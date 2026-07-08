@@ -54,9 +54,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-#ifdef WITH_DAV
 #include "caldav_alarm.h"
-#endif
 
 #if 0
 static int user_deleteacl(char *name, int matchlen, int category, void* rock)
@@ -288,10 +286,8 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
     /* delete all the search engine data (if any) */
     search_deluser(mbentry);
 
-#ifdef WITH_DAV
     /* delete all the calendar alarms for the user */
     caldav_alarm_delete_user(userid);
-#endif /* WITH_DAV */
 
     /* delete paths in our list */
     /* XXX  MUST do this last in case one of the functions above

@@ -1415,7 +1415,6 @@ EXPORTED char *jmap_role_to_specialuse(const char *role)
     return specialuse;
 }
 
-#ifdef HAVE_ICAL
 EXPORTED struct jmap_caleventid *jmap_caleventid_lookup(const char *id,
                                                         struct caldav_db *db,
                                                         struct caldav_data **cdatap)
@@ -1606,8 +1605,6 @@ EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
 
     buf_setcstr(idbuf, id);
 }
-
-#endif /* HAVE_ICAL */
 
 EXPORTED int jmap_is_valid_id(const char *id)
 {

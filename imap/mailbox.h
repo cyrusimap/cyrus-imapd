@@ -262,11 +262,9 @@ struct mailbox {
     /* namespace lock */
     struct usernamespacelocks *user_nslock;
 
-#ifdef WITH_DAV
     struct caldav_db *local_caldav;
     struct carddav_db *local_carddav;
     struct webdav_db *local_webdav;
-#endif
 #ifdef USE_SIEVE
     struct sieve_db *local_sieve;
     char *sievedir;

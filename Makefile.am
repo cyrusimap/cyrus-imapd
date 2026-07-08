@@ -192,6 +192,7 @@ libexec_PROGRAMS += \
     imap/lmtpd \
     imap/pop3d \
     imap/backupcyrusd \
+    imap/calalarmd \
     imap/promstatsd \
     imap/smmapd \
     ptclient/ptloader
@@ -261,12 +262,6 @@ if MURDER
 libexec_PROGRAMS += imap/mupdate
 endif # MURDER
 
-if CALALARMD
-libexec_PROGRAMS += imap/calalarmd
-endif
-
-if HTTPD
-
 AM_CPPFLAGS += $(HTTP_CPPFLAGS)
 
 AM_LDFLAGS += $(HTTP_LIBS)
@@ -281,8 +276,6 @@ noinst_PROGRAMS += imap/ical_apply_patch
 sbin_PROGRAMS += \
     imap/ctl_zoneinfo \
     imap/dav_reconstruct
-
-endif # HTTPD
 
 if REPLICATION
 libexec_PROGRAMS += imap/sync_server
@@ -689,11 +682,8 @@ cunit_TESTS += \
     cunit/tok.testc \
     cunit/dynarray.testc \
     cunit/util.testc \
+    cunit/ical_support.testc \
     cunit/xsha1.testc
-
-if HTTPD
-cunit_TESTS += cunit/ical_support.testc
-endif
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
     imap/css3_color.c imap/mutex_fake.c imap/spool.c imap/search_expr.c \
@@ -1018,6 +1008,14 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/auditlog.h \
     imap/backend.c \
     imap/backend.h \
+    imap/caldav_alarm.c \
+    imap/caldav_alarm.h \
+    imap/caldav_db.c \
+    imap/caldav_db.h \
+    imap/calsched_support.c \
+    imap/calsched_support.h \
+    imap/carddav_db.c \
+    imap/carddav_db.h \
     imap/conversations.c \
     imap/conversations.h \
     imap/convert_code.c \
@@ -1026,6 +1024,10 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/css3_color.h \
     imap/dav_db.c \
     imap/dav_db.h \
+    imap/dav_util.c \
+    imap/dav_util.h \
+    imap/defaultalarms.c \
+    imap/defaultalarms.h \
     imap/dlist.c \
     imap/dlist.h \
     imap/duplicate.c \
@@ -1036,16 +1038,20 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/haproxy.h \
     imap/http_client.c \
     imap/http_client.h \
+    imap/ical_support.c \
+    imap/ical_support.h \
+    imap/icu_wrap.cpp \
+    imap/icu_wrap.h \
     imap/idle.c \
     imap/idle.h \
     imap/idlemsg.c \
     imap/idlemsg.h \
     imap/imapparse.c \
     imap/imapparse.h \
-    imap/index.c \
-    imap/index.h \
     imap/index_file.c \
     imap/index_file.h \
+    imap/index.c \
+    imap/index.h \
     imap/jmap_util.c \
     imap/jmap_util.h \
     imap/json_support.c \
@@ -1056,18 +1062,18 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/mailbox.h \
     imap/mbdump.c \
     imap/mbdump.h \
+    imap/mboxevent.c \
+    imap/mboxevent.h \
     imap/mboxkey.c \
     imap/mboxkey.h \
     imap/mboxlist.c \
     imap/mboxlist.h \
-    imap/mboxevent.c \
-    imap/mboxevent.h \
     imap/mboxname.c \
     imap/mboxname.h \
     imap/message_guid.c \
+    imap/message_priv.h \
     imap/message.c \
     imap/message.h \
-    imap/message_priv.h \
     imap/msgrecord.c \
     imap/msgrecord.h \
     imap/mupdate-client.c \
@@ -1089,20 +1095,20 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/search_engines.h \
     imap/search_expr.c \
     imap/search_expr.h \
+    imap/search_part.h \
     imap/search_query.c \
     imap/search_query.h \
-    imap/search_part.h \
     imap/search_sort.h \
-    imap/seen.h \
     imap/seen_db.c \
+    imap/seen.h \
     imap/sievedir.c \
     imap/sievedir.h \
     imap/smtpclient.c \
     imap/smtpclient.h \
     imap/spool.c \
     imap/spool.h \
-    imap/statuscache.h \
     imap/statuscache_db.c \
+    imap/statuscache.h \
     imap/sync_log.c \
     imap/sync_log.h \
     imap/telemetry.c \
@@ -1113,15 +1119,18 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/user.h \
     imap/userdeny_db.c \
     imap/userdeny.h \
+    imap/vcard_support.c \
+    imap/vcard_support.h \
     imap/version.c \
-    imap/version.h
+    imap/version.h \
+    imap/webdav_db.c \
+    imap/webdav_db.h
 
 if SIEVE
 imap_libcyrus_imap_la_SOURCES += \
     imap/sieve_db.c \
     imap/sieve_db.h
 endif # SIEVE
-
 
 if USE_SQUAT
 imap_libcyrus_imap_la_SOURCES += \
@@ -1133,38 +1142,12 @@ imap_libcyrus_imap_la_SOURCES += \
     imap/squat_internal.h
 endif
 
-if HTTPD
-imap_libcyrus_imap_la_SOURCES += \
-    imap/caldav_alarm.c \
-    imap/caldav_alarm.h \
-    imap/caldav_db.c \
-    imap/caldav_db.h \
-    imap/carddav_db.c \
-    imap/carddav_db.h \
-    imap/dav_util.c \
-    imap/dav_util.h \
-    imap/defaultalarms.c \
-    imap/defaultalarms.h \
-    imap/ical_support.c \
-    imap/ical_support.h \
-    imap/icu_wrap.h \
-    imap/icu_wrap.cpp \
-    imap/calsched_support.c \
-    imap/calsched_support.h \
-    imap/vcard_support.c \
-    imap/vcard_support.h \
-    imap/webdav_db.c \
-    imap/webdav_db.h
-
 if CUNIT
 
 cunit_TESTS += cunit/http_jwt.testc
 cunit_unit_SOURCES += imap/http_jwt.c
 
 endif # CUNIT
-
-
-endif # HTTPD
 
 if USE_XAPIAN
 imap_libcyrus_imap_la_SOURCES += \
@@ -1206,7 +1189,6 @@ endif # AUTOCREATE
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c \
                       imap/zoneinfo_db.c
-if HTTPD
 imap_lmtpd_SOURCES += imap/jmap_util.c imap/caldav_util.c imap/defaultalarms.c imap/itip_support.c
 
 if JMAP
@@ -1214,8 +1196,6 @@ imap_lmtpd_SOURCES += \
     imap/jmap_mail_query.c imap/jmap_mail_query_parse.c \
     imap/dav_util.c imap/jmap_notif.c imap/jmap_ical.c imap/jcal.c imap/xcal.c
 endif # JMAP
-
-endif # HTTPD
 
 endif # SIEVE
 

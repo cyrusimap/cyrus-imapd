@@ -30,9 +30,7 @@
 #include <string.h>
 #include <syslog.h>
 
-#ifdef HAVE_ICAL
 #include <libical/ical.h>
-#endif
 
 /**************************************************************************/
 /**************************************************************************/
@@ -1185,7 +1183,6 @@ envelope_err:
                 }
 
                 if (!parse_tzoffset(str, &tzoffset)) {
-#ifdef HAVE_ICAL
                     /* Is this an IANA TZID? rather than an offset? */
                     icaltimezone *tz = icaltimezone_get_builtin_timezone(str);
 
@@ -1193,9 +1190,7 @@ envelope_err:
                         icaltimetype tt = icaltime_from_timet_with_zone(t, 0, tz);
 
                         tzoffset = icaltimezone_get_utc_offset(tz, &tt, NULL);
-                    } else
-#endif
-                    {
+                    } else {
                         res = 0;
                         goto date_err;
                     }

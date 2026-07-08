@@ -6,8 +6,8 @@ Default-Value:
 Last-Modified: 3.1.7
 
 Space-separated list of HTTP modules that will be enabled in
-:cyrusman:`httpd(8)`.  This option has no effect on modules that are
-disabled at compile time due to missing dependencies (e.g. libical).
+:cyrusman:`httpd(8)`.  Running multiple httpd instances, each with a
+different :imapdconf:`httpmodules` value, is supported.
 
 Note that "domainkey" depends on "ischedule" being enabled, and that both
 "freebusy" and "ischedule" depend on "caldav" being enabled.

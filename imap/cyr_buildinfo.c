@@ -87,11 +87,7 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "idled", json_false());
 #endif
-#ifdef USE_HTTPD
     json_object_set_new(component, "httpd", json_true());
-#else
-    json_object_set_new(component, "httpd", json_false());
-#endif
 #ifdef USE_MURDER
     json_object_set_new(component, "murder", json_true());
 #else
@@ -112,11 +108,7 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "sieve", json_false());
 #endif
-#ifdef USE_CALALARMD
     json_object_set_new(component, "calalarmd", json_true());
-#else
-    json_object_set_new(component, "calalarmd", json_false());
-#endif
 #ifdef WITH_JMAP
     json_object_set_new(component, "jmap", json_true());
 #else
@@ -176,16 +168,8 @@ static json_t *buildinfo()
 #else
     json_object_set_new(dependency, "brotli", json_false());
 #endif
-#ifdef USE_HTTPD
     json_object_set_new(dependency, "xml2", json_true());
-#else
-    json_object_set_new(dependency, "xml2", json_false());
-#endif
-#ifdef HAVE_ICAL
     json_object_set_new(dependency, "ical", json_true());
-#else
-    json_object_set_new(dependency, "ical", json_false());
-#endif
 #ifdef HAVE_ICU
     json_object_set_new(dependency, "icu4c", json_true());
 #else

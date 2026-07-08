@@ -15,10 +15,8 @@
 
 #include "annotate.h"
 #include "assert.h"
-#ifdef WITH_DAV
 #include "caldav_db.h"
 #include "carddav_db.h"
-#endif /* WITH_DAV */
 #include "global.h"
 #include "imapurl.h"
 #include "libconfig.h"
@@ -1108,7 +1106,6 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
                                    cacheitem_size(record, CACHE_BODYSTRUCTURE)));
     }
 
-#ifdef WITH_DAV
     /* add caldav items */
     if (mbtypes_dav(mailbox_mbtype(mailbox)) &&
         (mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
@@ -1163,7 +1160,6 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
         free(xval);
     }
-#endif // WITH_DAV
 
     if (body) message_free_body(body);
     free(body);
@@ -1340,7 +1336,6 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         FILL_STRING_PARAM(event, EVENT_BODYSTRUCTURE, bs);
     }
 
-#ifdef WITH_DAV
     /* add caldav items */
     if (mbtypes_dav(mailbox_mbtype(mailbox)) &&
         (mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
@@ -1397,7 +1392,6 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
 
         free(xval);
     }
-#endif // WITH_DAV
 
     if (body) message_free_body(body);
     free(body);

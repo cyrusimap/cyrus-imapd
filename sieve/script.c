@@ -124,7 +124,6 @@ static int stub_parse_error(int lineno, const char *msg,
     return SIEVE_OK;
 }
 
-#ifdef WITH_DAV
 #include <libxml/uri.h>
 
 static int listvalidator(void *ic __attribute__((unused)),
@@ -146,7 +145,6 @@ static int listvalidator(void *ic __attribute__((unused)),
 
     return ret;
 }
-#endif /* WITH_DAV */
 
 EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
 {
@@ -195,11 +193,9 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
         goto done;
     }
 
-#ifdef WITH_DAV
     sieve_register_extlists(interpreter, &listvalidator,
                             (sieve_list_comparator *) &stub_generic);
     sieve_register_processcal(interpreter, (sieve_callback *) &stub_generic);
-#endif
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interpreter, (sieve_jmapquery *) &stub_generic);
 #endif

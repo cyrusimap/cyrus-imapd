@@ -616,7 +616,6 @@ static char *sieve_srs_forward(char *return_path __attribute__((unused)))
 
 #endif /* USE_SRS */
 
-#ifdef WITH_DAV
 #include <libxml/uri.h>
 
 static mbentry_t *get_addrbook_mbentry(const char *list, const char *userid)
@@ -714,7 +713,6 @@ static int list_addresses(void *rock, struct carddav_data *cdata)
 
     return 0;
 }
-#endif /* WITH_DAV */
 
 static int send_forward(sieve_redirect_context_t *rc,
                         struct sieve_interp_ctx *ctx,
@@ -741,7 +739,6 @@ static int send_forward(sieve_redirect_context_t *rc,
     }
 
     if (rc->is_ext_list) {
-#ifdef WITH_DAV
         strarray_t *sa = strarray_split(rc->addr, ",", STRARRAY_TRIM);
 
         for (int i = 0; i < strarray_size(sa); i++) {
@@ -761,7 +758,6 @@ static int send_forward(sieve_redirect_context_t *rc,
             mboxlist_entry_free(&mbentry);
         }
         strarray_free(sa);
-#endif
     }
     else {
         struct address_itr ai;
@@ -1176,7 +1172,6 @@ done:
     return ret;
 }
 
-#ifdef HAVE_ICAL
 #include <jansson.h>
 #include "ical_support.h"
 
@@ -1412,7 +1407,6 @@ done:
     return ret;
 }
 
-#ifdef WITH_DAV
 #include "caldav_util.h"
 #include "http_caldav_sched.h"
 
@@ -1756,8 +1750,6 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
 
     return ret;
 }
-#endif /* WITH_DAV */
-#endif /* HAVE_ICAL */
 
 static int sieve_keep(void *ac,
                       void *ic __attribute__((unused)),
@@ -2369,21 +2361,15 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
         fatal("sieve_register_duplicate()", EX_SOFTWARE);
     }
 
-#ifdef WITH_DAV
     sieve_register_extlists(interp, &listvalidator, &listcompare);
-#endif
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interp, &jmapquery);
 #endif
-#ifdef HAVE_ICAL
     /* need timezones for sieve snooze and stripping in processcal */
     zoneinfo_open(NULL);
     ical_support_init();
     sieve_register_snooze(interp, &sieve_snooze);
-#ifdef WITH_DAV
     sieve_register_processcal(interp, &sieve_processcal);
-#endif
-#endif /* HAVE_ICAL */
     sieve_register_parse_error(interp, &sieve_parse_error_handler);
     sieve_register_execute_error(interp, &sieve_execute_error_handler);
 

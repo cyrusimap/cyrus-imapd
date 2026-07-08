@@ -9,11 +9,7 @@
 #include "conversations.h"
 #include "sieve/sieve_interface.h"
 
-#ifdef WITH_DAV
 #include "carddav_db.h"
-#else
-struct carddav_db { };
-#endif
 
 struct sieve_interp_ctx {
     const char *userid;

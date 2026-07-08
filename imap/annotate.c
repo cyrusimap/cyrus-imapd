@@ -43,12 +43,10 @@
 #include "quota.h"
 #include "xunlink.h"
 
-#ifdef WITH_DAV
 #include "caldav_alarm.h"
 #include "dav_util.h"
 
 #define CAL_TZ_ANNOT  DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone"
-#endif
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -3180,7 +3178,6 @@ static int write_entry(struct mailbox *mailbox,
 
     if (!mailbox)
         sync_log_annotation("");
-#ifdef WITH_DAV
     else if (mbtype_isa(mailbox->h.mbtype) == MBTYPE_CALENDAR &&
              !strncmp(entry, CAL_TZ_ANNOT, strlen(CAL_TZ_ANNOT))) {
         char *freeme = NULL;
@@ -3190,7 +3187,6 @@ static int write_entry(struct mailbox *mailbox,
         r = caldav_alarm_update_floating(mailbox, userid);
         free(freeme);
     }
-#endif
 
 out:
     annotate_putdb(&d);

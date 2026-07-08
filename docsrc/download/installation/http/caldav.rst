@@ -7,10 +7,11 @@ CalDAV
 Configuration
 =============
 
-When enabled, the CalDAV module allows Cyrus to function as a calendar and
-scheduling server. This module uses a subset of the mailbox hierarchy as
-calendar collections, the toplevel of which is specified by the
-:imapdconf:`calendarprefix` option. The public calendar hierarchy will reside
+When ``caldav`` is included in the :imapdconf:`httpmodules` option, the
+CalDAV module allows Cyrus to function as a calendar and scheduling server.
+This module uses a subset of the mailbox hierarchy as calendar collections,
+the toplevel of which is specified by the :imapdconf:`calendarprefix`
+option. The public calendar hierarchy will reside
 at the toplevel of the shared mailbox namespace. A user's personal calendar
 hierarchy will be a child of their Inbox.
 

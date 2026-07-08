@@ -35,9 +35,7 @@
 #include "autocreate.h"
 #endif
 #include "backend.h"
-#ifdef WITH_DAV
 #include "carddav_db.h"
-#endif
 #include "duplicate.h"
 #include "global.h"
 #include "idle.h"
@@ -910,10 +908,8 @@ int deliver(message_data_t *msgdata, char *authuser,
                 r = run_sieve(mbname, interp, &mydata);
             // set a flag if sieve failed
             if (r < 0) strarray_append(&flags, "$SieveFailed");
-#ifdef WITH_DAV
             if (ctx.carddavdb) carddav_close(ctx.carddavdb);
             ctx.carddavdb = NULL;
-#endif
             sieve_srs_free();
             sieve_interp_free(&interp);
             /* if there was no sieve script, or an error during execution,
@@ -1061,7 +1057,7 @@ static void shut_down(int code)
 
     libcyrus_run_delayed();
 
-#if defined USE_SIEVE && defined HAVE_ICAL
+#ifdef USE_SIEVE
     zoneinfo_close(NULL);
 #endif
     /* close backend connections */

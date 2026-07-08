@@ -21,8 +21,8 @@ To check: the final output of the configure step will display where a ``make ins
     make install-binsymlinks    # Only needed if you're testing older Cyrus versions
 
 
-Optional Components
-===================
+Additional Configuration
+========================
 
 .. toctree::
     :maxdepth: 2

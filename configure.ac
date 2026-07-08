@@ -1434,166 +1434,145 @@ AC_PATH_PROG([XXD],[xxd])
 AM_CONDITIONAL([HAVE_XXD], [test -n "$XXD"])
 
 dnl
-dnl see if we're compiling with HTTP support
+dnl HTTP support (and CalDAV, CardDAV, WebDAV) is mandatory as of Cyrus 3.13.5
+dnl libical, libxml2, sqlite3 and xxd are required build dependencies.
 dnl
-AC_ARG_ENABLE(http,
-        [AS_HELP_STRING([--enable-http], [enable HTTP support])],, [enable_http="no";])
-AM_CONDITIONAL([HTTPD], [test "$enable_http" != "no"])
 
 HTTP_CPPFLAGS=
 HTTP_LIBS=
-if test "$enable_http" != no; then
-dnl
-dnl make sure all the modules we need are present
-dnl
-        if test "x$HAVE_SQLITE" != x1; then
-            AC_MSG_ERROR([Need sqlite3 for http])
-        else
-            use_sqlite="yes"
-            AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?])
-        fi
 
-        AS_IF([test -z "$XXD"], [AC_MSG_ERROR([Need xxd for http])])
+if test "x$HAVE_SQLITE" != x1; then
+    AC_MSG_ERROR([Need sqlite3 for http])
+else
+    use_sqlite="yes"
+fi
 
-        PKG_CHECK_MODULES([XML2], [libxml-2.0], [
-                AC_DEFINE(HAVE_XML2, [], [Build with libxml support])
-                LIBS="$LIBS ${XML2_LIBS}"
-                with_xml2=yes
-                ],
-                AC_MSG_ERROR([Need libxml-2.0 for http]))
+AS_IF([test -z "$XXD"], [AC_MSG_ERROR([Need xxd for http])])
 
-        AC_CHECK_LIB(xml2, xmlFirstElementChild, [
-                AC_DEFINE(HAVE_XML_FIRSTCHILD,[],
-                        [Do we have support for xmlFirstElementChild()?])
+PKG_CHECK_MODULES([XML2], [libxml-2.0], [
+        LIBS="$LIBS ${XML2_LIBS}"
+        with_xml2=yes
+        ],
+        AC_MSG_ERROR([Need libxml-2.0 for http]))
 
-                AC_CHECK_LIB(xml2, xmlBufferDetach,
-                        AC_DEFINE(HAVE_XML_BUFFERDETACH,[],
-                                [Do we have support for xmlBufferDetach()?]))
-                ])
+AC_CHECK_LIB(xml2, xmlFirstElementChild, [
+        AC_DEFINE(HAVE_XML_FIRSTCHILD,[],
+                [Do we have support for xmlFirstElementChild()?])
 
-        PKG_CHECK_MODULES([ICAL], [libical >= 3.99.99], [
-                AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
-                LIBS="$LIBS ${ICAL_LIBS} -licalvcard"
-                with_ical=yes
-                ],
-                AC_MSG_ERROR([Need libical for http]))
+        AC_CHECK_LIB(xml2, xmlBufferDetach,
+                AC_DEFINE(HAVE_XML_BUFFERDETACH,[],
+                        [Do we have support for xmlBufferDetach()?]))
+        ])
 
-        dnl Check if libical supports PARTICIPANT-TYPE=VOTER
-        AC_CHECK_DECL([ICAL_PARTICIPANTTYPE_VOTER],
-                AC_DEFINE(HAVE_PARTTYPE_VOTER,[],
-                        [Do we have support for PARTICIPANT-TYPE=VOTER?]),
-                [], [[#include <libical/ical.h>]])
+PKG_CHECK_MODULES([ICAL], [libical >= 3.99.99], [
+        LIBS="$LIBS ${ICAL_LIBS} -licalvcard"
+        with_ical=yes
+        ],
+        AC_MSG_ERROR([Need libical for http]))
 
-        dnl vcardparser_set_xprop_value_kind will be new in libical 4.0
-        AC_CHECK_LIB(icalvcard, vcardparser_set_xprop_value_kind,
-                AC_DEFINE(HAVE_LIBICALVCARD_XPROP_VALUE,[],
-                        [Do we have support for custom x-property value types?]))
+dnl Check if libical supports PARTICIPANT-TYPE=VOTER
+AC_CHECK_DECL([ICAL_PARTICIPANTTYPE_VOTER],
+        AC_DEFINE(HAVE_PARTTYPE_VOTER,[],
+                [Do we have support for PARTICIPANT-TYPE=VOTER?]),
+        [], [[#include <libical/ical.h>]])
+
+dnl vcardparser_set_xprop_value_kind will be new in libical 4.0
+AC_CHECK_LIB(icalvcard, vcardparser_set_xprop_value_kind,
+        AC_DEFINE(HAVE_LIBICALVCARD_XPROP_VALUE,[],
+                [Do we have support for custom x-property value types?]))
 
 dnl  Don't bother checking for DKIM until iSchedule gains traction
-dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
-dnl                AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
-dnl                        AC_DEFINE(WITH_DKIM,[],
-dnl                                [Build DKIM support into iSchedule?]),
-dnl                        AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider patching OpenDKIM with contrib/dkim_canon_ischedule.patch])),
-dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider upgrading to OpenDKIM >= 2.7.0]))
+dnl PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
+dnl         AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
+dnl                 AC_DEFINE(WITH_DKIM,[],
+dnl                         [Build DKIM support into iSchedule?]),
+dnl                 AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider patching OpenDKIM with contrib/dkim_canon_ischedule.patch])),
+dnl         AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider upgrading to OpenDKIM >= 2.7.0]))
 
-        AC_ARG_WITH(nghttp2, [AS_HELP_STRING([--without-nghttp2], [disable HTTP/2 support (check)])],,[with_nghttp2="check"])
-        if test "x$with_nghttp2" = "xyes" -o "x$with_nghttp2" = "xcheck"; then
-                PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.34.0], [
-                        AC_DEFINE(HAVE_NGHTTP2,[],
-                                [Build HTTP/2 support into httpd?])
-                        AC_CHECK_DECL([nghttp2_submit_data2],
-                                AC_DEFINE(HAVE_NGHTTP2_SSIZE,[],
-                                [Do we have support for nghttp2_ssize?]),
-                                [], [[#include <nghttp2/nghttp2.h>]])
-                        with_nghttp2=yes
-                ], [
-                        if test "x$with_nghttp2" = "xyes"; then
-                                AC_MSG_ERROR([HTTP/2 explicitly requested, but libnghttp2 was not found])
-                        fi
-                        AC_MSG_NOTICE([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5])
-                        with_nghttp2=no
-                ])
-        fi
-
-
-        AC_ARG_WITH(wslay, [AS_HELP_STRING([--without-wslay], [disable WebSockets support (check)])],,[with_wslay="check"])
-        if test "x$with_wslay" = "xyes" -o "x$with_wslay" = "xcheck"; then
-                PKG_CHECK_MODULES([WSLAY], [libwslay >= 1.1.1], [
-                        with_wslay=yes
-                ], [
-                        AC_SEARCH_LIBS([wslay_event_context_free], [wslay], [
-                            AC_SUBST([WSLAY_LIBS], [-lwslay])
-                            with_wslay=yes
-                        ], [
-                                if test "x$with_wslay" = "xyes"; then
-                                        AC_MSG_ERROR([WebSockets explicitly requested, but libwslay was not found])
-                                fi
-                                with_wslay=no
-                        ])
-                ])
-
-                if test "x$with_wslay" = "xyes"; then
-                        AC_DEFINE(HAVE_WSLAY,[],
-                                [Build WebSockets support into httpd?])
-                else
-                        AC_MSG_NOTICE([httpd will not have support for WebSockets.  Consider installing libwslay])
+AC_ARG_WITH(nghttp2, [AS_HELP_STRING([--without-nghttp2], [disable HTTP/2 support (check)])],,[with_nghttp2="check"])
+if test "x$with_nghttp2" = "xyes" -o "x$with_nghttp2" = "xcheck"; then
+        PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.34.0], [
+                AC_DEFINE(HAVE_NGHTTP2,[],
+                        [Build HTTP/2 support into httpd?])
+                AC_CHECK_DECL([nghttp2_submit_data2],
+                        AC_DEFINE(HAVE_NGHTTP2_SSIZE,[],
+                        [Do we have support for nghttp2_ssize?]),
+                        [], [[#include <nghttp2/nghttp2.h>]])
+                with_nghttp2=yes
+        ], [
+                if test "x$with_nghttp2" = "xyes"; then
+                        AC_MSG_ERROR([HTTP/2 explicitly requested, but libnghttp2 was not found])
                 fi
-        fi
-
-        AC_ARG_WITH(brotli, [AS_HELP_STRING([--without-brotli], [disable brotli compression (check)])])
-        if test "x$with_brotli" = xyes -o "${with_brotli+x}" != x; then
-                PKG_CHECK_MODULES([BROTLI], [libbrotlienc], [
-                        AC_DEFINE(HAVE_BROTLI,[],
-                                [Build Brotli compression support into httpd?])
-                        with_brotli=yes
-                ], [
-                        if test "x$with_brotli" = xyes; then
-                                AC_MSG_ERROR([brotli compression explicitly requested, but libbrotlienc was not found])
-                        fi
-                        with_brotli="no (libbrotlienc not found)"
-                ])
-        fi
-
-        AC_ARG_WITH(zstd, [AS_HELP_STRING([--without-zstd], [disable Zstandard compression (check)])])
-        if test "x$with_zstd" = xyes -o "${with_zstd+x}" != x; then
-                PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0], [
-                        AC_DEFINE(HAVE_ZSTD,[],
-                                [Build Zstandard compression support into httpd?])
-                        with_zstd=yes
-                ], [
-                        if test "x$with_zstd" = xyes; then
-                                AC_MSG_ERROR([Zstandard compression explicitly requested, but libzstd was not found])
-                        fi
-                        with_zstd="no (libzstd >= 1.4.0 not found)"
-               ])
-        fi
-
-        PKG_CHECK_MODULES([SHAPELIB], [shapelib >= 1.3.0],[
-                AC_DEFINE(HAVE_SHAPELIB,[],
-                        [Build geographic support into tzdist?])
-                AC_DEFINE(SHAPELIB_VERSION, ["1.3.0"], [ShapeLib Version])
-                with_shapelib=yes
-                ],
-                AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
-
-        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
-        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIBM}"
-else
-        with_nghttp2="no (httpd is not built)"
-        with_wslay="no (httpd is not built)"
-        with_brotli="no (httpd is not built)"
-        with_zstd="no (httpd is not built)"
-        with_xml2="no (httpd is not built)"
-        with_ical="no (httpd is not built)"
-        with_icalvcard="no (httpd is not built)"
-        with_shapelib="no (httpd is not built)"
+                AC_MSG_NOTICE([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5])
+                with_nghttp2=no
+        ])
 fi
+
+
+AC_ARG_WITH(wslay, [AS_HELP_STRING([--without-wslay], [disable WebSockets support (check)])],,[with_wslay="check"])
+if test "x$with_wslay" = "xyes" -o "x$with_wslay" = "xcheck"; then
+        PKG_CHECK_MODULES([WSLAY], [libwslay >= 1.1.1], [
+                with_wslay=yes
+        ], [
+                AC_SEARCH_LIBS([wslay_event_context_free], [wslay], [
+                    AC_SUBST([WSLAY_LIBS], [-lwslay])
+                    with_wslay=yes
+                ], [
+                        if test "x$with_wslay" = "xyes"; then
+                                AC_MSG_ERROR([WebSockets explicitly requested, but libwslay was not found])
+                        fi
+                        with_wslay=no
+                ])
+        ])
+
+        if test "x$with_wslay" = "xyes"; then
+                AC_DEFINE(HAVE_WSLAY,[],
+                        [Build WebSockets support into httpd?])
+        else
+                AC_MSG_NOTICE([httpd will not have support for WebSockets.  Consider installing libwslay])
+        fi
+fi
+
+AC_ARG_WITH(brotli, [AS_HELP_STRING([--without-brotli], [disable brotli compression (check)])])
+if test "x$with_brotli" = xyes -o "${with_brotli+x}" != x; then
+        PKG_CHECK_MODULES([BROTLI], [libbrotlienc], [
+                AC_DEFINE(HAVE_BROTLI,[],
+                        [Build Brotli compression support into httpd?])
+                with_brotli=yes
+        ], [
+                if test "x$with_brotli" = xyes; then
+                        AC_MSG_ERROR([brotli compression explicitly requested, but libbrotlienc was not found])
+                fi
+                with_brotli="no (libbrotlienc not found)"
+        ])
+fi
+
+AC_ARG_WITH(zstd, [AS_HELP_STRING([--without-zstd], [disable Zstandard compression (check)])])
+if test "x$with_zstd" = xyes -o "${with_zstd+x}" != x; then
+        PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0], [
+                AC_DEFINE(HAVE_ZSTD,[],
+                        [Build Zstandard compression support into httpd?])
+                with_zstd=yes
+        ], [
+                if test "x$with_zstd" = xyes; then
+                        AC_MSG_ERROR([Zstandard compression explicitly requested, but libzstd was not found])
+                fi
+                with_zstd="no (libzstd >= 1.4.0 not found)"
+       ])
+fi
+
+PKG_CHECK_MODULES([SHAPELIB], [shapelib >= 1.3.0],[
+        AC_DEFINE(HAVE_SHAPELIB,[],
+                [Build geographic support into tzdist?])
+        AC_DEFINE(SHAPELIB_VERSION, ["1.3.0"], [ShapeLib Version])
+        with_shapelib=yes
+        ],
+        AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
+
+HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
+HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIBM}"
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
-if test "x$enable_http" = "xyes"; then
-        AC_DEFINE(USE_HTTPD,[],[Build with HTTP functionality])
-fi
 
 dnl
 dnl allow setting a compile-time default for zoneinfo_dir
@@ -1611,20 +1590,6 @@ AS_IF([test "x$with_zoneinfo_dir" != "x"],
                          [Default zoneinfo_dir]))
 
 dnl
-dnl see if we're compiling with calendar alarm support
-dnl
-AC_ARG_ENABLE(calalarmd,
-        [AS_HELP_STRING([--enable-calalarmd], [enable CalDAV alarm support])],,[enable_calalarmd="no";])
-if test "x$enable_calalarmd" = "xyes"; then
-    if test "x$enable_http" = "xyes"; then
-    AC_DEFINE(USE_CALALARMD,[],[Build with calendar alarm functionality])
-    else
-    AC_MSG_ERROR([--enable-calalarmd requires --enable-http])
-    fi
-fi
-AM_CONDITIONAL([CALALARMD], [test "$enable_calalarmd" != "no"])
-
-dnl
 dnl see if we're compiling with JMAP support
 dnl
 AC_ARG_ENABLE(jmap,
@@ -1632,9 +1597,6 @@ AC_ARG_ENABLE(jmap,
 if test "x$enable_jmap" = "xyes" ; then
     if test "x$enable_xapian" = "xno" ; then
         AC_MSG_ERROR([--enable-jmap requires --enable-xapian])
-    fi
-    if test "x$enable_http" = "xno" ; then
-        AC_MSG_ERROR([--enable-jmap requires --enable-http])
     fi
     AC_DEFINE(WITH_JMAP,[],[Build with JMAP support])
 fi
@@ -2413,13 +2375,11 @@ Cyrus Server configured components
    gssapi:             $gssapi
    autocreate:         $enable_autocreate
    idled:              $enable_idled
-   httpd:              $enable_http
    murder:             $enable_murder
    nntpd:              $enable_nntp
    replication:        $enable_replication
    sieve:              $enable_sieve
    srs:                $enable_srs
-   calalarmd:          $enable_calalarmd
    jmap:               $enable_jmap
    com_err:            $with_com_err
 
@@ -2435,8 +2395,6 @@ External dependencies:
    wslay:              $with_wslay
    brotli:             $with_brotli
    zstd:               $with_zstd
-   xml2:               $with_xml2
-   ical:               $with_ical
    shapelib:           $with_shapelib
    icu4c:              $with_icu4c
    chardet:            $with_chardet
@@ -2446,7 +2404,6 @@ External dependencies:
 Database support:
    mysql:              $with_mysql
    postgresql:         $use_pgsql
-   sqlite:             $use_sqlite
 
 Search engine:
    squat:              $enable_squat

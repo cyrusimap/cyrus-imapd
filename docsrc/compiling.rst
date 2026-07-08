@@ -142,7 +142,7 @@ CalDAV, CardDAV, or JMAP (httpd subsystem)
     character set. Required for JMAP, but otherwise is not needed."
     `libical`_, libical-dev, "yes", "It provides
     calendaring functionality for CalDAV, which can't be used without this lib.
-    Version 3.0.10 or higher is required."
+    Version 4.0.0 or higher is required."
     `libxml`_, libxml2-dev, "yes", "A fundamental lib for
     all \*DAV functionality."
     `nghttp2`_, libnghttp2-dev, "no", "HTTP/2 support
@@ -248,10 +248,18 @@ via configure.
 
 Sieve is enabled by default.
 
-CalDAV, CardDAV, WebDAV, JMAP
-#############################
+JMAP
+####
 
-    ``./configure --enable-http --enable-calalarmd --enable-jmap``
+    ``./configure --enable-jmap``
+
+.. note::
+
+    HTTP, CalDAV, CardDAV, WebDAV and the calendar alarm daemon are
+    always built and no longer require configure options.  libical,
+    libxml2 and SQLite3 are required build dependencies for every Cyrus
+    build (see the table above).  JMAP remains optional because it also
+    requires Xapian.
 
 Murder
 ######

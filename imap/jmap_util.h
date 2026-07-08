@@ -216,7 +216,6 @@ extern void jmap_set_contactid(struct conversations_state *cstate,
 extern void jmap_set_calendarid(struct conversations_state *cstate,
                                 const mbentry_t *mbentry, char *calid);
 
-#ifdef HAVE_ICAL
 struct jmap_caleventid {
     const char *raw; /* as requested by client */
     const char *ical_uid;
@@ -242,6 +241,5 @@ extern const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, str
 extern void jmap_caleventid_free(struct jmap_caleventid **eidptr);
 
 extern void jmap_alertid_encode(icalcomponent *valarm, struct buf *buf);
-#endif /* HAVE_ICAL */
 
 #endif /* JMAP_UTIL_H */
