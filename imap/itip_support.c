@@ -752,9 +752,6 @@ static int deliver_merge_request(const char *attendee,
 
             /* Copy over privacy from current component to iTIP component */
             prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
-            // CLASS takes precedence over legacy X-JMAP-PRIVACY.
-            if (!prop) prop =
-                icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_PRIVACY);
             if (prop) {
                 icalcomponent_add_property(new_comp,
                                            icalproperty_clone(prop));
@@ -791,10 +788,6 @@ static int deliver_merge_request(const char *attendee,
 
                 /* Inherit privacy from master */
                 prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
-                // CLASS takes precedence over legacy X-JMAP-PRIVACY.
-                if (!prop) prop =
-                    icalcomponent_get_x_property_by_name(master,
-                            JMAPICAL_XPROP_PRIVACY);
                 if (prop) {
                     icalcomponent_add_property(new_comp,
                                                icalproperty_clone(prop));
@@ -1042,17 +1035,6 @@ HIDDEN void itip_strip_personal_data(icalcomponent *comp, bool remove_transp)
             if (remove_transp) {
                 icalcomponent_remove_property(comp, prop);
                 icalproperty_free(prop);
-            }
-            break;
-
-        case ICAL_X_PROPERTY:
-            {
-                /* Remove select JMAP-related properties */
-                if (!strcmpsafe(icalproperty_get_x_name(prop),
-                            JMAPICAL_XPROP_PRIVACY)) {
-                    icalcomponent_remove_property(comp, prop);
-                    icalproperty_free(prop);
-                }
             }
             break;
 

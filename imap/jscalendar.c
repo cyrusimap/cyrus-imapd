@@ -53,7 +53,6 @@
 #define PROP_XJMAP_ID                "X-JMAP-ID"
 #define PROP_XJMAP_MAY_INVITE_OTHERS "X-JMAP-MAY-INVITE-OTHERS"
 #define PROP_XJMAP_MAY_INVITE_SELF   "X-JMAP-MAY-INVITE-SELF"
-#define PROP_XJMAP_PRIVACY           "X-JMAP-PRIVACY"
 #define PROP_XJMAP_SENT_BY           "X-JMAP-SENT-BY"
 #define PROP_XJMAP_USEDEFAULTALERTS  "X-JMAP-USEDEFAULTALERTS"
 
@@ -805,8 +804,6 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
             if (myicalproperty_has_name(prop, PROP_XJMAP_MAY_INVITE_OTHERS))
                 return true;
             if (myicalproperty_has_name(prop, PROP_XJMAP_MAY_INVITE_SELF))
-                return true;
-            if (myicalproperty_has_name(prop, PROP_XJMAP_PRIVACY))
                 return true;
             if (myicalproperty_has_name(prop, PROP_XJMAP_SENT_BY))
                 return true;
@@ -6500,18 +6497,6 @@ static void entry_from_ical(jscal_ctx_t *ctx,
         else
             jobj_set_icalprop(
                 ctx, jobj, "privacy", json_string("secret"), prop);
-    }
-    // XXX quirk: this got set in the former implementation
-    else if ((prop = myicalcomponent_get_property_by_name(
-             comp, PROP_XJMAP_PRIVACY))) {
-        icalvalue *v = icalproperty_get_value(prop);
-        const char *s = icalvalue_isa(v) == ICAL_TEXT_VALUE ?
-            icalvalue_get_text(v) : icalproperty_get_value_as_string(prop);
-        if (s) {
-            buf_setcstr(&buf, s);
-            json_object_set_new(jobj, "privacy", json_string(buf_lcase(&buf)));
-            buf_reset(&buf);
-        }
     }
 
     recuroverrides_from_ical(ctx, comp, jobj, overrides);

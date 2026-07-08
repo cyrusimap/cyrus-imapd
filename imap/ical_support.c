@@ -3151,9 +3151,6 @@ EXPORTED void icalcomponent_normalize_x(icalcomponent *ical)
             if (!strcasecmp(xname, JMAPICAL_XPROP_SHOWWITHOUTTIME)) {
                 is_default = !strcasecmp(xval, "FALSE");
             }
-            else if (!strcasecmp(xname, JMAPICAL_XPROP_PRIVACY)) {
-                is_default = !strcasecmp(xval, "PUBLIC");
-            }
             else if (!strcasecmp(xname, JMAPICAL_XPROP_MAYINVITESELF) ||
                      !strcasecmp(xname, JMAPICAL_XPROP_MAYINVITEOTHERS) ||
                      !strcasecmp(xname, JMAPICAL_XPROP_HIDEATTENDEES)) {
