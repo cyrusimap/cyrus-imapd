@@ -323,7 +323,7 @@ static int build_notify_message(sieve_interp_t *i,
                                 struct buf *out)
 {
     const char *c;
-    size_t n;
+    unsigned long n;
 
     if (msg == NULL) return SIEVE_OK;
 
@@ -351,8 +351,20 @@ static int build_notify_message(sieve_interp_t *i,
             c += 5;
             n = 0;
             if (*c++ == '[') {
-                while (*c != ']') n = n * 10 + (*c++ - '0');
-                c += 2; /* skip ]$ */
+                char *endptr;
+
+                errno = 0;
+                n = strtoul(c, &endptr, 10);
+                if (!isdigit(*c)                            // no SP or '-'
+                    || !n                                   // non-zero
+                    || (n == ULONG_MAX && errno == ERANGE)  // no overflow
+                    || strncmp(endptr, "]$", 2)) {          // invalid closing
+                    /* output "$text[..." as plaintext */
+                    buf_appendmap(out, c - 6, 6 + endptr - c);
+                    c = endptr;
+                    continue;
+                }
+                c = endptr + 2; /* skip ]$ */
             }
 
             i->getbody(message_context, content_types, &parts);
