@@ -2845,7 +2845,33 @@ static commandlist_t *build_notify(sieve_script_t *sscript,
     c->u.n.method = method;
 
     if (c->u.n.priority == -1) c->u.n.priority = B_NORMAL;
-    if (!c->u.n.message) c->u.n.message = xstrdup("$from$: $subject$");
+    if (c->u.n.message) {
+        const char *cp = c->u.n.message;
+
+        /* Validate $text[n]$ syntax */
+        if (!strncasecmp(cp, "$text", 5) && (cp[5] == '[' || cp[5] == '$')) {
+            if (!supported(SIEVE_CAPA_BODY)) {
+                sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "body");
+            }
+
+            if (cp[5] == '[') {
+                unsigned long n;
+                char *endptr;
+
+                cp += 6;
+                errno = 0;
+                if (!isdigit(*cp)                           // no SP or '-'
+                    || !(n = strtoul(cp, &endptr, 10))      // non-zero
+                    || (n == ULONG_MAX && errno == ERANGE)  // no overflow
+                    || strncmp(endptr, "]$", 2)) {          // invalid closing
+                    sieveerror_c(sscript, SIEVE_INVALID_VALUE, ":message");
+                }
+            }                
+        }
+    }
+    else {
+        c->u.n.message = xstrdup("$from$: $subject$");
+    }
 
     c->nargs = bc_precompile(c->args, "ssSis",
                              c->u.n.method,

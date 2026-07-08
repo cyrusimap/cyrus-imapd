@@ -14,7 +14,11 @@ EOF
         );
 
     xlog $self, "Deliver a message";
-    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    my $msg1 = $self->{gen}->generate(subject => "Message 1",
+                                      from => Cassandane::Address->new(
+                                          localpart => 'text',
+                                          domain => 'example.com'
+                                      ));
     $self->{instance}->deliver($msg1);
 
     my $data = $self->{instance}->getnotify();
@@ -22,6 +26,8 @@ EOF
     my ($mailto) = grep { $_->{METHOD} eq 'mailto' } @$data;
 
     $self->assert_not_null($updatecal);
+    $self->assert_matches(qr/<text\@example.com>: Message 1/,
+                          $updatecal->{MESSAGE});
     $self->assert_not_null($mailto);
     $self->assert_matches(qr/Hello World!/, $mailto->{MESSAGE});
 }
