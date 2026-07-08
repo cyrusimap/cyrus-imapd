@@ -2086,7 +2086,7 @@ static void _mboxset_args_parse(json_t *jargs,
         const char *sharee;
         json_t *jrights;
         json_object_foreach(args->shareWith, sharee, jrights) {
-            if (json_object_size(jrights)) {
+            if (!mboxname_policycheck(sharee, 0) && json_object_size(jrights)) {
                 const char *right;
                 json_t *jval;
                 json_object_foreach(jrights, right, jval) {

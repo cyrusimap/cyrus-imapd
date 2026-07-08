@@ -214,4 +214,27 @@ sub test_calendar_set_sharewith
         $self->assert_str_equals('lrwitedn', $map{manifold});
         $self->assert_null($map{paraphrase});
     }
+
+    xlog $self, "Try to give access to a bogus userid";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    accountId => 'master',
+                    update => { $CalendarId => {
+                        shareWith => {
+                            "../v/victim" => {
+                                mayRead => JSON::true
+                            }
+                        },
+             }}}, "R1"]
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            $CalendarId => {
+                type => 'invalidProperties',
+                properties => [
+                    "shareWith/..~1v~1victim"
+                ]
+            }
+        },
+        $res->[0][1]{notUpdated});
 }
