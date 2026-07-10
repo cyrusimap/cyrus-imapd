@@ -16,136 +16,35 @@ Cassandane test suite.
 2. Running The Tests
 --------------------
 
-In day-to-day development you don't set up Cassandane or run it by hand:
-``dar test`` (or ``cyd test`` inside the container) provisions everything and
-runs the suite as the ``cyrus`` user for you.  See the :ref:`developer
-quickstart <developer-quickstart>` for that workflow.
+Almost all the time you run Cassandane through ``dar test`` (from the host) or
+``cyd test`` (inside the container), which builds Cyrus, writes a
+``cassandane.ini``, and runs the suite as the ``cyrus`` user for you.  See the
+:ref:`developer quickstart <developer-quickstart>` for that workflow.
 
-The rest of this section explains how to select and run tests; it applies
-whether you go through ``dar test`` or call ``testrunner.pl`` directly inside
-the container.
-
-2.1. Running tests
-^^^^^^^^^^^^^^^^^^
-
-Cassandane tests are run out of the Cassandane directory itself, without
-installing Cassandane anywhere.  This is not the result of deliberate policy so
-much as implementation laziness.
-
-All runtime state is created under the cassandane rootdir configured in
-cassandane.ini (by default: ``/var/tmp/cass``).
-
-Internally, Cassandane (or more precisely, the Cyrus code it exercises) needs
-to run either as the superuser or as the "cyrus" user.  You invoke it as
-yourself: inside the container, ``cyd test`` steps down to the "cyrus" user for
-you, and a direct ``testrunner.pl`` run will re-invoke itself with sudo.
-
-The script 'testrunner.pl' is your interface for running Cassandane tests.
-There are several other Perl scripts in the directory, but they are utilities
-which were helpful during manual testing rather than part of the test suite
-itself.
-
-With no arguments, testrunner.pl runs all the tests that come with Cassandane
-and reports the results to the terminal in the 'prettier' test report format.
-The testrunner.pl exit code will be 0 if all tests passed, non-zero otherwise.
+Whether you go through ``dar test`` or the runner directly, you choose what to
+run by naming suites and individual tests:
 
 .. code::
 
-    $ ./testrunner.pl
-    [  OK  ] Cyrus::ACL.reconstruct
-    [  OK  ] Cyrus::ACL.move
-    [  OK  ] Cyrus::ACL.delete
-    ...
+    dar test Quota               # the whole Quota suite
+    dar test Quota.quotarename   # a single test
+    dar test Admin Quota         # several suites
+    dar test ~Quota              # everything except the Quota suite
 
-There are several test report formats to choose from, by invoking testrunner.pl
-with the -f 'format' option.
+Names accumulate from left to right, and any name can be negated with ``!`` or
+``~`` (``~`` is usually easier to slip past the shell).  ``dar test`` also
+exposes the options most people reach for — ``--slow``, ``--rerun``,
+``--valgrind``, ``-j``, and so on; run ``dar test --help`` to see them.
 
-``-f pretty``
-    Human readable output to the terminal, showing the ok/failed/error status
-    and name for each test, as well as the error reports from any not-ok tests.
-    This gets noisy in the case of failures!  It's mostly useful when debugging
-    single tests, especially in conjunction with -vvv.
-
-``-f prettier`` (the default)
-    As for pretty, but without the noise when problems occur.  This is most
-    useful when running many (or all) tests at once.  A list of failed tests
-    is written to $rootdir/failed, and the full error reports for any failed
-    tests are written to $rootdir/reports, so you can still access these details
-    if you find yourself needing them after the fact.
-
-``-f xml``
-    This writes reports in jUnit format.  The reports will be xml files in a
-    subdirectory "reports" of the current directory at the time testrunner.pl
-    was invoked.  Note that this is NOT the same "reports" file as used by
-    -f prettier.  This format is apparently useful for integration with various
-    CI systems, though it's not used by our Github CI.
-
-``-f tap``
-    TAP is a common format which originated with Perl and is now widely used,
-    see http://en.wikipedia.org/wiki/Test_Anything_Protocol for more
-    information.  Cassandane's implementation is very rudimentary, but should
-    generally produce valid TAP.
-
-You can run just a subset of tests by giving arguments to testrunner.pl.
-Tests to run are most commonly specified as:
-
-* a test suite without the leading Cassandane::Cyrus
-
-    .. code::
-
-        $ ./testrunner.pl Quota
-
-* a single test in a single test suite
-
-    .. code::
-
-        $ ./testrunner.pl Quota.quotarename
-
-Multiple test suites or tests can be specified as well:
-
-    .. code::
-
-        $ ./testrunner.pl Admin Quota.quotarename
-
-Arguments can be negated by using a leading exclamation mark (!) or tilde (~)
-character.  Note that you may need to escape the ! from the shell, so ~ is
-generally preferable:
+Underneath, the actual runner is ``cassandane/testrunner.pl``, run as the
+``cyrus`` user from inside the ``cassandane`` directory.  You need it directly
+only when you want something ``dar test`` doesn't expose, or when debugging the
+runner itself.  It documents itself:
 
 .. code::
 
-    $ ./testrunner.pl ~Quota
-
-will run all the tests from all the suites except the Quota suite.
-Arguments accumulate from left to right, so e.g.
-
-.. code::
-
-    $ ./testrunner.pl Quota ~Quota.quotarename
-
-will run all the tests in the Quota suite except the quotarename test.
-
-The -v (or --verbose) option to testrunner.pl causes both Cassandane and
-several Cyrus programs run by Cassandane to emit a lot of information to
-stderr.  You can specify this option multiple times for increased verbosity,
-and the single-character version can be stacked, like -vvv.
-
-The --valgrind option to testrunner.pl runs all the Cyrus executables using
-Valgrind.  This is of course much slower but is recommended because it finds
-many subtle bugs.  The Valgrind logs are saved in the files
-$rootdir/$instance/vglogs/$name.$pid.  Cassandane will examine these logs after
-each test finishes, and will fail the test if there are any errors (including
-memory leaks) reported.
-
-The --cleanup option causes Cassandane to do two things.  Firstly, it
-immediately cleans up any files left over in $rootdir.  Secondly, it cleans up
-any such files after each test, unless the test fails.  This should be helpful
-when the filesystem in use does not have much room, such as when running on a
-tmpfs filesystem.  You'll probably find this useful, so enable
-cassandane.cleanup in your cassandane.ini rather than typing it all the time.
-Then use --no-cleanup to override it when you don't want that.
-
-testrunner.pl also accepts a bunch of other options that are not documented
-here.  Consult the script itself for the full and most up-to-date set.
+    ./testrunner.pl --help       # the full, authoritative option list
+    perldoc ./testrunner.pl      # what it is, and notes on driving it
 
 3. Adding Your Own Tests
 ------------------------
