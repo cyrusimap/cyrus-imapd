@@ -735,7 +735,7 @@ check-discrete: cunit/run cunit/unit
 # (n.b. does not support Valgrind)
 check-fast: cunit/pcunit cunit/unit
 	@echo "Running unit tests in parallel"
-	$(PERL) cunit/pcunit $$JOBS
+	CYRUS_CUNIT_TMPDIR=$(CYRUS_CUNIT_TMPDIR) $(PERL) cunit/pcunit $$JOBS
 
 # Run named suites or tests:
 #     make check-libconfig         # run the whole libconfig suite

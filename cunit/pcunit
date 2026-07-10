@@ -30,6 +30,7 @@ if (defined $jobs) {
 }
 
 my $srcdir = abs_path(dirname($0));
+my $tmpdir = $ENV{CYRUS_CUNIT_TMPDIR} || $ENV{TMPDIR} || '/tmp';
 my $unit = "$srcdir/unit";
 
 # Convert a list of tests into a list of just the suites that contain them
@@ -63,17 +64,18 @@ while (@suites) {
     }
 
     my $next = shift @suites;
-    my (undef, $outfile) = tempfile(UNLINK => 0);
+    my (undef, $outfile) = tempfile(DIR => $tmpdir, UNLINK => 0);
 
     my $pid = fork;
     unless ($pid) {
-        my $tmpdir = tempdir("cyrus-cunit-XXXXXX",
-                             DIR => ($ENV{TMPDIR} || "/tmp"), CLEANUP => 1);
+        my $workdir = tempdir("cyrus-cunit-XXXXXX",
+                              DIR => $tmpdir, CLEANUP => 1);
         # Copy test data files to native Linux tmpdir so OpenSSL and others
         # can read them without macOS virtioFS interference
-        mkdir "$tmpdir/data";
-        system("cp $srcdir/data/* $tmpdir/data/ 2>/dev/null");
-        chdir $tmpdir;
+        mkdir "$workdir/data";
+        system("cp $srcdir/data/* $workdir/data/ 2>/dev/null");
+        chdir $workdir;
+        local $ENV{CYRUS_CUNIT_TMPDIR} = $workdir;
         my $r = system("$unit $next -v > $outfile 2>&1") >> 8;
         chdir "/"; # leave tmpdir before CLEANUP removes it
         exit $r;
