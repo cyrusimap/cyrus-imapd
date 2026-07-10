@@ -715,72 +715,41 @@ BUILT_SOURCES += cunit/unit-registry.c
 CLEANFILES += cunit/unit-registry.c $(CUNIT_INTERMEDIATES)
 check_PROGRAMS += cunit/unit
 
-# To run under Valgrind, do: make VG=1 check
-VALGRIND = ${abs_top_srcdir}/libtool --mode=execute valgrind \
-            --tool=memcheck \
-            --leak-check=full \
-            --suppressions=${abs_top_srcdir}/cunit/vg.supp \
-            --error-exitcode=75
-
-check-local:
+# To run unit tests under Valgrind, do:
+#     make VG=1 check
+# This applies to all check rules except check-fast.
+check-local: cunit/run
 	@echo "Running unit tests"
-	@vg= ; \
-		test -z "$$VG" || vg="$(VALGRIND)" ; \
-		tmpdir=$$(mktemp -d "$${TMPDIR:-/tmp}/cyrus-cunit-XXXXXX") || exit 1 ; \
-		trap "rm -rf $$tmpdir" EXIT ; \
-		cd $$tmpdir ; \
-		mkdir data ; \
-		cp $(abs_srcdir)/cunit/data/* data/ ; \
-		$$vg $(abs_builddir)/cunit/unit -v ; \
-		retval=$$? ; \
-		exit $$retval
+	$(PERL) cunit/run --verbose
 
 # Run every test individually, as if you had run them one at a time as
 # `make check-suitename:testname` manually.  Mainly useful for detecting
 # abstraction failures within our testing infrastructure -- if tests
 # succeed with `make check` but fail with `make check-discrete`, or
 # vice-versa, some state is leaking between tests!
-#
-# This assumes your sh supports arithmetic and process substitutions.
-# Sorry <3
-check-discrete: cunit/unit
+check-discrete: cunit/run cunit/unit
 	@echo "Running unit tests, one at a time"
-	@vg= ; \
-		test -z "$$VG" || vg="$(VALGRIND) --quiet --log-fd=3" ; \
-		fails=0 ; \
-		tests=0 ; \
-		while read t ; do \
-			tests=$$(($$tests + 1)) ; \
-			tmpdir=$$(mktemp -d "$${TMPDIR:-/tmp}/cyrus-cunit-XXXXXX") ; \
-			if (cd $$tmpdir && mkdir data && cp $(abs_srcdir)/cunit/data/* data/ && $$vg $(abs_builddir)/cunit/unit $$t >/dev/null 3>&2 2>/dev/null) ; then \
-				echo "[  OK  ] $$t" ; \
-			else \
-				fails=$$(($$fails + 1)) ; \
-				echo "[FAILED] $$t" ; \
-			fi ; \
-			rm -rf $$tmpdir ; \
-		done < <( $(abs_builddir)/cunit/unit -l ) ; \
-		echo "$$fails/$$tests tests failed" ; \
-		exit $$fails
+	$(PERL) cunit/run --discrete
 
 # Fast perl runner for cunit in parallel
-check-fast: cunit/unit
+# (n.b. does not support Valgrind)
+check-fast: cunit/pcunit cunit/unit
 	@echo "Running unit tests in parallel"
-	$(PERL) ./cunit/pcunit $$JOBS
+	$(PERL) cunit/pcunit $$JOBS
 
-check-%: cunit/unit
+# Run named suites or tests:
+#     make check-libconfig         # run the whole libconfig suite
+#     make check-backend:starttls  # run 'starttls' from the backend suite
+check-%: cunit/run cunit/unit
 	@echo "Running unit tests for $*"
-	@vg= ; \
-		test -z "$$VG" || vg="$(VALGRIND)" ; \
-		tmpdir=$$(mktemp -d "$${TMPDIR:-/tmp}/cyrus-cunit-XXXXXX") || exit 1 ; \
-		trap "rm -rf $$tmpdir" EXIT ; \
-		cd $$tmpdir ; \
-		mkdir data ; \
-		cp $(abs_srcdir)/cunit/data/* data/ ; \
-		$$vg $(abs_builddir)/cunit/unit -v $* ; \
-		exit $$?
+	$(PERL) cunit/run --verbose $*
 
-endif
+# As per check-discrete, with named suites or tests
+check-discrete-%: cunit/run cunit/unit
+	@echo "Running unit tests for $*, one at a time"
+	$(PERL) cunit/run --discrete $*
+
+endif # CUNIT
 
 includedir=@includedir@/cyrus
 
