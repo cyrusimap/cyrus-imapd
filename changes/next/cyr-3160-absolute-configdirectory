@@ -1,0 +1,23 @@
+Description:
+
+The :imapdconf:`configdirectory` must now be an absolute path.
+
+
+Documentation:
+
+:imapdconf:`configdirectory`
+
+
+Config changes:
+
+configdirectory
+
+
+Upgrade instructions:
+
+If configdirectory was set to a relative path, it must be changed.
+
+
+GitHub issue:
+
+None

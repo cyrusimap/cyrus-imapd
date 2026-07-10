@@ -56,9 +56,6 @@ static char *proc_getpath(pid_t pid, int isnew)
     /* belt and suspenders: libconfig defaults it if it wasn't set */
     assert(procpath != NULL);
 
-    /* XXX this is kinda weird -- we do not have this level of verification
-     * XXX for config_dir, but perhaps we should
-     */
     if (procpath[0] != '/')
         fatal("proc_path must be fully qualified", EX_CONFIG);
 

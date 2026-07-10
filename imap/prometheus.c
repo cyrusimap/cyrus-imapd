@@ -45,9 +45,6 @@ EXPORTED const char *prometheus_stats_dir(void)
 
     tmp = config_getstring(IMAPOPT_PROMETHEUS_STATS_DIR);
 
-    /* XXX this is a little weird, we don't validate these requirements
-     * XXX for config_dir...
-     */
     if (tmp[0] != '/')
         fatal("prometheus_stats_dir must be fully qualified", EX_CONFIG);
 
