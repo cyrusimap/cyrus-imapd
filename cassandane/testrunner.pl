@@ -2,6 +2,163 @@
 # SPDX-License-Identifier: BSD-3-Clause-CMU
 # See COPYING file at the root of the distribution for more details.
 
+=head1 NAME
+
+testrunner.pl - run the Cassandane integration test suite
+
+=head1 SYNOPSIS
+
+    ./testrunner.pl [options] [testname...]
+
+    ./testrunner.pl                     # run everything, 'prettier' output
+    ./testrunner.pl Quota               # run the whole Quota suite
+    ./testrunner.pl Quota.quotarename   # run one test
+    ./testrunner.pl Admin Quota         # run several suites
+    ./testrunner.pl ~Quota              # run everything *except* Quota
+    ./testrunner.pl -l                  # list matching suites, don't run them
+
+=head1 DESCRIPTION
+
+This is the low-level runner for the Cassandane test suite.  If you just want
+to run the tests, you almost certainly want C<cyd test> (inside the container)
+or C<dar test> (from the host), which builds Cyrus, provisions a
+F<cassandane.ini>, and drops to the C<cyrus> user before handing off to this
+script.  Reach for C<testrunner.pl> directly only when you need something
+C<cyd test> doesn't expose, or when you're debugging the runner itself.  In
+other words: by the time you're typing C<./testrunner.pl>, you've opted into
+hard mode.
+
+A few things worth knowing before you do:
+
+=over 4
+
+=item *
+
+Cassandane runs out of its own directory; nothing gets installed.  Run this
+script with the F<cassandane/> directory as your working directory.
+
+=item *
+
+The Cyrus code under test must run as the superuser or as the C<cyrus> user.
+You invoke C<testrunner.pl> as yourself; if you're root it steps down to
+C<cyrus>, and otherwise it re-invokes itself under C<sudo>.
+
+=item *
+
+All runtime state lives under the C<rootdir> from F<cassandane.ini> (by
+default F</var/tmp/cass>).  A list of the tests that failed is left in
+F<$rootdir/failed> (this is what C<--rerun> reads), and C<-f prettier> writes
+full error reports for failed tests under F<$rootdir/reports>.
+
+=item *
+
+Before running anything, the script checks that Cassandane's own helper
+binaries (listed in F<utils/Makefile>) have been built, and bails out telling
+you to run C<make> if they haven't.
+
+=back
+
+=head1 SELECTING TESTS
+
+With no test names, every test is run.  Otherwise, name what you want:
+
+=over 4
+
+=item *
+
+a whole suite by its name without the leading C<Cassandane::Cyrus::>, e.g.
+C<Quota>;
+
+=item *
+
+a single test as C<Suite.test>, e.g. C<Quota.quotarename>.
+
+=back
+
+Names accumulate left to right, and any name may be negated by prefixing it
+with C<!> or C<~>.  (Your shell probably wants C<!> escaped, so C<~> is usually
+easier.)  So C<Quota ~Quota.quotarename> runs the whole Quota suite except
+C<quotarename>, and C<~Quota> runs everything but the Quota suite.
+
+For convenience, a single argument may contain several whitespace-separated
+names.
+
+=head1 OPTIONS
+
+Run C<./testrunner.pl --help> for the authoritative, self-documenting list.
+The options most worth knowing about:
+
+=over 4
+
+=item B<-f>, B<--format> I<FORMAT>
+
+Choose a test report format; repeatable.  The formats are:
+
+=over 4
+
+=item C<prettier> (the default)
+
+One line per test with its status, quiet about the details of failures.  Best
+for running many tests: see F<$rootdir/failed> and F<$rootdir/reports>
+afterward for the gory details.
+
+=item C<pretty>
+
+Like C<prettier>, but dumps each failure's error report inline.  Noisy in bulk;
+handy when debugging a single test, especially with C<-vvv>.
+
+=item C<tap>
+
+Test Anything Protocol.  Rudimentary, but should be valid TAP.
+
+=item C<xml>
+
+jUnit-style XML, written to a F<reports/> subdirectory of the current
+directory.  (Not the same F<reports> as C<prettier> uses.)  Useful for some CI
+systems; our GitHub CI doesn't use it.
+
+=back
+
+=item B<-v>, B<--verbose>
+
+Make Cassandane and several of the Cyrus programs it runs much noisier on
+stderr.  Repeatable, and the short form stacks: C<-vvv>.
+
+=item B<--valgrind>
+
+Run every Cyrus executable under Valgrind.  Much slower, but it catches a lot
+of subtle bugs.  Per-test logs land in F<$rootdir/$instance/vglogs/>, and any
+error Valgrind reports (leaks included) fails the test.
+
+=item B<-c>, B<--cleanup>[=I<yes|no|pre|post>]
+
+Clean up C<$rootdir> leftovers before the run and after each passing test.
+Useful when disk (e.g. a tmpfs) is tight.  Bare C<--cleanup> means C<yes>.  If
+you want this most of the time, set C<cassandane.cleanup> in F<cassandane.ini>
+and use C<--no-cleanup> to override it.
+
+=item B<-j>, B<--jobs> I<N>
+
+Run I<N> test workers in parallel.
+
+=item B<--slow>, B<--slow-only>
+
+Also run (or run only) the tests marked slow, which are skipped by default.
+
+=item B<--rerun>, B<--rerun-suite>
+
+Rerun just the tests that failed last time (read from F<$rootdir/failed>).
+C<--rerun-suite> reruns the whole suite of each such test.
+
+=item B<-l>, B<--list>
+
+List the matching tests instead of running them.  Repeat (C<-ll>) to list
+individual tests rather than just suites.
+
+=back
+
+=cut
+
 use strict;
 use warnings;
 use File::Slurp;
