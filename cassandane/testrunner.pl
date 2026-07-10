@@ -5,6 +5,7 @@
 use strict;
 use warnings;
 use File::Slurp;
+use Getopt::Long::Descriptive;
 use List::Util qw(uniq);
 
 use lib '.';
@@ -24,15 +25,8 @@ $Data::Dumper::Indent = 1;
 $Data::Dumper::Sortkeys = 1;
 $Data::Dumper::Trailingcomma = 1;
 
-my %want_formats = ();
 my %format_params = ();
 my $output_dir = 'reports';
-my $do_list = 0;
-# The default really should be --no-keep-going like make
-my $keep_going = 1;
-my $skip_slow = 1;
-my $slow_only = 0;
-my $log_directory;
 my @names;
 
 # Make sure our binary components have been built already
@@ -158,129 +152,97 @@ if ($@) {
     };
 }
 
-sub usage
-{
-    printf STDERR "Usage: testrunner.pl [options] -f <xml|tap|pretty|prettier> [testname...]\n";
-    exit(1);
+my ($opt, $usage) = describe_options(
+    "%c %o [testname...]",
+
+    [ 'format|f=s@',   "test report format, repeatable: xml, tap, pretty, or"
+                     . " prettier (default: prettier)" ],
+    [ 'list|l+',       "list matching tests instead of running them; repeat"
+                     . " (-ll) to list individual tests, not just suites" ],
+    [],
+    [ 'jobs|j=i',      "run this many test workers in parallel" ],
+    # The default really should be --no-keep-going like make
+    [ 'keep-going|k!', "keep going after a test fails (default: yes)",
+                       { default => 1 } ],
+    [ 'stop|S',        "stop at the first failing test; same as --no-keep-going" ],
+    [],
+    [ 'slow',          "also run the tests marked slow" ],
+    [ 'slow-only',     "run *only* the tests marked slow" ],
+    [ 'rerun',         "rerun only the tests that failed on the previous run" ],
+    [ 'rerun-suite',   "like --rerun, but rerun the whole suite of each failure" ],
+    [],
+    [ 'valgrind!',     "run every Cyrus executable under Valgrind (slow, thorough)" ],
+    [ 'cleanup|c:s',   "clean up leftovers before the run and after each passing"
+                     . " test: yes|no|pre|post (bare --cleanup means yes)" ],
+    [ 'no-cleanup',    "never clean up leftovers (overrides --cleanup)" ],
+    [],
+    [ 'verbose|v+',    "make Cassandane and Cyrus much noisier; repeat (-vvv)"
+                     . " for more (default: 0)", { default => 0 } ],
+    [ 'no-ok',         "report only failures and errors, omitting passing tests" ],
+    [ 'log-directory|L=s', "collect per-test logs under this directory" ],
+    [ 'config=s',      "use this Cassandane config file instead of the default" ],
+    [ 'define|D=s%',   "override one Cassandane config value: -Dsection.param=value" ],
+    [],
+    [ 'help|h',        "print this help message and exit" ],
+);
+
+sub usage {
+    print STDERR $usage->text;
+    exit 1;
 }
 
-my $cassini_filename;
+if ($opt->help) {
+    print $usage->text;
+    exit 0;
+}
+
+my $cassini_filename = $opt->config;
 my @cassini_overrides;
-my $want_rerun;
 
-while (defined(my $a = shift))
-{
-    if ($a eq '--config')
-    {
-        $cassini_filename = shift;
-    }
-    elsif ($a eq '-c' || $a =~ m/^--cleanup(?:=(\w*))?$/)
-    {
-        my $v = $1 // 'yes';
-        usage if not grep { $v eq $_ } qw(yes no pre post);
-        push(@cassini_overrides, ['cassandane', 'cleanup', $v]);
-    }
-    elsif ($a eq '--no-cleanup')
-    {
-        push(@cassini_overrides, ['cassandane', 'cleanup', 'no']);
-    }
-    elsif ($a eq '-f')
-    {
-        my $format = shift;
-        usage unless defined $formatters{$format};
-        $want_formats{$format} = 1;
-    }
-    elsif ($a =~ m/^-f(\w+)$/)
-    {
-        my $format = $1;
-        usage unless defined $formatters{$format};
-        $want_formats{$format} = 1;
-    }
-    elsif ($a eq '-v' || $a eq '--verbose')
-    {
-        set_verbose(get_verbose()+1);
-    }
-    elsif ($a =~ m/^-v+$/)
-    {
-        # ganged verbosity
-        set_verbose(get_verbose() + length($a) - 1);
-    }
-    elsif ($a eq '--valgrind')
-    {
-        push(@cassini_overrides, ['valgrind', 'enabled', 'yes']);
-    }
-    elsif ($a eq '--no-valgrind')
-    {
-        push(@cassini_overrides, ['valgrind', 'enabled', 'no']);
-    }
-    elsif ($a eq '-j' || $a eq '--jobs')
-    {
-        my $jobs = 0 + shift;
-        usage unless $jobs > 0;
-        push(@cassini_overrides, ['cassandane', 'maxworkers', $jobs]);
-    }
-    elsif ($a =~ m/^-j(\d+)$/)
-    {
-        my $jobs = 0 + $1;
-        usage unless $jobs > 0;
-        push(@cassini_overrides, ['cassandane', 'maxworkers', $jobs]);
-    }
-    elsif ($a eq '-L' || $a eq '--log-directory')
-    {
-        $log_directory = shift;
-        usage unless defined $log_directory;
-    }
-    elsif ($a eq '-l' || $a eq '--list')
-    {
-        $do_list++;
-    }
-    elsif ($a eq '-k' || $a eq '--keep-going')
-    {
-        # These option names stolen from GNU make
-        $keep_going = 1;
-    }
-    elsif ($a eq '-S' || $a eq '--stop' || $a eq '--no-keep-going')
-    {
-        # These option names stolen from GNU make
-        $keep_going = 0;
-    }
-    elsif ($a =~ m/^-D.*=/)
-    {
-        my ($sec, $param, $val) = ($a =~ m/^-D([^.=]+)\.([^.=]+)=(.*)$/);
-        push(@cassini_overrides, [$sec, $param, $val]);
-    }
-    elsif ($a eq '--slow')
-    {
-        $skip_slow = 0;
-    }
-    elsif ($a eq '--slow-only')
-    {
-        $skip_slow = 0;
-        $slow_only = 1;
-    }
-    elsif ($a eq '--rerun')
-    {
-        $want_rerun = 1;
-    }
-    elsif ($a eq '--rerun-suite')
-    {
-        $want_rerun = 2;
-    }
-    elsif ($a eq '--no-ok')
-    {
-        # suppress success reports in formatters that support that
-        # (i.e. only report errors and failures)
-        $format_params{no_ok} = 1;
-    }
-    elsif ($a =~ m/^-/)
-    {
-        usage;
-    }
-    else
-    {
-        push(@names, split(/\s+/, $a));
+my %want_formats;
+for my $format (@{ $opt->format // [] }) {
+    usage() unless defined $formatters{$format};
+    $want_formats{$format} = 1;
+}
+
+set_verbose(get_verbose() + $opt->verbose);
+
+$format_params{no_ok} = 1 if $opt->no_ok;
+
+my $do_list       = $opt->list // 0;
+my $keep_going    = $opt->stop ? 0 : $opt->keep_going;
+my $skip_slow     = ($opt->slow || $opt->slow_only) ? 0 : 1;
+my $slow_only     = $opt->slow_only ? 1 : 0;
+my $log_directory = $opt->log_directory;
+my $want_rerun    = $opt->rerun_suite ? 2 : $opt->rerun ? 1 : 0;
+
+if (defined $opt->jobs) {
+    usage() unless $opt->jobs > 0;
+    push @cassini_overrides, ['cassandane', 'maxworkers', $opt->jobs];
+}
+
+if (defined $opt->valgrind) {
+    push @cassini_overrides,
+        ['valgrind', 'enabled', $opt->valgrind ? 'yes' : 'no'];
+}
+
+push @cassini_overrides, ['cassandane', 'cleanup', 'no'] if $opt->no_cleanup;
+
+if (defined $opt->cleanup) {
+    my $v = $opt->cleanup eq '' ? 'yes' : $opt->cleanup;
+    usage() unless grep { $v eq $_ } qw(yes no pre post);
+    push @cassini_overrides, ['cassandane', 'cleanup', $v];
+}
+
+if (my $overrides = $opt->define) {
+    for my $key (sort keys %$overrides) {
+        my ($sec, $param) = split /\./, $key, 2;
+        usage() unless length($sec // '') && length($param // '');
+        push @cassini_overrides, [$sec, $param, $overrides->{$key}];
     }
 }
+
+push @names, map { split /\s+/, $_ } @ARGV;
 
 my $cassini = Cassandane::Cassini->new(filename => $cassini_filename);
 map { $cassini->override(@$_); } @cassini_overrides;
