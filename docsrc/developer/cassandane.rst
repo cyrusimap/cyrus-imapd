@@ -333,3 +333,16 @@ plus non-RFC822 attributes, as returned by a message store or the generator)
 and ``Cassandane::Generator`` (which produces plausible random messages).  Both
 are best read about at the source: ``perldoc Cassandane/Message.pm`` and
 ``perldoc Cassandane/Generator.pm``.
+
+Module reference
+----------------
+
+Some Cassandane modules are documented in their source using Perl's Pod system.
+The pages below are rendered from that Pod when the docs are built.  (You can
+read the same text offline with ``perldoc``.)
+
+.. toctree::
+    :glob:
+    :maxdepth: 1
+
+    cassandane-api/*

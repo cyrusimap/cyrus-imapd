@@ -70,6 +70,7 @@ doc/text/
 docsrc/.doctrees/
 docsrc/_doxygen/
 docsrc/build/
+docsrc/developer/cassandane-api/
 docsrc/reference/manpages/configs/imapd.conf.rst
 docsrc/reference/manpages/usercommands/cyradm.rst
 docsrc/reference/manpages/usercommands/sieveshell.rst
