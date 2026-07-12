@@ -1,9 +1,39 @@
-#!/usr/bin/perl -w
-
+#!/usr/bin/perl
 use strict;
 use warnings;
 
 use Pod::POM::View::Restructured;
+
+# Optional "intelligent link" mode, enabled when the environment supplies a
+# namespace and/or a cross-reference map.  Without it, every L<> becomes a
+# (long-dead) search.cpan.org link; with it, links dispatch by target:
+#
+#   * a target that has a page of its own -> an internal :doc: cross-reference
+#   * another module in our namespace     -> literal text (no page to link to)
+#   * any other Module::Name              -> a metacpan.org link
+#   * L</section>                         -> an in-page link
+#
+# A L</section> whose section doesn't exist is left as a dangling in-page link
+# on purpose, so the doc build (under -W) fails and the broken Pod gets fixed
+# rather than silently masked.
+#
+# PERL2RST_NAMESPACE   a module-name prefix that counts as "ours"
+# PERL2RST_XREF_FILE   a file of "Module::Name<TAB>docname" lines, one per
+#                      module that has its own generated page
+my $namespace = $ENV{PERL2RST_NAMESPACE};
+
+my %xref;
+if (my $xref_file = $ENV{PERL2RST_XREF_FILE}) {
+    open my $fh, '<', $xref_file or die "can't read $xref_file: $!";
+    while (defined(my $line = <$fh>)) {
+        chomp $line;
+        my ($module, $docname) = split /\t/, $line, 2;
+        $xref{$module} = $docname if defined $docname && length $docname;
+    }
+    close $fh;
+}
+
+my $intelligent = defined($namespace) || %xref;
 
 {
     no warnings 'redefine';
@@ -11,8 +41,6 @@ use Pod::POM::View::Restructured;
         my ($self, $node) = @_;
 
         my $fmt = $node->format();
-
-        #print STDERR "got for: fmt='$fmt', text='" . $node->text() . "'\n";
 
         if ($fmt eq 'pod2rst') {
             my $text = $node->text();
@@ -27,11 +55,42 @@ use Pod::POM::View::Restructured;
 
         return $self->SUPER::view_for($node);
     };
+
+    # Render L<> ourselves in intelligent mode.  We capture the shipped method
+    # rather than calling SUPER:: -- SUPER:: from a glob-installed sub resolves
+    # against this script's package, not the view's.
+    my $orig_link = \&Pod::POM::View::Restructured::view_seq_link;
+    *Pod::POM::View::Restructured::view_seq_link = sub {
+        my ($self, $text) = @_;
+        return $orig_link->($self, $text) unless $intelligent;
+
+        my ($label, $target) = $text =~ /\A(.+?)\|(.+)\z/s
+                             ? ($1, $2)
+                             : ($text, $text);
+
+        # L</section> or L<"section">
+        if ($target =~ m{\A/(.+)\z}s) {
+            (my $section = $1) =~ s/\A"(.+)"\z/$1/;
+            return qq{`$section`_};
+        }
+
+        (my $module = $target) =~ s/\s+/ /g;
+
+        return qq{:doc:`$label <$xref{$module}>`} if $xref{$module};
+
+        if (defined($namespace) && $module =~ /\A\Q$namespace\E(?:::|\z)/) {
+            return qq{``$module``};
+        }
+
+        if ($module =~ /::/) {
+            return qq{`$label <https://metacpan.org/pod/$module>`_};
+        }
+
+        return $orig_link->($self, $text);
+    };
 }
 
 my $title = shift || die "Usage: $0 title < in > out";
 
 my $conv = Pod::POM::View::Restructured->new;
 my $output = $conv->convert_file(\*STDIN, "**$title**", \*STDOUT);
-
-

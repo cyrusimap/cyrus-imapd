@@ -20,7 +20,7 @@ either with or without setup actions:
     my $user = $test_case->instance->create_user_without_setup("someuser");
 
 Once you have them, you can get pre-authenticated clients for various protocols
-with the L</jmap>, L</caldav>, L</carddav>, or L</imap> methods.
+with the C<jmap>, C<caldav>, C<carddav>, or C<imap> methods.
 
 You can also easily create test data using the entity system, for which see the
 L</Test Entities> section below or L<Cassandane::TestEntity>.
