@@ -3339,7 +3339,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             /* Construct Content-Disposition header */
             char *encfname = NULL;
             for (const unsigned char *p = (unsigned char *)resp_body->dispo.fname; p && *p; p++) {
-                if (*p >= 0x80) {
+                if (*p < 0x20 || *p >= 0x7f) {
                     encfname = charset_encode_mimexvalue(resp_body->dispo.fname, NULL);
                     break;
                 }
@@ -3351,9 +3351,17 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 free(encfname);
             }
             else {
+                /* filename is printable ASCII: emit as a quoted-string,
+                 * backslash-escaping DQUOTE and backslash (RFC 9110, 5.6.4) */
+                struct buf fname = BUF_INITIALIZER;
+                for (const char *p = resp_body->dispo.fname; *p; p++) {
+                    if (*p == '"' || *p == '\\') buf_putc(&fname, '\\');
+                    buf_putc(&fname, *p);
+                }
                 simple_hdr(txn, "Content-Disposition", "%s; filename=\"%s\"",
                         resp_body->dispo.attach ? "attachment" : "inline",
-                        resp_body->dispo.fname);
+                        buf_cstring(&fname));
+                buf_free(&fname);
             }
         }
         if (txn->resp_body.enc.type) {
