@@ -123,7 +123,7 @@ sub undump_user {
 
   my $mailboxes = $opts{data}{mailboxes};
 
-  my $acl = $opts{acl} || "$opts{username}      lrswipkxtecdan  admin   lrswipkxtecdan  anyone  p       ",
+  my $acl = $opts{acl} || "$opts{username}      lrswipkxtecdan  admin   lrswipkxtecdan  anyone  p       ";
 
   my $time = time();
   my @subs;
@@ -194,8 +194,8 @@ sub undump_user {
     push @subs, $intname if $mailbox->{subscribed};
   }
 
-  if (@subs) {
-    $self->{sync}->dlwrite('APPLY', 'SUB', { USERID => $opts{username}, MBOXNAME => $_ }) for @subs;
+  for (@subs) {
+    $self->{sync}->dlwrite('APPLY', 'SUB', { USERID => $opts{username}, MBOXNAME => $_ });
   }
 }
 
