@@ -25,6 +25,11 @@ sub test_syncproto_dump_restore ($self)
     my $sp = Cyrus::SyncProto->new($admintalk);
     my $as = Cyrus::AccountSync->new($sp);
     my $data = $as->dump_user(username => 'cassandane');
+
+    xlog $self, "Dumped names use external altnamespace + unixhs format";
+    my @names = sort map { $_->{name} } @{$data->{mailboxes}};
+    $self->assert_deep_equals(['INBOX', 'Sent', 'subfolder'], \@names);
+
     $self->assert_null($as->dump_user(username => 'newuser'));
     $as->undump_user(username => 'newuser', data => $data);
     my $newdata = $as->dump_user(username => 'newuser');
