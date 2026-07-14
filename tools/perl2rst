@@ -2,6 +2,7 @@
 use strict;
 use warnings;
 
+use File::Temp qw(tempfile);
 use Pod::POM::View::Restructured;
 
 # Optional "intelligent link" mode, enabled when the environment supplies a
@@ -17,9 +18,12 @@ use Pod::POM::View::Restructured;
 # on purpose, so the doc build (under -W) fails and the broken Pod gets fixed
 # rather than silently masked.
 #
-# PERL2RST_NAMESPACE   a module-name prefix that counts as "ours"
-# PERL2RST_XREF_FILE   a file of "Module::Name<TAB>docname" lines, one per
-#                      module that has its own generated page
+# PERL2RST_NAMESPACE     a module-name prefix that counts as "ours"
+# PERL2RST_XREF_FILE     a file of "Module::Name<TAB>docname" lines, one per
+#                        module that has its own generated page
+# PERL2RST_SUMMARY_FILE  a file to append a reST definition-list entry to for
+#                        this module: its :doc: link and the abstract from its
+#                        =head1 NAME line ("Module - the abstract goes here")
 my $namespace = $ENV{PERL2RST_NAMESPACE};
 
 my %xref;
@@ -93,4 +97,28 @@ my $intelligent = defined($namespace) || %xref;
 my $title = shift || die "Usage: $0 title < in > out";
 
 my $conv = Pod::POM::View::Restructured->new;
-my $output = $conv->convert_file(\*STDIN, "**$title**", \*STDOUT);
+
+# In summary mode we read the input twice -- once to lift the abstract out of
+# the NAME section for the module listing, once to convert -- so slurp it and
+# stage a temp file (convert_file wants something -r can stat, which an
+# in-memory filehandle is not).
+if (my $summary_file = $ENV{PERL2RST_SUMMARY_FILE}) {
+    my $content = do { local $/; <STDIN> };
+
+    if (defined(my $docname = $xref{$title})) {
+        my ($abstract) = $content
+            =~ /^=head1[ \t]+NAME\b.*\n(?:[ \t]*\n)+[ \t]*\S.*?\s+-\s+(.+?)[ \t]*$/m;
+        open my $sfh, '>>', $summary_file
+            or die "can't append to $summary_file: $!";
+        print $sfh "* :doc:`$title <$docname>` - ", ($abstract // '(no summary)'), "\n\n";
+        close $sfh;
+    }
+
+    my ($tmp_fh, $tmp_name) = tempfile(UNLINK => 1);
+    print $tmp_fh $content;
+    close $tmp_fh;
+    $conv->convert_file($tmp_name, "**$title**", \*STDOUT);
+}
+else {
+    $conv->convert_file(\*STDIN, "**$title**", \*STDOUT);
+}

@@ -1965,6 +1965,7 @@ docsrc/developer/cassandane-api/.stamp: $(top_srcdir)/tools/perl2rst
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)pms=`cd $(top_srcdir) && grep -rl '^=head' cassandane/Cassandane --include='*.pm' | sort`; \
 	: > $(@D)/.xref; \
+	: > $(@D)/summary.inc; \
 	for pm in $$pms; do \
 	    mod=`echo "$$pm" | sed -e 's|^cassandane/||' -e 's|\.pm$$||' -e 's|/|::|g'`; \
 	    out=`echo "$$mod" | sed -e 's|::|-|g'`; \
@@ -1974,6 +1975,7 @@ docsrc/developer/cassandane-api/.stamp: $(top_srcdir)/tools/perl2rst
 	    mod=`echo "$$pm" | sed -e 's|^cassandane/||' -e 's|\.pm$$||' -e 's|/|::|g'`; \
 	    out=`echo "$$mod" | sed -e 's|::|-|g'`; \
 	    PERL2RST_NAMESPACE=Cassandane PERL2RST_XREF_FILE=$(@D)/.xref \
+	        PERL2RST_SUMMARY_FILE=$(@D)/summary.inc \
 	        $(PERL) $(top_srcdir)/tools/perl2rst "$$mod" \
 	        < $(top_srcdir)/$$pm > $(@D)/$$out.rst.NEW \
 	        && mv $(@D)/$$out.rst.NEW $(@D)/$$out.rst; \

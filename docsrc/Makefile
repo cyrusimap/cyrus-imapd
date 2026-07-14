@@ -75,6 +75,7 @@ cassandane-api:
 	@dir=$(SOURCEDIR)/developer/cassandane-api; \
 	pms=`grep -rl '^=head' ../cassandane/Cassandane --include='*.pm' | sort`; \
 	: > $$dir/.xref; \
+	: > $$dir/summary.inc; \
 	for pm in $$pms; do \
 	    mod=`echo "$$pm" | sed -e 's|.*/cassandane/||' -e 's|\.pm$$||' -e 's|/|::|g'`; \
 	    out=`echo "$$mod" | sed -e 's|::|-|g'`; \
@@ -85,6 +86,7 @@ cassandane-api:
 	    out=`echo "$$mod" | sed -e 's|::|-|g'`; \
 	    echo "  $$mod"; \
 	    PERL2RST_NAMESPACE=Cassandane PERL2RST_XREF_FILE=$$dir/.xref \
+	        PERL2RST_SUMMARY_FILE=$$dir/summary.inc \
 	        $(PERL2RST) "$$mod" < "$$pm" > $$dir/$$out.rst; \
 	done
 
