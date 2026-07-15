@@ -64,7 +64,8 @@ while (@suites) {
     }
 
     my $next = shift @suites;
-    my (undef, $outfile) = tempfile(DIR => $tmpdir, UNLINK => 0);
+    my (undef, $outfile) = tempfile("cyrus-cunit-$next.out-XXXXXX",
+                                    DIR => $tmpdir, UNLINK => 0);
 
     my $pid = fork;
     unless ($pid) {
