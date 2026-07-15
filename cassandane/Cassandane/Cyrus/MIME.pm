@@ -6,6 +6,7 @@ use strict;
 use warnings;
 use Data::Dumper;
 
+use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
