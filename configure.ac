@@ -1845,6 +1845,7 @@ AX_PROG_PERL_MODULES([App::Cmd], [], [AC_MSG_ERROR([Need perl module App::Cmd])]
 # These scripts need their perl shebang set.  They don't use any Cyrus modules,
 # so they don't need a full fixsearchpath.pl run; it's enough to just let
 # configure substitute the shebangs and set the mode.
+AC_CONFIG_FILES([cunit/run],    [chmod +x cunit/run])
 AC_CONFIG_FILES([tools/mkimap], [chmod +x tools/mkimap])
 AC_CONFIG_FILES([tools/rehash], [chmod +x tools/rehash])
 
@@ -1929,12 +1930,24 @@ if test "$enable_unit_tests" = "yes" ; then
     dnl Under VPATH builds the source and build directories are not the same,
     dnl so the built unit tests can't easily find their data files.
     dnl Solution: just link them into the build directory at the same path.
-    AC_CONFIG_LINKS([cunit/cacert.pem:cunit/cacert.pem])
-    AC_CONFIG_LINKS([cunit/cert.pem:cunit/cert.pem])
-    AC_CONFIG_LINKS([cunit/key.pem:cunit/key.pem])
+    AC_CONFIG_LINKS([cunit/data/cacert.pem:cunit/data/cacert.pem])
+    AC_CONFIG_LINKS([cunit/data/cert.pem:cunit/data/cert.pem])
+    AC_CONFIG_LINKS([cunit/data/key.pem:cunit/data/key.pem])
 
     dnl We also need cunit/pcunit for faster tests under VPATH builds
     AC_CONFIG_LINKS([cunit/pcunit:cunit/pcunit])
+
+    dnl Need a path to a temporary directory
+    AC_ARG_VAR([CYRUS_CUNIT_TMPDIR], [temporary directory for cunit [default: TMPDIR]])
+    AC_ARG_VAR([TMPDIR], [temporary directory [default: /tmp]])
+    AS_IF([test -n "$CYRUS_CUNIT_TMPDIR"], [],
+          [test -n "$TMPDIR"], [CYRUS_CUNIT_TMPDIR=$TMPDIR],
+          [CYRUS_CUNIT_TMPDIR=/tmp]);
+
+    dnl Don't automatically create a tmpdir!
+    dnl Instead, assert that it already exists.
+    AC_CHECK_FILE([$CYRUS_CUNIT_TMPDIR], [],
+                  [AC_MSG_ERROR([$CYRUS_CUNIT_TMPDIR not found])])
 
     USE_MAINTAINER_MODE=yes
 fi
@@ -2432,6 +2445,7 @@ Build info:
    ldflags:            $LDFLAGS
    libm:               $LIBM
    unit tests (cunit): $enable_unit_tests
+   CYRUS_CUNIT_TMPDIR: $CYRUS_CUNIT_TMPDIR
    perl:               $PERL
    xxd:                $XXD
    release checks:     $enable_release_checks

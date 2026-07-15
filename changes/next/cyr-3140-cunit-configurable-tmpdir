@@ -1,0 +1,24 @@
+Description:
+
+The temporary directory used by unit tests can now be set using the
+`CYRUS_CUNIT_TMPDIR` configure variable.
+
+
+Documentation:
+
+Run ``./configure --help | less``
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Nothing required
+
+
+GitHub issue:
+
+None

@@ -6,16 +6,17 @@
 #include "imap/global.h"
 #include "xunlink.h"
 
-
 #define PROLOG \
-    char *_fname = xstrdup("/tmp/cyrus-protXXXXXX"); \
-    int _fd = mkstemp(_fname)
+    char _fname[PATH_MAX] = {0}; \
+    int _fd = cunit_tmpfile(_fname, sizeof(_fname), "cyrus-protXXXXXX");
+
 #define BEGIN \
     { \
         int r = ftruncate(_fd, 0); \
         CU_ASSERT_EQUAL_FATAL(r, 0); \
         lseek(_fd, (off_t)0, SEEK_SET); \
     }
+
 #define END(b, n) \
     { \
         struct stat _sb; \
@@ -25,9 +26,9 @@
         if ((n) < _sb.st_size) CU_FAIL_FATAL("short read"); \
         if ((n) >= 0) (b)[(n)] = '\0'; \
     }
+
 #define EPILOG \
     xunlink(_fname); \
-    free(_fname); \
     close(_fd)
 
 static void test_printstring(void)
