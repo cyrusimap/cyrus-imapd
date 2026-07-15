@@ -27,7 +27,7 @@ static int set_up(void)
 {
     char dir[PATH_MAX] = {0};
 
-    if (!cunit_tmpdir(dir, sizeof(dir), "cyrus-cunit-proctestc-XXXXXX"))
+    if (!cunit_tmpdir(dir, sizeof(dir), "proc.testc-XXXXXX"))
         return -1;
 
     myconfigdir = xstrdup(dir);
