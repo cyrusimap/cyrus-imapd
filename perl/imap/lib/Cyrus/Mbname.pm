@@ -120,6 +120,32 @@ sub new_userfolder {
     return bless \%self, ref($class) || $class;
 }
 
+sub new_extuserfolder {
+    my $class = shift;
+    my $username = shift;
+    my $folder = shift;
+
+    my %self;
+    if ($username =~ s/\@(.*)//) {
+        $self{domain} = $1;
+    }
+    $self{localpart} = $username;
+
+    # external altnamespace + unixhierarchysep: "/" separator, with the inbox
+    # named exactly "INBOX" and its siblings as bare top-level names.  This is
+    # the inverse of extuserfolder(): only the bare string "INBOX" is the
+    # inbox; "INBOX/child" is a folder literally named INBOX below the inbox,
+    # not the inbox itself, so the leading component must be preserved.
+    if (defined $folder and $folder ne 'INBOX') {
+        $self{boxes} = [split m{/}, $folder];
+    }
+    else {
+        $self{boxes} = [];    # INBOX
+    }
+
+    return bless \%self, ref($class) || $class;
+}
+
 sub new_adminfolder {
     # this is basically new_intname, but with the domain on the end...
     my $class = shift;
