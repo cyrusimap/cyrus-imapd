@@ -2507,7 +2507,7 @@ void sched_request(const char *cal_ownerid, const char *sched_userid,
 
     if (!(rights & DACL_INVITE)) {
         /* DAV:need-privileges */
-        syslog(LOG_DEBUG,
+        syslog(LOG_WARNING,
                "No schedule-send-invite privilege for user %s on Outbox %s",
                httpd_userid, organizer);
 
@@ -2600,6 +2600,7 @@ struct reply_data {
     int master_send;
     int do_send;
     icalparameter_scheduleforcesend force_send;
+    bool found_attendee;  /* one of our schedule addresses is an attendee */
 };
 
 
@@ -2720,6 +2721,8 @@ static void schedule_sub_declines(const char *attendee,
         if (!find_attendee(comp, attendee))
             continue;
 
+        reply->found_attendee = true;
+
         /* no organizer, can't do anything */
         const char *organizer = get_organizer(comp);
         if (!organizer) continue;
@@ -2795,6 +2798,8 @@ static void schedule_sub_replies(const char *attendee,
         if (!find_attendee(comp, attendee))
             continue;
 
+        reply->found_attendee = true;
+
         /* no organizer, can't do anything */
         const char *organizer = get_organizer(comp);
         if (!organizer) continue;
@@ -2848,6 +2853,8 @@ static void schedule_full_decline(const char *attendee,
     icalcomponent *mastercomp = find_attended_component(oldical, "", attendee);
     if (!mastercomp) return;
 
+    reply->found_attendee = true;
+
     reply->organizer = get_organizer(mastercomp);
     if (!reply->organizer) return;
 
@@ -2892,6 +2899,8 @@ static void schedule_full_reply(const char *attendee,
         schedule_full_decline(attendee, h_cutoff, oldical, newical, reply);
         return;
     }
+
+    reply->found_attendee = true;
 
     reply->organizer = get_organizer(mastercomp);
     if (!reply->organizer) return;
@@ -2984,7 +2993,7 @@ void sched_reply(const char *cal_ownerid, const char *sched_userid,
 
     if (!(rights & DACL_REPLY)) {
         /* DAV:need-privileges */
-        syslog(LOG_DEBUG,
+        syslog(LOG_WARNING,
                "No schedule-send-reply privilege for user %s on Outbox %s",
                httpd_userid, sched_userid);
         update_organizer_status(newical, NULL, SCHEDSTAT_NOPRIVS);
@@ -3001,15 +3010,18 @@ void sched_reply(const char *cal_ownerid, const char *sched_userid,
      * send the accepts if any */
     icaltimetype h_cutoff = caldav_get_historical_cutoff();
 
+    bool found_attendee = false;
     int i;
     for (i = 0; i < strarray_size(schedule_addresses); i++) {
         const char *attendee = strarray_nth(schedule_addresses, i);
-        struct reply_data reply = { NULL, NULL, NULL, 0, 0, ICAL_SCHEDULEFORCESEND_NONE };
+        struct reply_data reply = { NULL, NULL, NULL, 0, 0, ICAL_SCHEDULEFORCESEND_NONE, false };
         if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
         schedule_full_reply(attendee, h_cutoff, oldical, newical, &reply);
         schedule_sub_replies(attendee, h_cutoff, oldical, newical, &reply);
         schedule_sub_declines(attendee, h_cutoff, oldical, newical, &reply);
+
+        if (reply.found_attendee) found_attendee = true;
 
         if (reply.do_send) {
             unsigned flags = SCHEDFLAG_IS_REPLY;
@@ -3026,6 +3038,24 @@ void sched_reply(const char *cal_ownerid, const char *sched_userid,
 
         if (reply.didparts) strarray_free(reply.didparts);
         if (reply.itip) icalcomponent_free(reply.itip);
+    }
+
+    if (!found_attendee) {
+        /* If the event has attendees and/or an organizer, but none of them
+         * match any scheduling addresses then nothing gets scheduled. */
+        icalcomponent *comp =
+            icalcomponent_get_first_real_component(newical ? newical : oldical);
+        if (comp && icalcomponent_get_first_invitee(comp)) {
+            const char *organizer = get_organizer(comp);
+            char *addrs = strarray_join(schedule_addresses, ", ");
+            xsyslog_ev(LOG_WARNING, "Not scheduling calendar component, "
+                    "ORGANIZER or ATTENDEE not found in scheduling addresses",
+                    lf_s("ical_uid", icalcomponent_get_uid(comp)),
+                    lf_s("sched_userid", sched_userid),
+                    lf_s("organizer", organizer),
+                    lf_s("sched_addrs", addrs));
+            free(addrs);
+        }
     }
 
     if (myoldical) icalcomponent_free(myoldical);

@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_schedule_organizer_mismatch
+    ($self)
+{
+    my $caldav = $self->default_user->caldav;
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "Default/$uuid.ics";
+
+    # cassandane is neither the ORGANIZER nor an ATTENDEE of this event
+    my $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:unknown-attendee\@example.com
+ORGANIZER:MAILTO:unknown-organizer\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    # clean notification and syslog cache
+    $self->{instance}->getnotify();
+    $self->{instance}->getsyslog();
+
+    xlog $self, "PUT an event with an unknown ORGANIZER";
+    $caldav->Request('PUT', $href, $event,
+                     'Content-Type' => 'text/calendar');
+
+    xlog $self, "Verify that no iMIP message is sent";
+    $self->assert_caldav_notified();
+
+    xlog $self, "We should have generated a syslog message about the mismatch";
+    $self->assert_syslog_matches($self->{instance},
+        qr/Not scheduling calendar component/);
+}

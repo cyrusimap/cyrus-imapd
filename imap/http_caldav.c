@@ -1192,7 +1192,7 @@ static int _scheduling_enabled(struct transaction_t *txn,
         !strcasecmp(buf_cstring(&buf), "F")) {
         is_enabled = 0;
 
-        syslog(LOG_DEBUG, "Scheduling disabled for user %s on mailbox %s"
+        syslog(LOG_WARNING, "Scheduling disabled for user %s on mailbox %s"
                " by CY:scheduling-enabled annotation",
                httpd_userid, mailbox_name(mailbox));
     }
