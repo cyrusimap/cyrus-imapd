@@ -4287,7 +4287,7 @@ static int setcalendarevents_schedule(const struct mailbox *mailbox,
     if (!strcasecmp(buf_cstring(&buf), "F") ||
         // http_caldav.c: has been accepting "no" so we do here as well
         !strcasecmp(buf_cstring(&buf), "no")) {
-        syslog(LOG_DEBUG, "Scheduling disabled for user %s on mailbox %s"
+        syslog(LOG_WARNING, "Scheduling disabled for user %s on mailbox %s"
                " by CY:scheduling-enabled annotation",
                httpd_userid, mailbox_name(mailbox));
         buf_free(&buf);

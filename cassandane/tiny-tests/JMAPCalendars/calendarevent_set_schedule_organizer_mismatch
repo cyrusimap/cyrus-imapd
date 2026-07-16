@@ -1,0 +1,53 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_schedule_organizer_mismatch
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    # clean notification and syslog cache
+    $self->{instance}->getnotify();
+    $self->{instance}->getsyslog();
+
+    xlog $self, "create event with an unknown ORGANIZER";
+    my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+        1 => {
+            version => "2.0",
+            calendarIds => {
+                $default_cal_id => JSON::true,
+            },
+            title => "foo",
+            showWithoutTime => JSON::false,
+            start => "2015-10-06T16:45:00",
+            timeZone => "Australia/Melbourne",
+            duration => "PT1H",
+            organizerCalendarAddress => "mailto:unknown-organizer\@example.com",
+            participants => {
+                org => {
+                    name => "Unknown Organizer",
+                    calendarAddress => 'mailto:unknown-organizer@example.com',
+                    roles => {
+                        owner => JSON::true,
+                    },
+                },
+                att => {
+                    name => "Unknown Attendee",
+                    calendarAddress => 'mailto:unknown-attendee@example.com',
+                },
+            },
+        }
+    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    xlog $self, "Verify that no iMIP message is sent";
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_null($imip);
+
+    xlog $self, "We should have generated a syslog message about the mismatch";
+    $self->assert_syslog_matches($self->{instance},
+        qr/Not scheduling calendar component/);
+}
