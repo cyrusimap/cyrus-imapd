@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_readonly_sharee_no_rewrite_vcard
+    ($self)
+{
+    my $sharee = $self->default_user;
+
+    xlog $self, "Create sharer user with addressbooks";
+    my $sharer = $self->{instance}->create_user('sharer');
+    my $abook_a = $sharer->addressbooks->create;
+    my $abook_b = $sharer->addressbooks->create;
+
+    xlog $self, "Share addressbooks with sharee";
+    $abook_a->share_with($sharee => [ 'mayRead' ]);
+    my $abook_a_href = $abook_a->properties->{'cyrusimap.org:href'};
+
+    $abook_b->share_with($sharee => [ 'mayRead' ]);
+    my $abook_b_href = $abook_b->properties->{'cyrusimap.org:href'};
+
+    xlog $self, "Create version 3.0 vCard 3.0 as sharer";
+    my $card = <<~"EOF";
+    BEGIN:VCARD
+    VERSION:3.0
+    UID:574E6CCF-BAE4-4005-B478-222DD257224A
+    N:Gump;Forrest;;Mr.;
+    FN:Forrest Gump
+    LABEL;TYPE=WORK:1501 Broadway\\nNew York NY 10036\\nUSA
+    END:VCARD
+    EOF
+    $card =~ s/\r?\n/\r\n/gs;
+    $sharer->carddav->Request('PUT', $abook_a_href . "/forrest.vcf",
+        $card, 'Content-Type' => 'text/vcard');
+
+    xlog $self, "Get Card as sharee";
+    my $res = $self->{jmap}->CallMethods([
+        ['ContactCard/get', {
+            accountId => 'sharer',
+            properties => [ 'cyrusimap.org:blobId' ],
+        }, 'R1'],
+    ]);
+    my $card_id = $res->[0][1]{list}[0]{id};
+    my $blob    = $res->[0][1]{list}[0]{'cyrusimap.org:blobId'};
+    $self->assert_not_null($card_id);
+    $self->assert_not_null($blob);
+
+    xlog $self, "Update Card with unchanged addressbookIds";
+    $res = $self->{jmap}->CallMethods([
+        ['ContactCard/set', {
+            accountId => 'sharer',
+            update => {
+                $card_id => {
+                    addressBookIds => { $abook_a->id => JSON::true },
+                },
+            },
+        }, 'R2'],
+    ]);
+
+    xlog $self, "Assert addressBookIds update is accepted as a no-op";
+    # A no-op update reports the id as updated with a null value (no
+    # server-set properties changed), so check the id is present rather
+    # than non-null.
+    $self->assert_null($res->[0][1]{notUpdated}{$card_id});
+    $self->assert(exists $res->[0][1]{updated}{$card_id});
+
+    xlog $self, "Assert that the card was not rewritten";
+    $res = $self->{jmap}->CallMethods([
+        ['ContactCard/get', {
+            accountId => 'sharer',
+            ids => [ $card_id ],
+            properties => [ 'cyrusimap.org:blobId' ],
+        }, 'R3'],
+    ]);
+    $self->assert_str_equals($blob,
+        $res->[0][1]{list}[0]{'cyrusimap.org:blobId'});
+
+    xlog $self, "Update Card with changed addressbookIds";
+    $res = $self->{jmap}->CallMethods([
+        ['ContactCard/set', {
+            accountId => 'sharer',
+            update => {
+                $card_id => {
+                    addressBookIds => { $abook_b->id => JSON::true },
+                },
+            },
+        }, 'R2'],
+    ]);
+
+    xlog $self, "Assert addressBookIds update is denied";
+    $self->assert_null($res->[0][1]{updated}{$card_id});
+    $self->assert_not_null($res->[0][1]{notUpdated}{$card_id});
+
+    xlog $self, "Assert that the card was not rewritten";
+    $res = $self->{jmap}->CallMethods([
+        ['ContactCard/get', {
+            accountId => 'sharer',
+            ids => [ $card_id ],
+            properties => [ 'cyrusimap.org:blobId' ],
+        }, 'R3'],
+    ]);
+    $self->assert_str_equals($blob,
+        $res->[0][1]{list}[0]{'cyrusimap.org:blobId'});
+}

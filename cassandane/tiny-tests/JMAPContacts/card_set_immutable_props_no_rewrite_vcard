@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_immutable_props_no_rewrite_vcard
+    ($self)
+{
+    my $user = $self->default_user;
+
+    xlog $self, "PUT a version 3.0 vCard";
+    my $card = <<~"EOF";
+    BEGIN:VCARD
+    VERSION:3.0
+    UID:574E6CCF-BAE4-4005-B478-222DD257224A
+    N:Gump;Forrest;;Mr.;
+    FN:Forrest Gump
+    LABEL;TYPE=WORK:1501 Broadway\\nNew York NY 10036\\nUSA
+    END:VCARD
+    EOF
+    $card =~ s/\r?\n/\r\n/gs;
+    $user->carddav->Request('PUT', "Default/forrest.vcf",
+        $card, 'Content-Type' => 'text/vcard');
+
+    xlog $self, "Get Card id and its immutable properties";
+    my @immutable = qw(
+        cyrusimap.org:href cyrusimap.org:blobId cyrusimap.org:size
+    );
+    my $got = $user->jmap->request([[
+        'ContactCard/get',
+        { properties => [ @immutable ] },
+        'R1',
+    ]])->single_sentence('ContactCard/get')->arguments->{list}[0];
+    my $card_id = $got->{id};
+    $self->assert_not_null($card_id);
+    $self->assert_not_null($got->{$_}) for @immutable;
+
+    xlog $self, "Update Card echoing back all of its immutable properties";
+    my $set = $user->jmap->request([[
+        'ContactCard/set',
+        {
+            update => {
+                $card_id => {
+                    id => $card_id,
+                    map { $_ => $got->{$_} } @immutable,
+                },
+            },
+        },
+        'R2',
+    ]])->single_sentence('ContactCard/set')->arguments;
+
+    xlog $self, "Assert update is accepted as a no-op";
+    $self->assert_null($set->{notUpdated}{$card_id});
+
+    xlog $self, "Assert vCard wasn't rewritten";
+    my $after = $user->jmap->request([[
+        'ContactCard/get',
+        { ids => [ $card_id ], properties => [ 'cyrusimap.org:blobId' ] },
+        'R3',
+    ]])->single_sentence('ContactCard/get')->arguments->{list}[0];
+    $self->assert_str_equals($got->{'cyrusimap.org:blobId'},
+        $after->{'cyrusimap.org:blobId'});
+}
