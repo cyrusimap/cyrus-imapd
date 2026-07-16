@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_revoked_access_invalidates_url
+    :UnixHierarchySep :AltNamespace ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client;
+    my $other = $self->{instance}->create_user('other');
+
+    $self->make_message("Secret Message");
+
+    # Grant 'other' read+lookup so that genurlauth will mint a token.
+    $admintalk->setacl('user/cassandane', 'other', 'lrs')
+        or die "setacl: " . $admintalk->get_last_error;
+
+    my $other_talk = $other->imap;
+
+    # 'other' mints a URLAUTH token while authorized.
+    my $url;
+    $other_talk->_imap_cmd(
+        'genurlauth', 0,
+        { genurlauth => sub { $url = $_[1]->[0] } },
+        'imap://other@127.0.0.1/Other%20Users%2fcassandane/;uid=1;urlauth=user+other',
+        'INTERNAL',
+    );
+    $self->assert_not_null($url, 'genurlauth should succeed while authorized');
+
+    # Captured value is wrapped in quotes; strip them for urlfetch.
+    (my $bare_url = $url) =~ s/\A"(.*)"\z/$1/;
+
+    # Sanity check: the token works while access is in place.
+    my $data;
+    $other_talk->_imap_cmd(
+        'urlfetch', 0,
+        { urlfetch => sub { $data = $_[1]->[1] } },
+        $bare_url,
+    );
+    $self->assert_not_null($data, 'URL should fetch while authorizer is authorized');
+
+    # Revoke 'other's access entirely.
+    $admintalk->setacl('user/cassandane', 'other', '')
+        or die "setacl: " . $admintalk->get_last_error;
+
+    # The token is cryptographically intact, but the authorizer's right to
+    # delegate the message is gone. cmd_urlfetch must re-check ACLs at fetch
+    # time and refuse, instead of trusting the token alone.
+    my $stolen;
+    $other_talk->_imap_cmd(
+        'urlfetch', 0,
+        { urlfetch => sub { $stolen = $_[1]->[1] } },
+        $bare_url,
+    );
+    $self->assert_null($stolen, 'URL must not fetch after authorizer access revoked');
+}

@@ -6147,6 +6147,11 @@ static int multisearch_cb(const mbentry_t *mbentry, void *rock)
         hash_lookup(mbentry->name, &mrock->mailboxes))
         return 0;
 
+    /* Skip mailboxes the caller can't read. */
+    if (!imapd_userisadmin &&
+        !(cyrus_acl_myrights(imapd_authstate, mbentry->acl) & ACL_READ))
+        return 0;
+
     switch (mrock->filter) {
     case SEARCH_SOURCE_INBOXES:
         /* Only allow user's INBOX or those postable by anonymous */
@@ -7505,17 +7510,20 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
     /* local mailbox */
     if (!r) {
+        int delflags = force ? MBOXLIST_DELETE_FORCE : 0;
+
         if (mbname_isdeleted(mbname)) {
             r = mboxlist_deletemailbox(mbname_intname(mbname),
                                        isadmin, imapd_userid,
                                        imapd_authstate, mboxevent,
-                                       MBOXLIST_DELETE_LOCALONLY);
+                                       delflags | MBOXLIST_DELETE_LOCALONLY);
         }
         else if (!isadmin && mbname_issystem(mbname)) {
             r = IMAP_PERMISSION_DENIED;
         }
         else {
-            int delflags = (1-force) ? MBOXLIST_DELETE_CHECKACL : 0;
+            if (!force)
+                delflags |= MBOXLIST_DELETE_CHECKACL;
 
             if (!delete_user && mboxlist_haschildren(mbname_intname(mbname))) {
                 r = IMAP_MAILBOX_HASCHILDREN;
@@ -8907,9 +8915,10 @@ static void cmd_listrights(char *tag, char *name, char *identifier)
     if (!r) {
         rights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
 
-        if (!rights && !imapd_userisadmin &&
+        if (!(rights & ACL_ADMIN) && !imapd_userisadmin &&
             !mboxname_userownsmailbox(imapd_userid, intname)) {
-            r = IMAP_MAILBOX_NONEXISTENT;
+            r = (rights & ACL_LOOKUP) ?
+                IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
         }
     }
 
@@ -14377,7 +14386,15 @@ static void cmd_urlfetch(char *tag)
                 if (r) break;
 
                 r = mboxkey_read(mboxkey_db, intname, &key, &keylen);
-                if (r) break;
+                if (!r && (!key || !keylen)) {
+                    /* If there's no key, we can't possibly validate against
+                     * it! */
+                    r = IMAP_BADURL;
+                }
+                if (r) {
+                    mboxkey_close(mboxkey_db);
+                    break;
+                }
 
                 HMAC(EVP_sha1(), key, keylen, (unsigned char *) arg.s,
                      url.urlauth.rump_len, vtoken, &vtoken_len);
@@ -14414,6 +14431,26 @@ static void cmd_urlfetch(char *tag)
             }
         }
         if (r) goto err;
+
+        /* For URLAUTH-protected URLs, re-check the authorizer's ACL.  The
+         * HMAC asserts that authorization DID exist, but may have since been
+         * revoked.  We can't read the ACL via state->mailbox here: when the
+         * URL targets the currently-selected mailbox we reuse imapd_index,
+         * whose mailbox handle is closed between commands. */
+        if (url.urlauth.access) {
+            mbentry_t *authz_mbentry = NULL;
+            r = mlookup(NULL, NULL, intname, &authz_mbentry);
+            if (!r) {
+                struct auth_state *authzstate = auth_newstate(url.user);
+                int authz_rights =
+                    cyrus_acl_myrights(authzstate, authz_mbentry->acl);
+                auth_freestate(authzstate);
+                if (!(authz_rights & ACL_READ))
+                    r = IMAP_BADURL;
+            }
+            mboxlist_entry_free(&authz_mbentry);
+            if (r) goto err;
+        }
 
         if (url.uidvalidity &&
            (state->mailbox->i.uidvalidity != url.uidvalidity)) {
@@ -14550,6 +14587,14 @@ static void cmd_genurlauth(char *tag)
             free(url.freeme);
             free(intname);
             continue;
+        }
+
+        /* You can't give permission you don't have! */
+        if (!imapd_userisadmin &&
+            !(cyrus_acl_myrights(imapd_authstate, mbentry->acl) & ACL_READ)) {
+            mboxlist_entry_free(&mbentry);
+            r = IMAP_BADURL;
+            goto err;
         }
 
         mboxlist_entry_free(&mbentry);
@@ -15049,7 +15094,10 @@ static void cmd_xapplepushservice(const char *tag,
         char *intname =
             mboxname_from_external(name, &imapd_namespace, imapd_userid);
         r = mlookup(tag, name, intname, &mbentry);
-        if (!r && mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) {
+        if (!r && mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL &&
+            (imapd_userisadmin ||
+             mboxname_userownsmailbox(imapd_userid, intname) ||
+             (cyrus_acl_myrights(imapd_authstate, mbentry->acl) & ACL_READ))) {
             strarray_push(&notif_mailboxes, name);
             if (applepushserviceargs->aps_version >= 2) {
                 prot_puts(imapd_out, "* XAPPLEPUSHSERVICE \"mailbox\" ");

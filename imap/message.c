@@ -1761,6 +1761,10 @@ static void message_parse_rfc822space(const char **s)
 
                 case '\\':
                     p++;
+                    if (*p == '\0') {
+                        *s = 0;     /* backslash at end of string */
+                        return;
+                    }
                     break;
 
                 case '(':

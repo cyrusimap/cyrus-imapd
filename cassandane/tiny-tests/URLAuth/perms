@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_perms
+    :UnixHierarchySep :AltNamespace ($self)
+{
+    my $user = $self->default_user;
+    my $other = $self->{instance}->create_user('other');
+
+    my $msg = $self->make_message("Message A");
+
+    my $url;
+    my %handlers = (
+        genurlauth => sub {
+            my ($cmd, $params) = @_;
+            $url = $params->[0];
+        }
+    );
+
+    my $talk = $other->imap;
+
+    $talk->_imap_cmd(
+        'genurlauth', 0, \%handlers,
+        "imap://other\@127.0.0.1/Other%20Users%2fcassandane/;uid=1;urlauth=user+other",
+        "INTERNAL",
+    );
+
+    # 'other' has no rights on cassandane's mailbox, so the server must refuse
+    # to mint a URLAUTH token for it. Without this check, cmd_urlfetch would
+    # happily hand over the message: it skips ACLs whenever urlauth.access is
+    # set, trusting that a valid token implies the authorizer had the rights
+    # to delegate.
+    $self->assert_null($url);
+}
