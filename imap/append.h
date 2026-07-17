@@ -43,6 +43,7 @@
 #ifndef INCLUDED_APPEND_H
 #define INCLUDED_APPEND_H
 
+#include "acl.h"
 #include "index.h"
 #include "mailbox.h"
 #include "mboxevent.h"
