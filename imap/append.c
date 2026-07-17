@@ -56,6 +56,7 @@
 #include <sys/poll.h>
 
 #include "acl.h"
+#include "append.h"
 #include "assert.h"
 #include "mailbox.h"
 #include "notify.h"
