@@ -6207,12 +6207,29 @@ static int multisearch_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
+/* Print the tagged completion for a search-family command (SEARCH, SORT,
+ * THREAD): OK with timing on success, NO if the search timer expired or
+ * the client cancelled (see cmd_cancelled). */
+static void search_reply_completed(const char *tag, int nmsg, clock_t start)
+{
+    int r = cmd_cancelled(/*insearch*/1);
+    if (!r) {
+        char mytime[100];
+        snprintf(mytime, sizeof(mytime), "%2.3f",
+                 (clock() - start) / (double) CLOCKS_PER_SEC);
+        prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
+                    error_message(IMAP_OK_COMPLETED), nmsg, mytime);
+    }
+    else {
+        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    }
+}
+
 static void cmd_search(const char *tag, const char *cmd)
 {
     int c;
     struct searchargs *searchargs;
     clock_t start = clock();
-    char mytime[100];
     int usinguid = 0, n = 0;
     int state = GETSEARCH_RETURN;
 
@@ -6444,16 +6461,7 @@ static void cmd_search(const char *tag, const char *cmd)
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("SEARCH MODSEQ");
 
-    int r = cmd_cancelled(/*insearch*/1);
-    if (!r) {
-        snprintf(mytime, sizeof(mytime), "%2.3f",
-                 (clock() - start) / (double) CLOCKS_PER_SEC);
-        prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
-                    error_message(IMAP_OK_COMPLETED), n, mytime);
-    }
-    else {
-        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-    }
+    search_reply_completed(tag, n, start);
 
   done:
     freesearchargs(searchargs);
@@ -6529,16 +6537,15 @@ static void cmd_sort(char *tag, int usinguid)
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("SORT MODSEQ");
 
-    snprintf(mytime, sizeof(mytime), "%2.3f",
-             (clock() - start) / (double) CLOCKS_PER_SEC);
     if (CONFIG_TIMING_VERBOSE) {
+        snprintf(mytime, sizeof(mytime), "%2.3f",
+                 (clock() - start) / (double) CLOCKS_PER_SEC);
         char *s = sortcrit_as_string(sortcrit);
         syslog(LOG_DEBUG, "SORT (%s) processing time: %d msg in %s sec",
                s, n, mytime);
         free(s);
     }
-    prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
-                error_message(IMAP_OK_COMPLETED), n, mytime);
+    search_reply_completed(tag, n, start);
 
     buf_free(&arg);
     freesortcrit(sortcrit);
@@ -6562,7 +6569,6 @@ static void cmd_thread(char *tag, int usinguid)
     int alg;
     struct searchargs *searchargs;
     clock_t start = clock();
-    char mytime[100];
     int n;
 
     if (backend_current) {
@@ -6634,10 +6640,7 @@ static void cmd_thread(char *tag, int usinguid)
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("THREAD MODSEQ");
 
-    snprintf(mytime, sizeof(mytime), "%2.3f",
-             (clock() - start) / (double) CLOCKS_PER_SEC);
-    prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
-                error_message(IMAP_OK_COMPLETED), n, mytime);
+    search_reply_completed(tag, n, start);
 
   done:
     freesearchargs(searchargs);
