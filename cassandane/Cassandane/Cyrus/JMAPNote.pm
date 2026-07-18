@@ -41,17 +41,11 @@ sub new
     return $self;
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
-
-    if ($self->{jmap}) {
-        $self->{jmap}->DefaultUsing([
-            'urn:ietf:params:jmap:core',
-            'https://cyrusimap.org/ns/jmap/notes',
-        ]);
-    }
+sub jmap_default_using {
+    return [
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/notes',
+    ];
 }
 
 use Cassandane::Tiny::Loader;
