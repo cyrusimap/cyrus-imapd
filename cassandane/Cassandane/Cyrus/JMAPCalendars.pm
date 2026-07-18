@@ -72,31 +72,17 @@ sub new
     return $self;
 }
 
-sub set_up
+sub jmap_default_using
 {
-    my ($self) = @_;
-    $self->SUPER::set_up();
-    if ($self->{_want}->{start_instances}) {
-        $self->{jmap}->DefaultUsing([
-            'urn:ietf:params:jmap:core',
-            'urn:ietf:params:jmap:calendars',
-            'urn:ietf:params:jmap:principals',
-            'urn:ietf:params:jmap:calendars:preferences',
-            'https://cyrusimap.org/ns/jmap/calendars',
-            'https://cyrusimap.org/ns/jmap/debug',
-            'https://cyrusimap.org/ns/jmap/jscalendarbis',
-        ]);
-
-        $self->default_user->jmap->DefaultUsing([
-            'urn:ietf:params:jmap:core',
-            'urn:ietf:params:jmap:calendars',
-            'urn:ietf:params:jmap:principals',
-            'urn:ietf:params:jmap:calendars:preferences',
-            'https://cyrusimap.org/ns/jmap/calendars',
-            'https://cyrusimap.org/ns/jmap/debug',
-            'https://cyrusimap.org/ns/jmap/jscalendarbis',
-        ]);
-    }
+    return [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'urn:ietf:params:jmap:calendars:preferences',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
+    ];
 }
 
 sub encode_eventid
@@ -491,13 +477,6 @@ sub create_user
     });
 
     my $jmap = $user_obj->new_jmaptester;
-
-    $jmap->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:calendars',
-        'https://cyrusimap.org/ns/jmap/calendars',
-        'https://cyrusimap.org/ns/jmap/jscalendarbis',
-    ]);
 
     my $caldav = $user_obj->caldav;
 

@@ -526,12 +526,6 @@ sub create_user
 
     my $jmap = $user_obj->new_jmaptester;
 
-    $jmap->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:calendars',
-        'https://cyrusimap.org/ns/jmap/calendars',
-    ]);
-
     my $caldav = $user_obj->caldav;
 
     return ($jmap, $caldav);
