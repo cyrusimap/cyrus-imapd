@@ -130,15 +130,13 @@ sub new
     return $self;
 }
 
-sub set_up
+sub default_jmap_using
 {
-    my ($self) = @_;
-    $self->SUPER::set_up();
-    $self->{jmap}->DefaultUsing([
+    return [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',
-    ]);
+    ];
 }
 
 # XXX Cheating and just passing in all the using strings that cyrus
