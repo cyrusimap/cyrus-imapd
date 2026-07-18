@@ -67,6 +67,7 @@ jobs:
         mv /usr/local/cyruslibs /dev/shm2/cyruslibs
         ln -s /dev/shm2/cyruslibs /usr/local/cyruslibs
     - name: setup git safe directory
+      working-directory: /dev/shm2/cyrus-imapd
       run: git config --global --add safe.directory /dev/shm2/cyrus-imapd
     - name: override kernel core pattern
       run: sudo sysctl -w kernel.core_pattern=core.%p
@@ -124,6 +125,7 @@ jobs:
         mv /usr/local/cyruslibs /dev/shm2/cyruslibs
         ln -s /dev/shm2/cyruslibs /usr/local/cyruslibs
     - name: setup git safe directory
+      working-directory: /dev/shm2/cyrus-imapd
       run: git config --global --add safe.directory /dev/shm2/cyrus-imapd
     - name: fetch upstream release tags
       working-directory: /dev/shm2/cyrus-imapd
@@ -167,6 +169,7 @@ jobs:
         mv /usr/local/cyruslibs /dev/shm2/cyruslibs
         ln -s /dev/shm2/cyruslibs /usr/local/cyruslibs
     - name: setup git safe directory
+      working-directory: /dev/shm2/cyrus-imapd
       run: git config --global --add safe.directory /dev/shm2/cyrus-imapd
     - name: fetch upstream release tags
       working-directory: /dev/shm2/cyrus-imapd
