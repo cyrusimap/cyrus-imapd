@@ -33,7 +33,7 @@ sub test_rename_create_resync
         sync_authname => 'repluser',
         sync_password => 'replpass',
     );
-    my $newstore = Cassandane::Instance->new(
+    my $newstore = $self->_create_instance(
         config        => $newstore_conf,
         description   => "newstore for test rename_create_resync",
         setup_mailbox => 0,
