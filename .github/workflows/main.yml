@@ -17,7 +17,7 @@ defaults:
   run:
     shell: bash
 env:
-  CYRUS_CLONE_ROOT: ${{ github.workspace }}
+  CYRUS_CLONE_ROOT: /dev/shm2/cyrus-imapd
 
 jobs:
   build:
@@ -70,6 +70,7 @@ jobs:
       working-directory: /dev/shm2/cyrus-imapd
       run: git config --global --add safe.directory /dev/shm2/cyrus-imapd
     - name: override kernel core pattern
+      working-directory: /dev/shm2/cyrus-imapd
       run: sudo sysctl -w kernel.core_pattern=core.%p
     - name: fetch upstream release tags
       working-directory: /dev/shm2/cyrus-imapd
