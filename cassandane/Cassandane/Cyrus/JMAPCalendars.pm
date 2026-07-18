@@ -483,6 +483,23 @@ sub create_user
     return ($jmap, $caldav);
 }
 
+sub create_user_and_allocate_calendar
+{
+    my ($self, $username, %params) = @_;
+
+    my $user = $self->{instance}->create_user($username, %params);
+
+    # Connecting over CalDAV provisions the user's calendar home, e.g.
+    # user.$username.#calendars.Default.  Some tests need that mailbox to
+    # exist before the new user has issued any calendar request of their own
+    # -- for example, to set an ACL on the default calendar.
+    #
+    # Hopefully this whole method can go, later.
+    $user->caldav;
+
+    return $user;
+}
+
 sub deliver_imip {
     my ($self) = @_;
 

@@ -11,7 +11,8 @@ sub test_calendarevent_get_privacy_shared
     my $caldav = $self->{caldav};
 
     xlog "share calendar";
-    my ($shareeJmap) = $self->create_user('sharee');
+    my $sharee_user = $self->{instance}->create_user('sharee');
+    my $shareeJmap = $sharee_user->jmap;
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {

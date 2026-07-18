@@ -10,7 +10,9 @@ sub test_calendarevent_set_itip_preserve_partstat
 
     my $caldav = $self->{caldav};
 
-    my ($otherJmap, $otherCalDAV) = $self->create_user('other');
+    my $other_user = $self->{instance}->create_user('other');
+    my $otherJmap = $other_user->jmap;
+    my $otherCalDAV = $other_user->caldav;
 
     xlog 'create event and invite other user';
     my $res = $jmap->CallMethods([

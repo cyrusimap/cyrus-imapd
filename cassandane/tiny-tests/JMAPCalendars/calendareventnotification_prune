@@ -12,7 +12,8 @@ sub test_calendareventnotification_prune
                                             ->get('jmap_max_calendareventnotifs');
     $self->assert_not_null($jmap_max_calendareventnotifs);
 
-    my ($manJmap) = $self->create_user('manifold');
+    my $manifold_user = $self->{instance}->create_user('manifold');
+    my $manJmap = $manifold_user->jmap;
     $manJmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',

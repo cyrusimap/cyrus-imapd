@@ -9,6 +9,7 @@ sub test_calendar_set_defaultalerts_shared
     my $t = $self->create_test;
 
     my $ownerJmap = $t->{owner}{jmap};
+    my $ownerDefaultCalendarId = $t->{owner}{defaultCalendarId};
     my $shareeJmap = $t->{sharee}{jmap};
 
     # Using a string here will fail matching if we were to attempt to match,
@@ -44,7 +45,7 @@ sub test_calendar_set_defaultalerts_shared
         ['Calendar/set', {
             accountId => 'owner',
             update => {
-                Default => {
+                $ownerDefaultCalendarId => {
                     defaultAlertsWithTime =>
                         $t->{owner}->{defaultAlertsWithTime},
                     defaultAlertsWithoutTime =>
@@ -82,7 +83,7 @@ sub test_calendar_set_defaultalerts_shared
         ['Calendar/set', {
             accountId => 'owner',
             update => {
-                Default => {
+                $ownerDefaultCalendarId => {
                     defaultAlertsWithTime =>
                         $t->{sharee}->{defaultAlertsWithTime},
                     defaultAlertsWithoutTime =>
@@ -101,7 +102,7 @@ sub test_calendar_set_defaultalerts_shared
         ['Calendar/set', {
             accountId => 'owner',
             update => {
-                Default => {
+                $ownerDefaultCalendarId => {
                     defaultAlertsWithTime =>
                         $t->{owner}->{defaultAlertsWithTime},
                     defaultAlertsWithoutTime =>
@@ -120,7 +121,7 @@ sub test_calendar_set_defaultalerts_shared
         ['Calendar/set', {
             accountId => 'owner',
             update => {
-                Default => {
+                $ownerDefaultCalendarId => {
                     defaultAlertsWithTime =>
                         $t->{sharee}->{defaultAlertsWithTime},
                     defaultAlertsWithoutTime =>
@@ -269,8 +270,13 @@ sub assert_shared_defaultalerts ($self, $t, $owneralarmid, $shareealarmid)
 sub create_test ($self)
 {
 
-    my ($ownerJmap, $ownerCaldav) = $self->create_user('owner');
-    my ($shareeJmap, $shareeCaldav) = $self->create_user('sharee');
+    my $owner_user = $self->{instance}->create_user('owner');
+    my $ownerJmap = $owner_user->jmap;
+    my $ownerCaldav = $owner_user->caldav;
+    my $ownerDefaultCalendarId = $owner_user->calendars->default->id;
+    my $sharee_user = $self->{instance}->create_user('sharee');
+    my $shareeJmap = $sharee_user->jmap;
+    my $shareeCaldav = $sharee_user->caldav;
 
     my $now = DateTime->now();
     $now->set_time_zone('Etc/UTC');
@@ -290,7 +296,7 @@ sub create_test ($self)
                 event1 => {
                     version => '2.0',
                     calendarIds => {
-                        Default => JSON::true,
+                        $ownerDefaultCalendarId => JSON::true,
                     },
                     uid => 'ed326178-43dc-474d-a496-6cba057c9afe',
                     title => 'test',
@@ -309,7 +315,7 @@ sub create_test ($self)
         ['Calendar/set', {
             accountId => 'owner',
             update => {
-                Default => {
+                $ownerDefaultCalendarId => {
                     shareWith => {
                         'sharee' => {
                             mayReadItems => JSON::true,
@@ -326,7 +332,7 @@ sub create_test ($self)
     $self->assert_not_null($eventId);
     my $ownerHref = $res->[0][1]{created}{event1}{'x-href'};
     $self->assert_not_null($ownerHref);
-    $self->assert(exists $res->[1][1]{updated}{Default});
+    $self->assert(exists $res->[1][1]{updated}{$ownerDefaultCalendarId});
 
     xlog $self, 'Sharee sets useDefaultAlerts=true';
     $res = $shareeJmap->CallMethods([
@@ -356,6 +362,7 @@ sub create_test ($self)
             caldav => $ownerCaldav,
             defaultAlertsWithTime => undef,
             defaultAlertsWithoutTime => undef,
+            defaultCalendarId => $ownerDefaultCalendarId,
             xhref => $ownerHref,
         },
         sharee => {
