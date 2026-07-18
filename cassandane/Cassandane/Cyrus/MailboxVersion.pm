@@ -72,13 +72,9 @@ sub new
     return $self;
 }
 
-sub set_up
+sub jmap_default_using
 {
-    my ($self) = @_;
-
-    $self->SUPER::set_up();
-
-    $self->{jmap}->DefaultUsing([
+    return [
         'urn:ietf:params:jmap:calendars',
         'urn:ietf:params:jmap:calendars:preferences',
         'urn:ietf:params:jmap:core',
@@ -95,7 +91,7 @@ sub set_up
         'https://cyrusimap.org/ns/jmap/notes',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/mail',
-    ]);
+    ];
 }
 
 sub upgrade_19_to_20

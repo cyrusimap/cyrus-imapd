@@ -66,22 +66,18 @@ sub new
     return $self;
 }
 
-sub set_up
+sub jmap_default_using
 {
-    my ($self) = @_;
-    $self->SUPER::set_up();
-    if ($self->{jmap}) {
-        $self->{jmap}->DefaultUsing([
-            'urn:ietf:params:jmap:core',
-            'urn:ietf:params:jmap:mail',
-            'urn:ietf:params:jmap:calendars',
-            'urn:ietf:params:jmap:principals',
-            'urn:ietf:params:jmap:calendars:preferences',
-            'https://cyrusimap.org/ns/jmap/calendars',
-            'https://cyrusimap.org/ns/jmap/mail',
-            'https://cyrusimap.org/ns/jmap/debug',
-        ]);
-    }
+    return [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'urn:ietf:params:jmap:calendars:preferences',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ];
 }
 
 sub tear_down

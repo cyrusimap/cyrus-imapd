@@ -64,17 +64,15 @@ sub new
     return $self;
 }
 
-sub set_up
+sub jmap_default_using
 {
-    my ($self) = @_;
-    $self->SUPER::set_up();
-    $self->{jmap}->DefaultUsing([
+    return [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:sieve',
         'https://cyrusimap.org/ns/jmap/sieve',  # for SieveScript/test
         'urn:ietf:params:jmap:blob',
-    ]);
+    ];
 }
 
 sub tear_down

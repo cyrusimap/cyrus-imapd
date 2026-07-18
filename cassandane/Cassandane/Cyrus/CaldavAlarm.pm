@@ -54,14 +54,17 @@ sub set_up
         url => '/',
         expandurl => 1,
     );
-    $self->{jmap}->DefaultUsing([
+}
+
+sub jmap_default_using {
+    return [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
         'urn:ietf:params:jmap:principals',
         'urn:ietf:params:jmap:calendars:preferences',
         'https://cyrusimap.org/ns/jmap/calendars',
         'https://cyrusimap.org/ns/jmap/debug',
-    ]);
+    ];
 }
 
 sub _can_match {

@@ -29,19 +29,6 @@ sub new
     return $self;
 }
 
-sub set_up
-{
-    my ($self) = @_;
-    $self->SUPER::set_up();
-    $self->{jmap}->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:mail',
-        'urn:ietf:params:jmap:contacts',
-        'https://cyrusimap.org/ns/jmap/contacts',
-        'https://cyrusimap.org/ns/jmap/debug',
-    ]);
-}
-
 use Cassandane::Tiny::Loader;
 
 1;

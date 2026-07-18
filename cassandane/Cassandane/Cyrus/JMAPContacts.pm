@@ -47,16 +47,20 @@ sub new
     return $self;
 }
 
-sub set_up
+sub jmap_default_using
 {
-    my ($self) = @_;
-    $self->SUPER::set_up();
-    $self->{jmap}->DefaultUsing([
+    return [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:contacts',
         'https://cyrusimap.org/ns/jmap/contacts',
         'https://cyrusimap.org/ns/jmap/debug',
-    ]);
+    ];
+}
+
+sub set_up
+{
+    my ($self) = @_;
+    $self->SUPER::set_up();
 
     $ENV{DEBUGDAV} = 1;
 }
