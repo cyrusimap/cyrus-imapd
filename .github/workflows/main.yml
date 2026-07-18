@@ -86,7 +86,7 @@ jobs:
       if: ${{ ! matrix.skip-cass }}
       id: cass1
       continue-on-error: true
-      run: cyd test --jobs 4 --no-ok --slow --format prettier "${{ matrix.skip }}"
+      run: cyd test --jobs 12 --no-ok --slow --format prettier "${{ matrix.skip }}"
     - name: rerun cassandane failures noisily
       if: ${{ steps.cass1.outcome == 'failure' }}
       run: cyd test --no-slow --format pretty --rerun
