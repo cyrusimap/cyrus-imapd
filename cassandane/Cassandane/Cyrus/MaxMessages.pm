@@ -134,28 +134,29 @@ sub put_script
     my $script = "# $name\r\nkeep;\r\n";
     $counter ++;
 
-    $self->{jmap}->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:mail',
-        'https://cyrusimap.org/ns/jmap/sieve',
-        'urn:ietf:params:jmap:blob',
-    ]);
-
-    my $res = $self->{jmap}->CallMethods([
-        ['Blob/upload', {
-            create => {
-               "A" => { data => [{'data:asText' => $script}] }
-            }
-         }, "R0"],
-        ['SieveScript/set', {
-            create => {
-                "1" => {
-                    name => $name,
-                    blobId => "#A"
-                },
-            },
-         }, "R1"],
-    ]);
+    my $res = $self->{jmap}->CallMethods(
+      [
+          ['Blob/upload', {
+              create => {
+                 "A" => { data => [{'data:asText' => $script}] }
+              }
+           }, "R0"],
+          ['SieveScript/set', {
+              create => {
+                  "1" => {
+                      name => $name,
+                      blobId => "#A"
+                  },
+              },
+           }, "R1"],
+      ],
+      [
+          'urn:ietf:params:jmap:core',
+          'urn:ietf:params:jmap:mail',
+          'https://cyrusimap.org/ns/jmap/sieve',
+          'urn:ietf:params:jmap:blob',
+      ]
+    );
 
     $self->assert_not_null($res);
     $self->assert_not_null($res->[1][1]{created}{"1"}{id});
@@ -211,13 +212,15 @@ sub put_submission
     $counter ++;
 
     my $jmap = $self->{jmap};
-    $jmap->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:mail',
-        'urn:ietf:params:jmap:submission',
-    ]);
 
-    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $res = $jmap->CallMethods(
+      [ [ 'Identity/get', {}, "R1" ] ],
+      [
+          'urn:ietf:params:jmap:core',
+          'urn:ietf:params:jmap:mail',
+          'urn:ietf:params:jmap:submission',
+      ],
+    );
     my $identityId = $res->[0][1]->{list}[0]->{id};
     $self->assert_not_null($identityId);
 
