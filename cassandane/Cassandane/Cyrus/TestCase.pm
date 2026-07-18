@@ -1837,4 +1837,8 @@ sub check_user
     }
 }
 
+sub jmap_default_using ($self) {
+    return Cassandane::Instance->jmap_default_default_using;
+}
+
 1;

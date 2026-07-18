@@ -126,6 +126,8 @@ sub new
         if defined $params{lsan_suppressions};
     $self->{old_jmap_ids} = $params{old_jmap_ids}
         if defined $params{old_jmap_ids};
+    $self->{test_case} = $params{test_case}
+        if defined $params{test_case};
 
     $self->{buildinfo} = Cassandane::BuildInfo->new($self->{installation});
 
@@ -3253,22 +3255,32 @@ sub _common_http_service_args ($self) {
   return $self->{_common_http_service_args}->%*;
 }
 
-my @DEFAULT_USING = qw(
-    urn:ietf:params:jmap:core
-    urn:ietf:params:jmap:mail
-    urn:ietf:params:jmap:submission
-    urn:ietf:params:jmap:vacationresponse
-    urn:ietf:params:jmap:calendars
-    urn:ietf:params:jmap:contacts
+sub jmap_default_default_using {
+    return [ qw(
+        urn:ietf:params:jmap:core
+        urn:ietf:params:jmap:mail
+        urn:ietf:params:jmap:submission
+        urn:ietf:params:jmap:vacationresponse
+        urn:ietf:params:jmap:calendars
+        urn:ietf:params:jmap:contacts
 
-    https://cyrusimap.org/ns/jmap/mail
-    https://cyrusimap.org/ns/jmap/calendars
-    https://cyrusimap.org/ns/jmap/contacts
+        https://cyrusimap.org/ns/jmap/mail
+        https://cyrusimap.org/ns/jmap/calendars
+        https://cyrusimap.org/ns/jmap/contacts
 
-    https://cyrusimap.org/ns/jmap/performance
-    https://cyrusimap.org/ns/jmap/backup
-    urn:ietf:params:jmap:blob
-);
+        https://cyrusimap.org/ns/jmap/performance
+        https://cyrusimap.org/ns/jmap/backup
+        urn:ietf:params:jmap:blob
+    ) ];
+}
+
+sub _jmap_default_using ($self) {
+    if ($self->{test_case}) {
+        return $self->{test_case}->jmap_default_using;
+    }
+
+    return $self->jmap_default_default_using;
+}
 
 sub new_jmaptester_ws_for_user ($self, $user, $new_arg = undef) {
   return $self->_new_jmaptester_for_user(
@@ -3309,7 +3321,7 @@ sub _new_jmaptester_for_user($self, $tester_class, $tester_arg, $user, $new_arg 
 
     my $jtest = $tester_class->new({
         fallback_account_id => $user->username,
-        default_using => [ @DEFAULT_USING ],
+        default_using => $self->_jmap_default_using,
         json_pretty => 1,
         %$tester_arg,
         %overrides,
