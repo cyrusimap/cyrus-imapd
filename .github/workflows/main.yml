@@ -54,16 +54,24 @@ jobs:
     runs-on: ubuntu-latest
     container:
         image: ${{ matrix.image || 'ghcr.io/cyrusimap/cyrus-docker:bookworm' }}
-        options: --init --privileged --shm-size 4GB
+        options: --init --privileged --shm-size 4GB '--tmpfs', '/dev/shm2:exec,size=1G',
     steps:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
+    - name: move repo to tmpfs
+      run: |
+        mv /__w/cyrus-imapd/cyrus-imapd /dev/shm2/cyrus-imapd
+        mkdir /dev/shm2/cyrus
+        ln -s /dev/shm2/cyrus /usr/cyrus
+        mv /usr/local/cyruslibs /dev/shm2/cyruslibs
+        ln -s /dev/shm2/cyruslibs /usr/local/cyruslibs
     - name: setup git safe directory
-      run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
+      run: git config --global --add safe.directory /dev/shm2/cyrus-imapd
     - name: override kernel core pattern
       run: sudo sysctl -w kernel.core_pattern=core.%p
     - name: fetch upstream release tags
+      working-directory: /dev/shm2/cyrus-imapd
       if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
       run: |
         git remote add upstream https://github.com/cyrusimap/cyrus-imapd.git
@@ -72,39 +80,53 @@ jobs:
         # need every other tag that's reachable from them
         git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
     - name: Run pre-test code if any
+      working-directory: /dev/shm2/cyrus-imapd
       if: ${{ matrix.pretest }}
       run: ${{ matrix.pretest }}
     - name: configure and build
+      working-directory: /dev/shm2/cyrus-imapd
       run: cyd build "${{ matrix.compiler }}" "${{ matrix.san }}" --cflags "${{ matrix.cflags }}" --cxxflags "${{ matrix.cxxflags }}"
     - name: report version information
+      working-directory: /dev/shm2/cyrus-imapd
       run: |
         echo "debian" $(cat /etc/debian_version)
         echo "Mail::IMAPTalk" $(cpanm --info Mail::IMAPTalk)
         /usr/cyrus/libexec/master -V
         /usr/cyrus/sbin/cyr_buildinfo
     - name: run cassandane quietly
+      working-directory: /dev/shm2/cyrus-imapd
       if: ${{ ! matrix.skip-cass }}
       id: cass1
       continue-on-error: true
-      run: cyd test --jobs 12 --no-ok --slow --format prettier "${{ matrix.skip }}"
+      run: cyd test --no-ok --slow --format prettier "${{ matrix.skip }}"
     - name: rerun cassandane failures noisily
+      working-directory: /dev/shm2/cyrus-imapd
       if: ${{ steps.cass1.outcome == 'failure' }}
       run: cyd test --no-slow --format pretty --rerun
     - name: collect logs
+      working-directory: /dev/shm2/cyrus-imapd
       if: ${{ ! matrix.skip-cass }}
       run: cat /dev/shm/cass/*/conf/log/syslog
   valgrind-make-check:
     runs-on: ubuntu-latest
     container:
         image: ghcr.io/cyrusimap/cyrus-docker:bookworm
-        options: --init
+        options: --init --privileged --shm-size 4GB '--tmpfs', '/dev/shm2:exec,size=1G',
     steps:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
+    - name: move repo to tmpfs
+      run: |
+        mv /__w/cyrus-imapd/cyrus-imapd /dev/shm2/cyrus-imapd
+        mkdir /dev/shm2/cyrus
+        ln -s /dev/shm2/cyrus /usr/cyrus
+        mv /usr/local/cyruslibs /dev/shm2/cyruslibs
+        ln -s /dev/shm2/cyruslibs /usr/local/cyruslibs
     - name: setup git safe directory
-      run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
+      run: git config --global --add safe.directory /dev/shm2/cyrus-imapd
     - name: fetch upstream release tags
+      working-directory: /dev/shm2/cyrus-imapd
       if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
       run: |
         git remote add upstream https://github.com/cyrusimap/cyrus-imapd.git
@@ -113,13 +135,16 @@ jobs:
         # need every other tag that's reachable from them
         git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
     - name: configure and build
+      working-directory: /dev/shm2/cyrus-imapd
       run: |
         echo "building cyrus version" $(./tools/git-version.sh)
         cyd build
     - name: make check with valgrind
+      working-directory: /dev/shm2/cyrus-imapd
       run: |
         make VG=1 check-discrete
     - name: report version information
+      working-directory: /dev/shm2/cyrus-imapd
       run: |
         echo "debian" $(cat /etc/debian_version)
         /usr/cyrus/libexec/master -V
@@ -129,14 +154,22 @@ jobs:
     runs-on: ubuntu-latest
     container:
         image: ghcr.io/cyrusimap/cyrus-docker:bookworm
-        options: --init
+        options: --init --privileged --shm-size 4GB '--tmpfs', '/dev/shm2:exec,size=1G',
     steps:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
+    - name: move repo to tmpfs
+      run: |
+        mv /__w/cyrus-imapd/cyrus-imapd /dev/shm2/cyrus-imapd
+        mkdir /dev/shm2/cyrus
+        ln -s /dev/shm2/cyrus /usr/cyrus
+        mv /usr/local/cyruslibs /dev/shm2/cyruslibs
+        ln -s /dev/shm2/cyruslibs /usr/local/cyruslibs
     - name: setup git safe directory
-      run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
+      run: git config --global --add safe.directory /dev/shm2/cyrus-imapd
     - name: fetch upstream release tags
+      working-directory: /dev/shm2/cyrus-imapd
       if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
       run: |
         git remote add upstream https://github.com/cyrusimap/cyrus-imapd.git
@@ -145,6 +178,7 @@ jobs:
         # need every other tag that's reachable from them
         git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
     - name: configure and build
+      working-directory: /dev/shm2/cyrus-imapd
       run: |
         echo "distchecking cyrus version" $(./tools/git-version.sh)
         cyd distcheck --brief
