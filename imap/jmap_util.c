@@ -19,9 +19,11 @@
 #include "global.h"
 #include "hash.h"
 #include "index.h"
+#include "jmap_api.h"
 #include "jmap_ical.h"
 #include "jmap_util.h"
 #include "json_support.h"
+#include "logfmt.h"
 #include "search_query.h"
 #include "times.h"
 #include "user.h"
@@ -1413,6 +1415,22 @@ EXPORTED char *jmap_role_to_specialuse(const char *role)
     char *specialuse = strconcat("\\", role, (char *)NULL);
     specialuse[1] = toupper(specialuse[1]);
     return specialuse;
+}
+
+/* Just for a brief window, log anything using JMAP for Calendars without
+ * jscalendarbis.  We want to remove support for this configuration, so first:
+ * log if we saw it! */
+EXPORTED void jmap_log_calendars_without_jscalendarbis(
+    const strarray_t *using_capabilities)
+{
+    if (!strarray_contains(using_capabilities, JMAP_URN_CALENDARS)) return;
+    if (strarray_contains(using_capabilities, JMAP_JSCALENDARBIS_EXTENSION)) return;
+
+    struct logfmt lf = LOGFMT_INITIALIZER;
+    logfmt_init(&lf, "jmap.calendars.without_jscalendarbis");
+    logfmt_push_session(&lf);
+    syslog(LOG_NOTICE, "%s", logfmt_cstring(&lf));
+    logfmt_fini(&lf);
 }
 
 EXPORTED struct jmap_caleventid *jmap_caleventid_lookup(const char *id,

@@ -3,7 +3,33 @@
 #include "xmalloc.h"
 #include "util.h"
 #include "hash.h"
+#include "imap/jmap_api.h"
 #include "imap/jmap_util.h"
+
+#include "lib/libconfig.h"
+#include "lib/sessionid.h"
+#include "lib/strarray.h"
+
+#include <stdbool.h>
+#include <stdio.h>
+
+#define DBDIR "test-jmap-util-dbdir"
+
+static int set_up(void)
+{
+    config_read_string(DBDIR"/conf", NULL);
+    session_clear_id();
+    trace_set_id(NULL, 0);
+    return 0;
+}
+
+static int tear_down(void)
+{
+    session_clear_id();
+    trace_set_id(NULL, 0);
+    config_reset();
+    return 0;
+}
 
 static void test_patchobject(void)
 {
@@ -496,6 +522,59 @@ static void test_caleventid(void)
     TESTCASE("EMzzzzzzzzzzw", NULL, NULL, 18446744073709551615ULL);
 
     TESTCASE("ER20211207-EM-yV", NULL, "20211207", 1000);
+}
+
+#define WITHOUT_JSCAL_EVENT "event=jmap.calendars.without_jscalendarbis"
+
+/* Assert whether a "using" set with the given capabilities emits the
+ * "calendars without jscalendarbis" log line exactly once (or not at all). */
+static void assert_jscalendarbis_logged(bool with_calendars,
+                                        bool with_jscalendarbis,
+                                        bool expect_log)
+{
+    strarray_t using = STRARRAY_INITIALIZER;
+
+    strarray_add(&using, JMAP_URN_CORE);
+    if (with_calendars)
+        strarray_add(&using, JMAP_URN_CALENDARS);
+    if (with_jscalendarbis)
+        strarray_add(&using, JMAP_JSCALENDARBIS_EXTENSION);
+
+    CU_SYSLOG_MATCH_SUBSTR(WITHOUT_JSCAL_EVENT);
+    jmap_log_calendars_without_jscalendarbis(&using);
+    CU_ASSERT_SYSLOG(/* match */ 0, expect_log ? 1 : 0);
+
+    strarray_fini(&using);
+}
+
+static void test_jscalendarbis_warning(void)
+{
+    /*                           calendars  jscalendarbis  should log */
+    assert_jscalendarbis_logged( true,      false,         true  );
+    assert_jscalendarbis_logged( true,      true,          false );
+    assert_jscalendarbis_logged( false,     false,         false );
+    assert_jscalendarbis_logged( false,     true,          false );
+}
+
+static void test_jscalendarbis_warning_session(void)
+{
+    strarray_t using = STRARRAY_INITIALIZER;
+    char match[256];
+
+    strarray_add(&using, JMAP_URN_CALENDARS);
+
+    session_new_id();
+    trace_set_id("sometraceid", 0);
+
+    snprintf(match, sizeof(match),
+             WITHOUT_JSCAL_EVENT " r.sessionid=%s r.tid=sometraceid",
+             session_id());
+
+    CU_SYSLOG_MATCH_SUBSTR(match);
+    jmap_log_calendars_without_jscalendarbis(&using);
+    CU_ASSERT_SYSLOG(/* match */ 0, 1);
+
+    strarray_fini(&using);
 }
 
 /* vim: set ft=c: */
