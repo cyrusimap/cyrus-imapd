@@ -8,7 +8,6 @@ sub test_mailbox_set_create_specialuse_nochildren
     $self->{instance}->{config}->set('specialuse_nochildren' => '\\Trash');
     $self->_start_instances();
     $self->_setup_http_service_objects();
-    $self->setup_default_using();
 
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
