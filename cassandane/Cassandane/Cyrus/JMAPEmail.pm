@@ -75,23 +75,14 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
-
-    # Tests with :NoStartInstances will need to setup default using
-    # themselves
-    if ($self->{jmap}) {
-        $self->setup_default_using();
-    }
 }
 
-sub setup_default_using
-{
-    my ($self) = @_;
-
-    $self->{jmap}->DefaultUsing([
+sub jmap_default_using {
+    return [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',
-    ]);
+    ];
 }
 
 sub getinbox
