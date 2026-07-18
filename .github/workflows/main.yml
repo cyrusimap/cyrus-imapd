@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
         image: ${{ matrix.image || 'ghcr.io/cyrusimap/cyrus-docker:bookworm' }}
-        options: --init --privileged --shm-size 4GB '--tmpfs', '/dev/shm2:exec,size=1G',
+        options: --init --privileged --shm-size 4GB --tmpfs /dev/shm2:exec,size=1G
     steps:
     - uses: actions/checkout@v6
       with:
@@ -111,7 +111,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
         image: ghcr.io/cyrusimap/cyrus-docker:bookworm
-        options: --init --privileged --shm-size 4GB '--tmpfs', '/dev/shm2:exec,size=1G',
+        options: --init --privileged --shm-size 4GB --tmpfs /dev/shm2:exec,size=1G
     steps:
     - uses: actions/checkout@v6
       with:
@@ -154,7 +154,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
         image: ghcr.io/cyrusimap/cyrus-docker:bookworm
-        options: --init --privileged --shm-size 4GB '--tmpfs', '/dev/shm2:exec,size=1G',
+        options: --init --privileged --shm-size 4GB --tmpfs /dev/shm2:exec,size=1G
     steps:
     - uses: actions/checkout@v6
       with:
