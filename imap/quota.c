@@ -227,6 +227,35 @@ errmsg(int err, const char *fmt, ...)
     fprintf(stderr, "%s\n", buf);
 }
 
+/*
+ * Report a repair action.  In JSON mode these are collected into a top-level
+ * "_repairs" array so that the output remains valid JSON even when stdout and
+ * stderr are captured together; otherwise they're printed to stderr as before.
+ */
+static void
+__attribute__((format(printf, 1, 2)))
+report_repair(const char *fmt, ...)
+{
+    char buf[1024];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+
+    if (jsonout) {
+        json_t *repairs = json_object_get(jsonout, "_repairs");
+        if (!repairs) {
+            repairs = json_array();
+            json_object_set_new(jsonout, "_repairs", repairs);
+        }
+        json_array_append_new(repairs, json_string(buf));
+    }
+    else {
+        fprintf(stderr, "%s\n", buf);
+    }
+}
+
 static void test_sync_wait(const char *mboxname)
 {
     char *filename;
@@ -516,7 +545,7 @@ int fixquota_fixroot(struct mailbox *mailbox,
                      const char *root)
 {
     const char *oldroot = mailbox_quotaroot(mailbox);
-    fprintf(stderr, "%s: quota root %s --> %s\n", mailbox_name(mailbox),
+    report_repair("%s: quota root %s --> %s", mailbox_name(mailbox),
            oldroot ? oldroot : "(none)",
            root ? root : "(none)");
 
@@ -538,7 +567,7 @@ int fixquota_finish(int thisquota)
 
     if (!quotaroots[thisquota].refcount) {
         quotaroots[thisquota].deleted = 1;
-        fprintf(stderr, "%s: removed\n", root);
+        report_repair("%s: removed", root);
         if (!flag_reportonly)
             r = quota_deleteroot(root, 0);
         if (r) {
@@ -558,7 +587,7 @@ int fixquota_finish(int thisquota)
     /* is it different? */
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
         if (localq.scanuseds[res] != localq.useds[res]) {
-            fprintf(stderr, "%s: %s usage was " QUOTA_T_FMT ", now " QUOTA_T_FMT "\n",
+            report_repair("%s: %s usage was " QUOTA_T_FMT ", now " QUOTA_T_FMT,
                 root,
                 quota_names[res],
                 localq.useds[res],

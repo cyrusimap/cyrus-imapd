@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_quota_json_repairs ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "set ourselves a basic usage quota";
+    $self->set_quotalimits(
+        quotaroot => 'user.cassandane',
+        storage => 100000,
+        message => 50000,
+        $self->res_annot_storage => 10000,
+    );
+
+    xlog $self, "create some messages to use various quota resources";
+    my $expected_storage = 0;
+    my $expected_message = 0;
+    for (1..3) {
+        my $msg = $self->make_message("Cassandane $_", extra_lines => 5000);
+        $expected_storage += length($msg->as_string());
+        $expected_message++;
+    }
+
+    xlog $self, "corrupt the stored usage so quota -f will repair it";
+    $self->zap_quota(quotaroot => 'user.cassandane');
+
+    xlog $self, "run quota -f -J, capturing stdout and stderr separately";
+    my $basedir = $self->{instance}->{basedir};
+    my $outfile = "$basedir/quota.json";
+    my $errfile = "$basedir/quota.err";
+    $self->{instance}->run_command({
+        cyrus => 1,
+        redirects => { stdout => $outfile, stderr => $errfile },
+    }, 'quota', '-f', '-J');
+
+    xlog $self, "stdout must be valid JSON even though repairs happened";
+    my $out = slurp_file($outfile);
+    my $json = decode_json($out);
+
+    xlog $self, "repairs are reported in a top-level _repairs array";
+    $self->assert(exists $json->{_repairs});
+    $self->assert_str_equals('ARRAY', ref $json->{_repairs});
+    $self->assert_num_not_equals(0, scalar @{$json->{_repairs}});
+
+    xlog $self, "quota roots are still reported alongside the repairs";
+    # JSON reports raw usage (bytes for STORAGE, count for MESSAGE), not KiB
+    $self->assert(exists $json->{'user.cassandane'});
+    $self->assert_num_equals($expected_storage,
+                             $json->{'user.cassandane'}{STORAGE}{used});
+    $self->assert_num_equals($expected_message,
+                             $json->{'user.cassandane'}{MESSAGE}{used});
+
+    xlog $self, "repair text went into the JSON, not onto stderr";
+    my $err = slurp_file($errfile);
+    $self->assert_does_not_match(qr/usage was/, $err);
+}
