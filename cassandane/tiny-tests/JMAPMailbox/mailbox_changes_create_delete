@@ -5,40 +5,29 @@ sub test_mailbox_changes_create_delete
     :min_version_3_5 :NoAltNameSpace
     ($self)
 {
-    my $jmap = $self->{jmap};
-    my $imap = $self->{store}->get_client();
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
 
-
-    $imap->create('INBOX.foo');
+    $user->mailboxes->create;
 
     my $res = $jmap->CallMethods([
         ['Mailbox/get', { }, 'R1'],
     ]);
-    my $fooId;
-    if ($res->[0][1]{list}[0]{name} eq 'foo') {
-        $fooId = $res->[0][1]{list}[0]{id};
-    }
-    else {
-        $fooId = $res->[0][1]{list}[1]{id};
-    }
-    $self->assert_not_null($fooId);
     my $state = $res->[0][1]{state};
     $self->assert_not_null($state);
 
-    $imap->create('INBOX.bar');
+    $user->mailboxes->create;
 
     $res = $jmap->CallMethods([
         ['Mailbox/changes', {
             sinceState => $state,
         }, 'R1'],
     ]);
-    my $barId = $res->[0][1]{created}[0];
-    $self->assert_not_null($barId);
     $state = $res->[0][1]{newState};
     $self->assert_not_null($state);
 
-    $imap->create("INBOX.fuzz");
-    $imap->delete("INBOX.fuzz");
+    my $doomed = $user->mailboxes->create;
+    $doomed->destroy;
 
     $res = $jmap->CallMethods([
         ['Mailbox/changes', {

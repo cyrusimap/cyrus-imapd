@@ -47,5 +47,11 @@ has properties => (
     },
 );
 
+sub destroy {
+    my $self = shift;
+
+    $self->factory->_destroy($self, @_);
+}
+
 no Moo::Role;
 1;
