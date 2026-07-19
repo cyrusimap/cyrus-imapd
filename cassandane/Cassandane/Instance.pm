@@ -3229,10 +3229,16 @@ sub make_folder_intermediate
     $self->start();
 }
 
-sub _common_http_service_args ($self) {
-  $self->{_common_http_service_args} //= do {
-      my $service = $self->get_service("https")
-                 || $self->get_service("http");
+sub _common_http_service_args ($self, $want_service = "") {
+  $self->{"_common_http_service_args_$want_service"} //= do {
+      my $service;
+
+      if ($want_service) {
+          $service = $self->get_service($want_service);
+      } else {
+          $service = $self->get_service("https")
+                  || $self->get_service("http");
+      }
 
       $service
           || Carp::confess("can't build _common_http_service_args without an http service configured");
@@ -3250,7 +3256,7 @@ sub _common_http_service_args ($self) {
       };
   };
 
-  return $self->{_common_http_service_args}->%*;
+  return $self->{"_common_http_service_args_$want_service"}->%*;
 }
 
 my @DEFAULT_USING = qw(
@@ -3279,11 +3285,15 @@ sub new_jmaptester_ws_for_user ($self, $user, $new_arg = undef) {
   );
 }
 
+sub new_entity_jmaptester_for_user ($self, $user, $new_arg = undef) {
+  return $self->_new_jmaptester_for_user('Cassandane::JMAPTester', {}, $user, $new_arg, 'entity');
+}
+
 sub new_jmaptester_for_user ($self, $user, $new_arg = undef) {
   return $self->_new_jmaptester_for_user('Cassandane::JMAPTester', {}, $user, $new_arg);
 }
 
-sub _new_jmaptester_for_user($self, $tester_class, $tester_arg, $user, $new_arg = undef) {
+sub _new_jmaptester_for_user($self, $tester_class, $tester_arg, $user, $new_arg = undef, $is_entity = undef) {
     my %overrides;
     if ($new_arg) {
         %overrides  = ref $new_arg eq 'HASH'  ? %$new_arg
@@ -3291,11 +3301,13 @@ sub _new_jmaptester_for_user($self, $tester_class, $tester_arg, $user, $new_arg 
                     : Carp::confess("expected hash or array reference to ->new_jmaptester, got neither");
     }
 
-    unless ($self->{config}->get_bit('httpmodules', 'jmap')) {
-        Carp::croak("User JMAP::Tester requested, but jmap httpmodule not enabled");
+    unless ($is_entity) {
+        unless ($self->{config}->get_bit('httpmodules', 'jmap')) {
+            Carp::croak("User JMAP::Tester requested, but jmap httpmodule not enabled");
+        }
     }
 
-    my %arg = $self->_common_http_service_args;
+    my %arg = $self->_common_http_service_args($is_entity ? 'tejmap' : "");
 
     my $host = $arg{host};
     my $port = $arg{port};
