@@ -2611,9 +2611,14 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
     if (!tr->indexed) {
         tr->indexed = seqset_init(0, SEQ_MERGE);
         /* we want to say that we indexed the entire gap from last time
-         * up until this first message as well, so our indexed range
-         * isn't gappy */
-        seqset_add(tr->indexed, seqset_firstnonmember(tr->oldindexed), 1);
+         * up until this first message as well, so our indexed range stays
+         * contiguous.  Only claim UIDs below the message we are indexing
+         * though: firstnonmember can be a live message deferred to a later
+         * batch (the one that tripped the batch-size limit, or re-indexed in
+         * the attachment pass), and claiming it here would skip it. */
+        uint32_t fnm = seqset_firstnonmember(tr->oldindexed);
+        if (fnm < tr->super.uid)
+            seqset_add(tr->indexed, fnm, 1);
     }
     seqset_add(tr->indexed, tr->super.uid, 1);
 
