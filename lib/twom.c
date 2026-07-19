@@ -2,23 +2,31 @@
  *
  * Copyright (c) 2025 Fastmail Pty Ltd
  *
- * https://creativecommons.org/publicdomain/zero/1.0/
- *
- *   The person who associated a work with this deed has dedicated the work to the
- *   public domain by waiving all of his or her rights to the work worldwide under
- *   copyright law, including all related and neighboring rights, to the extent
- *   allowed by law.
- *
- *   You can copy, modify, distribute and perform the work, even for commercial
- *   purposes, all without asking permission.
+ * Available under any of: CC0-1.0, 0BSD, or MIT-0
+ * See LICENSE-CC0, LICENSE-0BSD, or LICENSE-MIT-0 for details.
  */
 
 #include <assert.h>
+#ifdef __APPLE__
+#include <libkern/OSByteOrder.h>
+#define htole16(x) OSSwapHostToLittleInt16(x)
+#define le16toh(x) OSSwapLittleToHostInt16(x)
+#define htole32(x) OSSwapHostToLittleInt32(x)
+#define le32toh(x) OSSwapLittleToHostInt32(x)
+#define htole64(x) OSSwapHostToLittleInt64(x)
+#define le64toh(x) OSSwapLittleToHostInt64(x)
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN 37
+#endif
+#else
+#include <endian.h>
+#endif
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -45,6 +53,13 @@
 
 /* release lock in foreach at least every N records */
 #define FOREACH_LOCK_RELEASE 1024
+
+/* When re-locking during a long foreach we normally use TWOM_ONELOCK to skip
+ * the header "gate" lock and save syscalls.  But the gate is what lets a
+ * waiting writer fend off new readers, so if we ALWAYS skipped it a busy set
+ * of overlapping foreaches would starve writers indefinitely.  So every N
+ * re-locks we fall back to the full double-lock, bounding writer starvation. */
+#define FOREACH_GATE_RELOCKS 64
 
 /* type aliases */
 #define LLU long long unsigned int
@@ -133,6 +148,7 @@ struct twom_txn {
     struct tm_file *file;
     size_t end;
     uint64_t counter;
+    uint64_t nlocks;
     unsigned readonly:1;
     unsigned nosync:1;
     unsigned noyield:1;
@@ -229,19 +245,19 @@ static inline void *twom_zmalloc(size_t bytes)
 #define TYPE(ptr) (*((uint8_t *)(ptr)))
 #define LEVEL(ptr) (*((uint8_t *)(ptr+1)))
 // replace and delete records have an extra offset
-#define KLSKINNY(ptr) le16toh(*((uint16_t *)(ptr+2)))
-#define KLFAT(ptr) le64toh(*((uint64_t *)(ptr+8)))
-#define VLSKINNY(ptr) le32toh(*((uint32_t *)(ptr+4)))
-#define VLFAT(ptr) le64toh(*((uint64_t *)(ptr+16)))
+#define KLSKINNY(ptr) ((size_t)le16toh(*((uint16_t *)(ptr+2))))
+#define KLFAT(ptr) ((size_t)le64toh(*((uint64_t *)(ptr+8))))
+#define VLSKINNY(ptr) ((size_t)le32toh(*((uint32_t *)(ptr+4))))
+#define VLFAT(ptr) ((size_t)le64toh(*((uint64_t *)(ptr+16))))
 #define HLCALC(type, level) (ptroffset[type] + (8 * (1 + level)))
-#define HEADLEN(ptr) HLCALC(TYPE(ptr), LEVEL(ptr))
-#define HEADCSUM(ptr) le32toh(*((uint32_t *)(ptr + HEADLEN(ptr))))
+#define HEADLEN(ptr) ((size_t)HLCALC(TYPE(ptr), LEVEL(ptr)))
+#define HEADCSUM(ptr) ((uint32_t)le32toh(*((uint32_t *)(ptr + HEADLEN(ptr)))))
 #define TLCALC(type, keylen, vallen) (hastail[type] ? PAD8(keylen + vallen + 2) : 0)
-#define TAILLEN(ptr) TLCALC(TYPE(ptr), KEYLEN(ptr), VALLEN(ptr))
-#define TAILCSUM(ptr) le32toh(*((uint32_t *)(ptr + HEADLEN(ptr) + 4)))
-#define KEYLEN(ptr) (hastail[TYPE(ptr)] ? (fatrecord[TYPE(ptr)] ? KLFAT(ptr) : KLSKINNY(ptr)) : 0)
+#define TAILLEN(ptr) ((size_t)TLCALC(TYPE(ptr), KEYLEN(ptr), VALLEN(ptr)))
+#define TAILCSUM(ptr) ((uint32_t)le32toh(*((uint32_t *)(ptr + HEADLEN(ptr) + 4))))
+#define KEYLEN(ptr) ((size_t)(hastail[TYPE(ptr)] ? (fatrecord[TYPE(ptr)] ? KLFAT(ptr) : KLSKINNY(ptr)) : 0))
 #define KEYPTR(ptr) (hastail[TYPE(ptr)] ? (ptr + HEADLEN(ptr) + 8) : "")
-#define VALLEN(ptr) (fatrecord[TYPE(ptr)] ? VLFAT(ptr) : VLSKINNY(ptr))
+#define VALLEN(ptr) ((size_t)(fatrecord[TYPE(ptr)] ? VLFAT(ptr) : VLSKINNY(ptr)))
 #define VALPTR(ptr) (ptr + HEADLEN(ptr) + 8 + KEYLEN(ptr) + 1)
 #define ANCESTOR(ptr) (ancestoroffset[TYPE(ptr)] ? le64toh(*((uint64_t *)(ptr+(ancestoroffset[TYPE(ptr)])))) : 0)
 #define NEXT0PTR(ptr, alt) (ptr + ptroffset[TYPE(ptr)] + (alt ? 8 : 0))
@@ -383,6 +399,11 @@ static int compar_raw(const char *s1, size_t l1, const char *s2, size_t l2)
     return 0;
 }
 
+/* Wrap the comparator so that the zero-length string (DUMMY sentinel key)
+ * always sorts first, regardless of what an external comparator does. */
+#define COMPAR(fn, a, al, b, bl) \
+    (!(al) ? (!(bl) ? 0 : -1) : (!(bl) ? 1 : (fn)((a), (al), (b), (bl))))
+
 /************** CHECKSUMS ****************/
 
 #ifdef HAVE_DECLARE_OPTIMIZE
@@ -521,14 +542,14 @@ static inline int tm_ensure(struct twom_db *db, size_t offset)
 
     // map the larger file into new memory
     file->size = newoffset;
-    file->base = (char *)mmap((caddr_t)0, file->size, PROT_READ|PROT_WRITE, MAP_SHARED, db->openfile->fd, 0L);
-    if (file->base == MAP_FAILED) {
-        file->base = NULL;
+    void *map = mmap((caddr_t)0, file->size, PROT_READ|PROT_WRITE, MAP_SHARED, db->openfile->fd, 0L);
+    if (map == MAP_FAILED) {
         db->error("twom failed to mmap during tm_ensure",
                    "filename=<%s> newsize=<%08llX>",
                    db->fname, (LLU)file->size);
         return TWOM_IOERROR;
     }
+    file->base = map;
 
     return 0;
 }
@@ -799,8 +820,8 @@ static int locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, siz
             ptr = safeptr(loc, next);
             if (!ptr) return TWOM_IOERROR;
 
-            cmp = file->compar(KEYPTR(ptr), KEYLEN(ptr),
-                               key, keylen);
+            cmp = COMPAR(file->compar, KEYPTR(ptr), KEYLEN(ptr),
+                         key, keylen);
 
             /* not there?  stay at this level */
             if (cmp < 0) {
@@ -837,8 +858,8 @@ static int locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, siz
             if (!ptr) return TWOM_IOERROR;
         }
 
-        cmp = file->compar(KEYPTR(ptr), KEYLEN(ptr),
-                           key, keylen);
+        cmp = COMPAR(file->compar, KEYPTR(ptr), KEYLEN(ptr),
+                     key, keylen);
 
         // if we match exactly or see into the future, we're there!
         if (cmp > 0) {
@@ -964,7 +985,7 @@ static int find_loc(struct twom_txn *txn, struct tm_loc *loc, const char *key, s
     }
 
     const char *ptr = loc->offset ? LOCPTR(loc) : LOCBACKPTR(loc, 0);
-    int cmp = loc->file->compar(KEYPTR(ptr), KEYLEN(ptr), key, keylen);
+    int cmp = COMPAR(loc->file->compar, KEYPTR(ptr), KEYLEN(ptr), key, keylen);
     if (!cmp && loc->offset) {
         // we haven't moved
         return 0;
@@ -995,7 +1016,7 @@ static int find_loc(struct twom_txn *txn, struct tm_loc *loc, const char *key, s
             ptr = safeptr(loc, offset);
             if (!ptr) return TWOM_IOERROR;
         }
-        cmp = loc->file->compar(KEYPTR(ptr), KEYLEN(ptr), key, keylen);
+        cmp = COMPAR(loc->file->compar, KEYPTR(ptr), KEYLEN(ptr), key, keylen);
         // it's in the gap?
         if (cmp > 0) return 0;
         // found it?
@@ -1331,8 +1352,8 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
             if (!nextptr) return TWOM_IOERROR;
         }
 
-        cmp = file->compar(KEYPTR(nextptr), KEYLEN(nextptr),
-                           KEYPTR(ptr), KEYLEN(ptr));
+        cmp = COMPAR(file->compar, KEYPTR(nextptr), KEYLEN(nextptr),
+                     KEYPTR(ptr), KEYLEN(ptr));
         if (cmp <= 0) {
             db->error("out of order for recovery",
                       "fname=<%s> prev_key=<%.*s> key=<%.*s> offset=<%08llX>",
@@ -1360,8 +1381,8 @@ static int recovery1(struct twom_db *db, struct tm_loc *loc, int *count)
                 aptr = safeptr(loc, ancestor);
                 if (!aptr) return TWOM_IOERROR;
             }
-            cmp = file->compar(KEYPTR(aptr), KEYLEN(aptr),
-                               KEYPTR(nextptr), KEYLEN(nextptr));
+            cmp = COMPAR(file->compar, KEYPTR(aptr), KEYLEN(aptr),
+                         KEYPTR(nextptr), KEYLEN(nextptr));
             if (cmp) {
                 db->error("twom mismatched ancestor for recovery",
                         "fname=<%s> key=<%.*s> offset=<%08llX>"
@@ -1555,13 +1576,14 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
     struct flock fl;
     int r = 0;
     int cmd = (flags & TWOM_NONBLOCKING) ? F_SETLK : F_SETLKW;
+    int take_headlock = (flags & TWOM_ONELOCK) ? 0 : 1;
     struct tm_file *file = forcefile ? forcefile : db->openfile;
 
     if (file->has_headlock || file->has_datalock) return TWOM_INTERNAL;
 
     for (;;) {
         // lock the head section
-        for (;!file->has_headlock;) {
+        for (;take_headlock && !file->has_headlock;) {
             fl.l_type = F_WRLCK;
             fl.l_whence = SEEK_SET;
             fl.l_start = 0;
@@ -1631,6 +1653,9 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
 
         if (sbuf.st_ino == sbuffile.st_ino) break;
 
+        // go straight to the data lock when retrying
+        take_headlock = 0;
+
         r = unlock(db, file);
         if (r) goto done;
 
@@ -1665,14 +1690,14 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
     if (file->size < (size_t)sbuf.st_size) {
         if (file->size) munmap(file->base, file->size);
         file->size = sbuf.st_size;
-        file->base = (char *)mmap((caddr_t)0, file->size, PROT_READ|PROT_WRITE, MAP_SHARED, file->fd, 0L);
-        if (file->base == MAP_FAILED) {
-            file->base = NULL;
+        void *map = mmap((caddr_t)0, file->size, PROT_READ|PROT_WRITE, MAP_SHARED, file->fd, 0L);
+        if (map == MAP_FAILED) {
             db->error("write_lock mmap failed",
                       "filename=<%s> size=<%08llX>", db->fname, (LLU)file->size);
             r = TWOM_IOERROR;
             goto done;
         }
+        file->base = map;
     }
 
     /* reread header */
@@ -1705,12 +1730,13 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
     struct flock fl;
     struct tm_file *file = forcefile ? forcefile : db->openfile;
     int cmd = (flags & TWOM_NONBLOCKING) ? F_SETLK : F_SETLKW;
+    int take_headlock = (flags & TWOM_ONELOCK) ? 0 : 1;
 
     if (file->has_headlock || file->has_datalock) return TWOM_INTERNAL;
 
     for (;;) {
         // take the headlock
-        for (;!file->has_headlock;) {
+        for (;take_headlock && !file->has_headlock;) {
             fl.l_type = F_RDLCK;
             fl.l_whence = SEEK_SET;
             fl.l_start = 0;
@@ -1782,6 +1808,9 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
         // file is unchanged, we have successfully locked
         if (sbuf.st_ino == sbuffile.st_ino) break;
 
+        // go straight to the data lock when retrying
+        take_headlock = 0;
+
         // unlock the old file
         r = unlock(db, file);
         if (r) goto done;
@@ -1819,14 +1848,14 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
         if (file->size) munmap(file->base, file->size);
         int flags = db->readonly ? PROT_READ : PROT_READ|PROT_WRITE;
         file->size = sbuf.st_size;
-        file->base = (char *)mmap((caddr_t)0, file->size, flags, MAP_SHARED, file->fd, 0L);
-        if (file->base == MAP_FAILED) {
-            file->base = NULL;
+        void *map = mmap((caddr_t)0, file->size, flags, MAP_SHARED, file->fd, 0L);
+        if (map == MAP_FAILED) {
             db->error("read_lock mmap failed",
                       "filename=<%s> size=<%08llX>", db->fname, (LLU)file->size);
             r = TWOM_IOERROR;
             goto done;
         }
+        file->base = map;
     }
 
     // reread header
@@ -1896,8 +1925,9 @@ static int initdb(struct twom_db *db, int flags)
     // prepare the header
     uuid_generate(header.uuid);
     header.version = TWOM_VERSION;
-    // XXX: other persistent flags?
     header.flags = set_csum_engine(db, file, flags);
+    if (flags & TWOM_COMPAR_EXTERNAL)
+        header.flags |= TWOM_COMPAR_EXTERNAL;
     header.generation = 1;
     header.num_records = 0;
     header.num_commits = 0;
@@ -2176,7 +2206,10 @@ static int myreplay(struct twom_txn *txn,
         if (txn->counter > db->foreach_lock_release) {
             r = unlock(db, file);
             if (r) return r;
-            r = read_lock(db, &txn, file, /*flags*/0);
+            /* as in twom_cursor_next: mostly ONELOCK, but periodically take
+             * the full double-lock so we don't starve a waiting writer */
+            int lockflags = (txn->nlocks++ % FOREACH_GATE_RELOCKS) ? TWOM_ONELOCK : 0;
+            r = read_lock(db, &txn, file, lockflags);
             if (r) return r;
             txn->counter = 0;
         }
@@ -2204,7 +2237,7 @@ static int skipwrite(struct twom_txn *txn,
         if (flags & TWOM_IFNOTEXIST) return TWOM_EXISTS;
         if (!data) return store_here(txn, key, keylen, NULL, 0);
         /* unchanged?  Save the IO */
-        if (!loc->file->compar(data, datalen, VALPTR(ptr), VALLEN(ptr)))
+        if (!COMPAR(loc->file->compar, data, datalen, VALPTR(ptr), VALLEN(ptr)))
             return 0;
         return store_here(txn, key, keylen, data, datalen);
     }
@@ -2356,8 +2389,8 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
             if (!nextptr) return TWOM_IOERROR;
         }
 
-        cmp = file->compar(KEYPTR(nextptr), KEYLEN(nextptr),
-                           KEYPTR(ptr), KEYLEN(ptr));
+        cmp = COMPAR(file->compar, KEYPTR(nextptr), KEYLEN(nextptr),
+                     KEYPTR(ptr), KEYLEN(ptr));
         if (cmp <= 0) {
             db->error("out of order for consistent",
                       "fname=<%s> key=<%.*s> offset=<%08llX> prev_key=<%.*s>",
@@ -2383,8 +2416,8 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
                 aptr = safeptr(loc, ancestor);
                 if (!aptr) return TWOM_IOERROR;
             }
-            cmp = file->compar(KEYPTR(aptr), KEYLEN(aptr),
-                               KEYPTR(nextptr), KEYLEN(nextptr));
+            cmp = COMPAR(file->compar, KEYPTR(aptr), KEYLEN(aptr),
+                         KEYPTR(nextptr), KEYLEN(nextptr));
             if (cmp) {
                 db->error("mismatched ancestor for consistent",
                           "fname=<%s> key=<%.*s> offset=<%08llX>"
@@ -2399,8 +2432,15 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
 
         uint8_t level = LEVEL(nextptr);
         for (i = 1; i < level; i++) {
-            /* check the old pointer was to here */
-            if (next[i] != next[0]) {
+            /* check the old pointer was to here.  On a read-only
+             * transaction a higher-level pointer into the future (at or
+             * past our snapshot end) is a "future link" left by a writer
+             * that extended the file after we started, or by a crashed
+             * write transaction: recovery on a write lock would re-stitch
+             * it, so tolerate it here and resync rather than reporting
+             * broken linkage. */
+            if (next[i] != next[0]
+                && !(txn->readonly && next[i] >= loc->end)) {
                 db->error("broken linkage for consistent",
                           "fname=<%s> offset=<%08llX> level=<%d>"
                           " expected=<%08llX>",
@@ -2421,6 +2461,11 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
 
     for (i = 0; i < MAXLEVEL; i++) {
         if (next[i]) {
+            /* as above: a higher-level future link left dangling at the
+             * tail (a pointer at or past our snapshot end) is fine for a
+             * read-only transaction; recovery would zero it. */
+            if (i && txn->readonly && next[i] >= loc->end)
+                continue;
             db->error("broken tail for consistent",
                       "filename=<%s> offset=<%08llX> level=<%d>",
                       db->fname, (LLU)next[i], i);
@@ -2677,7 +2722,7 @@ int twom_db_begin_cursor(struct twom_db *db,
                          struct twom_cursor **curp, int flags)
 {
     struct twom_txn *txn = NULL;
-    int r = twom_db_begin_txn(db, flags & TWOM_SHARED, &txn);
+    int r = twom_db_begin_txn(db, flags, &txn);
     if (r) return r;
     r = twom_txn_begin_cursor(txn, prefix, prefixlen, curp, flags);
     if (r) {
@@ -2706,7 +2751,11 @@ int twom_cursor_next(struct twom_cursor *cur,
         }
 
         if (!txn->file->has_datalock) {
-            r = read_lock(txn->db, &txn, txn->mvcc ? txn->file : NULL, /*flags*/0);
+            /* usually re-lock cheaply with ONELOCK (skipping the header gate),
+             * but every FOREACH_GATE_RELOCKS re-locks take the full double-lock
+             * so a writer waiting on the gate isn't starved by this foreach */
+            int lockflags = (txn->nlocks++ % FOREACH_GATE_RELOCKS) ? TWOM_ONELOCK : 0;
+            r = read_lock(txn->db, &txn, txn->mvcc ? txn->file : NULL, lockflags);
             if (r) return r;
             txn->counter = 0;
         }
@@ -2736,7 +2785,7 @@ int twom_cursor_next(struct twom_cursor *cur,
         size_t keylen = KEYLEN(this);
         if (keylen < cur->prefixlen) return TWOM_DONE;
         const char *key = KEYPTR(this);
-        if (txn->file->compar(key, cur->prefixlen, cur->prefix, cur->prefixlen))
+        if (COMPAR(txn->file->compar, key, cur->prefixlen, cur->prefix, cur->prefixlen))
             return TWOM_DONE;
     }
 
@@ -2774,13 +2823,18 @@ int twom_cursor_replace(struct twom_cursor *cur,
     const char *ptr = LOCPTR(&cur->loc);
     const char *key = KEYPTR(ptr);
     size_t keylen = KEYLEN(ptr);
+
+    /* position db->loc at the key so store_here can rewire skip pointers */
+    int r = find_loc(cur->txn, &cur->txn->db->loc, key, keylen);
+    if (r) return r;
+
     /* could be a delete or a replace */
     if (hastail[TYPE(ptr)]) {
         // replacing existing record
         if (flags & TWOM_IFNOTEXIST) return TWOM_EXISTS;
         if (!data) return store_here(cur->txn, key, keylen, NULL, 0);
         /* unchanged?  Save the IO */
-        if (!cur->loc.file->compar(data, datalen, VALPTR(ptr), VALLEN(ptr)))
+        if (!COMPAR(cur->loc.file->compar, data, datalen, VALPTR(ptr), VALLEN(ptr)))
             return 0;
         return store_here(cur->txn, key, keylen, data, datalen);
     }
@@ -2969,7 +3023,11 @@ static int twom_txn_consistent(struct twom_txn *txn)
 {
     struct tm_loc *loc = (struct tm_loc *)twom_zmalloc(sizeof(struct tm_loc));
     loc->file = txn->file;
-    loc->end = loc->file->written_size;
+    /* check the transaction's own committed snapshot.  For a read-write
+     * transaction txn->end == written_size, so this is unchanged; for a
+     * read-only transaction it is the committed size at begin, which is
+     * exactly the region recovery would validate on a write lock. */
+    loc->end = txn->end;
     int r = consistent1(txn, loc);
     free(loc);
     return r;
@@ -3196,6 +3254,216 @@ int twom_db_dump(struct twom_db *db, int detail)
     return r;
 }
 
+/* Repair records whose keylen or vallen was silently truncated due to the
+ * skinny-record uint16_t/uint32_t overflow bug.
+ *
+ * Detection: for a skinny ADD/REPLACE, the byte immediately after the stored
+ * key must be NUL (store_here always writes a NUL terminator there).  If it is
+ * not, the true keylen must be stored_keylen + N*65536 for some N≥1.  We scan
+ * forward in 65536-byte steps until we find the NUL, then verify by
+ * re-computing the tail checksum with the candidate lengths.
+ *
+ * Repair: position the location (via find_loc with the truncated key) so that
+ * store_here replaces the broken record in-place in the skiplist and creates a
+ * correct FATADD/FATREPLACE record with the right 64-bit lengths.
+ *
+ * Returns TWOM_OK on success.  *nfixedp (if non-NULL) receives the count of
+ * records repaired. */
+int twom_db_repair(struct twom_db *db, size_t *nfixedp)
+{
+    struct twom_txn *txn = NULL;
+    int r = twom_db_begin_txn(db, 0, &txn);
+    if (r) return r;
+
+    struct tm_file *file = txn->file;
+
+    /* ------------------------------------------------------------------ *
+     * Pass 1 — scan the live skiplist for broken records.
+     * ------------------------------------------------------------------ */
+
+    struct repair_item {
+        size_t keylen;   /* true keylen found via NUL scan     */
+        size_t vallen;   /* vallen (stored uint32_t, unchanged)*/
+        char  *key;      /* malloc'd copy of the full key      */
+        char  *val;      /* malloc'd copy of the value         */
+    };
+
+    size_t capacity = 16, nbroken = 0;
+    struct repair_item *broken = malloc(capacity * sizeof(*broken));
+    if (!broken) {
+        twom_txn_abort(&txn);
+        return TWOM_IOERROR;
+    }
+
+    /* initialise loc so advance_loc starts from the very first record */
+    struct tm_loc *loc = &db->loc;
+    r = find_loc(txn, loc, NULL, 0);
+    if (r) goto fail;
+
+    for (;;) {
+        r = advance_loc(txn, loc);
+        if (r == TWOM_DONE) {
+            r = 0;
+            break;
+        }
+        if (r) goto fail;
+
+        /* deleted records don't need repair (no live tail) */
+        if (loc->deleted_offset) continue;
+
+        const char *ptr = safeptr(loc, loc->offset);
+        uint8_t type = TYPE(ptr);
+
+        /* only skinny records can overflow — fat records already have
+         * 64-bit lengths and are correct by construction */
+        if (fatrecord[type]) continue;
+
+        size_t stored_keylen = KLSKINNY(ptr);
+        size_t headlen = HEADLEN(ptr);
+        const char *keyptr = KEYPTR(ptr);
+
+        if (keyptr[stored_keylen] == '\0') continue;  /* looks fine */
+
+        /* scan forward in 65536-byte increments for the true NUL */
+        size_t real_keylen = stored_keylen + 65536;
+        size_t max_off = file->size - (loc->offset + headlen + 8 + 1);
+        while (real_keylen < max_off && keyptr[real_keylen] != '\0')
+            real_keylen += 65536;
+
+        if (real_keylen >= max_off) {
+            db->error("repair: cannot find key terminator",
+                      "filename=<%s> offset=<%08llX> stored_keylen=<%zu>",
+                      db->fname, (LLU)loc->offset, stored_keylen);
+            continue;
+        }
+
+        /* verify by re-computing the tail checksum with the real lengths */
+        size_t real_vallen = VALLEN(ptr);
+        size_t real_taillen = PAD8(real_keylen + real_vallen + 2);
+        if (loc->offset + headlen + 8 + real_taillen > file->size) {
+            db->error("repair: real record exceeds file size",
+                      "filename=<%s> offset=<%08llX>",
+                      db->fname, (LLU)loc->offset);
+            continue;
+        }
+        uint32_t csum = file->csum(keyptr, real_taillen);
+        if (csum != TAILCSUM(ptr)) {
+            db->error("repair: NUL found but tailcsum mismatch",
+                      "filename=<%s> offset=<%08llX> real_keylen=<%zu>",
+                      db->fname, (LLU)loc->offset, real_keylen);
+            continue;
+        }
+
+        /* save copies — the mmap may move when store_here calls tm_ensure */
+        char *keycopy = malloc(real_keylen+1);
+        char *valcopy = malloc(real_vallen+1);
+        if (!keycopy || !valcopy) {
+            free(keycopy); free(valcopy);
+            r = TWOM_IOERROR;
+            goto fail;
+        }
+        memcpy(keycopy, keyptr, real_keylen);
+        keycopy[real_keylen] = '\0';
+        memcpy(valcopy, keyptr + real_keylen + 1, real_vallen);
+        valcopy[real_vallen] = '\0';
+
+        if (nbroken >= capacity) {
+            capacity *= 2;
+            struct repair_item *tmp = realloc(broken, capacity * sizeof(*broken));
+            if (!tmp) {
+                free(keycopy);
+                free(valcopy);
+                r = TWOM_IOERROR;
+                goto fail;
+            }
+            broken = tmp;
+        }
+        broken[nbroken++] = (struct repair_item){
+            real_keylen, real_vallen, keycopy, valcopy
+        };
+
+        // we need to be dirty
+        if (!(loc->file->header.flags & DIRTY)) {
+            loc->file->header.flags |= DIRTY;
+            r = commit_header(db, &loc->file->header);
+            if (r) goto fail;
+        }
+
+        // now zero out the existing record entirely from the chain, starting
+        // with the level 0 pointer.  We have to set both, because we don't know
+        // which is right!
+        char *backptr = LOCBACKPTR(loc, 0);
+        char *prevptr = backptr;
+        size_t offset0 = advance0(ptr, loc->end);
+        char *addr = backptr + ptroffset[TYPE(backptr)];
+        *((uint64_t *)(addr)) = htole64(offset0);
+        addr+= 8;
+        *((uint64_t *)(addr)) = htole64(offset0);
+
+        uint8_t level = LEVEL(ptr);
+        uint8_t n;
+        for (n = 1; n < level; n++) {
+            backptr = LOCBACKPTR(loc, n);
+            if (backptr != prevptr) _recsum(loc->file, prevptr);
+            prevptr = backptr;
+            SETN(backptr, n, NEXTN(loc, n));
+        }
+
+        _recsum(loc->file, prevptr);
+
+        // we removed this record, account for it
+        loc->file->header.num_records--;
+        // you'd think so, but since this is invisible to the chain,
+        // the auditor doesn't know it's dirty
+        //loc->file->header.dirty_size += headlen + real_taillen;
+
+        // start again
+        r = locate(txn, loc, NULL, 0);
+        if (r) goto fail;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Pass 2 — store the broken records
+     * ------------------------------------------------------------------ */
+    size_t nfixed = 0;
+    for (size_t i = 0; i < nbroken; i++) {
+        struct repair_item *item = &broken[i];
+
+        r = twom_txn_store(txn, item->key, item->keylen, item->val, item->vallen, 0);
+        if (r) {
+            db->error("repair: twom_txn_store failed for broken record",
+                      "filename=<%s> key=<%s>",
+                      db->fname, item->key);
+            goto fail;
+        }
+
+        nfixed++;
+    }
+
+    for (size_t i = 0; i < nbroken; i++) {
+        free(broken[i].key);
+        free(broken[i].val);
+    }
+    free(broken);
+
+    if (nfixedp) *nfixedp = nfixed;
+
+    if (nfixed == 0) {
+        twom_txn_abort(&txn);
+        return TWOM_OK;
+    }
+    return twom_txn_commit(&txn);
+
+fail:
+    for (size_t i = 0; i < nbroken; i++) {
+        free(broken[i].key);
+        free(broken[i].val);
+    }
+    free(broken);
+    twom_txn_abort(&txn);
+    return r;
+}
+
 int twom_db_check_consistency(struct twom_db *db)
 {
     struct twom_txn *txn = NULL;
@@ -3266,6 +3534,12 @@ int twom_db_repack(struct twom_db *db)
         break;
     }
 
+    // if the file is dirty (unclean shutdown), we can't safely repack.
+    // a read-only transaction won't run recovery, and the consistency
+    // check will fail on uncommitted records.  The next writer will
+    // run recovery, and then repack can succeed.
+    if (!db_is_clean(db, db->openfile)) return TWOM_LOCKED;
+
     int r = twom_db_begin_txn(db, TWOM_SHARED|TWOM_MVCC, &txn);
     if (r) return r;
 
@@ -3287,7 +3561,7 @@ int twom_db_repack(struct twom_db *db)
     /* open fname.NEW */
     snprintf(newfname, sizeof(newfname), "%s.NEW", db->fname);
 
-    int flags = TWOM_NONBLOCKING; // if another file has already locked it, something is broken
+    int flags = TWOM_NONBLOCKING | TWOM_ONELOCK; // if another file has already locked it, something is broken
     if (db->external_csum)
         flags |= TWOM_CSUM_EXTERNAL;
     else if (db->nocsum)
