@@ -460,29 +460,6 @@ sub assert_rewrite_webdav_attachment_url_itip
     $self->assert($attach->[0]->value() =~ /^$webdavAttachURI.+/);
 }
 
-sub create_user
-{
-    my ($self, $username) = @_;
-
-    xlog $self, "create user $username";
-    my $admin = $self->{adminstore}->get_client();
-    $admin->create("user.$username");
-    $admin->setacl("user.$username", admin => 'lrswipkxtecdan') or die;
-    $admin->setacl("user.$username", $username => 'lrswipkxtecdn') or die;
-
-    my $user_obj = Cassandane::TestUser->new({
-        username => $username,
-        password => 'pass',
-        instance => $self->{instance},
-    });
-
-    my $jmap = $user_obj->new_jmaptester;
-
-    my $caldav = $user_obj->caldav;
-
-    return ($jmap, $caldav);
-}
-
 sub create_user_and_allocate_calendar
 {
     my ($self, $username, %params) = @_;
