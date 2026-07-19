@@ -256,7 +256,9 @@ sub assert_shared_calendars ($self, $state)
 
     if (not $state->{did_migrate}) {
         xlog $self, "Create sharee";
-        ($self->{shareeJmap}, $self->{shareeCaldav}) = $self->create_user('sharee');
+        my $sharee_user = $self->{instance}->create_user('sharee');
+        $self->{shareeJmap} = $sharee_user->jmap;
+        $self->{shareeCaldav} = $sharee_user->caldav;
 
         xlog $self, "Share calendars";
         my $admintalk = $self->{adminstore}->get_client();
@@ -400,10 +402,9 @@ EOF
     }
     else {
         my $sharee = $self->{instance}->create_user_without_setup('sharee');
-        my $default_cal_id = $sharee->calendars->default->id;
 
         $self->assert_deep_equals({
-            $default_cal_id => undef,
+            Default => undef,
         }, $state->{migrateResponse}{migrated}{sharee});
 
         $self->assert_null($eventA1->{useDefaultAlerts});

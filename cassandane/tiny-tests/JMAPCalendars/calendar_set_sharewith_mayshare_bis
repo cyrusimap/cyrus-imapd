@@ -53,7 +53,7 @@ sub _calendar_admin_right_name_check ($self, %arg) {
 
 sub test_calendar_set_sharewith_mayshare_bis ($self)
 {
-    $self->create_user('sharee');
+    $self->{instance}->create_user('sharee');
 
     my @using = (
         'urn:ietf:params:jmap:core',

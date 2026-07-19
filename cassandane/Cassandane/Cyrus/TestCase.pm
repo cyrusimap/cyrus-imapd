@@ -4,6 +4,8 @@
 package Cassandane::Cyrus::TestCase;
 use strict;
 use warnings;
+use experimental 'signatures';
+
 use attributes;
 use version 0.77;
 use Cwd qw(abs_path);
@@ -549,6 +551,14 @@ sub _run_magic
     }
 }
 
+sub _create_instance ($self, %rest)
+{
+    return Cassandane::Instance->new(
+        %rest,
+        test_case => $self,
+    );
+}
+
 sub _create_instances
 {
     my ($self) = @_;
@@ -642,7 +652,7 @@ sub _create_instances
         my $name  = $self->{_name} =~ s/^test_//r;
         $instance_params{description} = "main instance for test $class.$name";
 
-        $self->{instance} = Cassandane::Instance->new(%instance_params);
+        $self->{instance} = $self->_create_instance(%instance_params);
         $self->{instance}->add_services(@{$want->{services}});
         $self->{instance}->_setup_for_deliver()
             if ($want->{deliver});
@@ -675,8 +685,7 @@ sub _create_instances
             my $class = ref $self;
             my $name  = $self->{_name} =~ s/^test_//r;
             $replica_params{description} = "replica instance for test $class.$name";
-            $self->{replica} = Cassandane::Instance->new(%replica_params,
-                                                         setup_mailbox => 0);
+            $self->{replica} = $self->_create_instance(%replica_params, setup_mailbox => 0);
             my ($v) = Cassandane::Instance->get_version($replica_params{installation});
             if ($v < 3 || $want->{csyncreplica}) {
                 $self->{replica}->add_service(name => 'sync',
@@ -732,8 +741,8 @@ sub _create_instances
             my $name  = $self->{_name} =~ s/^test_//r;
             $frontend_params{description} = "murder frontend for test $class.$name";
             $frontend_params{config} = $frontend_conf;
-            $self->{frontend} = Cassandane::Instance->new(%frontend_params,
-                                                          setup_mailbox => 0);
+            $self->{frontend} = $self->_create_instance(%frontend_params,
+                                                        setup_mailbox => 0);
             $self->{frontend}->add_service(name => 'mupdate',
                                            port => $mupdate_port,
                                            argv => ['mupdate', '-m'],
@@ -800,8 +809,8 @@ sub _create_instances
 
             $backend2_params{description} = "murder backend2 for test $class.$name";
             $backend2_params{config} = $backend2_conf;
-            $self->{backend2} = Cassandane::Instance->new(%backend2_params,
-                                                          setup_mailbox => 0); # XXX ?
+            $self->{backend2} = $self->_create_instance(%backend2_params,
+                                                        setup_mailbox => 0); # XXX ?
             $self->{backend2}->add_services(@{$want->{services}});
 
             # arrange for backend2 to push to mupdate on startup
@@ -1826,6 +1835,10 @@ sub check_user
                                        $expected->{sieve}->{active});
         }
     }
+}
+
+sub jmap_default_using ($self) {
+    return Cassandane::Instance->jmap_default_default_using;
 }
 
 1;

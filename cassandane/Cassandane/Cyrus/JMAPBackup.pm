@@ -43,23 +43,19 @@ sub new
     return $self;
 }
 
-sub set_up
+sub jmap_default_using
 {
-    my ($self) = @_;
-    $self->SUPER::set_up();
-    if ($self->{_want}->{start_instances}) {
-        $self->{jmap}->DefaultUsing([
-            'urn:ietf:params:jmap:core',
-            'urn:ietf:params:jmap:mail',
-            'urn:ietf:params:jmap:calendars',
-            'urn:ietf:params:jmap:contacts',
-            'urn:ietf:params:jmap:principals',
-            'https://cyrusimap.org/ns/jmap/backup',
-            'https://cyrusimap.org/ns/jmap/contacts',
-            'https://cyrusimap.org/ns/jmap/calendars',
-            'https://cyrusimap.org/ns/jmap/notes',
-        ]);
-    }
+    return [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:contacts',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/backup',
+        'https://cyrusimap.org/ns/jmap/contacts',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/notes',
+    ];
 }
 
 use Cassandane::Tiny::Loader;

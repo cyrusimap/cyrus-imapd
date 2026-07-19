@@ -11,7 +11,9 @@ sub test_calendarevent_multiget_defaultalerts
     my $caldav = $self->{caldav};
 
     xlog "share calendar";
-    my ($shareeJmap, $shareeCaldav) = $self->create_user('sharee');
+    my $sharee_user = $self->{instance}->create_user('sharee');
+    my $shareeJmap = $sharee_user->jmap;
+    my $shareeCaldav = $sharee_user->caldav;
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {

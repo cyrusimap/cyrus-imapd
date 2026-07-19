@@ -61,6 +61,8 @@ has entity_jmap => (
     default => sub ($self) {
         $self->new_jmaptester({
           ident => "entity_jmap/" . $self->username,
+
+          default_using => Cassandane::Instance->jmap_default_default_using,
         });
     }
 );

@@ -72,31 +72,17 @@ sub new
     return $self;
 }
 
-sub set_up
+sub jmap_default_using
 {
-    my ($self) = @_;
-    $self->SUPER::set_up();
-    if ($self->{_want}->{start_instances}) {
-        $self->{jmap}->DefaultUsing([
-            'urn:ietf:params:jmap:core',
-            'urn:ietf:params:jmap:calendars',
-            'urn:ietf:params:jmap:principals',
-            'urn:ietf:params:jmap:calendars:preferences',
-            'https://cyrusimap.org/ns/jmap/calendars',
-            'https://cyrusimap.org/ns/jmap/debug',
-            'https://cyrusimap.org/ns/jmap/jscalendarbis',
-        ]);
-
-        $self->default_user->jmap->DefaultUsing([
-            'urn:ietf:params:jmap:core',
-            'urn:ietf:params:jmap:calendars',
-            'urn:ietf:params:jmap:principals',
-            'urn:ietf:params:jmap:calendars:preferences',
-            'https://cyrusimap.org/ns/jmap/calendars',
-            'https://cyrusimap.org/ns/jmap/debug',
-            'https://cyrusimap.org/ns/jmap/jscalendarbis',
-        ]);
-    }
+    return [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'urn:ietf:params:jmap:calendars:preferences',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
+    ];
 }
 
 sub encode_eventid
@@ -474,34 +460,21 @@ sub assert_rewrite_webdav_attachment_url_itip
     $self->assert($attach->[0]->value() =~ /^$webdavAttachURI.+/);
 }
 
-sub create_user
+sub create_user_and_allocate_calendar
 {
-    my ($self, $username) = @_;
+    my ($self, $username, %params) = @_;
 
-    xlog $self, "create user $username";
-    my $admin = $self->{adminstore}->get_client();
-    $admin->create("user.$username");
-    $admin->setacl("user.$username", admin => 'lrswipkxtecdan') or die;
-    $admin->setacl("user.$username", $username => 'lrswipkxtecdn') or die;
+    my $user = $self->{instance}->create_user($username, %params);
 
-    my $user_obj = Cassandane::TestUser->new({
-        username => $username,
-        password => 'pass',
-        instance => $self->{instance},
-    });
+    # Connecting over CalDAV provisions the user's calendar home, e.g.
+    # user.$username.#calendars.Default.  Some tests need that mailbox to
+    # exist before the new user has issued any calendar request of their own
+    # -- for example, to set an ACL on the default calendar.
+    #
+    # Hopefully this whole method can go, later.
+    $user->caldav;
 
-    my $jmap = $user_obj->new_jmaptester;
-
-    $jmap->DefaultUsing([
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:calendars',
-        'https://cyrusimap.org/ns/jmap/calendars',
-        'https://cyrusimap.org/ns/jmap/jscalendarbis',
-    ]);
-
-    my $caldav = $user_obj->caldav;
-
-    return ($jmap, $caldav);
+    return $user;
 }
 
 sub deliver_imip {
