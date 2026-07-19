@@ -91,5 +91,25 @@ sub _update {
     return;
 }
 
+sub _destroy {
+    my ($self, $instance, @rest) = @_;
+    @rest && Carp::confess("too many arguments to destroy");
+
+    my $dt = $self->datatype;
+    my $id = $instance->id;
+
+    my $jmap = $self->user->entity_jmap;
+
+    my $res = $jmap->request([[
+        "$dt/set",
+        { destroy => [ $id ] },
+        'FactorySetDestroy',
+    ]]);
+
+    $res->single_sentence("$dt/set")->as_set->assert_no_errors;
+
+    return;
+}
+
 no Moo::Role;
 1;

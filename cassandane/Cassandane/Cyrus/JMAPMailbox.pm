@@ -31,6 +31,7 @@ sub new
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                  httpmodules => 'carddav caldav jmap',
                  specialuse_extra => '\\XSpecialUse \\XChats \\XTemplates \\XNotes',
+                 jmap_nonstandard_extensions => 'yes',
                  notesmailbox => 'Notes',
                  httpallowcompress => 'no');
 
