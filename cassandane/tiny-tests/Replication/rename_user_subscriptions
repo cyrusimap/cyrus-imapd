@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# After a user rename, rolling replication must not lose the renamed user's
+# subscriptions.  The subscriptions file is stored keyed by the INBOX uniqueid,
+# which is unchanged across a rename, so the old and new userids share one
+# physical subs file.  A user rename logs USER <new> followed by UNUSER <old>,
+# and rolling replication runs USER before UNUSER; the UNUSER cleanup for the
+# old user must not nuke the subscriptions now owned by the new user.
+#
+sub test_rename_user_subscriptions
+    :NoAltNameSpace :AllowMoves :Replication :SyncLog :DelayedDelete
+    ($self)
+{
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    my $master_store = $self->{master_store};
+    my $mastertalk = $master_store->get_client();
+
+    $mastertalk->create("INBOX.Test") || die;
+    $mastertalk->create("INBOX.Test.Sub") || die;
+    $mastertalk->subscribe("INBOX") || die;
+    $mastertalk->subscribe("INBOX.Test") || die;
+    $mastertalk->subscribe("INBOX.Test.Sub") || die;
+
+    # drop the conf dir lock, so the subs get written out
+    $mastertalk->logout();
+
+    xlog $self, "run initial replication";
+    $self->run_replication();
+    unlink($synclogfname);
+    $self->check_replication('cassandane');
+
+    xlog $self, "rename user";
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->rename("user.cassandane", "user.dest") || die;
+
+    xlog $self, "run rolling replication of the rename (USER dest + UNUSER cassandane)";
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+
+    xlog $self, "verify the replica still has dest's subscriptions";
+    my $replicasvc = $self->{replica}->get_service('imap');
+    my $replicastore = $replicasvc->create_store(username => 'dest');
+    my $replicatalk = $replicastore->get_client();
+
+    my $subdata = $replicatalk->lsub("", "*");
+    my @names = sort map { $_->[2] } @$subdata;
+    $self->assert_deep_equals(['INBOX', 'INBOX.Test', 'INBOX.Test.Sub'], \@names);
+}

@@ -4654,18 +4654,30 @@ static int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
 
     user_nslock_t *user_nslock = user_nslock_lock_w(userid);
 
-    /* Nuke subscriptions */
-    /* ignore failures here - the subs file gets deleted soon anyway */
-    strarray_t *list = mboxlist_sublist(userid);
-    for (i = 0; i < list->count; i++) {
-        const char *name = strarray_nth(list, i);
-        mboxlist_changesub(name, userid, sstate->authstate, 0, 0, 0, /*silent*/1);
-    }
-
     mbentry_t *mbentry = NULL;
     char *inbox = mboxname_user_mbox(userid, 0);
     mboxlist_lookup_allow_all(inbox, &mbentry, NULL);
     free(inbox);
+
+    /* Only destroy this user's per-user data (subscriptions, seen, ...) when
+     * this is a genuine deletion.  If the INBOX has been renamed away (a
+     * modern-dirs tombstone), the per-user files are keyed by the INBOX
+     * uniqueid - which is unchanged across a rename - and so are now shared
+     * with the live user this INBOX was renamed to.  Nuking them here would
+     * clobber that live user's data.  This is the same condition that gates
+     * user_deletedata() below. */
+    int deletedata = mbentry && ((mbentry->mbtype & MBTYPE_LEGACY_DIRS) ||
+                                 !(mbentry->mbtype & MBTYPE_DELETED));
+
+    /* Nuke subscriptions */
+    /* ignore failures here - the subs file gets deleted soon anyway */
+    strarray_t *list = mboxlist_sublist(userid);
+    if (deletedata) {
+        for (i = 0; i < list->count; i++) {
+            const char *name = strarray_nth(list, i);
+            mboxlist_changesub(name, userid, sstate->authstate, 0, 0, 0, /*silent*/1);
+        }
+    }
 
     strarray_truncate(list, 0);
     mboxlist_usermboxtree(userid, NULL, addmbox_cb, list, 0);
@@ -4682,8 +4694,7 @@ static int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
         if (r) goto done;
     }
 
-    if (mbentry && ((mbentry->mbtype & MBTYPE_LEGACY_DIRS) ||
-                    !(mbentry->mbtype & MBTYPE_DELETED))) {
+    if (deletedata) {
          r = user_deletedata(mbentry, 1);
     }
     else {
