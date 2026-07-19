@@ -5,6 +5,7 @@ sub test_restore_mail_full
     :min_version_3_3
     ($self)
 {
+    my $user = $self->default_user;
     my $jmap = $self->{jmap};
 
     xlog "create mailboxes";
@@ -173,13 +174,16 @@ sub test_restore_mail_full
     my $draftAt2 = $res->[1][1]{list}[1]{receivedAt};
     my $draftAt3 = $res->[1][1]{list}[2]{receivedAt};
 
+    my $email6 = $user->emails->get($emailId6);
+
     xlog "move email6 from Inbox to bar, delete email1 and email5";
+    $email6->update({
+        "mailboxIds/$inboxId" => undef,
+        "mailboxIds/$barId" => JSON::true,
+    });
+
     $res = $jmap->CallMethods([
         ['Email/set', {
-            update => { $emailId6 => {
-                "mailboxIds/$inboxId" => undef,
-                "mailboxIds/$barId" => JSON::true
-                } },
             destroy => ["$emailId1", "$emailId5"]
          }, "R4"]
     ]);

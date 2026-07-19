@@ -47,6 +47,12 @@ has properties => (
     },
 );
 
+sub update {
+    my $self = shift;
+
+    $self->factory->_update($self, @_);
+}
+
 sub destroy {
     my $self = shift;
 
