@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_tier_stat_failure
+    :min_version_3_13 :needs_search_xapian
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog "index a message and compact it to the t2 tier";
+    $self->make_message("xyzzy") || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+    $self->{instance}->run_command({cyrus => 1},
+        'squatter', '-z', 't2', '-t', 't1');
+
+    xlog "index another message into t1";
+    $self->make_message("plugh") || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "make the t2 tier directory unstattable: deny traversal of its";
+    xlog "parent, as a wrong permission or SELinux label does";
+    my $xapdirs = ($self->{instance}->run_mbpath(-u => 'cassandane'))->{xapian};
+    my $t2 = $xapdirs->{t2};
+    use File::Basename;
+    my $t2parent = dirname($t2);
+    chmod 0000, $t2parent or die "chmod $t2parent: $!";
+
+    xlog "search with the t2 tier unreadable";
+    $talk->select('INBOX');
+    # guard the call: the failed tier open may terminate the search
+    my $uids = eval { $talk->search('fuzzy', 'subject', 'xyzzy') };
+    chmod 0755, $t2parent or die "chmod $t2parent: $!";
+
+    xlog "the unstattable tier must be kept and fail to open: a dropped";
+    xlog "tier logs only a stat warning and silently proceeds without it";
+    my @errors;
+    foreach (1..10) {
+        push @errors, $self->{instance}->getsyslog(qr/DatabaseOpeningError/);
+        last if scalar @errors >= 1;
+        sleep 1;
+    }
+    $self->assert(scalar @errors >= 1);
+
+    # consume the remaining expected IOERROR lines
+    $self->{instance}->getsyslog(qr/IOERROR/);
+}
