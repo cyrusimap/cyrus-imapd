@@ -93,6 +93,8 @@ send.time               when the message was actually sent
 
 cal.organizer           a calendar component's ORGANIZER
 cal.uid                 a calendar component's iCalendar UID
+http.header.name        the name of an HTTP header
+http.header.value       the value of an HTTP header
 imip.error              why an iMIP operation failed
 jmap.accountid          the JMAP account the request was for
 pop.subfolder           the subfolder a POP session was restricted to
