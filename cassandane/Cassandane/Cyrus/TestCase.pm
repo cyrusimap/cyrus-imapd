@@ -638,6 +638,14 @@ sub _create_instances
             die 'Use of config_<testname> subs is not supported anymore';
         }
 
+        # TestEntity stuff
+        my $teport = Cassandane::PortManager::alloc("localhost");
+        $conf->set(
+            tejmap_jmap_nonstandard_extensions => 'yes',
+            tejmap_httpmodules => 'jmap caldav carddav',
+            tejmap_conversations => 'yes',
+        );
+
         $instance_params{config} = $conf;
         $instance_params{install_certificates} = $want->{install_certificates};
         $instance_params{smtpdaemon} = $want->{smtpdaemon};
@@ -656,6 +664,8 @@ sub _create_instances
         $self->{instance}->add_services(@{$want->{services}});
         $self->{instance}->_setup_for_deliver()
             if ($want->{deliver});
+
+        $self->{instance}->add_service(name => 'tejmap', port => $teport, argv => ['httpd']);
 
         if ($want->{squatter}) {
             $self->{instance}->add_daemon(

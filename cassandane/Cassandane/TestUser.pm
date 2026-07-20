@@ -59,7 +59,7 @@ has entity_jmap => (
     is => 'ro',
     lazy => 1,
     default => sub ($self) {
-        $self->new_jmaptester({
+        $self->new_entity_jmaptester({
           ident => "entity_jmap/" . $self->username,
 
           default_using => Cassandane::Instance->jmap_default_default_using,
@@ -81,6 +81,10 @@ If the argument is an arrayref, it will be used as the default C<using> for the
 JMAPTester.
 
 =cut
+
+sub new_entity_jmaptester($self, $new_arg = undef) {
+    $self->instance->new_entity_jmaptester_for_user($self, $new_arg);
+}
 
 # Either 0-arg to get a default-config one, or provide just [using...] for
 # custom using, or {k=>v,...} to override constructor args.
