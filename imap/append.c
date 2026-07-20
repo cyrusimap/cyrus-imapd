@@ -19,6 +19,7 @@
 #include <inttypes.h>
 
 #include "acl.h"
+#include "append.h"
 #include "assert.h"
 #include "mailbox.h"
 #include "notify.h"

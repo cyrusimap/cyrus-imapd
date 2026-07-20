@@ -7,6 +7,7 @@
 
 #include <stdbool.h>
 
+#include "acl.h"
 #include "index.h"
 #include "mailbox.h"
 #include "mboxevent.h"
