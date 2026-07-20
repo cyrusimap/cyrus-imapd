@@ -1,0 +1,140 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_participantreply_reply_rsvp_sharee
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    xlog $self, "share cassandane's default calendar (read-only)";
+    my $default_cal_id = $self->default_user->calendars->default->id;
+    my ($shareeJmap) = $self->{instance}->create_user('sharee')->jmap;
+    $jmap->request([[
+        'Calendar/set', {
+            update => {
+                $default_cal_id => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                        },
+                    },
+                },
+            },
+        },
+    ]])->single_sentence('Calendar/set')->arguments;
+
+    xlog $self, "cassandane invites some other attendee";
+    my $res = $jmap->request([[
+        'CalendarEvent/set', {
+            create => {
+                1 => {
+                    version => "2.0",
+                    calendarIds => { $default_cal_id => JSON::true },
+                    sequence => 1,
+                    title => "public event",
+                    privacy => "public",
+                    freeBusyStatus => "busy",
+                    showWithoutTime => JSON::false,
+                    start => "2022-11-23T16:45:00",
+                    timeZone => "Australia/Melbourne",
+                    duration => "PT1H",
+                    organizerCalendarAddress =>
+                        "mailto:cassandane\@example.com",
+                    participants => {
+                        org => {
+                            roles => { owner => JSON::true },
+                            calendarAddress => 'mailto:cassandane@example.com',
+                        },
+                        other => {
+                            roles => { attendee => JSON::true },
+                            participationStatus => "needs-action",
+                            calendarAddress => 'mailto:other@example.com',
+                        },
+                    },
+                },
+            },
+        },
+    ]])->single_sentence('CalendarEvent/set')->arguments;
+    my $id = $res->{created}{1}{id};
+    $self->assert_not_null($id);
+
+    # Clean notifications
+    $self->{instance}->getnotify();
+
+    xlog $self, "Attempt as sharee to RSVP on behalf of other attendee";
+    my $sentence = $shareeJmap->request([[
+        'CalendarEvent/participantReply' => {
+            accountId => 'cassandane',
+            eventId => $id,
+            participantEmail => "other\@example.com",
+            updates => {
+                participationStatus => "accepted"
+            }
+        },
+    ]])->sentence(0);
+
+    xlog $self, "Check that RSVP attempt is rejected";
+    $self->assert_str_equals('error', $sentence->name);
+    $self->assert_str_equals('forbidden', $sentence->arguments->{type});
+
+    xlog $self, "Check that no iMIP reply was sent";
+    my $data = $self->{instance}->getnotify();
+    my @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+    foreach my $imip (@imips) {
+        my $payload = decode_json($imip->{MESSAGE});
+        $self->assert_str_not_equals("other\@example.com", $payload->{sender});
+    }
+
+    xlog $self, "Check that participation status is unchanged";
+    $res = $jmap->request([[
+        'CalendarEvent/get' => {
+            ids => [$id],
+            properties => ['participants'],
+        },
+    ]])->single_sentence('CalendarEvent/get')->arguments;
+    $self->assert_str_equals("needs-action",
+        $res->{list}[0]{participants}{other}{participationStatus});
+
+    xlog $self, "grant the sharee the mayWriteAll right on the calendar";
+    $jmap->request([[
+        'Calendar/set', {
+            update => {
+                $default_cal_id => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                            mayWriteAll => JSON::true,
+                        },
+                    },
+                },
+            },
+        },
+    ]])->single_sentence('Calendar/set')->arguments;
+
+    # Clean notifications
+    $self->{instance}->getnotify();
+
+    xlog $self, "RSVP as sharee on behalf of other attendee is allowed when "
+              . "the sharee has the mayWriteAll right";
+    my $reply = $shareeJmap->request([[
+        'CalendarEvent/participantReply' => {
+            accountId => 'cassandane',
+            eventId => $id,
+            participantEmail => "other\@example.com",
+            updates => {
+                participationStatus => "accepted"
+            }
+        },
+    ]])->single_sentence('CalendarEvent/participantReply')->arguments;
+    $self->assert_not_null($reply->{scheduleStatus});
+
+    xlog $self, "Check that participation status changed";
+    $res = $jmap->request([[
+        'CalendarEvent/get' => {
+            ids => [$id],
+            properties => ['participants'],
+        },
+    ]])->single_sentence('CalendarEvent/get')->arguments;
+    $self->assert_str_equals("accepted",
+        $res->{list}[0]{participants}{other}{participationStatus});
+}

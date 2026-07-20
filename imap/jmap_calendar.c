@@ -8536,8 +8536,8 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     struct caldav_data *cdata = NULL;
     mbentry_t *mbentry = NULL;
     struct mailbox *mbox = NULL;
-    strarray_t schedule_addr = STRARRAY_INITIALIZER;
-    struct updateevent update = { .schedule_addresses = &schedule_addr };
+    strarray_t reply_addr = STRARRAY_INITIALIZER; // participant email address
+    struct updateevent update = { .schedule_addresses = &reply_addr };
     icalparameter_partstat ical_part_stat = ICAL_PARTSTAT_NONE;
     json_t *res = json_object();
     char *part_id = NULL;
@@ -8559,7 +8559,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
         update.eid = jmap_caleventid_lookup(json_string_value(jprop),
                                             db, &cdata);
     }
-    if (!update.eid->ical_uid) {
+    if (!update.eid || !update.eid->ical_uid) {
         jmap_parser_invalid(&parser, "eventId");
     }
     jprop = json_object_get(req->args, "participantEmail");
@@ -8568,7 +8568,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
         if (!strncasecmp(uri, "mailto:", 7)) uri += 7;
 
         char *addr = xmlURIUnescapeString(uri, strlen(uri), NULL);
-        strarray_appendm(&schedule_addr, addr);
+        strarray_appendm(&reply_addr, addr);
         part_email = addr;
     }
     else {
@@ -8682,6 +8682,45 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     }
     mailbox_close(&mbox);
 
+    /* Validate the authenticated user may reply for the participant */
+    {
+        /* Determine the organizer of the event. */
+        icalcomponent *mastercomp =
+            icalcomponent_get_first_real_component(update.oldical);
+        icalproperty *orgprop = mastercomp ?
+            icalcomponent_get_first_property(mastercomp,
+                    ICAL_ORGANIZER_PROPERTY) : NULL;
+        const char *org = orgprop ?
+            icalproperty_get_decoded_calendaraddress(orgprop) : NULL;
+
+        /* Check that the organizer is one of the account's scheduling
+         * addresses. */
+        strarray_t sched_addrs = STRARRAY_INITIALIZER;
+        get_schedule_addresses(mbentry->name, req->accountid, &sched_addrs);
+        bool may_reply = org && strarray_contains_case(&sched_addrs, org);
+
+        /* Check that the authenticated user has the "mayWriteAll" right on
+         * this calendar. The owner of the calendar always may write all. */
+        if (may_reply && strcmp(req->userid, req->accountid)) {
+            may_reply = jmap_hasrights_mbentry(req, mbentry,
+                    JACL_WRITEALL|JACL_RSVP);
+        }
+
+        if (!may_reply) {
+            xsyslog_ev(LOG_NOTICE,
+                    "jmap.calendarevent.participantreply.forbidden",
+                    lf_s("u.username", req->userid),
+                    lf_s("jmap.accountid", req->accountid),
+                    lf_s("cal.organizer", org),
+                    lf_strarray("sched.addresses", &sched_addrs));
+            strarray_fini(&sched_addrs);
+            err = json_pack("{s:s}", "type", "forbidden");
+            goto done;
+        }
+
+        strarray_fini(&sched_addrs);
+    }
+
     /* Find participantId */
     icalcomponent *comp = icalcomponent_get_first_real_component(update.oldical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
@@ -8766,7 +8805,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     }
 
     /* Create and send the reply */
-    sched_reply(req->accountid, req->accountid, &schedule_addr,
+    sched_reply(req->accountid, req->accountid, &reply_addr,
                 update.oldical, update.newical,
                 cdata->dav.createdmodseq, SCHED_MECH_JMAP_PARTREPLY);
 
@@ -8815,6 +8854,7 @@ no_op:
     /* Build response */
     req->accountid = NULL;
     jmap_ok(req, res);
+    res = NULL;  // ownership passed to the response
 
 done:
     if (!err) {
@@ -8847,9 +8887,10 @@ done:
     mailbox_close(&mbox);
     if (update.oldical) icalcomponent_free(update.oldical);
     if (update.newical) icalcomponent_free(update.newical);
+    json_decref(res);
     json_decref(update.event_patch);
     json_decref(update.old_event);
-    strarray_fini(&schedule_addr);
+    strarray_fini(&reply_addr);
     mboxlist_entry_free(&mbentry);
     free(part_id);
     return 0;
