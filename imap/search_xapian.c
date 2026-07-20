@@ -2317,19 +2317,17 @@ static int audit_mailbox(search_text_receiver_t *rx, bitvector_t *unindexed)
         goto done;
     }
 
-    iter = mailbox_iter_init(tr->super.mailbox, 0, ITER_SKIP_UNLINKED);
+    /* check every live message: an unindexed message outside the recorded
+     * ranges is just as lost as one inside them.  Expunged messages are
+     * skipped: their documents may legitimately have been expired or
+     * compacted away. */
+    iter = mailbox_iter_init(tr->super.mailbox, 0,
+                             ITER_SKIP_UNLINKED|ITER_SKIP_EXPUNGED);
 
     while ((msg = mailbox_iter_step(iter))) {
         uint32_t uid;
         r = message_get_uid((message_t*) msg, &uid);
         if (r) goto done;
-
-        if (!seqset_ismember(tr->oldindexed, uid)) {
-            if (tr->super.verbose)
-                syslog(LOG_INFO, "search_xapian: ignoring %s:%d during audit",
-                        mailbox_name(tr->super.mailbox), uid);
-            continue;
-        }
 
         const struct message_guid *guid;
         r = message_get_guid((message_t*) msg, &guid);
