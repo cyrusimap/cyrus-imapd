@@ -58,7 +58,14 @@ typedef struct {
     json_t *blobNotFound;
 } jmap_contact_errors_t;
 
-static int required_set_rights(json_t *props);
+/** Defines an addresbook membership change for a Card */
+enum addrbook_change {
+    ADDRBOOK_CHANGE_NONE = 0,  /* does not change addressbook membership */
+    ADDRBOOK_CHANGE_CREATE,    /* creates a Card in the addressbook */
+    ADDRBOOK_CHANGE_MOVE,      /* moves a Card out of its addressbook */
+};
+
+static int required_set_rights(json_t *props, enum addrbook_change change);
 
 static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
@@ -1373,7 +1380,21 @@ done:
     return 0;
 }
 
-static int required_set_rights(json_t *props)
+static bool _card_prop_is_immutable(const char *name)
+{
+    if (!strcmp(name, "id")) {
+        return true;
+    }
+    if (!strncmp(name, "cyrusimap.org:", 14)) {
+        const char *sub = name + 14;
+        return !strcmp(sub, "href") ||
+               !strcmp(sub, "blobId") ||
+               !strcmp(sub, "size");
+    }
+    return false;
+}
+
+static int required_set_rights(json_t *props, enum addrbook_change change)
 {
     int needrights = 0;
     const char *name;
@@ -1382,31 +1403,40 @@ static int required_set_rights(json_t *props)
     json_object_foreach(props, name, val) {
         const char *myname = name;
 
-        if (!strcmp(myname, "id") ||
-            !strcmp(myname, "x-href") ||
-            !strcmp(myname, "x-hasPhoto") ||
-            !strcmp(myname, "addressbookId")) {
+        if (_card_prop_is_immutable(myname)) {
             /* immutable */
         }
-        else if (!strcmp(myname, "addressBookIds") ||
-                 (!strncmp(myname, "cyrusimap.org:", 14) && (myname += 14) &&
-                  (!strcmp(myname, "href") ||
-                   !strcmp(myname, "blobId") ||
-                   !strcmp(myname, "size")))) {
-            /* immutable */
-        }
-        else if (!strcmp(myname, "importance")) {
-            /* writing shared meta-data (per RFC 5257) */
-            needrights |= JACL_SETPROPERTIES;
-        }
-        else if (!strcmp(myname, "isFlagged")) {
-            /* writing private meta-data */
-            needrights |= JACL_SETKEYWORDS;
+        else if (!strcmp(myname, "addressBookIds")) {
+            /* membership change; rights are determined by `change` below */
         }
         else {
-            /* writing vCard data */
-            needrights |= JACL_UPDATEITEMS;
+            /* a "cyrusimap.org:" prefix denotes Cyrus-specific meta-data */
+            if (!strncmp(myname, "cyrusimap.org:", 14)) myname += 14;
+
+            if (!strcmp(myname, "importance")) {
+                /* writing shared meta-data (per RFC 5257) */
+                needrights |= JACL_SETPROPERTIES;
+            }
+            else if (!strcmp(myname, "isFlagged")) {
+                /* writing private meta-data */
+                needrights |= JACL_SETKEYWORDS;
+            }
+            else {
+                /* writing vCard data */
+                needrights |= JACL_UPDATEITEMS;
+            }
         }
+    }
+
+    switch (change) {
+    case ADDRBOOK_CHANGE_CREATE:
+        needrights |= JACL_ADDITEMS;
+        break;
+    case ADDRBOOK_CHANGE_MOVE:
+        needrights |= JACL_REMOVEITEMS;
+        break;
+    case ADDRBOOK_CHANGE_NONE:
+        break;
     }
 
     return needrights;
@@ -9106,7 +9136,7 @@ static int _card_set_create(jmap_req_t *req,
         json_object_del(jcard, "addressBookIds");
     }
 
-    int needrights = required_set_rights(jcard);
+    int needrights = required_set_rights(jcard, ADDRBOOK_CHANGE_CREATE);
 
     /* Check permissions. */
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, needrights)) {
@@ -9332,7 +9362,35 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
 
-    int needrights = required_set_rights(jcard);
+    /* Determine whether this set relocates the card to a different address
+     * book. An addressBookIds naming the card's current book is a no-op (no
+     * move, no rewrite); a different book is a move that requires rights. */
+    bool is_move = false;
+    json_t *jabookids = json_object_get(jcard, "addressBookIds");
+    if (jabookids && json_object_size(jabookids) == 1) {
+        void *iter = json_object_iter(jabookids);
+        const char *abookid = json_object_iter_value(iter) == json_true() ?
+            json_object_iter_key(iter) : NULL;
+        if (abookid && *abookid == '#')
+            abookid = jmap_lookup_id(req, abookid + 1);
+
+        mbentry_t *tgtmbentry = NULL;
+        if (abookid) abookid_to_mbentry(req, abookid, &tgtmbentry);
+        if (tgtmbentry && mbentry) {
+            if (!strcmpsafe(tgtmbentry->name, mbentry->name)) {
+                /* sets the current address book: a no-op, not a move */
+                num_props--;
+            }
+            else {
+                /* sets a different address book: a move */
+                is_move = true;
+            }
+        }
+        mboxlist_entry_free(&tgtmbentry);
+    }
+
+    int needrights = required_set_rights(jcard,
+        is_move ? ADDRBOOK_CHANGE_MOVE : ADDRBOOK_CHANGE_NONE);
 
     int rights = mbentry ? jmap_myrights_mbentry(req, mbentry) : 0;
     if (!mbentry || (rights & needrights) != needrights) {
@@ -9358,6 +9416,22 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     olduid = cdata->dav.imap_uid;
 
     annots = mailbox_extract_annots(*mailbox, &record);
+
+    /* Check for changes on immutable id property */
+    json_t *jid = json_object_get(jcard, "id");
+    if (jid && strcmpsafe(json_string_value(jid), id)) {
+        json_array_append_new(invalid, json_string("id"));
+        goto done;
+    }
+
+    /* Check other immutable properties, ignore value changes. */
+    {
+        const char *pname;
+        json_t *jval;
+        json_object_foreach(jcard, pname, jval) {
+            if (_card_prop_is_immutable(pname)) num_props--;
+        }
+    }
 
     const char *key = "cyrusimap.org:importance";
     json_t *jval;
