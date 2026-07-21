@@ -488,6 +488,13 @@ static void _emailsubmission_create(jmap_req_t *req,
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
+    char *mboxname = NULL;
+    struct mailbox *mbox = NULL;
+    json_t *myenvelope = NULL;
+    msgrecord_t *mr = NULL;
+    json_t *msg = NULL;
+    int fd_msg = -1;
+    int r = 0;
 
     /* messageId */
     json_t *jemailId = json_object_get(emailsubmission, "emailId");
@@ -528,10 +535,20 @@ static void _emailsubmission_create(jmap_req_t *req,
         if (json_array_size(rcpt)) {
             size_t i;
             json_t *addr;
+            json_t *invalid = NULL;
             json_array_foreach(rcpt, i, addr) {
                 jmap_parser_push_index(&parser, "rcptTo", i, NULL);
-                _emailsubmission_address_parse(addr, &parser, NULL, NULL);
+                if (!_emailsubmission_address_parse(addr, &parser, NULL, NULL)) {
+                    if (!invalid) invalid = json_array();
+                    json_array_append(invalid, json_object_get(addr, "email"));
+                }
                 jmap_parser_pop(&parser);
+            }
+            if (invalid) {
+                *set_err = json_pack("{s:s s:o}", "type", "invalidRecipients",
+                                     "invalidRecipients", invalid);
+                jmap_parser_fini(&parser);
+                goto done;
             }
         }
         else {
@@ -613,17 +630,8 @@ static void _emailsubmission_create(jmap_req_t *req,
     }
     jmap_parser_fini(&parser);
 
-    /* No more returns from here on */
-    char *mboxname = NULL;
-    uint32_t uid = 0;
-    struct mailbox *mbox = NULL;
-    json_t *myenvelope = NULL;
-    msgrecord_t *mr = NULL;
-    json_t *msg = NULL;
-    int r = 0;
-    int fd_msg = -1;
-
     /* Lookup the message */
+    uint32_t uid = 0;
     r = jmap_email_find(req, NULL, msgid, &mboxname, &uid, NULL);
     if (r) {
         if (r == IMAP_NOTFOUND) {
