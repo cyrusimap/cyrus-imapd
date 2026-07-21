@@ -88,6 +88,7 @@ struct fix_rock {
     struct buf jmapid;
     struct buf last_userid;
     struct buf last_mboxname;
+    struct buf last_inboxid;
     modseq_t highestmodseq;
     uint64_t next_mboxnum;
     int is_replica;
@@ -121,15 +122,21 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    const char *userid = mbname_userid(mbname);
+
+    /* if this is an INBOX with a uniqueid, track it as the inboxid */
+    if (userid && !strarray_size(mbname_boxes(mbname)) && mbentry->uniqueid) {
+        buf_setcstr(&frock->last_inboxid, mbentry->uniqueid);
+    }
+
     /* clean out any legacy specialuse */
     if (mbentry->legacy_specialuse) {
-        char *userid = mboxname_to_userid(mbentry->name);
         if (userid) {
             struct buf buf = BUF_INITIALIZER;
             buf_setcstr(&buf, mbentry->legacy_specialuse);
             annotatemore_rawwrite(mbentry->name, "/specialuse", userid, &buf);
             buf_free(&buf);
-            free(userid);
         }
         mbentry_t *copy = mboxlist_entry_copy(mbentry);
         xzfree(copy->legacy_specialuse);
@@ -138,7 +145,7 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
     }
 
     /* make sure every local mbentry has a uniqueid, jmapid & J record!  */
-    if ((!mbentry->uniqueid || !mbentry->jmapid) &&
+    if ((!mbentry->uniqueid || !mbentry->jmapid || !mbentry->inboxid) &&
         mbentry_is_local_mailbox(mbentry)) {
         struct mailbox *mailbox = NULL;
         mbentry_t *copy = NULL;
@@ -165,9 +172,6 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
 
         if (!mailbox->h.jmapid) {
             /* yikes, no jmapid in header either! */
-            mbname_t *mbname = mbname_from_intname(mbentry->name);
-            const char *userid = mbname_userid(mbname);
-
             if (!userid) userid = "";
 
             if (strcmpnull(userid, buf_cstringnull(&frock->last_userid))) {
@@ -209,8 +213,6 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
                 hash_insert(userid, (void *) frock->next_mboxnum,
                             &frock->next_mboxnum_by_userid);
             }
-
-            mbname_free(&mbname);
         }
 
         if (!mbentry->uniqueid) {
@@ -218,6 +220,11 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
             xsyslog(LOG_INFO, "mbentry had no uniqueid, setting from header",
                     "mboxname=<%s> newuniqueid=<%s>",
                     copy->name, copy->uniqueid);
+
+            /* if this is an INBOX, track it as the inboxid */
+            if (*userid && !strarray_size(mbname_boxes(mbname))) {
+                buf_setcstr(&frock->last_inboxid, copy->uniqueid);
+            }
         }
 
         if (!mbentry->jmapid) {
@@ -225,6 +232,13 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
             xsyslog(LOG_INFO, "mbentry had no jmapid, setting from header",
                     "mboxname=<%s> newjmapid=<%s>",
                     copy->name, copy->jmapid);
+        }
+
+        if (userid && *userid && !mbentry->inboxid) {
+            copy->inboxid = xstrdup(buf_cstring(&frock->last_inboxid));
+            xsyslog(LOG_INFO, "mbentry had no inboxid, setting it",
+                    "mboxname=<%s> inboxid=<%s>",
+                    copy->name, copy->inboxid);
         }
 
         r = mboxlist_updatelock(copy, /*localonly*/1);
@@ -252,6 +266,8 @@ skip_uniqueid:
         ;   /* hush "label at end of compound statement" warning */
     }
 
+    mbname_free(&mbname);
+
     return 0;
 }
 
@@ -262,11 +278,13 @@ static void process_mboxlist(int *upgraded)
 
     /* run fixmbox across all mboxlist entries */
     struct fix_rock frock = { HASH_TABLE_INITIALIZER, BUF_INITIALIZER,
-                              BUF_INITIALIZER, BUF_INITIALIZER, UINT64_MAX, 1,
+                              BUF_INITIALIZER, BUF_INITIALIZER, BUF_INITIALIZER,
+                              UINT64_MAX, 1,
                               config_getswitch(IMAPOPT_REPLICAONLY) };
     construct_hash_table(&frock.next_mboxnum_by_userid, 4096, 0);
     mboxlist_allmbox(NULL, fixmbox, &frock, MBOXTREE_INTERMEDIATES);
     free_hash_table(&frock.next_mboxnum_by_userid, NULL);
+    buf_free(&frock.last_inboxid);
     buf_free(&frock.last_mboxname);
     buf_free(&frock.last_userid);
     buf_free(&frock.jmapid);
