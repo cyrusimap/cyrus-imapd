@@ -2152,5 +2152,45 @@ sub test_emailsubmission_scheduled_send_null_onsend
     $self->assert_num_equals(0, scalar @$alarmdata);
 }
 
+sub test_emailsubmission_set_bad_rcpt
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog $self, "Generate an email via IMAP";
+    $self->make_message("foo", body => "an email\r\nwithCRLF\r\n") or die;
+
+    xlog $self, "get email id";
+    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
+    my $emailid = $res->[0][1]->{ids}[0];
+
+    xlog $self, "create email submissions";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost@localhost',
+                    }],
+                },
+            }
+       }
+    }, "R1" ] ] );
+    $self->assert_deep_equals({
+            type => 'invalidRecipients',
+            invalidRecipients => [ 'rcpt1@localhost@localhost' ]
+        },
+        $res->[0][1]->{notCreated}{1}
+    );
+}
 
 1;
