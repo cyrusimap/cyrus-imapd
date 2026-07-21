@@ -473,7 +473,7 @@ static char *parseaddr(char *s)
 }
 
 /* clean off the <> from the return path */
-static void clean_retpath(char *rpath)
+void clean_retpath(char *rpath)
 {
     int sl;
 
@@ -482,8 +482,12 @@ static void clean_retpath(char *rpath)
         sl = strlen(rpath);
         /* use strlen(rpath) so we move the NUL too */
         memmove(rpath, rpath+1, sl);
-        sl--; /* string is one shorter now */
-        if (rpath[sl-1] == '>') {
+
+        /* String is one shorter now, so decrement the length.  It might be 0
+         * now if the input was just "<" so don't try to index rpath by -1
+         * -- rjbs, 2026-07-03 */
+        sl--;
+        if (sl > 0 && rpath[sl-1] == '>') {
             rpath[sl-1] = '\0';
         }
     }
