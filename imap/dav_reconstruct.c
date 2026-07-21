@@ -90,6 +90,8 @@ int main(int argc, char **argv)
         }
     }
 
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
     cyrus_init(alt_config, "dav_reconstruct", 0, 0);
     global_sasl_init(1,0,NULL);
 

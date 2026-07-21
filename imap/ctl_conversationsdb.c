@@ -1212,6 +1212,8 @@ int main(int argc, char **argv)
         }
     }
 
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
     if (mode == UNKNOWN)
         usage(argv[0]);
 
