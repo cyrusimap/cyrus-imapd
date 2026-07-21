@@ -237,32 +237,6 @@ error:
 
 /* DLIST STUFF */
 
-EXPORTED void dlist_push(struct dlist *parent, struct dlist *child)
-{
-    assert(!child->next);
-
-    if (parent->head) {
-        child->next = parent->head;
-        parent->head = child;
-    }
-    else {
-        parent->head = parent->tail = child;
-    }
-}
-
-EXPORTED struct dlist *dlist_pop(struct dlist *parent)
-{
-    struct dlist *child;
-
-    assert(parent->head);
-
-    child = parent->head;
-    parent->head = parent->head->next;
-    child->next = NULL;
-
-    return child;
-}
-
 EXPORTED void dlist_stitch(struct dlist *parent, struct dlist *child)
 {
     assert(!child->next);
@@ -464,14 +438,6 @@ EXPORTED struct dlist *dlist_newlist(struct dlist *parent, const char *name)
     return dl;
 }
 
-EXPORTED struct dlist *dlist_newpklist(struct dlist *parent, const char *name)
-{
-    struct dlist *dl = dlist_child(parent, name);
-    dl->type = DL_ATOMLIST;
-    dl->nval = 1;
-    return dl;
-}
-
 EXPORTED struct dlist *dlist_setatom(struct dlist *parent, const char *name, const char *val)
 {
     struct dlist *dl = dlist_child(parent, name);
@@ -546,20 +512,6 @@ static struct dlist *dlist_updatechild(struct dlist *parent, const char *name)
     return dl;
 }
 
-EXPORTED struct dlist *dlist_updateatom(struct dlist *parent, const char *name, const char *val)
-{
-    struct dlist *dl = dlist_updatechild(parent, name);
-    dlist_makeatom(dl, val);
-    return dl;
-}
-
-EXPORTED struct dlist *dlist_updateflag(struct dlist *parent, const char *name, const char *val)
-{
-    struct dlist *dl = dlist_updatechild(parent, name);
-    dlist_makeflag(dl, val);
-    return dl;
-}
-
 EXPORTED struct dlist *dlist_updatenum64(struct dlist *parent, const char *name, bit64 val)
 {
     struct dlist *dl = dlist_updatechild(parent, name);
@@ -578,38 +530,6 @@ EXPORTED struct dlist *dlist_updatedate(struct dlist *parent, const char *name, 
 {
     struct dlist *dl = dlist_updatechild(parent, name);
     dlist_makedate(dl, val);
-    return dl;
-}
-
-EXPORTED struct dlist *dlist_updatehex64(struct dlist *parent, const char *name, bit64 val)
-{
-    struct dlist *dl = dlist_updatechild(parent, name);
-    dlist_makehex64(dl, val);
-    return dl;
-}
-
-EXPORTED struct dlist *dlist_updatemap(struct dlist *parent, const char *name,
-                           const char *val, size_t len)
-{
-    struct dlist *dl = dlist_updatechild(parent, name);
-    dlist_makemap(dl, val, len);
-    return dl;
-}
-
-EXPORTED struct dlist *dlist_updateguid(struct dlist *parent, const char *name,
-                               const struct message_guid *guid)
-{
-    struct dlist *dl = dlist_updatechild(parent, name);
-    dlist_makeguid(dl, guid);
-    return dl;
-}
-
-EXPORTED struct dlist *dlist_updatefile(struct dlist *parent, const char *name,
-                               const char *part, const struct message_guid *guid,
-                               size_t size, const char *fname)
-{
-    struct dlist *dl = dlist_updatechild(parent, name);
-    dlist_makefile(dl, part, guid, size, fname);
     return dl;
 }
 
@@ -686,24 +606,6 @@ EXPORTED void dlist_printbuf(const struct dlist *dl, int printkeys, struct buf *
     dlist_print(dl, printkeys, outstream);
     prot_flush(outstream);
     prot_free(outstream);
-}
-
-EXPORTED void dlist_unlink_files(struct dlist *dl)
-{
-    struct dlist *i;
-
-    if (!dl) return;
-
-    for (i = dl->head; i; i = i->next) {
-        dlist_unlink_files(i);
-    }
-
-    if (dl->type != DL_FILE) return;
-
-    if (!dl->sval) return;
-
-    syslog(LOG_DEBUG, "%s: unlinking %s", __func__, dl->sval);
-    xunlink(dl->sval);
 }
 
 EXPORTED void dlist_free(struct dlist **dlp)
@@ -1301,23 +1203,6 @@ EXPORTED void dlist_splat(struct dlist *parent, struct dlist *child)
     dlist_free(&child);
 }
 
-struct dlist *dlist_getkvchild_bykey(struct dlist *dl,
-                                     const char *key, const char *val)
-{
-    struct dlist *i;
-    struct dlist *tmp;
-
-    if (!dl) return NULL;
-
-    for (i = dl->head; i; i = i->next) {
-        tmp = dlist_getchild(i, key);
-        if (tmp && !strcmp(tmp->sval, val))
-            return i;
-    }
-
-    return NULL;
-}
-
 EXPORTED int dlist_toatom(struct dlist *dl, const char **valp)
 {
     const char *str;
@@ -1440,39 +1325,6 @@ int dlist_todate(struct dlist *dl, time_t *valp)
     return 0;
 }
 
-static int dlist_tohex64(struct dlist *dl, bit64 *valp)
-{
-    const char *end = NULL;
-    bit64 newval;
-
-    if (!dl) return 0;
-
-    switch (dl->type) {
-    case DL_ATOM:
-    case DL_BUF:
-        if (parsehex(dl->sval, &end, dl->nval, &newval))
-            return 0;
-        if (end - dl->sval != (int)dl->nval)
-            return 0;
-        /* successfully parsed - switch to a numeric value */
-        dlist_makehex64(dl, newval);
-        break;
-
-    case DL_NUM:
-    case DL_HEX:
-    case DL_DATE:
-        dl->type = DL_HEX;
-        break;
-
-    default:
-        return 0;
-    }
-
-    if (valp) *valp = dl->nval;
-
-    return 1;
-}
-
 EXPORTED int dlist_toguid(struct dlist *dl, struct message_guid **valp)
 {
     struct message_guid tmpguid;
@@ -1522,53 +1374,11 @@ EXPORTED int dlist_isatomlist(const struct dlist *dl)
     return (dl->type == DL_ATOMLIST);
 }
 
-int dlist_iskvlist(const struct dlist *dl)
-{
-    if (!dl) return 0;
-
-    return (dl->type == DL_KVLIST);
-}
-
 int dlist_isfile(const struct dlist *dl)
 {
     if (!dl) return 0;
 
     return (dl->type == DL_FILE);
-}
-
-/* XXX - these ones aren't const, because they can change
- * things... */
-int dlist_isnum(struct dlist *dl)
-{
-    bit64 tmp;
-
-    if (!dl) return 0;
-
-    /* see if it can be parsed as a number */
-    return dlist_tonum64(dl, &tmp);
-}
-
-/* XXX - these ones aren't const, because they can change
- * things... */
-EXPORTED int dlist_ishex64(struct dlist *dl)
-{
-    bit64 tmp;
-
-    if (!dl) return 0;
-
-    /* see if it can be parsed as a number */
-    return dlist_tohex64(dl, &tmp);
-}
-
-/* XXX - these ones aren't const, because they can change
- * things... */
-int dlist_isguid(struct dlist *dl)
-{
-    struct message_guid *tmp = NULL;
-
-    if (!dl) return 0;
-
-    return dlist_toguid(dl, &tmp);
 }
 
 /* XXX - this stuff is all shitty, rationalise later */
@@ -1622,12 +1432,6 @@ EXPORTED int dlist_getdate(struct dlist *parent, const char *name, time_t *valp)
     return dlist_todate(child, valp);
 }
 
-EXPORTED int dlist_gethex64(struct dlist *parent, const char *name, bit64 *valp)
-{
-    struct dlist *child = dlist_getchild(parent, name);
-    return dlist_tohex64(child, valp);
-}
-
 EXPORTED int dlist_getguid(struct dlist *parent, const char *name,
                   struct message_guid **valp)
 {
@@ -1654,16 +1458,6 @@ EXPORTED int dlist_getbuf(struct dlist *parent, const char *name,
     return 0;
 }
 
-int dlist_getfile(struct dlist *parent, const char *name,
-                  const char **partp,
-                  struct message_guid **guidp,
-                  unsigned long *sizep,
-                  const char **fnamep)
-{
-    struct dlist *child = dlist_getchild(parent, name);
-    return dlist_tofile(child, partp, guidp, sizep, fnamep);
-}
-
 EXPORTED int dlist_getlist(struct dlist *dl, const char *name, struct dlist **valp)
 {
     struct dlist *i = dlist_getchild(dl, name);
@@ -1675,21 +1469,4 @@ EXPORTED int dlist_getlist(struct dlist *dl, const char *name, struct dlist **va
 EXPORTED const char *dlist_lastkey(void)
 {
     return lastkey;
-}
-
-EXPORTED void dlist_rename(struct dlist *dl, const char *name)
-{
-    free(dl->name);
-    dl->name = xstrdup(name);
-}
-
-EXPORTED struct dlist *dlist_copy(const struct dlist *dl)
-{
-    if (!dl) return NULL;
-    struct buf buf = BUF_INITIALIZER;
-    struct dlist *new = NULL;
-    dlist_printbuf(dl, 1, &buf);
-    dlist_parsemap(&new, 1, buf_base(&buf), buf_len(&buf));
-    buf_free(&buf);
-    return new;
 }
