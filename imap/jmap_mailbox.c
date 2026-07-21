@@ -4199,9 +4199,21 @@ static int _mbox_changes(jmap_req_t *req,
         const char *id = json_string_value(json_object_get(update, "id"));
         modseq_t modseq = json_integer_value(json_object_get(update, "modseq"));
 
-        if (changes->max_changes && ((size_t) i) >= changes->max_changes) {
+        /* Apply maxChanges, if any. We do overshoot maxChanges in case
+         * the modseqs are not strictly increasing, which must not ever
+         * happen in a sane account. Should the account have any duplicate
+         * modseqs then we report that as an error but gracefully finish
+         * the /changes method. */
+        if (changes->max_changes && ((size_t) i) >= changes->max_changes &&
+            modseq > windowmodseq) {
             changes->has_more_changes = 1;
             break;
+        }
+
+        if (modseq == windowmodseq && windowmodseq) {
+            xsyslog_ev(LOG_ERR, "duplicate modseq in Mailbox/changes",
+                    lf_s("mboxid", id),
+                    lf_llu("modseq", modseq));
         }
 
         if (windowmodseq < modseq)
