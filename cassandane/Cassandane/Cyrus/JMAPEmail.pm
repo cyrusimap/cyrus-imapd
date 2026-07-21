@@ -82,6 +82,7 @@ sub jmap_default_using {
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
     ];
 }
 
