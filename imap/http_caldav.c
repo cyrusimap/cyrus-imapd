@@ -4050,6 +4050,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             hashu64_insert(icaltime_as_timet_with_zone(recurid, recurid.zone),
                            comp, &overrides);
         }
+
+        /* Remove JMAP X- properties */
+        icalcomponent_strip_jmap_xprops(comp);
     }
 
     if (rt) {
@@ -4275,12 +4278,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             }
 
             // XXX set legacy extension property until jmap_ical.c is removed
-            // Remove any stale SENT-BY properties
-            while ((prop = icalcomponent_get_x_property_by_name(comp,
-                            JMAPICAL_XPROP_SENTBY))) {
-                icalcomponent_remove_property(comp, prop);
-                icalproperty_free(prop);
-            }
             prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_SENTBY);
             icalproperty_set_value(prop, icalvalue_new_text(sentby));

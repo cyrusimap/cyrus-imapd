@@ -3151,9 +3151,6 @@ EXPORTED void icalcomponent_normalize_x(icalcomponent *ical)
             if (!strcasecmp(xname, JMAPICAL_XPROP_SHOWWITHOUTTIME)) {
                 is_default = !strcasecmp(xval, "FALSE");
             }
-            else if (!strcasecmp(xname, JMAPICAL_XPROP_PRIVACY)) {
-                is_default = !strcasecmp(xval, "PUBLIC");
-            }
             else if (!strcasecmp(xname, JMAPICAL_XPROP_MAYINVITESELF) ||
                      !strcasecmp(xname, JMAPICAL_XPROP_MAYINVITEOTHERS) ||
                      !strcasecmp(xname, JMAPICAL_XPROP_HIDEATTENDEES)) {
@@ -3264,4 +3261,34 @@ EXPORTED bool ical_is_valid_color(const char *val, bool allow_alpha)
     }
 
     return is_css3_color(val);
+}
+
+static const char *_jmap_xprops[] = {
+    JMAPICAL_XPROP_ID,
+    JMAPICAL_XPROP_SENTBY,
+    JMAPICAL_XPROP_HIDEATTENDEES,
+    JMAPICAL_XPROP_MAYINVITESELF,
+    JMAPICAL_XPROP_MAYINVITEOTHERS
+};
+
+static const strarray_t jmap_xprops = {
+    .count = sizeof(_jmap_xprops) / sizeof(_jmap_xprops[0]),
+    .data  = (char **) _jmap_xprops
+};
+
+EXPORTED void icalcomponent_strip_jmap_xprops(icalcomponent *comp)
+{
+    icalproperty *prop, *next;
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+         prop;
+         prop = next) {
+        next = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
+
+        const char *xname = icalproperty_get_x_name(prop);
+        if (strarray_find_case(&jmap_xprops, xname, 0) >= 0) {
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+        }
+    }
 }

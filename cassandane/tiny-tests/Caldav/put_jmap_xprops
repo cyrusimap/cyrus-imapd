@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_put_jmap_xprops ($self)
+{
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $href = "$CalendarId/uid1.ics";
+    my $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+X-JMAP-ID:EM123
+CREATED:20150806T234327Z
+DTEND:20160831T183000Z
+TRANSP:OPAQUE
+UID:uid1
+SUMMARY:HasUID1
+X-JMAP-SENT-BY:foo\@example.com
+DTSTART:20160831T153000Z
+RRULE:FREQ=YEARLY;COUNT=5
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+x-jmap-may-invite-self:true
+X-JMAP-MAY-INVITE-OTHERS:true
+END:VEVENT
+BEGIN:VEVENT
+UID:uid1
+RECURRENCE-ID:20170831T153000Z
+DTSTART:20160830T153000Z
+X-Jmap-Hide-Attendees:false
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
+
+    my $res = $CalDAV->Request('GET', $href);
+    $self->assert(not ($res->{content} =~ m/X-JMAP-ID/));
+    $self->assert(not ($res->{content} =~ m/X-JMAP-SENT-BY/));
+    $self->assert(not ($res->{content} =~ m/X-JMAP-HIDE-ATTENDEES/));
+    $self->assert(not ($res->{content} =~ m/X-JMAP-MAY-INVITE-SELF/));
+    $self->assert(not ($res->{content} =~ m/X-JMAP-MAY-INVITE-OTHERS/));
+}

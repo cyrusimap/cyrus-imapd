@@ -223,10 +223,11 @@ static void _num_to_comp_flags(struct comp_flags *flags, unsigned num)
     flags->tzbyref   = (num >> 4) & 1;
     flags->mattach   = (num >> 5) & 1;
     flags->shared    = (num >> 6) & 1;
-    flags->defaultalerts = (num >> 7) & 1;
-    flags->mayinviteself = (num >> 8) & 1;
-    flags->mayinviteothers = (num >> 9) & 1;
-    flags->privacy = (num >> 10) & 3;
+    flags->defaultalerts   = (num >>  7) & 1;
+    flags->mayinviteself   = (num >>  8) & 1;
+    flags->mayinviteothers = (num >>  9) & 1;
+    flags->privacy         = (num >> 10) & 3;
+    flags->hideattendees   = (num >> 12) & 1;
 }
 
 static unsigned _comp_flags_to_num(struct comp_flags *flags)
@@ -237,10 +238,11 @@ static unsigned _comp_flags_to_num(struct comp_flags *flags)
        + ((flags->tzbyref   & 1) << 4)
        + ((flags->mattach   & 1) << 5)
        + ((flags->shared    & 1) << 6)
-       + ((flags->defaultalerts & 1) << 7)
-       + ((flags->mayinviteself & 1) << 8)
-       + ((flags->mayinviteothers & 1) << 9)
-       + ((flags->privacy   & 3) << 10);
+       + ((flags->defaultalerts   & 1) <<  7)
+       + ((flags->mayinviteself   & 1) <<  8)
+       + ((flags->mayinviteothers & 1) <<  9)
+       + ((flags->privacy         & 3) << 10)
+       + ((flags->hideattendees   & 1) << 12);
 }
 
 #define ICALOBJS_FIELDS         \
@@ -1390,23 +1392,6 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
                 cdata->comp_flags.privacy = CAL_PRIVACY_PRIVATE;
         }
     }
-    else {
-        // Between 2022 and 2026, Cyrus used X-JMAP-PRIVACY for the
-        // JSCalendar "privacy" property.
-        // See 7ed6bbcd64b550eee9903b91c213442243edfebb
-        prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_PRIVACY);
-        if (prop) {
-            const char *val = icalproperty_get_value_as_string(prop);
-            if (val) {
-                if (!strcasecmp(val, "secret"))
-                    cdata->comp_flags.privacy = CAL_PRIVACY_SECRET;
-                else if (!strcasecmp(val, "public"))
-                    cdata->comp_flags.privacy = CAL_PRIVACY_PUBLIC;
-                else
-                    cdata->comp_flags.privacy = CAL_PRIVACY_PRIVATE;
-            }
-        }
-    }
 
     /* Get span of component set and check for managed attachments */
     span = icalrecurrenceset_get_utc_timespan(ical, kind, NULL, &recurring,
@@ -1427,13 +1412,16 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
             icalcomponent_get_usedefaultalerts(comp);
     }
 
-    /* Read JMAP fields mayInviteSelf and mayInviteOthers */
+    /* Read JMAP fields mayInviteSelf, mayInviteOthers, and hideAttendees */
     comp = icalcomponent_get_first_real_component(ical);
     prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_MAYINVITESELF);
     cdata->comp_flags.mayinviteself = prop &&
         !strcasecmpsafe(icalproperty_get_value_as_string(prop), "true");
     prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_MAYINVITEOTHERS);
     cdata->comp_flags.mayinviteothers = prop &&
+        !strcasecmpsafe(icalproperty_get_value_as_string(prop), "true");
+    prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_HIDEATTENDEES);
+    cdata->comp_flags.hideattendees = prop &&
         !strcasecmpsafe(icalproperty_get_value_as_string(prop), "true");
 
     int r = caldav_write(caldavdb, cdata);
