@@ -437,7 +437,7 @@ static struct capa_struct base_capabilities[] = {
     { "STATUS=SIZE",           CAPA_POSTAUTH,           { 0 } }, /* RFC 8438 */
     { "THREAD=ORDEREDSUBJECT", CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
     { "THREAD=REFERENCES",     CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
-    { "UIDBATCHES",            CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-mailmaint-imap-uidbatches */
+    { "UIDBATCHES",            CAPA_POSTAUTH,           { 0 } }, /* RFC 10022 */
     { "UIDONLY",               CAPA_POSTAUTH,           { 0 } }, /* RFC 9586 */
     { "UIDPLUS",               CAPA_POSTAUTH,           { 0 } }, /* RFC 4315 */
     { "UNAUTHENTICATE",        CAPA_POSTAUTH|CAPA_STATE,         /* RFC 8437 */
@@ -2543,7 +2543,7 @@ static void cmdloop(void)
                 }
             }
             else if (!strcmp(cmd.s, "Uidbatches")) {
-                /* draft-ietf-mailmaint-imap-uidbatches */
+                /* RFC 10022 */
                 uint32_t size, low = 1, high = UINT32_MAX;
 
                 if (!imapd_index && !backend_current) goto nomailbox;
