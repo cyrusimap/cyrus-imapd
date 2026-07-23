@@ -948,6 +948,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     JMAP Sharing
 
+:rfc:`10022`
+
+   IMAP UIDBATCHES Extension
+
 IETF RFC Drafts
 ===============
 
@@ -966,10 +970,6 @@ draft-ietf-calext-vpoll
 draft-ietf-jmap-calendars
 
     JMAP for Calendars
-
-draft-ietf-mailmaint-imap-uidbatches
-
-   IMAP UIDBATCHES Extension
 
 draft-murchison-lmtp-ignorequota
 

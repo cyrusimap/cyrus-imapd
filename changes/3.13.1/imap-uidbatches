@@ -1,7 +1,7 @@
 
 Description:
 
-Adds support for IMAP UIDBATCHES (draft-ietf-mailmaint-imap-uidbatches).
+Adds support for IMAP UIDBATCHES (RFC 10022).
 
 
 Config changes:
