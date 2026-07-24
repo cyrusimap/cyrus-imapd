@@ -2027,7 +2027,7 @@ static void apply_property_updates(struct patch_data_t *patch,
                 /* libical treats DQUOTEd BYPARAM as X value */
                 const char *byparam_prefix = "BYPARAM@";
                 const char *x_val = icalparameter_get_xvalue(actionp);
-                if (!strncmp(x_val, byparam_prefix, strlen(byparam_prefix))) {
+                if (!strncmpsafe(x_val, byparam_prefix, strlen(byparam_prefix))) {
                     /* Parse param-match */
                     const char *p = x_val + strlen(byparam_prefix);
                     size_t namelen = strcspn(p, "!=");
@@ -2056,8 +2056,8 @@ static void apply_property_updates(struct patch_data_t *patch,
                 nextprop = icalcomponent_get_next_property(parent, kind);
 
                 if (action == ICAL_PATCHACTION_BYVALUE) {
-                    match = !strcmp(value,
-                                    icalproperty_get_value_as_string(prop));
+                    match = !strcmpsafe(value,
+                                        icalproperty_get_value_as_string(prop));
                 }
                 else if (action == ICAL_PATCHACTION_BYPARAM) {
                     /* Check param-match */
