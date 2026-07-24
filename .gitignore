@@ -36,6 +36,7 @@ cmulocal/ltsugar.m4
 cmulocal/ltversion.m4
 cmulocal/lt~obsolete.m4
 compile
+compile_commands.json
 confdefs.h
 config.guess
 config.h
