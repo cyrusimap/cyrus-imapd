@@ -199,17 +199,16 @@ static void test_cronevent_add_broken_command(void)
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     dynarray_t *schedule, *details;
-    int i;
 
     cronevent_get_schedule(&schedule, &details);
 
-    for (i = 0; i < (int) n_tests; i++) {
+    for (size_t i = 0; i < n_tests; i++) {
         char name[16];
         const char *spec = "* * * * *";
         struct cronevent_details *event_details;
         unsigned j;
 
-        snprintf(name, sizeof(name), "event %d", i);
+        snprintf(name, sizeof(name), "event %zu", i);
 
         cronevent_add(name, spec, tests[i].cmd, false);
         assert_schedule_invariants();
