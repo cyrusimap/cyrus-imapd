@@ -2062,13 +2062,16 @@ static void apply_property_updates(struct patch_data_t *patch,
                 else if (action == ICAL_PATCHACTION_BYPARAM) {
                     /* Check param-match */
                     match = apply_param_match(prop, &byparam);
-                    free(byparam.prop.param);
-                    free(byparam.prop.value);
                 }
                 if (!match) continue;
 
                 icalcomponent_remove_property(parent, prop);
                 icalproperty_free(prop);
+            }
+
+            if (action == ICAL_PATCHACTION_BYPARAM) {
+                free(byparam.prop.param);
+                free(byparam.prop.value);
             }
         }
 
