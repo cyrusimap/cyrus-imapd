@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_header_fuzzy
+    :min_version_3_13 :needs_search_xapian
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    $self->make_message("running fast") || die;
+    $self->make_message("walking slowly") || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "the dedicated SUBJECT key matches a stemmed variant";
+    my $uids = $talk->search('fuzzy', 'subject', 'runs');
+    $self->assert_deep_equals([1], $uids);
+
+    xlog "HEADER Subject must match the same content the same way,";
+    xlog "not fall back to a substring scan";
+    $uids = $talk->search('fuzzy', 'header', 'subject', 'runs');
+    $self->assert_deep_equals([1], $uids);
+
+    xlog "a header field that is not a search attribute keeps substring";
+    xlog "semantics";
+    $uids = $talk->search('fuzzy', 'header', 'x-nonexistent', 'runs');
+    $self->assert_deep_equals([], $uids);
+}
