@@ -367,10 +367,16 @@ static char *activefile_path(const char *mboxname, const char *part, const char 
 
     if (dostat) {
         if (xapstat(dest)) {
-            if (errno != ENOENT)
+            if (errno != ENOENT) {
+                /* Keep the path: let the database open report an error
+                 * rather than silently searching (or compacting) without
+                 * this tier as if it did not exist. */
                 syslog(LOG_ERR, "IOERROR: can't read %s for search, check permissions: %m", dest);
-            free(dest);
-            dest = NULL;
+            }
+            else {
+                free(dest);
+                dest = NULL;
+            }
         }
     }
 
