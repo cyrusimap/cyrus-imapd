@@ -3902,6 +3902,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
 
         if (!r) {
             int is_active = 1;
+            void *save_context = s->context;
             s->context = (void*) &is_active;
             if (imapd_index) {
                 const char *mboxname = index_mboxname(imapd_index);
@@ -3916,7 +3917,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
             if (!(r = pipe_command(s, 16384))) {
                 pipe_including_tag(s, tag, 0);
             }
-            s->context = NULL;
+            s->context = save_context;
         } else {
             eatline(imapd_in, prot_getc(imapd_in));
         }
@@ -4481,6 +4482,8 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
         switch (pipe_including_tag(backend_current, tag, 0)) {
         case PROXY_OK:
+            mboxlist_entry_free((mbentry_t **) &backend_current->context);
+            backend_current->context = mboxlist_entry_copy(mbentry);
             syslog(LOG_DEBUG, "open: user %s opened %s on %s",
                    imapd_userid, name, mbentry->server);
 
@@ -6190,6 +6193,9 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
            (remove when we move to a unified environment) */
         struct backend *s = NULL;
 
+	/* save source context before proxy_findserver may change backend_current */
+        mbentry_t *source_mbentry = backend_current->context? mboxlist_entry_copy((mbentry_t *)backend_current->context) : NULL;
+
         s = proxy_findserver(mbentry->server, &imap_protocol,
                              proxy_userid, &backend_cached,
                              &backend_current, &backend_inbox, imapd_in);
@@ -6203,7 +6209,17 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
             /* this is the hard case; we have to fetch the messages and append
                them to the other mailbox */
 
-            proxy_copy(tag, sequence, name, myrights, usinguid, s);
+            /* need permission to delete from source if it's a move */
+            if (ismove && source_mbentry && !(cyrus_acl_myrights(imapd_authstate, source_mbentry->acl) & ACL_EXPUNGE)) {
+		mboxlist_entry_free(&source_mbentry);
+                r = IMAP_PERMISSION_DENIED;
+                goto done;
+            }
+            /* Return value ignored: the tagged response has already been sent to
+             * the client.  The int return is reserved for a future compensation
+             * path if expunge fails after a successful append. */
+            proxy_copy(tag, sequence, name, myrights, usinguid, s, ismove);
+	    mboxlist_entry_free(&source_mbentry);
             goto cleanup;
         }
         /* xxx  end of separate proxy-only code */
