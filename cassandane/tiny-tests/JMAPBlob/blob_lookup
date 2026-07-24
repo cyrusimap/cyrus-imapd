@@ -64,4 +64,11 @@ sub test_blob_lookup
     $self->assert_str_equals($emailId, $res->[0][1]{list}[0]{matchedIds}{Email}[0]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{notFound}});
     $self->assert_str_equals('unknown', $res->[0][1]{notFound}[0]);
+
+    xlog "Blob/lookup with zero ids doesn't crash/assert";
+    $res = $jmap->CallMethods(
+        [['Blob/lookup', { ids => [], typeNames => ['Mailbox', 'Thread', 'Email'] }, 'R1']],
+    );
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{notFound}});
 }
