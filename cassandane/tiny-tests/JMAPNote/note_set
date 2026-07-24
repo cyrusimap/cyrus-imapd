@@ -64,15 +64,15 @@ sub test_note_set
 
     my $id = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($id);
-    $self->assert_cmp_deeply(
+    $self->assert_cmp_deeply([
         superhashof({
             id        => $id,
             title     => 'HTML',
             body      => '<html><head></head><body>Hello World</body></html>',
             isHTML    => JSON::true,
             isFlagged => JSON::false
-        }),
-        $res->[1][1]{list}[0],
+        })],
+        $res->[1][1]{list},
     );
 
     xlog "update note with HTML body";
@@ -88,15 +88,15 @@ sub test_note_set
         ['Note/get', { }, "R2"]
     ]);
     $self->assert_not_null($res->[0][1]{updated}{$id});
-    $self->assert_cmp_deeply(
+    $self->assert_cmp_deeply([
         superhashof({
             id        => $id,
             title     => 'HTML',
             body      => '<html><head></head><body>Hello World 2</body></html>',
             isHTML    => JSON::true,
             isFlagged => JSON::false
-        }),
-        $res->[1][1]{list}[0],
+        })],
+        $res->[1][1]{list},
     );
 
     xlog "update note with plain text body";
@@ -114,15 +114,15 @@ sub test_note_set
         ['Note/get', { }, "R2"]
     ]);
     $self->assert_not_null($res->[0][1]{updated}{$id});
-    $self->assert_cmp_deeply(
+    $self->assert_cmp_deeply([
         superhashof({
             id        => $id,
             title     => 'plain text',
             body      => 'Hello World 3',
             isHTML    => JSON::false,
             isFlagged => JSON::false
-        }),
-        $res->[1][1]{list}[0],
+        })],
+        $res->[1][1]{list},
     );
 
     xlog "set \flagged";
@@ -132,15 +132,15 @@ sub test_note_set
 
     xlog "verify isFlagged";
     $res = $jmap->CallMethods([['Note/get', { }, "R1"]]);
-    $self->assert_cmp_deeply(
+    $self->assert_cmp_deeply([
         superhashof({
             id        => $id,
             title     => 'plain text',
             body      => 'Hello World 3',
             isHTML    => JSON::false,
             isFlagged => JSON::true
-        }),
-        $res->[0][1]{list}[0],
+        })],
+        $res->[0][1]{list},
     );
 
     xlog "destroy note";

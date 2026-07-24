@@ -601,7 +601,7 @@ static struct header_prop *_header_parseprop(const char *s)
      * Any header not found in this map is allowed to be requested
      * in any form. */
     static hash_table allowed_header_forms = HASH_TABLE_INITIALIZER;
-    if (allowed_header_forms.size == 0) {
+    if (!hash_constructed(&allowed_header_forms)) {
         /* TODO initialize with all headers in RFC 5322 and RFC 2369 */
         construct_hash_table(&allowed_header_forms, 32, 0);
         hash_insert("bcc",
@@ -1918,7 +1918,38 @@ static void _email_search_contactgroup(search_expr_t *parent,
                                        const char *attrname,
                                        hash_table *contactgroups)
 {
-    if (!contactgroups || !contactgroups->size) return;
+    if (!contactgroups) return;
+
+    /* At this point contactgroups must have entries - we can only get here if
+     * jmap_email_contactfilter_from_filtercondition() has been called,
+     * it called construct_hash_table(), and made one or more calls to
+     * hash_insert()
+     * The previous code assumed that it was possible for contactgroups to be
+     * non-NULL but point to an uninitialised hash table, and returned early
+     * in that case. That choice seemed conceptually buggy, because it's not
+     * consistent with the "hard false" SEOP_FALSE return just below - if the
+     * user is asking to filter on a groupid, and there are *no* group IDs, then
+     * the filter should return zero results, not return all results.
+     *
+     * It's actually already handled this way (failure) -
+     * _email_parse_filter_cb() correctly checks and propagates the error
+     * returned from jmap_email_contactfilter_from_filtercondition() and the
+     * search fails. In that function, for carddav_open_userid() to return NULL
+     * dav_open_userid() must fail - the user's SQLite DB on disk must be
+     * present AND corrupt. However, before we even reach that code path Cyrus
+     * has called my_dav_auth() in http_dav_sharing.c
+     * That calls webdav_open_userid(userid), which also calls
+     * dav_open_userid(userid). The failure path there is:
+     * if (!auth_webdavdb) {
+     *     syslog(LOG_ERR, "Unable to open WebDAV DB for userid: %s", userid);
+     *     return HTTP_UNAVAILABLE;
+     * }
+     * Hence that failure isn't even possible via the functions this source file
+     * - the only path that might cause contactgroups not be initialised is
+     * unreachable, because Cyrus will have already returned a 503 status
+     * response if the dav.db exists but can't be read.
+     * (Hence I can't write a test for it)
+     */
 
     strarray_t *members = hash_lookup(groupid, contactgroups);
     if (!members || !strarray_size(members)) {
@@ -4406,10 +4437,8 @@ static void emailquery_uidsearch_result_free(void *rock)
         hashset_free(&rrock->savedates);
     if (rrock->seen_emails)
         hashset_free(&rrock->seen_emails);
-    if (rrock->partid_bynum.size)
-        free_hashu64_table(&rrock->partid_bynum, free);
-    if (rrock->partnum_byid.size)
-        free_hash_table(&rrock->partnum_byid, NULL);
+    free_hashu64_table(&rrock->partid_bynum, free);
+    free_hash_table(&rrock->partnum_byid, NULL);
 
     free(rrock);
 }
@@ -4564,9 +4593,7 @@ static void emailquery_cache_reset(struct emailquery_cache *qc)
         qc->qr.free(qc->qr.rock);
     }
     free(qc->nextinthread);
-    if (qc->firstinthread.size) {
-        free_hashu64_table(&qc->firstinthread, NULL);
-    }
+    free_hashu64_table(&qc->firstinthread, NULL);
     memset(qc, 0, sizeof(struct emailquery_cache));
 }
 
@@ -4897,7 +4924,11 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
     int r = 0;
 
     modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
-    modseq_t addrbook_modseq = contactgroups->size ?
+    /* This ternary tests whether the hash initialisation code in
+     * jmap_email_contactfilter_from_filtercondition() was called
+     * "ensure we have preconditions for lookups"
+     */
+    modseq_t addrbook_modseq = hash_constructed(contactgroups) ?
         jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0) : 0;
     char *querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
 
@@ -6752,7 +6783,7 @@ static int _email_get_keywords(jmap_req_t *req,
         int r = seen_open(req->userid, SEEN_CREATE, &ctx->seendb);
         if (r) return r;
     }
-    if (ctx->seenseq_by_mbox_id.size == 0) {
+    if (!hash_constructed(&ctx->seenseq_by_mbox_id)) {
         construct_hash_table(&ctx->seenseq_by_mbox_id, 128, 0);
     }
     /* Gather keywords for all message records */
@@ -8174,7 +8205,7 @@ static int _email_get_bodies(jmap_req_t *req,
             }
 
             if (is_icsbody && hashset_add(icsguids, &part->content_guid)) {
-                if (!icsbody_by_partid.size) {
+                if (!hash_constructed(&icsbody_by_partid)) {
                     construct_hash_table(&icsbody_by_partid, 32, 0);
                 }
                 hash_insert(part->part_id, part, &icsbody_by_partid);
@@ -8182,7 +8213,7 @@ static int _email_get_bodies(jmap_req_t *req,
         }
 
         json_t *events = json_null();
-        if (hash_numrecords(&icsbody_by_partid)) {
+        if (hash_count(&icsbody_by_partid)) {
             r = _cyrusmsg_need_mime(msg);
             if (r) goto done;
             struct mailbox *mbox = NULL;
@@ -8197,7 +8228,7 @@ static int _email_get_bodies(jmap_req_t *req,
         }
         json_object_set_new(email, "calendarEvents", events);
 
-        if (icsbody_by_partid.size) free_hash_table(&icsbody_by_partid, NULL);
+        free_hash_table(&icsbody_by_partid, NULL);
         hashset_free(&icsguids);
     }
 
@@ -8556,7 +8587,7 @@ static int jmap_email_get(jmap_req_t *req)
     if (args.bodyprops == NULL) {
         args.bodyprops = &_email_get_default_bodyprops;
 
-        if (args.bodyprops->size == 0) {
+        if (!hash_constructed(args.bodyprops)) {
             _email_init_default_props(args.bodyprops);
         }
     }
@@ -8639,7 +8670,7 @@ static int jmap_email_parse(jmap_req_t *req)
     if (getargs.props == NULL) {
         getargs.props = &_email_parse_default_props;
 
-        if (getargs.props->size == 0) {
+        if (!hash_constructed(getargs.props)) {
             _email_init_default_props(getargs.props);
         }
     }
@@ -8648,7 +8679,7 @@ static int jmap_email_parse(jmap_req_t *req)
     if (getargs.bodyprops == NULL) {
         getargs.bodyprops = &_email_get_default_bodyprops;
 
-        if (getargs.bodyprops->size == 0) {
+        if (!getargs.bodyprops->table) {
             _email_init_default_props(getargs.bodyprops);
         }
     }
@@ -12153,7 +12184,7 @@ static void _email_bulkupdate_checklimits(struct email_bulkupdate *bulk)
 {
     /* Validate mailbox counts per email */
     hash_table mbox_ids_by_email_id = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&mbox_ids_by_email_id, hash_numrecords(&bulk->uidrecs_by_email_id)+1, 0);
+    construct_hash_table(&mbox_ids_by_email_id, hash_count(&bulk->uidrecs_by_email_id)+1, 0);
 
     /* Collect current mailboxes per email */
     hash_iter *iter = hash_table_iter(&bulk->uidrecs_by_email_id);
@@ -12342,7 +12373,7 @@ static int _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarr
     }
 
     hash_table seenseq_by_mbox_id = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&seenseq_by_mbox_id, hash_numrecords(&bulk->plans_by_mbox_id)+1, 0);
+    construct_hash_table(&seenseq_by_mbox_id, hash_count(&bulk->plans_by_mbox_id)+1, 0);
 
     /* Plan keyword updates per mailbox */
     hash_iter *iter = hash_table_iter(&bulk->plans_by_mbox_id);
@@ -12658,7 +12689,7 @@ static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *upd
     /* Validate plans */
     hash_table erroneous_plans = HASH_TABLE_INITIALIZER;
     construct_hash_table(&erroneous_plans,
-            hash_numrecords(&bulk->plans_by_mbox_id) + 1, 0);
+            hash_count(&bulk->plans_by_mbox_id) + 1, 0);
 
     /* Check permissions and quota */
     int check_quota = !ignorequota && !config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS);
@@ -12686,7 +12717,7 @@ static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *upd
             }
         }
     }
-    if (hash_numrecords(&erroneous_plans)) {
+    if (hash_count(&erroneous_plans)) {
         /* Fail any update where the email is an erroneous mailbox plan */
         hash_iter_reset(plan_iter);
         while (hash_iter_next(plan_iter)) {

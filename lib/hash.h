@@ -1,13 +1,17 @@
-/* +++Date last modified: 05-Jul-1997 */
 #ifndef HASH__H
 #define HASH__H
 
 #include <stddef.h>           /* For size_t     */
 #include <stdint.h>
+#include <stdbool.h>
 #include "mpool.h"
 #include "strarray.h"
 
 #define HASH_TABLE_INITIALIZER {0, 0, 0, 0, NULL, NULL}
+
+#ifndef EXPORTED
+#define EXPORTED __attribute__((visibility("default")))
+#endif
 
 /*
 ** A hash table consists of an array of these buckets.  Each bucket
@@ -20,7 +24,7 @@ typedef struct bucket bucket;
 
 /*
 ** This is what you actually declare an instance of to create a table.
-** You then call 'construct_table' with the address of this structure,
+** You then call 'construct_hash_table' with the address of this structure,
 ** and a guess at the size of the table.  Note that more nodes than this
 ** can be inserted in the table, but performance degrades as this
 ** happens.  Performance should still be quite adequate until 2 or 3
@@ -37,8 +41,8 @@ typedef struct hash_table {
 } hash_table;
 
 /*
-** This is used to construct the table.  If it doesn't succeed, it sets
-** the table's size to 0, and the pointer to the table to NULL.
+** This is used to construct the table.  If it can't allocate sufficient memory
+** it will terminate the program with the diagnostic "Virtual memory exhausted".
 */
 
 hash_table *construct_hash_table(hash_table *table, size_t size,
@@ -87,16 +91,39 @@ strarray_t *hash_keys(const hash_table *table);
 
 /* counts the number of nodes in the hash table */
 
-int hash_numrecords(hash_table *table);
+EXPORTED inline size_t hash_count(const hash_table *table)
+{
+    return table->count;
+}
+
+/* true if construct_hash_table() has been called on this hash table
+ * false if the memory has only been initialized with HASH_TABLE_INITIALIZER
+ * As free_hash_table() resets the memory to that same state, will be true after
+ * it has been called
+ * Encapsulates an idiom used by lots of Cyrus code to defer expensive
+ * initialization of hash tables until the first time they are actually needed
+ */
+
+EXPORTED inline bool hash_constructed(const hash_table *table)
+{
+    /* Currently this tests whether .table is non-NULL, but in future we might
+     * change the implementation further such that table isn't even allocated
+     * until the first hash_insert(), so we hide this lookup in a trivial named
+     * function, instead of exposing implementation details that might change
+     * everywhere in the main codebase.
+     */
+
+    return table->table;
+}
 
 /*
 ** Frees a hash table.  For each node that was inserted in the table,
 ** it calls the function whose address it was passed, with a pointer
 ** to the data that was in the table.  The function is expected to
 ** free the data.  Typical usage would be:
-** free_table(&table, free);
+** free_hash_table(&table, free);
 ** if the data placed in the table was dynamically allocated, or:
-** free_table(&table, NULL);
+** free_hash_table(&table, NULL);
 ** if not.  ( If the parameter passed is NULL, it knows not to call
 ** any function with the data. )
 */
