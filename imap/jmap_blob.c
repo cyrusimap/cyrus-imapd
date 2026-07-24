@@ -652,6 +652,8 @@ static int jmap_blob_lookup(jmap_req_t *req)
         goto done;
     }
 
+    if (!json_array_size(get.ids)) goto reply;
+
     // we'll just make this 'matchedIds' later
     const char *resname = json_object_get(req->args, "typeNames") ? "matchedIds" : "types";
 
@@ -805,6 +807,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
     // now clean all the found things!
     free_hash_table(&found, _free_found);
 
+reply:
     /* Reply */
     jmap_ok(req, jmap_get_reply(&get));
 
