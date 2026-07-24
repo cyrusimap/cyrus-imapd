@@ -315,7 +315,6 @@ static int create_managedattach(struct jmapical_ctx *jmapctx,
     struct mailbox *srcmbox = NULL;
     struct body *body = NULL;
     struct stagemsg *stage = NULL;
-    time_t internaldate = time(NULL);
     struct appendstate as;
     jmap_getblob_context_t getblobctx;
     jmap_getblob_ctx_init(&getblobctx, req->accountid, blobid, NULL, 1);
@@ -372,8 +371,8 @@ static int create_managedattach(struct jmapical_ctx *jmapctx,
     if (r) goto done;
 
     strarray_t flags = STRARRAY_INITIALIZER;
-    r = append_fromstage(&as, &body, stage, 0,
-                         internaldate, &flags, 0, NULL);
+    r = append_fromstage(&as, &body, stage, /*internaldate*/NULL,
+                         /*createdmodseq*/0, &flags, 0, NULL);
         if (r) {
         append_abort(&as);
         goto done;
