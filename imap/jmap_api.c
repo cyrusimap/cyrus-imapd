@@ -499,12 +499,7 @@ static json_t *lookup_capabilities(const char *accountid,
     char *inboxname = mboxname_user_mbox(accountid, NULL);
     if (mboxlist_lookup(inboxname, &inboxentry, NULL)) {
         free(inboxname);
-        if (httpd_userisadmin) {
-            json_t *capas = json_object();
-            jmap_admin_capabilities(capas);
-            return capas;
-        }
-        else return json_null();
+        return json_null();
     }
     free(inboxname);
 
@@ -531,8 +526,6 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_sieve_capabilities(capas);
         jmap_vacation_capabilities(capas);
 #endif
-        if (httpd_userisadmin)
-            jmap_admin_capabilities(capas);
     }
     else {
         /* Lookup capabilities for shared account */
@@ -1001,8 +994,6 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     json_object_set(primary_accounts, JMAP_SIEVE_EXTENSION, jprimary);
 #endif
     json_object_set(primary_accounts, JMAP_URN_PRINCIPALS, jprimary);
-    if (httpd_userisadmin)
-        json_object_set(primary_accounts, JMAP_ADMIN_EXTENSION, jprimary);
     json_decref(jprimary);
 
     /* Clean up */

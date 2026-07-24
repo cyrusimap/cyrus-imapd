@@ -1,0 +1,22 @@
+Description:
+
+Removes the experimental JMAP Admin capability and methods.
+
+
+Documentation:
+
+None.
+
+Config changes:
+
+None.
+
+Upgrade instructions:
+
+None.
+JMAP clients that use the experimental 'https://cyrusimap.org/ns/jmap/admin'
+capability must stop sending it in their requests.
+
+GitHub issue:
+
+None.
