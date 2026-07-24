@@ -55,12 +55,12 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
-#include "imap/jmap_calendar_event_notification_props.h"
-#include "imap/jmap_calendar_event_props.h"
-#include "imap/jmap_calendar_participant_identity_props.h"
-#include "imap/jmap_calendar_principal_props.h"
-#include "imap/jmap_calendar_props.h"
-#include "imap/jmap_calendar_share_notification_props.h"
+#include "imap/jmap_props/calendar.h"
+#include "imap/jmap_props/calendar_event.h"
+#include "imap/jmap_props/calendar_event_notification.h"
+#include "imap/jmap_props/participant_identity.h"
+#include "imap/jmap_props/principal.h"
+#include "imap/jmap_props/share_notification.h"
 
 static int jmap_calendar_get(struct jmap_req *req);
 static int jmap_calendar_changes(struct jmap_req *req);
@@ -9000,7 +9000,7 @@ static int jmap_principal_get(struct jmap_req *req)
     struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
 
-    jmap_get_parse(req, &parser, &calendarprincipal_props, 0, NULL, NULL, &get, &err);
+    jmap_get_parse(req, &parser, &principal_props, 0, NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -9565,8 +9565,7 @@ static int jmap_principal_set(struct jmap_req *req)
     struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *err = NULL;
 
-    jmap_set_parse(req, &argparser, &calendarprincipal_props,
-                   NULL, NULL, &set, &err);
+    jmap_set_parse(req, &argparser, &principal_props, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

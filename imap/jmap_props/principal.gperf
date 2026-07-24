@@ -1,6 +1,5 @@
 %{
-/* jmap_calendar_principal_props.c --
-   Lookup function for JMAP CalendarPrincipal properties */
+/* principal.c -- Lookup function for JMAP Principal properties */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
@@ -18,11 +17,11 @@
 
 %define slot-name             name
 %define initializer-suffix    ,NULL,0
-%define constants-prefix      CALENDARPRINCIPAL_PROP_
-%define word-array-name       calendarprincipal_prop_array
-%define length-table-name     calendarprincipal_prop_lengths
-%define hash-function-name    calendarprincipal_prop_hash
-%define lookup-function-name  calendarprincipal_prop_lookup
+%define constants-prefix      PRINCIPAL_PROP_
+%define word-array-name       principal_prop_array
+%define length-table-name     principal_prop_lengths
+%define hash-function-name    principal_prop_hash
+%define lookup-function-name  principal_prop_lookup
 
 jmap_property_t;
 
@@ -40,10 +39,10 @@ jmap_property_t;
 "calendarAddress",    NULL, JMAP_PROP_SERVER_SET
 %%
 
-const jmap_prop_hash_table_t jmap_calendarprincipal_props_map = {
-    calendarprincipal_prop_array,
-    CALENDARPRINCIPAL_PROP_TOTAL_KEYWORDS,
-    CALENDARPRINCIPAL_PROP_MIN_HASH_VALUE,
-    CALENDARPRINCIPAL_PROP_MAX_HASH_VALUE,
-    &calendarprincipal_prop_lookup
+const jmap_prop_hash_table_t jmap_principal_props_map = {
+    principal_prop_array,
+    PRINCIPAL_PROP_TOTAL_KEYWORDS,
+    PRINCIPAL_PROP_MIN_HASH_VALUE,
+    PRINCIPAL_PROP_MAX_HASH_VALUE,
+    &principal_prop_lookup
 };

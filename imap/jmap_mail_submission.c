@@ -32,8 +32,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
-#include "imap/jmap_mail_submission_props.h"
-#include "imap/jmap_mail_submission_identity_props.h"
+#include "imap/jmap_props/email_submission.h"
+#include "imap/jmap_props/identity.h"
 
 #define JMAP_SUBID_SIZE 12
 

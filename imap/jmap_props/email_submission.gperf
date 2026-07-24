@@ -1,5 +1,5 @@
 %{
-/* jmap_mail_submission_props.c --
+/* email_submission.c --
    Lookup function for JMAP Email Submission properties */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */

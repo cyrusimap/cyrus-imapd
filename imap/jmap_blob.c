@@ -18,8 +18,8 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 #include "imap/jmap_err.h"
-#include "imap/jmap_blob_props.h"
-#include "imap/jmap_blob_upload_props.h"
+#include "imap/jmap_props/blob.h"
+#include "imap/jmap_props/blob_upload.h"
 
 
 static int jmap_blob_copy(jmap_req_t *req);

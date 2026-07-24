@@ -30,7 +30,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-#include "imap/jmap_vacation_props.h"
+#include "imap/jmap_props/vacation.h"
 
 static int jmap_vacation_get(jmap_req_t *req);
 static int jmap_vacation_set(jmap_req_t *req);

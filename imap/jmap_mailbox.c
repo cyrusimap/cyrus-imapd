@@ -37,7 +37,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
-#include "imap/jmap_mailbox_props.h"
+#include "imap/jmap_props/mailbox.h"
 
 
 static int jmap_mailbox_get(jmap_req_t *req);

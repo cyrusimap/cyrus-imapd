@@ -60,8 +60,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
-#include "imap/jmap_mail_props.h"
-#include "imap/jmap_mail_thread_props.h"
+#include "imap/jmap_props/email.h"
+#include "imap/jmap_props/thread.h"
 
 static int jmap_email_query(jmap_req_t *req);
 static int jmap_email_querychanges(jmap_req_t *req);

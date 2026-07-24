@@ -39,8 +39,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
-#include "imap/jmap_contact_addressbook_props.h"
-#include "imap/jmap_contact_card_props.h"
+#include "imap/jmap_props/addressbook.h"
+#include "imap/jmap_props/contact_card.h"
 
 static int jmap_addressbook_get(struct jmap_req *req);
 static int jmap_addressbook_changes(struct jmap_req *req);
