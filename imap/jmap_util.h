@@ -68,6 +68,9 @@ extern const char *jmap_keyword_to_imap(const char *keyword);
 
 extern char *jmap_role_to_specialuse(const char *role);
 
+extern void jmap_log_calendars_without_jscalendarbis(
+    const strarray_t *using_capabilities);
+
 /* JMAP request parser */
 struct jmap_parser {
     struct buf buf;

@@ -644,6 +644,8 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         strarray_add(&using_capabilities, json_string_value(json_array_get(jusing, i)));
     }
 
+    jmap_log_calendars_without_jscalendarbis(&using_capabilities);
+
     /* Push client method calls on call stack */
     json_t *jmethod_calls = json_object_get(jreq, "methodCalls");
     for (i = json_array_size(jmethod_calls); i > 0; i--) {
