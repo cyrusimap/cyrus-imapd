@@ -115,8 +115,8 @@ imap/imap_err.c
 imap/imap_err.h
 imap/imapd
 imap/ipurge
-imap/jmap_*_props.c
-imap/jmap_*_props.h
+imap/jmap_props/*.c
+imap/jmap_props/*.h
 imap/jmap_data_types.h
 imap/jmap_err.c
 imap/jmap_err.h
