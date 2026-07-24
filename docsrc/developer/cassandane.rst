@@ -5,519 +5,78 @@ The Cassandane test suite
 
 .. contents::
 
-1. Introduction
----------------
+.. sectnum::
+
+Introduction
+------------
 
 Cyrus IMAP includes two test suites.  One is written in C, using CUnit, and is
 primarily *unit testing*.  The other, known as Cassandane, is written in Perl,
 using Test::Unit, and is primarily *integration testing*.  This page covers the
 Cassandane test suite.
 
-2. Running The Tests
---------------------
+Tests are grouped into *suites*, and each suite is a Perl module: those under
+``Cassandane/Cyrus/`` exercise Cyrus, and those under ``Cassandane/Test/``
+exercise Cassandane itself.  Most Cyrus tests are written as *tiny-tests* — one
+subroutine per file under ``cassandane/tiny-tests/{Suite}/``, sharing the
+suite module's setup.
 
-In day-to-day development you don't set up Cassandane or run it by hand:
-``dar test`` (or ``cyd test`` inside the container) provisions everything and
-runs the suite as the ``cyrus`` user for you.  See the :ref:`developer
-quickstart <developer-quickstart>` for that workflow.
+If you just want to get productive fast, the :ref:`developer quickstart
+<developer-quickstart>` takes you from a fresh checkout to a first passing test
+and the conventions to write it with the grain.  This page is the fuller
+story: how a test is put together and what the framework gives you to work
+with.
 
-The rest of this section explains how to select and run tests; it applies
-whether you go through ``dar test`` or call ``testrunner.pl`` directly inside
-the container.
+Running the tests
+-----------------
 
-2.1. Running tests
-^^^^^^^^^^^^^^^^^^
+Almost all the time you run Cassandane through ``dar test`` (from the host) or
+``cyd test`` (inside the container), which builds Cyrus, writes a
+``cassandane.ini``, and runs the suite as the ``cyrus`` user for you.  See the
+:ref:`developer quickstart <developer-quickstart>` for that workflow.
 
-Cassandane tests are run out of the Cassandane directory itself, without
-installing Cassandane anywhere.  This is not the result of deliberate policy so
-much as implementation laziness.
-
-All runtime state is created under the cassandane rootdir configured in
-cassandane.ini (by default: ``/var/tmp/cass``).
-
-Internally, Cassandane (or more precisely, the Cyrus code it exercises) needs
-to run either as the superuser or as the "cyrus" user.  You invoke it as
-yourself: inside the container, ``cyd test`` steps down to the "cyrus" user for
-you, and a direct ``testrunner.pl`` run will re-invoke itself with sudo.
-
-The script 'testrunner.pl' is your interface for running Cassandane tests.
-There are several other Perl scripts in the directory, but they are utilities
-which were helpful during manual testing rather than part of the test suite
-itself.
-
-With no arguments, testrunner.pl runs all the tests that come with Cassandane
-and reports the results to the terminal in the 'prettier' test report format.
-The testrunner.pl exit code will be 0 if all tests passed, non-zero otherwise.
+Whether you go through ``dar test`` or the runner directly, you choose what to
+run by naming suites and individual tests:
 
 .. code::
 
-    $ ./testrunner.pl
-    [  OK  ] Cyrus::ACL.reconstruct
-    [  OK  ] Cyrus::ACL.move
-    [  OK  ] Cyrus::ACL.delete
-    ...
+    dar test Quota               # the whole Quota suite
+    dar test Quota.quotarename   # a single test
+    dar test Admin Quota         # several suites
+    dar test ~Quota              # everything except the Quota suite
 
-There are several test report formats to choose from, by invoking testrunner.pl
-with the -f 'format' option.
+Names accumulate from left to right, and any name can be negated with ``!`` or
+``~`` (``~`` is usually easier to slip past the shell).  ``dar test`` also
+exposes the options most people reach for — ``--slow``, ``--rerun``,
+``--valgrind``, ``-j``, and so on; run ``dar test --help`` to see them.
 
-``-f pretty``
-    Human readable output to the terminal, showing the ok/failed/error status
-    and name for each test, as well as the error reports from any not-ok tests.
-    This gets noisy in the case of failures!  It's mostly useful when debugging
-    single tests, especially in conjunction with -vvv.
-
-``-f prettier`` (the default)
-    As for pretty, but without the noise when problems occur.  This is most
-    useful when running many (or all) tests at once.  A list of failed tests
-    is written to $rootdir/failed, and the full error reports for any failed
-    tests are written to $rootdir/reports, so you can still access these details
-    if you find yourself needing them after the fact.
-
-``-f xml``
-    This writes reports in jUnit format.  The reports will be xml files in a
-    subdirectory "reports" of the current directory at the time testrunner.pl
-    was invoked.  Note that this is NOT the same "reports" file as used by
-    -f prettier.  This format is apparently useful for integration with various
-    CI systems, though it's not used by our Github CI.
-
-``-f tap``
-    TAP is a common format which originated with Perl and is now widely used,
-    see http://en.wikipedia.org/wiki/Test_Anything_Protocol for more
-    information.  Cassandane's implementation is very rudimentary, but should
-    generally produce valid TAP.
-
-You can run just a subset of tests by giving arguments to testrunner.pl.
-Tests to run are most commonly specified as:
-
-* a test suite without the leading Cassandane::Cyrus
-
-    .. code::
-
-        $ ./testrunner.pl Quota
-
-* a single test in a single test suite
-
-    .. code::
-
-        $ ./testrunner.pl Quota.quotarename
-
-Multiple test suites or tests can be specified as well:
-
-    .. code::
-
-        $ ./testrunner.pl Admin Quota.quotarename
-
-Arguments can be negated by using a leading exclamation mark (!) or tilde (~)
-character.  Note that you may need to escape the ! from the shell, so ~ is
-generally preferable:
+Underneath, the actual runner is ``cassandane/testrunner.pl``, run as the
+``cyrus`` user from inside the ``cassandane`` directory.  You need it directly
+only when you want something ``dar test`` doesn't expose, or when debugging the
+runner itself.  It documents itself:
 
 .. code::
 
-    $ ./testrunner.pl ~Quota
-
-will run all the tests from all the suites except the Quota suite.
-Arguments accumulate from left to right, so e.g.
-
-.. code::
-
-    $ ./testrunner.pl Quota ~Quota.quotarename
-
-will run all the tests in the Quota suite except the quotarename test.
-
-The -v (or --verbose) option to testrunner.pl causes both Cassandane and
-several Cyrus programs run by Cassandane to emit a lot of information to
-stderr.  You can specify this option multiple times for increased verbosity,
-and the single-character version can be stacked, like -vvv.
-
-The --valgrind option to testrunner.pl runs all the Cyrus executables using
-Valgrind.  This is of course much slower but is recommended because it finds
-many subtle bugs.  The Valgrind logs are saved in the files
-$rootdir/$instance/vglogs/$name.$pid.  Cassandane will examine these logs after
-each test finishes, and will fail the test if there are any errors (including
-memory leaks) reported.
-
-The --cleanup option causes Cassandane to do two things.  Firstly, it
-immediately cleans up any files left over in $rootdir.  Secondly, it cleans up
-any such files after each test, unless the test fails.  This should be helpful
-when the filesystem in use does not have much room, such as when running on a
-tmpfs filesystem.  You'll probably find this useful, so enable
-cassandane.cleanup in your cassandane.ini rather than typing it all the time.
-Then use --no-cleanup to override it when you don't want that.
-
-testrunner.pl also accepts a bunch of other options that are not documented
-here.  Consult the script itself for the full and most up-to-date set.
-
-3. Adding Your Own Tests
-------------------------
-
-The source code for tests are Perl modules located in two directories under the
-Cassandane main directory.
-
-``Cassandane/Test/``
-    contains tests which exercise the Cassandane core classes,
-    i.e. self-tests.
-
-``Cassandane/Cyrus/``
-    contains tests which exercise Cyrus.
-
-Cassandane uses the Perl Test::Unit framework.  For more detailed information
-consult the Test::Unit documentation.  Each Cassandane test module derives from
-the Cassandane::Unit::TestCase class, and is logically a group of related
-tests.  The module can define the following methods.
-
-``new``
-    Constructor, creates and returns a new TestCase.  For Cassandane
-    tests, this will typically create Cassandane::Config and
-    Cassandane::Instance objects (see later).
-
-``set_up``
-    Optional method which is called by the framework before every
-    test is run.  It has no return value and should 'die' if anything
-    goes wrong.  For Cassandane tests, this will typically start an
-    Instance (see later).
-
-``tear_down``
-    Optional method which is called by the framework after every
-    test is run.  It has no return value and should 'die' if anything
-    goes wrong.  For Cassandane tests, this will typically stop an
-    Instance (see later).
-
-``test_foo``
-    Defines a test named "foo".  It has no return value and should
-    either call $self->assert(boolean) or 'die' if anything goes wrong.
-    Multiple test_whatever methods can be defined in a module.
-
-3.1 Helper Classes
-^^^^^^^^^^^^^^^^^^
-
-Cassandane contains a number of helper classes designed to make easier
-the job of writing tests that access Cyrus.  This section provides a
-brief overview.
-
-Cassandane::Instance
-    Encapsulates an instance of Cyrus, with its own directory
-    structure, configuration files, master process, and one or more
-    services such as imapd.
-
-    To create a default Instance:
-
-    .. code:: perl
-
-        my $instance = Cassandane::Instance->new();
-
-    To create an Instance with a non-default parameter in the
-    configuration file:
-
-    .. code:: perl
-
-        my $config = Cassandane::Config->default()->clone();
-        $config->set(conversations => 'on');
-        my $instance = Cassandane::Instance->new(config => $config);
-
-    By default the Instance has no services, but just runs the master
-    daemon.  This is rarely a useful setup.  To add a service, in this case
-    the imapd daemon:
-
-    .. code:: perl
-
-        $instance->add_service(name => 'imap');
-
-    Starting the Instance creates the directory structure and
-    configuration files, then starts the master process and waits for
-    all the defined services to be running (as reported by netstat).
-
-    .. code:: perl
-
-        $instance->start();
-
-    Stopping the instance kills all master process and all services
-    as gracefully as possible, and waits for them to die.
-
-    .. code:: perl
-
-        $instance->stop();
-
-    Interactions with services are handled via one of the classed
-    derived from the abstract Cassandane::MessageStore class.  To create
-    a store for a particular service in an Instance:
-
-    .. code:: perl
-
-        $store = $instance->get_service('imap')->create_store();
-
-    For the imapd service in particular, Cassandane::IMAPMessageStore
-    wraps a Mail::IMAPTalk object which can be retrieved thus:
-
-    .. code:: perl
-
-        my $imaptalk = $store->get_client();
-
-    The Cassandane::Instance can also produce TestUser objects for handling the
-    data of individual users.  There are two methods:
-
-    .. code:: perl
-
-       # This will perform initialization for the user, ensuring some basic
-       # normal bookkeeping was done, and then return a TestUser object:
-       my $testuser = $instance->create_user('username');
-
-       # This will just create the TestUser object, without touching any data
-       # on disk.  (Its protocol clients will work, and Cyrus will create
-       # whatever records are needed as they're accessed.)
-       my $testuser = $instance->create_user_without_setup('username');
-
-    Also, the method ``default_user`` will return a default user for the
-    running test, generally named ``cassandane``.
-
-Cassandane::TestUser
-    This class represents a Cyrus user, and provides methods for getting
-    protocol clients and creating test data.
-
-    You can get a TestUser by calling ``create_user`` or
-    ``create_user_without_setup`` on the Cassandane::Instance object.
-
-    The following methods are provided:
-
-    ``jmap`` and ``jmap_ws``
-        These methods provide cached JMAP clients (Cassandane::JMAPTester and
-        Cassandane::JMAPTesterWS, respectively).  They have all of Cyrus's
-        capabilities enabled by default.
-
-    ``new_jmap`` and ``new_jmap_ws``
-        These methods construct new JMAP clients (Cassandane::JMAPTester and
-        Cassandane::JMAPTesterWS, respectively).  They have all of Cyrus's
-        capabilities enabled by default, but you can pass an array of using
-        strings to pick different capabilities.  Alternatively, you can pass a
-        hashref of options, which will be passed along to the JMAP::Tester
-        constructor.
-
-    ``carddav`` and ``caldav``
-        These methods return cached Net::CardDAVTalk and Net::CalDAVTalk
-        objects, respectively, for interacting with the user's data over those
-        protocols.
-
-    ``imap``
-        This method returns a new Mail::IMAPTalk object, for interacting with
-        the user's data over IMAP.
-
-    test data entity methods
-        These methods return test data factories.  For more information run
-        ``perldoc cassandane/Cassandane/TestEntity/DataType/{TYPE}.pm`` for the
-        type you're interested in.  In general, they will have the methods
-        ``get`` and ``create``, to retrieve or create new instances of that
-        datatype.
-
-        * addressbooks
-        * contacts
-        * emails
-        * mailboxes
-
-Cassandane::Config
-    Encapsulates the configuration information present in an imapd.conf
-    format configuration file.  Config objects are useful for passing
-    to the Cassandane::Instance constructor to set up Cyrus instances
-    with particular configuration options.
-
-    The Config module keeps a global Config object.  This object should
-    not be modified directly but should be cloned (see below).  To get
-    the default object:
-
-    .. code:: perl
-
-        my $config = Cassandane::Config->default();
-
-    Configs use a lightweight copy-on-write cloning mechanism.  The
-    clone() method can be used to create a new Config object based on a
-    parent Config object.  The child remembers it's parent.
-
-    .. code:: perl
-
-        my $child_config = $parent_config->clone();
-
-    The set() and get() methods can be used to set and get key-value
-    pairs from a Config object.  The set() method always works on the
-    object itself, but get() will walk back up the ancestry chain until
-    it finds a matching key.
-
-    .. code:: perl
-
-        $config->set(conversations => 'on');
-        $config->set(foo => '1', bar => '2');
-
-        my $foo = $config->get('foo');
-
-    The typical use for a Config object is:
-
-    .. code:: perl
-
-        my $config = Cassandane::Config->default()->clone();
-        $config->set(conversations => 'on');
-        my $instance = Cassandane::Instance->new(config => $config);
-
-Cassandane::Message
-    Encapsulates an RFC822 message, plus a set of non-RFC822 attributes
-    expressed as key-value pairs.   Message objects are returned from
-    MessageStore->read_message() and Generator->generate().
-
-    To create a new default Message object
-
-    .. code:: perl
-
-        my $msg = Cassandane::Message->new();
-
-    To create a Message object read from a file handle
-
-    .. code:: perl
-
-        my $fh = ...
-        my $msg = Cassandane::Message->new(fh => $fh);
-
-    To get all the RFC822 headers of a given name, as a reference
-    to an array of strings:
-
-    .. code:: perl
-
-        my $values = $msg->get_headers('Received');
-
-    To get an RFC822 header and enforce that there is only a single
-    header of that name, use
-
-    .. code:: perl
-
-        my $value = $msg->get_header('From');
-
-    To set an RFC822 header, replacing any previous headers of
-    the same name:
-
-    .. code:: perl
-
-        $msg->set_headers('From', 'Foo Bar <foo@bar.org>');
-
-    To set multiple RFC822 headers with the same name, replacing
-    any previous headers of that name:
-
-    .. code:: perl
-
-        my @values = ('baz', 'quux');
-        $msg->set_headers('Received', @values);
-
-    To add an RFC822 header:
-
-    .. code:: perl
-
-        $msg->add_header('Subject', 'Hello World');
-
-    To set the RFC822 body (as one big string)
-
-    .. code:: perl
-
-        $msg->set_body('....one enormous string...');
-
-    To get a non-RFC822 attribute (this may have be placed on the message
-    as a side effect of it's creation e.g. during an IMAP FETCH command):
-
-    .. code:: perl
-
-        my $cid = $msg->get_attribute('cid');
-
-Cassandane::Generator
-    Creates new Message objects with a number of useful default values
-    based on random words.  Has a constructor and a single function
-
-    .. code:: perl
-
-        my $gen = Cassandane::Generator->new();
-        my $msg = $gen->generate();
-
-    By default, messages will have values for the RFC822 body and the
-    following headers:
-
-    * Return-Path
-    * Received
-    * MIME-Version - 1.0
-    * Content-Type - text/plain; charset="us-ascii"
-    * Content-Transfer-Encoding - 7bit
-    * Subject
-    * From
-    * Message-ID
-    * Date
-    * To
-    * X-Cassandane-Unique - a string of hex digits, unique per generator call
-
-    Some of these can be overridden by providing options to generate()
-
-    .. code::
-
-      my $msg = $gen->generate(subject => "Hello world");
-
-    The following options can be used:
-
-    date
-        a DateTime object
-    from
-        a Cassandane::Address object
-    subject
-        a string
-    to
-        a Cassandane::Address object
-    messageid
-        a string
-
-3.2 Targeting specific versions
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If you're writing a new Cyrus feature, you can (and should) mark tests for that
-feature as requiring the new version of Cyrus.  Because a newer version of
-Cassandane is sometimes run against older versions of Cyrus, this lets the test
-running skip tests that absolutely require a newer Cyrus.
-
-There are two new magical subroutine attribute patterns:
-
-* ``:min_version_x_y_z``
-* ``:max_version_x_y_z``
-
-…where in both cases y and z are optional.
-
-These only apply to test suites inheriting from Cassandane::Cyrus::TestCase.
-Test suites inheriting from Cassandane::Unit::TestCase will ignore these
-attributes entirely -- but you probably shouldn't inherit from this anyway
-(unless you're testing Cassandane itself).
-
-So for example, you might test a feature that's new in master with
-something like:
-
-.. code:: perl
-
-    sub test_my_new_feature
-        :min_version_3_0
-    {
-         # [...]
-    }
-
-And you might continue to test some hypothetical feature that's been
-discontinued on master but still exists in the stable branch with
-something like:
-
-.. code:: perl
-
-    sub test_my_obsolete_feature
-        :max_version_2_5
-    {
-        # [...]
-    }
-
-Cassandane::Instance offers ``get_version()``.  It's able to detect versions as
-far back as 2.5.0.  So if you need to do some version-based conditionalisation
-within a test function (or within infrastructure), you can use something like:
-
-.. code:: perl
-
-    my ($major, $minor, $revision, $extra) = Cassandane::Instance->get_version()
-
-Cassandane::Test::Skip implements the skip handling.
-
-4. An example test
-------------------
+    ./testrunner.pl --help       # the full, authoritative option list
+    perldoc ./testrunner.pl      # what it is, and notes on driving it
+
+When a single test misbehaves, ``./testrunner.pl -f pretty -vvv Suite.test``
+prints each failure's error report inline and turns up the Cassandane and Cyrus
+logging; ``perldoc ./testrunner.pl`` explains where the logs land.
+
+Writing a test
+--------------
+
+A test is a subroutine whose name begins with ``test_``.  Most live as
+*tiny-tests*: one such subroutine to a file under
+``cassandane/tiny-tests/{Suite}/``, the file beginning with ``#!perl`` and
+``use Cassandane::Tiny;``.  Drop the file into the suite's directory and the
+suite module in ``Cassandane/Cyrus/`` picks it up automatically; run it with
+``dar test Suite.name``.
+
+The example that follows shows only the subroutine — the ``use
+Cassandane::Tiny;`` wrapper is understood.  The best way to see how the pieces
+fit together is to read a real one, lightly polished:
 
 .. code-block:: perl
    :linenos:
@@ -563,12 +122,19 @@ Cassandane::Test::Skip implements the skip handling.
     }
 
 This example shows off many of the most common things you'll be using when
-writing Cassandane tests.  First, we see the ``needs_dependency_icalvcard``
-attribute, telling the test planner to skip this test when ``icalvcard`` is not
-compiled into Cyrus.
+writing Cassandane tests.
 
-It then sets ``$user`` to the default user.  Most tests only need one user, and
-so can use the default user instead of creating one.  The test calls
+First, we see the ``needs_dependency_icalvcard`` attribute, telling the test
+planner to skip this test when ``icalvcard`` is not compiled into Cyrus.  These
+attributes go between the subroutine name and its signature; see `Test
+attributes`_ below.
+
+The ``xlog`` calls scattered through the test log a line to Cassandane's output
+describing what's about to happen.  They're not required, but they make a
+failing test far easier to follow, so use them liberally.
+
+The test then sets ``$user`` to the default user.  Most tests only need one
+user, and so can use the default user instead of creating one.  It calls
 ``$user->jmap`` to get a JMAP client for the user.  Although the client is a
 Cassandane::JMAPTester, you'll find most of the relevant documentation in
 `JMAP::Tester <https://metacpan.org/pod/JMAP::Tester>`__, its parent class.
@@ -601,13 +167,11 @@ sentence_named
 single_sentence
     This method asserts that the response has exactly one sentence in it.  If a
     sentence name is passed as an argument to this method, it also asserts that
-    the sentence has that name.  If both assertions are true, the sentence in
+    the sentence has that name.  If both assertions are true, the sentence is
     returned.
 
 Every sentence has methods for accessing the first, second, and third items in
 the array it represents:  name, arguments, and client_id.
-
-We'll see much of this used in this test, soon!
 
 From lines 8 through 15, the test is creating test data.  To make it easy to
 make test data (for example, to hide the creation of boring mandatory
@@ -635,3 +199,155 @@ ContactCard/query response.
 
 The rest of the test is more of the same.
 
+Assertions
+^^^^^^^^^^
+
+A test passes unless it dies or an assertion fails, so assertions are how you
+state what "correct" means.  The ones you'll reach for most often come from
+Test::Unit:
+
+``assert($bool)``, ``assert_str_equals($expect, $got)``,
+``assert_num_equals($expect, $got)``, ``assert_null`` / ``assert_not_null``,
+and ``assert_matches($regex, $string)`` for scalars; and
+``assert_deep_equals($expect, $got)`` for nested data structures.
+
+Cassandane adds more in ``Cassandane::Unit::TestCase``.  The most generally
+useful is ``assert_cmp_deeply``, which compares against `Test::Deep
+<https://metacpan.org/pod/Test::Deep>`__ matchers — ``bag`` (order-insensitive
+lists, as in the example above), ``superhashof`` (partial hashes), and so on —
+when an exact ``assert_deep_equals`` would be too strict.  There are also
+domain-specific assertions such as ``assert_mailbox_structure`` and
+``assert_syslog_matches``.
+
+Run ``perldoc Cassandane/Unit/TestCase.pm`` for the Cassandane assertions, and
+see the Test::Unit and Test::Deep documentation for the rest.
+
+Test attributes
+---------------
+
+A test subroutine can carry *attributes*, written between its name and its
+signature, that tell the test planner how and whether to run it.  These apply
+to suites inheriting from ``Cassandane::Cyrus::TestCase`` (which is almost all
+of them); suites inheriting directly from ``Cassandane::Unit::TestCase`` ignore
+them, but you shouldn't be inheriting from that unless you're testing
+Cassandane itself.
+
+The ones you'll meet first are the ``:needs_*`` family, which skip a test
+unless Cyrus was built with some capability:
+
+* ``:needs_component_NAME`` — a Cyrus component (e.g. ``httpd``) is enabled.
+* ``:needs_dependency_NAME`` — a compiled-in library (e.g. ``icalvcard``) is
+  present.
+
+Next are the version guards, which skip a test outside a range of Cyrus
+versions:
+
+* ``:min_version_x_y_z``
+* ``:max_version_x_y_z``
+
+…where ``y`` and ``z`` are optional.  These used to be required on any test for
+a new feature, and you'll still see them on a great many older tests, but they
+now matter only when a newer Cassandane runs against an *older or external*
+Cyrus — a replication test against a stable-branch server, say.  A test runs
+against the Cyrus in its own branch by default, so a new feature usually needs
+no guard at all.  When you do want one, a feature new in 3.0 is guarded with:
+
+.. code:: perl
+
+    sub test_my_new_feature
+        :min_version_3_0
+    {
+         # [...]
+    }
+
+and a feature that survives only on a stable branch with:
+
+.. code:: perl
+
+    sub test_my_obsolete_feature
+        :max_version_2_5
+    {
+        # [...]
+    }
+
+There is also a family of ``:want_*`` "magic" attributes that switch on
+services or features (replication, and so on) before the test runs.  For the
+full, current set of magic and ``:needs_*`` categories, read
+``Cassandane/Cyrus/TestCase.pm`` — this is exactly the kind of list that rots
+in prose, so the source is the reference.
+
+If you need to branch on the Cyrus version *inside* a test (or inside
+infrastructure) rather than skip the whole thing, ``Cassandane::Instance``
+offers ``get_version()``, which can detect versions as far back as 2.5.0:
+
+.. code:: perl
+
+    my ($major, $minor, $revision, $extra) = Cassandane::Instance->get_version()
+
+The skip handling itself lives in ``Cassandane::Test::Skip``.
+
+The object model
+----------------
+
+You can write a great many tests knowing only ``default_user`` and its
+factories, as above.  When you need more — a non-default configuration, several
+users, or a protocol other than JMAP — these are the objects underneath.  This
+is a conceptual map; for method-level detail, ``perldoc`` the modules named
+here.
+
+Cassandane::Instance
+    A running Cyrus: its own directory tree, config, ``master`` process, and
+    services such as ``imapd``.  A test's ``set_up`` normally builds one, starts
+    it, and tears it down afterward, so most tests never touch it directly.
+    An Instance also mints users — ``create_user('name')`` sets a user up on
+    disk, ``create_user_without_setup('name')`` just makes the object — and
+    ``default_user`` returns the standard user (usually ``cassandane``).  A
+    service on the Instance can hand you a message store, and from that a
+    protocol client (for imapd, a `Mail::IMAPTalk
+    <https://metacpan.org/pod/Mail::IMAPTalk>`__).
+
+Cassandane::TestUser
+    A single Cyrus user, and your usual entry point.  It vends protocol
+    clients — ``jmap`` and ``jmap_ws`` (cached) or ``new_jmap`` / ``new_jmap_ws``
+    (fresh, and able to select capabilities), ``caldav`` and ``carddav``, and
+    ``imap`` — and the test-data factories (``emails``, ``mailboxes``,
+    ``contacts``, ``addressbooks``, …) used in the example above.
+
+Cassandane::Config
+    An ``imapd.conf`` in object form, used to start an Instance with particular
+    options.  There's a shared default you should never mutate; instead clone it
+    and ``set`` what you need:
+
+    .. code:: perl
+
+        my $config = Cassandane::Config->default()->clone();
+        $config->set(conversations => 'on');
+        my $instance = Cassandane::Instance->new(config => $config);
+
+    Cloning is copy-on-write and ``get`` walks back up the ancestry, so a clone
+    sees its parent's values until it overrides them.
+
+Two more classes come up once you're generating or inspecting mail directly
+rather than through the factories: ``Cassandane::Message`` (an RFC822 message
+plus non-RFC822 attributes, as returned by a message store or the generator)
+and ``Cassandane::Generator`` (which produces plausible random messages).  Both
+are best read about at the source: ``perldoc Cassandane/Message.pm`` and
+``perldoc Cassandane/Generator.pm``.
+
+Module reference
+----------------
+
+Some Cassandane modules are documented in their source using Perl's Pod system.
+The pages below are rendered from that Pod when the docs are built.  (You can
+read the same text offline with ``perldoc``.)
+
+.. include:: cassandane-api/summary.inc
+
+.. The pages themselves are listed above; this hidden toctree is what actually
+   puts them in the navigation tree.
+
+.. toctree::
+    :glob:
+    :hidden:
+
+    cassandane-api/*

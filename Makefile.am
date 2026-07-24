@@ -1955,6 +1955,33 @@ docsrc/reference/manpages/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/perl2rst sieveshell < $< > $@.NEW && mv $@.NEW $@
 
+# Render the Pod of every Cassandane module that carries any into reST, one
+# page per module, so it joins the doc site.  The pages are build artifacts,
+# gitignored like the other perl2rst output.  We build the ridiculous xref file
+# so that when we render the Pod into reST, we can know which L<...> sequences
+# should link internally, and which should go to metacpan.
+docsrc/developer/cassandane-api/.stamp: $(top_srcdir)/tools/perl2rst
+	@$(RM) -r $(@D)
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)pms=`cd $(top_srcdir) && grep -rl '^=head' cassandane/Cassandane --include='*.pm' | sort`; \
+	: > $(@D)/.xref; \
+	: > $(@D)/summary.inc; \
+	for pm in $$pms; do \
+	    mod=`echo "$$pm" | sed -e 's|^cassandane/||' -e 's|\.pm$$||' -e 's|/|::|g'`; \
+	    out=`echo "$$mod" | sed -e 's|::|-|g'`; \
+	    printf '%s\t/developer/cassandane-api/%s\n' "$$mod" "$$out" >> $(@D)/.xref; \
+	done; \
+	for pm in $$pms; do \
+	    mod=`echo "$$pm" | sed -e 's|^cassandane/||' -e 's|\.pm$$||' -e 's|/|::|g'`; \
+	    out=`echo "$$mod" | sed -e 's|::|-|g'`; \
+	    PERL2RST_NAMESPACE=Cassandane PERL2RST_XREF_FILE=$(@D)/.xref \
+	        PERL2RST_SUMMARY_FILE=$(@D)/summary.inc \
+	        $(PERL) $(top_srcdir)/tools/perl2rst "$$mod" \
+	        < $(top_srcdir)/$$pm > $(@D)/$$out.rst.NEW \
+	        && mv $(@D)/$$out.rst.NEW $(@D)/$$out.rst; \
+	done
+	@touch $@
+
 %.1: man/.sphinx-build.stamp
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)touch $@
@@ -1988,7 +2015,7 @@ SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
 ## that we have a single "source directory" for sphinx-build to use.
-docsrc/.sphinx-build.stamp: docsrc/reference/manpages/configs/imapd.conf.rst docsrc/reference/manpages/usercommands/cyradm.rst docsrc/reference/manpages/usercommands/sieveshell.rst
+docsrc/.sphinx-build.stamp: docsrc/reference/manpages/configs/imapd.conf.rst docsrc/reference/manpages/usercommands/cyradm.rst docsrc/reference/manpages/usercommands/sieveshell.rst docsrc/developer/cassandane-api/.stamp
 	$(AM_V_GEN)test x"$(top_srcdir)" = x"$(top_builddir)" || \
         (cd $(top_srcdir) && tar cf - --mode=gu+w docsrc doc/examples) | tar xf -
 	@touch $@

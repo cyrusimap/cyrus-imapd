@@ -26,7 +26,7 @@ ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(S
 # the i18n builder cannot share the environment and doctrees with the others
 I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(SOURCEDIR)
 
-.PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext doxygen
+.PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext doxygen cassandane-api
 
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
@@ -56,13 +56,41 @@ help:
 clean:
 	rm -rf $(BUILDDIR)/*
 	rm -rf _doxygen
+	rm -rf $(SOURCEDIR)/developer/cassandane-api
 
 doxygen:
 	@echo "Running Doxygen to generate XML for Breathe..."
 	cd .. && doxygen Doxyfile
 	@echo "Doxygen XML generated in _doxygen/xml/"
 
-init: doxygen ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
+# Render the Pod of every Cassandane module any into reST, one page per module,
+# so it joins the doc site.  The pages are build artifacts, gitignored like the
+# other perl2rst output.  We build the ridiculous xref file so that when we
+# render the Pod into reST, we can know which L<...> sequences should link
+# internally, and which should go to metacpan.
+cassandane-api:
+	@echo "Rendering Cassandane module Pod into developer/cassandane-api/"
+	@rm -rf $(SOURCEDIR)/developer/cassandane-api
+	@mkdir -p $(SOURCEDIR)/developer/cassandane-api
+	@dir=$(SOURCEDIR)/developer/cassandane-api; \
+	pms=`grep -rl '^=head' ../cassandane/Cassandane --include='*.pm' | sort`; \
+	: > $$dir/.xref; \
+	: > $$dir/summary.inc; \
+	for pm in $$pms; do \
+	    mod=`echo "$$pm" | sed -e 's|.*/cassandane/||' -e 's|\.pm$$||' -e 's|/|::|g'`; \
+	    out=`echo "$$mod" | sed -e 's|::|-|g'`; \
+	    printf '%s\t/developer/cassandane-api/%s\n' "$$mod" "$$out" >> $$dir/.xref; \
+	done; \
+	for pm in $$pms; do \
+	    mod=`echo "$$pm" | sed -e 's|.*/cassandane/||' -e 's|\.pm$$||' -e 's|/|::|g'`; \
+	    out=`echo "$$mod" | sed -e 's|::|-|g'`; \
+	    echo "  $$mod"; \
+	    PERL2RST_NAMESPACE=Cassandane PERL2RST_XREF_FILE=$$dir/.xref \
+	        PERL2RST_SUMMARY_FILE=$$dir/summary.inc \
+	        $(PERL2RST) "$$mod" < "$$pm" > $$dir/$$out.rst; \
+	done
+
+init: doxygen cassandane-api ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
 	@echo "Creating reference/manpages/usercommands/cyradm.rst"
 	$(PERL2RST) cyradm < ../perl/imap/IMAP/Shell.pm > $(SOURCEDIR)/reference/manpages/usercommands/cyradm.rst
 	@echo "Creating reference/manpages/usercommands/sieveshell.rst"

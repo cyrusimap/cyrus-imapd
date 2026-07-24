@@ -2,9 +2,167 @@
 # SPDX-License-Identifier: BSD-3-Clause-CMU
 # See COPYING file at the root of the distribution for more details.
 
+=head1 NAME
+
+testrunner.pl - run the Cassandane integration test suite
+
+=head1 SYNOPSIS
+
+    ./testrunner.pl [options] [testname...]
+
+    ./testrunner.pl                     # run everything, 'prettier' output
+    ./testrunner.pl Quota               # run the whole Quota suite
+    ./testrunner.pl Quota.quotarename   # run one test
+    ./testrunner.pl Admin Quota         # run several suites
+    ./testrunner.pl ~Quota              # run everything *except* Quota
+    ./testrunner.pl -l                  # list matching suites, don't run them
+
+=head1 DESCRIPTION
+
+This is the low-level runner for the Cassandane test suite.  If you just want
+to run the tests, you almost certainly want C<cyd test> (inside the container)
+or C<dar test> (from the host), which builds Cyrus, provisions a
+F<cassandane.ini>, and drops to the C<cyrus> user before handing off to this
+script.  Reach for C<testrunner.pl> directly only when you need something
+C<cyd test> doesn't expose, or when you're debugging the runner itself.  In
+other words: by the time you're typing C<./testrunner.pl>, you've opted into
+hard mode.
+
+A few things worth knowing before you do:
+
+=over 4
+
+=item *
+
+Cassandane runs out of its own directory; nothing gets installed.  Run this
+script with the F<cassandane/> directory as your working directory.
+
+=item *
+
+The Cyrus code under test must run as the superuser or as the C<cyrus> user.
+You invoke C<testrunner.pl> as yourself; if you're root it steps down to
+C<cyrus>, and otherwise it re-invokes itself under C<sudo>.
+
+=item *
+
+All runtime state lives under the C<rootdir> from F<cassandane.ini> (by
+default F</var/tmp/cass>).  A list of the tests that failed is left in
+F<$rootdir/failed> (this is what C<--rerun> reads), and C<-f prettier> writes
+full error reports for failed tests under F<$rootdir/reports>.
+
+=item *
+
+Before running anything, the script checks that Cassandane's own helper
+binaries (listed in F<utils/Makefile>) have been built, and bails out telling
+you to run C<make> if they haven't.
+
+=back
+
+=head1 SELECTING TESTS
+
+With no test names, every test is run.  Otherwise, name what you want:
+
+=over 4
+
+=item *
+
+a whole suite by its name without the leading C<Cassandane::Cyrus::>, e.g.
+C<Quota>;
+
+=item *
+
+a single test as C<Suite.test>, e.g. C<Quota.quotarename>.
+
+=back
+
+Names accumulate left to right, and any name may be negated by prefixing it
+with C<!> or C<~>.  (Your shell probably wants C<!> escaped, so C<~> is usually
+easier.)  So C<Quota ~Quota.quotarename> runs the whole Quota suite except
+C<quotarename>, and C<~Quota> runs everything but the Quota suite.
+
+For convenience, a single argument may contain several whitespace-separated
+names.
+
+=head1 OPTIONS
+
+Run C<./testrunner.pl --help> for the authoritative, self-documenting list.
+The options most worth knowing about:
+
+=over 4
+
+=item B<-f>, B<--format> I<FORMAT>
+
+Choose a test report format; repeatable.  The formats are:
+
+=over 4
+
+=item C<prettier> (the default)
+
+One line per test with its status, quiet about the details of failures.  Best
+for running many tests: see F<$rootdir/failed> and F<$rootdir/reports>
+afterward for the gory details.
+
+=item C<pretty>
+
+Like C<prettier>, but dumps each failure's error report inline.  Noisy in bulk;
+handy when debugging a single test, especially with C<-vvv>.
+
+=item C<tap>
+
+Test Anything Protocol.  Rudimentary, but should be valid TAP.
+
+=item C<xml>
+
+jUnit-style XML, written to a F<reports/> subdirectory of the current
+directory.  (Not the same F<reports> as C<prettier> uses.)  Useful for some CI
+systems; our GitHub CI doesn't use it.
+
+=back
+
+=item B<-v>, B<--verbose>
+
+Make Cassandane and several of the Cyrus programs it runs much noisier on
+stderr.  Repeatable, and the short form stacks: C<-vvv>.
+
+=item B<--valgrind>
+
+Run every Cyrus executable under Valgrind.  Much slower, but it catches a lot
+of subtle bugs.  Per-test logs land in F<$rootdir/$instance/vglogs/>, and any
+error Valgrind reports (leaks included) fails the test.
+
+=item B<-c>, B<--cleanup>[=I<yes|no|pre|post>]
+
+Clean up C<$rootdir> leftovers before the run and after each passing test.
+Useful when disk (e.g. a tmpfs) is tight.  Bare C<--cleanup> means C<yes>.  If
+you want this most of the time, set C<cassandane.cleanup> in F<cassandane.ini>
+and use C<--no-cleanup> to override it.
+
+=item B<-j>, B<--jobs> I<N>
+
+Run I<N> test workers in parallel.
+
+=item B<--slow>, B<--slow-only>
+
+Also run (or run only) the tests marked slow, which are skipped by default.
+
+=item B<--rerun>, B<--rerun-suite>
+
+Rerun just the tests that failed last time (read from F<$rootdir/failed>).
+C<--rerun-suite> reruns the whole suite of each such test.
+
+=item B<-l>, B<--list>
+
+List the matching tests instead of running them.  Repeat (C<-ll>) to list
+individual tests rather than just suites.
+
+=back
+
+=cut
+
 use strict;
 use warnings;
 use File::Slurp;
+use Getopt::Long::Descriptive;
 use List::Util qw(uniq);
 
 use lib '.';
@@ -24,15 +182,8 @@ $Data::Dumper::Indent = 1;
 $Data::Dumper::Sortkeys = 1;
 $Data::Dumper::Trailingcomma = 1;
 
-my %want_formats = ();
 my %format_params = ();
 my $output_dir = 'reports';
-my $do_list = 0;
-# The default really should be --no-keep-going like make
-my $keep_going = 1;
-my $skip_slow = 1;
-my $slow_only = 0;
-my $log_directory;
 my @names;
 
 # Make sure our binary components have been built already
@@ -158,129 +309,97 @@ if ($@) {
     };
 }
 
-sub usage
-{
-    printf STDERR "Usage: testrunner.pl [options] -f <xml|tap|pretty|prettier> [testname...]\n";
-    exit(1);
+my ($opt, $usage) = describe_options(
+    "%c %o [testname...]",
+
+    [ 'format|f=s@',   "test report format, repeatable: xml, tap, pretty, or"
+                     . " prettier (default: prettier)" ],
+    [ 'list|l+',       "list matching tests instead of running them; repeat"
+                     . " (-ll) to list individual tests, not just suites" ],
+    [],
+    [ 'jobs|j=i',      "run this many test workers in parallel" ],
+    # The default really should be --no-keep-going like make
+    [ 'keep-going|k!', "keep going after a test fails (default: yes)",
+                       { default => 1 } ],
+    [ 'stop|S',        "stop at the first failing test; same as --no-keep-going" ],
+    [],
+    [ 'slow',          "also run the tests marked slow" ],
+    [ 'slow-only',     "run *only* the tests marked slow" ],
+    [ 'rerun',         "rerun only the tests that failed on the previous run" ],
+    [ 'rerun-suite',   "like --rerun, but rerun the whole suite of each failure" ],
+    [],
+    [ 'valgrind!',     "run every Cyrus executable under Valgrind (slow, thorough)" ],
+    [ 'cleanup|c:s',   "clean up leftovers before the run and after each passing"
+                     . " test: yes|no|pre|post (bare --cleanup means yes)" ],
+    [ 'no-cleanup',    "never clean up leftovers (overrides --cleanup)" ],
+    [],
+    [ 'verbose|v+',    "make Cassandane and Cyrus much noisier; repeat (-vvv)"
+                     . " for more (default: 0)", { default => 0 } ],
+    [ 'no-ok',         "report only failures and errors, omitting passing tests" ],
+    [ 'log-directory|L=s', "collect per-test logs under this directory" ],
+    [ 'config=s',      "use this Cassandane config file instead of the default" ],
+    [ 'define|D=s%',   "override one Cassandane config value: -Dsection.param=value" ],
+    [],
+    [ 'help|h',        "print this help message and exit" ],
+);
+
+sub usage {
+    print STDERR $usage->text;
+    exit 1;
 }
 
-my $cassini_filename;
+if ($opt->help) {
+    print $usage->text;
+    exit 0;
+}
+
+my $cassini_filename = $opt->config;
 my @cassini_overrides;
-my $want_rerun;
 
-while (defined(my $a = shift))
-{
-    if ($a eq '--config')
-    {
-        $cassini_filename = shift;
-    }
-    elsif ($a eq '-c' || $a =~ m/^--cleanup(?:=(\w*))?$/)
-    {
-        my $v = $1 // 'yes';
-        usage if not grep { $v eq $_ } qw(yes no pre post);
-        push(@cassini_overrides, ['cassandane', 'cleanup', $v]);
-    }
-    elsif ($a eq '--no-cleanup')
-    {
-        push(@cassini_overrides, ['cassandane', 'cleanup', 'no']);
-    }
-    elsif ($a eq '-f')
-    {
-        my $format = shift;
-        usage unless defined $formatters{$format};
-        $want_formats{$format} = 1;
-    }
-    elsif ($a =~ m/^-f(\w+)$/)
-    {
-        my $format = $1;
-        usage unless defined $formatters{$format};
-        $want_formats{$format} = 1;
-    }
-    elsif ($a eq '-v' || $a eq '--verbose')
-    {
-        set_verbose(get_verbose()+1);
-    }
-    elsif ($a =~ m/^-v+$/)
-    {
-        # ganged verbosity
-        set_verbose(get_verbose() + length($a) - 1);
-    }
-    elsif ($a eq '--valgrind')
-    {
-        push(@cassini_overrides, ['valgrind', 'enabled', 'yes']);
-    }
-    elsif ($a eq '--no-valgrind')
-    {
-        push(@cassini_overrides, ['valgrind', 'enabled', 'no']);
-    }
-    elsif ($a eq '-j' || $a eq '--jobs')
-    {
-        my $jobs = 0 + shift;
-        usage unless $jobs > 0;
-        push(@cassini_overrides, ['cassandane', 'maxworkers', $jobs]);
-    }
-    elsif ($a =~ m/^-j(\d+)$/)
-    {
-        my $jobs = 0 + $1;
-        usage unless $jobs > 0;
-        push(@cassini_overrides, ['cassandane', 'maxworkers', $jobs]);
-    }
-    elsif ($a eq '-L' || $a eq '--log-directory')
-    {
-        $log_directory = shift;
-        usage unless defined $log_directory;
-    }
-    elsif ($a eq '-l' || $a eq '--list')
-    {
-        $do_list++;
-    }
-    elsif ($a eq '-k' || $a eq '--keep-going')
-    {
-        # These option names stolen from GNU make
-        $keep_going = 1;
-    }
-    elsif ($a eq '-S' || $a eq '--stop' || $a eq '--no-keep-going')
-    {
-        # These option names stolen from GNU make
-        $keep_going = 0;
-    }
-    elsif ($a =~ m/^-D.*=/)
-    {
-        my ($sec, $param, $val) = ($a =~ m/^-D([^.=]+)\.([^.=]+)=(.*)$/);
-        push(@cassini_overrides, [$sec, $param, $val]);
-    }
-    elsif ($a eq '--slow')
-    {
-        $skip_slow = 0;
-    }
-    elsif ($a eq '--slow-only')
-    {
-        $skip_slow = 0;
-        $slow_only = 1;
-    }
-    elsif ($a eq '--rerun')
-    {
-        $want_rerun = 1;
-    }
-    elsif ($a eq '--rerun-suite')
-    {
-        $want_rerun = 2;
-    }
-    elsif ($a eq '--no-ok')
-    {
-        # suppress success reports in formatters that support that
-        # (i.e. only report errors and failures)
-        $format_params{no_ok} = 1;
-    }
-    elsif ($a =~ m/^-/)
-    {
-        usage;
-    }
-    else
-    {
-        push(@names, split(/\s+/, $a));
+my %want_formats;
+for my $format (@{ $opt->format // [] }) {
+    usage() unless defined $formatters{$format};
+    $want_formats{$format} = 1;
+}
+
+set_verbose(get_verbose() + $opt->verbose);
+
+$format_params{no_ok} = 1 if $opt->no_ok;
+
+my $do_list       = $opt->list // 0;
+my $keep_going    = $opt->stop ? 0 : $opt->keep_going;
+my $skip_slow     = ($opt->slow || $opt->slow_only) ? 0 : 1;
+my $slow_only     = $opt->slow_only ? 1 : 0;
+my $log_directory = $opt->log_directory;
+my $want_rerun    = $opt->rerun_suite ? 2 : $opt->rerun ? 1 : 0;
+
+if (defined $opt->jobs) {
+    usage() unless $opt->jobs > 0;
+    push @cassini_overrides, ['cassandane', 'maxworkers', $opt->jobs];
+}
+
+if (defined $opt->valgrind) {
+    push @cassini_overrides,
+        ['valgrind', 'enabled', $opt->valgrind ? 'yes' : 'no'];
+}
+
+push @cassini_overrides, ['cassandane', 'cleanup', 'no'] if $opt->no_cleanup;
+
+if (defined $opt->cleanup) {
+    my $v = $opt->cleanup eq '' ? 'yes' : $opt->cleanup;
+    usage() unless grep { $v eq $_ } qw(yes no pre post);
+    push @cassini_overrides, ['cassandane', 'cleanup', $v];
+}
+
+if (my $overrides = $opt->define) {
+    for my $key (sort keys %$overrides) {
+        my ($sec, $param) = split /\./, $key, 2;
+        usage() unless length($sec // '') && length($param // '');
+        push @cassini_overrides, [$sec, $param, $overrides->{$key}];
     }
 }
+
+push @names, map { split /\s+/, $_ } @ARGV;
 
 my $cassini = Cassandane::Cassini->new(filename => $cassini_filename);
 map { $cassini->override(@$_); } @cassini_overrides;
