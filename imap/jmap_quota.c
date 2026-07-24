@@ -15,8 +15,8 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 #include "imap/jmap_err.h"
-#include "imap/jmap_quota_props.h"
-#include "imap/jmap_quota_legacy_props.h"
+#include "imap/jmap_props/quota.h"
+#include "imap/jmap_props/quota_legacy.h"
 
 
 static int jmap_legacy_quota_get(jmap_req_t *req);

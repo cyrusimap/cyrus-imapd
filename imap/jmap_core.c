@@ -15,7 +15,7 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 #include "imap/jmap_err.h"
-#include "imap/jmap_core_usercounters_props.h"
+#include "imap/jmap_props/usercounters.h"
 
 
 /* JMAP Core API Methods */

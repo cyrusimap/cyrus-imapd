@@ -1,5 +1,5 @@
 %{
-/* jmap_blob_props.c -- Lookup function for JMAP Blob properties */
+/* blob.c -- Lookup function for JMAP Blob properties */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

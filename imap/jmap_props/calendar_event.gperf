@@ -1,6 +1,5 @@
 %{
-/* jmap_calendar_event_props.c --
-   Lookup function for JMAP CalendarEvent properties */
+/* calendar_event.c -- Lookup function for JMAP CalendarEvent properties */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

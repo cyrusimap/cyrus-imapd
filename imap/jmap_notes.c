@@ -29,7 +29,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
-#include "imap/jmap_notes_props.h"
+#include "imap/jmap_props/notes.h"
 
 #define APPLE_NOTES_ID  "com.apple.mail-note"
 
