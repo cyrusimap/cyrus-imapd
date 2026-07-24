@@ -25,6 +25,8 @@
 #include "json_support.h"
 #include "libconfig.h"
 #include "mboxevent.h"
+#include "auditlog.h"
+#include "prometheus.h"
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "msgrecord.h"
@@ -467,6 +469,10 @@ static int send_alarm(struct get_alarm_rock *rock,
     return 0;
 }
 
+/* bump the prometheus delay counter for the given alarm type
+ * (defined later in this file; forward-declared for use in process_alarm_cb) */
+static void bump_send_delay_metric(uint32_t type, time_t delay);
+
 static int process_alarm_cb(icalcomponent *comp,
                             icaltimetype start, icaltimetype end,
                             icaltimetype recurid,
@@ -605,7 +611,24 @@ static int process_alarm_cb(icalcomponent *comp,
                        data->mboxname, data->imap_uid,
                        icaltime_as_ical_string(start), alarmno,
                        summary);
-                send_alarm(data, comp, alarm, start, end, recurid, is_standalone, alarmtime);
+                int sr = send_alarm(data, comp, alarm, start, end,
+                                    recurid, is_standalone, alarmtime);
+                if (!sr) {
+                    /* outcome "sent" reflects successful dispatch to the
+                     * notification subsystem; send_alarm() can't report
+                     * downstream delivery failure */
+                    struct auditlog_send as = {
+                        .action = "calalarmd.send.imip",
+                        .outcome = "sent",
+                        .userid = data->userid,
+                        .scheduled = check,
+                        .sent = data->now,
+                        .subject = summary,
+                        .caluid = icalcomponent_get_uid(comp),
+                    };
+                    auditlog_send(&as);
+                    bump_send_delay_metric(ALARM_CALENDAR, data->now - check);
+                }
             }
         }
 
@@ -1687,6 +1710,57 @@ static int update_unscheduled(const char *mboxname, time_t nextcheck)
     return -1;
 }
 
+#endif /* WITH_JMAP */
+
+/* map a send delay (in seconds) to a bucket band: 0=ontime 1=late 2=slow 3=verylate */
+static int send_delay_band(time_t delay)
+{
+    if (delay <= 10)   return 0;
+    if (delay <= 60)   return 1;
+    if (delay <= 1800) return 2;
+    return 3;
+}
+
+/* bump the prometheus delay counter for the given alarm type */
+static void bump_send_delay_metric(uint32_t type, time_t delay)
+{
+    int band = send_delay_band(delay < 0 ? 0 : delay);
+
+    switch (type) {
+    case ALARM_SEND: {
+        static const enum prom_metric_id b[] = {
+            CYRUS_CALALARMD_FUTURERELEASE_DELAY_TOTAL_BUCKET_ONTIME,
+            CYRUS_CALALARMD_FUTURERELEASE_DELAY_TOTAL_BUCKET_LATE,
+            CYRUS_CALALARMD_FUTURERELEASE_DELAY_TOTAL_BUCKET_SLOW,
+            CYRUS_CALALARMD_FUTURERELEASE_DELAY_TOTAL_BUCKET_VERYLATE,
+        };
+        prometheus_apply_delta(b[band], 1);
+        break;
+    }
+    case ALARM_SNOOZE: {
+        static const enum prom_metric_id b[] = {
+            CYRUS_CALALARMD_SNOOZE_DELAY_TOTAL_BUCKET_ONTIME,
+            CYRUS_CALALARMD_SNOOZE_DELAY_TOTAL_BUCKET_LATE,
+            CYRUS_CALALARMD_SNOOZE_DELAY_TOTAL_BUCKET_SLOW,
+            CYRUS_CALALARMD_SNOOZE_DELAY_TOTAL_BUCKET_VERYLATE,
+        };
+        prometheus_apply_delta(b[band], 1);
+        break;
+    }
+    case ALARM_CALENDAR: {
+        static const enum prom_metric_id b[] = {
+            CYRUS_CALALARMD_IMIP_DELAY_TOTAL_BUCKET_ONTIME,
+            CYRUS_CALALARMD_IMIP_DELAY_TOTAL_BUCKET_LATE,
+            CYRUS_CALALARMD_IMIP_DELAY_TOTAL_BUCKET_SLOW,
+            CYRUS_CALALARMD_IMIP_DELAY_TOTAL_BUCKET_VERYLATE,
+        };
+        prometheus_apply_delta(b[band], 1);
+        break;
+    }
+    }
+}
+
+#ifdef WITH_JMAP
 static int process_futurerelease(struct caldav_alarm_data *data,
                                  struct mailbox *mailbox,
                                  struct index_record *record,
@@ -1699,6 +1773,9 @@ static int process_futurerelease(struct caldav_alarm_data *data,
     smtpclient_t *sm = NULL;
     int do_move = 0;
     int r = 0;
+    char *userid = NULL;
+    struct buf subjbuf = BUF_INITIALIZER;
+    struct buf msgidbuf = BUF_INITIALIZER;
 
     syslog(LOG_DEBUG, "processing future release for mailbox %s uid %u",
            mailbox_name(mailbox), record->uid);
@@ -1735,6 +1812,22 @@ static int process_futurerelease(struct caldav_alarm_data *data,
     if (JNULL(onSend)) {
         /* Treat onSend:null as non-existent */
         onSend = NULL;
+    }
+
+    /* Gather audit detail (valid whether or not the send succeeds) */
+    userid = mboxname_to_userid(mailbox_name(mailbox));
+    message_get_subject(m, &subjbuf);
+    message_get_messageid(m, &msgidbuf);
+
+    const char *env_from = NULL;
+    const char *env_to = NULL;
+    if (JNOTNULL(envelope)) {
+        env_from = json_string_value(
+            json_object_get(json_object_get(envelope, "mailFrom"), "email"));
+        json_t *rcpts = json_object_get(envelope, "rcptTo");
+        if (json_array_size(rcpts))
+            env_to = json_string_value(
+                json_object_get(json_array_get(rcpts, 0), "email"));
     }
 
     /* Load message */
@@ -1805,7 +1898,6 @@ static int process_futurerelease(struct caldav_alarm_data *data,
 
     const char *destmboxid = NULL;
     json_t *setkeywords = NULL;
-    char *userid = NULL;
 
     if (r) {
         /* Determine if we should retry (again) or cancel the submission.
@@ -1819,6 +1911,24 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         default: cancel = 1; break;
         }
 
+        if (cancel) {
+            struct auditlog_send as = {
+                .action = "calalarmd.send.futurerelease",
+                .outcome = "cancelled",
+                .userid = userid,
+                .scheduled = record->internaldate.tv_sec,
+                .sent = runtime,
+                .msgid = buf_len(&msgidbuf) ? buf_cstring(&msgidbuf) : NULL,
+                .from = env_from,
+                .to = env_to,
+                .subject = buf_len(&subjbuf) ? buf_cstring(&subjbuf) : NULL,
+                .num_rcpts = data->num_rcpts,
+                .num_retries = data->num_retries,
+            };
+            auditlog_send(&as);
+            bump_send_delay_metric(ALARM_SEND, runtime - record->internaldate.tv_sec);
+        }
+
         if (!cancel) {
             /* Retry */
             caldav_alarm_bump_nextcheck(data, runtime + duration, runtime, err);
@@ -1829,7 +1939,6 @@ static int process_futurerelease(struct caldav_alarm_data *data,
             /* Move the scheduled message back into Drafts mailbox.
                Use INBOX as a fallback. */
             do_move = 1;
-            userid = mboxname_to_userid(data->mboxname);
 
             char *destname = mboxlist_find_specialuse("\\Drafts", userid);
             mbentry_t *mbentry = NULL;
@@ -1853,6 +1962,22 @@ static int process_futurerelease(struct caldav_alarm_data *data,
     else {
         /* Mark the email as sent */
         record->system_flags |= FLAG_ANSWERED;
+
+        struct auditlog_send as = {
+            .action = "calalarmd.send.futurerelease",
+            .outcome = "sent",
+            .userid = userid,
+            .scheduled = record->internaldate.tv_sec,
+            .sent = runtime,
+            .msgid = buf_len(&msgidbuf) ? buf_cstring(&msgidbuf) : NULL,
+            .from = env_from,
+            .to = env_to,
+            .subject = buf_len(&subjbuf) ? buf_cstring(&subjbuf) : NULL,
+            .num_rcpts = data->num_rcpts,
+            .num_retries = data->num_retries,
+        };
+        auditlog_send(&as);
+        bump_send_delay_metric(ALARM_SEND, runtime - record->internaldate.tv_sec);
 
         /* Get any onSend instructions */
         if (onSend) {
@@ -1883,8 +2008,6 @@ static int process_futurerelease(struct caldav_alarm_data *data,
 
     if (do_move) {
         /* Move the scheduled message into the specified mailbox */
-        if (!userid) userid = mboxname_to_userid(data->mboxname);
-
         const char *emailid =
             json_string_value(json_object_get(submission, "emailId"));
         struct find_sched_rock frock = { userid, NULL, 0 };
@@ -1926,12 +2049,14 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         mailbox_close(&sched_mbox);
         free(frock.mboxname);
     }
-    free(userid);
 
   done:
+    free(userid);
     if (submission) json_decref(submission);
     if (m) message_unref(&m);
     buf_free(&buf);
+    buf_free(&subjbuf);
+    buf_free(&msgidbuf);
 
     return r;
 }
@@ -1978,6 +2103,20 @@ static int process_snoozed(struct caldav_alarm_data *data,
                mailbox_name(mailbox), record->uid, error_message(r));
         /* try again in 5 minutes */
         caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
+    }
+
+    if (!r) {
+        char *userid = mboxname_to_userid(mailbox_name(mailbox));
+        struct auditlog_send as = {
+            .action = "calalarmd.send.snooze",
+            .outcome = "unsnoozed",
+            .userid = userid,
+            .scheduled = wakeup,
+            .sent = runtime,
+        };
+        auditlog_send(&as);
+        bump_send_delay_metric(ALARM_SNOOZE, runtime - wakeup);
+        free(userid);
     }
 
  done:

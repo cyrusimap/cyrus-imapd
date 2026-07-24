@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_alarm_send_delay_auditlog
+    :min_version_3_13 :needs_component_calalarmd
+    ($self)
+{
+    return if !$self->{instance}->{have_syslog_replacement};
+
+    my $CalDAV = $self->{caldav};
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('UTC');
+    # bump everything forward so a slow run (say: valgrind)
+    # doesn't cause things to magically fire...
+    $now->add(DateTime::Duration->new(seconds => 300));
+
+    # define the event to start in a few seconds, with a DISPLAY alarm
+    # at start, so the alarm trigger time is in the past once calalarmd
+    # is run well after it.
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(seconds => 2));
+    my $startstr = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $uuid = "12345678-1234-1234-1234-123456789abc";
+    my $href = "$CalendarId/$uuid.ics";
+    my $ics = <<"EOF";
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//NONSGML//EN
+BEGIN:VEVENT
+UID:$uuid
+DTSTAMP:${startstr}Z
+DTSTART:${startstr}Z
+DURATION:PT1H
+SUMMARY:delay test event
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:alarm
+TRIGGER:PT0S
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $ics,
+                     'Content-Type' => 'text/calendar');
+
+    # drain syslog so we only see lines from the calalarmd run below
+    $self->{instance}->getsyslog();
+
+    xlog $self, "run calalarmd after the alarm trigger time";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd',
+                                   '-t' => $now->epoch() + 60);
+
+    my @lines = $self->{instance}->getsyslog(
+        qr/auditlog\.calalarmd\.send\.imip/);
+    $self->assert_num_equals(1, scalar @lines);
+
+    # n.b. CaldavAlarm.pm "use POSIX" shadows the assert() method, so
+    # assert_matches (which calls $self->assert) can't be used here;
+    # express the pattern checks via assert_num_equals on a boolean instead.
+    $self->assert_num_equals(1,
+        ($lines[0] =~ /send\.delay=<?\d+>?/) ? 1 : 0,
+        "audit line should have a parseable send.delay: $lines[0]");
+    $self->assert_num_equals(1,
+        ($lines[0] =~ /cal\.uid=/) ? 1 : 0,
+        "audit line should have a cal.uid: $lines[0]");
+}

@@ -27,6 +27,7 @@ sub new
     $config->set(caldav_historical_age => -1);
     $config->set(calendar_minimum_alarm_interval => '61s');
     $config->set(jmap_nonstandard_extensions => 'yes');
+    $config->set(auditlog => 'yes');
 
     my $self = $class->SUPER::new({
         config => $config,

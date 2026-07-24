@@ -151,3 +151,9 @@ metric counter cyrus_http_unbind_total            The total number of HTTP UNBIN
     label cyrus_http_unbind_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive cgi convert
 metric counter cyrus_http_unlock_total            The total number of HTTP UNLOCKs
     label cyrus_http_unlock_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive cgi convert
+metric counter cyrus_calalarmd_futurerelease_delay_total   Delayed-email sends bucketed by scheduled-vs-actual delay
+    label cyrus_calalarmd_futurerelease_delay_total bucket ontime late slow verylate
+metric counter cyrus_calalarmd_snooze_delay_total          Snoozed-email wakeups bucketed by scheduled-vs-actual delay
+    label cyrus_calalarmd_snooze_delay_total bucket ontime late slow verylate
+metric counter cyrus_calalarmd_imip_delay_total            iMIP calendar-alarm sends bucketed by scheduled-vs-actual delay
+    label cyrus_calalarmd_imip_delay_total bucket ontime late slow verylate
