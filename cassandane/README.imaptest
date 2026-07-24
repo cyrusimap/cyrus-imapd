@@ -12,7 +12,7 @@ Then add this block to your cassandane.ini:
 
 [imaptest]
 basedir=/home/brong/src/imaptest/imaptest
-suppress=append-binary fetch-binary-mime fetch-binary-mime-base64 fetch-binary-mime-qp urlauth-binary
+suppress=append-binary fetch-binary-mime fetch-binary-mime-base64 fetch-binary-mime-qp
 
 ---
 

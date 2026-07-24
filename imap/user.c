@@ -35,7 +35,6 @@
 #include "dav_db.h"
 #include "global.h"
 #include "mailbox.h"
-#include "mboxkey.h"
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "proc.h"
@@ -210,7 +209,6 @@ static int user_deletesieve(const char *sieve_path)
 
 static const char *wipe_user_file_suffixes[] = {
     FNAME_SEENSUFFIX,
-    FNAME_MBOXKEYSUFFIX,  /* XXX  what do we do about multiple backends? */
     NULL
 };
 

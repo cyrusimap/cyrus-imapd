@@ -365,37 +365,6 @@ EXPORTED int imapurl_fromURL(struct imapurl *url, const char *s)
                 }
                 step = 4;
             }
-            else if (step >= 2 && step < 5 && !strncasecmp(src, "expire=", 7)) {
-                int n;
-
-                src += 7; /* skip expire= */
-                n = time_from_iso8601(src, &url->urlauth.expire);
-                if (n < 0)
-                    return -1;
-                src += n;
-                step = 5;
-            }
-            else if (step >= 2 && step < 6 && !strncasecmp(src, "urlauth=", 8)) {
-                char *u;
-
-                src += 8; /* skip urlauth= */
-                url->urlauth.access = src;
-                if ((u = strchr(src, ':'))) {
-                    url->urlauth.rump_len = (u - url->freeme);
-
-                    *u++ = '\0'; /* break urlauth at : */
-                    url->urlauth.mech = u;
-                    if ((u = strchr(u, ':'))) {
-                        *u++ = '\0'; /* break urlauth at : */
-                        url->urlauth.token = u;
-                    }
-                    src = u;
-                }
-                else {
-                    url->urlauth.rump_len = strlen(s);
-                }
-                step = 6;
-            }
             else {
                 return -1;
             }
@@ -433,19 +402,6 @@ EXPORTED void imapurl_toURL(struct buf *dst, const struct imapurl *url)
         if (url->start_octet || url->octet_count) {
             buf_printf(dst, "/;PARTIAL=%lu", url->start_octet);
             if (url->octet_count) buf_printf(dst, ".%lu", url->octet_count);
-        }
-    }
-    if (url->urlauth.access) {
-        if (url->urlauth.expire) {
-            buf_appendcstr(dst, ";EXPIRE=");
-            char buf[RFC3339_DATETIME_MAX+1] = { 0 };
-            time_to_iso8601(url->urlauth.expire, buf, RFC3339_DATETIME_MAX, 1);
-            buf_appendcstr(dst, buf);
-        }
-        buf_printf(dst, ";URLAUTH=%s", url->urlauth.access);
-        if (url->urlauth.mech) {
-            buf_printf(dst, ":%s", url->urlauth.mech);
-            if (url->urlauth.token) buf_printf(dst, ":%s", url->urlauth.token);
         }
     }
 }

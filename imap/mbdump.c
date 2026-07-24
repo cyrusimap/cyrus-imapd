@@ -27,7 +27,6 @@
 #include "map.h"
 #include "mappedfile.h"
 #include "mbdump.h"
-#include "mboxkey.h"
 #include "mboxlist.h"
 #include "quota.h"
 #include "retry.h"
@@ -427,7 +426,7 @@ static struct data_file data_files[] = {
     { 0, NULL }
 };
 
-enum { SEEN_DB = 0, SUBS_DB = 1, MBOXKEY_DB = 2, DAV_DB = 3 };
+enum { SEEN_DB = 0, SUBS_DB = 1, DAV_DB = 2 };
 static int NUM_USER_DATA_FILES = 4;
 
 EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
@@ -591,10 +590,6 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
             case SUBS_DB:
                 fname = user_hash_subs(userid);
                 ftag = "SUBS";
-                break;
-            case MBOXKEY_DB:
-                fname = mboxkey_getpath(userid);
-                ftag = "MBOXKEY";
                 break;
             case DAV_DB: {
                 struct buf dav_file = BUF_INITIALIZER;
@@ -799,7 +794,6 @@ EXPORTED int undump_mailbox(const char *mbname,
     char *annotation = NULL;
     struct buf content = BUF_INITIALIZER;
     char *seen_file = NULL;
-    char *mboxkey_file = NULL;
     quota_t old_quota_usage[QUOTA_NUMRESOURCES];
     int res;
     quota_t newquotas[QUOTA_NUMRESOURCES];
@@ -879,7 +873,6 @@ EXPORTED int undump_mailbox(const char *mbname,
         annotation = NULL;
         buf_reset(&content);
         seen_file = NULL;
-        mboxkey_file = NULL;
 
         c = getastring(pin, pout, &file);
         if(c != ' ') {
@@ -1057,10 +1050,6 @@ EXPORTED int undump_mailbox(const char *mbname,
             seen_file = seen_getpath(userid);
 
             snprintf(fnamebuf,sizeof(fnamebuf),"%s.%d",seen_file,getpid());
-        } else if (userid && !strcmp(file.s, "MBOXKEY")) {
-            mboxkey_file = mboxkey_getpath(userid);
-
-            snprintf(fnamebuf,sizeof(fnamebuf),"%s.%d",mboxkey_file,getpid());
         } else if (userid && !strncmp(file.s, "SIEVE", 5)) {
             int isdefault = !strncmp(file.s, "SIEVED", 6);
             char *realname;
@@ -1175,14 +1164,6 @@ EXPORTED int undump_mailbox(const char *mbname,
 
             if (r) goto done;
         }
-        /* we were operating on the seen state, so merge it and cleanup */
-        else if (mboxkey_file) {
-            mboxkey_merge(fnamebuf, mboxkey_file);
-            free(mboxkey_file);
-            mboxkey_file = NULL;
-
-            xunlink(fnamebuf);
-        }
 
         c = prot_getc(pin);
         if (c == ')') break;
@@ -1281,7 +1262,6 @@ EXPORTED int undump_mailbox(const char *mbname,
     free(annotation);
     buf_free(&content);
     free(seen_file);
-    free(mboxkey_file);
     free(userid);
 
     return r;

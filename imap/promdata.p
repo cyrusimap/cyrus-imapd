@@ -43,7 +43,6 @@ metric counter cyrus_imap_getjmapaccess_total           The total number of IMAP
 metric counter cyrus_imap_getmetadata_total             The total number of IMAP GETMETADATAs
 metric counter cyrus_imap_getquota_total                The total number of IMAP GETQUOTAs
 metric counter cyrus_imap_getquotaroot_total            The total number of IMAP GETQUOTAROOTs
-metric counter cyrus_imap_genurlauth_total              The total number of IMAP GENURLAUTHs
 metric counter cyrus_imap_id_total                      The total number of IMAP IDs
 metric counter cyrus_imap_idle_total                    The total number of IMAP IDLEs
 metric counter cyrus_imap_logout_total                  The total number of IMAP LOGOUTs

@@ -91,7 +91,6 @@ sub new
                  specialuse_extra => '\\XChats \\XTemplates \\XNotes',
                  statuscache => 'on',
                  subscription_db => 'flat',
-                 suppress_capabilities => 'URLAUTH URLAUTH=BINARY',
                  tcp_keepalive => 'yes',
                  timeout => '60',
                  unix_group_enable => 'no',

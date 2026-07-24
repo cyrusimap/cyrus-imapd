@@ -22,14 +22,6 @@ struct imapurl {
     /* RFC 2192bis */
     unsigned long start_octet;
     unsigned long octet_count;
-    /* URLAUTH */
-    struct {
-        const char *access;
-        const char *mech;
-        const char *token;
-        time_t expire;
-        size_t rump_len;
-    } urlauth;
 };
 
 /* Convert hex coded UTF-8 URL path to modified UTF-7 IMAP mailbox

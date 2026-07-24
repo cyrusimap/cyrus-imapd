@@ -2,6 +2,10 @@ Name: mboxkey_db
 Type: STRINGLIST
 Allowed-Values: skiplist twom twoskip
 Default-Value: twoskip
-Last-Modified: 3.13.1
+Last-Modified: UNRELEASED
+Deprecated-Since: UNRELEASED
 
 The cyrusdb backend to use for mailbox keys.
+
+Support for the IMAP URLAUTH extension has been deprecated and therefore
+there is no need for a mboxkey DB.
