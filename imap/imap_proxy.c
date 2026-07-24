@@ -1692,6 +1692,9 @@ void prot_print_client_capa(struct protstream *pout, unsigned capa)
     if (capa & CAPA_UTF8_ACCEPT) {
         prot_puts(pout, " UTF8=ACCEPT");
     }
+    if (capa & CAPA_OBJECTIDPLUS) {
+        prot_puts(pout, " OBJECTID+");
+    }
 }
 
 void proxy_enable(struct backend *s, unsigned capa)

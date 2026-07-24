@@ -107,6 +107,7 @@ enum {
     FETCH_MAILBOXES =           (1<<27),
     FETCH_PREVIEW =             (1<<28),
     FETCH_LASTUPDATED =         (1<<29),
+    FETCH_OBJECTID =            (1<<30), /* draft-ietf-mailmaint-imap-objectid-bis */
 
     /* XXX fetchitems is an int, we're running low on bits */
 };
@@ -245,6 +246,7 @@ enum {
     STATUS_MAILBOXID =          (1<<8),  /* RFC 8474 */
     STATUS_DELETED =            (1<<9),  /* RFC 9051 */
     STATUS_DELETED_STORAGE =    (1<<10), /* RFC 9208 */
+    STATUS_OBJECTID =           (1<<11), /* draft-ietf-mailmaint-imap-objectid-bis */
 
     /* Non-standard */
     STATUS_UNIQUEID =           (1<<13),
@@ -254,7 +256,7 @@ enum {
 };
 
 #define STATUS_MBENTRYITEMS (STATUS_UNIQUEID|STATUS_UIDVALIDITY)
-#define STATUS_INDEXITEMS (STATUS_MESSAGES|STATUS_UIDNEXT|STATUS_SIZE|STATUS_HIGHESTMODSEQ|STATUS_CREATEDMODSEQ|STATUS_MBOPTIONS|STATUS_DELETED|STATUS_DELETED_STORAGE|STATUS_MAILBOXID)
+#define STATUS_INDEXITEMS (STATUS_MESSAGES|STATUS_UIDNEXT|STATUS_SIZE|STATUS_HIGHESTMODSEQ|STATUS_CREATEDMODSEQ|STATUS_MBOPTIONS|STATUS_DELETED|STATUS_DELETED_STORAGE|STATUS_MAILBOXID|STATUS_OBJECTID)
 #define STATUS_SEENITEMS (STATUS_RECENT|STATUS_UNSEEN)
 
 struct getmetadata_options {
@@ -353,6 +355,7 @@ enum {
     CAPA_IMAP4REV2 =    (1<<2),  /* RFC 9051 */
     CAPA_UIDONLY =      (1<<3),  /* RFC 9586 */
     CAPA_UTF8_ACCEPT =  (1<<4),  /* RFC 6855 */
+    CAPA_OBJECTIDPLUS = (1<<5),  /* draft-ietf-mailmaint-imap-objectid-bis */
 };
 
 /* Bitmask for urlfetch params (RFC 5524) */
