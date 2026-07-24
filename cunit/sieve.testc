@@ -620,7 +620,7 @@ static void context_setup(sieve_test_context_t *ctx,
 
     r = sieve_generate_bytecode(&bytecode, scr);
     CU_ASSERT(r > 0);
-    fd = cunit_tmpfile(tempfile, sizeof(tempfile), "sievetest-BC-XXXXXX");
+    fd = cunit_tmpfile(tempfile, sizeof(tempfile), "sieve.testc-bytecode-XXXXXX");
     CU_ASSERT(fd >= 0);
     r = sieve_emit_bytecode(fd, bytecode);
     CU_ASSERT(r > 0);
@@ -723,7 +723,7 @@ static sieve_test_message_t *sieve_test_message_new(const char *text, int len)
     msg->length = len;
     msg->headers = spool_new_hdrcache();
 
-    fd = cunit_tmpfile(tempfile, sizeof(tempfile), "sievetest-MS-XXXXXX");
+    fd = cunit_tmpfile(tempfile, sizeof(tempfile), "sieve.testc-msg-XXXXXX");
     CU_ASSERT(fd >= 0);
     msg->filename = xstrdup(tempfile);
     r = retry_write(fd, text, len);

@@ -8,7 +8,7 @@
 
 #define PROLOG \
     char _fname[PATH_MAX] = {0}; \
-    int _fd = cunit_tmpfile(_fname, sizeof(_fname), "cyrus-protXXXXXX");
+    int _fd = cunit_tmpfile(_fname, sizeof(_fname), "prot.testc-XXXXXX");
 
 #define BEGIN \
     { \

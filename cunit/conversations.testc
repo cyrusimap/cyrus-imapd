@@ -1192,7 +1192,7 @@ static void test_dump(void)
 #define N_CID_TO_FOLDER 333
     struct stat sb;
 
-    fd = cunit_tmpfile(filename, sizeof(filename), "cyrus-conv.datXXXXXX");
+    fd = cunit_tmpfile(filename, sizeof(filename), "conversations.testc-dump-XXXXXX");
     CU_ASSERT_FATAL(fd >= 0);
     fp = fdopen(fd, "r+");
     CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
