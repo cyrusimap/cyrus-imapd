@@ -48,9 +48,9 @@ reduce IMAP SEARCH times on a mailbox.
 
 **mode** is one of indexer, search, rolling, synclog, compact or audit.
 
-By default, **squatter** creates an index of ALL messages in the
-mailbox, not just those since the last time that it was run.  The
-**-i** option is used to select incremental updates.  Any messages
+By default, **squatter** brings the search index up to date: when it
+completes, ALL messages in the mailbox are indexed.  How existing
+index data is treated depends on the search engine (see **-i**).  Any messages
 appended to the mailbox after **squatter** is run, will NOT be included
 in the index.  To include new messages in the index, **squatter** must
 be run again, or on a regular basis via crontab, an entry in the EVENTS
@@ -173,7 +173,10 @@ Options
 
 .. option:: -i, --incremental
 
-    Incremental updates where indexes already exist.
+    Incremental updates where indexes already exist.  For the *Xapian*
+    engine this is implied unless **-Z** is given.  For the *SQUAT*
+    engine the default is to rebuild each mailbox's index completely,
+    and **-i** selects incremental updates.
 
 .. option:: -N name, --name=name
 
@@ -294,6 +297,9 @@ Options
     Reindex all the messages before compacting.  This mode reads all
     the lists of messages indexed by the listed tiers, and re-indexes
     them into a temporary database before compacting that into place.
+    Reindexing covers only messages already recorded in the index; it
+    does not add messages that were never indexed.  Run **squatter** in
+    index mode to add those.
     Xapian only.
     |v3-new-feature|
 
@@ -309,7 +315,10 @@ Options
     When indexing messages, use the Xapian internal cyrusid rather than
     referencing the ranges of already indexed messages to know if a
     particular message is indexed.  Useful if the ranges get out of
-    sync with the actual messages (e.g. if files on a tier are lost)
+    sync with the actual messages (e.g. if files on a tier are lost).
+    Without **-i**, every message in the mailbox is checked against the
+    index; with **-i**, only messages beyond the last recorded index
+    point are checked.
     Xapian only.
     |master-new-feature|
 

@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+use POSIX qw(WNOHANG);
+
+sub test_squatter_index_default
+    :min_version_3_13 :needs_search_xapian :SearchBatchsize20
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    my $basedir = $self->{instance}->{basedir};
+    my $outfile = "$basedir/audit.tmp";
+
+    xlog "append more messages than search_batchsize (default 20)";
+    foreach my $i (1..25) {
+        $self->make_message("filler $i") || die;
+    }
+
+    xlog "a bare squatter run must complete: when broken it re-selects";
+    xlog "the same batch forever, logging the batching line each pass";
+    my $pid = $self->{instance}->run_command(
+        {cyrus => 1, background => 1}, 'squatter');
+    my $done = 0;
+    my $batchlines = 0;
+    foreach (1..60) {
+        if (waitpid($pid, WNOHANG) == $pid) {
+            $done = 1;
+            last;
+        }
+        # a correct run logs "batching" once; twice means the loop
+        $batchlines += scalar $self->{instance}->getsyslog(qr/batching/);
+        last if $batchlines >= 2;
+        sleep 1;
+    }
+    # kill a looping squatter rather than letting it outlive the test
+    eval { $self->{instance}->stop_command($pid) } if not $done;
+    $self->assert($done);
+
+    $talk->select('INBOX');
+    my $uids = $talk->search('fuzzy', 'subject', 'filler');
+    $self->assert_num_equals(25, scalar @$uids);
+
+    xlog "a second bare run must not add duplicate documents";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $xapdirs = ($self->{instance}->run_mbpath(-u => 'cassandane'))->{xapian};
+    my ($gdocs, $parts) = $self->delve_docs($xapdirs->{t1} . "/xapian");
+    $self->assert_num_equals(25, scalar @$gdocs);
+
+    xlog "audit reports no unindexed messages";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        'squatter', '-A');
+    open my $fh, '<', $outfile or die "open $outfile: $!";
+    my @audits = readline($fh);
+    close $fh;
+    $self->assert_num_equals(0, scalar @audits);
+}
