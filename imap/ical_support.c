@@ -2027,7 +2027,7 @@ static void apply_property_updates(struct patch_data_t *patch,
                 /* libical treats DQUOTEd BYPARAM as X value */
                 const char *byparam_prefix = "BYPARAM@";
                 const char *x_val = icalparameter_get_xvalue(actionp);
-                if (!strncmp(x_val, byparam_prefix, strlen(byparam_prefix))) {
+                if (!strncmpsafe(x_val, byparam_prefix, strlen(byparam_prefix))) {
                     /* Parse param-match */
                     const char *p = x_val + strlen(byparam_prefix);
                     size_t namelen = strcspn(p, "!=");
@@ -2043,7 +2043,6 @@ static void apply_property_updates(struct patch_data_t *patch,
             }
 
             icalproperty_remove_parameter_by_ref(newprop, actionp);
-            icalparameter_free(actionp);
         }
 
         if (action != ICAL_PATCHACTION_CREATE) {
@@ -2057,19 +2056,22 @@ static void apply_property_updates(struct patch_data_t *patch,
                 nextprop = icalcomponent_get_next_property(parent, kind);
 
                 if (action == ICAL_PATCHACTION_BYVALUE) {
-                    match = !strcmp(value,
-                                    icalproperty_get_value_as_string(prop));
+                    match = !strcmpsafe(value,
+                                        icalproperty_get_value_as_string(prop));
                 }
                 else if (action == ICAL_PATCHACTION_BYPARAM) {
                     /* Check param-match */
                     match = apply_param_match(prop, &byparam);
-                    free(byparam.prop.param);
-                    free(byparam.prop.value);
                 }
                 if (!match) continue;
 
                 icalcomponent_remove_property(parent, prop);
                 icalproperty_free(prop);
+            }
+
+            if (action == ICAL_PATCHACTION_BYPARAM) {
+                free(byparam.prop.param);
+                free(byparam.prop.value);
             }
         }
 
