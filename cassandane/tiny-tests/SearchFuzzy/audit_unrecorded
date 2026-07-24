@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_audit_unrecorded
+    :min_version_3_13 :needs_search_xapian
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    my $basedir = $self->{instance}->{basedir};
+    my $outfile = "$basedir/audit.tmp";
+
+    xlog "create and index two messages";
+    $self->make_message("needle one") || die;
+    $self->make_message("needle two") || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "audit reports nothing";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        'squatter', '-A');
+    open my $fh, '<', $outfile or die "open $outfile: $!";
+    my @audits = readline($fh);
+    close $fh;
+    $self->assert_num_equals(0, scalar @audits);
+
+    xlog "append a third message without indexing it";
+    $self->make_message("needle three") || die;
+
+    xlog "audit reports the unindexed message even though no recorded";
+    xlog "range claims it";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        'squatter', '-A');
+    open $fh, '<', $outfile or die "open $outfile: $!";
+    @audits = readline($fh);
+    close $fh;
+    $self->assert_num_equals(1, scalar @audits);
+    $self->assert_str_equals("Unindexed message(s) in user.cassandane: 3 \n",
+                             $audits[0]);
+}
