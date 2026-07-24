@@ -5549,10 +5549,23 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes,
         if (hash_lookup(email_id, &seen_ids)) continue;
         hash_insert(email_id, (void*)1, &seen_ids);
 
-        /* Apply limit, if any */
-        if (changes->max_changes && ++changes_count > changes->max_changes) {
+        /* Apply maxChanges, if any. We do overshoot maxChanges in case
+         * the modseqs are not strictly increasing, which must not ever
+         * happen in a sane account. Should the account have any duplicate
+         * modseqs then we report that as an error but gracefully finish
+         * the /changes method. */
+        if (changes->max_changes && changes_count >= changes->max_changes &&
+            md->modseq > highest_modseq) {
             changes->has_more_changes = 1;
             break;
+        }
+        changes_count++;
+
+        if (md->modseq == highest_modseq && highest_modseq) {
+            xsyslog_ev(LOG_ERR, "duplicate modseq in Email/changes",
+                    lf_s("mboxname", md->folder ? md->folder->mboxname : NULL),
+                    lf_u("uid", md->uid),
+                    lf_llu("modseq", md->modseq));
         }
 
         /* Keep track of the highest modseq */
@@ -5704,10 +5717,23 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
         /* Skip already seen threads */
         if (!hashset_add(seen_threads, &md->cid)) continue;
 
-        /* Apply limit, if any */
-        if (changes->max_changes && ++changes_count > changes->max_changes) {
+        /* Apply maxChanges, if any. We do overshoot maxChanges in case
+         * the modseqs are not strictly increasing, which must not ever
+         * happen in a sane account. Should the account have any duplicate
+         * modseqs then we report that as an error but gracefully finish
+         * the /changes method. */
+        if (changes->max_changes && changes_count >= changes->max_changes &&
+            md->modseq > highest_modseq) {
             changes->has_more_changes = 1;
             break;
+        }
+        changes_count++;
+
+        if (md->modseq == highest_modseq && highest_modseq) {
+            xsyslog_ev(LOG_ERR, "duplicate modseq in Thread/changes",
+                    lf_s("mboxname", md->folder ? md->folder->mboxname : NULL),
+                    lf_u("uid", md->uid),
+                    lf_llu("modseq", md->modseq));
         }
 
         /* Keep track of the highest modseq */
