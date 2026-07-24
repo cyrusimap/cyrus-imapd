@@ -43,6 +43,8 @@ typedef int sieve_add_header(void *message_context,
                              const char *header, const char *contents, int index);
 typedef int sieve_delete_header(void *message_context,
                                 const char *header, int index);
+typedef int sieve_add_annotation(void *message_context, const char *entry,
+                                 const char *attrib, const char *value);
 typedef int sieve_get_fname(void *message_context, const char **fname);
 typedef int sieve_get_envelope(void *message_context,
                                const char *field,
@@ -213,6 +215,7 @@ void sieve_register_header(sieve_interp_t *interp, sieve_get_header *f);
 void sieve_register_headersection(sieve_interp_t *interp,
                                   sieve_get_headersection *f);
 int sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *f);
+int sieve_register_addannotation(sieve_interp_t *interp, sieve_add_annotation *f);
 int sieve_register_deleteheader(sieve_interp_t *interp, sieve_delete_header *f);
 void sieve_register_fname(sieve_interp_t *interp, sieve_get_fname *f);
 void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
