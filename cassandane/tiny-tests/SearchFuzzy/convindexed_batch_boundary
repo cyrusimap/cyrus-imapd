@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+use File::Temp qw(tempdir);
+
+sub test_convindexed_batch_boundary
+    :min_version_3_13 :needs_search_xapian :SearchAttachmentExtractor
+    :SearchBatchsize20
+    ($self)
+{
+    my $instance = $self->{instance};
+    my $talk = $self->{store}->get_client();
+    my $basedir = $instance->{basedir};
+    my $outfile = "$basedir/audit.tmp";
+
+    my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    $self->start_echo_extractor(tracedir => $tracedir);
+
+    xlog "append a message with an attachment, then filler past search_batchsize";
+    $self->make_message("msg1",
+        mime_type => "multipart/related",
+        mime_boundary => "123456789abcdef",
+        body => ""
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: text/plain\r\n"
+        ."\r\n"
+        ."bodyterm"
+        ."\r\n--123456789abcdef\r\n"
+        ."Content-Type: application/pdf\r\n"
+        ."\r\n"
+        ."attachterm"
+        ."\r\n--123456789abcdef--\r\n"
+    ) || die;
+    # default search_batchsize is 20; message 21 sits just past the
+    # first batch boundary
+    foreach my $i (2..21) {
+        $self->make_message("filler $i") || die;
+    }
+
+    xlog "index everything";
+    $instance->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "the message after the batch boundary must be searchable";
+    $talk->select('INBOX');
+    my $uids = $talk->search('fuzzy', 'subject', 'filler');
+    $self->assert_num_equals(20, scalar @$uids);
+
+    xlog "audit reports no unindexed messages";
+    $instance->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        'squatter', '-A');
+    open my $fh, '<', $outfile or die "open $outfile: $!";
+    my @audits = readline($fh);
+    close $fh;
+    $self->assert_num_equals(0, scalar @audits);
+}

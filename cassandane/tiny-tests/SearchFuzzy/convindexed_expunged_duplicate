@@ -1,0 +1,84 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_convindexed_expunged_duplicate
+    :min_version_3_13 :needs_search_xapian :needs_component_jmap
+    ($self)
+{
+    # Like audit_unindexed, this test edits cyrus.indexed.db directly to
+    # construct a recorded range that claims a UID with no Xapian document,
+    # the state left behind by an indexing interruption or by a message
+    # expunged and expired before it was ever indexed.
+
+    my $talk = $self->{store}->get_client();
+    my $basedir = $self->{instance}->{basedir};
+    my $outfile = "$basedir/audit.tmp";
+
+    my $raw = ""
+        . "From: from\@local\r\n"
+        . "To: to\@local\r\n"
+        . "Subject: sharedguid\r\n"
+        . "Date: Mon, 13 Apr 2020 15:34:03 +0200\r\n"
+        . "MIME-Version: 1.0\r\n"
+        . "Content-Type: text/plain\r\n"
+        . "\r\n"
+        . "uniquebodyterm\r\n";
+
+    xlog "create and index message UID 1";
+    $self->make_message("filler one") || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "append message UID 2 but do not index it";
+    $talk->append('INBOX', { Literal => $raw }) || die "append: $@";
+
+    my $data = $self->{instance}->run_mbpath(-u => 'cassandane');
+    my $xapdir = $data->{xapian}{t1};
+    my $format = $self->{instance}->{config}->get('search_indexed_db');
+
+    xlog "read current cyrus.indexed.db";
+    my ($key, $val);
+    my $result = $self->{instance}->run_dbcommand_cb(sub {
+      my ($k, $v) = @_;
+      return if $k =~ m/\*V\*/;
+      $self->assert_null($key);
+      ($key, $val) = ($k, $v);
+    }, "$xapdir/xapian/cyrus.indexed.db", $format, ['SHOW']);
+    $self->assert_str_equals('ok', $result);
+    $self->assert_not_null($key);
+    $self->assert_not_null($val);
+
+    xlog "add UID 2 to the recorded range without a document, as an";
+    xlog "interrupted indexing run or an expunged-then-expired message";
+    xlog "leaves it";
+    $self->{instance}->run_dbcommand(
+        "$xapdir/xapian/cyrus.indexed.db", $format,
+        ['SET', $key, $val . ':2']);
+
+    xlog "append an identical copy of the unindexed message to another";
+    xlog "folder and index it";
+    $talk->create('INBOX.other') || die "create: $@";
+    $talk->append('INBOX.other', { Literal => $raw }) || die "append: $@";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "append and index another message there, so that folder's range";
+    xlog "claims UID 1";
+    my $raw2 = $raw;
+    $raw2 =~ s/sharedguid/othersubject/;
+    $raw2 =~ s/uniquebodyterm/otherbodyterm/;
+    $talk->append('INBOX.other', { Literal => $raw2 }) || die "append: $@";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "the copy must be searchable";
+    $talk->select('INBOX.other');
+    my $uids = $talk->search('fuzzy', 'body', 'uniquebodyterm');
+    $self->assert_deep_equals([1], $uids);
+
+    xlog "audit must not report the copy unindexed";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        'squatter', '-A');
+    open my $fh, '<', $outfile or die "open $outfile: $!";
+    my @audits = grep { m/\bother\b/ } readline($fh);
+    close $fh;
+    $self->assert_num_equals(0, scalar @audits);
+}
