@@ -1,4 +1,3 @@
-/* +++Date last modified: 05-Jul-1997 */
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -6,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <syslog.h>
+#include <stdbool.h>
 
 #include "assert.h"
 #include "hash.h"
@@ -13,6 +13,41 @@
 #include "strhash.h"
 #include "util.h"
 #include "xmalloc.h"
+
+/* What we're aiming at is that the header has the definition:
+ * inline size_t hash_count(...) { ... };
+ * and this C file has a decaration with `extern`, causing one implementation to
+ * be compiled into this object file, and available to the linker for all the
+ * cases that can't be inlined.
+ *
+ * However...
+ * We set the default for our visibility to be hidden. Hence we need to mark
+ * this definition as EXPORTED so that it's visible to the linker to use in
+ * other files. (Without this an unoptimised build immediately breaks)
+ * gcc is forgiving, but clang insists that the first declaration it sees for
+ * the function is marked EXPORTED, so if the declaration implied by the
+ * definition (in the header) is seen first, that needs EXPORTED
+ * If we don't include config.h then EXPORTED isn't defined as anything, so it's
+ * left in place as-is, and it's a syntax error.
+ * sieve-lex.o transitively includes hash.h, but doesn't itself include config.h
+ * so we try to fix that by including config.h in hash.h
+ * We can make that work, but then example_libcyrus_min.c (and the test for it)
+ * break because that uses installed headers, and we don't install config.h
+ *
+ * One solution that clang and gcc both are happy with is to move the
+ * declaration ahead of the definition, by moving it before the header include
+ * here. However, to make that work, we also need a forward definition of
+ * hash_table.
+ *
+ * We opted not to go with this as it's not a natural order to the human reader.
+ * Given that Cyrus removed support for compilers without __attribute__(...) in
+ * 2015 (without complaints) instead we simply define EXPORTED in hash.h
+ */
+
+extern inline size_t hash_count(const hash_table *table);
+extern inline bool hash_constructed(const hash_table *table);
+
+#include "hash_priv.h"
 
 struct bucket {
     void *data;
@@ -43,19 +78,212 @@ struct bucket {
 
 /* Initialize the hash_table to the size asked for.  Allocates space
 ** for the correct number of pointers and sets them to NULL.  If it
-** can't allocate sufficient memory, signals error by setting the size
-** of the table to 0.
+** can't allocate sufficient memory it will terminate the program with the
+** diagnostic "Virtual memory exhausted"
 */
+
+static size_t table_size(const hash_table *table) {
+    return table && table->table ? (1ULL << table->size_log2) : 0;
+}
+
+/* Approaches to attacking hash tables, and how to defend against it...
+**
+** Hash tables are a seductive data structure, with amortised O(1) complexity
+** for insertion and lookup. Worst case, however, is O(n).
+**
+** An attacker seeks to exploit this worst case performance, by crafting data
+** such that it hits the worst case, and causes degraded performance equivalent
+** to large volumes of data, but only requires sending a small amount of data.
+** This can be used to create a Denial Of Service attack on a server (such as
+** Cyrus) which is behind a layer protecting it from brute force flooding.
+**
+** The attacker knows
+** * the hash function (converting string keys to integers)
+** * the hash table structure (here an array of linked lists)
+** * the threshold where the hash resizes
+**
+** The attacker controls
+** * the strings for the keys
+** * the order that those keys are inserted
+** * when to "read" the hash (to some extent)
+**
+** The attacker can read
+** * the order that keys are returned in by iterators
+**
+** which lets them infer partial state of the data structure
+**
+**
+** The attacker doesn't know the full state of the data structure, or any secret
+** "salt" used to randomise it. If the attacker can figure some of this out,
+** they can locally construct hash keys to send that will trigger pathological
+** behaviour. They might need to brute force these locally, but this is an
+** acceptable trade off to get to small network traffic with an outsized remote
+** effect.
+**
+** The attack style came to widespread public attention with a paper by
+** Crosy & Wallach at the 12th USENIX Security Symposium in 2003:
+** Denial of Service via Algorithmic Complexity Attacks
+** https://www.usenix.org/legacy/events/sec03/tech/full_papers/crosby/crosby.pdf
+**
+** The authors showed that if there is no random internal state, it's easy to
+** craft a set of keys that will always collide, and hence generate a CPU
+** denial of service
+**
+** The "obvious" fix to this is to add random state - a "salt" to the algorithm
+** that converts string keys to integer bucket locations.
+**
+** Of course, at this point the attacker seeks to figure out what the salt is.
+**
+** What is often missed from these discussions is that one doesn't need to find
+** two strings that generate identical 32 (or 64) bit integers. If the hash
+** table code only uses the bottom (or top) $n bits to pick a bucket, then the
+** hash code only needs to collide on those bits. Hence, it's important that the
+** hash algorithm has a good final mixing stage
+** 1) so that the bucket isn't unduly biased by the last (or first) bytes of
+**    the string key
+** 2) so that the choice of bucket doesn't unduly expose a subset of the salt
+**    bits
+**
+** The latter is not obvious, but it's possible to incrementally figure out the
+** salt by
+** 1) supplying a small set of keys
+** 2) reading the iteration order
+** 3) adding more keys
+** 4) observing which keys change order
+** 5) computing which bits of the salt have to be 0 or 1 to explain observations
+** 6) goto 3
+**
+** at which point it may be possible to know enough of the salt to collide keys
+**
+** It's also unwise to trigger the hash array split on linked list chain length.
+** If the attacker can figure out sufficient state to cause bucket collisions
+** then they can create keys where
+** 1) the first $n chain to the same bucket, 1 under the threshold
+**    (and all share many or most hash code bits that keep them in the same
+**     bucket as the hash array splits)
+** 2) each subsequent key is computed to initially land on that long chain
+** 3) triggering a split
+** 4) where that key (only) moves to a different bucket
+**
+** and with a small number of keys one can rapidly (attempt to) exhaust all
+** memory on the victim machine, likely instead causing the process to die with
+** an allocation attempt for an array with 2**29 (or 2**30) entries.
+**
+** Hence
+**
+** 1) the only safe trigger for splitting appears to be "load factor"
+** 2) it's important to hide the iteration order
+**
+** Perl 5 achieves the latter by randomising iteration order for each iteration.
+** I believe that whilst correct, given that the attacker already knows the
+** timing of the array split, there's no need to conceal when the split
+** happened. Hence it's equivalently secure simply to ensure that for any level
+** of "split" the iteration order gives no clue about the low (or high) $n bits
+** of the full hash code used to pick the bucket.
+**
+** The hash code needs to stay the same either side of the hash split (to avoid
+** the performance hit of recomputing every key's hash code).
+** Hence this code mixes a random 32 bit integer into the hash code before
+** computing the bucket, and changes that integer each time the array splits.
+**
+** The attacker cannot infer anything about the random salt used (and hence gain
+** leverage to craft keys that collide) without first inferring a different
+** random 32 bit value. And one that changes each time they "look".
+*/
+
+/* The arithmetic in this code is 64 bit so that
+ * 1) it's future proof if we move to a 64 bit hash
+ * 2) it's consistent with the hashu64 code
+ * 3) the known working sizeof(size_t) doesn't need changing and debugging
+ *
+ * Multiplying by 9e3779b97f4a7c15ULL and shifting is Fibonacci Hashing
+ * It's not great in itself, but it's computationally cheap. We use this as a
+ * final mixing stage as djbx33x lacks one, hence leaves all the recent entropy
+ * in the lowest bits of the hash.
+ */
+
+static size_t table_index(const hash_table *table, uint32_t hash) {
+    /* Ensure we truncate this to 64 bits, even on a platform with 128 bit
+     * long longs. At some point, some joker is going to throw that at us:
+     */
+    uint64_t mixed = (hash ^ table->chaff) * 0x9e3779b97f4a7c15ULL;
+    return mixed >> (64 - table->size_log2);
+}
+
+/* We've changed the hash table size from "whatever the user asked for" to
+ * power of two (and therefore sizes must round up to the next power of two).
+ * This permits us to use a bitmask to map the hash code to the bucket, which is
+ * *considerably* faster than integer modulo.
+ *
+ * For example:
+ * https://johnnysswlab.com/make-your-programs-run-faster-avoid-expensive-instructions/
+ *
+ *       To test the speed difference, we implemented an open addressing hash
+ *       map whose size is always the power of two. We used working sets of
+ *       several sizes and tested it. The results are in the table below:
+ *
+ * and shifting is between 12% and 40% faster.
+ *
+ * This does, however, rely on a good hash function which properly mixes all the
+ * entropy into the low bits of the hash code. For example, the pre-2021
+ * algorithm is not:
+ *
+ *       ret_val ^= i;
+ *       ret_val <<= 1;
+ *
+ * The second operation in the loop is is "multiply by two". There is no final
+ * mixing step, so it will always generate an even number. Masking this would
+ * leave half the buckets unreachable!
+ *
+ * This doesn't matter if instead of masking, one uses modulo of an odd number
+ * to find the bucket. Hence the other "classic" approach is constraining the
+ * table size to be a prime number, and choosing the bucket modulo that.
+ *
+ * Compiler writers know a bunch of integer maths tricks to make modulo of an
+ * integer constant fast (by not actually using the CPU modulo operation).
+ * But modulo of a run time integer is slow. So one way to get speed back is:
+ *
+ *
+ *       So then how do we solve the problem of the slow integer modulo? For
+ *       this I’m using a trick that I copied from boost::multi_index: I make
+ *       all integer modulos use a compile time constant. I don’t allow all
+ *       possible prime numbers as sizes for the table. Instead I have a
+ *       selection of pre-picked prime numbers and will always grow the table to
+ *       the next largest one out of that list. Then I store the index of the
+ *       number that your table has. When it later comes time to do the integer
+ *       modulo to assign the hash value to a slot, you will see that my code
+ *       does this:
+ *
+ *       switch(prime_index)
+ *       {
+ *       case 0:
+ *           return 0llu;
+ *       case 1:
+ *           return hash % 2llu;
+ *       case 2:
+ *           return hash % 3llu;
+ *       case 3:
+ *           return hash % 5llu;
+ * ...
+ *
+ * https://probablydance.com/2017/02/26/i-wrote-the-fastest-hashtable/
+ *
+ * which would result in code much much longer than this comment.
+ *
+ * So we go with integer sizes and a good enough hash function as a reasonable
+ * speed/size trade off.
+ */
 
 EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
 {
       assert(table);
-      assert(size);
 
-      table->size = size;
+      uint8_t size_log2 = hash_base2_size_for_entries(size);
+      size = 1ULL << size_log2;
+      table->size_log2 = size_log2;
       table->count = 0;
       table->seed = rand(); /* might be zero, that's okay */
-      table->hash_load_warned_at = 0;
+      table->chaff = rand();
 
       /* Allocate the table -- different for using memory pools and not */
       if (use_mpool) {
@@ -76,23 +304,59 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
       return table;
 }
 
-#define check_load_factor(table) do {                                   \
-    hash_table *t = (table);                                            \
-    const double load_factor = t->count * 1.0 / t->size;                \
-    if (load_factor > 3.0) {                                            \
-        if (t->hash_load_warned_at == 0                                 \
-            || (int) load_factor > t->hash_load_warned_at) {            \
-            xsyslog(LOG_DEBUG, "hash table load factor exceeds 3.0",    \
-                               "table=<%p> entries=<" SIZE_T_FMT ">"    \
-                               " buckets=<" SIZE_T_FMT "> load=<%.2g>", \
-                               t, t->count, t->size, load_factor);      \
-            t->hash_load_warned_at = (int) load_factor;                 \
-        }                                                               \
-    }                                                                   \
-    else {                                                              \
-        t->hash_load_warned_at = 0;                                     \
-    }                                                                   \
-} while(0)
+static void hash_split(hash_table *table) {
+    size_t old_size = 1ULL << table->size_log2++;
+    size_t new_size = old_size * 2;
+    size_t wanted = sizeof(bucket *) * new_size;
+
+    if(new_size < old_size) {
+        fatal("Virtual memory exhausted by hash", EX_TEMPFAIL);
+    }
+
+    bucket **old_table = table->table;
+    bucket **new_table;
+
+    if (table->pool) {
+        new_table = (bucket **)mpool_malloc(table->pool, wanted);
+    } else {
+        new_table = xmalloc(wanted);
+    }
+    memset(new_table, 0, wanted);
+
+    size_t i = old_size;
+
+    table->chaff = rand();
+
+    /* This is (roughly) hash_enumerate */
+    while(i-- > 0) {
+        bucket *next = old_table[i];
+
+        /* Peel each bucket off in turn.
+         * Remember the next bucket, and set this bucket's next pointer to NULL
+         * Splice this bucket into the correct place in the new table
+         */
+        while(next) {
+            bucket *current = next;
+            next = next->next;
+            /* Conceptually current->next should be assigned NULL at this point
+             * (the bucket is detached and no longer linked to the previous
+             * chain) but we assign it a new value just below:
+             */
+
+            /* This is the logic at the guts of hash_insert: */
+            size_t val = table_index(table, current->hash);
+
+            current->next = new_table[val];
+            new_table[val] = current;
+        }
+    }
+
+    table->table = new_table;
+
+    if(!table->pool) {
+        free(old_table);
+    }
+}
 
 /*
 ** Insert 'key' into hash table.
@@ -102,7 +366,7 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
 EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 {
       uint32_t hash = strhash_seeded(table->seed, key);
-      unsigned val = hash % table->size;
+      size_t val = table_index(table, hash);
       bucket *ptr, *newptr;
 
       /*
@@ -120,6 +384,11 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
               ptr -> data = data;
               return old_data;
           }
+      }
+
+      if(++table->count > table_size(table) * HASH_LOAD_FACTOR) {
+          hash_split(table);
+          val = table_index(table, hash);
       }
 
       /*
@@ -151,8 +420,6 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
       newptr->data = data;
       newptr->next = (table->table)[val];
       (table->table)[val] = newptr;
-      table->count++;
-      check_load_factor(table);
       return data;
 }
 
@@ -165,11 +432,11 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
 {
       bucket *ptr;
 
-      if (!table->size)
+      if (!table->table || !table->count)
           return NULL;
 
       uint32_t hash = strhash_seeded(table->seed, key);
-      unsigned val = hash % table->size;
+      size_t val = table_index(table, hash);
 
       if (!(table->table)[val])
             return NULL;
@@ -191,7 +458,7 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
 EXPORTED void *hash_del(const char *key, hash_table *table)
 {
       uint32_t hash = strhash_seeded(table->seed, key);
-      unsigned val = hash % table->size;
+      size_t val = table_index(table, hash);
       bucket *ptr, *last = NULL;
 
       if (!(table->table)[val])
@@ -254,8 +521,9 @@ EXPORTED void *hash_del(const char *key, hash_table *table)
 
 EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
 {
-      unsigned i;
+      size_t i;
       bucket *ptr, *temp;
+      size_t size = table_size(table);
 
       if (!table) return;
 
@@ -263,7 +531,7 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
       /* We also need to traverse this anyway if we aren't using a memory
        * pool */
       if(func || !table->pool) {
-          for (i=0;i<table->size; i++)
+          for (i=0;i<size; i++)
           {
               ptr = (table->table)[i];
               while (ptr)
@@ -287,7 +555,7 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
           free(table->table);
       }
       table->table = NULL;
-      table->size = 0;
+      table->size_log2 = 0;
       table->count = 0;
 }
 
@@ -299,10 +567,11 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
 EXPORTED void hash_enumerate(hash_table *table, void (*func)(const char *, void *, void *),
                     void *rock)
 {
-      unsigned i;
+      size_t i;
       bucket *temp, *temp_next;
+      size_t size = table_size(table);
 
-      for (i=0;i<table->size; i++)
+      for (i=0;i<size; i++)
       {
             if ((table->table)[i] != NULL)
             {
@@ -320,11 +589,12 @@ EXPORTED void hash_enumerate(hash_table *table, void (*func)(const char *, void 
 EXPORTED strarray_t *hash_keys(const hash_table *table)
 {
     const bucket *temp;
-    unsigned i;
+    size_t i;
+    size_t size = table_size(table);
 
     strarray_t *sa = strarray_new();
 
-    for (i = 0; i < table->size; i++) {
+    for (i = 0; i < size; i++) {
         temp = (table->table)[i];
         while (temp) {
             strarray_append(sa, temp->key);
@@ -333,12 +603,6 @@ EXPORTED strarray_t *hash_keys(const hash_table *table)
     }
 
     return sa;
-}
-
-EXPORTED int hash_numrecords(hash_table *table)
-{
-    /* XXX macro or inline this if we keep the count field long term */
-    return table->count;
 }
 
 EXPORTED void hash_enumerate_sorted(hash_table *table, void (*func)(const char *, void *, void *),
@@ -374,9 +638,10 @@ EXPORTED hash_iter *hash_table_iter(hash_table *table)
 EXPORTED void hash_iter_reset(hash_iter *iter)
 {
     hash_table *table = iter->table;
+    size_t size = table_size(table);
     iter->curr = NULL;
     iter->peek = NULL;
-    for (iter->i = 0; iter->i < table->size; iter->i++) {
+    for (iter->i = 0; iter->i < size; iter->i++) {
         if ((iter->peek = table->table[iter->i])) {
             break;
         }
@@ -397,10 +662,14 @@ EXPORTED const char *hash_iter_next(hash_iter *iter)
         return NULL;
     else if (iter->curr->next)
         iter->peek = iter->curr->next;
-    else if (iter->i < table->size) {
-        for (iter->i = iter->i + 1; iter->i < table->size; iter->i++) {
-            if ((iter->peek = table->table[iter->i])) {
-                break;
+    else {
+        size_t size = table_size(table);
+
+        if (iter->i < size) {
+            for (iter->i = iter->i + 1; iter->i < size; iter->i++) {
+                if ((iter->peek = table->table[iter->i])) {
+                    break;
+                }
             }
         }
     }

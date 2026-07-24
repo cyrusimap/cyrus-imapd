@@ -159,7 +159,7 @@ int main (int argc, char **argv)
     construct_hash_table(&xlist, 10, 0);
     config_foreachoverflowstring(xlist_lookup_cb, &xlist);
 
-    if (hash_numrecords(&xlist) < 1) {
+    if (hash_count(&xlist) < 1) {
         /* nothing to do */
         fprintf(stderr, "no xlist- settings in %s, nothing to do\n",
                         alt_config ? alt_config : CONFIG_FILENAME);
