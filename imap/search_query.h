@@ -148,6 +148,10 @@ struct search_query {
 
     /* For INPROGRESS responses during IMAP SEARCH */
     struct progress_rock *prock;
+
+    /* Highest createdmodseq and generation of the search index */
+    modseq_t highest_createdmodseq;
+    uint64_t index_generation;
 };
 
 extern search_query_t *search_query_new(struct index_state *state,

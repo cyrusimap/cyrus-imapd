@@ -634,7 +634,8 @@ static int _matchmime_tr_end_message(search_text_receiver_t *rx, uint8_t indexle
 }
 
 static int _matchmime_tr_end_mailbox(search_text_receiver_t *rx __attribute__((unused)),
-                                     struct mailbox *mailbox __attribute__((unused)))
+                                     struct mailbox *mailbox __attribute__((unused)),
+                                     bool has_more __attribute__((unused)))
 {
     return 0;
 }

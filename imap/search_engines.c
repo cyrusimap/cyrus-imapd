@@ -48,7 +48,10 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
-    NULL
+    NULL,
+    NULL,
+    NULL,
+    NULL,
 };
 
 EXPORTED const struct search_engine *search_engine(void)
@@ -144,19 +147,45 @@ EXPORTED int search_part_is_header(enum search_part part)
     return 0;
 }
 
-EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox, int opts)
+EXPORTED search_builder_t *search_begin_search(search_session_t *session)
 {
-    if (!mailbox) return NULL;
+    if (!session) return NULL;
 
     const struct search_engine *se = search_engine();
-    return (se->begin_search ?
-            se->begin_search(mailbox, opts) : NULL);
+    return (se->begin_search ? se->begin_search(session) : NULL);
 }
 
 EXPORTED void search_end_search(search_builder_t *bx)
 {
     const struct search_engine *se = search_engine();
     if (se->end_search) se->end_search(bx);
+}
+
+EXPORTED search_session_t *search_begin_session(struct mailbox *mailbox,
+                                                int opts)
+{
+    if (!mailbox) return NULL;
+
+    const struct search_engine *se = search_engine();
+    return (se->begin_session ?
+            se->begin_session(mailbox, opts) : NULL);
+}
+
+EXPORTED void search_end_session(search_session_t *session)
+{
+    if (!session) return;
+    const struct search_engine *se = search_engine();
+    if (se->end_session) se->end_session(session);
+}
+
+EXPORTED modseq_t search_session_get_highest_createdmodseq(search_session_t *session,
+                                                           uint64_t *index_generation)
+{
+    if (index_generation) *index_generation = 0;
+    if (!session) return 0;
+    const struct search_engine *se = search_engine();
+    return se->session_get_highest_createdmodseq ?
+            se->session_get_highest_createdmodseq(session, index_generation) : 0;
 }
 
 EXPORTED search_text_receiver_t *search_begin_update(int verbose)
@@ -504,8 +533,9 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     if (!dynarray_size(&attachparts))
         goto done;
 
-    // Release mailbox lock
-    r = rx->end_mailbox(rx, mailbox);
+    // Release mailbox lock. Indexing this mailbox is not complete yet,
+    // it resumes after extracting attachments.
+    r = rx->end_mailbox(rx, mailbox, /*has_more*/true);
     if (r) goto done;
     mailbox_close(&mailbox);
 
@@ -563,7 +593,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     free(mycachedir);
     free(mboxname);
     {
-        int r2 = rx->end_mailbox(rx, mailbox);
+        int r2 = rx->end_mailbox(rx, mailbox, /*has_more*/false);
         if (r) return r;
         if (r2) return r2;
     }

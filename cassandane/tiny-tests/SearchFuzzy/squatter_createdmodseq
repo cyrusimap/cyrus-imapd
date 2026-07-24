@@ -1,0 +1,362 @@
+#!perl
+use Cassandane::Tiny;
+
+# Create a message in mboxname with make_message(params).
+# The return value is the createdmodseq (not the UID!).
+sub create_message_in_mailbox($self, $mboxname, $params = {})
+{
+    my $talk = $self->{store}->get_client();
+
+    $self->{store}->set_folder($mboxname);
+    my $msg = $self->make_message($params->{subject}, %{$params->{args} // {}}) || die;
+    my $uid = $msg->get_attribute('uid');
+
+    $talk->select($mboxname);
+    my $res = $talk->fetch($uid, '(createdmodseq)');
+    my $createdmodseq = $res->{$uid}{createdmodseq}[0];
+
+    return $createdmodseq;
+}
+
+# Read highest createdmodseq and index generation from squatter.
+sub get_squatter_createdmodseq($self)
+{
+    my $basedir = $self->{instance}->{basedir};
+    my $outfile = "$basedir/createdmodseq.tmp";
+    $self->{instance}->run_command(
+        {
+            cyrus => 1,
+            redirects => { stdout => $outfile },
+        },
+        'squatter', '--highest-createdmodseq', '-u', 'cassandane'
+    );
+
+    open(my $fh, '<', $outfile) or die "Cannot open $outfile: $!";
+    my $line = <$fh>;
+    close($fh);
+    chomp $line;
+
+    my (undef, $highest_createdmodseq, $index_generation) = split / /, $line;
+
+    return ($highest_createdmodseq, $index_generation);
+}
+
+sub test_squatter_createdmodseq
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Create mailboxes";
+    $talk->create("A") || die;
+    $talk->create("B") || die;
+    $talk->create("C") || die;
+
+    xlog $self, "Create message in mailbox A";
+    my $createdmodseqA = $self->create_message_in_mailbox("A");
+
+    xlog $self, "Index all mailboxes (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    my ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqA, $highest_createdmodseq);
+
+    xlog $self, "Create message in mailbox A";
+    $createdmodseqA = $self->create_message_in_mailbox("A");
+
+    xlog $self, "Index all mailboxes (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    my $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqA, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+
+    xlog $self, "Create message in mailbox B, then C";
+    my $createdmodseqB = $self->create_message_in_mailbox("B");
+    my $createdmodseqC = $self->create_message_in_mailbox("C");
+    $self->assert($createdmodseqB < $createdmodseqC);
+
+    xlog $self, "Index mailbox C (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i', 'user.cassandane.C');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqC, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+
+    xlog $self, "Index mailbox B (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i', 'user.cassandane.B');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqC, $highest_createdmodseq);
+    $self->assert_num_not_equals($prev_index_generation, $index_generation);
+
+    xlog "Compact index to t2 tier";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-z', 't2', '-t', 't1');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqC, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+
+    xlog $self, "Create message in mailbox A";
+    $createdmodseqA = $self->create_message_in_mailbox("A");
+
+    xlog $self, "Index mailbox A (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i', 'user.cassandane.A');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqA, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+
+    xlog $self, "Compact t2 to t3 tier, while t1 stays on top";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-z', 't3', '-t', 't2');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqA, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+}
+
+sub test_squatter_createdmodseq_partials
+    :SearchAttachmentExtractor :NoCheckSyslog
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    my $extractor_url = URI->new($self->{instance}->{config}->get('search_attachment_extractor_url'));
+
+    xlog "Start extractor server";
+    # This extractor server fails for the first index attempt,
+    # then returns "hellofromextractor" for any following requests.
+    my $nrequests = 0;
+    my $handler = sub ($conn, $req) {
+        if ($req->method eq 'HEAD') {
+            my $res = HTTP::Response->new(204);
+            $res->content("");
+            $conn->send_response($res);
+        } else {
+            $nrequests++;
+            if ($nrequests <= 4) {
+                # attach1: squatter sends GET and retries PUT 3 times
+                $conn->send_error(500);
+            } else {
+                my $res = HTTP::Response->new(200);
+                $res->content("hellofromextractor");
+                $conn->send_response($res);
+            }
+        }
+    };
+    $self->{instance}->start_httpd($handler, $extractor_url->port());
+
+    xlog $self, "Create message";
+    my $createdmodseq = $self->create_message_in_mailbox("INBOX");
+
+    xlog $self, "Index all mailboxes (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    my ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+
+    $createdmodseq = $self->create_message_in_mailbox("INBOX", {
+        subject => "partialmsg",
+        args => {
+            mime_type => "multipart/related",
+            mime_boundary => "123456789abcdef",
+            body => ""
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."plaintext"
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: application/pdf\r\n"
+            ."\r\n"
+            ."attachment"
+            ."\r\n--123456789abcdef--\r\n"
+        },
+    });
+
+    xlog $self, "Index all mailboxes (incremental, allow partials)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i', '-p');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    my $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+
+    xlog "Assert attachment is not indexed";
+    my $uids = $talk->search('fuzzy', 'xattachmentbody', 'hellofromextractor');
+    $self->assert_num_equals(0, scalar @{$uids});
+
+    xlog $self, "Create message";
+    $createdmodseq = $self->create_message_in_mailbox("INBOX");
+
+    xlog $self, "Index all mailboxes (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+
+    xlog $self, "Reindex partial messages (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i', '-P');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+    $self->assert_num_not_equals($prev_index_generation, $index_generation);
+
+    xlog "Assert attachment is indexed";
+    $uids = $talk->search('fuzzy', 'xattachmentbody', 'hellofromextractor');
+    $self->assert_num_not_equals(0, scalar @{$uids});
+}
+
+sub test_squatter_createdmodseq_attachments
+    :SearchAttachmentExtractor
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    my $extractor_url = URI->new($self->{instance}->{config}->get('search_attachment_extractor_url'));
+
+    xlog "Start extractor server";
+    my $handler = sub ($conn, $req) {
+        if ($req->method eq 'HEAD') {
+            my $res = HTTP::Response->new(204);
+            $res->content("");
+            $conn->send_response($res);
+        } else {
+            my $res = HTTP::Response->new(200);
+            $res->content("hellofromextractor");
+            $conn->send_response($res);
+        }
+    };
+    $self->{instance}->start_httpd($handler, $extractor_url->port());
+
+    xlog $self, "Create message";
+    my $createdmodseq = $self->create_message_in_mailbox("INBOX");
+
+    xlog $self, "Index all mailboxes (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    my ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+    $self->assert_num_not_equals(0, $index_generation);
+
+    xlog $self, "Create message with attachment, followed by plain message";
+    $self->create_message_in_mailbox("INBOX", {
+        subject => "attachmsg",
+        args => {
+            mime_type => "multipart/related",
+            mime_boundary => "123456789abcdef",
+            body => ""
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."plaintext"
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: application/pdf\r\n"
+            ."\r\n"
+            ."attachment"
+            ."\r\n--123456789abcdef--\r\n"
+        },
+    });
+    $createdmodseq = $self->create_message_in_mailbox("INBOX");
+
+    xlog $self, "Index all mailboxes (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "Assert attachment is indexed";
+    my $uids = $talk->search('fuzzy', 'xattachmentbody', 'hellofromextractor');
+    $self->assert_num_not_equals(0, scalar @{$uids});
+
+    xlog $self, "Assert index generation did not change";
+    my $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+}
+
+sub test_squatter_createdmodseq_reindex
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Create mailboxes";
+    $talk->create("A") || die;
+    $talk->create("B") || die;
+
+    xlog $self, "Create message in mailbox A, then B";
+    my $createdmodseqA = $self->create_message_in_mailbox("A");
+    my $createdmodseqB = $self->create_message_in_mailbox("B");
+    $self->assert($createdmodseqA < $createdmodseqB);
+
+    xlog $self, "Index mailbox B (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i', 'user.cassandane.B');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    my ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqB, $highest_createdmodseq);
+    $self->assert_num_not_equals(0, $index_generation);
+
+    xlog $self, "Index mailbox A (incremental), which back-dates the index";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i', 'user.cassandane.A');
+
+    xlog $self, "Assert the index generation changed";
+    my $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqB, $highest_createdmodseq);
+    $self->assert_num_not_equals($prev_index_generation, $index_generation);
+
+    xlog $self, "Index mailbox A (not incremental), re-adding its messages";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', 'user.cassandane.A');
+
+    xlog $self, "Assert the index generation changed";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqB, $highest_createdmodseq);
+    $self->assert_num_not_equals($prev_index_generation, $index_generation);
+
+    xlog $self, "Compact to tier t2 without reindexing";
+    $self->{instance}->run_command({cyrus => 1},
+        'squatter', '-z', 't2', '-t', 't1');
+
+    xlog $self, "Assert highest createdmodseq and index generation are unchanged";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqB, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+
+    xlog $self, "Compact back to tier t1 with reindexing";
+    $self->{instance}->run_command({cyrus => 1},
+        'squatter', '-z', 't1', '-t', 't2', '-T', 't2');
+
+    xlog $self, "Assert the index generation changed";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqB, $highest_createdmodseq);
+    $self->assert_num_not_equals($prev_index_generation, $index_generation);
+
+    xlog $self, "Compact to tier t2 with reindexing again";
+    $self->{instance}->run_command({cyrus => 1},
+        'squatter', '-z', 't2', '-t', 't1', '-T', 't1');
+
+    xlog $self, "Assert consecutive reindexes get distinct generations";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqB, $highest_createdmodseq);
+    $self->assert_num_not_equals($prev_index_generation, $index_generation);
+}

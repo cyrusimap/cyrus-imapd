@@ -3168,6 +3168,8 @@ struct emailquery_result {
     int is_guidsearch;
     int is_imapfoldersearch;
     int never_matches;
+    modseq_t highest_createdmodseq;
+    uint64_t index_generation;
     size_t total_ceiling;
 
     void(*ensure)(struct emailquery *q, struct emailquery_cache *qc, size_t n);
@@ -3207,7 +3209,9 @@ static void jmap_emailquery_fini(struct emailquery *q)
 
 static char *_email_make_querystate(jmap_req_t *req,
                                     modseq_t modseq, uint32_t uid,
-                                    modseq_t addrbook_modseq)
+                                    modseq_t addrbook_modseq,
+                                    modseq_t highest_createdmodseq,
+                                    uint64_t index_generation)
 {
     struct buf buf = BUF_INITIALIZER;
 
@@ -3219,12 +3223,18 @@ static char *_email_make_querystate(jmap_req_t *req,
     if (addrbook_modseq) {
         buf_printf(&buf, ",addrbook:" MODSEQ_FMT, addrbook_modseq);
     }
+    if (highest_createdmodseq) {
+        buf_printf(&buf, ",fts:" MODSEQ_FMT ":" UINT64_FMT,
+                highest_createdmodseq, index_generation);
+    }
     return buf_release(&buf);
 }
 
 static int _email_read_querystate(jmap_req_t *req, const char *s,
                                   modseq_t *modseq, uint32_t *uid,
-                                  modseq_t *addrbook_modseq)
+                                  modseq_t *addrbook_modseq,
+                                  modseq_t *highest_createdmodseq,
+                                  uint64_t *index_generation)
 {
     char sentinel = 0;
 
@@ -3234,15 +3244,29 @@ static int _email_read_querystate(jmap_req_t *req, const char *s,
 
     /* Parse mailbox modseq and uid */
     int n = sscanf(s, MODSEQ_FMT ":%u%c", modseq, uid, &sentinel);
-    if (n <= 2) return n == 2;
-    else if (sentinel != ',') return 0;
+    if (n != 2 && n != 3) return 0;
+    if (n == 3 && sentinel != ',') return 0;
 
-    /* Parse addrbook modseq */
-    s = strchr(s, ',') + 1;
-    if (strncmp(s, "addrbook:", 9)) return 0;
-    s += 9;
-    n = sscanf(s, MODSEQ_FMT "%c", addrbook_modseq, &sentinel);
-    if (n != 1) return 0;
+    /* Parse optional comma-separated suffixes in any order */
+    s = strchr(s, ',');
+    while (s) {
+        s++; /* skip ',' */
+        if (!strncmp(s, "addrbook:", 9)) {
+            s += 9;
+            n = sscanf(s, MODSEQ_FMT "%c", addrbook_modseq, &sentinel);
+            if (n != 1 && n != 2) return 0;
+            if (n == 2 && sentinel != ',') return 0;
+        }
+        else if (!strncmp(s, "fts:", 4)) {
+            s += 4;
+            n = sscanf(s, MODSEQ_FMT ":" UINT64_FMT "%c",
+                    highest_createdmodseq, index_generation, &sentinel);
+            if (n != 2 && n != 3) return 0;
+            if (n == 3 && sentinel != ',') return 0;
+        }
+        else return 0;
+        s = strchr(s, ',');
+    }
 
     /* Parsed successfully */
     return 1;
@@ -3917,6 +3941,8 @@ struct guidsearch_query {
     struct guidsearch_match *matches;
     size_t total;
     size_t collapsed_len;
+    modseq_t highest_createdmodseq;
+    uint64_t index_generation;
 };
 
 static int guidsearch_add_guidrec(const conv_guidrec_t *rec,
@@ -4039,6 +4065,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
     }
 
     search_builder_t *bx = NULL;
+    search_session_t *session = NULL;
     struct mailbox *mbox = NULL;
     mbname_t *mbname = mbname_from_userid(req->accountid);
 
@@ -4049,28 +4076,6 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         r = mailbox_open_irl(mbname_intname(mbname), &mbox);
     }
     if (r) goto done;
-
-    bx = search_begin_search(mbox, 0);
-    if (!bx) {
-        syslog(LOG_ERR, "jmap: %s: can't begin search for %s",
-                __func__,  mailbox_name(mbox));
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-
-    // Check the required index version.
-    if (need_xapian_index_version > 0) {
-        if (!bx->min_index_version ||
-            bx->min_index_version(bx) < need_xapian_index_version) {
-            xsyslog(LOG_DEBUG,
-                    "xapian index version is less than required minimum"
-                    "for this query - falling back to uidsearch",
-                    "need_xapian_index_version=<%d>",
-                    need_xapian_index_version);
-            r = IMAP_SEARCH_NOT_SUPPORTED;
-            goto done;
-        }
-    }
 
     /* Determine readable folders for userid */
     uint32_t numfolders = conversations_num_folders(req->cstate);
@@ -4124,7 +4129,8 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         free_hash_table(&foldernum_by_mboxname, NULL);
     }
 
-    // replace cache-backed message-id attributes with Xapian-backed ones
+    // Xapian-backed message-id attributes, swapped into the expression
+    // tree below once we are committed to running guidsearch
     static search_attr_t xapian_messageid_attr = {
         "xapian-messageid",
         SEA_FUZZABLE,
@@ -4179,6 +4185,40 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         NULL
     };
 
+    /* Open search session - this takes a read-lock on the index */
+    session = search_begin_session(mbox, 0);
+
+    /* Read highest createdmodseq and index generation from session */
+    gsq->highest_createdmodseq =
+        search_session_get_highest_createdmodseq(session, &gsq->index_generation);
+
+    /* Prepare query */
+    bx = search_begin_search(session);
+    if (!bx) {
+        syslog(LOG_ERR, "jmap: %s: can't begin search for %s",
+                __func__,  mailbox_name(mbox));
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    // Check the required index version.
+    if (need_xapian_index_version > 0) {
+        if (!bx->min_index_version ||
+            bx->min_index_version(bx) < need_xapian_index_version) {
+            xsyslog(LOG_DEBUG,
+                    "xapian index version is less than required minimum"
+                    "for this query - falling back to uidsearch",
+                    "need_xapian_index_version=<%d>",
+                    need_xapian_index_version);
+            r = IMAP_SEARCH_NOT_SUPPORTED;
+            goto done;
+        }
+    }
+
+    /* Replace the cache-backed message-id attributes in the expression
+     * tree with the Xapian-backed ones declared above. This mutates the
+     * expression in place, so it must only happen once we are sure not
+     * to fall back to uidsearch, which expects the original attributes. */
     ptrarray_t exprs = PTRARRAY_INITIALIZER;
     ptrarray_push(&exprs, search->expr_orig);
     search_expr_t *e;
@@ -4209,6 +4249,7 @@ done:
     mailbox_close(&mbox);
     mbname_free(&mbname);
     if (bx) search_end_search(bx);
+    search_end_session(session);
     return r;
 }
 
@@ -4276,11 +4317,16 @@ static int emailquery_guidsearch(jmap_req_t *req,
         NULL,
         0,
         0,
+        0,
+        0,
         0
     };
 
     int r = guidsearch_run(req, search, &gsq);
     if (r) return r;
+
+    qr->highest_createdmodseq = gsq.highest_createdmodseq;
+    qr->index_generation = gsq.index_generation;
 
     guidsearch_sort(req, search->sort, &gsq);
 
@@ -4333,6 +4379,12 @@ static void emailquery_uidsearch_result_ensure(struct emailquery *q, struct emai
         /* Skip expunged or hidden messages */
         if (md->system_flags & FLAG_DELETED ||
             md->internal_flags & FLAG_INTERNAL_EXPUNGED)
+            continue;
+
+        /* For Xapian-based queries, ignore messages having a higher
+         * created modseq than the highest createdmodseq of the index */
+        if (qc->qr.highest_createdmodseq &&
+                md->createdmodseq > qc->qr.highest_createdmodseq)
             continue;
 
         /* Is there another copy of this message with a targeted savedate? */
@@ -4439,6 +4491,10 @@ static int emailquery_uidsearch(jmap_req_t *req,
         return r;
     }
     if (search->never_matches) return 0;
+
+    // Read highest created modseq and index generation for Xapian queries.
+    qr->highest_createdmodseq = search->query->highest_createdmodseq;
+    qr->index_generation = search->query->index_generation;
     if (!search->query->merged_msgdata.count) return 0;
 
     struct emailquery_uidsearch_result_rock *rrock =
@@ -4815,9 +4871,10 @@ static void emailquery_buildresult(struct emailquery *q,
 }
 
 static void emailquery_fingerprint(struct buf *fingerprint,
-                                   const char *accountid,
                                    const char *userid,
-                                   const char *querystate,
+                                   const char *accountid,
+                                   modseq_t modseq,
+                                   modseq_t addrbook_modseq,
                                    struct emailquery *q)
 
 {
@@ -4832,7 +4889,10 @@ static void emailquery_fingerprint(struct buf *fingerprint,
     buf_putc(fingerprint, '>');
 
     buf_putc(fingerprint, '<');
-    buf_appendcstr(fingerprint, querystate);
+    buf_printf(fingerprint, MODSEQ_FMT, modseq);
+    if (addrbook_modseq) {
+        buf_printf(fingerprint, ",addrbook:" MODSEQ_FMT, addrbook_modseq);
+    }
     buf_putc(fingerprint, '>');
 
     if (JNOTNULL(q->super.filter)) {
@@ -4899,10 +4959,11 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
     modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     modseq_t addrbook_modseq = contactgroups->size ?
         jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0) : 0;
-    char *querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
+    char *querystate = NULL;
 
     struct buf fingerprint = BUF_INITIALIZER;
-    emailquery_fingerprint(&fingerprint, req->userid, req->accountid, querystate, q);
+    emailquery_fingerprint(&fingerprint, req->userid, req->accountid,
+                           modseq, addrbook_modseq, q);
 
     /* Try to reuse cached query result */
     int is_cached;
@@ -4930,6 +4991,13 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
     emailquery_buildresult(q, &emailquery_cache, errp);
     if (*errp) goto done;
     q->super.can_calculate_changes = emailquery_cache.qr.is_mutable;
+
+    /* Build the querystate. Use the highest createdmodseq and index
+     * generation of the cached result, so we can compare them against
+     * the index state in later queryChanges requests. */
+    querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq,
+            emailquery_cache.qr.highest_createdmodseq,
+            emailquery_cache.qr.index_generation);
     q->super.query_state = xstrdupnull(querystate);
 
     if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) {
@@ -5078,11 +5146,15 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     uint32_t since_uid;
     uint32_t num_changes = 0;
     modseq_t addrbook_modseq = 0;
+    modseq_t since_highest_createdmodseq = 0;
+    uint64_t since_index_generation = 0;
     int r = 0;
 
     if (!_email_read_querystate(req, query->since_querystate,
                                 &since_modseq, &since_uid,
-                                &addrbook_modseq)) {
+                                &addrbook_modseq,
+                                &since_highest_createdmodseq,
+                                &since_index_generation)) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
                                       "description", "invalid query state");
         return;
@@ -5111,6 +5183,29 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     /* Run search */
     r = emailsearch_run_uidsearch(req, &search);
     if (r) goto done;
+
+    /* Determine highest createdmodseq for any message to report changes
+     * for. Also match index generation of query state and result. */
+    modseq_t highest_createdmodseq =
+            search.never_matches ? 0 : search.query->highest_createdmodseq;
+    uint64_t index_generation =
+            search.never_matches ? 0 : search.query->index_generation;
+    if (since_highest_createdmodseq || highest_createdmodseq) {
+        if (!since_highest_createdmodseq || !highest_createdmodseq ||
+                since_index_generation != index_generation ||
+                highest_createdmodseq < since_highest_createdmodseq) {
+            xsyslog_ev(LOG_INFO, "cannot calculate changes: search index changed",
+                    lf_s("accountid", req->accountid),
+                    lf_llu("since_highest_createdmodseq",
+                        since_highest_createdmodseq),
+                    lf_llu("since_index_generation", since_index_generation),
+                    lf_llu("highest_createdmodseq", highest_createdmodseq),
+                    lf_llu("index_generation", index_generation));
+            *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                                          "description", "search index changed");
+            goto done;
+        }
+    }
 
     /* Prepare result loop */
     const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
@@ -5145,8 +5240,18 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     for (i = 0 ; i < mdcount; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
 
+        // ignore messages the indexer hasn't caught up with.
+        if (highest_createdmodseq &&
+                md->createdmodseq > highest_createdmodseq)
+            continue;
+
+        // determine if this message only became visible to the
+        // search index after the last query
+        bool is_newly_indexed = since_highest_createdmodseq &&
+                md->createdmodseq > since_highest_createdmodseq;
+
         // for this phase, we only care that it has a change
-        if (md->modseq <= since_modseq) {
+        if (md->modseq <= since_modseq && !is_newly_indexed) {
             if (search.is_mutable) {
                 modseq_t modseq = md->convmodseq;
                 if (!modseq) conversation_get_modseq(req->cstate, md->cid, &modseq);
@@ -5166,6 +5271,11 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     // phase 2: report messages that need it
     for (i = 0 ; i < mdcount; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
+
+        /* Drop messages the indexer hasn't caught up with. */
+        if (highest_createdmodseq &&
+                md->createdmodseq > highest_createdmodseq)
+            continue;
 
         jmap_set_emailid(req->cstate, &md->guid,
                          0, &md->internaldate, email_id);
@@ -5274,7 +5384,8 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     free_hashu64_table(&touched_cids, NULL);
 
     modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
-    query->new_querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
+    query->new_querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq,
+            highest_createdmodseq, index_generation);
 
 done:
     if (r && *err == NULL) {
@@ -5296,11 +5407,15 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     uint32_t since_uid;
     uint32_t num_changes = 0;
     modseq_t addrbook_modseq = 0;
+    modseq_t since_highest_createdmodseq = 0;
+    uint64_t since_index_generation = 0;
     int r = 0;
 
     if (!_email_read_querystate(req, query->since_querystate,
                                 &since_modseq, &since_uid,
-                                &addrbook_modseq)) {
+                                &addrbook_modseq,
+                                &since_highest_createdmodseq,
+                                &since_index_generation)) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
                                       "description", "invalid query state");
         return;
@@ -5329,6 +5444,29 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     r = emailsearch_run_uidsearch(req, &search);
     if (r) goto done;
 
+    /* Determine highest createdmodseq for any message to report changes
+     * for. Also match index generation of query state and result. */
+    modseq_t highest_createdmodseq =
+            search.never_matches ? 0 : search.query->highest_createdmodseq;
+    uint64_t index_generation =
+            search.never_matches ? 0 : search.query->index_generation;
+    if (since_highest_createdmodseq || highest_createdmodseq) {
+        if (!since_highest_createdmodseq || !highest_createdmodseq ||
+                since_index_generation != index_generation ||
+                highest_createdmodseq < since_highest_createdmodseq) {
+            xsyslog_ev(LOG_INFO, "cannot calculate changes: search index changed",
+                    lf_s("accountid", req->accountid),
+                    lf_llu("since_highest_createdmodseq",
+                        since_highest_createdmodseq),
+                    lf_llu("since_index_generation", since_index_generation),
+                    lf_llu("highest_createdmodseq", highest_createdmodseq),
+                    lf_llu("index_generation", index_generation));
+            *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                                          "description", "search index changed");
+            goto done;
+        }
+    }
+
     /* Prepare result loop */
     const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
     char email_id[JMAP_MAX_EMAILID_SIZE];
@@ -5351,8 +5489,18 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     for (i = 0 ; i < mdcount; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
 
+        // ignore messages the indexer hasn't caught up with.
+        if (highest_createdmodseq &&
+                md->createdmodseq > highest_createdmodseq)
+            continue;
+
+        // determine if this message only became visible to the
+        // search index after the last query
+        bool is_newly_indexed = since_highest_createdmodseq &&
+                md->createdmodseq > since_highest_createdmodseq;
+
         // for this phase, we only care that it has a change
-        if (md->modseq <= since_modseq) continue;
+        if (md->modseq <= since_modseq && !is_newly_indexed) continue;
 
         jmap_set_emailid(req->cstate, &md->guid,
                          0, &md->internaldate, email_id);
@@ -5363,6 +5511,16 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     // phase 2: report messages that need it
     for (i = 0 ; i < mdcount; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
+
+        // ignore messages the indexer hasn't caught up with.
+        if (highest_createdmodseq &&
+                md->createdmodseq > highest_createdmodseq)
+            continue;
+
+        // determine if this message only became visible to the
+        // search index after the last query
+        bool is_newly_indexed = since_highest_createdmodseq &&
+                md->createdmodseq > since_highest_createdmodseq;
 
         jmap_set_emailid(req->cstate, &md->guid,
                          0, &md->internaldate, email_id);
@@ -5399,7 +5557,8 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
 
         // if it's changed, tell about that
         if ((touched_id & 1)) {
-            if (!search.is_mutable && touched_id == 1 && md->modseq <= since_modseq) {
+            if (!search.is_mutable && touched_id == 1 &&
+                    md->modseq <= since_modseq && !is_newly_indexed) {
                 // this is the exemplar, and it's unchanged,
                 // and we haven't told a removed yet, so we
                 // can just suppress everything
@@ -5439,7 +5598,8 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     free_hash_table(&touched_ids, NULL);
 
     modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
-    query->new_querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
+    query->new_querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq,
+            highest_createdmodseq, index_generation);
 
 done:
     if (r && *err == NULL) {
@@ -5962,11 +6122,13 @@ static int _snippet_tr_end_message(search_text_receiver_t *rx, uint8_t indexleve
         sr->next->end_message(sr->next, indexlevel) : 0;
 }
 
-static int _snippet_tr_end_mailbox(search_text_receiver_t *rx, struct mailbox *mailbox)
+static int _snippet_tr_end_mailbox(search_text_receiver_t *rx,
+                                   struct mailbox *mailbox,
+                                   bool has_more)
 {
     struct snippet_receiver *sr = (struct snippet_receiver*) rx;
     return sr->next->end_mailbox ?
-        sr->next->end_mailbox(sr->next, mailbox) : 0;
+        sr->next->end_mailbox(sr->next, mailbox, has_more) : 0;
 }
 
 static int _snippet_tr_flush(search_text_receiver_t *rx)
@@ -6057,19 +6219,26 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     free(qmboxname);
     if (r) goto done;
 
-    bx = search_begin_search(state->mailbox, SEARCH_MULTIPLE);
+    search_session_t *session =
+        search_begin_session(state->mailbox, SEARCH_MULTIPLE);
+    bx = search_begin_search(session);
     if (!bx) {
         r = IMAP_INTERNAL;
+        search_end_session(session);
         goto done;
     }
 
     search_build_query(bx, searchargs->root);
     if (!bx->get_internalised) {
         r = IMAP_INTERNAL;
+        search_end_search(bx);
+        search_end_session(session);
         goto done;
     }
     intquery = bx->get_internalised(bx);
     search_end_search(bx);
+    bx = NULL;
+    search_end_session(session);
     if (!intquery) {
         r = IMAP_INTERNAL;
         goto done;
@@ -6148,7 +6317,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
             json_array_append_new(*snippets, json_deep_copy(snippet));
             r = 0;
         }
-        int r2 = srx->end_mailbox(srx, mbox);
+        int r2 = srx->end_mailbox(srx, mbox, /*has_more*/false);
         if (!r) r = r2;
 
         json_object_clear(snippet);

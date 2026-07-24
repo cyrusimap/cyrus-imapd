@@ -828,12 +828,17 @@ static int add_found_uid(const char *mboxname, uint32_t uidvalidity,
     return 0;
 }
 
-static void subquery_run_indexed(const char *key __attribute__((unused)),
+struct subquery_run_indexed_ctx {
+    search_query_t *query;
+    search_session_t *session;
+};
+
+static void subquery_run_indexed(const char *serialised_sub __attribute__((unused)),
                                  void *data, void *rock)
 {
-//     const char *mboxname = key;
     search_subquery_t *sub = data;
-    search_query_t *query = rock;
+    struct subquery_run_indexed_ctx *ctx = rock;
+    search_query_t *query = ctx->query;
     search_expr_t *excluded = NULL;
     search_builder_t *bx;
     struct subquery_rock qr = { 0 };
@@ -846,10 +851,6 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
         syslog(LOG_INFO, "Running indexed subquery: %s", s);
         free(s);
     }
-
-    int opts = SEARCH_VERBOSE(query->verbose);
-    if (query->multiple) opts |= SEARCH_MULTIPLE;
-    if (query->attachments_in_any) opts |= SEARCH_ATTACHMENTS_IN_ANY;
 
     /* If the subquery is NOT(x) or AND(NOT(x)..(NOT(y))) then
      * it's likely that we will get lots of results to look up
@@ -878,7 +879,7 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
         excluded = search_expr_duplicate(sub->indexed->children);
     }
 
-    bx = search_begin_search(query->state->mailbox, opts);
+    bx = search_begin_search(ctx->session);
     if (!bx) {
         if (config_getenum(IMAPOPT_SEARCH_ENGINE) == IMAP_ENUM_SEARCH_ENGINE_SQUAT) {
             r = subquery_run_one_folder(query, index_mboxname(query->state), sub->indexed);
@@ -1121,8 +1122,27 @@ EXPORTED int search_query_run(search_query_t *query)
          * all the search engine queries, and builds a set of matched
          * uids per folder.  The second runs per folder and applies
          * any scan expression.
+         * Both phases execute within a query session, which guarantees
+         * a stable index revision.
          */
-        hash_enumerate(&query->subs_by_indexed, subquery_run_indexed, query);
+        int opts = SEARCH_VERBOSE(query->verbose);
+        if (query->multiple) opts |= SEARCH_MULTIPLE;
+        if (query->attachments_in_any) opts |= SEARCH_ATTACHMENTS_IN_ANY;
+
+        struct subquery_run_indexed_ctx ctx = {
+            .query = query,
+            .session = search_begin_session(query->state->mailbox, opts),
+        };
+
+        /* Cache highest createdmodseq and index generation from session */
+        query->highest_createdmodseq =
+            search_session_get_highest_createdmodseq(ctx.session,
+                    &query->index_generation);
+
+        hash_enumerate(&query->subs_by_indexed, subquery_run_indexed, &ctx);
+
+        search_end_session(ctx.session);
+
         r = query->error;
         if (r) goto out;
     }

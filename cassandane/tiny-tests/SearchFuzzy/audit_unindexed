@@ -40,6 +40,7 @@ sub test_audit_unindexed
     my ($key, $val);
     my $result = $self->{instance}->run_dbcommand_cb(sub ($k, $v) {
       return if $k =~ m/\*V\*/;
+      return if $k =~ m/\*HIGHEST_CREATEDMODSEQ\*/;
       $self->assert_null($key);
       ($key, $val) = ($k, $v);
     }, "$xapdir/xapian/cyrus.indexed.db", $format, ['SHOW']);
