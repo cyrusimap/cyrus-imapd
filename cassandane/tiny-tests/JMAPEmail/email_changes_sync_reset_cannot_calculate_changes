@@ -1,0 +1,92 @@
+#!perl
+use Cassandane::Tiny;
+
+# This asserts that Email/changes on a replica after sync_reset is safe
+# with regards to destroyed messages on master where the expunged flag
+# didn't make it to the replica.
+
+my sub assert_email_changes_sync_reset_cannot_calculate_changes
+    ($self, $recreate_on_replica)
+{
+    my $master_jmap = $self->default_user->jmap;
+
+    xlog $self, "deliver message to master";
+    $self->make_message("Message X") or die;
+
+    my $email_id = $master_jmap->request(
+        [['Email/query', {} ]])->single_sentence->arguments->{ids}[0];
+    $self->assert_not_null($email_id);
+
+    xlog $self, "replicate master -> replica";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "get Email state from replica";
+    my $replica_jmap = $self->{replica}->new_jmaptester_for_user($self->default_user);
+    my $res = $replica_jmap->request(
+        [['Email/get', { ids => [$email_id], properties => ['id'] } ]]);
+    $self->assert_str_equals($email_id, $res->single_sentence->arguments->{list}[0]{id});
+
+    my $email_state = $replica_jmap->request(
+        [['Email/get', { ids => [] } ]])->single_sentence->arguments->{state};
+    $self->assert_not_null($email_state);
+
+    xlog $self, "destroy Email on master";
+    $res = $master_jmap->request([[ 'Email/set', { destroy => [$email_id] } ]]);
+    $self->assert_deep_equals([$email_id],
+                              $res->single_sentence->arguments->{destroyed});
+
+    xlog $self, "expunge the record on master";
+    $self->run_delayed_expunge();
+
+    xlog $self, "assert that master returns cannotCalculateChanges";
+    $res = $master_jmap->request([[ 'Email/changes', {
+        sinceState  => $email_state,
+        includeCADs => jtrue,
+    } ]]);
+    $self->assert_str_equals("cannotCalculateChanges",
+                             $res->single_sentence->arguments->{type} // '');
+
+    xlog $self, "reset the replica mailbox";
+    $self->{replica}->run_command({ cyrus => 1 },
+                                  'sync_reset', '-f', 'cassandane');
+
+    if ($recreate_on_replica) {
+        xlog $self, "recreate the replica mailbox with a new uniqueid";
+        my $radmin = $self->{replica}->get_service('imap')
+                          ->create_store(username => 'admin')->get_client();
+        $radmin->create('user.cassandane');
+        $self->assert_str_equals('ok', $radmin->get_last_completion_response());
+    }
+
+    xlog $self, "replicate onto the reset replica";
+    $self->run_replication();
+
+    xlog $self, "call Email/changes on the recreated replica";
+    $replica_jmap = $self->{replica}->new_jmaptester_for_user($self->default_user);
+    $res = $replica_jmap->request([[ 'Email/changes', {
+        sinceState  => $email_state,
+        includeCADs => jtrue,
+    } ]]);
+
+    xlog $self, "assert that replica returns cannotCalculateChanges";
+    $self->assert_str_equals('error', $res->single_sentence->name);
+    $self->assert_str_equals('cannotCalculateChanges',
+                             $res->single_sentence->arguments->{type});
+}
+
+sub test_email_changes_sync_reset_recreate_cannot_calculate_changes
+    :needs_component_jmap :needs_component_replication :Replication
+    :NoReplicaonly :Admin
+    ($self)
+{
+    assert_email_changes_sync_reset_cannot_calculate_changes($self, 1);
+}
+
+sub test_email_changes_sync_reset_create_cannot_calculate_changes
+    :needs_component_jmap :needs_component_replication :Replication
+    :NoReplicaonly
+    ($self)
+{
+    assert_email_changes_sync_reset_cannot_calculate_changes($self, 0);
+}
