@@ -1978,7 +1978,6 @@ static void apply_property_updates(struct patch_data_t *patch,
             }
 
             icalproperty_remove_parameter_by_ref(newprop, actionp);
-            icalparameter_free(actionp);
         }
 
         if (action != ICAL_PATCHACTION_CREATE) {
