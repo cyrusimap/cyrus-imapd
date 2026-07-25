@@ -47,6 +47,7 @@ use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;
 use Cassandane::Instance;
+use Cassandane::Tiny::Loader 'tiny-tests/MurderIMAP';
 
 $Data::Dumper::Sortkeys = 1;
 
