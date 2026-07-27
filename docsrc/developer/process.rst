@@ -25,9 +25,6 @@ lists <feedback-mailing-lists>` to talk about what you have in mind.  For
 smaller things, especially bug fixes, a pull request on GitHub might be the
 best way to propose the change.
 
-The team holds a mostly-weekly team meeting :ref:`online via Zoom
-<feedback-meetings>`.
-
 The :ref:`mailing lists <support>` are used to discuss or announce upcoming or
 ongoing changes and releases.
 
