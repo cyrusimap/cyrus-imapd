@@ -47,10 +47,10 @@ sub _create_instances
     my ($self) = @_;
 
     $self->SUPER::_create_instances();
-    # XXX This should really run from the DAEMON section,
-    # XXX but Cassandane doesn't know about that.
-    $self->{instance}->add_start(name => 'promstatsd',
-                                 argv => [ 'promstatsd' ]);
+    $self->{instance}->add_start(name => 'statscleanup',
+                                 argv => [ 'promstatsd', '-c' ]);
+    $self->{instance}->add_daemon(name => 'promstatsd',
+                                  argv => [ 'promstatsd' ]);
 }
 
 sub tear_down

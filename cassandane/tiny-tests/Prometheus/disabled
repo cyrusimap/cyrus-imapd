@@ -6,7 +6,7 @@ sub test_disabled
     ($self)
 {
     my $instance = $self->{instance};
-    $instance->{starts} = [ grep { $_->{name} ne 'promstatsd' } @{$instance->{starts}} ];
+    delete $instance->{daemons}->{promstatsd};
     $instance->{config}->set(prometheus_enabled => 'no');
 
     $self->_start_instances();
