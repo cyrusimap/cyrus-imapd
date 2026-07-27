@@ -901,8 +901,8 @@ EXPORTED int index_check(struct index_state *state, unsigned tell_flags)
 
     if (r) return r;
 
-    index_tellchanges(state, tell_flags);
     index_unlock(state);
+    index_tellchanges(state, tell_flags);
 
     return r;
 }

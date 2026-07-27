@@ -1,0 +1,246 @@
+#!perl
+use Cassandane::Tiny;
+use Socket qw(SOL_SOCKET SO_RCVBUF);
+use POSIX qw(_exit WNOHANG);
+use IO::Select;
+
+# Regression test for the index_check exclusive-lock-while-writing bug.
+#
+# index_check() acquires an exclusive mailbox index lock, then calls
+# index_tellchanges() which emits untagged FETCH responses through the
+# blocking prot stream.  When the client's TCP receive buffer is full the
+# kernel's TCP window collapses to zero, but prot_flush_internal() keeps
+# looping in write() until all data is flushed -- inside the lock.
+#
+# The idled path is the primary attack vector.  When a flag change arrives,
+# idled notifies the staller's imapd, which calls:
+#   push_updates() -> imapd_check() -> index_check()
+# where the blocking write() stalls the process inside the exclusive lock.
+#
+# BUFFER MATH
+# -----------
+# write() on the server blocks when the server's kernel send buffer fills
+# up.  Linux auto-tunes the send buffer up to tcp_wmem[2] (read at runtime
+# from /proc/sys/net/ipv4/tcp_wmem).  Once the receiver's window is zero,
+# nothing drains, so the sndbuf accumulates until it is full.
+#
+#   staller SO_RCVBUF = 4096  ->  kernel reports actual size via getsockopt
+#   server  SO_SNDBUF (max)   <=  tcp_wmem[2]  (read from /proc at runtime)
+#   total capacity            ==  tcp_wmem[2] + actual_rcvbuf
+#
+# push_updates() passes TELL_UID so each line is:
+#   "* N FETCH (FLAGS (\Seen) UID N)\r\n" ~ 36 bytes
+# 600 messages * 36 bytes ~= 21.6 KB per index_check() call.
+# The number of STOREs needed and the pre-victim sleep are computed at
+# runtime from the kernel's reported buffer ceiling so the test stays
+# correct across kernels with different tcp_wmem settings.
+#
+# FIX
+# ---
+# Call index_unlock() before index_tellchanges(), matching index_fetch,
+# index_store, and index_run_annotator.  index_tellchanges reads only the
+# in-memory index_state; it does not need the mailbox lock held.
+# With the fix the lock is released before any write() can block, so other
+# sessions can always acquire the index lock freely.
+#
+# HOW THE TEST DETECTS THE BUG
+# ----------------------------
+# A third "victim" connection attempts SELECT on the same mailbox after the
+# stall should have started.  If the bug is present the staller's imapd
+# holds the exclusive lock during the blocked write(), so the victim's
+# SELECT blocks on index_lock().  If the fix is applied the lock was already
+# released; the victim's SELECT returns immediately.
+#
+# Primary assertion  (always active):
+#   victim SELECT must complete within 2 seconds.
+#
+# Secondary assertion (requires syslog replacement):
+#   no "mailbox: longlock" message may appear.  mailbox_unlock_index()
+#   logs this when the exclusive lock is held for more than 1 second.
+#   With the fix the lock is held for microseconds; the message never fires.
+
+sub test_index_check_lockhold_slow
+    :needs_component_idled :NoAltNamespace
+    ($self)
+{
+    # --- compute how many STOREs are needed to fill the combined buffers ----
+    # Read the kernel's maximum auto-tunable send-buffer ceiling from /proc.
+    # tcp_wmem has three fields: min  default  max -- we need the third.
+    my $tcp_wmem_max;
+    {
+        my $opened = open my $fh, '<', '/proc/sys/net/ipv4/tcp_wmem';
+        unless ($opened) {
+            xlog "giving up, cannot read /proc/sys/net/ipv4/tcp_wmem: $!";
+            return;
+        }
+
+        $tcp_wmem_max = (split /\s+/, scalar <$fh>)[2] + 0;
+    }
+
+    # When idled is running the polling path in cmd_idle() is disabled
+    # (idle_sock != PROT_NO_FD), so flag changes immediately trigger
+    # push_updates() on the staller's imapd with no polling delay.
+    $self->{instance}->add_start(name => 'idled', argv => ['idled']);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+
+    # write_begin() calls connect() lazily, so assigning the store here
+    # is enough for make_message() to work without _start_instances().
+    $self->{store} = $svc->create_store(folder => 'INBOX');
+
+    # --- populate ----------------------------------------------------------
+    # 600 messages x ~36 bytes per FETCH line ~= 21.6 KB per index_check().
+    # The number of STOREs needed to fill the combined sndbuf + rcvbuf is
+    # computed at runtime below from tcp_wmem_max and actual_rcvbuf.
+    my $N = 600;
+    for my $i (1 .. $N) {
+        $self->make_message("Msg $i");
+    }
+
+    # --- staller -----------------------------------------------------------
+    # Shrink the receive buffer so the TCP window collapses after a small
+    # amount of FETCH data.  Authentication and SELECT responses have already
+    # been consumed by the time IDLE starts, so the 4 KB limit is in effect
+    # before any FETCH stream begins.
+    my $staller_store = $svc->create_store(folder => 'INBOX');
+    $staller_store->connect();
+    my $staller = $staller_store->get_client();
+    $staller->{Socket}->setsockopt(SOL_SOCKET, SO_RCVBUF, pack('i', 4096));
+    # Read back the actual kernel-allocated size (Linux doubles the requested
+    # value and may enforce a minimum; the real number feeds the math below).
+    # In Perl 5.40, IO::Socket::getsockopt returns the value as an ASCII
+    # decimal string ("8192"), not as packed bytes, so use +0 not unpack.
+    my $actual_rcvbuf = do {
+        my $v = $staller->{Socket}->getsockopt(SOL_SOCKET, SO_RCVBUF);
+        defined $v ? ($v + 0) : 8192;
+    };
+    $staller->select('INBOX');
+    $staller_store->idle_begin() or die "IDLE failed: $@";
+    # Staller is now registered with idled and will not read from its
+    # socket again until we explicitly drain it below.
+
+    # Each attacker STORE triggers one index_check() that emits one FETCH
+    # line per message: "* N FETCH (FLAGS (\Seen) UID N)\r\n" ~= 36 bytes.
+    my $bytes_per_store = $N * 36;
+    # Add a 20 % margin so we comfortably exceed the ceiling even if the
+    # kernel's effective sndbuf is slightly above tcp_wmem_max.
+    my $stores_needed = int(($tcp_wmem_max + $actual_rcvbuf) / $bytes_per_store * 1.2) + 5;
+
+    # --- attacker (forked child) -------------------------------------------
+    # Each STORE immediately triggers an index_check() on the staller via
+    # idled.  store() is synchronous -- it waits for the server's tagged OK,
+    # which only arrives after the flag update and idled notification.
+    # Once the combined sndbuf + rcvbuf is saturated, the next index_check()
+    # blocks in write() holding the exclusive lock, and the following STORE
+    # blocks on index_lock() -- the child is stuck.
+    # POSIX::_exit() avoids running destructors on inherited sockets.
+    #
+    # A pipe carries one byte per completed STORE back to the parent so it
+    # can detect the stall without sleeping for a fixed interval.
+    pipe(my $stall_rdr, my $stall_wtr) or die "pipe: $!";
+
+    my $atk_pid = fork();
+    die "fork (attacker): $!" unless defined $atk_pid;
+
+    if ($atk_pid == 0) {
+        close $stall_rdr;
+        my $atk_store = $svc->create_store(folder => 'INBOX');
+        $atk_store->connect();
+        my $atk = $atk_store->get_client();
+        $atk->select('INBOX');
+        for my $i (1 .. $stores_needed) {
+            my $op = ($i % 2) ? '+FLAGS' : '-FLAGS';
+            eval { $atk->store("1:$N", $op, '(\\Seen)') };
+            last if $@;
+            syswrite($stall_wtr, 'x');
+        }
+        POSIX::_exit(0);
+    }
+    close $stall_wtr;
+
+    # On loopback each completed STORE delivers a pipe byte in < 10 ms.
+    # A 1 s timeout with no new byte means the attacker's store() is blocked
+    # waiting for the index lock held by the staller's imapd -- stall is active.
+    {
+        my $sel = IO::Select->new($stall_rdr);
+        while ($sel->can_read(1)) {
+            my $buf;
+            sysread($stall_rdr, $buf, 4096) or last;
+        }
+    }
+    close $stall_rdr;
+
+    # --- victim (forked child) ---------------------------------------------
+    # Fork a victim that attempts SELECT on the mailbox.
+    # Bug present:  staller's imapd holds exclusive lock -> victim blocks.
+    # Fix applied:  lock released before write() -> victim returns at once.
+    my $vic_pid = fork();
+    die "fork (victim): $!" unless defined $vic_pid;
+
+    if ($vic_pid == 0) {
+        my $vic_store = $svc->create_store(folder => 'INBOX');
+        $vic_store->connect();
+        $vic_store->get_client()->select('INBOX');
+        POSIX::_exit(0);
+    }
+
+    # Allow 2 seconds for the victim's SELECT to complete.
+    select(undef, undef, undef, 2.0);
+    my $lock_held = (waitpid($vic_pid, POSIX::WNOHANG) <= 0);
+
+    if ($lock_held) {
+        # Victim is still blocked -- confirm and clean it up.
+        kill('TERM', $vic_pid);
+        waitpid($vic_pid, 0);
+    }
+
+    # --- drain the staller -------------------------------------------------
+    # SIGKILL cannot be deferred by Perl's signal machinery, unlike SIGTERM
+    # which Perl holds until the current op completes.  The attacker may be
+    # deep in a blocking socket read (waiting for the server's STORE reply,
+    # which the server can't send because it's blocked on index_lock waiting
+    # for the staller's exclusive lock).  Using SIGTERM + waitpid here would
+    # itself deadlock: attacker never exits, waitpid never returns, we never
+    # drain, server never unblocks, attacker never gets a chance to die.
+    # SIGKILL terminates it immediately at the kernel level.
+    kill('KILL', $atk_pid);
+    # Do NOT waitpid here -- reap after idle_end so we drain first.
+
+    # Drain the staller's receive buffer by reading FETCH responses one at a
+    # time.  The staller's TCP receive buffer was nearly full (SO_RCVBUF ~8 KB),
+    # keeping the advertised window near zero and blocking the server's write().
+    # Each idle_response() call reads one untagged FETCH line, freeing ~36
+    # bytes of receive-buffer space.  This causes the kernel to send a TCP
+    # window update to the server, allowing prot_flush_internal() write() to
+    # make progress.  We continue until no response arrives within 1 second,
+    # which means the server has finished all pending index_check() calls and
+    # is now blocked in cmd_idle waiting for our "DONE".
+    while ($staller_store->idle_response({}, 1)) {}
+
+    # Send DONE and collect the tagged OK.  idle_end sends "DONE" and then
+    # _parse_response reads all remaining untagged FETCH responses (from
+    # index_check() calls still in flight) before the server reads our
+    # "DONE" and sends the tagged OK.
+    # If the bug is present, mailbox_unlock_index() logs "longlock" here.
+    $staller_store->idle_end({});
+
+    sleep(1);  # let any syslog writes land
+
+    waitpid($atk_pid, 0);  # reap zombie (already killed above)
+
+    # --- assert ------------------------------------------------------------
+    # PRIMARY (always active): victim SELECT must not block.
+    # FAILS when the bug is present; PASSES when the fix is applied.
+    $self->assert(!$lock_held,
+        "index_check() held exclusive lock during blocking prot write: " .
+        "victim SELECT on INBOX timed out after 2 s");
+
+    # SECONDARY (requires syslog replacement): no longlock must appear.
+    # With the fix the lock is held for microseconds and this message never
+    # fires.  With the bug it fires after the drain above releases the lock.
+    $self->assert_syslog_does_not_match(
+        $self->{instance},
+        qr/mailbox: longlock.*user\.cassandane/,
+    );
+}
