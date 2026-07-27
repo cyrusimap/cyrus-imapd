@@ -48,7 +48,7 @@ static void test_get_search_program(void)
         searchargs = new_searchargs(".", 0, &ns, userid, authstate, isadmin); \
         pin = prot_readmap(_in, sizeof(_in)-1); \
         pout = prot_writebuf(&actual_errs); \
-        c = get_search_program(pin, pout, searchargs); \
+        c = get_search_program(pin, pout, 0/*quirks*/, searchargs); \
         CU_ASSERT_EQUAL(c, '\r'); \
         buf_cstring(&actual_errs); \
         CU_ASSERT_STRING_EQUAL(actual_errs.s, expected_errs); \

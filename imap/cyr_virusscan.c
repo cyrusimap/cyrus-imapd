@@ -351,7 +351,7 @@ int main (int argc, char *argv[])
 
         srock.searchargs = new_searchargs("*", GETSEARCH_CHARSET_KEYWORD,
                                           &scan_namespace, NULL, NULL, 1);
-        c = get_search_program(scan_in, scan_out, srock.searchargs);
+        c = get_search_program(scan_in, scan_out, 0/*quirks*/, srock.searchargs);
         prot_free(scan_in);
         prot_flush(scan_out);
         prot_free(scan_out);
