@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+use Date::Parse;
+use List::Util qw(uniq);
+use Time::HiRes qw(usleep);
+
+sub test_stable_clock
+    :min_version_3_1
+    ($self)
+{
+    my @procinfo = grep { m/^\d+ promstatsd\s*$/ }
+                        $self->{instance}->run_cyr_info('proc');
+    $self->assert_num_equals(1, scalar @procinfo);
+    my ($promstatsd_pid, undef) = split /\s/, $procinfo[0], 2;
+    xlog $self, "found promstatsd pid: $promstatsd_pid";
+
+    # do something that'll get counted; wait a moment for the initial report
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select("INBOX");
+    sleep 3;
+
+    my @timestamps;
+
+    # collect timestamps from consecutive reports, while sending signals to
+    # promstatsd to disrupt its sleep period
+    for (1..5) {
+        sleep 2;
+        kill 'USR1', $promstatsd_pid; # this signal just toggles debug logging
+
+        my $response = $self->http_report();
+
+        $self->assert_not_null($response->{success});
+        $self->assert_num_gt(0, length $response->{content});
+
+        my $report = parse_report($response->{content});
+
+        $self->assert_num_gt(0, scalar keys %{$report});
+        $self->assert_not_null($report->{cyrus_imap_connections_total});
+
+        my $stat = $report->{cyrus_imap_connections_total}->{'service="imap"'};
+
+        # timestamp is the report time, so it will have a new value each time
+        # the report is generated, regardless of if the counted value changed
+        push @timestamps, $stat->{timestamp};
+    }
+
+    # filter out any duplicates, they're not interesting here, they just mean
+    # our sleep won the race and we got in before a new report was generated
+    @timestamps = uniq @timestamps;
+    xlog $self, "report timestamps: " . Dumper \@timestamps;
+
+    # we're configured to produce a report every 2 seconds.
+    # generously allow for 200ms slop, although even under valgrind I only
+    # see a few milliseconds difference in practice
+    for (my $t = 0; $t < @timestamps - 1; $t++) {
+        my $delta = $timestamps[$t + 1] - $timestamps[$t];
+        $self->assert_num_gt(1800, $delta);
+        $self->assert_num_lt(2200, $delta);
+    }
+}
