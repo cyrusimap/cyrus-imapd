@@ -40,17 +40,16 @@ static struct report {
     const char *desc;
     void (*collate_fn)(struct buf *);
     enum imapopt freq_opt;
-    int default_frequency;
     struct mappedfile *mf;
     struct buf buf;
     int frequency;
     int64_t prev_report_time;
 } reports[] = {
     { FNAME_PROM_SERVICE_REPORT, "service", &do_collate_service_report,
-      IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ, 10,
+      IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ,
       NULL, BUF_INITIALIZER, 0, 0 },
     { FNAME_PROM_USAGE_REPORT,   "usage",   &do_collate_usage_report,
-      IMAPOPT_PROMETHEUS_USAGE_UPDATE_FREQ, 0,
+      IMAPOPT_PROMETHEUS_USAGE_UPDATE_FREQ,
       NULL, BUF_INITIALIZER, 0, 0 },
 };
 const size_t n_reports = sizeof(reports) / sizeof(reports[0]);
@@ -751,10 +750,7 @@ int main(int argc, char **argv)
                                 reports[i].fname,
                                 NULL);
 
-        if (reports[i].frequency <= 0)
-            reports[i].frequency = config_getduration(reports[i].freq_opt);
-        if (reports[i].frequency <= 0)
-            reports[i].frequency = reports[i].default_frequency;
+        reports[i].frequency = config_getduration(reports[i].freq_opt);
 
         if (reports[i].frequency) {
             syslog(LOG_DEBUG, "updating %s every %d seconds",
