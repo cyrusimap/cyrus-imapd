@@ -24,23 +24,22 @@ Description
 
 **promstatsd** is the Cyrus Prometheus statistics collating daemon.
 
-When the **prometheus_enabled** :cyrusman:`imapd.conf(5)` setting is true,
-various Cyrus service processes will count statistics as they run.
-**promstatsd** collates these statistics into a text-based report that
-Prometheus can ingest.
+When the :imapdconf:`prometheus_enabled` setting is true, various Cyrus
+service processes will count statistics as they run.  **promstatsd** collates
+these statistics into a text-based report that Prometheus can ingest.
 
 The report produced by **promstatsd** is served by :cyrusman:`httpd(8)` at
-the "/metrics" URL, if "prometheus" has been set in **httpmodules** in
-:cyrusman:`imapd.conf(5)`.
+the "/metrics" URL, if "prometheus" has been enabled in
+:imapdconf:`httpmodules`.
 
 **promstatsd** |default-conf-text|
 
 In the first synopsis, **promstatsd** will run as a daemon, updating the
 service and (optionally) usage reports at the frequencies set by the
-**prometheus_service_update_freq** and **prometheus_usage_update_freq**
-:cyrusman:`imapd.conf(5)` options, which default to 10s and disabled,
-respectively.  The optional **-f** *service-frequency* argument can be used to
-override **prometheus_service_update_freq**.  This invocation should be run
+:imapdconf:`prometheus_service_update_freq` and
+:imapdconf:`prometheus_usage_update_freq` options.  The optional **-f**
+*service-frequency* argument can be used to override
+**prometheus_service_update_freq**.  This invocation should be run
 from the DAEMON section of :cyrusman:`cyrus.conf(5)` (see
 :ref:`promstatsd-examples` below).
 
@@ -66,8 +65,8 @@ Options
 
 .. option:: -D
 
-    Run the external debugger specified in the **debug_command**
-    :cyrusman:`imapd.conf(5)` option.
+    Run the external debugger specified in the :imapdconf:`debug_command`
+    option.
 
 .. option:: -1
 
@@ -85,8 +84,7 @@ Options
 .. option:: -f service-frequency
 
     Update the service report every *service-frequency* seconds.  If not
-    specified, the **prometheus_service_update_freq** from
-    :cyrusman:`imapd.conf(5)` will be used, which defaults to 10 seconds.
+    specified, :imapdconf:`prometheus_service_update_freq` will be used.
 
 .. option:: -v
 
