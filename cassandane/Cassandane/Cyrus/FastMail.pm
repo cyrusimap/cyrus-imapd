@@ -130,7 +130,7 @@ sub new
     return $self;
 }
 
-sub default_jmap_using
+sub jmap_default_using
 {
     return [
         'urn:ietf:params:jmap:core',
