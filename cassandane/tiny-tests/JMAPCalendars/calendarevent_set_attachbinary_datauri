@@ -39,26 +39,7 @@ sub test_calendarevent_set_attachbinary_datauri
     my $eventId = $res->[0][1]{created}{event1}{id};
     $self->assert_not_null($eventId);
 
-    xlog "Fetch event without Cyrus extension";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/get', {
-            ids => [$eventId],
-            properties => ['links'],
-        }, 'R1'],
-    ], [
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:calendars',
-        'https://cyrusimap.org/ns/jmap/jscalendarbis',
-        'urn:ietf:params:jmap:principals',
-    ]);
-    my $linkWithoutExt = (values %{$res->[0][1]{list}[0]{links}})[0];
-    $self->assert_str_equals('data:text/plain;base64,aGVsbG8=',
-        $linkWithoutExt->{href});
-    $self->assert_null($linkWithoutExt->{blobId});
-    $self->assert_str_equals('text/plain',
-        $linkWithoutExt->{contentType});
-
-    xlog "Fetch event with Cyrus extension";
+    xlog "Fetch event";
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
             ids => [$eventId],
@@ -71,10 +52,10 @@ sub test_calendarevent_set_attachbinary_datauri
         'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
-    my $linkWithExt = (values %{$res->[0][1]{list}[0]{links}})[0];
-    $self->assert_null($linkWithExt->{href});
-    $self->assert_not_null($linkWithExt->{blobId});
-    $self->assert_str_equals('text/plain', $linkWithExt->{contentType});
+    my $link = (values %{$res->[0][1]{list}[0]{links}})[0];
+    $self->assert_str_equals('data:text/plain;base64,aGVsbG8=', $link->{href});
+    $self->assert_null($link->{blobId});
+    $self->assert_str_equals('text/plain', $link->{contentType});
     my $xhref = $res->[0][1]{list}[0]{'x-href'};
     $self->assert_not_null($xhref);
 
