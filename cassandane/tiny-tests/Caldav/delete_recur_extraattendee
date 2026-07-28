@@ -76,7 +76,7 @@ EOF
         },
     };
 
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         {
             method => 'CANCEL',
             recipient => "test1\@example.com",

@@ -76,7 +76,7 @@ EOF
 
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => "friend\@example.com", is_update => JSON::false, method => 'REQUEST' },
     );
 
@@ -126,7 +126,7 @@ EOF
                     'Allow-Organizer-Change' => 'yes',
     );
 
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         {
             recipient => "friend\@example.com",
             is_update => JSON::true,

@@ -69,7 +69,7 @@ EOF
     $card =~ s/SEQUENCE:0/$extra/;
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => "friend\@example.com", is_update => JSON::false, method => 'REQUEST' },
     );
 }

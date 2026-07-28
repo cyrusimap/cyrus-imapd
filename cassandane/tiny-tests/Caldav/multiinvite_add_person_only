@@ -52,7 +52,7 @@ EOF
 
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => "test1\@example.com", is_update => JSON::false, method => 'REQUEST' },
         { recipient => "test2\@example.com", is_update => JSON::false, method => 'REQUEST' },
     );
@@ -82,7 +82,7 @@ EOF
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
     # only test3 is notified
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => "test3\@example.com",
           is_update => JSON::false,
           method => 'REQUEST',

@@ -46,7 +46,7 @@ RRULE:FREQ=WEEKLY
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
 
-        $self->assert_caldav_notified(
+        $self->assert_caldav_notifications(
             {
                 method => 'REQUEST',
                 recipient => "test1\@example.com",

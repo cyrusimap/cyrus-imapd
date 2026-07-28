@@ -62,13 +62,13 @@ EOF
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar', 'Schedule-Address' => 'othercas@example.com');
 
     # we don't say anything when we add a NEEDS-ACTION item
-    $self->assert_caldav_notified();
+    $self->assert_caldav_notifications();
 
     $card =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=ACCEPTED/;
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar', 'Schedule-Address' => 'othercas@example.com');
 
     # we sent a reply from the correct address
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         {
             method => 'REPLY',
             recipient => 'friend@example.com',

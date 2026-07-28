@@ -15,7 +15,7 @@ ATTENDEE;PARTSTAT=ACCEPTED;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => "test2\@example.com", is_update => JSON::false, method => 'REQUEST' },
     );
 }

@@ -62,13 +62,13 @@ EOF
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
     # we don't say anything when we add a NEEDS-ACTION item
-    $self->assert_caldav_notified();
+    $self->assert_caldav_notifications();
 
     $card =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=ACCEPTED/;
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
     # we sent a reply
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         {
             method => 'REPLY',
             recipient => 'friend@example.com',

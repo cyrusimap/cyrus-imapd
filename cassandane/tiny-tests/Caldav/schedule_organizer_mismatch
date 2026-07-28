@@ -38,7 +38,7 @@ EOF
                      'Content-Type' => 'text/calendar');
 
     xlog $self, "Verify that no iMIP message is sent";
-    $self->assert_caldav_notified();
+    $self->assert_caldav_notifications();
 
     xlog $self, "We should have generated a syslog message about the mismatch";
     $self->assert_syslog_matches($self->{instance},
