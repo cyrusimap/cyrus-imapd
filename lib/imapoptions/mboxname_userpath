@@ -1,7 +1,7 @@
 Name: mboxname_userpath
 Type: STRING
 Default-Value: {configdirectory}
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.7
 
 Path to the parent directory of the user and domain directories.  This option
 can be used (along with other related options) to place all persistent data

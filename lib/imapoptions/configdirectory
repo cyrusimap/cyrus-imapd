@@ -1,7 +1,7 @@
 Name: configdirectory
 Type: STRING
 Default-Value: NULL
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.7
 
 The absolute pathname of the IMAP configuration directory.  This field is
 required.

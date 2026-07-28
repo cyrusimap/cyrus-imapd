@@ -1,6 +1,6 @@
 Name: proc_path
 Type: STRING
 Default-Value: {configdirectory}/proc/
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.7
 
 Path to proc directory.  Must be an absolute path.
