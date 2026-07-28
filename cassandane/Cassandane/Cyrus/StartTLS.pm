@@ -4,6 +4,7 @@
 package Cassandane::Cyrus::StartTLS;
 use strict;
 use warnings;
+use HTTP::Tiny;
 use JSON::XS;
 use Convert::Base64;
 use Cwd qw(abs_path);
