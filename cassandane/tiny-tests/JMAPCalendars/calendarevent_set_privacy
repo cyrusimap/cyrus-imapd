@@ -28,6 +28,7 @@ sub test_calendarevent_set_privacy
     ], [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
         'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
