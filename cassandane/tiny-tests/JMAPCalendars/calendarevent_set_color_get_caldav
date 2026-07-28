@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_color_get_caldav
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $calid = $self->default_user->calendars->default->id;
+
+    my $event =  {
+        version => "2.0",
+        calendarIds => {
+            $calid => JSON::true,
+        },
+        title=> "foo",
+        start=> "2015-11-07T09:00:00",
+        duration=> "PT5M",
+        color => "#01aafF"
+    };
+
+    xlog $self, "create event with named color";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {"1" => $event}
+         },
+         "R1"],
+        ['CalendarEvent/get', {
+            ids => [ '#1' ],
+            properties => [ 'color', 'x-href' ]
+         },
+         "R2"],
+    ]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_str_equals('#01aafF', $res->[1][1]{list}[0]{color});
+    my $href = $res->[1][1]{list}[0]{'x-href'};
+
+    my $caldav = $self->{caldav};
+    $res = $caldav->Request('GET', $href);
+    my $icaldata = $res->{content};
+    $self->assert_matches(qr/\r\nCOLOR:#01aafF\r\n/, $icaldata);
+
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<C:calendar-multiget xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+    <C:calendar-data/>
+  </D:prop>
+  <D:href>$href</D:href>
+</C:calendar-multiget>
+EOF
+
+    xlog "Run calendar-multiget report";
+    $res = $caldav->Request('REPORT', 'Default', $xml,
+        'Content-Type' => 'application/xml',
+    );
+    $icaldata = $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content};
+    $self->assert_matches(qr/\r\nCOLOR:#01aafF\r\n/, $icaldata);
+}

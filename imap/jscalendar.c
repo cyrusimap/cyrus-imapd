@@ -3194,7 +3194,7 @@ static void entry_to_ical(jscal_ctx_t *ctx,
         icalproperty *prop = jobj_get_icalprop(
             ctx, jentry, "color", ICAL_COLOR_PROPERTY, GET_ICAL_CREATE);
         const char *s = json_string_value(jval);
-        icalproperty_set_value(prop, icalvalue_new_text(s));
+        icalproperty_set_value(prop, icalvalue_new_color(s));
         icalcomponent_add_property(comp, prop);
     }
 
