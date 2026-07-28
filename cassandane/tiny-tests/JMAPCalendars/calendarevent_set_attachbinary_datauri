@@ -48,6 +48,7 @@ sub test_calendarevent_set_attachbinary_datauri
     ], [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
         'urn:ietf:params:jmap:principals',
     ]);
     my $linkWithoutExt = (values %{$res->[0][1]{list}[0]{links}})[0];
@@ -66,6 +67,7 @@ sub test_calendarevent_set_attachbinary_datauri
     ], [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
         'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);

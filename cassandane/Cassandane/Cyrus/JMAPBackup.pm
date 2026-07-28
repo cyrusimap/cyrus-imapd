@@ -55,6 +55,7 @@ sub jmap_default_using
         'https://cyrusimap.org/ns/jmap/contacts',
         'https://cyrusimap.org/ns/jmap/calendars',
         'https://cyrusimap.org/ns/jmap/notes',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ];
 }
 

@@ -91,6 +91,7 @@ sub jmap_default_using
         'https://cyrusimap.org/ns/jmap/notes',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ];
 }
 
