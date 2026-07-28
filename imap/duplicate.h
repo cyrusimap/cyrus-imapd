@@ -5,6 +5,8 @@
 #ifndef DUPLICATE_H
 #define DUPLICATE_H
 
+#include <config.h>
+
 #include "hash.h"
 
 /* name of the duplicate delivery database */

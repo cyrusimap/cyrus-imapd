@@ -830,7 +830,7 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
         annotatemore_findall_mailbox(mbox, record->uid, PER_USER_CAL_DATA,
                 0, migrate39_find_peruser_cb, &peruser, ANNOTATE_TOMBSTONES);
 
-        if (!hash_numrecords(&peruser)) {
+        if (!hash_count(&peruser)) {
             free_hash_table(&peruser, free);
             continue;
         }

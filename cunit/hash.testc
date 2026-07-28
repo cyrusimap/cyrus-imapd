@@ -120,8 +120,8 @@ static void test_empty(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(0, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(0, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(0, hash_count(&ht));
 
     /* free the hash table */
     free_hash_table(&ht, NULL);
@@ -152,8 +152,8 @@ static void test_reinsert(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(1, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(1, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(1, hash_count(&ht));
 
     /* re-insert into the hash table */
     d = hash_insert(KEY0, VALUE1, &ht);
@@ -169,8 +169,8 @@ static void test_reinsert(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(1, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(1, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(1, hash_count(&ht));
 
     /* delete from the hash table */
     d = hash_del(KEY0, &ht);
@@ -185,8 +185,8 @@ static void test_reinsert(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(0, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(0, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(0, hash_count(&ht));
 
     /* free the hash table */
     free_hash_table(&ht, NULL);
@@ -254,8 +254,8 @@ static void test_many(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(N, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(N, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(N, hash_count(&ht));
 
     /* delete from the hash table */
     for (i = 0 ; i < N ; i++) {
@@ -274,8 +274,8 @@ static void test_many(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(0, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(0, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(0, hash_count(&ht));
 
     /* free the hash table */
     freed_count = 0;
@@ -307,8 +307,8 @@ static void test_freeing_nonempty(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(N, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(N, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(N, hash_count(&ht));
 
     /* free the hash table */
     freed_count = 0;
@@ -377,32 +377,68 @@ static void test_load_factor_warning(void)
     const char *const words[] = {
         "id", "faucibus", "nisl", "tincidunt", "eget", "nullam", "non", "nisi",
         "est", "sit", "amet", "facilisis", "magna", "etiam", "tempor", "orci",
-        "eu", "lobortis", "elementum", "nibh", "tellus", "molestie"
+        "eu", "lobortis", "elementum", "nibh", "tellus", "molestie", "congue",
+        "consequat", "ac", "felis", "volutpat", "mauris", "nunc", "sed",
+        "augue", "lacus", "viverra"
     };
-    const size_t n_words = sizeof words / sizeof words[0]; /* 22 */
-    const size_t n_buckets = n_words / 4; /* 5 */
+    const size_t n_words = sizeof words / sizeof words[0]; /* 33 */
     unsigned i;
     unsigned int syslog_index;
 
     hash_table ht;
 
     /* make sure numeric assumptions hold */
-    CU_ASSERT_EQUAL_FATAL(22, n_words);
-    CU_ASSERT_EQUAL_FATAL(5, n_buckets);
+    CU_ASSERT_EQUAL_FATAL(33, n_words);
 
-    construct_hash_table(&ht, n_buckets, 0);
-    CU_ASSERT_EQUAL(n_buckets, ht.size);
+    construct_hash_table(&ht, 5, 0);
+    CU_ASSERT_EQUAL(3, ht.size_log2);
 
     syslog_index = CU_SYSLOG_MATCH("hash table load factor exceeds 3.0");
-    /* 5 buckets will hit load factor 3.0 after 15 insertions, 4.0 after 20
-     * insertions, and it won't reach 5.0, so we should warn exactly twice */
     for (i = 0; i < n_words; i++) {
         hash_insert(words[i], NULL, &ht);
     }
-    CU_ASSERT_EQUAL(n_words, hash_numrecords(&ht));
-    CU_ASSERT_SYSLOG(syslog_index, 2);
+    CU_ASSERT_EQUAL(n_words, hash_count(&ht));
+    CU_ASSERT_SYSLOG(syslog_index, 0);
 
     free_hash_table(&ht, NULL);
+}
+
+static void test_hash_size_rounding(void)
+{
+    size_t tests[][2] = {
+        { 0, 3 },
+        { 1, 3 },
+        { 2, 3 },
+        { 3, 3 },
+        { 4, 3 },
+        { 5, 3 },
+        { 6, 3 },
+        { 7, 3 },
+        { 8, 3 },
+        { 9, 4 },
+        { 15, 4 },
+        { 16, 4 },
+        { 17, 5 },
+        { 42, 6 },
+        { 54, 6 },
+        { 255, 8 },
+        { 256, 8 },
+        { 257, 9 },
+        { 65535, 16 },
+        { 65536, 16 },
+        { 65537, 17 },
+    };
+
+    unsigned i = sizeof(tests) / sizeof(size_t) / 2;
+
+    while(--i) {
+        size_t *test = tests[i];
+        hash_table ht;
+
+        construct_hash_table(&ht, test[0], 0);
+        CU_ASSERT_EQUAL(test[1], ht.size_log2);
+        free_hash_table(&ht, NULL);
+    }
 }
 
 /* vim: set ft=c: */
