@@ -1,0 +1,25 @@
+Description:
+
+JMAP for Calendars now always serves JSCalendar 2.0.  A request using the
+urn:ietf:params:jmap:calendars capability will be expected to work with
+JSCalendar 2.0.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None
