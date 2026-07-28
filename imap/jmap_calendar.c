@@ -3574,23 +3574,29 @@ jscal_cfg_t jmapical_ctx_to_jscalendar_cfg(struct jmapical_ctx *jmapctx)
     return cfg;
 }
 
-static json_t *ical_to_jsevent(jmap_req_t *req, icalcomponent *ical,
-                               struct jmapical_ctx *jmapctx)
+/* Convert a single iCalendar object to an array of JSCalendar 2.0 Events.
+ * If props is not NULL, only the named properties are returned. */
+static json_t *icalobj_to_jsevents_jscal(icalcomponent *ical,
+                                         hash_table *props,
+                                         struct jmapical_ctx *jmapctx)
 {
-    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-        jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
+    jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
 
-        json_t *jgroup = jscal_from_ical(&cfg, ical);
-        if (!jgroup) return NULL;
-        json_t *jevent = json_incref(
-            json_array_get(json_object_get(jgroup, "entries"), 0));
-        json_object_set(jevent, "version", json_object_get(jgroup, "version"));
-        json_decref(jgroup);
-        return jevent;
+    json_t *jgroup = jscal_from_ical(&cfg, ical);
+    if (!jgroup) return NULL;
+    json_t *jentries = json_incref(json_object_get(jgroup, "entries"));
+    for (size_t i = 0; i < json_array_size(jentries); i++) {
+        json_t *jentry = json_array_get(jentries, i);
+        json_object_set(jentry, "version", json_object_get(jgroup, "version"));
+
+        if (props) {
+            json_t *jtype = json_incref(json_object_get(jentry, "@type"));
+            jmap_filterprops(jentry, props);
+            if (jtype) json_object_set_new(jentry, "@type", jtype);
+        }
     }
-    else {
-        return jmapical_tojmap(ical, NULL, jmapctx);
-    }
+    json_decref(jgroup);
+    return jentries;
 }
 
 static json_t *ical_to_jsevents(jmap_req_t *req, icalcomponent *ical,
@@ -3598,20 +3604,44 @@ static json_t *ical_to_jsevents(jmap_req_t *req, icalcomponent *ical,
                                 struct jmapical_ctx *jmapctx)
 {
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-        jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
-
-        json_t *jgroup = jscal_from_ical(&cfg, ical);
-        if (!jgroup) return NULL;
-        json_t *jentries = json_incref(json_object_get(jgroup, "entries"));
-        for (size_t i = 0; i < json_array_size(jentries); i++) {
-            json_object_set(json_array_get(jentries, i),
-                    "version", json_object_get(jgroup, "version"));
+        if (icalcomponent_isa(ical) != ICAL_XROOT_COMPONENT) {
+            return icalobj_to_jsevents_jscal(ical, props, jmapctx);
         }
-        json_decref(jgroup);
-        return jentries;
+
+        /* An iCalendar object stream: convert each object and concatenate.
+         * jscal_from_ical only looks at the direct children of what it is
+         * given, so it can not see through the XROOT wrapper itself. */
+        json_t *jsevents = json_array();
+
+        for (icalcomponent *iobj = icalcomponent_get_first_component(
+                 ical, ICAL_VCALENDAR_COMPONENT);
+             iobj;
+             iobj = icalcomponent_get_next_component(ical,
+                                                     ICAL_VCALENDAR_COMPONENT))
+        {
+            json_t *tmp = icalobj_to_jsevents_jscal(iobj, props, jmapctx);
+            json_array_extend(jsevents, tmp);
+            json_decref(tmp);
+        }
+
+        return jsevents;
     }
     else {
         return jmapical_tojmap_all(ical, props, jmapctx);
+    }
+}
+
+static json_t *ical_to_jsevent(jmap_req_t *req, icalcomponent *ical,
+                               struct jmapical_ctx *jmapctx)
+{
+    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+        json_t *jsevents = ical_to_jsevents(req, ical, NULL, jmapctx);
+        json_t *jevent = json_incref(json_array_get(jsevents, 0));
+        json_decref(jsevents);
+        return jevent;
+    }
+    else {
+        return jmapical_tojmap(ical, NULL, jmapctx);
     }
 }
 
