@@ -60,31 +60,50 @@ EOF
     $imap->append('INBOX.Notes', $note3) || die $@;
 
     my $res = $jmap->CallMethods([['Note/get', { }, "R1"]]);
-    $self->assert_cmp_deeply(
+    $self->assert_cmp_deeply([
         superhashof({
             id     => $id1,
             title  => 'snowman',
             body   => "☃\n\n",
             isHTML => JSON::false
         }),
-        $res->[0][1]{list}[0],
-    );
-    $self->assert_cmp_deeply(
         superhashof({
             id     => $id2,
             title  => 'bad charset',
             body   => "foo bar\n",
             isHTML => JSON::false
         }),
-        $res->[0][1]{list}[1],
-    );
-    $self->assert_cmp_deeply(
         superhashof({
             id     => $id3,
             title  => 'bad encoding',
             body   => "foo bar\n",
             isHTML => JSON::false
         }),
-        $res->[0][1]{list}[2],
+    ], $res->[0][1]{list});
+
+    my $id4 = $id2 =~ tr/0-9/5-90-4/r;
+    my $id5 = $id3 =~ tr/0-9/5-90-4/r;
+    $res = $jmap->CallMethods([['Note/get',
+                                { ids => [$id4, $id1, $id5] },
+                                "R2"]]);
+    $self->assert_cmp_deeply(
+        bag($id4, $id5),
+        $res->[0][1]{notFound},
+    );
+    $self->assert_cmp_deeply([
+        superhashof({
+            id     => $id1,
+            title  => 'snowman',
+            body   => "☃\n\n",
+            isHTML => JSON::false
+        })],
+        $res->[0][1]{list},
+    );
+
+    $res = $jmap->CallMethods([['Note/get',
+                                { ids => [] },
+                                "R2"]]);
+    $self->assert_cmp_deeply([],
+        $res->[0][1]{list},
     );
 }

@@ -290,8 +290,8 @@ static void do_collate_service_report(struct buf *buf)
     promdir_foreach(&accum_stats, PROMDIR_FOREACH_PIDS, &all_stats);
 
     report_time = now_ms();
-    syslog(LOG_DEBUG, "updating prometheus report for %d services",
-                      hash_numrecords(&all_stats));
+    syslog(LOG_DEBUG, "updating prometheus report for %zu services",
+                      hash_count(&all_stats));
 
     /* release .doneprocs.lock */
     xunlink(doneprocs_lock_fname);
