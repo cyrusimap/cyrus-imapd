@@ -12,6 +12,7 @@ sub test_email_get_calendarevents
     # calendarEvents property
     my @using = @{ $jmap->DefaultUsing() };
     push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    push @using, 'https://cyrusimap.org/ns/jmap/jscalendarbis';
     $jmap->DefaultUsing(\@using);
 
     my $store = $self->{store};
