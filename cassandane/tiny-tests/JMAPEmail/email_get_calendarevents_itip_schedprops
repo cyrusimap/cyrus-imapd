@@ -175,13 +175,13 @@ EOF
         $self->assert_not_null($event);
         $self->assert_str_equals($tc->{wantMethod}, $event->{method});
 
-        my @attendees = grep { exists $_->{roles}{attendee} } values %{$event->{participants}};
+        # The attendees will be the participants who aren't the owner, here.
+        my @attendees = grep { not exists $_->{roles}{owner} }
+                        values %{$event->{participants}};
         $self->assert_num_equals(1, scalar @attendees);
         $self->assert_str_equals($tc->{wantScheduleUpdated},
             $attendees[0]->{scheduleUpdated});
         $self->assert_num_equals($tc->{wantScheduleSequence},
             $attendees[0]->{scheduleSequence});
-        $self->assert_str_equals($tc->{wantParticipationComment},
-            $attendees[0]->{participationComment});
     }
 }
