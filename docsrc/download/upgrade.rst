@@ -99,6 +99,11 @@ configured.  Our view is that this is so unlikely that we are not preparing
 detailed instructions.  If you are in this situation, contact us on the
 :ref:`mailing list <feedback-mailing-lists>`.
 
+Configuration updates
+#####################
+
+If configdirectory was set to a relative path, it must be changed.
+
 How are you planning on upgrading?
 ##################################
 
