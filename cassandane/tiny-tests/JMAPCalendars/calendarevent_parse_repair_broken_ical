@@ -105,10 +105,8 @@ EOF
                     '@type' => "Alert",
                     trigger => {
                         '@type' => "OffsetTrigger",
-                        relativeTo => "start",
                         offset => "PT0S"
                     },
-                    action => "display"
                 }
             },
         },
