@@ -72,6 +72,19 @@ icalcomponent *jscal_to_ical(jscal_cfg_t *cfg,
  *               or NULL on error. */
 json_t *jscal_from_ical(jscal_cfg_t *cfg, icalcomponent *vcal);
 
+/** @brief Convert an iCalendar object to a single JSCalendar Event object.
+ *
+ *  The Event is the first entry of the Group that jscal_from_ical would have
+ *  returned, with "version" copied down from the Group, since an Event without
+ *  an enclosing Group must set it. Use this where a caller wants one Event and
+ *  has nowhere to put the rest of the Group.
+ *
+ *  @param cfg   Conversion configuration, or NULL for defaults.
+ *  @param vcal  An iCalendar VCALENDAR component.
+ *  @return      A newly allocated JSON object representing a JSCalendar Event,
+ *               or NULL if the iCalendar object holds no entries. */
+json_t *jscal_event_from_ical(jscal_cfg_t *cfg, icalcomponent *vcal);
+
 /** @brief Returns the key of the Participant object for a property.
  *
  *  @param prop  An iCalendar ATTENDEE or ORGANIZER property.

@@ -3,11 +3,9 @@ use Cassandane::Tiny;
 
 # Create a CalendarEvent, then reply to it via CalendarEvent/participantReply.
 #
-# CalendarEventNotifications and iMIP mboxevent payloads are still built as
-# JSCalendar 1.0, whatever the request asked for, so the patch in the
-# mboxevent uses the old-style RFC8984 participant identifiers. Verify that
-# those identifiers are the ones the client chose, and not something the
-# 1.0 converter invented.
+# The jsevent and patch in an iMIP mboxevent are JSCalendar 2.0, whatever the
+# request asked for. Verify that the participant identifiers in the patch are
+# the ones the client chose, and not something the converter invented.
 
 sub get_imip_notification
 {
@@ -87,9 +85,10 @@ sub test_calendarevent_participantreply_patch ($self)
     xlog $self, "Assert participantReply imip patch";
     $payload = $self->get_imip_notification();
     $self->assert_str_equals("REQUEST", $payload->{method});
+    # JSCalendar 2.0 has no scheduleAgent, scheduleForceSend or scheduleStatus
+    # on a Participant, so the SCHEDULE-FORCE-SEND and SCHEDULE-STATUS
+    # parameters that 1.0 surfaced here don't appear in the patch at all.
     $self->assert_cmp_deeply({
         'participants/att1/participationStatus' => 'accepted',
-        'participants/att1/scheduleForceSend' => JSON::true,
-        'participants/org/scheduleStatus' => [ '1.2' ],
     }, $payload->{patch});
 }
