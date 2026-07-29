@@ -2095,6 +2095,9 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     if (mailbox_foldermodseq(mailbox))
         dlist_setnum64(kl, "FOLDERMODSEQ", mailbox_foldermodseq(mailbox));
 
+    if (mailbox->i.deletedmodseq)
+        dlist_setnum64(kl, "DELETEDMODSEQ", mailbox->i.deletedmodseq);
+
     /* always send mailbox annotations */
     r = read_annotations(mailbox, NULL, &annots, 0, 0);
     if (r) goto done;
@@ -3220,6 +3223,7 @@ static int sync_apply_mailbox(struct dlist *kin,
     modseq_t xconvmodseq = 0;
     modseq_t raclmodseq = 0;
     modseq_t createdmodseq = 0;
+    modseq_t deletedmodseq = 0;
     const char *groups = NULL;
     const char *jmapid = NULL;
 
@@ -3228,6 +3232,7 @@ static int sync_apply_mailbox(struct dlist *kin,
     struct synccrcs since_crcs = { 0, 0 };
 
     struct mailbox *mailbox = NULL;
+    bool created = false;
     struct dlist *kr;
     struct dlist *ka = NULL;
     struct dlist *userflags = NULL;
@@ -3305,6 +3310,7 @@ static int sync_apply_mailbox(struct dlist *kin,
     dlist_getnum32(kin, "COMPACT_EMAILIDS", &compact_emailids);
     dlist_getnum64(kin, "RACLMODSEQ", &raclmodseq);
     dlist_getnum64(kin, "FOLDERMODSEQ", &foldermodseq);
+    dlist_getnum64(kin, "DELETEDMODSEQ", &deletedmodseq);
     dlist_getlist(kin, "USERFLAGS", &userflags);
     dlist_getatom(kin, "USERGROUPS", &groups);
     dlist_getatom(kin, "JMAPID", &jmapid);
@@ -3360,7 +3366,10 @@ static int sync_apply_mailbox(struct dlist *kin,
         }
         /* set a highestmodseq of 0 so ALL changes are future
          * changes and get applied */
-        if (!r) mailbox->i.highestmodseq = 0;
+        if (!r) {
+            mailbox->i.highestmodseq = 0;
+            created = true;
+        }
 
 #ifdef USE_SIEVE
         if (mbtype_isa(mbtype) == MBTYPE_SIEVE) {
@@ -3423,7 +3432,10 @@ static int sync_apply_mailbox(struct dlist *kin,
                                                flags, &mailbox);
             /* set a highestmodseq of 0 so ALL changes are future
              * changes and get applied */
-            if (!r) mailbox->i.highestmodseq = 0;
+            if (!r) {
+                mailbox->i.highestmodseq = 0;
+                created = true;
+            }
         }
         else {
             xsyslog(LOG_ERR, "SYNCERROR: mailbox uniqueid changed - retry",
@@ -3669,12 +3681,22 @@ static int sync_apply_mailbox(struct dlist *kin,
     mailbox->i.pop3_last_login.tv_sec = pop3_last_login;
     mailbox->i.pop3_show_after.tv_sec = pop3_show_after;
     mailbox->i.createdmodseq = createdmodseq;
+    /* Replicate the deletedmodseq, but only when we just (re)created the
+     * mailbox, as otherwise it would get reset to 1. In all other cases
+     * the replica keeps track on its own of deletedmodseq. */
+    if (created && deletedmodseq > mailbox->i.deletedmodseq)
+        mailbox->i.deletedmodseq = deletedmodseq;
     /* only alter the syncable options */
     mailbox->i.options = (options & MAILBOX_OPTIONS_MASK) |
                          (mailbox->i.options & ~MAILBOX_OPTIONS_MASK);
 
     /* always set the highestmodseq */
     mboxname_setmodseq(mailbox_name(mailbox), highestmodseq, mailbox_mbtype(mailbox), /*flags*/0);
+
+    /* Also set the per-user maildeletedmodseq counter in case of a full reset */
+    if (created && deletedmodseq)
+        mboxname_setmodseq(mailbox_name(mailbox), deletedmodseq,
+                           mailbox_mbtype(mailbox), MBOXMODSEQ_ISDELETE);
 
     /* this happens rarely, so let us know */
     if (mailbox->i.uidvalidity != uidvalidity) {
