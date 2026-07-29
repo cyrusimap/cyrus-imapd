@@ -1,4 +1,4 @@
-/* jmap_ical.c - Routines to convert calendar events between JMAP and iCalendar */
+/* jmap_ical.c - Common code for JMAP for Calendars */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
@@ -16,44 +16,23 @@
 #include <guesstz.h>
 #endif
 
-#include "acl.h"
-#include "annotate.h"
-#include "append.h"
 #include "caldav_db.h"
 #include "caldav_util.h"
-#include "carddav_db.h"
+#include "calsched_support.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
-#include "http_carddav.h"
-#include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_jmap.h"
-#include "http_proxy.h"
 #include "ical_support.h"
 #include "icu_wrap.h"
-#include "jcal.h"
 #include "json_support.h"
 #include "mailbox.h"
-#include "mboxlist.h"
 #include "mboxname.h"
-#include "parseaddr.h"
-#include "seen.h"
-#include "statuscache.h"
 #include "times.h"
 #include "util.h"
-#include "vcard_support.h"
-#include "version.h"
 #include "webdav_db.h"
 #include "xmalloc.h"
-#include "xsha1.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
-#include "zoneinfo_db.h"
-
-/* for sasl_encode64 */
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
