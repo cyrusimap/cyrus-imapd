@@ -1,0 +1,25 @@
+Description:
+
+iMIP reply processing will no longer permit uninvited guests from inviting
+themselves.
+
+If a REPLY is received for an attendee who is not on the stored event, they
+will no longer be added to the replied-to event.
+
+Documentation:
+
+(none)
+
+
+Config changes:
+
+(none)
+
+Upgrade instructions:
+
+(none)
+
+
+GitHub issue:
+
+If theres a github issue number for this, put it here.
