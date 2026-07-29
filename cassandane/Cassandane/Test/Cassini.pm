@@ -188,7 +188,6 @@ sub test_environment_override
         'gdb.timsieved' => 'yes',
         'config.sasl_mech_list' => 'PLAIN LOGIN',
         'config.debug_command' => '@prefix@/utils/gdbtramp %s %d',
-        'caldavtalk.basedir' => '',
         'imaptest.basedir' => '',
         'imaptest.suppress' => 'listext subscribe',
         'caldavtester.basedir' => '',

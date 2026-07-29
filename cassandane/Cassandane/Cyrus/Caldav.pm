@@ -15,7 +15,6 @@ use Cwd qw(abs_path);
 
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
-use Cassandane::Util::Slurp;
 use utf8;
 
 sub MELBOURNE {
@@ -286,14 +285,6 @@ EOF
 }
 
 ############ REPLIES #############
-
-sub slurp {
-    my $testdir = shift;
-    my $name = shift;
-    my $ext = shift;
-
-    return slurp_file("$testdir/$name.$ext");
-}
 
 sub _safeeq {
     my ($a, $b) = @_;

@@ -169,10 +169,6 @@ extern icaltimezone *jstimezones_lookup_tzid(jstimezones_t* jstzones, const char
 /* Free a timezone resolver */
 extern void jstimezones_free(jstimezones_t **jstzonesptr);
 
-/* for CalDAV content negotiation */
-struct buf *icalcomponent_as_jevent_string(icalcomponent *ical);
-icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf);
-
 /* Base type for JSCalendar LocalDateTime and UTCDateTime */
 
 struct jmapical_datetime {
