@@ -3623,6 +3623,14 @@ EXPORTED void jmap_report_isdefault(struct jmap_set *set, const char *name,
 
     if (json_is_object(obj)) {
         json_object_set_new(obj, "isDefault", json_boolean(isdef));
+
+        /* A create record is built before onSuccessSetIsDefault runs, so its
+         * myRights still shows mayDelete:true, which we won't respect.
+         * Replace it with false.  -- rjbs, 2026-07-29 */
+        json_t *jrights = json_object_get(obj, "myRights");
+        if (isdef && json_is_object(jrights)) {
+            json_object_set_new(jrights, "mayDelete", json_false());
+        }
     }
     else {
         /* Did we make any other updates to the mailbox? */
