@@ -29,7 +29,6 @@ jmap_property_t;
 %%
 "id",     NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
 "name",   NULL, 0
-"sendTo", NULL, 0
 "calendarAddress", NULL, 0
 %%
 

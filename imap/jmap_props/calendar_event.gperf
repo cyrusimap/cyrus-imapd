@@ -50,14 +50,11 @@ jmap_property_t;
 "color",                   NULL, 0
 "recurrenceId",            NULL, 0
 "recurrenceIdTimeZone",    NULL, 0
-"recurrenceRules",         NULL, 0
 "recurrenceOverrides",     NULL, 0
 "excluded",                NULL, 0
-"excludedRecurrenceRules", NULL, 0
 "priority",                NULL, 0
 "freeBusyStatus",          NULL, 0
 "privacy",                 NULL, 0
-"replyTo",                 NULL, 0
 "participants",            NULL, 0
 "useDefaultAlerts",        NULL, 0
 "alerts",                  NULL, 0
@@ -84,7 +81,6 @@ jmap_property_t;
 # FM specific
 "x-href",                  JMAP_CALENDARS_EXTENSION, 0
 "blobId",                  JMAP_CALENDARS_EXTENSION, JMAP_PROP_SERVER_SET
-"cyrusimap.org:iCalProps", JMAP_CALENDARS_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_SKIP_GET
 "debugBlobId",             JMAP_DEBUG_EXTENSION,     JMAP_PROP_SERVER_SET
 #
 # jscalendarbis spec
