@@ -94,7 +94,8 @@ static int jmap_sharenotification_querychanges(struct jmap_req *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
-#define JMAPCACHE_CALVERSION 28
+/* v29 is just v28, bumped to ensure all entries are JSCalendar 2.0 */
+#define JMAPCACHE_CALVERSION 29
 
 // clang-format off
 static jmap_method_t jmap_calendar_methods_standard[] = {
@@ -445,14 +446,8 @@ struct getcalendars_rock {
     int skip_hidden;
 };
 
-static json_t *alert_from_ical(jmap_req_t *req,
-                               icalcomponent *valarm,
-                               struct buf *id)
+static json_t *alert_from_ical(icalcomponent *valarm, struct buf *id)
 {
-    if (!jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-        return jmapical_alert_from_ical(valarm, id);
-    }
-
     // Wrap VALARM in a VEVENT for conversion.
     icalcomponent *vevent = icalcomponent_new(ICAL_VEVENT_COMPONENT);
     icalcomponent_add_property(vevent, icalproperty_new_uid(makeuuid()));
@@ -486,7 +481,7 @@ static json_t *alert_from_ical(jmap_req_t *req,
     return jalert;
 }
 
-static json_t *alerts_from_ical(jmap_req_t *req, icalcomponent *ical)
+static json_t *alerts_from_ical(icalcomponent *ical)
 {
     json_t *alerts = json_object();
     struct buf buf = BUF_INITIALIZER;
@@ -496,7 +491,7 @@ static json_t *alerts_from_ical(jmap_req_t *req, icalcomponent *ical)
          valarm;
          valarm = icalcomponent_get_next_component(ical, ICAL_VALARM_COMPONENT)) {
         buf_reset(&buf);
-        json_t *alert = alert_from_ical(req, valarm, &buf);
+        json_t *alert = alert_from_ical(valarm, &buf);
         if (alert) {
             json_object_set_new(alerts, buf_cstring(&buf), alert);
         }
@@ -511,8 +506,7 @@ static json_t *alerts_from_ical(jmap_req_t *req, icalcomponent *ical)
     return alerts;
 }
 
-static int getcalendar_defaultalerts(jmap_req_t *req,
-                                     const char *mboxname,
+static int getcalendar_defaultalerts(const char *mboxname,
                                      const char *userid,
                                      json_t **with_timep,
                                      json_t **without_timep)
@@ -523,12 +517,12 @@ static int getcalendar_defaultalerts(jmap_req_t *req,
 
     if (with_timep) {
         *with_timep = defalarms.with_time.ical ?
-            alerts_from_ical(req, defalarms.with_time.ical) : NULL;
+            alerts_from_ical(defalarms.with_time.ical) : NULL;
     }
 
     if (without_timep) {
         *without_timep = defalarms.with_date.ical ?
-            alerts_from_ical(req, defalarms.with_date.ical) : NULL;
+            alerts_from_ical(defalarms.with_date.ical) : NULL;
     }
 
     defaultalarms_fini(&defalarms);
@@ -536,8 +530,7 @@ static int getcalendar_defaultalerts(jmap_req_t *req,
     return 0;
 }
 
-static json_t *encode_calendarrights(int rights, int is_owner,
-                                     int use_mayshare)
+static json_t *encode_calendarrights(int rights, int is_owner)
 {
     if (is_owner) rights |= JACL_RSVP;
 
@@ -558,25 +551,13 @@ static json_t *encode_calendarrights(int rights, int is_owner,
             (rights & JACL_RSVP) == JACL_RSVP,
             "mayDelete",
             (rights & JACL_DELETE) == JACL_DELETE,
-            use_mayshare ? "mayShare" : "mayAdmin",
+            "mayShare",
             (rights & JACL_ADMIN_CALENDAR) == JACL_ADMIN_CALENDAR);
-}
-
-static json_t *calendarrights_to_jmap(jmap_req_t *req, int rights,
-                                      int is_owner)
-{
-    return encode_calendarrights(rights, is_owner,
-            jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION));
 }
 
 static json_t *calendarrights_to_sharewith(int rights)
 {
-    return encode_calendarrights(rights, 0, 0);
-}
-
-static json_t *calendarrights_to_sharewith_bis(int rights)
-{
-    return encode_calendarrights(rights, 0, 1);
+    return encode_calendarrights(rights, 0);
 }
 
 static int calendar_sharewith_to_rights(int rights, json_t *jsharewith)
@@ -608,9 +589,7 @@ calendar_sharewith_to_rights_iter:
             mask = JACL_RSVP;
         else if (!strcmp("mayDelete", name))
             mask = JACL_DELETE;
-        /* safe to accept either only because setcalendar_parseprops has
-         * already rejected the wrong one before we get here. */
-        else if (!strcmp("mayAdmin", name) || !strcmp("mayShare", name))
+        else if (!strcmp("mayShare", name))
             mask = JACL_ADMIN_CALENDAR;
         else
             continue;
@@ -850,7 +829,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         jmap_wantprop(rock->get->props, "defaultAlertsWithoutTime")) {
 
         json_t *with_time = NULL, *without_time = NULL;
-        getcalendar_defaultalerts(req, mbentry->name, req->userid,
+        getcalendar_defaultalerts(mbentry->name, req->userid,
                 &with_time, &without_time);
 
         if (jmap_wantprop(rock->get->props, "defaultAlertsWithTime"))
@@ -910,15 +889,13 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             rights &= ~JACL_DELETE;
         }
         json_object_set_new(obj, "myRights",
-                calendarrights_to_jmap(req, rights,
+                encode_calendarrights(rights,
                     !strcmp(rock->req->userid, rock->req->accountid)));
     }
 
     if (jmap_wantprop(rock->get->props, "shareWith")) {
-        json_t *sharewith = jmap_get_sharewith(mbentry,
-                jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) ?
-                calendarrights_to_sharewith_bis :
-                calendarrights_to_sharewith);
+        json_t *sharewith =
+            jmap_get_sharewith(mbentry, calendarrights_to_sharewith);
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
@@ -1218,19 +1195,11 @@ static void setcalendar_props_fini(struct setcalendar_props *props)
         icalcomponent_free(props->defaultalarms_with_date);
 }
 
-static icalcomponent *alert_to_ical(jmap_req_t *req,
-                                    json_t *jalert,
+static icalcomponent *alert_to_ical(json_t *jalert,
                                     struct jmap_parser *parser,
                                     const char *id,
-                                    const char *summary,
-                                    const char *description,
                                     const char *email_recipient)
 {
-    if (!jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-        return jmapical_alert_to_ical(jalert, parser, id,
-                summary, description, email_recipient);
-    }
-
     struct buf buf = BUF_INITIALIZER;
 
     // Wrap the alert in a minimal JSCalendar Event.
@@ -1287,8 +1256,7 @@ static icalcomponent *alert_to_ical(jmap_req_t *req,
     return valarm;
 }
 
-static void setcalendar_parsealerts(jmap_req_t *req,
-                                    struct jmap_parser *parser,
+static void setcalendar_parsealerts(struct jmap_parser *parser,
                                     const char *propname,
                                     json_t *arg,
                                     const char *emailrecipient,
@@ -1304,8 +1272,7 @@ static void setcalendar_parsealerts(jmap_req_t *req,
         json_object_foreach(jprop, id, jalert) {
             jmap_parser_push(parser, id);
             icalcomponent *valarm =
-                alert_to_ical(req, jalert, parser, id,
-                        NULL, NULL, emailrecipient);
+                alert_to_ical(jalert, parser, id, emailrecipient);
             if (valarm) {
                 icalcomponent_add_component(alarms, valarm);
             }
@@ -1442,9 +1409,6 @@ static void setcalendar_parseprops(jmap_req_t *req,
     jprop = json_object_get(arg, "shareWith");
     if (json_object_size(jprop)) {
         // Validate rights
-        const char *admin_right =
-            jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) ?
-            "mayShare" : "mayAdmin";
         const char *sharee;
         json_t *jrights;
         json_object_foreach(jprop, sharee, jrights) {
@@ -1459,7 +1423,7 @@ static void setcalendar_parseprops(jmap_req_t *req,
                              strcmp(right, "mayWriteOwn") &&
                              strcmp(right, "mayUpdatePrivate") &&
                              strcmp(right, "mayRSVP") &&
-                             strcmp(right, admin_right) &&
+                             strcmp(right, "mayShare") &&
                              strcmp(right, "mayDelete"))) {
 
                         jmap_parser_push(parser, "shareWith");
@@ -1587,7 +1551,7 @@ static void setcalendar_parseprops(jmap_req_t *req,
         if (json_object_size(jalertargs)) {
             /* Read current alerts - we always write the whole lot */
             json_t *cur_with_time = NULL, *cur_without_time = NULL;
-            int r = getcalendar_defaultalerts(req, mboxname, req->userid,
+            int r = getcalendar_defaultalerts(mboxname, req->userid,
                     &cur_with_time, &cur_without_time);
 
             if (!r) {
@@ -1605,11 +1569,11 @@ static void setcalendar_parseprops(jmap_req_t *req,
                 if (!json_array_size(invalid)) {
                     /* Parse new alerts */
                     struct jmapical_ctx *jmapctx = jmapical_context_new(req, NULL);
-                    setcalendar_parsealerts(req, parser,
+                    setcalendar_parsealerts(parser,
                             "defaultAlertsWithTime",
                             new_alerts, jmapctx->to_ical.emailalert_recipient,
                             &props->defaultalarms_with_time);
-                    setcalendar_parsealerts(req, parser,
+                    setcalendar_parsealerts(parser,
                             "defaultAlertsWithoutTime",
                             new_alerts, jmapctx->to_ical.emailalert_recipient,
                             &props->defaultalarms_with_date);
@@ -2129,7 +2093,7 @@ static void setcalendars_create(struct jmap_req *req,
     jmap_set_calendarid(req->cstate, mbentry, id);
     *record = json_pack("{s:s s:o}", "id", id,
                         "myRights",
-                        calendarrights_to_jmap(req, jmap_myrights_mbentry(req, mbentry),
+                        encode_calendarrights(jmap_myrights_mbentry(req, mbentry),
                                                !strcmp(req->userid, req->accountid)));
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         json_object_set_new(*record, "mailboxUniqueId",
@@ -3028,8 +2992,6 @@ static void getcalendarevents_filterinstance(json_t *myevent,
 {
     json_object_del(myevent, "recurrenceOverrides");
     json_object_del(myevent, "recurrenceRule");
-    json_object_del(myevent, "recurrenceRules");
-    json_object_del(myevent, "excludedRecurrenceRules");
     jmap_filterprops(myevent, props);
     json_object_set_new(myevent, "id", json_string(id));
     json_object_set_new(myevent, "uid", json_string(ical_uid));
@@ -3354,7 +3316,6 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
         json_object_set_new(publicprops, "duration", json_true());
         json_object_set_new(publicprops, "estimatedDuration", json_true());
         json_object_set_new(publicprops, "excluded", json_true());
-        json_object_set_new(publicprops, "excludedRecurrenceRules", json_true());
         json_object_set_new(publicprops, "freeBusyStatus", json_true());
         json_object_set_new(publicprops, "id", json_true());
         json_object_set_new(publicprops, "isDraft", json_true());
@@ -3362,7 +3323,6 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
         json_object_set_new(publicprops, "recurrenceId", json_true());
         json_object_set_new(publicprops, "recurrenceIdTimeZone", json_true());
         json_object_set_new(publicprops, "recurrenceRule", json_true());
-        json_object_set_new(publicprops, "recurrenceRules", json_true());
         json_object_set_new(publicprops, "recurrenceOverrides", json_true());
         json_object_set_new(publicprops, "sequence", json_true());
         json_object_set_new(publicprops, "showWithoutTime", json_true());
@@ -3599,63 +3559,46 @@ static json_t *icalobj_to_jsevents_jscal(icalcomponent *ical,
     return jentries;
 }
 
-static json_t *ical_to_jsevents(jmap_req_t *req, icalcomponent *ical,
+static json_t *ical_to_jsevents(icalcomponent *ical,
                                 hash_table *props,
                                 struct jmapical_ctx *jmapctx)
 {
-    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-        if (icalcomponent_isa(ical) != ICAL_XROOT_COMPONENT) {
-            return icalobj_to_jsevents_jscal(ical, props, jmapctx);
-        }
-
-        /* An iCalendar object stream: convert each object and concatenate.
-         * jscal_from_ical only looks at the direct children of what it is
-         * given, so it can not see through the XROOT wrapper itself. */
-        json_t *jsevents = json_array();
-
-        for (icalcomponent *iobj = icalcomponent_get_first_component(
-                 ical, ICAL_VCALENDAR_COMPONENT);
-             iobj;
-             iobj = icalcomponent_get_next_component(ical,
-                                                     ICAL_VCALENDAR_COMPONENT))
-        {
-            json_t *tmp = icalobj_to_jsevents_jscal(iobj, props, jmapctx);
-            json_array_extend(jsevents, tmp);
-            json_decref(tmp);
-        }
-
-        return jsevents;
+    if (icalcomponent_isa(ical) != ICAL_XROOT_COMPONENT) {
+        return icalobj_to_jsevents_jscal(ical, props, jmapctx);
     }
-    else {
-        return jmapical_tojmap_all(ical, props, jmapctx);
+
+    /* An iCalendar object stream: convert each object and concatenate.
+     * jscal_from_ical only looks at the direct children of what it is
+     * given, so it can not see through the XROOT wrapper itself. */
+    json_t *jsevents = json_array();
+
+    for (icalcomponent *iobj = icalcomponent_get_first_component(
+             ical, ICAL_VCALENDAR_COMPONENT);
+         iobj;
+         iobj = icalcomponent_get_next_component(ical,
+                                                 ICAL_VCALENDAR_COMPONENT))
+    {
+        json_t *tmp = icalobj_to_jsevents_jscal(iobj, props, jmapctx);
+        json_array_extend(jsevents, tmp);
+        json_decref(tmp);
     }
+
+    return jsevents;
 }
 
-static json_t *ical_to_jsevent(jmap_req_t *req, icalcomponent *ical,
+static json_t *ical_to_jsevent(icalcomponent *ical,
                                struct jmapical_ctx *jmapctx)
 {
-    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-        json_t *jsevents = ical_to_jsevents(req, ical, NULL, jmapctx);
-        json_t *jevent = json_incref(json_array_get(jsevents, 0));
-        json_decref(jsevents);
-        return jevent;
-    }
-    else {
-        return jmapical_tojmap(ical, NULL, jmapctx);
-    }
+    json_t *jsevents = ical_to_jsevents(ical, NULL, jmapctx);
+    json_t *jevent = json_incref(json_array_get(jsevents, 0));
+    json_decref(jsevents);
+    return jevent;
 }
 
 static bool jsevent_is_origin(json_t *jsevent, const strarray_t *schedule_addresses)
 {
     const char *organizer =
         json_string_value(json_object_get(jsevent, "organizerCalendarAddress"));
-
-    if (!organizer) {
-        json_t *jreplyto = json_object_get(jsevent, "replyTo");
-        if (json_is_object(jreplyto)) {
-            organizer = json_string_value(json_object_get(jreplyto, "imip"));
-        }
-    }
 
     if (organizer && schedule_addresses) {
         if (!strncasecmp(organizer, "mailto:", 7)) {
@@ -3769,34 +3712,8 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
             !jmapctx->from_ical.want_icalprops) {
         jsevent = json_loads(jscal->cachedata, 0, NULL);
         if (jsevent) {
-            // XXX ignore cached entrys while we serve both RFC8984
-            // and jscalendarbis entries, and the the cache entry
-            // doesn't match the requested format.
-            const char *version =
-                json_string_value(json_object_get(jsevent, "version"));
-            bool ignore = false;
-
-            if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-                // need entry formatted as jscalendarbis
-                if (!version || !strncmp(version, "1.", 2)) {
-                    ignore = true;
-                }
-            }
-            else {
-                // need entry formatted as RFC8984
-                if (version && strncmp(version, "1.", 2)) {
-                    ignore = true;
-                }
-            }
-
-            if (ignore) {
-                json_decref(jsevent);
-                jsevent = NULL;
-            }
-            else {
-                getcalendarevents_reset_ical(rock);
-                goto gotevent;
-            }
+            getcalendarevents_reset_ical(rock);
+            goto gotevent;
         }
     }
 
@@ -3902,7 +3819,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 
     /* Convert to JMAP */
     context_begin_cdata(jmapctx, rock->mbentry, cdata);
-    jsevent = ical_to_jsevent(req, rock->ical, jmapctx);
+    jsevent = ical_to_jsevent(rock->ical, jmapctx);
     context_end_cdata(jmapctx);
     if (!jsevent) {
         syslog(LOG_ERR, "jmapical_tojson: can't convert %u:%s",
@@ -3969,9 +3886,7 @@ gotevent:
     if (!jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         json_object_del(jsevent, "blobId");
         json_object_del(jsevent, "debugBlobId");
-        remove_jsicalprops(jsevent, NULL,
-                jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) ?
-                    "iCalendar" : JMAPICAL_JSPROP_ICALPROPS);
+        remove_jsicalprops(jsevent, NULL, "iCalendar");
     }
 
     /* Process recurrenceOverrides[Before,After] */
@@ -4172,11 +4087,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     }
 
     /* Only include custom iCalendar properties if asked for */
-    if (get.props &&
-            ((jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) &&
-              jmap_wantprop(get.props, "iCalendar")) ||
-            ((!jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) &&
-              jmap_wantprop(get.props, JMAPICAL_JSPROP_ICALPROPS))))) {
+    if (get.props && jmap_wantprop(get.props, "iCalendar")) {
         rock.jmapctx->from_ical.want_icalprops = 1;
     }
 
@@ -4609,8 +4520,8 @@ static int createevent_toical(jmap_req_t *req,
     jmapctx->jsevent_is_origin_cb = jsevent_is_origin;
     jmapctx->to_ical.serverset = create->serverset;
 
-    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-        /* Remove any top-level property with value 'null' from the object. */
+    /* Remove any top-level property with value 'null' from the object. */
+    {
         const char *propname;
         json_t *jval;
         void *tmp;
@@ -4674,77 +4585,71 @@ static int createevent_toical(jmap_req_t *req,
         buf_reset(&buf);
     }
 
-    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-        // Do not allow to set method.
-        if (JNOTNULL(json_object_get(create->jsevent, "method")) && !create->is_copy) {
-            jmap_parser_invalid(parser, "method");
+    // Do not allow to set method.
+    if (JNOTNULL(json_object_get(create->jsevent, "method")) && !create->is_copy) {
+        jmap_parser_invalid(parser, "method");
+    }
+
+
+    if (jsevent_is_origin(create->jsevent, &create->schedule_addresses) && !create->is_copy) {
+        // Set updated and created.
+        time_t t_now = time(NULL);
+        char s[RFC3339_DATETIME_MAX+1] = { 0 };
+        time_to_rfc3339(t_now, s, RFC3339_DATETIME_MAX+1);
+        json_t *jupdated = json_string(s);
+
+        json_object_set(create->jsevent, "updated", jupdated);
+        json_object_set(create->serverset, "updated", jupdated);
+
+        json_t *jcreated = json_object_get(create->jsevent, "created");
+        const char *created = json_string_value(jcreated);
+        time_t t_created = t_now;
+        if (created && time_from_iso8601(created, &t_created) == -1) {
+            t_created = t_now;
+        }
+        if (JNULL(jcreated) || t_created > t_now) {
+            json_object_set(create->jsevent, "created", jupdated);
+            json_object_set(create->serverset, "created", jupdated);
+        }
+        json_decref(jupdated);
+
+        // Set sequence if not already set.
+        if (!json_object_get(create->jsevent, "sequence")) {
+            json_object_set_new(create->jsevent, "sequence", json_integer(0));
         }
 
-
-        if (jsevent_is_origin(create->jsevent, &create->schedule_addresses) && !create->is_copy) {
-            // Set updated and created.
-            time_t t_now = time(NULL);
-            char s[RFC3339_DATETIME_MAX+1] = { 0 };
-            time_to_rfc3339(t_now, s, RFC3339_DATETIME_MAX+1);
-            json_t *jupdated = json_string(s);
-
-            json_object_set(create->jsevent, "updated", jupdated);
-            json_object_set(create->serverset, "updated", jupdated);
-
-            json_t *jcreated = json_object_get(create->jsevent, "created");
-            const char *created = json_string_value(jcreated);
-            time_t t_created = t_now;
-            if (created && time_from_iso8601(created, &t_created) == -1) {
-                t_created = t_now;
-            }
-            if (JNULL(jcreated) || t_created > t_now) {
-                json_object_set(create->jsevent, "created", jupdated);
-                json_object_set(create->serverset, "created", jupdated);
-            }
-            json_decref(jupdated);
-
-            // Set sequence if not already set.
-            if (!json_object_get(create->jsevent, "sequence")) {
-                json_object_set_new(create->jsevent, "sequence", json_integer(0));
-            }
-
-            // XXX quirk: former implementation set organizer address
-            if (JNULL(json_object_get(create->jsevent, "organizerCalendarAddress"))) {
-                json_t *jparts = json_object_get(create->jsevent, "participants");
-                json_t *jpart;
-                const char *key;
-                json_object_foreach(jparts, key, jpart) {
-                    if (JNOTNULL(json_object_get(jpart, "calendarAddress"))) {
-                        // At least one scheduled Participant is set.
-                        json_t *jreplyto =
-                            jmapctx ? jmapctx->to_ical.replyto : NULL;
-                        const char *orga =
-                            json_string_value(json_object_get(jreplyto, "imip"));
-                        if (orga) {
-                            json_t *jorga = json_string(orga);
-                            json_object_set(create->jsevent,
-                                    "organizerCalendarAddress", jorga);
-                            json_object_set(create->serverset,
-                                    "organizerCalendarAddress", jorga);
-                            json_decref(jorga);
-                        }
+        // XXX quirk: former implementation set organizer address
+        if (JNULL(json_object_get(create->jsevent, "organizerCalendarAddress"))) {
+            json_t *jparts = json_object_get(create->jsevent, "participants");
+            json_t *jpart;
+            const char *key;
+            json_object_foreach(jparts, key, jpart) {
+                if (JNOTNULL(json_object_get(jpart, "calendarAddress"))) {
+                    // At least one scheduled Participant is set.
+                    json_t *jreplyto =
+                        jmapctx ? jmapctx->to_ical.replyto : NULL;
+                    const char *orga =
+                        json_string_value(json_object_get(jreplyto, "imip"));
+                    if (orga) {
+                        json_t *jorga = json_string(orga);
+                        json_object_set(create->jsevent,
+                                "organizerCalendarAddress", jorga);
+                        json_object_set(create->serverset,
+                                "organizerCalendarAddress", jorga);
+                        json_decref(jorga);
                     }
-                    break;
                 }
+                break;
             }
         }
+    }
 
-        jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
-        cfg.use_icalendar_convprops = create->is_copy;
-        create->ical = jscal_to_ical(&cfg, create->jsevent, parser);
-        if (create->ical)
-            create->comp = icalcomponent_get_first_component(
-                create->ical, ICAL_VEVENT_COMPONENT);
-    }
-    else {
-        create->ical = jmapical_toical(create->jsevent, NULL, parser->invalid,
-                create->serverset, &create->comp, NULL, jmapctx);
-    }
+    jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
+    cfg.use_icalendar_convprops = create->is_copy;
+    create->ical = jscal_to_ical(&cfg, create->jsevent, parser);
+    if (create->ical)
+        create->comp = icalcomponent_get_first_component(
+            create->ical, ICAL_VEVENT_COMPONENT);
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         json_object_set_new(create->serverset, "isOrigin",
@@ -5078,9 +4983,7 @@ static void setcalendarevents_create(jmap_req_t *req,
     };
 
     if (!is_copy) {
-        remove_jsicalprops(create.jsevent, &parser,
-                jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) ?
-                "iCalendar" : JMAPICAL_JSPROP_ICALPROPS);
+        remove_jsicalprops(create.jsevent, &parser, "iCalendar");
         if (json_array_size(parser.invalid)) goto done;
     }
 
@@ -5277,9 +5180,7 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
     }
 
     json_object_del(new_instance, "recurrenceRule");
-    json_object_del(new_instance, "recurrenceRules");
     json_object_del(new_instance, "recurrenceOverrides");
-    json_object_del(new_instance, "excludedRecurrenceRules");
     new_override = jmap_patchobject_create(old_event, new_instance, 0/*no_remove*/);
     json_object_del(new_override, "@type");
     json_object_del(new_override, "method");
@@ -5287,11 +5188,8 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
     json_object_del(new_override, "recurrenceId");
     json_object_del(new_override, "recurrenceIdTimeZone");
     json_object_del(new_override, "recurrenceRule");
-    json_object_del(new_override, "recurrenceRules");
     json_object_del(new_override, "recurrenceOverrides");
-    json_object_del(new_override, "excludedRecurrenceRules");
     json_object_del(new_override, "relatedTo");
-    json_object_del(new_override, "replyTo");
     json_object_del(new_override, "organizerCalendarAddress");
     json_object_del(new_override, "uid");
     json_decref(new_instance);
@@ -5537,9 +5435,6 @@ static void updateevent_bump_sequence(json_t *old_event,
 
     /* ... server is the source of the event */
     json_t *jorga = json_object_get(new_event, "organizerCalendarAddress");
-    if (JNULL(jorga)) {
-        jorga = json_object_get(json_object_get(new_event, "replyTo"), "imip");
-    }
     if (JNOTNULL(jorga)) {
         const char *addr = json_string_value(jorga);
         if (addr && !strncasecmp(addr, "mailto:", 7) &&
@@ -5603,8 +5498,6 @@ struct updateevent {
     json_t *old_event;
     icalcomponent *oldical;
     icalcomponent *newical;
-
-    jstimezones_t *jstzones;
 };
 
 static int updateevent_apply_patch(jmap_req_t *req,
@@ -5677,7 +5570,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
 
     // Read old event
     context_begin_cdata(jmapctx, update->mbentry, update->cdata);
-    old_event = ical_to_jsevent(req, myoldical, jmapctx);
+    old_event = ical_to_jsevent(myoldical, jmapctx);
     if (!old_event) {
         r = IMAP_INTERNAL;
         goto done;
@@ -5715,40 +5608,33 @@ static int updateevent_apply_patch(jmap_req_t *req,
     updateevent_bump_sequence(update->old_event, new_event,
             update->serverset, update->schedule_addresses);
 
+    // Do not allow to set method - but ignore keeping it.
+    const char *new_method =
+        json_string_value(json_object_get(update->event_patch, "method"));
+    if (new_method) {
+        const char *old_method =
+            json_string_value(json_object_get(old_event, "method"));
+        if (!old_method || strcasecmp(old_method, new_method)) {
+            json_array_append_new(invalid, json_string("method"));
+        }
+    }
+
+    // Set updated.
+    if (jsevent_is_origin(new_event, update->schedule_addresses)) {
+        char s[RFC3339_DATETIME_MAX+1] = { 0 };
+        time_to_rfc3339(time(NULL), s, RFC3339_DATETIME_MAX+1);
+        json_t *jupdated = json_string(s);
+        json_object_set(new_event, "updated", jupdated);
+        json_object_set(update->serverset, "updated", jupdated);
+        json_decref(jupdated);
+    }
+
     /* Convert to iCalendar */
-    icalcomponent *newical;
-    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-        // Do not allow to set method - but ignore keeping it.
-        const char *new_method =
-            json_string_value(json_object_get(update->event_patch, "method"));
-        if (new_method) {
-            const char *old_method =
-                json_string_value(json_object_get(old_event, "method"));
-            if (!old_method || strcasecmp(old_method, new_method)) {
-                json_array_append_new(invalid, json_string("method"));
-            }
-        }
-
-        // Set updated.
-        if (jsevent_is_origin(new_event, update->schedule_addresses)) {
-            char s[RFC3339_DATETIME_MAX+1] = { 0 };
-            time_to_rfc3339(time(NULL), s, RFC3339_DATETIME_MAX+1);
-            json_t *jupdated = json_string(s);
-            json_object_set(new_event, "updated", jupdated);
-            json_object_set(update->serverset, "updated", jupdated);
-            json_decref(jupdated);
-        }
-
-        struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
-        jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
-        newical = jscal_to_ical(&cfg, new_event, &myparser);
-        json_array_extend(invalid, myparser.invalid);
-        jmap_parser_fini(&myparser);
-    }
-    else {
-        newical = jmapical_toical(new_event, myoldical,
-                invalid, update->serverset, NULL, &update->jstzones, jmapctx);
-    }
+    struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
+    jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
+    icalcomponent *newical = jscal_to_ical(&cfg, new_event, &myparser);
+    json_array_extend(invalid, myparser.invalid);
+    jmap_parser_fini(&myparser);
     if (!newical || json_array_size(invalid)) {
         if (newical) icalcomponent_free(newical);
         goto done;
@@ -5873,9 +5759,7 @@ static void setcalendarevents_update(jmap_req_t *req,
         .serverset = serverset,
     };
 
-    remove_jsicalprops(update.event_patch, &parser,
-            jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) ?
-                "iCalendar" : JMAPICAL_JSPROP_ICALPROPS);
+    remove_jsicalprops(update.event_patch, &parser, "iCalendar");
     if (json_array_size(parser.invalid)) goto done;
 
     static int64_t icalendar_max_size = -1;
@@ -6258,7 +6142,6 @@ done:
         icalcomponent_free(update.oldical);
     json_decref(update.old_event);
     json_decref(update.event_patch);
-    jstimezones_free(&update.jstzones);
 
     mailbox_close(&mbox);
     mailbox_close(&dstmbox);
@@ -6443,7 +6326,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
                 eid->ical_recurid, 1);
         struct jmapical_ctx *jmapctx = jmapical_context_new(req, &schedule_addresses);
         context_begin_cdata(jmapctx, mbentry, cdata);
-        old_event = ical_to_jsevent(req, myical, jmapctx);
+        old_event = ical_to_jsevent(myical, jmapctx);
         jmapical_context_free(&jmapctx);
         newical = NULL;
         icalcomponent_free(myical);
@@ -6459,7 +6342,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     else {
         struct jmapical_ctx *jmapctx = jmapical_context_new(req, &schedule_addresses);
         context_begin_cdata(jmapctx, mbentry, cdata);
-        old_event = ical_to_jsevent(req, oldical, jmapctx);
+        old_event = ical_to_jsevent(oldical, jmapctx);
         jmapical_context_free(&jmapctx);
         newical = NULL;
     }
@@ -8136,7 +8019,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     jmapctx->to_ical.no_sanitize_timestamps = 1;
     jmapctx->from_ical.want_icalprops = 1;
     context_begin_cdata(jmapctx, mbentry, cdata);
-    json_t *src_event = ical_to_jsevent(req, src_ical, jmapctx);
+    json_t *src_event = ical_to_jsevent(src_ical, jmapctx);
     if (src_event) {
         dst_event = jmap_patchobject_apply(src_event, jevent, NULL, 0);
     }
@@ -8388,7 +8271,7 @@ static int jmap_calendarevent_parse(jmap_req_t *req)
         ical = icalparser_parse_string(buf_cstring(&blob_ctx.blob));
         if (ical) {
             if (args.repair_broken_ical) repair_broken_ical(&ical);
-            events = ical_to_jsevents(req, ical, args.props, jmapctx);
+            events = ical_to_jsevents(ical, args.props, jmapctx);
             icalcomponent_free(ical);
         }
 
@@ -8616,12 +8499,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
                 goto no_op;
             }
 
-            if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-                part_id = jscal_participant_id(prop);
-            }
-            else {
-                part_id = xstrdupnull(jmap_partid_from_ical(prop));
-            }
+            part_id = jscal_participant_id(prop);
             break;
         }
     }
@@ -8748,7 +8626,6 @@ done:
     mailbox_close(&mbox);
     if (update.oldical) icalcomponent_free(update.oldical);
     if (update.newical) icalcomponent_free(update.newical);
-    jstimezones_free(&update.jstzones);
     json_decref(update.event_patch);
     json_decref(update.old_event);
     strarray_fini(&schedule_addr);
@@ -8918,16 +8795,8 @@ static json_t *buildprincipal(struct jmap_req *req,
             }
             buf_appendcstr(&buf, addr);
 
-            if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-                json_object_set_new(jp, "calendarAddress",
-                        json_string(buf_cstring(&buf)));
-            }
-            else {
-                json_t *jsendTo = json_null();
-                jsendTo = json_pack("{s:s}", "imip", buf_cstring(&buf));
-                json_object_set_new(jp, "sendTo", jsendTo);
-            }
-
+            json_object_set_new(jp, "calendarAddress",
+                    json_string(buf_cstring(&buf)));
 
             buf_reset(&buf);
         }
@@ -9842,8 +9711,6 @@ static int principal_getavailability_ical_cb(icalcomponent *comp,
         /* Filter properties and set event */
         json_object_del(jevent, "recurrenceOverrides");
         json_object_del(jevent, "recurrenceRule");
-        json_object_del(jevent, "recurrenceRules");
-        json_object_del(jevent, "excludedRecurrenceRules");
         jmap_filterprops(jevent, rock->eventprops);
         bp.jevent = jevent;
     }
@@ -9927,7 +9794,7 @@ static int principal_getavailability_cb(void *vrock, struct caldav_jscal *jscal)
     if (rock->show_details) {
         /* Fetch all properties, we need them for recurrence overrides */
         context_begin_cdata(rock->jmapctx, rock->mbentry, cdata);
-        rock->jevent = ical_to_jsevent(rock->req, ical, rock->jmapctx);
+        rock->jevent = ical_to_jsevent(ical, rock->jmapctx);
         context_end_cdata(rock->jmapctx);
     }
 
@@ -10927,13 +10794,13 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
             if (dlist_getatom(xl, "OLD", &aclstr) && *aclstr) {
                 int rights;
                 if (cyrus_acl_strtomask(aclstr, &rights) == 0) {
-                    oldrights = calendarrights_to_jmap(req, rights, is_owner);
+                    oldrights = encode_calendarrights(rights, is_owner);
                 }
             }
             if (dlist_getatom(xl, "NEW", &aclstr) && *aclstr) {
                 int rights;
                 if (cyrus_acl_strtomask(aclstr, &rights) == 0) {
-                    newrights = calendarrights_to_jmap(req, rights, is_owner);
+                    newrights = encode_calendarrights(rights, is_owner);
                 }
             }
         }
@@ -11903,14 +11770,8 @@ static int jmap_participantidentity_get(struct jmap_req *req)
             if (!strchr(addr, ':')) buf_setcstr(&buf, "mailto:");
             buf_appendcstr(&buf, addr);
 
-            if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-                json_object_set_new(jpartid, "calendarAddress",
-                        json_string(buf_cstring(&buf)));
-            }
-            else {
-                json_object_set_new(jpartid, "sendTo",
-                        json_pack("{s:s}", "imip", buf_cstring(&buf)));
-            }
+            json_object_set_new(jpartid, "calendarAddress",
+                    json_string(buf_cstring(&buf)));
             buf_reset(&buf);
         }
 
@@ -12105,7 +11966,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
         jmapctx->from_ical.cyrus_msg.uid = uid;
         jmapctx->from_ical.cyrus_msg.partid = partid;
         repair_broken_ical(&ical);
-        json_t *jsevents = ical_to_jsevents(req, ical, NULL, jmapctx);
+        json_t *jsevents = ical_to_jsevents(ical, NULL, jmapctx);
         if (json_array_size(jsevents)) {
             json_object_set_new(jsevents_by_partid, part->part_id, jsevents);
         }

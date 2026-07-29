@@ -17,10 +17,10 @@ sub test_calendar_set_isdefault_requires_admin
 
     $orig_default->share_with(cassandane => [ qw( mayReadItems mayWriteAll ) ]);
 
-    # Granting mayAdmin on a single shared calendar must not be enough to flip
+    # Granting mayShare on a single shared calendar must not be enough to flip
     # the account's default calendar -- that is per-account state and requires
     # admin on the calendar home, not on the target alone.
-    $shared_cal->share_with(cassandane => [ qw( mayReadItems mayWriteAll mayAdmin ) ]);
+    $shared_cal->share_with(cassandane => [ qw( mayReadItems mayWriteAll mayShare ) ]);
 
     xlog $self, "as cassandane, attempt to flip sharer's default via onSuccessSetIsDefault";
     $jmap->CallMethods([
