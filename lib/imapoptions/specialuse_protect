@@ -2,7 +2,7 @@ Name: specialuse_protect
 Type: STRING
 Default-Value: \\Archive \\Drafts \\Important \\Junk \\Sent \\Scheduled
  \\Snoozed \\Trash
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.7
 
 Whitespace separated list of special-use attributes to protect the
 mailboxes for.  If set, don't allow mailboxes with these special use

@@ -1,7 +1,7 @@
 Name: lmtp_exclude_specialuse
 Type: STRING
 Default-Value: \\Drafts \\Scheduled \\Snoozed
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.7
 
 Don't allow delivery to folders with given special-use attributes.
 
