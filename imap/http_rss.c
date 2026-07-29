@@ -757,6 +757,37 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
 }
 
 
+/* HTML-escape a string for inline use inside a buf_printf_markup() line:
+ * no leading indent, no trailing newline, and no <blockquote> warning
+ * injection from buf_escapestr()'s `replace` mode (which would tear an
+ * enclosing tag or attribute in half).  Non-printable bytes are passed
+ * through as 'X', matching buf_escapestr()'s non-replace behaviour.
+ * -- claude, 2026-05-21
+ */
+static void buf_escape_inline(struct buf *buf, const char *str)
+{
+    const char *c;
+
+    for (c = str; c && *c; c++) {
+        if (*c == '"') buf_appendcstr(buf, "&quot;");
+        else if (*c == '&') buf_appendcstr(buf, "&amp;");
+        else if (*c == '<') buf_appendcstr(buf, "&lt;");
+        else if (*c == '>') buf_appendcstr(buf, "&gt;");
+        else if ((*c & 0xc0) == 0xc0) {
+            /* leading byte of a multi-byte UTF-8 sequence: copy the
+             * leader and all of its continuation bytes verbatim
+             */
+            unsigned char lead = *c;
+
+            do buf_putc(buf, *c);
+            while (((lead <<= 1) & 0x80) && c++);
+        }
+        else if (!(isspace(*c) || isprint(*c))) buf_putc(buf, 'X');
+        else buf_putc(buf, *c);
+    }
+}
+
+
 /* List messages as an RSS feed */
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
@@ -988,13 +1019,25 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
                 free(name);
             }
             else {
-                buf_printf_markup(buf, level, "<name>%s@%s</name>",
-                                  addr->mailbox, addr->domain);
+                if (config_httpprettytelemetry)
+                    buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+                buf_appendcstr(buf, "<name>");
+                buf_escape_inline(buf, addr->mailbox);
+                buf_appendcstr(buf, "@");
+                buf_escape_inline(buf, addr->domain);
+                buf_appendcstr(buf, "</name>");
+                if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
             }
 
             /* <email> - optional */
-            buf_printf_markup(buf, level, "<email>%s@%s</email>",
-                              addr->mailbox, addr->domain);
+            if (config_httpprettytelemetry)
+                buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+            buf_appendcstr(buf, "<email>");
+            buf_escape_inline(buf, addr->mailbox);
+            buf_appendcstr(buf, "@");
+            buf_escape_inline(buf, addr->domain);
+            buf_appendcstr(buf, "</email>");
+            if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
 
             buf_printf_markup(buf, --level, "</author>");
         }
@@ -1047,9 +1090,20 @@ static void display_address(struct buf *buf, struct address *addr,
         buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
 
     buf_printf(buf, "%s", sep);
-    if (addr->name) buf_printf(buf, "\"%s\" ", addr->name);
-    buf_printf(buf, "<a href=\"mailto:%s@%s\">&lt;%s@%s&gt;</a>",
-               addr->mailbox, addr->domain, addr->mailbox, addr->domain);
+    if (addr->name) {
+        buf_appendcstr(buf, "\"");
+        buf_escape_inline(buf, addr->name);
+        buf_appendcstr(buf, "\" ");
+    }
+    buf_appendcstr(buf, "<a href=\"mailto:");
+    buf_escape_inline(buf, addr->mailbox);
+    buf_appendcstr(buf, "@");
+    buf_escape_inline(buf, addr->domain);
+    buf_appendcstr(buf, "\">&lt;");
+    buf_escape_inline(buf, addr->mailbox);
+    buf_appendcstr(buf, "@");
+    buf_escape_inline(buf, addr->domain);
+    buf_appendcstr(buf, "&gt;</a>");
 
     if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
 }
@@ -1227,11 +1281,21 @@ static void display_part(struct transaction_t *txn,
 
             buf_printf_markup(buf, level++, "<div align=center>");
 
-            /* Create link */
-            buf_printf_markup(buf, level++,
-                              "<a href=\"%s?section=%s\" type=\"%s/%s\">",
-                              txn->req_tgt.path, cursection,
-                              body->type, body->subtype);
+            /* Create link.  body->type and body->subtype are already
+             * constrained by message_parse_type() to reject MIME tspecials,
+             * but escape them defensively anyway.
+             * -- claude, 2026-05-21
+             */
+            if (config_httpprettytelemetry)
+                buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+            buf_printf(buf, "<a href=\"%s?section=%s\" type=\"",
+                       txn->req_tgt.path, cursection);
+            buf_escape_inline(buf, body->type);
+            buf_appendcstr(buf, "/");
+            buf_escape_inline(buf, body->subtype);
+            buf_appendcstr(buf, "\">");
+            if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+            level++;
 
             if (config_httpprettytelemetry)
                 buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
@@ -1242,11 +1306,19 @@ static void display_part(struct transaction_t *txn,
                            txn->req_tgt.path, cursection);
             }
 
-            /* Create text for link or alternative text for image */
-            if (param) buf_printf(buf, "%s", param->value);
+            /* Create text for link or alternative text for image.
+             * param->value comes from message_parse_params(), which accepts
+             * arbitrary bytes inside a quoted-string parameter value, so it
+             * must be escaped before landing in alt="..." or anchor text.
+             * -- claude, 2026-05-21
+             */
+            if (param) buf_escape_inline(buf, param->value);
             else {
-                buf_printf(buf, "[%s/%s %u bytes]",
-                           body->type, body->subtype, body->content_size);
+                buf_appendcstr(buf, "[");
+                buf_escape_inline(buf, body->type);
+                buf_appendcstr(buf, "/");
+                buf_escape_inline(buf, body->subtype);
+                buf_printf(buf, " %u bytes]", body->content_size);
             }
 
             if (is_image) buf_printf(buf, "\">");
