@@ -1,0 +1,68 @@
+#include <config.h>
+
+#include <stdlib.h>
+#include <string.h>
+
+#include "cunit/unit.h"
+
+#include "imap/lmtpengine.h"
+
+/* clean_retpath() strips a single layer of surrounding <> from the
+ * return path.  These helpers verify that on every interesting input
+ * it produces the documented result and is memory-safe.
+ */
+
+#define GUARD_BYTE ((char) 0xA5)
+
+static void assert_clean_retpath(const char *input, const char *expected)
+{
+    size_t input_len = strlen(input);
+
+    /* Allocate a buffer with a sentinel byte immediately before the
+     * string we hand to clean_retpath.  A one-byte underflow write
+     * (the bug under test) clobbers that sentinel.
+     */
+    char *block = malloc(1 + input_len + 1);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(block);
+    block[0] = GUARD_BYTE;
+    memcpy(block + 1, input, input_len + 1);
+
+    char *rpath = block + 1;
+    clean_retpath(rpath);
+
+    CU_ASSERT_EQUAL(block[0], GUARD_BYTE);
+    CU_ASSERT_STRING_EQUAL(rpath, expected);
+
+    free(block);
+}
+
+static void test_normal(void)
+{
+    assert_clean_retpath("<user@example.com>", "user@example.com");
+}
+
+static void test_empty_angles(void)
+{
+    assert_clean_retpath("<>", "");
+}
+
+static void test_no_angles(void)
+{
+    assert_clean_retpath("user@example.com", "user@example.com");
+}
+
+/* Regression test for a one-byte heap underflow: when the return
+ * path was a single "<", clean_retpath() decremented its length
+ * counter past zero and then read/wrote rpath[-1].
+ */
+static void test_lone_open_angle(void)
+{
+    assert_clean_retpath("<", "");
+}
+
+static void test_missing_close_angle(void)
+{
+    assert_clean_retpath("<user@example.com", "user@example.com");
+}
+
+/* vim: set ft=c: */
