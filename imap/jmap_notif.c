@@ -344,29 +344,6 @@ HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
     return r;
 }
 
-/* Convert an iCalendar object to a JSCalendar Event.
- *
- * Returns the first event in the object, or NULL if it holds none. Notification
- * payloads are not tied to any particular request, so there is no capability to
- * consult here: they are always JSCalendar 2.0.
- */
-static json_t *jsevent_from_ical(icalcomponent *ical)
-{
-    json_t *jgroup = jscal_from_ical(NULL, ical);
-    if (!jgroup) return NULL;
-
-    json_t *jevent =
-        json_incref(json_array_get(json_object_get(jgroup, "entries"), 0));
-
-    if (jevent) {
-        // An Event outside an enclosing Group must set "version".
-        json_object_set(jevent, "version", json_object_get(jgroup, "version"));
-    }
-
-    json_decref(jgroup);
-    return jevent;
-}
-
 HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
                                         const char *userid,
                                         const struct auth_state *authstate,
@@ -412,10 +389,10 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
 
     const char *type;
     if (oldical) {
-        jevent = jsevent_from_ical(oldical);
+        jevent = jscal_event_from_ical(NULL, oldical);
         if (newical) {
             type = "updated";
-            json_t *tmp = jsevent_from_ical(newical);
+            json_t *tmp = jscal_event_from_ical(NULL, newical);
             jpatch = jmap_patchobject_create(jevent, tmp, 0/*no_remove*/);
             json_decref(tmp);
         }
@@ -423,7 +400,7 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
     }
     else {
         type = "created";
-        jevent = jsevent_from_ical(newical);
+        jevent = jscal_event_from_ical(NULL, newical);
     }
     if (!jevent) goto done;
 
