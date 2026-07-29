@@ -3531,7 +3531,8 @@ static void validate_jicalcomponent(jscal_ctx_t *ctx,
             if (!is_stringset(jval, NULL))
                 jmap_parser_invalid(parser, key);
         }
-        else {
+        // Ignore extension properties, reject anything else.
+        else if (!is_vendorext_key(key)) {
             jmap_parser_invalid(parser, key);
         }
     }
@@ -6519,15 +6520,17 @@ static void entry_from_ical(jscal_ctx_t *ctx,
     jobj_set_icalcomp(ctx, jobj, comp);
     vendorexts_from_ical(comp, jobj);
 
-    // XXX for debugging only
-    if (ctx->cfg.debug && ptrarray_size(&ctx->unguessable_vtimezones)) {
+    if (ctx->cfg.use_icalendar_convprops
+        && ptrarray_size(&ctx->unguessable_vtimezones))
+    {
+        json_t *jcomp = jobj_set_icalcomp_name(ctx, jobj, comp);
         json_t *jtimezones = json_array();
         for (int i = 0; i < ptrarray_size(&ctx->unguessable_vtimezones); i++) {
             icalcomponent *vtz = ptrarray_nth(&ctx->unguessable_vtimezones, i);
             json_array_append_new(jtimezones, icalcomponent_as_jcal_array(vtz));
         }
-        json_object_set_new(jobj,
-                "cyrusimap.org:unguessableTimezones", jtimezones);
+        json_object_set_new(jcomp, "cyrusimap.org:unguessableTimezones",
+                            jtimezones);
     }
 
     // XXX quirk: a VEVENT without DTSTART is bogus. But in case such

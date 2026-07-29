@@ -473,9 +473,6 @@ static json_t *alert_from_ical(jmap_req_t *req,
     icalcomponent_add_component(vcal, vevent);
 
     jscal_cfg_t cfg = { 0 };
-    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
-        cfg.debug = true;
-    }
 
     json_t *jalert = NULL;
     json_t *jgroup = jscal_from_ical(&cfg, vcal);
@@ -1257,9 +1254,6 @@ static icalcomponent *alert_to_ical(jmap_req_t *req,
 
     jscal_cfg_t cfg = { 0 };
     cfg.emailalert_default_uri = email_recipient;
-    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
-        cfg.debug = true;
-    }
 
     struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
     icalcomponent *vcal = jscal_to_ical(&cfg, jevent, &myparser);
@@ -3576,9 +3570,6 @@ static json_t *ical_to_jsevent(jmap_req_t *req, icalcomponent *ical,
 {
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
         jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
-        if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
-            cfg.debug = true;
-        }
 
         json_t *jgroup = jscal_from_ical(&cfg, ical);
         if (!jgroup) return NULL;
@@ -3599,9 +3590,6 @@ static json_t *ical_to_jsevents(jmap_req_t *req, icalcomponent *ical,
 {
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
         jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
-        if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
-            cfg.debug = true;
-        }
 
         json_t *jgroup = jscal_from_ical(&cfg, ical);
         if (!jgroup) return NULL;

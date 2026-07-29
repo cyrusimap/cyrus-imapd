@@ -17,7 +17,6 @@ my sub assert_guesstz
 
     my $res = $jmap->CallMethods([['CalendarEvent/get', {
         properties => [
-            'cyrusimap.org:unguessableTimezones',
             'start',
             'timeZone',
             'duration',
@@ -28,6 +27,7 @@ my sub assert_guesstz
             'title',
             'prodId',
             'x-href',
+            'iCalendar',
         ],
     }, 'R1']]);
     my $event = $res->[0][1]{list}[0];
@@ -296,6 +296,13 @@ sub test_calendarevent_get_guesstz_custom_tzid_unguessable
         ,
         superhashof({
             start => '2026-01-02T10:00:00',
+            iCalendar => superhashof({
+                'cyrusimap.org:unguessableTimezones' => [
+                    ['vtimezone',
+                        supersetof(['tzid', {}, 'text', 'Foo']),
+                        ignore()],
+                ],
+            }),
         })
     );
 }
