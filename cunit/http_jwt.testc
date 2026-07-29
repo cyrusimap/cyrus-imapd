@@ -69,7 +69,7 @@ static void test_init_multi(void)
 
     CU_ASSERT_PTR_NOT_NULL_FATAL(cunit_tmpdir(dname,
                                               sizeof(dname),
-                                              "cyrus-cunit-XXXXXX"));
+                                              "http_jwt.testc-XXXXXX"));
 
     char *fnames[2] = {
         strconcat(dname, "/hmac.pem", NULL),
@@ -104,7 +104,7 @@ static void test_init_nokeys(void)
 
     CU_ASSERT_PTR_NOT_NULL_FATAL(cunit_tmpdir(dname,
                                               sizeof(dname),
-                                              "cyrus-cunit-XXXXXX"));
+                                              "http_jwt.testc-XXXXXX"));
 
     char *fname = strconcat(dname, "/key.pem", NULL);
     FILE *fp = fopen(fname, "w");
@@ -166,7 +166,7 @@ static void test_validate(void)
 
     CU_ASSERT_PTR_NOT_NULL_FATAL(cunit_tmpdir(dname,
                                               sizeof(dname),
-                                              "cyrus-cunit-XXXXXX"));
+                                              "http_jwt.testc-XXXXXX"));
 
     char *fname = strconcat(dname, "/key.pem", NULL);
     FILE *fp = fopen(fname, "w");
@@ -350,7 +350,7 @@ static void test_validate_claims_no_max_age(void)
 
     CU_ASSERT_PTR_NOT_NULL_FATAL(cunit_tmpdir(dname,
                                               sizeof(dname),
-                                              "cyrus-cunit-XXXXXX"));
+                                              "http_jwt.testc-XXXXXX"));
 
     char *fname = strconcat(dname, "/key.pem", NULL);
     FILE *fp = fopen(fname, "w");
@@ -408,7 +408,7 @@ static void test_validate_claims_with_max_age(void)
 
     CU_ASSERT_PTR_NOT_NULL_FATAL(cunit_tmpdir(dname,
                                               sizeof(dname),
-                                              "cyrus-cunit-XXXXXX"));
+                                              "http_jwt.testc-XXXXXX"));
 
     char *fname = strconcat(dname, "/key.pem", NULL);
     FILE *fp = fopen(fname, "w");
@@ -467,7 +467,7 @@ static void test_auth(void)
 
     CU_ASSERT_PTR_NOT_NULL_FATAL(cunit_tmpdir(dname,
                                               sizeof(dname),
-                                              "cyrus-cunit-XXXXXX"));
+                                              "http_jwt.testc-XXXXXX"));
 
     char *fnames[2] = {
         strconcat(dname, "/hmac.pem", NULL),
