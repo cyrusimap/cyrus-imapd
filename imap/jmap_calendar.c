@@ -94,7 +94,7 @@ static int jmap_sharenotification_querychanges(struct jmap_req *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
-#define JMAPCACHE_CALVERSION 27
+#define JMAPCACHE_CALVERSION 28
 
 // clang-format off
 static jmap_method_t jmap_calendar_methods_standard[] = {
@@ -3714,8 +3714,10 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
             ptrarray_append(&rock->malloced_fallbacktzs, floatingtz);
     }
 
-    /* Try to read from cache */
-    if (jscal->cacheversion == JMAPCACHE_CALVERSION) {
+    /* Try to read from cache, but force conversion from iCalendar
+     * if the conversion properties are requested. */
+    if (jscal->cacheversion == JMAPCACHE_CALVERSION &&
+            !jmapctx->from_ical.want_icalprops) {
         jsevent = json_loads(jscal->cachedata, 0, NULL);
         if (jsevent) {
             // XXX ignore cached entrys while we serve both RFC8984
@@ -3876,14 +3878,18 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
                 cdata->dav.imap_uid, req->userid, &rock->guid);
     }
 
-    /* Add to cache */
-    json_t *cached = hashu64_lookup(cdata->dav.rowid, &rock->cache_jsevents);
-    if (!cached) {
-        cached = json_object();
-        hashu64_insert(cdata->dav.rowid, cached, &rock->cache_jsevents);
+    /* Add to cache, but only if the event does not include conversion
+     * properties. */
+    if (!jmapctx->from_ical.want_icalprops) {
+        json_t *cached =
+            hashu64_lookup(cdata->dav.rowid, &rock->cache_jsevents);
+        if (!cached) {
+            cached = json_object();
+            hashu64_insert(cdata->dav.rowid, cached, &rock->cache_jsevents);
+        }
+        json_object_set(cached, jscal->ical_recurid, jsevent);
+        jsevent = json_deep_copy(jsevent);
     }
-    json_object_set(cached, jscal->ical_recurid, jsevent);
-    jsevent = json_deep_copy(jsevent);
 
 gotevent:
 
