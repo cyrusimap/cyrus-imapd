@@ -8,6 +8,12 @@ The event payloads that aren't tied to a request are JSCalendar 2.0 too: the
 event and eventPatch of a CalendarEventNotification, and the jsevent and patch
 of an iMIP notification sent to the imipnotifier.
 
+CalDAV no longer supports the application/event+json media type.  It was never
+standardized, and JSCalendar belongs to JMAP; a client that wants JSCalendar
+should use JMAP for Calendars.  A GET asking for it in Accept now gets a 406,
+and a PUT sending it now gets a 400.  application/calendar+json (jCal, RFC
+7265) and application/calendar+xml (xCal, RFC 6321) are unaffected.
+
 
 Documentation:
 
