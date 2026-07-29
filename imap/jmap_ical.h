@@ -15,12 +15,6 @@ extern "C" {
 #include "jmap_api.h"
 #include "jmap_util.h"
 
-#define JMAPICAL_ERROR_UNKNOWN  -1
-#define JMAPICAL_ERROR_CALLBACK 1
-#define JMAPICAL_ERROR_MEMORY   2
-#define JMAPICAL_ERROR_ICAL     3
-#define JMAPICAL_ERROR_PROPS    4
-#define JMAPICAL_ERROR_UID      5
 
 /* Custom iCalendar properties */
 #define JMAPICAL_XPROP_ID              "X-JMAP-ID"
@@ -104,46 +98,6 @@ extern void jmapical_context_free(struct jmapical_ctx**);
 
 extern int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx);
 
-/* Converts the iCalendar component ical to JSCalendar.
- * Returns NULL on error.
- */
-json_t* jmapical_tojmap(icalcomponent *ical, hash_table *props,
-                        struct jmapical_ctx *jmapctx);
-
-/* Converts the iCalendar component ical to an array of JSCalendar objects.
- * Returns NULL on error.
- */
-json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
-                            struct jmapical_ctx *jmapctx);
-
-/* Convert the jsevent to iCalendar.
- * The oldical argument points to the previous VCALENDAR of the event,
- * or NULL.
- * Returns a new VCALENDAR component, or NULL on error.
- * If compptr is not NULL, then its value points to
- * the newly created VEVENT.
- */
-icalcomponent* jmapical_toical(json_t *jsevent, icalcomponent *oldical,
-                               json_t *invalid,
-                               json_t *serverset,
-                               icalcomponent **compptr,
-                               jstimezones_t **jstzonesp,
-                               struct jmapical_ctx *jmapctx);
-
-
-/* Convert the iCalendar VALARM to a JSCalendar Alert.
- * Return NULL on error. */
-json_t *jmapical_alert_from_ical(icalcomponent *valarm, struct buf *id);
-
-/* Convert alert to iCalendar VALARM. Returns NULL on error */
-extern icalcomponent *jmapical_alert_to_ical(json_t *alert, struct jmap_parser *parser,
-                                             const char *alert_jmap_id,
-                                             const char *description,
-                                             const char *email_summary,
-                                             const char *email_recipient);
-
-
-void icalcomponent_add_required_timezones(icalcomponent *ical);
 
 /* jstimezones allows to resolve standard and non-standard timezone
  * identifiers to ical timezones. It mainly is useful to handle
@@ -252,7 +206,6 @@ extern int jmapical_duration_from_string(const char *val, struct jmapical_durati
 
 extern void jmapical_remove_peruserprops(json_t *jevent);
 
-extern const char *jmap_partid_from_ical(icalproperty *prop);
 
 #ifdef __cplusplus
 }
