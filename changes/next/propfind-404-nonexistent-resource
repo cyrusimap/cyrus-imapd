@@ -1,0 +1,27 @@
+Description:
+
+A WebDAV/CalDAV/CardDAV PROPFIND request on a Request-URI that is not mapped
+to a resource now returns 404 (Not Found), as required by RFC 4918 Section
+9.6.  Previously such a request returned a 207 Multi-Status wrapping a nested
+404, which confused plain WebDAV clients (e.g. KDE Dolphin) into believing the
+resource already existed.
+
+
+Documentation:
+
+(none)
+
+
+Config changes:
+
+(none)
+
+
+Upgrade instructions:
+
+(none)
+
+
+GitHub issue:
+
+https://github.com/cyrusimap/cyrus-imapd/issues/5667

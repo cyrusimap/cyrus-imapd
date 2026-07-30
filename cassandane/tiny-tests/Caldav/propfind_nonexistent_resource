@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+# RFC 4918 Section 9.6: a PROPFIND on a Request-URI that is not mapped to a
+# resource MUST return 404 (Not Found), not a 207 Multi-Status wrapping a
+# nested 404.  (GitHub issue #5667)
+sub test_propfind_nonexistent_resource
+    :min_version_3_13
+    ($self)
+{
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $propfind = <<'EOF';
+<?xml version="1.0" encoding="utf-8"?>
+<D:propfind xmlns:D="DAV:"><D:prop><D:getetag/></D:prop></D:propfind>
+EOF
+
+    my %headers = (
+        'Content-Type' => 'application/xml',
+        'Depth' => '0',
+        'Authorization' => $CalDAV->auth_header(),
+    );
+
+    # A PROPFIND on a non-existing resource in an existing collection must be
+    # a top-level 404, not a 207.
+    my $R = $CalDAV->{ua}->request('PROPFIND',
+        $CalDAV->request_url("$CalendarId/does-not-exist.ics"),
+        { content => $propfind, headers => \%headers });
+    $self->assert_num_equals(404, $R->{status});
+
+    # A PROPFIND on a resource inside a non-existing collection must also be
+    # a top-level 404 (not a 500).
+    $R = $CalDAV->{ua}->request('PROPFIND',
+        $CalDAV->request_url("no-such-collection/does-not-exist.ics"),
+        { content => $propfind, headers => \%headers });
+    $self->assert_num_equals(404, $R->{status});
+
+    # A PROPFIND on an existing collection must still return 207 Multi-Status.
+    $R = $CalDAV->{ua}->request('PROPFIND',
+        $CalDAV->request_url("$CalendarId/"),
+        { content => $propfind, headers => \%headers });
+    $self->assert_num_equals(207, $R->{status});
+}
