@@ -3630,6 +3630,20 @@ static bool jsevent_is_origin(json_t *jsevent, const strarray_t *schedule_addres
     return true;
 }
 
+static void getcalendarevents_reset_ical(struct getcalendarevents_rock *rock)
+{
+    if (rock->ical) {
+        icalcomponent_free(rock->ical);
+        rock->ical = NULL;
+    }
+    rock->imap_uid = 0;
+    rock->is_draft = 0;
+    message_guid_set_null(&rock->guid);
+    if (rock->ical_instances_by_recurid.size)
+        free_hash_table(&rock->ical_instances_by_recurid,
+                        _icalcomponent_free_cb);
+}
+
 static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 {
     struct getcalendarevents_rock *rock = vrock;
@@ -3686,11 +3700,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
                 &rock->schedule_addresses);
 
         // reset ical iterator state
-        if (rock->ical) {
-            icalcomponent_free(rock->ical);
-            rock->ical = NULL;
-        }
-        rock->imap_uid = 0;
+        getcalendarevents_reset_ical(rock);
     }
 
     /* Check mailbox ACL rights */
@@ -3744,21 +3754,17 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
                 json_decref(jsevent);
                 jsevent = NULL;
             }
-            else goto gotevent;
+            else {
+                getcalendarevents_reset_ical(rock);
+                goto gotevent;
+            }
         }
     }
 
     if ((rock->imap_uid != cdata->dav.imap_uid) || !rock->ical) {
         /* Reset iterator state */
-        if (rock->ical) {
-            icalcomponent_free(rock->ical);
-            rock->ical = NULL;
-        }
+        getcalendarevents_reset_ical(rock);
         rock->imap_uid = cdata->dav.imap_uid;
-        rock->is_draft = 0;
-        message_guid_set_null(&rock->guid);
-        if (rock->ical_instances_by_recurid.size)
-            free_hash_table(&rock->ical_instances_by_recurid, _icalcomponent_free_cb);
 
         /* Open calendar mailbox. */
         if (!rock->mailbox || strcmp(mailbox_uniqueid(rock->mailbox), rock->mbentry->uniqueid)) {
