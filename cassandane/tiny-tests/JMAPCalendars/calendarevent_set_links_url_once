@@ -1,0 +1,53 @@
+#!perl
+use Cassandane::Tiny;
+
+use Text::VCardFast qw(vcard2hash);
+
+sub test_calendarevent_set_links_url_once
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $caldav = $self->{caldav};
+
+    my $event = {
+        calendarIds => {
+            $self->default_user->calendars->default->id => JSON::true,
+        },
+        start => '2026-01-02T03:04:05',
+        version => '2.0',
+        links => {
+            link1 => {
+                '@type' => 'Link',
+                href => 'https://example.com/link1',
+                rel => 'describedby',
+            },
+            link2 => {
+                '@type' => 'Link',
+                href => 'https://example.com/link2',
+                rel => 'describedby',
+            },
+        },
+    };
+
+    xlog $self, "Create event having two describedby links";
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => { 1 => $event },
+        }, 'a' ],
+        [ 'CalendarEvent/get' => {
+            ids => [ '#1' ],
+            properties => [ keys %$event, 'x-href' ],
+        }, 'b' ],
+    ]);
+
+    my $got_event =
+        $res->sentence_named('CalendarEvent/get')->arguments->{list}[0];
+    $self->assert_normalized_event_equals($event, $got_event);
+
+    xlog $self, "Assert exactly one URL and one LINK property was set";
+    $res = $caldav->Request('GET', "" . $got_event->{'x-href'});
+    my $vevent = vcard2hash($res->{content})->{objects}[0]{objects}[0];
+
+    $self->assert_num_equals(1, scalar @{ $vevent->{properties}{url} });
+    $self->assert_num_equals(1, scalar @{ $vevent->{properties}{link} });
+}

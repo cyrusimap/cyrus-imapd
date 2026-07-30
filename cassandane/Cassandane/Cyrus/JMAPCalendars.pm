@@ -164,9 +164,6 @@ sub normalize_event
         delete($event->{links});
     } else {
         foreach my $link (values %{$event->{links}}) {
-            if (not defined $link->{cid}) {
-                delete($link->{cid});
-            }
             if (not defined $link->{contentType}) {
                 delete($link->{contentType});
             }
@@ -177,6 +174,7 @@ sub normalize_event
                 delete($link->{title});
             }
             $link->{q{@type}} //= 'Link';
+            $link->{rel} //= 'enclosure';
         }
     }
     # locale
@@ -190,7 +188,17 @@ sub normalize_event
         foreach my $loc (values %{$event->{locations}}) {
             $loc->{q{@type}} //= 'Location';
             foreach my $link (values %{$loc->{links}}) {
+                if (not defined $link->{contentType}) {
+                    delete($link->{contentType});
+                }
+                if (not defined $link->{size}) {
+                    delete($link->{size});
+                }
+                if (not defined $link->{title}) {
+                    delete($link->{title});
+                }
                 $link->{q{@type}} //= 'Link';
+                $link->{rel} //= 'enclosure';
             }
         }
     }
@@ -219,7 +227,17 @@ sub normalize_event
             $p->{scheduleSequence} //= 0;
             $p->{q{@type}} //= 'Participant';
             foreach my $link (values %{$p->{links}}) {
+                if (not defined $link->{contentType}) {
+                    delete($link->{contentType});
+                }
+                if (not defined $link->{size}) {
+                    delete($link->{size});
+                }
+                if (not defined $link->{title}) {
+                    delete($link->{title});
+                }
                 $link->{q{@type}} //= 'Link';
+                $link->{rel} //= 'enclosure';
             }
         }
     }

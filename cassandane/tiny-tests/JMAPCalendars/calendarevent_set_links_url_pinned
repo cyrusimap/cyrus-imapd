@@ -1,0 +1,107 @@
+#!perl
+use Cassandane::Tiny;
+
+use Text::VCardFast qw(vcard2hash);
+
+sub test_calendarevent_set_links_url_pinned
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $caldav = $self->{caldav};
+
+    xlog $self, "Create event having a LINK and a URL property";
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+PRODID:-//FOO//bar//EN
+VERSION:2.0
+BEGIN:VEVENT
+DTSTAMP:20260102T030405Z
+UID:2a2a1e0b-c1d5-4b0f-8f2c-3d0f9a1b2c3d
+DTSTART:20260102T030405Z
+SUMMARY:test
+LINK;LINKREL=describedby;VALUE=URI;JSID=link:https://example.com/link
+URL;JSID=url:https://example.com/url
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    xlog $self, "Assert both Link objects have a describedby relation";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', { }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids',
+            },
+            properties => [ 'links' ],
+        }, 'R2'],
+    ]);
+
+    my $event = $res->[1][1]{list}[0];
+    $self->assert_not_null($event);
+
+    $self->assert_cmp_deeply({
+        link => {
+            '@type' => 'Link',
+            href => 'https://example.com/link',
+            rel => 'describedby',
+        },
+        url => {
+            '@type' => 'Link',
+            href => 'https://example.com/url',
+            rel => 'describedby',
+        },
+    }, $event->{links});
+
+    xlog $self, "Set size, title and contentType on the Link object";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $event->{id} => {
+                    'links/url/contentType' => 'text/html',
+                    'links/url/size' => 42,
+                    'links/url/title' => 'A title',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$event->{id}});
+
+    xlog $self, "Assert url kept the URL property";
+    $res = $caldav->Request('GET', 'Default/test.ics');
+    my $vevent = vcard2hash($res->{content})->{objects}[0]{objects}[0];
+
+    my %got_props;
+    foreach my $name (qw{link url}) {
+        foreach my $prop (@{ $vevent->{properties}{$name} // [] }) {
+            push @{ $got_props{$name} }, {
+                value => $prop->{value},
+                params => $prop->{params} // {},
+            };
+        }
+    }
+
+    $self->assert_cmp_deeply({
+        link => [ {
+            value => 'https://example.com/link',
+            params => {
+                jsid => ignore(),
+                value => [ 'URI' ],
+                linkrel => [ 'describedby' ],
+            },
+        } ],
+        url => [ {
+            value => 'https://example.com/url',
+            params => {
+                jsid => ignore(),
+                fmttype => [ 'text/html' ],
+                size => [ '42' ],
+                label => [ 'A title' ],
+            },
+        } ],
+    }, \%got_props);
+}

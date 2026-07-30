@@ -613,8 +613,27 @@ static bool is_known_param(icalproperty *prop, icalparameter *param)
     case ICAL_IMAGE_PROPERTY:
     case ICAL_LINK_PROPERTY:
         switch (param_kind) {
-        case ICAL_DISPLAY_PARAMETER:
         case ICAL_ENCODING_PARAMETER:
+        case ICAL_FMTTYPE_PARAMETER:
+        case ICAL_LABEL_PARAMETER:
+        case ICAL_LINKREL_PARAMETER:
+        case ICAL_SIZE_PARAMETER:
+            return true;
+        case ICAL_DISPLAY_PARAMETER:
+            // The DISPLAY parameter only is defined for the IMAGE property.
+            return prop_kind == ICAL_IMAGE_PROPERTY;
+        case ICAL_FILENAME_PARAMETER:
+            // The "title" property converts to the FILENAME parameter for
+            // the ATTACH and IMAGE properties.
+            return prop_kind != ICAL_LINK_PROPERTY;
+        default:
+            return false;
+        }
+
+    case ICAL_URL_PROPERTY:
+        // No parameter is defined for the URL property, but these still
+        // convert to the properties of a Link object.
+        switch (param_kind) {
         case ICAL_FMTTYPE_PARAMETER:
         case ICAL_LABEL_PARAMETER:
         case ICAL_LINKREL_PARAMETER:
@@ -740,6 +759,7 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
         case ICAL_SOURCE_PROPERTY:
         case ICAL_STYLEDDESCRIPTION_PROPERTY:
         case ICAL_UID_PROPERTY:
+        case ICAL_URL_PROPERTY:
         case ICAL_VERSION_PROPERTY:
             return true;
         default:
@@ -830,6 +850,7 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
         case ICAL_NAME_PROPERTY:
         case ICAL_LOCATIONTYPE_PROPERTY:
         case ICAL_STYLEDDESCRIPTION_PROPERTY:
+        case ICAL_URL_PROPERTY:
             return true;
         default:
             if (myicalproperty_has_name(prop, "COORDINATES")) {
@@ -848,6 +869,7 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
         case ICAL_NAME_PROPERTY:
         case ICAL_PERCENTCOMPLETE_PROPERTY:
         case ICAL_STYLEDDESCRIPTION_PROPERTY:
+        case ICAL_URL_PROPERTY:
             return true;
         default:
             return false;
@@ -1561,6 +1583,30 @@ static icalproperty *jobj_get_icalprop(jscal_ctx_t *ctx,
     return prop;
 }
 
+// TODO this is the third reader that read the convertedProperties property,
+// see also jobj_get_icalprop and jobj_get_icalprop_valuetype. This could
+// get refactored into a shared lookup helper.
+static icalproperty_kind jobj_get_icalprop_kind(jscal_ctx_t *ctx,
+                                                json_t *jobj,
+                                                const char *proppath)
+{
+    if (!ctx->cfg.use_icalendar_convprops) return ICAL_NO_PROPERTY;
+
+    json_t *jcomp = json_object_get(jobj, "iCalendar");
+    if (!jcomp) return ICAL_NO_PROPERTY;
+
+    json_t *jconvprops = json_object_get(jcomp, "convertedProperties");
+    if (!jconvprops) return ICAL_NO_PROPERTY;
+
+    json_t *jconvprop = json_object_get(jconvprops, proppath);
+    if (!jconvprop) return ICAL_NO_PROPERTY;
+
+    const char *name = json_string_value(json_object_get(jconvprop, "name"));
+    if (!name) return ICAL_NO_PROPERTY;
+
+    return icalproperty_string_to_kind(name);
+}
+
 static enum icalvalue_kind jobj_get_icalprop_valuetype(jscal_ctx_t *ctx,
                                                        json_t *jobj,
                                                        const char *proppath,
@@ -1613,13 +1659,25 @@ static bool jobj_has_icalquirk(json_t *jobj, const char *quirk)
 static const char *const JSCAL_UUID5NAMESPACE =
     "7f1e1965-ae73-4454-b088-232c90730ce2";
 
-static void myicalproperty_make_uuid5(icalproperty *prop, struct buf *buf)
+static void myicalproperty_make_uuid5(icalproperty *prop,
+                                      bool encode_name,
+                                      struct buf *buf)
 {
-    const char *s = icalproperty_get_value_as_string(prop);
-    buf_setcstr(
-        buf,
-        makeuuid5(JSCAL_UUID5NAMESPACE, (const unsigned char *) s, strlen(s)));
+    struct buf key = BUF_INITIALIZER;
+
+    if (encode_name) {
+        buf_setcstr(&key, icalproperty_get_property_name(prop));
+        buf_putc(&key, ':');
+    }
+    buf_appendcstr(&key, icalproperty_get_value_as_string(prop));
+
+    buf_setcstr(buf,
+                makeuuid5(JSCAL_UUID5NAMESPACE,
+                          (const unsigned char *) buf_cstring(&key),
+                          buf_len(&key)));
     buf_cstring(buf);
+
+    buf_free(&key);
 }
 
 static void jsid_to_prop(icalproperty *prop, const char *key, bool force)
@@ -1630,7 +1688,7 @@ static void jsid_to_prop(icalproperty *prop, const char *key, bool force)
     }
 
     struct buf buf = BUF_INITIALIZER;
-    myicalproperty_make_uuid5(prop, &buf);
+    myicalproperty_make_uuid5(prop, false, &buf);
     bool is_derived = !strcmp(key, buf_cstring(&buf));
     buf_free(&buf);
     if (!is_derived) {
@@ -1662,12 +1720,18 @@ static const char *jsid_from_prop(icalproperty *prop,
     }
 
     // Generate UUIDv5 from property value.
-    myicalproperty_make_uuid5(prop, buf);
+    myicalproperty_make_uuid5(prop, false, buf);
     if (!json_object_get(jobj, buf_cstring(buf))) {
         return buf_cstring(buf);
     }
 
-    // Generating random UUIDv4.
+    // Another property uses that id, also encode the property name.
+    myicalproperty_make_uuid5(prop, true, buf);
+    if (!json_object_get(jobj, buf_cstring(buf))) {
+        return buf_cstring(buf);
+    }
+
+    // Generate random UUIDv4.
     buf_setcstr(buf, makeuuid());
     return buf_cstring(buf);
 }
@@ -1681,7 +1745,7 @@ static void jsid_to_comp(icalcomponent *comp, const char *jsid)
         icalproperty *prop =
             myicalcomponent_get_property(comp, ICAL_CALENDARADDRESS_PROPERTY);
         if (prop) {
-            myicalproperty_make_uuid5(prop, &buf);
+            myicalproperty_make_uuid5(prop, false, &buf);
             if (!strcmp(jsid, buf_cstring(&buf))) goto done;
             buf_reset(&buf);
         }
@@ -1740,7 +1804,7 @@ static const char *jsid_from_comp(icalcomponent *comp,
         prop =
             myicalcomponent_get_property(comp, ICAL_CALENDARADDRESS_PROPERTY);
         if (prop) {
-            myicalproperty_make_uuid5(prop, buf);
+            myicalproperty_make_uuid5(prop, false, buf);
             if (!json_object_get(jobj, buf_cstring(buf))) {
                 return buf_cstring(buf);
             }
@@ -2064,31 +2128,130 @@ static void links_to_ical(jscal_ctx_t *ctx,
 
     const char *key;
     json_t *jlink;
+
+    // At most one Link object converts to the URL property, because that
+    // property MUST NOT occur more than once in a component. Determine
+    // which one that is, if any.
+    //
+    // The FMTTYPE, LABEL and SIZE parameters are not specified for the URL
+    // property, but testing suggests that Apple clients ignore them. Stick
+    // to any existing URL property even if these Link properties are added.
+    const char *url_key = NULL;
+    json_object_foreach(jlinks, key, jlink)
+    {
+        // Only the "describedby" link relation converts to URL.
+        const char *rel = json_string_value(json_object_get(jlink, "rel"));
+        if (strcasecmpsafe(rel, "describedby")) continue;
+
+        jmap_parser_push(&parser, key);
+        bool had_binary_value =
+            jobj_get_icalprop_valuetype(
+                ctx, jobj, jmap_parser_path_at(&parser, "href"),
+                ICAL_ANY_PROPERTY) == ICAL_BINARY_VALUE;
+        bool converted_from_url =
+            jobj_get_icalprop_kind(
+                ctx, jobj, jmap_parser_path_at(&parser, "href")) ==
+            ICAL_URL_PROPERTY;
+        jmap_parser_pop(&parser);
+
+        // A Link object that had a BINARY value type can not convert to URL.
+        if (had_binary_value) continue;
+
+        // Prefer the Link object that converted from the URL property.
+        if (!url_key) url_key = key;
+
+        if (converted_from_url) {
+            url_key = key;
+            break;
+        }
+    }
+
     json_object_foreach(jlinks, key, jlink)
     {
         jmap_parser_push(&parser, key);
 
         const char *href = json_string_value(json_object_get(jlink, "href"));
 
-        // Determine which property kind to use, keep using former one.
+        // The default value of the "rel" property is "enclosure".
+        const char *rel = json_string_value(json_object_get(jlink, "rel"));
+        if (!rel) rel = "enclosure";
+
+        // Determine which property name to use by inspecting the "rel"
+        // property.
+        icalproperty_kind want_kind;
+        if (!strcasecmp(rel, "icon")) {
+            want_kind = ICAL_IMAGE_PROPERTY;
+        }
+        else if (!strcasecmp(rel, "enclosure")) {
+            want_kind = ICAL_ATTACH_PROPERTY;
+        }
+        else if (url_key && !strcmp(url_key, key)) {
+            want_kind = ICAL_URL_PROPERTY;
+        }
+        else {
+            want_kind = ICAL_LINK_PROPERTY;
+        }
+
+        // Keep using the former property, if it is compatible with
+        // the current "rel" property value.
         icalproperty *prop =
             jobj_get_icalprop(ctx,
                               jobj,
                               jmap_parser_path_at(&parser, "href"),
                               ICAL_ANY_PROPERTY,
                               0);
-        if (!prop) {
-            if (JNOTNULL(json_object_get(jlink, "display")))
-                prop = icalproperty_new(ICAL_IMAGE_PROPERTY);
-            else if (JNOTNULL(json_object_get(jlink, "rel")))
-                prop = icalproperty_new(ICAL_LINK_PROPERTY);
-            else
-                prop = icalproperty_new(ICAL_ATTACH_PROPERTY);
+
+        // A Link object that converted from a BINARY value still keeps that
+        // value type, unless its "href" got changed to some other scheme.
+        bool use_binary_value =
+            jobj_get_icalprop_valuetype(
+                ctx, jobj, jmap_parser_path_at(&parser, "href"),
+                ICAL_ANY_PROPERTY) == ICAL_BINARY_VALUE
+            && !strncasecmp("data:", href, 5);
+
+        // Only the ATTACH and IMAGE properties allow a BINARY value. If we
+        // have to, we even preserve the LINKREL on ATTACH or IMAGE.
+        bool keep_linkrel = false;
+        if (use_binary_value && want_kind != ICAL_ATTACH_PROPERTY
+            && want_kind != ICAL_IMAGE_PROPERTY)
+        {
+            want_kind = prop && icalproperty_isa(prop) == ICAL_IMAGE_PROPERTY
+                            ? ICAL_IMAGE_PROPERTY
+                            : ICAL_ATTACH_PROPERTY;
+
+            // The link relation does not match the property kind, so it
+            // must get preserved in the LINKREL parameter.
+            keep_linkrel = true;
         }
 
-        // Convert data: URI value to BINARY value
+        if (prop && icalproperty_isa(prop) != want_kind) {
+            // Change property kind but preserve unknown parameters.
+            icalproperty *former_prop = prop;
+            prop = icalproperty_new(want_kind);
+            icalparameter *param;
+            icalparamiter param_iter;
+            myicalproperty_foreach_parameter(
+                former_prop, ICAL_ANY_PARAMETER, param, param_iter)
+            {
+                if (!is_known_param(prop, param)) {
+                    icalproperty_add_parameter(prop,
+                                               icalparameter_clone(param));
+                }
+            }
+            icalproperty_free(former_prop);
+        }
+        else if (!prop) {
+            prop = icalproperty_new(want_kind);
+        }
+
+        icalproperty_kind prop_kind = icalproperty_isa(prop);
+
+        // Convert data: URI value to BINARY value. Only the ATTACH and
+        // IMAGE properties allow that value type.
+        bool have_value = false;
         if (!strncasecmp("data:", href, 5)
-            && icalproperty_isa(prop) != ICAL_LINK_PROPERTY)
+            && (prop_kind == ICAL_ATTACH_PROPERTY
+                || prop_kind == ICAL_IMAGE_PROPERTY))
         {
             struct buf fmttype = BUF_INITIALIZER;
             const char *s = href + 5;
@@ -2110,6 +2273,8 @@ static void links_to_ical(jscal_ctx_t *ctx,
                     icalproperty_add_parameter(
                         prop, icalparameter_new_fmttype(buf_cstring(&fmttype)));
                 }
+
+                have_value = true;
             }
 
             buf_free(&fmttype);
@@ -2117,9 +2282,9 @@ static void links_to_ical(jscal_ctx_t *ctx,
 
         // Otherwise set URI value but make sure it's using the same
         // libical-internal value type as if read from iCalendar.
-        if (!icalproperty_get_value(prop)) {
-            if (icalproperty_isa(prop) == ICAL_ATTACH_PROPERTY ||
-                icalproperty_isa(prop) == ICAL_IMAGE_PROPERTY) {
+        if (!have_value) {
+            if (prop_kind == ICAL_ATTACH_PROPERTY ||
+                prop_kind == ICAL_IMAGE_PROPERTY) {
                 icalattach *attach = icalattach_new_from_url(href);
                 icalproperty_set_value(prop, icalvalue_new_attach(attach));
                 icalattach_unref(attach);
@@ -2137,7 +2302,9 @@ static void links_to_ical(jscal_ctx_t *ctx,
             icalproperty_add_parameter(prop, icalparameter_new_fmttype(s));
         }
 
-        if (JNOTNULL(jval = json_object_get(jlink, "display"))) {
+        // The DISPLAY parameter only is defined for the IMAGE property.
+        if (prop_kind == ICAL_IMAGE_PROPERTY &&
+                JNOTNULL(jval = json_object_get(jlink, "display"))) {
             icalenumarray *displays = icalenumarray_new(json_object_size(jval));
             icalenumarray_element elem = { 0 };
             for (void *it = json_object_iter(jval); it;
@@ -2162,10 +2329,12 @@ static void links_to_ical(jscal_ctx_t *ctx,
             }
         }
 
-        if (JNOTNULL(jval = json_object_get(jlink, "rel"))) {
-            const char *rel = json_string_value(jval);
-            icalproperty_add_parameter(prop,
-                    icalparameter_new_linkrel(rel));
+        // Only set the LINKREL parameter on the LINK property. It is not
+        // defined for the ATTACH, IMAGE and URL properties. Only exception
+        // is a BINARY value, which forced the property kind above and
+        // otherwise would lose the link relation.
+        if (prop_kind == ICAL_LINK_PROPERTY || keep_linkrel) {
+            icalproperty_add_parameter(prop, icalparameter_new_linkrel(rel));
         }
 
         if (JNOTNULL(jval = json_object_get(jlink, "size"))) {
@@ -2176,9 +2345,21 @@ static void links_to_ical(jscal_ctx_t *ctx,
                 prop, icalparameter_new_size(buf_cstring(&buf)));
         }
 
+        // The "title" property converts to the FILENAME parameter for the
+        // ATTACH and IMAGE properties, and to the LABEL parameter for the
+        // LINK and URL properties.
         if (JNOTNULL(jval = json_object_get(jlink, "title"))) {
             const char *title = json_string_value(jval);
-            icalproperty_add_parameter(prop, icalparameter_new_label(title));
+            if (prop_kind == ICAL_ATTACH_PROPERTY
+                || prop_kind == ICAL_IMAGE_PROPERTY)
+            {
+                icalproperty_add_parameter(prop,
+                                           icalparameter_new_filename(title));
+            }
+            else {
+                icalproperty_add_parameter(prop,
+                                           icalparameter_new_label(title));
+            }
         }
 
         // Add property.
@@ -3760,6 +3941,14 @@ static void validate_links(jscal_ctx_t *ctx __attribute__((unused)),
             jmap_parser_invalid(parser, "href");
         }
 
+        // If the "display" property is set, then the "rel"
+        // property value MUST be "icon".
+        if (JNOTNULL(json_object_get(jlink, "display")) &&
+                strcasecmpsafe("icon",
+                    json_string_value(json_object_get(jlink, "rel")))) {
+            jmap_parser_invalid(parser, "rel");
+        }
+
         jmap_parser_pop(parser);
     }
 }
@@ -5329,6 +5518,7 @@ static void links_from_ical(jscal_ctx_t *ctx __attribute__((unused)),
         case ICAL_ATTACH_PROPERTY:
         case ICAL_IMAGE_PROPERTY:
         case ICAL_LINK_PROPERTY:
+        case ICAL_URL_PROPERTY:
             break;
         default:
             continue;
@@ -5360,7 +5550,7 @@ static void links_from_ical(jscal_ctx_t *ctx __attribute__((unused)),
         default:
             continue;
         }
-        if (!strval) continue;
+        if (!strval || *strval == '\0') continue;
 
         // Build href from value.
         if (value_kind == ICAL_BINARY_VALUE) {
@@ -5377,18 +5567,24 @@ static void links_from_ical(jscal_ctx_t *ctx __attribute__((unused)),
             buf_setcstr(&href, strval);
         }
 
+        icalproperty_kind prop_kind = icalproperty_isa(prop);
+
         json_t *jlink = json_pack("{s:s}", "@type", "Link");
         json_object_set_new(jlink, "href", json_string(buf_cstring(&href)));
 
         // Set Link properties.
+        // The FILENAME parameter of the ATTACH and IMAGE properties takes
+        // precedence over the LABEL parameter when setting "title".
+        bool have_filename = false;
         icalparameter *param;
         icalparamiter param_iter;
         myicalproperty_foreach_parameter(
             prop, ICAL_ANY_PARAMETER, param, param_iter)
         {
             icalparameter_kind param_kind = icalparameter_isa(param);
+
             if (param_kind == ICAL_DISPLAY_PARAMETER
-                && icalproperty_isa(prop) == ICAL_IMAGE_PROPERTY)
+                && prop_kind == ICAL_IMAGE_PROPERTY)
             {
                 json_t *jdisplay = json_object();
                 for (size_t i = 0; i < icalparameter_get_display_size(param);
@@ -5413,11 +5609,23 @@ static void links_from_ical(jscal_ctx_t *ctx __attribute__((unused)),
                     "contentType",
                     json_string(icalparameter_get_fmttype(param)));
             }
-            else if (param_kind == ICAL_LABEL_PARAMETER) {
+            else if (param_kind == ICAL_FILENAME_PARAMETER
+                     && (prop_kind == ICAL_ATTACH_PROPERTY
+                         || prop_kind == ICAL_IMAGE_PROPERTY))
+            {
                 json_object_set_new(
                     jlink,
                     "title",
-                    json_string(icalparameter_get_label(param)));
+                    json_string(icalparameter_get_filename(param)));
+                have_filename = true;
+            }
+            else if (param_kind == ICAL_LABEL_PARAMETER) {
+                if (!have_filename) {
+                    json_object_set_new(
+                        jlink,
+                        "title",
+                        json_string(icalparameter_get_label(param)));
+                }
             }
             else if (param_kind == ICAL_LINKREL_PARAMETER) {
                 const char *rel = icalparameter_get_linkrel(param);
@@ -5449,27 +5657,63 @@ static void links_from_ical(jscal_ctx_t *ctx __attribute__((unused)),
         const char *key = jsid_from_prop(prop, jlinks, &buf);
         json_object_set_new(jlinks, key, jlink);
 
+        // Determine the link relation by property kind.
+        const char *rel = json_string_value(json_object_get(jlink, "rel"));
+        if (!rel) {
+            if (prop_kind == ICAL_IMAGE_PROPERTY) {
+                rel = "icon";
+                json_object_set_new(jlink, "rel", json_string(rel));
+            }
+            else if (prop_kind == ICAL_URL_PROPERTY) {
+                rel = "describedby";
+                json_object_set_new(jlink, "rel", json_string(rel));
+            }
+            else {
+                rel = "enclosure";
+                // Do not set default relation on Link object.
+            }
+        }
+
+        // Sanitize "rel" property.
+        if (json_object_get(jlink, "display") && strcasecmp(rel, "icon")) {
+            // The "display" property requires "rel=icon".
+            rel = "icon";
+            json_object_set_new(jlink, "rel", json_string(rel));
+        }
+        else if (!strcasecmp(rel, "enclosure")) {
+            // Remove default "enclosure" relation, if any.
+            rel = "enclosure";
+            json_object_del(jlink, "rel");
+        }
+
         // Preserve conversion-specific info, if necessary.
         jmap_parser_push(&parser, key);
         jmap_parser_push(&parser, "href");
 
         if (value_kind == ICAL_BINARY_VALUE) {
             jobj_set_icalprop_valuetype(
-                ctx, jobj, jmap_parser_path(&parser), prop);
-        }
-        else if (icalproperty_isa(prop) == ICAL_IMAGE_PROPERTY) {
-            if (myicalproperty_get_parameter(prop, ICAL_LINKREL_PARAMETER))
-                jobj_set_icalprop_name(
                     ctx, jobj, jmap_parser_path(&parser), prop);
         }
-        else if (icalproperty_isa(prop) == ICAL_LINK_PROPERTY) {
-            if (!myicalproperty_get_parameter(prop, ICAL_LINKREL_PARAMETER))
-                jobj_set_icalprop_name(
-                    ctx, jobj, jmap_parser_path(&parser), prop);
+
+        // Preserve the property name for the URL property, so that we
+        // know which Link object to convert back to URL in an update.
+        if (prop_kind == ICAL_URL_PROPERTY) {
+            jobj_set_icalprop_name(
+                 ctx, jobj, jmap_parser_path(&parser), prop);
         }
-        else if (icalproperty_isa(prop) != ICAL_ATTACH_PROPERTY) {
-            jobj_set_icalprop_name(ctx, jobj, jmap_parser_path(&parser), prop);
+
+        // Preserve the property name for unexpected link relations.
+        if ((!strcasecmp(rel, "enclosure") &&
+                    prop_kind != ICAL_ATTACH_PROPERTY) ||
+            (!strcasecmp(rel, "icon") &&
+                    prop_kind != ICAL_IMAGE_PROPERTY) ||
+            (!strcasecmp(rel, "describedby") &&
+                    prop_kind != ICAL_URL_PROPERTY)) {
+            jobj_set_icalprop_name(
+                 ctx, jobj, jmap_parser_path(&parser), prop);
         }
+
+        // Preserve unknown iCalendar parameters.
         jobj_set_icalprop_params(ctx, jobj, jmap_parser_path(&parser), prop);
 
         jmap_parser_pop(&parser);

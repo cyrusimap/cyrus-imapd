@@ -1,0 +1,400 @@
+#!perl
+use Cassandane::Tiny;
+
+use Text::VCardFast qw(vcard2hash);
+
+# This test validates the conversion of Link objects to iCalendar
+# in CalendarEvent/set{update}.
+
+# An arbitrary HREF that we set on all properties.
+my $LINK_HREF = 'https://example.com/link';
+
+my sub assert_calendarevent_set_links_update_ical ($self, %arg)
+{
+    my $jmap = $self->default_user->jmap;
+    my $caldav = $self->{caldav};
+
+    # Binary-valued properties set their own value, everything else uses
+    # the arbitrary HREF.
+    my $orig_value = $arg{orig_value} // $LINK_HREF;
+    my $want_value = $arg{want_value} // $LINK_HREF;
+
+    xlog $self, "Create event having a $arg{orig_ical} property";
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+PRODID:-//FOO//bar//EN
+VERSION:2.0
+BEGIN:VEVENT
+DTSTAMP:20260102T030405Z
+UID:2a2a1e0b-c1d5-4b0f-8f2c-3d0f9a1b2c3d
+DTSTART:20260102T030405Z
+SUMMARY:test
+$arg{orig_ical};JSID=link1:$orig_value
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', { }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{ids}[0];
+    $self->assert_not_null($eventId);
+
+    xlog $self, "Update event over JMAP";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => $arg{patch},
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    xlog $self, "Assert updated iCalendar properties";
+    $res = $caldav->Request('GET', 'Default/test.ics');
+    my $vevent = vcard2hash($res->{content})->{objects}[0]{objects}[0];
+
+    my %got_props;
+    foreach my $name (qw{attach image link url}) {
+        foreach my $prop (@{ $vevent->{properties}{$name} // [] }) {
+            push @{ $got_props{$name} }, {
+                value => $prop->{value},
+                params => $prop->{params} // {},
+            };
+        }
+    }
+
+    # The IMAGE and LINK properties have no default value type, so they
+    # set a VALUE parameter. Ignore them when comparing the result.
+    my %value_uri_param = (
+        image => { value => [ 'URI' ] },
+        link  => { value => [ 'URI' ] },
+    );
+
+    my %want_props = map {;
+        $_ => [ {
+            value => $want_value,
+            params => {
+                jsid => ignore(),
+                %{ $value_uri_param{$_} // {} },
+                %{ $arg{want_ical}{$_} },
+            },
+        } ]
+    } keys %{ $arg{want_ical} };
+
+    $self->assert_cmp_deeply(\%want_props, \%got_props);
+}
+
+sub test_calendarevent_set_links_update_ical_attach
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'ATTACH',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { attach => { } });
+}
+
+sub test_calendarevent_set_links_update_ical_attach_enclosure
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'ATTACH;LINKREL=enclosure',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { attach => { } });
+}
+
+sub test_calendarevent_set_links_update_ical_attach_icon
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'ATTACH;LINKREL=icon',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { image => { } });
+}
+
+sub test_calendarevent_set_links_update_ical_attach_me
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'ATTACH;LINKREL=me',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { link => { linkrel => [ 'me' ] } });
+}
+
+sub test_calendarevent_set_links_update_ical_attach_binary
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'ATTACH;VALUE=BINARY;ENCODING=BASE64;FMTTYPE=text/plain',
+        orig_value => 'aGVsbG8=',
+        patch => { title => 'updated' },
+        want_value => 'aGVsbG8=',
+        want_ical => {
+            attach => {
+                encoding => [ 'BASE64' ],
+                fmttype => [ 'text/plain' ],
+                value => [ 'BINARY' ],
+            },
+        });
+}
+
+sub test_calendarevent_set_links_update_ical_attach_binary_describedby
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'ATTACH;VALUE=BINARY;ENCODING=BASE64'
+                   . ';FMTTYPE=text/plain;LINKREL=describedby',
+        orig_value => 'aGVsbG8=',
+        patch => { title => 'updated' },
+        want_value => 'aGVsbG8=',
+        want_ical => {
+            attach => {
+                encoding => [ 'BASE64' ],
+                fmttype => [ 'text/plain' ],
+                linkrel => [ 'describedby' ],
+                value => [ 'BINARY' ],
+            },
+        });
+}
+
+sub test_calendarevent_set_links_update_ical_attach_binary_me
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'ATTACH;VALUE=BINARY;ENCODING=BASE64'
+                   . ';FMTTYPE=text/plain;LINKREL=me',
+        orig_value => 'aGVsbG8=',
+        patch => { title => 'updated' },
+        want_value => 'aGVsbG8=',
+        want_ical => {
+            attach => {
+                encoding => [ 'BASE64' ],
+                fmttype => [ 'text/plain' ],
+                linkrel => [ 'me' ],
+                value => [ 'BINARY' ],
+            },
+        });
+}
+
+sub test_calendarevent_set_links_update_ical_image_binary_me
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'IMAGE;VALUE=BINARY;ENCODING=BASE64'
+                   . ';FMTTYPE=image/png;LINKREL=me',
+        orig_value => 'aGVsbG8=',
+        patch => { title => 'updated' },
+        want_value => 'aGVsbG8=',
+        want_ical => {
+            image => {
+                encoding => [ 'BASE64' ],
+                fmttype => [ 'image/png' ],
+                linkrel => [ 'me' ],
+                value => [ 'BINARY' ],
+            },
+        });
+}
+
+sub test_calendarevent_set_links_update_ical_link_data_uri_me
+    ($self)
+{
+    # A "data:" URI that got stored as a URI value stays a URI value.
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'LINK;VALUE=URI;LINKREL=me',
+        orig_value => 'data:text/plain;base64,aGVsbG8=',
+        patch => { title => 'updated' },
+        want_value => 'data:text/plain;base64,aGVsbG8=',
+        want_ical => { link => { linkrel => [ 'me' ] } });
+}
+
+sub test_calendarevent_set_links_update_ical_image
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'IMAGE;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { image => { } });
+}
+
+sub test_calendarevent_set_links_update_ical_image_icon
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'IMAGE;LINKREL=icon;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { image => { } });
+}
+
+sub test_calendarevent_set_links_update_ical_image_enclosure
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'IMAGE;LINKREL=enclosure;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { attach => { } });
+}
+
+sub test_calendarevent_set_links_update_ical_image_me
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'IMAGE;LINKREL=me;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { link => { linkrel => [ 'me' ] } });
+}
+
+sub test_calendarevent_set_links_update_ical_image_display
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'IMAGE;DISPLAY=BADGE;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { image => { display => [ 'BADGE' ] } });
+}
+
+sub test_calendarevent_set_links_update_ical_image_display_icon
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'IMAGE;LINKREL=icon;DISPLAY=BADGE;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { image => { display => [ 'BADGE' ] } });
+}
+
+sub test_calendarevent_set_links_update_ical_image_display_enclosure
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'IMAGE;LINKREL=enclosure;DISPLAY=BADGE;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { image => { display => [ 'BADGE' ] } });
+}
+
+sub test_calendarevent_set_links_update_ical_image_display_me
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'IMAGE;LINKREL=me;DISPLAY=BADGE;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { image => { display => [ 'BADGE' ] } });
+}
+
+sub test_calendarevent_set_links_update_ical_link
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'LINK;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { attach => { } });
+}
+
+sub test_calendarevent_set_links_update_ical_link_enclosure
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'LINK;LINKREL=enclosure;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { attach => { } });
+}
+
+sub test_calendarevent_set_links_update_ical_link_icon
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'LINK;LINKREL=icon;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { image => { } });
+}
+
+sub test_calendarevent_set_links_update_ical_link_describedby
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'LINK;LINKREL=describedby;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { url => { } });
+}
+
+sub test_calendarevent_set_links_update_ical_link_me
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'LINK;LINKREL=me;VALUE=URI',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { link => { linkrel => [ 'me' ] } });
+}
+
+sub test_calendarevent_set_links_update_ical_url
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'URL',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { url => { } });
+}
+
+sub test_calendarevent_set_links_update_ical_url_describedby
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'URL;LINKREL=describedby',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { url => { } });
+}
+
+sub test_calendarevent_set_links_update_ical_url_me
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'URL;LINKREL=me',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => { link => { linkrel => [ 'me' ] } });
+}
+
+sub test_calendarevent_set_links_update_ical_url_fmttype_label_size
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'URL;FMTTYPE=text/html;LABEL=A title;SIZE=42',
+        patch => { 'links/link1/href' => $LINK_HREF },
+        want_ical => {
+            url => {
+                fmttype => [ 'text/html' ],
+                label => [ 'A title' ],
+                size => [ '42' ],
+            },
+        });
+}
+
+sub test_calendarevent_set_links_update_ical_keep_xparam
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'ATTACH;X-FOO=bar',
+        patch => {
+            'links/link1/href' => $LINK_HREF,
+            'links/link1/rel' => 'icon',
+            'links/link1/display' => { badge => JSON::true },
+        },
+        want_ical => {
+            image => {
+                display => [ 'BADGE' ],
+                'x-foo' => [ 'bar' ],
+            },
+        });
+}
+
+sub test_calendarevent_set_links_update_ical_keep_filename
+    ($self)
+{
+    assert_calendarevent_set_links_update_ical($self,
+        orig_ical => 'ATTACH;FILENAME=photo.jpg',
+        patch => {
+            'links/link1/href' => $LINK_HREF,
+            'links/link1/rel' => 'icon',
+        },
+        want_ical => { image => { filename => [ 'photo.jpg' ] } });
+}
