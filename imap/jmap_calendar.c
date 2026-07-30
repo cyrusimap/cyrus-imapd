@@ -6410,6 +6410,7 @@ static void setcalendarevents_update(jmap_req_t *req,
     char *resource = NULL;
     strarray_t del_imapflags = STRARRAY_INITIALIZER;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
+    strarray_t caller_sched_addrs = STRARRAY_INITIALIZER;
 
     struct updateevent update = {
         .event_patch = json_deep_copy(event_patch),
@@ -6463,6 +6464,20 @@ static void setcalendarevents_update(jmap_req_t *req,
             r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
                 IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
             goto done;
+        }
+    }
+
+    /* Check write permission for sharees. */
+    if (strcmp(req->accountid, req->userid) &&
+            !jmap_hasrights_mbentry(req, mbentry, JACL_WRITEALL)) {
+        get_schedule_addresses(mbentry->name, req->userid, &caller_sched_addrs);
+        if (jmap_hasrights_mbentry(req, mbentry, JACL_WRITEOWN)) {
+            int is_organizer = cdata->organizer &&
+                strarray_contains(&caller_sched_addrs, cdata->organizer);
+            if (!is_organizer) {
+                *err = json_pack("{s:s}", "type", "forbidden");
+                goto done;
+            }
         }
     }
 
@@ -6838,6 +6853,7 @@ done:
     jmap_parser_fini(&parser);
     strarray_fini(&del_imapflags);
     strarray_fini(&schedule_addresses);
+    strarray_fini(&caller_sched_addrs);
     mboxlist_entry_free(&mbentry);
     mboxlist_entry_free(&dstmbentry);
     free(resource);

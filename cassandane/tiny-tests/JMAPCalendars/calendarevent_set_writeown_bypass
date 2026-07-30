@@ -1,0 +1,104 @@
+#!perl
+use Cassandane::Tiny;
+
+# A sharee with mayWriteOwn may only rewrite events that they organize.  If
+# they can patch owner-controlled properties (title, timing, location, ...) of
+# somebody else's event, that's CVE-2026-61914 all over again.
+sub test_calendarevent_set_writeown_bypass ($self)
+{
+    my $sharee_jmap = $self->default_user->jmap;
+
+    xlog $self, 'create the calendar owner and the calendar to share';
+    my $victim = $self->{instance}->create_user('victim');
+    my $victim_cal = $victim->calendars->create({ name => 'Victim Calendar' });
+
+    my $victim_creates_event = sub ($event) {
+        my $res = $victim->jmap->CallMethods([
+            ['CalendarEvent/set', {
+                create => {
+                    ev => {
+                        version     => '2.0',
+                        calendarIds => { $victim_cal->id => JSON::true },
+                        start       => '2025-01-01T10:00:00',
+                        duration    => 'PT1H',
+                        timeZone    => 'Etc/UTC',
+                        %$event,
+                    },
+                },
+            }, 'R1'],
+        ]);
+
+        my $event_id = $res->[0][1]{created}{ev}{id};
+        $self->assert_null($res->[0][1]{notCreated}{ev});
+        $self->assert_not_null($event_id);
+
+        return $event_id;
+    };
+
+    my $sharee_retitles_event = sub ($event_id, $title) {
+        my $res = $sharee_jmap->CallMethods([
+            ['CalendarEvent/set', {
+                accountId => 'victim',
+                update    => { $event_id => { title => $title } },
+            }, 'R1'],
+        ]);
+
+        return $res->[0][1];
+    };
+
+    my $assert_sharee_cannot_retitle = sub ($desc, $event) {
+        xlog $self, "owner creates an event $desc";
+        my $event_id = $victim_creates_event->($event);
+
+        xlog $self, "sharee tries to retitle the event $desc";
+        my $set = $sharee_retitles_event->($event_id, 'Attacker Rewrote This');
+
+        $self->assert_null($set->{updated}{$event_id});
+        $self->assert_not_null($set->{notUpdated}{$event_id});
+        $self->assert_str_equals('forbidden',
+            $set->{notUpdated}{$event_id}{type});
+
+        xlog $self, "owner's copy of the event $desc is unchanged";
+        my $res = $victim->jmap->CallMethods([
+            ['CalendarEvent/get', {
+                ids        => [ $event_id ],
+                properties => [ 'title' ],
+            }, 'R1'],
+        ]);
+        $self->assert_str_equals($event->{title},
+            $res->[0][1]{list}[0]{title});
+    };
+
+    xlog $self, 'share the calendar with the sharee as mayWriteOwn';
+    $victim_cal->share_with(
+        cassandane => [ qw( mayReadItems mayWriteOwn ) ],
+    );
+
+    $assert_sharee_cannot_retitle->('organized by the owner' => {
+        title                    => "Owner's Meeting",
+        organizerCalendarAddress => 'mailto:victim@example.com',
+        participants             => {
+            victim => { calendarAddress => 'mailto:victim@example.com' },
+        },
+    });
+
+    # The CalDAV code path (caldav_util.c) counts an event with no ORGANIZER as
+    # the sharee's own.  The JMAP path does not: an unorganized event in
+    # somebody else's calendar was never organized by the sharee.
+    #  -- rjbs, 2026-08-20
+    $assert_sharee_cannot_retitle->('with no organizer at all' => {
+        title => "Owner's Private Reminder",
+    });
+
+    xlog $self, 'as a control, re-share the calendar as mayWriteAll';
+    $victim_cal->share_with(
+        cassandane => [ qw( mayReadItems mayWriteAll ) ],
+    );
+
+    my $event_id = $victim_creates_event->({ title => "Owner's Other Event" });
+    my $set = $sharee_retitles_event->($event_id, 'Retitled');
+
+    $self->assert_null($set->{notUpdated}{$event_id});
+    $self->assert(exists $set->{updated}{$event_id},
+        'a mayWriteAll sharee can still retitle the owner-created event');
+}
