@@ -1301,33 +1301,27 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
                 buf_reset(&txn->buf);
             }
 
-            if (!cdata->organizer || (flags & PREFER_REP)) {
-                /* Read index record for new message (always the last one) */
-                struct index_record newrecord;
+            /* Read index record for new message (always the last one).
+               Recompute the validators from the stored resource - even for
+               scheduling objects - so that the ETag we return matches the one
+               a subsequent GET will report (mixing in any per-user data). */
+            struct index_record newrecord;
 
-                cdata->dav.alive = 1;
-                cdata->dav.imap_uid = newuid;
+            cdata->dav.alive = 1;
+            cdata->dav.imap_uid = newuid;
 
-                caldav_get_validators(mailbox, cdata, userid, &newrecord,
-                                      &txn->resp_body.etag,
-                                      &txn->resp_body.lastmod);
+            caldav_get_validators(mailbox, cdata, userid, &newrecord,
+                                  &txn->resp_body.etag,
+                                  &txn->resp_body.lastmod);
 
-                if (flags & PREFER_REP) {
-                    /* Re-insert per-user data */
-                    icalcomponent_apply_vpatch(ical, userdata, NULL, NULL);
-                }
+            if (flags & PREFER_REP) {
+                /* Re-insert per-user data */
+                icalcomponent_apply_vpatch(ical, userdata, NULL, NULL);
             }
         }
 
-        if (cdata->organizer) {
-            if (flags & NEW_STAG) txn->resp_body.stag = sched_tag;
-
-            if (!(flags & PREFER_REP)) {
-                /* iCal data has been rewritten - don't return validators */
-                txn->resp_body.lastmod = 0;
-                txn->resp_body.etag = NULL;
-            }
-        }
+        if (cdata->organizer && (flags & NEW_STAG))
+            txn->resp_body.stag = sched_tag;
         break;
     }
 
