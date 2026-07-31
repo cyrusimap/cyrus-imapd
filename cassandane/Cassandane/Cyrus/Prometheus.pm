@@ -92,8 +92,14 @@ sub parse_report
     return $report;
 }
 
-sub slowtest_50000_users
-    :min_version_3_1
+# This is not a test, in that it doesn't really verify any particular result,
+# and it never runs automatically.  Not even with --slow!  But it does spin up
+# a representative number of user accounts, which can be useful for seeing how
+# the prometheus subsystems perform in "reality".
+#
+# To use it, delete "stress" from the sub name and run Prometheus.50000_users.
+# And then wait a while!  Watch logs for whatever detail you're interested in.
+sub stresstest_50000_users
 {
     my ($self) = @_;
 
@@ -131,10 +137,10 @@ sub slowtest_50000_users
     sleep 3;
 
     my $response = $self->http_report();
-    $self->assert($response->{success});
+    $self->assert_not_null($response->{success});
 
     my $report = parse_report($response->{content});
-    $self->assert(scalar keys %{$report});
+    $self->assert_num_gt(0, scalar keys %{$report});
 
     # n.b. user/mailbox counts are +1 cause of user.cassandane!
     $self->assert_num_equals(1 + $nusers,
