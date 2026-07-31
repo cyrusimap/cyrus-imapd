@@ -42,15 +42,16 @@ static struct report {
     enum imapopt freq_opt;
     struct mappedfile *mf;
     struct buf buf;
-    int64_t frequency;
+    int64_t frequency; /* actually period, not frequency. d'oh */
     int64_t next_report_time;
+    int slow_collate_count;
 } reports[] = {
     { FNAME_PROM_SERVICE_REPORT, "service", &do_collate_service_report,
       IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ,
-      NULL, BUF_INITIALIZER, 0, 0 },
+      NULL, BUF_INITIALIZER, 0, 0, 0 },
     { FNAME_PROM_USAGE_REPORT,   "usage",   &do_collate_usage_report,
       IMAPOPT_PROMETHEUS_USAGE_UPDATE_FREQ,
-      NULL, BUF_INITIALIZER, 0, 0 },
+      NULL, BUF_INITIALIZER, 0, 0, 0 },
 };
 const size_t n_reports = sizeof(reports) / sizeof(reports[0]);
 
@@ -803,7 +804,38 @@ int main(int argc, char **argv)
                                   collate_took / 1000.0);
                 do_write_report(reports[i].mf, &reports[i].buf);
 
-                // XXX if collate_took is greater than frequency, uh oh!
+                /* if some report is consistently taking too long to collate
+                 * relative to how often we collate it, do so less often
+                 */
+                if (collate_took >= reports[i].frequency / 2) {
+                    reports[i].slow_collate_count ++;
+
+                    xsyslog(LOG_NOTICE, "report took too long to collate",
+                                        "report=<%s> frequency=<%" PRIi64 "s>"
+                                        " collate_took=<%gs> count=<%d>",
+                                        reports[i].desc,
+                                        reports[i].frequency / 1000,
+                                        collate_took / 1000.0,
+                                        reports[i].slow_collate_count);
+
+                    if (reports[i].slow_collate_count > 2) {
+                        int64_t new_frequency = reports[i].frequency * 2;
+
+                        xsyslog(LOG_NOTICE, "increasing time between reports",
+                                            "report=<%s> frequency=<%" PRIi64 "s>"
+                                            " new_frequency=<%" PRIi64 "s>",
+                                            reports[i].desc,
+                                            reports[i].frequency / 1000,
+                                            new_frequency / 1000);
+
+                        reports[i].frequency = new_frequency;
+                        reports[i].slow_collate_count = 0;
+                    }
+                }
+                else {
+                    reports[i].slow_collate_count = 0;
+                }
+
                 reports[i].next_report_time = tick + reports[i].frequency;
             }
         }
