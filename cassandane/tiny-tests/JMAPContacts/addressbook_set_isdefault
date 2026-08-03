@@ -109,7 +109,10 @@ sub test_addressbook_set_isdefault
         superhashof({
             created => {
                 2 => superhashof({
-                    isDefault => JSON::true
+                    isDefault => JSON::true,
+                    myRights => superhashof({
+                        mayDelete => JSON::false
+                    })
                 })
             },
             updated => {                   
