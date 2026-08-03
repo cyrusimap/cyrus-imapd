@@ -61,6 +61,7 @@
 EXPORTED bool json_is_date(json_t *json);
 EXPORTED bool json_is_utcdate(json_t *json);
 EXPORTED bool json_is_localdate(json_t *json);
+EXPORTED bool json_is_cyrus_accountid(json_t *json);
 
 EXPORTED int json_array_find(json_t *array, const char *needle);
 

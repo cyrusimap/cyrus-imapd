@@ -103,6 +103,27 @@ bool json_is_localdate(json_t *json)
     return validate_datetime(json, TZ_NONE);
 }
 
+/* Base64 URL chars */
+#define JMAPID_CHARS "ABCDEFGHIJKLMNOPQRSTUVWXYZ"        \
+                     "abcdefghijklmnopqrstuvwxyz"        \
+                     "0123456789-_"
+
+/* Cyrus (currently) allows '.' and '@' to support email addresses */
+#define CYRUS_ACCOUNTID_CHARS JMAPID_CHARS ".@"
+
+bool json_is_cyrus_accountid(json_t *json)
+{
+    const char *s = NULL;
+    size_t len = 0;
+
+    if (!json_is_string(json)) return false;
+
+    s = json_string_value(json);
+    len = strlen(s);
+
+    return (len > 0 && len < 256 && len == strspn(s, CYRUS_ACCOUNTID_CHARS));
+}
+
 int json_array_find(json_t *array, const char *needle)
 {
     size_t i;
