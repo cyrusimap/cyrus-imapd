@@ -10,23 +10,34 @@
 
 #include "json_support.h"
 
-static int parse_date(json_t *json, unsigned utc)
+enum tz_type {
+    TZ_NONE,
+    TZ_UTC,
+    TZ_ANY,
+};
+
+static bool validate_datetime(json_t *json, unsigned tz_type)
 {
     const char *s = NULL;
     struct tm date;
 
-    if (!json_is_string(json)) return 0;
+    if (!json_is_string(json)) return false;
 
     /* parse full-date and partial-time up to time-secfrac */
     s = strptime(json_string_value(json), "%Y-%m-%dT%H:%M:%S", &date);
-    if (!s) return 0;
+    if (!s) return false;
 
     /* parse time-secfrac */
     if (*s == '.') {
         while (Uisdigit(*(++s)));
     }
 
-    if (utc) {
+    if (tz_type == TZ_NONE) {
+        /* MUST NOT have time-offset */
+        return (*s == '\0');
+    }
+
+    if (tz_type == TZ_UTC) {
         /* time-offset MUST be "Z" */
         return (!strcmp(s, "Z"));
     }
@@ -38,14 +49,19 @@ static int parse_date(json_t *json, unsigned utc)
     return (s && *s == '\0');
 }
 
-int json_is_date(json_t *json)
+bool json_is_date(json_t *json)
 {
-    return parse_date(json, 0);
+    return validate_datetime(json, TZ_ANY);
 }
 
-int json_is_utcdate(json_t *json)
+bool json_is_utcdate(json_t *json)
 {
-    return parse_date(json, 1);
+    return validate_datetime(json, TZ_UTC);
+}
+
+bool json_is_localdate(json_t *json)
+{
+    return validate_datetime(json, TZ_NONE);
 }
 
 int json_array_find(json_t *array, const char *needle)

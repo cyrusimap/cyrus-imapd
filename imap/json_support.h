@@ -8,6 +8,7 @@
 
 #include <config.h>
 #include <jansson.h>
+#include <stdbool.h>
 
 #include "util.h"
 
@@ -18,8 +19,9 @@
 /* ... none at present! */
 
 /* utility functions not present in any libjansson */
-EXPORTED int json_is_date(json_t *json);
-EXPORTED int json_is_utcdate(json_t *json);
+EXPORTED bool json_is_date(json_t *json);
+EXPORTED bool json_is_utcdate(json_t *json);
+EXPORTED bool json_is_localdate(json_t *json);
 
 EXPORTED int json_array_find(json_t *array, const char *needle);
 
