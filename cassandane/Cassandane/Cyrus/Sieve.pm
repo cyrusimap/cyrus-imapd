@@ -4,6 +4,7 @@
 package Cassandane::Cyrus::Sieve;
 use Net::CalDAVTalk 0.14;
 use Text::JSContact 0.01 qw(vcard_to_jscontact);
+use Text::VCardFast;
 use strict;
 use warnings;
 use IO::File;

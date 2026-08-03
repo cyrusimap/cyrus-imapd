@@ -5772,6 +5772,9 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
         }
 
         if (ical) {
+            /* Remove all X-LIC-ERROR properties */
+            icalcomponent_strip_errors(ical);
+
             /* Create iCalendar data from new ical component */
             data = icalcomponent_as_ical_string(ical);
             datalen = strlen(data);

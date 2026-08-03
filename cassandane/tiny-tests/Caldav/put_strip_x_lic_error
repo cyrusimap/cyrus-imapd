@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_put_strip_x_lic_error
+    ($self)
+{
+    my $caldav = $self->{caldav};
+
+    xlog $self, "PUT event having a COLOR and an X-LIC-ERROR property";
+    my $eventUid = '4c9aff9c-91df-4859-8026-772a82f52094';
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Foo//Bar//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20230909T160000Z
+DURATION:PT1H
+UID:$eventUid
+SUMMARY:test
+COLOR:#f0a0b0
+X-LIC-ERROR;X-LIC-ERRORTYPE=PARAMETER-VALUE-PARSE-ERROR:Invalid VALUE type for property COLOR: VALUE=TEXT
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT',
+        "/dav/calendars/user/cassandane/Default/test.ics",
+        $ical,
+        'Content-Type' => 'text/calendar');
+
+    xlog $self, "Assert X-LIC-ERROR got stripped but COLOR is kept";
+    my $res = $caldav->Request('GET',
+        "/dav/calendars/user/cassandane/Default/test.ics");
+
+    my $vcal = Text::VCardFast::vcard2hash($res->{content});
+    my $vevent = $vcal->{objects}[0]{objects}[0];
+    $self->assert_str_equals('vevent', $vevent->{type});
+    $self->assert_null($vevent->{properties}{'x-lic-error'});
+    $self->assert_str_equals('#f0a0b0',
+        $vevent->{properties}{color}[0]{value});
+}

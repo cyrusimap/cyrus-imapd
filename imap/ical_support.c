@@ -794,9 +794,51 @@ EXPORTED icalcomponent *icalcomponent_new_stream(struct mailbox *mailbox,
     return ical;
 }
 
+/* Remove all X-LIC-ERROR content lines, including their folded lines, from
+ * the iCalendar data in rawical. Returns a newly allocated string.
+ *
+ * The libical parser reports parse errors as X-LIC-ERROR properties, so a
+ * client-sent X-LIC-ERROR property is indistinguishable from a parse error
+ * once the data got parsed. Strip them from the raw data instead. */
+static char *strip_xlicerror_lines(const char *rawical)
+{
+    static const char propname[] = "X-LIC-ERROR";
+    struct buf buf = BUF_INITIALIZER;
+
+    for (const char *p = rawical; *p;) {
+        const char *eol = strchr(p, '\n');
+        size_t linelen = eol ? (size_t) (eol - p) + 1 : strlen(p);
+
+        if (!strncasecmp(p, propname, sizeof(propname) - 1)
+            && (p[sizeof(propname) - 1] == ';'
+                || p[sizeof(propname) - 1] == ':'))
+        {
+            /* Skip this property and any of its folded lines */
+            p += linelen;
+            while (*p == ' ' || *p == '\t') {
+                eol = strchr(p, '\n');
+                p += eol ? (size_t) (eol - p) + 1 : strlen(p);
+            }
+        }
+        else {
+            buf_appendmap(&buf, p, linelen);
+            p += linelen;
+        }
+    }
+
+    return buf_release(&buf);
+}
+
 EXPORTED icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
 {
     const char *rawical = buf_cstring(buf);
+    char *stripped = NULL;
+
+    if (stristr(rawical, "X-LIC-ERROR")) {
+        stripped = strip_xlicerror_lines(rawical);
+        rawical = stripped;
+    }
+
     icalcomponent *ical = icalparser_parse_string(rawical);
 
     if (!ical && !stristr(rawical, "END:VCALENDAR")) {
@@ -805,6 +847,7 @@ EXPORTED icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
         free(fixed);
     }
 
+    free(stripped);
     return ical;
 }
 
