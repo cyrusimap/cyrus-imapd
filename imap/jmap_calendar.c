@@ -94,7 +94,7 @@ static int jmap_sharenotification_querychanges(struct jmap_req *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
-#define JMAPCACHE_CALVERSION 27
+#define JMAPCACHE_CALVERSION 28
 
 // clang-format off
 static jmap_method_t jmap_calendar_methods_standard[] = {
@@ -473,9 +473,6 @@ static json_t *alert_from_ical(jmap_req_t *req,
     icalcomponent_add_component(vcal, vevent);
 
     jscal_cfg_t cfg = { 0 };
-    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
-        cfg.debug = true;
-    }
 
     json_t *jalert = NULL;
     json_t *jgroup = jscal_from_ical(&cfg, vcal);
@@ -1257,9 +1254,6 @@ static icalcomponent *alert_to_ical(jmap_req_t *req,
 
     jscal_cfg_t cfg = { 0 };
     cfg.emailalert_default_uri = email_recipient;
-    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
-        cfg.debug = true;
-    }
 
     struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
     icalcomponent *vcal = jscal_to_ical(&cfg, jevent, &myparser);
@@ -3576,9 +3570,6 @@ static json_t *ical_to_jsevent(jmap_req_t *req, icalcomponent *ical,
 {
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
         jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
-        if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
-            cfg.debug = true;
-        }
 
         json_t *jgroup = jscal_from_ical(&cfg, ical);
         if (!jgroup) return NULL;
@@ -3599,9 +3590,6 @@ static json_t *ical_to_jsevents(jmap_req_t *req, icalcomponent *ical,
 {
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
         jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
-        if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
-            cfg.debug = true;
-        }
 
         json_t *jgroup = jscal_from_ical(&cfg, ical);
         if (!jgroup) return NULL;
@@ -3640,6 +3628,20 @@ static bool jsevent_is_origin(json_t *jsevent, const strarray_t *schedule_addres
     }
 
     return true;
+}
+
+static void getcalendarevents_reset_ical(struct getcalendarevents_rock *rock)
+{
+    if (rock->ical) {
+        icalcomponent_free(rock->ical);
+        rock->ical = NULL;
+    }
+    rock->imap_uid = 0;
+    rock->is_draft = 0;
+    message_guid_set_null(&rock->guid);
+    if (rock->ical_instances_by_recurid.size)
+        free_hash_table(&rock->ical_instances_by_recurid,
+                        _icalcomponent_free_cb);
 }
 
 static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
@@ -3698,11 +3700,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
                 &rock->schedule_addresses);
 
         // reset ical iterator state
-        if (rock->ical) {
-            icalcomponent_free(rock->ical);
-            rock->ical = NULL;
-        }
-        rock->imap_uid = 0;
+        getcalendarevents_reset_ical(rock);
     }
 
     /* Check mailbox ACL rights */
@@ -3726,8 +3724,10 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
             ptrarray_append(&rock->malloced_fallbacktzs, floatingtz);
     }
 
-    /* Try to read from cache */
-    if (jscal->cacheversion == JMAPCACHE_CALVERSION) {
+    /* Try to read from cache, but force conversion from iCalendar
+     * if the conversion properties are requested. */
+    if (jscal->cacheversion == JMAPCACHE_CALVERSION &&
+            !jmapctx->from_ical.want_icalprops) {
         jsevent = json_loads(jscal->cachedata, 0, NULL);
         if (jsevent) {
             // XXX ignore cached entrys while we serve both RFC8984
@@ -3754,21 +3754,17 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
                 json_decref(jsevent);
                 jsevent = NULL;
             }
-            else goto gotevent;
+            else {
+                getcalendarevents_reset_ical(rock);
+                goto gotevent;
+            }
         }
     }
 
     if ((rock->imap_uid != cdata->dav.imap_uid) || !rock->ical) {
         /* Reset iterator state */
-        if (rock->ical) {
-            icalcomponent_free(rock->ical);
-            rock->ical = NULL;
-        }
+        getcalendarevents_reset_ical(rock);
         rock->imap_uid = cdata->dav.imap_uid;
-        rock->is_draft = 0;
-        message_guid_set_null(&rock->guid);
-        if (rock->ical_instances_by_recurid.size)
-            free_hash_table(&rock->ical_instances_by_recurid, _icalcomponent_free_cb);
 
         /* Open calendar mailbox. */
         if (!rock->mailbox || strcmp(mailbox_uniqueid(rock->mailbox), rock->mbentry->uniqueid)) {
@@ -3888,14 +3884,18 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
                 cdata->dav.imap_uid, req->userid, &rock->guid);
     }
 
-    /* Add to cache */
-    json_t *cached = hashu64_lookup(cdata->dav.rowid, &rock->cache_jsevents);
-    if (!cached) {
-        cached = json_object();
-        hashu64_insert(cdata->dav.rowid, cached, &rock->cache_jsevents);
+    /* Add to cache, but only if the event does not include conversion
+     * properties. */
+    if (!jmapctx->from_ical.want_icalprops) {
+        json_t *cached =
+            hashu64_lookup(cdata->dav.rowid, &rock->cache_jsevents);
+        if (!cached) {
+            cached = json_object();
+            hashu64_insert(cdata->dav.rowid, cached, &rock->cache_jsevents);
+        }
+        json_object_set(cached, jscal->ical_recurid, jsevent);
+        jsevent = json_deep_copy(jsevent);
     }
-    json_object_set(cached, jscal->ical_recurid, jsevent);
-    jsevent = json_deep_copy(jsevent);
 
 gotevent:
 

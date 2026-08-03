@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_links_display
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my %create;
+    foreach my $rel (qw{icon enclosure}) {
+        $create{$rel} = {
+            calendarIds => {
+                $self->default_user->calendars->default->id => JSON::true,
+            },
+            start => '2026-01-02T03:04:05',
+            version => '2.0',
+            links => {
+                link1 => {
+                    href => 'https://example.com/link',
+                    display => { badge => JSON::true },
+                    rel => $rel,
+                },
+            },
+        };
+    }
+
+    xlog $self, "Create events having a display link";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => \%create,
+        }, 'R1'],
+    ]);
+
+    xlog $self, "Assert the display property requires 'rel=icon'";
+    $self->assert_not_null($res->[0][1]{created}{icon}{id});
+
+    xlog $self, "Assert the display property with 'rel=enclosure' is rejected";
+    $self->assert_cmp_deeply({
+        type => 'invalidProperties',
+        properties => [ 'links/link1/rel' ],
+    }, $res->[0][1]{notCreated}{enclosure});
+}

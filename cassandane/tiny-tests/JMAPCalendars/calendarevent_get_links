@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_get_links
-    :min_version_3_1
     ($self)
 {
     my ($id, $ical) = $self->icalfile('links');
@@ -15,7 +14,6 @@ sub test_calendarevent_get_links
             contentType => "text/html",
             size => 4480,
             title => "the spec",
-            rel => "enclosure",
         },
         ignore() => {
             '@type' => 'Link',
@@ -24,6 +22,11 @@ sub test_calendarevent_get_links
         'describedby-attach' => {
             '@type' => 'Link',
             href => "http://describedby/attach",
+            rel => "describedby",
+        },
+        'describedby-url' => {
+            '@type' => 'Link',
+            href => "http://describedby/url",
             rel => "describedby",
         },
     );

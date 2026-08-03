@@ -1,0 +1,97 @@
+#!perl
+use Cassandane::Tiny;
+
+# Two properties may convert to a Link object having the same href, but
+# their ids must not clash. Only the first of them gets its id derived
+# from the property value alone, the id of the other one also takes the
+# property name into account. Both ids must be stable, so converting the
+# same iCalendar data twice must result in the same Link object ids.
+
+sub test_calendarevent_get_links_dupvalue
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $caldav = $self->{caldav};
+
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+PRODID:-//FOO//bar//EN
+VERSION:2.0
+BEGIN:VEVENT
+DTSTAMP:20260102T030405Z
+UID:2a2a1e0b-c1d5-4b0f-8f2c-3d0f9a1b2c3d
+DTSTART:20260102T030405Z
+SUMMARY:test
+ATTACH:https://example.com/link
+URL:https://example.com/link
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my sub get_links
+    {
+        my $res = $jmap->CallMethods([
+            ['CalendarEvent/query', { }, 'R1'],
+            ['CalendarEvent/get', {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name => 'CalendarEvent/query',
+                    path => '/ids',
+                },
+                properties => [ 'links' ],
+            }, 'R2'],
+        ]);
+        my $event = $res->[1][1]{list}[0];
+        $self->assert_not_null($event);
+        return ($event->{id}, $event->{links});
+    }
+
+    xlog $self, "Create event having an ATTACH and URL property of same value";
+    $caldav->Request('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    my ($eventId, $links) = get_links();
+
+    xlog $self, "Assert both properties converted to a distinct Link object";
+    my @linkIds = sort keys %$links;
+    $self->assert_num_equals(2, scalar @linkIds);
+
+    $self->assert_cmp_deeply([
+        {
+            '@type' => 'Link',
+            href => 'https://example.com/link',
+        },
+        {
+            '@type' => 'Link',
+            href => 'https://example.com/link',
+            rel => 'describedby',
+        },
+    ], [ sort { ($a->{rel} // '') cmp ($b->{rel} // '') } values %$links ]);
+
+    xlog $self, "Recreate the very same event";
+    $caldav->Request('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    xlog $self, "Assert the Link object ids did not change";
+    my ($newEventId, $newLinks) = get_links();
+    $self->assert_cmp_deeply($links, $newLinks);
+
+    xlog $self, "Assert a Link object id from the former read still patches it";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $newEventId => { "links/$linkIds[1]/title" => 'A title' },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [ $newEventId ],
+            properties => [ 'links' ],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$newEventId});
+
+    my $got_links = $res->[1][1]{list}[0]{links};
+    $self->assert_num_equals(2, scalar keys %$got_links);
+    $self->assert_str_equals('A title', $got_links->{$linkIds[1]}{title});
+    $self->assert_null($got_links->{$linkIds[0]}{title});
+}

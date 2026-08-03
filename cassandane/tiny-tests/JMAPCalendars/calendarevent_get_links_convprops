@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_links_convprops
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $caldav = $self->{caldav};
+
+    xlog $self, "Create event having a LINK and a URL property";
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+PRODID:-//FOO//bar//EN
+VERSION:2.0
+BEGIN:VEVENT
+DTSTAMP:20260102T030405Z
+UID:2a2a1e0b-c1d5-4b0f-8f2c-3d0f9a1b2c3d
+DTSTART:20260102T030405Z
+SUMMARY:test
+LINK;LINKREL=enclosure;VALUE=URI;JSID=link:https://example.com/link
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    xlog $self, "Get Link objects including conversion property";
+    my $res = $jmap->request([
+        ['CalendarEvent/query', { }, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids',
+            },
+            properties => [ 'links', 'iCalendar' ],
+        }, 'R2'],
+    ]);
+    my $event =
+       $res->sentence_named('CalendarEvent/get')->arguments->{list}[0];
+    $self->assert_not_null($event);
+
+    xlog $self, "Assert that convertedProperties names LINK property";
+    $self->assert_cmp_deeply(superhashof({
+        "iCalendar" => {
+            '@type' => "ICalComponent",
+            "name" => "vevent",
+            "convertedProperties" => {
+                "links/link/href" => {
+                    '@type' => "ICalProperty",
+                    "name" => "link"
+                }
+            }
+        },
+        "links" => {
+            "link" => {
+                '@type' => "Link",
+                "href" => "https://example.com/link",
+            }
+        },
+    }), $event);
+}

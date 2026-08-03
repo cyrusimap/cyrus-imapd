@@ -1,0 +1,136 @@
+#!perl
+use Cassandane::Tiny;
+
+# This test validates fetching the "iCalendar" property is supported
+# in CalendarEvent/get, but only if it is requested explicitly and
+# only if the https://cyrusimap.org/ns/jmap/calendars JMAP capability
+# is set in the request.
+
+sub test_calendarevent_get_icalendar ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $caldav = $self->{caldav};
+
+    my $uuid = '0f9b3a5c-2b6d-4a17-9d8e-1c2f3a4b5c6d';
+    my $alarmUid = 'c3a1f0e2-5d4b-4c7a-8e19-2b0d6f7a8c91';
+
+    xlog $self, "Create a VEVENT with non-standard elements";
+    my $ical = <<~"EOF";
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//Example Corp.//CalDAV Client//EN
+    CALSCALE:GREGORIAN
+    BEGIN:VEVENT
+    UID:$uuid
+    DTSTAMP:20260701T120000Z
+    DTSTART;TZID=Europe/Berlin:20260805T100000
+    DURATION:PT1H
+    SUMMARY;X-SUMMARY-PARAM=xyz:event
+    X-EVENT-PROP;X-FOO=1:eventprop
+    BEGIN:VALARM
+    UID:$alarmUid
+    ACTION:DISPLAY
+    TRIGGER:-PT5M
+    X-ALARM-PROP;X-BAR=2:alarmprop
+    END:VALARM
+    BEGIN:X-UNKNOWN-COMP
+    X-UNKNOWN-COMP-PROP:compprop
+    END:X-UNKNOWN-COMP
+    END:VEVENT
+    END:VCALENDAR
+    EOF
+
+    $caldav->Request('PUT', "Default/$uuid.ics",
+        $ical, 'Content-Type' => 'text/calendar');
+
+    my $wantEvent = superhashof({
+        iCalendar => {
+            '@type' => 'ICalComponent',
+            name => 'vevent',
+            properties => [
+                ['x-event-prop', { 'x-foo' => '1' }, 'unknown', 'eventprop'],
+            ],
+            components => [
+                ['x-unknown-comp', [
+                    ['x-unknown-comp-prop', {}, 'unknown', 'compprop'],
+                ], []],
+            ],
+            convertedProperties => {
+                title => {
+                    '@type' => 'ICalProperty',
+                    name => 'summary',
+                    parameters => { 'x-summary-param' => 'xyz' },
+                },
+            },
+        },
+        alerts => {
+            $alarmUid => superhashof({
+                iCalendar => {
+                    '@type' => 'ICalComponent',
+                    name => 'valarm',
+                    properties => [
+                        ['uid', {}, 'text', $alarmUid],
+                        ['x-alarm-prop', { 'x-bar' => '2' },
+                            'unknown', 'alarmprop'],
+                    ],
+                },
+            }),
+        },
+    });
+
+    xlog $self, "Get the 'iCalendar' property with an empty cache";
+    my $res = $jmap->request({
+        methodCalls => [
+            ['CalendarEvent/get', {
+                properties => ['iCalendar', 'alerts'],
+            }, 'R1'],
+        ],
+    });
+    $self->assert_cmp_deeply([$wantEvent],
+        $res->sentence_named('CalendarEvent/get')->arguments->{list});
+
+    xlog $self, "Assert the 'iCalendar' property isn't returned by default";
+    $res = $jmap->request({
+        methodCalls => [
+            ['CalendarEvent/get', {}, 'R1'],
+        ],
+    });
+    my $event = $res->sentence_named('CalendarEvent/get')->arguments->{list}[0];
+    $self->assert_cmp_deeply({
+        '@type' => 'Alert',
+        trigger => {
+            '@type' => 'OffsetTrigger',
+            offset => '-PT5M',
+        },
+    }, $event->{alerts}{$alarmUid}, 'no iCalendar data in the alert');
+    $self->assert_cmp_deeply([], [grep { /^iCalendar/ } keys %{$event}]);
+
+    xlog $self, "Get the 'iCalendar' property from a warmed up cache";
+    $res = $jmap->request({
+        methodCalls => [
+            ['CalendarEvent/get', {
+                properties => ['iCalendar', 'alerts'],
+            }, 'R1'],
+        ],
+    });
+    $self->assert_cmp_deeply([$wantEvent],
+        $res->sentence_named('CalendarEvent/get')->arguments->{list});
+
+    xlog $self, "Assert iCalendar requires the calendars extension";
+    $res = $jmap->request({
+        methodCalls => [
+            ['CalendarEvent/get', {
+                properties => ['iCalendar'],
+            }, 'R1'],
+        ],
+        using => [
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:calendars',
+            'https://cyrusimap.org/ns/jmap/jscalendarbis',
+        ],
+    });
+    $self->assert_cmp_deeply(['error', {
+        type => 'invalidArguments',
+        arguments => ['properties[0:iCalendar]'],
+    }, 'R1'], $res->sentence(0)->as_stripped_triple);
+}

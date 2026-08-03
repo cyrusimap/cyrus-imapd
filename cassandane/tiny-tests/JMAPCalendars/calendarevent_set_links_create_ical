@@ -1,0 +1,195 @@
+#!perl
+use Cassandane::Tiny;
+
+use Text::VCardFast qw(vcard2hash);
+
+# This test validates the conversion of Link objects to iCalendar
+# in CalendarEvent/set{create}.
+
+# An arbitrary HREF that we set on all properties.
+my $LINK_HREF = 'https://example.com/link';
+
+my sub assert_calendarevent_set_links_create_ical ($self, %arg)
+{
+    my $jmap = $self->default_user->jmap;
+    my $caldav = $self->{caldav};
+
+    my $event = {
+        calendarIds => {
+            $self->default_user->calendars->default->id => JSON::true,
+        },
+        start => '2026-01-02T03:04:05',
+        version => '2.0',
+        links => {
+            link1 => $arg{link},
+        },
+    };
+
+    xlog $self, "Create event with links property";
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => { 1 => $event },
+        }, 'a' ],
+        [ 'CalendarEvent/get' => {
+            ids => [ '#1' ],
+            properties => [ keys %$event, 'x-href' ],
+        }, 'b' ],
+    ]);
+
+    my $got_event =
+        $res->sentence_named('CalendarEvent/get')->arguments->{list}[0];
+    $self->assert_normalized_event_equals($event, $got_event);
+
+    xlog $self, "Assert iCalendar properties";
+    $res = $caldav->Request('GET', "" . $got_event->{'x-href'});
+    my $vevent = vcard2hash($res->{content})->{objects}[0]{objects}[0];
+
+    my %got_props;
+    foreach my $name (qw{attach image link url}) {
+        foreach my $prop (@{ $vevent->{properties}{$name} // [] }) {
+            push @{ $got_props{$name} }, {
+                value => $prop->{value},
+                params => $prop->{params} // {},
+            };
+        }
+    }
+
+    # The IMAGE and LINK properties have no default value type, so they
+    # also carry a VALUE parameter. The ATTACH and URL properties do not.
+    my %value_uri_param = (
+        image => { value => [ 'URI' ] },
+        link  => { value => [ 'URI' ] },
+    );
+
+    my %want_props = map {;
+        $_ => [ {
+            value => $arg{link}{href},
+            params => {
+                jsid => ignore(),
+                %{ $value_uri_param{$_} // {} },
+                %{ $arg{want_ical}{$_} },
+            },
+        } ]
+    } keys %{ $arg{want_ical} };
+
+    $self->assert_cmp_deeply(\%want_props, \%got_props);
+}
+
+sub test_calendarevent_set_links_create_ical_no_rel
+    ($self)
+{
+    assert_calendarevent_set_links_create_ical($self,
+        link => {
+            href => $LINK_HREF,
+        },
+        want_ical => { attach => { } });
+}
+
+sub test_calendarevent_set_links_create_ical_rel_enclosure
+    ($self)
+{
+    assert_calendarevent_set_links_create_ical($self,
+        link => {
+            href => $LINK_HREF,
+            rel => 'enclosure',
+        },
+        want_ical => { attach => { } });
+}
+
+sub test_calendarevent_set_links_create_ical_rel_icon
+    ($self)
+{
+    assert_calendarevent_set_links_create_ical($self,
+        link => {
+            href => $LINK_HREF,
+            rel => 'icon',
+        },
+        want_ical => { image => { } });
+}
+
+sub test_calendarevent_set_links_create_ical_rel_describedby
+    ($self)
+{
+    assert_calendarevent_set_links_create_ical($self,
+        link => {
+            href => $LINK_HREF,
+            rel => 'describedby',
+        },
+        want_ical => { url => { } });
+}
+
+sub test_calendarevent_set_links_create_ical_rel_me
+    ($self)
+{
+    assert_calendarevent_set_links_create_ical($self,
+        link => {
+            href => $LINK_HREF,
+            rel => 'me',
+        },
+        want_ical => { link => { linkrel => [ 'me' ] } });
+}
+
+# The "title" property converts to the FILENAME parameter for the ATTACH
+# and IMAGE properties, and to the LABEL parameter for the LINK and URL
+# properties. See also the rel_describedby_non_url_params test for URL.
+
+sub test_calendarevent_set_links_create_ical_rel_enclosure_title
+    ($self)
+{
+    assert_calendarevent_set_links_create_ical($self,
+        link => {
+            href => $LINK_HREF,
+            rel => 'enclosure',
+            title => 'somename',
+        },
+        want_ical => { attach => { filename => [ 'somename' ] } });
+}
+
+sub test_calendarevent_set_links_create_ical_rel_icon_title
+    ($self)
+{
+    assert_calendarevent_set_links_create_ical($self,
+        link => {
+            href => $LINK_HREF,
+            rel => 'icon',
+            title => 'somename',
+        },
+        want_ical => { image => { filename => [ 'somename' ] } });
+}
+
+sub test_calendarevent_set_links_create_ical_rel_me_title
+    ($self)
+{
+    assert_calendarevent_set_links_create_ical($self,
+        link => {
+            href => $LINK_HREF,
+            rel => 'me',
+            title => 'somename',
+        },
+        want_ical => {
+            link => {
+                linkrel => [ 'me' ],
+                label => [ 'somename' ],
+            },
+        });
+}
+
+sub test_calendarevent_set_links_create_ical_rel_describedby_non_url_params
+    ($self)
+{
+    assert_calendarevent_set_links_create_ical($self,
+        link => {
+            href => $LINK_HREF,
+            rel => 'describedby',
+            contentType => 'text/html',
+            title => 'somename',
+            size => 42,
+        },
+        want_ical => {
+            url => {
+                fmttype => [ 'text/html' ],
+                label => [ 'somename' ],
+                size => [ '42' ],
+            },
+        });
+}
