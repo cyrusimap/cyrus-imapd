@@ -1,0 +1,150 @@
+#!perl
+use Cassandane::Tiny;
+use XML::Simple;
+
+sub test_dav_locks ($self)
+{
+    my $CardDAV = $self->{carddav};
+
+    my $fooId = $CardDAV->NewAddressBook('foo');
+    my $barId = $CardDAV->NewAddressBook('bar');
+    $self->assert_not_null($fooId);
+    $self->assert_not_null($barId);
+
+    my $href = $CardDAV->fullpath("$fooId/foo.vcf");
+    my $dstHref = $CardDAV->fullpath("$barId/bar.vcf");
+    my $uid = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
+
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$uid
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+END:VCARD
+EOF
+
+    my $xml = <<"EOF";
+<D:lockinfo xmlns:D="DAV:">
+  <D:lockscope>
+    <D:exclusive/>
+  </D:lockscope>
+  <D:locktype>
+    <D:write/>
+  </D:locktype>
+  <D:owner>
+    <D:href>mailto:cassandane\@example.com</D:href>
+  </D:owner>
+</D:lockinfo>
+EOF
+
+    xlog $self, "LOCK unmapped URL";
+    my $res = $CardDAV->SafeRequest('LOCK', $href, $xml,
+                                     'Content-Type' => 'text/xml');
+    $self->assert_equals(201, $res->{http_response}{status});
+    my $xmlResp = XMLin($res->{http_response}{content});
+    my $lockToken =
+        $xmlResp->{'D:lockdiscovery'}{'D:activelock'}{'D:locktoken'}{'D:href'};
+    $self->assert_not_null($lockToken);
+
+    xlog $self, "Fetch empty resource";
+    $res = $CardDAV->SafeRequest('GET', $href, '');
+
+    $self->assert_equals(200, $res->{http_response}{status});
+    $self->assert_equals('', $res->{http_response}{content});
+
+    xlog $self, "Attempt to relock resource";
+    $res = $CardDAV->SafeRequest('LOCK', $href, $xml,
+                                 'Content-Type' => 'text/xml');
+    $self->assert_equals(423, $res->{http_response}{status});
+    $xmlResp = XMLin($res->{http_response}{content});
+    $self->assert_str_equals($href,
+                             $xmlResp->{'D:lock-token-submitted'}{'D:href'});
+
+    xlog $self, "Attempt to delete resource";
+    $res = $CardDAV->SafeRequest('DELETE', $href, '');
+    $self->assert_equals(423, $res->{http_response}{status});
+    $xmlResp = XMLin($res->{http_response}{content});
+    $self->assert_str_equals($href,
+                             $xmlResp->{'D:lock-token-submitted'}{'D:href'});
+
+    xlog $self, "Attempt to update locked resource";
+    $res = $CardDAV->SafeRequest('PUT', $href, $card,
+                                 'Content-Type' => 'text/vcard');
+    $self->assert_equals(423, $res->{http_response}{status});
+    $xmlResp = XMLin($res->{http_response}{content});
+    $self->assert_str_equals($href,
+                             $xmlResp->{'D:lock-token-submitted'}{'D:href'});
+
+    xlog $self, "Attempt to update locked resource with bad lock token";
+    $res = $CardDAV->SafeRequest('PUT', $href, $card,
+                                 'Content-Type' => 'text/vcard',
+                                 'If' => "(<foo>)");
+    $self->assert_equals(412, $res->{http_response}{status});
+
+    xlog $self, "Update locked resource";
+    $res = $CardDAV->SafeRequest('PUT', $href, $card,
+                                 'Content-Type' => 'text/vcard',
+                                 'If' => "(<$lockToken>)");
+    $self->assert_equals(201, $res->{http_response}{status});
+
+    xlog $self, "Attempt to move locked source resource";
+    $res = $CardDAV->SafeRequest('MOVE', $href, '',
+                                 'Destination' => $dstHref);
+    $self->assert_equals(423, $res->{http_response}{status});
+    $xmlResp = XMLin($res->{http_response}{content});
+    $self->assert_str_equals($href,
+                             $xmlResp->{'D:lock-token-submitted'}{'D:href'});
+
+    xlog $self, "LOCK unmapped destination URL";
+    $res = $CardDAV->SafeRequest('LOCK', $dstHref, $xml,
+                                 'Content-Type' => 'text/xml');
+    $self->assert_equals(201, $res->{http_response}{status});
+    $xmlResp = XMLin($res->{http_response}{content});
+    my $dstLockToken =
+        $xmlResp->{'D:lockdiscovery'}{'D:activelock'}{'D:locktoken'}{'D:href'};
+    $self->assert_not_null($dstLockToken);
+
+    xlog $self, "Attempt a copy into locked resource w/o overwriting it";
+    $res = $CardDAV->SafeRequest('COPY', $href, '',
+                                 'Overwrite' => 'F',
+                                 'Destination' => $dstHref);
+    $self->assert_equals(412, $res->{http_response}{status});
+
+    xlog $self, "Attempt to copy into locked resource";
+    $res = $CardDAV->SafeRequest('COPY', $href, '',
+                                 'Destination' => $dstHref);
+    $self->assert_equals(423, $res->{http_response}{status});
+    $xmlResp = XMLin($res->{http_response}{content});
+    $self->assert_str_equals($dstHref,
+                             $xmlResp->{'D:lock-token-submitted'}{'D:href'});
+
+    xlog $self, "Attempt to copy into locked resource with bad lock token";
+    $res = $CardDAV->SafeRequest('COPY', $href, '',
+                                 'Destination' => $dstHref,
+                                 'If' => "<$dstHref> (<foo>)");
+    $self->assert_equals(412, $res->{http_response}{status});
+
+    xlog $self, "Copy into locked resource";
+    $res = $CardDAV->SafeRequest('COPY', $href, '',
+                                 'Destination' => $dstHref,
+                                 'If' => "<$dstHref> (<$dstLockToken>)");
+    $self->assert_equals(201, $res->{http_response}{status});
+
+    xlog $self, "Move locked resource into locked resource";
+    $res = $CardDAV->SafeRequest('MOVE', $href, '',
+                                 'Destination' => $dstHref,
+                                 'If' => "<$href> (<$lockToken>)
+                                          <$dstHref> (<$dstLockToken>)");
+    $self->assert_equals(204, $res->{http_response}{status});
+
+    xlog $self, "Unlock source resource - no longer exists";
+    $res = $CardDAV->SafeRequest('UNLOCK', $href, '',
+                                 'Lock-Token' => "<$lockToken>");
+    $self->assert_equals(404, $res->{http_response}{status});
+
+    xlog $self, "Unlock destination resource";
+    $res = $CardDAV->SafeRequest('UNLOCK', $dstHref, '',
+                                 'Lock-Token' => "<$dstLockToken>");
+    $self->assert_equals(204, $res->{http_response}{status});
+}

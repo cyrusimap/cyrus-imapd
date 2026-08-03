@@ -2422,12 +2422,15 @@ static int jmap_calendar_set(struct jmap_req *req)
         /* make sure new default calendar exists */
         mbentry_t *mbentry = NULL;
         calid_to_mbentry(req, newid, &mbentry);
+
+        /* The default calendar is per-account state, so changing it requires
+         * admin rights on the calendar home set. */
+        char *calhome_mboxname = caldav_mboxname(req->accountid, NULL);
         if (mbentry &&
-            jmap_hasrights_mbentry(req, mbentry, JACL_ADMIN_CALENDAR)) {
+            jmap_hasrights(req, calhome_mboxname, JACL_ADMIN_CALENDAR)) {
             /* set CALDAV:schedule-default-calendar annotation */
             static const char annot[] =
                 DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
-            char *calhome_mboxname = caldav_mboxname(req->accountid, NULL);
             mbname_t *mbname = mbname_from_intname(mbentry->name);
             struct buf buf = BUF_INITIALIZER;
 
@@ -2436,7 +2439,6 @@ static int jmap_calendar_set(struct jmap_req *req)
                                        req->accountid, &buf);
             buf_free(&buf);
             mbname_free(&mbname);
-            free(calhome_mboxname);
 
             if (!r) {
                 /* report that isDefault has been moved to new calendar */
@@ -2455,6 +2457,7 @@ static int jmap_calendar_set(struct jmap_req *req)
             }
         }
 
+        free(calhome_mboxname);
         mboxlist_entry_free(&mbentry);
     }
 

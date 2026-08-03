@@ -303,7 +303,8 @@ struct meth_params;
 typedef int (*check_precond_t)(struct transaction_t *txn,
                                struct meth_params *params,
                                struct mailbox *mailbox, const void *data,
-                               const char *etag, time_t lastmod);
+                               const char *etag, time_t lastmod,
+                               const char *dest_path, bool *dest_islocked);
 
 /* Function to insert/update DAV resource in 'data' */
 typedef int (*db_write_proc_t)(void *davdb, void *data);
@@ -549,7 +550,8 @@ modseq_t dav_get_modseq(struct mailbox *mailbox,
                         void *data, const char *userid);
 int dav_check_precond(struct transaction_t *txn, struct meth_params *params,
                       struct mailbox *mailbox, const void *data,
-                      const char *etag, time_t lastmod);
+                      const char *etag, time_t lastmod,
+                      const char *dest_path, bool *dest_islocked);
 int dav_premethod(struct transaction_t *txn);
 unsigned get_preferences(struct transaction_t *txn);
 struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types);
