@@ -686,8 +686,11 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         const char *accountid = httpd_userid;
         json_t *err = NULL;
         json_t *arg = json_object_get(args, "accountId");
-        if (arg && arg != json_null()) {
+        if (arg && json_is_cyrus_accountid(arg)) {
             accountid = json_string_value(arg);
+        }
+        else if (JNOTNULL(arg)) {
+            accountid = NULL;
         }
         if (!accountid) {
             err = json_pack("{s:s, s:[s]}",
@@ -723,12 +726,12 @@ HIDDEN int jmap_api(struct transaction_t *txn,
          * RFC 8620 Section 3.6.2. */
         arg = json_object_get(args, "fromAccountId");
         if (arg && arg != json_null()) {
-            const char *from_accountid = json_string_value(arg);
-            if (!from_accountid) {
+            if (!json_is_cyrus_accountid(arg)) {
                 err = json_pack("{s:s, s:[s]}", "type", "invalidArguments",
                                 "arguments", "fromAccountId");
             }
             else {
+                const char *from_accountid = json_string_value(arg);
                 json_t *from_capas =
                     hash_lookup(from_accountid, &capabilities_by_accountid);
                 if (!from_capas) {
@@ -2250,7 +2253,7 @@ HIDDEN void jmap_copy_parse(jmap_req_t *req, struct jmap_parser *parser,
     json_object_foreach(jargs, key, arg) {
         /* fromAccountId */
         if (!strcmp(key, "fromAccountId")) {
-            if (json_is_string(arg)) {
+            if (json_is_cyrus_accountid(arg)) {
                 copy->from_account_id = json_string_value(arg);
             }
             else if (JNOTNULL(arg)) {
