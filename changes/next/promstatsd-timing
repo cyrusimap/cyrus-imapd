@@ -1,0 +1,23 @@
+Description:
+
+:cyrusman:`promstatsd(8)` is less susceptible to timing drift and other quirks.
+
+
+Documentation:
+
+:cyrusman:`promstatsd(8)`
+
+
+Config changes:
+
+prometheus_usage_update_freq (docs only)
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+None
