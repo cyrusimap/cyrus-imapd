@@ -360,3 +360,50 @@ sub test_squatter_createdmodseq_reindex
     $self->assert_num_equals($createdmodseqB, $highest_createdmodseq);
     $self->assert_num_not_equals($prev_index_generation, $index_generation);
 }
+
+sub test_squatter_createdmodseq_failed_msg
+    :SearchAttachmentExtractor :NoCheckSyslog
+    ($self)
+{
+    xlog $self, "Start an extractor that fails for our attachment";
+    $self->start_echo_extractor(fail_content => qr/badattachment/);
+
+    xlog $self, "Create a plain text message, then one with an attachment that fails to index";
+    my $createdmodseq = $self->create_message_in_mailbox("INBOX",
+        { subject => "plainmsg" });
+    my $failed_createdmodseq = $self->create_message_in_mailbox("INBOX", {
+        subject => "failmsg",
+        args => {
+            mime_type => "multipart/related",
+            mime_boundary => "123456789abcdef",
+            body => ""
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."plaintext"
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: application/pdf\r\n"
+            ."\r\n"
+            ."badattachment"
+            ."\r\n--123456789abcdef--\r\n",
+        },
+    });
+    $self->assert_num_lt($failed_createdmodseq, $createdmodseq);
+
+    xlog $self, "Index all mailboxes (incremental)";
+    # Indexing stops at the message that fails, so squatter reports failure.
+    my $failed = 0;
+    $self->{instance}->run_command({
+        cyrus => 1,
+        handlers => {
+            exited_abnormally => sub { $failed = 1; return 0; },
+        },
+    }, 'squatter', '-i');
+    $self->assert_num_equals(1, $failed);
+
+    # A message that fails to index must not advance the highest createdmodseq.
+    xlog $self, "Assert the highest createdmodseq covers the plain text message only";
+    my ($highest_createdmodseq, $index_generation) =
+        $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+}

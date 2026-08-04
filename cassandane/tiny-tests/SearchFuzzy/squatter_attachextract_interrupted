@@ -1,0 +1,159 @@
+#!perl
+use Cassandane::Tiny;
+
+# This test interrupts squatter while it extracts the attachment text
+# of a mailbox, at the point where it does not hold the mailbox lock.
+# It then deletes the mailbox, or deletes and creates a mailbox with that
+# same name, or removes one of the messages it selected. In each case, the
+# index state must remain sane.
+
+sub assert_squatter_attachextract_interrupted($self, $interrupt, %opts)
+{
+    # $interrupt runs once the extractor got called and does the interrupting.
+    # expect_syslog, if given, must match what squatter logged about it.
+    # expect_reindexed, if given, lists the subjects of the messages that
+    # squatter must have indexed in mailbox A after the interruption.
+
+    my $talk = $self->{store}->get_client();
+    my $instance = $self->{instance};
+
+    my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    my $unblock = $instance->{basedir} . "/tmp/unblock_extractor";
+
+    xlog $self, "Index a message in INBOX and one in mailbox A";
+    $self->create_message_in_mailbox("INBOX", { subject => "inboxmsg" });
+    $talk->create("A") || die;
+    $self->create_message_in_mailbox("A", { subject => "indexedmsg" });
+    $instance->run_command({cyrus => 1}, 'squatter', '-i');
+
+    my ($highest_createdmodseq, $index_generation) =
+        $self->get_squatter_createdmodseq;
+    $self->assert_num_not_equals(0, $index_generation);
+
+    xlog $self, "Add a plain message and one with an attachment to A";
+    $self->create_message_in_mailbox("A", { subject => "plainmsg" });
+    $self->create_message_in_mailbox("A", {
+        subject => "attachmsg",
+        args => {
+            mime_type => "multipart/related",
+            mime_boundary => "123456789abcdef",
+            body => ""
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."plaintext"
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: application/pdf\r\n"
+            ."\r\n"
+            ."attachment"
+            ."\r\n--123456789abcdef--\r\n",
+        },
+    });
+
+    xlog $self, "Clear syslog";
+    $instance->getsyslog();
+
+    xlog $self, "Start an extractor that blocks until we interrupted squatter";
+    $self->start_echo_extractor(tracedir => $tracedir,
+                                wait_for_file => $unblock);
+
+    xlog $self, "Index mailbox A in the background";
+    my $pid = $instance->run_command({ cyrus => 1, background => 1 },
+        'squatter', '-i', 'user.cassandane.A');
+
+    xlog $self, "Wait for the extractor to get called";
+    timed_wait(sub { scalar(glob("$tracedir/*")) },
+        description => "attachment extraction to start",
+        maxwait => 60);
+
+    $interrupt->();
+
+    # The interruption may have reconnected the store, e.g. to expunge.
+    $talk = $self->{store}->get_client();
+
+    xlog $self, "Let the extractor respond";
+    open(my $fh, '>', $unblock) or die "Can't open > $unblock: $!";
+    close($fh);
+
+    xlog $self, "Assert squatter terminated normally";
+    $instance->reap_command($pid);
+
+    my ($new_createdmodseq, $new_generation) =
+        $self->get_squatter_createdmodseq;
+    if (!$opts{expect_reindexed}) {
+        xlog $self, "Assert the index state of this user did not change";
+        $self->assert_num_equals($highest_createdmodseq, $new_createdmodseq);
+        $self->assert_num_equals($index_generation, $new_generation);
+    }
+
+    xlog $self, "Assert the message indexed before is still searchable";
+    $talk->select("INBOX");
+    my $uids = $talk->search('fuzzy', 'subject', 'inboxmsg');
+    $self->assert_num_equals(1, scalar @{$uids});
+
+    if ($opts{expect_reindexed}) {
+        xlog $self, "Assert squatter indexed the mailbox that is there now";
+        $talk->select("A");
+        foreach my $subject (@{$opts{expect_reindexed}}) {
+            $uids = $talk->search('fuzzy', 'subject', $subject);
+            $self->assert_num_equals(1, scalar @{$uids});
+        }
+    }
+
+    if ($opts{expect_syslog} && $instance->{have_syslog_replacement}) {
+        xlog $self, "Assert squatter reported the interruption";
+        my @log = $instance->getsyslog($opts{expect_syslog});
+        $self->assert_num_not_equals(0, scalar @log);
+    }
+}
+
+sub test_squatter_attachextract_interrupted_mbox_deleted
+    :SearchAttachmentExtractor :SearchAttachmentExtractorBlocking
+    ($self)
+{
+    $self->assert_squatter_attachextract_interrupted(sub {
+        # The mailbox is gone by the time squatter wants to index into it.
+        xlog $self, "Delete mailbox A";
+        my $talk = $self->{store}->get_client();
+        $talk->delete("A") || die;
+    });
+}
+
+sub test_squatter_attachextract_interrupted_msg_removed
+    :SearchAttachmentExtractor :SearchAttachmentExtractorBlocking
+    ($self)
+{
+    $self->assert_squatter_attachextract_interrupted(sub {
+        # A message that squatter selected is gone from the index by the time
+        # it wants to index it. That message needs no indexing anymore, but
+        # the messages after it still do.
+        xlog $self, "Expunge plainmsg from A, then remove its record";
+        my $talk = $self->{store}->get_client();
+        $talk->select("A") || die;
+        $talk->store('2', '+flags', '(\\Deleted)') || die;
+        $talk->expunge() || die;
+        $self->run_delayed_expunge();
+    }, expect_reindexed => ["attachmsg"],
+       expect_syslog => qr/index record is gone/);
+}
+
+sub test_squatter_attachextract_interrupted_mbox_recreated
+    :SearchAttachmentExtractor :SearchAttachmentExtractorBlocking
+    ($self)
+{
+    $self->assert_squatter_attachextract_interrupted(sub {
+        # A different mailbox goes by that name by the time squatter wants to index
+        # into it, so none of the uids it selected mean anything anymore.
+        xlog $self, "Delete and recreate mailbox A";
+        my $talk = $self->{store}->get_client();
+        $talk->delete("A") || die;
+        $talk->create("A") || die;
+        # Uid 1 is below the lowest uid that squatter selected, so an
+        # indexed range reaching down to the first unindexed uid of this
+        # mailbox would claim it without ever indexing it.
+        $self->create_message_in_mailbox("A", { subject => "recreatedmsg1" });
+        $self->create_message_in_mailbox("A", { subject => "recreatedmsg2" });
+        $self->create_message_in_mailbox("A", { subject => "recreatedmsg3" });
+    }, expect_syslog => qr/mailbox changed while extracting attachments/,
+       expect_reindexed => ["recreatedmsg1", "recreatedmsg2", "recreatedmsg3"]);
+}
