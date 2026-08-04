@@ -296,6 +296,7 @@ const char *sync_restore(struct dlist *kin,
 #define SYNC_FLAG_SIEVE_MAILBOX (1<<6)
 #define SYNC_FLAG_NONBLOCK (1<<7)
 #define SYNC_FLAG_ARCHIVE (1<<8)
+#define SYNC_FLAG_USECACHE (1<<9)
 
 int sync_do_annotation(struct sync_client_state *sync_cs, const char *mboxname);
 int sync_do_mailboxes(struct sync_client_state *sync_cs,

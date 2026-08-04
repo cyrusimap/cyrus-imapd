@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Invariant: only rolling replication reads the cache.  A sync of a named user
+# compares against the replica itself, so it repairs a lost user whatever the
+# cache claims.
+#
+sub test_synccache_rolling_only
+    :NoAltNameSpace :ImmediateDelete :NoReplicaonly :SyncCache :SyncLog
+    :min_version_3_9
+    ($self)
+{
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+    my $cachefname = "$self->{instance}->{basedir}/sync_cache.db";
+
+    xlog $self, "rolling replication, so the cache gets populated";
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+    $self->check_replication('cassandane');
+    $self->assert_file_test($cachefname, '-f');
+
+    xlog $self, "delete the user on the replica, leaving a tombstone behind";
+    my $replicasvc = $self->{replica}->get_service('imap');
+    my $replicaadmin = $replicasvc->create_store(username => 'admin');
+    my $replicaadmintalk = $replicaadmin->get_client();
+    $replicaadmintalk->delete("user.cassandane");
+    $self->assert_str_equals('ok',
+        $replicaadmintalk->get_last_completion_response());
+    $replicaadmin->disconnect();
+
+    xlog $self, "a sync of the user by name must repair it";
+    $self->run_replication(user => 'cassandane');
+    $self->check_replication('cassandane');
+}

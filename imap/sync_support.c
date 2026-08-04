@@ -7637,10 +7637,15 @@ redo:
     struct dlist *kl = NULL;
     struct dlist *cachel = NULL;
 
+    /* the cache records what the replica looked like last time this channel's
+     * rolling process talked to it, so only it can trust a cached copy.  Every
+     * mode still writes to the cache, it just may not read from it. */
+    int usecache = !!(sync_cs->flags & SYNC_FLAG_USECACHE);
+
     for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
         struct dlist *cl = NULL;
         // check if it's in the cache, then we don't need to look it up
-        if (!sync_readcache(sync_cs, mbox->name, &cl) && cl) {
+        if (usecache && !sync_readcache(sync_cs, mbox->name, &cl) && cl) {
             if (!cachel) cachel = dlist_newlist(NULL, "MAILBOXES");
             dlist_stitch(cachel, cl);
             if ((flags & SYNC_FLAG_VERBOSE) || (flags & SYNC_FLAG_LOGGING))
