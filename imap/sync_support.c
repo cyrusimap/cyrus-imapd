@@ -2265,6 +2265,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_NOTSUPPORTED ",
                           strlen("IMAP_MAILBOX_NOTSUPPORTED ")))
             return IMAP_MAILBOX_NOTSUPPORTED;
+        else if (!strncmp(errmsg.s, "IMAP_PERMISSION_DENIED ",
+                          strlen("IMAP_PERMISSION_DENIED ")))
+            return IMAP_PERMISSION_DENIED;
         else if (!strncmp(errmsg.s, "IMAP_SYNC_CHECKSUM ",
                           strlen("IMAP_SYNC_CHECKSUM ")))
             return IMAP_SYNC_CHECKSUM;
@@ -5188,6 +5191,9 @@ static const char *sync_response(int r)
         break;
     case IMAP_MAILBOX_NOTSUPPORTED:
         resp = "NO IMAP_MAILBOX_NOTSUPPORTED Operation is not supported on mailbox";
+        break;
+    case IMAP_PERMISSION_DENIED:
+        resp = "NO IMAP_PERMISSION_DENIED Permission denied";
         break;
     case IMAP_SYNC_CHECKSUM:
         resp = "NO IMAP_SYNC_CHECKSUM Checksum Failure";
