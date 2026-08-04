@@ -5309,7 +5309,7 @@ static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
                 jmap_parser_invalid(parser, field);
             }
 
-            if (!strcmp(field, "kind")) {
+           else if (!strcmp(field, "kind")) {
                 int *kind = (int *) rock;
 
                 if (!strcmp("group", json_string_value(arg))) {

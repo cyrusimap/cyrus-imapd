@@ -46,4 +46,22 @@ sub test_card_query_inaddressbook
         'R2'
         ], $res->[0]
     );
+
+    xlog $self, "query by bogus addressBookId";
+    $res = $jmap->CallMethods([
+        ['ContactCard/query', {
+            filter => {
+                inAddressBook => ['R8k']
+            }
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([
+        'error',
+        {
+            type => 'invalidArguments',
+            arguments => [ 'filter/inAddressBook' ]
+        },
+        'R2'
+        ], $res->[0]
+    );
 }
