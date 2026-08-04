@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_search_sort_thread_maxtime
+    :min_version_3_13 :needs_search_xapian :SearchMaxtime1Sec :SearchNormalizationMax20000
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    $self->make_message("needle") || die;
+    $talk->select('INBOX');
+
+    # criteria whose DNF normalisation reliably exceeds search_maxtime,
+    # independent of mailbox size
+    my $crit = 'SUBJECT a';
+    $crit = "OR NOT $crit NOT $crit" for (1..14);
+
+    xlog "SEARCH must report the timeout";
+    my $uids = $talk->search(\$crit);
+    $self->assert_null($uids);
+    $self->assert_matches(qr/taking too long/i, $talk->get_last_error());
+
+    xlog "SORT must report the timeout";
+    $uids = $talk->sort('(ARRIVAL)', 'UTF-8', \$crit);
+    $self->assert_null($uids);
+    $self->assert_matches(qr/taking too long/i, $talk->get_last_error());
+
+    xlog "THREAD must report the timeout";
+    $uids = $talk->thread('ORDEREDSUBJECT', 'UTF-8', \$crit);
+    $self->assert_null($uids);
+    $self->assert_matches(qr/taking too long/i, $talk->get_last_error());
+}
