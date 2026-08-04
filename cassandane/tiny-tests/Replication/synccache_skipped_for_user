@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Invariant: a whole-user sync asks the replica rather than believing the cache,
+# so it repairs a replica that lost the user even though nothing ever failed and
+# every folder is cached as already in sync.
+#
+sub test_synccache_skipped_for_user
+    :NoAltNameSpace :ImmediateDelete :NoReplicaonly :SyncCache :SyncLog
+    :min_version_3_9
+    ($self)
+{
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+    my $cachefname = "$self->{instance}->{basedir}/sync_cache.db";
+
+    my $mastertalk = $self->{master_store}->get_client();
+    $mastertalk->create("INBOX.sub");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog $self, "rolling replication, so the cache gets populated";
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+    $self->check_replication('cassandane');
+    $self->assert_file_test($cachefname, '-f');
+
+    xlog $self, "delete the user on the replica, leaving tombstones behind";
+    my $replicasvc = $self->{replica}->get_service('imap');
+    my $replicaadmin = $replicasvc->create_store(username => 'admin');
+    my $replicaadmintalk = $replicaadmin->get_client();
+    foreach my $folder ("user.cassandane.sub", "user.cassandane") {
+        $replicaadmintalk->delete($folder);
+        $self->assert_str_equals('ok',
+            $replicaadmintalk->get_last_completion_response());
+    }
+    $replicaadmin->disconnect();
+
+    $self->{instance}->getsyslog();
+    $self->{replica}->getsyslog();
+
+    xlog $self, "a USER item in the log, with every folder cached as in sync";
+    open(my $fh, ">", $synclogfname) or die "open $synclogfname: $!";
+    print $fh "USER cassandane\n";
+    close($fh);
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+
+    xlog $self, "the replica must have the whole user back";
+    $self->check_replication('cassandane');
+}

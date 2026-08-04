@@ -7638,9 +7638,11 @@ redo:
     struct dlist *cachel = NULL;
 
     /* the cache records what the replica looked like last time this channel's
-     * rolling process talked to it, so only it can trust a cached copy.  Every
-     * mode still writes to the cache, it just may not read from it. */
-    int usecache = !!(sync_cs->flags & SYNC_FLAG_USECACHE);
+     * rolling process talked to it, so only it can trust a cached copy.  A
+     * whole-user sync asks as well: it's our chance to notice that the replica
+     * isn't what we think it is.  Every mode still writes to the cache, it just
+     * may not read from it. */
+    int usecache = (sync_cs->flags & SYNC_FLAG_USECACHE) && !sync_cs->userid;
 
     for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
         struct dlist *cl = NULL;
