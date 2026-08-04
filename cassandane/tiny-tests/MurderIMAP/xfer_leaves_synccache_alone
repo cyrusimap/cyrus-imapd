@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Invariant: an XFER doesn't touch the replication cache.  It syncs to a server
+# that isn't the channel's replica, so anything it cached would never be looked
+# up again.
+#
+sub test_xfer_leaves_synccache_alone
+    :AllowMoves :NoAltNamespace :SyncCache
+    :min_version_3_2
+    ($self)
+{
+    my $cachefname = "$self->{instance}->{basedir}/sync_cache.db";
+
+    $self->populate_user($self->{instance},
+                         $self->{backend1_store},
+                         [qw(INBOX INBOX.Drafts)]);
+
+    my $admintalk = $self->{backend1_adminstore}->get_client();
+    my $backend2_servername = $self->{backend2}->get_servername();
+
+    xlog $self, "xfer the user to the other backend";
+    my $ret = $admintalk->_imap_cmd('xfer', 0, {},
+                                    'user.cassandane', $backend2_servername);
+    $self->assert_str_equals('ok', $ret);
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    xlog $self, "the xfer must not have written a replication cache";
+    $self->assert(!-e $cachefname, "$cachefname exists");
+}
