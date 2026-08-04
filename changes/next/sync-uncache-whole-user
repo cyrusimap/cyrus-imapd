@@ -1,0 +1,38 @@
+Description:
+
+Replication now recovers when a replica has lost a user.
+
+The replication cache is only read by rolling replication, and never for a
+whole-user sync.  Every other case compares against the replica itself, so it
+notices that the replica isn't what the cache claims and repairs it.  This makes
+"sync_client -u <user>" able to fix such a user, which it previously was not:
+with a warm cache it decided every folder was already in sync and did nothing.
+
+An XFER no longer writes to the cache.  It syncs to a server that isn't the
+channel's replica, so the records it wrote were never going to be read back.
+
+sync_server also reports IMAP_PERMISSION_DENIED by name instead of "NO Unknown
+error", so these failures are identifiable in sync_client logs.
+
+Documentation:
+
+(none)
+
+
+Config changes:
+
+(none)
+
+Upgrade instructions:
+
+Sites using sync_cache_db_path may have replicas that are silently missing
+users whose folders are all tombstoned in the replica's mailboxes.db, with the
+master believing them to be in sync.  Such a user is repaired by any whole-user
+sync, which rolling replication does by itself as soon as one of their folders
+fails to apply, or which can be run on demand with "sync_client -u <user>" or
+-A.
+
+
+GitHub issue:
+
+(none)
