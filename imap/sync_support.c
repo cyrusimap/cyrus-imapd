@@ -5516,6 +5516,10 @@ static int reserve_messages(struct sync_client_state *sync_cs,
 
 static struct db *sync_getcachedb(struct sync_client_state *sync_cs)
 {
+    /* nothing to gain: we're syncing somewhere that isn't this channel's
+     * replica, so whatever we cached would never be looked up again */
+    if (sync_cs->flags & SYNC_FLAG_NOCACHE) return NULL;
+
     if (sync_cs->cachedb) return sync_cs->cachedb;
 
     const char *dbtype = config_getstring(IMAPOPT_SYNC_CACHE_DB);
