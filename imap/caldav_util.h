@@ -57,8 +57,6 @@ extern int caldav_create_defaultcalendars(const char *userid,
                                           const struct auth_state *authstate,
                                           mbentry_t **mbentryp);
 
-extern int caldav_is_secretarymode(const char *mboxname);
-
 extern void caldav_attachment_url(struct buf *buf, const char *userid,
                                   const char *baseurl, const char *managedid);
 
@@ -104,8 +102,6 @@ extern int caldav_get_usedefaultalerts(struct dlist *dl,
                                        const struct index_record *record,
                                        icalcomponent **icalp);
 
-
-extern int caldav_is_secretarymode(const char *mboxname);
 
 #ifdef WITH_JMAP
 extern int caldav_init_jmapcalendar(const char *userid, struct mailbox *mailbox);

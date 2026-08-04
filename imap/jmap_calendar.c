@@ -353,14 +353,6 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
                 json_boolean(rights & JACL_CREATECHILD));
     }
 
-    /* shareesActAs */
-    static const char *annot =
-        DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">sharees-act-as";
-    annotatemore_lookup_mbe(mbentry, annot, "", &buf);
-    if (!buf_len(&buf)) buf_setcstr(&buf, "self");
-    json_object_set_new(calcapa, "shareesActAs", json_string(buf_cstring(&buf)));
-    buf_reset(&buf);
-
     /* maxCalendarsPerEvent */
     json_object_set_new(calcapa, "maxCalendarsPerEvent", json_integer(1));
 
