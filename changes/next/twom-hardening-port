@@ -1,0 +1,56 @@
+Description:
+
+twom: robustness fixes ported from the standalone library - a corrupt or
+truncated database is now reported as an error instead of crashing, and a
+bug in twom_db_repair which corrupted the skiplist has been fixed.
+
+
+Documentation:
+
+No user-facing documentation; the changes are internal to lib/twom.c and
+lib/cyrusdb_twom.c.  The standalone library carries the tests.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.  No file format change, no configuration change, and no change in
+behaviour for a valid database.
+
+Three of the fixes only take effect on a damaged file, where the previous
+code either aborted the process or read outside the mapping:
+
+  - a record whose level byte is out of range is rejected, rather than
+    overflowing the arrays which are indexed by it (previously a heap
+    write past the end of a location's backloc array, or a stack write in
+    recovery and the consistency check)
+  - a header whose current_size runs past the end of the file, or whose
+    maxlevel is out of range, returns TWOM_BADFORMAT instead of failing an
+    assert() and aborting the calling process
+  - the replay path used during repack validates a record's type and its
+    DELETE ancestor offset before following them
+
+The repair fix matters on a healthy file: twom_db_repair took the
+replacement pointer for a record's higher skiplist levels from the wrong
+object, so repairing a database with any record above level 1 wrote a wild
+value into its predecessor's forward pointer.
+
+twom_db_open is now strict about a second open of a file this process
+already has open: a different comparison or checksum function, a writable
+open of a readonly handle, or a different NOSYNC, NOCSUM or NOYIELD flag
+all return TWOM_BADUSAGE rather than silently giving the caller the first
+opener's semantics.  cyrusdb_twom therefore keeps the flags each database
+was opened with, so that the delayed checkpoint can reopen with the same
+ones.  A checkpoint which still cannot match them - a database held open
+readonly, which could not have been repacked anyway - is now logged at
+INFO and retried after the next commit, instead of being reported as a
+DBERROR.
+
+
+GitHub issue:
+
+No issue number.
