@@ -3406,7 +3406,7 @@ int twom_db_repair(struct twom_db *db, size_t *nfixedp)
             backptr = LOCBACKPTR(loc, n);
             if (backptr != prevptr) _recsum(loc->file, prevptr);
             prevptr = backptr;
-            SETN(backptr, n, NEXTN(loc, n));
+            SETN(backptr, n, NEXTN(ptr, n));
         }
 
         _recsum(loc->file, prevptr);
