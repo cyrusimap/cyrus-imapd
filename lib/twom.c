@@ -3743,6 +3743,9 @@ const char *twom_strerror(int r)
     case TWOM_NOTFOUND: return "Not Found";
     case TWOM_LOCKED: return "Database is locked";
     case TWOM_READONLY: return "Database is read-only";
+    case TWOM_BADFORMAT: return "Not a twom file";
+    case TWOM_BADUSAGE: return "Invalid API usage";
+    case TWOM_BADCHECKSUM: return "Checksum failure";
     default: return "Unknown error";
     }
 }
