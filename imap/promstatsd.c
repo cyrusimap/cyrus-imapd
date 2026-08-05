@@ -40,18 +40,18 @@ static struct report {
     const char *desc;
     void (*collate_fn)(struct buf *);
     enum imapopt freq_opt;
-    int default_frequency;
     struct mappedfile *mf;
     struct buf buf;
-    int frequency;
-    int64_t prev_report_time;
+    int64_t frequency; /* actually period, not frequency. d'oh */
+    int64_t next_report_time;
+    int slow_collate_count;
 } reports[] = {
     { FNAME_PROM_SERVICE_REPORT, "service", &do_collate_service_report,
-      IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ, 10,
-      NULL, BUF_INITIALIZER, 0, 0 },
+      IMAPOPT_PROMETHEUS_SERVICE_UPDATE_FREQ,
+      NULL, BUF_INITIALIZER, 0, 0, 0 },
     { FNAME_PROM_USAGE_REPORT,   "usage",   &do_collate_usage_report,
-      IMAPOPT_PROMETHEUS_USAGE_UPDATE_FREQ, 0,
-      NULL, BUF_INITIALIZER, 0, 0 },
+      IMAPOPT_PROMETHEUS_USAGE_UPDATE_FREQ,
+      NULL, BUF_INITIALIZER, 0, 0, 0 },
 };
 const size_t n_reports = sizeof(reports) / sizeof(reports[0]);
 
@@ -638,7 +638,7 @@ static void do_write_report(struct mappedfile *mf, const struct buf *report)
 
 static inline int report_due(const struct report *report, int64_t tick)
 {
-    return (report->prev_report_time + 1000 * report->frequency <= tick);
+    return report->next_report_time <= tick;
 }
 
 int main(int argc, char **argv)
@@ -652,10 +652,10 @@ int main(int argc, char **argv)
     int debugmode = 0;
     int verbose = 0;
     int oneshot = 0;
-    int min_frequency = INT_MAX;
     int opt;
     int r;
     unsigned i;
+    int64_t tick;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
@@ -683,8 +683,8 @@ int main(int argc, char **argv)
             break;
 
         case 'f': /* set service report frequency */
-            reports[0].frequency = atoi(optarg);
-            if (reports[0].frequency <= 0) usage();
+            reports[0].frequency = 1000 * atoi(optarg);
+            if (reports[0].frequency < 1000) usage();
             break;
 
         case 'v': /* verbose */
@@ -746,21 +746,18 @@ int main(int argc, char **argv)
         }
     }
 
+    tick = now_ms();
     for (i = 0; i < n_reports; i++) {
         char *fname = strconcat(prometheus_stats_dir(),
                                 reports[i].fname,
                                 NULL);
 
-        if (reports[i].frequency <= 0)
-            reports[i].frequency = config_getduration(reports[i].freq_opt);
-        if (reports[i].frequency <= 0)
-            reports[i].frequency = reports[i].default_frequency;
+        reports[i].frequency = 1000 * config_getduration(reports[i].freq_opt);
 
         if (reports[i].frequency) {
-            syslog(LOG_DEBUG, "updating %s every %d seconds",
-                              fname, reports[i].frequency);
-            if (reports[i].frequency < min_frequency)
-                min_frequency = reports[i].frequency;
+            syslog(LOG_DEBUG, "updating %s every %" PRIi64 " seconds",
+                              fname, reports[i].frequency / 1000);
+            reports[i].next_report_time = tick + reports[i].frequency;
         }
         else {
             syslog(LOG_DEBUG, "not updating %s due to frequency 0", fname);
@@ -772,11 +769,11 @@ int main(int argc, char **argv)
         free(fname);
         if (r) fatal("couldn't open report file", EX_IOERR);
     }
-    assert(min_frequency > 0 && min_frequency < INT_MAX);
 
     for (;;) {
         int sig;
-        int64_t tick, elapsed;
+        int64_t next_report_time;
+        struct timespec wake;
 
         sig = signals_poll();
         if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
@@ -797,12 +794,49 @@ int main(int argc, char **argv)
                 && (oneshot || report_due(&reports[i], tick)))
             {
                 int64_t profile_starttime = now_ms();
+                int64_t collate_took;
+
                 reports[i].collate_fn(&reports[i].buf);
+                collate_took = now_ms() - profile_starttime;
+
                 syslog(LOG_DEBUG, "collated %s report in %f seconds",
                                   reports[i].desc,
-                                  (now_ms() - profile_starttime) / 1000.0);
+                                  collate_took / 1000.0);
                 do_write_report(reports[i].mf, &reports[i].buf);
-                reports[i].prev_report_time = tick;
+
+                /* if some report is consistently taking too long to collate
+                 * relative to how often we collate it, do so less often
+                 */
+                if (collate_took >= reports[i].frequency / 2) {
+                    reports[i].slow_collate_count ++;
+
+                    xsyslog(LOG_NOTICE, "report took too long to collate",
+                                        "report=<%s> frequency=<%" PRIi64 "s>"
+                                        " collate_took=<%gs> count=<%d>",
+                                        reports[i].desc,
+                                        reports[i].frequency / 1000,
+                                        collate_took / 1000.0,
+                                        reports[i].slow_collate_count);
+
+                    if (reports[i].slow_collate_count > 2) {
+                        int64_t new_frequency = reports[i].frequency * 2;
+
+                        xsyslog(LOG_NOTICE, "increasing time between reports",
+                                            "report=<%s> frequency=<%" PRIi64 "s>"
+                                            " new_frequency=<%" PRIi64 "s>",
+                                            reports[i].desc,
+                                            reports[i].frequency / 1000,
+                                            new_frequency / 1000);
+
+                        reports[i].frequency = new_frequency;
+                        reports[i].slow_collate_count = 0;
+                    }
+                }
+                else {
+                    reports[i].slow_collate_count = 0;
+                }
+
+                reports[i].next_report_time = tick + reports[i].frequency;
             }
         }
 
@@ -810,15 +844,23 @@ int main(int argc, char **argv)
             shut_down(0);
         }
 
-        /* then wait around a bit */
-        /* XXX This isn't exactly right: if service is 10s and usage is 15s
-         * XXX we'll end up waking at 10s, 20s, 30s, 40s, and the usage report
-         * XXX will be on a lurching clock since 10 doesn't evenly divide 15.
-         * XXX Probably want to use greatest common divisor, but that would
-         * XXX become annoying to compute if we add a third report to the mix.
-         */
-        elapsed = now_ms() - tick;
-        sleep(min_frequency - elapsed / 1000);
+        /* then wait around until the next report is due */
+        next_report_time = INT64_MAX;
+        for (i = 0; i < n_reports; i++) {
+            if (reports[i].frequency) {
+                next_report_time = MIN(next_report_time,
+                                       reports[i].next_report_time);
+            }
+        }
+        assert(next_report_time > tick);
+        assert(next_report_time < INT64_MAX);
+
+        wake.tv_sec = next_report_time / 1000;
+        wake.tv_nsec = (next_report_time % 1000) * 1000000; /* ms -> ns */
+        do {
+            r = clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &wake, NULL);
+            assert(r == 0 || r == EINTR);
+        } while (r == EINTR);
     }
 
     /* NOTREACHED */
