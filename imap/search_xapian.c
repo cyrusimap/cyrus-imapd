@@ -792,32 +792,6 @@ static void read_highest_createdmodseq_at_dir(const char *userid,
     free(fname);
 }
 
-/* Store the highest createdmodseq and index generation in the indexed.db
- * located in the xapian database directory dir. */
-static int store_highest_createdmodseq_at_dir(const char *userid,
-                                              const char *dir,
-                                              modseq_t highest_createdmodseq,
-                                              uint64_t index_generation)
-{
-    char *fname = indexeddb_fname(dir);
-    struct indexeddb *idb = NULL;
-
-    int r = indexeddb_open(userid, fname, CYRUSDB_CREATE, &idb);
-    if (!r && (idb->highest_createdmodseq != highest_createdmodseq ||
-                idb->index_generation != index_generation)) {
-        idb->highest_createdmodseq = highest_createdmodseq;
-        idb->index_generation = index_generation;
-        r = store_indexeddb_highest_createdmodseq(idb);
-    }
-    if (idb) {
-        int r2 = indexeddb_close(&idb, r);
-        if (!r) r = r2;
-    }
-
-    free(fname);
-    return r;
-}
-
 /*
  * Merge the indexed.db of all search tiers activetiers[1..n] into the
  * indexed.db of the top tier.
@@ -2315,6 +2289,8 @@ struct xapian_update_receiver
     struct mboxlock *xapiandb_namelock;
     unsigned int uncommitted;
     unsigned int commits;
+    /* True if any commit failed during the current mailbox update. */
+    bool commit_failed;
     seqset_t *oldindexed;
     seqset_t *indexed;
     strarray_t *activedirs;
@@ -2322,10 +2298,13 @@ struct xapian_update_receiver
     hash_table cached_seqs;
     int mode;
     int flags;
-    /* Highest and lowest createdmodseq seen across messages indexed in the
-     * current batch (0 if none seen yet). */
+    /* Highest and lowest createdmodseq across the messages indexed by the
+     * current mailbox update (0 if none got indexed yet). */
     modseq_t batch_highest_createdmodseq;
     modseq_t batch_lowest_createdmodseq;
+    /* The createdmodseq of the message currently being indexed. It only
+     * counts towards the batch createdmodseqs once that message is indexed. */
+    modseq_t msg_createdmodseq;
     /* The top tier's highest createdmodseq and index generation, read from
      * indexeddb */
     modseq_t highest_createdmodseq;
@@ -2445,34 +2424,59 @@ out:
     return r;
 }
 
-static int flush_internal(search_text_receiver_t *rx, bool has_more)
+/* Commit the messages indexed so far, if any. */
+static int commit_transaction(xapian_update_receiver_t *tr)
 {
-    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-    int r = 0;
     struct timeval start, end;
 
-    if (tr->uncommitted) {
-        assert(tr->dbw);
+    if (!tr->uncommitted) return 0;
 
-        gettimeofday(&start, NULL);
-        r = xapian_dbw_commit_txn(tr->dbw);
-        if (r) goto out;
-        gettimeofday(&end, NULL);
+    assert(tr->dbw);
 
-        syslog(LOG_INFO, "Xapian committed %u updates in %.6f sec",
-                    tr->uncommitted, timesub(&start, &end));
+    // Reset uncommitted in the receiver regardless of whether the commit
+    // succeeds or fails. We can't recover from failed commits.
+    unsigned int uncommitted = tr->uncommitted;
+    tr->uncommitted = 0;
 
-        tr->uncommitted = 0;
-        tr->commits++;
+    gettimeofday(&start, NULL);
+    int r = xapian_dbw_commit_txn(tr->dbw);
+    gettimeofday(&end, NULL);
+    if (r) {
+        tr->commit_failed = true; // keep track of failed commit
+        xsyslog_ev(LOG_ERR, "failed to commit transaction",
+                lf_s("mailbox", mailbox_name(tr->super.mailbox)),
+                lf_u("uncommitted", uncommitted),
+                lf_f("seconds", timesub(&start, &end)),
+                lf_s("error", error_message(r)));
+        return r;
     }
 
-    /* Update the highest createdmodseq and bump the index generation to
-     * cover all batches indexed since begin_mailbox. This must only happen
-     * once the mailbox update is complete (has_more is false): a message
-     * indexed by a later batch of the same update may have a lower
-     * createdmodseq than the highest createdmodseq of an earlier batch,
-     * which would spuriously invalidate the index generation. */
-    if (!has_more && tr->batch_highest_createdmodseq) {
+    xsyslog_ev(LOG_INFO, "committed Xapian transaction",
+                lf_u("committed", uncommitted),
+                lf_f("seconds", timesub(&start, &end)));
+
+    tr->commits++;
+    return 0;
+}
+
+/* Write the index state of this mailbox: the list of the messages that got
+ * indexed, the highest createdmodseq they cover and the index generation.
+ * These must get written together and exactly once for a mailbox update,
+ * a reader seeing a message as indexed but the generation not bumped for
+ * it would miss that its cached query results went stale. */
+static int update_indexeddb(xapian_update_receiver_t *tr)
+{
+    if (tr->commit_failed) {
+        xsyslog_ev(LOG_ERR, "not updating indexed.db after failed commit",
+                lf_s("mailbox", mailbox_name(tr->super.mailbox)));
+        return IMAP_IOERROR;
+    }
+
+    /* Nothing got indexed, so there is no state to write. Only a message
+     * that got indexed contributes a batch createdmodseq. */
+    if (!tr->indexed) return 0;
+
+    if (tr->batch_highest_createdmodseq) {
         if (tr->batch_lowest_createdmodseq <= tr->highest_createdmodseq) {
             /* This update indexed a message that has a lower createdmodseq
              * than the highest createdmodseq in the index. This means we
@@ -2498,41 +2502,20 @@ static int flush_internal(search_text_receiver_t *rx, bool has_more)
 
     /* We write out the indexed list for the mailbox only after successfully
      * updating the index, to avoid a future instance not realising that
-     * there are unindexed messages should we fail to index. This also
-     * persists the highest createdmodseq and index generation. */
-    if (tr->indexed) {
-        r = write_indexed(strarray_nth(tr->activedirs, 0),
-                mailbox_name(tr->super.mailbox), tr->super.mailbox->i.uidvalidity,
-                mailbox_uniqueid(tr->super.mailbox), tr->indexed,
-                tr->highest_createdmodseq, tr->index_generation,
-                tr->super.verbose);
-        if (r) goto out;
-    }
-    else if (!has_more && tr->batch_highest_createdmodseq && tr->activedirs) {
-        /* There is no indexed list to write, but an earlier batch of this
-         * update still indexed messages whose highest createdmodseq and
-         * index generation we must persist. */
-        r = store_highest_createdmodseq_at_dir(mbname_userid(tr->super.mbname),
-                strarray_nth(tr->activedirs, 0),
-                tr->highest_createdmodseq, tr->index_generation);
-        if (r) goto out;
-    }
-
-    if (!has_more) {
-        tr->batch_highest_createdmodseq = 0;
-        tr->batch_lowest_createdmodseq = 0;
-    }
-
-out:
-    return r;
+     * there are unindexed messages should we fail to index. */
+    return write_indexed(strarray_nth(tr->activedirs, 0),
+            mailbox_name(tr->super.mailbox), tr->super.mailbox->i.uidvalidity,
+            mailbox_uniqueid(tr->super.mailbox), tr->indexed,
+            tr->highest_createdmodseq, tr->index_generation,
+            tr->super.verbose);
 }
 
 static int flush(search_text_receiver_t *rx)
 {
-    /* A flush via the receiver API is always intermediate: more batches may
-     * follow, and the mailbox update is only complete once end_mailbox is
-     * called. The highest createdmodseq is committed from end_mailbox_update. */
-    return flush_internal(rx, /*has_more*/true);
+    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
+    /* Only commit the messages in Xapian. We'll update indexed.db
+     * in end_mailbox_update. */
+    return tr->super.mailbox ? commit_transaction(tr) : 0;
 }
 
 static int audit_mailbox(search_text_receiver_t *rx, bitvector_t *unindexed)
@@ -2613,14 +2596,8 @@ static int begin_message_update(search_text_receiver_t *rx, message_t *msg)
     if (r) return r;
 
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-    modseq_t createdmodseq = 0;
-    if (!message_get_createdmodseq(msg, &createdmodseq) && createdmodseq) {
-        if (createdmodseq > tr->batch_highest_createdmodseq)
-            tr->batch_highest_createdmodseq = createdmodseq;
-        if (!tr->batch_lowest_createdmodseq ||
-                createdmodseq < tr->batch_lowest_createdmodseq)
-            tr->batch_lowest_createdmodseq = createdmodseq;
-    }
+    tr->msg_createdmodseq = 0;
+    message_get_createdmodseq(msg, &tr->msg_createdmodseq);
     return 0;
 }
 
@@ -2844,10 +2821,20 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
     }
     seqset_add(tr->indexed, tr->super.uid, 1);
 
+    /* This message is indexed, so it counts towards the createdmodseqs */
+    if (tr->msg_createdmodseq) {
+        if (tr->msg_createdmodseq > tr->batch_highest_createdmodseq)
+            tr->batch_highest_createdmodseq = tr->msg_createdmodseq;
+        if (!tr->batch_lowest_createdmodseq ||
+                tr->msg_createdmodseq < tr->batch_lowest_createdmodseq)
+            tr->batch_lowest_createdmodseq = tr->msg_createdmodseq;
+    }
+
 out:
     tr->super.uid = 0;
     message_guid_set_null(&tr->super.guid);
     tr->super.internaldate = 0;
+    tr->msg_createdmodseq = 0;
     return r;
 }
 
@@ -2860,6 +2847,42 @@ static int _starts_with_tier(const strarray_t *active, const char *tier)
     int res = !strcmp(item->tier, tier);
     activeitem_free(item);
     return res;
+}
+
+static void cleanup_mailbox_update(xapian_update_receiver_t *tr)
+{
+    seqset_free(&tr->indexed);
+    seqset_free(&tr->oldindexed);
+
+    tr->super.mailbox = NULL;
+    mbname_free(&tr->super.mbname);
+
+    if (tr->dbw) {
+        xapian_dbw_close(tr->dbw);
+        tr->dbw = NULL;
+    }
+
+    if (tr->activefile) {
+        mappedfile_unlock(tr->activefile);
+        mappedfile_close(&tr->activefile);
+        tr->activefile = NULL;
+    }
+
+    if (tr->xapiandb_namelock) {
+        mboxname_release(&tr->xapiandb_namelock);
+        tr->xapiandb_namelock = NULL;
+    }
+
+    if (tr->activedirs) {
+        strarray_free(tr->activedirs);
+        tr->activedirs = NULL;
+    }
+    if (tr->activetiers) {
+        strarray_free(tr->activetiers);
+        tr->activetiers = NULL;
+    }
+
+    tr->flags = 0;
 }
 
 static int begin_mailbox_update(search_text_receiver_t *rx,
@@ -2876,6 +2899,9 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     tr->flags = flags;
     tr->mode = (flags & (SEARCH_UPDATE_XAPINDEXED|SEARCH_UPDATE_AUDIT)) ?
         XAPIAN_DBW_XAPINDEXED : XAPIAN_DBW_CONVINDEXED;
+    tr->commit_failed = false;
+    tr->batch_highest_createdmodseq = 0;
+    tr->batch_lowest_createdmodseq = 0;
 
     /* not an indexable mailbox, fine - return a code to avoid
      * trying to index each message as well */
@@ -3026,6 +3052,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     tr->super.mbname = mbname_from_intname(mailbox_name(mailbox));
 
 out:
+    if (r) cleanup_mailbox_update(tr);
     free(fname);
     free(userid);
     free(namelock_fname);
@@ -3135,51 +3162,19 @@ static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
 
 static int end_mailbox_update(search_text_receiver_t *rx,
                               struct mailbox *mailbox
-                            __attribute__((unused)),
-                              bool has_more)
+                            __attribute__((unused)))
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     int r = 0;
 
-    /* flush_internal handles updating the highest createdmodseq and index
-     * generation once the mailbox update is complete, see has_more. */
-    r = flush_internal(rx, has_more);
-
-    /* flush before cleaning up, since indexed data is written by flush */
-    seqset_free(&tr->indexed);
-    seqset_free(&tr->oldindexed);
-
-    tr->super.mailbox = NULL;
-    mbname_free(&tr->super.mbname);
-
-    if (tr->dbw) {
-        xapian_dbw_close(tr->dbw);
-        tr->dbw = NULL;
+    if (tr->super.mailbox) {
+        /* Commit whatever is left, then write the index state of this
+         * mailbox. Nothing is indexed for it after this point. */
+        r = commit_transaction(tr);
+        if (!r) r = update_indexeddb(tr);
     }
 
-    /* don't unlock until DB is committed */
-    if (tr->activefile) {
-        mappedfile_unlock(tr->activefile);
-        mappedfile_close(&tr->activefile);
-        tr->activefile = NULL;
-    }
-
-    /* Release xapian db named lock */
-    if (tr->xapiandb_namelock) {
-        mboxname_release(&tr->xapiandb_namelock);
-        tr->xapiandb_namelock = NULL;
-    }
-
-    if (tr->activedirs) {
-        strarray_free(tr->activedirs);
-        tr->activedirs = NULL;
-    }
-    if (tr->activetiers) {
-        strarray_free(tr->activetiers);
-        tr->activetiers = NULL;
-    }
-
-    tr->flags = 0;
+    cleanup_mailbox_update(tr);
 
     return r;
 }
@@ -3392,8 +3387,7 @@ static int end_message_snippets(search_text_receiver_t *rx,
 
 static int end_mailbox_snippets(search_text_receiver_t *rx,
                                 struct mailbox *mailbox
-                                    __attribute__((unused)),
-                                bool has_more __attribute__((unused)))
+                                    __attribute__((unused)))
 {
     xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
 

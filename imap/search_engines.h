@@ -117,12 +117,7 @@ struct search_text_receiver {
 #define SEARCH_INDEXLEVEL_BEST SEARCH_INDEXLEVEL_ATTACH
 #define SEARCH_INDEXLEVEL_MAX (SEARCH_INDEXLEVEL_PARTIAL - 1)
     int (*end_message)(search_text_receiver_t *, uint8_t indexlevel);
-    /* Finish indexing a mailbox. If has_more is true, this indicates that the
-     * same mailbox will get reopened with more messages, so search engines
-     * may defer updating the index state until the. This mostly is relevant
-     * for two-phased attachment extraction and indexing. */
-    int (*end_mailbox)(search_text_receiver_t *, struct mailbox *,
-                       bool has_more);
+    int (*end_mailbox)(search_text_receiver_t *, struct mailbox *);
     int (*flush)(search_text_receiver_t *);
     int (*audit_mailbox)(search_text_receiver_t *, bitvector_t *unindexed);
     int (*index_charset_flags)(int base_flags);
@@ -227,9 +222,18 @@ extern modseq_t search_session_get_highest_createdmodseq(search_session_t *,
 #define SEARCH_UPDATE_ALLOW_DUPPARTS (1<<7)
 #define SEARCH_UPDATE_VERBOSE (1<<8)
 search_text_receiver_t *search_begin_update(int verbose);
+/* Index the messages of mailbox *mailboxptr that are not indexed at
+ * min_indexlevel yet. Returns IMAP_AGAIN if the mailbox needs another
+ * update to complete, an IMAP error code on error, or 0.
+ *
+ * If nindexedptr is not NULL, it is set to the number of messages this
+ * update indexed. A caller that repeats an update returning IMAP_AGAIN
+ * must use it to tell an update that made progress from one that did not,
+ * so that it does not repeat forever. */
 int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox **mailboxptr,
-                          int min_indexlevel, int flags);
+                          int min_indexlevel, int flags,
+                          size_t *nindexedptr);
 int search_end_update(search_text_receiver_t *rx);
 
 /* Create a search text receiver for snippets. For each non-empty
