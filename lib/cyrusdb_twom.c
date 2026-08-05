@@ -63,6 +63,16 @@ static int _errormap(int r) {
     }
 }
 
+/* cyrusdb hands callers an opaque struct dbengine *, and each backend
+ * defines its own.  Ours pairs the twom handle with the twom flags it was
+ * opened with, because the delayed checkpoint has to reopen the same file
+ * with the same flags: twom refuses an open which disagrees with a handle
+ * it is already sharing. */
+struct dbengine {
+    struct twom_db *db;
+    int twom_flags;
+};
+
 struct dcrock {
     char *fname;
     int flags;
@@ -107,14 +117,22 @@ static void _delayed_checkpoint(void *rock)
     struct twom_open_data init = TWOM_OPEN_DATA_INITIALIZER;
     init.error = _twom_error_callback;
     init.flags = drock->flags;
-    int r = _errormap(twom_db_open(drock->fname, &init, &db, NULL));
-    if (r == CYRUSDB_NOTFOUND) {
+    int tmr = twom_db_open(drock->fname, &init, &db, NULL);
+    if (tmr == TWOM_NOTFOUND) {
         // the file is gone - it's fine to lose this race, nothing to do
         return;
     }
-    else if (r) {
+    if (tmr == TWOM_BADUSAGE) {
+        /* somebody in this process still has it open with flags we can't
+         * match - a readonly handle, most likely, which could not have
+         * been repacked through anyway.  The next commit asks again. */
+        syslog(LOG_INFO, "twom: not checkpointing %s, already open with "
+               "different flags", drock->fname);
+        return;
+    }
+    if (tmr) {
         syslog(LOG_ERR, "DBERROR: opening %s for checkpoint: %s",
-               drock->fname, cyrusdb_strerror(r));
+               drock->fname, cyrusdb_strerror(_errormap(tmr)));
         return;
     }
     if (twom_db_should_repack(db)) {
@@ -131,7 +149,7 @@ static void _delayed_checkpoint(void *rock)
 
 static int mylock(struct dbengine *db, struct txn **tidptr, int flags)
 {
-    struct twom_db *tmdb = (struct twom_db *)db;
+    struct twom_db *tmdb = db->db;
     struct twom_txn *tmtxn = (struct twom_txn *)*tidptr;
     int tmr = twom_db_begin_txn(tmdb, flags & CYRUSDB_SHARED, &tmtxn);
     *tidptr = (struct txn *)tmtxn;
@@ -166,7 +184,10 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
         tmr = twom_db_open(fname, &init, &tmdb, tidptr ? &tmtxn : NULL);
     }
     if (!tmr) {
-        *ret = (struct dbengine *)tmdb;
+        struct dbengine *dbe = xzmalloc(sizeof(struct dbengine));
+        dbe->db = tmdb;
+        dbe->twom_flags = init.flags;
+        *ret = dbe;
         if (tidptr) *tidptr = (struct txn *)tmtxn;
     }
     return _errormap(tmr);
@@ -174,8 +195,8 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
 
 static int myclose(struct dbengine *db)
 {
-    struct twom_db *tmdb = (struct twom_db *)db;
-    int tmr = twom_db_close(&tmdb);
+    int tmr = twom_db_close(&db->db);
+    free(db);
     return _errormap(tmr);
 }
 
@@ -190,13 +211,17 @@ static int myabort(struct dbengine *db __attribute__((unused)), struct txn *tid)
 static int mycommit(struct dbengine *db, struct txn *tid)
 {
     if (!tid) return 0;
-    struct twom_db *tmdb = (struct twom_db *)db;
+    struct twom_db *tmdb = db->db;
     struct twom_txn *tmtid = (struct twom_txn *)tid;
     if (twom_db_should_repack(tmdb)) {
         // delay the checkpoint until the user isn't waiting
         struct dcrock *drock = xzmalloc(sizeof(struct dcrock));
         drock->fname = xstrdup(twom_db_fname(tmdb));
-        drock->flags = 0;
+        /* reopen with the same handle properties, or twom will refuse to
+         * share the handle with us.  Not CREATE: if the file has gone in
+         * the meantime that is a race we lose harmlessly.  Not SHARED
+         * either, because a repack has to write. */
+        drock->flags = db->twom_flags & ~(TWOM_CREATE | TWOM_SHARED);
         libcyrus_delayed_action(drock->fname, _delayed_checkpoint,
                                 _delayed_checkpoint_free, drock);
     }
@@ -208,7 +233,7 @@ static int mybegin(struct dbengine *db, struct txn **tidptr)
 {
     if (*tidptr) return 0;
 
-    struct twom_db *tmdb = (struct twom_db *)db;
+    struct twom_db *tmdb = db->db;
     struct twom_txn *tmtxn = NULL;
 
     int tmr = twom_db_begin_txn(tmdb, 0, &tmtxn);
@@ -235,7 +260,7 @@ static int myforeach(struct dbengine *db,
         // we release the lock every time sadly, so add ALWAYSYIELD
         // to match twoskip/skiplist et al behaviour
         tmflags |= TWOM_ALWAYSYIELD;
-        struct twom_db *tmdb = (struct twom_db *)db;
+        struct twom_db *tmdb = db->db;
         return _errormap(twom_db_foreach(tmdb, prefix, prefixlen,
                                          goodp, cb, rock, tmflags));
     }
@@ -250,21 +275,21 @@ static int myforeach(struct dbengine *db,
 
 static int mycheckpoint(struct dbengine *db)
 {
-    struct twom_db *tmdb = (struct twom_db *)db;
+    struct twom_db *tmdb = db->db;
     int tmr = checkpoint(tmdb);
     return _errormap(tmr);
 }
 
 static int mydump(struct dbengine *db, int detail)
 {
-    struct twom_db *tmdb = (struct twom_db *)db;
+    struct twom_db *tmdb = db->db;
     int tmr = twom_db_dump(tmdb, detail);
     return _errormap(tmr);
 }
 
 static int myconsistent(struct dbengine *db)
 {
-    struct twom_db *tmdb = (struct twom_db *)db;
+    struct twom_db *tmdb = db->db;
     int tmr = twom_db_check_consistency(tmdb);
     return _errormap(tmr);
 }
@@ -276,7 +301,7 @@ static int myread(struct dbengine *db,
                   struct txn **tidptr, int tmflags)
 {
     if (keylen) assert(key);
-    struct twom_db *tmdb = (struct twom_db *)db;
+    struct twom_db *tmdb = db->db;
 
     if (!tidptr)
         return _errormap(twom_db_fetch(tmdb, key, keylen, foundkey, fklen,
@@ -312,7 +337,7 @@ static int mywrite(struct dbengine *db,
                    const char *data, size_t datalen,
                    struct txn **tidptr, int tmflags)
 {
-    struct twom_db *tmdb = (struct twom_db *)db;
+    struct twom_db *tmdb = db->db;
 
     if (!tidptr)
         return _errormap(twom_db_store(tmdb, key, keylen, data, datalen, tmflags));
