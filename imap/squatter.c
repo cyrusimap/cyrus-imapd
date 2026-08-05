@@ -270,10 +270,16 @@ done:
 
 /* ====================================================================== */
 
+/* How many times to repeat an update of the same mailbox that indexed no
+ * message at all. Such an update can only complete if whatever kept it from
+ * indexing goes away, so give up rather than block this run on it. */
+#define MAX_UNPRODUCTIVE_UPDATES 3
+
 /* This is called once for each mailbox we're told to index. */
 static int index_one(const char *name, int blocking)
 {
     struct mailbox *mailbox = NULL;
+    int nunproductive = 0;
     int r;
     int flags = SEARCH_UPDATE_BATCH;
 
@@ -376,14 +382,28 @@ again:
         }
     }
 
-    r = search_update_mailbox(rx, &mailbox, reindex_minlevel, flags);
+    size_t nindexed = 0;
+    r = search_update_mailbox(rx, &mailbox, reindex_minlevel, flags, &nindexed);
 
     mailbox_close(&mailbox);
 
     /* in non-blocking (rolling) mode, only do one batch per mailbox at
      * a time for fairness [IRIS-2471].  The squatter will re-insert the
      * mailbox in the queue */
-    if (blocking && r == IMAP_AGAIN) goto again;
+    if (blocking && r == IMAP_AGAIN) {
+        /* Batching an update indexes messages, so keep going. An update
+         * that indexed nothing, e.g. because the mailbox got recreated
+         * while we extracted its attachment text, may never complete. */
+        if (nindexed) {
+            nunproductive = 0;
+            goto again;
+        }
+        if (++nunproductive <= MAX_UNPRODUCTIVE_UPDATES) goto again;
+
+        xsyslog_ev(LOG_ERR, "giving up on mailbox that indexes no message",
+                lf_s("mboxname", name),
+                lf_d("updates", nunproductive));
+    }
     free(extname);
 
     return r;
@@ -433,6 +453,7 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
 static int do_indexer(const strarray_t *mboxnames)
 {
     int r = 0;
+    int rincomplete = 0;
     int i;
 
     rx = search_begin_update(verbose);
@@ -447,6 +468,12 @@ static int do_indexer(const strarray_t *mboxnames)
             r = 0;
         if (r == IMAP_MAILBOX_LOCKED)
             r = 0; /* XXX - try again? */
+        if (r == IMAP_AGAIN) {
+            /* index_one gave up on this mailbox. Keep indexing the others,
+             * but report the incomplete index for this run. */
+            rincomplete = r;
+            r = 0;
+        }
         if (r) break;
         if (sleepmicroseconds)
             usleep(sleepmicroseconds);
@@ -454,7 +481,7 @@ static int do_indexer(const strarray_t *mboxnames)
 
     search_end_update(rx);
 
-    return r;
+    return r ? r : rincomplete;
 }
 
 static int squatter_build_query(search_builder_t *bx, const char *query)
@@ -873,22 +900,21 @@ static void do_rolling(const char *channel)
 
 static int audit_one(const char *mboxname, bitvector_t *unindexed)
 {
-    int r2, r = 0;
     struct mailbox *mailbox = NULL;
 
-    r = mailbox_open_irl(mboxname, &mailbox);
-    if (r) goto done;
+    int r = mailbox_open_irl(mboxname, &mailbox);
+    if (r) return r;
 
+    /* only end a mailbox that we did begin */
     r = rx->begin_mailbox(rx, mailbox, SEARCH_UPDATE_AUDIT);
-    if (r) goto done;
+    if (!r) {
+        r = rx->audit_mailbox(rx, unindexed);
 
-    r = rx->audit_mailbox(rx, unindexed);
-    if (r) goto done;
+        int r2 = rx->end_mailbox(rx, mailbox);
+        if (!r) r = r2;
+    }
 
-done:
-    r2 = rx->end_mailbox(rx, mailbox, /*has_more*/false);
     mailbox_close(&mailbox);
-    if (!r) r = r2;
     return r;
 }
 
