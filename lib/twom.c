@@ -46,7 +46,7 @@
 /* don't bother rewriting if the database has less than this much extra */
 #define MINREWRITE 16834
 /* number of skiplist levels - 31 gives us binary search to 2^32 records.
- * This is the limit to what we can calculate from a single call to random(),
+ * This is the limit to what we can calculate from a single 32 bit random value,
  * but skiplist had 20, and that was enough
  * for most real uses.  31 is heaps. */
 #define MAXLEVEL 31
@@ -235,6 +235,27 @@ static inline void *twom_zmalloc(size_t bytes)
     memset(res, 0, bytes);
     return res;
 }
+
+/* Random numbers for choosing skiplist levels.  These just need a decent
+ * distribution of coin flips - levels don't depend on the key, so there's
+ * nothing here for an attacker to steer - but we keep our own generator
+ * rather than calling random(), because that shares global state with the
+ * calling application: we would consume its sequence, and our record
+ * levels would change if it called srandom().  Fixed seed, so a given
+ * series of writes produces the same shape on every run, as it did with
+ * an unseeded random(). */
+static uint64_t tm_rand_state = 0x2545F4914F6CDD1DULL;
+
+static uint32_t tm_random(void)
+{
+    uint64_t x = tm_rand_state;
+    x ^= x >> 12;
+    x ^= x << 25;
+    x ^= x >> 27;
+    tm_rand_state = x;
+    /* the high bits of the multiply are the well mixed ones */
+    return (uint32_t)((x * 0x2545F4914F6CDD1DULL) >> 32);
+}
 /********************** POINTER MANAGEMENT WITHIN THE FILES *********************/
 
 // pad out to an 8 byte boundary
@@ -392,7 +413,7 @@ static size_t advance0(const char *ptr, size_t end)
 // find random level 1-maxlevel (up to 31 on Linux)
 static inline uint8_t randlvl(uint8_t lvl, uint8_t maxlvl)
 {
-    uint32_t v = random();
+    uint32_t v = tm_random();
     uint8_t i;
     for(i = lvl-1; i < maxlvl-1; i++)
         if (v & (1<<i)) break;
