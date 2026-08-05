@@ -27,7 +27,7 @@ EXDATE;TZID=Australia/Melbourne:20160608T153000
 EOF
 
         # should this send a PARTSTAT=DECLINED instead?
-        $self->assert_caldav_notified(
+        $self->assert_caldav_notifications(
             {
                 recipient => "test1\@example.com",
                 method => 'REPLY',

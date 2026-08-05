@@ -59,7 +59,7 @@ EOF
 
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => "friend\@example.com", is_update => JSON::false, method => 'REQUEST' },
     );
 
@@ -67,7 +67,7 @@ EOF
     $card =~ s/RECURRENCE-ID/ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend2\@example.com\nRECURRENCE-ID/;
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => "friend2\@example.com", is_update => JSON::false, method => 'REQUEST' },
     );
 }

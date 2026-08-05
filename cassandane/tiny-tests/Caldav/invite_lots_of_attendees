@@ -76,7 +76,7 @@ EOF
 
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         map {
             +{
                 recipient => $_,

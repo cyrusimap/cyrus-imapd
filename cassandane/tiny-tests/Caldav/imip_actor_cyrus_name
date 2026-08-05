@@ -82,7 +82,7 @@ EOF
 
     $arg{actor}->Request('PUT', "$arg{cal_path}/$arg{uuid}.ics", $card, @hdrs);
 
-    $self->assert_caldav_notified({
+    $self->assert_caldav_notifications({
         recipient      => 'friend@example.com',
         method         => 'REQUEST',
         is_update      => JSON::false,

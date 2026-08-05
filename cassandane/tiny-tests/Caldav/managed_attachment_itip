@@ -47,7 +47,7 @@ EOF
     });
     $self->assert_str_equals('201', $res->{status});
 
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => 'attendee@local', is_update => JSON::true, method => 'REQUEST' },
     );
 }

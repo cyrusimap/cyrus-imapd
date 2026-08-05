@@ -22,7 +22,7 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
 ORGANIZER:MAILTO:test1\@example.com
 EOF
-        $self->assert_caldav_notified(
+        $self->assert_caldav_notifications(
             { recipient => "test1\@example.com", method => 'REPLY' },
         );
     }
@@ -41,7 +41,7 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
 ORGANIZER;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 EOF
-        $self->assert_caldav_notified();
+        $self->assert_caldav_notifications();
     }
 
     xlog $self, "attendee-modify NONE";
@@ -58,6 +58,6 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
 ORGANIZER;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 EOF
-        $self->assert_caldav_notified();
+        $self->assert_caldav_notifications();
     }
 }

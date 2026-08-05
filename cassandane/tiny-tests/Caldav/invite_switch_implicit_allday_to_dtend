@@ -45,7 +45,7 @@ EOF
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
     xlog $self, "make sure an invite is sent to attendee";
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => "friend\@example.com",
           is_update => JSON::false, method => 'REQUEST' },
     );

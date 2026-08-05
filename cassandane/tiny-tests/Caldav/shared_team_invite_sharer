@@ -91,7 +91,7 @@ EOF
     xlog $self, "add event as sharee, inviting sharer";
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => "test\@example.com", is_update => JSON::false, method => 'REQUEST' },
         { recipient => "friend\@example.com", is_update => JSON::false, method => 'REQUEST' },
     );
@@ -102,7 +102,7 @@ EOF
 
     $testtalk->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => "cassandane\@example.com", is_update => JSON::false, method => 'REPLY' },
     );
 }

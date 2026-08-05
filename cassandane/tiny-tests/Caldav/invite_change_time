@@ -38,7 +38,7 @@ EOF
             'PUT', $href, $ical,
             'Content-Type' => 'text/calendar'
         );
-        $self->assert_caldav_notified(
+        $self->assert_caldav_notifications(
             { recipient => 'invitee@example.com', method => 'REQUEST' },
         );
         return ($href, $ical);
@@ -48,7 +48,7 @@ EOF
     my ($href, $ical) = $create_event->();
     $ical =~ s/20240925T010000/20240925T020000/;
     $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => 'invitee@example.com', method => 'REQUEST' },
     );
 
@@ -56,7 +56,7 @@ EOF
     ($href, $ical) = $create_event->();
     $ical =~ s/DURATION:PT1H/DURATION:PT2H/;
     $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => 'invitee@example.com', method => 'REQUEST' },
     );
 
@@ -64,7 +64,7 @@ EOF
     ($href, $ical) = $create_event->();
     $ical =~ s/Perth/Melbourne/;
     $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => 'invitee@example.com', method => 'REQUEST' },
     );
 
@@ -72,7 +72,7 @@ EOF
     ($href, $ical) = $create_event->();
     $ical =~ s/Perth/West/;
     $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => 'invitee@example.com', method => 'REQUEST' },
     );
 
@@ -81,13 +81,13 @@ EOF
     $ical =~ s/DURATION:PT1H/DTEND;TZID=Australia\/Perth:20240925T020000/;
     $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
     # Does not trigger an iTIP message, see Caldav.invite_switch_duration_to_dtend
-    $self->assert_caldav_notified();
+    $self->assert_caldav_notifications();
 
     # Keep using event with DTEND, rather than creating a new one.
     xlog $self, "Change DTEND TZID to same UTC offset using IANA alias";
     $ical =~ s/DTEND;TZID=Australia\/Perth/DTEND;TZID=Australia\/West/;
     $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => 'invitee@example.com', method => 'REQUEST' },
     );
 
@@ -95,7 +95,7 @@ EOF
     xlog $self, "Change DTEND TZID to different UTC offse";
     $ical =~ s/DTEND;TZID=Australia\/West/DTEND;TZID=Asia\/Singapore/;
     $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => 'invitee@example.com', method => 'REQUEST' },
     );
 }

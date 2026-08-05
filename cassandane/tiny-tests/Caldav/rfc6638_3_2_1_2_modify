@@ -40,7 +40,7 @@ EOF
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
+        $self->assert_caldav_notifications();
     }
 
     xlog $self, "<Absent> / SERVER";
@@ -56,7 +56,7 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified(
+        $self->assert_caldav_notifications(
         { recipient => "test1\@example.com", is_update => JSON::false, method => 'REQUEST' },
         );
     }
@@ -74,7 +74,7 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
+        $self->assert_caldav_notifications();
     }
 
     xlog $self, "<Absent> / NONE";
@@ -90,7 +90,7 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
+        $self->assert_caldav_notifications();
     }
 
     xlog $self, "SERVER / <Removed>";
@@ -106,7 +106,7 @@ EOF
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified(
+        $self->assert_caldav_notifications(
             { recipient => "test1\@example.com", method => 'CANCEL' },
         );
     }
@@ -125,7 +125,7 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified(
+        $self->assert_caldav_notifications(
             { recipient => "test1\@example.com", is_update => JSON::true },
         );
     }
@@ -144,7 +144,7 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified(
+        $self->assert_caldav_notifications(
             { recipient => "test1\@example.com", method => 'CANCEL' },
         );
     }
@@ -163,7 +163,7 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified(
+        $self->assert_caldav_notifications(
             { recipient => "test1\@example.com", method => 'CANCEL' },
         );
     }
@@ -181,7 +181,7 @@ EOF
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
+        $self->assert_caldav_notifications();
     }
 
     xlog $self, "CLIENT / SERVER";
@@ -199,7 +199,7 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
         # XXX - should be a new request is_update => true
-        $self->assert_caldav_notified(
+        $self->assert_caldav_notifications(
             #{ recipient => "test1\@example.com", is_update => JSON::true, method => 'REQUEST' },
             { recipient => "test1\@example.com", method => 'REQUEST' },
         );
@@ -219,7 +219,7 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
+        $self->assert_caldav_notifications();
     }
 
     xlog $self, "CLIENT / NONE";
@@ -236,7 +236,7 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
+        $self->assert_caldav_notifications();
     }
 
     xlog $self, "NONE / <Removed>";
@@ -252,7 +252,7 @@ EOF
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
+        $self->assert_caldav_notifications();
     }
 
     xlog $self, "NONE / SERVER";
@@ -270,7 +270,7 @@ ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
         # XXX - should be a new request is_update => true
-        $self->assert_caldav_notified(
+        $self->assert_caldav_notifications(
             #{ recipient => "test1\@example.com", is_update => JSON::true, method => 'REQUEST' },
             { recipient => "test1\@example.com", method => 'REQUEST' },
         );
@@ -290,7 +290,7 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
+        $self->assert_caldav_notifications();
     }
 
     xlog $self, "NONE / NONE";
@@ -307,7 +307,7 @@ ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-        $self->assert_caldav_notified();
+        $self->assert_caldav_notifications();
     }
 
     # XXX - check that the SCHEDULE-STATUS property is set correctly...

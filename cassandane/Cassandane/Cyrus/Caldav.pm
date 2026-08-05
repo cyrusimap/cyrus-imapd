@@ -192,7 +192,7 @@ sub _all_keys_match
     die "WEIRD REF $ref for $a";
 }
 
-sub assert_caldav_notified
+sub assert_caldav_notifications
 {
     my $self = shift;
     my @expected = @_;
@@ -280,7 +280,7 @@ ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
 ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
-    $self->assert_caldav_notified(
+    $self->assert_caldav_notifications(
         { recipient => "test2\@example.com", is_update => JSON::false, method => 'REQUEST' },
     );
 }
