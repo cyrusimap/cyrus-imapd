@@ -102,7 +102,6 @@ AM_DISTCHECK_CONFIGURE_FLAGS = \
     --enable-http \
     --enable-calalarmd \
     --enable-replication \
-    --enable-nntp \
     --enable-murder \
     --enable-idled \
     --enable-sieve \
@@ -140,8 +139,6 @@ DISTCLEANFILES = \
     imap/lmtp_err.h \
     imap/mupdate_err.c \
     imap/mupdate_err.h \
-    imap/nntp_err.c \
-    imap/nntp_err.h \
     imap/promdata.c \
     imap/promdata.h \
     imap/tz_err.c \
@@ -259,12 +256,6 @@ if SQUATTER
 sbin_PROGRAMS += imap/squatter
 endif
 
-if NNTPD
-libexec_PROGRAMS += imap/nntpd
-sbin_PROGRAMS += imap/fetchnews
-BUILT_SOURCES += imap/nntp_err.c
-endif # NNTPD
-
 libexec_PROGRAMS += imap/fud
 
 if IDLED
@@ -374,7 +365,6 @@ EXTRA_DIST = \
     imap/lmtp_err.et \
     imap/mailbox_header_cache.gperf \
     imap/mupdate_err.et \
-    imap/nntp_err.et \
     imap/promdata.p \
     imap/rfc822_header.gperf \
     imap/tz_err.et \
@@ -944,9 +934,6 @@ nodist_imap_deliver_SOURCES = imap/lmtp_err.c
 
 imap_deliver_LDADD = $(LD_UTILITY_ADD)
 
-imap_fetchnews_SOURCES = imap/cli_fatal.c imap/fetchnews.c imap/mutex_fake.c
-imap_fetchnews_LDADD = $(LD_UTILITY_ADD)
-
 imap_fud_SOURCES = imap/fud.c imap/mutex_fake.c master/service.c
 imap_fud_LDADD = $(LD_SERVER_ADD)
 
@@ -1228,21 +1215,6 @@ imap_mupdate_SOURCES = \
     master/service-thread.c
 imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
 imap_mupdate_CFLAGS =  $(AM_CFLAGS) -pthread
-
-nodist_imap_nntpd_SOURCES = imap/nntp_err.c
-
-imap_nntpd_SOURCES = \
-    imap/mutex_fake.c \
-    imap/nntpd.c \
-    imap/proxy.c \
-    imap/smtpclient.c \
-    imap/smtpclient.h \
-    imap/spool.c \
-    imap/spool.h \
-    imap/sync_support.c \
-    imap/sync_support.h \
-    master/service.c
-imap_nntpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 nodist_imap_httpd_SOURCES = \
     imap/tz_err.c \
@@ -1715,7 +1687,6 @@ dist_man1_MANS = \
     man/httptest.1 \
     man/lmtptest.1 \
     man/mupdatetest.1 \
-    man/nntptest.1 \
     man/pop3test.1 \
     man/sieveshell.1 \
     man/sivtest.1 \
@@ -1753,7 +1724,6 @@ dist_man8_MANS = \
     man/cyr_withlock_run.8 \
     man/cyrdump.8 \
     man/deliver.8 \
-    man/fetchnews.8 \
     man/fud.8 \
     man/httpd.8 \
     man/idled.8 \
@@ -1766,7 +1736,6 @@ dist_man8_MANS = \
     man/mbpath.8 \
     man/mbtool.8 \
     man/mupdate.8 \
-    man/nntpd.8 \
     man/notifyd.8 \
     man/pop3d.8 \
     man/pop3proxyd.8 \
@@ -2269,7 +2238,6 @@ endif
 	  $(LN_S) -f imtest httptest && \
 	  $(LN_S) -f imtest lmtptest && \
 	  $(LN_S) -f imtest mupdatetest && \
-	  $(LN_S) -f imtest nntptest && \
 	  $(LN_S) -f imtest pop3test && \
 	  $(LN_S) -f imtest sivtest && \
 	  $(LN_S) -f imtest smtptest && \

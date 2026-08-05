@@ -1,4 +1,4 @@
-/* imtest.c - IMAP/POP3/NNTP/LMTP/SMTP/MUPDATE/MANAGESIEVE test client */
+/* imtest.c - IMAP/POP3/LMTP/SMTP/MUPDATE/MANAGESIEVE test client */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
@@ -2070,95 +2070,6 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *apop_chal,
     return result;
 }
 
-/********************************** NNTP *************************************/
-
-static int auth_nntp()
-{
-    char str[1024];
-    /* we need username and password to do AUTHINFO USER/PASS */
-    char *username;
-    unsigned int userlen;
-    char *pass;
-    unsigned int passlen;
-
-    interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
-
-    printf("C: AUTHINFO USER %s\r\n", username);
-    prot_printf(pout,"AUTHINFO USER %s\r\n", username);
-    prot_flush(pout);
-
-    if (prot_fgets(str, 1024, pin) == NULL) {
-        imtest_fatal("prot layer failure");
-    }
-
-    printf("S: %s", str);
-
-    if (!strncmp(str, "381", 3)) {
-        interaction(SASL_CB_PASS, NULL, "Please enter your password",
-                    &pass, &passlen);
-
-        printf("C: AUTHINFO PASS <omitted>\r\n");
-        prot_printf(pout,"AUTHINFO PASS %s\r\n",pass);
-        prot_flush(pout);
-
-        if (prot_fgets(str, 1024, pin) == NULL) {
-            imtest_fatal("prot layer failure");
-        }
-
-        printf("S: %s", str);
-    }
-
-    if (!strncmp(str, "281", 3)) {
-        return IMTEST_OK;
-    } else {
-        return IMTEST_FAIL;
-    }
-}
-
-static int nntp_do_auth(struct sasl_cmd_t *sasl_cmd,
-                        void *rock __attribute__((unused)),
-                        int user_enabled, const char *mech, const char *mechlist)
-{
-    int result = IMTEST_OK;
-
-    if (mech) {
-        if (!strcasecmp(mech, "user")) {
-            if (!user_enabled) {
-                printf("[Server did not advertise AUTHINFO USER]\n");
-                result = IMTEST_FAIL;
-            } else {
-                result = auth_nntp();
-            }
-        } else if (!mechlist || !stristr(mechlist, mech)) {
-            printf("[Server did not advertise SASL %s]\n", mech);
-            result = IMTEST_FAIL;
-        } else {
-            result = auth_sasl(sasl_cmd, mech);
-        }
-    } else {
-        if (mechlist) {
-            result = auth_sasl(sasl_cmd, mechlist);
-        } else if (user_enabled) {
-            result = auth_nntp();
-        }
-    }
-
-    return result;
-}
-
-static char *nntp_parse_success(char *str)
-{
-    char *success = NULL, *tmp;
-
-    if (!strncmp(str, "283 ", 4)) {
-        success = str+4;
-        if ((tmp = strchr(success, ' ')))
-            *tmp = '\0'; /* clip trailing comment */
-    }
-
-    return success;
-}
-
 /******************************** LMTP/SMTP **********************************/
 
 static int xmtp_do_auth(struct sasl_cmd_t *sasl_cmd,
@@ -2634,27 +2545,25 @@ static void usage(char *prog, const char *prot)
         printf("             (\"login\" for IMAP LOGIN)\n");
     else if (!strcasecmp(prot, "pop3"))
         printf("             (\"user\" for USER/PASS, \"apop\" for APOP)\n");
-    else if (!strcasecmp(prot, "nntp"))
-        printf("             (\"user\" for AUTHINFO USER/PASS\n");
     else if (!strcasecmp(prot, "http"))
         printf("             (\"basic\", \"negotiate\", \"scram-sha-1\", \"scram-sha-256\")\n");
     printf("  -f file  : pipe file into connection after authentication\n");
     printf("  -r realm : realm\n");
     if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "pop3") ||
-        !strcasecmp(prot, "nntp") || !strcasecmp(prot, "smtp") || !strcasecmp(prot, "http"))
+        !strcasecmp(prot, "smtp") || !strcasecmp(prot, "http"))
         printf("  -s       : Enable %s over SSL (%ss)\n", prot, prot);
     if (strcasecmp(prot, "mupdate"))
         printf("  -t file  : Enable TLS. file has the TLS public and private keys\n"
                "             (specify \"\" to not use TLS for authentication)\n");
 #ifdef HAVE_ZLIB
-    if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "nntp") ||
+    if (!strcasecmp(prot, "imap") ||
         !strcasecmp(prot, "mupdate") || !strcasecmp(prot, "csync")) {
         printf("  -q       : Enable %s COMPRESSion (after authentication)\n",
                prot);
     }
 #endif /* HAVE_ZLIB */
     if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "pop3") ||
-        !strcasecmp(prot, "nntp") || !strcasecmp(prot, "smtp") ||
+        !strcasecmp(prot, "smtp") ||
         !strcasecmp(prot, "http") || !strcasecmp(prot, "sieve"))
         printf("  -H ip    : Enable the HAProxy protocol and send the specified client IP address in a v1 header\n"
                "             If the address is \"unknown\", a v1 header with UNKNOWN protocol will be sent\n"
@@ -2690,16 +2599,6 @@ static struct protocol_t protocols[] = {
       { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL, 0 },
       { NULL, NULL, NULL, },
       &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL, NULL
-    },
-    { "nntp", "nntps", "nntp", 0,  /* AUTHINFO USER unavail until advertised */
-      { 0, "20", NULL },
-      { "CAPABILITIES", ".", "STARTTLS", "AUTHINFO USER", "SASL ",
-        "COMPRESS DEFLATE", NULL },
-      { "STARTTLS", "382", "580", 0 },
-      { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*",
-        &nntp_parse_success, 0 },
-      { "COMPRESS DEFLATE", "206", "403", },
-      &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp", 0,
       { 0, "220 ", NULL },
@@ -2966,8 +2865,6 @@ int main(int argc, char **argv)
             prot = "imap";
         else if (!strcasecmp(prog, "pop3test"))
             prot = "pop3";
-        else if (!strcasecmp(prog, "nntptest"))
-            prot = "nntp";
         else if (!strcasecmp(prog, "lmtptest"))
             prot = "lmtp";
         else if (!strcasecmp(prog, "smtptest"))

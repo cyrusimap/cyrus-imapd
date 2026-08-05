@@ -7107,21 +7107,6 @@ static bool index_thread_refs(struct index_state *state,
                              refs_thread_proc, NULL, sortcrit, usinguid);
 }
 
-/*
- * NNTP specific stuff.
- */
-EXPORTED char *index_get_msgid(struct index_state *state,
-                               uint32_t msgno)
-{
-    struct mailbox *mailbox = state->mailbox;
-    struct index_record record;
-
-    if (index_reload_record(state, msgno, &record))
-        return NULL;
-
-    return mailbox_cache_get_env(mailbox, &record, ENV_MSGID);
-}
-
 static void massage_header(char *hdr)
 {
     int n = 0;
@@ -7150,94 +7135,6 @@ static void massage_header(char *hdr)
         hdr[n++] = c;
     }
     hdr[n] = '\0';
-}
-
-EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
-                                                     uint32_t msgno)
-{
-    static struct nntp_overview over;
-    static char *env = NULL, *from = NULL, *hdr = NULL;
-    static int envsize = 0, fromsize = 0, hdrsize = 0;
-    int size;
-    char *envtokens[NUMENVTOKENS];
-    struct address addr = { NULL, NULL, NULL, NULL, NULL, NULL, 0 };
-    strarray_t refhdr = STRARRAY_INITIALIZER;
-    struct mailbox *mailbox = state->mailbox;
-    struct index_record record;
-
-    /* flush any previous data */
-    memset(&over, 0, sizeof(struct nntp_overview));
-
-    if (index_reload_record(state, msgno, &record))
-        return NULL;
-
-    if (mailbox_cacherecord(mailbox, &record))
-        return NULL; /* upper layers can cope! */
-
-    /* make a working copy of envelope; strip outer ()'s */
-    /* -2 -> don't include the size of the outer parens */
-    /* +1 -> leave space for NUL */
-    size = cacheitem_size(&record, CACHE_ENVELOPE) - 2 + 1;
-    if (envsize < size) {
-        envsize = size;
-        env = xrealloc(env, envsize);
-    }
-    /* +1 -> skip the leading paren */
-    strlcpy(env, cacheitem_base(&record, CACHE_ENVELOPE) + 1, size);
-
-    /* make a working copy of headers */
-    size = cacheitem_size(&record, CACHE_HEADERS);
-    if (hdrsize < size+2) {
-        hdrsize = size+100;
-        hdr = xrealloc(hdr, hdrsize);
-    }
-    memcpy(hdr, cacheitem_base(&record, CACHE_HEADERS), size);
-    hdr[size] = '\0';
-
-    parse_cached_envelope(env, envtokens, VECTOR_SIZE(envtokens));
-
-    over.uid = record.uid;
-    over.bytes = record.size;
-    over.lines = index_getlines(state, msgno);
-    over.date = envtokens[ENV_DATE];
-    over.msgid = envtokens[ENV_MSGID];
-
-    /* massage subject */
-    if ((over.subj = envtokens[ENV_SUBJECT]))
-        massage_header(over.subj);
-
-    /* build original From: header */
-    if (envtokens[ENV_FROM]) /* paranoia */
-        message_parse_env_address(envtokens[ENV_FROM], &addr);
-
-    if (addr.mailbox && addr.domain) { /* paranoia */
-        /* +3 -> add space for quotes and space */
-        /* +4 -> add space for < @ > NUL */
-        size = (addr.name ? strlen(addr.name) + 3 : 0) +
-            strlen(addr.mailbox) + strlen(addr.domain) + 4;
-        if (fromsize < size) {
-            fromsize = size;
-            from = xrealloc(from, fromsize);
-        }
-        from[0] = '\0';
-        if (addr.name) sprintf(from, "\"%s\" ", addr.name);
-        snprintf(from + strlen(from), fromsize - strlen(from),
-                 "<%s@%s>", addr.mailbox, addr.domain);
-
-        over.from = from;
-    }
-
-    /* massage references */
-    strarray_append(&refhdr, "references");
-    message_pruneheader(hdr, &refhdr, 0);
-    strarray_fini(&refhdr);
-
-    if (*hdr) {
-        over.ref = hdr + 11; /* skip over header name */
-        massage_header(over.ref);
-    }
-
-    return &over;
 }
 
 EXPORTED char *index_getheader(struct index_state *state,
@@ -7279,41 +7176,6 @@ EXPORTED char *index_getheader(struct index_state *state,
     }
 
     return buf;
-}
-
-EXPORTED extern unsigned long index_getsize(struct index_state *state,
-                                            uint32_t msgno)
-{
-    struct index_record record;
-
-    if (index_reload_record(state, msgno, &record))
-        return 0;
-
-    return record.size;
-}
-
-EXPORTED extern unsigned long index_getlines(struct index_state *state,
-                                             uint32_t msgno)
-{
-    struct index_record record;
-    struct body *body = NULL;
-    unsigned long lines = 0;
-
-    if (index_reload_record(state, msgno, &record))
-        return 0;
-
-    if (mailbox_cacherecord(state->mailbox, &record))
-        return 0;
-
-    message_read_bodystructure(&record, &body);
-    if (!body) return 0;
-
-    lines = body->content_lines;
-
-    message_free_body(body);
-    free(body);
-
-    return lines;
 }
 
 EXPORTED const char *index_mboxname(const struct index_state *state)
