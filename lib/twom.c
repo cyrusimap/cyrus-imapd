@@ -231,6 +231,7 @@ static inline void *twom_zmalloc(size_t bytes)
 static inline void *twom_zmalloc(size_t bytes)
 {
     void *res = malloc(bytes);
+    if (!res) return NULL;
     memset(res, 0, bytes);
     return res;
 }
@@ -1507,6 +1508,11 @@ static int recovery(struct twom_db *db, struct tm_file *file)
     // all the safeptr logic, so create a synthetic one with the correct
     // offsets.
     struct tm_loc *loc = (struct tm_loc *)twom_zmalloc(sizeof(struct tm_loc));
+    if (!loc) {
+        db->error("out of memory allocating recovery location",
+                  "filename=<%s>", db->fname);
+        return TWOM_IOERROR;
+    }
     loc->file = file;
     loc->end = loc->file->header.current_size;
     loc->file->refcount++;
@@ -1552,6 +1558,8 @@ static struct twom_txn *_newtxn_read(struct twom_db *db)
 
     /* create the transaction */
     struct twom_txn *txn = (struct twom_txn *)twom_zmalloc(sizeof(struct twom_txn));
+    if (!txn) return NULL;
+    if (!txn) return NULL;
     txn->db = db;
     txn->file = db->openfile;
     txn->file->refcount++;
@@ -1700,6 +1708,13 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
 
         // new file, create a new mapping
         file = (struct tm_file *)twom_zmalloc(sizeof(struct tm_file));
+        if (!file) {
+            db->error("out of memory allocating file for write_lock",
+                      "filename=<%s>", db->fname);
+            close(newfd);
+            r = TWOM_IOERROR;
+            goto done;
+        }
         file->fd = newfd;
         file->next = db->openfile;
         db->openfile = file;
@@ -1745,6 +1760,12 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
 
     if (txnp) {
         *txnp = _newtxn_write(db);
+        if (!*txnp) {
+            db->error("out of memory allocating write transaction",
+                      "filename=<%s>", db->fname);
+            r = TWOM_IOERROR;
+            goto done;
+        }
         return 0;
     }
 
@@ -1855,6 +1876,13 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
 
         // new file
         file = (struct tm_file *)twom_zmalloc(sizeof(struct tm_file));
+        if (!file) {
+            db->error("out of memory allocating file for read_lock",
+                      "filename=<%s>", db->fname);
+            close(newfd);
+            r = TWOM_IOERROR;
+            goto done;
+        }
         file->fd = newfd;
         file->next = db->openfile;
         db->openfile = file;
@@ -1897,7 +1925,15 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
     file->written_size = file->committed_size;
 
     if (txnp) {
-        if (!*txnp) *txnp = _newtxn_read(db);
+        if (!*txnp) {
+            *txnp = _newtxn_read(db);
+            if (!*txnp) {
+                db->error("out of memory allocating read transaction",
+                          "filename=<%s>", db->fname);
+                r = TWOM_IOERROR;
+                goto done;
+            }
+        }
         else if (!(*txnp)->mvcc) {
             // if we're not on this file, change file
             if ((*txnp)->file != file) {
@@ -2000,6 +2036,7 @@ static int opendb(const char *fname, struct twom_open_data *setup, struct twom_d
     assert(ret);
 
     struct twom_db *db = (struct twom_db *)twom_zmalloc(sizeof(struct twom_db));
+    if (!db) return TWOM_IOERROR;
     db->readonly = (setup->flags & TWOM_SHARED) ? 1 : 0;
     db->nocsum = (setup->flags & TWOM_NOCSUM) ? 1 : 0;
     db->nosync = (setup->flags & TWOM_NOSYNC) ? 1 : 0;
@@ -2011,12 +2048,18 @@ static int opendb(const char *fname, struct twom_open_data *setup, struct twom_d
     db->external_compar = setup->compar;
 
     db->openfile = (struct tm_file *)twom_zmalloc(sizeof(struct tm_file));
+    /* a zeroed tm_file has fd 0, and cleanup closes any fd which isn't -1,
+     * so make it invalid before anything can fail */
+    if (db->openfile) db->openfile->fd = -1;
+
+    if (!db->fname || !db->openfile) goto done;
 
     int fd = open(db->fname, db->readonly ? O_RDONLY : O_RDWR, 0644);
     db->openfile->fd = fd;
     if (fd < 0) {
         if (setup->flags & TWOM_CREATE) {
             char *copy = strdup(fname);
+            if (!copy) goto done;
             const char *dir = dirname(copy);
 #if defined(O_DIRECTORY)
             int dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
@@ -2030,6 +2073,10 @@ static int opendb(const char *fname, struct twom_open_data *setup, struct twom_d
                 goto done;
             }
             copy = strdup(fname);
+            if (!copy) {
+                close(dirfd);
+                goto done;
+            }
             const char *leaf = basename(copy);
             fd = openat(dirfd, leaf, O_RDWR|O_CREAT, 0644);
             free(copy);
@@ -2329,10 +2376,18 @@ static int tm_rename(struct twom_db *db, struct tm_file *oldfile, const char *ne
     struct stat sbuf, sbuffile;
     char *copyd = strdup(db->fname);
     char *copyb = strdup(db->fname);
-    const char *dir = dirname(copyd);
-    const char *file = basename(copyb);
     int r = 0;
     int dirfd = -1;
+
+    if (!copyd || !copyb) {
+        db->error("out of memory in tm_rename",
+                  "filename=<%s> newname=<%s>", db->fname, newname);
+        r = TWOM_IOERROR;
+        goto done;
+    }
+
+    const char *dir = dirname(copyd);
+    const char *file = basename(copyb);
 
 #if defined(O_DIRECTORY)
     dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
@@ -2925,10 +2980,21 @@ int twom_txn_begin_cursor(struct twom_txn *txn,
                           struct twom_cursor **curp, int flags)
 {
     struct twom_cursor *cur = (struct twom_cursor *)twom_zmalloc(sizeof(struct twom_cursor));
+    if (!cur) {
+        txn->db->error("out of memory allocating cursor",
+                       "filename=<%s>", txn->db->fname);
+        return TWOM_IOERROR;
+    }
     cur->txn = txn;
     if (flags & TWOM_ALWAYSYIELD) cur->alwaysyield = 1;
     if ((flags & TWOM_CURSOR_PREFIX) && prefix && prefixlen) {
         cur->prefix = twom_zmalloc(prefixlen);
+        if (!cur->prefix) {
+            txn->db->error("out of memory allocating cursor prefix",
+                           "filename=<%s>", txn->db->fname);
+            twom_cursor_fini(&cur);
+            return TWOM_IOERROR;
+        }
         memcpy(cur->prefix, prefix, prefixlen);
         cur->prefixlen = prefixlen;
     }
@@ -3066,6 +3132,11 @@ const char *twom_db_uuid(struct twom_db *db)
 static int twom_txn_consistent(struct twom_txn *txn)
 {
     struct tm_loc *loc = (struct tm_loc *)twom_zmalloc(sizeof(struct tm_loc));
+    if (!loc) {
+        txn->db->error("out of memory allocating consistency location",
+                       "filename=<%s>", txn->db->fname);
+        return TWOM_IOERROR;
+    }
     loc->file = txn->file;
     /* check the transaction's own committed snapshot.  For a read-write
      * transaction txn->end == written_size, so this is unchanged; for a
@@ -3628,6 +3699,16 @@ int twom_db_repack(struct twom_db *db)
 
     struct tm_file *oldfile = db->openfile;
     db->openfile = (struct tm_file *)twom_zmalloc(sizeof(struct tm_file));
+    if (!db->openfile) {
+        db->error("out of memory allocating file for repack",
+                  "filename=<%s>", db->fname);
+        db->openfile = oldfile;
+        close(newfd);
+        newfd = -1;
+        unlink(newfname);
+        r = TWOM_IOERROR;
+        goto badfile;
+    }
     db->openfile->fd = newfd;
     db->openfile->next = oldfile;
 
