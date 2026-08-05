@@ -342,20 +342,35 @@ static size_t(*reclenfn[])(const char *) = {
 #define RECLEN(ptr) (reclenfn[TYPE(ptr)](ptr))
 
 /* return a "safe" pointer - that's one where it's guaranteed that the entire record
- * fits inside the mapped space for the file */
+ * fits inside 'end', and that the type and level (which are read straight from
+ * the file and used to index tables and size arrays) are in range */
+#ifdef HAVE_DECLARE_OPTIMIZE
+static inline const char *safeptr_raw(struct tm_file *file, size_t offset, size_t end)
+    __attribute__((optimize("-O3")));
+#endif
+static inline const char *safeptr_raw(struct tm_file *file, size_t offset, size_t end)
+{
+    if (!offset) return NULL;
+    if (end < offset + 24) return NULL;  // need space for the head info
+    const char *base = file->base + offset;
+    if (!*base) return NULL; // no type
+    if (*base & ~7) return NULL; // invalid type
+    // callers index arrays of MAXLEVEL+1 entries (loc->backloc, and the
+    // prev/next arrays in recovery and the consistency check) with every
+    // level below this one, so a corrupt level would write past their end
+    if (LEVEL(base) > MAXLEVEL) return NULL;
+    if (end < offset + RECLEN(base)) return NULL; // no space for entire record
+    return base;
+}
+
+/* the common case: a record within the mapped space that the location can see */
 #ifdef HAVE_DECLARE_OPTIMIZE
 static inline const char *safeptr(struct tm_loc *loc, size_t offset)
     __attribute__((optimize("-O3")));
 #endif
 static inline const char *safeptr(struct tm_loc *loc, size_t offset)
 {
-    if (!offset) return NULL;
-    if (loc->end < offset + 24) return NULL;  // need space for the head info
-    const char *base = loc->file->base + offset;
-    if (!*base) return NULL; // no type
-    if (*base & ~7) return NULL; // invalid type
-    if (loc->end < offset + RECLEN(base)) return NULL; // no space for entire record
-    return base;
+    return safeptr_raw(loc->file, offset, loc->end);
 }
 
 /* find the more recent of the forward pointers at level 0 */
@@ -2179,18 +2194,31 @@ static int myreplay(struct twom_txn *txn,
     struct tm_file *file = txn->file;
 
     while (txn->end + 24 <= file->committed_size) {
-        const char *ptr = file->base + txn->end;
-        size_t reclen = RECLEN(ptr);
-        // ensure the entire record fits!
-        if (txn->end + reclen > file->committed_size)
+        // the type indexes reclenfn[], so it has to be checked before we
+        // can calculate a record length at all
+        const char *ptr = safeptr_raw(file, txn->end, file->committed_size);
+        if (!ptr) {
+            db->error("invalid record during replay",
+                      "filename=<%s> offset=<%08llX>",
+                      db->fname, (LLU)txn->end);
             return TWOM_IOERROR;
+        }
+        size_t reclen = RECLEN(ptr);
 
         // skip over commits, but replay all ADD, REPLACE or DELETE
         if (TYPE(ptr) == COMMIT) {
             // skip over
         }
         else if (TYPE(ptr) == DELETE) {
-            const char *aptr = file->base + ANCESTOR(ptr);
+            // the ancestor offset comes from the file as well
+            const char *aptr = safeptr_raw(file, ANCESTOR(ptr),
+                                           file->committed_size);
+            if (!aptr) {
+                db->error("invalid ancestor during replay",
+                          "filename=<%s> offset=<%08llX> ancestor=<%08llX>",
+                          db->fname, (LLU)txn->end, (LLU)ANCESTOR(ptr));
+                return TWOM_IOERROR;
+            }
             r = cb(rock, KEYPTR(aptr), KEYLEN(aptr), NULL, 0);
             if (r) return r;
         }
