@@ -2627,13 +2627,43 @@ int twom_db_open(const char *fname, struct twom_open_data *setup,
     /* do we already have this DB open? */
     for (mydb = open_twom; mydb; mydb = mydb->next) {
         if (strcmp(mydb->fname, fname)) continue;
+
+        /* This caller shares the existing handle, so a comparison or
+         * checksum function which differs from the one the database was
+         * opened with would just be ignored - and the caller would get the
+         * first opener's ordering, which is not a difference it can detect
+         * for itself.  Refuse instead. */
+        if (setup->compar != mydb->external_compar
+            || setup->csum != mydb->external_csum) {
+            mydb->error("open with mismatched compar or csum function",
+                        "filename=<%s>", fname);
+            return TWOM_BADUSAGE;
+        }
+
+        /* a handle opened readonly can never be written through */
+        if (mydb->readonly && !(setup->flags & TWOM_SHARED)) {
+            mydb->error("writable open of a readonly database handle",
+                        "filename=<%s>", fname);
+            return TWOM_BADUSAGE;
+        }
+
+        /* these are properties of the handle, so a second open can neither
+         * inherit them nor change them: relaxing noyield would let an
+         * existing caller's non-MVCC scan start dropping its lock every
+         * FOREACH_LOCK_RELEASE records mid-iteration, and any change would
+         * outlive the second handle's close in any case */
+        if (!(setup->flags & TWOM_NOSYNC) != !mydb->nosync
+            || !(setup->flags & TWOM_NOCSUM) != !mydb->nocsum
+            || !(setup->flags & TWOM_NOYIELD) != !mydb->noyield) {
+            mydb->error("open with mismatched nosync, nocsum or noyield flag",
+                        "filename=<%s>", fname);
+            return TWOM_BADUSAGE;
+        }
+
         if (txnp) {
             r = twom_db_begin_txn(mydb, setup->flags, txnp);
             if (r) return r;
         }
-        // XXX: we should check that setup->flags are compatible with the
-        // flags that the DB was originally opened with and reject if they
-        // aren't, e.g. NOSYNC
         mydb->refcount++;
         *ret = mydb;
         return 0;
