@@ -7132,6 +7132,7 @@ static int propfind_shareesactas(const xmlChar *name, xmlNsPtr ns,
     xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
                                        BAD_CAST buf_cstring(&attrib),
                                        buf_len(&attrib)));
+    buf_free(&attrib);
     return 0;
 }
 
@@ -7146,15 +7147,9 @@ static int proppatch_shareesactas(xmlNodePtr prop, unsigned set,
         int have_rights = mboxname_userownsmailbox(httpd_userid, mailbox_name(pctx->mailbox)) ||
                     (cyrus_acl_myrights(httpd_authstate, mailbox_acl(pctx->mailbox)) & DACL_ADMIN);
         if (have_rights) {
-            xmlChar *freeme = xmlNodeGetContent(prop);
-            const char *val = (const char *) freeme;
-            if (!strcmpsafe("self", val)) {
-                is_valid = 1;
-                set = 0;
-            }
-            else if (!strcmpsafe("secretary", val)) {
-                is_valid = 1;
-            }
+            /* Secretary mode is not supported anymore, so this property
+               only may be removed, not set to any value */
+            is_valid = !set;
             if (is_valid) {
                 annotate_state_t *astate = NULL;
                 struct buf value = BUF_INITIALIZER;
@@ -7164,9 +7159,7 @@ static int proppatch_shareesactas(xmlNodePtr prop, unsigned set,
                 buf_printf(&pctx->buf, DAV_ANNOT_NS "<%s>%s",
                         (const char *) prop->ns->href, prop->name);
 
-                if (set) buf_init_ro_cstr(&value, val);
-
-                /* write as shared annotation */
+                /* remove the shared annotation */
                 r = mailbox_get_annotate_state(pctx->mailbox, 0, &astate);
                 if (!r) r = annotate_state_writemask(astate,
                         buf_cstring(&pctx->buf), "", &value);
@@ -7181,7 +7174,6 @@ static int proppatch_shareesactas(xmlNodePtr prop, unsigned set,
 
                 buf_free(&value);
             }
-            if (freeme) xmlFree(freeme);
         }
     }
     if (!is_valid) {

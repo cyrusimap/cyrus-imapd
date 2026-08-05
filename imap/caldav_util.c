@@ -191,8 +191,6 @@ EXPORTED int caldav_is_personalized(struct mailbox *mailbox,
                                     const char *userid,
                                     struct buf *userdata)
 {
-    if (caldav_is_secretarymode(mailbox_name(mailbox))) return 0;
-
     if (cdata->comp_flags.shared) {
         /* Lookup per-user calendar data */
         mbname_t *mbname = NULL;
@@ -913,27 +911,6 @@ static int caldav_store_preprocess(struct transaction_t *txn,
     return ret;
 }
 
-HIDDEN int caldav_is_secretarymode(const char *mboxname)
-{
-    mbname_t *mbname = mbname_from_intname(mboxname);
-    int is_secretarymode = 0;
-
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
-    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0))) {
-        mbname_truncate_boxes(mbname, 1);
-        static const char *annot =
-            DAV_ANNOT_NS "<" XML_NS_JMAPCAL ">sharees-act-as";
-        struct buf val = BUF_INITIALIZER;
-        annotatemore_lookup(mbname_intname(mbname), annot, "", &val);
-        is_secretarymode = !strcmp(buf_cstring(&val), "secretary");
-        buf_free(&val);
-    }
-
-    mbname_free(&mbname);
-    return is_secretarymode;
-}
-
 static void strip_schedule_params(icalcomponent *ical)
 {
     icalcomponent *comp = icalcomponent_get_first_real_component(ical);
@@ -1036,7 +1013,6 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     uint32_t newuid = 0;
     strarray_t myimapflags = STRARRAY_INITIALIZER;
     int usedefaultalerts = 0; // for per-user data
-    int is_secretarymode = caldav_is_secretarymode(mailbox_name(mailbox));
     int personalize = 0;
 
     errno = 0;
@@ -1132,7 +1108,7 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     else if (mailbox->i.options & OPT_IMAP_SHAREDSEEN) {
         cdata->comp_flags.shared = 0;
     }
-    else if (userid && (namespace_calendar.allow & ALLOW_USERDATA) && !is_secretarymode) {
+    else if (userid && (namespace_calendar.allow & ALLOW_USERDATA)) {
         usedefaultalerts = icalcomponent_get_usedefaultalerts(ical);
         personalize = 1;
     }
@@ -1276,20 +1252,18 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
                                   mailbox, newuid, NULL);
             }
 
-            if (!is_secretarymode) {
-                int r = write_personal_data(userid, mailbox, newuid,
-                        mailbox->i.highestmodseq+1,
-                        usedefaultalerts, userdata);
-                if (r) {
-                    /* XXX  We have already written the stripped resource
-                       so we're pretty screwed.  All message annotations
-                       need to be handled (properly) in append_fromstage()
-                       so storing resource and annotations is atomic.
-                       */
-                    txn->error.desc = error_message(r);
-                    ret = HTTP_SERVER_ERROR;
-                    goto done;
-                }
+            int r = write_personal_data(userid, mailbox, newuid,
+                    mailbox->i.highestmodseq+1,
+                    usedefaultalerts, userdata);
+            if (r) {
+                /* XXX  We have already written the stripped resource
+                   so we're pretty screwed.  All message annotations
+                   need to be handled (properly) in append_fromstage()
+                   so storing resource and annotations is atomic.
+                   */
+                txn->error.desc = error_message(r);
+                ret = HTTP_SERVER_ERROR;
+                goto done;
             }
 
             if (store_ical) {
