@@ -689,10 +689,26 @@ static int read_header(struct twom_db *db, struct tm_file *file, struct tm_heade
     header->current_size
         = le64toh(*((uint64_t *)(base + OFFSET_CURRENT_SIZE)));
 
-    assert(file->size >= header->current_size);
+    /* these are values read straight from the file, so a truncated or
+     * corrupted file must be reported as such rather than asserting (which
+     * would abort the caller's process, or with -DNDEBUG not check at all) */
+    if (file->size < header->current_size) {
+        db->error("current_size is past the end of the file",
+                  "filename=<%s> size=<%08llX> current_size=<%08llX>",
+                  db->fname, (LLU)file->size, (LLU)header->current_size);
+        return TWOM_BADFORMAT;
+    }
 
-    header->maxlevel
+    uint32_t maxlevel
         = le32toh(*((uint32_t *)(base + OFFSET_MAXLEVEL)));
+
+    if (maxlevel > MAXLEVEL) {
+        db->error("invalid maxlevel",
+                  "filename=<%s> maxlevel=<%lu>", db->fname, (LU)maxlevel);
+        return TWOM_BADFORMAT;
+    }
+
+    header->maxlevel = maxlevel;
 
     if (db->nocsum) return 0;
 
