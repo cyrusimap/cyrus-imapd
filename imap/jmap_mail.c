@@ -11160,6 +11160,16 @@ static int _email_to_mime(jmap_req_t *req, FILE *fp, void *rock, json_t **err)
     return 0;
 }
 
+static bool is_appendmailbox(jmap_req_t *req,
+                             const mbentry_t *mbentry, int need_rights)
+{
+    return (mbentry &&
+            !(mbentry->mbtype & MBTYPE_DELETED) &&
+            !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
+            !mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) &&
+            jmap_hasrights_mbentry(req, mbentry, need_rights));
+}
+
 static void _append_validate_mboxids(jmap_req_t *req,
                                      json_t *jmailboxids,
                                      struct jmap_parser *parser,
@@ -11223,9 +11233,7 @@ static void _append_validate_mboxids(jmap_req_t *req,
             if (mbox_id) {
                 mbentry = jmap_mbentry_by_mboxid(req, mbox_id);
             }
-            if (!mbentry || (mbentry->mbtype & MBTYPE_DELETED) ||
-                    mboxname_isdeletedmailbox(mbentry->name, NULL) ||
-                    !jmap_hasrights_mbentry(req, mbentry, need_rights)) {
+            if (!is_appendmailbox(req, mbentry, need_rights)) {
                 jmap_parser_invalid(parser, NULL);
                 is_valid = 0;
             }
@@ -12796,14 +12804,16 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
                 json_object_del(update->mailboxids, mbox_id);
                 json_object_set(update->mailboxids, mbentry->uniqueid, jval);
                 mbox_id = mbentry->uniqueid;
-                is_valid = 1;
+
+                is_valid = is_appendmailbox(req, mbentry,
+                                            JACL_LOOKUP | JACL_ADDITEMS);
             }
 
             /* If trying to move a message in/out of $scheduled
                it better be in our scheduled email cache */
-            if (!strcmpnull(scheduled_uniqueid, mbox_id) &&
-                !strarray_contains(req->scheduled_emails, update->email_id)) {
-                is_valid = 0;
+            if (!strcmpnull(scheduled_uniqueid, mbox_id)) {
+                is_valid = strarray_contains(req->scheduled_emails,
+                                             update->email_id);
             }
 
             if (!is_valid) {

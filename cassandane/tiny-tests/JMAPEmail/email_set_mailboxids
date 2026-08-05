@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_set_mailboxids
-    :min_version_3_1 :needs_component_sieve
+    :MagicPlus
     ($self)
 {
     my $jmap = $self->{jmap};
@@ -53,4 +53,34 @@ sub test_email_set_mailboxids
     $msg->{subject} = "Email 3";
     $res = $jmap->CallMethods([['Email/set', { create => { "1" => $msg }}, "R1"]]);
     $self->assert(exists $res->[0][1]{created}{"1"});
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(username => 'cassandane+dav');
+    my $imaptalk = $plusstore->get_client();
+
+    $res = $imaptalk->status('#calendars.Inbox', '(MAILBOXID)');
+    my $calid = $res->{mailboxid}[0];
+
+    # Not OK: can't store email into non-email mailboxes
+    $res = $jmap->CallMethods([['Email/set', {
+        update => {
+            $id => {
+                mailboxIds => { $calid => JSON::true }
+            }
+        }
+    }, "R1"]]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$id}{type});
+    $self->assert_str_equals('mailboxIds', $res->[0][1]{notUpdated}{$id}{properties}[0]);
+
+    # Not OK: can't store email into non-email mailboxes
+    $msg->{mailboxIds} = { $calid => JSON::true },
+    $res = $jmap->CallMethods([['Email/set', { update => { $id => $msg }}, "R1"]]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$id}{type});
+    $self->assert_str_equals('mailboxIds', $res->[0][1]{notUpdated}{$id}{properties}[0]);
+
+    # Not OK: can't store email into non-email mailboxes
+    $msg->{subject} = "Email 4";
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $msg }}, "R1"]]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
+    $self->assert_str_equals('mailboxIds', $res->[0][1]{notCreated}{"1"}{properties}[0]);
 }
