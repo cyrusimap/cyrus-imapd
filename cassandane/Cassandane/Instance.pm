@@ -3317,7 +3317,7 @@ sub _new_jmaptester_for_user($self, $tester_class, $tester_arg, $user, $new_arg 
 
     # This causes all requests and responses to be printed to STDERR.
     local $ENV{JMAP_TESTER_LOGGER} = 'HTTP:-2'
-        unless exists $ENV{JMAP_TESTER_LOGGER};
+        if get_verbose() >= 3 && not exists $ENV{JMAP_TESTER_LOGGER};
 
     my $jtest = $tester_class->new({
         fallback_account_id => $user->username,
