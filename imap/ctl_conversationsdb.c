@@ -1186,6 +1186,15 @@ int main(int argc, char **argv)
                 !strcasecmp(optarg, "on") || !strcasecmp(optarg, "yes")) {
                 enable_compactids = 1;
             }
+            else if (!strcmp(optarg, "0") ||
+                     !strcasecmp(optarg, "off") || !strcasecmp(optarg, "no")) {
+                enable_compactids = 0;
+            }
+            else {
+                /* don't let a typo silently mean "disable" */
+                fprintf(stderr, "unrecognised value for -I: %s\n", optarg);
+                usage(argv[0]);
+            }
             mode = ENABLE_COMPACTIDS;
             rock = (void *) &enable_compactids;
             break;
@@ -1257,7 +1266,7 @@ static int usage(const char *name)
     fprintf(stderr, "    -U             upgrade to latest version of conversations.db\n");
     fprintf(stderr, "    -A             audit conversations DB counts\n");
     fprintf(stderr, "    -F             check folder names\n");
-    fprintf(stderr, "    -I switch      enable/disable compact emailids.  1/on/yes to enable\n");
+    fprintf(stderr, "    -I switch      enable/disable compact emailids.  1/on/yes or 0/off/no\n");
     fprintf(stderr, "    -T dir         store temporary data for audit in dir\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "    -r             recursive mode: username is a prefix\n");
