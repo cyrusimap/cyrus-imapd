@@ -1,0 +1,29 @@
+Name: compact_ids
+Type: ENUM
+Allowed-Values: per-user always
+Default-Value: per-user
+Last-Modified: UNRELEASED
+
+Whether compact JMAP object ids are enabled for a user.
+
+Compact ids affect quite a few JMAP types as well as IMAP OBJECTID data items.
+
+*per-user*
+    Compact ids are enabled for a user only if the ``$COMPACT_EMAILIDS``
+    key is present in that user's conversations database, as set by
+    :cyrusman:`ctl_conversationsdb(8)` ``-I on`` or by the ``COMPACTIDS``
+    argument to the IMAP ``CREATE`` command.
+
+*always*
+    Compact ids are enabled for every user, whether or not their conversations
+    database says so, and the setting cannot be turned off for an individual
+    user.  Newly created users have the setting written to their conversations
+    database as well.
+
+    Do not set this until every user has been migrated!  Compact email ids
+    are derived from the nanosecond internaldate, which only exists in
+    mailbox index version 20 and later, and compact ids in general require
+    conversations database version 2 or later.
+
+    "always" will be the only effective setting in the next major release, and
+    this option will be removed.

@@ -133,6 +133,11 @@ EXPORTED char *conversations_getmboxpath(const char *mboxname)
     return fname;
 }
 
+static int _compactids_always(void)
+{
+    return config_getenum(IMAPOPT_COMPACT_IDS) == IMAP_ENUM_COMPACT_IDS_ALWAYS;
+}
+
 static int _init_counted(struct conversations_state *state,
                          const char *val, int vallen)
 {
@@ -375,12 +380,16 @@ EXPORTED int conversations_open_path_version(const char *fname,
        otherwise we assume v0 unless/until we read VERSIONKEY
     */
     struct stat sbuf;
+    int is_new = 0;
     if (!stat(fname, &sbuf))
         open->s.version = 0;
-    else if (version)
-        open->s.version = version;
-    else
-        open->s.version = CONVERSATIONS_VERSION;
+    else {
+        is_new = 1;
+        if (version)
+            open->s.version = version;
+        else
+            open->s.version = CONVERSATIONS_VERSION;
+    }
 
     /* open db */
     int flags = CYRUSDB_CREATE | (shared ? (CYRUSDB_SHARED|CYRUSDB_NOCRC) : CYRUSDB_CONVERT);
@@ -407,6 +416,31 @@ EXPORTED int conversations_open_path_version(const char *fname,
     /* are compactids enabled? */
     cyrusdb_fetch(open->s.db, IDKEY, strlen(IDKEY), &val, &vallen, &open->s.txn);
     if (vallen) open->s.compact_emailids = 1;
+    else if (_compactids_always()) {
+        /* The config says to ignore the per-user setting entirely.  We still
+         * honor the db version, since compact ids can't be generated from a v1
+         * database - but complain about it, don't silently hand out legacy
+         * ids! -- rjbs, 2026-08-06
+         */
+        if (open->s.version >= 2) {
+            open->s.compact_emailids = 1;
+
+            /* a brand new database gets the setting recorded, so that the
+             * on-disk state doesn't depend on the config staying set */
+            if (is_new && !shared)
+                conversations_enable_compactids(&open->s, 1);
+        }
+        else {
+            /* once per process is plenty: this shouldn't happen ever, but if
+             * it does, this would get called *a lot* */
+            static int warned_v1 = 0;
+            if (!warned_v1++) {
+                syslog(LOG_ERR, "compact_ids is \"always\" but %s is version %d:"
+                                " falling back to legacy ids",
+                       fname, open->s.version);
+            }
+        }
+    }
 
     /* load or initialize counted flags */
     cyrusdb_fetch(open->s.db, CFKEY, strlen(CFKEY), &val, &vallen, &open->s.txn);
