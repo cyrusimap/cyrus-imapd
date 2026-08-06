@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_compactids_always_refuses_disable
+    :min_version_3_13 :CompactIdsAlways
+    ($self)
+{
+    $self->make_message("test compactids");
+    $self->assert_email_id_shape('compact');
+
+    xlog $self, "ctl_conversationsdb -I off is refused, and says why";
+    my $res = $self->{instance}->run_command_capture(
+        {
+            cyrus => 1,
+            handlers => {
+                exited_abnormally => sub ($child, $code) { return $code },
+            },
+        },
+        qw(ctl_conversationsdb -v -I off cassandane),
+    );
+
+    $self->assert_num_not_equals(0, $res->status);
+    $self->assert_matches(qr/compact_ids is set to "always"/, $res->stderr);
+
+    xlog $self, "And nothing changed";
+    $self->assert_num_equals(1, $self->compact_ids_key_is_set());
+    $self->assert_email_id_shape('compact');
+}
