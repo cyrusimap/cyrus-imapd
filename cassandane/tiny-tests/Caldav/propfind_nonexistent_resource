@@ -5,7 +5,6 @@ use Cassandane::Tiny;
 # resource MUST return 404 (Not Found), not a 207 Multi-Status wrapping a
 # nested 404.  (GitHub issue #5667)
 sub test_propfind_nonexistent_resource
-    :min_version_3_13
     ($self)
 {
     my $CalDAV = $self->{caldav};

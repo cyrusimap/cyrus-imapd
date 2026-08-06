@@ -6052,7 +6052,6 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     const char *mboxname = mbentry->name;
     struct buf writebuf = BUF_INITIALIZER;
-    struct mailbox *mailbox = NULL;
     char *p;
     size_t len;
     int r = 0, rights = 0;
@@ -6099,14 +6098,15 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
         goto done;
 
 
-    /* Open mailbox for reading */
-    if ((r = mailbox_open_irl(mboxname, &mailbox))) {
-        syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-               mboxname, error_message(r));
+    if (!fctx->mailbox) {
+        /* Open mailbox for reading */
+        if ((r = mailbox_open_irl(mboxname, &fctx->mailbox))) {
+            syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+                   mboxname, error_message(r));
+        }
     }
 
     fctx->mbentry = mbentry;
-    fctx->mailbox = mailbox;
     fctx->record = NULL;
 
     if (!fctx->req_tgt->resource) {
@@ -6155,7 +6155,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 
   done:
     buf_free(&writebuf);
-    if (mailbox) mailbox_close(&mailbox);
+    if (fctx->mailbox) mailbox_close(&fctx->mailbox);
 
     return r;
 }
@@ -6256,11 +6256,9 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
             /* PROPFIND on a resource that is not mapped MUST return
                404 (Not Found), not a 207 with a nested 404
                (RFC 4918, Section 9.6) */
-            struct mailbox *mailbox = NULL;
             struct dav_data *ddata;
-            void *davdb;
 
-            r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
+            r = mailbox_open_irl(txn->req_tgt.mbentry->name, &fctx.mailbox);
             if (r == IMAP_MAILBOX_NONEXISTENT) {
                 /* Collection is gone - the resource can't exist either */
                 return HTTP_NOT_FOUND;
@@ -6272,15 +6270,16 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                 return HTTP_SERVER_ERROR;
             }
 
-            davdb = fparams->davdb.open_db(mailbox);
-            fparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry,
+            fctx.davdb = fparams->davdb.open_db(fctx.mailbox);
+            fparams->davdb.lookup_resource(fctx.davdb, txn->req_tgt.mbentry,
                                            txn->req_tgt.resource,
                                            (void **) &ddata, 0);
-            int found = ddata->rowid != 0;
-            fparams->davdb.close_db(davdb);
-            mailbox_close(&mailbox);
 
-            if (!found) return HTTP_NOT_FOUND;
+            if (!ddata->rowid) {
+                fparams->davdb.close_db(fctx.davdb);
+                mailbox_close(&fctx.mailbox);
+                return HTTP_NOT_FOUND;
+            }
         }
     }
 
@@ -6371,7 +6370,6 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
     fctx.mbentry = NULL;
-    fctx.mailbox = NULL;
     fctx.record = NULL;
     fctx.get_validators = fparams->get_validators;
     fctx.reqd_privs = DACL_READ;
