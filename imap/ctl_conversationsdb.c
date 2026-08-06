@@ -444,6 +444,15 @@ static int do_compactids(const char *userid, int enable)
     struct conversations_state *state = NULL;
     int r;
 
+    if (!enable &&
+        config_getenum(IMAPOPT_COMPACT_IDS) == IMAP_ENUM_COMPACT_IDS_ALWAYS) {
+        fprintf(stderr,
+                "cannot disable compactids for user '%s':"
+                " compact_ids is set to \"always\"\n",
+                userid);
+        return IMAP_MAILBOX_BADFORMAT;
+    }
+
     r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
 

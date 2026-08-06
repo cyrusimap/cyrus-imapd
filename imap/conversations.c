@@ -3624,6 +3624,17 @@ EXPORTED int conversations_enable_compactids(struct conversations_state *state,
 {
     int r;
 
+    /* refusing here is the whole point of the "always" setting: it's not
+     * enough to ignore the flag when reading, because replication will
+     * happily delete it out from under us. -- rjbs, 2026-08-06
+     */
+    if (!enable && _compactids_always()) {
+        syslog(LOG_NOTICE, "compact_ids is \"always\":"
+                           " refusing to disable compactids for %s",
+               state->userid ? state->userid : "<unknown>");
+        return 0;
+    }
+
     if (enable) {
         char vbuf[16];
         snprintf(vbuf, sizeof(vbuf), "%d", enable);
