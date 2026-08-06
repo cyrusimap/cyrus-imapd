@@ -14,6 +14,7 @@
 *.tar.gz
 *.tar.bz2
 *~
+.cache/
 .clang-format
 .deps
 .dirstamp
