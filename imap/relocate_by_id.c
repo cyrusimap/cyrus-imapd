@@ -23,7 +23,6 @@
 #include "ical_support.h"
 #include "ptrarray.h"
 #include "mappedfile.h"
-#include "mboxkey.h"
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "seen.h"
@@ -223,7 +222,6 @@ int main(int argc, char **argv)
                                            FNAME_SEENSUFFIX,
                                            FNAME_CONVERSATIONS_SUFFIX,
                                            FNAME_COUNTERSSUFFIX,
-                                           FNAME_MBOXKEYSUFFIX,
                                            FNAME_DAVSUFFIX,
                                            FNAME_XAPIANSUFFIX,
                                            NULL };

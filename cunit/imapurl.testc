@@ -21,11 +21,6 @@ static void test_fromurl_cclient(void)
     CU_ASSERT_PTR_NULL(iurl.section);
     CU_ASSERT_EQUAL(iurl.start_octet, 0);
     CU_ASSERT_EQUAL(iurl.octet_count, 0);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.access);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.mech);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.token);
-    CU_ASSERT_EQUAL(iurl.urlauth.expire, 0);
-    CU_ASSERT_EQUAL(iurl.urlauth.rump_len, 0);
     free(iurl.freeme);
 }
 
@@ -47,11 +42,6 @@ static void test_fromurl(void)
     CU_ASSERT_PTR_NULL(iurl.section);
     CU_ASSERT_EQUAL(iurl.start_octet, 0);
     CU_ASSERT_EQUAL(iurl.octet_count, 0);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.access);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.mech);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.token);
-    CU_ASSERT_EQUAL(iurl.urlauth.expire, 0);
-    CU_ASSERT_EQUAL(iurl.urlauth.rump_len, 0);
     free(iurl.freeme);
 }
 
@@ -73,11 +63,6 @@ static void test_fromurl_user(void)
     CU_ASSERT_PTR_NULL(iurl.section);
     CU_ASSERT_EQUAL(iurl.start_octet, 0);
     CU_ASSERT_EQUAL(iurl.octet_count, 0);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.access);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.mech);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.token);
-    CU_ASSERT_EQUAL(iurl.urlauth.expire, 0);
-    CU_ASSERT_EQUAL(iurl.urlauth.rump_len, 0);
     free(iurl.freeme);
 }
 
@@ -99,11 +84,6 @@ static void test_fromurl_encuser(void)
     CU_ASSERT_PTR_NULL(iurl.section);
     CU_ASSERT_EQUAL(iurl.start_octet, 0);
     CU_ASSERT_EQUAL(iurl.octet_count, 0);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.access);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.mech);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.token);
-    CU_ASSERT_EQUAL(iurl.urlauth.expire, 0);
-    CU_ASSERT_EQUAL(iurl.urlauth.rump_len, 0);
     free(iurl.freeme);
 }
 
@@ -129,41 +109,6 @@ static void test_fromurl_options(void)
     CU_ASSERT_STRING_EQUAL(iurl.section, "1.4");
     CU_ASSERT_EQUAL(iurl.start_octet, 1);
     CU_ASSERT_EQUAL(iurl.octet_count, 1023);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.access);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.mech);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.token);
-    CU_ASSERT_EQUAL(iurl.urlauth.expire, 0);
-    CU_ASSERT_EQUAL(iurl.urlauth.rump_len, 0);
-    free(iurl.freeme);
-}
-
-static void test_fromurl_urlauth(void)
-{
-    static const char URL[] = "imap://wooster@jeeves/deverill"
-                              "/;UID=123456"
-                              ";EXPIRE=2010-11-24T06:57:26Z"
-                              ";URLAUTH=submit+fred:internal:91354a473744909de610943775f92038";
-    struct imapurl iurl;
-    int r;
-
-    memset(&iurl, 0x45, sizeof(iurl));
-    r = imapurl_fromURL(&iurl, URL);
-    CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_STRING_EQUAL(iurl.user, "wooster");
-    CU_ASSERT_PTR_NULL(iurl.auth);
-    CU_ASSERT_STRING_EQUAL(iurl.server, "jeeves");
-    CU_ASSERT_STRING_EQUAL(iurl.mailbox, "deverill");
-    CU_ASSERT_EQUAL(iurl.uidvalidity, 0);
-    CU_ASSERT_EQUAL(iurl.uid, 123456);
-    CU_ASSERT_PTR_NULL(iurl.section);
-    CU_ASSERT_EQUAL(iurl.start_octet, 0);
-    CU_ASSERT_EQUAL(iurl.octet_count, 0);
-    CU_ASSERT_STRING_EQUAL(iurl.urlauth.access, "submit+fred");
-    CU_ASSERT_STRING_EQUAL(iurl.urlauth.mech, "internal");
-    CU_ASSERT_STRING_EQUAL(iurl.urlauth.token,
-                            "91354a473744909de610943775f92038");
-    CU_ASSERT_EQUAL(iurl.urlauth.expire, 1290581846);
-    CU_ASSERT_EQUAL(iurl.urlauth.rump_len, 90);
     free(iurl.freeme);
 }
 
@@ -246,29 +191,6 @@ static void test_tourl_options(void)
     iurl.section = "1.4";
     iurl.start_octet = 1;
     iurl.octet_count = 1023;
-
-    imapurl_toURL(&buf, &iurl);
-    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), URL);
-    buf_free(&buf);
-}
-
-static void test_tourl_urlauth(void)
-{
-    static const char URL[] = "imap://jeeves/deverill"
-                              "/;UID=123456"
-                              ";EXPIRE=2010-11-24T06:57:26Z"
-                              ";URLAUTH=submit+fred:internal:91354a473744909de610943775f92038";
-    struct imapurl iurl;
-    struct buf buf = BUF_INITIALIZER;
-
-    memset(&iurl, 0, sizeof(iurl));
-    iurl.server = "jeeves";
-    iurl.mailbox = "deverill";
-    iurl.uid = 123456;
-    iurl.urlauth.access = "submit+fred";
-    iurl.urlauth.mech = "internal";
-    iurl.urlauth.token = "91354a473744909de610943775f92038";
-    iurl.urlauth.expire = 1290581846;
 
     imapurl_toURL(&buf, &iurl);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), URL);
@@ -361,11 +283,6 @@ static void test_fromurl_utf2_high(void)
     CU_ASSERT_PTR_NULL(iurl.section);
     CU_ASSERT_EQUAL(iurl.start_octet, 0);
     CU_ASSERT_EQUAL(iurl.octet_count, 0);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.access);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.mech);
-    CU_ASSERT_PTR_NULL(iurl.urlauth.token);
-    CU_ASSERT_EQUAL(iurl.urlauth.expire, 0);
-    CU_ASSERT_EQUAL(iurl.urlauth.rump_len, 0);
     free(iurl.freeme);
 }
 

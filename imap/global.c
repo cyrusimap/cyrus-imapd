@@ -65,7 +65,6 @@ EXPORTED const char *config_quota_db;
 EXPORTED const char *config_subscription_db;
 EXPORTED const char *config_annotation_db;
 EXPORTED const char *config_seenstate_db;
-HIDDEN const char *config_mboxkey_db;
 EXPORTED const char *config_duplicate_db;
 EXPORTED const char *config_tls_sessions_db;
 EXPORTED const char *config_ptscache_db;
@@ -317,7 +316,6 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         config_subscription_db = config_getstring(IMAPOPT_SUBSCRIPTION_DB);
         config_annotation_db = config_getstring(IMAPOPT_ANNOTATION_DB);
         config_seenstate_db = config_getstring(IMAPOPT_SEENSTATE_DB);
-        config_mboxkey_db = config_getstring(IMAPOPT_MBOXKEY_DB);
         config_duplicate_db = config_getstring(IMAPOPT_DUPLICATE_DB);
         config_tls_sessions_db = config_getstring(IMAPOPT_TLS_SESSIONS_DB);
         config_ptscache_db = config_getstring(IMAPOPT_PTSCACHE_DB);

@@ -1028,8 +1028,6 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/mbdump.h \
     imap/mboxevent.c \
     imap/mboxevent.h \
-    imap/mboxkey.c \
-    imap/mboxkey.h \
     imap/mboxlist.c \
     imap/mboxlist.h \
     imap/mboxname.c \

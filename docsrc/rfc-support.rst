@@ -290,11 +290,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Collected Extensions to IMAP4 ABNF
 
-:rfc:`4467`
-
-    Internet Message Access Protocol (IMAP) - URLAUTH Extension, updated
-    by :rfc:`5092`.
-
 :rfc:`4469`
 
     Internet Message Access Protocol (IMAP) CATENATE Extension
@@ -373,7 +368,12 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`5092`
 
-    IMAP URL Scheme, updated by :rfc:`5593`.
+    IMAP URL Scheme
+
+    .. NOTE::
+
+        Since :rfc:`4467` is no longer implemented,
+        URLAUTH Authorized URLs are NOT supported.
 
 :rfc:`5051`
 
@@ -517,10 +517,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     The Sieve Mail-Filtering Language -- Extensions for Checking Mailbox
     Status and Accessing Mailbox Metadata
 
-:rfc:`5524`
-
-    Extended URLFETCH for Binary and Converted Parts
-
 :rfc:`5536`
 
     Netnews Article Format
@@ -547,11 +543,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
         The URL-PARTIAL capability is implemented.  The CONTEXT=SEARCH,
         CONTEXT=SORT, CONVERT, and I18NLEVEL=1 capabilities
         are not implemented.
-
-:rfc:`5593`
-
-    Internet Message Access Protocol (IMAP) - URL Access Identifier
-    Extension
 
 :rfc:`5689`
 
