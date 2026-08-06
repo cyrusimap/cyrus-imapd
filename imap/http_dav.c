@@ -78,6 +78,13 @@ static const struct dav_namespace_t {
 #define NUM_KNOWN_NAMESPACES                                    \
     (sizeof(known_namespaces) / sizeof(struct dav_namespace_t))
 
+/* Stack arrays of xmlNsPtr are sized NUM_NAMESPACE but indexed by
+ * known_namespaces[] slots, so the two must match.  See comment on the
+ * NS_* enum in http_dav.h.
+ */
+_Static_assert(NUM_NAMESPACE == NUM_KNOWN_NAMESPACES,
+               "NUM_NAMESPACE must match known_namespaces[]");
+
 static const struct match_type_t {
     const char *name;
     unsigned value;
@@ -1298,46 +1305,25 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
             xmlNsPtr nsDef;
 
             for (nsDef = req->nsDef; nsDef; nsDef = nsDef->next) {
-                if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_DAV))
-                    ensure_ns(respNs, NS_DAV, root,
+                /* Is is one of our known namespaces? */
+                unsigned ns_idx;
+                for (ns_idx = 0; ns_idx < NUM_KNOWN_NAMESPACES; ns_idx++) {
+                    if (!xmlStrcmp(nsDef->href,
+                                   BAD_CAST known_namespaces[ns_idx].href)) {
+                        break;
+                    }
+                }
+
+                if (ns_idx < NUM_KNOWN_NAMESPACES) {
+                    ensure_ns(respNs, ns_idx, root,
                               (const char *) nsDef->href,
                               (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CALDAV))
-                    ensure_ns(respNs, NS_CALDAV, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CARDDAV))
-                    ensure_ns(respNs, NS_CARDDAV, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CS))
-                    ensure_ns(respNs, NS_CS, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_APPLE))
-                    ensure_ns(respNs, NS_APPLE, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_MECOM))
-                    ensure_ns(respNs, NS_MECOM, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_MOBME))
-                    ensure_ns(respNs, NS_MOBME, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CYRUS))
-                    ensure_ns(respNs, NS_CYRUS, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_JMAPCAL))
-                    ensure_ns(respNs, NS_JMAPCAL, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
+                }
                 else if (!xmlNewNs(root, nsDef->href, nsDef->prefix)) {
                     /* namespace prefix already in use */
                     char myprefix[20];
-                    snprintf(myprefix, sizeof(myprefix), "X%X", strhash((const char *) nsDef->href) & 0xffff);
+                    snprintf(myprefix, sizeof(myprefix), "X%X",
+                             strhash((const char *) nsDef->href) & 0xffff);
                     xmlFree((char *) nsDef->prefix);
                     nsDef->prefix = xmlStrdup(BAD_CAST myprefix);
                     xmlNewNs(root, nsDef->href, BAD_CAST myprefix); // could again return NULL
@@ -3147,45 +3133,60 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
     annotate_state_t *astate = NULL;
     struct buf value = BUF_INITIALIZER;
     int r = 1; /* default to error */
+    const char *ns_href = (const char *) prop->ns->href;
 
-    /* flags only store "exists" */
+    if (!httpd_userisadmin &&
+        (!strcmp(ns_href, XML_NS_SYSFLAG) ||
+         !strcmp(ns_href, XML_NS_USERFLAG))) {
+        int rights = httpd_myrights(httpd_authstate,
+                                    pctx->txn->req_tgt.mbentry);
+        if (!(rights & DACL_WRITECONT)) {
+            xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                         &propstat[PROPSTAT_FORBID],
+                         prop->name, prop->ns, NULL,
+                         DAV_NEED_PRIVS);
+            *pctx->ret = HTTP_FORBIDDEN;
+            return 0;
+        }
 
-    if (!strcmp((const char *)prop->ns->href, XML_NS_SYSFLAG)) {
-        struct flaggedresources *frp;
-        int isset;
-        for (frp = fres; frp->name; frp++) {
-            if (strcasecmp((const char *)prop->name, frp->name)) continue;
-            r = 0; /* ok to do nothing */
-            isset = pctx->record->system_flags & frp->flag;
+        /* flags only store "exists" */
+
+        if (!strcmp(ns_href, XML_NS_SYSFLAG)) {
+            struct flaggedresources *frp;
+            int isset;
+            for (frp = fres; frp->name; frp++) {
+                if (strcasecmp((const char *)prop->name, frp->name)) continue;
+                r = 0; /* ok to do nothing */
+                isset = pctx->record->system_flags & frp->flag;
+                if (set) {
+                    if (isset) goto done;
+                    pctx->record->system_flags |= frp->flag;
+                }
+                else {
+                    if (!isset) goto done;
+                    pctx->record->system_flags &= ~frp->flag;
+                }
+                r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
+                break;
+            }
+        }
+        else {
+            int userflag = 0;
+            int isset;
+            r = mailbox_user_flag(pctx->mailbox,
+                                  (const char *)prop->name, &userflag, 1);
+            if (r) goto done;
+            isset = pctx->record->user_flags[userflag/32] & (1U<<(userflag&31));
             if (set) {
                 if (isset) goto done;
-                pctx->record->system_flags |= frp->flag;
+                pctx->record->user_flags[userflag/32] |= (1U<<(userflag&31));
             }
             else {
                 if (!isset) goto done;
-                pctx->record->system_flags &= ~frp->flag;
+                pctx->record->user_flags[userflag/32] &= ~(1U<<(userflag&31));
             }
             r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
-            goto done;
         }
-        goto done;
-    }
-
-    if (!strcmp((const char *)prop->ns->href, XML_NS_USERFLAG)) {
-        int userflag = 0;
-        int isset;
-        r = mailbox_user_flag(pctx->mailbox, (const char *)prop->name, &userflag, 1);
-        if (r) goto done;
-        isset = pctx->record->user_flags[userflag/32] & (1U<<(userflag&31));
-        if (set) {
-            if (isset) goto done;
-            pctx->record->user_flags[userflag/32] |= (1U<<(userflag&31));
-        }
-        else {
-            if (!isset) goto done;
-            pctx->record->user_flags[userflag/32] &= ~(1U<<(userflag&31));
-        }
-        r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
         goto done;
     }
 

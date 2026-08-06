@@ -1,0 +1,73 @@
+#!perl
+use Cassandane::Tiny;
+
+# A PROPPATCH that names a property in the Cyrus-internal sysflag or userflag
+# namespace used to read past the end of pctx->ns[NUM_NAMESPACE], then
+# dereferenced the garbage pointer in proppatch_toresource().  On the sysflag
+# namespace that reliably crashed the httpd worker; on userflag it was
+# undefined behaviour.  The internal namespaces are never legitimately
+# writable from a DAV client, so the property update should be rejected
+# without taking the worker down.
+
+sub test_proppatch_internal_namespace ($self)
+{
+    my $carddav = $self->{carddav};
+    my $bookId  = 'Default';
+
+    my $uid = guid_string();
+    my $vcard = vcard_to_jscontact(<<~"EOF");
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:$uid
+        FN:Alice Cooper
+        N:Cooper;Alice;;;
+        END:VCARD
+        EOF
+
+    my $href = $carddav->NewContact($bookId, $vcard);
+
+    my $sysflag_url = "http://cyrusimap.org/ns/sysflag/";
+    my $userflag_url = "http://cyrusimap.org/ns/userflag/";
+
+    my @cases = (
+        [ sysflag  => $sysflag_url,  'flagged' ],
+        [ userflag => $userflag_url, 'casstest' ],
+    );
+
+    for my $case (@cases) {
+        my ($name, $ns_url, $prop) = @$case;
+
+        my $xml = <<~"EOF";
+            <D:propertyupdate xmlns:D="DAV:" xmlns:X="$ns_url">
+              <D:set>
+                <D:prop>
+                  <X:$prop/>
+                </D:prop>
+              </D:set>
+            </D:propertyupdate>
+            EOF
+
+        xlog $self, "PROPPATCH $name namespace on contact resource";
+
+        my $ok = eval {
+            $carddav->Request('PROPPATCH', $href, $xml,
+                              'Content-Type' => 'text/xml');
+            1;
+        };
+        my $err = $@;
+
+        $self->assert($ok,
+            "PROPPATCH with internal $name namespace must not crash the "
+            . "httpd worker (error: $err)");
+    }
+
+    xlog $self, "Server is still responsive afterwards";
+    my $res = $carddav->Request(
+        'PROPFIND',
+        $href,
+        '<D:propfind xmlns:D="DAV:"><D:prop><D:getetag/></D:prop></D:propfind>',
+        'Content-Type' => 'text/xml',
+        'Depth'        => 0,
+    );
+    $self->assert_not_null($res->{'{DAV:}response'});
+}
