@@ -1,0 +1,194 @@
+#!perl
+use Cassandane::Tiny;
+
+# A message whose attachment text can not get extracted must not end up
+# recorded as indexed: the indexed ranges of a mailbox only ever get merged,
+# so it would never get indexed again. Indexing the mailbox stops at that
+# message, a later run indexes it and the messages after it.
+
+sub assert_squatter_attachextract_failed_part($self, %params)
+{
+    my $talk = $self->{store}->get_client();
+    my $instance = $self->{instance};
+
+    xlog $self, "Start an extractor that fails for the bad attachment";
+    $self->{unfail} = $instance->{basedir} . "/tmp/unfail_extractor";
+    $self->start_echo_extractor(fail_content => qr/badattachment/,
+                                fail_until_file => $self->{unfail});
+
+    my %make_message = (
+        failmsg => sub {
+            $self->create_message_in_mailbox("INBOX", {
+                subject => "failmsg",
+                args => {
+                    mime_type => "multipart/related",
+                    mime_boundary => "123456789abcdef",
+                    body => ""
+                    ."\r\n--123456789abcdef\r\n"
+                    ."Content-Type: text/plain\r\n"
+                    ."\r\n"
+                    ."failbody"
+                    ."\r\n--123456789abcdef\r\n"
+                    ."Content-Type: application/pdf\r\n"
+                    ."\r\n"
+                    ."badattachment"
+                    ."\r\n--123456789abcdef--\r\n",
+                },
+            });
+        },
+        plainmsg => sub {
+            $self->create_message_in_mailbox("INBOX",
+                { subject => "plainmsg" });
+        },
+        goodmsg => sub {
+            $self->create_message_in_mailbox("INBOX", {
+                subject => "goodmsg",
+                args => {
+                    mime_type => "multipart/related",
+                    mime_boundary => "123456789abcdef",
+                    body => ""
+                    ."\r\n--123456789abcdef\r\n"
+                    ."Content-Type: text/plain\r\n"
+                    ."\r\n"
+                    ."goodbody"
+                    ."\r\n--123456789abcdef\r\n"
+                    ."Content-Type: application/pdf\r\n"
+                    ."\r\n"
+                    ."goodattachment"
+                    ."\r\n--123456789abcdef--\r\n",
+                },
+            });
+        },
+    );
+
+    # Where the message that fails sits decides which messages this run still
+    # gets to index, and what must keep its uid out of the indexed range, so
+    # the caller picks the order the messages get created in. Returns the uid
+    # each of them ended up with.
+    my @order = @{ $params{order} // [qw(failmsg plainmsg goodmsg)] };
+    my %uid;
+    my $nmessages = 0;
+    foreach my $subject (@order) {
+        xlog $self, "Create $subject";
+        $make_message{$subject}->();
+        $uid{$subject} = ++$nmessages;
+    }
+
+    xlog $self, "Index INBOX";
+    my $failed = 0;
+    $instance->run_command({
+        cyrus => 1,
+        handlers => {
+            exited_abnormally => sub { $failed = 1; return 0; },
+        },
+    }, 'squatter', '-i', @{ $params{squatter_args} // [] });
+
+    xlog $self, "Assert squatter reported the failure";
+    $self->assert_num_equals($params{allow_partials} ? 0 : 1, $failed);
+
+    # Unless partials are allowed, indexing stops at the message that fails,
+    # so only the messages created before it get indexed by this run.
+    my %indexed = map { $_ => 1 } @order;
+    if (!$params{allow_partials}) {
+        my $stopped = 0;
+        foreach my $subject (@order) {
+            $stopped = 1 if $subject eq 'failmsg';
+            delete $indexed{$subject} if $stopped;
+        }
+    }
+
+    xlog $self, "Assert indexing stopped at the message that failed";
+    $talk->select("INBOX");
+    my $uids = $talk->search('fuzzy', 'subject', 'plainmsg');
+    $self->assert_deep_equals($indexed{plainmsg} ? [$uid{plainmsg}] : [], $uids);
+    $uids = $talk->search('fuzzy', 'xattachmentbody', 'goodattachment');
+    $self->assert_deep_equals($indexed{goodmsg} ? [$uid{goodmsg}] : [], $uids);
+
+    xlog $self, "Assert the failed attachment text is not indexed";
+    $uids = $talk->search('fuzzy', 'xattachmentbody', 'badattachment');
+    $self->assert_deep_equals([], $uids);
+
+    return \%uid;
+}
+
+# Not allowing partials, the message that failed is not indexed at all, so a
+# later run must index it, and the messages after it, again.
+sub assert_failed_part_indexed_by_later_run($self, $uid)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Assert the failed message is not indexed at all";
+    my $uids = $talk->search('fuzzy', 'body', 'failbody');
+    $self->assert_deep_equals([], $uids);
+
+    xlog $self, "Index again, with the extractor no longer failing";
+    open(my $fh, '>', $self->{unfail}) or die "Can't open: $!";
+    close($fh);
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Assert the failed message got indexed now";
+    $uids = $talk->search('fuzzy', 'body', 'failbody');
+    $self->assert_deep_equals([$uid->{failmsg}], $uids);
+    $uids = $talk->search('fuzzy', 'xattachmentbody', 'badattachment');
+    $self->assert_deep_equals([$uid->{failmsg}], $uids);
+
+    xlog $self, "Assert the messages after it got indexed now, too";
+    $uids = $talk->search('fuzzy', 'subject', 'plainmsg');
+    $self->assert_deep_equals([$uid->{plainmsg}], $uids);
+    $uids = $talk->search('fuzzy', 'xattachmentbody', 'goodattachment');
+    $self->assert_deep_equals([$uid->{goodmsg}], $uids);
+}
+
+# The message that fails is the first one of the mailbox on purpose. That
+# makes it the lowest unindexed uid, which is the one an indexed range gets
+# extended down to so that it does not become gappy.
+sub test_squatter_attachextract_failed_part_nopartials
+    :SearchAttachmentExtractor :NoCheckSyslog
+    ($self)
+{
+    $self->assert_failed_part_indexed_by_later_run(
+        $self->assert_squatter_attachextract_failed_part());
+}
+
+# The message that fails sits between two messages that index fine. The
+# indexed range must not get merged across its uid either.
+sub test_squatter_attachextract_failed_part_middle
+    :SearchAttachmentExtractor :NoCheckSyslog
+    ($self)
+{
+    $self->assert_failed_part_indexed_by_later_run(
+        $self->assert_squatter_attachextract_failed_part(
+            order => [qw(plainmsg failmsg goodmsg)]));
+}
+
+# Allowing partials, that message gets indexed without its attachment text
+# and marked as partially indexed. Indexing does not stop at it.
+sub test_squatter_attachextract_failed_part_partials
+    :SearchAttachmentExtractor :NoCheckSyslog
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my $uid = $self->assert_squatter_attachextract_failed_part(
+        squatter_args => ['-p'], allow_partials => 1);
+
+    xlog $self, "Assert the failed message is indexed without its attachment";
+    my $uids = $talk->search('fuzzy', 'body', 'failbody');
+    $self->assert_deep_equals([$uid->{failmsg}], $uids);
+
+    xlog $self, "Index again, with the extractor no longer failing";
+    open(my $fh, '>', $self->{unfail}) or die "Can't open: $!";
+    close($fh);
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Assert a plain index run leaves the partial message alone";
+    $uids = $talk->search('fuzzy', 'xattachmentbody', 'badattachment');
+    $self->assert_deep_equals([], $uids);
+
+    xlog $self, "Reindex partial messages";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i', '-P');
+
+    xlog $self, "Assert the attachment text got indexed now";
+    $uids = $talk->search('fuzzy', 'xattachmentbody', 'badattachment');
+    $self->assert_deep_equals([$uid->{failmsg}], $uids);
+}

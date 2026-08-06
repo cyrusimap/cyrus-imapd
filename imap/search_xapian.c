@@ -10,7 +10,9 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <syslog.h>
+#include <stdbool.h>
 #include <string.h>
+#include <time.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -41,6 +43,7 @@
 #define INDEXEDDB_VAL_VERSION   2 /* current version for entry value */
 #define INDEXEDDB_VERSION       2 /* current database version */
 #define INDEXEDDB_FNAME         "/cyrus.indexed.db"
+#define INDEXEDDB_KEY_HIGHEST_CREATEDMODSEQ "*HIGHEST_CREATEDMODSEQ*"
 #define XAPIAN_NAME_LOCK_PREFIX "$XAPIAN$"
 
 // this seems to translate for 4Gb-ish  - units are 10 bytes?
@@ -508,6 +511,8 @@ struct indexeddb {
     struct db *db;
     struct txn *txn;
     int version;
+    modseq_t highest_createdmodseq;
+    uint64_t index_generation;
 };
 
 static int indexeddb_close(struct indexeddb **idbptr, int abort)
@@ -608,6 +613,75 @@ static int cachetier_cb(void *vrock, const char *key, size_t keylen,
     return r;
 }
 
+static int read_indexeddb_highest_createdmodseq(struct indexeddb *idb)
+{
+    const char *data = NULL;
+    size_t datalen = 0;
+    int r = cyrusdb_fetch(idb->db,
+            INDEXEDDB_KEY_HIGHEST_CREATEDMODSEQ,
+            strlen(INDEXEDDB_KEY_HIGHEST_CREATEDMODSEQ),
+            &data, &datalen, NULL);
+    if (r == CYRUSDB_NOTFOUND) return 0;
+    if (r) return r;
+
+    // Parse value as: <highest_createdmodseq>":"<index_generation>
+    bit64 modseq = 0;
+    bit64 generation = 0;
+    const char *end = data + datalen;
+    const char *rest = NULL;
+
+    bool parsed = parsenum(data, &rest, datalen, &modseq) == 0;
+    if (parsed)
+        parsed = rest < end && *rest == ':';
+    if (parsed) {
+        rest++; // skip ':'
+        parsed = rest < end;
+    }
+    if (parsed)
+        parsed = parsenum(rest, &rest, end - rest, &generation) == 0;
+    if (parsed)
+        parsed = rest == end; // generation must consume the remaining bytes
+    if (!parsed) {
+        xsyslog(LOG_ERR, "bogus highest_createdmodseq entry",
+                "entry=<%.*s>", (int) datalen, data);
+        return CYRUSDB_INTERNAL;
+    }
+
+    idb->highest_createdmodseq = modseq;
+    idb->index_generation = generation;
+    return 0;
+}
+
+static int store_indexeddb_highest_createdmodseq(struct indexeddb *idb)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT ":" UINT64_FMT,
+            idb->highest_createdmodseq, idb->index_generation);
+    int r = cyrusdb_store(idb->db,
+            INDEXEDDB_KEY_HIGHEST_CREATEDMODSEQ,
+            strlen(INDEXEDDB_KEY_HIGHEST_CREATEDMODSEQ),
+            buf_base(&buf), buf_len(&buf), &idb->txn);
+    buf_free(&buf);
+    return r;
+}
+
+/* Return a newly allocated path to the cyrus.indexed.db located in the given
+ * xapian directory. Caller frees. */
+static char *indexeddb_fname(const char *dir)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_setcstr(&buf, dir);
+
+    // INDEXEDDB_FNAME macro starts with '/'.
+    size_t len = buf_len(&buf);
+    if (len && buf_base(&buf)[len-1] == '/') {
+        buf_truncate(&buf, len - 1);
+    }
+
+    buf_appendcstr(&buf, INDEXEDDB_FNAME);
+    return buf_release(&buf);
+}
+
 /* Open the cyrus.indexed.db located at fname, passing flags to cyrusdb. */
 static int indexeddb_open(const char *userid, const char *fname,
                          int flags, struct indexeddb **idbptr)
@@ -635,6 +709,10 @@ static int indexeddb_open(const char *userid, const char *fname,
             }
         }
         else if (r == CYRUSDB_NOTFOUND) r = 0;
+
+        if (!r) {
+            r = read_indexeddb_highest_createdmodseq(idb);
+        }
     }
     else if (r == CYRUSDB_NOTFOUND && (flags & CYRUSDB_CREATE)) {
         /* Create database */
@@ -653,9 +731,9 @@ static int indexeddb_open(const char *userid, const char *fname,
                 r = cyrusdb_store(idb->db, "*V*", 3,
                         buf_base(&buf), buf_len(&buf), &idb->txn);
                 buf_reset(&buf);
+
                 if (!r) {
-                    r = r ? cyrusdb_abort(idb->db, idb->txn) :
-                        cyrusdb_commit(idb->db, idb->txn);
+                    r = cyrusdb_commit(idb->db, idb->txn);
                     idb->txn = NULL;
                 }
                 if (!r) {
@@ -687,6 +765,31 @@ static int indexeddb_open(const char *userid, const char *fname,
         *idbptr = idb;
     }
     return r;
+}
+
+/* Read the highest createdmodseq and index generation from the indexed.db
+ * located in the xapian database directory dir. Sets both values to zero
+ * if the database or its entry does not exist, or an error occurred. */
+static void read_highest_createdmodseq_at_dir(const char *userid,
+                                              const char *dir,
+                                              modseq_t *highest_createdmodseq,
+                                              uint64_t *index_generation)
+{
+    char *fname = indexeddb_fname(dir);
+    struct indexeddb *idb = NULL;
+
+    if (highest_createdmodseq) *highest_createdmodseq = 0;
+    if (index_generation) *index_generation = 0;
+
+    if (!indexeddb_open(userid, fname, 0, &idb) && idb) {
+        if (highest_createdmodseq)
+            *highest_createdmodseq = idb->highest_createdmodseq;
+        if (index_generation)
+            *index_generation = idb->index_generation;
+    }
+    if (idb) indexeddb_close(&idb, 0);
+
+    free(fname);
 }
 
 /*
@@ -1011,27 +1114,25 @@ static int write_indexed(const char *dir,
                          uint32_t uidvalidity,
                          const char *uniqueid,
                          seqset_t *seq,
+                         modseq_t highest_createdmodseq,
+                         uint64_t index_generation,
                          int verbose)
 {
-    struct buf path = BUF_INITIALIZER;
     struct buf key = BUF_INITIALIZER;
     struct indexeddb *idb = NULL;
     mbname_t *mbname = mbname_from_intname(mboxname);
     const char *userid = mbname_userid(mbname);
+    char *fname = indexeddb_fname(dir);
     int r = 0;
-
-    buf_reset(&path);
-    buf_printf(&path, "%s%s", dir, INDEXEDDB_FNAME);
 
     if (verbose) {
         char *str = seqset_cstring(seq);
         syslog(LOG_INFO, "write_indexed db=%s uniqueid=%s uids=%s",
-               buf_cstring(&path), uniqueid, str);
+               fname, uniqueid, str);
         free(str);
     }
 
-
-    r = indexeddb_open(userid, buf_cstring(&path), CYRUSDB_CREATE, &idb);
+    r = indexeddb_open(userid, fname, CYRUSDB_CREATE, &idb);
     if (r) goto out;
 
     if (idb->version >= 2) {
@@ -1042,6 +1143,15 @@ static int write_indexed(const char *dir,
     }
 
     r = store_indexed(idb, key.s, key.len, seq);
+    if (r) goto out;
+
+    /* Update highest createdmodseq and index generation, if required. */
+    if (highest_createdmodseq != idb->highest_createdmodseq ||
+            index_generation != idb->index_generation) {
+        idb->highest_createdmodseq = highest_createdmodseq;
+        idb->index_generation = index_generation;
+        r = store_indexeddb_highest_createdmodseq(idb);
+    }
 
 out:
     if (idb) {
@@ -1049,7 +1159,7 @@ out:
         if (!r) r = r2;
     }
     mbname_free(&mbname);
-    buf_free(&path);
+    xzfree(fname);
     buf_free(&key);
     return r;
 }
@@ -1171,10 +1281,7 @@ static int upgrade(const char *userid)
 
     int i;
     for (i = 0; i < strarray_size(activedirs); i++) {
-        buf_setcstr(&buf, strarray_nth(activedirs, i));
-        buf_appendcstr(&buf, INDEXEDDB_FNAME);
-
-        char *fname = xstrdup(buf_cstring(&buf));
+        char *fname = indexeddb_fname(strarray_nth(activedirs, i));
         struct indexeddb *idb = NULL;
 
         r = indexeddb_open(userid, fname, CYRUSDB_CREATE, &idb);
@@ -1361,13 +1468,21 @@ struct opnode
     struct opnode *children;
 };
 
+/*
+ * A search session takes a shared lock on the activefile. Within
+ * a session, all Xapian and indexeddb databases for tiers of that
+ * activefile are guaranteed to not change.
+ */
+struct search_session {
+    struct xapiandb_lock lock;
+    struct mailbox *mailbox;
+    int opts;
+};
+
 typedef struct xapian_builder xapian_builder_t;
 struct xapian_builder {
     search_builder_t super;
-    struct xapiandb_lock lock;
-    seqset_t *indexed;
-    struct mailbox *mailbox;
-    int opts;
+    search_session_t *session;
     struct opnode *root;
     ptrarray_t stack;       /* points to opnode* */
     int (*proc)(const char *, uint32_t, uint32_t, const char *, void *);
@@ -1749,8 +1864,8 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *vrock)
     struct xapian_run_guid_rock *rock = vrock;
     xapian_builder_t *bb = rock->bb;
 
-    if (!(bb->opts & SEARCH_MULTIPLE)) {
-        if (conv_guidrec_mboxcmp(rec, bb->mailbox))
+    if (!(bb->session->opts & SEARCH_MULTIPLE)) {
+        if (conv_guidrec_mboxcmp(rec, bb->session->mailbox))
             return 0;
     }
 
@@ -1774,10 +1889,10 @@ static int xapian_run_cb(void *data, size_t nmemb, void *rock)
     int r = cmd_cancelled(/*insearch*/1);
     if (r) return r;
 
-    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
+    struct conversations_state *cstate = mailbox_get_cstate(bb->session->mailbox);
     if (!cstate) {
         syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-               mailbox_name(bb->mailbox));
+               mailbox_name(bb->session->mailbox));
         return IMAP_NOTFOUND;
     }
 
@@ -1812,7 +1927,7 @@ static int xapian_run_guidsearch_cb(void *data, size_t nmemb, void *rock)
     int r = cmd_cancelled(/*insearch*/1);
     if (r) return r;
 
-    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
+    struct conversations_state *cstate = mailbox_get_cstate(bb->session->mailbox);
     if (!cstate) return IMAP_NOTFOUND;
 
     qsort(data, nmemb, 41, memcmp40); // byte 41 is always zero
@@ -1841,14 +1956,14 @@ static int run_query(xapian_builder_t *bb)
     int r = 0;
 
     /* Validate query for this db */
-    r = validate_query(bb->lock.db, bb->root);
+    r = validate_query(bb->session->lock.db, bb->root);
     if (r) return r;
 
     if (bb->proc_guidsearch) {
-        xq = opnode_to_query(bb->lock.db, bb->root, bb->opts);
+        xq = opnode_to_query(bb->session->lock.db, bb->root, bb->session->opts);
         if (!xq) goto out;
 
-        r = xapian_query_run(bb->lock.db, xq, xapian_run_guidsearch_cb, bb);
+        r = xapian_query_run(bb->session->lock.db, xq, xapian_run_guidsearch_cb, bb);
         goto out;
     }
 
@@ -1903,18 +2018,18 @@ static int run_query(xapian_builder_t *bb)
         goto out;
     }
 
-    xq = opnode_to_query(bb->lock.db, root, bb->opts);
+    xq = opnode_to_query(bb->session->lock.db, root, bb->session->opts);
     if (!xq) goto out;
 
-    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
+    struct conversations_state *cstate = mailbox_get_cstate(bb->session->mailbox);
     if (!cstate) {
         syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-                mailbox_name(bb->mailbox));
+                mailbox_name(bb->session->mailbox));
         r = IMAP_NOTFOUND;
         goto out;
     }
     // sort the response by GUID for more efficient later handling
-    r = xapian_query_run(bb->lock.db, xq, xapian_run_cb, bb);
+    r = xapian_query_run(bb->session->lock.db, xq, xapian_run_cb, bb);
 
 out:
     if (root && root != bb->root) opnode_delete(root);
@@ -1945,7 +2060,7 @@ static int run_internal(xapian_builder_t *bb)
     /* Sanity check builder */
     assert((bb->proc == NULL) != (bb->proc_guidsearch == NULL));
 
-    if (!bb->lock.db) return 0; // no index for this user
+    if (!bb->session->lock.db) return 0; // no index for this user
 
     /* Validate config */
     r = check_config(NULL);
@@ -1954,7 +2069,7 @@ static int run_internal(xapian_builder_t *bb)
     if (bb->root) optimise_nodes(NULL, bb->root);
 
     /* Stem using any languages explicitly requested by the user. */
-    add_stemmers(bb->lock.db, bb->root);
+    add_stemmers(bb->session->lock.db, bb->root);
 
     return run_query(bb);
 }
@@ -1972,7 +2087,7 @@ static int run_guidsearch(search_builder_t *bx, search_hitguid_cb_t proc, void *
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     bb->proc_guidsearch = proc;
     bb->rock = rock;
-    if (!bb->lock.db) return IMAP_SEARCH_NOT_SUPPORTED;
+    if (!bb->session->lock.db) return IMAP_SEARCH_NOT_SUPPORTED;
     return run_internal(bb);
 }
 
@@ -1986,14 +2101,14 @@ static void begin_boolean(search_builder_t *bx, int op)
     else
         bb->root = on;
     ptrarray_push(&bb->stack, on);
-    if (SEARCH_VERBOSE(bb->opts))
+    if (SEARCH_VERBOSE(bb->session->opts))
         syslog(LOG_INFO, "begin_boolean(op=%s)", search_op_as_string(op));
 }
 
 static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
-    if (SEARCH_VERBOSE(bb->opts))
+    if (SEARCH_VERBOSE(bb->session->opts))
         syslog(LOG_INFO, "end_boolean");
     ptrarray_pop(&bb->stack);
 }
@@ -2005,7 +2120,7 @@ static void matchlist(search_builder_t *bx, enum search_part part, const strarra
     struct opnode *on;
 
     if (!vals) return;
-    if (SEARCH_VERBOSE(bb->opts)) {
+    if (SEARCH_VERBOSE(bb->session->opts)) {
         char *item = strarray_join(vals, ",");
         syslog(LOG_INFO, "match(part=%s, str=\"%s\")",
                search_part_as_string(part), item);
@@ -2050,16 +2165,76 @@ static void free_internalised(void *internalised)
 static unsigned min_index_version(search_builder_t *bx)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
-    if (!bb->lock.db) return 0;
-    return xapian_db_min_index_version(bb->lock.db);
+    if (!bb->session->lock.db) return 0;
+    return xapian_db_min_index_version(bb->session->lock.db);
 }
 
-static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
+static search_session_t *begin_session(struct mailbox *mailbox, int opts)
 {
     int r = check_config(NULL);
     if (r) return NULL;
 
     if (!mailbox) return NULL;
+
+    /* make sure conversations.db is open before we take any xapiandb
+     * locks, to avoid deadlocking */
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (!cstate) {
+        xsyslog(LOG_ERR, "can't open conversations", "mailbox=<%s>",
+                mailbox_name(mailbox));
+        return NULL;
+    }
+
+    search_session_t *session = xzmalloc(sizeof(*session));
+    session->mailbox = mailbox;
+    session->opts = opts;
+
+    r = xapiandb_lock_open(mailbox, &session->lock);
+    if (r) {
+        xapiandb_lock_release(&session->lock);
+        free(session);
+        return NULL;
+    }
+
+    return session;
+}
+
+static modseq_t session_get_highest_createdmodseq(search_session_t *session,
+                                                  uint64_t *index_generation)
+{
+    if (index_generation) *index_generation = 0;
+    if (!session || !session->lock.activedirs || !session->lock.activedirs->count)
+        return 0;
+
+    /* Read the highest createdmodseq and index generation from indexeddb
+     * of the top tier. We hold a read lock on the activefile, so multiple
+     * calls to this function in the same session are guaranteed to return
+     * the same values. */
+
+    modseq_t highest_createdmodseq = 0;
+    char *userid = mboxname_to_userid(mailbox_name(session->mailbox));
+
+    // XXX This opens indexeddb on every call. This is fine with the current
+    // callers, but we might cache the highest modseq and index generation
+    // in the session if this gets called multiple times for a session.
+    read_highest_createdmodseq_at_dir(userid,
+            strarray_nth(session->lock.activedirs, 0),
+            &highest_createdmodseq, index_generation);
+
+    free(userid);
+    return highest_createdmodseq;
+}
+
+static void end_session(search_session_t *session)
+{
+    if (!session) return;
+    xapiandb_lock_release(&session->lock);
+    free(session);
+}
+
+static search_builder_t *begin_search(search_session_t *session)
+{
+    if (!session) return NULL;
 
     xapian_builder_t *bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
@@ -2070,37 +2245,8 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->super.run = run;
     bb->super.run_guidsearch = run_guidsearch;
     bb->super.min_index_version = min_index_version;
+    bb->session = session;
 
-    bb->mailbox = mailbox;
-    bb->opts = opts;
-
-    /* make sure the conversations are open before we start indexing
-     * to avoid deadlocking against the search state */
-    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-    if (!cstate) {
-        xsyslog(LOG_ERR, "can't open conversations", "mailbox=<%s>",
-                mailbox_name(mailbox));
-        r = IMAP_MAILBOX_NOTSUPPORTED;
-        goto out;
-    }
-
-    r = xapiandb_lock_open(mailbox, &bb->lock);
-    if (r) goto out;
-    if (!bb->lock.activedirs || !bb->lock.activedirs->count) goto out;
-
-    /* read the list of all indexed messages to allow (optional) false positives
-     * for unindexed messages */
-    // TODO also handle for guidsearch
-    bb->indexed = seqset_init(0, SEQ_MERGE);
-    mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
-    r = read_indexed(mbname_userid(mbname),
-            bb->lock.activedirs, bb->lock.activetiers,
-            mailbox_uniqueid(mailbox), bb->indexed, /*do_cache*/0, /*verbose*/0);
-    mbname_free(&mbname);
-    if (r) goto out;
-
-out:
-    /* XXX - error return? */
     return &bb->super;
 }
 
@@ -2108,12 +2254,8 @@ static void end_search(search_builder_t *bx)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
 
-    seqset_free(&bb->indexed);
     ptrarray_fini(&bb->stack);
     if (bb->root) opnode_delete(bb->root);
-
-    xapiandb_lock_release(&bb->lock);
-
     free(bx);
 }
 
@@ -2147,6 +2289,8 @@ struct xapian_update_receiver
     struct mboxlock *xapiandb_namelock;
     unsigned int uncommitted;
     unsigned int commits;
+    /* True if any commit failed during the current mailbox update. */
+    bool commit_failed;
     seqset_t *oldindexed;
     seqset_t *indexed;
     strarray_t *activedirs;
@@ -2154,6 +2298,17 @@ struct xapian_update_receiver
     hash_table cached_seqs;
     int mode;
     int flags;
+    /* Highest and lowest createdmodseq across the messages indexed by the
+     * current mailbox update (0 if none got indexed yet). */
+    modseq_t batch_highest_createdmodseq;
+    modseq_t batch_lowest_createdmodseq;
+    /* The createdmodseq of the message currently being indexed. It only
+     * counts towards the batch createdmodseqs once that message is indexed. */
+    modseq_t msg_createdmodseq;
+    /* The top tier's highest createdmodseq and index generation, read from
+     * indexeddb */
+    modseq_t highest_createdmodseq;
+    uint64_t index_generation;
 };
 
 /* receiver used for extracting snippets after a search */
@@ -2269,39 +2424,98 @@ out:
     return r;
 }
 
-static int flush(search_text_receiver_t *rx)
+/* Commit the messages indexed so far, if any. */
+static int commit_transaction(xapian_update_receiver_t *tr)
 {
-    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
-    int r = 0;
     struct timeval start, end;
 
-    if (tr->uncommitted) {
-        assert(tr->dbw);
+    if (!tr->uncommitted) return 0;
 
-        gettimeofday(&start, NULL);
-        r = xapian_dbw_commit_txn(tr->dbw);
-        if (r) goto out;
-        gettimeofday(&end, NULL);
+    assert(tr->dbw);
 
-        syslog(LOG_INFO, "Xapian committed %u updates in %.6f sec",
-                    tr->uncommitted, timesub(&start, &end));
+    // Reset uncommitted in the receiver regardless of whether the commit
+    // succeeds or fails. We can't recover from failed commits.
+    unsigned int uncommitted = tr->uncommitted;
+    tr->uncommitted = 0;
 
-        tr->uncommitted = 0;
-        tr->commits++;
+    gettimeofday(&start, NULL);
+    int r = xapian_dbw_commit_txn(tr->dbw);
+    gettimeofday(&end, NULL);
+    if (r) {
+        tr->commit_failed = true; // keep track of failed commit
+        xsyslog_ev(LOG_ERR, "failed to commit transaction",
+                lf_s("mailbox", mailbox_name(tr->super.mailbox)),
+                lf_u("uncommitted", uncommitted),
+                lf_f("seconds", timesub(&start, &end)),
+                lf_s("error", error_message(r)));
+        return r;
+    }
+
+    xsyslog_ev(LOG_INFO, "committed Xapian transaction",
+                lf_u("committed", uncommitted),
+                lf_f("seconds", timesub(&start, &end)));
+
+    tr->commits++;
+    return 0;
+}
+
+/* Write the index state of this mailbox: the list of the messages that got
+ * indexed, the highest createdmodseq they cover and the index generation.
+ * These must get written together and exactly once for a mailbox update,
+ * a reader seeing a message as indexed but the generation not bumped for
+ * it would miss that its cached query results went stale. */
+static int update_indexeddb(xapian_update_receiver_t *tr)
+{
+    if (tr->commit_failed) {
+        xsyslog_ev(LOG_ERR, "not updating indexed.db after failed commit",
+                lf_s("mailbox", mailbox_name(tr->super.mailbox)));
+        return IMAP_IOERROR;
+    }
+
+    /* Nothing got indexed, so there is no state to write. Only a message
+     * that got indexed contributes a batch createdmodseq. */
+    if (!tr->indexed) return 0;
+
+    if (tr->batch_highest_createdmodseq) {
+        if (tr->batch_lowest_createdmodseq <= tr->highest_createdmodseq) {
+            /* This update indexed a message that has a lower createdmodseq
+             * than the highest createdmodseq in the index. This means we
+             * either reindexed a message, fully or partially, or a message got
+             * added to the index that wasn't indexed before but the highest
+             * createdmodseq suggested we had. We need to invalidate the
+             * index generation. */
+            tr->index_generation++;
+            xsyslog_ev(LOG_INFO, "bumping index generation",
+                    lf_s("mailbox", mailbox_name(tr->super.mailbox)),
+                    lf_llu("batch_lowest_createdmodseq",
+                        tr->batch_lowest_createdmodseq),
+                    lf_llu("batch_highest_createdmodseq",
+                        tr->batch_highest_createdmodseq),
+                    lf_llu("highest_createdmodseq", tr->highest_createdmodseq),
+                    lf_llu("index_generation", tr->index_generation));
+        }
+
+        /* Update the highest createdmodseq */
+        if (tr->batch_highest_createdmodseq > tr->highest_createdmodseq)
+            tr->highest_createdmodseq = tr->batch_highest_createdmodseq;
     }
 
     /* We write out the indexed list for the mailbox only after successfully
      * updating the index, to avoid a future instance not realising that
-     * there are unindexed messages should we fail to index */
-    if (tr->indexed) {
-        r = write_indexed(strarray_nth(tr->activedirs, 0),
-                mailbox_name(tr->super.mailbox), tr->super.mailbox->i.uidvalidity,
-                mailbox_uniqueid(tr->super.mailbox), tr->indexed, tr->super.verbose);
-        if (r) goto out;
-    }
+     * there are unindexed messages should we fail to index. */
+    return write_indexed(strarray_nth(tr->activedirs, 0),
+            mailbox_name(tr->super.mailbox), tr->super.mailbox->i.uidvalidity,
+            mailbox_uniqueid(tr->super.mailbox), tr->indexed,
+            tr->highest_createdmodseq, tr->index_generation,
+            tr->super.verbose);
+}
 
-out:
-    return r;
+static int flush(search_text_receiver_t *rx)
+{
+    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
+    /* Only commit the messages in Xapian. We'll update indexed.db
+     * in end_mailbox_update. */
+    return tr->super.mailbox ? commit_transaction(tr) : 0;
 }
 
 static int audit_mailbox(search_text_receiver_t *rx, bitvector_t *unindexed)
@@ -2362,16 +2576,28 @@ static void free_segments(xapian_receiver_t *tr)
 
 static int begin_message(search_text_receiver_t *rx, message_t *msg)
 {
-    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
+    /* Common code to the update and snippet receivers */
+    xapian_receiver_t *tr = (xapian_receiver_t *)rx;
     const struct message_guid *guid = NULL;
 
-    int r = message_get_uid(msg, &tr->super.uid);
+    int r = message_get_uid(msg, &tr->uid);
     if (!r) r = message_get_guid(msg, &guid);
-    if (!r) r = message_get_internaldate(msg, &tr->super.internaldate);
+    if (!r) r = message_get_internaldate(msg, &tr->internaldate);
     if (r) return r;
 
-    message_guid_copy(&tr->super.guid, guid);
-    free_segments((xapian_receiver_t *)tr);
+    message_guid_copy(&tr->guid, guid);
+    free_segments(tr);
+    return 0;
+}
+
+static int begin_message_update(search_text_receiver_t *rx, message_t *msg)
+{
+    int r = begin_message(rx, msg);
+    if (r) return r;
+
+    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
+    tr->msg_createdmodseq = 0;
+    message_get_createdmodseq(msg, &tr->msg_createdmodseq);
     return 0;
 }
 
@@ -2595,10 +2821,20 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
     }
     seqset_add(tr->indexed, tr->super.uid, 1);
 
+    /* This message is indexed, so it counts towards the createdmodseqs */
+    if (tr->msg_createdmodseq) {
+        if (tr->msg_createdmodseq > tr->batch_highest_createdmodseq)
+            tr->batch_highest_createdmodseq = tr->msg_createdmodseq;
+        if (!tr->batch_lowest_createdmodseq ||
+                tr->msg_createdmodseq < tr->batch_lowest_createdmodseq)
+            tr->batch_lowest_createdmodseq = tr->msg_createdmodseq;
+    }
+
 out:
     tr->super.uid = 0;
     message_guid_set_null(&tr->super.guid);
     tr->super.internaldate = 0;
+    tr->msg_createdmodseq = 0;
     return r;
 }
 
@@ -2611,6 +2847,42 @@ static int _starts_with_tier(const strarray_t *active, const char *tier)
     int res = !strcmp(item->tier, tier);
     activeitem_free(item);
     return res;
+}
+
+static void cleanup_mailbox_update(xapian_update_receiver_t *tr)
+{
+    seqset_free(&tr->indexed);
+    seqset_free(&tr->oldindexed);
+
+    tr->super.mailbox = NULL;
+    mbname_free(&tr->super.mbname);
+
+    if (tr->dbw) {
+        xapian_dbw_close(tr->dbw);
+        tr->dbw = NULL;
+    }
+
+    if (tr->activefile) {
+        mappedfile_unlock(tr->activefile);
+        mappedfile_close(&tr->activefile);
+        tr->activefile = NULL;
+    }
+
+    if (tr->xapiandb_namelock) {
+        mboxname_release(&tr->xapiandb_namelock);
+        tr->xapiandb_namelock = NULL;
+    }
+
+    if (tr->activedirs) {
+        strarray_free(tr->activedirs);
+        tr->activedirs = NULL;
+    }
+    if (tr->activetiers) {
+        strarray_free(tr->activetiers);
+        tr->activetiers = NULL;
+    }
+
+    tr->flags = 0;
 }
 
 static int begin_mailbox_update(search_text_receiver_t *rx,
@@ -2627,6 +2899,9 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     tr->flags = flags;
     tr->mode = (flags & (SEARCH_UPDATE_XAPINDEXED|SEARCH_UPDATE_AUDIT)) ?
         XAPIAN_DBW_XAPINDEXED : XAPIAN_DBW_CONVINDEXED;
+    tr->commit_failed = false;
+    tr->batch_highest_createdmodseq = 0;
+    tr->batch_lowest_createdmodseq = 0;
 
     /* not an indexable mailbox, fine - return a code to avoid
      * trying to index each message as well */
@@ -2730,6 +3005,28 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     r = check_directory(strarray_nth(tr->activedirs, 0), tr->super.verbose, /*create*/1);
     if (r) goto out;
 
+    /* Read highest createdmodseq and index generation of the top tier.
+     * If this is a new tier, read them from the newest former tier that
+     * has them set. */
+    tr->highest_createdmodseq = 0;
+    tr->index_generation = 0;
+    for (int i = 0; i < strarray_size(tr->activedirs); i++) {
+        read_highest_createdmodseq_at_dir(userid,
+                strarray_nth(tr->activedirs, i),
+                &tr->highest_createdmodseq, &tr->index_generation);
+        if (tr->highest_createdmodseq || tr->index_generation)
+            break;
+    }
+    if (!tr->highest_createdmodseq && !tr->index_generation) {
+        /* Could not read from any tier. This must be
+         * a brand-new index. Initialize the index generation to the current
+         * Unix epoch seconds, so a fully rebuilt index does not restart at a
+         * generation a reader may still hold cached from the old index.
+         * Later revisions only bump the generation by one, so within one
+         * index the generation increases regardless of the clock. */
+        tr->index_generation = (uint64_t) time(NULL);
+    }
+
     if (tr->mode == XAPIAN_DBW_XAPINDEXED) {
         /* open the DB now, we need it to check if messages are indexed */
         r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
@@ -2755,6 +3052,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     tr->super.mbname = mbname_from_intname(mailbox_name(mailbox));
 
 out:
+    if (r) cleanup_mailbox_update(tr);
     free(fname);
     free(userid);
     free(namelock_fname);
@@ -2869,43 +3167,14 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     int r = 0;
 
-    r = flush(rx);
-
-    /* flush before cleaning up, since indexed data is written by flush */
-    seqset_free(&tr->indexed);
-    seqset_free(&tr->oldindexed);
-
-    tr->super.mailbox = NULL;
-    mbname_free(&tr->super.mbname);
-
-    if (tr->dbw) {
-        xapian_dbw_close(tr->dbw);
-        tr->dbw = NULL;
+    if (tr->super.mailbox) {
+        /* Commit whatever is left, then write the index state of this
+         * mailbox. Nothing is indexed for it after this point. */
+        r = commit_transaction(tr);
+        if (!r) r = update_indexeddb(tr);
     }
 
-    /* don't unlock until DB is committed */
-    if (tr->activefile) {
-        mappedfile_unlock(tr->activefile);
-        mappedfile_close(&tr->activefile);
-        tr->activefile = NULL;
-    }
-
-    /* Release xapian db named lock */
-    if (tr->xapiandb_namelock) {
-        mboxname_release(&tr->xapiandb_namelock);
-        tr->xapiandb_namelock = NULL;
-    }
-
-    if (tr->activedirs) {
-        strarray_free(tr->activedirs);
-        tr->activedirs = NULL;
-    }
-    if (tr->activetiers) {
-        strarray_free(tr->activetiers);
-        tr->activetiers = NULL;
-    }
-
-    tr->flags = 0;
+    cleanup_mailbox_update(tr);
 
     return r;
 }
@@ -2926,7 +3195,7 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.begin_mailbox = begin_mailbox_update;
     tr->super.super.first_unindexed_uid = first_unindexed_uid;
     tr->super.super.is_indexed = is_indexed;
-    tr->super.super.begin_message = begin_message;
+    tr->super.super.begin_message = begin_message_update;
     tr->super.super.begin_bodypart = begin_bodypart;
     tr->super.super.begin_part = begin_part;
     tr->super.super.append_text = append_text;
@@ -3351,10 +3620,10 @@ static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths
                          const char *userid, int flags, struct mbfilter *filter,
                          int bloom)
 {
-    struct buf buf = BUF_INITIALIZER;
     int r = 0;
     int i;
     struct conversations_state *cstate = NULL;
+    char *destfname = NULL;
 
     memset(filter, 0, sizeof(struct mbfilter));
     filter->destpaths = destpaths;
@@ -3363,28 +3632,51 @@ static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths
     filter->flags = flags;
 
     /* build the cyrus.indexed.db from the contents of the source dirs */
-
-    buf_reset(&buf);
-    buf_printf(&buf, "%s%s", strarray_nth(destpaths, 0), INDEXEDDB_FNAME);
-
-    r = indexeddb_open(userid, buf_cstring(&buf), CYRUSDB_CREATE, &filter->idb);
+    destfname = indexeddb_fname(strarray_nth(destpaths, 0));
+    r = indexeddb_open(userid, destfname, CYRUSDB_CREATE, &filter->idb);
     if (r) {
-        printf("ERROR: failed to open indexed %s\n", buf_cstring(&buf));
+        printf("ERROR: failed to open indexed %s\n", destfname);
         goto done;
     }
+
+    /* Carry over the highest createdmodseq and index generation of the source
+     * tiers to the destination tier. If the compaction does not reindex, the
+     * index generation is copied as-is. For compaction with reindex, compact_dbs
+     * takes care of updating the generation. */
+    modseq_t highest_createdmodseq = 0;
+    uint64_t index_generation = 0;
     for (i = 0; i < srcpaths->count; i++) {
         struct indexeddb *srcdb = NULL;
-        buf_reset(&buf);
-        buf_printf(&buf, "%s%s", strarray_nth(srcpaths, i), INDEXEDDB_FNAME);
-        r = indexeddb_open(userid, buf_cstring(&buf), 0, &srcdb);
+        char *srcfname = indexeddb_fname(strarray_nth(srcpaths, i));
+        r = indexeddb_open(userid, srcfname, 0, &srcdb);
+        xzfree(srcfname);
         if (r) {
             r = 0;
             continue;
         }
+
+        if (srcdb->highest_createdmodseq > highest_createdmodseq)
+            highest_createdmodseq = srcdb->highest_createdmodseq;
+        if (srcdb->index_generation > index_generation)
+            index_generation = srcdb->index_generation;
+
         r = cyrusdb_foreach(srcdb->db, "", 0, NULL, copyindexed_cb, filter, NULL);
         indexeddb_close(&srcdb, r);
         if (r) {
             printf("ERROR: failed to process indexed db %s\n", strarray_nth(srcpaths, i));
+            goto done;
+        }
+    }
+    if (highest_createdmodseq > filter->idb->highest_createdmodseq ||
+            index_generation > filter->idb->index_generation) {
+        if (highest_createdmodseq > filter->idb->highest_createdmodseq)
+            filter->idb->highest_createdmodseq = highest_createdmodseq;
+        if (index_generation > filter->idb->index_generation)
+            filter->idb->index_generation = index_generation;
+        r = store_indexeddb_highest_createdmodseq(filter->idb);
+        if (r) {
+            printf("ERROR: failed to store highest createdmodseq and index generation in %s\n",
+                   strarray_nth(destpaths, 0));
             goto done;
         }
     }
@@ -3412,8 +3704,7 @@ static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths
 
 done:
     conversations_commit(&cstate);
-    buf_free(&buf);
-
+    free(destfname);
     return r;
 }
 
@@ -3775,6 +4066,68 @@ static void cleanup_xapiandirs(const char *mboxname, const char *partition, stra
     strarray_fini(&bogus);
 }
 
+static int compact_set_highest_createdmodseq(const char *userid,
+                                             const char *topdir,
+                                             const char *srcdir,
+                                             bool did_reindex)
+{
+    modseq_t highest_createdmodseq = 0;
+    uint64_t index_generation = 0;
+    struct indexeddb *idb = NULL;
+    char *fname = NULL;
+    int r = 0;
+
+    /* Read highest_createdmodseq from source tier. */
+    if (srcdir && strcmp(topdir, srcdir)) {
+        char *src_fname = indexeddb_fname(srcdir);
+        struct indexeddb *src_idb = NULL;
+
+        r = indexeddb_open(userid, src_fname, 0, &src_idb);
+        if (!r) {
+            highest_createdmodseq = src_idb->highest_createdmodseq;
+            index_generation = src_idb->index_generation;
+            r = indexeddb_close(&src_idb, r);
+        }
+        else if (r == CYRUSDB_NOTFOUND) {
+            r = 0;
+        }
+
+        free(src_fname);
+        if (r) goto done;
+    }
+
+    /* Write highest_createmodseq to top tier. */
+    fname = indexeddb_fname(topdir);
+    r = indexeddb_open(userid, fname, CYRUSDB_CREATE, &idb);
+    if (r) goto done;
+
+    if (idb->highest_createdmodseq > highest_createdmodseq)
+        highest_createdmodseq = idb->highest_createdmodseq;
+    if (idb->index_generation > index_generation)
+        index_generation = idb->index_generation;
+
+    if (did_reindex) {
+        /* Reset the index generation. This typically becomes the Unix epoch
+         * seconds. But if the index generation of the former tier had gone
+         * *past* the current epoch seconds, we'll keep bumping it by one. */
+        uint64_t now = (uint64_t) time(NULL);
+        index_generation = index_generation + 1 > now ?
+            index_generation + 1 : now;
+    }
+
+    if (highest_createdmodseq != idb->highest_createdmodseq ||
+            index_generation != idb->index_generation) {
+        idb->highest_createdmodseq = highest_createdmodseq;
+        idb->index_generation = index_generation;
+        r = store_indexeddb_highest_createdmodseq(idb);
+    }
+
+done:
+    free(fname);
+    int r2 = indexeddb_close(&idb, r);
+    return r ? r : r2;
+}
+
 static int compact_dbs(const char *userid, const strarray_t *reindextiers,
                        const strarray_t *srctiers, const char *desttier,
                        int flags)
@@ -4085,6 +4438,44 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
         strarray_free(newactive);
     }
 
+    if (!created_something) {
+        if (verbose) {
+            printf("nothing compacted, cleaning up %s\n", newdest);
+        }
+        strarray_append(tochange, newdest);
+    }
+
+    for (i = 0; i < tochange->count; i++)
+        strarray_remove_all(active, strarray_nth(tochange, i));
+
+    /* Write the highest createdmodseq and index generation of the
+     * destination tier to the new top tier. */
+    {
+        char *topdir = NULL;
+        for (i = 0; i < active->count; i++) {
+            const char *item = strarray_nth(active, i);
+            if (!strcmp(item, newdest)) {
+                if (created_something) topdir = xstrdup(tempdestdir);
+            }
+            else {
+                topdir = activefile_path(mboxname, mbentry->partition, item,
+                                         /*dostat*/1);
+            }
+            if (topdir) break;
+        }
+        if (topdir) {
+            r = compact_set_highest_createdmodseq(userid, topdir,
+                    created_something ? tempdestdir : NULL,
+                    toreindex && toreindex->count);
+            free(topdir);
+            if (r) {
+                printf("ERROR: failed to carry highest createdmodseq for %s\n",
+                       mboxname);
+                goto out;
+            }
+        }
+    }
+
     if (created_something) {
         /* rename the destination data into place */
         if (verbose) {
@@ -4097,15 +4488,6 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
             goto out;
         }
     }
-    else {
-        if (verbose) {
-            printf("nothing compacted, cleaning up %s\n", newdest);
-        }
-        strarray_append(tochange, newdest);
-    }
-
-    for (i = 0; i < tochange->count; i++)
-        strarray_remove_all(active, strarray_nth(tochange, i));
 
     /* Get an exclusive lock on the activefile */
     mappedfile_writelock(activefile);
@@ -4286,8 +4668,11 @@ static int can_match(enum search_op matchop, enum search_part partnum)
 const struct search_engine xapian_search_engine = {
     "Xapian",
     SEARCH_FLAG_CAN_BATCH | SEARCH_FLAG_CAN_GUIDSEARCH,
+    begin_session,
+    end_session,
     begin_search,
     end_search,
+    session_get_highest_createdmodseq,
     begin_update,
     end_update,
     begin_snippets,

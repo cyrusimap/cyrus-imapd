@@ -2,6 +2,15 @@
 # See COPYING file at the root of the distribution for more details.
 
 package Cassandane::Cyrus::SearchFuzzy;
+
+=head1 NAME
+
+Cassandane::Cyrus::SearchFuzzy - tests for fuzzy search and indexing
+
+=head1 HELPER METHODS
+
+=cut
+
 use strict;
 use warnings;
 use Cwd qw(abs_path);
@@ -14,6 +23,7 @@ use Encode qw(decode encode);
 
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Wait;
 
 sub new
 {
@@ -179,6 +189,53 @@ sub delve_docs
     return \@gdocs, \@parts;
 }
 
+=head2 start_echo_extractor
+
+    $self->start_echo_extractor(%params);
+
+This starts an attachment extractor server as configured in the imapd.conf
+C<search_attachment_extractor_url> config value.  It answers C<HEAD> requests
+with C<204>, C<GET> requests with C<404>, and echoes the request body back for
+any other method.
+
+Valid parameters are:
+
+=over 4
+
+=item tracedir
+
+A directory in which the extractor touches one empty file per request, named
+C<< req<n>_<method>_<guid> >>, so tests can assert which requests it got.
+
+=item trace_delay_seconds
+
+Seconds to sleep before writing the trace file.
+
+=item response_delay_seconds
+
+Seconds to sleep before sending the response; may be an arrayref of per-request
+delays, where requests beyond the end of the array are not delayed.
+
+=item fail_content
+
+A regex; requests whose body matches it are answered with C<500> instead of
+being extracted. Use C<fail_until_file> to disable this while the extractor
+is running.
+
+=item fail_until_file
+
+A file name; once that file exists, C<fail_content> stops taking effect and
+matching requests are extracted normally.
+
+=item wait_for_file
+
+A file name; the extractor blocks each request (for up to 60 seconds) until
+that file shows up, which also blocks the squatter that made the request.
+
+=back
+
+=cut
+
 sub start_echo_extractor
 {
     my ($self, %params) = @_;
@@ -213,9 +270,35 @@ sub start_echo_extractor
         } elsif ($req->method eq 'GET') {
             $res = HTTP::Response->new(404);
             $res->content("nope");
+        } elsif (defined $params{fail_content} &&
+                 $req->content =~ $params{fail_content} &&
+                 !($params{fail_until_file} && -e $params{fail_until_file})) {
+            # This is the part the caller wants us to not extract, at least
+            # until the file fail_until_file starts to exist.
+            $conn->send_error(500);
+            return;
         } else {
             $res = HTTP::Response->new(200);
             $res->content($req->content);
+        }
+
+        if ($params{wait_for_file}) {
+            # Hold the extraction, and with it the mailbox update, until the
+            # caller is done with whatever it wants to happen meanwhile.
+            # This runs in the forked httpd, so a timeout must not die here:
+            # that would take down the extractor, and run the destructors of
+            # the whole test in the fork. Fail the extraction instead and let
+            # the test fail on its own assertions.
+            eval {
+                timed_wait(sub { -e $params{wait_for_file} },
+                    description => "$params{wait_for_file} to show up",
+                    maxwait => 60);
+            };
+            if ($@) {
+                xlog "extractor: $@";
+                $conn->send_error(500);
+                return;
+            }
         }
 
         if ($params{response_delay_seconds}) {

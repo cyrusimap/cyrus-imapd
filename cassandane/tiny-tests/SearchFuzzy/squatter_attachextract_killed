@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+# Kill squatter while it extracts the attachment text of a mailbox. Indexing
+# a mailbox is all or nothing, so none of its messages may be recorded as
+# indexed.
+sub test_squatter_attachextract_killed
+    :SearchAttachmentExtractor :SearchAttachmentExtractorBlocking
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    my $instance = $self->{instance};
+
+    my $tracedir = tempdir(DIR => $instance->{basedir} . "/tmp");
+    my $unblock = $instance->{basedir} . "/tmp/unblock_extractor";
+
+    xlog $self, "Create a plain message and one with an attachment in INBOX";
+    $self->create_message_in_mailbox("INBOX", { subject => "plainmsg" });
+    $self->create_message_in_mailbox("INBOX", {
+        subject => "attachmsg",
+        args => {
+            mime_type => "multipart/related",
+            mime_boundary => "123456789abcdef",
+            body => ""
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."plaintext"
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: application/pdf\r\n"
+            ."\r\n"
+            ."attachment"
+            ."\r\n--123456789abcdef--\r\n",
+        },
+    });
+
+    xlog $self, "Start an extractor that never responds";
+    $self->start_echo_extractor(tracedir => $tracedir,
+                                wait_for_file => $unblock);
+
+    xlog $self, "Index INBOX in the background";
+    my $pid = $instance->run_command({ cyrus => 1, background => 1 },
+        'squatter', '-i', 'user.cassandane');
+
+    xlog $self, "Wait for the extractor to get called";
+    # Assert this positively: squatter must have got as far as extracting,
+    # otherwise this test proves nothing about being killed while it does.
+    timed_wait(sub { scalar(glob("$tracedir/*")) },
+        description => "attachment extraction to start",
+        maxwait => 60);
+
+    xlog $self, "Kill squatter while it waits for the extractor";
+    kill 'KILL', $pid;
+    waitpid($pid, 0);
+
+    xlog $self, "Assert nothing of this mailbox got indexed";
+    $talk->select("INBOX");
+    my $uids = $talk->search('fuzzy', 'subject', 'plainmsg');
+    $self->assert_deep_equals([], $uids);
+
+    xlog $self, "Let the extractor respond, then index again";
+    open(my $fh, '>', $unblock) or die "Can't open > $unblock: $!";
+    close($fh);
+    $instance->run_command({cyrus => 1}, 'squatter', '-i', 'user.cassandane');
+
+    xlog $self, "Assert both messages are indexed now";
+    $uids = $talk->search('fuzzy', 'subject', 'plainmsg');
+    $self->assert_deep_equals([1], $uids);
+    $uids = $talk->search('fuzzy', 'xattachmentbody', 'attachment');
+    $self->assert_deep_equals([2], $uids);
+}
