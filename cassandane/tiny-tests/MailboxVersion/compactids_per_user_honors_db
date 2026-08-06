@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+# The default setting is unchanged, and this is what it costs: lose the key and
+# the user silently starts seeing legacy ids.
+sub test_compactids_per_user_honors_db
+    :min_version_3_13
+    ($self)
+{
+    $self->make_message("test compactids");
+
+    $self->assert_num_equals(1, $self->compact_ids_key_is_set());
+    $self->assert_email_id_shape('compact');
+
+    $self->delete_compact_ids_key();
+
+    $self->assert_num_equals(0, $self->compact_ids_key_is_set());
+    $self->assert_email_id_shape('legacy');
+}
