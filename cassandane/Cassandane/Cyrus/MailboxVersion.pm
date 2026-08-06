@@ -218,6 +218,70 @@ sub disable_compact_ids
     $self->assert_str_equals("", $res->stderr);
 }
 
+# Returns true if the $COMPACT_EMAILIDS key is present in the user's
+# conversations database on the given instance, which is not the same question
+# as whether the user gets compact ids: with "compact_ids: always" configured,
+# a user with no key still gets them.
+sub compact_ids_key_is_set
+{
+    my ($self, $user, $instance) = @_;
+
+    $user //= "cassandane";
+    $instance //= $self->{instance};
+
+    my $outfile = $instance->{basedir} . "/conv-dump-$user.txt";
+
+    $instance->run_command({ cyrus => 1,
+                             redirects => { stdout => $outfile } },
+                           'ctl_conversationsdb', '-d', $user);
+
+    return slurp_file($outfile) =~ m/^\$COMPACT_EMAILIDS\t/m ? 1 : 0;
+}
+
+# Remove the key behind Cyrus's back, the way a stray replication event or a
+# database rebuild might.
+sub delete_compact_ids_key
+{
+    my ($self, $user, $instance) = @_;
+
+    $user //= "cassandane";
+    $instance //= $self->{instance};
+
+    xlog $self, "Delete the \$COMPACT_EMAILIDS key for $user";
+
+    my $dbfile = $instance->get_conf_user_file($user, 'conversations');
+    my $engine = $instance->{config}->get('conversations_db');
+
+    $instance->run_dbcommand($dbfile, $engine,
+                             [ 'DELETE', '$COMPACT_EMAILIDS' ]);
+}
+
+# Assert that the ids the server hands out for the first message in the
+# mailbox have the given shape.  Ids are computed at read time, so the same
+# message answers to a different id once the setting changes.
+sub assert_email_id_shape
+{
+    my ($self, $want) = @_;
+
+    my %prefix = (compact => [ 'S', 'A' ], legacy => [ 'M', 'T' ]);
+    my $prefix = $prefix{$want} or die "unknown id shape '$want'";
+
+    my $res = $self->{jmap}->CallMethods([
+        [ 'Email/query', {}, 'R1' ],
+        [ 'Email/get', {
+            '#ids' => {
+                resultOf => 'R1', name => 'Email/query', path => '/ids',
+            },
+            properties => [ 'threadId' ],
+        }, 'R2' ],
+    ]);
+
+    my $email = $res->[1][1]{list}[0];
+    $self->assert_not_null($email);
+    $self->assert_matches(qr/^$prefix->[0]/, $email->{id});
+    $self->assert_matches(qr/^$prefix->[1]/, $email->{threadId});
+}
+
 sub lookup_email_id
 {
     my ($self, $oldid) = @_;
