@@ -852,20 +852,20 @@ EXPORTED modseq_t dav_get_modseq(struct mailbox *mailbox __attribute__((unused))
 
 /* Evaluate If header.  Note that we can't short-circuit any of the tests
    because we need to check for a lock-token anywhere in the header */
-static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
-                     const char *lock_token, bool *islocked)
+static bool eval_list(char *list, struct mailbox *mailbox, const char *etag,
+                      const char *lock_token, bool *islocked)
 {
-    unsigned ret = 1;
+    bool ret = true;
     tok_t tok;
     char *cond;
 
     /* Process each condition, ANDing the results */
     tok_initm(&tok, list+1, "]>", TOK_TRIMLEFT|TOK_TRIMRIGHT);
     while ((cond = tok_next(&tok))) {
-        unsigned r = 0, not = 0;
+        bool r = false, not = false;
 
         if (!strncmp(cond, "Not", 3)) {
-            not = 1;
+            not = true;
             cond += 3;
             while (*cond == ' ') cond++;
         }
@@ -901,14 +901,14 @@ static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
     return ret;
 }
 
-static int eval_if(const char *hdr, struct meth_params *params,
-                   const struct namespace_t *namespace,
-                   struct mailbox *tgt_mailbox, const char *tgt_path,
-                   const char *tgt_etag, const char *tgt_lock_token,
-                   bool *tgt_islocked,
-                   const char *dest_path, bool *dest_islocked)
+static bool eval_if(const char *hdr, struct meth_params *params,
+                    const struct namespace_t *namespace,
+                    struct mailbox *tgt_mailbox, const char *tgt_path,
+                    const char *tgt_etag, const char *tgt_lock_token,
+                    bool *tgt_islocked,
+                    const char *dest_path, bool *dest_islocked)
 {
-    unsigned ret = 0;
+    bool ret = false;
     tok_t tok;
     char *list;
 
