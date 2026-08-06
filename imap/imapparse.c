@@ -1142,9 +1142,20 @@ static int get_search_criterion(struct protstream *pin,
             c = getastring(pin, pout, &arg2);
             if (c <= EOF) goto missingarg;
 
-            e = search_expr_new(parent, SEOP_MATCH);
-            e->attr = search_attr_find_field(arg.s);
-            e->value.s = charset_convert(arg2.s, base->charset, charset_flags|CHARSET_KEEPCASE);
+            const search_attr_t *attr = search_attr_find_field(arg.s);
+            if (base->fuzzy_depth > 0 && search_attr_is_fuzzable(attr)) {
+                /* RFC 6203: a fuzzable header field (Subject, From, To, ...)
+                 * uses the same index-backed match as its dedicated search
+                 * key rather than a full-text scan. */
+                e = search_expr_new(parent, SEOP_FUZZYMATCH);
+                e->attr = attr;
+                e->value.s = xstrdup(arg2.s);
+            }
+            else {
+                e = search_expr_new(parent, SEOP_MATCH);
+                e->attr = attr;
+                e->value.s = charset_convert(arg2.s, base->charset, charset_flags|CHARSET_KEEPCASE);
+            }
             if (!e->value.s) {
                 e->op = SEOP_FALSE;
                 e->attr = NULL;
