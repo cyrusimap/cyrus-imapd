@@ -2517,6 +2517,24 @@ static int is_indexed_part(xapian_update_receiver_t *tr, const struct message_gu
     }
     free(guidrep);
 
+    /* As in is_indexed(), the range proxy can claim a UID whose document is
+     * not actually in Xapian; confirm a positive against Xapian so an
+     * attachment part is not silently dropped.  Open the db lazily, only to
+     * verify a positive. */
+    if (ret) {
+        if (!tr->dbw) {
+            /* XAPIAN_DBW_XAPINDEXED opens the other active tiers read-only,
+             * so the check sees documents in all of them */
+            int r2 = xapian_dbw_open((const char **)tr->activedirs->data,
+                                     &tr->dbw, tr->mode | XAPIAN_DBW_XAPINDEXED);
+            if (r2)
+                xsyslog(LOG_ERR, "xapian_dbw_open failed", "guid=<%s> err=<%s>",
+                        message_guid_encode(guid), error_message(r2));
+        }
+        if (tr->dbw && !xapian_dbw_is_indexed(tr->dbw, guid, XAPIAN_WRAP_DOCTYPE_PART))
+            ret = 0;
+    }
+
     return ret;
 }
 
@@ -2528,7 +2546,11 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
     int r = 0;
 
     if (!tr->dbw) {
-        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
+        /* XAPIAN_DBW_XAPINDEXED opens the other active tiers read-only, so
+         * is_indexed() checks against this handle see documents in all of
+         * them */
+        r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw,
+                            tr->mode | XAPIAN_DBW_XAPINDEXED);
         if (r) goto out;
     }
 
@@ -2589,9 +2611,14 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
     if (!tr->indexed) {
         tr->indexed = seqset_init(0, SEQ_MERGE);
         /* we want to say that we indexed the entire gap from last time
-         * up until this first message as well, so our indexed range
-         * isn't gappy */
-        seqset_add(tr->indexed, seqset_firstnonmember(tr->oldindexed), 1);
+         * up until this first message as well, so our indexed range stays
+         * contiguous.  Only claim UIDs below the message we are indexing
+         * though: firstnonmember can be a live message deferred to a later
+         * batch (the one that tripped the batch-size limit, or re-indexed in
+         * the attachment pass), and claiming it here would skip it. */
+        uint32_t fnm = seqset_firstnonmember(tr->oldindexed);
+        if (fnm < tr->super.uid)
+            seqset_add(tr->indexed, fnm, 1);
     }
     seqset_add(tr->indexed, tr->super.uid, 1);
 
@@ -2853,6 +2880,29 @@ static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
                    mailbox_name(tr->super.mailbox), uid, r, cyrusdb_strerror(r));
         }
         free(guidrep);
+
+        /* The result above is only a proxy: indexed UID ranges can claim UIDs
+         * whose documents are not actually in Xapian (gap-filled ranges, a
+         * message deferred at a batch-size boundary, or an expunged
+         * duplicate), which would silently drop a live message from the
+         * index.  Confirm any positive against Xapian, which is
+         * authoritative.  A negative needs no such verification; the db is
+         * opened here lazily, only to verify a positive. */
+        if (ret) {
+            if (!tr->dbw) {
+                /* XAPIAN_DBW_XAPINDEXED opens the other active tiers
+                 * read-only, so the check sees documents in all of them */
+                int r2 = xapian_dbw_open((const char **)tr->activedirs->data,
+                                         &tr->dbw,
+                                         tr->mode | XAPIAN_DBW_XAPINDEXED);
+                if (r2)
+                    syslog(LOG_ERR, "is_indexed %s:%d: xapian_dbw_open failed: %s",
+                           mailbox_name(tr->super.mailbox), uid, error_message(r2));
+            }
+            if (tr->dbw &&
+                !xapian_dbw_is_indexed(tr->dbw, guid, XAPIAN_WRAP_DOCTYPE_MSG))
+                ret = 0;
+        }
     }
     else if (tr->mode == XAPIAN_DBW_XAPINDEXED) {
         // XXX check for all parts of that message?
