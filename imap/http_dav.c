@@ -6251,6 +6251,37 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
         }
 
         /* Local Mailbox */
+
+        if (txn->req_tgt.resource && fparams->davdb.open_db) {
+            /* PROPFIND on a resource that is not mapped MUST return
+               404 (Not Found), not a 207 with a nested 404
+               (RFC 4918, Section 9.6) */
+            struct mailbox *mailbox = NULL;
+            struct dav_data *ddata;
+            void *davdb;
+
+            r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
+            if (r == IMAP_MAILBOX_NONEXISTENT) {
+                /* Collection is gone - the resource can't exist either */
+                return HTTP_NOT_FOUND;
+            }
+            else if (r) {
+                syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+                       txn->req_tgt.mbentry->name, error_message(r));
+                txn->error.desc = error_message(r);
+                return HTTP_SERVER_ERROR;
+            }
+
+            davdb = fparams->davdb.open_db(mailbox);
+            fparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry,
+                                           txn->req_tgt.resource,
+                                           (void **) &ddata, 0);
+            int found = ddata->rowid != 0;
+            fparams->davdb.close_db(davdb);
+            mailbox_close(&mailbox);
+
+            if (!found) return HTTP_NOT_FOUND;
+        }
     }
 
     /* Principal or Local Mailbox */
