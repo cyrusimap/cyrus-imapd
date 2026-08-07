@@ -1224,6 +1224,19 @@ int main(int argc, char **argv)
             fatal(error_message(r), EX_CONFIG);
     }
 
+    /* For the Xapian engine, non-incremental indexing cannot complete
+     * mailboxes larger than search_batchsize (the same batch is built
+     * on every pass) and re-adds duplicate documents for mailboxes
+     * that fit in one batch.  Imply -i unless -Z supplies its own
+     * per-message index check.  The squat engine keeps its documented
+     * rebuild-by-default behavior. */
+    if ((mode == INDEXER || mode == SYNCLOG) &&
+        !incremental_mode && !xapindexed_mode &&
+        config_getenum(IMAPOPT_SEARCH_ENGINE) == IMAP_ENUM_SEARCH_ENGINE_XAPIAN) {
+        syslog(LOG_NOTICE, "xapian: forcing incremental mode (-i implied)");
+        incremental_mode = 1;
+    }
+
     if (mode == ROLLING || mode == SYNCLOG) {
         signals_set_shutdown(&shut_down);
         signals_add_handlers(0);

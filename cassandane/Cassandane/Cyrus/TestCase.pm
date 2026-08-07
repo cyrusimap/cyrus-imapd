@@ -381,6 +381,9 @@ magic(SearchEngineSquat => sub {
 magic(SearchNormalizationMax20000 => sub {
     shift->config_set(search_normalisation_max => 20000);
 });
+magic(SearchBatchsize20 => sub {
+    shift->config_set(search_batchsize => 20);
+});
 magic(SearchMaxtime1Sec => sub {
     shift->config_set(search_maxtime => 1);
 });
