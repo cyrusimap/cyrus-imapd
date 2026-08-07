@@ -89,6 +89,51 @@ sub mailboxes_db_format
     return $self->{instance}->{config}->get('mboxlist_db');
 }
 
+
+# Count tombstone (deleted-marker) N records in mailboxes.db.
+sub count_tombstones
+{
+    my ($self) = @_;
+    my %db = $self->{instance}->run_dbcommand(
+        $self->mailboxes_db(), $self->mailboxes_db_format(), ['SHOW']);
+    my $n = 0;
+    foreach my $k (keys %db) {
+        next unless $k =~ m/^N/;
+        $n++ if $db{$k} =~ m/\bT\s+\S*d/;
+    }
+    return $n;
+}
+
+# Does an I record exist for this uniqueid?
+sub has_i_record
+{
+    my ($self, $uniqueid) = @_;
+    my %db = $self->{instance}->run_dbcommand(
+        $self->mailboxes_db(), $self->mailboxes_db_format(), ['SHOW']);
+    return exists $db{"I$uniqueid"} ? 1 : 0;
+}
+
+# Backdate every tombstone's mtime so that pruning will consider it.
+# Cassandane creates everything fresh, so nothing is otherwise old enough.
+sub backdate_tombstones
+{
+    my ($self, $days) = @_;
+    $days //= 30;
+
+    my $db = $self->mailboxes_db();
+    my $fmt = $self->mailboxes_db_format();
+    my %all = $self->{instance}->run_dbcommand($db, $fmt, ['SHOW']);
+    my $when = time() - ($days * 86400);
+
+    foreach my $k (keys %all) {
+        next unless $k =~ m/^N/;
+        next unless $all{$k} =~ m/\bT\s+\S*d/;
+        my $v = $all{$k};
+        $v =~ s/(\sM\s+)\d+/$1$when/;
+        $self->{instance}->run_dbcommand($db, $fmt, ['SET', $k, $v]);
+    }
+}
+
 use Cassandane::Tiny::Loader;
 
 1;

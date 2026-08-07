@@ -17,6 +17,7 @@
 
 #include "audit.h"
 #include "libconfig.h"
+#include "imap/imap_err.h"
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "user.h"
@@ -33,7 +34,18 @@ struct audit_state {
      * read transaction, so nothing can be written while it runs. */
     strarray_t deletes;     /* raw keys to remove */
     strarray_t fix_jmapids; /* uniqueids needing a J record */
+    ptrarray_t prunes;      /* struct audit_prune */
 };
+
+/* A tombstone judged old enough to remove, and the I record it refers
+ * to.  What happens to that I record depends on whether it still carries
+ * the tombstoned name -- see audit_apply_prunes(). */
+struct audit_prune {
+    char *mboxname;
+    char *uniqueid;
+};
+
+static void free_prune(void *data);
 
 EXPORTED struct audit_state *audit_begin(const struct audit_config *config)
 {
@@ -147,6 +159,10 @@ EXPORTED void audit_done(struct audit_state **statep)
     strarray_fini(&(*statep)->deletes);
     strarray_fini(&(*statep)->fix_jmapids);
 
+    while (ptrarray_size(&(*statep)->prunes))
+        free_prune(ptrarray_pop(&(*statep)->prunes));
+    ptrarray_fini(&(*statep)->prunes);
+
     free(*statep);
     *statep = NULL;
 }
@@ -194,6 +210,124 @@ static void queue_fix_jmapid(struct audit_state *state, const char *uniqueid)
     if (!state->config.do_fix) return;
 
     strarray_append(&state->fix_jmapids, uniqueid);
+}
+
+static void queue_prune(struct audit_state *state, const char *mboxname,
+                        const char *uniqueid)
+{
+    struct audit_prune *p;
+
+    if (!state->config.prune_days) return;
+
+    p = xzmalloc(sizeof(struct audit_prune));
+    p->mboxname = xstrdupnull(mboxname);
+    p->uniqueid = xstrdupnull(uniqueid);
+
+    ptrarray_append(&state->prunes, p);
+}
+
+static void free_prune(void *data)
+{
+    struct audit_prune *p = (struct audit_prune *)data;
+
+    if (!p) return;
+    free(p->mboxname);
+    free(p->uniqueid);
+    free(p);
+}
+
+/* Remove a tombstone, and whatever refers to it.
+ *
+ * Rename tombstones the old name and moves the I record to the new one;
+ * delete tombstones the current name.  So for a tombstone at name X with
+ * uniqueid U:
+ *
+ *   I(U) exists and names X   the mailbox is entirely gone -- drop both
+ *   I(U) exists, names other  the mailbox lives elsewhere -- drop the
+ *                             tombstone and the matching history item
+ *   I(U) absent               an orphan -- drop the tombstone alone
+ *
+ * All within one transaction, so the database is never left describing a
+ * name that no longer exists.
+ */
+static int prune_one(const struct audit_prune *p, struct txn **tid)
+{
+    mbentry_t *byid = NULL;
+    struct buf key = BUF_INITIALIZER;
+    int i, r;
+
+    /* the tombstone itself, in every case */
+    mboxlist_key_for_name(p->mboxname, &key);
+    r = mboxlist_rawkey_delete(buf_base(&key), buf_len(&key), tid);
+    if (r) goto done;
+
+    r = mboxlist_lookup_by_uniqueid(p->uniqueid, &byid, tid);
+    if (r == IMAP_MAILBOX_NONEXISTENT) { r = 0; goto done; }
+    if (r) goto done;
+
+    if (!strcmpsafe(byid->name, p->mboxname)) {
+        /* nothing refers to this mailbox any more */
+        buf_reset(&key);
+        mboxlist_key_for_id(p->uniqueid, &key);
+        r = mboxlist_rawkey_delete(buf_base(&key), buf_len(&key), tid);
+        goto done;
+    }
+
+    /* the mailbox survives under another name: drop just the history
+     * item, rather than the record that still describes a live mailbox */
+    for (i = 0; i < ptrarray_size(&byid->name_history); i++) {
+        former_name_t *h = ptrarray_nth(&byid->name_history, i);
+
+        if (strcmpsafe(h->name, p->mboxname)) continue;
+
+        ptrarray_remove(&byid->name_history, i);
+        free(h->name);
+        free(h->partition);
+        free(h);
+
+        r = mboxlist_rewrite_id_record(byid, tid);
+        break;
+    }
+
+  done:
+    mboxlist_entry_free(&byid);
+    buf_free(&key);
+
+    return r;
+}
+
+static int audit_apply_prunes(struct audit_state *state)
+{
+    struct txn *tid = NULL;
+    int i, r = 0;
+
+    if (!ptrarray_size(&state->prunes)) return 0;
+
+    if (!state->config.really) {
+        for (i = 0; i < ptrarray_size(&state->prunes); i++) {
+            const struct audit_prune *p = ptrarray_nth(&state->prunes, i);
+            struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+            finding.code = "would-prune-tombstone";
+            finding.mboxname = p->mboxname;
+            finding.uniqueid = p->uniqueid;
+            audit_report(state, &finding);
+        }
+        return 0;
+    }
+
+    for (i = 0; i < ptrarray_size(&state->prunes); i++) {
+        r = prune_one(ptrarray_nth(&state->prunes, i), &tid);
+        if (r) break;
+    }
+
+    if (r) {
+        if (tid) mboxlist_abort(tid);
+        return r;
+    }
+
+    if (tid) r = mboxlist_commit(tid);
+
+    return r;
 }
 
 /* Apply everything queued, in one transaction.  Returns 0 on success. */
@@ -616,6 +750,22 @@ EXPORTED void audit_keyspace_check(struct audit_keyspace *ks,
         struct audit_dbentry *entry = hash_lookup(t->uniqueid, &ks->byid);
         struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
 
+        finding.uniqueid = t->uniqueid;
+        finding.mboxname = t->dbname;
+
+        /* Pruning is off unless an age was given: a tombstone removed
+         * before a replica has synced past it means that replica never
+         * learns the name is gone, and the safe threshold is a property
+         * of the deployment rather than something Cyrus can know. */
+        if (state->config.prune_days &&
+            t->mtime &&
+            t->mtime < time(NULL) - (state->config.prune_days * 86400)) {
+            finding.code = "db-stale-tombstone";
+            audit_report(state, &finding);
+            queue_prune(state, t->dbname, t->uniqueid);
+            continue;
+        }
+
         /* no I record at all: an orphan tombstone.  Prunable, but not an
          * inconsistency -- there is nothing left for it to disagree with */
         if (!entry) continue;
@@ -624,8 +774,6 @@ EXPORTED void audit_keyspace_check(struct audit_keyspace *ks,
         if (find_history_item(ks, t->uniqueid, t->dbname)) continue; /* renamed */
 
         finding.code = "db-tombstone-no-history";
-        finding.uniqueid = t->uniqueid;
-        finding.mboxname = t->dbname;
         audit_report(state, &finding);
     }
 
@@ -1458,6 +1606,7 @@ EXPORTED int audit_run(struct audit_state *state)
         /* Only now, with the read transaction closed and every check
          * done, do we write anything. */
         r = audit_apply_repairs(state);
+        if (!r) r = audit_apply_prunes(state);
         if (!r) r = audit_apply_jmapid_fixes(state);
     }
 
