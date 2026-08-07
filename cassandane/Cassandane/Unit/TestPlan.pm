@@ -578,11 +578,11 @@ sub _glob_suites ($path)
 }
 
 # Returns a list of [ $neg, $ostype, $ospath, $testname ] tuples.  It's a list
-# because one specification can name more than one suite.
+# because one specification can name more than one test case.
 #
 # An exact name is resolved against the roots in order and the first hit wins,
-# so that a suite in an earlier root shadows one of the same name later on.  A
-# globbed suite name is instead collected from every root, because "JMAP*"
+# so that a test case in an earlier root shadows one of the same name later on.  A
+# globbed test case name is instead collected from every root, because "JMAP*"
 # plainly means all of them and not just the ones in whichever root happened to
 # match first.
 sub _parse_test_spec
@@ -598,6 +598,11 @@ sub _parse_test_spec
     $path =~ s/\/*$//;
 
     $neg = '!' if $neg eq '~';
+
+    # '*' has to be quoted in every shell worth using, so let '+' mean the same
+    # thing.  Neither suite names nor test names can contain a '+', so there's
+    # no loss in functionality.
+    $path =~ s/\+/*/g;
 
     # Allow Cyrus::TesterJMAP and TesterJMAP to work
     my @paths;
