@@ -72,6 +72,7 @@ sub new
         install_certificates => 0,
         squatter => 0,
         smtpdaemon => 0,
+        sanity_check => 1,
     };
     map {
         $want->{$_} = delete $params->{$_}
@@ -314,6 +315,13 @@ magic(NoStartInstances => sub {
     # If any test function in your suite uses this magic, then
     # your suite's set_up function cannot assume Cyrus is running!
     shift->want('start_instances' => 0);
+});
+magic(NoSanityCheck => sub {
+    # Skip the quota -f / reconstruct -q -G consistency check that runs
+    # when an instance stops.  For tests that deliberately damage the
+    # store -- typically to check that a repair tool notices -- and which
+    # take responsibility for what they leave behind.
+    shift->want('sanity_check' => 0);
 });
 magic(MagicPlus => sub {
     shift->config_set('imapmagicplus' => 'yes');
@@ -577,6 +585,8 @@ sub _create_instances
     my %instance_params = %{$self->{_instance_params}};
 
     $instance_params{lsan_suppressions} = $self->{lsan_suppressions} // "";
+
+    $instance_params{skip_sanity_check} = 1 if !$want->{sanity_check};
 
     my $cassini = Cassandane::Cassini->instance();
 
