@@ -176,6 +176,9 @@ Either part may be a glob, where '*' matches any run of characters:
     JMAPCore.blob_*         every blob test in JMAPCore
     JMAP*.blob_*            both at once
 
+A '+' is accepted anywhere a '*' would be, so that a glob can be typed
+without having to be quoted against the shell.
+
 END
     exit(1);
 }

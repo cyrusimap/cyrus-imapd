@@ -233,6 +233,26 @@ sub test_root_shadowing ($self)
     $self->assert_plan(['Alpha::Glob*'], \@GLOB_STAR);
 }
 
+sub test_plus_stands_in_for_star ($self)
+{
+    # '+' means '*' wherever a '*' could have gone, because '*' can't be typed
+    # unquoted at a shell prompt
+    $self->assert_plan(['Glob+'], \@GLOB_STAR);
+    $self->assert_plan(['+'], \@EVERYTHING);
+    $self->assert_plan(['GlobOne.b+'], [qw(Alpha::GlobOne.beta)]);
+    $self->assert_plan(['Glob+.alpha'],
+                       [qw(Alpha::GlobOne.alpha
+                           Alpha::GlobTwo.alpha
+                           Beta::GlobThree.alpha)]);
+    $self->assert_plan(['Glob+', '!Glob+.alpha'],
+                       [qw(Alpha::GlobOne.beta
+                           Alpha::GlobOne.gamma_slow
+                           Alpha::GlobTwo.delta)]);
+
+    # the two spellings are interchangeable within one specification
+    $self->assert_plan(['Glob+.b*'], [qw(Alpha::GlobOne.beta)]);
+}
+
 sub test_unrecognised_spec_dies ($self)
 {
     $self->assert_plan_dies(['Nonesuch'],
