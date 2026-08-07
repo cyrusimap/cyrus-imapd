@@ -539,6 +539,7 @@ dist_noinst_SCRIPTS = \
     tools/masssievec \
     tools/mknewsgroups \
     tools/perl2rst \
+    tools/pod-index \
     tools/translatesieve \
     tools/update-tzdata.sh
 noinst_MAN = \
@@ -1986,31 +1987,33 @@ docsrc/reference/manpages/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/perl2rst sieveshell < $< > $@.NEW && mv $@.NEW $@
 
-# Render the Pod of every Cassandane module that carries any into reST, one
-# page per module, so it joins the doc site.  The pages are build artifacts,
-# gitignored like the other perl2rst output.  We build the ridiculous xref file
-# so that when we render the Pod into reST, we can know which L<...> sequences
-# should link internally, and which should go to metacpan.
-docsrc/developer/cassandane-api/.stamp: $(top_srcdir)/tools/perl2rst
-	@$(RM) -r $(@D)
+# The generated Cassandane API docs: one reST page per Cassandane module that
+# carries Pod, plus a cross-reference file (so L<...> between them renders as an
+# internal :doc: link rather than a metacpan link) and a listing that
+# developer/cassandane.rst includes.  It's all a build artifact, gitignored
+# like the other perl2rst output.  The module list is shared with docsrc/Makefile:
+include docsrc/cassandane-pod.mk
+
+cassandane_apidir  = docsrc/developer/cassandane-api
+cassandane_pod_rst = $(CASSANDANE_POD:%=$(cassandane_apidir)/%.rst)
+
+# module -> doc-page map, read by perl2rst to resolve internal L<...> links
+$(cassandane_apidir)/.xref: $(top_srcdir)/tools/pod-index Makefile
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)pms=`cd $(top_srcdir) && grep -rl '^=head' cassandane/Cassandane --include='*.pm' | sort`; \
-	: > $(@D)/.xref; \
-	: > $(@D)/summary.inc; \
-	for pm in $$pms; do \
-	    mod=`echo "$$pm" | sed -e 's|^cassandane/||' -e 's|\.pm$$||' -e 's|/|::|g'`; \
-	    out=`echo "$$mod" | sed -e 's|::|-|g'`; \
-	    printf '%s\t/developer/cassandane-api/%s\n' "$$mod" "$$out" >> $(@D)/.xref; \
-	done; \
-	for pm in $$pms; do \
-	    mod=`echo "$$pm" | sed -e 's|^cassandane/||' -e 's|\.pm$$||' -e 's|/|::|g'`; \
-	    out=`echo "$$mod" | sed -e 's|::|-|g'`; \
-	    PERL2RST_NAMESPACE=Cassandane PERL2RST_XREF_FILE=$(@D)/.xref \
-	        PERL2RST_SUMMARY_FILE=$(@D)/summary.inc \
-	        $(PERL) $(top_srcdir)/tools/perl2rst "$$mod" \
-	        < $(top_srcdir)/$$pm > $(@D)/$$out.rst.NEW \
-	        && mv $(@D)/$$out.rst.NEW $(@D)/$$out.rst; \
-	done
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/pod-index --xref $(CASSANDANE_POD) >$@.NEW && mv $@.NEW $@
+
+# one page per module, from its .pm and the shared xref
+$(cassandane_apidir)/%.rst: $(top_srcdir)/cassandane/%.pm $(cassandane_apidir)/.xref $(top_srcdir)/tools/perl2rst
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)PERL2RST_NAMESPACE=Cassandane PERL2RST_XREF_FILE=$(cassandane_apidir)/.xref \
+	    $(PERL) $(top_srcdir)/tools/perl2rst $(subst /,::,$*) <$< >$@.NEW && mv $@.NEW $@
+
+# the reST bullet list + hidden toctree that developer/cassandane.rst includes
+$(cassandane_apidir)/listing.inc: $(top_srcdir)/tools/pod-index Makefile $(CASSANDANE_POD:%=$(top_srcdir)/cassandane/%.pm)
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/pod-index --listing --srcdir $(top_srcdir)/cassandane $(CASSANDANE_POD) >$@.NEW && mv $@.NEW $@
+
+$(cassandane_apidir)/.stamp: $(cassandane_pod_rst) $(cassandane_apidir)/listing.inc
 	@touch $@
 
 %.1: man/.sphinx-build.stamp
