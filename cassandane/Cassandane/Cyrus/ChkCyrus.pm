@@ -134,6 +134,16 @@ sub backdate_tombstones
     }
 }
 
+
+# Move a path's mtime back beyond the audit's young-guard, so that
+# --delete will consider it.  Cassandane creates everything fresh.
+sub backdate_path
+{
+    my ($path) = @_;
+    my $when = time() - 3600;
+    utime($when, $when, $path) or die "utime $path: $!";
+}
+
 use Cassandane::Tiny::Loader;
 
 1;

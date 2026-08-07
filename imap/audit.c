@@ -1291,17 +1291,40 @@ static void fsview_init(struct audit_fsview *fs)
 
 static void fsview_fini(struct audit_fsview *fs)
 {
-    free_hash_table(&fs->meta, NULL);
-    free_hash_table(&fs->data, NULL);
-    free_hash_table(&fs->archive, NULL);
-    free_hash_table(&fs->search, NULL);
-    free_hash_table(&fs->user, NULL);
-    free_hash_table(&fs->sieve, NULL);
+    /* values are the directory paths, owned by the table */
+    free_hash_table(&fs->meta, free);
+    free_hash_table(&fs->data, free);
+    free_hash_table(&fs->archive, free);
+    free_hash_table(&fs->search, free);
+    free_hash_table(&fs->user, free);
+    free_hash_table(&fs->sieve, free);
 }
 
 /* Sweep every root of one kind into a set.  Hashed rather than kept as a
  * list: a large store has millions of mailboxes and every cross-check
  * below is a membership test. */
+/* Record each uniqueid found under base, with the directory it was found
+ * in as the value.  The layout is deterministic -- it is what
+ * mboxname_id_hash() builds -- so the path is rebuilt rather than carried
+ * back out of the scanner. */
+static void collect_found(hash_table *set, const char *base,
+                          const strarray_t *found)
+{
+    int i;
+
+    for (i = 0; i < strarray_size(found); i++) {
+        const char *id = strarray_nth(found, i);
+        struct buf path = BUF_INITIALIZER;
+
+        if (hash_lookup(id, set)) continue;
+
+        buf_printf(&path, "%s/uuid/%c/%c/%s", base, id[0], id[1], id);
+        hash_insert(id, buf_release(&path), set);
+
+        buf_free(&path);
+    }
+}
+
 static void sweep_into(hash_table *set, const char *partition, int type,
                        const char *suffix, struct audit_state *state)
 {
@@ -1313,17 +1336,12 @@ static void sweep_into(hash_table *set, const char *partition, int type,
     for (i = 0; i < strarray_size(&roots); i++) {
         strarray_t found = STRARRAY_INITIALIZER;
         struct buf base = BUF_INITIALIZER;
-        int j;
 
         buf_setcstr(&base, strarray_nth(&roots, i));
         if (suffix) buf_printf(&base, "/%s", suffix);
 
         audit_scan_uuid_root(buf_cstring(&base), &found, state);
-
-        for (j = 0; j < strarray_size(&found); j++) {
-            const char *id = strarray_nth(&found, j);
-            if (!hash_lookup(id, set)) hash_insert(id, (void *)1, set);
-        }
+        collect_found(set, buf_cstring(&base), &found);
 
         buf_free(&base);
         strarray_fini(&found);
@@ -1338,14 +1356,9 @@ static void sweep_dir_into(hash_table *set, const char *dir,
                            struct audit_state *state)
 {
     strarray_t found = STRARRAY_INITIALIZER;
-    int i;
 
     audit_scan_uuid_root(dir, &found, state);
-
-    for (i = 0; i < strarray_size(&found); i++) {
-        const char *id = strarray_nth(&found, i);
-        if (!hash_lookup(id, set)) hash_insert(id, (void *)1, set);
-    }
+    collect_found(set, dir, &found);
 
     strarray_fini(&found);
 }
@@ -1385,26 +1398,43 @@ struct orphanrock {
     hash_table *against;
     const char *code;
     struct audit_state *state;
+    int removable;      /* is the path this refers to ours to remove? */
 };
 
-static void orphan_cb(const char *uniqueid,
-                      void *data __attribute__((unused)), void *rock)
+static void orphan_cb(const char *uniqueid, void *data, void *rock)
 {
     struct orphanrock *orock = (struct orphanrock *)rock;
+    const char *path = (const char *)data;
     struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
 
     if (hash_lookup(uniqueid, orock->against)) return;
 
     finding.code = orock->code;
     finding.uniqueid = uniqueid;
+    finding.path = path;
     audit_report(orock->state, &finding);
+
+    if (!orock->removable || !path) return;
+
+    /* Re-verify before acting: the sweep produced a candidate list, not a
+     * decision, and a mailbox may have been created since. */
+    if (!mboxlist_lookup_by_uniqueid(uniqueid, NULL, NULL)) {
+        struct audit_finding race = AUDIT_FINDING_INITIALIZER;
+        race.code = "race-detected";
+        race.uniqueid = uniqueid;
+        audit_report(orock->state, &race);
+        return;
+    }
+
+    audit_remove_path(orock->state, path);
 }
 
 /* Report each uniqueid in `set` that is absent from `against`. */
 static void report_orphans(hash_table *set, hash_table *against,
-                           const char *code, struct audit_state *state)
+                           const char *code, int removable,
+                           struct audit_state *state)
 {
-    struct orphanrock rock = { against, code, state };
+    struct orphanrock rock = { against, code, state, removable };
 
     hash_enumerate(set, orphan_cb, &rock);
 }
@@ -1445,22 +1475,23 @@ static void audit_check_filesystem(struct audit_fsview *fs,
     /* A mailbox directory with no database entry.  Nothing else in Cyrus
      * looks inward from the filesystem, so this is the direction only the
      * audit covers. */
-    report_orphans(&fs->meta, &ks->byid, "meta-dir-no-db-entry", state);
+    report_orphans(&fs->meta, &ks->byid, "meta-dir-no-db-entry", 1, state);
 
     /* Spool and archive without meta.  When those partitions share a disk
      * path with meta -- which is common -- the sets are identical and
      * these can never fire. */
-    report_orphans(&fs->data, &fs->meta, "spool-dir-no-meta-dir", state);
-    report_orphans(&fs->archive, &fs->meta, "archive-dir-no-meta-dir", state);
+    report_orphans(&fs->data, &fs->meta, "spool-dir-no-meta-dir", 1, state);
+    report_orphans(&fs->archive, &fs->meta, "archive-dir-no-meta-dir", 1,
+                   state);
 
     /* Only whole-uniqueid orphans are reported for search: adjudicating
      * individual xapian directories of a live mailbox needs to know
      * whether a repack is in flight, and getting that wrong destroys a
      * live index. */
-    report_orphans(&fs->search, &ks->byid, "search-dir-no-db-entry", state);
+    report_orphans(&fs->search, &ks->byid, "search-dir-no-db-entry", 1, state);
 
-    report_orphans(&fs->user, &ks->byid, "user-files-no-db-entry", state);
-    report_orphans(&fs->sieve, &ks->byid, "sieve-files-no-db-entry", state);
+    report_orphans(&fs->user, &ks->byid, "user-files-no-db-entry", 1, state);
+    report_orphans(&fs->sieve, &ks->byid, "sieve-files-no-db-entry", 1, state);
 
     hash_enumerate(&ks->byid, check_ondisk_cb, &drock);
 }
