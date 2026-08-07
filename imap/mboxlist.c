@@ -1353,6 +1353,31 @@ EXPORTED void mboxlist_key_for_jmapid(const char *userid, const char *jmapid,
     mboxlist_jmapid_to_key(userid, jmapid, key);
 }
 
+EXPORTED int mboxlist_rewrite_id_record(const mbentry_t *mbentry,
+                                        struct txn **tid)
+{
+    char *dbname = mboxname_to_dbname(mbentry->name);
+    struct dlist *dl = mboxlist_entry_dlist(dbname, mbentry, KEY_TYPE_ID);
+    struct buf mboxent = BUF_INITIALIZER;
+    struct buf key = BUF_INITIALIZER;
+    int r;
+
+    init_internal();
+
+    dlist_printbuf(dl, 0, &mboxent);
+    mboxlist_id_to_key(mbentry->uniqueid, &key);
+
+    r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
+                      buf_base(&mboxent), buf_len(&mboxent), tid);
+
+    dlist_free(&dl);
+    buf_free(&mboxent);
+    buf_free(&key);
+    free(dbname);
+
+    return r;
+}
+
 EXPORTED int mboxlist_rawkey_delete(const char *key, size_t keylen,
                                     struct txn **tid)
 {
