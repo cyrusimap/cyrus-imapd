@@ -19,6 +19,7 @@
 #include "libconfig.h"
 #include "mboxlist.h"
 #include "mboxname.h"
+#include "user.h"
 #include "xmalloc.h"
 
 struct audit_state {
@@ -31,6 +32,7 @@ struct audit_state {
      * database as it was rather than half-fixed.  The scan itself holds a
      * read transaction, so nothing can be written while it runs. */
     strarray_t deletes;     /* raw keys to remove */
+    strarray_t fix_jmapids; /* uniqueids needing a J record */
 };
 
 EXPORTED struct audit_state *audit_begin(const struct audit_config *config)
@@ -143,6 +145,7 @@ EXPORTED void audit_done(struct audit_state **statep)
     if (!statep || !*statep) return;
 
     strarray_fini(&(*statep)->deletes);
+    strarray_fini(&(*statep)->fix_jmapids);
 
     free(*statep);
     *statep = NULL;
@@ -183,6 +186,16 @@ static void queue_delete_jmapid(struct audit_state *state,
     buf_free(&key);
 }
 
+/* Queue a mailbox for jmapid repair.  Unlike the deletions this is not a
+ * raw key write -- mboxlist_fix_jmapid() may have to open the mailbox and
+ * bump its modseq -- so it is applied outside the delete transaction. */
+static void queue_fix_jmapid(struct audit_state *state, const char *uniqueid)
+{
+    if (!state->config.do_fix) return;
+
+    strarray_append(&state->fix_jmapids, uniqueid);
+}
+
 /* Apply everything queued, in one transaction.  Returns 0 on success. */
 static int audit_apply_repairs(struct audit_state *state)
 {
@@ -221,6 +234,54 @@ static int audit_apply_repairs(struct audit_state *state)
     }
 
     if (tid) r = mboxlist_commit(tid);
+
+    return r;
+}
+
+/* Assign jmapids to the mailboxes that need one.  Separate from the
+ * delete transaction because mboxlist_fix_jmapid() opens the mailbox and
+ * bumps its modseq, and holds its own locks while doing so. */
+static int audit_apply_jmapid_fixes(struct audit_state *state)
+{
+    int i, r = 0;
+
+    for (i = 0; i < strarray_size(&state->fix_jmapids); i++) {
+        const char *uniqueid = strarray_nth(&state->fix_jmapids, i);
+        mbentry_t *mbentry = NULL;
+        user_nslock_t *nslock = NULL;
+        int r2;
+
+        /* Re-verify: the sweep produced a candidate list, not a decision,
+         * and the mailbox may have changed since. */
+        r2 = mboxlist_lookup_by_uniqueid(uniqueid, &mbentry, NULL);
+        if (r2 || !mbentry) {
+            mboxlist_entry_free(&mbentry);
+            continue;
+        }
+
+        if (!state->config.really) {
+            struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+            finding.code = "would-fix-jmapid";
+            finding.uniqueid = uniqueid;
+            finding.mboxname = mbentry->name;
+            audit_report(state, &finding);
+            mboxlist_entry_free(&mbentry);
+            continue;
+        }
+
+        nslock = user_nslock_lockmb_w(mbentry->name);
+        r2 = mboxlist_fix_jmapid(mbentry);
+        user_nslock_release(&nslock);
+
+        if (r2) {
+            xsyslog(LOG_ERR, "audit: failed to fix jmapid",
+                    "mboxname=<%s> error=<%s>",
+                    mbentry->name, error_message(r2));
+            if (!r) r = r2;
+        }
+
+        mboxlist_entry_free(&mbentry);
+    }
 
     return r;
 }
@@ -477,8 +538,8 @@ static void check_id_cb(const char *uniqueid, void *data, void *rock)
 
     if (!entry->jmapid) {
         finding.code = "db-missing-j-property";
-        finding.detail = "run ctl_mboxlist -k";
         audit_report(crock->state, &finding);
+        queue_fix_jmapid(crock->state, uniqueid);
     }
     else {
         struct buf owner = BUF_INITIALIZER;
@@ -486,8 +547,8 @@ static void check_id_cb(const char *uniqueid, void *data, void *rock)
         if (!find_jmapid_key(crock->ks, entry, &owner)) {
             finding.code = "db-missing-j-key";
             finding.userid = buf_cstring(&owner);
-            finding.detail = "run ctl_mboxlist -k";
             audit_report(crock->state, &finding);
+            queue_fix_jmapid(crock->state, uniqueid);
         }
 
         buf_free(&owner);
@@ -1397,6 +1458,7 @@ EXPORTED int audit_run(struct audit_state *state)
         /* Only now, with the read transaction closed and every check
          * done, do we write anything. */
         r = audit_apply_repairs(state);
+        if (!r) r = audit_apply_jmapid_fixes(state);
     }
 
     if (dofs) fsview_fini(&fs);
