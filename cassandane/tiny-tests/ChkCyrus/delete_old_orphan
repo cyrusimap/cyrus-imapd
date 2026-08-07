@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+# An orphan past the guard is removed with --delete --really.
+sub test_delete_old_orphan
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+    my $meta = $mbpath->{meta};
+    $meta =~ s{/uuid/.*$}{};
+    my $id = '0123456789abcdef';
+    my $dir = "$meta/uuid/0/1/$id";
+    make_path($dir) or die "make_path failed";
+    backdate_path($dir);
+
+    $self->audit_json('--level', '1', '--delete', '--really');
+
+    $self->assert(!-d $dir, "an old orphan should have been removed");
+
+    # and the real mailboxes are untouched
+    my $findings = $self->audit_json('--level', '1');
+    $self->assert_str_equals('', join(q{,}, codes($findings)));
+}

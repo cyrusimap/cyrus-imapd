@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+# Without --really nothing on disk may change.  This is the contract every
+# operator relies on before running for real.
+sub test_dry_run_changes_nothing
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+    my $meta = $mbpath->{meta};
+    $meta =~ s{/uuid/.*$}{};
+    my $id = '0123456789abcdef';
+    my $dir = "$meta/uuid/0/1/$id";
+    make_path($dir) or die "make_path failed";
+    backdate_path($dir);
+
+    my $findings = $self->audit_json('--level', '1', '--delete');
+    $self->assert_has_code($findings, 'meta-dir-no-db-entry');
+    $self->assert_has_code($findings, 'would-remove');
+
+    $self->assert(-d $dir, "a dry run must not remove anything");
+}
