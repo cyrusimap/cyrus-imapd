@@ -116,6 +116,27 @@ sub test_suite_naming ($self)
     }
 }
 
+sub test_separators_are_interchangeable ($self)
+{
+    # The separator between a suite and a test is no different from the one
+    # between the parts of a suite name: '.', '/' and '::' are all flattened to
+    # the same thing before anything looks at the specification, which is why
+    # nothing can tell which one you typed.
+    for my $spec ('GlobOne.beta', 'GlobOne/beta', 'GlobOne::beta')
+    {
+        $self->assert_plan([$spec], [qw(Alpha::GlobOne.beta)]);
+    }
+
+    # ... and that stays true once both halves are globbed.  Only GlobOne has a
+    # test starting with 'b', so the other suites the glob matched contribute
+    # nothing rather than making this an error.
+    for my $spec ('Glob*.b*', 'Glob*/b*', 'Glob*::b*',
+                  'Glob+.b+', 'Glob+/b+', 'Glob+::b+')
+    {
+        $self->assert_plan([$spec], [qw(Alpha::GlobOne.beta)]);
+    }
+}
+
 sub test_whole_root ($self)
 {
     $self->assert_plan([$BETA],
