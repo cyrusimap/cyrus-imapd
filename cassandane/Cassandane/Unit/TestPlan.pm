@@ -450,7 +450,7 @@ use File::Path qw(mkpath);
 use Data::Dumper;
 use Cassandane::Util::Log;
 
-my @test_roots = (
+my @default_test_roots = (
     'Cassandane/Test',
     'Cassandane/Cyrus',
 );
@@ -465,6 +465,7 @@ sub new
         maxworkers => delete $opts{maxworkers} || 1,
         skip_slow => delete $opts{skip_slow} // 1,
         slow_only => delete $opts{slow_only} // 0,
+        test_roots => delete $opts{test_roots} // [ @default_test_roots ],
     };
     die "Unknown options: " . join(' ', keys %opts)
         if scalar %opts;
@@ -514,7 +515,7 @@ sub _schedule
 # Returns ($neg, $ostype, $ospath, $testname)
 sub _parse_test_spec
 {
-    my ($name) = @_;
+    my ($self, $name) = @_;
 
     my ($neg, $path) = ($name =~ m/^([~!]?)(.*)$/);
     $path =~ s/\.pm$//g;
@@ -537,7 +538,7 @@ sub _parse_test_spec
     }
 
     foreach my $candidate (@paths) {
-        foreach my $root (@test_roots)
+        foreach my $root ($self->{test_roots}->@*)
         {
             return ($neg, 'd', $candidate, undef)
                 if ($root eq $candidate);
@@ -579,7 +580,7 @@ sub _default_test_list
 
     my %default;
     my %suppressed;
-    @default{@test_roots} = ();
+    @default{$self->{test_roots}->@*} = ();
 
     # skip suppressions
     foreach my $s (@tosuppress) {
@@ -612,7 +613,7 @@ sub schedule
 
     foreach my $name (@names)
     {
-        my ($neg, $type, $path, $test) = _parse_test_spec($name);
+        my ($neg, $type, $path, $test) = $self->_parse_test_spec($name);
 
         # slow test explicitly requested by name, so turn off the filter
         if (defined $test
@@ -679,7 +680,7 @@ sub check_sanity
             }
             close $fh;
         },
-    }, @test_roots);
+    }, $self->{test_roots}->@*);
 
     # collect tiny-tests directories that exist on disk
     my %real_tt_dirs;
