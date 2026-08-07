@@ -341,13 +341,7 @@ Some Cassandane modules are documented in their source using Perl's Pod system.
 The pages below are rendered from that Pod when the docs are built.  (You can
 read the same text offline with ``perldoc``.)
 
-.. include:: cassandane-api/summary.inc
+.. The listing below is generated: a bullet per module plus the hidden toctree
+   that puts the pages in the navigation tree.
 
-.. The pages themselves are listed above; this hidden toctree is what actually
-   puts them in the navigation tree.
-
-.. toctree::
-    :glob:
-    :hidden:
-
-    cassandane-api/*
+.. include:: cassandane-api/listing.inc

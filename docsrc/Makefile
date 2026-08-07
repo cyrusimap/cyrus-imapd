@@ -8,6 +8,7 @@ PAPER         =
 SOURCEDIR     = .
 BUILDDIR      = build
 PERL2RST      = ../tools/perl2rst
+POD_INDEX     = ../tools/pod-index
 
 # User-friendly check for sphinx-build
 ifeq ($(shell which $(SPHINXBUILD) >/dev/null 2>&1; echo $$?), 1)
@@ -68,27 +69,27 @@ doxygen:
 # other perl2rst output.  We build the ridiculous xref file so that when we
 # render the Pod into reST, we can know which L<...> sequences should link
 # internally, and which should go to metacpan.
-cassandane-api:
-	@echo "Rendering Cassandane module Pod into developer/cassandane-api/"
-	@rm -rf $(SOURCEDIR)/developer/cassandane-api
-	@mkdir -p $(SOURCEDIR)/developer/cassandane-api
-	@dir=$(SOURCEDIR)/developer/cassandane-api; \
-	pms=`grep -rl '^=head' ../cassandane/Cassandane --include='*.pm' | sort`; \
-	: > $$dir/.xref; \
-	: > $$dir/summary.inc; \
-	for pm in $$pms; do \
-	    mod=`echo "$$pm" | sed -e 's|.*/cassandane/||' -e 's|\.pm$$||' -e 's|/|::|g'`; \
-	    out=`echo "$$mod" | sed -e 's|::|-|g'`; \
-	    printf '%s\t/developer/cassandane-api/%s\n' "$$mod" "$$out" >> $$dir/.xref; \
-	done; \
-	for pm in $$pms; do \
-	    mod=`echo "$$pm" | sed -e 's|.*/cassandane/||' -e 's|\.pm$$||' -e 's|/|::|g'`; \
-	    out=`echo "$$mod" | sed -e 's|::|-|g'`; \
-	    echo "  $$mod"; \
-	    PERL2RST_NAMESPACE=Cassandane PERL2RST_XREF_FILE=$$dir/.xref \
-	        PERL2RST_SUMMARY_FILE=$$dir/summary.inc \
-	        $(PERL2RST) "$$mod" < "$$pm" > $$dir/$$out.rst; \
-	done
+# Generated Cassandane API docs.  The module list lives in cassandane-pod.mk,
+# shared with the top-level Makefile.am; the rules mirror it too.
+include cassandane-pod.mk
+
+cassandane_apidir  = $(SOURCEDIR)/developer/cassandane-api
+cassandane_pod_rst = $(CASSANDANE_POD:%=$(cassandane_apidir)/%.rst)
+
+cassandane-api: $(cassandane_pod_rst) $(cassandane_apidir)/listing.inc
+
+$(cassandane_apidir)/.xref: $(POD_INDEX) cassandane-pod.mk
+	@mkdir -p $(@D)
+	$(POD_INDEX) --xref $(CASSANDANE_POD) >$@.NEW && mv $@.NEW $@
+
+$(cassandane_apidir)/%.rst: ../cassandane/%.pm $(cassandane_apidir)/.xref $(PERL2RST)
+	@mkdir -p $(@D)
+	PERL2RST_NAMESPACE=Cassandane PERL2RST_XREF_FILE=$(cassandane_apidir)/.xref \
+	    $(PERL2RST) $(subst /,::,$*) <$< >$@.NEW && mv $@.NEW $@
+
+$(cassandane_apidir)/listing.inc: $(POD_INDEX) cassandane-pod.mk $(CASSANDANE_POD:%=../cassandane/%.pm)
+	@mkdir -p $(@D)
+	$(POD_INDEX) --listing --srcdir ../cassandane $(CASSANDANE_POD) >$@.NEW && mv $@.NEW $@
 
 init: doxygen cassandane-api ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
 	@echo "Creating reference/manpages/usercommands/cyradm.rst"
