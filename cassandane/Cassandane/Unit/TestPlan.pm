@@ -544,8 +544,47 @@ sub _schedule
     }
 }
 
+# Turns a glob into an anchored regex.  '*' matches any run of characters,
+# including none, and nothing else is special.
+sub _glob_to_regex ($glob)
+{
+    my @hunks = split /\*+/, $glob, -1;
+    my $regex = join q{.*}, map {; quotemeta } @hunks;
+
+    return qr{\A$regex\z};
+}
+
+# Given a path whose last component may be a glob -- ".../Cyrus/JMAP*" --
+# return the suite files it matches, in sorted order.  Returns nothing if
+# there's no glob to expand, or if the directory that would hold the matches
+# doesn't exist, so the caller can use this to ask "is this a globbed suite
+# name?" without checking first.
+sub _glob_suites ($path)
+{
+    my ($dir, $leaf) = ($path =~ m/^(.*)\/([^\/]+)$/);
+    return if not defined $leaf;
+    return if $leaf !~ m/\*/;
+    return if not -d $dir;
+
+    my $regex = _glob_to_regex($leaf);
+
+    opendir my $dh, $dir
+        or die "Cannot open directory $dir for reading: $!";
+    my @moniker = grep {; my $m = $_; $m =~ s/\.pm$// and $m =~ $regex }
+                  readdir $dh;
+    closedir $dh;
+
+    return map {; "$dir/$_" } sort @moniker;
+}
+
 # Returns a list of [ $neg, $ostype, $ospath, $testname ] tuples.  It's a list
 # because one specification can name more than one suite.
+#
+# An exact name is resolved against the roots in order and the first hit wins,
+# so that a suite in an earlier root shadows one of the same name later on.  A
+# globbed suite name is instead collected from every root, because "JMAP*"
+# plainly means all of them and not just the ones in whichever root happened to
+# match first.
 sub _parse_test_spec
 {
     my ($self, $name) = @_;
@@ -571,6 +610,8 @@ sub _parse_test_spec
     }
 
     foreach my $candidate (@paths) {
+        my @globbed;
+
         foreach my $root ($self->{test_roots}->@*)
         {
             return [ $neg, q{d}, $candidate, undef ]
@@ -585,20 +626,25 @@ sub _parse_test_spec
             return [ $neg, q{f}, "$fpath.pm", undef ]
                 if ( -f "$fpath.pm" );
 
+            # the whole thing may be a globbed suite name, with no test named
+            push @globbed, map {; [ $neg, q{f}, $_, undef ] }
+                           _glob_suites($fpath);
+
             my $test;
             ($fpath, $test) = ($fpath =~ m/^(.*)\/([^\/]+)$/);
             next unless defined $test;
 
-            if ( -f "$fpath.pm" ) {
-                if ($test =~ /\*/) {
-                    my @hunks = split /\*+/, $test, -1;
-                    my $regex = join q{.*}, map {; quotemeta } @hunks;
-                    return [ $neg, q{f}, "$fpath.pm", qr{\A$regex\z} ];
-                } else {
-                    return [ $neg, q{f}, "$fpath.pm", $test ]
-                }
-            }
+            $test = _glob_to_regex($test) if $test =~ m/\*/;
+
+            return [ $neg, q{f}, "$fpath.pm", $test ]
+                if ( -f "$fpath.pm" );
+
+            # ... or the suite part alone may be globbed, with a test after it
+            push @globbed, map {; [ $neg, q{f}, $_, $test ] }
+                           _glob_suites($fpath);
         }
+
+        return @globbed if @globbed;
     }
 
     die "Unrecognised test specification: $name";
@@ -683,25 +729,40 @@ sub schedule
 # going to be filtered out from under you.
 sub _check_selections ($self)
 {
-    my @matches = map {; $_->_spec_matches() }
-                  $self->{schedule}->@{ sort keys $self->{schedule}->%* };
+    # One specification can be applied to several suites, so gather up
+    # everything it matched before judging it.  "JMAP*.blob_get" has done its
+    # job if any one of the JMAP suites has that test; it's only a mistake if
+    # none of them do.
+    my (@specs, %matched);
 
-    my @unmatched = map {; $_->{spec} } grep {; ! $_->{tests}->@* } @matches;
+    foreach my $item ($self->{schedule}->@{ sort keys $self->{schedule}->%* })
+    {
+        foreach my $match ($item->_spec_matches())
+        {
+            my $spec = $match->{spec};
+
+            push @specs, $spec if not $matched{$spec};
+            $matched{$spec} //= [];
+            push $matched{$spec}->@*, $match->{tests}->@*;
+        }
+    }
+
+    my @unmatched = grep {; ! $matched{$_}->@* } @specs;
     die "No tests matched: " . join(q{, }, @unmatched) . "\n" if @unmatched;
 
-    foreach my $match (@matches)
+    foreach my $spec (@specs)
     {
-        my @tests = $match->{tests}->@*;
+        my @tests = $matched{$spec}->@*;
 
         if ($self->{skip_slow} and not grep {; $_ !~ m/_slow$/ } @tests)
         {
-            xlog "$match->{spec} was explicitly requested. Enabling slow tests!";
+            xlog "$spec was explicitly requested. Enabling slow tests!";
             $self->{skip_slow} = 0;
         }
 
         if ($self->{slow_only} and not grep {; $_ =~ m/_slow$/ } @tests)
         {
-            xlog "$match->{spec} was explicitly requested. Enabling regular tests!";
+            xlog "$spec was explicitly requested. Enabling regular tests!";
             $self->{slow_only} = 0;
         }
     }

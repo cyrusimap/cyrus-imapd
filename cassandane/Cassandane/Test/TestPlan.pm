@@ -26,6 +26,16 @@ my @GLOB_ONE = qw(Alpha::GlobOne.alpha
                   Alpha::GlobOne.beta
                   Alpha::GlobOne.gamma_slow);
 
+# Everything matching "Glob*", which spans both roots.
+my @GLOB_STAR = (@GLOB_ONE, qw(Alpha::GlobTwo.alpha
+                               Alpha::GlobTwo.delta
+                               Beta::GlobThree.alpha));
+
+# Every test in the fixture.
+my @EVERYTHING = (@GLOB_STAR, qw(Alpha::Other.alpha
+                                 Alpha::Shared.from_alpha
+                                 Beta::Shared.from_beta));
+
 # Build a plan over the fixture roots and schedule @$specs on it.
 sub _fixture_plan ($specs, %opts)
 {
@@ -111,15 +121,68 @@ sub test_whole_root ($self)
     $self->assert_plan([$BETA],
                        [qw(Beta::GlobThree.alpha Beta::Shared.from_beta)]);
 
-    $self->assert_plan([$ALPHA, $BETA],
-                       [@GLOB_ONE,
-                        qw(Alpha::GlobTwo.alpha
-                           Alpha::GlobTwo.delta
-                           Alpha::Other.alpha
-                           Alpha::Shared.from_alpha
-                           Beta::GlobThree.alpha
-                           Beta::Shared.from_beta)]);
+    $self->assert_plan([$ALPHA, $BETA], \@EVERYTHING);
 }
+
+sub test_suite_globs ($self)
+{
+    # a globbed suite name is collected from every root, unlike an exact one
+    $self->assert_plan(['Glob*'], \@GLOB_STAR);
+    $self->assert_plan(['Shared*'],
+                       [qw(Alpha::Shared.from_alpha Beta::Shared.from_beta)]);
+
+    $self->assert_plan(['GlobT*'],
+                       [qw(Alpha::GlobTwo.alpha
+                           Alpha::GlobTwo.delta
+                           Beta::GlobThree.alpha)]);
+
+    $self->assert_plan(['*One'], \@GLOB_ONE);
+
+    # ... and on its own it means every suite there is
+    $self->assert_plan(['*'], \@EVERYTHING);
+
+    # a fully qualified glob is confined to the root it names
+    $self->assert_plan(['Cassandane::Fixture::TestPlan::Beta::Glob*'],
+                       [qw(Beta::GlobThree.alpha)]);
+
+    # a glob matching no suite is as fatal as a name that doesn't exist
+    $self->assert_plan_dies(['Nonesuch*'],
+                            qr{Unrecognised test specification: Nonesuch\*});
+
+    # a globbed suite can be negated, or have parts of it negated
+    $self->assert_plan(['Glob*', '!GlobTwo'],
+                       [@GLOB_ONE, 'Beta::GlobThree.alpha']);
+
+    $self->assert_plan(['Glob*', '!Glob*.alpha'],
+                       [qw(Alpha::GlobOne.beta
+                           Alpha::GlobOne.gamma_slow
+                           Alpha::GlobTwo.delta)]);
+}
+
+sub test_suite_globs_with_tests ($self)
+{
+    $self->assert_plan(['Glob*.alpha'],
+                       [qw(Alpha::GlobOne.alpha
+                           Alpha::GlobTwo.alpha
+                           Beta::GlobThree.alpha)]);
+
+    $self->assert_plan(['Glob*.*a'],
+                       [qw(Alpha::GlobOne.alpha
+                           Alpha::GlobOne.beta
+                           Alpha::GlobTwo.alpha
+                           Alpha::GlobTwo.delta
+                           Beta::GlobThree.alpha)]);
+
+    # The test only has to exist in one of the suites the glob matched.  If it
+    # had to exist in all of them, a suite glob would be almost unusable with a
+    # test name after it.
+    $self->assert_plan(['Glob*.delta'], [qw(Alpha::GlobTwo.delta)]);
+
+    # ... but if it turns up in none of them, that's still a mistake
+    $self->assert_plan_dies(['Glob*.nonesuch'],
+                            qr{No tests matched: Glob\*\.nonesuch});
+}
+
 
 sub test_test_globs ($self)
 {
@@ -164,6 +227,10 @@ sub test_root_shadowing ($self)
     # ... so the only way to name the other one is in full
     $self->assert_plan(['Cassandane::Fixture::TestPlan::Beta::Shared'],
                        [qw(Beta::Shared.from_beta)]);
+
+    # A leading component that doesn't resolve is dropped rather than being
+    # treated as a constraint, so naming a root doesn't confine a glob to it.
+    $self->assert_plan(['Alpha::Glob*'], \@GLOB_STAR);
 }
 
 sub test_unrecognised_spec_dies ($self)
