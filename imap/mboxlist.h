@@ -182,6 +182,14 @@ void mboxlist_rawkey_fini(struct mboxlist_rawkey *rawkey);
 int mboxlist_foreach_raw(mboxlist_rawproc_t *proc, void *rock,
                          struct txn **tid);
 
+/* Ensure a mailbox is reachable by jmapid: assign one if it has none, and
+ * write the J record.  Not database-only -- with no jmapid present this
+ * opens the mailbox, dirties the modseq and writes the header, because
+ * the jmapid is derived from the folder's modseq.
+ *
+ * Shared by ctl_mboxlist -k and the consistency audit. */
+int mboxlist_fix_jmapid(const mbentry_t *mbentry);
+
 /* Build the key for a record.  The inverse of mboxlist_parse_rawkey(),
  * kept here so that key format knowledge stays in one file. */
 void mboxlist_key_for_name(const char *mboxname, struct buf *key);

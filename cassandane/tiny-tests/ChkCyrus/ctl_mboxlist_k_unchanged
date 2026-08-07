@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+# The refactor must not change ctl_mboxlist -k's behaviour: it is the
+# existing owner of this repair and has its own users.
+sub test_ctl_mboxlist_k_unchanged
+    :Conversations :NoSanityCheck
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+
+    my $db = $self->mailboxes_db();
+    my $fmt = $self->mailboxes_db_format();
+
+    my %all = $self->{instance}->run_dbcommand($db, $fmt, ['SHOW']);
+    my ($jkey) = grep { m/^J/ } keys %all;
+    $self->assert_not_null($jkey);
+    $self->{instance}->run_dbcommand($db, $fmt, ['DELETE', $jkey]);
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_mboxlist', '-k');
+
+    my $findings = $self->audit_json('--level', '0');
+    $self->assert_lacks_code($findings, 'db-missing-j-key');
+    $self->assert_lacks_code($findings, 'db-missing-j-property');
+}
