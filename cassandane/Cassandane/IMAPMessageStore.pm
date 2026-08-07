@@ -106,7 +106,7 @@ sub connect
     }
 
     $client->set_tracing(1)
-        if $self->{verbose};
+        if $self->{verbose} >= 3;
 
     my $banner = $client->get_response_code('remainder');
     if (not $params{NoLogin}) {
