@@ -200,24 +200,27 @@ sub test_unmatched_test_dies ($self)
 
 sub test_slow_flags ($self)
 {
-    # naming a slow test explicitly turns the skip_slow filter off
+    # asking for a whole suite isn't asking for its slow tests
     $self->assert_slow_flag(['GlobOne'], 'skip_slow', 1);
     $self->assert_slow_flag(['GlobOne.beta'], 'skip_slow', 1);
-    $self->assert_slow_flag(['GlobOne.gamma_slow'], 'skip_slow', 0);
 
-    # ... but a negated one doesn't
+    # but selecting only slow tests is, however you spell it
+    $self->assert_slow_flag(['GlobOne.gamma_slow'], 'skip_slow', 0);
+    $self->assert_slow_flag(['GlobOne.*_slow'], 'skip_slow', 0);
+    $self->assert_slow_flag(['GlobOne.gamma*'], 'skip_slow', 0);
+
+    # ... whereas selecting a mixture of slow and regular tests isn't
+    $self->assert_slow_flag(['GlobOne.*'], 'skip_slow', 1);
+
+    # ... and neither is denying a slow test
     $self->assert_slow_flag(['GlobOne', '!GlobOne.gamma_slow'], 'skip_slow', 1);
 
-    # A glob doesn't count as naming it explicitly, so this selects the slow
-    # test and then filters it back out again.  That is arguably wrong; if it
-    # gets fixed, this expectation should change.
-    $self->assert_slow_flag(['GlobOne.*_slow'], 'skip_slow', 1);
-
-    # symmetrically, naming a non-slow test turns slow_only off
+    # slow_only works the same way, in reverse
+    $self->assert_slow_flag(['GlobOne.beta'], 'slow_only', 0, slow_only => 1);
+    $self->assert_slow_flag(['GlobOne.*a'], 'slow_only', 0, slow_only => 1);
     $self->assert_slow_flag(['GlobOne.gamma_slow'], 'slow_only', 1,
                             slow_only => 1);
-    $self->assert_slow_flag(['GlobOne.beta'], 'slow_only', 0,
-                            slow_only => 1);
+    $self->assert_slow_flag(['GlobOne.*'], 'slow_only', 1, slow_only => 1);
 }
 
 1;
