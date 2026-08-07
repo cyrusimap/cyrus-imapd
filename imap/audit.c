@@ -1603,6 +1603,108 @@ static int scan_cb(void *rock, const char *rawkey, size_t rawkeylen,
     return 0;
 }
 
+/* ------------------------------------------------------------------ */
+/* levels 2-4: message and meta damage                                */
+
+/* Forward reconstruct's structured findings to the audit's emitter. */
+static void reconstruct_finding_cb(void *rock,
+                                   const struct reconstruct_finding *rf)
+{
+    struct audit_state *state = (struct audit_state *)rock;
+    struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+    mbname_t *mbname = NULL;
+
+    finding.code = rf->code;
+    finding.mboxname = rf->mboxname;
+    finding.uniqueid = rf->uniqueid;
+    finding.path = rf->path;
+    finding.tier = rf->tier;
+    finding.metaname = rf->metaname;
+    finding.guid = rf->guid;
+    finding.uid = rf->uid;
+    finding.size = rf->size;
+    finding.has_uid = rf->has_uid;
+    finding.has_size = rf->has_size;
+
+    /* a driver fetching a replacement needs the owner */
+    if (rf->mboxname) {
+        mbname = mbname_from_intname(rf->mboxname);
+        finding.userid = mbname_userid(mbname);
+    }
+
+    audit_report(state, &finding);
+
+    mbname_free(&mbname);
+}
+
+struct mbcheckrock {
+    struct audit_state *state;
+    int flags;
+};
+
+static int check_mailbox_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct mbcheckrock *mrock = (struct mbcheckrock *)rock;
+    struct reconstruct_report report = { reconstruct_finding_cb,
+                                         mrock->state };
+    mbname_t *mbname = NULL;
+    const char *userid;
+    int r;
+
+    if (mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_REMOTE |
+                           MBTYPE_INTERMEDIATE))
+        return 0;
+
+    if (!entry_in_scope(mrock->state, mbentry)) return 0;
+
+    mbname = mbname_from_intname(mbentry->name);
+    userid = mbname_userid(mbname);
+
+    if (userid && mrock->state->config.skipusers &&
+        strarray_contains(mrock->state->config.skipusers, userid))
+        goto done;
+
+    /* Never RECONSTRUCT_MAKE_CHANGES.  Allowed to make changes it would
+     * expunge the index record for a missing file, destroying the very
+     * guid a driver needs to fetch the message back. */
+    r = mailbox_reconstruct_report(mbentry->name, mrock->flags, NULL, &report);
+
+    /* A mailbox that cannot even be opened is exactly what these levels
+     * exist to surface, and reconstruct cannot report it through the
+     * observer: with no changes allowed it stops at the failed open.
+     * Deleted mid-run is the exception -- that is not damage. */
+    if (r && r != IMAP_MAILBOX_NONEXISTENT) {
+        struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+        finding.code = "mailbox-unreadable";
+        finding.mboxname = mbentry->name;
+        finding.uniqueid = mbentry->uniqueid;
+        finding.userid = userid;
+        finding.detail = error_message(r);
+        audit_report(mrock->state, &finding);
+    }
+
+  done:
+    mbname_free(&mbname);
+
+    return 0;
+}
+
+static void audit_check_mailboxes(struct audit_state *state)
+{
+    struct mbcheckrock mrock = { state, 0 };
+
+    if (state->config.level >= 3) mrock.flags |= RECONSTRUCT_DO_STAT;
+    if (state->config.level >= 4) mrock.flags |= RECONSTRUCT_ALWAYS_PARSE;
+
+    if (state->config.userid) {
+        mboxlist_usermboxtree(state->config.userid, NULL, check_mailbox_cb,
+                              &mrock, 0);
+    }
+    else {
+        mboxlist_allmbox("", check_mailbox_cb, &mrock, 0);
+    }
+}
+
 EXPORTED int audit_run(struct audit_state *state)
 {
     struct audit_keyspace ks;
@@ -1639,6 +1741,10 @@ EXPORTED int audit_run(struct audit_state *state)
         r = audit_apply_repairs(state);
         if (!r) r = audit_apply_prunes(state);
         if (!r) r = audit_apply_jmapid_fixes(state);
+
+        /* Levels 2-4 are report-only, so they run after the repairs and
+         * take no part in them. */
+        if (!r && state->config.level >= 2) audit_check_mailboxes(state);
     }
 
     if (dofs) fsview_fini(&fs);
