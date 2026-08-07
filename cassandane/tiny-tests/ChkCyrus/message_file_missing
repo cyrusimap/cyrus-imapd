@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+# A missing message file must be reported with everything a driver needs
+# to fetch a replacement: user, mailbox, uid, guid and destination path.
+sub test_message_file_missing
+    :NoSanityCheck
+{
+    my ($self) = @_;
+
+    $self->make_message("test message") or die;
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+    unlink("$mbpath->{data}/1.") or die "unlink: $!";
+
+    my $findings = $self->audit_json('--level', '2');
+    my ($f) = grep { $_->{code} eq 'message-file-missing' } @{$findings};
+
+    $self->assert_not_null($f);
+    $self->assert_num_equals(1, $f->{uid});
+    $self->assert_not_null($f->{guid});
+    $self->assert_not_null($f->{path});
+    $self->assert_str_equals('cassandane', $f->{user});
+    $self->assert_str_equals('user.cassandane', $f->{mboxname});
+}
