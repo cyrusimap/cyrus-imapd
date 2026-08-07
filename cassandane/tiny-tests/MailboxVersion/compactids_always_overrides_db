@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_compactids_always_overrides_db
+    :min_version_3_13 :CompactIdsAlways
+    ($self)
+{
+    xlog $self, "Deliver a message to have something with an id";
+    $self->make_message("test compactids");
+
+    $self->assert_num_equals(1, $self->compact_ids_key_is_set());
+    $self->assert_email_id_shape('compact');
+
+    xlog $self, "Lose the per-user setting, as a stray sync might";
+    $self->delete_compact_ids_key();
+    $self->assert_num_equals(0, $self->compact_ids_key_is_set());
+
+    xlog $self, "The config still says compact, so the ids stay compact";
+    $self->assert_email_id_shape('compact');
+}

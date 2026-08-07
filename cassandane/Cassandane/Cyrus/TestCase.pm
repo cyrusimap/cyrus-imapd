@@ -289,6 +289,9 @@ magic(MailboxLegacyDirs => sub {
 magic(CrossDomains => sub {
     shift->config_set(crossdomains => 'yes');
 });
+magic(CompactIdsAlways => sub {
+    shift->config_set(compact_ids => 'always');
+});
 magic(Conversations => sub {
     shift->config_set(conversations => 'yes');
 });
