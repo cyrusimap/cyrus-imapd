@@ -1,0 +1,112 @@
+/* audit.testc - unit tests for mailstore consistency auditing */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+#include <string.h>
+
+#include "cunit/unit.h"
+
+#include "imap/mboxlist.h"
+#include "lib/util.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+
+/* The mailboxes.db key separator.  Spell it as its own string literal and
+ * rely on concatenation: written inline, "\x1ebob" is a single hex escape
+ * of 0x1eb -- out of range -- because 'b' is a hex digit.
+ */
+#define SEP "\x1e"
+
+static void test_rawkey_name(void)
+{
+    struct mboxlist_rawkey key;
+    const char *raw = "Nuser" SEP "bob";
+    int r = mboxlist_parse_rawkey(raw, strlen(raw), &key);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(key.type, MBOXLIST_KEY_NAME);
+    CU_ASSERT_STRING_EQUAL(key.dbname, "user" SEP "bob");
+    mboxlist_rawkey_fini(&key);
+}
+
+static void test_rawkey_id(void)
+{
+    struct mboxlist_rawkey key;
+    const char *raw = "I1234abcd";
+    int r = mboxlist_parse_rawkey(raw, strlen(raw), &key);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(key.type, MBOXLIST_KEY_ID);
+    CU_ASSERT_STRING_EQUAL(key.uniqueid, "1234abcd");
+    mboxlist_rawkey_fini(&key);
+}
+
+static void test_rawkey_jmapid(void)
+{
+    struct mboxlist_rawkey key;
+    const char *raw = "Jbob" SEP "P123";
+    int r = mboxlist_parse_rawkey(raw, strlen(raw), &key);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(key.type, MBOXLIST_KEY_JMAPID);
+    CU_ASSERT_STRING_EQUAL(key.userid, "bob");
+    CU_ASSERT_STRING_EQUAL(key.jmapid, "P123");
+    mboxlist_rawkey_fini(&key);
+}
+
+static void test_rawkey_racl_user(void)
+{
+    struct mboxlist_rawkey key;
+    const char *raw = "AU" SEP "alice" SEP "user" SEP "bob";
+    int r = mboxlist_parse_rawkey(raw, strlen(raw), &key);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(key.type, MBOXLIST_KEY_RACL);
+    CU_ASSERT_EQUAL(key.isuser, 1);
+    CU_ASSERT_STRING_EQUAL(key.userid, "alice");
+    CU_ASSERT_STRING_EQUAL(key.aclmbox, "user" SEP "bob");
+    mboxlist_rawkey_fini(&key);
+}
+
+static void test_rawkey_racl_shared(void)
+{
+    struct mboxlist_rawkey key;
+    const char *raw = "AS" SEP "alice" SEP "shared";
+    int r = mboxlist_parse_rawkey(raw, strlen(raw), &key);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(key.type, MBOXLIST_KEY_RACL);
+    CU_ASSERT_EQUAL(key.isuser, 0);
+    mboxlist_rawkey_fini(&key);
+}
+
+/* An unrecognised prefix must be reported, not guessed at: the audit's
+ * whole job is to notice keys that should not be in the database. */
+static void test_rawkey_unknown(void)
+{
+    struct mboxlist_rawkey key;
+    const char *raw = "Zwhatever";
+    int r = mboxlist_parse_rawkey(raw, strlen(raw), &key);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(key.type, MBOXLIST_KEY_UNKNOWN);
+    mboxlist_rawkey_fini(&key);
+}
+
+/* A key with a valid prefix but no payload is malformed, not a valid key
+ * with an empty field. */
+static void test_rawkey_truncated(void)
+{
+    struct mboxlist_rawkey key;
+
+    CU_ASSERT_EQUAL(mboxlist_parse_rawkey("I", 1, &key), IMAP_MAILBOX_BADNAME);
+    CU_ASSERT_EQUAL(mboxlist_parse_rawkey("N", 1, &key), IMAP_MAILBOX_BADNAME);
+    CU_ASSERT_EQUAL(mboxlist_parse_rawkey("J", 1, &key), IMAP_MAILBOX_BADNAME);
+    CU_ASSERT_EQUAL(mboxlist_parse_rawkey("", 0, &key), IMAP_MAILBOX_BADNAME);
+
+    /* a J key needs both a userid and a jmapid */
+    CU_ASSERT_EQUAL(mboxlist_parse_rawkey("Jbob", 4, &key), IMAP_MAILBOX_BADNAME);
+}
+
+/* vim: set ft=c: */

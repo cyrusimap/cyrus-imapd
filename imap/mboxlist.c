@@ -1118,6 +1118,134 @@ static void mboxlist_racl_key(int isuser, const char *keyuser,
     }
 }
 
+/*
+ * Raw keyspace access, for consistency auditing.
+ *
+ * The audit has to see keys the regular lookup API would hide or choke
+ * on -- an unparseable entry or an unrecognised prefix is exactly the
+ * kind of thing it exists to find -- so these live here, next to the key
+ * format they depend on, rather than in the auditing code.
+ */
+EXPORTED int mboxlist_parse_rawkey(const char *key, size_t keylen,
+                                   struct mboxlist_rawkey *rawkey)
+{
+    const char *sep;
+
+    memset(rawkey, 0, sizeof(*rawkey));
+
+    if (!keylen) return IMAP_MAILBOX_BADNAME;
+
+    switch (key[0]) {
+    case KEY_TYPE_NAME:
+        if (keylen < 2) return IMAP_MAILBOX_BADNAME;
+        rawkey->type = MBOXLIST_KEY_NAME;
+        rawkey->dbname = xstrndup(key + 1, keylen - 1);
+        return 0;
+
+    case KEY_TYPE_ID:
+        if (keylen < 2) return IMAP_MAILBOX_BADNAME;
+        rawkey->type = MBOXLIST_KEY_ID;
+        rawkey->uniqueid = xstrndup(key + 1, keylen - 1);
+        return 0;
+
+    case KEY_TYPE_JID:
+        if (keylen < 2) return IMAP_MAILBOX_BADNAME;
+        sep = memchr(key + 1, DB_RECORDSEP_CHAR, keylen - 1);
+        /* an empty userid is legal (shared mailboxes), but the separator
+         * and a jmapid are not optional */
+        if (!sep || sep + 1 >= key + keylen) return IMAP_MAILBOX_BADNAME;
+        rawkey->type = MBOXLIST_KEY_JMAPID;
+        rawkey->userid = xstrndup(key + 1, sep - (key + 1));
+        rawkey->jmapid = xstrndup(sep + 1, (key + keylen) - (sep + 1));
+        return 0;
+
+    case KEY_TYPE_ACL:
+        if (keylen < 3 || key[2] != DB_RECORDSEP_CHAR)
+            return IMAP_MAILBOX_BADNAME;
+        if (key[1] != 'U' && key[1] != 'S')
+            return IMAP_MAILBOX_BADNAME;
+        rawkey->type = MBOXLIST_KEY_RACL;
+        rawkey->isuser = (key[1] == 'U');
+        sep = memchr(key + 3, DB_RECORDSEP_CHAR, keylen - 3);
+        if (sep) {
+            rawkey->userid = xstrndup(key + 3, sep - (key + 3));
+            rawkey->aclmbox = xstrndup(sep + 1, (key + keylen) - (sep + 1));
+        }
+        else {
+            /* mboxlist_racl_key() omits both trailing parts when they are
+             * NULL, so a key with neither is well-formed */
+            rawkey->userid = xstrndup(key + 3, keylen - 3);
+        }
+        return 0;
+
+    default:
+        rawkey->type = MBOXLIST_KEY_UNKNOWN;
+        return 0;
+    }
+}
+
+EXPORTED void mboxlist_rawkey_fini(struct mboxlist_rawkey *rawkey)
+{
+    if (!rawkey) return;
+    xzfree(rawkey->dbname);
+    xzfree(rawkey->uniqueid);
+    xzfree(rawkey->userid);
+    xzfree(rawkey->jmapid);
+    xzfree(rawkey->aclmbox);
+    rawkey->type = MBOXLIST_KEY_UNKNOWN;
+    rawkey->isuser = 0;
+}
+
+struct rawforeach_rock {
+    mboxlist_rawproc_t *proc;
+    void *rock;
+};
+
+static int rawforeach_cb(void *rock, const char *key, size_t keylen,
+                         const char *data, size_t datalen)
+{
+    struct rawforeach_rock *frock = (struct rawforeach_rock *)rock;
+    struct mboxlist_rawkey rawkey = MBOXLIST_RAWKEY_INITIALIZER;
+    mbentry_t *mbentry = NULL;
+    int r;
+
+    r = mboxlist_parse_rawkey(key, keylen, &rawkey);
+    if (r) {
+        /* report it rather than dropping it: a malformed key is a finding,
+         * not a reason to stop */
+        rawkey.type = MBOXLIST_KEY_UNKNOWN;
+    }
+
+    /* a NULL mbentry tells the callback the value did not parse */
+    if (rawkey.type == MBOXLIST_KEY_NAME) {
+        mboxlist_parse_entry(&mbentry, rawkey.dbname, strlen(rawkey.dbname),
+                             data, datalen);
+    }
+    else if (rawkey.type == MBOXLIST_KEY_ID ||
+             rawkey.type == MBOXLIST_KEY_JMAPID) {
+        mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
+    }
+
+    r = frock->proc(frock->rock, &rawkey, mbentry, data, datalen);
+
+    mboxlist_entry_free(&mbentry);
+    mboxlist_rawkey_fini(&rawkey);
+
+    return r;
+}
+
+EXPORTED int mboxlist_foreach_raw(mboxlist_rawproc_t *proc, void *rock,
+                                  struct txn **tid)
+{
+    struct rawforeach_rock frock = { proc, rock };
+
+    init_internal();
+
+    /* One foreach inside a single transaction gives a consistent snapshot
+     * across all key types, which every cross-check depends on. */
+    return cyrusdb_foreach(mbdb, "", 0, NULL, rawforeach_cb, &frock, tid);
+}
+
 static int user_can_read(const strarray_t *aclbits, const char *user)
 {
     int i;
