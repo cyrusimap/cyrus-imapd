@@ -197,6 +197,12 @@ void mboxlist_key_for_id(const char *uniqueid, struct buf *key);
 void mboxlist_key_for_jmapid(const char *userid, const char *jmapid,
                              struct buf *key);
 
+/* Rewrite the I record for an mbentry, serialised exactly as
+ * mboxlist_update_entry_full() would.  For repairs that alter an existing
+ * record -- pruning a name_history item, say -- without the surrounding
+ * bookkeeping of a real update. */
+int mboxlist_rewrite_id_record(const mbentry_t *mbentry, struct txn **tid);
+
 /* Raw key writes, for repairing a damaged keyspace.  The caller owns the
  * transaction, so that a repair touching several keys either lands whole
  * or not at all. */
