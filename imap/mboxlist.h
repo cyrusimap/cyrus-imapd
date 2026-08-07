@@ -146,6 +146,45 @@ int mboxlist_lookup_by_jmapid(const char *scope, const char *jmapid,
  * carries it, if the current holder no longer does */
 int mboxlist_rehome_jmapid(const char *mboxname, const char *jmapid);
 
+/* Raw access to the mailboxes.db keyspace, for consistency auditing.
+ *
+ * Unlike the mboxlist_lookup* API, this reports every key in the database
+ * including ones that fail to parse, so that a damaged database can be
+ * examined and repaired rather than merely erroring out.
+ */
+enum mboxlist_keytype {
+    MBOXLIST_KEY_UNKNOWN = 0,
+    MBOXLIST_KEY_NAME,          /* N<dbname> */
+    MBOXLIST_KEY_ID,            /* I<uniqueid> */
+    MBOXLIST_KEY_JMAPID,        /* J<userid>\x1e<jmapid> */
+    MBOXLIST_KEY_RACL,          /* AU\x1e<userid>\x1e<dbname>, or AS\x1e... */
+};
+
+struct mboxlist_rawkey {
+    enum mboxlist_keytype type;
+    char *dbname;       /* NAME */
+    char *uniqueid;     /* ID */
+    char *userid;       /* JMAPID: the owner.  RACL: user granted access */
+    char *jmapid;       /* JMAPID */
+    char *aclmbox;      /* RACL: dbname of the mailbox granted */
+    int isuser;         /* RACL: 1 for AU, 0 for AS */
+};
+
+#define MBOXLIST_RAWKEY_INITIALIZER \
+    { MBOXLIST_KEY_UNKNOWN, NULL, NULL, NULL, NULL, NULL, 0 }
+
+/* mbentry is NULL if the value could not be parsed */
+typedef int mboxlist_rawproc_t(void *rock,
+                               const struct mboxlist_rawkey *key,
+                               const mbentry_t *mbentry,
+                               const char *data, size_t datalen);
+
+int mboxlist_parse_rawkey(const char *key, size_t keylen,
+                          struct mboxlist_rawkey *rawkey);
+void mboxlist_rawkey_fini(struct mboxlist_rawkey *rawkey);
+int mboxlist_foreach_raw(mboxlist_rawproc_t *proc, void *rock,
+                         struct txn **tid);
+
 char *mboxlist_find_specialuse(const char *use, const char *userid);
 /**
  * Find the name of the live mailbox with a given uniqueid, in any account.
