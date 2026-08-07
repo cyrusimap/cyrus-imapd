@@ -4,6 +4,7 @@
 package Cassandane::Unit::TestPlanItem;
 use strict;
 use warnings;
+use experimental 'signatures';
 use IO::Handle;
 use POSIX;
 use Time::HiRes qw(time);
@@ -66,13 +67,44 @@ sub _deny
 
 sub _allow
 {
-    my ($self, $test) = @_;
+    my ($self, $test, $spec) = @_;
+
+    # $spec is the specification this came from, kept only so that
+    # _spec_matches can complain about it by the name the user typed
+    push $self->{allowed_specs}->@*, { spec => $spec, test => $test };
+
     if (ref $test) {
         push @{ $self->{allowed_patterns} }, $test;
     } else {
         $self->{allowed}->{$test} = 1;
     }
     return;
+}
+
+# Returns, for each specification that selected individual tests from this
+# suite, a hash of the specification and the test names it actually matched.
+# Loading the suite is the only way to know those names, so this can't be
+# answered until scheduling is finished.
+#
+# Missing suppressions aren't a problem.  We want to keep working against
+# versions of Cyrus where the named test doesn't exist.
+sub _spec_matches ($self)
+{
+    return if not $self->{allowed_specs};
+
+    my @names = map {; s/^test_//r } $self->_get_loaded_suite()->names()->@*;
+
+    my @matches;
+    foreach my $allowed ($self->{allowed_specs}->@*)
+    {
+        my $test = $allowed->{test};
+        my @matched = ref $test ? grep {; $_ =~ $test } @names
+                                : grep {; $_ eq $test } @names;
+
+        push @matches, { spec => $allowed->{spec}, tests => \@matched };
+    }
+
+    return @matches;
 }
 
 package Cassandane::Unit::Worker;
@@ -481,7 +513,7 @@ sub _get_item
 
 sub _schedule
 {
-    my ($self, $neg, $path, $testname) = @_;
+    my ($self, $neg, $path, $testname, $spec) = @_;
     return if ($path =~ m/\/TestCase\.pm$/);
 
     my $suite = $path;
@@ -507,7 +539,7 @@ sub _schedule
         my $item = $self->_get_item($suite);
         if (defined $testname)
         {
-            $item->_allow($testname) if $testname;
+            $item->_allow($testname, $spec) if $testname;
         }
     }
 }
@@ -644,15 +676,32 @@ sub schedule
             while ($_ = readdir DIR)
             {
                 next unless m/\.pm$/;
-                $self->_schedule($neg, "$path/$_", undef);
+                $self->_schedule($neg, "$path/$_", undef, $name);
             }
             closedir DIR;
         }
         else
         {
-            $self->_schedule($neg, $path, $test);
+            $self->_schedule($neg, $path, $test, $name);
         }
     }
+
+    $self->_check_selections();
+}
+
+# Check what the specifications that named individual tests actually selected.
+# This can't happen while they're being parsed, because it needs the suites to
+# be loaded, which can't happen until we know which suites to load.
+#
+# A specification that matches no tests at all is fatal.  It's nearly always a
+# typo, and you think everything passed, but actually nothing ran.
+sub _check_selections ($self)
+{
+    my @matches = map {; $_->_spec_matches() }
+                  $self->{schedule}->@{ sort keys $self->{schedule}->%* };
+
+    my @unmatched = map {; $_->{spec} } grep {; ! $_->{tests}->@* } @matches;
+    die "No tests matched: " . join(q{, }, @unmatched) . "\n" if @unmatched;
 }
 
 sub check_sanity

@@ -20,6 +20,12 @@ my $BETA  = 'Cassandane/Fixture/TestPlan/Beta';
 # read "Alpha::GlobOne.beta" instead of the full package name.
 my $PREFIX = 'Cassandane::Fixture::TestPlan::';
 
+# The whole of Alpha::GlobOne, which most of these cases select one way or
+# another.  Note that it has both slow and regular tests in it.
+my @GLOB_ONE = qw(Alpha::GlobOne.alpha
+                  Alpha::GlobOne.beta
+                  Alpha::GlobOne.gamma_slow);
+
 # Build a plan over the fixture roots and schedule @$specs on it.
 sub _fixture_plan ($specs, %opts)
 {
@@ -69,18 +75,12 @@ sub assert_slow_flag ($self, $specs, $flag, $expect, %opts)
 
 sub test_whole_suite ($self)
 {
-    $self->assert_plan(['GlobOne'],
-                       [qw(Alpha::GlobOne.alpha
-                           Alpha::GlobOne.beta
-                           Alpha::GlobOne.gamma_slow)]);
+    $self->assert_plan(['GlobOne'], \@GLOB_ONE);
 
     $self->assert_plan(['Other'], [qw(Alpha::Other.alpha)]);
 
     $self->assert_plan(['GlobOne', 'Other'],
-                       [qw(Alpha::GlobOne.alpha
-                           Alpha::GlobOne.beta
-                           Alpha::GlobOne.gamma_slow
-                           Alpha::Other.alpha)]);
+                       [@GLOB_ONE, 'Alpha::Other.alpha']);
 }
 
 sub test_single_test ($self)
@@ -89,10 +89,6 @@ sub test_single_test ($self)
 
     $self->assert_plan(['GlobOne.beta', 'GlobTwo.delta'],
                        [qw(Alpha::GlobOne.beta Alpha::GlobTwo.delta)]);
-
-    # a test that doesn't exist is not an error -- it just quietly selects
-    # nothing.  If that ever becomes an error, this expectation should change.
-    $self->assert_plan(['GlobOne.nonesuch'], []);
 }
 
 sub test_suite_naming ($self)
@@ -106,10 +102,7 @@ sub test_suite_naming ($self)
                   'Cassandane::Fixture::TestPlan::Alpha::GlobOne',
                   'Cassandane/Fixture/TestPlan/Alpha/GlobOne.pm')
     {
-        $self->assert_plan([$spec],
-                           [qw(Alpha::GlobOne.alpha
-                               Alpha::GlobOne.beta
-                               Alpha::GlobOne.gamma_slow)]);
+        $self->assert_plan([$spec], \@GLOB_ONE);
     }
 }
 
@@ -119,10 +112,8 @@ sub test_whole_root ($self)
                        [qw(Beta::GlobThree.alpha Beta::Shared.from_beta)]);
 
     $self->assert_plan([$ALPHA, $BETA],
-                       [qw(Alpha::GlobOne.alpha
-                           Alpha::GlobOne.beta
-                           Alpha::GlobOne.gamma_slow
-                           Alpha::GlobTwo.alpha
+                       [@GLOB_ONE,
+                        qw(Alpha::GlobTwo.alpha
                            Alpha::GlobTwo.delta
                            Alpha::Other.alpha
                            Alpha::Shared.from_alpha
@@ -132,10 +123,7 @@ sub test_whole_root ($self)
 
 sub test_test_globs ($self)
 {
-    $self->assert_plan(['GlobOne.*'],
-                       [qw(Alpha::GlobOne.alpha
-                           Alpha::GlobOne.beta
-                           Alpha::GlobOne.gamma_slow)]);
+    $self->assert_plan(['GlobOne.*'], \@GLOB_ONE);
 
     $self->assert_plan(['GlobOne.*a'],
                        [qw(Alpha::GlobOne.alpha Alpha::GlobOne.beta)]);
@@ -143,9 +131,6 @@ sub test_test_globs ($self)
     $self->assert_plan(['GlobOne.b*'], [qw(Alpha::GlobOne.beta)]);
 
     $self->assert_plan(['GlobOne.*mm*'], [qw(Alpha::GlobOne.gamma_slow)]);
-
-    # a glob is anchored at both ends, so this does not match gamma_slow
-    $self->assert_plan(['GlobOne.mm*'], []);
 }
 
 sub test_negation ($self)
@@ -162,6 +147,12 @@ sub test_negation ($self)
     # denial beats permission, whichever order they're given in
     $self->assert_plan(['GlobOne.beta', '!GlobOne.beta'], []);
     $self->assert_plan(['!GlobOne.beta', 'GlobOne.beta'], []);
+
+    # Denying a test that doesn't exist is not an error, unlike selecting one:
+    # the "suppress" setting names tests to deny, and has to keep working
+    # against a version of Cyrus where the test is gone.
+    $self->assert_plan(['GlobOne', '!GlobOne.nonesuch'], \@GLOB_ONE);
+    $self->assert_plan(['GlobOne', '!GlobOne.zz*'], \@GLOB_ONE);
 }
 
 sub test_root_shadowing ($self)
@@ -186,6 +177,25 @@ sub test_unrecognised_spec_dies ($self)
     # a bad spec is fatal even alongside good ones
     $self->assert_plan_dies(['GlobOne', 'Nonesuch'],
                             qr{Unrecognised test specification: Nonesuch});
+}
+
+sub test_unmatched_test_dies ($self)
+{
+    # Selecting nothing is nearly always a typo, and a run that plans no tests
+    # looks just like a run where everything passed.
+    $self->assert_plan_dies(['GlobOne.nonesuch'],
+                            qr{No tests matched: GlobOne\.nonesuch});
+
+    # a glob that matches nothing is exactly as suspicious
+    $self->assert_plan_dies(['GlobOne.mm*'],
+                            qr{No tests matched: GlobOne\.mm\*});
+
+    # every bad specification is named, not just the first one found
+    $self->assert_plan_dies(['GlobOne.nonesuch', 'GlobTwo.nonesuch'],
+                            qr{No tests matched: GlobOne\.nonesuch, GlobTwo\.nonesuch});
+
+    # a specification that matches, but is then denied, is not an error
+    $self->assert_plan(['GlobOne.beta', '!GlobOne.beta'], []);
 }
 
 sub test_slow_flags ($self)
