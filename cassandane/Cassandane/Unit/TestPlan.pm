@@ -647,28 +647,6 @@ sub schedule
     {
         my ($neg, $type, $path, $test) = $self->_parse_test_spec($name);
 
-        # slow test explicitly requested by name, so turn off the filter
-        if (defined $test
-            and ! ref $test
-            and $test =~ m/_slow$/
-            and ! $neg
-            and $self->{skip_slow})
-        {
-            xlog "$name was explicitly requested. Enabling slow tests!";
-            $self->{skip_slow} = 0;
-        }
-
-        # non-slow test explicitly requested by name, so turn off slow-only
-        if (defined $test
-            and ! ref $test
-            and $test !~ m/_slow$/
-            and ! $neg
-            and $self->{slow_only})
-        {
-            xlog "$name was explicitly requested. Enabling regular tests!";
-            $self->{slow_only} = 0;
-        }
-
         if ($type eq 'd')
         {
             opendir DIR, $path
@@ -695,6 +673,10 @@ sub schedule
 #
 # A specification that matches no tests at all is fatal.  It's nearly always a
 # typo, and you think everything passed, but actually nothing ran.
+#
+# A specification that matches only slow tests turns the skip_slow filter off,
+# on the grounds that you can't have meant to ask for tests that were then
+# going to be filtered out from under you.
 sub _check_selections ($self)
 {
     my @matches = map {; $_->_spec_matches() }
@@ -702,6 +684,23 @@ sub _check_selections ($self)
 
     my @unmatched = map {; $_->{spec} } grep {; ! $_->{tests}->@* } @matches;
     die "No tests matched: " . join(q{, }, @unmatched) . "\n" if @unmatched;
+
+    foreach my $match (@matches)
+    {
+        my @tests = $match->{tests}->@*;
+
+        if ($self->{skip_slow} and not grep {; $_ !~ m/_slow$/ } @tests)
+        {
+            xlog "$match->{spec} was explicitly requested. Enabling slow tests!";
+            $self->{skip_slow} = 0;
+        }
+
+        if ($self->{slow_only} and not grep {; $_ =~ m/_slow$/ } @tests)
+        {
+            xlog "$match->{spec} was explicitly requested. Enabling regular tests!";
+            $self->{slow_only} = 0;
+        }
+    }
 }
 
 sub check_sanity
