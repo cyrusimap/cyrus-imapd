@@ -544,7 +544,8 @@ sub _schedule
     }
 }
 
-# Returns ($neg, $ostype, $ospath, $testname)
+# Returns a list of [ $neg, $ostype, $ospath, $testname ] tuples.  It's a list
+# because one specification can name more than one suite.
 sub _parse_test_spec
 {
     my ($self, $name) = @_;
@@ -572,16 +573,16 @@ sub _parse_test_spec
     foreach my $candidate (@paths) {
         foreach my $root ($self->{test_roots}->@*)
         {
-            return ($neg, 'd', $candidate, undef)
+            return [ $neg, q{d}, $candidate, undef ]
                 if ($root eq $candidate);
 
             my $fpath = $candidate;
             $fpath = "$root/$candidate"
                 if ("$root/" ne substr($candidate, 0, length($root)+1));
 
-            return ($neg, 'd', $fpath, undef)
+            return [ $neg, q{d}, $fpath, undef ]
                 if ( -d $fpath );
-            return ($neg, 'f', "$fpath.pm", undef)
+            return [ $neg, q{f}, "$fpath.pm", undef ]
                 if ( -f "$fpath.pm" );
 
             my $test;
@@ -592,9 +593,9 @@ sub _parse_test_spec
                 if ($test =~ /\*/) {
                     my @hunks = split /\*+/, $test, -1;
                     my $regex = join q{.*}, map {; quotemeta } @hunks;
-                    return ($neg, 'f', "$fpath.pm", qr{\A$regex\z});
+                    return [ $neg, q{f}, "$fpath.pm", qr{\A$regex\z} ];
                 } else {
-                    return ($neg, 'f', "$fpath.pm", $test)
+                    return [ $neg, q{f}, "$fpath.pm", $test ]
                 }
             }
         }
@@ -645,22 +646,25 @@ sub schedule
 
     foreach my $name (@names)
     {
-        my ($neg, $type, $path, $test) = $self->_parse_test_spec($name);
+        foreach my $spec ($self->_parse_test_spec($name))
+        {
+            my ($neg, $type, $path, $test) = @$spec;
 
-        if ($type eq 'd')
-        {
-            opendir DIR, $path
-                or die "Cannot open directory $path for reading: $!";
-            while ($_ = readdir DIR)
+            if ($type eq 'd')
             {
-                next unless m/\.pm$/;
-                $self->_schedule($neg, "$path/$_", undef, $name);
+                opendir DIR, $path
+                    or die "Cannot open directory $path for reading: $!";
+                while ($_ = readdir DIR)
+                {
+                    next unless m/\.pm$/;
+                    $self->_schedule($neg, "$path/$_", undef, $name);
+                }
+                closedir DIR;
             }
-            closedir DIR;
-        }
-        else
-        {
-            $self->_schedule($neg, $path, $test, $name);
+            else
+            {
+                $self->_schedule($neg, $path, $test, $name);
+            }
         }
     }
 
