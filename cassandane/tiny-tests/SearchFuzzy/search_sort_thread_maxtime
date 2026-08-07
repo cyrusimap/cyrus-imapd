@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_search_sort_thread_maxtime
-    :min_version_3_13 :needs_search_xapian :SearchMaxtime1Sec :SearchNormalizationMax20000
+    :needs_search_xapian :SearchMaxtime1Sec :SearchNormalizationMax20000
     ($self)
 {
     my $talk = $self->{store}->get_client();
@@ -13,7 +13,7 @@ sub test_search_sort_thread_maxtime
     # criteria whose DNF normalisation reliably exceeds search_maxtime,
     # independent of mailbox size
     my $crit = 'SUBJECT a';
-    $crit = "OR NOT $crit NOT $crit" for (1..14);
+    $crit = "OR NOT $crit NOT $crit" for (1..15);
 
     xlog "SEARCH must report the timeout";
     my $uids = $talk->search(\$crit);
