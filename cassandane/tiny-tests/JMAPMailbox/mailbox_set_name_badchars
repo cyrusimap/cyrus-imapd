@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_name_badchars ($self)
+{
+    my $jmap = $self->{jmap};
+
+    # These are all legal UTF-8, and all survive IMAP UTF-7 encoding
+    # untouched, but Cyrus forbids them in a mailbox name.
+    my @badnames = ('10% Happier', 'yes/no', 'a;b', 'c|d', 'e<f', '"g"', 'h\\i');
+
+    xlog $self, "create a mailbox to rename";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', { create => {
+            victim => { name => 'victim', parentId => undef, role => undef },
+        }}, 'R0'],
+    ]);
+    my $victim = $res->[0][1]{created}{victim}{id};
+    $self->assert_not_null($victim);
+
+    my sub assert_bad_name($name) {
+        my $res = $jmap->CallMethods([
+            ['Mailbox/set', {
+                create => { bad => { name => $name, parentId => undef } },
+                update => { $victim => { name => $name } },
+            }, 'R1'],
+        ]);
+
+        $self->assert_str_equals('invalidProperties',
+                                 $res->[0][1]{notCreated}{bad}{type});
+        $self->assert_deep_equals(['name'],
+                                  $res->[0][1]{notCreated}{bad}{properties});
+
+        $self->assert_str_equals('invalidProperties',
+                                 $res->[0][1]{notUpdated}{$victim}{type});
+        $self->assert_deep_equals(['name'],
+                                  $res->[0][1]{notUpdated}{$victim}{properties});
+    }
+
+    assert_bad_name($_) for @badnames;
+
+    xlog $self, "a name made only of legal characters still works";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', { create => {
+            good => { name => "10 percent happier (#1) + a bit", parentId => undef },
+        }}, 'R2'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{good}{id});
+}
