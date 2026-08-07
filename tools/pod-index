@@ -1,0 +1,78 @@
+#!/usr/bin/perl
+# SPDX-License-Identifier: BSD-3-Clause-CMU
+# See COPYING file at the root of the distribution for more details.
+use v5.28.0;
+use warnings;
+
+use experimental 'signatures';
+
+use Getopt::Long::Descriptive;
+
+# Build the aggregate files for the generated Cassandane API docs from a list
+# of module stems -- paths under cassandane/, without the .pm, e.g.
+# "Cassandane/TestUser".  Each module's own page is rendered separately (by
+# perl2rst); this fills in the two files that describe the set as a whole:
+#
+#   --xref     the "Module::Name<TAB>docname" cross-reference that perl2rst
+#              reads to turn L<Some::Module> into an internal :doc: link
+#
+#   --listing  the reStructuredText that developer/cassandane.rst includes:
+#              one bullet per module (its :doc: link and the abstract from its
+#              =head1 NAME line), followed by a hidden toctree of the pages
+#
+# A docname is the absolute Sphinx name of a module's page, "<base>/<stem>".
+
+my ($opt, $usage) = describe_options(
+    '%c %o <module-stem>...',
+    [ 'xref',     'print the module-to-docname cross-reference' ],
+    [ 'listing',  'print the reST module listing and hidden toctree' ],
+    [],
+    [ 'base=s',   'doc-root-relative base for the generated pages',
+                  { default => '/developer/cassandane-api' } ],
+    [ 'srcdir=s', 'directory the stems are relative to; needed by --listing' ],
+    [ 'help',     'print this message and exit' ],
+);
+
+if ($opt->help or !($opt->xref xor $opt->listing)) {
+    print $usage->text;
+    exit($opt->help ? 0 : 1);
+}
+
+my @stems = @ARGV
+    or die "$0: no module stems given\n";
+
+sub module_of  ($stem) { $stem =~ s{/}{::}gr }
+sub docname_of ($stem) { $opt->base . "/" . $stem }
+
+if ($opt->xref) {
+    print module_of($_), "\t", docname_of($_), "\n" for @stems;
+    exit 0;
+}
+
+# --listing
+defined $opt->srcdir or die "$0: --listing needs --srcdir\n";
+
+for my $stem (@stems) {
+    printf "* :doc:`%s <%s>` - %s\n",
+        module_of($stem), docname_of($stem), abstract_of($stem);
+}
+
+print "\n.. toctree::\n   :hidden:\n\n";
+print "   ", docname_of($_), "\n" for @stems;
+
+# The abstract is the text after the " - " on the module's "=head1 NAME" line:
+#
+#     =head1 NAME
+#
+#     Cassandane::TestUser - a handle on a Cyrus user with test-related methods
+sub abstract_of ($stem) {
+    my $file = $opt->srcdir . "/" . $stem . ".pm";
+    open my $fh, '<', $file or die "$0: can't read $file: $!";
+    my $pod = do { local $/; <$fh> };
+    close $fh;
+
+    my ($abstract) = $pod
+        =~ /^=head1[ \t]+NAME\b.*\n(?:[ \t]*\n)+[ \t]*\S.*?\s+-\s+(.+?)[ \t]*$/m;
+
+    return $abstract // '(no summary)';
+}
