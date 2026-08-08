@@ -218,6 +218,7 @@ sbin_PROGRAMS += \
     imap/cyr_synclog \
     imap/cyr_userseen \
     imap/cyr_virusscan \
+    imap/deduplicate \
     imap/deliver \
     imap/ipurge \
     imap/mbexamine \
@@ -894,6 +895,9 @@ imap_cyr_userseen_LDADD = $(LD_UTILITY_ADD)
 imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
 imap_cyr_virusscan_CFLAGS = $(AM_CFLAGS) $(CLAMAV_CFLAGS) $(CFLAG_VISIBILITY)
 imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) $(CLAMAV_LIBS)
+
+imap_deduplicate_SOURCES = imap/cli_fatal.c imap/deduplicate.c imap/mutex_fake.c
+imap_deduplicate_LDADD = $(LD_UTILITY_ADD)
 
 imap_deliver_SOURCES = \
     imap/deliver.c \
@@ -1709,6 +1713,7 @@ dist_man8_MANS = \
     man/cyr_virusscan.8 \
     man/cyr_withlock_run.8 \
     man/cyrdump.8 \
+    man/deduplicate.8 \
     man/deliver.8 \
     man/fetchnews.8 \
     man/fud.8 \

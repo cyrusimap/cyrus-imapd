@@ -5,4 +5,6 @@ Last-Modified: 2.3.17
 
 If enabled, imapd, lmtpd and nntpd attempt to only write one copy of a
 message per partition and create hard links, resulting in a potentially
-large disk savings.
+large disk savings. Duplicates that arise despite this (e.g. from
+independent deliveries or per-user migrations) can be collapsed
+afterwards with :cyrusman:`deduplicate(8)`.
