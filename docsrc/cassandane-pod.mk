@@ -1,14 +1,9 @@
 # Cassandane modules whose Pod is published to the doc site, as stems: paths
-# under cassandane/, without the .pm extension.  Shared by the top-level
-# Makefile.am and docsrc/Makefile so the list lives in exactly one place.
+# under cassandane/, without the .pm extension (e.g. "Cassandane/TestUser").
 #
-# When a module grows Pod worth publishing, add it here.  (This could later be
-# generated at configure time instead of maintained by hand.)
-CASSANDANE_POD = \
-    Cassandane/TestEntity \
-    Cassandane/TestEntity/DataType/AddressBook \
-    Cassandane/TestEntity/DataType/Calendar \
-    Cassandane/TestEntity/DataType/ContactCard \
-    Cassandane/TestEntity/DataType/Email \
-    Cassandane/TestEntity/DataType/Mailbox \
-    Cassandane/TestUser
+# The list is discovered at make time -- every module with an "=head" line --
+# so it can't drift out of sync with the source and nobody has to remember to
+# maintain it.  cassandane_srcdir comes from outside, and it differs between
+# the autoconf build and docsrc/Makefile!
+CASSANDANE_POD := $(shell cd $(cassandane_srcdir) && \
+    grep -rl '^=head' Cassandane --include='*.pm' | sed 's|\.pm$$||' | sort)
