@@ -318,7 +318,6 @@ my ($opt, $usage) = describe_options(
                      . " (-ll) to list individual tests, not just suites" ],
     [],
     [ 'jobs|j=i',      "run this many test workers in parallel" ],
-    # The default really should be --no-keep-going like make
     [ 'keep-going|k!', "keep going after a test fails (default: yes)",
                        { default => 1 } ],
     [ 'stop|S',        "stop at the first failing test; same as --no-keep-going" ],
