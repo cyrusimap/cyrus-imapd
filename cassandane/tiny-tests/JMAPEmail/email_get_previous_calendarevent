@@ -15,6 +15,7 @@ sub test_email_get_previous_calendarevent
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',
         'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
         'https://cyrusimap.org/ns/jmap/debug',
         'https://cyrusimap.org/ns/jmap/performance',
     ];

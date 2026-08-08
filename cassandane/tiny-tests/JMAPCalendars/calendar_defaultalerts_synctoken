@@ -78,6 +78,7 @@ sub test_calendar_defaultalerts_synctoken
     my $using = [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
         'https://cyrusimap.org/ns/jmap/calendars',
     ];
 

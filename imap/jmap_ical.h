@@ -1,4 +1,4 @@
-/* jmap_ical.h - Routines to convert JMAP calendar events and iCalendar */
+/* jmap_ical.c - Common code for JMAP for Calendars */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
@@ -15,53 +15,25 @@ extern "C" {
 #include "jmap_api.h"
 #include "jmap_util.h"
 
-#define JMAPICAL_ERROR_UNKNOWN  -1
-#define JMAPICAL_ERROR_CALLBACK 1
-#define JMAPICAL_ERROR_MEMORY   2
-#define JMAPICAL_ERROR_ICAL     3
-#define JMAPICAL_ERROR_PROPS    4
-#define JMAPICAL_ERROR_UID      5
 
-/* Custom iCalendar properties */
+/* Custom iCalendar properties.
+ *
+ * Note that jscalendar.c defines its own PROP_XJMAP_* names for several of
+ * these same X-properties. These are the copies read by the CalDAV and
+ * iCalendar support layers. */
 #define JMAPICAL_XPROP_ID              "X-JMAP-ID"
-#define JMAPICAL_XPROP_LOCATION        "X-JMAP-LOCATION"
 #define JMAPICAL_XPROP_SHOWWITHOUTTIME "X-JMAP-SHOW-WITHOUT-TIME"
 #define JMAPICAL_XPROP_MAYINVITESELF   "X-JMAP-MAY-INVITE-SELF"
 #define JMAPICAL_XPROP_MAYINVITEOTHERS "X-JMAP-MAY-INVITE-OTHERS"
 #define JMAPICAL_XPROP_HIDEATTENDEES   "X-JMAP-HIDE-ATTENDEES"
 #define JMAPICAL_XPROP_SENTBY          "X-JMAP-SENT-BY"
 #define JMAPICAL_XPROP_PRIVACY         "X-JMAP-PRIVACY"
-#define JMAPICAL_XPROP_USEDEFAULTALERTS "X-JMAP-USEDEFAULTALERTS"
-#define JMAPICAL_XPROP_JSPROP          "X-JMAP-JSPROP"
 
 /* Custom iCalendar parameters */
-#define JMAPICAL_XPARAM_CID           "X-JMAP-CID"
-#define JMAPICAL_XPARAM_DESCRIPTION   "X-JMAP-DESCRIPTION"
-#define JMAPICAL_XPARAM_DISPLAY       "X-JMAP-DISPLAY"
-#define JMAPICAL_XPARAM_FEATURE       "X-JMAP-FEATURE"
-#define JMAPICAL_XPARAM_GEO           "X-JMAP-GEO"
-#define JMAPICAL_XPARAM_ID            "X-JMAP-ID"
-#define JMAPICAL_XPARAM_INVITEDBY     "X-JMAP-INVITEDBY"
-#define JMAPICAL_XPARAM_JSPTR         "X-JMAP-JSPTR"
-#define JMAPICAL_XPARAM_LINKID        "X-JMAP-LINKID"
-#define JMAPICAL_XPARAM_LOCATIONID    "X-JMAP-LOCATIONID"
-#define JMAPICAL_XPARAM_LOCATIONTYPE  "X-JMAP-LOCATIONTYPE"
-#define JMAPICAL_XPARAM_NAME          "X-JMAP-NAME"
-#define JMAPICAL_XPARAM_PARENTID      "X-JMAP-PARENTID"
-#define JMAPICAL_XPARAM_PARENTPROP    "X-JMAP-PARENTPROP"
-#define JMAPICAL_XPARAM_REL           "X-JMAP-REL"
 #define JMAPICAL_XPARAM_ROLE          "X-JMAP-ROLE"
-#define JMAPICAL_XPARAM_RSVP_URI      "X-JMAP-RSVP-URI"
-#define JMAPICAL_XPARAM_TZID          "X-JMAP-TZID"
 
 #define JMAPICAL_XPARAM_DTSTAMP       "X-DTSTAMP" /* used for iMIP ATTENDEE replies */
 #define JMAPICAL_XPARAM_SEQUENCE      "X-SEQUENCE" /*used for iMIP ATTENDEE replies */
-#define JMAPICAL_XPARAM_COMMENT       "X-COMMENT" /*used for iMIP ATTENDEE replies */
-#define JMAPICAL_XPARAM_TITLE         "X-TITLE" /* Apple uses that for locations */
-
-/* Custom JSCalendar properties */
-#define JMAPICAL_JSPROP_TIMEZONES     "cyrusimap.org:timeZones"
-#define JMAPICAL_JSPROP_ICALPROPS     "cyrusimap.org:iCalProps"
 
 typedef struct jstimezones jstimezones_t;
 
@@ -104,46 +76,6 @@ extern void jmapical_context_free(struct jmapical_ctx**);
 
 extern int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx);
 
-/* Converts the iCalendar component ical to JSCalendar.
- * Returns NULL on error.
- */
-json_t* jmapical_tojmap(icalcomponent *ical, hash_table *props,
-                        struct jmapical_ctx *jmapctx);
-
-/* Converts the iCalendar component ical to an array of JSCalendar objects.
- * Returns NULL on error.
- */
-json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
-                            struct jmapical_ctx *jmapctx);
-
-/* Convert the jsevent to iCalendar.
- * The oldical argument points to the previous VCALENDAR of the event,
- * or NULL.
- * Returns a new VCALENDAR component, or NULL on error.
- * If compptr is not NULL, then its value points to
- * the newly created VEVENT.
- */
-icalcomponent* jmapical_toical(json_t *jsevent, icalcomponent *oldical,
-                               json_t *invalid,
-                               json_t *serverset,
-                               icalcomponent **compptr,
-                               jstimezones_t **jstzonesp,
-                               struct jmapical_ctx *jmapctx);
-
-
-/* Convert the iCalendar VALARM to a JSCalendar Alert.
- * Return NULL on error. */
-json_t *jmapical_alert_from_ical(icalcomponent *valarm, struct buf *id);
-
-/* Convert alert to iCalendar VALARM. Returns NULL on error */
-extern icalcomponent *jmapical_alert_to_ical(json_t *alert, struct jmap_parser *parser,
-                                             const char *alert_jmap_id,
-                                             const char *description,
-                                             const char *email_summary,
-                                             const char *email_recipient);
-
-
-void icalcomponent_add_required_timezones(icalcomponent *ical);
 
 /* jstimezones allows to resolve standard and non-standard timezone
  * identifiers to ical timezones. It mainly is useful to handle
@@ -168,10 +100,6 @@ extern icaltimezone *jstimezones_lookup_tzid(jstimezones_t* jstzones, const char
 
 /* Free a timezone resolver */
 extern void jstimezones_free(jstimezones_t **jstzonesptr);
-
-/* for CalDAV content negotiation */
-struct buf *icalcomponent_as_jevent_string(icalcomponent *ical);
-icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf);
 
 /* Base type for JSCalendar LocalDateTime and UTCDateTime */
 
@@ -256,7 +184,6 @@ extern int jmapical_duration_from_string(const char *val, struct jmapical_durati
 
 extern void jmapical_remove_peruserprops(json_t *jevent);
 
-extern const char *jmap_partid_from_ical(icalproperty *prop);
 
 #ifdef __cplusplus
 }

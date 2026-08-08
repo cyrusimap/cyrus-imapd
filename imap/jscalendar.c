@@ -6961,6 +6961,23 @@ HIDDEN json_t *jscal_from_ical(jscal_cfg_t *cfg, icalcomponent *ical)
     return jgroup;
 }
 
+HIDDEN json_t *jscal_event_from_ical(jscal_cfg_t *cfg, icalcomponent *ical)
+{
+    json_t *jgroup = jscal_from_ical(cfg, ical);
+    if (!jgroup) return NULL;
+
+    json_t *jevent =
+        json_incref(json_array_get(json_object_get(jgroup, "entries"), 0));
+
+    if (jevent) {
+        // An Event outside an enclosing Group must set "version".
+        json_object_set(jevent, "version", json_object_get(jgroup, "version"));
+    }
+
+    json_decref(jgroup);
+    return jevent;
+}
+
 HIDDEN char *jscal_participant_id(icalproperty *prop)
 {
     if (icalproperty_isa(prop) != ICAL_ATTENDEE_PROPERTY &&

@@ -51,6 +51,7 @@ EOF
     $res = $jmap->CallMethods([['CalendarEvent/set', {
         create => {
             "1" => {
+                "version" => "2.0",
                 calendarIds => {
                     $calid => JSON::true,
                 },

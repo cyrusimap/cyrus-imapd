@@ -1,0 +1,96 @@
+#!perl
+use Cassandane::Tiny;
+
+my $one_icalobj = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ABC Corporation//NONSGML My Product//EN
+BEGIN:VEVENT
+UID:1a968fa5-3afd-4736-8fac-21958ef3db90
+DTSTART:20160928T160000Z
+DURATION:PT1H
+SUMMARY:test1
+DESCRIPTION:a description
+END:VEVENT
+END:VCALENDAR
+EOF
+
+my $two_icalobjs = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ABC Corporation//NONSGML My Product//EN
+BEGIN:VEVENT
+UID:1a968fa5-3afd-4736-8fac-21958ef3db90
+DTSTART:20160928T160000Z
+DURATION:PT1H
+SUMMARY:test1
+END:VEVENT
+END:VCALENDAR
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ABC Corporation//NONSGML My Product//EN
+BEGIN:VEVENT
+UID:b876f7a3-3e71-46e1-a350-84be804aa486
+DTSTART:20160928T160000Z
+DURATION:PT1H
+SUMMARY:test2
+END:VEVENT
+END:VCALENDAR
+EOF
+
+sub test_calendarevent_parse_jscal ($self)
+{
+    {
+        # one component in ics
+        xlog $self, "Narrow the parsed event to two properties";
+        my $parsed = $self->_parse_jscal(
+            $one_icalobj,
+            { properties => [ 'uid', 'title' ] }
+        );
+
+        # "@type" is always provided
+        $self->assert_deep_equals(
+            {
+                '@type' => 'Event',
+                uid     => '1a968fa5-3afd-4736-8fac-21958ef3db90',
+                title   => 'test1',
+            },
+            $parsed,
+        );
+
+        xlog $self, "Without 'properties', nothing is filtered";
+        $parsed = $self->_parse_jscal($one_icalobj, {});
+
+        $self->assert_str_equals('a description', $parsed->{description});
+        $self->assert_str_equals('PT1H', $parsed->{duration});
+        $self->assert_str_equals('2.0', $parsed->{version});
+        $self->assert_not_null($parsed->{start});
+    }
+
+    {
+        # two components in ics
+        my $parsed = $self->_parse_jscal(
+            $two_icalobjs,
+            { properties => [ 'uid', 'title' ] }
+        );
+
+        $self->assert_deep_equals(
+            {
+                '@type' => 'Group',
+                entries => [
+                    {
+                        '@type' => 'Event',
+                        uid     => '1a968fa5-3afd-4736-8fac-21958ef3db90',
+                        title   => 'test1',
+                    },
+                    {
+                        '@type' => 'Event',
+                        uid     => 'b876f7a3-3e71-46e1-a350-84be804aa486',
+                        title   => 'test2',
+                    },
+                ],
+            },
+            $parsed,
+        );
+    }
+}

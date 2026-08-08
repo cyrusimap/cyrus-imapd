@@ -4,6 +4,7 @@
 package Cassandane::Cyrus::JMAPCalendars;
 use strict;
 use warnings;
+use experimental 'signatures';
 use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.14;
@@ -20,6 +21,7 @@ use MIME::Base64 qw(encode_base64url decode_base64url encode_base64 decode_base6
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
+
 
 use charnames ':full';
 
@@ -529,6 +531,32 @@ EOF
     xlog $self, "Deliver iMIP invite";
     $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
 };
+
+sub _parse_jscal ($self, $ical, $args) {
+    my $jmap = $self->default_user->jmap;
+
+    $ical =~ s/\r?\n/\r\n/gs;
+
+    my $res = $jmap->CallMethods(
+        [
+            ['Blob/upload', {
+                create => {
+                    ical => { data => [ { 'data:asText' => $ical } ] },
+                },
+            }, 'R0'],
+            ['CalendarEvent/parse', {
+                blobIds => ["#ical"],
+                %$args,
+            }, 'R1'],
+        ],
+        [ @{$self->jmap_default_using}, 'urn:ietf:params:jmap:blob' ],
+    );
+
+    $self->assert_not_null($res->[0][1]{created}{ical});
+    $self->assert_null($res->[1][1]{notParsable});
+
+    return $res->[1][1]{parsed}{'#ical'};
+}
 
 use Cassandane::Tiny::Loader;
 

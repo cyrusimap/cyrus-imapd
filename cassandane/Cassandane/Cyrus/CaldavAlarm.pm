@@ -65,6 +65,7 @@ sub jmap_default_using {
         'urn:ietf:params:jmap:calendars:preferences',
         'https://cyrusimap.org/ns/jmap/calendars',
         'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ];
 }
 

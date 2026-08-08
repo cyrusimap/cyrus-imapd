@@ -15,6 +15,7 @@ sub test_email_query_guidsearch_only_email_mailboxes
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',
         'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
         'urn:ietf:params:jmap:contacts',
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/quota',
@@ -54,6 +55,7 @@ sub test_email_query_guidsearch_only_email_mailboxes
         ['CalendarEvent/set', {
             create => {
                 '2' => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true
                     },

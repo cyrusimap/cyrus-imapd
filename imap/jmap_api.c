@@ -637,6 +637,14 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         strarray_add(&using_capabilities, json_string_value(json_array_get(jusing, i)));
     }
 
+    /* JMAP for Calendars now means JSCalendar 2.0, so asking for the former
+     * implies the latter. Injecting it here, rather than editing each
+     * jmap_is_using() call site, keeps the two conversion paths intact while
+     * we find out what a cutover breaks. -- rjbs, 2026-07-29 */
+    if (strarray_contains(&using_capabilities, JMAP_URN_CALENDARS)) {
+        strarray_add(&using_capabilities, JMAP_JSCALENDARBIS_EXTENSION);
+    }
+
     /* Push client method calls on call stack */
     json_t *jmethod_calls = json_object_get(jreq, "methodCalls");
     for (i = json_array_size(jmethod_calls); i > 0; i--) {
