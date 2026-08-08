@@ -8,6 +8,7 @@ PAPER         =
 SOURCEDIR     = .
 BUILDDIR      = build
 PERL2RST      = ../tools/perl2rst
+POD_INDEX     = ../tools/pod-index
 
 # User-friendly check for sphinx-build
 ifeq ($(shell which $(SPHINXBUILD) >/dev/null 2>&1; echo $$?), 1)
@@ -26,7 +27,7 @@ ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(S
 # the i18n builder cannot share the environment and doctrees with the others
 I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(SOURCEDIR)
 
-.PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext doxygen
+.PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext doxygen cassandane-api
 
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
@@ -56,13 +57,39 @@ help:
 clean:
 	rm -rf $(BUILDDIR)/*
 	rm -rf _doxygen
+	rm -rf $(SOURCEDIR)/developer/cassandane-api
 
 doxygen:
 	@echo "Running Doxygen to generate XML for Breathe..."
 	cd .. && doxygen Doxyfile
 	@echo "Doxygen XML generated in _doxygen/xml/"
 
-init: doxygen ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
+# Generated Cassandane API docs.  The module list is discovered at make time
+# by cassandane-pod.mk, shared with the top-level Makefile.am; the rules mirror
+# it too.
+cassandane_srcdir = ../cassandane
+include cassandane-pod.mk
+
+cassandane_apidir  = $(SOURCEDIR)/developer/cassandane-api
+cassandane_pod_rst = $(CASSANDANE_POD:%=$(cassandane_apidir)/%.rst)
+cassandane_pod_pm  = $(CASSANDANE_POD:%=$(cassandane_srcdir)/%.pm)
+
+cassandane-api: $(cassandane_pod_rst) $(cassandane_apidir)/listing.inc
+
+$(cassandane_apidir)/.xref: $(POD_INDEX) $(cassandane_pod_pm)
+	@mkdir -p $(@D)
+	$(POD_INDEX) --xref $(CASSANDANE_POD) >$@.NEW && mv $@.NEW $@
+
+$(cassandane_apidir)/%.rst: $(cassandane_srcdir)/%.pm $(cassandane_apidir)/.xref $(PERL2RST)
+	@mkdir -p $(@D)
+	PERL2RST_NAMESPACE=Cassandane PERL2RST_XREF_FILE=$(cassandane_apidir)/.xref \
+	    $(PERL2RST) $(subst /,::,$*) <$< >$@.NEW && mv $@.NEW $@
+
+$(cassandane_apidir)/listing.inc: $(POD_INDEX) $(cassandane_pod_pm)
+	@mkdir -p $(@D)
+	$(POD_INDEX) --listing --srcdir $(cassandane_srcdir) $(CASSANDANE_POD) >$@.NEW && mv $@.NEW $@
+
+init: doxygen cassandane-api ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
 	@echo "Creating reference/manpages/usercommands/cyradm.rst"
 	$(PERL2RST) cyradm < ../perl/imap/IMAP/Shell.pm > $(SOURCEDIR)/reference/manpages/usercommands/cyradm.rst
 	@echo "Creating reference/manpages/usercommands/sieveshell.rst"
