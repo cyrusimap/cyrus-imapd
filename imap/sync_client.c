@@ -640,6 +640,10 @@ int main(int argc, char **argv)
     sync_cs.channel = channel;
     sync_cs.flags = flags;
 
+    /* every other mode compares against the replica itself, which is what lets
+     * it repair a replica that's been changed behind our back */
+    if (mode == MODE_REPEAT) sync_cs.flags |= SYNC_FLAG_USECACHE;
+
     switch (mode) {
     case MODE_USER:
         /* Open up connection to server */

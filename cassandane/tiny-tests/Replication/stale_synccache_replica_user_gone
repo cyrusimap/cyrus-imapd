@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Invariant: rolling replication recovers when the replica has lost a user.  The
+# mailbox that fails is promoted to a whole-user sync, which asks the replica
+# rather than believing the cached records for the other folders.
+#
+sub test_stale_synccache_replica_user_gone
+    :NoAltNameSpace :ImmediateDelete :NoReplicaonly :SyncCache :SyncLog
+    :min_version_3_9
+    ($self)
+{
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    xlog $self, "rolling replication, so the cache gets populated";
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+    $self->check_replication('cassandane');
+
+    xlog $self, "delete the user on the replica, leaving a tombstone behind";
+    my $replicasvc = $self->{replica}->get_service('imap');
+    my $replicaadmin = $replicasvc->create_store(username => 'admin');
+    my $replicaadmintalk = $replicaadmin->get_client();
+    $replicaadmintalk->delete("user.cassandane");
+    $self->assert_str_equals('ok',
+        $replicaadmintalk->get_last_completion_response());
+    $replicaadmin->disconnect();
+
+    xlog $self, "create a folder that the cache has never seen";
+    my $mastertalk = $self->{master_store}->get_client();
+    $mastertalk->create("INBOX.sub");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    $self->{instance}->getsyslog();
+    $self->{replica}->getsyslog();
+
+    xlog $self, "sync just that folder, whose parent is gone on the replica";
+    open(my $fh, ">", $synclogfname) or die "open $synclogfname: $!";
+    print $fh "MAILBOX user.cassandane.sub\n";
+    close($fh);
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+
+    xlog $self, "the replica must have the whole user back";
+    $self->check_replication('cassandane');
+
+    xlog $self, "the folder apply fails first, and says why";
+    $self->assert_syslog_matches($self->{replica},
+        qr/Failed to open mailbox user\.cassandane\.sub to update: Permission denied/);
+    $self->assert_syslog_matches($self->{instance},
+        qr/MAILBOX received NO response: IMAP_PERMISSION_DENIED/);
+}

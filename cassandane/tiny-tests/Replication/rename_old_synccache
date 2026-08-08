@@ -34,11 +34,13 @@ sub test_rename_old_synccache
     $self->check_messages(\%exp, $master_store);
 
     xlog $self, "run initial replication";
-    $self->run_replication();
-    #$self->run_replication(rolling => 1, inputfile => $synclogfname);
+    # must be rolling: only rolling replication uses the sync cache, and this
+    # test needs cached records for the pre-rename names
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
     unlink($synclogfname);
     $self->check_replication('cassandane');
 
+    $self->assert_file_test($cachefname, '-f');
     rename($cachefname, "$cachefname.junk");
 
     xlog $self, "rename user";

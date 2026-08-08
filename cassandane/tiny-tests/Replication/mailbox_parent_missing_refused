@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Invariant: the replica never ends up with a parentless folder.  A folder whose
+# parent is missing there is refused, leaving nothing behind; syncing the user
+# is what repairs it.
+#
+sub test_mailbox_parent_missing_refused
+    :NoAltNameSpace :ImmediateDelete :NoReplicaonly :min_version_3_9
+    ($self)
+{
+    my $mastertalk = $self->{master_store}->get_client();
+
+    $mastertalk->create("INBOX.sub");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog $self, "replicate the whole user";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "delete the user on the replica, leaving tombstones behind";
+    my $replicasvc = $self->{replica}->get_service('imap');
+    my $replicaadmin = $replicasvc->create_store(username => 'admin');
+    my $replicaadmintalk = $replicaadmin->get_client();
+    foreach my $folder ("user.cassandane.sub", "user.cassandane") {
+        $replicaadmintalk->delete($folder);
+        $self->assert_str_equals('ok',
+            $replicaadmintalk->get_last_completion_response());
+    }
+
+    $self->{instance}->getsyslog();
+    $self->{replica}->getsyslog();
+
+    xlog $self, "ask for only the child folder, whose parent is gone";
+    eval { $self->run_replication(mailbox => 'user.cassandane.sub') };
+
+    xlog $self, "the replica must have gained nothing";
+    $replicaadmintalk = $replicaadmin->get_client();
+    my $data = $replicaadmintalk->list("", "user.cassandane*");
+    $self->assert_deep_equals([], $data);
+
+    $self->assert_syslog_matches($self->{replica},
+        qr/Failed to open mailbox user\.cassandane\.sub to update: Permission denied/);
+    $self->assert_syslog_matches($self->{instance},
+        qr/MAILBOX received NO response: IMAP_PERMISSION_DENIED/);
+
+    xlog $self, "syncing the user is what repairs it";
+    $replicaadmin->disconnect();
+    $self->run_replication(user => 'cassandane');
+    $self->check_replication('cassandane');
+}
