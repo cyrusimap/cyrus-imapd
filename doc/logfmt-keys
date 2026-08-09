@@ -1,7 +1,7 @@
 # doc/logfmt-keys - the registered logfmt key vocabulary
 #
 # Every logfmt key used anywhere in the source must appear in this file.
-# tools/check-logfmt-keys enforces that.  See doc/README.logfmt.md for the
+# tools/lint-logfmt-keys enforces that.  See doc/README.logfmt.md for the
 # naming rules and for why we bother.
 #
 # Format: one key per line, then whitespace, then a description of what the

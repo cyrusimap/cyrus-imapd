@@ -7,7 +7,7 @@ logs can be parsed reliably instead of scraped with regular expressions.
 This document is the rulebook for that conversion.  It covers how to emit an
 event, how to name it, and how to name and format its fields.  The vocabulary
 itself — the list of every key you're allowed to use — lives in
-[`doc/logfmt-keys`](logfmt-keys) and is enforced by `tools/check-logfmt-keys`.
+[`doc/logfmt-keys`](logfmt-keys) and is enforced by `tools/lint-logfmt-keys`.
 
 ## Why a rulebook
 
@@ -170,7 +170,7 @@ Two structural prefixes stack on top of the above:
 Rules:
 
 - **Every key must be registered** in `doc/logfmt-keys` before use.
-  `tools/check-logfmt-keys` fails the build otherwise.  Adding a key is meant
+  `tools/lint-logfmt-keys` fails the build otherwise.  Adding a key is meant
   to be easy — a one-line patch — but deliberate.
 - **Same fact, same key, everywhere.** If you're about to invent a key for
   something that already has one, use the existing one even if you'd have
@@ -291,7 +291,7 @@ correctly by rejecting it.
 2. If there isn't one, add it there, in the same patch as the code that uses
    it, with a description that says what the value *is* — not what your one
    call site uses it for.
-3. Run `tools/check-logfmt-keys` (or just build; it runs as part of `make
+3. Run `tools/lint-logfmt-keys` (or just build; it runs as part of `make
    check`).
 
 ## Changing an existing event
@@ -345,7 +345,7 @@ properly.
 | `imap/auditlog.c`              | the `auditlog.*` event family                            |
 | `imap/loginlog.c`              | the `login.*` event family                               |
 | `doc/logfmt-keys`              | the registered key vocabulary                            |
-| `tools/check-logfmt-keys`      | the lint that enforces it                                |
+| `tools/lint-logfmt-keys`       | the lint that enforces it                                |
 | `cunit/logfmt.testc`           | tests for escaping and the push functions                |
 | `cunit/xsyslog_ev.testc`       | tests for `xsyslog_ev()` and the `lf_*` macros           |
 

@@ -1,0 +1,156 @@
+#!/usr/bin/perl
+#
+# lint-logfmt-keys - check logfmt keys in the source against doc/logfmt-keys
+#
+# Every logfmt key used in the source must be registered in doc/logfmt-keys.
+# See doc/README.logfmt.md for why.
+#
+# Usage: tools/lint-logfmt-keys [--list-unused] [srcdir]
+#
+# Exits non-zero, with a report on stderr, if anything is wrong.
+
+use strict;
+use warnings;
+
+use File::Find;
+use Getopt::Long;
+
+my $list_unused = 0;
+GetOptions('list-unused' => \$list_unused) or exit 2;
+
+my $srcdir = shift // '.';
+
+my $registry = "$srcdir/doc/logfmt-keys";
+
+# A key is lowercase dotted segments.  This is the syntax doc/README.logfmt.md
+# describes; keeping it mechanical stops "mbox.mailboxID" ever happening.
+my $key_re = qr/[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*/;
+
+# Directories to scan.  master/ and the like will join this list as they're
+# converted; there's no point scanning what has no logfmt in it yet.
+my @scan = qw(imap lib sieve timsieved ptclient notifyd master);
+
+my @problems;
+
+#
+# Read the registry
+#
+
+open my $fh, '<', $registry or die "can't read $registry: $!\n";
+
+my %registered;
+my %section_of;
+my $section = '(top)';
+my @in_section;
+
+while (my $line = <$fh>) {
+    chomp $line;
+
+    if ($line =~ /^###\s*(.*)/) {
+        check_sorted($section, \@in_section);
+        $section = $1;
+        @in_section = ();
+        next;
+    }
+
+    next if $line =~ /^\s*#/ || $line !~ /\S/;
+
+    my ($key, $description) = $line =~ /^(\S+)\s+(.*\S)/;
+
+    if (! defined $key) {
+        push @problems, "$registry:$.: can't parse: $line";
+        next;
+    }
+
+    if ($key !~ /^$key_re$/) {
+        push @problems, "$registry:$.: not a well-formed key: $key";
+    }
+
+    if (exists $registered{$key}) {
+        push @problems, "$registry:$.: duplicate key: $key";
+    }
+
+    $registered{$key} = 0;
+    $section_of{$key} = $section;
+    push @in_section, $key;
+}
+
+check_sorted($section, \@in_section);
+close $fh;
+
+sub check_sorted
+{
+    my ($name, $keys) = @_;
+
+    for my $i (1 .. $#$keys) {
+        next if $keys->[$i - 1] le $keys->[$i];
+        push @problems,
+             "$registry: section '$name' is out of order:"
+             . " $keys->[$i] should come before $keys->[$i - 1]";
+        return; # one complaint per section is plenty
+    }
+}
+
+#
+# Scan the source
+#
+
+my @sources;
+find(sub {
+    return unless -f && /\.[ch]$/;
+    push @sources, $File::Find::name;
+}, grep { -d } map { "$srcdir/$_" } @scan);
+
+for my $source (sort @sources) {
+    open my $src, '<', $source or die "can't read $source: $!\n";
+    my $code = do { local $/; <$src> };
+    close $src;
+
+    # Comments talk about keys without using them -- lib/util.h explains
+    # lf_c("k", 1) -- so they mustn't be scanned.  Replace rather than
+    # delete, so that line numbers survive.
+    $code =~ s{/\*(.*?)\*/}{my $c = $1; $c =~ s/[^\n]//g; "/*$c*/"}ges;
+    $code =~ s{//[^\n]*}{//}g;
+
+    my $lineno = 0;
+
+    for my $line (split /\n/, $code, -1) {
+        $lineno++;
+
+        # lf_s("key", ...), lf_mbname("key", ...), lf_fn("key", ...) &c.
+        # and logfmt_push(lf, "key", ...) and its variants.  Keys built at
+        # runtime can't be checked, and are simply not matched here.
+        my @keys = $line =~ /\blf_[a-z0-9_]+\(\s*"([^"]*)"/g;
+        push @keys, $line =~ /\blogfmt_push[a-z0-9_]*\([^,()]+,\s*"([^"]*)"/g;
+
+        for my $key (@keys) {
+            if (! exists $registered{$key}) {
+                my $rel = $source;
+                $rel =~ s{^\Q$srcdir\E/}{};
+                push @problems, "$rel:$lineno: unregistered logfmt key: $key";
+            }
+            else {
+                $registered{$key}++;
+            }
+        }
+    }
+}
+
+#
+# Report
+#
+
+if (@problems) {
+    print STDERR "$_\n" for @problems;
+    print STDERR "\n";
+    print STDERR "Every logfmt key must be registered in doc/logfmt-keys.\n";
+    print STDERR "See doc/README.logfmt.md for the naming rules.\n";
+    exit 1;
+}
+
+if ($list_unused) {
+    my @unused = sort grep { ! $registered{$_} } keys %registered;
+    print "unused: $_ ($section_of{$_})\n" for @unused;
+}
+
+exit 0;
