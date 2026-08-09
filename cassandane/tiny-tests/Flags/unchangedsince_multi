@@ -27,7 +27,7 @@ sub test_unchangedsince_multi ($self)
 {
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
+    $talk->uid(1);
     $self->{store}->set_fetch_attributes(qw(uid flags modseq));
 
     xlog $self, "Add some messages";
@@ -44,9 +44,9 @@ sub test_unchangedsince_multi ($self)
     xlog $self, "Bump the modseq on M,N,O";
     my $res = $talk->store('13,14,15', '+flags', '(\\Draft)');
     $self->assert_deep_equals({
-        '13' => { 'flags' => [ '\\Draft' ] },
-        '14' => { 'flags' => [ '\\Draft' ] },
-        '15' => { 'flags' => [ '\\Draft' ] },
+        '13' => { 'uid' => '13', 'flags' => [ '\\Draft' ] },
+        '14' => { 'uid' => '14', 'flags' => [ '\\Draft' ] },
+        '15' => { 'uid' => '15', 'flags' => [ '\\Draft' ] },
     }, $res);
     $msg{M}->set_attribute(flags => ['\\Draft']);
     $msg{N}->set_attribute(flags => ['\\Draft']);
@@ -59,13 +59,14 @@ sub test_unchangedsince_multi ($self)
         $store2->connect();
         $store2->_select();
         my $talk2 = $store2->get_client();
+        $talk2->uid(1);
         xlog $self, "Delete and expunge D,E,F from another session";
         for (my $i = 4 ; $i <= 6 ; $i++)
         {
             my $letter = chr(64 + $i);  # D, E, F
             my $res = $talk2->store($i, '+flags', '(\\Deleted)');
             $self->assert_deep_equals({
-                "$i" => { 'flags' => [ '\\Deleted' ] }
+                "$i" => { 'uid' => "$i", 'flags' => [ '\\Deleted' ] }
             }, $res);
             delete $msg{$letter};
         }
@@ -179,15 +180,21 @@ sub test_unchangedsince_multi ($self)
     $self->assert_deep_equals($modified, ['13:15']);
 
     xlog $self, "sent untagged FETCH responses with the new modseq?";
-    # also tells about the 3 messages which were deleted since
-    # the last command
-    $self->assert_num_equals(23, scalar keys %fetched);
-    foreach my $i (1..3, 7..12, 16..26)
+    # A server may not send EXPUNGE during a command that speaks in sequence
+    # numbers.  During a UID command it may, and Cyrus does.  So the three
+    # messages the other session expunged are reported as untagged EXPUNGEs
+    # ahead of the FETCHes -- not, as they would be for a plain STORE, as
+    # three extra FETCH responses -- and the FETCHes that follow are numbered
+    # in the closed-up sequence.  M, N and O failed the conditional store and
+    # so are not reported at all.
+    $self->assert_num_equals(20, 0+%fetched);
+    foreach my $seq (1..9, 13..23)
     {
-        my $letter = chr(64 + $i);
-        $self->assert_not_null($fetched{$i});
+        my $uid = ($seq <= 3 ? $seq : $seq + 3);   # D, E and F are gone
+        my $letter = chr(64 + $uid);
+        $self->assert_not_null($fetched{$seq});
         $self->assert_num_equals(get_modseq($act1, $letter),
-                                 get_modseq_from_fetch(\%fetched, $i));
+                                 get_modseq_from_fetch(\%fetched, $seq));
     }
 
 }
