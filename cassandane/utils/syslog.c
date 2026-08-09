@@ -6,6 +6,12 @@
  *
  * Set CASSANDANE_SYSLOG_FNAME in the environment to specify the file
  * to which logged lines should be appended.
+ *
+ * Each captured line is prefixed with the severity it was logged at, as
+ * "<err> ", so that log consumers can recognise problems without having
+ * to match on message text.  Real syslog discards the priority by the
+ * time it reaches the log file, which is why we record it ourselves.
+ * Cassandane::Instance::_check_syslog depends on this prefix.
  */
 
 /* need _GNU_SOURCE for RTLD_NEXT */
@@ -88,6 +94,22 @@ EXPORTED void closelog(void)
     is_opened = 0;
 }
 
+/* The severity names used by syslog.conf(5), so that they'll look familiar. */
+static const char *severity_name(int priority)
+{
+    switch (LOG_PRI(priority)) {
+    case LOG_EMERG:   return "emerg";
+    case LOG_ALERT:   return "alert";
+    case LOG_CRIT:    return "crit";
+    case LOG_ERR:     return "err";
+    case LOG_WARNING: return "warning";
+    case LOG_NOTICE:  return "notice";
+    case LOG_INFO:    return "info";
+    case LOG_DEBUG:   return "debug";
+    default:          return "unknown";
+    }
+}
+
 static void fake_vsyslog(int priority, const char *format, va_list ap)
 {
     struct timeval now = {0};
@@ -103,8 +125,11 @@ static void fake_vsyslog(int priority, const char *format, va_list ap)
 
     gettimeofday(&now, NULL);
 
+    /* The severity goes first, so that it can be matched with an anchored
+     * pattern that can never be confused by the message body. */
     strftime(timestamp, sizeof(timestamp), "%b %d %T", localtime(&now.tv_sec));
-    fprintf(out, "%s.%06" PRIdMAX " %s %s[%" PRIdMAX "]: ",
+    fprintf(out, "<%s> %s.%06" PRIdMAX " %s %s[%" PRIdMAX "]: ",
+                 severity_name(priority),
                  timestamp, (intmax_t) now.tv_usec,
                  hostname, myident, (intmax_t) pid);
     errno = saved_errno;

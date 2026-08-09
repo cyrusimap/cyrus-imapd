@@ -1837,6 +1837,34 @@ sub _check_sanity
     return;
 }
 
+# Lines captured by our syslog replacement (utils/syslog.c) are prefixed
+# with the severity they were logged at.  These are the severities that
+# mean the server hit a problem the test didn't ask for.
+my $error_severity = qr{^<(?:emerg|alert|crit|err)>};
+
+# Decide whether a captured syslog line represents an unexpected error.
+#
+# logfmt events (which always begin "event=") carry their severity, so we
+# can recognise a problem without knowing anything about the message text.
+# That's the whole point of recording the severity: as logfmt conversion
+# proceeds, messages can be reworded freely without silently switching off
+# this check.
+#
+# Everything else is still matched by text.  We can't simply promote the
+# old messages to severity matching, because plenty of them are logged at
+# LOG_ERR without being the kind of error a test should fail on.  This
+# clause shrinks as logfmt conversion proceeds, and goes away with the last
+# unconverted call site.
+sub _syslog_line_is_error
+{
+    my ($line) = @_;
+
+    return scalar $line =~ $error_severity
+        if $line =~ m/\]: event=/;
+
+    return scalar $line =~ m/ERROR|TRACELOG|Unknown code ____/;
+}
+
 sub _check_syslog
 {
     my ($self, $pattern) = @_;
@@ -1849,7 +1877,7 @@ sub _check_syslog
 
     my @lines = $self->getsyslog();
     my @errors = grep {
-        m/ERROR|TRACELOG|Unknown code ____/ || ($pattern && m/$pattern/)
+        _syslog_line_is_error($_) || ($pattern && m/$pattern/)
     } @lines;
 
     @errors = grep { not m/DBERROR.*skipstamp/ } @errors;
@@ -2812,6 +2840,15 @@ sub setup_syslog_replacement
 # In most cases you probably want assert_syslog_matches from TestCase
 # (or assert_syslog_does_not_match).  If you need something trickier,
 # check those anyway to see how to do so safely.
+#
+# Returned lines look like:
+#
+#   <notice> Aug 23 12:34:20.123456 bat 0234200101/imap[14527]: message
+#
+# The leading "<severity>" is added by our syslog replacement, because real
+# syslog doesn't preserve the priority into the log file.  Match on it if
+# you care how loudly something was logged; don't rely on it to identify
+# a message, since the same event can be logged at different severities.
 sub getsyslog
 {
     my ($self, $pattern) = @_;

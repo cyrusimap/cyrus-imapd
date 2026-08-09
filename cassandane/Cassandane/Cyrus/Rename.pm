@@ -50,8 +50,8 @@ sub _match_intermediates
 {
     my ($self, %expect) = @_;
     my @lines = $self->{instance}->getsyslog();
-    #'Aug 23 12:34:20 bat 0234200101/ctl_cyrusdb[14527]: mboxlist: creating intermediate with children: user.cassandane.a (ec10f137-1bee-443e-8cb2-c6c893463b0a)',
-    #'Aug 23 12:34:20 bat 0234200101/ctl_cyrusdb[14527]: mboxlist: deleting intermediate with no children: user.cassandane.hanging (b13ba9d4-9d40-4474-911f-77346a73d747)',
+    #'<notice> Aug 23 12:34:20 bat 0234200101/ctl_cyrusdb[14527]: mboxlist: creating intermediate with children: user.cassandane.a (ec10f137-1bee-443e-8cb2-c6c893463b0a)',
+    #'<notice> Aug 23 12:34:20 bat 0234200101/ctl_cyrusdb[14527]: mboxlist: deleting intermediate with no children: user.cassandane.hanging (b13ba9d4-9d40-4474-911f-77346a73d747)',
     for (@lines) {
         if (m/mboxlist: creating intermediate with children: (.*?)($| \()/) {
             my $mbox = $1;
