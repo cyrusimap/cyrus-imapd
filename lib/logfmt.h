@@ -24,6 +24,11 @@ extern void logfmt_init(struct logfmt *lf, const char *event);
 extern void logfmt_fini(struct logfmt *lf);
 const char *logfmt_cstring(const struct logfmt *lf);
 
+/* Write the event to syslog and release it.  The logfmt is safe to
+ * logfmt_init() again afterwards, but must not otherwise be used.
+ */
+extern void logfmt_emit(struct logfmt *lf, int priority);
+
 extern void logfmt_push(struct logfmt *lf, const char *key, const char *value);
 
 extern void logfmt_push_utf8(struct logfmt *lf,

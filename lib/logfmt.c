@@ -13,6 +13,7 @@
 #include "unicode/utf8.h"
 #include "unicode/utypes.h"
 
+#include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -248,6 +249,16 @@ EXPORTED void logfmt_fini(struct logfmt *lf)
 EXPORTED const char *logfmt_cstring(const struct logfmt *lf)
 {
     return buf_cstring(&lf->msg);
+}
+
+EXPORTED void logfmt_emit(struct logfmt *lf, int priority)
+{
+    int saved_errno = errno;
+
+    syslog(priority, "%s", logfmt_cstring(lf));
+    logfmt_fini(lf);
+
+    errno = saved_errno;
 }
 
 EXPORTED void logfmt_push(struct logfmt *lf,
