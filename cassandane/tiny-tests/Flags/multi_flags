@@ -12,7 +12,7 @@ sub test_multi_flags ($self)
 {
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
+    $talk->uid(1);
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
     xlog $self, "Add two messages";
@@ -30,7 +30,7 @@ sub test_multi_flags ($self)
     xlog $self, "Set many flags on message A";
     my $res = $talk->store('1', '+flags',
                            '(\\Answered \\Flagged \\Draft \\Deleted \\Seen)');
-    $self->assert_deep_equals({ '1' => { 'flags' => [
+    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [
                                 qw(\\Answered \\Flagged \\Draft
                                    \\Deleted \\Seen)
                               ]}}, $res);
@@ -39,7 +39,7 @@ sub test_multi_flags ($self)
 
     xlog $self, "Clear \\Flagged on message A";
     $res = $talk->store('1', '-flags', '(\\Flagged)');
-    $self->assert_deep_equals({ '1' => { 'flags' => [
+    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [
                                 qw(\\Answered \\Draft \\Deleted \\Seen)
                               ]}}, $res);
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Draft \\Deleted \\Seen)]);
@@ -47,7 +47,7 @@ sub test_multi_flags ($self)
 
     xlog $self, "Clear \\Draft and \\Deleted on message A";
     $res = $talk->store('1', '-flags', '(\\Draft \\Deleted)');
-    $self->assert_deep_equals({ '1' => { 'flags' => [
+    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [
                                 qw(\\Answered \\Seen)
                               ]}}, $res);
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Seen)]);
@@ -55,7 +55,7 @@ sub test_multi_flags ($self)
 
     xlog $self, "Set \\Draft and \\Flagged on message A";
     $res = $talk->store('1', '+flags', '(\\Draft \\Flagged)');
-    $self->assert_deep_equals({ '1' => { 'flags' => [
+    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [
                                 qw(\\Answered \\Flagged \\Draft \\Seen)
                               ]}}, $res);
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Flagged \\Draft \\Seen)]);
@@ -63,7 +63,7 @@ sub test_multi_flags ($self)
 
     xlog $self, "Set to just \\Answered and \\Seen on message A";
     $res = $talk->store('1', 'flags', '(\\Answered \\Seen)');
-    $self->assert_deep_equals({ '1' => { 'flags' => [
+    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [
                                 qw(\\Answered \\Seen)
                               ]}}, $res);
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Seen)]);
@@ -86,7 +86,7 @@ sub test_multi_flags ($self)
         }
         xlog $self, "Setting " . join(',',@flags) . " on message A";
         my $res = $talk->store('1', 'flags', '(' . join(' ',@flags) . ')');
-        $self->assert_deep_equals({ '1' => { 'flags' => \@flags }}, $res);
+        $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => \@flags }}, $res);
         $msg{A}->set_attribute(flags => \@flags);
         $self->check_messages(\%msg);
     }

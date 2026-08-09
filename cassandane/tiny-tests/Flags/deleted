@@ -14,7 +14,7 @@ sub test_deleted ($self)
 {
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
+    $talk->uid(1);
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
     xlog $self, "Append 3 messages";
@@ -35,7 +35,7 @@ sub test_deleted ($self)
 
     xlog $self, "Mark the middle message \\Deleted";
     my $res = $talk->store('2', '+flags', '(\\Deleted)');
-    $self->assert_deep_equals({ '2' => { 'flags' => [ '\\Deleted' ] }}, $res);
+    $self->assert_deep_equals({ '2' => { 'uid' => '2', 'flags' => [ '\\Deleted' ] }}, $res);
     $msg{B}->set_attribute(flags => ['\\Deleted']);
     $self->check_messages(\%msg);
 

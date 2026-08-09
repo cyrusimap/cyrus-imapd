@@ -12,7 +12,7 @@ sub test_modseq ($self)
 {
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
+    $talk->uid(1);
     $self->{store}->set_fetch_attributes(qw(uid modseq));
 
     xlog $self, "Append 3 messages";
@@ -34,14 +34,17 @@ sub test_modseq ($self)
     $self->assert_deep_equals(
             {
                 1 => {
+                        uid => 1,
                         modseq => [$hms0-2],
                         annotation => { $entry => { $attrib => undef } }
                      },
                 2 => {
+                        uid => 2,
                         modseq => [$hms0-1],
                         annotation => { $entry => { $attrib => undef } }
                      },
                 3 => {
+                        uid => 3,
                         modseq => [$hms0],
                         annotation => { $entry => { $attrib => undef } }
                      },
@@ -63,14 +66,17 @@ sub test_modseq ($self)
     $self->assert_deep_equals(
             {
                 1 => {
+                        uid => 1,
                         modseq => [$hms1],
                         annotation => { $entry => { $attrib => $value1 } }
                      },
                 2 => {
+                        uid => 2,
                         modseq => [$hms0-1],
                         annotation => { $entry => { $attrib => undef } }
                      },
                 3 => {
+                        uid => 3,
                         modseq => [$hms0],
                         annotation => { $entry => { $attrib => undef } }
                      },
@@ -92,14 +98,17 @@ sub test_modseq ($self)
     $self->assert_deep_equals(
             {
                 1 => {
+                        uid => 1,
                         modseq => [$hms2],
                         annotation => { $entry => { $attrib => undef } }
                      },
                 2 => {
+                        uid => 2,
                         modseq => [$hms0-1],
                         annotation => { $entry => { $attrib => undef } }
                      },
                 3 => {
+                        uid => 3,
                         modseq => [$hms0],
                         annotation => { $entry => { $attrib => undef } }
                      },

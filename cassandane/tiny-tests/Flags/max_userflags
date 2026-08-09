@@ -5,7 +5,7 @@ sub test_max_userflags ($self)
 {
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
+    $talk->uid(1);
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
     xlog $self, "Add two messages";
@@ -37,14 +37,14 @@ sub test_max_userflags ($self)
 
         xlog $self, "Set $flag on message A";
         my $res = $talk->store('1', '+flags', "($flag)");
-        $self->assert_deep_equals({ '1' => { 'flags' => [ "$flag" ] }},
+        $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ "$flag" ] }},
                                   $res);
         $msg{A}->set_attribute(flags => [$flag]);
         $self->check_messages(\%msg);
 
         xlog $self, "Clear $flag on message A";
         $res = $talk->store('1', '-flags', "($flag)");
-        $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+        $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
         $msg{A}->set_attribute(flags => []);
         $self->check_messages(\%msg);
     }
@@ -65,7 +65,7 @@ sub test_max_userflags ($self)
     my @flags = sort { $allflags{$a} <=> $allflags{$b} } (keys %allflags);
     xlog $self, "Set all the user flags on message A";
     $res = $talk->store('1', '+flags', '(' . join(' ',@flags) . ')');
-    $self->assert_deep_equals({ '1' => { 'flags' => [ @flags ] }},
+    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ @flags ] }},
                               $res);
     $msg{A}->set_attribute(flags => [@flags]);
     $self->check_messages(\%msg);
