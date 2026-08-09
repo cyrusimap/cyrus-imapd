@@ -1,0 +1,119 @@
+# doc/logfmt-keys - the registered logfmt key vocabulary
+#
+# Every logfmt key used anywhere in the source must appear in this file.
+# tools/check-logfmt-keys enforces that.  See doc/README.logfmt.md for the
+# naming rules and for why we bother.
+#
+# Format: one key per line, then whitespace, then a description of what the
+# value is.  Describe the value, not the call site: a key is shared, and the
+# next person to want one like it will read this line to decide whether yours
+# already fits.
+#
+# Blank lines and #-comments are ignored.  Keep each section sorted.
+#
+# Adding a key belongs in the same commit as the code that uses it.
+# Removing or renaming one is a breaking change for log consumers, and needs
+# a changes/next/ entry.
+
+### the event itself
+
+event                   name of the event; always the first pair on the line
+
+### r. - the request or connection
+
+r.clienthost            the client end of the connection, as host [ip]
+r.sessionid             this process's session id
+r.tid                   trace id, when the client supplied one
+remote.sessionid        the session id of a backend we proxied to
+
+### u. - the user
+
+u.username              the authenticated userid the event happened for
+
+### mbox. - a mailbox
+
+mbox                    placeholder for "no mailbox"; value is always ~null~
+mbox.acl                the mailbox ACL, in its stored form
+mbox.crcs.annot         annotation sync CRC
+mbox.crcs.basic         basic sync CRC
+mbox.deletedmodseq      highest modseq of a deletion in this mailbox
+mbox.foldermodseq       the mailbox's folder modseq
+mbox.highestmodseq      the mailbox's highest modseq
+mbox.mailboxid          the mailbox's JMAP id
+mbox.name               the mailbox name, in the admin namespace
+mbox.part               the partition the mailbox is on
+mbox.type               the mailbox type, as a string
+mbox.uidvalidity        the mailbox's uidvalidity
+mbox.uniqueid           the mailbox's uniqueid
+
+### msg. - a message
+
+msg.cid                 the message's conversation id
+msg.date                the message's date, as sent
+msg.emailid             the message's JMAP id
+msg.from                the message's envelope sender
+msg.guid                the message's guid
+msg.id                  the message's RFC 5322 Message-ID
+msg.imapuid             the message's IMAP uid within its mailbox
+msg.modseq              the message's modseq
+msg.size                the message's size in bytes
+msg.subject             the message's subject, as UTF-8
+msg.sysflags            the message's system flags, as a string
+msg.to                  the message's envelope recipient
+
+### login. - authentication
+
+login.anonymous         1 if the login was anonymous
+login.magic             the magic-plus suffix supplied with the username
+login.mech              the SASL mechanism used
+login.nopassword        1 if the login was accepted without a password
+login.password          the password given for a refused anonymous login
+login.scheme            the HTTP auth scheme used
+login.tls               1 if the connection was under TLS
+
+### send. - outbound delivery
+
+send.delay              seconds between when a message was due and when it went
+send.numrcpts           how many recipients the message went to
+send.outcome            what happened: sent, cancelled, unsnoozed
+send.retries            how many times sending had been retried
+send.scheduled          when the message was due to be sent
+send.time               when the message was actually sent
+
+### per-subsystem
+
+cal.uid                 a calendar component's iCalendar UID
+imip.error              why an iMIP operation failed
+pop.subfolder           the subfolder a POP session was restricted to
+quota.root              the quota root a quota applies to
+scope                   the scope a duplicate-delivery check applied to
+sieve.target            the target of a Sieve action: a folder, address or url
+vacation.from           the From address of a vacation response
+vacation.to             the To address of a vacation response
+
+### out. - the outbound half of an event that has two halves
+
+out.msg.id              Message-ID we sent, where msg.id is the one we got
+
+### old. - the value before a change, paired with the unprefixed key
+
+old.mbox.acl            the mailbox ACL before the change
+old.mbox.name           the mailbox name before the rename
+old.mbox.part           the partition before the move
+old.msg.sysflags        the message's system flags before the change
+
+### usage counters
+
+used.bytes.in           bytes read from the client this session
+used.bytes.out          bytes written to the client this session
+
+### failure detail
+
+error                   why the operation failed, as human-readable text
+sys.error               strerror() of errno at the point of logging
+
+### caller. - where in the C source the event was logged
+
+caller.file             source file
+caller.func             function name
+caller.line             line number
