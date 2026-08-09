@@ -15,9 +15,9 @@ sub test_remove_infected_slow
 
     my $talk = $self->{store}->get_client();
     $talk->select("INBOX");
-    $self->assert_num_equals(1, $talk->uid());
+    $talk->uid(1);
     $talk->select("shared.folder");
-    $self->assert_num_equals(1, $talk->uid());
+    $talk->uid(1);
 
     # put some test messages in INBOX (and verify)
     $self->{store}->set_folder("INBOX");

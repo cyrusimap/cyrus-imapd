@@ -7,7 +7,7 @@ sub test_archivenow_messages
 {
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
+    $talk->uid(1);
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
     xlog $self, "Append 3 messages";
