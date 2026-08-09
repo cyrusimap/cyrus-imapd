@@ -4153,7 +4153,8 @@ static int _mbox_changes_cmp(const void **pa, const void **pb)
 
 static int _mbox_changes(jmap_req_t *req,
                          struct jmap_changes *changes,
-                         int *only_counts_changed)
+                         int *only_counts_changed,
+                         json_t **err)
 {
     *only_counts_changed = 1;
 
@@ -4191,41 +4192,61 @@ static int _mbox_changes(jmap_req_t *req,
     }
     ptrarray_sort(&updates, _mbox_changes_cmp);
 
-    /* Build result */
+    /* Build result
+     *
+     * Gather up all the changes up to maxChanges, but absolutely not more.  If
+     * we can't fit all the changes in that size, we have to report
+     * cannotCalculateChanges, not overrun.
+     */
     changes->has_more_changes = 0;
     windowmodseq = 0;
-    for (i = 0; i < updates.count; i++) {
+    i = 0;
+    while (i < updates.count) {
         json_t *update = ptrarray_nth(&updates, i);
-        const char *id = json_string_value(json_object_get(update, "id"));
-        modseq_t modseq = json_integer_value(json_object_get(update, "modseq"));
+        modseq_t groupmodseq =
+            (modseq_t) json_integer_value(json_object_get(update, "modseq"));
+        int groupend;
 
-        /* Apply maxChanges, if any. We do overshoot maxChanges in case
-         * the modseqs are not strictly increasing, which must not ever
-         * happen in a sane account. Should the account have any duplicate
-         * modseqs then we report that as an error but gracefully finish
-         * the /changes method. */
-        if (changes->max_changes && ((size_t) i) >= changes->max_changes &&
-            modseq > windowmodseq) {
+        for (groupend = i; groupend < updates.count; groupend++) {
+            update = ptrarray_nth(&updates, groupend);
+            if ((modseq_t) json_integer_value(json_object_get(update, "modseq"))
+                != groupmodseq) {
+                break;
+            }
+        }
+
+        /* groupend is also the number of changes we'd have reported once this
+         * group is done, since we only ever report a prefix */
+        if (changes->max_changes
+            && (size_t) groupend > changes->max_changes) {
             changes->has_more_changes = 1;
             break;
         }
 
-        if (modseq == windowmodseq && windowmodseq) {
-            xsyslog_ev(LOG_ERR, "duplicate modseq in Mailbox/changes",
-                    lf_s("mboxid", id),
-                    lf_llu("modseq", modseq));
+        for ( ; i < groupend; i++) {
+            const char *id;
+
+            update = ptrarray_nth(&updates, i);
+            id = json_string_value(json_object_get(update, "id"));
+
+            if (json_object_get(data.created, id)) {
+                json_array_append_new(changes->created, json_string(id));
+            } else if (json_object_get(data.updated, id)) {
+                json_array_append_new(changes->updated, json_string(id));
+            } else {
+                json_array_append_new(changes->destroyed, json_string(id));
+            }
         }
 
-        if (windowmodseq < modseq)
-            windowmodseq = modseq;
+        windowmodseq = groupmodseq;
+    }
 
-        if (json_object_get(data.created, id)) {
-            json_array_append_new(changes->created, json_string(id));
-        } else if (json_object_get(data.updated, id)) {
-            json_array_append_new(changes->updated, json_string(id));
-        } else {
-            json_array_append_new(changes->destroyed, json_string(id));
-        }
+    if (changes->has_more_changes && !windowmodseq) {
+        /* The first group alone exceeds maxChanges, we must report an error */
+        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                         "description",
+                         "maxChanges too small to report a whole modseq");
+        goto done;
     }
 
     if ((json_array_size(changes->created) == 0 &&
@@ -4264,10 +4285,14 @@ static int jmap_mailbox_changes(jmap_req_t *req)
 
     /* Search for updates */
     int only_counts_changed = 0;
-    int r = _mbox_changes(req, &changes, &only_counts_changed);
+    int r = _mbox_changes(req, &changes, &only_counts_changed, &err);
     if (r) {
         syslog(LOG_ERR, "jmap: Mailbox/changes: %s", error_message(r));
         jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
 

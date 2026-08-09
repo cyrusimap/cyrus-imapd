@@ -1,0 +1,119 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::CRLF;
+
+# Several mailboxes can legitimately get the same changed modseq at once.
+# A mailbox modseq is the greater of its highestmodseq and its conversations
+# threadmodseq, and one change to any message in a conversation raises
+# threadmodseq in every folder that conversation touches.
+#
+# Mailbox/changes has to report such a group all at once, because the state
+# it hands back is a modseq.  What it must not do is report more than
+# maxChanges to get there -- RFC 8620 §5.2 says "MUST NOT".
+sub test_mailbox_changes_maxchanges_not_exceeded
+    :NoAltNameSpace
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    my $imap = $user->imap;
+    $imap->uid(1);
+
+    xlog $self, "Set up mailboxes";
+    my %mbox = map {; $_ => $user->mailboxes->create({ name => $_ }) }
+               qw( a b c );
+
+    # one thread spanning a and b, so that a change to it touches both
+    my $threaded = to_crlf(<<~'EOF');
+        From: <from@local>
+        To: to@local
+        Subject: test
+        Message-Id: <threaded1@foo>
+        Date: Wed, 7 Dec 2019 22:11:11 +1100
+        MIME-Version: 1.0
+        Content-Type: text/plain
+
+        threaded
+        EOF
+
+    my $reply = to_crlf(<<~'EOF');
+        From: <from@local>
+        To: to@local
+        Subject: test
+        Message-Id: <threaded2@foo>
+        In-Reply-To: <threaded1@foo>
+        Date: Wed, 7 Dec 2019 22:11:12 +1100
+        MIME-Version: 1.0
+        Content-Type: text/plain
+
+        threaded reply
+        EOF
+
+    my $lonely = to_crlf(<<~'EOF');
+        From: <from@local>
+        To: to@local
+        Subject: unrelated
+        Message-Id: <lonely1@foo>
+        Date: Wed, 7 Dec 2019 22:11:13 +1100
+        MIME-Version: 1.0
+        Content-Type: text/plain
+
+        lonely
+        EOF
+
+    xlog $self, "Set up messages";
+    $imap->append('INBOX.a', "(\\Seen)", $threaded) || die $@;
+    $imap->append('INBOX.a', "()", $reply) || die $@;
+    $imap->append('INBOX.b', "(\\Seen)", $threaded) || die $@;
+
+    my $res = $jmap->request([[ 'Mailbox/get', {} ]]);
+    my $state = $res->single_sentence('Mailbox/get')->arguments->{state};
+    $self->assert_not_null($state);
+
+    xlog $self, "Change c on its own, giving one mailbox at one modseq";
+    $imap->append('INBOX.c', "()", $lonely) || die $@;
+
+    xlog $self, "Mark the thread seen, giving a and b at a later modseq";
+    $imap->select("INBOX.a");
+    $imap->store(2, "+flags", "\\Seen");
+
+    xlog $self, "Page through the changes, never exceeding maxChanges";
+    # n.b. never interpolate $maxchanges into a string.  That sets the
+    # scalar's string flag, and JSON::PP then sends it as "2" rather than 2,
+    # which Mailbox/changes quite rightly rejects as invalidArguments.
+    my $maxchanges = 2;
+    my %seen;
+    my $rounds = 0;
+
+    while (1) {
+        $self->assert($rounds++ < 10, "Mailbox/changes did not terminate");
+
+        $res = $jmap->request([
+            [ 'Mailbox/changes', {
+                sinceState => $state,
+                maxChanges => $maxchanges,
+            } ],
+        ]);
+
+        my $changes = $res->single_sentence('Mailbox/changes')->arguments;
+
+        my @got = ($changes->{created}->@*,
+                   $changes->{updated}->@*,
+                   $changes->{destroyed}->@*);
+
+        $self->assert(scalar @got <= $maxchanges,
+                      "returned " . scalar(@got) . " ids, over maxChanges");
+
+        $seen{$_} = 1 for @got;
+
+        $self->assert_str_not_equals($state, $changes->{newState});
+        $state = $changes->{newState};
+
+        last if not $changes->{hasMoreChanges};
+    }
+
+    xlog $self, "All three mailboxes should have been reported";
+    $self->assert_not_null($seen{$mbox{a}->id});
+    $self->assert_not_null($seen{$mbox{b}->id});
+    $self->assert_not_null($seen{$mbox{c}->id});
+}

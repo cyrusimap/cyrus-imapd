@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::CRLF;
+
+# When a single modseq's worth of changes is larger than maxChanges, there is
+# no intermediate state to hand back.  The client would sync only a partial
+# changeset and then advance its local state.  Oops RFC 8620 §5.2 says to
+# return cannotCalculateChanges.
+sub test_mailbox_changes_maxchanges_too_small
+    :NoAltNameSpace
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    my $imap = $user->imap;
+    $imap->uid(1);
+
+    xlog $self, "Set up mailboxes";
+    my %mbox = map {; $_ => $user->mailboxes->create({ name => $_ }) }
+               qw( a b );
+
+    my $threaded = to_crlf(<<~'EOF');
+        From: <from@local>
+        To: to@local
+        Subject: test
+        Message-Id: <threaded1@foo>
+        Date: Wed, 7 Dec 2019 22:11:11 +1100
+        MIME-Version: 1.0
+        Content-Type: text/plain
+
+        threaded
+        EOF
+
+    my $reply = to_crlf(<<~'EOF');
+        From: <from@local>
+        To: to@local
+        Subject: test
+        Message-Id: <threaded2@foo>
+        In-Reply-To: <threaded1@foo>
+        Date: Wed, 7 Dec 2019 22:11:12 +1100
+        MIME-Version: 1.0
+        Content-Type: text/plain
+
+        threaded reply
+        EOF
+
+    xlog $self, "Set up a thread spanning both mailboxes";
+    $imap->append('INBOX.a', "(\\Seen)", $threaded) || die $@;
+    $imap->append('INBOX.a', "()", $reply) || die $@;
+    $imap->append('INBOX.b', "(\\Seen)", $threaded) || die $@;
+
+    my $res = $jmap->request([[ 'Mailbox/get', {} ]]);
+    my $state = $res->single_sentence('Mailbox/get')->arguments->{state};
+    $self->assert_not_null($state);
+
+    xlog $self, "Mark the thread seen, changing both mailboxes at once";
+    $imap->select("INBOX.a");
+    $imap->store(2, "+flags", "\\Seen");
+
+    xlog $self, "Both mailboxes change together, so maxChanges 1 can't work";
+    $res = $jmap->request([
+        [ 'Mailbox/changes', { sinceState => $state, maxChanges => 1 } ],
+    ]);
+
+    $self->assert_str_equals('cannotCalculateChanges',
+                             $res->single_sentence('error')->arguments->{type});
+
+    xlog $self, "... but asking for both at once does";
+    $res = $jmap->request([
+        [ 'Mailbox/changes', { sinceState => $state, maxChanges => 2 } ],
+    ]);
+
+    my $changes = $res->single_sentence('Mailbox/changes')->arguments;
+
+    $self->assert_cmp_deeply(
+        bag($mbox{a}->id . "", $mbox{b}->id . ""),
+        $changes->{updated},
+    );
+    $self->assert(! $changes->{hasMoreChanges}, "no more changes");
+}
