@@ -48,6 +48,7 @@ mbox.uniqueid           the mailbox's uniqueid
 
 ### msg. - a message
 
+msg                     placeholder for "no message"; value is always ~null~
 msg.cid                 the message's conversation id
 msg.date                the message's date, as sent
 msg.emailid             the message's JMAP id
@@ -82,11 +83,16 @@ send.time               when the message was actually sent
 
 ### per-subsystem
 
+cal.organizer           a calendar component's ORGANIZER
 cal.uid                 a calendar component's iCalendar UID
 imip.error              why an iMIP operation failed
 pop.subfolder           the subfolder a POP session was restricted to
 quota.root              the quota root a quota applies to
+sched.addresses         the scheduling addresses considered, one per indexed subkey
+sched.userid            the userid whose scheduling addresses were used
 scope                   the scope a duplicate-delivery check applied to
+search.expr             a search expression, serialised
+search.op               a search operator, e.g. OR
 sieve.target            the target of a Sieve action: a folder, address or url
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
@@ -100,6 +106,8 @@ out.msg.id              Message-ID we sent, where msg.id is the one we got
 old.mbox.acl            the mailbox ACL before the change
 old.mbox.name           the mailbox name before the rename
 old.mbox.part           the partition before the move
+old.mbox.uniqueid       the uniqueid of the mailbox a message moved out of
+old.msg.imapuid         the message's IMAP uid before a move
 old.msg.sysflags        the message's system flags before the change
 
 ### usage counters

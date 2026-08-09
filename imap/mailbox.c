@@ -8431,6 +8431,12 @@ EXPORTED void logfmt_push_msgrecord(struct logfmt *lf,
 {
     char sysflags[FLAGMAPSTR_MAXLEN] = {0};
 
+    if (!record) {
+        /* as for logfmt_push_mailbox(): logging shouldn't crash us */
+        logfmt_push(lf, "msg", NULL);
+        return;
+    }
+
     flags_to_str(record, sysflags);
 
     logfmt_pushf(lf, "msg.imapuid", "%" PRIu32, record->uid);

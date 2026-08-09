@@ -6182,9 +6182,9 @@ static void setcalendarevents_update(jmap_req_t *req,
                               JACL_ADDITEMS, NULL, &jmap_namespace, 0,
                               EVENT_MESSAGE_MOVE);
         if (r) {
-            xsyslog_ev(LOG_ERR, "append_setup_mbox failed",
-                    lf_s("dst_mboxid", mailbox_uniqueid(dstmbox)),
-                    lf_s("error", error_message(r)));
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.move.failed",
+                    lf_s("mbox.uniqueid", mailbox_uniqueid(dstmbox)),
+                    lf_err("error", r));
             goto done;
         }
 
@@ -6198,19 +6198,19 @@ static void setcalendarevents_update(jmap_req_t *req,
         ptrarray_fini(&msgrecs);
         if (r) {
             append_abort(&as);
-            xsyslog_ev(LOG_ERR, "append_copy failed",
-                    lf_s("src_mboxid", mailbox_uniqueid(mbox)),
-                    lf_s("dst_mboxid", mailbox_uniqueid(dstmbox)),
-                    lf_s("error", error_message(r)));
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.move.failed",
+                    lf_s("old.mbox.uniqueid", mailbox_uniqueid(mbox)),
+                    lf_s("mbox.uniqueid", mailbox_uniqueid(dstmbox)),
+                    lf_err("error", r));
             goto done;
         }
 
         /* Finish append */
         r = append_commit(&as);
         if (r) {
-            xsyslog_ev(LOG_ERR, "append_commit failed",
-                    lf_s("dst_mboxid", mailbox_uniqueid(dstmbox)),
-                    lf_s("error", error_message(r)));
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.move.failed",
+                    lf_s("mbox.uniqueid", mailbox_uniqueid(dstmbox)),
+                    lf_err("error", r));
             goto done;
         }
 
@@ -6219,10 +6219,10 @@ static void setcalendarevents_update(jmap_req_t *req,
         mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
         r = mailbox_rewrite_index_record(mbox, &record);
         if (r) {
-            xsyslog_ev(LOG_ERR, "mailbox_rewrite_index_record failed: %s",
-                    lf_s("src_mboxid", mailbox_uniqueid(mbox)),
-                    lf_u("imap_uid", record.uid),
-                    lf_s("error", error_message(r)));
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.move.failed",
+                    lf_s("old.mbox.uniqueid", mailbox_uniqueid(mbox)),
+                    lf_u("old.msg.imapuid", record.uid),
+                    lf_err("error", r));
             mailbox_close(&mbox);
             goto done;
         }
@@ -6235,11 +6235,11 @@ static void setcalendarevents_update(jmap_req_t *req,
         mboxevent_free(&mboxevent);
 
         /* Successfully moved, all done! */
-        xsyslog_ev(LOG_DEBUG, "moved calendar event via fast path",
-                lf_s("ical_uid", eid->ical_uid),
-                lf_u("src_imap_uid", record.uid),
-                lf_s("src_mboxid", mailbox_uniqueid(mbox)),
-                lf_s("dst_mboxid", mailbox_uniqueid(dstmbox)));
+        xsyslog_ev(LOG_DEBUG, "jmap.calendarevent.moved",
+                lf_s("cal.uid", eid->ical_uid),
+                lf_u("old.msg.imapuid", record.uid),
+                lf_s("old.mbox.uniqueid", mailbox_uniqueid(mbox)),
+                lf_s("mbox.uniqueid", mailbox_uniqueid(dstmbox)));
         r = 0;
         goto done;
     }

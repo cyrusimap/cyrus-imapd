@@ -42,5 +42,5 @@ EOF
 
     xlog $self, "We should have generated a syslog message about the mismatch";
     $self->assert_syslog_matches($self->{instance},
-        qr/Not scheduling calendar component/);
+        qr/event=caldav\.schedule\.skipped/);
 }
