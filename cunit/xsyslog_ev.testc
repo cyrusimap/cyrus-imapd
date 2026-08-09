@@ -6,6 +6,7 @@
 #include "lib/libconfig.h"
 #include "lib/logfmt.h"
 #include "lib/sessionid.h"
+#include "lib/strarray.h"
 
 #include <syslog.h>
 #include <limits.h>
@@ -473,6 +474,74 @@ static void test_lf_flag(void)
 
     CU_ASSERT_SYSLOG(pat_line, 1);
     CU_ASSERT_SYSLOG(pat_off, 0);
+}
+
+static void test_lf_strarray(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+    strarray_t empty = STRARRAY_INITIALIZER;
+    unsigned pat_line = 0, pat_bare = 0;
+
+    strarray_append(&sa, "one@example.com");
+    strarray_append(&sa, "two words");
+
+    /* one indexed key per element, and the bare key doesn't appear at all */
+    pat_line = CU_SYSLOG_MATCH_SUBSTR("event=test.lf_strarray"
+                                      " addrs.0=one@example.com"
+                                      " addrs.1=\"two words\" after=1");
+    pat_bare = CU_SYSLOG_MATCH_SUBSTR(" addrs=");
+
+    xsyslog_ev(LOG_ERR, "test.lf_strarray",
+        lf_strarray("addrs", &sa),
+        lf_d("after", 1));
+
+    CU_ASSERT_SYSLOG(pat_line, 1);
+    CU_ASSERT_SYSLOG(pat_bare, 0);
+
+    /* empty and NULL stay distinguishable, as they are for a string value */
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_strarray empty=\"\" null=~null~");
+    xsyslog_ev(LOG_ERR, "test.lf_strarray",
+        lf_strarray("empty", &empty),
+        lf_strarray("null", NULL));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    strarray_fini(&sa);
+}
+
+struct pair {
+    const char *one;
+    const char *two;
+};
+
+/* stands in for the real push functions, which live over in imap/ */
+static void push_pair(struct logfmt *lf, const char *key, const void *value)
+{
+    const struct pair *pair = value;
+    struct buf subkey = BUF_INITIALIZER;
+
+    buf_printf(&subkey, "%s.one", key);
+    logfmt_push(lf, buf_cstring(&subkey), pair->one);
+
+    buf_setcstr(&subkey, key);
+    buf_appendcstr(&subkey, ".two");
+    logfmt_push(lf, buf_cstring(&subkey), pair->two);
+
+    buf_free(&subkey);
+}
+
+static void test_lf_fn(void)
+{
+    struct pair pair = { "hello", "there" };
+
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_fn"
+                           " thing.one=hello thing.two=there");
+    xsyslog_ev(LOG_ERR, "test.lf_fn", lf_fn("thing", push_pair, &pair));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* the same struct under a different key */
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_fn old.one=hello old.two=there");
+    xsyslog_ev(LOG_ERR, "test.lf_fn", lf_fn("old", push_pair, &pair));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
 }
 
 static void test_no_args(void)

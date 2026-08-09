@@ -197,7 +197,7 @@ EXPORTED void auditlog_message(const char *action,
     auditlog_begin(&lf, action);
 
     logfmt_push_mailbox(&lf, mailbox);
-    logfmt_push_record(&lf, record);
+    logfmt_push_msgrecord(&lf, record);
     logfmt_push(&lf, "msg.emailid", emailid);
     logfmt_push(&lf, "msg.cid", threadid);
 

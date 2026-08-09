@@ -8426,8 +8426,8 @@ EXPORTED void logfmt_push_mailbox(struct logfmt *lf,
     }
 }
 
-EXPORTED void logfmt_push_record(struct logfmt *lf,
-                                 const struct index_record *record)
+EXPORTED void logfmt_push_msgrecord(struct logfmt *lf,
+                                    const struct index_record *record)
 {
     char sysflags[FLAGMAPSTR_MAXLEN] = {0};
 
@@ -8438,4 +8438,18 @@ EXPORTED void logfmt_push_record(struct logfmt *lf,
     logfmt_push(lf, "msg.sysflags", sysflags);
     logfmt_push(lf, "msg.guid", message_guid_encode(&record->guid));
     logfmt_pushf(lf, "msg.size", UINT64_FMT, record->size);
+}
+
+EXPORTED void logfmt_arg_mailbox(struct logfmt *lf,
+                                 const char *key __attribute__((unused)),
+                                 const void *value)
+{
+    logfmt_push_mailbox(lf, (const struct mailbox *) value);
+}
+
+EXPORTED void logfmt_arg_msgrecord(struct logfmt *lf,
+                                   const char *key __attribute__((unused)),
+                                   const void *value)
+{
+    logfmt_push_msgrecord(lf, (const struct index_record *) value);
 }

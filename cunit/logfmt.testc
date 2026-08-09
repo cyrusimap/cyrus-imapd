@@ -431,7 +431,7 @@ static void test_logfmt_push_mbname(void)
     logfmt_fini(&lf);
 }
 
-static void test_logfmt_push_record(void)
+static void test_logfmt_push_msgrecord(void)
 {
     static const char msg[] = "banana";
     struct index_record test_record = {
@@ -451,9 +451,9 @@ static void test_logfmt_push_record(void)
     snprintf(expect_size, sizeof(expect_size), "msg.size=" SIZE_T_FMT,
              strlen(msg));
 
-    logfmt_init(&lf, "test_logfmt_push_record");
+    logfmt_init(&lf, "test_logfmt_push_msgrecord");
 
-    logfmt_push_record(&lf, &test_record);
+    logfmt_push_msgrecord(&lf, &test_record);
 
     CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "msg.imapuid=123"));
     CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "msg.modseq=234"));

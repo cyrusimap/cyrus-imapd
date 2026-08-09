@@ -1544,6 +1544,10 @@ EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
             /* lf_s_opt()/lf_flag() decided this field doesn't apply */
             break;
 
+        case LF_FN:
+            arg->data[i].fn.push(&lf, name, arg->data[i].fn.value);
+            break;
+
         case LF_S:
             logfmt_push(&lf, name, arg->data[i].s);
             break;

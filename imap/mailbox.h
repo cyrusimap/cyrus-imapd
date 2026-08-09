@@ -769,7 +769,22 @@ extern int mailbox_set_datafile_timestamps(struct mailbox *mailbox,
 /* data-type aware logging */
 extern void logfmt_push_mailbox(struct logfmt *lf,
                                 const struct mailbox *mailbox);
-extern void logfmt_push_record(struct logfmt *lf,
-                               const struct index_record *record);
+extern void logfmt_push_msgrecord(struct logfmt *lf,
+                                  const struct index_record *record);
+
+extern void logfmt_arg_mailbox(struct logfmt *lf,
+                               const char *key, const void *value);
+extern void logfmt_arg_msgrecord(struct logfmt *lf,
+                                 const char *key, const void *value);
+
+/* Log a mailbox's identity -- mbox.name, mbox.uniqueid, mbox.mailboxid --
+ * or mbox=~null~ if it's NULL.  For xsyslog_ev().
+ */
+#define lf_mailbox(mailboxp) lf_fn("mbox", logfmt_arg_mailbox, (mailboxp))
+
+/* Log a message record -- msg.imapuid, msg.modseq, msg.sysflags, msg.guid,
+ * msg.size.  For xsyslog_ev().
+ */
+#define lf_msgrecord(recordp) lf_fn("msg", logfmt_arg_msgrecord, (recordp))
 
 #endif /* INCLUDED_MAILBOX_H */

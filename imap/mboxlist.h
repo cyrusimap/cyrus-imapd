@@ -404,4 +404,16 @@ int mboxlist_promote_intermediary(const char *mboxname);
 
 int mboxlist_upgrade(int *upgraded);
 
+/* data-type aware logging */
+extern void logfmt_push_mbentry(struct logfmt *lf, const mbentry_t *mbentry);
+
+extern void logfmt_arg_mbentry(struct logfmt *lf,
+                               const char *key, const void *value);
+
+/* Log a mailbox entry's identity -- mbox.name, mbox.uniqueid,
+ * mbox.mailboxid, mbox.type -- or mbox=~null~ if it's NULL.  For
+ * xsyslog_ev().  Where you have an open mailbox, prefer lf_mailbox().
+ */
+#define lf_mbentry(mbentryp) lf_fn("mbox", logfmt_arg_mbentry, (mbentryp))
+
 #endif

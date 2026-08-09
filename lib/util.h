@@ -382,6 +382,15 @@ void xsyslog_fn(int priority, const char *description,
                      + __GNUC_MINOR__ * 100     \
                      + __GNUC_PATCHLEVEL__)
 
+struct logfmt;
+
+/* Pushes some struct's fields onto an event.  `key` is the key to log the
+ * value under, for types that log a single field; types that log a whole
+ * set of fields under fixed keys ignore it.
+ */
+typedef void (*lf_push_fn)(struct logfmt *lf, const char *key,
+                           const void *value);
+
 typedef struct xsyslog_ev_arg {
     const char *name;
     int type;
@@ -397,6 +406,10 @@ typedef struct xsyslog_ev_arg {
         size_t zu;
         double f;
         const char *s;
+        struct {
+            lf_push_fn push;
+            const void *value;
+        } fn;
     };
 } xsyslog_ev_arg;
 
@@ -465,7 +478,8 @@ enum xsyslog_ev_arg_type {
     LF_B,
     LF_TIME,
     LF_DURATION,
-    LF_SKIP
+    LF_SKIP,
+    LF_FN
 };
 
 #define lf_c(key, value)    (xsyslog_ev_arg){ key, LF_C,    { .c   = value } }
@@ -529,6 +543,17 @@ enum xsyslog_ev_arg_type {
 
 /* key=1 if the condition holds, and nothing at all if it doesn't. */
 #define lf_flag(key, cond)  ((cond) ? lf_b(key, 1) : lf_skip())
+
+/* Log a whole struct, using a push function that knows its fields.
+ *
+ * lib/ can't see the structs that most events are about, so the actual
+ * helpers are declared alongside the struct they log -- lf_mailbox() in
+ * imap/mailbox.h, and so on.  Find them with:
+ *
+ *     $ git grep 'define lf_'
+ */
+#define lf_fn(key, pushfn, valuep)                                          \
+    (xsyslog_ev_arg){ key, LF_FN, { .fn = { (pushfn), (valuep) } } }
 
 /* Set up cyrus_gettime as a weak alias for a wrapper around clock_gettime.
  * We then use cyrus_gettime everywhere instead of clock_gettime, and unit

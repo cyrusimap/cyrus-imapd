@@ -3407,3 +3407,10 @@ EXPORTED void logfmt_push_mbname(struct logfmt *lf,
 
     logfmt_push(lf, key, mbname_extname(mbname, admin_namespace, NULL));
 }
+
+EXPORTED void logfmt_arg_mbname(struct logfmt *lf,
+                                const char *key,
+                                const void *value)
+{
+    logfmt_push_mbname(lf, key, (const mbname_t *) value);
+}

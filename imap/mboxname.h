@@ -368,4 +368,11 @@ void mboxname_zero_counters(const char *mboxname);
 void logfmt_push_mbname(struct logfmt *lf,
                         const char *key, const mbname_t *mbname);
 
+void logfmt_arg_mbname(struct logfmt *lf, const char *key, const void *value);
+
+/* Log an mbname_t under `key`, for xsyslog_ev().  Normally "mbox.name", but
+ * you could supply (say) "old.mbox.name" instead.
+ */
+#define lf_mbname(key, mbnamep) lf_fn(key, logfmt_arg_mbname, (mbnamep))
+
 #endif
