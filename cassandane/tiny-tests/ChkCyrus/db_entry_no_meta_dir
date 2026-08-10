@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+# The converse of an orphan directory: a database entry whose directory
+# has gone.
+#
+# The instance is stopped before the damage is done and never restarted,
+# so that tear_down's consistency check does not run over a store we broke
+# deliberately.  chk_cyrus reads the database and the disk directly and
+# does not need a running server.
+sub test_db_entry_no_meta_dir
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+    $imaptalk->logout();
+    undef $imaptalk;
+
+    my $mbpath = $self->{instance}->run_mbpath('user.cassandane.INBOX.Archive');
+
+    $self->{instance}->stop();
+    $self->{instance}->{re_use_dir} = 1;
+
+    remove_tree($mbpath->{meta}) or die "remove_tree failed";
+
+    my $findings = $self->audit_json('--level', '1');
+    $self->assert_has_code($findings, 'db-entry-no-meta-dir');
+
+    # and only for the mailbox we actually removed
+    my ($f) = grep { $_->{code} eq 'db-entry-no-meta-dir' } @{$findings};
+    $self->assert_str_equals('user.cassandane.INBOX.Archive', $f->{mboxname});
+}
