@@ -19,7 +19,8 @@ sub test_cyrusdb_default_backends ($self)
     );
 
     my @regular_backends = grep { defined }
-                           ($ENV{CASSANDANE_DEFAULT_DB}, 'twom', 'twoskip');
+                           ($ENV{CASSANDANE_DEFAULT_DB}, 'twom', 'twoskip',
+                            'zeroskip');
 
     my %irregular_databases = (
         quota_db => 'quotalegacy',
