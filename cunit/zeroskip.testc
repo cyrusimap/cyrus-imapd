@@ -399,6 +399,56 @@ static void test_convert_leaves_no_residue(void)
     free(fname);
 }
 
+/* Invariant: cyrusdb_copyfile copies a database whatever its shape, and the
+ * copy is a working database.  The lock file carries no state and is not
+ * copied. */
+static void test_copyfile_directory(void)
+{
+    char *fname = dbpath("copyme");
+    char *copy = dbpath("copyme.copy");
+    struct stat sbuf;
+    int r;
+
+    fill_db("zeroskip", fname, 100);
+
+    r = cyrusdb_copyfile(fname, copy);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    CU_ASSERT_EQUAL_FATAL(stat(copy, &sbuf), 0);
+    CU_ASSERT(S_ISDIR(sbuf.st_mode));
+
+    char *lock = strconcat(copy, "/zeroskip.lock", NULL);
+    CU_ASSERT_EQUAL(fexists(lock), -ENOENT);
+
+    check_db("zeroskip", copy, 100);
+
+    free(lock);
+    free(copy);
+    free(fname);
+}
+
+/* Invariant: the copy replaces whatever was at the destination, so a leftover
+ * database there cannot leak files into the new copy and corrupt it. */
+static void test_copyfile_replaces_stale_directory(void)
+{
+    char *fname = dbpath("fresh");
+    char *copy = dbpath("stale");
+    int r;
+
+    /* a different database already at the destination */
+    fill_db("zeroskip", copy, 10);
+
+    fill_db("zeroskip", fname, 100);
+
+    r = cyrusdb_copyfile(fname, copy);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    check_db("zeroskip", copy, 100);
+
+    free(copy);
+    free(fname);
+}
+
 static int set_up(void)
 {
     char buf[PATH_MAX];
