@@ -404,4 +404,5 @@ HIDDEN struct cyrusdb_backend cyrusdb_twom =
     &myconsistent,
     &mycheckpoint,
     &bsearch_ncompare_raw,
+    0, /* flags */
 };

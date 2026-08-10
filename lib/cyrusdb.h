@@ -39,6 +39,18 @@ enum cyrusdb_openflags {
     CYRUSDB_NOCRC     = 0x20     /* Don't check CRC32 on read */
 };
 
+enum cyrusdb_backendflags {
+    /* the database is a directory rather than a single file.  cyrusdb_open()
+       stats fname and compares S_ISDIR() against this flag to spot a shape
+       mismatch and route it to conversion.
+
+       quotalegacy sets it too, but the check never fires there: quotalegacy is
+       opened with a sentinel fname that nothing creates, it stats
+       dirname(fname) itself, so cyrusdb_open()'s stat fails first.  Don't rely
+       on that if quotalegacy ever gets a real path. */
+    CYRUSDB_BACKEND_ISDIR = 0x01
+};
+
 typedef int foreach_p(void *rock,
                       const char *key, size_t keylen,
                       const char *data, size_t datalen);
@@ -182,6 +194,9 @@ struct cyrusdb_backend {
     int (*consistent)(struct dbengine *db);
     int (*repack)(struct dbengine *db);
     int (*compar)(const char *s1, size_t l1, const char *s2, size_t l2);
+
+    /* enum cyrusdb_backendflags */
+    unsigned flags;
 };
 
 extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
