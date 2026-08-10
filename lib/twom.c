@@ -2404,14 +2404,15 @@ static int skipwrite(struct twom_txn *txn,
     int r = find_loc(txn, loc, key, keylen);
     if (r) return r;
 
-    const char *ptr = LOCPTR(loc);
     /* could be a delete or a replace */
     if (loc->offset && !loc->deleted_offset) {
+        const char *ptr = LOCPTR(loc);
         // replacing existing record
         if (flags & TWOM_IFNOTEXIST) return TWOM_EXISTS;
         if (!data) return store_here(txn, key, keylen, NULL, 0);
-        /* unchanged?  Save the IO */
-        if (!COMPAR(loc->file->compar, data, datalen, VALPTR(ptr), VALLEN(ptr)))
+        /* unchanged?  Save the IO.  Bytewise: file->compar orders keys,
+         * and an external one may call differing values equal. */
+        if (datalen == VALLEN(ptr) && !memcmp(data, VALPTR(ptr), datalen))
             return 0;
         return store_here(txn, key, keylen, data, datalen);
     }
