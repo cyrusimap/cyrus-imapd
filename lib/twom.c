@@ -1740,7 +1740,8 @@ static struct twom_txn *tm_newtxn_read(struct twom_db *db)
     txn->db = db;
     txn->file = db->openfile;
     txn->file->refcount++;
-    assert(txn->file->committed_size == txn->file->written_size);
+    /* the committed point, so a write transaction's pending records stay
+     * invisible to this reader until that transaction commits */
     txn->end = txn->file->committed_size;
     txn->readonly = 1;
     txn->next = db->read_txn;
@@ -2740,6 +2741,7 @@ int twom_db_begin_txn(struct twom_db *db, int flags, struct twom_txn **txnp)
         /* if we're already in a lock, that's fine! */
         if (db->openfile->has_datalock) {
             *txnp = tm_newtxn_read(db);
+            if (!*txnp) return TWOM_INTERNAL;
         }
         else {
             int r = tm_read_lock(db, txnp, NULL, flags);
