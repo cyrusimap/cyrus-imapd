@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <dirent.h>
 
 #include "assert.h"
 #include "bsearch.h"
@@ -618,7 +619,34 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
 {
     FILE *f;
     char buf[32];
+    struct stat sbuf;
     int n;
+
+    if (stat(fname, &sbuf)) return NULL;
+
+    /* a directory-shaped database has no magic to read, so identify it by the
+       names inside it.  zeroskip calls both its data files and its lock file
+       "zeroskip*", so a created-but-never-written database is still
+       identified.  quotalegacy is the other directory backend, but it never
+       arrives here: it's opened with a sentinel path rather than with its
+       directory, so the stat above fails. */
+    if (S_ISDIR(sbuf.st_mode)) {
+        DIR *d = opendir(fname);
+        struct dirent *de;
+        const char *ret = NULL;
+
+        if (!d) return NULL;
+
+        while ((de = readdir(d)) != NULL) {
+            if (!strncmp(de->d_name, "zeroskip", 8)) {
+                ret = "zeroskip";
+                break;
+            }
+        }
+        closedir(d);
+
+        return ret;
+    }
 
     f = fopen(fname, "r");
     if (!f) return NULL;
