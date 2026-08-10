@@ -145,11 +145,23 @@ static int has_text(const struct buf *out, const char *needle)
 }
 
 /* Returns a state that appends to the given buffer.  Leaked deliberately:
- * cunit processes are short-lived and this keeps the tests readable. */
+ * cunit processes are short-lived and this keeps the tests readable.
+ *
+ * check_jmapids is on, matching an install with conversations enabled;
+ * that is the only configuration in which the J keyspace is meaningful. */
 static struct audit_state *test_state(struct buf *out)
 {
     struct audit_config config = AUDIT_CONFIG_INITIALIZER;
     config.out = out;
+    config.check_jmapids = 1;
+    return audit_begin(&config);
+}
+
+static struct audit_state *test_state_nojmap(struct buf *out)
+{
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    config.out = out;
+    config.check_jmapids = 0;
     return audit_begin(&config);
 }
 
@@ -427,6 +439,89 @@ static void test_keyspace_missing_j_key(void)
     audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, "P1");
     audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, "P1");
     /* entry claims jmapid P1 but no J key exists */
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-missing-j-key"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* With conversations disabled every mailbox is created with modseq 1 and
+ * so shares a jmapid, leaving the J keyspace degenerate.  There is nothing
+ * to audit there, and checking anyway would report every mailbox of every
+ * user on such an install. */
+static void test_keyspace_jmapid_checks_skipped_without_conversations(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, "P-F");
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, "P-F");
+    audit_keyspace_add_id(&ks, "def456", "user.bob.Archive", 0, "P-F");
+    audit_keyspace_add_name(&ks, "user.bob.Archive", "def456", 0, "P-F");
+    /* only one J key can exist for the shared pair */
+    audit_keyspace_add_jmapid(&ks, "bob", "P-F", "def456");
+
+    audit_keyspace_check(&ks, test_state_nojmap(&out));
+
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* An entry with no jmapid at all is likewise not worth reporting when the
+ * J keyspace is not in use. */
+static void test_keyspace_missing_j_property_skipped_without_conversations(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, NULL);
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, NULL);
+
+    audit_keyspace_check(&ks, test_state_nojmap(&out));
+
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* With conversations enabled jmapids are unique per user, so a J record
+ * naming a different mailbox leaves this one unreachable by jmapid. */
+static void test_keyspace_j_key_names_other_mailbox(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, "P1");
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, "P1");
+    audit_keyspace_add_jmapid(&ks, "bob", "P1", "someoneelse");
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-missing-j-key"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* A J key for a different user does not satisfy this user's entry. */
+static void test_keyspace_j_key_wrong_user(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, "P1");
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, "P1");
+    audit_keyspace_add_jmapid(&ks, "alice", "P1", "abc123");
 
     audit_keyspace_check(&ks, test_state(&out));
 
