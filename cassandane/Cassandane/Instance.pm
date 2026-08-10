@@ -136,6 +136,20 @@ sub new
         $self->{mailbox_version} = $params{mailbox_version};
     }
 
+    $self->_set_db_defaults($self->{config});
+
+    # XXX - get testcase name from caller, to apply even finer
+    # configuration from cassini ?
+    return $self;
+}
+
+# The databases in an instance are shared by all of its services, so any
+# service carrying its own config must agree with the instance about which
+# backend owns each database.
+sub _set_db_defaults
+{
+    my ($self, $config) = @_;
+
     if ($self->{buildinfo}->get('cyrusdb', undef)) {
         # find best default backend based on what installed cyrus supports
         my @backends = grep { defined }
@@ -155,7 +169,7 @@ sub new
             if not $default_backend;
 
         # set default backends, but only where the test didn't specify already
-        $self->{config}->set_if_undef(
+        $config->set_if_undef(
             annotation_db => $default_backend,
             conversations_db => $default_backend,
             duplicate_db => $default_backend,
@@ -174,10 +188,6 @@ sub new
             zoneinfo_db => $default_backend,
         );
     }
-
-    # XXX - get testcase name from caller, to apply even finer
-    # configuration from cassini ?
-    return $self;
 }
 
 # return an id for use by xlog
@@ -488,6 +498,8 @@ sub add_service
     {
         $self->add_recover();
     }
+
+    $self->_set_db_defaults($params{config}) if defined $params{config};
 
     my $srv = Cassandane::ServiceFactory->create(instance => $self, %params);
     $self->{services}->{$name} = $srv;
