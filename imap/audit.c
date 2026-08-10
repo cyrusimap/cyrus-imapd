@@ -25,6 +25,12 @@ struct audit_state {
     struct audit_config config;
     struct buf *out;        /* borrowed from config, or NULL for stdout */
     unsigned count;
+
+    /* Repairs are accumulated during the checks and applied afterwards in
+     * one transaction, so that a failure part-way through leaves the
+     * database as it was rather than half-fixed.  The scan itself holds a
+     * read transaction, so nothing can be written while it runs. */
+    strarray_t deletes;     /* raw keys to remove */
 };
 
 EXPORTED struct audit_state *audit_begin(const struct audit_config *config)
@@ -136,8 +142,87 @@ EXPORTED void audit_done(struct audit_state **statep)
 {
     if (!statep || !*statep) return;
 
+    strarray_fini(&(*statep)->deletes);
+
     free(*statep);
     *statep = NULL;
+}
+
+/* ------------------------------------------------------------------ */
+/* repairs                                                            */
+
+/* Queue a key for removal.  Nothing is written during the scan: the
+ * checks run inside a read transaction, and a repair may touch several
+ * keys that must land together or not at all. */
+static void queue_delete(struct audit_state *state, const struct buf *key)
+{
+    if (!state->config.do_delete) return;
+
+    strarray_appendm(&state->deletes,
+                     xstrndup(buf_base(key), buf_len(key)));
+}
+
+static void queue_delete_id(struct audit_state *state, const char *uniqueid)
+{
+    struct buf key = BUF_INITIALIZER;
+
+    mboxlist_key_for_id(uniqueid, &key);
+    queue_delete(state, &key);
+
+    buf_free(&key);
+}
+
+static void queue_delete_jmapid(struct audit_state *state,
+                                const char *userid, const char *jmapid)
+{
+    struct buf key = BUF_INITIALIZER;
+
+    mboxlist_key_for_jmapid(userid, jmapid, &key);
+    queue_delete(state, &key);
+
+    buf_free(&key);
+}
+
+/* Apply everything queued, in one transaction.  Returns 0 on success. */
+static int audit_apply_repairs(struct audit_state *state)
+{
+    struct txn *tid = NULL;
+    int i, r = 0;
+
+    if (!strarray_size(&state->deletes)) return 0;
+
+    /* Without --really the intent has already been reported and there is
+     * nothing to write. */
+    if (!state->config.really) {
+        for (i = 0; i < strarray_size(&state->deletes); i++) {
+            struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+            finding.code = "would-delete-key";
+            finding.detail = strarray_nth(&state->deletes, i);
+            audit_report(state, &finding);
+        }
+        return 0;
+    }
+
+    for (i = 0; i < strarray_size(&state->deletes); i++) {
+        const char *key = strarray_nth(&state->deletes, i);
+
+        r = mboxlist_rawkey_delete(key, strlen(key), &tid);
+        if (r) {
+            xsyslog(LOG_ERR, "audit: failed to delete key",
+                    "error=<%s>", cyrusdb_strerror(r));
+            break;
+        }
+    }
+
+    if (r) {
+        /* leave the database as it was rather than half-repaired */
+        if (tid) mboxlist_abort(tid);
+        return r;
+    }
+
+    if (tid) r = mboxlist_commit(tid);
+
+    return r;
 }
 
 /* ------------------------------------------------------------------ */
@@ -383,6 +468,8 @@ static void check_id_cb(const char *uniqueid, void *data, void *rock)
     if (!entry->dbname || !hash_lookup(entry->dbname, &crock->ks->byname)) {
         finding.code = "db-missing-n-key";
         audit_report(crock->state, &finding);
+        /* an I record nothing can reach by name */
+        queue_delete_id(crock->state, uniqueid);
     }
 
     /* The J keyspace is only meaningful with conversations enabled. */
@@ -446,6 +533,7 @@ EXPORTED void audit_keyspace_check(struct audit_keyspace *ks,
         if (!entry) {
             finding.code = "db-bogus-jmapid";
             audit_report(state, &finding);
+            queue_delete_jmapid(state, j->userid, j->jmapid);
             continue;
         }
 
@@ -455,6 +543,7 @@ EXPORTED void audit_keyspace_check(struct audit_keyspace *ks,
             finding.code = "db-bad-jmapid";
             finding.mboxname = entry->dbname;
             audit_report(state, &finding);
+            queue_delete_jmapid(state, j->userid, j->jmapid);
         }
     }
 
@@ -924,6 +1013,50 @@ EXPORTED void audit_scan_uuid_root(const char *root, strarray_t *found,
 }
 
 /* ------------------------------------------------------------------ */
+/* removal, and the guards on it                                      */
+
+EXPORTED int audit_path_is_young(const char *path)
+{
+    struct stat sbuf;
+
+    /* already gone: nothing to protect */
+    if (stat(path, &sbuf) < 0) return 0;
+
+    return time(NULL) < sbuf.st_mtime + AUDIT_MIN_AGE;
+}
+
+EXPORTED void audit_remove_path(struct audit_state *state, const char *path)
+{
+    struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+
+    /* a plain audit never touches anything */
+    if (!state->config.do_delete) return;
+
+    /* Anything this new may belong to an operation still in flight.  No
+     * flag overrides this; tests backdate mtimes instead. */
+    if (audit_path_is_young(path)) {
+        finding.code = "skipped-too-young";
+        finding.path = path;
+        audit_report(state, &finding);
+        return;
+    }
+
+    if (!state->config.really) {
+        finding.code = "would-remove";
+        finding.path = path;
+        audit_report(state, &finding);
+        return;
+    }
+
+    if (removedir(path)) {
+        xsyslog(LOG_ERR, "audit: failed to remove", "path=<%s>", path);
+        finding.code = "remove-failed";
+        finding.path = path;
+        audit_report(state, &finding);
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /* level 1: db entries vs directories on disk                         */
 
 /* The on-disk view, one set of uniqueids per kind of location. */
@@ -1151,44 +1284,51 @@ static int entry_in_scope(struct audit_state *state, const mbentry_t *mbentry)
     return 1;
 }
 
-static int scan_cb(void *rock, const struct mboxlist_rawkey *key,
+static int scan_cb(void *rock, const char *rawkey, size_t rawkeylen,
+                   const struct mboxlist_rawkey *key,
                    const mbentry_t *mbentry,
                    const char *data __attribute__((unused)),
                    size_t datalen __attribute__((unused)))
 {
     struct scanrock *srock = (struct scanrock *)rock;
     struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+    struct buf keybuf = BUF_INITIALIZER;
     int i;
+
+    buf_init_ro(&keybuf, rawkey, rawkeylen);
+
+    /* A value that will not parse cannot be interpreted or repaired, only
+     * removed.  Reporting it is the whole reason this scan reads the
+     * keyspace raw rather than through the lookup API. */
+    if (key->type != MBOXLIST_KEY_UNKNOWN &&
+        key->type != MBOXLIST_KEY_RACL && !mbentry) {
+        finding.code = "db-unparseable-entry";
+        finding.uniqueid = key->uniqueid;
+        finding.mboxname = key->dbname;
+        finding.userid = key->userid;
+        audit_report(srock->state, &finding);
+        queue_delete(srock->state, &keybuf);
+        goto done;
+    }
 
     switch (key->type) {
     case MBOXLIST_KEY_UNKNOWN:
         finding.code = "db-unknown-key";
         audit_report(srock->state, &finding);
-        return 0;
+        queue_delete(srock->state, &keybuf);
+        break;
 
     case MBOXLIST_KEY_RACL:
         /* collected but not yet cross-checked; see the racl work */
-        return 0;
+        break;
 
     case MBOXLIST_KEY_JMAPID:
-        if (!mbentry) {
-            finding.code = "db-unparseable-entry";
-            finding.userid = key->userid;
-            audit_report(srock->state, &finding);
-            return 0;
-        }
         audit_keyspace_add_jmapid(srock->ks, key->userid, key->jmapid,
                                   mbentry->uniqueid);
-        return 0;
+        break;
 
     case MBOXLIST_KEY_ID:
-        if (!mbentry) {
-            finding.code = "db-unparseable-entry";
-            finding.uniqueid = key->uniqueid;
-            audit_report(srock->state, &finding);
-            return 0;
-        }
-        if (!entry_in_scope(srock->state, mbentry)) return 0;
+        if (!entry_in_scope(srock->state, mbentry)) break;
 
         audit_keyspace_add_id(srock->ks, key->uniqueid, mbentry->name,
                               mbentry->mbtype, mbentry->jmapid);
@@ -1199,29 +1339,26 @@ static int scan_cb(void *rock, const struct mboxlist_rawkey *key,
             audit_keyspace_add_history(srock->ks, key->uniqueid,
                                        h->name, h->mtime);
         }
-        return 0;
+        break;
 
     case MBOXLIST_KEY_NAME:
-        if (!mbentry) {
-            finding.code = "db-unparseable-entry";
-            finding.mboxname = key->dbname;
-            audit_report(srock->state, &finding);
-            return 0;
-        }
-        if (!entry_in_scope(srock->state, mbentry)) return 0;
+        if (!entry_in_scope(srock->state, mbentry)) break;
 
         /* A tombstone records a name that is gone.  It is not a live
          * mailbox, so it must not satisfy the I-without-N check. */
         if (mbentry->mbtype & MBTYPE_DELETED) {
             audit_keyspace_add_tombstone(srock->ks, mbentry->name,
                                          mbentry->uniqueid, mbentry->mtime);
-            return 0;
+            break;
         }
 
         audit_keyspace_add_name(srock->ks, mbentry->name, mbentry->uniqueid,
                                 mbentry->mbtype, mbentry->jmapid);
-        return 0;
+        break;
     }
+
+  done:
+    buf_free(&keybuf);
 
     return 0;
 }
@@ -1256,6 +1393,10 @@ EXPORTED int audit_run(struct audit_state *state)
         audit_keyspace_check(&ks, state);
         audit_check_users(&ks, state);
         if (dofs) audit_check_filesystem(&fs, &ks, state);
+
+        /* Only now, with the read transaction closed and every check
+         * done, do we write anything. */
+        r = audit_apply_repairs(state);
     }
 
     if (dofs) fsview_fini(&fs);
