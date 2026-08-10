@@ -1,0 +1,178 @@
+#!/usr/bin/perl
+# twom-report <raw-bpftrace-output>
+# Collapses per-user db paths to db type and decodes twom flag bitmasks.
+use strict;
+use warnings;
+
+# Fallback only. The capture normally embeds this build's own enum as a
+# "#enum" line, which is what actually gets used - twom gains flags between
+# releases (TWOM_ONELOCK arrived in fm-20260730) and a stale table would
+# silently mis-decode them.
+my @FLAGS = (
+  [ 1<<0,  'CREATE'         ], [ 1<<1,  'SHARED'      ],
+  [ 1<<2,  'NOCSUM'         ], [ 1<<3,  'NOSYNC'      ],
+  [ 1<<4,  'NONBLOCKING'    ], [ 1<<5,  'ONELOCK'     ],
+  [ 1<<9,  'ALWAYSYIELD'    ], [ 1<<10, 'NOYIELD'     ],
+  [ 1<<11, 'IFNOTEXIST'     ], [ 1<<12, 'IFEXIST'     ],
+  [ 1<<13, 'FETCHNEXT'      ], [ 1<<14, 'SKIPROOT'    ],
+  [ 1<<15, 'MVCC'           ], [ 1<<16, 'CURSOR_PREFIX' ],
+  [ 1<<27, 'CSUM_NULL'      ], [ 1<<28, 'CSUM_XXH64'  ],
+  [ 1<<29, 'CSUM_EXTERNAL'  ], [ 1<<30, 'COMPAR_EXTERNAL' ],
+);
+
+# "#enum {TWOM_CREATE = 1, TWOM_SHARED, TWOM_NOCSUM = 4, ...}" - gdb prints a
+# value only when it breaks the sequence, so carry the running value forward.
+sub parse_enum {
+  my ($txt) = @_;
+  my @f;
+  my $next = 0;
+  $txt =~ s/^.*?\{//s; $txt =~ s/\}.*$//s;
+  for my $e (split /\s*,\s*/, $txt) {
+    next unless $e =~ /^\s*TWOM_([A-Z0-9_]+)\s*(?:=\s*(-?\d+))?\s*$/;
+    my ($name, $val) = ($1, $2);
+    $val = $next unless defined $val;
+    $next = $val + 1;
+    push @f, [ $val, $name ] if $val > 0;
+  }
+  return @f;
+}
+
+sub decode_flags {
+  my ($v) = @_;
+  return '-' unless $v;
+  my $known = 0;
+  my @on;
+  for my $f (@FLAGS) {
+    next unless $v & $f->[0];
+    push @on, $f->[1];
+    $known |= $f->[0];
+  }
+  push @on, sprintf('0x%x', $v & ~$known) if $v & ~$known;
+  return join('|', @on);
+}
+
+# .../conf/user/uuid/f/f/<uuid>/conversations.db -> conversations.db (per-user)
+# .../meta/uuid/2/6/<uuid>/cyrus.annotations     -> cyrus.annotations (per-mailbox)
+# .../conf/mailboxes.db                          -> mailboxes.db (global)
+sub db_type {
+  my ($p) = @_;
+  my $per_user = ($p =~ m{/uuid/}) ? 1 : 0;
+  my ($base) = $p =~ m{([^/]+)$};
+  $base = $p unless defined $base;
+  $base =~ s{^sync_cache_.*\.db$}{sync_cache.db};
+  return ($base, $per_user);
+}
+
+my $file = shift or die "usage: twom-report <raw>\n";
+open my $fh, '<', $file or die "$file: $!\n";
+
+my @OPNAME = (undef, qw(db_fetch txn_fetch db_foreach txn_foreach cursor_next
+                        db_store txn_store db_begin_cursor txn_begin_cursor
+                        begin_txn txn_commit txn_abort db_open db_yield db_repack));
+
+my (%ops, %flags, %distinct, %txnmode, %hist, $cur_hist, $nkeys, $lib, $strlen, $trunc, $junk);
+while (my $l = <$fh>) {
+  chomp $l;
+  if ($l =~ /^#enum\s+(.*)$/) {
+    my @f = parse_enum($1);
+    @FLAGS = @f if @f;
+    next;
+  }
+  elsif ($l =~ /^#lib\s+(.*)$/)    { $lib = $1; next; }
+  elsif ($l =~ /^#strlen\s+(\d+)$/) { $strlen = $1; next; }
+  if ($l =~ /^\@ops\[(.+), (\d+)\]:\s+(\d+)$/) {
+    my ($path, $opid, $n) = ($1, $2, $3);
+    my $op = $OPNAME[$opid] || "op$opid";
+    my ($t, $pu) = db_type($path);
+    $ops{$t}{$op} += $n;
+    $distinct{$t}{$path} = 1 if $pu;
+    $nkeys++;
+    # bpftrace str() cuts at STRLEN-1; such a key lost its trailing db name
+    $trunc++ if $strlen && length($path) >= $strlen - 1;
+    # a wrong struct offset does not error, it yields junk instead of a path
+    $junk++ unless $path =~ m{^/};
+    $cur_hist = undef;
+  }
+  elsif ($l =~ /^\@flags\[(\d+), (\d+)\]:\s+(\d+)$/) {
+    my $op = $OPNAME[$1] || "op$1";
+    $flags{$op}{$2} += $3;
+    $cur_hist = undef;
+  }
+  elsif ($l =~ /^\@txnmode\[(\d+)\]:\s+(\d+)$/) {
+    $txnmode{$1 ? 'shared' : 'exclusive'} += $2;
+    $cur_hist = undef;
+  }
+  elsif ($l =~ /^\@(keylen|vallen|preflen)\[(\d+)\]:\s*$/) {
+    $cur_hist = ($OPNAME[$2] || "op$2") . " $1";
+  }
+  elsif (defined $cur_hist && $l =~ /^\[/)   { push @{$hist{$cur_hist}}, $l; }
+  elsif ($l eq '')                            { $cur_hist = undef; }
+}
+close $fh;
+
+my @allops = qw(db_fetch txn_fetch db_foreach txn_foreach cursor_next
+                db_store txn_store db_begin_cursor txn_begin_cursor
+                begin_txn txn_commit txn_abort db_open db_yield db_repack);
+my %seen;
+for my $t (keys %ops) { $seen{$_} = 1 for keys %{$ops{$t}} }
+my @cols = grep { $seen{$_} } @allops;
+
+my %tot;
+for my $t (keys %ops) { $tot{$t} += $ops{$t}{$_} for keys %{$ops{$t}} }
+my $grand = 0; $grand += $tot{$_} for keys %tot;
+
+print "lib: $lib\n\n" if $lib;
+print "== operations per database type ==\n";
+printf "%-20s %10s %5s", 'DB TYPE', 'TOTAL', '%';
+printf " %10s", $_ for @cols;
+printf " %8s\n", 'FILES';
+for my $t (sort { $tot{$b} <=> $tot{$a} } keys %ops) {
+  printf "%-20s %10d %4.1f%%", $t, $tot{$t}, $grand ? 100 * $tot{$t} / $grand : 0;
+  printf " %10s", ($ops{$t}{$_} // 0) for @cols;
+  printf " %8s\n", scalar(keys %{$distinct{$t} || {}}) || '-';
+}
+printf "%-20s %10d\n", 'ALL', $grand;
+
+print "\n== flags by operation ==\n";
+for my $op (sort keys %flags) {
+  my $h = $flags{$op};
+  for my $v (sort { $h->{$b} <=> $h->{$a} } keys %$h) {
+    printf "  %-18s %10d  %s\n", $op, $h->{$v}, decode_flags($v);
+  }
+}
+
+if (%txnmode) {
+  print "\n== begin_txn lock mode ==\n";
+  printf "  shared=%d exclusive=%d\n",
+    $txnmode{shared} // 0, $txnmode{exclusive} // 0;
+}
+
+if (%hist) {
+  print "\n== size distributions (bytes) ==\n";
+  for my $h (sort keys %hist) {
+    print "$h:\n";
+    print "$_\n" for @{$hist{$h}};
+    print "\n";
+  }
+}
+
+# The @ops map is preallocated and silently drops keys once full, which would
+# understate a busy db rather than erroring, so say so loudly.
+if ($junk) {
+  printf "\n*** WARNING: %d resolved name(s) are not absolute paths - the struct\n", $junk;
+  print  "*** offsets are probably wrong for this build. Do not trust this run.\n";
+}
+
+if ($trunc) {
+  printf "\n*** WARNING: %d path(s) hit the %d-byte string limit and lost their\n",
+    $trunc, $strlen;
+  print  "*** trailing db name, so those rows are grouped wrongly.\n";
+  print  "*** Re-run with a larger STRLEN (must stay a multiple of 8).\n";
+}
+
+my $max = $ENV{BPFTRACE_MAP_KEYS_MAX} || 1048576;
+if (defined $nkeys && $nkeys >= 0.95 * $max) {
+  printf "\n*** WARNING: %d of %d map keys used - counts are probably TRUNCATED.\n",
+    $nkeys, $max;
+  print  "*** Re-run with a shorter window or a larger BPFTRACE_MAP_KEYS_MAX.\n";
+}
