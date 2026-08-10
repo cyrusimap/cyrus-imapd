@@ -1,8 +1,12 @@
 Description:
 
-twom: robustness fixes ported from the standalone library - a corrupt or
-truncated database is now reported as an error instead of crashing, and a
-bug in twom_db_repair which corrupted the skiplist has been fixed.
+twom: lib/twom.c and lib/twom.h are now an exact copy of the standalone
+library.  The port brings robustness fixes - a corrupt or truncated
+database is now reported as an error instead of crashing, bad arguments
+return TWOM_BADUSAGE instead of aborting, and a bug in twom_db_repair
+which corrupted the skiplist has been fixed - plus a large mechanical
+tidyup and a rework of all mmap access to be free of undefined
+behaviour.
 
 
 Documentation:
@@ -49,6 +53,27 @@ ones.  A checkpoint which still cannot match them - a database held open
 readonly, which could not have been repacked anyway - is now logged at
 INFO and retried after the next commit, instead of being reported as a
 DBERROR.
+
+Further fixes complete the vendoring:
+
+  - storing a value whose bytes differ from the stored one is no longer
+    skipped as unchanged when an external key comparator calls the two
+    equal; values are compared bytewise
+  - a read transaction can begin while the same handle has a write
+    transaction pending, as documented, instead of failing an assert
+  - every public entry point validates its arguments and returns
+    TWOM_BADUSAGE instead of asserting, so a NULL handle or key is an
+    error, not an abort (or undefined behaviour under -DNDEBUG)
+  - the record accessor macros parenthesise their arguments
+  - all reads and writes of the mmap'd file go through byte accessors
+    and memcpy instead of casts to wider integer types.  The old code
+    was undefined behaviour under strict aliasing, which the standalone
+    library's build disabled but the Cyrus build never did; it is now
+    correct without any special flags, and on any endianness
+  - twom generates its UUIDs itself instead of calling libuuid
+  - MINREWRITE was a transposition: 16834 is now 16384
+
+The on-disk format is unchanged throughout.
 
 
 GitHub issue:
