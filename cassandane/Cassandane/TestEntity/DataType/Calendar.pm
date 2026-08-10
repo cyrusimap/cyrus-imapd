@@ -71,6 +71,25 @@ package Cassandane::TestEntity::Instance::Calendar {
 
     with 'Cassandane::TestEntity::Role::ShareableInstance';
 
+=head2 create_event
+
+    my $event = $cal->create_event({ ... });
+
+This method creates a CalendarEvent instance that's in C<< $cal >> and no other
+calendars.
+
+=cut
+
+    sub create_event {
+        my ($self, $prop) = @_;
+        $prop //= {};
+
+        $self->user->calendarevents->create({
+            %$prop,
+            calendarIds => { $self->id => JSON::true() },
+        });
+    }
+
     no Moo;
 }
 

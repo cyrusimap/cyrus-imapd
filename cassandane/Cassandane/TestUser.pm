@@ -170,6 +170,10 @@ The following methods return factories for the relevant datatypes:
 
 returns a L<Cassandane::TestEntity::DataType::AddressBook> factory
 
+=item calendarevents
+
+returns a L<Cassandane::TestEntity::DataType::CalendarEvent> factory
+
 =item calendars
 
 returns a L<Cassandane::TestEntity::DataType::Calendar> factory
@@ -200,11 +204,12 @@ datatype.  Mailboxes are just used as an example.
 =cut
 
 for my $pair (
-    [ addressbooks => 'AddressBook' ],
-    [ calendars    => 'Calendar' ],
-    [ contacts     => 'ContactCard' ],
-    [ emails       => 'Email' ],
-    [ mailboxes    => 'Mailbox' ],
+    [ addressbooks   => 'AddressBook' ],
+    [ calendarevents => 'CalendarEvent' ],
+    [ calendars      => 'Calendar' ],
+    [ contacts       => 'ContactCard' ],
+    [ emails         => 'Email' ],
+    [ mailboxes      => 'Mailbox' ],
 ) {
     my ($attr, $moniker) = @$pair;
     my $module = "Cassandane::TestEntity::DataType::$moniker";
