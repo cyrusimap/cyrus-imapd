@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+# Asserts that events carry the special-use attributes of the mailbox they
+# refer to (vnd.fastmail.specialUse) and, for copy/move events, of the
+# source mailbox (vnd.fastmail.oldSpecialUse).  Both parameters are
+# omitted when the mailbox has no special-use attribute.
+
+sub test_specialuse_params
+    :min_version_3_13
+    ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Trash");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", "\\Trash");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    $self->make_message("Message A");
+
+    # discard events from setup
+    $self->{instance}->getnotify();
+
+    # copy from INBOX (no special-use) to Trash (\Trash)
+    $imaptalk->select("INBOX");
+    $imaptalk->copy("1", "INBOX.Trash");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    my @events = map { decode_json($_->{MESSAGE}) }
+                     $self->{instance}->getnotify->@*;
+    my ($copy) = grep { $_->{event} eq 'vnd.cmu.MessageCopy' } @events;
+    $self->assert_not_null($copy);
+    $self->assert_str_equals("\\Trash",
+        $copy->{'vnd.fastmail.specialUse'} // '');
+    $self->assert(!exists $copy->{'vnd.fastmail.oldSpecialUse'},
+        "INBOX has no special-use, so oldSpecialUse should be absent");
+
+    # copy back from Trash (\Trash) to INBOX (no special-use)
+    $imaptalk->select("INBOX.Trash");
+    $imaptalk->copy("1", "INBOX");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    @events = map { decode_json($_->{MESSAGE}) }
+                  $self->{instance}->getnotify->@*;
+    ($copy) = grep { $_->{event} eq 'vnd.cmu.MessageCopy' } @events;
+    $self->assert_not_null($copy);
+    $self->assert_str_equals("\\Trash",
+        $copy->{'vnd.fastmail.oldSpecialUse'} // '');
+    $self->assert(!exists $copy->{'vnd.fastmail.specialUse'},
+        "INBOX has no special-use, so specialUse should be absent");
+
+    # a flag change in Trash should also carry specialUse
+    $imaptalk->store('1', '+flags', '(\\Flagged)');
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    @events = map { decode_json($_->{MESSAGE}) }
+                  $self->{instance}->getnotify->@*;
+    my ($flagsset) = grep { $_->{event} eq 'FlagsSet' } @events;
+    $self->assert_not_null($flagsset);
+    $self->assert_str_equals("\\Trash",
+        $flagsset->{'vnd.fastmail.specialUse'} // '');
+
+    $imaptalk->logout();
+}
