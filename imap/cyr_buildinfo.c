@@ -202,6 +202,7 @@ static json_t *buildinfo()
     json_object_set_new(cyrusdb, "skiplist", json_true());
     json_object_set_new(cyrusdb, "twom", json_true());
     json_object_set_new(cyrusdb, "twoskip", json_true());
+    json_object_set_new(cyrusdb, "zeroskip", json_true());
 #ifdef USE_CYRUSDB_SQL
     {
         json_t *sql_engines = json_array();
