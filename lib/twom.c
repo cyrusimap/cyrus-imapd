@@ -297,14 +297,21 @@ static void tm_uuid_unparse(const tm_uuid_t uuid, char *out)
              uuid[8], uuid[9], uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]);
 }
 
-/* Little-endian load and store (the on-disk order, F-1 style).
+/* Little-endian load and store (the on-disk byte order).
  *
- * Assembled byte by byte through an unsigned char *, which aliases anything
- * and needs no alignment.  Nothing casts the mapped buffer to a wider
- * integer type, so these are correct on a big-endian host and on a target
- * that faults on an unaligned load, they do not drop const on a read, and
- * they do not depend on -fno-strict-aliasing.  Compilers recognise the
- * pattern and emit a single instruction where one is legal. */
+ * The unsigned char array IS the on-disk order, by construction, so these
+ * are correct on a big-endian host with no detection and no #ifdef.  memcpy
+ * to and from it aliases anything and needs no alignment, and every compiler
+ * folds a fixed-size memcpy of a locally built array into the single wide
+ * load or store the platform allows.
+ *
+ * The array-and-memcpy shape is load bearing: writing the bytes straight
+ * through an unsigned char * is equally correct but does NOT merge, and cost
+ * tm_store_here 65 extra instructions when it was written that way.  Loads
+ * widen either way; stores only merge through memcpy.
+ *
+ * Nothing here casts the mapped buffer to a wider integer type, so none of
+ * this depends on -fno-strict-aliasing, and a read keeps its const. */
 static inline uint8_t tm_get8(const char *p)
 {
     return *(const unsigned char *)p;
@@ -312,15 +319,17 @@ static inline uint8_t tm_get8(const char *p)
 
 static inline uint16_t tm_get16(const char *p)
 {
-    const unsigned char *u = (const unsigned char *)p;
-    return (uint16_t)((uint16_t)u[0] | ((uint16_t)u[1] << 8));
+    unsigned char b[2];
+    memcpy(b, p, sizeof(b));
+    return (uint16_t)((uint16_t)b[0] | ((uint16_t)b[1] << 8));
 }
 
 static inline uint32_t tm_get32(const char *p)
 {
-    const unsigned char *u = (const unsigned char *)p;
-    return (uint32_t)u[0] | ((uint32_t)u[1] << 8)
-         | ((uint32_t)u[2] << 16) | ((uint32_t)u[3] << 24);
+    unsigned char b[4];
+    memcpy(b, p, sizeof(b));
+    return (uint32_t)b[0] | ((uint32_t)b[1] << 8)
+         | ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24);
 }
 
 static inline uint64_t tm_get64(const char *p)
@@ -335,24 +344,34 @@ static inline void tm_put8(char *p, uint8_t v)
 
 static inline void tm_put16(char *p, uint16_t v)
 {
-    unsigned char *u = (unsigned char *)p;
-    u[0] = (unsigned char)(v & 0xFF);
-    u[1] = (unsigned char)((v >> 8) & 0xFF);
+    unsigned char b[2];
+    b[0] = (unsigned char)v;
+    b[1] = (unsigned char)(v >> 8);
+    memcpy(p, b, sizeof(b));
 }
 
 static inline void tm_put32(char *p, uint32_t v)
 {
-    unsigned char *u = (unsigned char *)p;
-    u[0] = (unsigned char)(v & 0xFF);
-    u[1] = (unsigned char)((v >> 8) & 0xFF);
-    u[2] = (unsigned char)((v >> 16) & 0xFF);
-    u[3] = (unsigned char)((v >> 24) & 0xFF);
+    unsigned char b[4];
+    b[0] = (unsigned char)v;
+    b[1] = (unsigned char)(v >> 8);
+    b[2] = (unsigned char)(v >> 16);
+    b[3] = (unsigned char)(v >> 24);
+    memcpy(p, b, sizeof(b));
 }
 
 static inline void tm_put64(char *p, uint64_t v)
 {
-    tm_put32(p, (uint32_t)(v & 0xFFFFFFFFU));
-    tm_put32(p + 4, (uint32_t)((v >> 32) & 0xFFFFFFFFU));
+    unsigned char b[8];
+    b[0] = (unsigned char)v;
+    b[1] = (unsigned char)(v >> 8);
+    b[2] = (unsigned char)(v >> 16);
+    b[3] = (unsigned char)(v >> 24);
+    b[4] = (unsigned char)(v >> 32);
+    b[5] = (unsigned char)(v >> 40);
+    b[6] = (unsigned char)(v >> 48);
+    b[7] = (unsigned char)(v >> 56);
+    memcpy(p, b, sizeof(b));
 }
 
 /********** POINTER MANAGEMENT *************/
