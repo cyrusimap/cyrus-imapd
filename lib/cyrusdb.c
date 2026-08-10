@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <dirent.h>
 
 #include "assert.h"
 #include "bsearch.h"
@@ -618,7 +619,31 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
 {
     FILE *f;
     char buf[32];
+    struct stat sbuf;
     int n;
+
+    if (stat(fname, &sbuf)) return NULL;
+
+    /* Every other backend is a single file identified by magic, but a zeroskip
+     * database is a directory.  Both its data files and its lock file are named
+     * "zeroskip*", so an empty-but-created database is still identified. */
+    if (S_ISDIR(sbuf.st_mode)) {
+        DIR *d = opendir(fname);
+        struct dirent *de;
+        const char *ret = NULL;
+
+        if (!d) return NULL;
+
+        while ((de = readdir(d)) != NULL) {
+            if (!strncmp(de->d_name, "zeroskip", 8)) {
+                ret = "zeroskip";
+                break;
+            }
+        }
+        closedir(d);
+
+        return ret;
+    }
 
     f = fopen(fname, "r");
     if (!f) return NULL;
