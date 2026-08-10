@@ -5,7 +5,11 @@ sub test_email_legacy_ids
     :MailboxLegacyDirs :NoAltNameSpace :Conversations :JMAPExtensions :NoStartInstances
     ($self)
 {
+    # Every database the fixture tarball carries is a plain file, so each
+    # must be configured to a file-shaped backend (see upgrade_v19_to_v20).
     $self->{instance}->{config}->set(mboxlist_db => 'twoskip');
+    $self->{instance}->{config}->set(conversations_db => 'twoskip');
+    $self->{instance}->{config}->set(annotation_db => 'twoskip');
 
     $self->_start_instances();
     $self->_setup_http_service_objects();

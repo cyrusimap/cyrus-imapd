@@ -77,10 +77,10 @@ EOF
     xlog $self, "Verify user data files/directories exist";
     my $data = $self->{instance}->run_mbpath('-u', 'cassandane');
     $self->assert_file_test($data->{user}{'sub'}, '-f');
-    $self->assert_file_test($data->{user}{seen}, '-f');
+    $self->assert_file_test($data->{user}{seen}, '-e');
     $self->assert_file_test($data->{user}{dav}, '-f');
     $self->assert_file_test($data->{user}{counters}, '-f');
-    $self->assert_file_test($data->{user}{conversations}, '-f');
+    $self->assert_file_test($data->{user}{conversations}, '-e');
     $self->assert_file_test($data->{user}{xapianactive}, '-f');
     $self->assert_file_test("$data->{user}{sieve}/defaultbc", '-f');
     $self->assert_file_test($data->{xapian}{t1}, '-d');
