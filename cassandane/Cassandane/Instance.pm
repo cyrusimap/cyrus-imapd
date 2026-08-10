@@ -139,7 +139,8 @@ sub new
     if ($self->{buildinfo}->get('cyrusdb', undef)) {
         # find best default backend based on what installed cyrus supports
         my @backends = grep { defined }
-                            ($ENV{CASSANDANE_DEFAULT_DB}, 'twom', 'twoskip');
+                            ($ENV{CASSANDANE_DEFAULT_DB}, 'twom', 'twoskip',
+                             'zeroskip');
         my $default_backend;
 
         foreach my $b (@backends) {
