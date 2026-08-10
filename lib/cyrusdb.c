@@ -170,6 +170,21 @@ static int _myopen(const char *backend, const char *fname,
 
     /* check if it opens normally.  Horray */
     r = db->backend->open(fname, flags, &db->engine, tid);
+
+    /* A zeroskip database is a directory and every other backend is a file, so
+     * a shape mismatch fails deep in the backend as an I/O error - EISDIR from
+     * a file backend, ENOTDIR from zeroskip.  Neither reaches the conversion
+     * path on its own, so recognise it here, where the backend's expectation is
+     * known, and report it as the format mismatch it is. */
+    if (r && r != CYRUSDB_NOTFOUND) {
+        struct stat sbuf;
+        if (!stat(fname, &sbuf)) {
+            int isdir = S_ISDIR(sbuf.st_mode) ? 1 : 0;
+            int wantdir = (db->backend->flags & CYRUSDB_BACKEND_ISDIR) ? 1 : 0;
+            if (isdir != wantdir) r = CYRUSDB_BADFORMAT;
+        }
+    }
+
     if (r == CYRUSDB_BADFORMAT) {
         r = _detect_or_convert(db, backend, fname, flags);
         if (r) goto done;
