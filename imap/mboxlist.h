@@ -167,9 +167,12 @@ struct mboxlist_rawkey {
 #define MBOXLIST_RAWKEY_INITIALIZER \
     { MBOXLIST_KEY_UNKNOWN, NULL, NULL, NULL, NULL, NULL, 0 }
 
-/* mbentry is NULL if the value could not be parsed */
+/* key/keylen are the stored bytes, so that a caller can remove exactly
+ * what it saw.  parsed is the interpretation of those bytes; mbentry is
+ * NULL if the value could not be parsed. */
 typedef int mboxlist_rawproc_t(void *rock,
-                               const struct mboxlist_rawkey *key,
+                               const char *key, size_t keylen,
+                               const struct mboxlist_rawkey *parsed,
                                const mbentry_t *mbentry,
                                const char *data, size_t datalen);
 
@@ -178,6 +181,21 @@ int mboxlist_parse_rawkey(const char *key, size_t keylen,
 void mboxlist_rawkey_fini(struct mboxlist_rawkey *rawkey);
 int mboxlist_foreach_raw(mboxlist_rawproc_t *proc, void *rock,
                          struct txn **tid);
+
+/* Build the key for a record.  The inverse of mboxlist_parse_rawkey(),
+ * kept here so that key format knowledge stays in one file. */
+void mboxlist_key_for_name(const char *mboxname, struct buf *key);
+void mboxlist_key_for_id(const char *uniqueid, struct buf *key);
+void mboxlist_key_for_jmapid(const char *userid, const char *jmapid,
+                             struct buf *key);
+
+/* Raw key writes, for repairing a damaged keyspace.  The caller owns the
+ * transaction, so that a repair touching several keys either lands whole
+ * or not at all. */
+int mboxlist_rawkey_delete(const char *key, size_t keylen, struct txn **tid);
+int mboxlist_rawkey_store(const char *key, size_t keylen,
+                          const char *data, size_t datalen,
+                          struct txn **tid);
 
 char *mboxlist_find_specialuse(const char *use, const char *userid);
 char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,

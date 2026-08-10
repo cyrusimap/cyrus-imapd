@@ -1226,7 +1226,8 @@ static int rawforeach_cb(void *rock, const char *key, size_t keylen,
         mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
     }
 
-    r = frock->proc(frock->rock, &rawkey, mbentry, data, datalen);
+    r = frock->proc(frock->rock, key, keylen, &rawkey, mbentry,
+                    data, datalen);
 
     mboxlist_entry_free(&mbentry);
     mboxlist_rawkey_fini(&rawkey);
@@ -1244,6 +1245,43 @@ EXPORTED int mboxlist_foreach_raw(mboxlist_rawproc_t *proc, void *rock,
     /* One foreach inside a single transaction gives a consistent snapshot
      * across all key types, which every cross-check depends on. */
     return cyrusdb_foreach(mbdb, "", 0, NULL, rawforeach_cb, &frock, tid);
+}
+
+EXPORTED void mboxlist_key_for_name(const char *mboxname, struct buf *key)
+{
+    char *dbname = mboxname_to_dbname(mboxname);
+
+    mboxlist_dbname_to_key(dbname, strlen(dbname), NULL, key);
+
+    free(dbname);
+}
+
+EXPORTED void mboxlist_key_for_id(const char *uniqueid, struct buf *key)
+{
+    mboxlist_id_to_key(uniqueid, key);
+}
+
+EXPORTED void mboxlist_key_for_jmapid(const char *userid, const char *jmapid,
+                                      struct buf *key)
+{
+    mboxlist_jmapid_to_key(userid, jmapid, key);
+}
+
+EXPORTED int mboxlist_rawkey_delete(const char *key, size_t keylen,
+                                    struct txn **tid)
+{
+    init_internal();
+
+    return cyrusdb_delete(mbdb, key, keylen, tid, /*force*/1);
+}
+
+EXPORTED int mboxlist_rawkey_store(const char *key, size_t keylen,
+                                   const char *data, size_t datalen,
+                                   struct txn **tid)
+{
+    init_internal();
+
+    return cyrusdb_store(mbdb, key, keylen, data, datalen, tid);
 }
 
 static int user_can_read(const strarray_t *aclbits, const char *user)

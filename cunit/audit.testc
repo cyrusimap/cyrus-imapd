@@ -3,6 +3,7 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <string.h>
+#include <utime.h>
 
 #include "cunit/unit.h"
 
@@ -1241,6 +1242,160 @@ static void test_scan_flags_misfiled_uniqueid(void)
     CU_ASSERT(find_code(&out, "fs-misfiled-uniqueid"));
 
     strarray_fini(&found);
+    buf_free(&out);
+}
+
+/* ------------------------------------------------------------------ */
+/* the young-guard and safe removal                                   */
+
+static struct audit_state *delete_state(struct buf *out, int really)
+{
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    config.out = out;
+    config.do_delete = 1;
+    config.really = really;
+    return audit_begin(&config);
+}
+
+static void backdate(const char *path)
+{
+    struct utimbuf times;
+
+    times.actime = times.modtime = time(NULL) - (AUDIT_MIN_AGE + 60);
+    CU_ASSERT_EQUAL(utime(path, &times), 0);
+}
+
+/* Anything younger than the guard may belong to an operation still in
+ * flight.  This is the guard's entire contract. */
+static void test_young_path_is_protected(void)
+{
+    char path[] = "/tmp/audit-young-XXXXXX";
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    CU_ASSERT(audit_path_is_young(path));
+
+    rmdir(path);
+}
+
+static void test_backdated_path_is_not_young(void)
+{
+    char path[] = "/tmp/audit-old-XXXXXX";
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    backdate(path);
+
+    CU_ASSERT(!audit_path_is_young(path));
+
+    rmdir(path);
+}
+
+/* A path that has already gone is not something to protect. */
+static void test_missing_path_is_not_young(void)
+{
+    CU_ASSERT(!audit_path_is_young("/tmp/audit-definitely-not-here"));
+}
+
+/* Without --really nothing may be touched, whatever else is set. */
+static void test_remove_respects_dry_run(void)
+{
+    char path[] = "/tmp/audit-dry-XXXXXX";
+    struct buf out = BUF_INITIALIZER;
+    struct stat sbuf;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    backdate(path);
+
+    audit_remove_path(delete_state(&out, 0), path);
+
+    CU_ASSERT_EQUAL(stat(path, &sbuf), 0);
+
+    rmdir(path);
+    buf_free(&out);
+}
+
+static void test_remove_deletes_when_really(void)
+{
+    char path[] = "/tmp/audit-real-XXXXXX";
+    struct buf out = BUF_INITIALIZER;
+    struct stat sbuf;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    backdate(path);
+
+    audit_remove_path(delete_state(&out, 1), path);
+
+    CU_ASSERT_EQUAL(stat(path, &sbuf), -1);
+
+    buf_free(&out);
+}
+
+/* A young path is reported but survives even with --really. */
+static void test_remove_spares_young_even_when_really(void)
+{
+    char path[] = "/tmp/audit-spare-XXXXXX";
+    struct buf out = BUF_INITIALIZER;
+    struct stat sbuf;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    /* deliberately not backdated */
+
+    audit_remove_path(delete_state(&out, 1), path);
+
+    CU_ASSERT_EQUAL(stat(path, &sbuf), 0);
+    CU_ASSERT(find_code(&out, "skipped-too-young"));
+
+    rmdir(path);
+    buf_free(&out);
+}
+
+/* Without --delete, removal is not even considered: a plain audit must
+ * never touch anything. */
+static void test_remove_does_nothing_without_delete(void)
+{
+    char path[] = "/tmp/audit-nodel-XXXXXX";
+    struct buf out = BUF_INITIALIZER;
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    struct stat sbuf;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    backdate(path);
+
+    config.out = &out;
+    config.really = 1;      /* but do_delete is off */
+    audit_remove_path(audit_begin(&config), path);
+
+    CU_ASSERT_EQUAL(stat(path, &sbuf), 0);
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    rmdir(path);
+    buf_free(&out);
+}
+
+/* A non-empty directory must go entirely: a mailbox directory always has
+ * files in it. */
+static void test_remove_deletes_recursively(void)
+{
+    char path[] = "/tmp/audit-tree-XXXXXX";
+    struct buf out = BUF_INITIALIZER;
+    struct buf file = BUF_INITIALIZER;
+    struct stat sbuf;
+    FILE *f;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    test_mkpath("%s/sub", path);
+
+    buf_printf(&file, "%s/sub/cyrus.index", path);
+    f = fopen(buf_cstring(&file), "w");
+    CU_ASSERT_PTR_NOT_NULL(f);
+    if (f) fclose(f);
+
+    backdate(path);
+
+    audit_remove_path(delete_state(&out, 1), path);
+
+    CU_ASSERT_EQUAL(stat(path, &sbuf), -1);
+
+    buf_free(&file);
     buf_free(&out);
 }
 
