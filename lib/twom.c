@@ -7,19 +7,6 @@
  */
 
 #include <assert.h>
-#ifdef __APPLE__
-#include <libkern/OSByteOrder.h>
-#define htole16(x) OSSwapHostToLittleInt16(x)
-#define le16toh(x) OSSwapLittleToHostInt16(x)
-#define htole32(x) OSSwapHostToLittleInt32(x)
-#define le32toh(x) OSSwapLittleToHostInt32(x)
-#define htole64(x) OSSwapHostToLittleInt64(x)
-#define le64toh(x) OSSwapLittleToHostInt64(x)
-#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
-#include <sys/endian.h>
-#else
-#include <endian.h>
-#endif
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
@@ -310,6 +297,64 @@ static void tm_uuid_unparse(const tm_uuid_t uuid, char *out)
              uuid[8], uuid[9], uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]);
 }
 
+/* Little-endian load and store (the on-disk order, F-1 style).
+ *
+ * Assembled byte by byte through an unsigned char *, which aliases anything
+ * and needs no alignment.  Nothing casts the mapped buffer to a wider
+ * integer type, so these are correct on a big-endian host and on a target
+ * that faults on an unaligned load, they do not drop const on a read, and
+ * they do not depend on -fno-strict-aliasing.  Compilers recognise the
+ * pattern and emit a single instruction where one is legal. */
+static inline uint8_t tm_get8(const char *p)
+{
+    return *(const unsigned char *)p;
+}
+
+static inline uint16_t tm_get16(const char *p)
+{
+    const unsigned char *u = (const unsigned char *)p;
+    return (uint16_t)((uint16_t)u[0] | ((uint16_t)u[1] << 8));
+}
+
+static inline uint32_t tm_get32(const char *p)
+{
+    const unsigned char *u = (const unsigned char *)p;
+    return (uint32_t)u[0] | ((uint32_t)u[1] << 8)
+         | ((uint32_t)u[2] << 16) | ((uint32_t)u[3] << 24);
+}
+
+static inline uint64_t tm_get64(const char *p)
+{
+    return (uint64_t)tm_get32(p) | ((uint64_t)tm_get32(p + 4) << 32);
+}
+
+static inline void tm_put8(char *p, uint8_t v)
+{
+    *(unsigned char *)p = v;
+}
+
+static inline void tm_put16(char *p, uint16_t v)
+{
+    unsigned char *u = (unsigned char *)p;
+    u[0] = (unsigned char)(v & 0xFF);
+    u[1] = (unsigned char)((v >> 8) & 0xFF);
+}
+
+static inline void tm_put32(char *p, uint32_t v)
+{
+    unsigned char *u = (unsigned char *)p;
+    u[0] = (unsigned char)(v & 0xFF);
+    u[1] = (unsigned char)((v >> 8) & 0xFF);
+    u[2] = (unsigned char)((v >> 16) & 0xFF);
+    u[3] = (unsigned char)((v >> 24) & 0xFF);
+}
+
+static inline void tm_put64(char *p, uint64_t v)
+{
+    tm_put32(p, (uint32_t)(v & 0xFFFFFFFFU));
+    tm_put32(p + 4, (uint32_t)((v >> 32) & 0xFFFFFFFFU));
+}
+
 /********** POINTER MANAGEMENT *************/
 
 /* pad out to an 8 byte boundary */
@@ -318,33 +363,35 @@ static void tm_uuid_unparse(const tm_uuid_t uuid, char *out)
 /* Direct accessors for every part of a record.
  *
  * Every parameter is parenthesised.  They were not, and "+" binds tighter
- * than "?:", so NEXTN(a ? b : c, n) silently read from c + offset. */
+ * than "?:", so NEXTN(a ? b : c, n) silently read from c + offset.
+ *
+ * Reads go through tm_get*, so they take a const char * and stay const. */
 #define LOCBACKPTR(loc, n) ((loc)->file->base + (loc)->backloc[(n)])
 #define LOCPTR(loc) ((loc)->file->base + (loc)->offset)
-#define TYPE(ptr) (*((uint8_t *)(ptr)))
-#define LEVEL(ptr) (*((uint8_t *)((ptr)+1)))
+#define TYPE(ptr) tm_get8(ptr)
+#define LEVEL(ptr) tm_get8((ptr)+1)
 /* replace and delete records have an extra offset */
-#define KLSKINNY(ptr) ((size_t)le16toh(*((uint16_t *)((ptr)+2))))
-#define KLFAT(ptr) ((size_t)le64toh(*((uint64_t *)((ptr)+8))))
-#define VLSKINNY(ptr) ((size_t)le32toh(*((uint32_t *)((ptr)+4))))
-#define VLFAT(ptr) ((size_t)le64toh(*((uint64_t *)((ptr)+16))))
+#define KLSKINNY(ptr) ((size_t)tm_get16((ptr)+2))
+#define KLFAT(ptr) ((size_t)tm_get64((ptr)+8))
+#define VLSKINNY(ptr) ((size_t)tm_get32((ptr)+4))
+#define VLFAT(ptr) ((size_t)tm_get64((ptr)+16))
 #define HLCALC(type, level) (ptroffset[(type)] + (8 * (1 + (level))))
 #define HEADLEN(ptr) ((size_t)HLCALC(TYPE(ptr), LEVEL(ptr)))
-#define HEADCSUM(ptr) ((uint32_t)le32toh(*((uint32_t *)((ptr) + HEADLEN(ptr)))))
+#define HEADCSUM(ptr) tm_get32((ptr) + HEADLEN(ptr))
 #define TLCALC(type, keylen, vallen) (hastail[(type)] ? PAD8((keylen) + (vallen) + 2) : 0)
 #define TAILLEN(ptr) ((size_t)TLCALC(TYPE(ptr), KEYLEN(ptr), VALLEN(ptr)))
-#define TAILCSUM(ptr) ((uint32_t)le32toh(*((uint32_t *)((ptr) + HEADLEN(ptr) + 4))))
+#define TAILCSUM(ptr) tm_get32((ptr) + HEADLEN(ptr) + 4)
 #define KEYLEN(ptr) ((size_t)(hastail[TYPE(ptr)] ? (fatrecord[TYPE(ptr)] ? KLFAT(ptr) : KLSKINNY(ptr)) : 0))
 #define KEYPTR(ptr) (hastail[TYPE(ptr)] ? ((ptr) + HEADLEN(ptr) + 8) : "")
 #define VALLEN(ptr) ((size_t)(fatrecord[TYPE(ptr)] ? VLFAT(ptr) : VLSKINNY(ptr)))
 #define VALPTR(ptr) ((ptr) + HEADLEN(ptr) + 8 + KEYLEN(ptr) + 1)
-#define ANCESTOR(ptr) (ancestoroffset[TYPE(ptr)] ? le64toh(*((uint64_t *)((ptr)+(ancestoroffset[TYPE(ptr)])))) : 0)
+#define ANCESTOR(ptr) (ancestoroffset[TYPE(ptr)] ? tm_get64((ptr)+(ancestoroffset[TYPE(ptr)])) : 0)
 #define NEXT0PTR(ptr, alt) ((ptr) + ptroffset[TYPE(ptr)] + ((alt) ? 8 : 0))
 #define NEXTNPTR(ptr, lvl) ((ptr) + ptroffset[TYPE(ptr)] + 8 * (1 + (lvl)))
-#define NEXT0(ptr, alt) le64toh(*((uint64_t *)NEXT0PTR(ptr, alt)))
-#define NEXTN(ptr, lvl) le64toh(*((uint64_t *)NEXTNPTR(ptr, lvl)))
+#define NEXT0(ptr, alt) tm_get64(NEXT0PTR(ptr, alt))
+#define NEXTN(ptr, lvl) tm_get64(NEXTNPTR(ptr, lvl))
 #define SET0(file, ptr, offset) tm_setloc0(file, ptr, offset)
-#define SETN(ptr, level, offset)  *((uint64_t *)((ptr) + ptroffset[TYPE(ptr)] + 8 * ((level) + 1))) = htole64(offset)
+#define SETN(ptr, level, offset) tm_put64((ptr) + ptroffset[TYPE(ptr)] + 8 * ((level) + 1), (offset))
 
 static size_t tm_reclen_dummy(const char *ptr __attribute__((unused)))
 {
@@ -394,12 +441,16 @@ static size_t(*reclenfn[])(const char *) = {
 
 /* return a "safe" pointer - that's one where it's guaranteed that the entire record
  * fits inside 'end', and that the type and level (which are read straight from
- * the file and used to index tables and size arrays) are in range */
-static inline const char *tm_safeptr_raw(struct tm_file *file, size_t offset, size_t end)
+ * the file and used to index tables and size arrays) are in range
+ *
+ * Writable, because file->base is; the const-returning wrappers below are
+ * what almost every caller wants, and the two write paths (recovery
+ * repairing pointers, and the record builder) take this one. */
+static inline char *tm_safeptr_mut_raw(struct tm_file *file, size_t offset, size_t end)
 {
     if (!offset) return NULL;
     if (end < offset + 24) return NULL;  /* need space for the head info */
-    const char *base = file->base + offset;
+    char *base = file->base + offset;
     if (!*base) return NULL;  /* no type */
     if (*base & ~7) return NULL;  /* invalid type */
     /* callers index arrays of MAXLEVEL+1 entries (loc->backloc, and the
@@ -411,10 +462,21 @@ static inline const char *tm_safeptr_raw(struct tm_file *file, size_t offset, si
     return base;
 }
 
+static inline const char *tm_safeptr_raw(struct tm_file *file, size_t offset, size_t end)
+{
+    return tm_safeptr_mut_raw(file, offset, end);
+}
+
 /* the common case: a record within the mapped space that the location can see */
 static inline const char *tm_safeptr(struct tm_loc *loc, size_t offset)
 {
-    return tm_safeptr_raw(loc->file, offset, loc->end);
+    return tm_safeptr_mut_raw(loc->file, offset, loc->end);
+}
+
+/* the same record, for a caller that is going to modify it */
+static inline char *tm_safeptr_mut(struct tm_loc *loc, size_t offset)
+{
+    return tm_safeptr_mut_raw(loc->file, offset, loc->end);
 }
 
 /* find the more recent of the forward pointers at level 0 */
@@ -659,7 +721,7 @@ static int tm_read_header(struct twom_db *db, struct tm_file *file, struct tm_he
     memcpy(header->uuid, base + OFFSET_UUID, 16);
 
     header->version
-        = le32toh(*((uint32_t *)(base + OFFSET_VERSION)));
+        = tm_get32(base + OFFSET_VERSION);
 
     if (header->version > TWOM_VERSION) {
         db->error("invalid version",
@@ -669,7 +731,7 @@ static int tm_read_header(struct twom_db *db, struct tm_file *file, struct tm_he
     }
 
     header->flags
-        = le32toh(*((uint32_t *)(base + OFFSET_FLAGS)));
+        = tm_get32(base + OFFSET_FLAGS);
 
     if (header->flags & TWOM_CSUM_EXTERNAL) {
         if (!db->external_csum) {
@@ -694,22 +756,22 @@ static int tm_read_header(struct twom_db *db, struct tm_file *file, struct tm_he
     }
 
     header->generation
-        = le64toh(*((uint64_t *)(base + OFFSET_GENERATION)));
+        = tm_get64(base + OFFSET_GENERATION);
 
     header->num_records
-        = le64toh(*((uint64_t *)(base + OFFSET_NUM_RECORDS)));
+        = tm_get64(base + OFFSET_NUM_RECORDS);
 
     header->num_commits
-        = le64toh(*((uint64_t *)(base + OFFSET_NUM_COMMITS)));
+        = tm_get64(base + OFFSET_NUM_COMMITS);
 
     header->dirty_size
-        = le64toh(*((uint64_t *)(base + OFFSET_DIRTY_SIZE)));
+        = tm_get64(base + OFFSET_DIRTY_SIZE);
 
     header->repack_size
-        = le64toh(*((uint64_t *)(base + OFFSET_REPACK_SIZE)));
+        = tm_get64(base + OFFSET_REPACK_SIZE);
 
     header->current_size
-        = le64toh(*((uint64_t *)(base + OFFSET_CURRENT_SIZE)));
+        = tm_get64(base + OFFSET_CURRENT_SIZE);
 
     /* these are values read straight from the file, so a truncated or
      * corrupted file must be reported as such rather than asserting (which
@@ -722,7 +784,7 @@ static int tm_read_header(struct twom_db *db, struct tm_file *file, struct tm_he
     }
 
     uint32_t maxlevel
-        = le32toh(*((uint32_t *)(base + OFFSET_MAXLEVEL)));
+        = tm_get32(base + OFFSET_MAXLEVEL);
 
     if (maxlevel > MAXLEVEL) {
         db->error("invalid maxlevel",
@@ -734,7 +796,7 @@ static int tm_read_header(struct twom_db *db, struct tm_file *file, struct tm_he
 
     if (db->nocsum) return 0;
 
-    uint32_t csum = le32toh(*((uint32_t *)(base + OFFSET_CSUM)));
+    uint32_t csum = tm_get32(base + OFFSET_CSUM);
     if (file->csum(base, OFFSET_CSUM) != csum) {
         db->error("header checksum failure",
                   "filename=<%s>", db->fname);
@@ -749,16 +811,16 @@ static void tm_pack_header(struct tm_header *header, struct tm_file *file, char 
 {
     memcpy(base, HEADER_MAGIC, HEADER_MAGIC_SIZE);
     memcpy(base + OFFSET_UUID, header->uuid, 16);
-    *((uint32_t *)(base + OFFSET_VERSION)) = htole32(header->version);
-    *((uint32_t *)(base + OFFSET_FLAGS)) = htole32(header->flags);
-    *((uint64_t *)(base + OFFSET_GENERATION)) = htole64(header->generation);
-    *((uint64_t *)(base + OFFSET_NUM_RECORDS)) = htole64(header->num_records);
-    *((uint64_t *)(base + OFFSET_NUM_COMMITS)) = htole64(header->num_commits);
-    *((uint64_t *)(base + OFFSET_DIRTY_SIZE)) = htole64(header->dirty_size);
-    *((uint64_t *)(base + OFFSET_REPACK_SIZE)) = htole64(header->repack_size);
-    *((uint64_t *)(base + OFFSET_CURRENT_SIZE)) = htole64(header->current_size);
-    *((uint32_t *)(base + OFFSET_MAXLEVEL)) = htole32(header->maxlevel);
-    *((uint32_t *)(base + OFFSET_CSUM)) = htole32(file->csum(base, OFFSET_CSUM));
+    tm_put32(base + OFFSET_VERSION, header->version);
+    tm_put32(base + OFFSET_FLAGS, header->flags);
+    tm_put64(base + OFFSET_GENERATION, header->generation);
+    tm_put64(base + OFFSET_NUM_RECORDS, header->num_records);
+    tm_put64(base + OFFSET_NUM_COMMITS, header->num_commits);
+    tm_put64(base + OFFSET_DIRTY_SIZE, header->dirty_size);
+    tm_put64(base + OFFSET_REPACK_SIZE, header->repack_size);
+    tm_put64(base + OFFSET_CURRENT_SIZE, header->current_size);
+    tm_put32(base + OFFSET_MAXLEVEL, header->maxlevel);
+    tm_put32(base + OFFSET_CSUM, file->csum(base, OFFSET_CSUM));
 }
 
 /* simple wrapper to write with an fsync */
@@ -802,14 +864,14 @@ static inline void tm_setloc0(struct tm_file *file, char *ptr, size_t offset)
     if (val0 < end && (val1 >= end || val0 > val1))
         addr += 8;  /* conditions to write to val1 */
 
-    *((uint64_t *)(addr)) = htole64(offset);
+    tm_put64(addr, offset);
 }
 
 static inline void tm_recsum(struct tm_file *file, char *ptr)
 {
     size_t headlen = HEADLEN(ptr);
     uint32_t newcsum = file->csum(ptr, headlen);
-    *((uint32_t *)(ptr + headlen)) = htole32(newcsum);
+    tm_put32(ptr + headlen, newcsum);
 }
 
 /********** LOCATION MANAGEMENT *************/
@@ -1091,7 +1153,7 @@ static int tm_delete_here(struct twom_txn *txn, struct tm_loc *loc)
 
     char *addr = base;
 
-    *((uint8_t *)(addr)) = DELETE;
+    tm_put8(addr, DELETE);
     addr += 8;
 
     /* update the level0 back record and re-checksum */
@@ -1100,11 +1162,11 @@ static int tm_delete_here(struct twom_txn *txn, struct tm_loc *loc)
     tm_recsum(file, backptr);
 
     /* set ancestor to current record */
-    *((uint64_t *)(addr)) = htole64(loc->offset);
+    tm_put64(addr, loc->offset);
     addr += 8;
 
     /* calculate checksum of current record */
-    *((uint32_t *)(addr)) = htole32(file->csum(base, headlen));
+    tm_put32(addr, file->csum(base, headlen));
 
     /* update header to know details of new record */
     header->dirty_size += reclen;
@@ -1205,22 +1267,22 @@ static int tm_store_here(struct twom_txn *txn, const char *key, size_t keylen, c
     /* the first 1-3 blocks are metadata.  Fat records have extra for the key
      * and value lengths
      */
-    *((uint8_t *)(addr)) = type;
-    *((uint8_t *)(addr+1)) = level;
+    tm_put8(addr, type);
+    tm_put8(addr+1, level);
     if (fatrecord[type]) {
-        *((uint64_t *)(addr+8)) = htole64(keylen);
-        *((uint64_t *)(addr+16)) = htole64(vallen);
+        tm_put64(addr+8, keylen);
+        tm_put64(addr+16, vallen);
         addr += 24;
     }
     else {
-        *((uint16_t *)(addr+2)) = htole16(keylen);
-        *((uint32_t *)(addr+4)) = htole32(vallen);
+        tm_put16(addr+2, keylen);
+        tm_put32(addr+4, vallen);
         addr += 8;
     }
 
     /* replacement records have an ancestor for MVCC chaining */
     if (ancestoroffset[type]) {
-        *((uint64_t *)(addr)) = htole64(ancestor);
+        tm_put64(addr, ancestor);
         addr += 8;
     }
 
@@ -1240,7 +1302,7 @@ static int tm_store_here(struct twom_txn *txn, const char *key, size_t keylen, c
         char *prevptr = backptr;
         const char *fwd = oldrec ? oldrec : backptr;
 
-        *((uint64_t *)(addr)) = htole64(tm_advance0(fwd, end));
+        tm_put64(addr, tm_advance0(fwd, end));
         addr += 8;
         SET0(file, backptr, offset);
 
@@ -1250,7 +1312,7 @@ static int tm_store_here(struct twom_txn *txn, const char *key, size_t keylen, c
             if (backptr != prevptr) tm_recsum(file, prevptr);
             prevptr = backptr;
             fwd = oldrec ? oldrec : backptr;
-            *((uint64_t *)(addr)) = htole64(NEXTN(fwd, n));
+            tm_put64(addr, NEXTN(fwd, n));
             addr += 8;
             SETN(backptr, n, offset);
         }
@@ -1260,7 +1322,7 @@ static int tm_store_here(struct twom_txn *txn, const char *key, size_t keylen, c
     }
 
     /* head checksum */
-    *((uint32_t *)(addr)) = htole32(file->csum(base, headlen));
+    tm_put32(addr, file->csum(base, headlen));
 
     /* if we have a KEY then we add a tail (key, maybe value, plus padding),
      * otherwise we've already zeroed out the tailcsum field.
@@ -1274,7 +1336,7 @@ static int tm_store_here(struct twom_txn *txn, const char *key, size_t keylen, c
             memcpy(addr + 8 + keylen + 1, val, vallen);
             addr[8+keylen+1+vallen] = 0;
         }
-        *((uint32_t *)(addr+4)) = htole32(file->csum(addr+8, taillen));
+        tm_put32(addr+4, file->csum(addr+8, taillen));
     }
 
     /* update header to know details of new record */
@@ -1364,7 +1426,7 @@ static int tm_recovery_pass(struct twom_db *db, struct tm_loc *loc, int *count)
     assert(loc->file == db->openfile);
     struct tm_file *file = loc->file;
 
-    const char *ptr = tm_safeptr(loc, DUMMY_OFFSET);
+    char *ptr = tm_safeptr_mut(loc, DUMMY_OFFSET);
     if (!ptr) {
         db->error("failed to read DUMMY for recovery",
                   "fname=<%s>", db->fname);
@@ -1379,8 +1441,8 @@ static int tm_recovery_pass(struct twom_db *db, struct tm_loc *loc, int *count)
         /* check for broken level - pointers, and extract the best next pointer */
         if (cur >= loc->end) {
             /* zero out bogus pointer */
-            *((uint64_t *)(NEXT0PTR(ptr, i))) = 0;
-            tm_recsum(file, (char *)ptr);
+            tm_put64(NEXT0PTR(ptr, i), 0);
+            tm_recsum(file, ptr);
             changed++;
         }
         else if (cur > next[0]) {
@@ -1395,7 +1457,7 @@ static int tm_recovery_pass(struct twom_db *db, struct tm_loc *loc, int *count)
 
     while (next[0]) {
         size_t deleted_offset = 0;
-        const char *nextptr = tm_safeptr(loc, next[0]);
+        char *nextptr = tm_safeptr_mut(loc, next[0]);
         if (!nextptr) {
             db->error("failed to read next record for recovery",
                       "fname=<%s> prev_key=<%.*s> offset=<%08llX>",
@@ -1408,7 +1470,7 @@ static int tm_recovery_pass(struct twom_db *db, struct tm_loc *loc, int *count)
             dirty_size += 24;
             next[0] = ANCESTOR(nextptr);
             if (!next[0]) return TWOM_IOERROR;
-            nextptr = tm_safeptr(loc, next[0]);
+            nextptr = tm_safeptr_mut(loc, next[0]);
             if (!nextptr) return TWOM_IOERROR;
         }
 
@@ -1461,7 +1523,7 @@ static int tm_recovery_pass(struct twom_db *db, struct tm_loc *loc, int *count)
         for (i = 1; i < level; i++) {
             if (next[i] != next[0]) {
                 char *rec = file->base + prev[i];
-                *((uint64_t *)(NEXTNPTR(rec, i))) = htole64(next[0]);
+                tm_put64(NEXTNPTR(rec, i), next[0]);
                 tm_recsum(file, rec);
                 changed++;
             }
@@ -1476,8 +1538,8 @@ static int tm_recovery_pass(struct twom_db *db, struct tm_loc *loc, int *count)
             /* check for broken level - pointers, and extract the best next pointer */
             if (cur >= loc->end) {
                 /* zero out bogus pointer */
-                *((uint64_t *)(NEXT0PTR(nextptr, i))) = 0;
-                tm_recsum(file, (char *)nextptr);
+                tm_put64(NEXT0PTR(nextptr, i), 0);
+                tm_recsum(file, nextptr);
                 changed++;
             }
             else if (cur > next[0]) {
@@ -1495,7 +1557,7 @@ static int tm_recovery_pass(struct twom_db *db, struct tm_loc *loc, int *count)
     for (i = 1; i < MAXLEVEL; i++) {
         if (next[i]) {
             char *rec = file->base + prev[i];
-            *((uint64_t *)(NEXTNPTR(rec, i))) = htole64(next[0]);
+            tm_put64(NEXTNPTR(rec, i), next[0]);
             tm_recsum(file, rec);
             changed++;
         }
@@ -2188,9 +2250,9 @@ static int tm_initdb(struct twom_db *db, int flags)
     /* write a blank dummy record */
     size_t headlen = HLCALC(DUMMY, MAXLEVEL);
     char *base = scratch + DUMMY_OFFSET;
-    *((uint8_t *)(base)) = DUMMY;
-    *((uint8_t *)(base+1)) = MAXLEVEL;
-    *((uint32_t *)(base+headlen)) = htole32(file->csum(base, headlen));
+    tm_put8(base, DUMMY);
+    tm_put8(base+1, MAXLEVEL);
+    tm_put32(base+headlen, file->csum(base, headlen));
 
     /* ensure that the data is written to the file! */
     size_t written;
@@ -2382,9 +2444,9 @@ static int tm_commit_locked(struct twom_txn **txnp)
     char *base = file->base + file->written_size;
     memset(base, 0, reclen);  /* zero out the whole thing before we set just the bits we want */
 
-    *((uint8_t *)(base)) = COMMIT;
-    *((uint64_t *)(base+8)) = htole64(header->current_size);
-    *((uint32_t *)(base+16)) = htole32(file->csum(base, headlen));
+    tm_put8(base, COMMIT);
+    tm_put64(base+8, header->current_size);
+    tm_put32(base+16, file->csum(base, headlen));
 
     file->written_size += reclen;
     txn->end = file->written_size;
@@ -3600,9 +3662,9 @@ int twom_db_repair(struct twom_db *db, size_t *nfixedp)
         char *prevptr = backptr;
         size_t offset0 = tm_advance0(ptr, loc->end);
         char *addr = backptr + ptroffset[TYPE(backptr)];
-        *((uint64_t *)(addr)) = htole64(offset0);
+        tm_put64(addr, offset0);
         addr+= 8;
-        *((uint64_t *)(addr)) = htole64(offset0);
+        tm_put64(addr, offset0);
 
         uint8_t level = LEVEL(ptr);
         uint8_t n;
