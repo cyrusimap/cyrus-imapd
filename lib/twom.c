@@ -1561,6 +1561,7 @@ static struct twom_txn *_newtxn_write(struct twom_db *db)
 
     /* create the transaction */
     struct twom_txn *txn = (struct twom_txn *)twom_zmalloc(sizeof(struct twom_txn));
+    if (!txn) return NULL;
     txn->db = db;
     txn->file = db->openfile;
     txn->file->refcount++;
@@ -1579,7 +1580,6 @@ static struct twom_txn *_newtxn_read(struct twom_db *db)
 
     /* create the transaction */
     struct twom_txn *txn = (struct twom_txn *)twom_zmalloc(sizeof(struct twom_txn));
-    if (!txn) return NULL;
     if (!txn) return NULL;
     txn->db = db;
     txn->file = db->openfile;
