@@ -37,7 +37,7 @@ sub test_annotator_callout_disabled
             $self->assert_str_equals($_[1]{flags}[1], "\$X-ME-Annot-2");
         };
     }
-    $imaptalk->_imap_cmd("uid fetch", 1, \%handlers1, '1', '(flags modseq)');
+    $imaptalk->_imap_cmd("fetch", 1, \%handlers1, '1', '(flags modseq)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
     xlog $self, "Clear the $flag from the message A.";
@@ -50,7 +50,7 @@ sub test_annotator_callout_disabled
         };
     }
     $imaptalk->store('1', '-flags', "($flag)");
-    $imaptalk->_imap_cmd("uid fetch", 1, \%handlers2, '1', '(flags modseq)');
+    $imaptalk->_imap_cmd("fetch", 1, \%handlers2, '1', '(flags modseq)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
     xlog $self, "Run xrunannotator";
@@ -62,10 +62,10 @@ sub test_annotator_callout_disabled
             $self->assert_str_equals($_[1]{flags}[0], "\\Recent");
         };
     }
-    $imaptalk->_imap_cmd("uid xrunannotator", 0, {}, '1');
+    $imaptalk->_imap_cmd("xrunannotator", 1, {}, '1');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
     xlog $self, "Nothing should have changed from the previous run of uid fetch.";
-    $imaptalk->_imap_cmd("uid fetch", 1, \%handlers3, '1', '(flags modseq)');
+    $imaptalk->_imap_cmd("fetch", 1, \%handlers3, '1', '(flags modseq)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 }

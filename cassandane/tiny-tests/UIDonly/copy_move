@@ -27,20 +27,25 @@ sub test_copy_move
     $res = $imaptalk->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY');
     $self->assert_num_equals(1, $res->{uidonly});
 
+    # Rejecting message sequence numbers is the whole point of UIDONLY, so
+    # these two have to be asked in sequence numbers to mean anything.
     xlog $self, "attempt COPY";
-    $res = $imaptalk->copy(1, $folder);
+    $self->with_seq_mode($imaptalk, sub { $imaptalk->copy(1, $folder) });
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
     # get_response_code() doesn't (yet) handle [UIDREQUIRED]
     $self->assert_matches(qr/\[UIDREQUIRED\]/, $imaptalk->get_last_error());
 
     xlog $self, "attempt MOVE";
-    $res = $imaptalk->move(1, $folder);
+    $self->with_seq_mode($imaptalk, sub { $imaptalk->move(1, $folder) });
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
     # get_response_code() doesn't (yet) handle [UIDREQUIRED]
     $self->assert_matches(qr/\[UIDREQUIRED\]/, $imaptalk->get_last_error());
 
+    # Spelled out with 0 rather than letting _imap_cmd add the "uid ": what
+    # is under test is which form the server accepts, so the command must not
+    # depend on the connection's mode.
     xlog $self, "UID MOVE";
-    $res = $imaptalk->_imap_cmd('UID MOVE', 1, 'vanished', '1', $folder);
+    $res = $imaptalk->_imap_cmd('UID MOVE', 0, 'vanished', '1', $folder);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_str_equals('1', $res->[0]);
 }
