@@ -44,6 +44,15 @@ struct audit_config {
     int do_fix;
     int really;
     int prune_days;         /* 0 disables tombstone pruning */
+
+    /* Whether the J keyspace is worth auditing at all.  jmapids are
+     * derived from createdmodseq, and mboxname_domodseq() never consults
+     * the per-user counter when conversations are disabled, so every
+     * mailbox on such an install is created with modseq 1 and the same
+     * jmapid.  The keyspace is degenerate there and JMAP is unusable
+     * anyway, so there is nothing to check.  Set from the conversations
+     * switch by the caller. */
+    int check_jmapids;
     const char *partition;  /* NULL for all */
     const char *userid;     /* NULL for all */
     strarray_t *userlist;   /* NULL: every db user is treated as expected */
@@ -52,7 +61,7 @@ struct audit_config {
 };
 
 #define AUDIT_CONFIG_INITIALIZER \
-    { 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL }
+    { 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL }
 
 struct audit_state;
 
@@ -116,6 +125,10 @@ void audit_keyspace_add_history(struct audit_keyspace *ks,
 void audit_keyspace_check(struct audit_keyspace *ks,
                           struct audit_state *state);
 void audit_check_users(struct audit_keyspace *ks, struct audit_state *state);
+
+/* Run the audit at the configured level.  Returns 0 on success; findings
+ * are reported through the emitter and counted by audit_finding_count(). */
+int audit_run(struct audit_state *state);
 
 struct audit_state *audit_begin(const struct audit_config *config);
 void audit_report(struct audit_state *state,
