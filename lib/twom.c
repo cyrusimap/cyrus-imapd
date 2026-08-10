@@ -53,7 +53,7 @@ static void tm_uuid_unparse(const tm_uuid_t uuid, char *out);
 /********** TUNING *************/
 
 /* don't bother rewriting if the database has less than this much extra */
-#define MINREWRITE 16834
+#define MINREWRITE 16384
 /* number of skiplist levels - 31 gives us binary search to 2^32 records.
  * This is the limit to what we can calculate from a single 32 bit random value,
  * but skiplist had 20, and that was enough
