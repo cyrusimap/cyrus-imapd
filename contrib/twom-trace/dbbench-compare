@@ -1,0 +1,51 @@
+#!/bin/bash
+# dbbench-compare [engine ...]
+# Run the same measured workload against several cyrusdb backends and tabulate
+# throughput, CPU, wall time and disk.
+#   RECORDS=200000 PROCS=8 SECS=30 PROFILE=aggregate DB=/var/tmp/dbbench.db
+# Extra dbbench flags can be passed through in OPTS, e.g. OPTS=--sync
+set -u
+HERE=$(dirname "$(readlink -f "$0")")
+BENCH=$HERE/dbbench
+[ -x "$BENCH" ] || { echo "build it first: $HERE/dbbench-build" >&2; exit 1; }
+
+RECORDS=${RECORDS:-200000}
+PROCS=${PROCS:-8}
+SECS=${SECS:-30}
+PROFILE=${PROFILE:-aggregate}
+DB=${DB:-/var/tmp/dbbench.db}
+OPTS=${OPTS:-}
+
+# quotalegacy is a directory-per-quota-root store, not a general kv backend
+ENGINES=${*:-twom twoskip skiplist}
+RAW=${RAW:-/var/tmp/dbbench-compare.$(date +%Y%m%dT%H%M%S).txt}
+
+printf 'workload: profile=%s records=%s procs=%s secs=%s%s\n' \
+  "$PROFILE" "$RECORDS" "$PROCS" "$SECS" "${OPTS:+ opts=$OPTS}"
+printf 'raw: %s\n\n' "$RAW"
+
+for e in $ENGINES; do
+  rm -f "$DB"* 2>/dev/null
+  printf '### %s\n' "$e" >> "$RAW"
+  # shellcheck disable=SC2086
+  "$BENCH" --engine "$e" --db "$DB" --records "$RECORDS" --procs "$PROCS" \
+           --secs "$SECS" --profile "$PROFILE" $OPTS >> "$RAW" 2>&1
+  grep -h '^RESULT ' "$RAW" | tail -1 | grep -q "engine=$e" \
+    || printf 'RESULT engine=%s FAILED\n' "$e" >> "$RAW"
+done
+
+awk '
+  /^RESULT /{
+    delete f
+    for (i = 2; i <= NF; i++) { split($i, kv, "="); f[kv[1]] = kv[2] }
+    if (!hdr++)
+      printf "%-10s %9s %7s %7s %6s %7s %7s %10s %10s %8s %7s\n",
+        "ENGINE","OPS/S","CORES","US/OP","HIT%","P50us","P99us",
+        "ON-DISK","AFTER PACK","B/REC","PACK s"
+    if (f["FAILED"] != "" || f["ops"] == "") { printf "%-10s  failed\n", f["engine"]; next }
+    printf "%-10s %9d %7.2f %7.2f %6.1f %7d %7d %9.1fM %9.1fM %8.1f %7s\n",
+      f["engine"], f["opsps"], f["cores"], f["usop"], f["hit"],
+      f["p50"], f["p99"], f["alloc_run"]/1048576, f["alloc_pack"]/1048576,
+      f["brec"], (f["repack"]=="yes" ? sprintf("%.2f", f["packsec"]) : "n/a")
+  }
+' "$RAW"
