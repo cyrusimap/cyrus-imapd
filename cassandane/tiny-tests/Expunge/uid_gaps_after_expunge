@@ -4,7 +4,8 @@ use Cassandane::Tiny;
 # Expunging a message leaves a hole in the UID sequence, because UIDs are
 # never reused, while the sequence numbers of the surviving messages close up
 # behind it.  Check that the message store's read path -- the engine behind
-# check_messages() -- reports both numbers correctly once they have diverged.
+# check_messages() -- still finds every message once the two have diverged,
+# and that the server renumbers the survivors as it should.
 sub test_uid_gaps_after_expunge ($self)
 {
     my $store = $self->{store};
@@ -26,9 +27,10 @@ sub test_uid_gaps_after_expunge ($self)
     delete $msg{3};
 
     xlog $self, "The survivors keep their UIDs but move down in sequence";
-    $msg{2}->set_attributes(id => 1, uid => 2);
-    $msg{4}->set_attributes(id => 2, uid => 4);
-    $msg{5}->set_attributes(id => 3, uid => 5);
+    $msg{2}->set_attributes(uid => 2);
+    $msg{4}->set_attributes(uid => 4);
+    $msg{5}->set_attributes(uid => 5);
 
     $self->check_messages(\%msg);
+    $self->assert_seq_uids($talk, [ 2, 4, 5 ]);
 }

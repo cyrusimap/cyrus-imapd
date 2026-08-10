@@ -1339,6 +1339,38 @@ sub check_messages
     return $actual;
 }
 
+#
+# Assert that the messages in the selected folder, taken in sequence number
+# order, have exactly the given UIDs -- so assert_seq_uids($talk, [1, 3])
+# means "two messages, at sequence numbers 1 and 2, with UIDs 1 and 3".
+#
+# Renumbering the survivors after an expunge is the server's job, so we ask
+# the server: this issues a plain FETCH, in sequence number mode, however the
+# client is set up.  Reading the sequence numbers back out of a message store
+# would only tell us what the store had counted for itself.
+#
+sub assert_seq_uids
+{
+    my ($self, $talk, $expected) = @_;
+
+    # Mail::IMAPTalk picks FETCH or UID FETCH from a connection-wide flag,
+    # and its uid() accessor can't be read, so save and restore by hand.
+    my $old_uid_mode = $talk->{Uid};
+    $talk->uid(0);
+    my $res = eval { $talk->fetch('1:*', '(uid)') };
+    my $err = $@;
+    $talk->uid($old_uid_mode);
+    die $err if $err;
+
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my @seqs = sort { $a <=> $b } keys %$res;
+    $self->assert_deep_equals([ 1 .. scalar @$expected ],
+                              [ map { 0 + $_ } @seqs ]);
+    $self->assert_deep_equals($expected,
+                              [ map { 0 + $res->{$_}->{uid} } @seqs ]);
+}
+
 sub _disconnect_all
 {
     my ($self) = @_;
