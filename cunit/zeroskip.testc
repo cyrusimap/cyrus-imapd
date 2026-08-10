@@ -1,0 +1,443 @@
+#include <fcntl.h>
+#include <limits.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include "config.h"
+#include "cunit/unit.h"
+#include "cyrusdb.h"
+#include "libconfig.h"
+#include "util.h"
+#include "xmalloc.h"
+
+static char *basedir;
+
+static char *make_basedir(const char *const *reldirs)
+{
+    char dir[PATH_MAX] = {0};
+    const char *const *d;
+
+    if (!cunit_tmpdir(dir, sizeof(dir), "cunit-zeroskip.XXXXXX"))
+        return NULL;
+
+    for (d = reldirs; *d; d++) {
+        char path[PATH_MAX];
+        int r;
+
+        r = snprintf(path, sizeof(path), "%s/%s", dir, *d);
+        if (r < 0 || (unsigned) r >= sizeof(path)) {
+            fputs("make_basedir: path too long\n", stderr);
+            return NULL;
+        }
+
+        r = mkdir(path, 0700);
+        if (r < 0) {
+            perror(path);
+            return NULL;
+        }
+    }
+
+    return xstrdup(dir);
+}
+
+static char *dbpath(const char *name)
+{
+    return strconcat(basedir, "/stuff/", name, NULL);
+}
+
+static int fexists(const char *fname)
+{
+    struct stat sb;
+    return stat(fname, &sb) < 0 ? -errno : 0;
+}
+
+/* Invariant: unlinking a zeroskip database removes the whole directory, not
+ * just a file of that name. */
+static void test_unlink_removes_tree(void)
+{
+    char *fname = dbpath("unlinkme");
+    struct db *db = NULL;
+    int r;
+
+    r = cyrusdb_open("zeroskip", fname, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+    r = cyrusdb_store(db, "key", 3, "value", 5, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(fexists(fname), 0);
+
+    r = cyrusdb_unlink("zeroskip", fname, 0);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(fexists(fname), -ENOENT);
+
+    free(fname);
+}
+
+/* Invariant: archiving copies the data files into a subdirectory of the backup
+ * directory, and the copy is a working database.  The lock file carries no
+ * state and is not copied. */
+static void test_archive_copies_data_files(void)
+{
+    char *fname = dbpath("archiveme");
+    char *backupdir = strconcat(basedir, "/backup", NULL);
+    struct db *db = NULL;
+    strarray_t fnames = STRARRAY_INITIALIZER;
+    int r;
+
+    r = cyrusdb_open("zeroskip", fname, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+    r = cyrusdb_store(db, "key", 3, "value", 5, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    r = mkdir(backupdir, 0755);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    strarray_append(&fnames, fname);
+    cyrusdb_archiver *archiver = cyrusdb_getarchiver("zeroskip");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(archiver);
+    r = archiver(&fnames, backupdir);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+
+    char *copy = strconcat(backupdir, "/archiveme", NULL);
+    CU_ASSERT_EQUAL_FATAL(fexists(copy), 0);
+
+    char *lock = strconcat(copy, "/zeroskip.lock", NULL);
+    CU_ASSERT_EQUAL(fexists(lock), -ENOENT);
+
+    /* the copy is a database in its own right */
+    db = NULL;
+    r = cyrusdb_open("zeroskip", copy, 0, &db);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+
+    const char *data = NULL;
+    size_t datalen = 0;
+    r = cyrusdb_fetch(db, "key", 3, &data, &datalen, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(datalen, 5);
+    CU_ASSERT_EQUAL(0, memcmp(data, "value", 5));
+
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    free(lock);
+    free(copy);
+    free(backupdir);
+    free(fname);
+    strarray_fini(&fnames);
+}
+
+/* Invariant: a zeroskip database is detected as such from its directory
+ * contents, where every other backend is detected from file magic. */
+static void test_detect_directory(void)
+{
+    char *fname = dbpath("detectme");
+    struct db *db = NULL;
+    int r;
+
+    r = cyrusdb_open("zeroskip", fname, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+    r = cyrusdb_store(db, "key", 3, "value", 5, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    CU_ASSERT_STRING_EQUAL(cyrusdb_detect(fname), "zeroskip");
+
+    free(fname);
+}
+
+/* Invariant: a database that has been created but never written is still a
+ * zeroskip database.  The lock file alone is enough to identify it. */
+static void test_detect_lockfile_only(void)
+{
+    char *fname = dbpath("lockonly");
+    int r;
+
+    r = mkdir(fname, 0755);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    char *lock = strconcat(fname, "/zeroskip.lock", NULL);
+    int fd = open(lock, O_CREAT | O_RDWR, 0644);
+    CU_ASSERT_FATAL(fd >= 0);
+    close(fd);
+
+    CU_ASSERT_STRING_EQUAL(cyrusdb_detect(fname), "zeroskip");
+
+    free(lock);
+    free(fname);
+}
+
+/* Invariant: an unrelated directory is not mistaken for a database. */
+static void test_detect_foreign_directory(void)
+{
+    char *fname = dbpath("notadb");
+    int r;
+
+    r = mkdir(fname, 0755);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    CU_ASSERT_PTR_NULL(cyrusdb_detect(fname));
+
+    free(fname);
+}
+
+/* Invariant: teaching detect about directories does not disturb the file
+ * backends it already handled. */
+static void test_detect_still_finds_twoskip(void)
+{
+    char *fname = dbpath("twoskipdb");
+    struct db *db = NULL;
+    int r;
+
+    r = cyrusdb_open("twoskip", fname, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+    r = cyrusdb_store(db, "key", 3, "value", 5, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    CU_ASSERT_STRING_EQUAL(cyrusdb_detect(fname), "twoskip");
+
+    free(fname);
+}
+
+/* Invariant: opening a database whose on-disk shape does not match the
+ * configured backend reports BADFORMAT, which is what routes it to the
+ * conversion path, rather than an I/O error. */
+static void test_open_file_as_zeroskip(void)
+{
+    char *fname = dbpath("shape_file");
+    struct db *db = NULL;
+    int r;
+
+    r = cyrusdb_open("twoskip", fname, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+    r = cyrusdb_store(db, "key", 3, "value", 5, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* no CONVERT and autoconvert off: _detect_or_convert falls back to
+     * opening with the detected backend */
+    db = NULL;
+    r = cyrusdb_open("zeroskip", fname, 0, &db);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
+
+    const char *data = NULL;
+    size_t datalen = 0;
+    r = cyrusdb_fetch(db, "key", 3, &data, &datalen, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(datalen, 5);
+
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    free(fname);
+}
+
+/* Invariant: and the same in the other direction. */
+static void test_open_zeroskip_as_file(void)
+{
+    char *fname = dbpath("shape_dir");
+    struct db *db = NULL;
+    int r;
+
+    r = cyrusdb_open("zeroskip", fname, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+    r = cyrusdb_store(db, "key", 3, "value", 5, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    db = NULL;
+    r = cyrusdb_open("twoskip", fname, 0, &db);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
+
+    const char *data = NULL;
+    size_t datalen = 0;
+    r = cyrusdb_fetch(db, "key", 3, &data, &datalen, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(datalen, 5);
+
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    free(fname);
+}
+
+static int count_cb(void *rock,
+                    const char *key __attribute__((unused)),
+                    size_t keylen __attribute__((unused)),
+                    const char *data __attribute__((unused)),
+                    size_t datalen __attribute__((unused)))
+{
+    int *count = rock;
+    (*count)++;
+    return 0;
+}
+
+static void fill_db(const char *backend, const char *fname, int n)
+{
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    int r;
+    int i;
+
+    r = cyrusdb_open(backend, fname, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+
+    for (i = 0; i < n; i++) {
+        char key[32], val[32];
+        snprintf(key, sizeof(key), "key%04d", i);
+        snprintf(val, sizeof(val), "value%04d", i);
+        r = cyrusdb_store(db, key, strlen(key), val, strlen(val), &txn);
+        CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    }
+
+    r = cyrusdb_commit(db, txn);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+}
+
+static void check_db(const char *backend, const char *fname, int n)
+{
+    struct db *db = NULL;
+    int count = 0;
+    int r;
+
+    r = cyrusdb_open(backend, fname, 0, &db);
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+
+    r = cyrusdb_foreach(db, "", 0, NULL, count_cb, &count, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(count, n);
+
+    const char *data = NULL;
+    size_t datalen = 0;
+    r = cyrusdb_fetch(db, "key0007", 7, &data, &datalen, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(datalen, 9);
+    CU_ASSERT_EQUAL(0, memcmp(data, "value0007", 9));
+
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+}
+
+/* Invariant: an in-place convert replaces a file database with a directory
+ * one under the same name, losing no records. */
+static void test_convert_twoskip_to_zeroskip(void)
+{
+    char *fname = dbpath("conv_to_zs");
+    struct stat sbuf;
+    int r;
+
+    fill_db("twoskip", fname, 100);
+
+    r = cyrusdb_convert(fname, fname, "twoskip", "zeroskip");
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+
+    CU_ASSERT_EQUAL_FATAL(fexists(fname), 0);
+    CU_ASSERT_EQUAL_FATAL(stat(fname, &sbuf), 0);
+    CU_ASSERT(S_ISDIR(sbuf.st_mode));
+    CU_ASSERT_STRING_EQUAL(cyrusdb_detect(fname), "zeroskip");
+
+    check_db("zeroskip", fname, 100);
+
+    free(fname);
+}
+
+/* Invariant: and the reverse, replacing a directory with a file. */
+static void test_convert_zeroskip_to_twoskip(void)
+{
+    char *fname = dbpath("conv_from_zs");
+    struct stat sbuf;
+    int r;
+
+    fill_db("zeroskip", fname, 100);
+
+    r = cyrusdb_convert(fname, fname, "zeroskip", "twoskip");
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+
+    CU_ASSERT_EQUAL_FATAL(fexists(fname), 0);
+    CU_ASSERT_EQUAL_FATAL(stat(fname, &sbuf), 0);
+    CU_ASSERT(!S_ISDIR(sbuf.st_mode));
+    CU_ASSERT_STRING_EQUAL(cyrusdb_detect(fname), "twoskip");
+
+    check_db("twoskip", fname, 100);
+
+    free(fname);
+}
+
+/* Invariant: nothing of the old database is left beside the new one, neither
+ * the ".NEW" name it was built under nor the ".OLD" name the original was
+ * moved to while swapping shapes. */
+static void test_convert_leaves_no_residue(void)
+{
+    char *fname = dbpath("conv_clean");
+    char *newname = strconcat(fname, ".NEW", NULL);
+    char *oldname = strconcat(fname, ".OLD", NULL);
+    int r;
+
+    fill_db("twoskip", fname, 10);
+
+    r = cyrusdb_convert(fname, fname, "twoskip", "zeroskip");
+    CU_ASSERT_EQUAL_FATAL(r, CYRUSDB_OK);
+
+    CU_ASSERT_EQUAL(fexists(newname), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(oldname), -ENOENT);
+
+    free(oldname);
+    free(newname);
+    free(fname);
+}
+
+static int set_up(void)
+{
+    char buf[PATH_MAX];
+    static const char * const reldirs[] = {
+        "conf",
+        "conf/lock/",
+        "conf/lock/user",
+        "stuff",
+        NULL
+    };
+
+    basedir = make_basedir(reldirs);
+    if (!basedir)
+        return -1;
+
+    snprintf(buf, sizeof(buf), "%s/conf", basedir);
+    config_read_string(buf, NULL);
+
+    cyrusdb_init();
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    int r = 0;
+
+    cyrusdb_done();
+
+    config_reset();
+
+    if (basedir) {
+        char buf[PATH_MAX];
+        snprintf(buf, sizeof(buf), "rm -rf \"%s\"", basedir);
+        r = system(buf);
+        if (r) r = -1;
+    }
+
+    xzfree(basedir);
+
+    return r;
+}

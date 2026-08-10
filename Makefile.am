@@ -692,7 +692,8 @@ cunit_TESTS += \
     cunit/dynarray.testc \
     cunit/util.testc \
     cunit/ical_support.testc \
-    cunit/xsha1.testc
+    cunit/xsha1.testc \
+    cunit/zeroskip.testc
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
     imap/css3_color.c imap/mutex_fake.c imap/spool.c imap/search_expr.c \
