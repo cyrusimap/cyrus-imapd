@@ -114,6 +114,8 @@ static struct mboxevent event_template =
     { EVENT_MESSAGE_THREADID, "vnd.cmu.threadid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_JMAP_EMAIL, "vnd.fastmail.jmapEmail", EVENT_PARAM_JSON, { 0 }, 0 },
     { EVENT_JMAP_STATES, "vnd.fastmail.jmapStates", EVENT_PARAM_JSON, { 0 }, 0 },
+    { EVENT_SPECIAL_USE, "vnd.fastmail.specialUse", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_OLD_SPECIAL_USE, "vnd.fastmail.oldSpecialUse", EVENT_PARAM_STRING, { 0 }, 0 },
 
     /* calendar params for calalarmd/notifyd */
     { EVENT_CALENDAR_ALARM_TIME, "alarmTime", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -258,14 +260,30 @@ EXPORTED void mboxevent_setnamespace(struct namespace *n)
     namespace.isalt = 0;
 }
 
-static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
+/* Return the space-separated value of the mailbox's /specialuse annotation
+ * (e.g. "\Trash"), or NULL if it has none */
+static char *mboxevent_mailbox_specialuse(const struct mailbox *mailbox)
 {
     struct buf attrib = BUF_INITIALIZER;
-    char *userid = NULL;
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+
+    annotatemore_lookup_mbox(mailbox, "/specialuse", userid, &attrib);
+    free(userid);
+
+    if (!buf_len(&attrib)) {
+        buf_free(&attrib);
+        return NULL;
+    }
+
+    return buf_release(&attrib);
+}
+
+static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
+{
+    char *attrib = NULL;
     strarray_t *specialuse = NULL;
     int enabled = 1;
     int i = 0;
-    int r = 0;
 
     init_internal();
 
@@ -276,13 +294,8 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 
     /* test if the mailbox has a special-use attribute in the exclude list */
     if (strarray_size(excluded_specialuse) > 0) {
-        userid = mboxname_to_userid(mailbox_name(mailbox));
-
-        r = annotatemore_lookup_mbox(mailbox, "/specialuse", userid, &attrib);
-        if (r) goto done; /* XXX - return -1?  Failure? */
-
-        /* get info and set flags */
-        specialuse = strarray_split(buf_cstring(&attrib), NULL, 0);
+        attrib = mboxevent_mailbox_specialuse(mailbox);
+        specialuse = strarray_split(attrib, NULL, 0);
 
         for (i = 0; i < strarray_size(specialuse) ; i++) {
             const char *attribute = strarray_nth(specialuse, i);
@@ -295,8 +308,7 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 
 done:
     strarray_free(specialuse);
-    buf_free(&attrib);
-    free(userid);
+    free(attrib);
     return enabled;
 }
 
@@ -582,6 +594,12 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
                (type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND));
     case EVENT_JMAP_STATES:
         return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPSTATES;
+    case EVENT_SPECIAL_USE:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SPECIALUSE) &&
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
+    case EVENT_OLD_SPECIAL_USE:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SPECIALUSE) &&
+               (type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE|EVENT_MAILBOX_RENAME));
     case EVENT_MESSAGES:
         if (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN))
             return 1;
@@ -1738,6 +1756,13 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox_acl(mailbox)));
     FILL_STRING_PARAM(event, EVENT_VISIBLE_USERS, mailbox_visible_users(mailbox));
 
+    /* add the mailbox's special-use attributes if it has any */
+    if (mboxevent_expected_param(event->type, EVENT_SPECIAL_USE)) {
+        char *specialuse = mboxevent_mailbox_specialuse(mailbox);
+        if (specialuse)
+            FILL_STRING_PARAM(event, EVENT_SPECIAL_USE, specialuse);
+    }
+
     /* mailbox related events also require mailboxID and mailboxUniqueId */
     if (event->type & MAILBOX_EVENTS) {
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
@@ -1853,6 +1878,13 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_ID, buf_release(&url));
 
     free(extname);
+
+    /* add the old mailbox's special-use attributes if it has any */
+    if (mboxevent_expected_param(event->type, EVENT_OLD_SPECIAL_USE)) {
+        char *specialuse = mboxevent_mailbox_specialuse(mailbox);
+        if (specialuse)
+            FILL_STRING_PARAM(event, EVENT_OLD_SPECIAL_USE, specialuse);
+    }
 }
 
 EXPORTED void mboxevent_set_client_id(const char *id)
@@ -2079,6 +2111,10 @@ static int filled_params(enum event_type type, struct mboxevent *event)
                  * messages */
                 if (!event->uidset || (seqset_first(event->uidset) == seqset_last(event->uidset)))
                     buf_appendcstr(&missing, " modseq");
+                break;
+            case EVENT_SPECIAL_USE:
+            case EVENT_OLD_SPECIAL_USE:
+                /* only included if the mailbox has a special-use attribute */
                 break;
             default:
                 buf_appendcstr(&missing, " ");
