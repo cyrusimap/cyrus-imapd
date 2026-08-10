@@ -831,7 +831,8 @@ include_HEADERS = \
     lib/wildmat.h \
     lib/xmalloc.h \
     lib/xsha1.h \
-    lib/xunlink.h
+    lib/xunlink.h \
+    lib/zeroskip.h
 
 nodist_include_HEADERS = \
     lib/imapopts.h
@@ -1567,7 +1568,8 @@ lib_libcyrus_la_SOURCES = \
     lib/times.c \
     lib/twom.c \
     lib/wildmat.c \
-    lib/xxhash.h
+    lib/xxhash.h \
+    lib/zeroskip.c
 
 if USE_CYRUSDB_SQL
 lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
