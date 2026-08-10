@@ -5,6 +5,7 @@ package Cassandane::TestSuite::ChkCyrus;
 use strict;
 use warnings;
 
+use File::Path qw(make_path remove_tree);
 use JSON::XS;
 
 use base qw(Cassandane::Unit::TestSuite::Cyrus);
