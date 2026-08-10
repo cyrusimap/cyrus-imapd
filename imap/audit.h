@@ -153,6 +153,13 @@ int audit_valid_uniqueid(const char *id);
 void audit_scan_uuid_root(const char *root, strarray_t *found,
                           struct audit_state *state);
 
+/* Is this path too new to touch?  See AUDIT_MIN_AGE. */
+int audit_path_is_young(const char *path);
+
+/* Remove a path, subject to --delete, --really and the young-guard.
+ * Does nothing at all unless --delete was given. */
+void audit_remove_path(struct audit_state *state, const char *path);
+
 /* Run the audit at the configured level.  Returns 0 on success; findings
  * are reported through the emitter and counted by audit_finding_count(). */
 int audit_run(struct audit_state *state);
