@@ -452,7 +452,47 @@ EXPORTED void cyrusdb_done(void)
 
 EXPORTED int cyrusdb_copyfile(const char *srcname, const char *dstname)
 {
-    return cyrus_copyfile(srcname, dstname, COPYFILE_NOLINK);
+    struct stat sbuf;
+
+    if (stat(srcname, &sbuf) < 0)
+        return -1;
+
+    if (!S_ISDIR(sbuf.st_mode))
+        return cyrus_copyfile(srcname, dstname, COPYFILE_NOLINK);
+
+    /* A directory-shaped database.  Replace the destination wholesale --
+     * merging into leftovers of an older copy would corrupt the new one --
+     * then copy each regular file.  Lock files carry no state and are
+     * recreated on open, so they are not copied. */
+    if (removedir(dstname) < 0 && errno != ENOENT)
+        return -1;
+    if (mkdir(dstname, 0755) < 0)
+        return -1;
+
+    DIR *d = opendir(srcname);
+    if (!d) return -1;
+
+    struct dirent *de;
+    int r = 0;
+    while (!r && (de = readdir(d)) != NULL) {
+        const char *suffix = strrchr(de->d_name, '.');
+        if (suffix && !strcmp(suffix, ".lock"))
+            continue;
+
+        char *srcpath = strconcat(srcname, "/", de->d_name, NULL);
+        char *dstpath = strconcat(dstname, "/", de->d_name, NULL);
+
+        if (stat(srcpath, &sbuf) < 0)
+            r = -1;
+        else if (S_ISREG(sbuf.st_mode))
+            r = cyrus_copyfile(srcpath, dstpath, COPYFILE_NOLINK);
+
+        free(dstpath);
+        free(srcpath);
+    }
+    closedir(d);
+
+    return r;
 }
 
 struct db_rock {
