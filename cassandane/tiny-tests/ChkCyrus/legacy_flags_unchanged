@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+# Existing cron invocations must not change behaviour or gain output.
+# chk_cyrus with no new flag still performs a read-only reconstruct sweep
+# and emits no findings.
+sub test_legacy_flags_unchanged
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+
+    my $outfile = $self->{instance}->get_basedir() . "/legacy.out";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        'chk_cyrus');
+
+    my $out = slurp_file($outfile);
+    $self->assert_does_not_match(qr/\{"code"/, $out);
+}

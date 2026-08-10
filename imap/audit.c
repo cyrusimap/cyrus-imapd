@@ -314,20 +314,41 @@ static int find_tombstone(const struct audit_keyspace *ks, const char *dbname)
     return 0;
 }
 
-/* Does a J key exist pointing at this entry with the entry's own jmapid? */
+/* Does a J key exist for this entry, naming this mailbox?
+ *
+ * The match is on all three of (userid, jmapid, uniqueid): a J record
+ * that names a different mailbox does not make this one reachable by
+ * jmapid.  That is only a safe thing to require because the caller has
+ * told us conversations are enabled -- see check_jmapids.
+ */
 static int find_jmapid_key(const struct audit_keyspace *ks,
-                           const struct audit_dbentry *entry)
+                           const struct audit_dbentry *entry,
+                           struct buf *founduser)
 {
-    int i;
+    mbname_t *mbname;
+    const char *userid;
+    int i, found = 0;
+
+    if (!entry->dbname) return 0;
+
+    mbname = mbname_from_intname(entry->dbname);
+    userid = mbname_userid(mbname);
+    if (!userid) userid = "";
+
+    if (founduser) buf_setcstr(founduser, userid);
 
     for (i = 0; i < ptrarray_size(&ks->jmapids); i++) {
         const struct audit_jmapid *j = ptrarray_nth(&ks->jmapids, i);
-        if (strcmpsafe(j->uniqueid, entry->uniqueid)) continue;
         if (strcmpsafe(j->jmapid, entry->jmapid)) continue;
-        return 1;
+        if (strcmpsafe(j->userid, userid)) continue;
+        if (strcmpsafe(j->uniqueid, entry->uniqueid)) continue;
+        found = 1;
+        break;
     }
 
-    return 0;
+    mbname_free(&mbname);
+
+    return found;
 }
 
 struct checkrock {
@@ -359,15 +380,25 @@ static void check_id_cb(const char *uniqueid, void *data, void *rock)
         audit_report(crock->state, &finding);
     }
 
+    /* The J keyspace is only meaningful with conversations enabled. */
+    if (!crock->state->config.check_jmapids) return;
+
     if (!entry->jmapid) {
         finding.code = "db-missing-j-property";
         finding.detail = "run ctl_mboxlist -k";
         audit_report(crock->state, &finding);
     }
-    else if (!find_jmapid_key(crock->ks, entry)) {
-        finding.code = "db-missing-j-key";
-        finding.detail = "run ctl_mboxlist -k";
-        audit_report(crock->state, &finding);
+    else {
+        struct buf owner = BUF_INITIALIZER;
+
+        if (!find_jmapid_key(crock->ks, entry, &owner)) {
+            finding.code = "db-missing-j-key";
+            finding.userid = buf_cstring(&owner);
+            finding.detail = "run ctl_mboxlist -k";
+            audit_report(crock->state, &finding);
+        }
+
+        buf_free(&owner);
     }
 }
 
@@ -398,7 +429,8 @@ EXPORTED void audit_keyspace_check(struct audit_keyspace *ks,
     hash_enumerate(&ks->byid, check_id_cb, &crock);
     hash_enumerate(&ks->byname, check_name_cb, &crock);
 
-    for (i = 0; i < ptrarray_size(&ks->jmapids); i++) {
+    for (i = 0; state->config.check_jmapids &&
+                i < ptrarray_size(&ks->jmapids); i++) {
         struct audit_jmapid *j = ptrarray_nth(&ks->jmapids, i);
         struct audit_dbentry *entry = hash_lookup(j->uniqueid, &ks->byid);
         struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
@@ -578,4 +610,134 @@ EXPORTED void audit_check_users(struct audit_keyspace *ks,
     hash_enumerate(&users, check_user_cb, &urock);
 
     free_hash_table(&users, free_userinfo);
+}
+
+/* ------------------------------------------------------------------ */
+/* driving the scan                                                   */
+
+struct scanrock {
+    struct audit_keyspace *ks;
+    struct audit_state *state;
+};
+
+/* Is this entry one we should consider at all, given --partition and
+ * --user?  A partition-scoped run must ignore entries elsewhere, or it
+ * would report every mailbox on another partition as an orphan. */
+static int entry_in_scope(struct audit_state *state, const mbentry_t *mbentry)
+{
+    if (state->config.partition) {
+        if (strcmpsafe(mbentry->partition, state->config.partition))
+            return 0;
+    }
+
+    if (state->config.userid) {
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+        int match = !strcmpsafe(mbname_userid(mbname), state->config.userid);
+        mbname_free(&mbname);
+        if (!match) return 0;
+    }
+
+    return 1;
+}
+
+static int scan_cb(void *rock, const struct mboxlist_rawkey *key,
+                   const mbentry_t *mbentry,
+                   const char *data __attribute__((unused)),
+                   size_t datalen __attribute__((unused)))
+{
+    struct scanrock *srock = (struct scanrock *)rock;
+    struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+    int i;
+
+    switch (key->type) {
+    case MBOXLIST_KEY_UNKNOWN:
+        finding.code = "db-unknown-key";
+        audit_report(srock->state, &finding);
+        return 0;
+
+    case MBOXLIST_KEY_RACL:
+        /* collected but not yet cross-checked; see the racl work */
+        return 0;
+
+    case MBOXLIST_KEY_JMAPID:
+        if (!mbentry) {
+            finding.code = "db-unparseable-entry";
+            finding.userid = key->userid;
+            audit_report(srock->state, &finding);
+            return 0;
+        }
+        audit_keyspace_add_jmapid(srock->ks, key->userid, key->jmapid,
+                                  mbentry->uniqueid);
+        return 0;
+
+    case MBOXLIST_KEY_ID:
+        if (!mbentry) {
+            finding.code = "db-unparseable-entry";
+            finding.uniqueid = key->uniqueid;
+            audit_report(srock->state, &finding);
+            return 0;
+        }
+        if (!entry_in_scope(srock->state, mbentry)) return 0;
+
+        audit_keyspace_add_id(srock->ks, key->uniqueid, mbentry->name,
+                              mbentry->mbtype, mbentry->jmapid);
+
+        /* the former names this record remembers */
+        for (i = 0; i < ptrarray_size(&mbentry->name_history); i++) {
+            const former_name_t *h = ptrarray_nth(&mbentry->name_history, i);
+            audit_keyspace_add_history(srock->ks, key->uniqueid,
+                                       h->name, h->mtime);
+        }
+        return 0;
+
+    case MBOXLIST_KEY_NAME:
+        if (!mbentry) {
+            finding.code = "db-unparseable-entry";
+            finding.mboxname = key->dbname;
+            audit_report(srock->state, &finding);
+            return 0;
+        }
+        if (!entry_in_scope(srock->state, mbentry)) return 0;
+
+        /* A tombstone records a name that is gone.  It is not a live
+         * mailbox, so it must not satisfy the I-without-N check. */
+        if (mbentry->mbtype & MBTYPE_DELETED) {
+            audit_keyspace_add_tombstone(srock->ks, mbentry->name,
+                                         mbentry->uniqueid, mbentry->mtime);
+            return 0;
+        }
+
+        audit_keyspace_add_name(srock->ks, mbentry->name, mbentry->uniqueid,
+                                mbentry->mbtype, mbentry->jmapid);
+        return 0;
+    }
+
+    return 0;
+}
+
+EXPORTED int audit_run(struct audit_state *state)
+{
+    struct audit_keyspace ks;
+    struct scanrock srock = { &ks, state };
+    struct txn *tid = NULL;
+    int r;
+
+    audit_keyspace_init(&ks);
+
+    /* One transaction for the whole scan: the cross-checks compare keys of
+     * different types against each other, so they need a snapshot that is
+     * consistent across all of them. */
+    r = mboxlist_foreach_raw(scan_cb, &srock, &tid);
+
+    /* read-only: nothing to commit */
+    if (tid) mboxlist_abort(tid);
+
+    if (!r) {
+        audit_keyspace_check(&ks, state);
+        audit_check_users(&ks, state);
+    }
+
+    audit_keyspace_fini(&ks);
+
+    return r;
 }
