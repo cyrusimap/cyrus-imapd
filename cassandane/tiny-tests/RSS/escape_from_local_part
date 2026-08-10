@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_escape_from_local_part ($self)
+{
+    # A double-quoted local-part survives parseaddr verbatim too, so the
+    # mailbox part of the address can contain HTML metachars.  This hits
+    # both Atom paths (<name> with no display-name, and <email>) plus
+    # display_address() in the per-message HTML.
+    my $raw = <<'EOF';
+From: "<script>alert(2)</script>"@example.org
+To: cassandane@example.com
+Subject: From mailbox XSS
+Message-ID: <rss-xss-from-local@example.org>
+Date: Mon, 01 Jan 2024 00:00:00 +0000
+Content-Type: text/plain
+
+body
+EOF
+
+    for my $path ('/rss/INBOX/', '/rss/INBOX/1.') {
+        $self->_assert_rss_does_not_contain(
+            raw      => $raw,
+            sentinel => '<script>alert(2)</script>',
+            path     => $path,
+            label    => "From mailbox local-part via $path",
+        );
+    }
+}
