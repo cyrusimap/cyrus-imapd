@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <errno.h>
 
 #include "assert.h"
 #include "bsearch.h"
@@ -568,6 +569,7 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
                     const char *frombackend, const char *tobackend)
 {
     char *newfname = NULL;
+    char *oldfname = NULL;
     struct db *fromdb = NULL;
     struct db *todb = NULL;
     struct db_rock cr;
@@ -583,8 +585,9 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
     if (!strcmp(tofname, fromfname))
         tofname = newfname = strconcat(fromfname, ".NEW", NULL);
 
-    /* remove any rubbish lying around */
-    xunlink(tofname);
+    /* remove any rubbish lying around.  Through the backend, because the
+     * target may be a directory. */
+    cyrusdb_unlink(tobackend, tofname, 0);
 
     r = cyrusdb_open(tobackend, tofname, CYRUSDB_CREATE, &todb);
     if (r) goto err;
@@ -593,8 +596,13 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
     cr.db = todb;
     cr.tid = &totid;
 
-    /* copy each record to the destination DB */
-    cyrusdb_foreach(fromdb, "", 0, NULL, converter_cb, &cr, &fromtid);
+    /* copy each record to the destination DB.  If this fails partway
+     * through (CYRUSDB_FULL on a full disk, IOERROR reading a damaged
+     * source, ...), don't fall through to commit and install a truncated
+     * destination: abort via the err label instead, leaving the untouched
+     * original in place under fromfname. */
+    r = cyrusdb_foreach(fromdb, "", 0, NULL, converter_cb, &cr, &fromtid);
+    if (r) goto err;
 
     /* commit destination transaction */
     if (totid) cyrusdb_commit(todb, totid);
@@ -603,10 +611,56 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
     todb = NULL;
     if (r) goto err;
 
-    /* created a new filename - so it's a replace-in-place */
+    /* created a new filename - so it's a replace-in-place.  Try the plain
+     * atomic rename(2) first: for a same-shape convert (the common case,
+     * e.g. twoskip to twom) it either succeeds outright or fails for a
+     * reason unrelated to shape, and the source is never disturbed.  It
+     * only fails with EISDIR/ENOTDIR when the convert changed shape, in
+     * which case rename(2) cannot replace a file with a directory or the
+     * reverse; fall back to moving the original aside first, so a complete
+     * copy of the data exists at every point and the original is only
+     * removed once the new database is in place under its name. */
     if (newfname) {
         r = cyrus_rename(newfname, fromfname);
-        if (r) goto err;
+        if (r && (errno == EISDIR || errno == ENOTDIR)) {
+            oldfname = strconcat(fromfname, ".OLD", NULL);
+
+            cyrusdb_unlink(frombackend, oldfname, 0);
+
+            /* between this rename and the one below, nothing exists at
+             * fromfname: rename(2) cannot swap a file for a directory (or
+             * vice versa) atomically.  A crash in that window followed by
+             * a normal CYRUSDB_CREATE open would silently start a fresh,
+             * empty database, with the real data left behind under
+             * oldfname.  Log the breadcrumb an operator needs to notice
+             * and recover it. */
+            xsyslog(LOG_NOTICE, "moving database aside for shape-changing "
+                                 "convert; if a crash follows before this "
+                                 "completes, recover data from the .OLD path",
+                                 "fname=<%s> oldfname=<%s>",
+                                 fromfname, oldfname);
+
+            if (rename(fromfname, oldfname)) {
+                xsyslog(LOG_ERR, "DBERROR: failed to move aside",
+                                 "fname=<%s> to=<%s>", fromfname, oldfname);
+                r = CYRUSDB_IOERROR;
+                goto err;
+            }
+
+            r = cyrus_rename(newfname, fromfname);
+            if (r) {
+                /* put it back rather than leaving nothing under the real name */
+                if (rename(oldfname, fromfname)) {
+                    xsyslog(LOG_ERR, "DBERROR: failed to restore original "
+                                     "after failed rename",
+                                     "fname=<%s> from=<%s>", fromfname, oldfname);
+                }
+                goto err;
+            }
+
+            cyrusdb_unlink(frombackend, oldfname, 0);
+        }
+        else if (r) goto err;
     }
 
     /* and close the source database - nothing should have
@@ -615,6 +669,7 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
     cyrusdb_close(fromdb);
 
     free(newfname);
+    free(oldfname);
 
     return 0;
 
@@ -624,8 +679,13 @@ err:
     if (fromtid) cyrusdb_abort(fromdb, fromtid);
     if (fromdb) cyrusdb_close(fromdb);
 
-    xunlink(tofname);
+    /* tofname might still equal fromfname here, if opening the source
+     * database failed before the same-file check below reassigned it to
+     * newfname: don't let a failed convert delete the untouched source. */
+    if (strcmp(tofname, fromfname))
+        cyrusdb_unlink(tobackend, tofname, 0);
     free(newfname);
+    free(oldfname);
 
     return r;
 }
