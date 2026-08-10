@@ -2606,6 +2606,8 @@ int twom_db_open(const char *fname, struct twom_open_data *setup,
     struct twom_db *mydb;
     int r = 0;
 
+    if (!fname || !setup || !ret) return TWOM_BADUSAGE;
+
     /* do we already have this DB open? */
     for (mydb = open_twom; mydb; mydb = mydb->next) {
         if (strcmp(mydb->fname, fname)) continue;
@@ -2668,6 +2670,7 @@ int twom_db_close(struct twom_db **dbp)
     struct twom_db *mydb = open_twom;
     struct twom_db *prev = NULL;
 
+    if (!dbp) return TWOM_BADUSAGE;
     if (!*dbp) return 0;
 
     /* remove this DB from the open list */
@@ -2675,7 +2678,8 @@ int twom_db_close(struct twom_db **dbp)
         prev = mydb;
         mydb = mydb->next;
     }
-    assert(mydb);
+    /* not one of ours: a double close, or a handle from another library */
+    if (!mydb) return TWOM_BADUSAGE;
 
     if (--mydb->refcount <= 0) {
         if (prev) prev->next = mydb->next;
@@ -2724,6 +2728,8 @@ int twom_txn_yield(struct twom_txn *txn)
  */
 int twom_db_begin_txn(struct twom_db *db, int flags, struct twom_txn **txnp)
 {
+    if (!db || !txnp) return TWOM_BADUSAGE;
+
     struct twom_txn *txn = *txnp;
     /* you can call begin on an existing transaction, and it just refreshes
      * the read_lock if yield or another action has released it meanwhile
@@ -2804,10 +2810,15 @@ int twom_txn_fetch(struct twom_txn *txn,
                    const char **data, size_t *datalen,
                    int flags)
 {
+    /* an empty key is a legal POSITION - it is the DUMMY, which sorts
+     * first, so TWOM_FETCHNEXT from it returns the first record.  It is
+     * only illegal as a key to store. */
+    if (!txn) return TWOM_BADUSAGE;
+    if (keylen && !key) return TWOM_BADUSAGE;
+    if (datalen && !data) return TWOM_BADUSAGE;
+
     struct twom_db *db = txn->db;
     int r = 0;
-
-    if (datalen) assert(data);
 
     if (data) *data = NULL;
     if (datalen) *datalen = 0;
@@ -2860,6 +2871,9 @@ int twom_db_begin_cursor(struct twom_db *db,
                          const char *prefix, size_t prefixlen,
                          struct twom_cursor **curp, int flags)
 {
+    if (!db || !curp) return TWOM_BADUSAGE;
+    if (prefixlen && !prefix) return TWOM_BADUSAGE;
+
     struct twom_txn *txn = NULL;
     int r = twom_db_begin_txn(db, flags, &txn);
     if (r) return r;
@@ -2877,6 +2891,9 @@ int twom_cursor_next(struct twom_cursor *cur,
                      const char **data, size_t *datalen)
 {
     int r;
+
+    if (!cur) return TWOM_BADUSAGE;
+    if (datalen && !data) return TWOM_BADUSAGE;
 
     struct twom_txn *txn = cur->txn;
     struct tm_loc *loc = &cur->loc;
@@ -2959,6 +2976,8 @@ int twom_cursor_next(struct twom_cursor *cur,
 int twom_cursor_replace(struct twom_cursor *cur,
                         const char *data, size_t datalen, int flags)
 {
+    if (!cur) return TWOM_BADUSAGE;
+    if (datalen && !data) return TWOM_BADUSAGE;
     if (cur->txn->readonly) return TWOM_READONLY;
     if (!cur->loc.offset) return TWOM_NOTFOUND;
     const char *ptr = LOCPTR(&cur->loc);
@@ -3021,6 +3040,9 @@ int twom_txn_begin_cursor(struct twom_txn *txn,
                           const char *prefix, size_t prefixlen,
                           struct twom_cursor **curp, int flags)
 {
+    if (!txn || !curp) return TWOM_BADUSAGE;
+    if (prefixlen && !prefix) return TWOM_BADUSAGE;
+
     struct twom_cursor *cur = (struct twom_cursor *)tm_zmalloc(sizeof(struct twom_cursor));
     if (!cur) {
         txn->db->error("out of memory allocating cursor",
@@ -3101,8 +3123,8 @@ int twom_txn_foreach(struct twom_txn *txn,
     size_t datalen = 0;
     struct twom_cursor *cur = NULL;
 
-    assert(cb);
-    if (prefixlen) assert(prefix);
+    if (!txn || !cb) return TWOM_BADUSAGE;
+    if (prefixlen && !prefix) return TWOM_BADUSAGE;
 
     r = twom_txn_begin_cursor(txn, prefix, prefixlen, &cur, flags | TWOM_CURSOR_PREFIX);
     if (r) goto done;
@@ -3129,12 +3151,15 @@ int twom_txn_store(struct twom_txn *txn,
                    const char *data, size_t datalen,
                    int flags)
 {
+    if (!txn || !key || !keylen) return TWOM_BADUSAGE;
+    if (datalen && !data) return TWOM_BADUSAGE;
+
     /* no writing a readonly database */
     if (txn->db->readonly)
         return TWOM_READONLY;
 
-    assert(txn == txn->db->write_txn);
-    assert(key && keylen);
+    /* a store has to go through the handle's one write transaction */
+    if (txn != txn->db->write_txn) return TWOM_BADUSAGE;
 
     return tm_skipwrite(txn, key, keylen, data, datalen, flags);
 }
@@ -3352,6 +3377,10 @@ int twom_db_fetch(struct twom_db *db,
                   const char **data, size_t *datalen,
                   int flags)
 {
+    if (!db) return TWOM_BADUSAGE;
+    if (keylen && !key) return TWOM_BADUSAGE;
+    if (datalen && !data) return TWOM_BADUSAGE;
+
     /* if we're inside a write txn, use that */
     if (db->write_txn)
         return twom_txn_fetch(db->write_txn, key, keylen, foundkey, foundkeylen, data, datalen, flags);
@@ -3370,6 +3399,9 @@ int twom_db_foreach(struct twom_db *db,
                     twom_cb *goodp, twom_cb *cb, void *rock,
                     int flags)
 {
+    if (!db || !cb) return TWOM_BADUSAGE;
+    if (prefixlen && !prefix) return TWOM_BADUSAGE;
+
     /* if we're inside a write txn, use that */
     if (db->write_txn)
         return twom_txn_foreach(db->write_txn, prefix, prefixlen, goodp, cb, rock, flags);
@@ -3388,6 +3420,9 @@ int twom_db_store(struct twom_db *db,
                   const char *data, size_t datalen,
                   int flags)
 {
+    if (!db || !key || !keylen) return TWOM_BADUSAGE;
+    if (datalen && !data) return TWOM_BADUSAGE;
+
     /* if we're inside a write txn, use that */
     if (db->write_txn)
         return twom_txn_store(db->write_txn, key, keylen, data, datalen, flags);
