@@ -26,9 +26,9 @@ sub test_permessage_getset ($self)
     $self->assert_not_null($res);
     $self->assert_deep_equals(
             {
-                1 => { annotation => { $entry => { $attrib => undef } } },
-                2 => { annotation => { $entry => { $attrib => undef } } },
-                3 => { annotation => { $entry => { $attrib => undef } } },
+                1 => { uid => 1, annotation => { $entry => { $attrib => undef } } },
+                2 => { uid => 2, annotation => { $entry => { $attrib => undef } } },
+                3 => { uid => 3, annotation => { $entry => { $attrib => undef } } },
             },
             $res);
 
@@ -44,9 +44,9 @@ sub test_permessage_getset ($self)
     $self->assert_not_null($res);
     $self->assert_deep_equals(
             {
-                1 => { annotation => { $entry => { $attrib => $value1 } } },
-                2 => { annotation => { $entry => { $attrib => undef } } },
-                3 => { annotation => { $entry => { $attrib => undef } } },
+                1 => { uid => 1, annotation => { $entry => { $attrib => $value1 } } },
+                2 => { uid => 2, annotation => { $entry => { $attrib => undef } } },
+                3 => { uid => 3, annotation => { $entry => { $attrib => undef } } },
             },
             $res);
 
@@ -62,9 +62,9 @@ sub test_permessage_getset ($self)
     $self->assert_not_null($res);
     $self->assert_deep_equals(
             {
-                1 => { annotation => { $entry => { $attrib => $value1 } } },
-                2 => { annotation => { $entry => { $attrib => undef } } },
-                3 => { annotation => { $entry => { $attrib => $value2 } } },
+                1 => { uid => 1, annotation => { $entry => { $attrib => $value1 } } },
+                2 => { uid => 2, annotation => { $entry => { $attrib => undef } } },
+                3 => { uid => 3, annotation => { $entry => { $attrib => $value2 } } },
             },
             $res);
 
@@ -82,9 +82,9 @@ sub test_permessage_getset ($self)
     $self->assert_not_null($res);
     $self->assert_deep_equals(
             {
-                1 => { annotation => { $entry => { $attrib => $value3 } } },
-                2 => { annotation => { $entry => { $attrib => $value3 } } },
-                3 => { annotation => { $entry => { $attrib => $value3 } } },
+                1 => { uid => 1, annotation => { $entry => { $attrib => $value3 } } },
+                2 => { uid => 2, annotation => { $entry => { $attrib => $value3 } } },
+                3 => { uid => 3, annotation => { $entry => { $attrib => $value3 } } },
             },
             $res);
 
@@ -102,9 +102,9 @@ sub test_permessage_getset ($self)
     $self->assert_not_null($res);
     $self->assert_deep_equals(
             {
-                1 => { annotation => { $entry => { $attrib => $value3 } } },
-                2 => { annotation => { $entry => { $attrib => undef } } },
-                3 => { annotation => { $entry => { $attrib => $value3 } } },
+                1 => { uid => 1, annotation => { $entry => { $attrib => $value3 } } },
+                2 => { uid => 2, annotation => { $entry => { $attrib => undef } } },
+                3 => { uid => 3, annotation => { $entry => { $attrib => $value3 } } },
             },
             $res);
 
@@ -122,9 +122,9 @@ sub test_permessage_getset ($self)
     $self->assert_not_null($res);
     $self->assert_deep_equals(
             {
-                1 => { annotation => { $entry => { $attrib => undef } } },
-                2 => { annotation => { $entry => { $attrib => undef } } },
-                3 => { annotation => { $entry => { $attrib => undef } } },
+                1 => { uid => 1, annotation => { $entry => { $attrib => undef } } },
+                2 => { uid => 2, annotation => { $entry => { $attrib => undef } } },
+                3 => { uid => 3, annotation => { $entry => { $attrib => undef } } },
             },
             $res);
 }

@@ -83,7 +83,7 @@ sub connect
                       UseBlocking => 1,  # must be blocking for SSL
                       Pedantic => 1,
                       PreserveINBOX => 1,
-                      Uid => 0,
+                      Uid => 1,
                       NoLiteralPlus => delete $params{NoLiteralPlus} || 0,
                       UseCompress => delete $params{UseCompress} || 0,
                   )
@@ -99,7 +99,7 @@ sub connect
                       Socket => $sock,
                       Pedantic => 1,
                       PreserveINBOX => 1,
-                      Uid => 0,
+                      Uid => 1,
                       NoLiteralPlus => delete $params{NoLiteralPlus} || 0,
                       UseCompress => delete $params{UseCompress} || 0,
                   )

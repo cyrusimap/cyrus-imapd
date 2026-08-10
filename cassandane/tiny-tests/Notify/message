@@ -98,14 +98,16 @@ sub test_message
     $self->assert_num_equals(1, $talk->get_response_code('recent'));
 
     my $fetch = $talk->get_response_code('fetch');
-    $self->assert_num_equals(3, $fetch->{2}{uid});
-    $self->assert_str_equals('Message 3', $fetch->{2}{headers}{subject}[0]);
-    $self->assert_not_null($fetch->{2}{headers}{from});
-    $self->assert_not_null($fetch->{2}{emailid}[0]);
-    $self->assert_not_null($fetch->{2}{mailboxids}[0]);
+    $self->assert_not_null($fetch->{3});
+    $self->assert_str_equals('Message 3', $fetch->{3}{headers}{subject}[0]);
+    $self->assert_not_null($fetch->{3}{headers}{from});
+    $self->assert_not_null($fetch->{3}{emailid}[0]);
+    $self->assert_not_null($fetch->{3}{mailboxids}[0]);
 
     xlog $self, "DELETE message from INBOX in other session";
-    $res = $othertalk->store('1', '+flags', '(\\Deleted)');
+    # UID 1 was expunged further up, so the message sitting at the front of
+    # this mailbox is UID 2.
+    $res = $othertalk->store('2', '+flags', '(\\Deleted)');
 
     # Should get FETCH response for INBOX
     $res = $store->idle_response('FETCH', 3);
@@ -114,8 +116,8 @@ sub test_message
     $self->assert(!$res, "no more unsolicited responses");
 
     $fetch = $talk->get_response_code('fetch');
-    $self->assert_num_equals(2, $fetch->{1}{uid});
-    $self->assert_str_equals('\\Deleted', $fetch->{1}{flags}[0]);
+    $self->assert_not_null($fetch->{2});
+    $self->assert_str_equals('\\Deleted', $fetch->{2}{flags}[0]);
 
     xlog $self, "EXPUNGE message from INBOX in other session";
     $res = $othertalk->expunge();

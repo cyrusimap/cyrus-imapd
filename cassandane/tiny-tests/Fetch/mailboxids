@@ -55,9 +55,12 @@ sub test_mailboxids
     # expunge INBOX
     $imaptalk->expunge();
 
-    # expect to find it in INBOX.target only
+    # expect to find it in INBOX.target only.  A UID FETCH naming a message
+    # that isn't there is not an error -- it just returns nothing -- where
+    # the sequence number form would be a NO for an out of range number.
     $res = $imaptalk->fetch('1', '(MAILBOXES MAILBOXIDS)');
-    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_null($res);
     $imaptalk->select('INBOX.target');
     $res = $imaptalk->fetch('1', '(MAILBOXES MAILBOXIDS)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());

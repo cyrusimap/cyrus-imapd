@@ -62,7 +62,7 @@ sub test_idle
     $self->assert_num_equals(1, $talk->get_response_code('recent'));
 
     my $fetch = $talk->get_response_code('fetch');
-    $self->assert_num_equals(1, $fetch->{1}{uid});
+    $self->assert_not_null($fetch->{1});
     $self->assert_str_equals('Message 1', $fetch->{1}{headers}{subject}[0]);
 
     xlog $self, "Create mailbox in other session";
@@ -124,8 +124,8 @@ sub test_idle
     $self->assert_num_equals(1, $talk->get_response_code('recent'));
 
     $fetch = $talk->get_response_code('fetch');
-    $self->assert_num_equals(2, $fetch->{1}{uid});
-    $self->assert_str_equals('Message 2', $fetch->{1}{headers}{subject}[0]);
+    $self->assert_not_null($fetch->{2});
+    $self->assert_str_equals('Message 2', $fetch->{2}{headers}{subject}[0]);
 
     xlog $self, "Unselect INBOX";
     $talk->unselect();

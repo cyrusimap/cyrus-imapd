@@ -28,27 +28,34 @@ EOF
     $self->{instance}->deliver($msg1,
                                users => [ 'cassandane', 'other1', 'other2' ]);
 
-    # message should NOT appear in cassandane INBOX
+    # message should NOT appear in cassandane INBOX.  A UID FETCH naming a
+    # message that isn't there returns nothing rather than failing, so check
+    # that nothing came back rather than that the command was refused.
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->examine('user.cassandane');
-    $admintalk->fetch('1', '(flags)');
-    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+    my $res = $admintalk->fetch('1', '(flags)');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_null($res);
 
     # message should appear in other1 INBOX
     $admintalk->examine('user.other1');
-    my $res = $admintalk->fetch('1', '(flags)');
+    $res = $admintalk->fetch('1', '(flags)');
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-    $self->assert_deep_equals($res, { '1' => { 'flags' => [ '\\Recent'] }});
+    $self->assert_deep_equals($res,
+                              { '1' => { 'uid' => '1',
+                                         'flags' => [ '\\Recent'] }});
 
     # message should NOT appear in other2 INBOX
     $admintalk->examine('user.other2');
-    $admintalk->fetch('1', '(flags)');
-    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+    $res = $admintalk->fetch('1', '(flags)');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_null($res);
 
     # message should appear in other2 INBOX.sub
     $admintalk->examine('user.other2.sub');
     $res = $admintalk->fetch('1', '(flags)');
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
     $self->assert_deep_equals($res,
-                              { '1' => { 'flags' => [ '\\Recent', '\\Flagged'] }});
+                              { '1' => { 'uid' => '1',
+                                         'flags' => [ '\\Recent', '\\Flagged'] }});
 }

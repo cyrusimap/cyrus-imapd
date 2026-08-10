@@ -128,7 +128,9 @@ sub test_note_set
     xlog "set \flagged";
     my $imap = $self->{store}->get_client();
     $imap->select('INBOX.Notes') || die $@;
-    $imap->store('1', '+flags', '(\\flagged)') || die $@;
+    # Updating a note rewrites its message, burning a UID each time, so
+    # address the note as "whatever is in there" rather than by number.
+    $imap->store('1:*', '+flags', '(\\flagged)') || die $@;
 
     xlog "verify isFlagged";
     $res = $jmap->CallMethods([['Note/get', { }, "R1"]]);

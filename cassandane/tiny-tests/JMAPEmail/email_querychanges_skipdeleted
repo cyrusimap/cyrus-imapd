@@ -39,7 +39,9 @@ sub test_email_querychanges_skipdeleted
     my $old = $res->[0][1];
 
     $talk->select("INBOX");
-    $talk->store("1", "+flags", "(\\Flagged)");
+    # A and B left and came back with new UIDs, so INBOX is now UIDs 3,4,5,6
+    # (C, D, A, B).  The message being flagged here is C.
+    $talk->store("3", "+flags", "(\\Flagged)");
 
     $res = $jmap->CallMethods([['Email/queryChanges', {
         sort => [

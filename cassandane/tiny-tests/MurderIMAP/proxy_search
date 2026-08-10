@@ -27,8 +27,10 @@ sub test_proxy_search ($self)
     my $frontend = $self->{frontend_store}->get_client();
     $frontend->examine('INBOX');
 
+    # This test deliberately asks the same SEARCH both ways over a mailbox
+    # with holes in it, so the sequence number form has to be spelled out.
     xlog $self, "SEARCH ALL";
-    my $res = $frontend->search('all');
+    my $res = $self->with_seq_mode($frontend, sub { $frontend->search('all') });
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
     $self->assert_str_equals($res->[0], "1");
     $self->assert_str_equals($res->[1], "2");
@@ -39,7 +41,6 @@ sub test_proxy_search ($self)
     $self->assert_str_equals($res->[6], "7");
 
     xlog $self, "UID SEARCH ALL";
-    $frontend->uid(1);
     $res = $frontend->search('all');
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
     $self->assert_str_equals($res->[0], "2");

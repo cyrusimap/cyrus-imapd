@@ -27,7 +27,8 @@ sub test_unsolicited
     $res = $admintalk->select('user.cassandane');
 
     xlog $self, "set flag in another session";
-    $admintalk->store('1', '+flags', '\\flagged');
+    # UID 1 was expunged above, so the surviving message is UID 2.
+    $admintalk->store('2', '+flags', '\\flagged');
 
     xlog $self, "poll for changes";
     my %fetched = $self->uidonly_cmd($imaptalk, 'NOOP');
