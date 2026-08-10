@@ -15,9 +15,8 @@
 #define le32toh(x) OSSwapLittleToHostInt32(x)
 #define htole64(x) OSSwapHostToLittleInt64(x)
 #define le64toh(x) OSSwapLittleToHostInt64(x)
-#ifndef UUID_STR_LEN
-#define UUID_STR_LEN 37
-#endif
+#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+#include <sys/endian.h>
 #else
 #include <endian.h>
 #endif
@@ -25,13 +24,14 @@
 #include <fcntl.h>
 #include <libgen.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
-#include <uuid/uuid.h>
 
 #include "twom.h"
 
@@ -40,6 +40,15 @@
 #define XXH_NO_INLINE_HINTS   1 /* allow compiling with -Og on modern compilers */
 #define XXH_IMPLEMENTATION      /* access definitions */
 #include "xxhash.h"
+
+/* Self-contained UUID (RFC 4122 version 4) support.  We generate and format
+ * UUIDs ourselves rather than depending on util-linux's libuuid, which is not
+ * present in the base system on the BSDs and only needs three trivial
+ * operations here anyway. */
+typedef unsigned char tm_uuid_t[16];
+#define TM_UUID_STR_LEN 37  /* 36 hex/hyphen chars + NUL */
+static void tm_uuid_generate(tm_uuid_t uuid);
+static void tm_uuid_unparse(const tm_uuid_t uuid, char *out);
 
 /********** TUNING *************/
 
@@ -86,7 +95,7 @@ static uint8_t hastail[8]        = { 0,  0,  1,  1,  1,  1,  0,  0 };
 
 struct tm_header {
     /* header info */
-    uuid_t uuid;
+    tm_uuid_t uuid;
     uint32_t version;
     uint32_t flags;
     uint64_t generation;
@@ -180,7 +189,7 @@ struct twom_db {
     void (*error)(const char *msg, const char *fmt, ...);
 
     // scratch space
-    char uuidstr[UUID_STR_LEN];
+    char uuidstr[TM_UUID_STR_LEN];
 
     // flags
     unsigned readonly:1;
@@ -236,14 +245,40 @@ static inline void *twom_zmalloc(size_t bytes)
     return res;
 }
 
+/* Fill a buffer with random bytes from /dev/urandom (present on Linux, macOS
+ * and every BSD).  Returns false if we couldn't read the whole buffer, in
+ * which case the caller needs its own fallback. */
+static bool tm_random_bytes(void *buf, size_t len)
+{
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0) return false;
+    size_t off = 0;
+    while (off < len) {
+        ssize_t n = read(fd, (char *)buf + off, len - off);
+        if (n <= 0) break;
+        off += (size_t)n;
+    }
+    close(fd);
+    return off == len;
+}
+
+/* a mix of weak entropy sources, for when /dev/urandom isn't available */
+static uint64_t tm_weak_entropy(void)
+{
+    uint64_t a = (uint64_t)time(NULL);
+    uint64_t b = (uint64_t)getpid();
+    uint64_t c = (uint64_t)(uintptr_t)&a;
+    return a ^ (b << 32) ^ c;
+}
+
 /* Random numbers for choosing skiplist levels.  These just need a decent
  * distribution of coin flips - levels don't depend on the key, so there's
  * nothing here for an attacker to steer - but we keep our own generator
  * rather than calling random(), because that shares global state with the
- * calling application: we would consume its sequence, and our record
- * levels would change if it called srandom().  Fixed seed, so a given
- * series of writes produces the same shape on every run, as it did with
- * an unseeded random(). */
+ * calling application: we would consume its sequence, and our record levels
+ * would change if it called srandom().  Fixed seed, so a given series of
+ * writes produces the same shape on every run, as it did with an unseeded
+ * random(). */
 static uint64_t tm_rand_state = 0x2545F4914F6CDD1DULL;
 
 static uint32_t tm_random(void)
@@ -256,6 +291,33 @@ static uint32_t tm_random(void)
     /* the high bits of the multiply are the well mixed ones */
     return (uint32_t)((x * 0x2545F4914F6CDD1DULL) >> 32);
 }
+
+/* Fill a 16-byte buffer with a random version-4 UUID.  We fall back to weak
+ * entropy if /dev/urandom is somehow unavailable, so we always produce a
+ * distinct identifier rather than failing. */
+static void tm_uuid_generate(tm_uuid_t uuid)
+{
+    if (!tm_random_bytes(uuid, sizeof(tm_uuid_t))) {
+        uint64_t a = tm_weak_entropy();
+        uint64_t b = tm_random();
+        b = (b << 32) | tm_random();
+        memcpy((char *)uuid + 0, &a, 8);
+        memcpy((char *)uuid + 8, &b, 8);
+    }
+    uuid[6] = (unsigned char)((uuid[6] & 0x0f) | 0x40);  /* version 4 */
+    uuid[8] = (unsigned char)((uuid[8] & 0x3f) | 0x80);  /* RFC 4122 variant */
+}
+
+/* Format a UUID as the canonical lowercase 8-4-4-4-12 string, matching the
+ * output of libuuid's uuid_unparse().  out must hold TM_UUID_STR_LEN bytes. */
+static void tm_uuid_unparse(const tm_uuid_t uuid, char *out)
+{
+    snprintf(out, TM_UUID_STR_LEN,
+             "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+             uuid[0], uuid[1], uuid[2], uuid[3], uuid[4], uuid[5], uuid[6], uuid[7],
+             uuid[8], uuid[9], uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]);
+}
+
 /********************** POINTER MANAGEMENT WITHIN THE FILES *********************/
 
 // pad out to an 8 byte boundary
@@ -2011,7 +2073,7 @@ static int initdb(struct twom_db *db, int flags)
     memset(scratch, 0, 512);
 
     // prepare the header
-    uuid_generate(header.uuid);
+    tm_uuid_generate(header.uuid);
     header.version = TWOM_VERSION;
     header.flags = set_csum_engine(db, file, flags);
     if (flags & TWOM_COMPAR_EXTERNAL)
@@ -2628,11 +2690,9 @@ int twom_db_open(const char *fname, struct twom_open_data *setup,
     for (mydb = open_twom; mydb; mydb = mydb->next) {
         if (strcmp(mydb->fname, fname)) continue;
 
-        /* This caller shares the existing handle, so a comparison or
-         * checksum function which differs from the one the database was
-         * opened with would just be ignored - and the caller would get the
-         * first opener's ordering, which is not a difference it can detect
-         * for itself.  Refuse instead. */
+        /* this caller shares the existing handle, so anything which changes
+         * how the file is interpreted has to match - otherwise they would
+         * silently get the first caller's semantics instead of their own */
         if (setup->compar != mydb->external_compar
             || setup->csum != mydb->external_csum) {
             mydb->error("open with mismatched compar or csum function",
@@ -3174,7 +3234,7 @@ size_t twom_db_size(struct twom_db *db)
 
 const char *twom_db_uuid(struct twom_db *db)
 {
-    uuid_unparse(db->openfile->header.uuid, db->uuidstr);
+    tm_uuid_unparse(db->openfile->header.uuid, db->uuidstr);
     return db->uuidstr;
 }
 
