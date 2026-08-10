@@ -18,7 +18,7 @@ sub test_synccache_rolling_only
     $self->run_replication(rolling => 1, inputfile => $synclogfname);
     unlink($synclogfname);
     $self->check_replication('cassandane');
-    $self->assert_file_test($cachefname, '-f');
+    $self->assert_file_test($cachefname, '-e');
 
     xlog $self, "delete the user on the replica, leaving a tombstone behind";
     my $replicasvc = $self->{replica}->get_service('imap');

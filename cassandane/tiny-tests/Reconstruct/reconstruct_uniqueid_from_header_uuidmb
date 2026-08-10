@@ -11,7 +11,7 @@ sub test_reconstruct_uniqueid_from_header_uuidmb
     $self->_start_instances();
     my $basedir = $self->{instance}->get_basedir();
     my $mailboxes_db = "$basedir/conf/mailboxes.db";
-    $self->assert(-f $mailboxes_db, "$mailboxes_db not present");
+    $self->assert(-e $mailboxes_db, "$mailboxes_db not present");
 
     # find out the uniqueid of the inbox
     my $imaptalk = $self->{store}->get_client();

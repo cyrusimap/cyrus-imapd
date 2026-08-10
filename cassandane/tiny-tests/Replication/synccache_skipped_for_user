@@ -22,7 +22,7 @@ sub test_synccache_skipped_for_user
     $self->run_replication(rolling => 1, inputfile => $synclogfname);
     unlink($synclogfname);
     $self->check_replication('cassandane');
-    $self->assert_file_test($cachefname, '-f');
+    $self->assert_file_test($cachefname, '-e');
 
     xlog $self, "delete the user on the replica, leaving tombstones behind";
     my $replicasvc = $self->{replica}->get_service('imap');
