@@ -126,6 +126,33 @@ void audit_keyspace_check(struct audit_keyspace *ks,
                           struct audit_state *state);
 void audit_check_users(struct audit_keyspace *ks, struct audit_state *state);
 
+/* Which kind of partition option a root came from.  A single disk path
+ * can serve several: it is common for meta and spool to share one. */
+enum {
+    AUDIT_ROOT_DATA    = (1<<0),    /* partition-* */
+    AUDIT_ROOT_META    = (1<<1),    /* metapartition-* */
+    AUDIT_ROOT_ARCHIVE = (1<<2),    /* archivepartition-* */
+    AUDIT_ROOT_SEARCH  = (1<<3),    /* searchpartition-* */
+    AUDIT_ROOT_ANY     = 0xf,
+};
+
+/* Collect the distinct on-disk roots to sweep, deduplicated by disk path.
+ * Only roots whose kind is in the types mask are collected.  If partition
+ * is non-NULL only that partition's roots are collected. */
+void audit_collect_roots(const char *partition, int types, strarray_t *roots);
+
+/* Is this a plausible mailbox uniqueid?  Rejects anything shorter than
+ * three characters: a mailbox with uniqueid "0" existed in the wild, and
+ * mboxname_id_hash() would place it at a path that is the PARENT of many
+ * other mailbox directories. */
+int audit_valid_uniqueid(const char *id);
+
+/* Walk <root>/uuid/<c0>/<c1>/<uniqueid>, the inverse of
+ * mboxname_id_hash(), appending each uniqueid found to *found and
+ * reporting anything that does not belong. */
+void audit_scan_uuid_root(const char *root, strarray_t *found,
+                          struct audit_state *state);
+
 /* Run the audit at the configured level.  Returns 0 on success; findings
  * are reported through the emitter and counted by audit_finding_count(). */
 int audit_run(struct audit_state *state);

@@ -34,6 +34,14 @@ static int tear_down(void)
     return 0;
 }
 
+/* Replace the loaded config wholesale.  set_up has already loaded a bare
+ * one, and config_read_string does not merge, so reset first. */
+static void load_config(const char *conf)
+{
+    config_reset();
+    config_read_string(DBDIR"/conf", conf);
+}
+
 /* mailboxes.db separators.  RS divides the fields of a key; HS divides
  * the levels of a mailbox name within one field.  Spell them as their own
  * string literals and rely on concatenation: written inline, "\x1ebob" is
@@ -870,6 +878,373 @@ static void test_user_tombstones_are_not_folders(void)
 
     audit_keyspace_fini(&ks);
     strarray_fini(&userlist);
+    buf_free(&out);
+}
+
+/* ------------------------------------------------------------------ */
+/* level 1: partition roots                                           */
+
+/* Several partition options commonly point at the same directory, and
+ * the meta and archive fallbacks add more.  Scanning one twice would
+ * report every mailbox on it as its own duplicate. */
+static void test_roots_deduplicated(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n"
+                "metapartition-default: /tmp/audit-data\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_ANY, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-data");
+
+    strarray_fini(&roots);
+}
+
+static void test_roots_distinct_paths_all_collected(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("archive_enabled: yes\n"
+                "partition-default: /tmp/audit-data\n"
+                "metapartition-default: /tmp/audit-meta\n"
+                "archivepartition-default: /tmp/audit-archive\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_ANY, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 3);
+    CU_ASSERT(strarray_contains(&roots, "/tmp/audit-data"));
+    CU_ASSERT(strarray_contains(&roots, "/tmp/audit-meta"));
+    CU_ASSERT(strarray_contains(&roots, "/tmp/audit-archive"));
+
+    strarray_fini(&roots);
+}
+
+/* With archiving disabled there is no separate archive location at all --
+ * config_archivepartitiondir() returns NULL regardless of what is
+ * configured, and mboxname_metapath() puts archive files on the data
+ * partition.  Sweeping the configured-but-unused directory would report
+ * anything left there as an orphan of a mailbox that never used it. */
+static void test_roots_archive_ignored_when_disabled(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n"
+                "archivepartition-default: /tmp/audit-archive\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_ARCHIVE, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-data");
+
+    strarray_fini(&roots);
+}
+
+/* Search tiers hold per-user xapian trees in the same UUID layout, so
+ * they belong in the sweep too. */
+static void test_roots_include_search_tiers(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n"
+                "defaultsearchtier: t1\n"
+                "searchpartition-t1: /tmp/audit-search\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_ANY, &roots);
+
+    CU_ASSERT(strarray_contains(&roots, "/tmp/audit-search"));
+
+    strarray_fini(&roots);
+}
+
+/* Restricting to a partition must restrict the sweep, or a
+ * partition-scoped run would report every mailbox living elsewhere as an
+ * orphan and, with --delete, remove it. */
+static void test_roots_partition_restricted(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n"
+                "metapartition-default: /tmp/audit-meta\n"
+                "partition-other: /tmp/audit-other\n");
+
+    audit_collect_roots("default", AUDIT_ROOT_ANY, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 2);
+    CU_ASSERT(strarray_contains(&roots, "/tmp/audit-data"));
+    CU_ASSERT(strarray_contains(&roots, "/tmp/audit-meta"));
+    CU_ASSERT(!strarray_contains(&roots, "/tmp/audit-other"));
+
+    strarray_fini(&roots);
+}
+
+/* A partition name that is a prefix of another must not drag it in. */
+static void test_roots_partition_name_is_exact(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-def: /tmp/audit-def\n"
+                "partition-default: /tmp/audit-default\n");
+
+    audit_collect_roots("def", AUDIT_ROOT_ANY, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-def");
+
+    strarray_fini(&roots);
+}
+
+/* Each finding differs by the kind of root it came from, so the caller
+ * must be able to sweep one kind at a time. */
+static void test_roots_type_filtered(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n"
+                "metapartition-default: /tmp/audit-meta\n"
+                "archivepartition-default: /tmp/audit-archive\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_META, &roots);
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-meta");
+    strarray_truncate(&roots, 0);
+
+    /* "partition-" is a suffix of "metapartition-" and the rest, so this
+     * is the case that over-matches if the prefix is matched loosely */
+    audit_collect_roots(NULL, AUDIT_ROOT_DATA, &roots);
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-data");
+
+    strarray_fini(&roots);
+}
+
+/* With no metapartition configured, meta files live on the data
+ * partition -- mboxname_metapath() falls back to it.  Sweeping the
+ * unconfigured location instead would find nothing and report every
+ * mailbox in the store as missing its directory. */
+static void test_roots_meta_falls_back_to_data(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_META, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-data");
+
+    strarray_fini(&roots);
+}
+
+/* Likewise for archive. */
+static void test_roots_archive_falls_back_to_data(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_ARCHIVE, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-data");
+
+    strarray_fini(&roots);
+}
+
+/* Options merely containing the word "partition" are not partition
+ * definitions and must not be swept. */
+static void test_roots_ignores_unrelated_options(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n"
+                "defaultpartition: default\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_ANY, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-data");
+
+    strarray_fini(&roots);
+}
+
+/* ------------------------------------------------------------------ */
+/* level 1: the UUID-layout scanner                                   */
+
+/* All four uniqueid formats in the wild must be accepted, or a valid
+ * mailbox directory would be reported as junk and, with --delete,
+ * removed. */
+static void test_valid_uniqueid_formats(void)
+{
+    /* really old: namehash + uidvalidity */
+    CU_ASSERT(audit_valid_uniqueid("0123456789abcdef"));
+    /* non-libuuid random */
+    CU_ASSERT(audit_valid_uniqueid("abcdefghij0123456789wxyz"));
+    /* uuid, builtin (lowercase) */
+    CU_ASSERT(audit_valid_uniqueid("01234567-89ab-cdef-0123-456789abcdef"));
+    /* uuid, imported (uppercase) */
+    CU_ASSERT(audit_valid_uniqueid("01234567-89AB-CDEF-0123-456789ABCDEF"));
+}
+
+static void test_invalid_uniqueid_formats(void)
+{
+    CU_ASSERT(!audit_valid_uniqueid(NULL));
+    CU_ASSERT(!audit_valid_uniqueid(""));
+    CU_ASSERT(!audit_valid_uniqueid("nope"));
+    CU_ASSERT(!audit_valid_uniqueid("0123456789abcdefg"));     /* 17 */
+    CU_ASSERT(!audit_valid_uniqueid("0123456789abcde"));       /* 15 */
+    CU_ASSERT(!audit_valid_uniqueid("0123456789abcdeZ"));      /* 16, not hex */
+    /* a uuid must have its dashes in the right count */
+    CU_ASSERT(!audit_valid_uniqueid("0123456789abcdef0123456789abcdef1234"));
+    /* and must not mix cases */
+    CU_ASSERT(!audit_valid_uniqueid("01234567-89ab-CDEF-0123-456789abcdef"));
+}
+
+/* A mailbox once genuinely had uniqueid "0".  The hashed path for it is a
+ * PARENT directory holding many other mailboxes, so accepting it would
+ * mean removing a whole slice of the store. */
+static void test_short_uniqueid_rejected(void)
+{
+    CU_ASSERT(!audit_valid_uniqueid("0"));
+    CU_ASSERT(!audit_valid_uniqueid("ab"));
+}
+
+/* mkdir -p for a printf-formatted path */
+static void test_mkpath(const char *fmt, ...)
+{
+    struct buf path = BUF_INITIALIZER;
+    va_list ap;
+    char *p;
+
+    va_start(ap, fmt);
+    buf_vprintf(&path, fmt, ap);
+    va_end(ap);
+
+    for (p = (char *)buf_cstring(&path) + 1; *p; p++) {
+        if (*p != '/') continue;
+        *p = '\0';
+        (void) mkdir(buf_cstring(&path), 0755);
+        *p = '/';
+    }
+    (void) mkdir(buf_cstring(&path), 0755);
+
+    buf_free(&path);
+}
+
+static void test_scan_finds_leaves(void)
+{
+    char root[] = "/tmp/audit-scan-XXXXXX";
+    strarray_t found = STRARRAY_INITIALIZER;
+    struct buf out = BUF_INITIALIZER;
+    const char *id = "0123456789abcdef";
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(root));
+    test_mkpath("%s/uuid/0/1/%s", root, id);
+
+    audit_scan_uuid_root(root, &found, test_state(&out));
+
+    CU_ASSERT_EQUAL(strarray_size(&found), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&found, 0), id);
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    strarray_fini(&found);
+    buf_free(&out);
+}
+
+/* A missing root is not a finding: a site may simply not have an archive
+ * partition populated yet. */
+static void test_scan_missing_root_is_quiet(void)
+{
+    strarray_t found = STRARRAY_INITIALIZER;
+    struct buf out = BUF_INITIALIZER;
+
+    audit_scan_uuid_root("/tmp/audit-does-not-exist", &found,
+                         test_state(&out));
+
+    CU_ASSERT_EQUAL(strarray_size(&found), 0);
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    strarray_fini(&found);
+    buf_free(&out);
+}
+
+/* A directory whose name is not a single hash character does not belong
+ * in the layout at all. */
+static void test_scan_flags_bad_hash_dir(void)
+{
+    char root[] = "/tmp/audit-scan-XXXXXX";
+    strarray_t found = STRARRAY_INITIALIZER;
+    struct buf out = BUF_INITIALIZER;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(root));
+    test_mkpath("%s/uuid/zzz/1/0123456789abcdef", root);
+
+    audit_scan_uuid_root(root, &found, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "fs-bad-hash-dir"));
+    CU_ASSERT_EQUAL(strarray_size(&found), 0);
+
+    strarray_fini(&found);
+    buf_free(&out);
+}
+
+static void test_scan_flags_invalid_uniqueid(void)
+{
+    char root[] = "/tmp/audit-scan-XXXXXX";
+    strarray_t found = STRARRAY_INITIALIZER;
+    struct buf out = BUF_INITIALIZER;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(root));
+    test_mkpath("%s/uuid/n/o/nope", root);
+
+    audit_scan_uuid_root(root, &found, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "fs-invalid-uniqueid"));
+    CU_ASSERT_EQUAL(strarray_size(&found), 0);
+
+    strarray_fini(&found);
+    buf_free(&out);
+}
+
+/* An INBOX subdirectory inside a mailbox directory is a known bogus
+ * artifact; the mailbox itself is still valid and must still be found. */
+static void test_scan_flags_bogus_inbox(void)
+{
+    char root[] = "/tmp/audit-scan-XXXXXX";
+    strarray_t found = STRARRAY_INITIALIZER;
+    struct buf out = BUF_INITIALIZER;
+    const char *id = "0123456789abcdef";
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(root));
+    test_mkpath("%s/uuid/0/1/%s/INBOX", root, id);
+
+    audit_scan_uuid_root(root, &found, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "fs-bogus-inbox-dir"));
+    CU_ASSERT_EQUAL(strarray_size(&found), 1);
+
+    strarray_fini(&found);
+    buf_free(&out);
+}
+
+/* The hash directories must match the start of the uniqueid, or the
+ * mailbox is not where mboxname_id_hash() would look for it. */
+static void test_scan_flags_misfiled_uniqueid(void)
+{
+    char root[] = "/tmp/audit-scan-XXXXXX";
+    strarray_t found = STRARRAY_INITIALIZER;
+    struct buf out = BUF_INITIALIZER;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(root));
+    /* 0123456789abcdef belongs under 0/1, not 9/9 */
+    test_mkpath("%s/uuid/9/9/0123456789abcdef", root);
+
+    audit_scan_uuid_root(root, &found, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "fs-misfiled-uniqueid"));
+
+    strarray_fini(&found);
     buf_free(&out);
 }
 

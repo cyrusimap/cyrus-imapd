@@ -4,14 +4,19 @@
 
 #include <config.h>
 
+#include <ctype.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include <jansson.h>
 
 #include "audit.h"
+#include "libconfig.h"
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "xmalloc.h"
@@ -613,6 +618,512 @@ EXPORTED void audit_check_users(struct audit_keyspace *ks,
 }
 
 /* ------------------------------------------------------------------ */
+/* level 1: on-disk roots                                             */
+
+struct namerock {
+    const char *prefix;
+    const char *want;       /* NULL for all */
+    strarray_t *names;
+};
+
+/* Collect the names defined by options of one prefix.  Matched on an
+ * exact prefix rather than a substring search, so that options merely
+ * containing the word -- such as defaultpartition -- are not mistaken for
+ * definitions, and "partition-" does not also match "metapartition-". */
+static void collect_name_cb(const char *key, const char *value, void *rock)
+{
+    struct namerock *nrock = (struct namerock *)rock;
+    size_t len = strlen(nrock->prefix);
+
+    if (strncmp(key, nrock->prefix, len)) return;
+    if (!key[len]) return;
+    if (!value || !*value) return;
+
+    /* "partition-x" must not be reached via the tail of
+     * "metapartition-x"; config_foreachoverflowstring hands us whole
+     * option names, so an exact prefix match is enough */
+    if (nrock->want && strcmp(key + len, nrock->want)) return;
+
+    if (strarray_contains(nrock->names, key + len)) return;
+
+    strarray_append(nrock->names, key + len);
+}
+
+static void collect_names(const char *prefix, const char *want,
+                          strarray_t *names)
+{
+    struct namerock nrock = { prefix, want, names };
+
+    config_foreachoverflowstring(collect_name_cb, &nrock);
+}
+
+static void add_root(strarray_t *roots, const char *dir)
+{
+    if (!dir || !*dir) return;
+
+    /* Deduplicate by disk path.  A site that has not configured a
+     * metapartition gets the data partition back from
+     * config_metapartitiondir()'s fallback, so the same path legitimately
+     * arrives more than once; sweeping it twice would report every
+     * mailbox on it as its own duplicate. */
+    if (strarray_contains(roots, dir)) return;
+
+    strarray_append(roots, dir);
+}
+
+EXPORTED void audit_collect_roots(const char *partition, int types,
+                                  strarray_t *roots)
+{
+    strarray_t names = STRARRAY_INITIALIZER;
+    int i;
+
+    if (types & AUDIT_ROOT_SEARCH) {
+        /* search tiers are named independently of mail partitions */
+        strarray_t tiers = STRARRAY_INITIALIZER;
+
+        collect_names("searchpartition-", NULL, &tiers);
+        for (i = 0; i < strarray_size(&tiers); i++) {
+            struct buf key = BUF_INITIALIZER;
+            buf_printf(&key, "searchpartition-%s", strarray_nth(&tiers, i));
+            add_root(roots, config_getoverflowstring(buf_cstring(&key), NULL));
+            buf_free(&key);
+        }
+
+        strarray_fini(&tiers);
+    }
+
+    if (!(types & (AUDIT_ROOT_DATA | AUDIT_ROOT_META | AUDIT_ROOT_ARCHIVE)))
+        return;
+
+    collect_names("partition-", partition, &names);
+
+    for (i = 0; i < strarray_size(&names); i++) {
+        const char *name = strarray_nth(&names, i);
+
+        /* Resolve through Cyrus's own accessors so that the fallbacks
+         * match mboxname_metapath(): with no metapartition configured the
+         * meta files live on the data partition, and auditing the
+         * unconfigured location would report every mailbox as missing. */
+        if (types & AUDIT_ROOT_DATA)
+            add_root(roots, config_partitiondir(name));
+
+        if (types & AUDIT_ROOT_META) {
+            const char *dir = config_metapartitiondir(name);
+            add_root(roots, dir ? dir : config_partitiondir(name));
+        }
+
+        if (types & AUDIT_ROOT_ARCHIVE) {
+            const char *dir = config_archivepartitiondir(name);
+            add_root(roots, dir ? dir : config_partitiondir(name));
+        }
+    }
+
+    strarray_fini(&names);
+}
+
+/* ------------------------------------------------------------------ */
+/* level 1: the UUID-layout scanner                                   */
+
+/* A uniqueid shorter than this would hash to a path that is the PARENT of
+ * many mailbox directories rather than a mailbox directory.  A mailbox
+ * with uniqueid "0" existed in the wild; treating it as valid would mean
+ * removing a whole slice of the store. */
+#define AUDIT_MIN_UNIQUEID_LEN 3
+
+static int all_lowerhex(const char *s, size_t len)
+{
+    size_t i;
+
+    for (i = 0; i < len; i++) {
+        if (!isxdigit((unsigned char)s[i])) return 0;
+        if (isupper((unsigned char)s[i])) return 0;
+    }
+
+    return 1;
+}
+
+EXPORTED int audit_valid_uniqueid(const char *id)
+{
+    size_t len, i;
+    int dashes = 0, lower = 0, upper = 0;
+
+    if (!id) return 0;
+
+    len = strlen(id);
+    if (len < AUDIT_MIN_UNIQUEID_LEN) return 0;
+
+    /* really old format: namehash + uidvalidity */
+    if (len == 16) return all_lowerhex(id, len);
+
+    /* non-libuuid random format */
+    if (len == 24) {
+        for (i = 0; i < len; i++) {
+            if (islower((unsigned char)id[i])) continue;
+            if (isdigit((unsigned char)id[i])) continue;
+            return 0;
+        }
+        return 1;
+    }
+
+    /* uuid format, either builtin (lowercase) or imported (uppercase),
+     * but never a mix of the two */
+    if (len == 36) {
+        for (i = 0; i < len; i++) {
+            if (id[i] == '-') { dashes++; continue; }
+            if (!isxdigit((unsigned char)id[i])) return 0;
+            if (islower((unsigned char)id[i])) lower = 1;
+            if (isupper((unsigned char)id[i])) upper = 1;
+        }
+        if (lower && upper) return 0;
+        return dashes == 4;
+    }
+
+    return 0;
+}
+
+static int valid_hashchar(const char *name)
+{
+    return name[0] && !name[1] && isalnum((unsigned char)name[0]);
+}
+
+/* A mailbox directory holding an INBOX subdirectory is a known bogus
+ * artifact.  The mailbox itself is still valid. */
+static void check_bogus_inbox(const char *leaf, struct audit_state *state)
+{
+    struct buf path = BUF_INITIALIZER;
+    struct stat sbuf;
+
+    buf_printf(&path, "%s/INBOX", leaf);
+
+    if (!stat(buf_cstring(&path), &sbuf) && S_ISDIR(sbuf.st_mode)) {
+        struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+        finding.code = "fs-bogus-inbox-dir";
+        finding.path = buf_cstring(&path);
+        audit_report(state, &finding);
+    }
+
+    buf_free(&path);
+}
+
+struct scandir {
+    const char *root;
+    strarray_t *found;
+    struct audit_state *state;
+};
+
+static void scan_leaf_dir(struct scandir *sd, const char *dirpath,
+                          char c0, char c1)
+{
+    DIR *dh = opendir(dirpath);
+    struct dirent *de;
+
+    if (!dh) return;
+
+    while ((de = readdir(dh))) {
+        struct buf leaf = BUF_INITIALIZER;
+        struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+
+        if (de->d_name[0] == '.') continue;
+
+        buf_printf(&leaf, "%s/%s", dirpath, de->d_name);
+        finding.path = buf_cstring(&leaf);
+
+        if (!audit_valid_uniqueid(de->d_name)) {
+            finding.code = "fs-invalid-uniqueid";
+            audit_report(sd->state, &finding);
+            buf_free(&leaf);
+            continue;
+        }
+
+        /* mboxname_id_hash() places a mailbox under the first two
+         * characters of its uniqueid; anywhere else and nothing will
+         * ever look for it here */
+        if (de->d_name[0] != c0 || de->d_name[1] != c1) {
+            finding.code = "fs-misfiled-uniqueid";
+            finding.uniqueid = de->d_name;
+            audit_report(sd->state, &finding);
+            buf_free(&leaf);
+            continue;
+        }
+
+        strarray_append(sd->found, de->d_name);
+        check_bogus_inbox(buf_cstring(&leaf), sd->state);
+
+        buf_free(&leaf);
+    }
+
+    closedir(dh);
+}
+
+EXPORTED void audit_scan_uuid_root(const char *root, strarray_t *found,
+                                   struct audit_state *state)
+{
+    struct scandir sd = { root, found, state };
+    struct buf base = BUF_INITIALIZER;
+    DIR *d0;
+    struct dirent *e0;
+
+    buf_printf(&base, "%s/uuid", root);
+
+    /* A missing root is not a finding: a site may simply not have this
+     * partition populated. */
+    d0 = opendir(buf_cstring(&base));
+    if (!d0) goto done;
+
+    while ((e0 = readdir(d0))) {
+        struct buf lvl1 = BUF_INITIALIZER;
+        DIR *d1;
+        struct dirent *e1;
+
+        if (e0->d_name[0] == '.') continue;
+
+        buf_printf(&lvl1, "%s/%s", buf_cstring(&base), e0->d_name);
+
+        if (!valid_hashchar(e0->d_name)) {
+            struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+            finding.code = "fs-bad-hash-dir";
+            finding.path = buf_cstring(&lvl1);
+            audit_report(state, &finding);
+            buf_free(&lvl1);
+            continue;
+        }
+
+        d1 = opendir(buf_cstring(&lvl1));
+        if (!d1) { buf_free(&lvl1); continue; }
+
+        while ((e1 = readdir(d1))) {
+            struct buf lvl2 = BUF_INITIALIZER;
+
+            if (e1->d_name[0] == '.') continue;
+
+            buf_printf(&lvl2, "%s/%s", buf_cstring(&lvl1), e1->d_name);
+
+            if (!valid_hashchar(e1->d_name)) {
+                struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+                finding.code = "fs-bad-hash-dir";
+                finding.path = buf_cstring(&lvl2);
+                audit_report(state, &finding);
+                buf_free(&lvl2);
+                continue;
+            }
+
+            scan_leaf_dir(&sd, buf_cstring(&lvl2),
+                          e0->d_name[0], e1->d_name[0]);
+
+            buf_free(&lvl2);
+        }
+
+        closedir(d1);
+        buf_free(&lvl1);
+    }
+
+    closedir(d0);
+
+  done:
+    buf_free(&base);
+}
+
+/* ------------------------------------------------------------------ */
+/* level 1: db entries vs directories on disk                         */
+
+/* The on-disk view, one set of uniqueids per kind of location. */
+struct audit_fsview {
+    hash_table meta;
+    hash_table data;
+    hash_table archive;
+    hash_table search;
+    hash_table user;
+    hash_table sieve;
+};
+
+static void fsview_init(struct audit_fsview *fs)
+{
+    memset(fs, 0, sizeof(*fs));
+    construct_hash_table(&fs->meta, 4096, 0);
+    construct_hash_table(&fs->data, 4096, 0);
+    construct_hash_table(&fs->archive, 4096, 0);
+    construct_hash_table(&fs->search, 4096, 0);
+    construct_hash_table(&fs->user, 4096, 0);
+    construct_hash_table(&fs->sieve, 4096, 0);
+}
+
+static void fsview_fini(struct audit_fsview *fs)
+{
+    free_hash_table(&fs->meta, NULL);
+    free_hash_table(&fs->data, NULL);
+    free_hash_table(&fs->archive, NULL);
+    free_hash_table(&fs->search, NULL);
+    free_hash_table(&fs->user, NULL);
+    free_hash_table(&fs->sieve, NULL);
+}
+
+/* Sweep every root of one kind into a set.  Hashed rather than kept as a
+ * list: a large store has millions of mailboxes and every cross-check
+ * below is a membership test. */
+static void sweep_into(hash_table *set, const char *partition, int type,
+                       const char *suffix, struct audit_state *state)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+    int i;
+
+    audit_collect_roots(partition, type, &roots);
+
+    for (i = 0; i < strarray_size(&roots); i++) {
+        strarray_t found = STRARRAY_INITIALIZER;
+        struct buf base = BUF_INITIALIZER;
+        int j;
+
+        buf_setcstr(&base, strarray_nth(&roots, i));
+        if (suffix) buf_printf(&base, "/%s", suffix);
+
+        audit_scan_uuid_root(buf_cstring(&base), &found, state);
+
+        for (j = 0; j < strarray_size(&found); j++) {
+            const char *id = strarray_nth(&found, j);
+            if (!hash_lookup(id, set)) hash_insert(id, (void *)1, set);
+        }
+
+        buf_free(&base);
+        strarray_fini(&found);
+    }
+
+    strarray_fini(&roots);
+}
+
+/* Sweep a single directory that is not a partition, such as the
+ * per-user and sieve trees under configdirectory. */
+static void sweep_dir_into(hash_table *set, const char *dir,
+                           struct audit_state *state)
+{
+    strarray_t found = STRARRAY_INITIALIZER;
+    int i;
+
+    audit_scan_uuid_root(dir, &found, state);
+
+    for (i = 0; i < strarray_size(&found); i++) {
+        const char *id = strarray_nth(&found, i);
+        if (!hash_lookup(id, set)) hash_insert(id, (void *)1, set);
+    }
+
+    strarray_fini(&found);
+}
+
+static void audit_sweep_filesystem(struct audit_fsview *fs,
+                                   struct audit_state *state)
+{
+    const char *partition = state->config.partition;
+    const char *confdir = config_getstring(IMAPOPT_CONFIGDIRECTORY);
+    struct buf dir = BUF_INITIALIZER;
+
+    /* Scan order is load-bearing.  Every cross-check below asks "does X
+     * exist without Y", so sweeping spool and archive before meta -- and
+     * all of them before the database -- means a mailbox created or
+     * deleted mid-run can only produce a false orphan, which we then
+     * re-verify, never a false "safe to delete".  Do not reorder. */
+    sweep_into(&fs->data, partition, AUDIT_ROOT_DATA, NULL, state);
+    sweep_into(&fs->archive, partition, AUDIT_ROOT_ARCHIVE, NULL, state);
+    sweep_into(&fs->meta, partition, AUDIT_ROOT_META, NULL, state);
+
+    /* search tiers keep their per-user trees below a "user" directory */
+    sweep_into(&fs->search, partition, AUDIT_ROOT_SEARCH, "user", state);
+
+    if (confdir) {
+        buf_printf(&dir, "%s/user", confdir);
+        sweep_dir_into(&fs->user, buf_cstring(&dir), state);
+
+        buf_reset(&dir);
+        buf_printf(&dir, "%s/sieve", confdir);
+        sweep_dir_into(&fs->sieve, buf_cstring(&dir), state);
+    }
+
+    buf_free(&dir);
+}
+
+struct orphanrock {
+    hash_table *against;
+    const char *code;
+    struct audit_state *state;
+};
+
+static void orphan_cb(const char *uniqueid,
+                      void *data __attribute__((unused)), void *rock)
+{
+    struct orphanrock *orock = (struct orphanrock *)rock;
+    struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+
+    if (hash_lookup(uniqueid, orock->against)) return;
+
+    finding.code = orock->code;
+    finding.uniqueid = uniqueid;
+    audit_report(orock->state, &finding);
+}
+
+/* Report each uniqueid in `set` that is absent from `against`. */
+static void report_orphans(hash_table *set, hash_table *against,
+                           const char *code, struct audit_state *state)
+{
+    struct orphanrock rock = { against, code, state };
+
+    hash_enumerate(set, orphan_cb, &rock);
+}
+
+struct dbcheckrock {
+    struct audit_fsview *fs;
+    struct audit_state *state;
+};
+
+static void check_ondisk_cb(const char *uniqueid, void *data, void *rock)
+{
+    struct dbcheckrock *drock = (struct dbcheckrock *)rock;
+    struct audit_dbentry *entry = (struct audit_dbentry *)data;
+    struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+
+    /* A legacy-layout mailbox lives in a name-hashed directory that the
+     * UUID sweep never visits, so its absence here means nothing.  It is
+     * already reported as db-entry-legacy-layout. */
+    if (entry->mbtype & MBTYPE_LEGACY_DIRS) return;
+
+    /* Remote and intermediate mailboxes have no data of their own. */
+    if (entry->mbtype & (MBTYPE_REMOTE | MBTYPE_INTERMEDIATE)) return;
+
+    if (hash_lookup(uniqueid, &drock->fs->meta)) return;
+
+    finding.code = "db-entry-no-meta-dir";
+    finding.uniqueid = uniqueid;
+    finding.mboxname = entry->dbname;
+    audit_report(drock->state, &finding);
+}
+
+static void audit_check_filesystem(struct audit_fsview *fs,
+                                   struct audit_keyspace *ks,
+                                   struct audit_state *state)
+{
+    struct dbcheckrock drock = { fs, state };
+
+    /* A mailbox directory with no database entry.  Nothing else in Cyrus
+     * looks inward from the filesystem, so this is the direction only the
+     * audit covers. */
+    report_orphans(&fs->meta, &ks->byid, "meta-dir-no-db-entry", state);
+
+    /* Spool and archive without meta.  When those partitions share a disk
+     * path with meta -- which is common -- the sets are identical and
+     * these can never fire. */
+    report_orphans(&fs->data, &fs->meta, "spool-dir-no-meta-dir", state);
+    report_orphans(&fs->archive, &fs->meta, "archive-dir-no-meta-dir", state);
+
+    /* Only whole-uniqueid orphans are reported for search: adjudicating
+     * individual xapian directories of a live mailbox needs to know
+     * whether a repack is in flight, and getting that wrong destroys a
+     * live index. */
+    report_orphans(&fs->search, &ks->byid, "search-dir-no-db-entry", state);
+
+    report_orphans(&fs->user, &ks->byid, "user-files-no-db-entry", state);
+    report_orphans(&fs->sieve, &ks->byid, "sieve-files-no-db-entry", state);
+
+    hash_enumerate(&ks->byid, check_ondisk_cb, &drock);
+}
+
+/* ------------------------------------------------------------------ */
 /* driving the scan                                                   */
 
 struct scanrock {
@@ -718,11 +1229,20 @@ static int scan_cb(void *rock, const struct mboxlist_rawkey *key,
 EXPORTED int audit_run(struct audit_state *state)
 {
     struct audit_keyspace ks;
+    struct audit_fsview fs;
     struct scanrock srock = { &ks, state };
     struct txn *tid = NULL;
+    int dofs = state->config.level >= 1;
     int r;
 
     audit_keyspace_init(&ks);
+    if (dofs) fsview_init(&fs);
+
+    /* Sweep the filesystem before reading the database.  See the comment
+     * in audit_sweep_filesystem(): the order is what makes a mid-run
+     * create or delete produce a false orphan rather than a false "safe
+     * to delete". */
+    if (dofs) audit_sweep_filesystem(&fs, state);
 
     /* One transaction for the whole scan: the cross-checks compare keys of
      * different types against each other, so they need a snapshot that is
@@ -735,8 +1255,10 @@ EXPORTED int audit_run(struct audit_state *state)
     if (!r) {
         audit_keyspace_check(&ks, state);
         audit_check_users(&ks, state);
+        if (dofs) audit_check_filesystem(&fs, &ks, state);
     }
 
+    if (dofs) fsview_fini(&fs);
     audit_keyspace_fini(&ks);
 
     return r;
