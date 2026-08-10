@@ -124,6 +124,10 @@ static struct cyrusopt_s cyrus_options[] =
       .val.b = false,
       .t = CYRUS_OPT_SWITCH },
 
+    { .opt = CYRUSOPT_ZEROSKIP_INDEX_PATH,
+      .val.s = NULL,
+      .t = CYRUS_OPT_STRING },
+
     { .opt = CYRUSOPT_LAST, .val.s = NULL, .t = CYRUS_OPT_NOTOPT }
 };
 

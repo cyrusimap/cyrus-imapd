@@ -1545,6 +1545,7 @@ lib_libcyrus_la_SOURCES = \
     lib/cyrusdb_skiplist.c \
     lib/cyrusdb_twoskip.c \
     lib/cyrusdb_twom.c \
+    lib/cyrusdb_zeroskip.c \
     lib/glob.c \
     lib/htmlchar.h \
     lib/imapurl.c \
