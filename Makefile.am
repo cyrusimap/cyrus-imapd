@@ -987,6 +987,8 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/append.h \
     imap/attachextract.c \
     imap/attachextract.h \
+    imap/audit.c \
+    imap/audit.h \
     imap/auditlog.c \
     imap/auditlog.h \
     imap/backend.c \
