@@ -47,7 +47,6 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xunlink.h"
 
 #define N(a) (sizeof(a) / sizeof(a[0]))
 
@@ -444,7 +443,13 @@ int main(int argc, char *argv[])
                     while ((dirent = readdir(dirp)) != NULL) {
                         if (dirent->d_name[0] == '.') continue;
                         file = strconcat(backup2, "/", dirent->d_name, (char *)NULL);
-                        xunlink(file);
+                        /* entries here may be plain files (most backends)
+                         * or whole directories (e.g. zeroskip); removedir()
+                         * handles either shape, unlike xunlink() which only
+                         * copes with plain files and fails EISDIR on a
+                         * directory-shaped database, aborting the rotation
+                         * below */
+                        removedir(file);
                         free(file);
                     }
 
