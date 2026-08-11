@@ -131,6 +131,7 @@ struct tm_loc {
     size_t offset;  /* current position */
     size_t deleted_offset;  /* was there a deletion in front of the current record? */
     size_t backloc[MAXLEVEL+1];  /* previous record at every level */
+    struct tm_loc *nextloc;  /* the database's list of live locations */
 };
 
 #define DIRTY (1<<0)
@@ -162,6 +163,7 @@ struct twom_db {
 
     /* tracking info */
     struct tm_loc loc;
+    struct tm_loc *locs;  /* live locations, for re-anchoring on abort */
     struct tm_file *openfile;
     struct twom_txn *write_txn;
     struct twom_txn *read_txn;
@@ -1003,6 +1005,53 @@ static int tm_locate(struct twom_txn *txn, struct tm_loc *loc, const char *key, 
     }
 
     return TWOM_INTERNAL;
+}
+
+/* every long-lived location (the db's cache and each cursor's) is on the
+ * db's list, so an aborting write transaction can find and re-anchor them */
+static void tm_register_loc(struct twom_db *db, struct tm_loc *loc)
+{
+    loc->nextloc = db->locs;
+    db->locs = loc;
+}
+
+static void tm_unregister_loc(struct twom_db *db, struct tm_loc *loc)
+{
+    struct tm_loc **ptr;
+    for (ptr = &db->locs; *ptr; ptr = &(*ptr)->nextloc) {
+        if (*ptr == loc) {
+            *ptr = loc->nextloc;
+            loc->nextloc = NULL;
+            return;
+        }
+    }
+}
+
+/* tm_reanchor_locs()
+ *
+ * A live location may reference records in the region a write transaction
+ * is rolling back, and the next write transaction will reuse that space.
+ * The rolled-back bytes are still intact here, so re-locate each such
+ * location by the key it currently references, against the committed
+ * state.  A location can only reference offsets below its own end, so
+ * one at or below committed_size needs nothing.
+ */
+static int tm_reanchor_locs(struct twom_txn *txn)
+{
+    struct tm_file *file = txn->file;
+    struct tm_loc *loc;
+    int r = 0;
+
+    for (loc = txn->db->locs; loc; loc = loc->nextloc) {
+        if (loc->file != file) continue;
+        if (loc->end <= file->committed_size) continue;
+        const char *ptr = loc->offset ? LOCPTR(loc) : LOCBACKPTR(loc, 0);
+        loc->end = file->committed_size;
+        int r2 = tm_locate(txn, loc, KEYPTR(ptr), KEYLEN(ptr));
+        if (r2 && !r) r = r2;
+    }
+
+    return r;
 }
 
 /* tm_advance_loc()
@@ -2299,6 +2348,7 @@ static int tm_opendb(const char *fname, struct twom_open_data *setup, struct two
 
     struct twom_db *db = (struct twom_db *)tm_zmalloc(sizeof(struct twom_db));
     if (!db) return TWOM_IOERROR;
+    db->locs = &db->loc;
     db->readonly = (setup->flags & TWOM_SHARED) ? 1 : 0;
     db->nocsum = (setup->flags & TWOM_NOCSUM) ? 1 : 0;
     db->nosync = (setup->flags & TWOM_NOSYNC) ? 1 : 0;
@@ -2412,6 +2462,14 @@ static int tm_abort_locked(struct twom_txn **txnp)
      * it or it gets repacked.
      */
     int r = tm_recovery(db, txn->file);
+
+    /* the next write transaction will reuse the rolled-back space, so
+     * move any location which references it back onto committed records
+     * while the bytes it needs are still intact */
+    txn->file->written_size = txn->file->committed_size;
+    int r2 = tm_reanchor_locs(txn);
+    if (r2 && !r) r = r2;
+
     txn->file->refcount--;
     free(txn);
     *txnp = NULL;
@@ -3094,6 +3152,7 @@ int twom_cursor_replace(struct twom_cursor *cur,
 int twom_cursor_abort(struct twom_cursor **curp)
 {
     struct twom_cursor *cur = *curp;
+    tm_unregister_loc(cur->txn->db, &cur->loc);
     if (cur->loc.file) {
         cur->loc.file->refcount--;
         cur->loc.file = NULL;
@@ -3108,6 +3167,7 @@ int twom_cursor_abort(struct twom_cursor **curp)
 int twom_cursor_commit(struct twom_cursor **curp)
 {
     struct twom_cursor *cur = *curp;
+    tm_unregister_loc(cur->txn->db, &cur->loc);
     if (cur->loc.file) {
         cur->loc.file->refcount--;
         cur->loc.file = NULL;
@@ -3134,6 +3194,7 @@ int twom_txn_begin_cursor(struct twom_txn *txn,
         return TWOM_IOERROR;
     }
     cur->txn = txn;
+    tm_register_loc(txn->db, &cur->loc);
     if (flags & TWOM_ALWAYSYIELD) cur->alwaysyield = 1;
     if ((flags & TWOM_CURSOR_PREFIX) && prefix && prefixlen) {
         cur->prefix = tm_zmalloc(prefixlen);
@@ -3175,6 +3236,7 @@ void twom_cursor_fini(struct twom_cursor **curp)
 {
     struct twom_cursor *cur = *curp;
     if (!cur) return;
+    if (cur->txn) tm_unregister_loc(cur->txn->db, &cur->loc);
     if (cur->loc.file) {
         cur->loc.file->refcount--;
         cur->loc.file = NULL;

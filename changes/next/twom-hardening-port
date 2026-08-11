@@ -70,6 +70,9 @@ Further fixes complete the vendoring:
     was undefined behaviour under strict aliasing, which the standalone
     library's build disabled but the Cyrus build never did; it is now
     correct without any special flags, and on any endianness
+  - a cursor (or the db's cached location) held across a write
+    transaction abort is re-anchored against the committed state,
+    instead of continuing to reference rolled-back bytes
   - twom generates its UUIDs itself instead of calling libuuid
   - MINREWRITE was a transposition: 16834 is now 16384
 
