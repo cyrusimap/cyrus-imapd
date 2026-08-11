@@ -1,0 +1,67 @@
+#!perl
+use Cassandane::Tiny;
+
+# Two Mailboxes can share a modseq without both of them being written to.  A
+# Mailbox modseq is the greater of its highestmodseq and its conversations
+# threadmodseq, and one change to any message in a conversation raises
+# threadmodseq in every folder that conversation touches.
+#
+# This test asserts that Mailbox/changes either reports all Mailboxes having
+# the same modseq in a response, or none of them.
+sub test_mailbox_changes_maxchanges_duplicate_thread_modseqs
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    xlog $self, "Set up two mailboxes sharing one thread";
+    my $mbox_a = $user->mailboxes->create({ name => 'A' });
+    my $mbox_b = $user->mailboxes->create({ name => 'B' });
+
+    # The same email in both mailboxes, so the conversation touches both.
+    my $email1 = $user->emails->create({
+        mailboxIds => { $mbox_a->id => JSON::true,
+                        $mbox_b->id => JSON::true },
+        keywords   => { '$seen' => JSON::true },
+        messageId  => [ 'msg1@local' ],
+        subject    => 'msg',
+    });
+
+    # Its reply lives in mailbox A only, and is the sole unseen message of the
+    # thread, so marking it seen changes the thread counts of both mailboxes.
+    my $email2 = $user->emails->create({
+        mailboxIds => { $mbox_a->id => JSON::true },
+        messageId  => [ 'msg2@local' ],
+        inReplyTo  => [ 'msg1@local' ],
+        references => [ 'msg1@local' ],
+        subject    => 'msg',
+    });
+
+    $self->assert_str_equals($email1->threadId, $email2->threadId);
+
+    my $res = $jmap->request([[ 'Mailbox/get', {} ]]);
+    my $state = $res->single_sentence('Mailbox/get')->arguments->{state};
+    $self->assert_not_null($state);
+
+    xlog $self, "Set flag on the reply, which is in mailbox A only";
+    $email2->update({ 'keywords/$seen' => JSON::true });
+
+    xlog $self, "Mailbox B shares the thread, so it gets the modseq of A";
+    $res = $jmap->request([
+        [ 'Mailbox/changes', { sinceState => $state, maxChanges => 1 } ],
+    ]);
+
+    $self->assert_str_equals('cannotCalculateChanges',
+                             $res->single_sentence('error')->arguments->{type});
+
+    xlog $self, "... but asking for both at once works";
+    $res = $jmap->request([
+        [ 'Mailbox/changes', { sinceState => $state, maxChanges => 2 } ],
+    ]);
+
+    my $changes = $res->single_sentence('Mailbox/changes')->arguments;
+
+    $self->assert_cmp_deeply(bag($mbox_a->id, $mbox_b->id),
+                             $changes->{updated});
+    $self->assert(! $changes->{hasMoreChanges}, "no more changes");
+}

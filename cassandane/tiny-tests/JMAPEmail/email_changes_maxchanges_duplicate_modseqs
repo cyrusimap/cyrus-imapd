@@ -1,0 +1,77 @@
+#!perl
+use Cassandane::Tiny;
+
+# This test asserts that Email/changes either reports all Emails having the
+# same modseq in a response, or none of them.  It must not exceed maxChanges
+# to do so -- RFC 8620 §5.2 says "MUST NOT".
+sub test_email_changes_maxchanges_duplicate_modseqs
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    xlog $self, "Set up three mailboxes with one email each";
+    my $mbox_a = $user->mailboxes->create({ name => 'A' });
+    my $mbox_b = $user->mailboxes->create({ name => 'B' });
+    my $mbox_c = $user->mailboxes->create({ name => 'C' });
+
+    my $email_a = $user->emails->create({
+        mailboxIds => { $mbox_a->id => JSON::true },
+        subject    => 'msgA',
+    });
+    my $email_b = $user->emails->create({
+        mailboxIds => { $mbox_b->id => JSON::true },
+        subject    => 'msgB',
+    });
+    my $email_c = $user->emails->create({
+        mailboxIds => { $mbox_c->id => JSON::true },
+        subject    => 'msgC',
+    });
+
+    my $res = $jmap->request([[ 'Email/get', { ids => [] } ]]);
+    my $state = $res->single_sentence('Email/get')->arguments->{state};
+    $self->assert_not_null($state);
+
+    xlog $self, "Set flag on email in mailbox C";
+    $email_c->update({ 'keywords/$flagged' => JSON::true });
+
+    xlog $self, "Set flag on emails in mailboxes A and B simultaneously";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            update => {
+                $email_a->id => { 'keywords/$flagged' => JSON::true },
+                $email_b->id => { 'keywords/$flagged' => JSON::true },
+            },
+        } ],
+    ]);
+    $res->assert_single_successful_set('Email/set');
+
+    xlog $self, "Email in mailbox C is reported independently from the ones in A and B";
+    $res = $jmap->request([
+        [ 'Email/changes', { sinceState => $state, maxChanges => 2 } ],
+    ]);
+    my $changes = $res->single_sentence('Email/changes')->arguments;
+
+    $self->assert_cmp_deeply([], $changes->{created});
+    $self->assert_cmp_deeply([ $email_c->id ], $changes->{updated});
+    $self->assert_cmp_deeply([], $changes->{destroyed});
+    $self->assert($changes->{hasMoreChanges}, "more changes");
+    $self->assert_str_not_equals($state, $changes->{newState});
+
+    xlog $self, "The emails in A and B share a modseq, so they get reported together";
+    $res = $jmap->request([
+        [ 'Email/changes', {
+            sinceState => $changes->{newState},
+            maxChanges => 2,
+        } ],
+    ]);
+    $changes = $res->single_sentence('Email/changes')->arguments;
+
+    $self->assert_cmp_deeply([], $changes->{created});
+    $self->assert_cmp_deeply(
+        bag($email_a->id, $email_b->id),
+        $changes->{updated},
+    );
+    $self->assert_cmp_deeply([], $changes->{destroyed});
+    $self->assert(! $changes->{hasMoreChanges}, "no more changes");
+}

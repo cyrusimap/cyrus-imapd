@@ -2138,6 +2138,33 @@ HIDDEN void jmap_changes_fini(struct jmap_changes *changes)
     json_decref(changes->destroyed);
 }
 
+HIDDEN size_t jmap_changes_count(const struct jmap_changes *changes)
+{
+    return json_array_size(changes->created) + json_array_size(changes->updated)
+           + json_array_size(changes->destroyed);
+}
+
+HIDDEN void jmap_changes_set_mark(const struct jmap_changes *changes,
+                                  size_t mark[3])
+{
+    mark[0] = json_array_size(changes->created);
+    mark[1] = json_array_size(changes->updated);
+    mark[2] = json_array_size(changes->destroyed);
+}
+
+HIDDEN void jmap_changes_truncate(struct jmap_changes *changes,
+                                  const size_t mark[3])
+{
+    json_t *arrays[3]
+        = { changes->created, changes->updated, changes->destroyed };
+
+    for (size_t i = 0; i < 3; i++) {
+        while (json_array_size(arrays[i]) > mark[i]) {
+            json_array_remove(arrays[i], json_array_size(arrays[i]) - 1);
+        }
+    }
+}
+
 HIDDEN json_t *jmap_changes_reply(struct jmap_changes *changes)
 {
     json_t *res = json_object();

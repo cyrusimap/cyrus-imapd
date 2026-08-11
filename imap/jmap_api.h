@@ -488,6 +488,18 @@ extern void jmap_changes_parse(jmap_req_t *req, struct jmap_parser *parser,
                                jmap_args_parse_cb args_parse, void *args_rock,
                                struct jmap_changes *changes, json_t **err);
 extern void jmap_changes_fini(struct jmap_changes *changes);
+
+/** @brief Returns the number of created, updated and destroyed ids. */
+extern size_t jmap_changes_count(const struct jmap_changes *changes);
+
+/** @brief Marks the current end of the created, updated and destroyed ids. */
+extern void jmap_changes_set_mark(const struct jmap_changes *changes,
+                                  size_t mark[3]);
+
+/** @brief Truncates the created, updated and destroyed ids back to the mark. */
+extern void jmap_changes_truncate(struct jmap_changes *changes,
+                                  const size_t mark[3]);
+
 extern json_t *jmap_changes_reply(struct jmap_changes *changes);
 
 

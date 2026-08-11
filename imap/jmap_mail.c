@@ -5531,8 +5531,9 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes,
     /* Process results */
     const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
     char email_id[JMAP_MAX_EMAILID_SIZE];
-    size_t changes_count = 0;
     modseq_t highest_modseq = 0;
+    modseq_t prev_modseq = 0;
+    size_t prev_modseq_mark[3] = {0};
     int i;
     hash_table seen_ids = HASH_TABLE_INITIALIZER;
     memset(&seen_ids, 0, sizeof(hash_table));
@@ -5549,38 +5550,37 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes,
         if (hash_lookup(email_id, &seen_ids)) continue;
         hash_insert(email_id, (void*)1, &seen_ids);
 
-        /* Apply maxChanges, if any. We do overshoot maxChanges in case
-         * the modseqs are not strictly increasing, which must not ever
-         * happen in a sane account. Should the account have any duplicate
-         * modseqs then we report that as an error but gracefully finish
-         * the /changes method. */
-        if (changes->max_changes && changes_count >= changes->max_changes &&
-            md->modseq > highest_modseq) {
+        /* Apply maxChanges, if any. Emails that share a modseq have to be
+         * reported together, because the state we hand back is a modseq and
+         * there is no way to resume in the middle of them. So if the modseq we
+         * are in the middle of turns out not to fit, take it back out again
+         * and stop before it. */
+        if (changes->max_changes &&
+            jmap_changes_count(changes) >= changes->max_changes) {
+            if (md->modseq == highest_modseq) {
+                jmap_changes_truncate(changes, prev_modseq_mark);
+                highest_modseq = prev_modseq;
+            }
             changes->has_more_changes = 1;
             break;
         }
-        changes_count++;
 
-        if (md->modseq == highest_modseq && highest_modseq) {
-            xsyslog_ev(LOG_ERR, "duplicate modseq in Email/changes",
-                    lf_s("mboxname", md->folder ? md->folder->mboxname : NULL),
-                    lf_u("uid", md->uid),
-                    lf_llu("modseq", md->modseq));
-        }
-
-        /* Keep track of the highest modseq */
-        if (highest_modseq < md->modseq)
+        /* Keep track of the highest modseq, and of where it starts */
+        if (highest_modseq < md->modseq) {
+            prev_modseq = highest_modseq;
             highest_modseq = md->modseq;
+            jmap_changes_set_mark(changes, prev_modseq_mark);
+        }
 
         struct email_expunge_check rock = { req, changes->since_modseq, 0, 0 };
         if (USER_COMPACT_EMAILIDS(req->cstate)) {
             rock.nano_internaldate = TIMESPEC_TO_NANOSEC(&md->internaldate);
         }
-        int r = conversations_guid_foreach(req->cstate, guidrep,
-                                           _email_is_expunged_cb, &rock);
+        r = conversations_guid_foreach(req->cstate, guidrep,
+                                       _email_is_expunged_cb, &rock);
         if (r) {
             *err = jmap_server_error(r);
-            goto done;
+            break;
         }
 
         /* Check the message status - status is a bitfield with:
@@ -5612,6 +5612,18 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes,
         }
     }
     free_hash_table(&seen_ids, NULL);
+
+    if (*err) goto done;
+
+    if (changes->has_more_changes && !jmap_changes_count(changes)) {
+        /* Not even one modseq can be reported. Handing back an empty
+         * changeset with hasMoreChanges set would only defer this error
+         * by one round-trip. */
+        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                         "description",
+                         "maxChanges too small to report a whole modseq");
+        goto done;
+    }
 
     /* Set new state */
     changes->new_modseq = changes->has_more_changes ?
@@ -5703,8 +5715,9 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
 
     /* Process results */
     const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
-    size_t changes_count = 0;
     modseq_t highest_modseq = 0;
+    modseq_t prev_modseq = 0;
+    size_t prev_modseq_mark[3] = {0};
     int i;
 
     struct hashset *seen_threads = hashset_new(8);
@@ -5717,28 +5730,27 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
         /* Skip already seen threads */
         if (!hashset_add(seen_threads, &md->cid)) continue;
 
-        /* Apply maxChanges, if any. We do overshoot maxChanges in case
-         * the modseqs are not strictly increasing, which must not ever
-         * happen in a sane account. Should the account have any duplicate
-         * modseqs then we report that as an error but gracefully finish
-         * the /changes method. */
-        if (changes->max_changes && changes_count >= changes->max_changes &&
-            md->modseq > highest_modseq) {
+        /* Apply maxChanges, if any. Threads that share a modseq have to be
+         * reported together, because the state we hand back is a modseq and
+         * there is no way to resume in the middle of them. So if the modseq we
+         * are in the middle of turns out not to fit, take it back out again
+         * and stop before it. */
+        if (changes->max_changes &&
+            jmap_changes_count(changes) >= changes->max_changes) {
+            if (md->modseq == highest_modseq) {
+                jmap_changes_truncate(changes, prev_modseq_mark);
+                highest_modseq = prev_modseq;
+            }
             changes->has_more_changes = 1;
             break;
         }
-        changes_count++;
 
-        if (md->modseq == highest_modseq && highest_modseq) {
-            xsyslog_ev(LOG_ERR, "duplicate modseq in Thread/changes",
-                    lf_s("mboxname", md->folder ? md->folder->mboxname : NULL),
-                    lf_u("uid", md->uid),
-                    lf_llu("modseq", md->modseq));
-        }
-
-        /* Keep track of the highest modseq */
-        if (highest_modseq < md->modseq)
+        /* Keep track of the highest modseq, and of where it starts */
+        if (highest_modseq < md->modseq) {
+            prev_modseq = highest_modseq;
             highest_modseq = md->modseq;
+            jmap_changes_set_mark(changes, prev_modseq_mark);
+        }
 
         /* Determine if the thread got changed or destroyed */
         if (conversation_load_advanced(req->cstate, md->cid, &conv, /*flags*/0))
@@ -5761,6 +5773,16 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
         memset(&conv, 0, sizeof(conversation_t));
     }
     hashset_free(&seen_threads);
+
+    if (changes->has_more_changes && !jmap_changes_count(changes)) {
+        /* Not even one modseq can be reported. Handing back an empty
+         * changeset with hasMoreChanges set would only defer this error
+         * by one round-trip. */
+        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                         "description",
+                         "maxChanges too small to report a whole modseq");
+        goto done;
+    }
 
     /* Set new state */
     changes->new_modseq = changes->has_more_changes ?
