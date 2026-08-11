@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+# When a single modseq's worth of changes is larger than maxChanges, there is
+# no intermediate state to hand back.  The client would sync only a partial
+# changeset and then advance its local state.
+sub test_thread_changes_maxchanges_too_small_duplicate_modseqs
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    xlog $self, "Set up two mailboxes with one email each";
+    my $mbox_a = $user->mailboxes->create({ name => 'A' });
+    my $mbox_b = $user->mailboxes->create({ name => 'B' });
+
+    my $email_a = $user->emails->create({
+        mailboxIds => { $mbox_a->id => JSON::true },
+        subject    => 'msgA',
+    });
+    my $email_b = $user->emails->create({
+        mailboxIds => { $mbox_b->id => JSON::true },
+        subject    => 'msgB',
+    });
+
+    my $res = $jmap->request([[ 'Thread/get', { ids => [] } ]]);
+    my $state = $res->single_sentence('Thread/get')->arguments->{state};
+    $self->assert_not_null($state);
+
+    xlog $self, "Set flag on emails in mailboxes A and B simultaneously";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            update => {
+                $email_a->id => { 'keywords/$flagged' => JSON::true },
+                $email_b->id => { 'keywords/$flagged' => JSON::true },
+            },
+        } ],
+    ]);
+    $res->assert_single_successful_set('Email/set');
+
+    xlog $self, "Both threads get the same modseq, so maxChanges 1 is rejected";
+    $res = $jmap->request([
+        [ 'Thread/changes', { sinceState => $state, maxChanges => 1 } ],
+    ]);
+
+    $self->assert_str_equals('cannotCalculateChanges',
+                             $res->single_sentence('error')->arguments->{type});
+
+    xlog $self, "... but asking for both at once works";
+    $res = $jmap->request([
+        [ 'Thread/changes', { sinceState => $state, maxChanges => 2 } ],
+    ]);
+
+    my $changes = $res->single_sentence('Thread/changes')->arguments;
+
+    $self->assert_cmp_deeply(bag($email_a->threadId, $email_b->threadId),
+                             $changes->{updated});
+    $self->assert(! $changes->{hasMoreChanges}, "no more changes");
+}

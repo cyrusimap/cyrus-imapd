@@ -4153,7 +4153,8 @@ static int _mbox_changes_cmp(const void **pa, const void **pb)
 
 static int _mbox_changes(jmap_req_t *req,
                          struct jmap_changes *changes,
-                         int *only_counts_changed)
+                         int *only_counts_changed,
+                         json_t **err)
 {
     *only_counts_changed = 1;
 
@@ -4167,6 +4168,8 @@ static int _mbox_changes(jmap_req_t *req,
         req
     };
     modseq_t windowmodseq;
+    modseq_t prev_modseq = 0;
+    size_t prev_modseq_mark[3] = {0};
     const char *id;
     json_t *val;
     int r, i;
@@ -4199,25 +4202,27 @@ static int _mbox_changes(jmap_req_t *req,
         const char *id = json_string_value(json_object_get(update, "id"));
         modseq_t modseq = json_integer_value(json_object_get(update, "modseq"));
 
-        /* Apply maxChanges, if any. We do overshoot maxChanges in case
-         * the modseqs are not strictly increasing, which must not ever
-         * happen in a sane account. Should the account have any duplicate
-         * modseqs then we report that as an error but gracefully finish
-         * the /changes method. */
-        if (changes->max_changes && ((size_t) i) >= changes->max_changes &&
-            modseq > windowmodseq) {
+        /* Apply maxChanges, if any. Mailboxes that share a modseq have to be
+         * reported together, because the state we hand back is a modseq and
+         * there is no way to resume in the middle of them. So if the modseq we
+         * are in the middle of turns out not to fit, take it back out again
+         * and stop before it. */
+        if (changes->max_changes &&
+            jmap_changes_count(changes) >= changes->max_changes) {
+            if (modseq == windowmodseq) {
+                jmap_changes_truncate(changes, prev_modseq_mark);
+                windowmodseq = prev_modseq;
+            }
             changes->has_more_changes = 1;
             break;
         }
 
-        if (modseq == windowmodseq && windowmodseq) {
-            xsyslog_ev(LOG_ERR, "duplicate modseq in Mailbox/changes",
-                    lf_s("mboxid", id),
-                    lf_llu("modseq", modseq));
-        }
-
-        if (windowmodseq < modseq)
+        /* Keep track of the highest modseq, and of where it starts */
+        if (windowmodseq < modseq) {
+            prev_modseq = windowmodseq;
             windowmodseq = modseq;
+            jmap_changes_set_mark(changes, prev_modseq_mark);
+        }
 
         if (json_object_get(data.created, id)) {
             json_array_append_new(changes->created, json_string(id));
@@ -4226,6 +4231,14 @@ static int _mbox_changes(jmap_req_t *req,
         } else {
             json_array_append_new(changes->destroyed, json_string(id));
         }
+    }
+
+    if (changes->has_more_changes && !jmap_changes_count(changes)) {
+        /* Not even one modseq can be reported */
+        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
+                         "description",
+                         "maxChanges too small to report a whole modseq");
+        goto done;
     }
 
     if ((json_array_size(changes->created) == 0 &&
@@ -4264,10 +4277,14 @@ static int jmap_mailbox_changes(jmap_req_t *req)
 
     /* Search for updates */
     int only_counts_changed = 0;
-    int r = _mbox_changes(req, &changes, &only_counts_changed);
+    int r = _mbox_changes(req, &changes, &only_counts_changed, &err);
     if (r) {
         syslog(LOG_ERR, "jmap: Mailbox/changes: %s", error_message(r));
         jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
 
