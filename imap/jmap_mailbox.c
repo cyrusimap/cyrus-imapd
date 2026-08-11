@@ -2111,6 +2111,11 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
         goto done;
     }
 
+    if (mboxname_policycheck(mboxname)) {
+        jmap_parser_invalid(&parser, "name");
+        goto done;
+    }
+
     /* Skip role updates in first iteration */
     if (args->specialuse && *args->specialuse) {
         if (mode == _MBOXSET_SKIP) {
@@ -2511,6 +2516,15 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                 goto done;
             }
             ptrarray_append(&strpool, newmboxname);
+
+            /* If the JMAP name didn't change then it can't be at fault -- the
+             * old mailbox exists, so its name already passed policy -- and we
+             * must be moving it somewhere we can't. */
+            if (mboxname_policycheck(newmboxname)) {
+                jmap_parser_invalid(&parser,
+                                    name == oldname ? "parentId" : "name");
+                goto done;
+            }
 
             r = jmap_mboxlist_lookup(newmboxname, NULL, NULL);
             if (r == 0) {
