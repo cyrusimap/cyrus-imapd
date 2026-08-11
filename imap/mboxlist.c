@@ -30,6 +30,7 @@
 #include "global.h"
 #include "cyrusdb.h"
 #include "util.h"
+#include "jmap_util.h"
 #include "mailbox.h"
 #include "mboxevent.h"
 #include "xmalloc.h"
@@ -1116,6 +1117,282 @@ static void mboxlist_racl_key(int isuser, const char *keyuser,
     if (dbname) {
         buf_appendcstr(buf, dbname);
     }
+}
+
+/*
+ * Raw keyspace access, for consistency auditing.
+ *
+ * The audit has to see keys the regular lookup API would hide or choke
+ * on -- an unparseable entry or an unrecognised prefix is exactly the
+ * kind of thing it exists to find -- so these live here, next to the key
+ * format they depend on, rather than in the auditing code.
+ */
+EXPORTED int mboxlist_parse_rawkey(const char *key, size_t keylen,
+                                   struct mboxlist_rawkey *rawkey)
+{
+    const char *sep;
+
+    memset(rawkey, 0, sizeof(*rawkey));
+
+    if (!keylen) return IMAP_MAILBOX_BADNAME;
+
+    switch (key[0]) {
+    case KEY_TYPE_NAME:
+        if (keylen < 2) return IMAP_MAILBOX_BADNAME;
+        rawkey->type = MBOXLIST_KEY_NAME;
+        rawkey->dbname = xstrndup(key + 1, keylen - 1);
+        return 0;
+
+    case KEY_TYPE_ID:
+        if (keylen < 2) return IMAP_MAILBOX_BADNAME;
+        rawkey->type = MBOXLIST_KEY_ID;
+        rawkey->uniqueid = xstrndup(key + 1, keylen - 1);
+        return 0;
+
+    case KEY_TYPE_JID:
+        if (keylen < 2) return IMAP_MAILBOX_BADNAME;
+        sep = memchr(key + 1, DB_RECORDSEP_CHAR, keylen - 1);
+        /* an empty userid is legal (shared mailboxes), but the separator
+         * and a jmapid are not optional */
+        if (!sep || sep + 1 >= key + keylen) return IMAP_MAILBOX_BADNAME;
+        rawkey->type = MBOXLIST_KEY_JMAPID;
+        rawkey->userid = xstrndup(key + 1, sep - (key + 1));
+        rawkey->jmapid = xstrndup(sep + 1, (key + keylen) - (sep + 1));
+        return 0;
+
+    case KEY_TYPE_ACL:
+        if (keylen < 3 || key[2] != DB_RECORDSEP_CHAR)
+            return IMAP_MAILBOX_BADNAME;
+        if (key[1] != 'U' && key[1] != 'S')
+            return IMAP_MAILBOX_BADNAME;
+        rawkey->type = MBOXLIST_KEY_RACL;
+        rawkey->isuser = (key[1] == 'U');
+        sep = memchr(key + 3, DB_RECORDSEP_CHAR, keylen - 3);
+        if (sep) {
+            rawkey->userid = xstrndup(key + 3, sep - (key + 3));
+            rawkey->aclmbox = xstrndup(sep + 1, (key + keylen) - (sep + 1));
+        }
+        else {
+            /* mboxlist_racl_key() omits both trailing parts when they are
+             * NULL, so a key with neither is well-formed */
+            rawkey->userid = xstrndup(key + 3, keylen - 3);
+        }
+        return 0;
+
+    default:
+        rawkey->type = MBOXLIST_KEY_UNKNOWN;
+        return 0;
+    }
+}
+
+EXPORTED void mboxlist_rawkey_fini(struct mboxlist_rawkey *rawkey)
+{
+    if (!rawkey) return;
+    xzfree(rawkey->dbname);
+    xzfree(rawkey->uniqueid);
+    xzfree(rawkey->userid);
+    xzfree(rawkey->jmapid);
+    xzfree(rawkey->aclmbox);
+    rawkey->type = MBOXLIST_KEY_UNKNOWN;
+    rawkey->isuser = 0;
+}
+
+struct rawforeach_rock {
+    mboxlist_rawproc_t *proc;
+    void *rock;
+};
+
+static int rawforeach_cb(void *rock, const char *key, size_t keylen,
+                         const char *data, size_t datalen)
+{
+    struct rawforeach_rock *frock = (struct rawforeach_rock *)rock;
+    struct mboxlist_rawkey rawkey = MBOXLIST_RAWKEY_INITIALIZER;
+    mbentry_t *mbentry = NULL;
+    int r;
+
+    r = mboxlist_parse_rawkey(key, keylen, &rawkey);
+    if (r) {
+        /* report it rather than dropping it: a malformed key is a finding,
+         * not a reason to stop */
+        rawkey.type = MBOXLIST_KEY_UNKNOWN;
+    }
+
+    /* a NULL mbentry tells the callback the value did not parse */
+    if (rawkey.type == MBOXLIST_KEY_NAME) {
+        mboxlist_parse_entry(&mbentry, rawkey.dbname, strlen(rawkey.dbname),
+                             data, datalen);
+    }
+    else if (rawkey.type == MBOXLIST_KEY_ID ||
+             rawkey.type == MBOXLIST_KEY_JMAPID) {
+        mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
+    }
+
+    r = frock->proc(frock->rock, key, keylen, &rawkey, mbentry,
+                    data, datalen);
+
+    mboxlist_entry_free(&mbentry);
+    mboxlist_rawkey_fini(&rawkey);
+
+    return r;
+}
+
+EXPORTED int mboxlist_foreach_raw(mboxlist_rawproc_t *proc, void *rock,
+                                  struct txn **tid)
+{
+    struct rawforeach_rock frock = { proc, rock };
+
+    init_internal();
+
+    /* One foreach inside a single transaction gives a consistent snapshot
+     * across all key types, which every cross-check depends on. */
+    return cyrusdb_foreach(mbdb, "", 0, NULL, rawforeach_cb, &frock, tid);
+}
+
+/*
+ * Ensure this mailbox is reachable by jmapid: assign one if it has none,
+ * and write the J record.
+ *
+ * This is not a database-only repair.  The jmapid is derived from the
+ * folder's modseq, so with no jmapid present it opens the mailbox,
+ * dirties the modseq, writes the header and commits before updating the
+ * mbentry.  Callers must be prepared for that cost.
+ *
+ * Shared by ctl_mboxlist -k and the consistency audit: a second
+ * implementation of jmapid assignment would drift from this one.
+ */
+EXPORTED int mboxlist_fix_jmapid(const mbentry_t *mbentry)
+{
+    mbentry_t *byunqid = NULL;
+
+    int r = mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &byunqid, NULL);
+    if (r) {
+        xsyslog(LOG_NOTICE, "missing uniqueid record, skipping",
+               "mboxname=<%s> uniqueid=<%s>",
+               mbentry->name, mbentry->uniqueid);
+        return 0;
+    }
+
+    // we are not the current record?  We don't need to process this.
+    if (strcmp(mbentry->name, byunqid->name))
+        goto done;
+
+    if (mbentry->jmapid) {
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+        const char *userid = mbname_userid(mbname);
+
+        if (!userid) userid = "";
+
+        // already got a record, we're good!
+        int res = mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, NULL, NULL);
+        mbname_free(&mbname);
+        if (!res) goto done;
+
+        xsyslog(LOG_NOTICE, "adding missing J record to mboxlist",
+                "mboxname=<%s> jmapid=<%s>",
+                mbentry->name, mbentry->jmapid);
+    }
+    else {
+        struct mailbox *mailbox = NULL;
+        r = mailbox_open_from_mbe(byunqid, &mailbox);
+        if (r) goto done;
+        struct buf jmapid = BUF_INITIALIZER;
+
+        byunqid->foldermodseq = mailbox_modseq_dirty(mailbox);
+
+        buf_putc(&jmapid, JMAP_MAILBOXID_PREFIX);
+        MODSEQ_TO_JMAPID(&jmapid, byunqid->foldermodseq);
+        mailbox_set_jmapid(mailbox, buf_cstring(&jmapid));
+
+        free(byunqid->jmapid);
+        byunqid->jmapid = buf_release(&jmapid);
+        buf_free(&jmapid);
+
+        xsyslog(LOG_NOTICE, "adding new J record to mboxlist",
+                "mboxname=<%s> jmapid=<%s>",
+                byunqid->name, byunqid->jmapid);
+
+        r = mailbox_commit(mailbox);
+        mailbox_close(&mailbox);
+        if (r) {
+            xsyslog(LOG_ERR, "DBERROR: error committing transaction",
+                    "error=<%s>", cyrusdb_strerror(r));
+            goto done;
+        }
+    }
+
+    r = mboxlist_updatelock(byunqid, /*localonly*/1);
+    if (r) {
+        xsyslog(LOG_ERR, "failed to update mboxlist",
+                "mboxname=<%s> error=<%s>",
+                mbentry->name, error_message(r));
+    }
+
+done:
+    mboxlist_entry_free(&byunqid);
+
+    return r;
+}
+
+EXPORTED void mboxlist_key_for_name(const char *mboxname, struct buf *key)
+{
+    char *dbname = mboxname_to_dbname(mboxname);
+
+    mboxlist_dbname_to_key(dbname, strlen(dbname), NULL, key);
+
+    free(dbname);
+}
+
+EXPORTED void mboxlist_key_for_id(const char *uniqueid, struct buf *key)
+{
+    mboxlist_id_to_key(uniqueid, key);
+}
+
+EXPORTED void mboxlist_key_for_jmapid(const char *userid, const char *jmapid,
+                                      struct buf *key)
+{
+    mboxlist_jmapid_to_key(userid, jmapid, key);
+}
+
+EXPORTED int mboxlist_rewrite_id_record(const mbentry_t *mbentry,
+                                        struct txn **tid)
+{
+    char *dbname = mboxname_to_dbname(mbentry->name);
+    struct dlist *dl = mboxlist_entry_dlist(dbname, mbentry, KEY_TYPE_ID);
+    struct buf mboxent = BUF_INITIALIZER;
+    struct buf key = BUF_INITIALIZER;
+    int r;
+
+    init_internal();
+
+    dlist_printbuf(dl, 0, &mboxent);
+    mboxlist_id_to_key(mbentry->uniqueid, &key);
+
+    r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
+                      buf_base(&mboxent), buf_len(&mboxent), tid);
+
+    dlist_free(&dl);
+    buf_free(&mboxent);
+    buf_free(&key);
+    free(dbname);
+
+    return r;
+}
+
+EXPORTED int mboxlist_rawkey_delete(const char *key, size_t keylen,
+                                    struct txn **tid)
+{
+    init_internal();
+
+    return cyrusdb_delete(mbdb, key, keylen, tid, /*force*/1);
+}
+
+EXPORTED int mboxlist_rawkey_store(const char *key, size_t keylen,
+                                   const char *data, size_t datalen,
+                                   struct txn **tid)
+{
+    init_internal();
+
+    return cyrusdb_store(mbdb, key, keylen, data, datalen, tid);
 }
 
 static int user_can_read(const strarray_t *aclbits, const char *user)

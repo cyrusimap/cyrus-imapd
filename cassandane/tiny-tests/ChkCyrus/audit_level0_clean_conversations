@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+# The J keyspace is only audited with conversations enabled, so this is
+# the configuration where those checks actually run.  A healthy store must
+# still report nothing.
+sub test_audit_level0_clean_conversations
+    :Conversations
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+    $imaptalk->create("INBOX.Sent") or die "create: $@";
+
+    my $findings = $self->audit_json('--level', '0');
+    my @codes = sort { $a cmp $b } codes($findings);
+    $self->assert_str_equals('', join(q{,}, @codes));
+}

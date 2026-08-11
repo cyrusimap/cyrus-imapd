@@ -88,6 +88,7 @@ sub new
         _pid => $$,
         smtpdaemon => 0,
         lsan_suppressions => "",
+        skip_sanity_check => 0,
     }, $class);
 
     $self->{name} = $params{name}
@@ -124,6 +125,8 @@ sub new
         if defined $params{smtpdaemon};
     $self->{lsan_suppressions} = $params{lsan_suppressions}
         if defined $params{lsan_suppressions};
+    $self->{skip_sanity_check} = $params{skip_sanity_check}
+        if defined $params{skip_sanity_check};
     $self->{old_jmap_ids} = $params{old_jmap_ids}
         if defined $params{old_jmap_ids};
     $self->{test_case} = $params{test_case}
@@ -1798,6 +1801,14 @@ sub _check_mupdate
 sub _check_sanity
 {
     my ($self) = @_;
+
+    # Some tests deliberately damage the store -- typically to check that
+    # a repair tool notices -- and would always trip this.  Those declare
+    # :NoSanityCheck and take responsibility for what they leave behind.
+    if ($self->{skip_sanity_check}) {
+        xlog "skipping spool sanity check at test's request";
+        return;
+    }
 
     # We added this check during 3.5 development... older versions
     # probably fail these checks.  If we backport fixes we can decrement

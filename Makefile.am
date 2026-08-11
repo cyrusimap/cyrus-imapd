@@ -615,6 +615,7 @@ cunit_TESTS = \
     cunit/aaa-db.testc \
     cunit/annotate.testc \
     cunit/arrayu64.testc \
+    cunit/audit.testc \
     cunit/auditlog.testc \
     cunit/backend.testc \
     cunit/binhex.testc \
@@ -968,6 +969,8 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/append.h \
     imap/attachextract.c \
     imap/attachextract.h \
+    imap/audit.c \
+    imap/audit.h \
     imap/auditlog.c \
     imap/auditlog.h \
     imap/backend.c \

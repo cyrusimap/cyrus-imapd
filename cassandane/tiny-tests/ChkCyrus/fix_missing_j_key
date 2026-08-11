@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+# A mailbox whose J record has gone is unreachable by jmapid.  The repair
+# is shared with ctl_mboxlist -k rather than reimplemented.
+sub test_fix_missing_j_key
+    :Conversations :NoSanityCheck
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+
+    my $db = $self->mailboxes_db();
+    my $fmt = $self->mailboxes_db_format();
+
+    # find and drop a J record
+    my %all = $self->{instance}->run_dbcommand($db, $fmt, ['SHOW']);
+    my ($jkey) = grep { m/^J/ } keys %all;
+    $self->assert_not_null($jkey);
+    $self->{instance}->run_dbcommand($db, $fmt, ['DELETE', $jkey]);
+
+    my $findings = $self->audit_json('--level', '0');
+    $self->assert_has_code($findings, 'db-missing-j-key');
+
+    # a dry run must leave it missing
+    $self->audit_json('--level', '0', '--fix');
+    $findings = $self->audit_json('--level', '0');
+    $self->assert_has_code($findings, 'db-missing-j-key');
+
+    $self->audit_json('--level', '0', '--fix', '--really');
+
+    $findings = $self->audit_json('--level', '0');
+    $self->assert_lacks_code($findings, 'db-missing-j-key');
+}
