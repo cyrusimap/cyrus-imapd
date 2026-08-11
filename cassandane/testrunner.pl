@@ -4,6 +4,7 @@
 
 use strict;
 use warnings;
+use Cwd qw(abs_path);
 use File::Slurp;
 use List::Util qw(uniq);
 
@@ -23,6 +24,9 @@ $Data::Dumper::Deepcopy = 1;
 $Data::Dumper::Indent = 1;
 $Data::Dumper::Sortkeys = 1;
 $Data::Dumper::Trailingcomma = 1;
+
+$ENV{DATAPRINTERRC} = abs_path('.dataprinter')
+    unless exists $ENV{DATAPRINTERRC};
 
 my %want_formats = ();
 my %format_params = ();

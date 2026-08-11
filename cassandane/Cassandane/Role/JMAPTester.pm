@@ -3,12 +3,37 @@ use Moo::Role;
 
 use experimental 'signatures';
 
+use Cassandane::JMAPAbort ();
 use Encode ();
+use JMAP::Tester ();
+use JMAP::Tester::Abort ();
+
+# A JMAP::Tester::Abort is a Throwable::Error, which Test::Unit reports as an
+# error -- as though the suite were broken -- instead of as a failing test.
+# We want to throw an Error instead -- or, well, we don't want to, but we sort
+# of have to.  This solution is absolutely gross: just replace the
+# JMAP::Tester::Abort constructor.
+unless (JMAP::Tester->can('abort_class')) {
+    no warnings 'redefine';
+    *JMAP::Tester::Abort::new = sub ($, @rest) {
+        return Cassandane::JMAPAbort->new(@rest);
+    };
+}
 
 has fallback_account_id => (
     is       => 'ro',
     required => 1,
 );
+
+# JMAP::Tester dumps the values in an abort's diagnostics as JSON.
+# Data::Printer is easier to read, and I can bring in my cool .dataprinter to
+# make it even better.
+sub default_diagnostic_dumper {
+    require Data::Printer;
+    return sub ($value) {
+        return Data::Printer::np($value, colored => 1);
+    };
+}
 
 # This emulates JMAPTalk's DefaultUsing
 sub DefaultUsing {
