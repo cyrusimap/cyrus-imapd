@@ -71,6 +71,7 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane');
+    $config->set(conversations => 'yes');
     $config->set(httpmodules => 'caldav');
     $config->set(calendar_user_address_set => 'example.com');
     $config->set(httpallowcompress => 'no');
