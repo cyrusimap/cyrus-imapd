@@ -3647,6 +3647,7 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
     static json_t *publicprops = NULL;
     if (!publicprops) {
         publicprops = json_object();
+        json_object_set_new(publicprops, "baseEventId", json_true());
         json_object_set_new(publicprops, "calendarIds", json_true());
         json_object_set_new(publicprops, "created", json_true());
         json_object_set_new(publicprops, "due", json_true());
@@ -3656,6 +3657,7 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
         json_object_set_new(publicprops, "freeBusyStatus", json_true());
         json_object_set_new(publicprops, "id", json_true());
         json_object_set_new(publicprops, "isDraft", json_true());
+        json_object_set_new(publicprops, "isOrigin", json_true());
         json_object_set_new(publicprops, "privacy", json_true());
         json_object_set_new(publicprops, "recurrenceId", json_true());
         json_object_set_new(publicprops, "recurrenceIdTimeZone", json_true());
@@ -3669,6 +3671,7 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
         json_object_set_new(publicprops, "updated", json_true());
         json_object_set_new(publicprops, "utcStart", json_true());
         json_object_set_new(publicprops, "utcEnd", json_true());
+        json_object_set_new(publicprops, "version", json_true());
     }
 
     const char *key;
