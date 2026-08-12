@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_deep_nesting ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    $talk->select('INBOX');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # A search program nested far deeper than any real client would nest one
+    # used to be parsed recursively until imapd ran out of stack and died.
+    my $depth = 60_000;
+    $talk->_imap_cmd('SEARCH', 0, {},
+                     '(' x $depth . 'ALL' . ')' x $depth);
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    # ... and having said no, the server is still there to say it again
+    $talk->noop();
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+}
