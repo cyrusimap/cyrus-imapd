@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cmd_id_nil_os ($self)
+{
+    # Purge any syslog lines before this test runs.
+    $self->{instance}->getsyslog();
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # Send ID command with NIL as "os" value
+    $imaptalk->_imap_cmd('ID', 0, {}, qq{("os" NIL)});
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    # Send ID command with two "os" values, the second being ""
+    $imaptalk->_imap_cmd('ID', 0, {}, qq{("os" "foo" "os" "")});
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        # make sure that the connection is ended so that imapd reset happens
+        $imaptalk->logout();
+        undef $imaptalk;
+
+        my @behavior_lines = $self->{instance}->getsyslog(qr/client id/);
+
+        $self->assert_num_gte(2, scalar @behavior_lines);
+
+        $self->assert_matches(qr/"os" NIL/, $behavior_lines[0]);
+        $self->assert_matches(qr/"os" ""/,  $behavior_lines[1]);
+    }
+}

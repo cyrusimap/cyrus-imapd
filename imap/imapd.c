@@ -3490,12 +3490,12 @@ static void cmd_id(char *tag)
                 return;
             }
 
-            if (!strcmp(field.s, "os") && !strcmp(arg.s, "iOS")) {
+            if (!strcmp(field.s, "os") && !strcmpnull(arg.s, "iOS")) {
                 imapd_id.quirks |= QUIRK_SEARCHFUZZY;
             }
 
             /* ok, we're happy enough */
-            hash_insert(field.s, xstrdup(buf_cstring(&arg)), &imapd_id.params);
+            hash_upsert(field.s, buf_releasenull(&arg), &imapd_id.params, &free);
         }
 
         if (c != ')') {
