@@ -1423,19 +1423,26 @@ static void clean_component(icalcomponent *comp, icalproperty_method method)
 {
     icalproperty *prop;
 
-    bool remove_transp;
+    /* A message to the organizer must not disclose how the attendee
+       presents this event in their own calendar */
+    bool is_reply;
     switch (method) {
         case ICAL_METHOD_REPLY:
         case ICAL_METHOD_REFRESH:
         case ICAL_METHOD_COUNTER:
-            remove_transp = true;
+            is_reply = true;
             break;
         default:
-            remove_transp = false;
+            is_reply = false;
     }
 
     /* Strip VALARMs, TRANSP, COLOR, and CATEGORIES (if color) */
-    itip_strip_personal_data(comp, remove_transp);
+    itip_strip_personal_data(comp, is_reply);
+
+    if (is_reply) {
+        /* Strip the privacy of the attendee's copy of the event */
+        itip_strip_privacy(comp);
+    }
 
     /* Replace DTSTAMP on component */
     prop = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY);

@@ -1,0 +1,75 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_itip_privacy_outgoing_reply
+    :needs_component_sieve
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $uid = guid_string();
+    my $organizer = 'organizer@example.net';
+    my $attendee = 'cassandane@example.com';
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<~"EOF");
+    require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+    if body :content "text/calendar" :contains "\nMETHOD:" {
+        processimip :deletecanceled :outcome "outcome";
+    }
+    EOF
+
+    xlog $self, "Organizer sends invite with CLASS:PRIVATE";
+    my $ical = <<~"EOF";
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+    METHOD:REQUEST
+    BEGIN:VEVENT
+    CREATED:20210923T034327Z
+    UID:$uid
+    SUMMARY:test
+    CLASS:PRIVATE
+    DTSTART;TZID=America/New_York:20210923T153000
+    DURATION:PT1H
+    DTSTAMP:20210923T034327Z
+    SEQUENCE:0
+    ORGANIZER:MAILTO:$organizer
+    ATTENDEE;RSVP=TRUE;PARTSTAT=NEEDS-ACTION;X-JMAP-ID=cassandane:MAILTO:$attendee
+    END:VEVENT
+    END:VCALENDAR
+    EOF
+
+    my $msg = $self->{gen}->generate(
+        from => Cassandane::Address->new(localpart => 'sender',
+                                         domain => 'example.net'),
+        to => Cassandane::Address->new(localpart => 'cassandane',
+                                       domain => 'example.com'),
+        mime_type => 'text/calendar; method=REQUEST; component=VEVENT',
+        body => $ical,
+    );
+    $self->{instance}->deliver($msg);
+
+    my $event_id = $jmap->request([
+        [ 'CalendarEvent/get' => { properties => ['id'] } ],
+    ])->single_sentence('CalendarEvent/get')->arguments->{list}[0]{id};
+    $self->assert_not_null($event_id);
+
+    xlog $self, "Clear notifications";
+    $self->{instance}->getnotify();
+
+    xlog $self, "Set privacy to 'secret' and accept invitation";
+    $user->calendarevents->get($event_id)->update({
+        'participants/cassandane/participationStatus' => 'accepted',
+        privacy => 'secret',
+    });
+
+    xlog $self, "the iTIP REPLY does not disclose the privacy of our copy";
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+    my $reply = decode_json($imip->{MESSAGE})->{ical};
+    $self->assert_matches(qr/METHOD:REPLY/, $reply);
+    $self->assert_does_not_match(qr/CLASS:/, $reply);
+}

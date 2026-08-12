@@ -599,6 +599,21 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
     return attendee;
 }
 
+HIDDEN void itip_strip_privacy(icalcomponent *comp)
+{
+    icalproperty *prop, *nextprop;
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+         prop;
+         prop = nextprop)
+    {
+        nextprop = icalcomponent_get_next_property(comp, ICAL_CLASS_PROPERTY);
+
+        icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
+    }
+}
+
 
 static int deliver_merge_request(const char *attendee,
                                  icalcomponent *ical,     // current iCalendar
