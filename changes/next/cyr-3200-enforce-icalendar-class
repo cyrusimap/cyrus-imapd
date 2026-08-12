@@ -1,0 +1,39 @@
+Description:
+
+The iCalendar CLASS property now is enforced for calendar sharees, both in
+CalDAV and JMAP, following the JMAP Calendars semantics for the JSCalendar
+"privacy" property.
+
+The CLASS property no longer is stripped from iTIP messages. It is preserved
+for new invites (REQUEST) and for outgoing messages where the user is the
+organizer, but changes to it are discarded for invite updates and for
+replies (REPLY).
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+The DAV database gets upgraded automatically, but two kinds of existing data
+predate this change and need attention:
+
+Existing JMAP calendar event notifications do not record the privacy of the
+event they are about, so they keep being visible to sharees. Purge them from
+the JMAP notification folder to make CLASS take effect for them.
+
+Existing DAV database entries may hold a stale privacy. A sharee still can
+read such an event, although they may not write it. Run "dav_reconstruct" to
+refresh these entries.
+
+
+GitHub issue:
+
+None.
