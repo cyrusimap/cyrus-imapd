@@ -8339,7 +8339,10 @@ done:
             *set_err = json_pack("{s:s}", "type", "notFound");
         else
             *set_err = jmap_server_error(r);
-        return;
+    }
+    if (*set_err) {
+        json_decref(*new_event);
+        *new_event = NULL;
     }
     mboxlist_entry_free(&mbentry);
     mailbox_close(&src_mbox);
