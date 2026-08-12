@@ -58,6 +58,12 @@ int getmodseq(struct protstream *pin, modseq_t *num);
 
 void eatline(struct protstream *pin, int c);
 
+/* Search criteria nest, via parentheses and via the NOT, OR and FUZZY
+ * criteria.  We won't parse a search more complex than this.  In testing, we'd
+ * crash somewhere past 50k.
+ */
+#define MAX_SEARCH_DEPTH 1000
+
 int get_search_program(struct protstream *pin, struct protstream *pout,
                        unsigned client_quirks, struct searchargs *searchargs);
 int get_search_return_opts(struct protstream *pin, struct protstream *pout,
