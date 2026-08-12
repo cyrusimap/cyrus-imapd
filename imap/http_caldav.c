@@ -1051,7 +1051,32 @@ static int caldav_check_precond(struct transaction_t *txn,
     const char **hdr;
     int precond = 0;
 
+    /* Only the owner may remove a non-public resource from their calendar,
+       or duplicate it elsewhere. */
     enum caldav_privacy privacy = caldav_privacy_for_sharee(mailbox, cdata);
+
+    if (privacy != CAL_PRIVACY_PUBLIC
+        && (txn->meth == METH_DELETE || txn->meth == METH_MOVE
+            || txn->meth == METH_COPY))
+    {
+        xsyslog_ev(LOG_NOTICE, "sharee may not remove non-public resource",
+                   lf_s("method", http_methods[txn->meth].name),
+                   lf_s("userid", httpd_userid),
+                   lf_s("mboxname", mailbox_name(mailbox)),
+                   lf_s("resource", cdata->dav.resource),
+                   lf_s("privacy", caldav_privacy_as_string(privacy)));
+
+        if (privacy == CAL_PRIVACY_SECRET) {
+            /* Report a secret resource as if it did not exist */
+            return HTTP_NOT_FOUND;
+        }
+
+        /* Report as if the sharee had no access to remove the resource */
+        txn->error.precond = DAV_NEED_PRIVS;
+        txn->error.resource = txn->req_tgt.path;
+        txn->error.rights = DACL_RMRSRC;
+        return HTTP_NO_PRIVS;
+    }
 
     if (privacy == CAL_PRIVACY_SECRET
         && (txn->meth == METH_GET || txn->meth == METH_HEAD))

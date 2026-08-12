@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+# These tests assert the CLASS property for CalDAV DELETE.
+
+my $NO_PRIVS = { status => 403, precondition => 'need-privileges' };
+my $NOT_FOUND = { status => 404 };
+
+my sub assert_sharee_delete ($self, $privacy_prop, $want_error)
+{
+    my $owner_caldav = $self->default_user->caldav;
+    my $uid = '2a358cee-6489-4f14-a57f-c104db4b8b4c';
+
+    xlog $self, "create the event as the calendar owner";
+    $owner_caldav->Request('PUT', "Default/$uid.ics", join("\r\n",
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN',
+        'BEGIN:VEVENT',
+        "UID:$uid",
+        'DTSTAMP:20150806T234327Z',
+        'DTSTART:20160831T153000Z',
+        'DURATION:PT1H',
+        'SUMMARY:An Event',
+        'SEQUENCE:0',
+        $privacy_prop,
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ) . "\r\n", 'Content-Type' => 'text/calendar');
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    my $href = "/dav/calendars/user/cassandane/Default/$uid.ics";
+
+    if (!$want_error) {
+        xlog $self, "sharee deletes the event";
+        $sharee_caldav->Request('DELETE', $href);
+
+        xlog $self, "the event is gone from the owner's calendar";
+        my $res = $owner_caldav->SafeRequest('GET', "Default/$uid.ics");
+        $self->assert_num_equals(404, $res->{http_response}{status});
+    }
+    else {
+        xlog $self, "sharee is denied deleting the event";
+        my $res = $sharee_caldav->SafeRequest('DELETE', $href);
+        $self->assert_num_equals($want_error->{status},
+                                 $res->{http_response}{status});
+        if ($want_error->{precondition}) {
+            $self->assert_matches(qr/$want_error->{precondition}/,
+                                  $res->{http_response}{content});
+        }
+
+        xlog $self, "the event is still in the owner's calendar";
+        my $event = $owner_caldav->Request('GET', "Default/$uid.ics");
+        $self->assert_matches(qr/SUMMARY:An Event/, $event->{content});
+    }
+}
+
+sub test_class_delete__public
+    ($self)
+{
+    assert_sharee_delete($self, 'CLASS:PUBLIC', undef);
+}
+
+sub test_class_delete__private
+    ($self)
+{
+    assert_sharee_delete($self, 'CLASS:PRIVATE', $NO_PRIVS);
+}
+
+sub test_class_delete__secret
+    ($self)
+{
+    assert_sharee_delete($self, 'CLASS:CONFIDENTIAL', $NOT_FOUND);
+}
