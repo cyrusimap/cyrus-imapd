@@ -889,12 +889,15 @@ static void date_range(search_expr_t *parent, const char *aname,
 }
 
 /*
- * Parse a single search criterion
+ * Parse a single search criterion.  'depth' is how many enclosing
+ * criteria we're nested inside; it's zero for a criterion at the top level
+ * of the search program.
  */
 static int get_search_criterion(struct protstream *pin,
                                 struct protstream *pout,
                                 search_expr_t *parent,
-                                struct searchargs *base)
+                                struct searchargs *base,
+                                int depth)
 {
     static struct buf criteria, arg, arg2;
     search_expr_t *e;
@@ -903,6 +906,12 @@ static int get_search_criterion(struct protstream *pin,
     time_t start, end, now = time(0);
     uint32_t u;
     int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
+
+    if (depth > MAX_SEARCH_DEPTH) {
+        prot_printf(pout, "%s BAD Search program too deeply nested\r\n",
+                    base->tag);
+        return EOF;
+    }
 
     if (base->state & GETSEARCH_CHARSET_FIRST) {
         c = getcharset(pin, pout, &arg);
@@ -925,7 +934,7 @@ static int get_search_criterion(struct protstream *pin,
         if (c != '(') goto badcri;
         e = search_expr_new(parent, SEOP_AND);
         do {
-            c = get_search_criterion(pin, pout, e, base);
+            c = get_search_criterion(pin, pout, e, base, depth+1);
         } while (c == ' ');
         if (c <= EOF) return c;
         if (c != ')') {
@@ -1125,7 +1134,7 @@ static int get_search_criterion(struct protstream *pin,
         else if (!strcmp(criteria.s, "fuzzy")) {        /* RFC 6203 */
             if (c != ' ') goto missingarg;
             base->fuzzy_depth++;
-            c = get_search_criterion(pin, pout, parent, base);
+            c = get_search_criterion(pin, pout, parent, base, depth+1);
             base->fuzzy_depth--;
             if (c <= EOF) return c;
 
@@ -1213,7 +1222,7 @@ static int get_search_criterion(struct protstream *pin,
         if (!strcmp(criteria.s, "not")) {       /* RFC 3501 */
             if (c != ' ') goto missingarg;
             e = search_expr_new(parent, SEOP_NOT);
-            c = get_search_criterion(pin, pout, e, base);
+            c = get_search_criterion(pin, pout, e, base, depth+1);
             if (c <= EOF) return c;
         }
         else if (!strcmp(criteria.s, "new")) {  /* RFC 3501 */
@@ -1228,10 +1237,10 @@ static int get_search_criterion(struct protstream *pin,
         if (!strcmp(criteria.s, "or")) {        /* RFC 3501 */
             if (c != ' ') goto missingarg;
             e = search_expr_new(parent, SEOP_OR);
-            c = get_search_criterion(pin, pout, e, base);
+            c = get_search_criterion(pin, pout, e, base, depth+1);
             if (c <= EOF) return c;
             if (c != ' ') goto missingarg;
-            c = get_search_criterion(pin, pout, e, base);
+            c = get_search_criterion(pin, pout, e, base, depth+1);
             if (c <= EOF) return c;
         }
         else if (!strcmp(criteria.s, "old")) {  /* RFC 3501 */
@@ -1611,7 +1620,8 @@ EXPORTED int get_search_program(struct protstream *pin,
     searchargs->root = search_expr_new(NULL, SEOP_AND);
 
     do {
-        c = get_search_criterion(pin, pout, searchargs->root, searchargs);
+        c = get_search_criterion(pin, pout, searchargs->root, searchargs,
+                                 /*depth*/0);
     } while (c == ' ');
 
     return c;
