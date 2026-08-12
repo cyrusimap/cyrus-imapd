@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+# A sharee may not reply on behalf of a participant of an event that the
+# calendar owner marked non-public.
+
+my sub assert_sharee_participantreply ($self, $privacy, $want_error)
+{
+    $self->assert_str_not_equals('public', $privacy);
+
+    my $default_cal = $self->default_user->calendars->default;
+    my $sharee_jmap = $self->{instance}->create_user('sharee')->jmap;
+
+    xlog $self, "share the default calendar with sharee";
+    $default_cal->share_with(sharee => [qw( mayReadItems mayWriteAll )]);
+
+    xlog $self, "create a scheduled $privacy event";
+    my $event_id = $default_cal->create_event({
+        privacy => $privacy,
+        organizerCalendarAddress => 'mailto:cassandane@example.com',
+        participants => {
+            org => {
+                calendarAddress => 'mailto:cassandane@example.com',
+                roles => {
+                    owner => JSON::true,
+                },
+            },
+            att => {
+                calendarAddress => 'mailto:bugs@looneytunes.com',
+                expectReply => JSON::true,
+                participationStatus => 'needs-action',
+            },
+        },
+    })->id;
+
+    xlog $self, "sharee replies for the participant";
+    my $reply = $sharee_jmap->request([[
+        'CalendarEvent/participantReply' => {
+            accountId => 'cassandane',
+            eventId => $event_id,
+            participantEmail => 'bugs@looneytunes.com',
+            updates => {
+                participationStatus => 'accepted',
+            },
+        },
+    ]])->single_sentence;
+
+    $self->assert_str_equals('error', $reply->name);
+    $self->assert_str_equals($want_error, $reply->arguments->{type});
+}
+
+sub test_calendarevent_participantreply_privacy__private
+    ($self)
+{
+    assert_sharee_participantreply($self, 'private', 'forbidden');
+}
+
+sub test_calendarevent_participantreply_privacy__secret
+    ($self)
+{
+    assert_sharee_participantreply($self, 'secret', 'notFound');
+}
