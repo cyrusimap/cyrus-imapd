@@ -53,6 +53,13 @@ hash_table *construct_hash_table(hash_table *table, size_t size,
 void *hash_insert(const char *key,void *data,hash_table *table);
 
 /*
+** Insert or update 'key' with 'data' into hash table.
+** Any existing data associated with 'key' must be freed by 'func'.
+*/
+void hash_upsert(const char *key,void *data, hash_table *table,
+                 void (*func)(void *));
+
+/*
 ** Returns a pointer to the data associated with a key.  If the key has
 ** not been inserted in the table, returns NULL.
 */

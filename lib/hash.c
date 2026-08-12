@@ -157,6 +157,19 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 }
 
 /*
+** Insert or update 'key' with 'data' into hash table.
+** Any existing data associated with 'key' must be freed by 'func'.
+*/
+EXPORTED void hash_upsert(const char *key,void *data,hash_table *table,
+                          void (*func)(void *))
+{
+    void *old_data = hash_insert(key, data, table);
+
+    if (func && old_data && old_data != data)
+        func(old_data);
+}
+
+/*
 ** Look up a key and return the associated data.  Returns NULL if
 ** the key is not in the table.
 */
