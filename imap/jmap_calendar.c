@@ -8891,6 +8891,7 @@ no_op:
     /* Build response */
     req->accountid = NULL;
     jmap_ok(req, res);
+    res = NULL; // ownership passed to the response
 
 done:
     if (!err) {
@@ -8917,6 +8918,7 @@ done:
         jmap_error(req, err);
     }
 
+    json_decref(res);
     jmap_parser_fini(&parser);
     jmap_caleventid_free(&update.eid);
     if (db) caldav_close(db);
