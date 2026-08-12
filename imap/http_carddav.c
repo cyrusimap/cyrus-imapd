@@ -306,6 +306,7 @@ static struct meth_params carddav_params = {
     &carddav_parse_path,
     &dav_get_validators,
     &dav_get_modseq,
+    NULL,                       /* is_visible */
     &dav_check_precond,
     { (db_open_proc_t) &carddav_open_mailbox,
       (db_close_proc_t) &carddav_close,

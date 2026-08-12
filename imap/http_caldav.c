@@ -114,6 +114,9 @@ static int caldav_parse_path(const char *path, struct request_target_t *tgt,
 static modseq_t caldav_get_modseq(struct mailbox *mailbox,
                                   void *data, const char *userid);
 
+static bool caldav_is_visible(struct mailbox *mailbox, void *data,
+                              modseq_t modseq, bool *was_visible);
+
 static int caldav_check_precond(struct transaction_t *txn,
                                 struct meth_params *params,
                                 struct mailbox *mailbox, const void *data,
@@ -564,6 +567,7 @@ static struct meth_params caldav_params = {
     &caldav_parse_path,
     &caldav_get_validators,
     &caldav_get_modseq,
+    &caldav_is_visible,
     &caldav_check_precond,
     { (db_open_proc_t) &caldav_open_mailbox,
       (db_close_proc_t) &caldav_close,
@@ -1040,6 +1044,22 @@ static enum caldav_privacy caldav_privacy_for_sharee(
     }
 
     return cdata->comp_flags.privacy;
+}
+
+static bool caldav_is_visible(struct mailbox *mailbox, void *data,
+                              modseq_t modseq, bool *was_visible)
+{
+    const struct caldav_data *cdata = (const struct caldav_data *) data;
+
+    if (!cdata || !caldav_is_sharee(mailbox)) {
+        *was_visible = true;
+        return true;
+    }
+
+    *was_visible = cdata->dav.createdmodseq <= modseq &&
+                   !caldav_was_secret(cdata, modseq);
+
+    return cdata->comp_flags.privacy != CAL_PRIVACY_SECRET;
 }
 
 static int caldav_privacy_filter(struct propfind_ctx *fctx, void *data)

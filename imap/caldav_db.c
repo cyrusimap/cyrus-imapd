@@ -264,6 +264,7 @@ static unsigned _comp_flags_to_num(struct comp_flags *flags)
     " ical_objs.alive,"         \
     " ical_objs.modseq,"        \
     " ical_objs.createdmodseq," \
+    " ical_objs.privacy_modseq," \
 
 #define CMD_READFIELDS \
     "SELECT " ICALOBJS_FIELDS " NULL FROM ical_objs"
@@ -279,6 +280,7 @@ static void read_cdata(sqlite3_stmt *stmt,
     cdata->dav.alive = sqlite3_column_int(stmt, 16);
     cdata->dav.modseq = sqlite3_column_int64(stmt, 17);
     cdata->dav.createdmodseq = sqlite3_column_int64(stmt, 18);
+    cdata->privacy_modseq = sqlite3_column_int64(stmt, 19);
 
     if (skip_tombstones && !cdata->dav.alive) return;
 
@@ -490,13 +492,13 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const mbentry_t *mbentry
     "  createdmodseq,"                                                  \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  comp_type, ical_uid, organizer, dtstart, dtend,"                 \
-    "  comp_flags, sched_tag )"                                         \
+    "  comp_flags, sched_tag, privacy_modseq )"                         \
     " VALUES ("                                                         \
     "  :alive, :mailbox, :resource, :creationdate, :imap_uid, :modseq," \
     "  :createdmodseq,"                                                 \
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"          \
     "  :comp_type, :ical_uid, :organizer, :dtstart, :dtend,"            \
-    "  :comp_flags, :sched_tag );"
+    "  :comp_flags, :sched_tag, :privacy_modseq );"
 
 #define CMD_UPDATE                      \
     "UPDATE ical_objs SET"              \
@@ -515,7 +517,8 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const mbentry_t *mbentry
     "  dtstart      = :dtstart,"        \
     "  dtend        = :dtend,"          \
     "  comp_flags   = :comp_flags,"     \
-    "  sched_tag    = :sched_tag"       \
+    "  sched_tag    = :sched_tag,"      \
+    "  privacy_modseq = :privacy_modseq" \
     " WHERE rowid = :rowid;"
 
 #define CMD_DELETE_JSCALCACHE "DELETE FROM jscal_cache WHERE rowid = :rowid"
@@ -551,6 +554,7 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
         { ":dtend",        SQLITE_TEXT,    { .s = cdata->dtend            } },
         { ":sched_tag",    SQLITE_TEXT,    { .s = cdata->sched_tag        } },
         { ":comp_flags",   SQLITE_INTEGER, { .i = comp_flags              } },
+        { ":privacy_modseq", SQLITE_INTEGER, { .i = cdata->privacy_modseq } },
         { NULL,            SQLITE_NULL,    { .s = NULL                    } } };
 
     if (cdata->dav.rowid) {
@@ -786,15 +790,15 @@ static int read_jscal_cb(sqlite3_stmt *stmt, void *rock)
 
     read_cdata(stmt, db, 0, &jscal->cdata);
 
-    jscal->ical_recurid = (const char *) sqlite3_column_text(stmt, 19);
-    jscal->alive = sqlite3_column_int(stmt, 20);
-    jscal->modseq = sqlite3_column_int64(stmt, 21);
-    jscal->added_at_modseq = sqlite3_column_int64(stmt, 22);
-    jscal->dtstart = (const char *) sqlite3_column_text(stmt, 23);
-    jscal->dtend = (const char *) sqlite3_column_text(stmt, 24);
-    jscal->ical_guid = (const char *) sqlite3_column_text(stmt, 25);
-    jscal->cacheversion = sqlite3_column_int(stmt, 26);
-    jscal->cachedata = (const char *) sqlite3_column_text(stmt, 27);
+    jscal->ical_recurid = (const char *) sqlite3_column_text(stmt, 20);
+    jscal->alive = sqlite3_column_int(stmt, 21);
+    jscal->modseq = sqlite3_column_int64(stmt, 22);
+    jscal->added_at_modseq = sqlite3_column_int64(stmt, 23);
+    jscal->dtstart = (const char *) sqlite3_column_text(stmt, 24);
+    jscal->dtend = (const char *) sqlite3_column_text(stmt, 25);
+    jscal->ical_guid = (const char *) sqlite3_column_text(stmt, 26);
+    jscal->cacheversion = sqlite3_column_int(stmt, 27);
+    jscal->cachedata = (const char *) sqlite3_column_text(stmt, 28);
 
     return rrock->cb(rrock->rock, jscal);
 }
@@ -1342,6 +1346,12 @@ EXPORTED const char *caldav_privacy_as_string(enum caldav_privacy privacy)
     }
 }
 
+EXPORTED bool caldav_was_secret(const struct caldav_data *cdata, modseq_t modseq)
+{
+    bool is_secret = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET;
+    return is_secret != (cdata->privacy_modseq > modseq);
+}
+
 EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cdata,
                               icalcomponent *ical)
 {
@@ -1410,8 +1420,20 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
     }
     cdata->comp_flags.transp = transp;
 
-    /* Determine privacy */
+    /* Determine privacy. Keep track of the modseq when the privacy switched
+     * from "secret" to anything else, or the other way round. We need this to
+     * report the object as created or destroyed during sync-collection reports
+     * and CalendarEvent/changes. We initialize this to zero, not the
+     * createdmodseq, to prevent reporting newly created secret objects as
+     * destroyed to sharees. */
+    enum caldav_privacy old_privacy = cdata->comp_flags.privacy;
     cdata->comp_flags.privacy = caldav_privacy_from_ical(comp);
+
+    if (cdata->dav.rowid &&
+        (old_privacy == CAL_PRIVACY_SECRET) !=
+        (cdata->comp_flags.privacy == CAL_PRIVACY_SECRET)) {
+        cdata->privacy_modseq = cdata->dav.modseq;
+    }
 
     /* Get span of component set and check for managed attachments */
     span = icalrecurrenceset_get_utc_timespan(ical, kind, NULL, &recurring,

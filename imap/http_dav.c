@@ -7613,6 +7613,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 struct updates_rock {
     struct propfind_ctx *fctx;
     get_modseq_t get_modseq;
+    is_visible_t is_visible;
     uint32_t limit;
     modseq_t syncmodseq;
     modseq_t basemodseq;
@@ -7633,6 +7634,16 @@ static int updates_cb(void *rock, void *data)
             return 0;
         }
 
+        if (urock->is_visible) {
+            bool was_visible = false;
+
+            urock->is_visible(fctx->mailbox, data,
+                              urock->syncmodseq, &was_visible);
+
+            /* Nothing to remove for a user that never saw this resource */
+            if (!was_visible) return 0;
+        }
+
         /* Report resource as NOT FOUND
            IMAP UID of 0 will cause index record to be ignored
            propfind_by_resource() will append our resource name */
@@ -7641,6 +7652,19 @@ static int updates_cb(void *rock, void *data)
     else if (modseq <= urock->syncmodseq) {
         /* Per-user modseq hasn't changed */
         return 0;
+    }
+    else if (urock->is_visible) {
+        bool was_visible = false;
+
+        if (!urock->is_visible(fctx->mailbox, data,
+                               urock->syncmodseq, &was_visible)) {
+            /* Invisible to this user now. Report it as removed if they could
+               have synced it while it still was visible, otherwise as if it
+               never existed at all. */
+            if (!was_visible || modseq <= urock->basemodseq) return 0;
+
+            ddata->imap_uid = 0;
+        }
     }
 
 
@@ -7806,8 +7830,9 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     xml_response(HTTP_MULTI_STATUS, txn, fctx->root->doc);
 
     /* Report the resources within the client requested limit (if any) */
-    struct updates_rock rock = { fctx, rparams->get_modseq, limit,
-                                 syncmodseq, basemodseq, &respmodseq, &nresp };
+    struct updates_rock rock = { fctx, rparams->get_modseq, rparams->is_visible,
+                                 limit, syncmodseq, basemodseq,
+                                 &respmodseq, &nresp };
 
     r = rparams->davdb.foreach_update(fctx->davdb, syncmodseq, fctx->mbentry,
                                       -1 /* ALL kinds of resources */,

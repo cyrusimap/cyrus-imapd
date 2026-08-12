@@ -88,7 +88,19 @@ struct caldav_data {
     const char *dtend;
     struct comp_flags comp_flags;
     const char *sched_tag;
+    /**
+     *  When privacy last crossed CAL_PRIVACY_SECRET. Only the latest crossing
+     *  is kept, so any number of crossings since the queried modseq looks like
+     *  a single one. An event with an even number of crossings may be reported
+     *  to a sharee as destroyed although the sharee never knew of it, or as
+     *  created despite having been visible before.
+     */
+    modseq_t privacy_modseq;
 };
+
+/** @brief Return whether 'cdata' was secret at 'modseq', and so was hidden
+ *         then from the sharees of its calendar. */
+bool caldav_was_secret(const struct caldav_data *cdata, modseq_t modseq);
 
 typedef int caldav_cb_t(void *rock, struct caldav_data *cdata);
 
