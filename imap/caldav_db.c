@@ -1308,6 +1308,40 @@ done:
     return r;
 }
 
+EXPORTED enum caldav_privacy caldav_privacy_from_ical(icalcomponent *comp)
+{
+    if (!comp) {
+        return CAL_PRIVACY_PUBLIC;
+    }
+
+    icalproperty *prop =
+        icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+    if (prop) {
+        switch (icalproperty_get_class(prop)) {
+        case ICAL_CLASS_CONFIDENTIAL:
+            return CAL_PRIVACY_SECRET;
+        case ICAL_CLASS_PUBLIC:
+            return CAL_PRIVACY_PUBLIC;
+        default:
+            return CAL_PRIVACY_PRIVATE;
+        }
+    }
+
+    return CAL_PRIVACY_PUBLIC;
+}
+
+EXPORTED const char *caldav_privacy_as_string(enum caldav_privacy privacy)
+{
+    switch (privacy) {
+    case CAL_PRIVACY_PRIVATE:
+        return "private";
+    case CAL_PRIVACY_SECRET:
+        return "secret";
+    default:
+        return "public";
+    }
+}
+
 EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cdata,
                               icalcomponent *ical)
 {
@@ -1377,20 +1411,7 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
     cdata->comp_flags.transp = transp;
 
     /* Determine privacy */
-    cdata->comp_flags.privacy = CAL_PRIVACY_PUBLIC;
-    prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
-    if (prop) {
-        switch (icalproperty_get_class(prop)) {
-            case ICAL_CLASS_CONFIDENTIAL:
-                cdata->comp_flags.privacy = CAL_PRIVACY_SECRET;
-                break;
-            case ICAL_CLASS_PUBLIC:
-                cdata->comp_flags.privacy = CAL_PRIVACY_PUBLIC;
-                break;
-            default:
-                cdata->comp_flags.privacy = CAL_PRIVACY_PRIVATE;
-        }
-    }
+    cdata->comp_flags.privacy = caldav_privacy_from_ical(comp);
 
     /* Get span of component set and check for managed attachments */
     span = icalrecurrenceset_get_utc_timespan(ical, kind, NULL, &recurring,

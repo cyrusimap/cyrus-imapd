@@ -12,6 +12,7 @@
 #include "caldav_db.h"
 #include "caldav_util.h"
 #include "defaultalarms.h"
+#include "global.h"
 #include "http_dav.h"
 #include "ical_support.h"
 #include "itip_support.h"
@@ -816,6 +817,7 @@ static int caldav_store_preprocess(struct transaction_t *txn,
     is_owner = !strcmpsafe(owner, userid);
 
     rights = cyrus_acl_myrights(authstate, mailbox_acl(mailbox));
+    bool is_admin = global_authisa(authstate, IMAPOPT_ADMINS);
     auth_freestate(authstate);
 
     if (rights & DACL_WRITECONT) {
@@ -865,6 +867,46 @@ static int caldav_store_preprocess(struct transaction_t *txn,
         txn->error.rights = DACL_WRITECONT;
         ret = HTTP_NO_PRIVS;
         goto done;
+    }
+
+    /* Enforce privacy for sharees, but let an admin override it */
+    if (!is_owner && !is_admin) {
+        enum caldav_privacy privacy;
+        bool is_stored = false;
+
+        if (cdata->dav.imap_uid
+            && cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC)
+        {
+            /* Only the owner may write a non-public resource */
+            privacy = cdata->comp_flags.privacy;
+            is_stored = true;
+        }
+        else {
+            /* A sharee may not make a resource non-public */
+            privacy = caldav_privacy_from_ical(
+                icalcomponent_get_first_real_component(ical));
+        }
+
+        if (privacy != CAL_PRIVACY_PUBLIC) {
+            xsyslog_ev(LOG_NOTICE, "sharee may not write non-public resource",
+                       lf_s("userid", userid),
+                       lf_s("mboxname", mailbox_name(mailbox)),
+                       lf_s("resource", resource),
+                       lf_s("privacy", caldav_privacy_as_string(privacy)));
+
+            if (is_stored && privacy == CAL_PRIVACY_SECRET) {
+                /* Report a secret resource as if it did not exist */
+                ret = HTTP_NOT_FOUND;
+            }
+            else {
+                /* Report as if the sharee had no write access */
+                txn->error.precond = DAV_NEED_PRIVS;
+                txn->error.resource = txn->req_tgt.path;
+                txn->error.rights = DACL_WRITECONT;
+                ret = HTTP_NO_PRIVS;
+            }
+            goto done;
+        }
     }
 
     if (cdata->dav.imap_uid &&

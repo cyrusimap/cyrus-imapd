@@ -70,6 +70,15 @@ enum caldav_privacy {
     CAL_PRIVACY_SECRET
 };
 
+/** @brief Determine the privacy of a calendar object from its CLASS property.
+ *
+ *  @param comp  An iCalendar component, or NULL.
+ *  @return      The privacy. A NULL component reads as CAL_PRIVACY_PUBLIC. */
+enum caldav_privacy caldav_privacy_from_ical(icalcomponent *comp);
+
+/** @brief Return the JSCalendar "privacy" property value for 'privacy'. */
+const char *caldav_privacy_as_string(enum caldav_privacy privacy);
+
 struct caldav_data {
     struct dav_data dav;  /* MUST be first so we can typecast */
     unsigned comp_type;
