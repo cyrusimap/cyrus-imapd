@@ -7038,8 +7038,18 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
     if (mbtype_isa(mbentry->mbtype) != MBTYPE_CALENDAR)
         goto done;
 
-    // check privacy
-    if (rock->is_sharee && jscal->cdata.comp_flags.privacy == CAL_PRIVACY_SECRET)
+    /* Check privacy. Events that were secret but became visible to this sharee
+     * get reported as created, events that became secret as destroyed. */
+    bool is_secret = rock->is_sharee &&
+        jscal->cdata.comp_flags.privacy == CAL_PRIVACY_SECRET;
+    bool was_secret = rock->is_sharee &&
+        caldav_was_secret(&jscal->cdata, changes->since_modseq);
+    bool was_visible =
+        jscal->added_at_modseq <= changes->since_modseq && !was_secret;
+
+    /* Nothing to report about an event a sharee cannot see now and could not
+     * see then either. */
+    if (is_secret && !was_visible)
         goto done;
 
     if (jscal->cdata.comp_type != CAL_COMP_VEVENT)
@@ -7058,14 +7068,14 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
     };
     const char *id = jmap_caleventid_encode(&eid, &rock->buf);
 
-    /* Report item as updated or destroyed. */
-    if (jscal->alive) {
-        if (jscal->added_at_modseq <= changes->since_modseq)
+    /* Report item as created, updated or destroyed. */
+    if (jscal->alive && !is_secret) {
+        if (was_visible)
             json_array_append_new(changes->updated, json_string(id));
         else
             json_array_append_new(changes->created, json_string(id));
     } else {
-        if (jscal->added_at_modseq <= changes->since_modseq)
+        if (was_visible)
             json_array_append_new(changes->destroyed, json_string(id));
     }
 
