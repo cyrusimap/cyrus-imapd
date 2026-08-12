@@ -89,7 +89,7 @@ jobs:
       run: cyd test --no-ok --slow --format prettier "${{ matrix.skip }}"
     - name: rerun cassandane failures noisily
       if: ${{ steps.cass1.outcome == 'failure' }}
-      run: cyd test --no-slow --format pretty --rerun
+      run: cyd test --format pretty --rerun
     - name: collect logs
       if: ${{ ! matrix.skip-cass }}
       run: cat /dev/shm/cass/*/conf/log/syslog
