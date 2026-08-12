@@ -11721,7 +11721,8 @@ static int xfer_init(const char *toserver, struct xfer_header **xferptr)
     syslog(LOG_INFO, "XFER: connecting to server '%s'", toserver);
 
     xfer->sync_cs.servername = toserver;
-    xfer->sync_cs.flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY;
+    xfer->sync_cs.flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY
+                        | SYNC_FLAG_NOCACHE;
 
     /* Get a connection to the remote backend */
     xfer->sync_cs.backend = proxy_findserver(toserver, &imap_protocol, "", &backend_cached,

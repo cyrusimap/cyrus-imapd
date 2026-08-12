@@ -2265,6 +2265,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_NOTSUPPORTED ",
                           strlen("IMAP_MAILBOX_NOTSUPPORTED ")))
             return IMAP_MAILBOX_NOTSUPPORTED;
+        else if (!strncmp(errmsg.s, "IMAP_PERMISSION_DENIED ",
+                          strlen("IMAP_PERMISSION_DENIED ")))
+            return IMAP_PERMISSION_DENIED;
         else if (!strncmp(errmsg.s, "IMAP_SYNC_CHECKSUM ",
                           strlen("IMAP_SYNC_CHECKSUM ")))
             return IMAP_SYNC_CHECKSUM;
@@ -5189,6 +5192,9 @@ static const char *sync_response(int r)
     case IMAP_MAILBOX_NOTSUPPORTED:
         resp = "NO IMAP_MAILBOX_NOTSUPPORTED Operation is not supported on mailbox";
         break;
+    case IMAP_PERMISSION_DENIED:
+        resp = "NO IMAP_PERMISSION_DENIED Permission denied";
+        break;
     case IMAP_SYNC_CHECKSUM:
         resp = "NO IMAP_SYNC_CHECKSUM Checksum Failure";
         break;
@@ -5510,6 +5516,10 @@ static int reserve_messages(struct sync_client_state *sync_cs,
 
 static struct db *sync_getcachedb(struct sync_client_state *sync_cs)
 {
+    /* nothing to gain: we're syncing somewhere that isn't this channel's
+     * replica, so whatever we cached would never be looked up again */
+    if (sync_cs->flags & SYNC_FLAG_NOCACHE) return NULL;
+
     if (sync_cs->cachedb) return sync_cs->cachedb;
 
     const char *dbtype = config_getstring(IMAPOPT_SYNC_CACHE_DB);
@@ -7631,10 +7641,17 @@ redo:
     struct dlist *kl = NULL;
     struct dlist *cachel = NULL;
 
+    /* only use the cache in normal rolling replication, that's where the bulk
+     * of the benefit comes from, and if we escalate to a full USER sync or
+     * run a sync manually, correctness outweighs efficiency, e.g. if the
+     * INBOX is cached locally but missing remotely then syncing another
+     * folder would hit an infinite loop asserting that parent is needed */
+    int usecache = (sync_cs->flags & SYNC_FLAG_USECACHE) && !sync_cs->userid;
+
     for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
         struct dlist *cl = NULL;
         // check if it's in the cache, then we don't need to look it up
-        if (!sync_readcache(sync_cs, mbox->name, &cl) && cl) {
+        if (usecache && !sync_readcache(sync_cs, mbox->name, &cl) && cl) {
             if (!cachel) cachel = dlist_newlist(NULL, "MAILBOXES");
             dlist_stitch(cachel, cl);
             if ((flags & SYNC_FLAG_VERBOSE) || (flags & SYNC_FLAG_LOGGING))
