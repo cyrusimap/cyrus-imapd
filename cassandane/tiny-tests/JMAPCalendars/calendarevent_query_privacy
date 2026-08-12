@@ -1,0 +1,141 @@
+#!perl
+use Cassandane::Tiny;
+
+use DateTime ();
+
+# A sharee may query the public and the private event of a shared calendar, but
+# never the secret one.
+
+# Create one event per privacy value in the owner's default calendar. Only the
+# public and the secret event carry the searchable term "wombat": every
+# text-searchable property is one that a sharee may not read back for a private
+# event, so a text query must not depend on whether the private event matches.
+#
+# Returns a map of event uid to the privacy of that event.
+my sub create_events ($self)
+{
+    my $default_cal = $self->default_user->calendars->default;
+
+    xlog $self, "create one event for each privacy value";
+    my %title = (
+        public => 'wombat public',
+        private => 'numbat private',
+        secret => 'wombat secret',
+    );
+    my %privacy_by_uid = map {;
+        my $event = $default_cal->create_event({
+            privacy => $_,
+            title => $title{$_},
+        });
+        (q{} . $event->uid => $_)
+    } qw( public private secret );
+
+    return \%privacy_by_uid;
+}
+
+# Return the sorted privacy values of the events a query matched.
+#
+# The ids are resolved to uids as the calendar owner, who sees every event.
+# Resolving them as the sharee would hide the secret event a second time and
+# so could let this test pass vacuously.
+my sub query_privacy ($self, $jmap, $privacy_by_uid, $args)
+{
+    my $ids = $jmap->request([[
+        'CalendarEvent/query' => {
+            accountId => 'cassandane',
+            %$args,
+        },
+    ]])->single_sentence('CalendarEvent/query')->arguments->{ids};
+
+    return [] if !@$ids;
+
+    my $get = $self->default_user->jmap->request([[
+        'CalendarEvent/get' => {
+            ids => $ids,
+            properties => ['uid'],
+        },
+    ]])->single_sentence('CalendarEvent/get')->arguments;
+
+    $self->assert_cmp_deeply([], $get->{notFound});
+
+    my @privacy;
+    foreach my $jsevent ($get->{list}->@*) {
+        my $privacy = $privacy_by_uid->{q{} . $jsevent->{uid}};
+        $self->assert_not_null($privacy);
+        push @privacy, $privacy;
+    }
+    return [ sort @privacy ];
+}
+
+# The query in this test is trivial, so it takes the fast path.
+sub test_calendarevent_query_privacy__fastpath
+    ($self)
+{
+    my $privacy_by_uid = create_events($self);
+
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    $self->default_user->calendars->default
+         ->share_with(sharee => [qw( mayReadItems )]);
+
+    $self->assert_cmp_deeply([qw( private public )],
+        query_privacy($self, $sharee->jmap, $privacy_by_uid, { }));
+}
+
+# A query that expands recurrences bypasses the fast path. A private event is
+# still returned, only reduced to its public properties on read.
+sub test_calendarevent_query_privacy__expandrecurrences
+    ($self)
+{
+    my $privacy_by_uid = create_events($self);
+
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    $self->default_user->calendars->default
+         ->share_with(sharee => [qw( mayReadItems )]);
+
+    # The events start now, so this window holds all of them.
+    my $before = DateTime->now(time_zone => 'UTC')->add(days => 1)
+                         ->strftime('%Y-%m-%dT%H:%M:%S');
+
+    $self->assert_cmp_deeply([qw( private public )],
+        query_privacy($self, $sharee->jmap, $privacy_by_uid, {
+            filter => {
+                before => $before,
+            },
+            expandRecurrences => JSON::true,
+        }));
+}
+
+sub test_calendarevent_query_privacy__text
+    ($self)
+{
+    my $privacy_by_uid = create_events($self);
+
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    $self->default_user->calendars->default
+         ->share_with(sharee => [qw( mayReadItems )]);
+
+    xlog $self, "index the events";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "the term matches the public and the secret event";
+    $self->assert_cmp_deeply([qw( public secret )],
+        query_privacy($self, $self->default_user->jmap, $privacy_by_uid, {
+            filter => {
+                text => 'wombat',
+            },
+        }));
+
+    xlog $self, "sharee does not get the secret event";
+    $self->assert_cmp_deeply(['public'],
+        query_privacy($self, $sharee->jmap, $privacy_by_uid, {
+            filter => {
+                text => 'wombat',
+            },
+        }));
+}
