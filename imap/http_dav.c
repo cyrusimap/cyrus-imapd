@@ -273,7 +273,7 @@ static const struct prop_entry principal_props[] = {
 
 struct meth_params princ_params = {
     .parse_path = &principal_parse_path,
-    .propfind = { 0, principal_props },
+    .propfind = { 0, principal_props, NULL },
     .reports = principal_reports
 };
 
@@ -6378,7 +6378,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.record = NULL;
     fctx.get_validators = fparams->get_validators;
     fctx.reqd_privs = DACL_READ;
-    fctx.filter = NULL;
+    fctx.filter = fparams->propfind.filter;
     fctx.filter_crit = NULL;
     if (fparams->mime_types) fctx.free_obj = fparams->mime_types[0].free;
     fctx.open_db = fparams->davdb.open_db;
@@ -7582,7 +7582,11 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
             ddata->resource = tgt.resource;
             /* XXX  Check errors */
 
-            fctx->proc_by_resource(fctx, ddata);
+            if (fctx->filter && !fctx->filter(fctx, ddata)) {
+                /* Report a filtered out resource as if it did not exist. */
+                xml_add_response(fctx, HTTP_NOT_FOUND, 0, NULL, NULL);
+            }
+            else fctx->proc_by_resource(fctx, ddata);
 
             rparams->davdb.close_db(fctx->davdb);
 
@@ -8436,6 +8440,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.record = NULL;
     fctx.get_validators = rparams->get_validators;
     fctx.reqd_privs = report->reqd_privs;
+    fctx.filter = rparams->propfind.filter;
     if (rparams->mime_types) fctx.free_obj = rparams->mime_types[0].free;
     fctx.proc_by_resource = &propfind_by_resource;
     fctx.elist = NULL;

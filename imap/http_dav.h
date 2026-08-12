@@ -422,6 +422,8 @@ struct put_params {
 struct propfind_params {
     unsigned finite_depth_precond;      /* precond code for finite depth */
     const struct prop_entry *lprops;    /* array of "live" properties */
+    int (*filter)(struct propfind_ctx *,
+                  void *data);          /* default resource filter, may be NULL */
 };
 
 /* meth_report() parameters */

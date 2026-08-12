@@ -231,7 +231,7 @@ static struct meth_params notify_params = {
     NULL,                                       /* No PATCH handling */
     { 0, &notify_post, { 0, NULL, NULL } },     /* No generic POST handling */
     { 0, NULL },
-    { DAV_FINITE_DEPTH, notify_props},
+    { DAV_FINITE_DEPTH, notify_props, NULL },
     notify_reports
 };
 // clang-format on

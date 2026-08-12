@@ -219,7 +219,7 @@ struct meth_params webdav_params = {
     NULL,                                       /* No PATCH handling */
     { POST_ADDMEMBER, NULL, { 0, NULL, NULL } },/* No special POST handling */
     { 0, &webdav_put },                         /* Allow any MIME type */
-    { DAV_FINITE_DEPTH, webdav_props},
+    { DAV_FINITE_DEPTH, webdav_props, NULL },
     webdav_reports
 };
 // clang-format on

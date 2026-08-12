@@ -131,6 +131,8 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data, void **obj,
                       struct mime_type_t *mime);
 
+static int caldav_privacy_filter(struct propfind_ctx *fctx, void *data);
+
 static int caldav_mkcol(struct mailbox *mailbox);
 static int caldav_post(struct transaction_t *txn);
 static int caldav_patch(struct transaction_t *txn, void *obj);
@@ -583,7 +585,8 @@ static struct meth_params caldav_params = {
     { POST_ADDMEMBER | POST_SHARE, &caldav_post,
       { NS_CALDAV, "calendar-data", &caldav_import } },
     { CALDAV_SUPP_DATA, &caldav_put },
-    { 0, caldav_props },                        /* Allow infinite depth */
+    { 0, caldav_props,                          /* Allow infinite depth */
+      &caldav_privacy_filter },
     caldav_reports
 };
 // clang-format on
@@ -1037,6 +1040,17 @@ static enum caldav_privacy caldav_privacy_for_sharee(
     }
 
     return cdata->comp_flags.privacy;
+}
+
+static int caldav_privacy_filter(struct propfind_ctx *fctx, void *data)
+{
+    struct caldav_data *cdata = (struct caldav_data *) data;
+
+    if (caldav_privacy_for_sharee(fctx->mailbox, cdata) == CAL_PRIVACY_SECRET) {
+        return 0;
+    }
+
+    return 1;
 }
 
 /* Check headers for any preconditions */
@@ -5126,6 +5140,15 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
     struct caldav_data *cdata = (struct caldav_data *) data;
     icalcomponent *ical = fctx->obj;
 
+    /* Enforce privacy for sharees. */
+    enum caldav_privacy privacy =
+        caldav_privacy_for_sharee(fctx->mailbox, cdata);
+
+    if (privacy == CAL_PRIVACY_SECRET) {
+        /* Never match a secret resource */
+        return 0;
+    }
+
     if (calfilter->comp_types) {
         /* Check if we can short-circuit based on
            comp-filter(s) vs component type of resource */
@@ -5149,6 +5172,12 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
                                         fctx->record->header_size);
         }
         if (!ical) return 0;
+    }
+
+    if (privacy == CAL_PRIVACY_PRIVATE && ical) {
+        /* Match on what the sharee is allowed to see, otherwise a prop-filter
+           could be used to probe the properties we are about to redact */
+        caldav_redact_private_ical(ical);
     }
 
     return apply_compfilter(calfilter->comp, calfilter->tz, ical, cdata, fctx);
@@ -5193,6 +5222,11 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
     if (sqlite3_libversion_number() < 3003008) {
         /* Can't write to a table while a SELECT is active */
+        goto done;
+    }
+
+    if (caldav_privacy_for_sharee(fctx->mailbox, cdata) == CAL_PRIVACY_SECRET) {
+        /* Don't rewrite a resource that caldav_privacy_filter() will hide */
         goto done;
     }
 
@@ -5855,6 +5889,26 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
             }
 
             prune_properties(ical, partial->comp);
+        }
+
+        switch (caldav_privacy_for_sharee(fctx->mailbox, cdata)) {
+        case CAL_PRIVACY_SECRET:
+            /* Should have been hidden by caldav_privacy_filter() already */
+            return HTTP_NOT_FOUND;
+
+        case CAL_PRIVACY_PRIVATE:
+            if (!fctx->obj) {
+                ical = fctx->obj = icalparser_parse_string(data);
+                if (!ical) {
+                    return HTTP_SERVER_ERROR;
+                }
+            }
+
+            caldav_redact_private_ical(ical);
+            break;
+
+        default:
+            break;
         }
 
         if (ical) {
@@ -7611,6 +7665,12 @@ HIDDEN int busytime_add_resource(struct mailbox *mailbox,
                                  struct caldav_data *cdata)
 {
     if (!cdata->dav.imap_uid) return 0;
+
+    if (caldav_privacy_for_sharee(mailbox, cdata) == CAL_PRIVACY_SECRET) {
+        /* A secret object contributes no busy time. A private one still does,
+           but free-busy carries no detail anyway. */
+        return 0;
+    }
 
     /* Perform component filtering */
     if (!(cdata->comp_type &
