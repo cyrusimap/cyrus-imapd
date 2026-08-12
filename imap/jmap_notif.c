@@ -103,6 +103,7 @@ static int append_eventnotif(const char *from,
                              struct mailbox *notifmbox,
                              const char *calmboxname,
                              struct timespec *created,
+                             enum caldav_privacy privacy,
                              json_t *jnotif)
 {
     struct stagemsg *stage = NULL;
@@ -199,6 +200,7 @@ static int append_eventnotif(const char *from,
     dlist_setatom(dl, "ID", ical_uid);
     dlist_setatom(dl, "NT", type);
     dlist_setatom(dl, "M", calmboxname);
+    dlist_setatom(dl, "P", caldav_privacy_as_string(privacy));
     dlist_printbuf(dl, 1, &buf);
     fputs("Content-Description: ", fp);
     fputs(buf_cstring(&buf), fp);
@@ -299,7 +301,6 @@ static json_t *build_eventnotif(const char *type,
     return jn;
 }
 
-
 HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
                                      const char *userid,
                                      const struct auth_state *authstate,
@@ -309,6 +310,7 @@ HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
                                      const strarray_t *schedule_addresses,
                                      const char *comment,
                                      int is_draft,
+                                     enum caldav_privacy privacy,
                                      json_t *jevent,
                                      json_t *jpatch)
 {
@@ -336,7 +338,7 @@ HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
 
     char *from = jmap_caleventnotif_format_fromheader(userid);
     int r = append_eventnotif(from, userid, authstate, notifmbox,
-            calmboxname, &now, jnotif);
+            calmboxname, &now, privacy, jnotif);
     free(from);
 
     json_decref(jnotif);
@@ -435,13 +437,28 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
         byemail = strarray_nth(schedule_addresses, 0);
     }
 
+    /* Take the most restrictive privacy of the old and the new event: an
+       update that makes an event non-public must not be reported either. */
+    enum caldav_privacy privacy = CAL_PRIVACY_PUBLIC;
+    if (oldical) {
+        privacy = caldav_privacy_from_ical(
+            icalcomponent_get_first_real_component(oldical));
+    }
+    if (newical) {
+        enum caldav_privacy newprivacy = caldav_privacy_from_ical(
+            icalcomponent_get_first_real_component(newical));
+        if (newprivacy > privacy) {
+            privacy = newprivacy;
+        }
+    }
+
     cyrus_gettime(CLOCK_REALTIME, &now);
     json_t *jnotif = build_eventnotif(type, now.tv_sec,
             byprincipal, buf_cstring(&byname), byemail,
             eid, NULL, is_draft, jevent, jpatch);
 
     r = append_eventnotif(from, userid, authstate, notifmbox,
-                          calmboxname, &now, jnotif);
+                          calmboxname, &now, privacy, jnotif);
 
     json_decref(jnotif);
     buf_free(&byname);

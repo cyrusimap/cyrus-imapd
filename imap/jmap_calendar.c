@@ -5231,8 +5231,10 @@ static int createevent_store(jmap_req_t *req,
         jmap_calendarevent_remove_peruserprops(myevent);
         r2 = jmap_create_caleventnotif(notifmbox, req->userid, req->authstate,
                 mailbox_name(mbox), "created", &eid,
-                &create->schedule_addresses, NULL,
-                is_draft, myevent, NULL);
+                &create->schedule_addresses, NULL, is_draft,
+                caldav_privacy_from_ical(
+                    icalcomponent_get_first_real_component(create->ical)),
+                myevent, NULL);
         if (r2) {
             xsyslog(LOG_WARNING, "could not create notification",
                     "uid=%s error=%s", create->ical_uid, error_message(r2));
@@ -6097,10 +6099,12 @@ static void setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
 
+    enum caldav_privacy old_privacy = cdata->comp_flags.privacy;
+
     /* Check privacy for sharees */
     if (jmap_is_sharee(req, req->accountid)) {
-        if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
-            r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
+        if (old_privacy != CAL_PRIVACY_PUBLIC) {
+            r = old_privacy == CAL_PRIVACY_SECRET ?
                 IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
             goto done;
         }
@@ -6354,10 +6358,15 @@ static void setcalendarevents_update(jmap_req_t *req,
                 jmap_calendarevent_remove_peruserprops(patch_copy);
                 jmap_calendarevent_remove_peruserprops(update.old_event);
                 if (json_object_size(patch_copy)) {
+                    /* Most restrictive of the old and the new privacy */
+                    enum caldav_privacy privacy = caldav_privacy_from_ical(
+                        icalcomponent_get_first_real_component(update.newical));
+                    if (old_privacy > privacy) privacy = old_privacy;
+
                     int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
                             req->authstate, mailbox_name(mbox), "updated",
                             eid, &schedule_addresses, NULL,
-                            record.system_flags & FLAG_DRAFT,
+                            record.system_flags & FLAG_DRAFT, privacy,
                             update.old_event, patch_copy);
                     if (r2) {
                         xsyslog(LOG_WARNING, "could not create notification",
@@ -6587,10 +6596,12 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         }
     }
 
+    enum caldav_privacy privacy = cdata->comp_flags.privacy;
+
     /* Check privacy for sharees */
     if (jmap_is_sharee(req, req->accountid)) {
-        if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
-            r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
+        if (privacy != CAL_PRIVACY_PUBLIC) {
+            r = privacy == CAL_PRIVACY_SECRET ?
                 IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
             goto done;
         }
@@ -6690,7 +6701,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
                 req->authstate, mailbox_name(mbox), "destroyed",
                 eid, &schedule_addresses, NULL,
-                record.system_flags & FLAG_DRAFT, old_event, NULL);
+                record.system_flags & FLAG_DRAFT, privacy, old_event, NULL);
         if (r2) {
             xsyslog(LOG_WARNING, "could not create notification",
                     "uid=%s error=%s", eid->ical_uid, error_message(r2));
@@ -11518,7 +11529,7 @@ static json_t *eventnotif_tojmap(jmap_req_t *req,
     }
 
     if (rock->check_acl) {
-        /* Check ACL */
+        /* Check ACL and privacy */
         // XXX - we really want to use mailbox-by-id here
         int have_rights = 0;
         const struct body *body;
@@ -11527,7 +11538,17 @@ static json_t *eventnotif_tojmap(jmap_req_t *req,
             if (!dlist_parsemap(&dl, 1, body->description,
                         strlen(body->description))) {
                 const char *mboxname;
-                if (dlist_getatom(dl, "M", &mboxname)) {
+                const char *privacyatom = NULL;
+                dlist_getatom(dl, "P", &privacyatom);
+                enum caldav_privacy privacy =
+                    caldav_privacy_from_string(privacyatom);
+                /* A sharee only sees a notification about a public event: its
+                   mere existence tells them that the event changed and when,
+                   so it is suppressed entirely rather than redacted. */
+                if (dlist_getatom(dl, "M", &mboxname)
+                    && (privacy == CAL_PRIVACY_PUBLIC
+                        || !jmap_is_sharee(req, req->accountid)))
+                {
                     have_rights = jmap_hasrights(req, mboxname, JACL_READITEMS);
                 }
             }
@@ -11712,21 +11733,25 @@ static int eventnotif_match(message_t *msg, struct notifsearch_entry *entry, voi
         const char *ical_uid = NULL;
         const char *type = NULL;
         const char *mboxname = NULL;
+        enum caldav_privacy privacy = CAL_PRIVACY_PUBLIC;
         struct dlist *dl = NULL;
         const struct body *body;
         if (!message_get_cachebody(msg, &body)) {
             if (!dlist_parsemap(&dl, 1, body->description,
                         strlen(body->description))) {
+                const char *privacyatom = NULL;
                 dlist_getatom(dl, "M", &mboxname);
                 dlist_getatom(dl, "ID", &ical_uid);
                 dlist_getatom(dl, "NT", &type);
+                dlist_getatom(dl, "P", &privacyatom);
+                privacy = caldav_privacy_from_string(privacyatom);
             }
         }
         if (!dl || !ical_uid || !type || !mboxname) {
             dlist_free(&dl);
             return 0;
         }
-        /* Evaluate criteria and ACL */
+        /* Evaluate criteria, ACL and privacy */
         int matches = 1;
         if (rock->eventids && !hash_lookup(ical_uid, rock->eventids)) {
             matches = 0;
@@ -11735,6 +11760,12 @@ static int eventnotif_match(message_t *msg, struct notifsearch_entry *entry, voi
             matches = 0;
         }
         if (rock->check_acl && !jmap_hasrights(rock->req, mboxname, JACL_READITEMS)) {
+            matches = 0;
+        }
+        /* Suppress notifications about non-public events, as in
+           eventnotif_tojmap() */
+        if (rock->check_acl && privacy != CAL_PRIVACY_PUBLIC
+            && jmap_is_sharee(rock->req, rock->req->accountid)) {
             matches = 0;
         }
         dlist_free(&dl);

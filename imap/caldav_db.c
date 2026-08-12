@@ -1346,6 +1346,19 @@ EXPORTED const char *caldav_privacy_as_string(enum caldav_privacy privacy)
     }
 }
 
+EXPORTED enum caldav_privacy caldav_privacy_from_string(const char *str)
+{
+    if (!str || !strcmp(str, "public")) {
+        return CAL_PRIVACY_PUBLIC;
+    }
+    else if (!strcmp(str, "private")) {
+        return CAL_PRIVACY_PRIVATE;
+    }
+    else {
+        return CAL_PRIVACY_SECRET;
+    }
+}
+
 EXPORTED bool caldav_was_secret(const struct caldav_data *cdata, modseq_t modseq)
 {
     bool is_secret = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET;

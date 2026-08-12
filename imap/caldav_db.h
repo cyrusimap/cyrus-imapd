@@ -79,6 +79,13 @@ enum caldav_privacy caldav_privacy_from_ical(icalcomponent *comp);
 /** @brief Return the JSCalendar "privacy" property value for 'privacy'. */
 const char *caldav_privacy_as_string(enum caldav_privacy privacy);
 
+/** @brief Return the privacy for a JSCalendar "privacy" property value.
+ *
+ *  @param str  A property value, or NULL.
+ *  @return     The privacy. NULL reads as CAL_PRIVACY_PUBLIC, an unknown
+ *              value as CAL_PRIVACY_SECRET. */
+enum caldav_privacy caldav_privacy_from_string(const char *str);
+
 struct caldav_data {
     struct dav_data dav;  /* MUST be first so we can typecast */
     unsigned comp_type;
