@@ -9901,6 +9901,7 @@ struct principal_getavailability_rock {
     icaltimetype icalstart;
     icaltimetype icalend;
     const char *principalid;
+    bool is_sharee;
     struct dynarray *busyperiods;
     int show_details;
     hash_table *eventprops;
@@ -9914,6 +9915,7 @@ struct principal_getavailability_rock {
     icaltimezone *floatingtz;
     /* Event-scoped context */
     json_t *jevent;
+    enum caldav_privacy privacy;
 };
 
 static int getavailability_ishidden(icalcomponent *comp)
@@ -9921,10 +9923,6 @@ static int getavailability_ishidden(icalcomponent *comp)
     icalproperty *prop;
     prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
     if (prop && icalproperty_get_transp(prop) == ICAL_TRANSP_TRANSPARENT) {
-        return 0;
-    }
-    prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
-    if (prop && icalproperty_get_class(prop) == ICAL_CLASS_CONFIDENTIAL) {
         return 0;
     }
     prop = icalcomponent_get_first_property(comp, ICAL_STATUS_PROPERTY);
@@ -9969,11 +9967,9 @@ static int principal_getavailability_ical_cb(icalcomponent *comp,
     }
 
     /* event */
-    enum icalproperty_class class = ICAL_CLASS_NONE;
-    prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
-    if (prop) class = icalproperty_get_class(prop);
-    if (rock->show_details && rock->jevent &&
-            class != ICAL_CLASS_PRIVATE && class != ICAL_CLASS_CONFIDENTIAL) {
+    if (rock->show_details && rock->jevent
+        && rock->privacy == CAL_PRIVACY_PUBLIC)
+    {
 
         /* Build event instance */
         json_t *jevent = NULL;
@@ -10083,6 +10079,14 @@ static int principal_getavailability_cb(void *vrock, struct caldav_jscal *jscal)
     }
     icalcomponent_kind kind = icalcomponent_isa(comp);
 
+    /* Determine privacy of calendar object */
+    rock->privacy = rock->is_sharee ?
+        cdata->comp_flags.privacy : CAL_PRIVACY_PUBLIC;
+    if (rock->privacy == CAL_PRIVACY_SECRET) {
+        /* A secret event must not contribute any busy time */
+        goto done;
+    }
+
     /* Check mailbox-scoped ACL for showDetails */
     if (rock->show_details && rock->checkacl && !(rock->rights & ACL_READ)) {
         rock->show_details = 0;
@@ -10182,6 +10186,7 @@ static void principal_getavailability(jmap_req_t *req,
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct buf buf = BUF_INITIALIZER;
     int checkacl = strcmp(req->userid, principalid);
+    bool is_sharee = jmap_is_sharee(req, principalid);
     struct dynarray *busyperiods = dynarray_new(sizeof(struct busyperiod));
 
     /* Lookup busytime across calendars */
@@ -10195,6 +10200,7 @@ static void principal_getavailability(jmap_req_t *req,
         icalstart,
         icalend,
         principalid,
+        is_sharee,
         busyperiods,
         show_details,
         props,
@@ -10205,7 +10211,8 @@ static void principal_getavailability(jmap_req_t *req,
         checkacl,
         0,
         NULL,
-        NULL
+        NULL,
+        CAL_PRIVACY_PUBLIC
     };
 
     enum caldav_sort sort[] = { CAL_SORT_MAILBOX };

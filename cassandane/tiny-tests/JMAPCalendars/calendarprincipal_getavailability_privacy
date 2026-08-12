@@ -1,0 +1,207 @@
+#!perl
+use Cassandane::Tiny;
+
+# A secret event must not contribute busy time to availability, and the
+# details of a non-public event must never be disclosed. This applies to
+# sharees only, the owner of the calendar sees their events in full.
+
+# Returns the availability of the sharer, as seen by $user.
+my sub get_availability ($self, $user)
+{
+    return $user->jmap->request([[
+        'Principal/getAvailability' => {
+            id => 'sharer',
+            utcStart => '2020-08-01T00:00:00Z',
+            utcEnd => '2020-09-01T00:00:00Z',
+            showDetails => JSON::true,
+            eventProperties => ['start', 'title'],
+        },
+    ]])->single_sentence('Principal/getAvailability')->arguments->{list};
+}
+
+my sub create_event ($self, $sharer, %props)
+{
+    $sharer->calendars->default->create_event({
+        title => 'the title',
+        start => '2020-08-05T09:00:00',
+        timeZone => 'Europe/Vienna',
+        duration => 'PT1H',
+        status => 'confirmed',
+        %props,
+    });
+}
+
+# PUT the VEVENTs as the sharer's "event.ics" resource. The tests below need
+# CLASS in one VEVENT but not in another, which cannot be expressed in a
+# CalendarEvent/set.
+my sub put_ical ($self, $sharer, @vevent_lines)
+{
+    $sharer->caldav->Request('PUT', 'Default/event.ics',
+        join("\r\n",
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN',
+            @vevent_lines,
+            'END:VCALENDAR',
+        ) . "\r\n", 'Content-Type' => 'text/calendar');
+}
+
+sub test_calendarprincipal_getavailability_privacy__public_sharee
+    ($self)
+{
+    my $sharer = $self->{instance}->create_user('sharer');
+    $sharer->calendars->default->share_with(cassandane => [qw( mayReadItems )]);
+    create_event($self, $sharer, privacy => 'public');
+
+    $self->assert_cmp_deeply([{
+        utcStart => '2020-08-05T07:00:00Z',
+        utcEnd => '2020-08-05T08:00:00Z',
+        busyStatus => 'confirmed',
+        event => {
+            start => '2020-08-05T09:00:00',
+            title => 'the title',
+        },
+    }], get_availability($self, $self->default_user));
+}
+
+sub test_calendarprincipal_getavailability_privacy__private_sharee
+    ($self)
+{
+    my $sharer = $self->{instance}->create_user('sharer');
+    $sharer->calendars->default->share_with(cassandane => [qw( mayReadItems )]);
+    create_event($self, $sharer, privacy => 'private');
+
+    xlog $self, "the event is busy, but discloses no details";
+    $self->assert_cmp_deeply([{
+        utcStart => '2020-08-05T07:00:00Z',
+        utcEnd => '2020-08-05T08:00:00Z',
+        busyStatus => 'confirmed',
+        event => undef,
+    }], get_availability($self, $self->default_user));
+}
+
+sub test_calendarprincipal_getavailability_privacy__private_owner
+    ($self)
+{
+    my $sharer = $self->{instance}->create_user('sharer');
+    $sharer->calendars->default->share_with(cassandane => [qw( mayReadItems )]);
+    create_event($self, $sharer, privacy => 'private');
+
+    xlog $self, "the owner sees the details of their own event";
+    $self->assert_cmp_deeply([{
+        utcStart => '2020-08-05T07:00:00Z',
+        utcEnd => '2020-08-05T08:00:00Z',
+        busyStatus => 'confirmed',
+        event => {
+            start => '2020-08-05T09:00:00',
+            title => 'the title',
+        },
+    }], get_availability($self, $sharer));
+}
+
+sub test_calendarprincipal_getavailability_privacy__secret_sharee
+    ($self)
+{
+    my $sharer = $self->{instance}->create_user('sharer');
+    $sharer->calendars->default->share_with(cassandane => [qw( mayReadItems )]);
+    create_event($self, $sharer, privacy => 'secret');
+
+    xlog $self, "the event contributes no busy time at all";
+    $self->assert_cmp_deeply([], get_availability($self, $self->default_user));
+}
+
+sub test_calendarprincipal_getavailability_privacy__secret_owner
+    ($self)
+{
+    my $sharer = $self->{instance}->create_user('sharer');
+    $sharer->calendars->default->share_with(cassandane => [qw( mayReadItems )]);
+    create_event($self, $sharer, privacy => 'secret');
+
+    xlog $self, "the owner sees their own event in full";
+    $self->assert_cmp_deeply([{
+        utcStart => '2020-08-05T07:00:00Z',
+        utcEnd => '2020-08-05T08:00:00Z',
+        busyStatus => 'confirmed',
+        event => {
+            start => '2020-08-05T09:00:00',
+            title => 'the title',
+        },
+    }], get_availability($self, $sharer));
+}
+
+# Cyrus ignores CLASS in a recurrence override: privacy is a property of the
+# whole calendar object, not of a single instance. So an override that does not
+# repeat the CLASS of its main event must not disclose its details either.
+my sub put_private_override ($self, $sharer)
+{
+    put_ical($self, $sharer,
+        'BEGIN:VEVENT',
+        'UID:2a358cee-6489-4f14-a57f-c104db4b8b4c',
+        'DTSTAMP:20150806T234327Z',
+        'DTSTART;TZID=Europe/Vienna:20200805T090000',
+        'DURATION:PT1H',
+        'RRULE:FREQ=WEEKLY;COUNT=2',
+        'SUMMARY:the title',
+        'STATUS:CONFIRMED',
+        'CLASS:PRIVATE',
+        'SEQUENCE:0',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'UID:2a358cee-6489-4f14-a57f-c104db4b8b4c',
+        'RECURRENCE-ID;TZID=Europe/Vienna:20200812T090000',
+        'DTSTAMP:20150806T234327Z',
+        'DTSTART;TZID=Europe/Vienna:20200812T090000',
+        'DURATION:PT1H',
+        'SUMMARY:the override title',
+        'STATUS:CONFIRMED',
+        'SEQUENCE:0',
+        'END:VEVENT',
+    );
+}
+
+sub test_calendarprincipal_getavailability_privacy__private_override_sharee
+    ($self)
+{
+    my $sharer = $self->{instance}->create_user('sharer');
+    $sharer->calendars->default->share_with(cassandane => [qw( mayReadItems )]);
+    put_private_override($self, $sharer);
+
+    $self->assert_cmp_deeply([{
+        utcStart => '2020-08-05T07:00:00Z',
+        utcEnd => '2020-08-05T08:00:00Z',
+        busyStatus => 'confirmed',
+        event => undef,
+    }, {
+        utcStart => '2020-08-12T07:00:00Z',
+        utcEnd => '2020-08-12T08:00:00Z',
+        busyStatus => 'confirmed',
+        event => undef,
+    }], get_availability($self, $self->default_user));
+}
+
+sub test_calendarprincipal_getavailability_privacy__private_override_owner
+    ($self)
+{
+    my $sharer = $self->{instance}->create_user('sharer');
+    $sharer->calendars->default->share_with(cassandane => [qw( mayReadItems )]);
+    put_private_override($self, $sharer);
+
+    xlog $self, "the owner sees the details of both instances";
+    $self->assert_cmp_deeply([{
+        utcStart => '2020-08-05T07:00:00Z',
+        utcEnd => '2020-08-05T08:00:00Z',
+        busyStatus => 'confirmed',
+        event => {
+            start => '2020-08-05T09:00:00',
+            title => 'the title',
+        },
+    }, {
+        utcStart => '2020-08-12T07:00:00Z',
+        utcEnd => '2020-08-12T08:00:00Z',
+        busyStatus => 'confirmed',
+        event => {
+            start => '2020-08-12T09:00:00',
+            title => 'the override title',
+        },
+    }], get_availability($self, $sharer));
+}
