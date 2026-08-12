@@ -1,0 +1,21 @@
+
+Description:
+
+The X-JMAP-PRIVACY iCalendar property has been deprecated in favor of using
+the CLASS property.
+
+
+Documentation:
+
+RFC 5545, Section 3.8.1.3.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Installations that have used, and depend on, the X-JMAP-PRIVACY property
+must migrate their iCalendar data to use the CLASS property instead.

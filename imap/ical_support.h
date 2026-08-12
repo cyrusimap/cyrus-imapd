@@ -249,6 +249,8 @@ extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
 
 extern bool ical_is_valid_color(const char *val, bool allow_alpha);
 
+extern void icalcomponent_strip_jmap_xprops(icalcomponent *comp);
+
 /**
  * Looks up a property parameter by name.
  *
