@@ -64,7 +64,7 @@ enum {
 };
 
 /* Privacy values */
-enum {
+enum caldav_privacy {
     CAL_PRIVACY_PUBLIC = 0,
     CAL_PRIVACY_PRIVATE,
     CAL_PRIVACY_SECRET

@@ -98,6 +98,82 @@ EXPORTED void strip_vtimezones(icalcomponent *ical)
     free_hash_table(&tzid_table, free);
 }
 
+/* Return true if a sharee may see 'prop' on a calendar object
+ * having CLASS=PRIVATE. */
+static bool is_public_property(icalproperty *prop)
+{
+    switch (icalproperty_isa(prop)) {
+    case ICAL_CLASS_PROPERTY:
+    case ICAL_CREATED_PROPERTY:
+    case ICAL_DTEND_PROPERTY:
+    case ICAL_DTSTAMP_PROPERTY:
+    case ICAL_DTSTART_PROPERTY:
+    case ICAL_DUE_PROPERTY:
+    case ICAL_DURATION_PROPERTY:
+    case ICAL_ESTIMATEDDURATION_PROPERTY:
+    case ICAL_EXDATE_PROPERTY:
+    case ICAL_EXRULE_PROPERTY:
+    case ICAL_LASTMODIFIED_PROPERTY:
+    case ICAL_RDATE_PROPERTY:
+    case ICAL_RECURRENCEID_PROPERTY:
+    case ICAL_RRULE_PROPERTY:
+    case ICAL_SEQUENCE_PROPERTY:
+    case ICAL_TRANSP_PROPERTY:
+    case ICAL_UID_PROPERTY:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+EXPORTED void caldav_redact_private_ical(icalcomponent *ical)
+{
+    icalcomponent *comp, *nextcomp;
+
+    for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
+         comp;
+         comp = nextcomp)
+    {
+        nextcomp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT);
+
+        if (icalcomponent_isa(comp) == ICAL_VTIMEZONE_COMPONENT) {
+            /* Keep timezones, the retained TZID parameters refer to them */
+            continue;
+        }
+
+        /* Strip any property a sharee may not see. This also covers the
+           recurrence overrides, which are siblings of the main component. */
+        icalproperty *prop, *nextprop;
+
+        for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
+             prop;
+             prop = nextprop)
+        {
+            nextprop = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY);
+
+            if (!is_public_property(prop)) {
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
+        }
+
+        /* Strip all sub-components, including any VALARM */
+        icalcomponent *sub, *nextsub;
+
+        for (sub = icalcomponent_get_first_component(comp, ICAL_ANY_COMPONENT);
+             sub;
+             sub = nextsub)
+        {
+            nextsub =
+                icalcomponent_get_next_component(comp, ICAL_ANY_COMPONENT);
+
+            icalcomponent_remove_component(comp, sub);
+            icalcomponent_free(sub);
+        }
+    }
+}
+
 static void add_defaultalarm_etagdata(const char *mboxname,
                                       const char *userid,
                                       struct buf *etagdata)

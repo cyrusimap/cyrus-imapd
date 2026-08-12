@@ -1014,6 +1014,31 @@ static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
     return precond ? HTTP_FORBIDDEN : 0;
 }
 
+/* Return whether the authenticated user is a sharee of 'mailbox', for whom
+   privacy is to be enforced: they neither own it nor are an admin. */
+static bool caldav_is_sharee(struct mailbox *mailbox)
+{
+    return !httpd_userisadmin &&
+           !mboxname_userownsmailbox(httpd_userid, mailbox_name(mailbox));
+}
+
+/* Return the privacy of 'cdata' as it applies to the authenticated user.
+   Returns CAL_PRIVACY_PUBLIC if there is nothing to enforce. */
+static enum caldav_privacy caldav_privacy_for_sharee(
+    struct mailbox *mailbox,
+    const struct caldav_data *cdata)
+{
+    if (!cdata || cdata->comp_flags.privacy == CAL_PRIVACY_PUBLIC) {
+        return CAL_PRIVACY_PUBLIC;
+    }
+
+    if (!caldav_is_sharee(mailbox)) {
+        return CAL_PRIVACY_PUBLIC;
+    }
+
+    return cdata->comp_flags.privacy;
+}
+
 /* Check headers for any preconditions */
 static int caldav_check_precond(struct transaction_t *txn,
                                 struct meth_params *params,
@@ -1025,6 +1050,20 @@ static int caldav_check_precond(struct transaction_t *txn,
     const char *stag = cdata && cdata->organizer ? cdata->sched_tag : NULL;
     const char **hdr;
     int precond = 0;
+
+    enum caldav_privacy privacy = caldav_privacy_for_sharee(mailbox, cdata);
+
+    if (privacy == CAL_PRIVACY_SECRET
+        && (txn->meth == METH_GET || txn->meth == METH_HEAD))
+    {
+        /* Report a secret resource as if it did not exist. */
+        xsyslog_ev(LOG_NOTICE, "hiding secret resource from sharee",
+                   lf_s("method", http_methods[txn->meth].name),
+                   lf_s("userid", httpd_userid),
+                   lf_s("mboxname", mailbox_name(mailbox)),
+                   lf_s("resource", cdata->dav.resource));
+        return HTTP_NOT_FOUND;
+    }
 
     if (txn->meth == METH_DELETE) {
         if (!cdata) {
@@ -1821,6 +1860,21 @@ static int export_calendar(struct transaction_t *txn)
         if (!r) ical = caldav_record_to_ical(mailbox, cdata, httpd_userid, NULL);
 
         if (ical) {
+            /* Enforce privacy for sharees */
+            enum caldav_privacy privacy =
+                caldav_privacy_for_sharee(mailbox, cdata);
+
+            if (privacy == CAL_PRIVACY_SECRET) {
+                /* Omit a secret resource as if it did not exist */
+                icalcomponent_free(ical);
+                continue;
+            }
+            else if (privacy == CAL_PRIVACY_PRIVATE) {
+                caldav_redact_private_ical(ical);
+            }
+        }
+
+        if (ical) {
             icalcomponent *comp;
 
             if (!syncmodseq) {
@@ -2585,6 +2639,16 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         const char **hdr;
         icalcomponent *ical = NULL;
 
+        enum caldav_privacy privacy = caldav_privacy_for_sharee(mailbox, cdata);
+        if (privacy == CAL_PRIVACY_SECRET) {
+            /* Report a secret resource as if it did not exist. */
+            xsyslog_ev(LOG_NOTICE, "hiding secret resource from sharee",
+                       lf_s("userid", httpd_userid),
+                       lf_s("mboxname", mailbox_name(mailbox)),
+                       lf_s("resource", cdata->dav.resource));
+            return HTTP_NOT_FOUND;
+        }
+
         /* Check for optional CalDAV-Timezones header */
         hdr = spool_getheader(txn->req_hdrs, "CalDAV-Timezones");
         if (hdr && !strcmp(hdr[0], "T")) need_tz = 1;
@@ -2649,6 +2713,9 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         if (!ical) *obj = ical = record_to_ical(mailbox, record, NULL);
         personalize_and_add_defaultalarms(mailbox, cdata, record, ical, NULL);
 
+        if (privacy == CAL_PRIVACY_PRIVATE) {
+            caldav_redact_private_ical(ical);
+        }
 
         /* iCalendar data in response should not be transformed */
         txn->flags.cc |= CC_NOTRANSFORM;
