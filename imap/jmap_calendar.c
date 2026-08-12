@@ -3108,6 +3108,14 @@ static void jmapical_duration_as_string(const struct jmapical_duration *dur, str
     buf_cstring(buf);
 }
 
+/* Return true if the requesting user is a sharee of the calendar objects in
+ * the account of 'ownerid'. The owner never is, and neither is an admin. */
+static bool jmap_is_sharee(jmap_req_t *req, const char *ownerid)
+{
+    return strcmpsafe(ownerid, req->userid)
+        && !global_authisa(req->authstate, IMAPOPT_ADMINS);
+}
+
 struct getcalendarevents_rock {
     /* Request-scoped context */
     struct caldav_db *db;
@@ -4374,7 +4382,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         .req = req,
         .get = &get,
         .check_acl = checkacl,
-        .is_sharee = strcmp(req->accountid, req->userid)
+        .is_sharee = jmap_is_sharee(req, req->accountid)
     };
     construct_hashu64_table(&rock.cache_jsevents, 512, 0);
     construct_hash_table(&rock.floatingtz_by_mboxid, 64, 0);
@@ -4848,7 +4856,7 @@ static int createevent_toical(jmap_req_t *req,
     }
 
     // Validate privacy on shared calendars
-    if (strcmp(req->accountid, req->userid)) {
+    if (jmap_is_sharee(req, req->accountid)) {
         const char *privacy =
             json_string_value(json_object_get(create->jsevent, "privacy"));
         if (privacy && strcmp(privacy, "public")) {
@@ -5876,7 +5884,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
     }
     else {
         // Validate privacy on shared calendars
-        if (strcmp(req->accountid, req->userid)) {
+        if (jmap_is_sharee(req, req->accountid)) {
             const char *new_privacy =
                 json_string_value(json_object_get(update->event_patch, "privacy"));
             if (new_privacy && strcmp(new_privacy, "public")) {
@@ -6087,7 +6095,7 @@ static void setcalendarevents_update(jmap_req_t *req,
     }
 
     /* Check privacy for sharees */
-    if (strcmp(req->accountid, req->userid)) {
+    if (jmap_is_sharee(req, req->accountid)) {
         if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
             r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
                 IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
@@ -6577,7 +6585,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     }
 
     /* Check privacy for sharees */
-    if (strcmp(req->accountid, req->userid)) {
+    if (jmap_is_sharee(req, req->accountid)) {
         if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
             r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
                 IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
@@ -7067,7 +7075,7 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
         .req = req,
         .changes = &changes,
         .check_acl = strcmp(req->accountid, req->userid),
-        .is_sharee = strcmp(req->accountid, req->userid),
+        .is_sharee = jmap_is_sharee(req, req->accountid),
     };
     int r = 0;
 
@@ -7500,7 +7508,7 @@ static int eventquery_textsearch_run(jmap_req_t *req,
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct mailbox *mailbox = NULL;
     const char *wantuid = json_string_value(json_object_get(filter, "uid"));
-    int is_sharee = strcmp(req->accountid, req->userid);
+    int is_sharee = jmap_is_sharee(req, req->accountid);
     char *sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX);
 
     if (before != caldav_eternity) {
@@ -7866,7 +7874,7 @@ static int eventquery_run(jmap_req_t *req,
     enum caldav_sort *sort = NULL;
     struct buf buf = BUF_INITIALIZER;
     size_t nsort = 0;
-    int is_sharee = strcmp(req->accountid, req->userid);
+    int is_sharee = jmap_is_sharee(req, req->accountid);
     struct caldav_jscal_filter *jscal_filter = NULL;
     int is_fastpath = 0;
 
@@ -8704,7 +8712,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     }
 
     /* Check privacy for sharees */
-    if (strcmp(req->accountid, req->userid)) {
+    if (jmap_is_sharee(req, req->accountid)) {
         if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
             syslog(LOG_NOTICE, "no permissions for sharee to read event");
             r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
