@@ -8282,24 +8282,12 @@ static void _calendarevent_copy(jmap_req_t *req,
     jmap_caleventid_free(&eid);
 
     /* Check privacy */
-    if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
-        if (strcmp(copy->from_account_id, req->userid)) {
-            // can't copy a non-public shared event anywhere
-            *set_err = json_pack("{s:s}", "type",
-                    cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
-                    "notFound" : "forbidden");
-        }
-        else {
-            // may copy own event anywhere if made public
-            const char *new_privacy =
-                json_string_value(json_object_get(jevent, "privacy"));
-            if (strcmpsafe(new_privacy, "public")) {
-                *set_err = json_pack("{s:s s:[s]}",
-                        "type", "invalidProperties",
-                        "properties", "privacy");
-            }
-        }
-        if (*set_err) goto done;
+    if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC &&
+        jmap_is_sharee(req, copy->from_account_id)) {
+        *set_err = json_pack("{s:s}", "type",
+                cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
+                "notFound" : "forbidden");
+        goto done;
     }
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);

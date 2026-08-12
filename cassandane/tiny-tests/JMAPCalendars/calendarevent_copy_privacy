@@ -1,0 +1,148 @@
+#!perl
+use Cassandane::Tiny;
+
+# This test asserts that copying a non-public event from an owned calendar to a
+# non-owned calendar requires it to become public, and that a sharee may not
+# copy a non-public event out of a calendar they do not own.
+
+# Copy an event having $privacy into sharer's calendar. If $patch_privacy is
+# set then the privacy is set explicitly in the create patch, otherwise it is
+# inherited from the event being copied.
+my sub assert_copy_to_shared ($self, $privacy, $patch_privacy = undef)
+{
+    $self->assert_str_not_equals('public', $patch_privacy // $privacy);
+
+    my $jmap = $self->default_user->jmap;
+    my $sharer = $self->{instance}->create_user('sharer');
+    my $dst_cal = $sharer->calendars->default;
+
+    xlog $self, "sharer shares their default calendar with cassandane";
+    $dst_cal->share_with(cassandane => [qw( mayReadItems mayWriteAll )]);
+
+    xlog $self, "cassandane creates a $privacy event";
+    my $event_id = $self->default_user->calendars->default
+                        ->create_event({ privacy => $privacy })->id;
+
+    my %copy_args = (
+        fromAccountId => 'cassandane',
+        accountId => 'sharer',
+    );
+    my %copy_props = (
+        id => $event_id,
+        calendarIds => {
+            $dst_cal->id => JSON::true,
+        },
+        ($patch_privacy ? (privacy => $patch_privacy) : ()),
+    );
+
+    xlog $self, "assert that copying it to sharer as non-public gets rejected";
+    my $res = $jmap->request([[
+        'CalendarEvent/copy' => { %copy_args,
+            create => {
+                copy => { %copy_props },
+            },
+        },
+    ]])->single_sentence('CalendarEvent/copy')->arguments;
+
+    $self->assert_cmp_deeply(superhashof({
+        type => 'invalidProperties',
+        properties => ['privacy'],
+    }), $res->{notCreated}{copy});
+
+    xlog $self, "assert that copying it as a public event is allowed";
+    $res = $jmap->request([[
+        'CalendarEvent/copy' => { %copy_args,
+            create => {
+                copy => { %copy_props,
+                    privacy => 'public',
+                },
+            },
+        },
+    ]])->single_sentence('CalendarEvent/copy')->arguments;
+
+    $self->assert_not_null($res->{created}{copy});
+}
+
+# A sharee copies a non-public event out of cassandane's calendar.
+my sub assert_copy_from_shared ($self, $privacy, $want_error,
+                                $patch_privacy = undef)
+{
+    $self->assert_str_not_equals('public', $privacy);
+
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    $self->default_user->calendars->default
+        ->share_with(sharee => [qw( mayReadItems mayWriteAll )]);
+
+    xlog $self, "cassandane creates a $privacy event";
+    my $event_id = $self->default_user->calendars->default
+                        ->create_event({ privacy => $privacy })->id;
+
+    xlog $self, "assert that sharee can not copy it into their own calendar";
+    my $res = $sharee->jmap->request([[
+        'CalendarEvent/copy' => {
+            fromAccountId => 'cassandane',
+            accountId => 'sharee',
+            create => {
+                copy => {
+                    id => $event_id,
+                    calendarIds => {
+                        $sharee->calendars->default->id => JSON::true,
+                    },
+                    ($patch_privacy ? (privacy => $patch_privacy) : ()),
+                },
+            },
+        },
+    ]])->single_sentence('CalendarEvent/copy')->arguments;
+
+    $self->assert_str_equals($want_error, $res->{notCreated}{copy}{type});
+}
+
+sub test_calendarevent_copy_privacy__to_shared_private
+    ($self)
+{
+    assert_copy_to_shared($self, 'private');
+}
+
+sub test_calendarevent_copy_privacy__to_shared_secret
+    ($self)
+{
+    assert_copy_to_shared($self, 'secret');
+}
+
+sub test_calendarevent_copy_privacy__to_shared_patch_private
+    ($self)
+{
+    assert_copy_to_shared($self, 'public', 'private');
+}
+
+sub test_calendarevent_copy_privacy__to_shared_patch_secret
+    ($self)
+{
+    assert_copy_to_shared($self, 'public', 'secret');
+}
+
+sub test_calendarevent_copy_privacy__from_shared_private
+    ($self)
+{
+    assert_copy_from_shared($self, 'private', 'forbidden');
+}
+
+sub test_calendarevent_copy_privacy__from_shared_secret
+    ($self)
+{
+    assert_copy_from_shared($self, 'secret', 'notFound');
+}
+
+sub test_calendarevent_copy_privacy__from_shared_private_as_public
+    ($self)
+{
+    assert_copy_from_shared($self, 'private', 'forbidden', 'public');
+}
+
+sub test_calendarevent_copy_privacy__from_shared_secret_as_public
+    ($self)
+{
+    assert_copy_from_shared($self, 'secret', 'notFound', 'public');
+}
