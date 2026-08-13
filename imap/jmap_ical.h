@@ -16,8 +16,6 @@ extern "C" {
 #include "jmap_util.h"
 
 
-typedef struct jstimezones jstimezones_t;
-
 struct jmapical_ctx {
     jmap_req_t *req;
     struct {
@@ -51,30 +49,6 @@ extern void jmapical_context_free(struct jmapical_ctx**);
 
 extern int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx);
 
-
-/* jstimezones allows to resolve standard and non-standard timezone
- * identifiers to ical timezones. It mainly is useful to handle
- * iCalendar data that embeds non-standard VTIMEZONES */
-typedef struct jstimezones jstimezones_t;
-
-/* Create a resolver for VTIMEZONEs embedded in VCALENDAR ical.
- * If no_guess is true, then the resolver does not attempt to
- * guess IANA timezone identifiers for non-IANA timezones
- * and preserves them in the custom "cyrusimap.org:timeZones"
- * property in the CalendarEvent */
-extern jstimezones_t *jstimezones_new(icalcomponent *ical, int no_guess);
-
-/* Resolve tzid to a timezone.
- *
- * If jstzones is not NULL, first look up the timezones in the custom
- * resolver. If not found, lookup tzid in the standard timezones.
- *
- * Returns NULL if no timezone is found.
- */
-extern icaltimezone *jstimezones_lookup_tzid(jstimezones_t* jstzones, const char *tzid);
-
-/* Free a timezone resolver */
-extern void jstimezones_free(jstimezones_t **jstzonesptr);
 
 /* Base type for JSCalendar LocalDateTime and UTCDateTime */
 
