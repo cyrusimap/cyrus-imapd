@@ -73,6 +73,7 @@ enum event_param {
              EVENT_MAILBOX_UNIQUEID,
              EVENT_MAILBOX_JMAPID,
              EVENT_OLD_MAILBOX_JMAPID,
+             EVENT_OLD_MAILBOX_UNIQUEID,
     /*  7 */ EVENT_URI,
     /*  8 */ EVENT_MODSEQ,
     /*  9 */ EVENT_QUOTA_STORAGE,
