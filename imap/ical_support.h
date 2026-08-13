@@ -21,6 +21,22 @@
 
 #define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
 
+/* Custom iCalendar properties */
+#define JMAPICAL_XPROP_ID              "X-JMAP-ID"
+#define JMAPICAL_XPROP_SHOWWITHOUTTIME "X-JMAP-SHOW-WITHOUT-TIME"
+#define JMAPICAL_XPROP_MAYINVITESELF   "X-JMAP-MAY-INVITE-SELF"
+#define JMAPICAL_XPROP_MAYINVITEOTHERS "X-JMAP-MAY-INVITE-OTHERS"
+#define JMAPICAL_XPROP_HIDEATTENDEES   "X-JMAP-HIDE-ATTENDEES"
+#define JMAPICAL_XPROP_SENTBY          "X-JMAP-SENT-BY"
+#define JMAPICAL_XPROP_PRIVACY         "X-JMAP-PRIVACY"
+#define JMAPICAL_XPROP_USEDEFAULTALERTS "X-JMAP-USEDEFAULTALERTS"
+
+/* Custom iCalendar parameters */
+#define JMAPICAL_XPARAM_ROLE          "X-JMAP-ROLE"
+
+#define JMAPICAL_XPARAM_DTSTAMP       "X-DTSTAMP" /* used for iMIP ATTENDEE replies */
+#define JMAPICAL_XPARAM_SEQUENCE      "X-SEQUENCE" /*used for iMIP ATTENDEE replies */
+
 #define PER_USER_CAL_DATA                                       \
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">per-user-calendar-data"
 

@@ -16,25 +16,6 @@ extern "C" {
 #include "jmap_util.h"
 
 
-/* Custom iCalendar properties.
- *
- * Note that jscalendar.c defines its own PROP_XJMAP_* names for several of
- * these same X-properties. These are the copies read by the CalDAV and
- * iCalendar support layers. */
-#define JMAPICAL_XPROP_ID              "X-JMAP-ID"
-#define JMAPICAL_XPROP_SHOWWITHOUTTIME "X-JMAP-SHOW-WITHOUT-TIME"
-#define JMAPICAL_XPROP_MAYINVITESELF   "X-JMAP-MAY-INVITE-SELF"
-#define JMAPICAL_XPROP_MAYINVITEOTHERS "X-JMAP-MAY-INVITE-OTHERS"
-#define JMAPICAL_XPROP_HIDEATTENDEES   "X-JMAP-HIDE-ATTENDEES"
-#define JMAPICAL_XPROP_SENTBY          "X-JMAP-SENT-BY"
-#define JMAPICAL_XPROP_PRIVACY         "X-JMAP-PRIVACY"
-
-/* Custom iCalendar parameters */
-#define JMAPICAL_XPARAM_ROLE          "X-JMAP-ROLE"
-
-#define JMAPICAL_XPARAM_DTSTAMP       "X-DTSTAMP" /* used for iMIP ATTENDEE replies */
-#define JMAPICAL_XPARAM_SEQUENCE      "X-SEQUENCE" /*used for iMIP ATTENDEE replies */
-
 typedef struct jstimezones jstimezones_t;
 
 struct jmapical_ctx {

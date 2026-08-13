@@ -18,6 +18,7 @@
 #include "carddav_db.h"
 #include "global.h"
 #include "hash.h"
+#include "ical_support.h"
 #include "index.h"
 #include "jmap_ical.h"
 #include "jmap_util.h"
