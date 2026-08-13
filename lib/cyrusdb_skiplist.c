@@ -2449,6 +2449,8 @@ EXPORTED struct cyrusdb_backend cyrusdb_skiplist =
     &cyrusdb_generic_archive,
     &cyrusdb_generic_unlink,
 
+    NULL, /*yield*/
+
     &myopen,
     &myclose,
 
