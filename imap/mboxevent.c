@@ -79,6 +79,7 @@ static struct mboxevent event_template =
     { EVENT_MAILBOX_UNIQUEID, "mailboxUniqueId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MAILBOX_JMAPID, "vnd.fastmail.mailboxJMAPId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_OLD_MAILBOX_JMAPID, "vnd.fastmail.oldMailboxJMAPId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_OLD_MAILBOX_UNIQUEID, "oldMailboxUniqueId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_URI, "uri", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MODSEQ, "modseq", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_QUOTA_STORAGE, "diskQuota", EVENT_PARAM_INT, { 0 }, 0 },
@@ -643,6 +644,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
             return 0;
         break;
     case EVENT_OLD_MAILBOX_ID:
+    case EVENT_OLD_MAILBOX_UNIQUEID:
         return type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE|EVENT_MAILBOX_RENAME);
     case EVENT_SERVER_ADDRESS:
         return type & (EVENT_LOGIN|EVENT_LOGOUT);
@@ -1951,6 +1953,10 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
 
     free(extname);
 
+    const char *uniqueid = mailbox_uniqueid(mailbox);
+    if (uniqueid)
+        FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_UNIQUEID, xstrdup(uniqueid));
+
     /* add the old mailbox's special-use attributes if it has any */
     if (mboxevent_expected_param(event->type, EVENT_OLD_SPECIAL_USE)) {
         char *specialuse = mboxevent_mailbox_specialuse(mailbox);
@@ -2198,6 +2204,9 @@ static int filled_params(enum event_type type, struct mboxevent *event)
             case EVENT_MAILBOX_JMAPID:
             case EVENT_OLD_MAILBOX_JMAPID:
                 /* only included if the mailbox has a JMAP id or uniqueid */
+                break;
+            case EVENT_OLD_MAILBOX_UNIQUEID:
+                /* only included if the old mailbox has a uniqueid */
                 break;
             case EVENT_EMAILIDS:
                 /* only included when a conversations db is available */
