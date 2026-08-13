@@ -1,0 +1,550 @@
+#!perl
+use Cassandane::Tiny;
+
+use Sub::Install ();
+
+# ANDs a filter condition with a body search, so that the filter carries a
+# condition which guidsearch answers from the Xapian index.
+my sub with_body_search ($cond)
+{
+    return {
+        operator   => 'AND',
+        conditions => [ $cond, { body => 'hello' } ],
+    };
+}
+
+# Creates the content that filter conditions refer to: a contact card with an
+# email address, and a contact group whose only member is that card. Returns the
+# id of the Inbox and the uids of the card and of the group.
+my sub create_fixtures ($self)
+{
+    my $user = $self->default_user;
+
+    my $abook = $user->addressbooks->create;
+    my $card = $abook->create_card({
+        name   => 'Contact',
+        emails => { e1 => { address => 'contact@example.com' } },
+    });
+    my $card_uid = q{} . $card->uid;
+    my $group = $abook->create_card_group({
+        name    => 'Group',
+        members => { $card_uid => JSON::true },
+    });
+
+    return {
+        inbox => q{} . $user->mailboxes->inbox->id,
+        card  => $card_uid,
+        group => q{} . $group->uid,
+    };
+}
+
+# The filter of a case may be a code reference that is called with the fixture
+# ids and returns the filter.
+my @TESTCASES = (
+    # Filter conditions indexed in Xapian.
+    {
+        name            => 'text',
+        filter          => { text => 'hello' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'from',
+        filter          => { from => 'foo@example.com' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'to',
+        filter          => { to => 'foo@example.com' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'cc',
+        filter          => { cc => 'foo@example.com' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'bcc',
+        filter          => { bcc => 'foo@example.com' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'subject',
+        filter          => { subject => 'hello' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'body',
+        filter          => { body => 'hello' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'attachment_name',
+        filter          => { attachmentName => 'attach.txt' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'attachment_body',
+        filter          => { attachmentBody => 'hello' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'delivered_to',
+        filter          => { deliveredTo => 'foo@example.com' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'list_id',
+        filter          => { listId => 'list.example.com' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'language',
+        filter          => { language => 'en' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'attachment_type_pdf',
+        filter          => { attachmentType => 'pdf' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'is_high_priority',
+        filter          => { isHighPriority => JSON::true },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'is_not_high_priority',
+        filter          => { isHighPriority => JSON::false },
+        want_guidsearch => 1,
+    },
+
+    # Fuzzy search for the email addresses of contact cards.
+    {
+        name            => 'from_any_contact',
+        filter          => { fromAnyContact => JSON::true },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'to_any_contact',
+        filter          => { toAnyContact => JSON::true },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'cc_any_contact',
+        filter          => { ccAnyContact => JSON::true },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'bcc_any_contact',
+        filter          => { bccAnyContact => JSON::true },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'from_contact_card_uid',
+        filter          => sub ($ids) { { fromContactCardUid => $ids->{card} } },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'to_contact_card_uid',
+        filter          => sub ($ids) { { toContactCardUid => $ids->{card} } },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'cc_contact_card_uid',
+        filter          => sub ($ids) { { ccContactCardUid => $ids->{card} } },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'bcc_contact_card_uid',
+        filter          => sub ($ids) { { bccContactCardUid => $ids->{card} } },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'from_contact_group_id',
+        filter          => sub ($ids) { { fromContactGroupId => $ids->{group} } },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'to_contact_group_id',
+        filter          => sub ($ids) { { toContactGroupId => $ids->{group} } },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'cc_contact_group_id',
+        filter          => sub ($ids) { { ccContactGroupId => $ids->{group} } },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'bcc_contact_group_id',
+        filter          => sub ($ids) { { bccContactGroupId => $ids->{group} } },
+        want_guidsearch => 1,
+    },
+
+    # Message id headers. The search attribute of these conditions is
+    # cache-backed, but guidsearch replaces it with a Xapian-backed one.
+    {
+        name            => 'message_id',
+        filter          => { messageId => 'msg1@example.com' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'references',
+        filter          => { references => 'msg1@example.com' },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'in_reply_to',
+        filter          => { inReplyTo => 'msg1@example.com' },
+        want_guidsearch => 1,
+    },
+
+    # The folder bitvector of a G record.
+    {
+        name            => 'in_mailbox',
+        filter          => sub ($ids) { { inMailbox => $ids->{inbox} } },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'in_mailbox_and_body',
+        filter          => sub ($ids) {
+            with_body_search({ inMailbox => $ids->{inbox} })
+        },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'in_mailbox_other_than',
+        filter          =>
+            sub ($ids) { { inMailboxOtherThan => [ $ids->{inbox} ] } },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'in_mailbox_other_than_and_body',
+        filter          => sub ($ids) {
+            with_body_search({ inMailboxOtherThan => [ $ids->{inbox} ] })
+        },
+        want_guidsearch => 1,
+    },
+
+    # The system flags of a G record.
+    {
+        name            => 'has_keyword_draft',
+        filter          => { hasKeyword => '$draft' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'has_keyword_draft_and_body',
+        filter          => with_body_search({ hasKeyword => '$draft' }),
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'has_keyword_flagged',
+        filter          => { hasKeyword => '$flagged' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'has_keyword_flagged_and_body',
+        filter          => with_body_search({ hasKeyword => '$flagged' }),
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'has_keyword_answered',
+        filter          => { hasKeyword => '$answered' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'has_keyword_answered_and_body',
+        filter          => with_body_search({ hasKeyword => '$answered' }),
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'not_keyword_draft',
+        filter          => { notKeyword => '$draft' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'not_keyword_draft_and_body',
+        filter          => with_body_search({ notKeyword => '$draft' }),
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'not_keyword_flagged',
+        filter          => { notKeyword => '$flagged' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'not_keyword_flagged_and_body',
+        filter          => with_body_search({ notKeyword => '$flagged' }),
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'not_keyword_answered',
+        filter          => { notKeyword => '$answered' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'not_keyword_answered_and_body',
+        filter          => with_body_search({ notKeyword => '$answered' }),
+        want_guidsearch => 1,
+    },
+
+    # The unseen and flag counts of a conversation. Any keyword works here as
+    # long as it is counted in conversations_counted_flags, which for this test
+    # suite includes $flagged and $IsMailingList. Email/query rejects a keyword
+    # that is not counted as an unsupported filter.
+    {
+        name            => 'all_in_thread_have_keyword_seen',
+        filter          => { allInThreadHaveKeyword => '$seen' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'all_in_thread_have_keyword_seen_and_body',
+        filter          =>
+            with_body_search({ allInThreadHaveKeyword => '$seen' }),
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'some_in_thread_have_keyword_seen',
+        filter          => { someInThreadHaveKeyword => '$seen' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'some_in_thread_have_keyword_seen_and_body',
+        filter          =>
+            with_body_search({ someInThreadHaveKeyword => '$seen' }),
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'none_in_thread_have_keyword_seen',
+        filter          => { noneInThreadHaveKeyword => '$seen' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'none_in_thread_have_keyword_seen_and_body',
+        filter          =>
+            with_body_search({ noneInThreadHaveKeyword => '$seen' }),
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'all_in_thread_have_keyword_flagged',
+        filter          => { allInThreadHaveKeyword => '$flagged' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'all_in_thread_have_keyword_flagged_and_body',
+        filter          =>
+            with_body_search({ allInThreadHaveKeyword => '$flagged' }),
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'some_in_thread_have_keyword_mailinglist',
+        filter          => { someInThreadHaveKeyword => '$IsMailingList' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'some_in_thread_have_keyword_mailinglist_and_body',
+        filter          =>
+            with_body_search({ someInThreadHaveKeyword => '$IsMailingList' }),
+        want_guidsearch => 1,
+    },
+
+    # A G record has no per-message internaldate range criteria, even though it
+    # does carry the internaldate that guidsearch sorts on.
+    {
+        name            => 'before',
+        filter          => { before => '2020-01-01T00:00:00Z' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'before_and_body',
+        filter          =>
+            with_body_search({ before => '2020-01-01T00:00:00Z' }),
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'after',
+        filter          => { after => '2020-01-01T00:00:00Z' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'after_and_body',
+        filter          => with_body_search({ after => '2020-01-01T00:00:00Z' }),
+        want_guidsearch => 0,
+    },
+
+    # $seen is not a system flag of the message, it depends on the seen state of
+    # the mailboxes the message is in.
+    {
+        name            => 'has_keyword_seen',
+        filter          => { hasKeyword => '$seen' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'has_keyword_seen_and_body',
+        filter          => with_body_search({ hasKeyword => '$seen' }),
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'not_keyword_seen',
+        filter          => { notKeyword => '$seen' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'not_keyword_seen_and_body',
+        filter          => with_body_search({ notKeyword => '$seen' }),
+        want_guidsearch => 0,
+    },
+
+    # Any other keyword is neither a system flag nor Xapian-backed.
+    {
+        name            => 'has_keyword_user',
+        filter          => { hasKeyword => 'pinned' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'has_keyword_user_and_body',
+        filter          => with_body_search({ hasKeyword => 'pinned' }),
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'not_keyword_user',
+        filter          => { notKeyword => 'pinned' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'not_keyword_user_and_body',
+        filter          => with_body_search({ notKeyword => 'pinned' }),
+        want_guidsearch => 0,
+    },
+
+    # $HasAttachment only exists as a per-conversation count.
+    {
+        name            => 'has_attachment',
+        filter          => { hasAttachment => JSON::true },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'has_attachment_and_body',
+        filter          => with_body_search({ hasAttachment => JSON::true }),
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'has_no_attachment',
+        filter          => { hasAttachment => JSON::false },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'has_no_attachment_and_body',
+        filter          => with_body_search({ hasAttachment => JSON::false }),
+        want_guidsearch => 0,
+    },
+
+    # A G record has no message size.
+    {
+        name            => 'min_size',
+        filter          => { minSize => 1 },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'min_size_and_body',
+        filter          => with_body_search({ minSize => 1 }),
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'max_size',
+        filter          => { maxSize => 1000000 },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'max_size_and_body',
+        filter          => with_body_search({ maxSize => 1000000 }),
+        want_guidsearch => 0,
+    },
+
+    # Header matches need the message headers.
+    {
+        name            => 'header_exists',
+        filter          => { header => [ 'X-Foo' ] },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'header_exists_and_body',
+        filter          => with_body_search({ header => [ 'X-Foo' ] }),
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'header_contains',
+        filter          => { header => [ 'X-Foo', 'bar' ] },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'header_contains_and_body',
+        filter          => with_body_search({ header => [ 'X-Foo', 'bar' ] }),
+        want_guidsearch => 0,
+    },
+
+    # Embedded emails do not get indexed as an attachment type.
+    {
+        name            => 'attachment_type_email',
+        filter          => { attachmentType => 'email' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'attachment_type_email_and_body',
+        filter          => with_body_search({ attachmentType => 'email' }),
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'attachment_type_message_rfc822',
+        filter          => { attachmentType => 'message/rfc822' },
+        want_guidsearch => 0,
+    },
+    {
+        name            => 'attachment_type_message_rfc822_and_body',
+        filter          =>
+            with_body_search({ attachmentType => 'message/rfc822' }),
+        want_guidsearch => 0,
+    },
+);
+
+sub assert_email_query_guidsearch_filters ($self, $filter, $want_guidsearch)
+{
+    my $jmap = $self->{jmap};
+    $jmap->AddUsing(
+        'urn:ietf:params:jmap:contacts',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/contacts',
+        'https://cyrusimap.org/ns/jmap/performance',
+    );
+
+    my $ids = create_fixtures($self);
+
+    $self->make_message('msg1', body => 'hello') or die;
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $filter = $filter->($ids) if ref $filter eq 'CODE';
+
+    my $res = $jmap->request([
+        [ 'Email/query', { filter => $filter }, 'R1' ],
+    ]);
+    $res->assert_successful;
+
+    $self->assert_cmp_deeply(
+        $want_guidsearch ? jtrue() : jfalse(),
+        $res->single_sentence('Email/query')
+            ->arguments->{performance}{details}{isGuidSearch},
+        'isGuidSearch for ' . JSON::XS->new->canonical->encode($filter),
+    );
+}
+
+for my $case (@TESTCASES) {
+    Sub::Install::install_sub({
+        code => sub :JMAPExtensions ($self, @)
+        {
+            $self->assert_email_query_guidsearch_filters(
+                $case->{filter}, $case->{want_guidsearch});
+        },
+        as => "test_email_query_guidsearch_filters_$case->{name}",
+    });
+}
