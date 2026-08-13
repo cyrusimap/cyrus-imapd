@@ -5,6 +5,9 @@ use Cassandane::Tiny;
 # copy/move events, vnd.fastmail.oldMailboxJMAPId: the JMAP mailbox id
 # of the destination and source folders.  Without compact email ids
 # the JMAP mailbox id is the mailbox uniqueid.
+#
+# Also asserts oldMailboxUniqueId, the always-on counterpart of
+# mailboxUniqueId for the source folder.
 
 sub test_mailbox_jmapid_params
     :min_version_3_13
@@ -41,6 +44,7 @@ sub test_mailbox_jmapid_params
     # this suite does not use compact email ids, so the JMAP mailbox id
     # is the mailbox uniqueid
     $self->assert_str_equals($copy1->{mailboxUniqueId}, $target_id);
+    $self->assert_str_equals($copy1->{oldMailboxUniqueId}, $inbox_id);
 
     # copy back: the two ids must swap roles
     $imaptalk->select("INBOX.Target");
@@ -56,6 +60,8 @@ sub test_mailbox_jmapid_params
         $copy2->{'vnd.fastmail.mailboxJMAPId'});
     $self->assert_str_equals($target_id,
         $copy2->{'vnd.fastmail.oldMailboxJMAPId'});
+    $self->assert_str_equals($inbox_id, $copy2->{mailboxUniqueId});
+    $self->assert_str_equals($target_id, $copy2->{oldMailboxUniqueId});
 
     $imaptalk->logout();
 }
