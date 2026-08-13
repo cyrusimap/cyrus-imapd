@@ -71,6 +71,8 @@ enum event_param {
     /*  5 */ EVENT_OLD_UIDSET,
     /*  6 */ EVENT_MAILBOX_ID,
              EVENT_MAILBOX_UNIQUEID,
+             EVENT_MAILBOX_JMAPID,
+             EVENT_OLD_MAILBOX_JMAPID,
     /*  7 */ EVENT_URI,
     /*  8 */ EVENT_MODSEQ,
     /*  9 */ EVENT_QUOTA_STORAGE,
