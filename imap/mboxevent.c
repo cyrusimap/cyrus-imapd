@@ -578,10 +578,16 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
                && trace_id() != NULL;
     case EVENT_MAILBOX_ID:
     case EVENT_MAILBOX_UNIQUEID:
-    case EVENT_MBTYPE:
-    case EVENT_MAILBOX_ACL:
-    case EVENT_VISIBLE_USERS:
         return (type & MAILBOX_EVENTS);
+    case EVENT_MBTYPE:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_MBTYPE) &&
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
+    case EVENT_MAILBOX_ACL:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_MAILBOXACL) &&
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
+    case EVENT_VISIBLE_USERS:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_VISIBLEUSERS) &&
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
 
     case EVENT_QUOTA_MESSAGES:
         return type & QUOTA_EVENTS;
@@ -1813,11 +1819,18 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 
     free(extname);
 
-    FILL_STRING_PARAM(event, EVENT_MBTYPE,
-        xstrdup(mboxlist_mbtype_to_string(mailbox_mbtype(mailbox))));
+    if (mboxevent_expected_param(event->type, EVENT_MBTYPE)) {
+        FILL_STRING_PARAM(event, EVENT_MBTYPE,
+            xstrdup(mboxlist_mbtype_to_string(mailbox_mbtype(mailbox))));
+    }
 
-    FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox_acl(mailbox)));
-    FILL_STRING_PARAM(event, EVENT_VISIBLE_USERS, mailbox_visible_users(mailbox));
+    if (mboxevent_expected_param(event->type, EVENT_MAILBOX_ACL)) {
+        FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox_acl(mailbox)));
+    }
+
+    if (mboxevent_expected_param(event->type, EVENT_VISIBLE_USERS)) {
+        FILL_STRING_PARAM(event, EVENT_VISIBLE_USERS, mailbox_visible_users(mailbox));
+    }
 
     /* add the mailbox's special-use attributes if it has any */
     if (mboxevent_expected_param(event->type, EVENT_SPECIAL_USE)) {
