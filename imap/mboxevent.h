@@ -106,6 +106,7 @@ enum event_param {
     EVENT_COMPACT_CALIDS,
     EVENT_MESSAGE_EMAILID,
     EVENT_MESSAGE_THREADID,
+    EVENT_EMAILIDS,
     EVENT_JMAP_EMAIL,
     EVENT_JMAP_STATES,
     EVENT_SPECIAL_USE,
@@ -181,6 +182,7 @@ struct mboxevent {
     struct timeval timestamp;
     seqset_t *uidset;
     strarray_t midset;
+    strarray_t emailids;
     seqset_t *olduidset;
 
     struct mboxevent *prev;

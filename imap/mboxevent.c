@@ -112,6 +112,7 @@ static struct mboxevent event_template =
     { EVENT_COMPACT_CALIDS, "vnd.fastmail.compactCalendarIds", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_MESSAGE_EMAILID, "vnd.cmu.emailid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MESSAGE_THREADID, "vnd.cmu.threadid", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_EMAILIDS, "vnd.cmu.emailids", EVENT_PARAM_ARRAY, { 0 }, 0 },
     { EVENT_JMAP_EMAIL, "vnd.fastmail.jmapEmail", EVENT_PARAM_JSON, { 0 }, 0 },
     { EVENT_JMAP_STATES, "vnd.fastmail.jmapStates", EVENT_PARAM_JSON, { 0 }, 0 },
     { EVENT_SPECIAL_USE, "vnd.fastmail.specialUse", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -163,7 +164,8 @@ static struct mboxevent event_template =
     /* always at end to let the parser to easily truncate this part */
     { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, { 0 }, 0 }
   },
-  STRARRAY_INITIALIZER, { 0, 0 }, NULL, STRARRAY_INITIALIZER, NULL, NULL, NULL
+  STRARRAY_INITIALIZER, { 0, 0 }, NULL, STRARRAY_INITIALIZER,
+  STRARRAY_INITIALIZER, NULL, NULL, NULL
 };
 
 static json_t *json_formatter(enum event_type type, struct event_parameter params[]);
@@ -400,6 +402,7 @@ EXPORTED void mboxevent_free(struct mboxevent **mboxevent)
     seqset_free(&event->uidset);
     seqset_free(&event->olduidset);
     strarray_fini(&event->midset);
+    strarray_fini(&event->emailids);
     strarray_fini(&event->flagnames);
 
     for (i = 0; i <= MAX_PARAM; i++) {
@@ -589,6 +592,9 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_MESSAGE_THREADID:
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_THREADID) &&
                (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW));
+    case EVENT_EMAILIDS:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_EMAILIDS) &&
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS));
     case EVENT_JMAP_EMAIL:
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPEMAIL) &&
                (type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND));
@@ -749,6 +755,9 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
         }
         if (strarray_size(&event->midset) > 0) {
             FILL_ARRAY_PARAM(event, EVENT_MIDSET, &event->midset);
+        }
+        if (strarray_size(&event->emailids) > 0) {
+            FILL_ARRAY_PARAM(event, EVENT_EMAILIDS, &event->emailids);
         }
         if (event->olduidset) {
             FILL_STRING_PARAM(event, EVENT_OLD_UIDSET, seqset_cstring(event->olduidset));
@@ -1086,6 +1095,17 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         }
     }
 
+    /* add message EMAILID to emailids */
+    if (mboxevent_expected_param(event->type, EVENT_EMAILIDS)) {
+        if (!cstate) cstate = mailbox_get_cstate(mailbox);
+        if (cstate) {
+            char emailid[JMAP_MAX_EMAILID_SIZE];
+            jmap_set_emailid(cstate, &record->guid,
+                             0, &record->internaldate, emailid);
+            strarray_add(&event->emailids, emailid);
+        }
+    }
+
     /* add message THREADID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_THREADID)) {
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
@@ -1287,6 +1307,26 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
             char *emailid = xmalloc(JMAP_MAX_EMAILID_SIZE);
             jmap_set_emailid(cstate, &guid, 0, &internaldate, emailid);
             FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, emailid);
+        }
+    }
+
+    /* add message EMAILID to emailids */
+    if (mboxevent_expected_param(event->type, EVENT_EMAILIDS)) {
+        struct message_guid guid;
+        struct timespec internaldate;
+        if ((r = msgrecord_get_guid(msgrec, &guid))) {
+            syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
+            return;
+        }
+        if ((r = msgrecord_get_internaldate(msgrec, &internaldate))) {
+            syslog(LOG_ERR, "mboxevent: can't extract internaldate: %s", error_message(r));
+            return;
+        }
+        if (!cstate) cstate = mailbox_get_cstate(mailbox);
+        if (cstate) {
+            char emailid[JMAP_MAX_EMAILID_SIZE];
+            jmap_set_emailid(cstate, &guid, 0, &internaldate, emailid);
+            strarray_add(&event->emailids, emailid);
         }
     }
 
@@ -2115,6 +2155,9 @@ static int filled_params(enum event_type type, struct mboxevent *event)
             case EVENT_SPECIAL_USE:
             case EVENT_OLD_SPECIAL_USE:
                 /* only included if the mailbox has a special-use attribute */
+                break;
+            case EVENT_EMAILIDS:
+                /* only included when a conversations db is available */
                 break;
             default:
                 buf_appendcstr(&missing, " ");
