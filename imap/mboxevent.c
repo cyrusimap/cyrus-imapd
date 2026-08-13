@@ -931,30 +931,25 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 
     // Login and Logout events do not have a mailboxname, so avoid looking that up...
     if (mailboxname) {
-        mbentry_t *mbentry = NULL;
-        r = mboxlist_lookup(mailboxname, &mbentry, NULL);
-        if (!r && mbentry->uniqueid) {
-            struct conversations_state *cstate =
-                conversations_get_mbox(mailboxname);
-            const char *mboxid =
-                mbentry->jmapid && USER_COMPACT_EMAILIDS(cstate) ?
-                mbentry->jmapid : mbentry->uniqueid;
-
-            /* mboxevent_extract_mailbox may already have set EVENT_MAILBOX_ID,
-             * so make sure to deallocate its previous value */
-            if (event->params[EVENT_MAILBOX_ID].filled) {
-                free(event->params[EVENT_MAILBOX_ID].value.s);
-            }
-            FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mboxid));
-
-            /* mboxevent_extract_mailbox may already have set EVENT_MAILBOX_UNIQUEID,
-             * so make sure to deallocate its previous value */
-            if (event->params[EVENT_MAILBOX_UNIQUEID].filled) {
-                free(event->params[EVENT_MAILBOX_UNIQUEID].value.s);
-            }
-            FILL_STRING_PARAM(event, EVENT_MAILBOX_UNIQUEID, xstrdup(mbentry->uniqueid));
+        /* From RFC 5423: mailboxID is a URI describing the mailbox.
+         * mboxevent_extract_mailbox may already have set it to a URI
+         * that includes the UIDVALIDITY, which is unknown here, so
+         * don't overwrite it */
+        if (!event->params[EVENT_MAILBOX_ID].filled) {
+            struct buf url = BUF_INITIALIZER;
+            imapurl_toURL(&url, &imapurl);
+            FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, buf_release(&url));
         }
-        mboxlist_entry_free(&mbentry);
+
+        if (!event->params[EVENT_MAILBOX_UNIQUEID].filled) {
+            mbentry_t *mbentry = NULL;
+            r = mboxlist_lookup(mailboxname, &mbentry, NULL);
+            if (!r && mbentry->uniqueid) {
+                FILL_STRING_PARAM(event, EVENT_MAILBOX_UNIQUEID,
+                                  xstrdup(mbentry->uniqueid));
+            }
+            mboxlist_entry_free(&mbentry);
+        }
     }
 
     if (serveraddr && mboxevent_expected_param(event->type, EVENT_SERVER_ADDRESS)) {
@@ -1796,6 +1791,15 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     char *extname = mboxname_to_external(mailbox_name(mailbox), &namespace, NULL);
     imapurl.mailbox = extname;
 
+    /* From RFC 5423: mailboxID is a URI describing the mailbox */
+    struct buf url = BUF_INITIALIZER;
+    imapurl_toURL(&url, &imapurl);
+    FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, buf_release(&url));
+
+    const char *uniqueid = mailbox_uniqueid(mailbox);
+    if (uniqueid)
+        FILL_STRING_PARAM(event, EVENT_MAILBOX_UNIQUEID, xstrdup(uniqueid));
+
     if (event->type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND) && event->uidset) {
         imapurl.uid = seqset_first(event->uidset);
         /* don't add uidset parameter to MessageNew and MessageAppend events */
@@ -1804,7 +1808,6 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     }
 
     /* all events need uri parameter */
-    struct buf url = BUF_INITIALIZER;
     imapurl_toURL(&url, &imapurl);
     FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
 
@@ -1828,17 +1831,6 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         const char *jmapid = mboxevent_mailbox_jmapid(mailbox);
         if (jmapid)
             FILL_STRING_PARAM(event, EVENT_MAILBOX_JMAPID, xstrdup(jmapid));
-    }
-
-    /* mailbox related events also require mailboxID and mailboxUniqueId */
-    if (event->type & MAILBOX_EVENTS) {
-        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-        const char *uniqueid = mailbox_uniqueid(mailbox);
-        const char *jmapid = mailbox_jmapid(mailbox);
-        const char *mboxid =
-            jmapid && USER_COMPACT_EMAILIDS(cstate) ? jmapid : uniqueid;
-        FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mboxid));
-        FILL_STRING_PARAM(event, EVENT_MAILBOX_UNIQUEID, xstrdup(uniqueid));
     }
 
     if (mboxevent_expected_param(event->type, EVENT_UIDNEXT)) {
