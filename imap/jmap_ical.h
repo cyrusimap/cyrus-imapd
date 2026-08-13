@@ -38,10 +38,8 @@ typedef struct jstimezones jstimezones_t;
 
 struct jmapical_ctx {
     jmap_req_t *req;
-    struct buf buf;
     struct {
         struct buf url;
-        const char *baseurl;
         struct webdav_db *db;
         struct mailbox *mbox;
         int lock;
@@ -51,9 +49,6 @@ struct jmapical_ctx {
         json_t *serverset;
         json_t *replyto;
         char *emailalert_recipient;
-        unsigned ignore_orphan_timezones : 1;
-        unsigned no_sanitize_timestamps : 1;
-        unsigned allow_method : 1;
     } to_ical;
     struct {
         struct {
@@ -62,7 +57,6 @@ struct jmapical_ctx {
             const char *partid;
         } cyrus_msg;
         unsigned want_icalprops : 1;
-        unsigned dont_guess_timezones : 1;
     } from_ical;
     const strarray_t *schedule_addresses;
     bool (*jsevent_is_origin_cb)(json_t *jsevent, const strarray_t *schedule_addresses);
@@ -117,9 +111,6 @@ struct jmapical_datetime {
 /* True if all time components are zero */
 extern int jmapical_datetime_has_zero_time(const struct jmapical_datetime *dt);
 
-/* Convert DateTime to ical date, truncating time components */
-extern struct icaltimetype jmapical_datetime_to_icaldate(const struct jmapical_datetime *dt);
-
 /* Convert DateTime to ical time, truncating subseconds */
 extern icaltimetype jmapical_datetime_to_icaltime(const struct jmapical_datetime *dt,
                                                   const icaltimezone* zone);
@@ -161,18 +152,6 @@ extern int jmapical_duration_has_zero_time(const struct jmapical_duration *dur);
 
 /* Convert Duration to ical duration, truncating subseconds */
 extern struct icaldurationtype jmapical_duration_to_icalduration(const struct jmapical_duration *dur);
-
-/* Convert ical duration to Duration with zero subseconds */
-extern void jmapical_duration_from_icalduration(struct icaldurationtype icaldur,
-                                                struct jmapical_duration *dur);
-
-/* Convert ical duration property value to Duration with subseconds */
-extern int jmapical_duration_from_icalprop(icalproperty *prop, struct jmapical_duration *dur);
-
-/* Calculate time-range between t1 and t2 into Duration dur */
-extern void jmapical_duration_between_unixtime(time_t t1, bit64 t1nanos,
-                                               time_t t2, bit64 t2nanos,
-                                               struct jmapical_duration *dur);
 
 extern void jmapical_duration_between_utctime(const struct jmapical_datetime *t1,
                                               const struct jmapical_datetime *t2,

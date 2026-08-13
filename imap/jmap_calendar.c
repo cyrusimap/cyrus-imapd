@@ -5564,9 +5564,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
             update->schedule_addresses);
     jmapctx->jsevent_is_origin_cb = jsevent_is_origin;
     jmapctx->to_ical.serverset = update->serverset;
-    jmapctx->from_ical.dont_guess_timezones = 1;
     jmapctx->from_ical.want_icalprops = 1;
-    jmapctx->to_ical.ignore_orphan_timezones = 1;
 
     // Read old event
     context_begin_cdata(jmapctx, update->mbentry, update->cdata);
@@ -8016,7 +8014,6 @@ static void _calendarevent_copy(jmap_req_t *req,
 
     /* Patch JMAP event */
     struct jmapical_ctx *jmapctx = jmapical_context_new(req, &schedule_addresses);
-    jmapctx->to_ical.no_sanitize_timestamps = 1;
     jmapctx->from_ical.want_icalprops = 1;
     context_begin_cdata(jmapctx, mbentry, cdata);
     json_t *src_event = ical_to_jsevent(src_ical, jmapctx);

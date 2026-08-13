@@ -134,7 +134,6 @@ HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
     /* Initialize context for Link.blobId */
     const char *baseurl = config_getstring(IMAPOPT_WEBDAV_ATTACHMENTS_BASEURL);
     if (baseurl) {
-        jmapctx->attachments.baseurl = baseurl;
         caldav_attachment_url(&jmapctx->attachments.url, req->accountid, baseurl, "");
     }
 
@@ -172,7 +171,6 @@ HIDDEN void jmapical_context_free(struct jmapical_ctx **jmapctxp)
     json_decref(jmapctx->to_ical.replyto);
 
     free(jmapctx->to_ical.emailalert_recipient);
-    buf_free(&jmapctx->buf);
     free(jmapctx);
 
     *jmapctxp = NULL;
@@ -485,19 +483,6 @@ HIDDEN int jmapical_datetime_has_zero_time(const struct jmapical_datetime *dt)
     return dt->hour == 0 && dt->minute == 0 && dt->second == 0 && dt->nano == 0;
 }
 
-HIDDEN struct icaltimetype jmapical_datetime_to_icaldate(const struct jmapical_datetime *dt)
-{
-    struct icaltimetype icaldt = icaltime_null_time();
-    icaldt.year = dt->year;
-    icaldt.month = dt->month;
-    icaldt.day = dt->day;
-    icaldt.hour = dt->hour;
-    icaldt.minute = dt->minute;
-    icaldt.second = dt->second;
-    icaldt.is_date = 1;
-    return icaldt;
-}
-
 HIDDEN icaltimetype jmapical_datetime_to_icaltime(const struct jmapical_datetime *dt,
                                                   const icaltimezone* zone)
 {
@@ -661,7 +646,7 @@ HIDDEN struct icaldurationtype jmapical_duration_to_icalduration(const struct jm
     return icaldur;
 }
 
-HIDDEN void jmapical_duration_from_icalduration(struct icaldurationtype icaldur,
+static void jmapical_duration_from_icalduration(struct icaldurationtype icaldur,
                                                 struct jmapical_duration *dur)
 {
     memset(dur, 0, sizeof(struct jmapical_duration));
@@ -673,14 +658,7 @@ HIDDEN void jmapical_duration_from_icalduration(struct icaldurationtype icaldur,
     dur->seconds = icaldur.seconds;
 }
 
-HIDDEN int jmapical_duration_from_icalprop(icalproperty *prop, struct jmapical_duration *dur)
-{
-    struct icaldurationtype icaldur = icalproperty_get_duration(prop);
-    jmapical_duration_from_icalduration(icaldur, dur);
-    return 0;
-}
-
-HIDDEN void jmapical_duration_between_unixtime(time_t t1, bit64 t1nanos,
+static void jmapical_duration_between_unixtime(time_t t1, bit64 t1nanos,
                                                time_t t2, bit64 t2nanos,
                                                struct jmapical_duration *dur)
 {
@@ -781,88 +759,6 @@ HIDDEN void jmapical_duration_as_string(const struct jmapical_duration *dur, str
     free(tmp);
     buf_cstring(buf);
 }
-
-/* Determine the TZID, if any, of the ical property prop. */
-
-/* Determine the Olson TZID, if any, of the first ical property of
- * kind in component comp. */
-
-
-/* Compare int in ascending order. */
-
-/* Convert the ical recurrence prop to a JMAP recurrenceRule */
-
-/* Convert the ical recurrence recur to a JMAP recurrenceRule */
-
-
-/* Convert the ical ORGANIZER/ATTENDEEs in comp to CalendarEvent participants */
-
-
-/* Convert the VALARMS in the VEVENT comp to CalendarEvent alerts.
- * Adds any ATTACH properties found in VALARM components to the
- * event 'links' property. */
-
-
-/* Convert a VEVENT ical component to CalendarEvent keywords */
-
-/* Convert a VEVENT ical component to CalendarEvent relatedTo */
-
-
-/* Convert the libical VEVENT comp to a CalendarEvent 
- *
- * master: if not NULL, treat comp as a VEVENT exception
- * props:  if not NULL, only convert properties named as keys
- */
-
-
-/*
- * Convert to iCalendar from JMAP
- */
-
-
-/* Remove and deallocate any properties of kind in comp. */
-
-/* Add or overwrite the datetime property kind in comp. If tz is not NULL, set
- * the TZID parameter on the property. Also take care to purge conflicting
- * datetime properties such as DTEND and DURATION. */
-
-
-/* Update the start and end properties of VEVENT comp, as defined by
- * the JMAP calendarevent event. */
-
-
-/* Create or update the ORGANIZER and ATTENDEEs in the VEVENT component comp as
- * defined by the participants and replyTo property. */
-
-
-/* Create or update the VALARMs in the VEVENT component comp as defined by the
- * JMAP alerts. */
-
-/* Convert and print the JMAP byX recurrence value to ical into buf, otherwise
- * report the erroneous fieldName as invalid. If lower or upper is not NULL,
- * make sure that every byX value is within these bounds. */
-
-/* Create or overwrite the RRULE in the VEVENT component comp as defined by the
- * JMAP recurrence. */
-
-/* Create or overwrite the RRULE in the VEVENT component comp as defined by the
- * JMAP recurrence. */
-
-/* Create or overwrite JMAP keywords in comp */
-
-/* Create or overwrite JMAP relatedTo in comp */
-
-
-/* Create or overwrite the JMAP locations in comp */
-
-/* Create or overwrite the JMAP virtualLocations in comp */
-
-
-/* Create or overwrite the iCalendar properties in VEVENT comp based on the
- * properties the JMAP calendar event. This writes a *complete* jsevent and
- * does not implement patch object semantics.
- */
-
 
 HIDDEN void jmapical_remove_peruserprops(json_t *jevent)
 {
