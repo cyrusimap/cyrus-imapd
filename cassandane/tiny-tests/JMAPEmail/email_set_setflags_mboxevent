@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_set_setflags_mboxevent
-    :min_version_3_1 :needs_component_sieve
+    :min_version_3_13 :needs_component_sieve
     ($self)
 {
     my $jmap = $self->{jmap};
@@ -142,10 +142,10 @@ sub test_email_set_setflags_mboxevent
     foreach (@$data) {
         my $event = decode_json($_->{MESSAGE});
         if ($event->{event} eq "FlagsClear") {
-            $flagsClearEvents{$event->{mailboxID}} = $event;
+            $flagsClearEvents{$event->{q{vnd.fastmail.mailboxJMAPId}}} = $event;
         }
         elsif ($event->{event} eq "FlagsSet") {
-            $flagsSetEvents{$event->{mailboxID}} = $event;
+            $flagsSetEvents{$event->{q{vnd.fastmail.mailboxJMAPId}}} = $event;
         }
     }
 
