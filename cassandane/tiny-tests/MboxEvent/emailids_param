@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+
+# Asserts that message events carry vnd.cmu.emailids: the set of
+# JMAP email ids of the affected messages.  JMAP email ids are stable
+# across copy/move, so the same ids must show up on both sides of a
+# round-trip copy.
+
+sub test_emailids_param
+    :Conversations :min_version_3_13
+    ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Trash");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    $self->make_message("Message A");
+    $self->make_message("Message B");
+
+    # discard events from setup
+    $self->{instance}->getnotify();
+
+    # copy both messages from INBOX to Trash
+    $imaptalk->select("INBOX");
+    $imaptalk->copy("1:2", "INBOX.Trash");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    my @events = map { decode_json($_->{MESSAGE}) }
+                     $self->{instance}->getnotify->@*;
+    my ($copy) = grep { $_->{event} eq 'vnd.cmu.MessageCopy' } @events;
+    $self->assert_not_null($copy);
+
+    my $emailids = $copy->{'vnd.cmu.emailids'};
+    $self->assert_not_null($emailids);
+    $self->assert_num_equals(2, 0+@$emailids);
+    $self->assert_matches(qr/^[MS]\S+$/, $_) for @$emailids;
+
+    # copy them back: same emails, so the same email ids
+    $imaptalk->select("INBOX.Trash");
+    $imaptalk->copy("1:2", "INBOX");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    @events = map { decode_json($_->{MESSAGE}) }
+                  $self->{instance}->getnotify->@*;
+    ($copy) = grep { $_->{event} eq 'vnd.cmu.MessageCopy' } @events;
+    $self->assert_not_null($copy);
+    $self->assert_deep_equals(
+        [ sort @$emailids ],
+        [ sort $copy->{'vnd.cmu.emailids'}->@* ]);
+
+    # an expunge should carry the ids of the removed messages too
+    $imaptalk->store('1', '+flags', '(\\Deleted)');
+    $imaptalk->expunge();
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    @events = map { decode_json($_->{MESSAGE}) }
+                  $self->{instance}->getnotify->@*;
+    my ($expunge) = grep { $_->{event} eq 'MessageExpunge' } @events;
+    $self->assert_not_null($expunge);
+    my $expunged = $expunge->{'vnd.cmu.emailids'};
+    $self->assert_not_null($expunged);
+    $self->assert_num_equals(1, 0+@$expunged);
+    $self->assert(!!grep { $_ eq $expunged->[0] } @$emailids,
+        "expunged email id should be one of the copied ids");
+
+    $imaptalk->logout();
+}
