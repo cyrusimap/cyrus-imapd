@@ -13,6 +13,7 @@
 #include "caldav_util.h"
 #include "defaultalarms.h"
 #include "http_dav.h"
+#include "ical_support.h"
 #include "itip_support.h"
 #include "jmap_ical.h"
 #include "mailbox.h"
