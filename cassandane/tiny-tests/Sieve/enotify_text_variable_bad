@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_enotify_text_variable_bad
+    :min_version_3_2
+    ($self)
+{
+    xlog $self, "a \$text\$ reference requires the body extension";
+    my ($res, $errs) = $self->compile_sievec('norequire', <<'EOF'
+require ["enotify"];
+notify :message "$text$" "mailto:foo@example.com";
+EOF
+    );
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/body extension MUST be enabled/, $errs);
+
+    xlog $self, "an unterminated \$text[ reference is rejected";
+    ($res, $errs) = $self->compile_sievec('unterminated', <<'EOF'
+require ["enotify", "body"];
+notify :message "$text[" "mailto:foo@example.com";
+EOF
+    );
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/invalid :message value/, $errs);
+
+    xlog $self, "a zero index is rejected";
+    ($res, $errs) = $self->compile_sievec('zero', <<'EOF'
+require ["enotify", "body"];
+notify :message "$text[0]$" "mailto:foo@example.com";
+EOF
+    );
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/invalid :message value/, $errs);
+
+    xlog $self, "a non-numeric index is rejected";
+    ($res, $errs) = $self->compile_sievec('nonnumeric', <<'EOF'
+require ["enotify", "body"];
+notify :message "$text[xyz]$" "mailto:foo@example.com";
+EOF
+    );
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/invalid :message value/, $errs);
+
+    xlog $self, "a well-formed reference still compiles";
+    ($res, $errs) = $self->compile_sievec('good', <<'EOF'
+require ["enotify", "body"];
+notify :message "$text[5]$ World!" "mailto:foo@example.com";
+EOF
+    );
+    $self->assert_str_equals('success', $res);
+}
