@@ -242,4 +242,8 @@ extern void jmap_caleventid_free(struct jmap_caleventid **eidptr);
 
 extern void jmap_alertid_encode(icalcomponent *valarm, struct buf *buf);
 
+/* Remove the per-user properties from a JSCalendar Event, including from
+ * each of its recurrence overrides. */
+extern void jmap_calendarevent_remove_peruserprops(json_t *jevent);
+
 #endif /* JMAP_UTIL_H */
