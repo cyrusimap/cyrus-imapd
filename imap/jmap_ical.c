@@ -25,7 +25,6 @@
 #include "mboxname.h"
 #include "times.h"
 #include "util.h"
-#include "webdav_db.h"
 #include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
@@ -61,63 +60,12 @@ static char *_emailalert_recipient(const char *userid)
 }
 
 
-#ifndef BUILD_LMTPD
-
-HIDDEN int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx)
-{
-    jmap_req_t *req = jmapctx->req;
-
-    if (jmapctx->attachments.err)
-        return jmapctx->attachments.err;
-
-    if (!jmapctx->attachments.mbox) {
-        char *mboxname = caldav_mboxname(req->accountid, MANAGED_ATTACH);
-        int rw = jmapctx->attachments.lock;
-        int r = rw ? mailbox_open_iwl(mboxname, &jmapctx->attachments.mbox)
-                   : mailbox_open_irl(mboxname, &jmapctx->attachments.mbox);
-        if (r) {
-            xsyslog(LOG_ERR, "can't open attachments",
-                    "mboxname=<%s> err<%s>", mboxname, error_message(r));
-        }
-        free(mboxname);
-        if (r) {
-            jmapctx->attachments.err = r;
-            return jmapctx->attachments.err;
-        }
-    }
-    if (!jmapctx->attachments.db) {
-        jmapctx->attachments.db = webdav_open_mailbox(jmapctx->attachments.mbox);
-        if (!jmapctx->attachments.db) {
-            xsyslog(LOG_ERR, "mailbox_open_webdav failed",
-                    "attachments=<%s>", mailbox_name(jmapctx->attachments.mbox));
-            mailbox_close(&jmapctx->attachments.mbox);
-            jmapctx->attachments.db = NULL;
-            jmapctx->attachments.err = IMAP_INTERNAL;
-            return jmapctx->attachments.err;
-        }
-    }
-
-    return 0;
-}
-
-#endif // BUILD_LMTPD
-
 HIDDEN struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
                                                  const strarray_t *schedule_addresses)
 {
     struct jmapical_ctx *jmapctx = xzmalloc(sizeof(struct jmapical_ctx));
 
-    jmapctx->req = req;
     jmapctx->schedule_addresses = schedule_addresses;
-
-    const char *slash = strrchr(req->method, '/');
-    jmapctx->attachments.lock = slash && !strcmp(slash, "/set");
-
-    /* Initialize context for Link.blobId */
-    const char *baseurl = config_getstring(IMAPOPT_WEBDAV_ATTACHMENTS_BASEURL);
-    if (baseurl) {
-        caldav_attachment_url(&jmapctx->attachments.url, req->accountid, baseurl, "");
-    }
 
     jmapctx->to_ical.emailalert_recipient = _emailalert_recipient(req->userid);
 
@@ -142,13 +90,6 @@ HIDDEN void jmapical_context_free(struct jmapical_ctx **jmapctxp)
 
     struct jmapical_ctx *jmapctx = *jmapctxp;
     if (!jmapctx) return;
-
-#ifndef BUILD_LMTPD
-    mailbox_close(&jmapctx->attachments.mbox);
-    if (jmapctx->attachments.db)
-        webdav_close(jmapctx->attachments.db);
-#endif // BUILD_LMTPD
-    buf_free(&jmapctx->attachments.url);
 
     json_decref(jmapctx->to_ical.replyto);
 

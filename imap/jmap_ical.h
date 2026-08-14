@@ -17,14 +17,6 @@ extern "C" {
 
 
 struct jmapical_ctx {
-    jmap_req_t *req;
-    struct {
-        struct buf url;
-        struct webdav_db *db;
-        struct mailbox *mbox;
-        int lock;
-        int err;
-    } attachments;
     struct {
         json_t *serverset;
         json_t *replyto;
@@ -46,8 +38,6 @@ extern struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
         const strarray_t *schedule_addresses);
 
 extern void jmapical_context_free(struct jmapical_ctx**);
-
-extern int jmapical_context_open_attachments(struct jmapical_ctx *jmapctx);
 
 
 extern void jmapical_remove_peruserprops(json_t *jevent);
