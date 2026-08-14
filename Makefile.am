@@ -70,6 +70,19 @@ if HAVE_LDAP
 AM_CPPFLAGS += $(LDAP_CPPFLAGS)
 endif # HAVE_LDAP
 
+# Where "make install" puts the VTIMEZONEs and the guesstz database.
+zoneinfodir = $(pkgdatadir)/zoneinfo
+
+# The compile-time default for the zoneinfo_dir imapd.conf option.  Either an
+# explicit --with-zoneinfo-dir, or -- when we build the data ourselves -- the
+# directory we install it in.  configure.ac makes these mutually exclusive.
+if HAVE_ZONEINFO_DIR
+AM_CPPFLAGS += -DDEFAULT_ZONEINFO_DIR=\"$(ZONEINFO_DIR)\"
+endif # HAVE_ZONEINFO_DIR
+if ZONEINFO_DIR_FROM_BUILD
+AM_CPPFLAGS += -DDEFAULT_ZONEINFO_DIR=\"$(zoneinfodir)\"
+endif # ZONEINFO_DIR_FROM_BUILD
+
 AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
 
 AM_YFLAGS = -d
@@ -2104,7 +2117,58 @@ doc: man doc-html doc-text doc-examples
 clean-doc: clean-man clean-doc-html clean-doc-text clean-doc-examples clean-doc-doxygen
 
 .PHONY: clean-local
-clean-local: clean-doc clean-sphinx-cache clean-docsrc
+clean-local: clean-doc clean-sphinx-cache clean-docsrc clean-zoneinfo
+
+## Time zone data.
+##
+## We ship the IANA time zone database in tzdata/ and convert it to the
+## VTIMEZONEs that the TZDist service serves and that guesstz indexes.  This
+## needs vzic; without it we build nothing here and an administrator has to
+## populate zoneinfo_dir by hand -- see the TZDist chapter of the docs.
+##
+## vzic writes some 600 files, so a stamp file stands in for them all.
+
+ZONEINFO_STAMP = zoneinfo/.stamp
+ZONEINFO_DEPS = $(top_srcdir)/tzdata/version
+
+if HAVE_GUESSTZ
+ZONEINFO_DEPS += imap/cyr_guesstz
+endif # HAVE_GUESSTZ
+
+if BUILD_ZONEINFO
+
+all-local: $(ZONEINFO_STAMP)
+
+$(ZONEINFO_STAMP): $(ZONEINFO_DEPS)
+	$(AM_V_GEN)rm -rf zoneinfo
+	$(AM_V_at)$(VZIC) --pure --olson-dir $(top_srcdir)/tzdata \
+	    --output-dir zoneinfo
+	$(AM_V_at)cp $(top_srcdir)/tzdata/version zoneinfo/version
+if HAVE_GUESSTZ
+## We run cyr_guesstz here to generate data, not to test it: an ASan build
+## would otherwise leak-check it at exit, and look for the suppressions file
+## next to the libtool-wrapped binary, where there is none.  The cunit suite
+## and the Valgrind build check guesstz for leaks.
+	$(AM_V_at)ASAN_OPTIONS="$$ASAN_OPTIONS:detect_leaks=0" \
+	    ./imap/cyr_guesstz -z zoneinfo zoneinfo/guesstz.db
+endif # HAVE_GUESSTZ
+	$(AM_V_at)touch $@
+
+install-data-local: $(ZONEINFO_STAMP)
+	@echo "installing time zone data in $(DESTDIR)$(zoneinfodir)"
+	cd zoneinfo \
+	    && find . -type d -exec $(MKDIR_P) $(DESTDIR)$(zoneinfodir)/{} \; \
+	    && find . -type f ! -name .stamp \
+	        -exec $(INSTALL_DATA) {} $(DESTDIR)$(zoneinfodir)/{} \;
+
+uninstall-local:
+	rm -rf $(DESTDIR)$(zoneinfodir)
+
+endif # BUILD_ZONEINFO
+
+.PHONY: clean-zoneinfo
+clean-zoneinfo:
+	rm -rf zoneinfo
 
 distgit:
 	$(MKDIR_P) dist

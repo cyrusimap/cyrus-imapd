@@ -230,6 +230,7 @@ timsieved/timsieved
 tools/mkimap
 tools/rehash
 ylwrap
+zoneinfo/
 
 # tzdata/ holds an unmodified IANA release, and some of its files -- Makefile,
 # README, version -- are named like the build artefacts above.  Nothing writes
