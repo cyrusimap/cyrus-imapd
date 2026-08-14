@@ -1,0 +1,42 @@
+Description:
+
+JMAP Mailbox/set, Calendar/set, and AddressBook/set now reject a shareWith
+entry whose sharee is not a valid userid.  Previously any string was accepted
+and later appended to a filesystem path when recording that sharee's
+subscriptions, so a sharee holding path separators or traversal components
+could cause a file to be written outside the directory intended for it.
+
+
+CVE number:
+
+(not yet assigned)
+Tracked as GitHub security advisory GHSA-3525-275g-p67h.
+
+
+CVE description:
+
+JMAP sharing permits path traversal through a sharee userid
+
+An authenticated JMAP user could share a mailbox, calendar, or address book
+with a sharee that was not a valid userid, and cause the server to write a
+file outside the directory intended for it.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
