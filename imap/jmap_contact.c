@@ -178,22 +178,31 @@ HIDDEN void jmap_contact_capabilities(json_t *account_capabilities,
                                       const char *authuserid,
                                       const char *accountid)
 {
-    char *cardhomename = carddav_mboxname(accountid, NULL);
+    char *cardhomename = NULL;
     mbentry_t *mbentry = NULL;
-    int r = mboxlist_lookup(cardhomename, &mbentry, NULL);
-    if (r) {
-        /* An account that has never used contacts has no addressbook
-         * home, and the capability is simply left out. */
-        xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT ? LOG_DEBUG : LOG_ERR,
-                   "jmap.addressbook.home.lookup.failed",
-                   lf_s("jmap.accountid", accountid),
-                   lf_intname("mbox.name", cardhomename),
-                   lf_err("error", r));
-        goto done;
-    }
+    int rights;
+    bool is_main_account;
 
-    int rights = httpd_myrights(authstate, mbentry);
-    int is_main_account = !strcmpsafe(authuserid, accountid);
+    if (httpd_userisadmin) {
+        rights = ACL_ALL;
+        is_main_account = true;
+    }
+    else {
+        cardhomename = carddav_mboxname(accountid, NULL);
+        int r = mboxlist_lookup(cardhomename, &mbentry, NULL);
+        if (r) {
+            /* An account that has never used contacts has no addressbook
+             * home, and the capability is simply left out. */
+            xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT ? LOG_DEBUG : LOG_ERR,
+                       "jmap.addressbook.home.lookup.failed",
+                       lf_s("jmap.accountid", accountid),
+                       lf_intname("mbox.name", cardhomename),
+                       lf_err("error", r));
+            goto done;
+        }
+        rights = httpd_myrights(authstate, mbentry);
+        is_main_account = !strcmpsafe(authuserid, accountid);
+    }
 
     json_object_set_new(account_capabilities, JMAP_URN_CONTACTS,
                         json_pack("{s:i s:b}",
