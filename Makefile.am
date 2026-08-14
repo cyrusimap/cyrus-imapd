@@ -1343,7 +1343,9 @@ imap_httpd_SOURCES += \
     imap/jmap_util.c \
     imap/jmap_util.h \
     imap/jscalendar.c \
-    imap/jscalendar.h
+    imap/jscalendar.h \
+    imap/jscontact.c \
+    imap/jscontact.h
 
 imap_httpd_LDADD += imap/jmap_props/libcyrus_jmap_props.la
 noinst_LTLIBRARIES += imap/jmap_props/libcyrus_jmap_props.la
