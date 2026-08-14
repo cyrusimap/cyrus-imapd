@@ -1,0 +1,37 @@
+Description:
+
+Two JMAP operations that could add message data to a user's mailboxes without
+consulting the storage quota now enforce it.
+
+Email/copy now charges copied messages against the destination account's
+storage quota when the source and destination mailboxes are under different
+quota roots.  Previously, an authenticated JMAP user could bypass quota
+limits by copying mail from one account to another: the limits that applied
+when writing new mail were not applied to cross-account copies.
+
+EmailSubmission/set now charges the saved copy of an outgoing message against
+the submitting user's storage quota.  For a futurerelease submission that
+copy carries the full message body, so a user already at or over quota could
+schedule large sends and grow their usage without limit.
+
+Tracked as GitHub security advisory GHSA-m78h-pxc5-h7wp.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
