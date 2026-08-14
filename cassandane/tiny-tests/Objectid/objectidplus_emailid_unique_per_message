@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that different messages get different EMAILIDs
+#
+sub test_objectidplus_emailid_unique_per_message
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    $self->make_message("Message A");
+    $self->make_message("Message B");
+    $self->make_message("Message C");
+
+    $talk->select('INBOX');
+
+    my $fetch = $talk->fetch('1:3', '(emailid)');
+
+    my $eid1 = $fetch->{1}{emailid};
+    my $eid2 = $fetch->{2}{emailid};
+    my $eid3 = $fetch->{3}{emailid};
+
+    $self->assert_not_null($eid1);
+    $self->assert_not_null($eid2);
+    $self->assert_not_null($eid3);
+
+    # all EMAILIDs must be different
+    $self->assert_str_not_equals($eid1, $eid2);
+    $self->assert_str_not_equals($eid1, $eid3);
+    $self->assert_str_not_equals($eid2, $eid3);
+}
