@@ -45,7 +45,6 @@
 #include "times.h"
 #include "user.h"
 #include "util.h"
-#include "webdav_db.h"
 #include "xapian_wrap.h"
 #include "xmalloc.h"
 #include "xsha1.h"
@@ -12175,8 +12174,6 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
     json_t *jsevents_by_partid = json_object();
     struct jmapical_ctx *jmapctx = jmapical_context_new(req, NULL);
     struct buf buf = BUF_INITIALIZER;
-    struct buf rewritebufs[CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS];
-    memset(rewritebufs, 0, sizeof(struct buf) * CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS);
 
     hash_iter *hit = hash_table_iter(icsbody_by_partid);
     while (hash_iter_next(hit)) {
@@ -12221,34 +12218,6 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
             }
         }
 
-        if (icalcomponent_get_method(ical) != ICAL_METHOD_NONE) {
-            /* In-place rewrite BINARY ATTACH to managed attachment */
-            icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-            if (!comp) continue;
-            icalcomponent_kind kind = icalcomponent_isa(comp);
-            for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
-                icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
-                for ( ; prop; prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)) {
-
-                    icalvalue *icalval = icalproperty_get_value(prop);
-                    if (!icalval || icalvalue_isa(icalval) != ICAL_ATTACH_VALUE)
-                        continue;
-
-                    icalattach *attach = icalproperty_get_attach(prop);
-                    if (!attach || icalattach_get_is_url(attach))
-                        continue;
-
-                    if (!jmapical_context_open_attachments(jmapctx)) {
-                        caldav_rewrite_attachprop_to_url(jmapctx->attachments.db,
-                                prop, &jmapctx->attachments.url, rewritebufs);
-                        int j;
-                        for (j = 0; j < CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS; j++)
-                            buf_reset(&rewritebufs[j]);
-                    }
-                }
-            }
-        }
-
         /* Convert to Event */
         jmapctx->from_ical.cyrus_msg.mboxid = mboxid;
         jmapctx->from_ical.cyrus_msg.uid = uid;
@@ -12268,9 +12237,6 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
         jsevents_by_partid = json_null();
     }
 
-    int j;
-    for (j = 0; j < CALDAV_REWRITE_ATTACHPROP_TO_URL_NBUFS; j++)
-        buf_free(&rewritebufs[j]);
     buf_free(&buf);
     return jsevents_by_partid;
 }
