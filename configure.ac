@@ -1580,8 +1580,8 @@ dnl guesstz need.  Without it we build no time zone data, and an administrator
 dnl has to populate zoneinfo_dir by hand.
 dnl
 dnl vzic hard-codes TZID_PREFIX, CREATE_SYMLINK and IGNORE_TOP_LEVEL_LINK and
-dnl we cannot detect them here, so we assume it was built the way the TZDist
-dnl chapter of the docs requires.
+dnl we cannot detect them here.  The TZDist chapter of the docs says what the
+dnl build does about that.
 dnl
 dnl TODO Ask the vzic maintainers to make these settings runtime options.
 dnl

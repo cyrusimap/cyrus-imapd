@@ -212,6 +212,45 @@ static void test_open_missing(void)
     guesstz_close(&gtz);
 }
 
+/* A zoneinfo directory may name an alias with a symlink to the zone it
+ * aliases, and indexing one must not file that zone a second time. */
+static void test_symlinked_alias(void)
+{
+    char *alias = strconcat(zonedir, "/Europe/Berlin-alias.ics", (char *)NULL);
+    CU_ASSERT_EQUAL_FATAL(symlink("Berlin.ics", alias), 0);
+
+    char *path = strconcat(zonedir, "/aliased.db", (char *)NULL);
+    FILE *fp = fopen(path, "w");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
+    int r = guesstz_create(zonedir,
+                           icaltime_from_string(TRSTART),
+                           icaltime_from_string(TREND), fp);
+    fclose(fp);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    /* The database of the fixture without the symlink is our reference. */
+    guesstz_t *gtz = guesstz_open(dbpath);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+    char *want = guesstz_encode(gtz);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(want);
+    guesstz_close(&gtz);
+
+    gtz = guesstz_open(path);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+    char *have = guesstz_encode(gtz);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(have);
+    CU_ASSERT_STRING_EQUAL(have, want);
+
+    free(have);
+    free(want);
+    guesstz_close(&gtz);
+
+    /* Leave the fixture as we found it for the tests after this one. */
+    CU_ASSERT_EQUAL(unlink(alias), 0);
+    free(path);
+    free(alias);
+}
+
 /* The JSON dump round-trips the database header. */
 static void test_encode(void)
 {

@@ -531,6 +531,7 @@ dist_noinst_SCRIPTS = \
     perl/sieve/scripts/sieveshell.pl \
     tools/arbitronsort.pl \
     tools/fixsearchpath.pl \
+    tools/fixup-zoneinfo.pl \
     tools/git-version.sh \
     tools/gperf-build-prop-set.pl \
     tools/imapoptions.pl \
@@ -2126,10 +2127,13 @@ clean-local: clean-doc clean-sphinx-cache clean-docsrc clean-zoneinfo
 ## needs vzic; without it we build nothing here and an administrator has to
 ## populate zoneinfo_dir by hand -- see the TZDist chapter of the docs.
 ##
-## vzic writes some 600 files, so a stamp file stands in for them all.
+## vzic writes some 600 files, so a stamp file stands in for them all.  Some of
+## them may be symlinked aliases, which we install as symlinks, and all of them
+## go through fixup-zoneinfo.pl first.
 
 ZONEINFO_STAMP = zoneinfo/.stamp
-ZONEINFO_DEPS = $(top_srcdir)/tzdata/version
+ZONEINFO_FIXUP = $(top_srcdir)/tools/fixup-zoneinfo.pl
+ZONEINFO_DEPS = $(top_srcdir)/tzdata/version $(ZONEINFO_FIXUP)
 
 if HAVE_GUESSTZ
 ZONEINFO_DEPS += imap/cyr_guesstz
@@ -2143,6 +2147,7 @@ $(ZONEINFO_STAMP): $(ZONEINFO_DEPS)
 	$(AM_V_GEN)rm -rf zoneinfo
 	$(AM_V_at)$(VZIC) --pure --olson-dir $(top_srcdir)/tzdata \
 	    --output-dir zoneinfo
+	$(AM_V_at)$(PERL) $(ZONEINFO_FIXUP) zoneinfo
 	$(AM_V_at)cp $(top_srcdir)/tzdata/version zoneinfo/version
 if HAVE_GUESSTZ
 ## We run cyr_guesstz here to generate data, not to test it: an ASan build
@@ -2159,7 +2164,12 @@ install-data-local: $(ZONEINFO_STAMP)
 	cd zoneinfo \
 	    && find . -type d -exec $(MKDIR_P) $(DESTDIR)$(zoneinfodir)/{} \; \
 	    && find . -type f ! -name .stamp \
-	        -exec $(INSTALL_DATA) {} $(DESTDIR)$(zoneinfodir)/{} \;
+	        -exec $(INSTALL_DATA) {} $(DESTDIR)$(zoneinfodir)/{} \; \
+	    && find . -type l | while read -r link; do \
+	        target=`readlink "$$link"` || exit 1; \
+	        rm -f "$(DESTDIR)$(zoneinfodir)/$$link" || exit 1; \
+	        ln -s "$$target" "$(DESTDIR)$(zoneinfodir)/$$link" || exit 1; \
+	    done
 
 uninstall-local:
 	rm -rf $(DESTDIR)$(zoneinfodir)

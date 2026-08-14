@@ -371,19 +371,17 @@ Pass ``--with-vzic=PATH`` to ``configure`` if ``vzic`` is not on your
 .. note::
 
     ``vzic`` hard-codes three settings when it is itself compiled, and
-    ``configure`` cannot tell how the ``vzic`` it found was built.  Cyrus needs
-    it built with ``TZID_PREFIX="" CREATE_SYMLINK=0 IGNORE_TOP_LEVEL_LINK=0``:
+    ``configure`` cannot tell how the ``vzic`` it found was built:
 
     ``TZID_PREFIX``
         The vendor prefix ``vzic`` writes on every ``TZID``, ``/citadel.org/%D_1/``
-        by default.  Cyrus needs bare IANA names, and does not recognise a
-        prefixed one.
+        by default.  Cyrus needs bare IANA names, and the build strips any
+        prefix from the data it generates.
 
     ``CREATE_SYMLINK``
         Whether a time zone alias becomes a symlink to the zone it aliases
-        rather than a VTIMEZONE of its own.  ``make install`` installs the
-        files it finds, so an alias needs its own VTIMEZONE to be installed at
-        all.
+        rather than a VTIMEZONE of its own.  Either way works: Cyrus reads such
+        a symlink as an alias, and ``make install`` installs it as a symlink.
 
     ``IGNORE_TOP_LEVEL_LINK``
         Whether to skip the aliases that have no region, such as ``EST5EDT``.
@@ -436,8 +434,9 @@ with ``--without-vzic`` -- then populate :imapdconf:`zoneinfo_dir` by hand.
 
 `vzic <https://github.com/libical/vzic>`_ converts the IANA TZ DB to iCalendar
 format, writing a separate file with its own TZID property for each time zone.
-Build it with ``TZID_PREFIX="" CREATE_SYMLINK=0 IGNORE_TOP_LEVEL_LINK=0``, as
-:ref:`the note above <tzdist_vzic>` describes.
+Build it with ``TZID_PREFIX="" IGNORE_TOP_LEVEL_LINK=0``: nothing strips the
+vendor prefix for you here, since that is part of the build you just turned
+off.  See :ref:`the note above <tzdist_vzic>` for what these settings mean.
 
 The steps are:
 

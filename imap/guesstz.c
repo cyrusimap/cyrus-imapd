@@ -1149,7 +1149,7 @@ EXPORTED int guesstz_create(const char *zoneinfo_dir,
                    FILE *fp)
 {
     char *paths[2] = { (char *) zoneinfo_dir, NULL };
-    FTS *fts = fts_open(paths, 0, NULL);
+    FTS *fts = fts_open(paths, FTS_PHYSICAL, NULL);
     if (!fts) {
         fprintf(stderr, "fts_open(%s): %s\n", zoneinfo_dir, strerror(errno));
         return EX_IOERR;
@@ -1161,7 +1161,15 @@ EXPORTED int guesstz_create(const char *zoneinfo_dir,
     /* Process VTIMEZONEs */
     FTSENT *fe;
     while ((fe = fts_read(fts))) {
-        if (fe->fts_info != FTS_F && fe->fts_info != FTS_SL) {
+        /* Skip symlinks.  A zoneinfo directory may name a time zone alias
+         * with a link to the zone it aliases, and we index that zone by its
+         * own file already.
+         *
+         * TODO An alias that has a file of its own still enters the database
+         * under its own TZID, so a guess may name an alias rather than the
+         * canonical zone.  Skip the VTIMEZONEs that carry TZID-ALIAS-OF as
+         * well. */
+        if (fe->fts_info != FTS_F) {
             continue;
         }
         /* Only look at VTIMEZONEs.  A zoneinfo directory also holds the IANA
