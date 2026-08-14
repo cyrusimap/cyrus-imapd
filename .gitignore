@@ -92,6 +92,7 @@ imap/cyr_dbtool
 imap/cyr_deny
 imap/cyr_df
 imap/cyr_expire
+imap/cyr_guesstz
 imap/cyr_info
 imap/cyr_ls
 imap/cyr_pwd

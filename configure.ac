@@ -1369,19 +1369,18 @@ AS_IF([test "x$with_cld2" = "xyes"],
 AM_CONDITIONAL([HAVE_CLD2], [test "x$with_cld2" = xyes])
 
 dnl
-dnl Check for guesstz library
+dnl see if we're building the guesstz library
+dnl
+dnl guesstz used to be a separate package (cyrus-timezones) that we found with
+dnl pkg-config.  It now lives in imap/ and needs nothing that a --enable-http
+dnl build doesn't already require, so this is a plain feature switch.
 dnl
 AC_ARG_WITH([guesstz],
-       [AS_HELP_STRING([--without-guesstz], [ignore presence of guesstz library and disable it])],
+       [AS_HELP_STRING([--without-guesstz], [disable guessing IANA timezone names from VTIMEZONE])],
     [],
     [with_guesstz=yes])
 AS_IF([test "x$with_guesstz" = "xyes"],
-       [ PKG_CHECK_MODULES([GUESSTZ], [guesstz],
-               [ AC_DEFINE(HAVE_GUESSTZ, [], [Build with guesstz library support])
-                 with_guesstz=yes ],
-          with_guesstz=no)])
-AC_SUBST([GUESSTZ_LIBS])
-AC_SUBST([GUESSTZ_CFLAGS])
+      [AC_DEFINE(HAVE_GUESSTZ, [], [Build with guesstz library support])])
 AM_CONDITIONAL([HAVE_GUESSTZ], [test "x$with_guesstz" = xyes])
 
 dnl

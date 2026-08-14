@@ -277,6 +277,10 @@ sbin_PROGRAMS += \
     imap/ctl_zoneinfo \
     imap/dav_reconstruct
 
+if HAVE_GUESSTZ
+sbin_PROGRAMS += imap/cyr_guesstz
+endif # HAVE_GUESSTZ
+
 if REPLICATION
 libexec_PROGRAMS += imap/sync_server
 sbin_PROGRAMS += imap/sync_client imap/sync_reset
@@ -491,7 +495,8 @@ EXTRA_DIST = \
     sieve/tests/actionExtensions/serverm/ueamail-vacation \
     timsieved/TODO \
     tools/mkimap.in \
-    tools/rehash.in
+    tools/rehash.in \
+    tzdata
 
 IMAPOPTIONS_LIBS = \
     tools/lib/Cyrus/IMAPOptions/AllowedValues.pm \
@@ -520,7 +525,8 @@ dist_noinst_SCRIPTS = \
     tools/masssievec \
     tools/mknewsgroups \
     tools/perl2rst \
-    tools/translatesieve
+    tools/translatesieve \
+    tools/update-tzdata.sh
 noinst_MAN = \
     com_err/et/com_err.3 \
     com_err/et/compile_et.1
@@ -590,12 +596,6 @@ if USE_JANSSON
 AM_LDFLAGS += $(JANSSON_LIBS)
 AM_CPPFLAGS += $(JANSSON_CFLAGS)
 LD_SERVER_ADD += $(JANSSON_LIBS)
-endif
-
-if HAVE_GUESSTZ
-AM_LDFLAGS += $(GUESSTZ_LIBS)
-AM_CPPFLAGS += $(GUESSTZ_CFLAGS)
-LD_SERVER_ADD += $(GUESSTZ_LIBS)
 endif
 
 cunit_FRAMEWORK = \
@@ -669,6 +669,10 @@ cunit_TESTS = \
 if SIEVE
 cunit_TESTS += cunit/sieve.testc
 endif
+
+if HAVE_GUESSTZ
+cunit_TESTS += cunit/guesstz.testc
+endif # HAVE_GUESSTZ
 
 cunit_TESTS += \
     cunit/spool.testc \
@@ -879,6 +883,11 @@ imap_cyr_withlock_run_LDADD = $(LD_UTILITY_ADD)
 imap_cyr_expire_SOURCES = imap/cli_fatal.c imap/cyr_expire.c imap/mutex_fake.c
 imap_cyr_expire_LDADD = $(LD_UTILITY_ADD)
 
+if HAVE_GUESSTZ
+imap_cyr_guesstz_SOURCES = imap/cli_fatal.c imap/cyr_guesstz.c imap/mutex_fake.c
+imap_cyr_guesstz_LDADD = $(LD_UTILITY_ADD)
+endif # HAVE_GUESSTZ
+
 imap_cyr_info_SOURCES = imap/cli_fatal.c imap/cyr_info.c imap/mutex_fake.c master/masterconf.c
 imap_cyr_info_LDADD = $(LD_UTILITY_ADD)
 
@@ -1087,6 +1096,12 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/version.h \
     imap/webdav_db.c \
     imap/webdav_db.h
+
+if HAVE_GUESSTZ
+imap_libcyrus_imap_la_SOURCES += \
+    imap/guesstz.c \
+    imap/guesstz.h
+endif # HAVE_GUESSTZ
 
 if SIEVE
 imap_libcyrus_imap_la_SOURCES += \
@@ -1746,6 +1761,10 @@ dist_man8_MANS = \
     man/timsieved.8 \
     man/tls_prune.8 \
     man/unexpunge.8
+
+if HAVE_GUESSTZ
+dist_man8_MANS += man/cyr_guesstz.8
+endif # HAVE_GUESSTZ
 
 if BENCH
 noinst_PROGRAMS += bench/cyrdbbench
