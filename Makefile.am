@@ -1278,6 +1278,8 @@ JMAP_PROPS_BUILT_SOURCES = \
     imap/jmap_props/calendar_event_notification.h \
     imap/jmap_props/contact_card.c \
     imap/jmap_props/contact_card.h \
+    imap/jmap_props/account.c \
+    imap/jmap_props/account.h \
     imap/jmap_props/email.c \
     imap/jmap_props/email.h \
     imap/jmap_props/email_submission.c \
@@ -1315,6 +1317,7 @@ imap_httpd_SOURCES += \
     imap/defaultalarms.h \
     imap/http_jmap.c \
     imap/http_jmap.h \
+    imap/jmap_admin.c \
     imap/jmap_api.c \
     imap/jmap_api.h \
     imap/jmap_backup.c \
@@ -1359,6 +1362,7 @@ imap_jmap_props_libcyrus_jmap_props_la_SOURCES = \
     imap/jmap_props/calendar_event.gperf \
     imap/jmap_props/calendar_event_notification.gperf \
     imap/jmap_props/contact_card.gperf \
+    imap/jmap_props/account.gperf \
     imap/jmap_props/email.gperf \
     imap/jmap_props/email_submission.gperf \
     imap/jmap_props/identity.gperf \

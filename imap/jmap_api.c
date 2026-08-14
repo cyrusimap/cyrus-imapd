@@ -494,24 +494,35 @@ static json_t *lookup_capabilities(const char *accountid,
                                    hash_table *mboxrights)
 {
     // we need to know if we can write children of the inbox
-    mbentry_t *inboxentry = NULL;
+    bool mayCreateTopLevel;
+    json_t *capas = NULL;
 
-    char *inboxname = mboxname_user_mbox(accountid, NULL);
-    if (mboxlist_lookup(inboxname, &inboxentry, NULL)) {
-        free(inboxname);
-        return json_null();
+    if (httpd_userisadmin) {
+        capas = json_object();
+        jmap_admin_capabilities(capas);
+        mayCreateTopLevel = true;
     }
-    free(inboxname);
+    else {
+        mbentry_t *inboxentry = NULL;
 
-    int inboxrights = _rights_for_mbentry(authstate, inboxentry, mboxrights);
-    mboxlist_entry_free(&inboxentry);
+        char *inboxname = mboxname_user_mbox(accountid, NULL);
+        if (mboxlist_lookup(inboxname, &inboxentry, NULL)) {
+            free(inboxname);
+            return json_null();
+        }
+        free(inboxname);
 
-    json_t *capas = json_object();
+        int inboxrights = _rights_for_mbentry(authstate, inboxentry, mboxrights);
+        mboxlist_entry_free(&inboxentry);
 
-    int mayCreateTopLevel = (inboxrights & JACL_CREATECHILD) ? 1 : 0;
+        capas = json_object();
 
-    if (!strcmp(authuserid, accountid)) {
-        /* Primary account has all capabilities */
+        mayCreateTopLevel = (inboxrights & JACL_CREATECHILD) ? 1 : 0;
+    }
+
+
+    if (httpd_userisadmin || !strcmp(authuserid, accountid)) {
+        /* Admins and primary account have all capabilities */
         jmap_core_capabilities(capas);
         jmap_blob_capabilities(capas);
         jmap_quota_capabilities(capas);
@@ -526,6 +537,8 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_sieve_capabilities(capas);
         jmap_vacation_capabilities(capas);
 #endif
+        if (httpd_userisadmin)
+            jmap_admin_capabilities(capas);
     }
     else {
         /* Lookup capabilities for shared account */
@@ -754,7 +767,8 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         jmap_initreq(&req);
 
         req.method = mname;
-        req.userid = httpd_userid;
+        /* Admins proxy as accountid */
+        req.userid = httpd_userisadmin ? accountid : httpd_userid;
         req.accountid = accountid;
         req.cstate = cstate;
         req.authstate = httpd_authstate;
@@ -994,6 +1008,8 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     json_object_set(primary_accounts, JMAP_SIEVE_EXTENSION, jprimary);
 #endif
     json_object_set(primary_accounts, JMAP_URN_PRINCIPALS, jprimary);
+    if (httpd_userisadmin)
+        json_object_set(primary_accounts, JMAP_ADMIN_EXTENSION, jprimary);
     json_decref(jprimary);
 
     /* Clean up */
@@ -1757,7 +1773,7 @@ HIDDEN json_t *jmap_get_reply(struct jmap_get *get)
 
 /* Foo/set */
 
-static bool jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *jobj,
+HIDDEN bool jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *jobj,
                                     const jmap_property_set_t *valid_props,
                                     json_t **err)
 {
