@@ -10,8 +10,8 @@
 #include "dav_util.h"
 #include "caldav_util.h"
 #include "httpd.h"
-#include "jmap_ical.h"
 #include "jmap_notif.h"
+#include "jmap_util.h"
 #include "jscalendar.h"
 #include "spool.h"
 #include "strhash.h"
@@ -404,8 +404,8 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
     }
     if (!jevent) goto done;
 
-    jmapical_remove_peruserprops(jevent);
-    jmapical_remove_peruserprops(jpatch);
+    jmap_calendarevent_remove_peruserprops(jevent);
+    jmap_calendarevent_remove_peruserprops(jpatch);
 
     /* Determine who triggered that event notification */
     struct buf byname = BUF_INITIALIZER;

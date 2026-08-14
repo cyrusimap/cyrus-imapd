@@ -40,7 +40,6 @@
 #include "http_proxy.h"
 #include "index.h"
 #include "ical_support.h"
-#include "jmap_ical.h"
 #include "jmap_notif.h"
 #include "jcal.h"
 #include "xcal.h"
@@ -4271,8 +4270,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 icalproperty_add_parameter(orga, icalparameter_new_sentby(sentby));
             }
 
-            // XXX set legacy extension property until jmap_ical.c is removed
-            // Remove any stale SENT-BY properties
+            // XXX also set the legacy X-property, superseded by the
+            // SENT-BY parameter above. Remove any stale ones first.
             while ((prop = icalcomponent_get_x_property_by_name(comp,
                             JMAPICAL_XPROP_SENTBY))) {
                 icalcomponent_remove_property(comp, prop);

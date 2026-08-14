@@ -23,7 +23,6 @@
 #include "xsha1.h"
 
 #ifdef WITH_JMAP
-#include "jmap_ical.h"
 #endif
 
 #include "imap/imap_err.h"

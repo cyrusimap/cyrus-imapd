@@ -24,7 +24,6 @@
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "ical_support.h"
-#include "jmap_ical.h"
 #include "jmap_util.h"
 #include "jscalendar.h"
 #include "msgrecord.h"

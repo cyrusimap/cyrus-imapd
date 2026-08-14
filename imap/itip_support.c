@@ -14,7 +14,6 @@
 #include "http_dav.h"
 #include "httpd.h"
 #include "ical_support.h"
-#include "jmap_ical.h"
 #include "jmap_notif.h"
 
 /* generated headers are not necessarily in current directory */
@@ -1487,8 +1486,8 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                 icalproperty_add_parameter(orga, icalparameter_new_sentby(val));
             }
 
-            // XXX set legacy extension property until jmap_ical.c is removed
-            // Remove any stale SENT-BY properties
+            // XXX also set the legacy X-property, superseded by the
+            // SENT-BY parameter above. Remove any stale ones first.
             while ((prop = icalcomponent_get_x_property_by_name(comp,
                             JMAPICAL_XPROP_SENTBY))) {
                 icalcomponent_remove_property(comp, prop);
