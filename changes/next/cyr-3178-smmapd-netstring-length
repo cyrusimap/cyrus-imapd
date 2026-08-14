@@ -1,0 +1,32 @@
+Description:
+
+The smmapd service now rejects a request whose netstring length is negative
+or larger than the maximum request size, answering with a protocol error
+instead of reading the request.  Previously the length was accepted up to the
+limit of a 32-bit signed integer and then used as the number of bytes to read
+into a fixed 1024-byte buffer on the stack, overflowing it.  smmapd is only
+present where an administrator has configured it as a service, and it performs
+no authentication of its own: it is intended to be reachable only from trusted
+hosts, which is the boundary that protects it.
+
+Tracked as GitHub security advisory GHSA-h85c-8j84-p3w5.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
