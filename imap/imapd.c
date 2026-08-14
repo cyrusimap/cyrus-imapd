@@ -6220,7 +6220,7 @@ static void cmd_search(const char *tag, const char *cmd)
         break;
     }
 
-    /* RFC 9855, Section 3: MUST reject SEARCH with a charset specification */ 
+    /* RFC 9755, Section 3: MUST reject SEARCH with a charset specification */
     if (!(client_capa & CAPA_UTF8_ACCEPT)) {
         state |= GETSEARCH_CHARSET_KEYWORD;
     }
@@ -8101,7 +8101,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
         rock.newuser = newuser;
         rock.partition = location;
         rock.rename_user = rename_user;
-            rock.noisy = noisy;
+        rock.noisy = noisy;
 
         /* Check mboxnames to ensure we can write them all BEFORE we start */
         r = mboxlist_allmbox(ombn, checkmboxname, &rock, 0);

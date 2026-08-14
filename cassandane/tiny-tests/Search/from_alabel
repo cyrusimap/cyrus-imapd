@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_from_alabel
+    :want_deliver :min_version_3_13
+    ($self)
+{
+    xlog $self, "test that the cache holds u-labels, not punycode";
+
+    # Punycode is for the DNS, so a message from xn--gr-zia.org is
+    # cached, reported and searched as grå.org. Note that both
+    # messages are pure ASCII on the wire: the a-label is what the
+    # sender wrote, and the u-label is what we make of it.
+
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(
+        subject => "IDN sender",
+        from => Cassandane::Address->new(
+            name => "Arnt",
+            localpart => "arnt",
+            domain => "xn--gr-zia.org"));
+    $msgs{2} = $self->{gen}->generate(
+        subject => "Sender with a broken a-label",
+        from => Cassandane::Address->new(
+            name => "Info",
+            localpart => "info",
+            domain => "xn--zz.example.com"));
+
+    xlog $self, "deliver the messages over LMTP";
+    $self->{instance}->deliver($msgs{1});
+    $self->{instance}->deliver($msgs{2});
+
+    my $talk = $self->{store}->get_client();
+    $talk->select('INBOX');
+
+    xlog $self, "FETCH ENVELOPE reports the u-label";
+    my $res = $talk->fetch('1:2', 'envelope')
+        or die "Cannot fetch: $@";
+    $self->assert_str_equals('grå.org',
+                             $res->{1}->{envelope}->{'From-Raw'}->[0]->[3]);
+
+    xlog $self, "an a-label that isn't valid punycode is kept as it came";
+    $self->assert_str_equals('xn--zz.example.com',
+                             $res->{2}->{envelope}->{'From-Raw'}->[0]->[3]);
+
+    xlog $self, "SEARCH FROM finds the u-label";
+    my $uids = $talk->search('charset', 'utf-8', 'from', { Quote => 'grå.org' })
+        or die "Cannot search: $@";
+    $self->assert_deep_equals([1], $uids);
+
+    xlog $self, "and the a-label, which is not what we store, finds nothing";
+    $uids = $talk->search('charset', 'utf-8', 'from',
+                          { Quote => 'xn--gr-zia.org' })
+        or die "Cannot search: $@";
+    $self->assert_deep_equals([], $uids);
+
+    xlog $self, "the undecodable a-label is searchable as it came";
+    $uids = $talk->search('charset', 'utf-8', 'from',
+                          { Quote => 'xn--zz.example.com' })
+        or die "Cannot search: $@";
+    $self->assert_deep_equals([2], $uids);
+}

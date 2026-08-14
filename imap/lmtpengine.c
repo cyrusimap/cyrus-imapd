@@ -401,7 +401,6 @@ static char *parseautheq(char **strp)
 static char *parseaddr(char *s)
 {
     char *p;
-    int lmtp_strict_rfc2821 = config_getswitch(IMAPOPT_LMTP_STRICT_RFC2821);
 
     p = s;
 
@@ -439,15 +438,9 @@ static char *parseaddr(char *s)
             if (*p == '\\') {
                 if (!*++p) return 0;
             }
-            else {
-                if (*p & 128 && !lmtp_strict_rfc2821) {
-                    /* this prevents us from becoming a backscatter
-                       source if our MTA allows 8bit in local-part
-                       of addresses. */
-                    *p = 'X';
-                }
-                if (*p <= ' ' || (*p & 128) ||
-                    strchr("<>()[]\\,;:\"", *p)) return 0;
+            else if ((*(unsigned char *)p <= ' ' && *p) ||
+                     strchr("<>()[]\\,;:\"", *p)) {
+                return 0;
             }
             p++;
         }
@@ -462,7 +455,8 @@ static char *parseaddr(char *s)
             if (*p++ != ']') return 0;
         }
         else {
-            while (Uisalnum(*p) || *p == '.' || *p == '-') p++;
+            while (Uisalnum(*p) || *p == '.' || *p == '-' ||
+                   *(unsigned char *)p >= 128) p++;
         }
     }
 
@@ -1161,6 +1155,7 @@ void lmtpmode(struct lmtp_func *func,
 
               prot_printf(pout, "250-%s\r\n"
                                 "250-8BITMIME\r\n"
+                                "250-SMTPUTF8\r\n"
                                 "250-ENHANCEDSTATUSCODES\r\n"
                                 "250-PIPELINING\r\n"
                                 "250-SIZE %" PRIu64 "\r\n",
@@ -1251,6 +1246,11 @@ void lmtpmode(struct lmtp_func *func,
                         break;
 
                     case 's': case 'S':
+                        if (strncasecmp(tmp, "smtputf8", 8) == 0) {
+                            tmp += 8;
+                            break;
+                        }
+
                         if (strncasecmp(tmp, "size=", 5) != 0) {
                             goto badparam;
                         }

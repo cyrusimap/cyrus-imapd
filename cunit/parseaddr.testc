@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include "cunit/unit.h"
 #include "parseaddr.h"
 
@@ -378,6 +379,116 @@ static void test_utf8_domain(void)
     CU_ASSERT_STRING_EQUAL(a->mailbox, "jb");
     CU_ASSERT_STRING_EQUAL(a->domain, "julián.example.com");
     CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+}
+
+static void test_alabel_domain(void)
+{
+    struct address *a;
+
+    /* Punycode is for the DNS. What we store, and what anyone above
+     * us sees, is the u-label, so that a search for grå.org finds
+     * this. */
+
+    a = NULL;
+    parseaddr_list("Arnt <arnt@xn--gr-zia.org>", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_STRING_EQUAL(a->name, "Arnt");
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "arnt");
+    CU_ASSERT_STRING_EQUAL(a->domain, "grå.org");
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+
+    /* every label, not just the first */
+
+    a = NULL;
+    parseaddr_list("info@xn--fsqu00a.xn--fiqs8s", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "info");
+    CU_ASSERT_STRING_EQUAL(a->domain, "例子.中国");
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+
+    /* a comment makes the output lag behind the input */
+
+    a = NULL;
+    parseaddr_list("\"Gøril\" (at home) <gøril@xn--gr-zia.org>", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_STRING_EQUAL(a->name, "Gøril");
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "gøril");
+    CU_ASSERT_STRING_EQUAL(a->domain, "grå.org");
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+}
+
+static void test_alabel_domain_grows(void)
+{
+    struct address *a;
+    const char *alabels = "xn--p1b6ci4b4b3a.xn--h2brj9c";
+    const char *ulabels = "उदाहरण.भारत";
+
+    /* The u-label is usually shorter than the a-label, but not
+     * always, and the parse happens in place. Devanagari is one of
+     * the cases that grows, so the address after it must survive the
+     * domain being rewritten. */
+
+    CU_ASSERT(strlen(ulabels) > strlen(alabels));
+
+    a = NULL;
+    parseaddr_list("उदाहरण@xn--p1b6ci4b4b3a.xn--h2brj9c, "
+                   "Gøril <goril@example.com>", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_PTR_NULL(a->name);
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "उदाहरण");
+    CU_ASSERT_STRING_EQUAL(a->domain, "उदाहरण.भारत");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a->next);
+
+    CU_ASSERT_STRING_EQUAL(a->next->name, "Gøril");
+    CU_ASSERT_STRING_EQUAL(a->next->mailbox, "goril");
+    CU_ASSERT_STRING_EQUAL(a->next->domain, "example.com");
+    CU_ASSERT_PTR_NULL(a->next->next);
+
+    parseaddr_free(a);
+}
+
+static void test_bad_alabel_domain(void)
+{
+    struct address *a;
+
+    /* An xn-- label that isn't valid punycode is best passed on as it
+     * arrived. */
+
+    a = NULL;
+    parseaddr_list("arnt@xn--.org", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "arnt");
+    CU_ASSERT_STRING_EQUAL(a->domain, "xn--.org");
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+
+    a = NULL;
+    parseaddr_list("arnt@xn--a.org", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "arnt");
+    CU_ASSERT_STRING_EQUAL(a->domain, "xn--a.org");
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+
+    /* ... and one bad label doesn't break the good ones */
+
+    a = NULL;
+    parseaddr_list("arnt@xn--gr-zia.org, info@xn--zz.example.com", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_STRING_EQUAL(a->domain, "grå.org");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a->next);
+    CU_ASSERT_STRING_EQUAL(a->next->domain, "xn--zz.example.com");
+    CU_ASSERT_PTR_NULL(a->next->next);
 
     parseaddr_free(a);
 }

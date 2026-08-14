@@ -8,6 +8,8 @@
 #include <string.h>
 
 #include "parseaddr.h"
+#include "charset.h"
+#include "stristr.h"
 #include "xmalloc.h"
 #include "util.h"
 
@@ -23,7 +25,8 @@ static int parseaddr_phrase(char **inp,
 static int parseaddr_domain(char **inp,
                             const char **domainp,
                             const char **commmentp,
-                            int *invalid);
+                            int *invalid,
+                            const char *bufend);
 static int parseaddr_route(char **inp, const char **routep);
 
 /*
@@ -35,7 +38,9 @@ EXPORTED void parseaddr_list(const char *str, struct address **addrp)
     char *s;
     int ingroup = 0;
     char *freeme;
+    const char *bufend;
     int tok = ' ', invalid = 0;
+    size_t len, size;
     const char *phrase, *route, *mailbox, *domain, *comment;
 
     /* Skip down to the tail */
@@ -43,7 +48,15 @@ EXPORTED void parseaddr_list(const char *str, struct address **addrp)
         addrp = &(*addrp)->next;
     }
 
-    s = freeme = xstrdup(str);
+    /* The parse happens in place, so an a-label that turns into a
+       longer u-label needs room to grow even if it very seldom grows.
+       See the comment in parseaddr_to_ulabels. */
+    len = strlen(str);
+    size = stristr(str, "xn--") ? 4 * len + 1 : len + 1;
+    freeme = xmalloc(size);
+    memcpy(freeme, str, len + 1);
+    s = freeme;
+    bufend = freeme + size;
 
     while (tok) {
         tok = parseaddr_phrase(&s, &phrase, ingroup ? ",@<;" : ",@<:");
@@ -66,7 +79,7 @@ EXPORTED void parseaddr_list(const char *str, struct address **addrp)
             continue;
 
         case '@':
-            tok = parseaddr_domain(&s, &domain, &comment, &invalid);
+            tok = parseaddr_domain(&s, &domain, &comment, &invalid, bufend);
             parseaddr_append(&addrp, comment, 0, phrase, domain, &freeme, invalid);
             if (tok == ';') {
                 parseaddr_append(&addrp, 0, 0, 0, 0, &freeme, invalid);
@@ -93,7 +106,7 @@ EXPORTED void parseaddr_list(const char *str, struct address **addrp)
                         continue;
                     }
                 }
-                tok = parseaddr_domain(&s, &domain, 0, &invalid);
+                tok = parseaddr_domain(&s, &domain, 0, &invalid, bufend);
                 parseaddr_append(&addrp, phrase, route, mailbox, domain,
                                  &freeme, invalid);
                 while (tok && tok != '>') tok = *s++;
@@ -264,6 +277,58 @@ fail:
     return 0;
 }
 
+/* Does any label of 'domain' look like an a-label? */
+static int parseaddr_has_alabel(const char *domain)
+{
+    while (domain) {
+        if (!strncasecmp(domain, "xn--", 4)) return 1;
+        domain = strchr(domain, '.');
+        if (domain) domain++;
+    }
+    return 0;
+}
+
+/*
+ * Convert the a-labels of the parsed, NUL-terminated 'domain' to
+ * u-labels, in place. Punycode belongs in the DNS; everything above
+ * this stores and shows the u-label, so that a search for grå.org
+ * finds mail from xn--gr-zia.org.
+ *
+ * A domain that ICU won't decode is left exactly as it arrived, and so
+ * is stored that way. This isn't ideal, but I don't see any better way to
+ * handle errors like example@xn--zz.example.com.
+ */
+static void parseaddr_to_ulabels(char *domain, char **tailp,
+                                 const char *bufend)
+{
+    char *tail = *tailp;
+    char *utf8;
+    size_t need, taillen;
+
+    if (!parseaddr_has_alabel(domain)) return;
+
+    utf8 = charset_idna_to_utf8(domain);
+    if (!utf8) return;
+
+    /* The u-label form may be longer than the a-label form, in which
+       case the not yet parsed remainder has to move out of the way. */
+    need = strlen(utf8);
+    if (domain + need >= tail) {
+        size_t extra = domain + need + 1 - tail;
+        taillen = strlen(tail);
+        if (tail + taillen + 1 + extra > bufend) {
+            /* parseaddr_list() sizes the buffer so this cannot happen */
+            free(utf8);
+            return;
+        }
+        memmove(tail + extra, tail, taillen + 1);
+        *tailp = tail + extra;
+    }
+
+    memcpy(domain, utf8, need + 1);
+    free(utf8);
+}
+
 /*
  * Parse a domain.  If 'commentp' is non-nil, parses any trailing comment.
  * If the domain is invalid, set invalid to non-zero.
@@ -271,7 +336,8 @@ fail:
 static int parseaddr_domain(char **inp,
                             const char **domainp,
                             const char **commentp,
-                            int *invalid)
+                            int *invalid,
+                            const char *bufend)
 {
     u_char c;
     char *src = *inp;
@@ -321,8 +387,17 @@ static int parseaddr_domain(char **inp,
             if (commentp) *commentp = 0;
         }
         else if (!Uisspace(c)) {
+            char *tail;
+
             if (dst > *domainp && dst[-1] == '.') dst--;
             *dst = '\0';
+
+            /* src has stepped past the terminating character, which at
+               the end of the string is the NUL, with nothing after. */
+            tail = c ? src : src - 1;
+            parseaddr_to_ulabels((char *) *domainp, &tail, bufend);
+            src = tail;
+
             *inp = src;
             return c;
         }

@@ -1908,7 +1908,9 @@ EXPORTED int mboxname_policycheck(const char *name)
             name++;             /* Skip over terminating '-' */
         }
         else {
-            if (!(strchr(GOODCHARS, *name) || (hasdom && *name == '!')))
+            if (!(strchr(GOODCHARS, *name) ||
+                  *(unsigned char *)name >= 128 ||
+                  (hasdom && *name == '!')))
                 return IMAP_MAILBOX_BADNAME;
             name++;
             sawutf7 = 0;
