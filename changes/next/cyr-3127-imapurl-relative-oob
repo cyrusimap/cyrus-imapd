@@ -1,0 +1,27 @@
+Description:
+
+Parsing a relative IMAP URL that begins with ";" -- one whose mailbox part is
+empty -- no longer looks at the byte before the start of the URL.  Previously
+that byte was read, and overwritten if it happened to be "/".
+
+Tracked as GitHub security advisory GHSA-wv9j-8jcc-3pvv.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
