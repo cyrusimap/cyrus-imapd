@@ -1,0 +1,28 @@
+Description:
+
+Fixed an off-by-one in the bounds check that reinserts the "magic plus" suffix
+into a canonicalized username, which failed to account for the trailing NUL.
+This was reachable only with :imapdconf:`imapmagicplus` (imapd) or
+:imapdconf:`popsubfolders` (pop3d) enabled, both of which default to off.
+
+Tracked as GitHub security advisory GHSA-m586-8hm8-vq2x.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
