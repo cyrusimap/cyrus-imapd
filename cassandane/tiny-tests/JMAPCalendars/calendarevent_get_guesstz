@@ -267,6 +267,46 @@ sub test_calendarevent_get_guesstz_custom_tzid_guess_gmt
     );
 }
 
+sub test_calendarevent_get_guesstz_custom_tzid_empty_rrule
+    :needs_dependency_guesstz
+    ($self)
+{
+    assert_guesstz($self, <<~EOF
+        BEGIN:VCALENDAR
+        PRODID: -//xxx//yyy//EN
+        VERSION:2.0
+        BEGIN:VTIMEZONE
+        TZID:AEST
+        BEGIN:DAYLIGHT
+        TZOFFSETFROM:+1000
+        TZOFFSETTO:+1100
+        DTSTART:20191004T020000
+        RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+        END:DAYLIGHT
+        BEGIN:STANDARD
+        TZOFFSETFROM:+1100
+        TZOFFSETTO:+1000
+        DTSTART:20190403T020000
+        RRULE:
+        END:STANDARD
+        END:VTIMEZONE
+        BEGIN:VEVENT
+        UID:DFA12F38-1910-4979-9ECA-F42A1BD1FDEF
+        DTSTAMP:20201226T180609Z
+        DTSTART;TZID=AEST:20190421T110000
+        DURATION:PT1H
+        SUMMARY:test
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+        ,
+        superhashof({
+            start => '2019-04-21T11:00:00',
+            timeZone => 'Australia/Melbourne',
+        })
+    );
+}
+
 sub test_calendarevent_get_guesstz_custom_tzid_unguessable
     :needs_dependency_guesstz
     ($self)
