@@ -3886,6 +3886,7 @@ static int catenate_text(const char *tag, FILE *f, size_t maxsize,
     int c;
     static struct buf arg;
     unsigned size = 0;
+    unsigned literal_size;
     char buf[4096+1];
     unsigned n;
     int r;
@@ -3896,6 +3897,8 @@ static int catenate_text(const char *tag, FILE *f, size_t maxsize,
     r = getliteralsize(tag, arg.s, c, maxsize - *totalsize,
                        &size, binary, parseerr);
     if (r) return r;
+
+    literal_size = size;
 
     /* Catenate message part to stage */
     while (size) {
@@ -3918,7 +3921,7 @@ static int catenate_text(const char *tag, FILE *f, size_t maxsize,
         if (f) fwrite(buf, n, 1, f);
     }
 
-    *totalsize += size;
+    *totalsize += literal_size;
 
     return r;
 }
