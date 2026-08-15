@@ -10661,6 +10661,14 @@ static int apply_mailbox_array(annotate_state_t *state,
         if (r)
             break;
 
+        if (!imapd_userisadmin
+            && (!mbentry->acl
+                || !(cyrus_acl_myrights(imapd_authstate, mbentry->acl)
+                     & ACL_LOOKUP))) {
+            r = IMAP_MAILBOX_NONEXISTENT;
+            break;
+        }
+
         mbentry->ext_name = xstrdup(extname);
 
         r = annotate_state_set_mailbox_mbe(state, mbentry);

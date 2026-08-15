@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+# GETMETADATA in the "list of mailboxes" form should not leak whether any given
+# mailbox exists but is not readable.
+sub test_getmetadata_acl_check
+    :NoAltNamespace
+    ($self)
+{
+    $self->{instance}->create_user("otheruser");
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user.otheruser.Job-Search')
+        or die "create Job-Search: " . $admintalk->get_last_error();
+
+    my $talk = $self->{store}->get_client();
+
+    # Precondition: cassandane sees neither name via LIST, regardless of
+    # whether the mailbox is real.  Both should be opaque from the
+    # outside.
+    my $existing = 'user.otheruser.Job-Search';   # real but hidden from cassandane
+    my $missing  = 'user.otheruser.Finance';      # fabricated guess
+
+    my $entry = '/shared/comment';
+
+    # Handing IMAPTalk an arrayref will trigger the paren-list-of-mailboxes
+    # form.
+    $talk->getmetadata([$existing], $entry);
+    my $resp_existing = $talk->get_last_completion_response();
+
+    $talk->getmetadata([$missing], $entry);
+    my $resp_missing = $talk->get_last_completion_response();
+
+    # The two responses must be indistinguishable.
+    $self->assert_str_equals($resp_missing, $resp_existing,
+        "GETMETADATA must not distinguish hidden mailboxes from "
+      . "nonexistent ones: existing=$resp_existing missing=$resp_missing");
+
+    $self->assert_str_equals('no', $resp_existing,
+        "GETMETADATA on an inaccessible mailbox must respond NO "
+      . "(got $resp_existing)");
+}
