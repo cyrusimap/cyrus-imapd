@@ -2047,6 +2047,11 @@ sub deliver
         push(@cmd, '--trace-id', $params{trace_id});
     }
 
+    if (defined $params{auth_id})
+    {
+        push(@cmd, '-a', $params{auth_id});
+    }
+
     my @users;
     if (defined $params{users})
     {

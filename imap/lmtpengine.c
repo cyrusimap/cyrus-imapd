@@ -356,9 +356,9 @@ static char *parseautheq(char **strp)
             for (lup=0;lup<2;lup++)
             {
                 if ((*s>='0') && (*s<='9'))
-                    (*str) = (*str) & (*s - '0');
+                    (*str) = (*str) | (*s - '0');
                 else if ((*s>='A') && (*s<='F'))
-                    (*str) = (*str) & (*s - 'A' + 10);
+                    (*str) = (*str) | (*s - 'A' + 10);
                 else {
                     free(ret);
                     *strp = s;
