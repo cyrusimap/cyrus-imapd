@@ -1,0 +1,32 @@
+Description:
+
+A calendar's display name is no longer copied verbatim into the
+Content-Disposition header of a CalDAV GET on the collection.  Control
+characters and non-ASCII bytes now force RFC 8187 encoding, and a double
+quote or backslash is escaped inside the quoted string as RFC 9110 requires.
+Previously a display name holding a CRLF sequence truncated the header value
+and allowed further headers to be added to the response, and one holding a
+double quote or backslash could corrupt the header's parameters.  Separately,
+httpd now drops any response header whose name or value holds a control
+character other than HTAB, logging an error rather than emitting a corrupt
+response.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
