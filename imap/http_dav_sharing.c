@@ -1805,6 +1805,21 @@ static int set_share_access(const char *mboxname,
                             httpd_userid, httpd_authstate);
     }
 
+    /* Revoking a DAV share must also clear the sharee's subscription on the
+     * calendar.
+     */
+    if (!r && access == SHARE_NONE) {
+        int unsub_r = mboxlist_changesub(mboxname, userid, httpd_authstate,
+                                         /*add*/0, /*force*/0,
+                                         /*notify*/1, /*silent*/0);
+        if (unsub_r) {
+            syslog(LOG_ERR,
+                   "mboxlist_changesub(%s, %s) failed during share revoke: %s",
+                   mboxname, userid, error_message(unsub_r));
+            r = unsub_r;
+        }
+    }
+
     return r;
 }
 
