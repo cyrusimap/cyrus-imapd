@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+# When copying from account A to B, we should treat the write to B like an
+# append: it must not cause B to exceed its quota usage.
+sub test_email_copy_quota_storage ($self)
+{
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Tighten cassandane's storage quota to 1 KiB";
+    $self->set_quotaroot('user.cassandane');
+    $self->set_quotalimits(storage => 1);  # 1 * 1024 bytes
+
+    xlog $self, "Create otheruser and grant cassandane lookup/read on it";
+
+    my $other_user = $self->{instance}->create_user('other');
+    my $other_inbox = $other_user->mailboxes->inbox;
+    $other_inbox->share_with(cassandane => [ qw(mayRead) ]);
+
+    xlog $self, "Land a >1 KiB message in other's INBOX via IMAP";
+
+    my $email = $other_inbox->new_email({
+      body_str => 'X' x 4096, # 4 KiB is more than the 1 KiB quota!
+    });
+
+    xlog $self, "Find cassandane's INBOX id";
+    my $cass_inbox_id = $self->default_user->mailboxes->inbox->id;
+
+    xlog $self, "Email/copy from other -> cassandane (over quota)";
+    my $res = $jmap->request([
+        ['Email/copy', {
+            fromAccountId => 'other',
+            accountId => 'cassandane',
+            create => {
+                copy => {
+                    id => $email->id,
+                    mailboxIds => {
+                        $cass_inbox_id => JSON::true,
+                    },
+                },
+            },
+        } ],
+    ]);
+
+    my $res_arg = $res->single_sentence('Email/copy')->arguments;
+    $self->assert_cmp_deeply(
+      superhashof({
+        created => any(undef, {}),
+        notCreated => {
+          copy => superhashof({ type => 'overQuota' }),
+        },
+      }),
+      $res_arg,
+      "can't copy email, get overQuota",
+    );
+}

@@ -8803,8 +8803,26 @@ static int _copy_msgrecords(struct auth_state *authstate,
     int r;
     int nolink = !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
 
+    /* When the source and destination live under different quota roots
+     * -- e.g. a cross-account JMAP Email/copy -- we have to charge the
+     * destination for the bytes we're about to land. */
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+    quota_t *qptr = NULL;
+    if (strcmpsafe(mailbox_quotaroot(src), mailbox_quotaroot(dst)) != 0) {
+        qdiffs[QUOTA_STORAGE] = 0;
+        qdiffs[QUOTA_MESSAGE] = ptrarray_size(msgrecs);
+        int i;
+        for (i = 0; i < ptrarray_size(msgrecs); i++) {
+            msgrecord_t *mr = ptrarray_nth(msgrecs, i);
+            uint32_t size = 0;
+            msgrecord_get_size(mr, &size);
+            qdiffs[QUOTA_STORAGE] += size;
+        }
+        qptr = qdiffs;
+    }
+
     r = append_setup_mbox(&as, dst, user_id, authstate,
-                 aclcheck, NULL, namespace, 0, EVENT_MESSAGE_COPY);
+                 aclcheck, qptr, namespace, 0, EVENT_MESSAGE_COPY);
     if (r) goto done;
 
     r = append_copy(src, &as, msgrecs, nolink,
