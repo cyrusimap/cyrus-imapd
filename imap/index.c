@@ -6935,12 +6935,9 @@ static bool _index_thread_ref(struct index_state *state, unsigned *msgno_list,
      * and our parent/child/next pointers will no longer be correct
      * (been there, done that).
      */
-    if (nmsg >= (uint64_t) (UINT64_MAX / 1.5)) {
-        ret = false;
-        goto done;
-    }
-
-    nnode = (uint64_t) (1.5 * nmsg + 1);
+    /* nmsg is 32 bits wide, so this can't overflow, but the arithmetic must
+     * be done in 64 bits or the sum itself will wrap. -- claude, 2026-08-16 */
+    nnode = (uint64_t) nmsg + nmsg / 2 + 1;
     ref_limit = UINT64_MAX - nnode;
 
     /* Create/load the msgdata array */
