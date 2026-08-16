@@ -4710,6 +4710,7 @@ static void emailquery_cache_slice(struct emailquery *q,
             return;
         }
     }
+    if (pos > total) pos = total;
     n = total - pos;
     if (q->super.have_limit && q->super.limit < n) {
         n = q->super.limit;
