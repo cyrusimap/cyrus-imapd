@@ -293,6 +293,46 @@ EOF
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/unbalanced/, $errs);
 
+    my $badnotify1 = << 'EOF';
+require ["enotify"];
+notify :message "$text$" "mailto:test@example.net";
+EOF
+    ($res, $errs) = $self->compile_sieve_script('badnotify1', $badnotify1);
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/body.*MUST be enabled/, $errs);
+
+    my $badnotify2 = << 'EOF';
+require ["enotify", "body"];
+notify :message "$text[" "mailto:test@example.net";
+EOF
+    ($res, $errs) = $self->compile_sieve_script('badnotify2', $badnotify2);
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/invalid :message value/, $errs);
+
+    my $badnotify3 = << 'EOF';
+require ["enotify", "body"];
+notify :message "$text[]$" "mailto:test@example.net";
+EOF
+    ($res, $errs) = $self->compile_sieve_script('badnotify3', $badnotify3);
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/invalid :message value/, $errs);
+
+    my $badnotify4 = << 'EOF';
+require ["enotify", "body"];
+notify :message "$text[-5]$" "mailto:test@example.net";
+EOF
+    ($res, $errs) = $self->compile_sieve_script('badnotify4', $badnotify4);
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/invalid :message value/, $errs);
+
+    my $badnotify5 = << 'EOF';
+require ["enotify", "body"];
+notify :message "$text[18446744073709551616]$" "mailto:test@example.net";
+EOF
+    ($res, $errs) = $self->compile_sieve_script('badnotify5', $badnotify5);
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/invalid :message value/, $errs);
+
     # TODO: test UTF-8 verification of the string parameter
 }
 
