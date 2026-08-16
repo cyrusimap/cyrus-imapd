@@ -13,7 +13,7 @@ use JMAP::Tester::Abort ();
 # We want to throw an Error instead -- or, well, we don't want to, but we sort
 # of have to.  This solution is absolutely gross: just replace the
 # JMAP::Tester::Abort constructor.
-unless (JMAP::Tester->can('abort_class')) {
+{
     no warnings 'redefine';
     *JMAP::Tester::Abort::new = sub ($, @rest) {
         return Cassandane::JMAPAbort->new(@rest);
