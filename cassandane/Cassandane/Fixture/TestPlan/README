@@ -1,0 +1,21 @@
+These are not tests.  Nothing here is run by a normal Cassandane run, and
+nothing here tests Cyrus.
+
+The suites under Alpha/ and Beta/ are fixture data for Cassandane::Test::
+TestPlan, which is a test of the test planner itself.  Rather than making
+assertions about the real tests, which are changing all the time, the test
+planner tester builds a plan over these two roots instead, and asserts exactly
+which tests a given specification selects.  The tests here are all empty subs,
+because the planner only ever looks at their names.
+
+Moving these under, say, cassandane/data/ would be nice but would not work.  In
+Cassandane::Unit::TestPlan a test root is two things at once: a directory path
+*resolved against the current working directory*, and -- after s{/}{::}g -- the
+package prefix the suites are loaded by.  Those two readings coincide only
+because testrunner.pl does "use lib '.'" and runs from cassandane/, so the one
+@INC entry and the cwd are the same directory.  You can't fix that by fiddling
+@INC in the tests.
+
+Future changes to the test running code might address this, but the goal now is
+to land *these* improvements, not *every* improvement, so they live here, and
+you get this README file.
