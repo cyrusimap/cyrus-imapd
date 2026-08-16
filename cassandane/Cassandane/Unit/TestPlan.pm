@@ -70,7 +70,7 @@ sub _allow
     my ($self, $test, $spec) = @_;
 
     # $spec is the specification this came from, kept only so that
-    # _spec_matches can complain about it by the name the user typed
+    # _get_candidates can complain about it by the name the user typed
     push $self->{allowed_specs}->@*, { spec => $spec, test => $test };
 
     if (ref $test) {
@@ -85,10 +85,7 @@ sub _allow
 # suite, a hash of the specification and the test names it actually matched.
 # Loading the suite is the only way to know those names, so this can't be
 # answered until scheduling is finished.
-#
-# Missing suppressions aren't a problem.  We want to keep working against
-# versions of Cyrus where the named test doesn't exist.
-sub _spec_matches ($self)
+sub _get_candidates ($self)
 {
     return if not $self->{allowed_specs};
 
@@ -742,7 +739,7 @@ sub _check_selections ($self)
 
     foreach my $item ($self->{schedule}->@{ sort keys $self->{schedule}->%* })
     {
-        foreach my $match ($item->_spec_matches())
+        foreach my $match ($item->_get_candidates())
         {
             my $spec = $match->{spec};
 
