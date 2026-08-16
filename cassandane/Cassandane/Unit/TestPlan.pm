@@ -756,7 +756,7 @@ sub _check_selections ($self)
     {
         my @tests = $matched{$spec}->@*;
 
-        if ($self->{skip_slow} and not grep {; $_ !~ m/_slow$/ } @tests)
+        if ($self->{skip_slow} and @tests == grep {; /_slow$/ } @tests)
         {
             xlog "$spec was explicitly requested. Enabling slow tests!";
             $self->{skip_slow} = 0;
