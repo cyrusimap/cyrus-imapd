@@ -4,6 +4,7 @@
 package Cassandane::Unit::TestPlanItem;
 use strict;
 use warnings;
+use experimental 'signatures';
 use IO::Handle;
 use POSIX;
 use Time::HiRes qw(time);
@@ -66,13 +67,41 @@ sub _deny
 
 sub _allow
 {
-    my ($self, $test) = @_;
+    my ($self, $test, $spec) = @_;
+
+    # $spec is the specification this came from, kept only so that
+    # _get_candidates can complain about it by the name the user typed
+    push $self->{allowed_specs}->@*, { spec => $spec, test => $test };
+
     if (ref $test) {
         push @{ $self->{allowed_patterns} }, $test;
     } else {
         $self->{allowed}->{$test} = 1;
     }
     return;
+}
+
+# Returns, for each specification that selected individual tests from this
+# suite, a hash of the specification and the test names it actually matched.
+# Loading the suite is the only way to know those names, so this can't be
+# answered until scheduling is finished.
+sub _get_candidates ($self)
+{
+    return if not $self->{allowed_specs};
+
+    my @names = map {; s/^test_//r } $self->_get_loaded_suite()->names()->@*;
+
+    my @matches;
+    foreach my $allowed ($self->{allowed_specs}->@*)
+    {
+        my $test = $allowed->{test};
+        my @matched = ref $test ? grep {; $_ =~ $test } @names
+                                : grep {; $_ eq $test } @names;
+
+        push @matches, { spec => $allowed->{spec}, tests => \@matched };
+    }
+
+    return @matches;
 }
 
 package Cassandane::Unit::Worker;
@@ -450,7 +479,7 @@ use File::Path qw(mkpath);
 use Data::Dumper;
 use Cassandane::Util::Log;
 
-my @test_roots = (
+my @default_test_roots = (
     'Cassandane/Test',
     'Cassandane/Cyrus',
 );
@@ -465,6 +494,7 @@ sub new
         maxworkers => delete $opts{maxworkers} || 1,
         skip_slow => delete $opts{skip_slow} // 1,
         slow_only => delete $opts{slow_only} // 0,
+        test_roots => delete $opts{test_roots} // [ @default_test_roots ],
     };
     die "Unknown options: " . join(' ', keys %opts)
         if scalar %opts;
@@ -480,7 +510,7 @@ sub _get_item
 
 sub _schedule
 {
-    my ($self, $neg, $path, $testname) = @_;
+    my ($self, $neg, $path, $testname, $spec) = @_;
     return if ($path =~ m/\/TestCase\.pm$/);
 
     my $suite = $path;
@@ -506,15 +536,55 @@ sub _schedule
         my $item = $self->_get_item($suite);
         if (defined $testname)
         {
-            $item->_allow($testname) if $testname;
+            $item->_allow($testname, $spec) if $testname;
         }
     }
 }
 
-# Returns ($neg, $ostype, $ospath, $testname)
+# Turns a glob into an anchored regex.  '*' matches any run of characters,
+# including none, and nothing else is special.
+sub _glob_to_regex ($glob)
+{
+    my @hunks = split /\*+/, $glob, -1;
+    my $regex = join q{.*}, map {; quotemeta } @hunks;
+
+    return qr{\A$regex\z};
+}
+
+# Given a path whose last component may be a glob -- ".../Cyrus/JMAP*" --
+# return the suite files it matches, in sorted order.  Returns nothing if
+# there's no glob to expand, or if the directory that would hold the matches
+# doesn't exist, so the caller can use this to ask "is this a globbed suite
+# name?" without checking first.
+sub _glob_suites ($path)
+{
+    my ($dir, $leaf) = ($path =~ m/^(.*)\/([^\/]+)$/);
+    return if not defined $leaf;
+    return if $leaf !~ m/\*/;
+    return if not -d $dir;
+
+    my $regex = _glob_to_regex($leaf);
+
+    opendir my $dh, $dir
+        or die "Cannot open directory $dir for reading: $!";
+    my @moniker = grep {; my $m = $_; $m =~ s/\.pm$// and $m =~ $regex }
+                  readdir $dh;
+    closedir $dh;
+
+    return map {; "$dir/$_" } sort @moniker;
+}
+
+# Returns a list of [ $neg, $ostype, $ospath, $testname ] tuples.  It's a list
+# because one specification can name more than one test case.
+#
+# An exact name is resolved against the roots in order and the first hit wins,
+# so that a test case in an earlier root shadows one of the same name later on.  A
+# globbed test case name is instead collected from every root, because "JMAP*"
+# plainly means all of them and not just the ones in whichever root happened to
+# match first.
 sub _parse_test_spec
 {
-    my ($name) = @_;
+    my ($self, $name) = @_;
 
     my ($neg, $path) = ($name =~ m/^([~!]?)(.*)$/);
     $path =~ s/\.pm$//g;
@@ -525,6 +595,11 @@ sub _parse_test_spec
     $path =~ s/\/*$//;
 
     $neg = '!' if $neg eq '~';
+
+    # '*' has to be quoted in every shell worth using, so let '+' mean the same
+    # thing.  Neither suite names nor test names can contain a '+', so there's
+    # no loss in functionality.
+    $path =~ s/\+/*/g;
 
     # Allow Cyrus::TesterJMAP and TesterJMAP to work
     my @paths;
@@ -537,34 +612,41 @@ sub _parse_test_spec
     }
 
     foreach my $candidate (@paths) {
-        foreach my $root (@test_roots)
+        my @globbed;
+
+        foreach my $root ($self->{test_roots}->@*)
         {
-            return ($neg, 'd', $candidate, undef)
+            return [ $neg, q{d}, $candidate, undef ]
                 if ($root eq $candidate);
 
             my $fpath = $candidate;
             $fpath = "$root/$candidate"
                 if ("$root/" ne substr($candidate, 0, length($root)+1));
 
-            return ($neg, 'd', $fpath, undef)
+            return [ $neg, q{d}, $fpath, undef ]
                 if ( -d $fpath );
-            return ($neg, 'f', "$fpath.pm", undef)
+            return [ $neg, q{f}, "$fpath.pm", undef ]
                 if ( -f "$fpath.pm" );
+
+            # the whole thing may be a globbed suite name, with no test named
+            push @globbed, map {; [ $neg, q{f}, $_, undef ] }
+                           _glob_suites($fpath);
 
             my $test;
             ($fpath, $test) = ($fpath =~ m/^(.*)\/([^\/]+)$/);
             next unless defined $test;
 
-            if ( -f "$fpath.pm" ) {
-                if ($test =~ /\*/) {
-                    my @hunks = split /\*+/, $test, -1;
-                    my $regex = join q{.*}, map {; quotemeta } @hunks;
-                    return ($neg, 'f', "$fpath.pm", qr{\A$regex\z});
-                } else {
-                    return ($neg, 'f', "$fpath.pm", $test)
-                }
-            }
+            $test = _glob_to_regex($test) if $test =~ m/\*/;
+
+            return [ $neg, q{f}, "$fpath.pm", $test ]
+                if ( -f "$fpath.pm" );
+
+            # ... or the suite part alone may be globbed, with a test after it
+            push @globbed, map {; [ $neg, q{f}, $_, $test ] }
+                           _glob_suites($fpath);
         }
+
+        return @globbed if @globbed;
     }
 
     die "Unrecognised test specification: $name";
@@ -579,7 +661,7 @@ sub _default_test_list
 
     my %default;
     my %suppressed;
-    @default{@test_roots} = ();
+    @default{$self->{test_roots}->@*} = ();
 
     # skip suppressions
     foreach my $s (@tosuppress) {
@@ -612,44 +694,93 @@ sub schedule
 
     foreach my $name (@names)
     {
-        my ($neg, $type, $path, $test) = _parse_test_spec($name);
-
-        # slow test explicitly requested by name, so turn off the filter
-        if (defined $test
-            and ! ref $test
-            and $test =~ m/_slow$/
-            and ! $neg
-            and $self->{skip_slow})
+        foreach my $spec ($self->_parse_test_spec($name))
         {
-            xlog "$name was explicitly requested. Enabling slow tests!";
+            my ($neg, $type, $path, $test) = @$spec;
+
+            if ($type eq 'd')
+            {
+                opendir DIR, $path
+                    or die "Cannot open directory $path for reading: $!";
+                while ($_ = readdir DIR)
+                {
+                    next unless m/\.pm$/;
+                    $self->_schedule($neg, "$path/$_", undef, $name);
+                }
+                closedir DIR;
+            }
+            else
+            {
+                $self->_schedule($neg, $path, $test, $name);
+            }
+        }
+    }
+
+    $self->_check_selections();
+    $self->_check_not_empty();
+}
+
+# Every specification can be fine, but we still have nothing to run, because a
+# negation can cancel out a selection: "ACL !ACL" is nothing.
+sub _check_not_empty ($self)
+{
+    foreach my $item (values $self->{schedule}->%*)
+    {
+        my @names = map {; s/^test_//r } $item->_get_loaded_suite()->names()->@*;
+
+        return if grep {; $item->_is_allowed($_) } @names;
+    }
+
+    die "No tests to run: the test plan is empty\n";
+}
+
+# Check what the specifications that named individual tests actually selected.
+# This can't happen while they're being parsed, because it needs the suites to
+# be loaded, which can't happen until we know which suites to load.
+#
+# A specification that matches no tests at all is fatal.  It's nearly always a
+# typo, and you think everything passed, but actually nothing ran.
+#
+# A specification that matches only slow tests turns the skip_slow filter off,
+# on the grounds that you can't have meant to ask for tests that were then
+# going to be filtered out from under you.
+sub _check_selections ($self)
+{
+    # One specification can be applied to several suites, so gather up
+    # everything it matched before judging it.  "JMAP*.blob_get" has done its
+    # job if any one of the JMAP suites has that test; it's only a mistake if
+    # none of them do.
+    my (@specs, %matched);
+
+    foreach my $item ($self->{schedule}->@{ sort keys $self->{schedule}->%* })
+    {
+        foreach my $match ($item->_get_candidates())
+        {
+            my $spec = $match->{spec};
+
+            push @specs, $spec if not $matched{$spec};
+            $matched{$spec} //= [];
+            push $matched{$spec}->@*, $match->{tests}->@*;
+        }
+    }
+
+    my @unmatched = grep {; ! $matched{$_}->@* } @specs;
+    die "No tests matched: " . join(q{, }, @unmatched) . "\n" if @unmatched;
+
+    foreach my $spec (@specs)
+    {
+        my @tests = $matched{$spec}->@*;
+
+        if ($self->{skip_slow} and @tests == grep {; /_slow$/ } @tests)
+        {
+            xlog "$spec was explicitly requested. Enabling slow tests!";
             $self->{skip_slow} = 0;
         }
 
-        # non-slow test explicitly requested by name, so turn off slow-only
-        if (defined $test
-            and ! ref $test
-            and $test !~ m/_slow$/
-            and ! $neg
-            and $self->{slow_only})
+        if ($self->{slow_only} and not grep {; $_ =~ m/_slow$/ } @tests)
         {
-            xlog "$name was explicitly requested. Enabling regular tests!";
+            xlog "$spec was explicitly requested. Enabling regular tests!";
             $self->{slow_only} = 0;
-        }
-
-        if ($type eq 'd')
-        {
-            opendir DIR, $path
-                or die "Cannot open directory $path for reading: $!";
-            while ($_ = readdir DIR)
-            {
-                next unless m/\.pm$/;
-                $self->_schedule($neg, "$path/$_", undef);
-            }
-            closedir DIR;
-        }
-        else
-        {
-            $self->_schedule($neg, $path, $test);
         }
     }
 }
@@ -679,7 +810,7 @@ sub check_sanity
             }
             close $fh;
         },
-    }, @test_roots);
+    }, $self->{test_roots}->@*);
 
     # collect tiny-tests directories that exist on disk
     my %real_tt_dirs;

@@ -165,6 +165,25 @@ if ($@) {
 sub usage
 {
     printf STDERR "Usage: testrunner.pl [options] -f <xml|tap|pretty|prettier> [testname...]\n";
+    print STDERR <<'END';
+
+A testname is a suite, optionally followed by a dot and a test within it.
+Prefixing one with '!' (or '~') excludes it instead:
+
+    JMAPCore                every test in the suite
+    JMAPCore.blob_download  just that test
+    !JMAPCore.blob_download  everything else in the suite
+
+Either part may be a glob, where '*' matches any run of characters:
+
+    JMAP*                   every JMAP suite
+    JMAPCore.blob_*         every blob test in JMAPCore
+    JMAP*.blob_*            both at once
+
+A '+' is accepted anywhere a '*' would be, so that a glob can be typed
+without having to be quoted against the shell.
+
+END
     exit(1);
 }
 
