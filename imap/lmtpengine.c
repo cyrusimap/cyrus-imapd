@@ -873,6 +873,18 @@ static int reset_saslconn(sasl_conn_t **conn)
     return SASL_OK;
 }
 
+/*
+ * Do we accept UTF-8? This is the same question imapd answers by
+ * advertising UTF8=ACCEPT, and it has to have the same answer: what
+ * arrives here is what IMAP serves later, so a server that will munge
+ * or reject 8-bit data has no business asking an MTA to send it.
+ */
+static int lmtp_utf8_allowed(void)
+{
+    return !(config_getswitch(IMAPOPT_REJECT8BIT) ||
+             config_getswitch(IMAPOPT_MUNGE8BIT));
+}
+
 void lmtpmode(struct lmtp_func *func,
               struct protstream *pin,
               struct protstream *pout,
@@ -1157,11 +1169,14 @@ void lmtpmode(struct lmtp_func *func,
 
               prot_printf(pout, "250-%s\r\n"
                                 "250-8BITMIME\r\n"
-                                "250-SMTPUTF8\r\n"
                                 "250-ENHANCEDSTATUSCODES\r\n"
                                 "250-PIPELINING\r\n"
                                 "250-SIZE %" PRIu64 "\r\n",
                           config_servername, max_msgsize);
+
+              if (lmtp_utf8_allowed()) {
+                  prot_printf(pout, "250-SMTPUTF8\r\n");
+              }
 
               if (tls_starttls_enabled() && !cd.starttls_done &&
                   cd.authenticated == NOAUTH) {
@@ -1249,6 +1264,8 @@ void lmtpmode(struct lmtp_func *func,
 
                     case 's': case 'S':
                         if (strncasecmp(tmp, "smtputf8", 8) == 0) {
+                            /* we only take what we advertised */
+                            if (!lmtp_utf8_allowed()) goto badparam;
                             tmp += 8;
                             break;
                         }
