@@ -3387,6 +3387,7 @@ enum guidsearch_expr_op {
     GSEOP_FLAGS,
     GSEOP_CONVFLAGS,
     GSEOP_ALLCONVFLAGS,
+    GSEOP_INTERNALDATE,
     GSEOP_AND,
     GSEOP_OR,
     GSEOP_NOT
@@ -3399,6 +3400,10 @@ union guidsearch_expr_value {
         uint32_t num;
         uint8_t include_trash;
     } convflag;
+    struct {
+        int64_t t;   // seconds since epoch
+        uint8_t op;  // one of SEOP_LT, SEOP_LE, SEOP_GT, SEOP_GE
+    } internaldate;
 };
 
 struct guidsearch_expr {
@@ -3529,6 +3534,23 @@ static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state 
                 }
             }
             break;
+        case SEOP_LT:
+        case SEOP_LE:
+        case SEOP_GT:
+        case SEOP_GE:
+            {
+                if (e->attr == search_attr_find("internaldate")) {
+                    // before, after
+                    ge = xzmalloc(sizeof(struct guidsearch_expr));
+                    ge->op = GSEOP_INTERNALDATE;
+                    ge->v.internaldate.t = (int64_t) e->value.t;
+                    ge->v.internaldate.op = e->op;
+                }
+                else {
+                    assert(0); // guidsearch_rank_clause must reject this
+                }
+            }
+            break;
         case SEOP_MATCH:
             {
                 if (e->attr == search_attr_find("folder")) {
@@ -3639,6 +3661,9 @@ static void guidsearch_expr_serialise(struct buf *buf, struct guidsearch_expr *e
             break;
         case GSEOP_ALLCONVFLAGS:
             buf_appendcstr(buf, "ALLCONVFLAGS");
+            break;
+        case GSEOP_INTERNALDATE:
+            buf_appendcstr(buf, "INTERNALDATE");
             break;
         case GSEOP_AND:
             buf_appendcstr(buf, "AND");
@@ -3761,6 +3786,25 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
                 conversation_fini(&conv);
                 return ret;
             }
+        case GSEOP_INTERNALDATE:
+            {
+                /* Compare at second granularity. */
+                struct timespec internaldate;
+                TIMESPEC_FROM_NANOSEC(&internaldate, match->nano_internaldate);
+                int64_t d = (int64_t) internaldate.tv_sec - e->v.internaldate.t;
+                switch (e->v.internaldate.op) {
+                    case SEOP_LT:
+                        return d < 0;
+                    case SEOP_LE:
+                        return d <= 0;
+                    case SEOP_GT:
+                        return d > 0;
+                    case SEOP_GE:
+                        return d >= 0;
+                    default:
+                        return 1;
+                }
+            }
         default:
             return 1;
     }
@@ -3826,8 +3870,16 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
         case SEOP_LE:
         case SEOP_GT:
         case SEOP_GE:
-            // TODO support receivedAt?
-            return -1;
+            if (e->attr == search_attr_find("internaldate")) {
+                /* before
+                 * after */
+                if (nonxapian_hash) {
+                    guidsearch_hash_expr(e, nonxapian_hash);
+                }
+                return 1;
+            }
+            // minSize, maxSize and sinceEmailState are unsupported
+            else return -1;
         case SEOP_MATCH:
             // check for supported MATCH expressions
             if (e->attr == search_attr_find("folder") ||
@@ -3993,12 +4045,10 @@ static int guidsearch_add_guidrec(const conv_guidrec_t *rec,
     }
 
     if (prev && !memcmp(rec->guidrep, prev->guidrep, MESSAGE_GUID_SIZE*2)) {
-        /* Update match for same guid */
+        /* Update match for same guid. All copies of a guid carry the same
+         * internaldate, so only folders and flags need merging. */
         if (gsq->numfolders) bv_set(&prev->folders, rec->foldernum);
         prev->system_flags |= rec->system_flags;
-        if (rec->nano_internaldate < prev->nano_internaldate) {
-            prev->nano_internaldate = rec->nano_internaldate;
-        }
         return 0;
     }
 

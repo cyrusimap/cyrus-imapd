@@ -347,8 +347,8 @@ my @TESTCASES = (
         want_guidsearch => 1,
     },
 
-    # A G record has no per-message internaldate range criteria, even though it
-    # does carry the internaldate that guidsearch sorts on.
+    # The internaldate of a G record. It must be combined with a Xapian-backed
+    # filter condition to enable guidsearch.
     {
         name            => 'before',
         filter          => { before => '2020-01-01T00:00:00Z' },
@@ -358,7 +358,7 @@ my @TESTCASES = (
         name            => 'before_and_body',
         filter          =>
             with_body_search({ before => '2020-01-01T00:00:00Z' }),
-        want_guidsearch => 0,
+        want_guidsearch => 1,
     },
     {
         name            => 'after',
@@ -368,6 +368,40 @@ my @TESTCASES = (
     {
         name            => 'after_and_body',
         filter          => with_body_search({ after => '2020-01-01T00:00:00Z' }),
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'before_after_and_body',
+        filter          => with_body_search({
+            after  => '2020-01-01T00:00:00Z',
+            before => '2021-01-01T00:00:00Z',
+        }),
+        want_guidsearch => 1,
+    },
+
+    # The non-Xapian criteria must be the same across all clauses of the
+    # disjunctive normal form, because guidsearch post-processes the Xapian
+    # results of all clauses at once.
+    {
+        name            => 'or_before_body_same_dates',
+        filter          => {
+            operator   => 'OR',
+            conditions => [
+                { body => 'hello', before => '2020-01-01T00:00:00Z' },
+                { body => 'world', before => '2020-01-01T00:00:00Z' },
+            ],
+        },
+        want_guidsearch => 1,
+    },
+    {
+        name            => 'or_before_body_differing_dates',
+        filter          => {
+            operator   => 'OR',
+            conditions => [
+                { body => 'hello', before => '2020-01-01T00:00:00Z' },
+                { body => 'world', before => '2021-01-01T00:00:00Z' },
+            ],
+        },
         want_guidsearch => 0,
     },
 
