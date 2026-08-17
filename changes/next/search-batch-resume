@@ -1,0 +1,25 @@
+Description:
+
+A batched squatter update now resumes where its previous batch stopped.
+A non-incremental Xapian run completes mailboxes larger than
+search_batchsize instead of re-selecting the same first batch forever.
+
+
+Documentation:
+
+:cyrusman:`squatter(8)`
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+#6156

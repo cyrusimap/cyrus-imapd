@@ -280,6 +280,7 @@ static int index_one(const char *name, int blocking)
 {
     struct mailbox *mailbox = NULL;
     int nunproductive = 0;
+    uint32_t resumeuid = 0;
     int r;
     int flags = SEARCH_UPDATE_BATCH;
 
@@ -382,8 +383,8 @@ again:
         }
     }
 
-    size_t nindexed = 0;
-    r = search_update_mailbox(rx, &mailbox, reindex_minlevel, flags, &nindexed);
+    uint32_t prevuid = resumeuid;
+    r = search_update_mailbox(rx, &mailbox, reindex_minlevel, flags, &resumeuid);
 
     mailbox_close(&mailbox);
 
@@ -394,7 +395,7 @@ again:
         /* Batching an update indexes messages, so keep going. An update
          * that indexed nothing, e.g. because the mailbox got recreated
          * while we extracted its attachment text, may never complete. */
-        if (nindexed) {
+        if (resumeuid > prevuid) {
             nunproductive = 0;
             goto again;
         }

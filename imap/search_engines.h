@@ -226,14 +226,16 @@ search_text_receiver_t *search_begin_update(int verbose);
  * min_indexlevel yet. Returns IMAP_AGAIN if the mailbox needs another
  * update to complete, an IMAP error code on error, or 0.
  *
- * If nindexedptr is not NULL, it is set to the number of messages this
- * update indexed. A caller that repeats an update returning IMAP_AGAIN
- * must use it to tell an update that made progress from one that did not,
- * so that it does not repeat forever. */
+ * *resumeuidptr must not be NULL. On entry it is the lowest uid this
+ * update considers, 0 for all messages; on IMAP_AGAIN it is set to the uid
+ * the next update must resume from. A caller that repeats an update
+ * returning IMAP_AGAIN must pass the same variable every time and use it to
+ * tell an update that made progress from one that did not, so that it does
+ * not repeat forever. */
 int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox **mailboxptr,
                           int min_indexlevel, int flags,
-                          size_t *nindexedptr);
+                          uint32_t *resumeuidptr);
 int search_end_update(search_text_receiver_t *rx);
 
 /* Create a search text receiver for snippets. For each non-empty
