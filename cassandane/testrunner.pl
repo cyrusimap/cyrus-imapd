@@ -139,7 +139,8 @@ and use C<--no-cleanup> to override it.
 
 =item B<-j>, B<--jobs> I<N>
 
-Run I<N> test workers in parallel.
+Run I<N> test workers in parallel.  Defaults to the C<cassandane.maxworkers>
+setting from F<cassandane.ini>.
 
 =item B<--slow>, B<--slow-only>
 
