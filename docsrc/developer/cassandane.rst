@@ -238,9 +238,17 @@ Cassandane itself.
 The ones you'll meet first are the ``:needs_*`` family, which skip a test
 unless Cyrus was built with some capability:
 
-* ``:needs_component_NAME`` — a Cyrus component (e.g. ``httpd``) is enabled.
-* ``:needs_dependency_NAME`` — a compiled-in library (e.g. ``icalvcard``) is
-  present.
+* ``:needs_CATEGORY_NAME`` - the thing named NAME in category CATEGORY is
+  present
+* ``:needs_CATEGORY_NAME(VALUE)`` - same thing, but it also must have the given
+  value
+
+You can see all the categories, names, and values by running the
+``cyr_buildinfo`` tool.  The most common categories are "component" for
+features that Cyrus can be built with or without and "dependency" for libraries
+that Cyrus may or may not have available.  Those two categories only tell you
+whether a dependency is present or not present, there's no useful value to
+test.
 
 Next are the version guards, which skip a test outside a range of Cyrus
 versions:
