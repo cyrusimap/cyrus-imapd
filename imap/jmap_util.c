@@ -18,8 +18,8 @@
 #include "carddav_db.h"
 #include "global.h"
 #include "hash.h"
+#include "ical_support.h"
 #include "index.h"
-#include "jmap_ical.h"
 #include "jmap_util.h"
 #include "json_support.h"
 #include "search_query.h"
@@ -1620,4 +1620,36 @@ EXPORTED int jmap_is_valid_id(const char *id)
         return 0;
     }
     return 1;
+}
+
+EXPORTED void jmap_calendarevent_remove_peruserprops(json_t *jevent)
+{
+    json_object_del(jevent, "keywords");
+    json_object_del(jevent, "color");
+    json_object_del(jevent, "freeBusyStatus");
+    json_object_del(jevent, "useDefaultAlerts");
+    json_object_del(jevent, "alerts");
+
+    json_t *joverrides = json_object_get(jevent, "recurrenceOverrides");
+    const char *recurid;
+    json_t *joverride;
+    void *tmp;
+    json_object_foreach_safe(joverrides, tmp, recurid, joverride) {
+        json_object_del(joverride, "keywords");
+        json_object_del(joverride, "color");
+        json_object_del(joverride, "freeBusyStatus");
+        json_object_del(joverride, "useDefaultAlerts");
+        json_object_del(joverride, "alerts");
+        const char *prop;
+        json_t *jpatch;
+        void *tmp2;
+        json_object_foreach_safe(joverride, tmp2, prop, jpatch) {
+            if (!strncmp(prop, "alerts/", 7)) {
+                json_object_del(joverride, prop);
+            }
+        }
+        if (!json_object_size(joverride)) {
+            json_object_del(joverrides, recurid);
+        }
+    }
 }

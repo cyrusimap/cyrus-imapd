@@ -15,6 +15,7 @@ sub test_mailbox_get_nocalendars
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
         'https://cyrusimap.org/ns/jmap/calendars',
     ];
 

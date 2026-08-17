@@ -35,7 +35,6 @@ jmap_property_t;
 "mayGetAvailability", NULL, JMAP_PROP_SERVER_SET
 "accountId",          NULL, JMAP_PROP_SERVER_SET
 "account",            NULL, JMAP_PROP_SERVER_SET
-"sendTo",             NULL, JMAP_PROP_SERVER_SET
 "calendarAddress",    NULL, JMAP_PROP_SERVER_SET
 %%
 

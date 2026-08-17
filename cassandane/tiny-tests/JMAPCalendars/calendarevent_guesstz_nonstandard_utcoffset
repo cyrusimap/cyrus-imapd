@@ -7,10 +7,13 @@ sub test_calendarevent_guesstz_nonstandard_utcoffset
 {
     my $jmap = $self->default_user->jmap;
 
-    # This iCalendar object contains two non-standard timezones
-    # for which no equivalent IANA timezone can be found in the
-    # 'guesstz' timezone database. Cyrus falls back to guessing
-    # the nearest UTC offset timezone.
+    # This iCalendar object contains two non-standard timezones for which no
+    # equivalent IANA timezone can be found in the 'guesstz' database. Their
+    # offsets are not whole hours, so there is no Etc/GMT zone to fall back to
+    # either, and by decision we report no timeZone at all rather than name a
+    # zone that is half an hour out. (Compare
+    # calendarevent_get_guesstz_custom_tzid_guess_gmt, where a whole-hour
+    # offset does resolve to Etc/GMT+10.)
     my $ical = <<'EOF';
 BEGIN:VCALENDAR
 PRODID:-//Foo//Bar//EN
@@ -72,14 +75,26 @@ EOF
         [
             'urn:ietf:params:jmap:core',
             'urn:ietf:params:jmap:calendars',
+            'https://cyrusimap.org/ns/jmap/jscalendarbis',
             'https://cyrusimap.org/ns/jmap/calendars',
             'urn:ietf:params:jmap:blob',
         ]
     );
 
-    my %timeZoneByTitle = map { $_->{title} => $_->{timeZone} }
+    my %eventByTitle = map { $_->{title} => $_ }
       @{ $res->[1][1]{parsed}{'#ical'}{entries} };
 
-    $self->assert_str_equals('Etc/GMT+8', $timeZoneByTitle{offset0730});
-    $self->assert_str_equals('Etc/GMT+5', $timeZoneByTitle{offset0430});
+    my %wantStart = (
+        offset0730 => '2025-01-30T18:30:00',
+        offset0430 => '2024-08-24T15:30:00',
+    );
+
+    for my $title (sort keys %wantStart) {
+        my $event = $eventByTitle{$title};
+        $self->assert_not_null($event);
+
+        # The local time is preserved, but we do not claim to know the zone.
+        $self->assert_str_equals($wantStart{$title}, $event->{start});
+        $self->assert_null($event->{timeZone});
+    }
 }

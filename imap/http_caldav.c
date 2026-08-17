@@ -40,7 +40,6 @@
 #include "http_proxy.h"
 #include "index.h"
 #include "ical_support.h"
-#include "jmap_ical.h"
 #include "jmap_notif.h"
 #include "jcal.h"
 #include "xcal.h"
@@ -282,13 +281,6 @@ static struct mime_type_t caldav_mime_types[] = {
       (void * (*)(const struct buf*)) &jcal_string_as_icalcomponent,
       NULL, &begin_jcal, &end_jcal
     },
-#ifdef WITH_JMAP
-    { "application/event+json; charset=utf-8", NULL, "jevent",
-      (struct buf* (*)(void *)) &icalcomponent_as_jevent_string,
-      (void * (*)(const struct buf*)) &jevent_string_as_icalcomponent,
-      NULL, NULL, NULL
-    },
-#endif
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 // clang-format on
@@ -4281,7 +4273,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 icalproperty_add_parameter(orga, icalparameter_new_sentby(sentby));
             }
 
-            // XXX set legacy extension property until jmap_ical.c is removed
+            // XXX also set the legacy X-property, superseded by the
+            // SENT-BY parameter above.
             prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_SENTBY);
             icalproperty_set_value(prop, icalvalue_new_text(sentby));

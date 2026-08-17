@@ -8376,15 +8376,8 @@ static int _email_get_bodies(jmap_req_t *req,
         if (hash_numrecords(&icsbody_by_partid)) {
             r = _cyrusmsg_need_mime(msg);
             if (r) goto done;
-            struct mailbox *mbox = NULL;
-            uint32_t uid = 0;
-            if (msg->mr) {
-                msgrecord_get_mailbox(msg->mr, &mbox);
-                msgrecord_get_uid(msg->mr, &uid);
-            }
-            events = jmap_calendar_events_from_msg(req,
-                    mbox ? mailbox_uniqueid(mbox) : NULL, uid,
-                    &icsbody_by_partid, /*max_uids*/8, msg->mime);
+            events = jmap_calendar_events_from_msg(&icsbody_by_partid,
+                    /*max_uids*/8, msg->mime);
         }
         json_object_set_new(email, "calendarEvents", events);
 

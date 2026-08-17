@@ -40,21 +40,14 @@
          (param = icalparamiter_deref(&iter));                                 \
          icalparamiter_next(&iter))
 
-// Non-standard iCalendar elements.
+// Non-standard iCalendar elements. The X-JMAP-* names shared with the
+// CalDAV and iCalendar support layers live in ical_support.h.
 #define PARAM_JSID              "JSID"
 #define PARAM_JSPTR             "JSPTR"
 #define PARAM_XJMAP_REL         "X-JMAP-REL"
-#define PARAM_XDTSTAMP          "X-DTSTAMP"
-#define PARAM_XSEQUENCE         "X-SEQUENCE"
 
 #define PROP_JSID               "JSID"
 #define PROP_JSPROP             "JSPROP"
-#define PROP_XJMAP_HIDE_ATTENDEES    "X-JMAP-HIDE-ATTENDEES"
-#define PROP_XJMAP_ID                "X-JMAP-ID"
-#define PROP_XJMAP_MAY_INVITE_OTHERS "X-JMAP-MAY-INVITE-OTHERS"
-#define PROP_XJMAP_MAY_INVITE_SELF   "X-JMAP-MAY-INVITE-SELF"
-#define PROP_XJMAP_SENT_BY           "X-JMAP-SENT-BY"
-#define PROP_XJMAP_USEDEFAULTALERTS  "X-JMAP-USEDEFAULTALERTS"
 
 // Supported iCalendar quirks.
 #define ICALQUIRK_NO_ORGANIZER_ATTENDEE "no-organizer-attendee"
@@ -655,8 +648,8 @@ static bool is_known_param(icalproperty *prop, icalparameter *param)
         case ICAL_X_PARAMETER: {
             const char *xname = icalparameter_get_xname(param);
             // XXX these are set on iMIP ATTENDEE replies
-            if (!strcasecmpsafe(PARAM_XDTSTAMP, xname)
-                || !strcasecmpsafe(PARAM_XSEQUENCE, xname))
+            if (!strcasecmpsafe(JMAPICAL_XPARAM_DTSTAMP, xname)
+                || !strcasecmpsafe(JMAPICAL_XPARAM_SEQUENCE, xname))
             {
                 return true;
             }
@@ -814,18 +807,18 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
                 return true;
             }
             // Extension properties for Cyrus JMAP Calendars
-            if (myicalproperty_has_name(prop, PROP_XJMAP_USEDEFAULTALERTS))
+            if (myicalproperty_has_name(prop, JMAPICAL_XPROP_USEDEFAULTALERTS))
                 return true;
             // XXX quirk: these got set in the former implementation
-            if (myicalproperty_has_name(prop, PROP_XJMAP_ID))
+            if (myicalproperty_has_name(prop, JMAPICAL_XPROP_ID))
                 return true;
-            if (myicalproperty_has_name(prop, PROP_XJMAP_HIDE_ATTENDEES))
+            if (myicalproperty_has_name(prop, JMAPICAL_XPROP_HIDEATTENDEES))
                 return true;
-            if (myicalproperty_has_name(prop, PROP_XJMAP_MAY_INVITE_OTHERS))
+            if (myicalproperty_has_name(prop, JMAPICAL_XPROP_MAYINVITEOTHERS))
                 return true;
-            if (myicalproperty_has_name(prop, PROP_XJMAP_MAY_INVITE_SELF))
+            if (myicalproperty_has_name(prop, JMAPICAL_XPROP_MAYINVITESELF))
                 return true;
-            if (myicalproperty_has_name(prop, PROP_XJMAP_SENT_BY))
+            if (myicalproperty_has_name(prop, JMAPICAL_XPROP_SENTBY))
                 return true;
             // XXX quirk: our previous jscalendar draft implementation
             // erroneously used the X-APPLE-DEFAULT-ALARM annotation in
@@ -1696,7 +1689,7 @@ static void jsid_to_prop(icalproperty *prop, const char *key, bool force)
 static bool prop_has_jsid(icalproperty *prop)
 {
     return myicalproperty_get_parameter_by_name(prop, PARAM_JSID) ||
-           myicalproperty_get_parameter_by_name(prop, PROP_XJMAP_ID);
+           myicalproperty_get_parameter_by_name(prop, JMAPICAL_XPROP_ID);
 }
 
 static const char *jsid_from_prop(icalproperty *prop,
@@ -1708,7 +1701,7 @@ static const char *jsid_from_prop(icalproperty *prop,
     icalparameter *param = myicalproperty_get_parameter_by_name(prop, PARAM_JSID);
     if (param) jsid = icalparameter_get_iana(param);
     if (!jsid) {
-        param = myicalproperty_get_parameter_by_name(prop, PROP_XJMAP_ID);
+        param = myicalproperty_get_parameter_by_name(prop, JMAPICAL_XPROP_ID);
         if (param) jsid = icalparameter_get_x(param);
     }
     if (jsid && !json_object_get(jobj, jsid)) {
@@ -1776,7 +1769,7 @@ done:
 static bool comp_has_jsid(icalcomponent *prop)
 {
     return myicalcomponent_get_property_by_name(prop, PROP_JSID) ||
-           myicalcomponent_get_property_by_name(prop, PROP_XJMAP_ID);
+           myicalcomponent_get_property_by_name(prop, JMAPICAL_XPROP_ID);
 }
 
 static const char *jsid_from_comp(icalcomponent *comp,
@@ -1787,7 +1780,8 @@ static const char *jsid_from_comp(icalcomponent *comp,
 
     // Use JSID property value, if set.
     icalproperty *prop = myicalcomponent_get_property_by_name(comp, PROP_JSID);
-    if (!prop) prop = myicalcomponent_get_property_by_name(comp, PROP_XJMAP_ID);
+    if (!prop)
+        prop = myicalcomponent_get_property_by_name(comp, JMAPICAL_XPROP_ID);
     if (prop) {
         const char *jsid = icalproperty_get_value_as_string(prop);
         if (jsid && !json_object_get(jobj, jsid)) {
@@ -2762,7 +2756,7 @@ static void participants_to_ical(jscal_ctx_t *ctx,
                     struct buf buf = BUF_INITIALIZER;
                     buf_printf(&buf, "%" JSON_INTEGER_FORMAT, json_integer_value(jval));
                     icalparameter *param = icalparameter_new_iana(buf_cstring(&buf));
-                    icalparameter_set_iana_name(param, PARAM_XSEQUENCE);
+                    icalparameter_set_iana_name(param, JMAPICAL_XPARAM_SEQUENCE);
                     icalproperty_add_parameter(attendee, param);
                     buf_free(&buf);
                 }
@@ -2773,7 +2767,7 @@ static void participants_to_ical(jscal_ctx_t *ctx,
                     if (!icaltime_is_null_time(t)) {
                         char *tmp = icaltime_as_ical_string_r(t);
                         icalparameter *param = icalparameter_new_iana(tmp);
-                        icalparameter_set_iana_name(param, PARAM_XDTSTAMP);
+                        icalparameter_set_iana_name(param, JMAPICAL_XPARAM_DTSTAMP);
                         icalproperty_add_parameter(attendee, param);
                         free(tmp);
                     }
@@ -3503,7 +3497,7 @@ static void entry_to_ical(jscal_ctx_t *ctx,
     if (JNOTNULL(jval = json_object_get(jentry, "hideAttendees"))) {
         if (json_boolean_value(jval)) {
             icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, PROP_XJMAP_HIDE_ATTENDEES);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_HIDEATTENDEES);
             icalproperty_set_value(prop, icalvalue_new_boolean(true));
             icalcomponent_add_property(comp, prop);
         }
@@ -3512,7 +3506,7 @@ static void entry_to_ical(jscal_ctx_t *ctx,
     if (JNOTNULL(jval = json_object_get(jentry, "mayInviteOthers"))) {
         if (json_boolean_value(jval)) {
             icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, PROP_XJMAP_MAY_INVITE_OTHERS);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_MAYINVITEOTHERS);
             icalproperty_set_value(prop, icalvalue_new_boolean(true));
             icalcomponent_add_property(comp, prop);
         }
@@ -3521,7 +3515,7 @@ static void entry_to_ical(jscal_ctx_t *ctx,
     if (JNOTNULL(jval = json_object_get(jentry, "mayInviteSelf"))) {
         if (json_boolean_value(jval)) {
             icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, PROP_XJMAP_MAY_INVITE_SELF);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_MAYINVITESELF);
             icalproperty_set_value(prop, icalvalue_new_boolean(true));
             icalcomponent_add_property(comp, prop);
         }
@@ -3530,7 +3524,7 @@ static void entry_to_ical(jscal_ctx_t *ctx,
     if (JNOTNULL(jval = json_object_get(jentry, "useDefaultAlerts"))) {
         if (json_boolean_value(jval)) {
             icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, PROP_XJMAP_USEDEFAULTALERTS);
+            icalproperty_set_x_name(prop, JMAPICAL_XPROP_USEDEFAULTALERTS);
             icalproperty_set_value(prop, icalvalue_new_boolean(true));
             icalcomponent_add_property(comp, prop);
         }
@@ -5861,7 +5855,7 @@ static void participant_from_icalprop(icalproperty *prop, json_t *jpart)
             json_object_set_new(jpart, "sentBy", json_string(sentby));
         }
 
-        else if (myicalparameter_has_name(param, PARAM_XSEQUENCE)) {
+        else if (myicalparameter_has_name(param, JMAPICAL_XPARAM_SEQUENCE)) {
             const char *xval = icalparameter_get_value_as_string(param);
             if (xval) {
                 bit64 res = 0;
@@ -5871,7 +5865,7 @@ static void participant_from_icalprop(icalproperty *prop, json_t *jpart)
             }
         }
 
-        else if (myicalparameter_has_name(param, PARAM_XDTSTAMP)) {
+        else if (myicalparameter_has_name(param, JMAPICAL_XPARAM_DTSTAMP)) {
             const char *xval = icalparameter_get_value_as_string(param);
             if (xval) {
                 icaltimetype t = icaltime_from_string(xval);
@@ -6670,7 +6664,7 @@ static void entry_from_ical(jscal_ctx_t *ctx,
         }
         // XXX quirk: this got set in the former implementation
         else if ((prop = myicalcomponent_get_property_by_name(
-                        comp, PROP_XJMAP_SENT_BY))) {
+                        comp, JMAPICAL_XPROP_SENTBY))) {
             icalvalue *v = icalproperty_get_value(prop);
             const char *s = icalvalue_isa(v) == ICAL_TEXT_VALUE ?
                 icalvalue_get_text(v) : icalproperty_get_value_as_string(prop);
@@ -6697,7 +6691,7 @@ static void entry_from_ical(jscal_ctx_t *ctx,
     }
 
     if ((prop = myicalcomponent_get_property_by_name(
-             comp, PROP_XJMAP_USEDEFAULTALERTS)) ||
+             comp, JMAPICAL_XPROP_USEDEFAULTALERTS)) ||
         // XXX quirk: our previous jscalendar draft implementation
         // erroneously used the X-APPLE-DEFAULT-ALARM annotation in
         // the VEVENT, not the VALARM. We support it for backwards
@@ -6711,21 +6705,21 @@ static void entry_from_ical(jscal_ctx_t *ctx,
     }
 
     if ((prop = myicalcomponent_get_property_by_name(
-             comp, PROP_XJMAP_HIDE_ATTENDEES))) {
+             comp, JMAPICAL_XPROP_HIDEATTENDEES))) {
         const char *v = icalproperty_get_value_as_string(prop);
         if (!strcasecmpsafe(v, "TRUE"))
             json_object_set_new(jobj, "hideAttendees", json_true());
     }
 
     if ((prop = myicalcomponent_get_property_by_name(
-             comp, PROP_XJMAP_MAY_INVITE_OTHERS))) {
+             comp, JMAPICAL_XPROP_MAYINVITEOTHERS))) {
         const char *v = icalproperty_get_value_as_string(prop);
         if (!strcasecmpsafe(v, "TRUE"))
             json_object_set_new(jobj, "mayInviteOthers", json_true());
     }
 
     if ((prop = myicalcomponent_get_property_by_name(
-             comp, PROP_XJMAP_MAY_INVITE_SELF))) {
+             comp, JMAPICAL_XPROP_MAYINVITESELF))) {
         const char *v = icalproperty_get_value_as_string(prop);
         if (!strcasecmpsafe(v, "TRUE"))
             json_object_set_new(jobj, "mayInviteSelf", json_true());
@@ -6944,6 +6938,23 @@ HIDDEN json_t *jscal_from_ical(jscal_cfg_t *cfg, icalcomponent *ical)
     jscal_ctx_fini(&ctx);
     buf_free(&buf);
     return jgroup;
+}
+
+HIDDEN json_t *jscal_event_from_ical(jscal_cfg_t *cfg, icalcomponent *ical)
+{
+    json_t *jgroup = jscal_from_ical(cfg, ical);
+    if (!jgroup) return NULL;
+
+    json_t *jevent =
+        json_incref(json_array_get(json_object_get(jgroup, "entries"), 0));
+
+    if (jevent) {
+        // An Event outside an enclosing Group must set "version".
+        json_object_set(jevent, "version", json_object_get(jgroup, "version"));
+    }
+
+    json_decref(jgroup);
+    return jevent;
 }
 
 HIDDEN char *jscal_participant_id(icalproperty *prop)

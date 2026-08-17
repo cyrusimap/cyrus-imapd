@@ -10,8 +10,9 @@
 #include "dav_util.h"
 #include "caldav_util.h"
 #include "httpd.h"
-#include "jmap_ical.h"
 #include "jmap_notif.h"
+#include "jmap_util.h"
+#include "jscalendar.h"
 #include "spool.h"
 #include "strhash.h"
 #include "times.h"
@@ -388,10 +389,10 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
 
     const char *type;
     if (oldical) {
-        jevent = jmapical_tojmap(oldical, NULL, NULL);
+        jevent = jscal_event_from_ical(NULL, oldical);
         if (newical) {
             type = "updated";
-            json_t *tmp = jmapical_tojmap(newical, NULL, NULL);
+            json_t *tmp = jscal_event_from_ical(NULL, newical);
             jpatch = jmap_patchobject_create(jevent, tmp, 0/*no_remove*/);
             json_decref(tmp);
         }
@@ -399,12 +400,12 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
     }
     else {
         type = "created";
-        jevent = jmapical_tojmap(newical, NULL, NULL);
+        jevent = jscal_event_from_ical(NULL, newical);
     }
     if (!jevent) goto done;
 
-    jmapical_remove_peruserprops(jevent);
-    jmapical_remove_peruserprops(jpatch);
+    jmap_calendarevent_remove_peruserprops(jevent);
+    jmap_calendarevent_remove_peruserprops(jpatch);
 
     /* Determine who triggered that event notification */
     struct buf byname = BUF_INITIALIZER;

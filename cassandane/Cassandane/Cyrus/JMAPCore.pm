@@ -59,6 +59,7 @@ sub jmap_default_using
         'urn:ietf:params:jmap:contacts',
         'urn:ietf:params:jmap:sieve',
         'https://cyrusimap.org/ns/jmap/notes',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ];
 }
 

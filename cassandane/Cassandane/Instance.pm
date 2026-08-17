@@ -3271,6 +3271,7 @@ sub jmap_default_default_using {
 
         https://cyrusimap.org/ns/jmap/mail
         https://cyrusimap.org/ns/jmap/calendars
+        https://cyrusimap.org/ns/jmap/jscalendarbis
         https://cyrusimap.org/ns/jmap/contacts
 
         https://cyrusimap.org/ns/jmap/performance

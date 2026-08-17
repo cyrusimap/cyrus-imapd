@@ -23,8 +23,9 @@
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
-#include "jmap_ical.h"
+#include "ical_support.h"
 #include "jmap_util.h"
+#include "jscalendar.h"
 #include "msgrecord.h"
 #include "notify.h"
 #include "crc32.h"
@@ -634,11 +635,12 @@ static int imip_send(const char *cal_ownerid, const char *sched_userid,
 
 #ifdef WITH_JMAP
     if (sched_data->oldical) {
-        jsevent = jmapical_tojmap(sched_data->oldical, NULL, NULL);
+        jsevent = jscal_event_from_ical(NULL, sched_data->oldical);
 
         if (sched_data->newical) {
             /* Updated event */
-            json_t *new_jsevent = jmapical_tojmap(sched_data->newical, NULL, NULL);
+            json_t *new_jsevent =
+                jscal_event_from_ical(NULL, sched_data->newical);
 
             patch = jmap_patchobject_create(jsevent, new_jsevent, 0/*no_remove*/);
             json_decref(new_jsevent);
@@ -651,7 +653,7 @@ static int imip_send(const char *cal_ownerid, const char *sched_userid,
     else {
         /* New event */
         jsevent = json_null();
-        patch = jmapical_tojmap(sched_data->newical, NULL, NULL);
+        patch = jscal_event_from_ical(NULL, sched_data->newical);
     }
 
     struct jmap_caleventid eid = { .createdmodseq = sched_data->createdmodseq };

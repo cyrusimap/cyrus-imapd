@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+
+# Check that the content of a CalendarEventNotification is the correct
+# JSCalendar 2.0 payload.
+sub test_calendareventnotification_jscalendar2 ($self)
+{
+    my $caldav = $self->{caldav};
+
+    my $sharee = $self->{instance}->create_user('sharee');
+    my $sharee_jmap = $sharee->jmap;
+
+    $self->default_user->calendars->default->share_with(
+        $sharee => [ qw( mayReadFreeBusy mayReadItems ) ],
+    );
+
+    xlog $self, "Owner creates an event with an organizer and an attendee";
+    my $ical = <<~'EOF';
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+        CALSCALE:GREGORIAN
+        BEGIN:VEVENT
+        UID:2a358cee-6489-4f14-a57f-c104db4dc357
+        DTSTART:20160928T160000Z
+        DURATION:PT1H
+        SUMMARY:test
+        ORGANIZER;CN=Cassandane:mailto:cassandane@example.com
+        ATTENDEE;CN=Bugs Bunny;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION:mailto:bugs@example.com
+        DTSTAMP:20150806T234327Z
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+
+    $ical =~ s/\r?\n/\r\n/gs;
+    $caldav->Request('PUT', "/dav/calendars/user/cassandane/Default/test.ics", $ical,
+        'Content-Type' => 'text/calendar');
+
+    xlog $self, "Sharee reads the 'created' notification";
+    my $res = $sharee_jmap->request([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }],
+    ])->single_sentence('CalendarEventNotification/get')->as_stripped_pair->[1];
+
+    $self->assert_num_equals(1, scalar @{$res->{list}});
+    $self->assert_str_equals('created', $res->{list}[0]{type});
+
+    my $event = $res->{list}[0]{event};
+    $self->assert_not_null($event);
+
+    # A standalone Event carries its version.
+    $self->assert_str_equals('2.0', $event->{version});
+
+    # 2.0 spellings, and none of the 1.0 ones.
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $event->{organizerCalendarAddress});
+    $self->assert_null($event->{replyTo});
+
+    my ($attendee) = grep { not exists $_->{roles}{owner} }
+                     values %{$event->{participants}};
+    $self->assert_not_null($attendee);
+    $self->assert_str_equals('mailto:bugs@example.com',
+        $attendee->{calendarAddress});
+    $self->assert_null($attendee->{sendTo});
+
+    xlog $self, "Owner updates the event, adding a second attendee";
+    my $ical2 = $ical;
+    $ical2 =~ s{(ATTENDEE[^\r]*bugs\@example\.com\r\n)}
+               {$1ATTENDEE;CN=Daffy Duck;ROLE=REQ-PARTICIPANT:mailto:daffy\@example.com\r\n};
+    $caldav->Request('PUT', "/dav/calendars/user/cassandane/Default/test.ics", $ical2,
+        'Content-Type' => 'text/calendar');
+
+    xlog $self, "Sharee reads the 'updated' notification";
+    $res = $sharee_jmap->request([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }],
+    ])->single_sentence('CalendarEventNotification/get')->as_stripped_pair->[1];
+
+    my ($updated) = grep { $_->{type} eq 'updated' } @{$res->{list}};
+    $self->assert_not_null($updated);
+    $self->assert_str_equals('2.0', $updated->{event}{version});
+
+    # The patch is a diff of two 2.0 events, so its paths and values use the
+    # 2.0 spellings too.
+    my $patch = encode_json($updated->{eventPatch});
+    $self->assert_matches(qr/calendarAddress/, $patch);
+    $self->assert_matches(qr/daffy\@example\.com/, $patch);
+    $self->assert_does_not_match(qr/sendTo/, $patch);
+}

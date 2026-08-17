@@ -1,0 +1,43 @@
+Description:
+
+JMAP for Calendars now always serves JSCalendar 2.0.  A request using the
+urn:ietf:params:jmap:calendars capability will be expected to work with
+JSCalendar 2.0.
+
+The event payloads that aren't tied to a request are JSCalendar 2.0 too: the
+event and eventPatch of a CalendarEventNotification, and the jsevent and patch
+of an iMIP notification sent to the imipnotifier.
+
+The JSCalendar 1.0 spellings are gone, so a request that uses them now fails
+instead of being quietly understood.  On Calendar, myRights and shareWith use
+"mayShare" rather than "mayAdmin".  On ParticipantIdentity and Principal, the
+address is "calendarAddress" rather than "sendTo".  On CalendarEvent, the
+custom iCalendar properties are "iCalendar" rather than
+"cyrusimap.org:iCalProps", and "recurrenceRules", "excludedRecurrenceRules"
+and "replyTo" are no longer properties at all.
+
+CalDAV no longer supports the application/event+json media type.  It was never
+standardized, and JSCalendar belongs to JMAP; a client that wants JSCalendar
+should use JMAP for Calendars.  A GET asking for it in Accept now gets a 406,
+and a PUT sending it now gets a 400.  application/calendar+json (jCal, RFC
+7265) and application/calendar+xml (xCal, RFC 6321) are unaffected.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None
