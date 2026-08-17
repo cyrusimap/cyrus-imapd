@@ -206,10 +206,13 @@ A test passes unless it dies or an assertion fails, so assertions are how you
 state what "correct" means.  The ones you'll reach for most often come from
 Test::Unit:
 
-``assert($bool)``, ``assert_str_equals($expect, $got)``,
-``assert_num_equals($expect, $got)``, ``assert_null`` / ``assert_not_null``,
-and ``assert_matches($regex, $string)`` for scalars; and
-``assert_deep_equals($expect, $got)`` for nested data structures.
+* ``assert_str_equals($expect, $got)``
+* ``assert_num_equals($expect, $got)``
+* ``assert_null($value)``
+* ``assert_not_null($value)``
+* ``assert_matches($regex, $string)``
+* ``assert_not_matches($regex, $string)``
+* ``assert_deep_equals($expect, $got)`` for data structures
 
 Cassandane adds more in ``Cassandane::Unit::TestCase``.  The most generally
 useful is ``assert_cmp_deeply``, which compares against `Test::Deep
