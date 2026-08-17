@@ -295,8 +295,6 @@ offers ``get_version()``, which can detect versions as far back as 2.5.0:
 
     my ($major, $minor, $revision, $extra) = Cassandane::Instance->get_version()
 
-The skip handling itself lives in ``Cassandane::Test::Skip``.
-
 The object model
 ----------------
 
