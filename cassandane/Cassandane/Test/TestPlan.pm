@@ -228,9 +228,12 @@ sub test_negation ($self)
     $self->assert_plan(['GlobOne', '!GlobOne.*a'],
                        [qw(Alpha::GlobOne.gamma_slow)]);
 
-    # denial beats permission, whichever order they're given in
-    $self->assert_plan(['GlobOne.beta', '!GlobOne.beta'], []);
-    $self->assert_plan(['!GlobOne.beta', 'GlobOne.beta'], []);
+    # denial beats permission, whichever order they're given in -- which here
+    # leaves nothing to run at all, so see test_empty_plan_dies
+    $self->assert_plan_dies(['GlobOne.beta', '!GlobOne.beta'],
+                            qr{test plan is empty});
+    $self->assert_plan_dies(['!GlobOne.beta', 'GlobOne.beta'],
+                            qr{test plan is empty});
 
     # Denying a test that doesn't exist is not an error, unlike selecting one:
     # the "suppress" setting names tests to deny, and has to keep working
@@ -302,8 +305,38 @@ sub test_unmatched_test_dies ($self)
     $self->assert_plan_dies(['GlobOne.nonesuch', 'GlobTwo.nonesuch'],
                             qr{No tests matched: GlobOne\.nonesuch, GlobTwo\.nonesuch});
 
-    # a specification that matches, but is then denied, is not an error
-    $self->assert_plan(['GlobOne.beta', '!GlobOne.beta'], []);
+    # A specification that matches and is then denied is not this error: it did
+    # match, so it's never named here.  It dies for being empty instead.
+    $self->assert_plan_dies(['GlobOne.beta', '!GlobOne.beta'],
+                            qr{test plan is empty});
+}
+
+sub test_empty_plan_dies ($self)
+{
+    # Every specification here is individually fine, so nothing above catches
+    # these.  A plan that runs nothing still has to be fatal, because "OK (0
+    # tests)" is exactly what a run where everything passed looks like.
+
+    # a suite, denied
+    $self->assert_plan_dies(['GlobOne', '!GlobOne'], qr{test plan is empty});
+
+    # a suite, denied a test at a time
+    $self->assert_plan_dies(['GlobTwo', '!GlobTwo.alpha', '!GlobTwo.delta'],
+                            qr{test plan is empty});
+
+    # a whole root, denied
+    $self->assert_plan_dies([$BETA, "!$BETA"], qr{test plan is empty});
+
+    # a glob, denied by the same glob
+    $self->assert_plan_dies(['Glob*.alpha', '!Glob*.alpha'],
+                            qr{test plan is empty});
+
+    # ... and one survivor anywhere in the plan is enough to save it
+    $self->assert_plan(['GlobOne', '!GlobOne.alpha', '!GlobOne.beta'],
+                       [qw(Alpha::GlobOne.gamma_slow)]);
+
+    $self->assert_plan(['GlobOne', 'Other', '!GlobOne'],
+                       [qw(Alpha::Other.alpha)]);
 }
 
 sub test_slow_flags ($self)

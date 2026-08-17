@@ -717,6 +717,21 @@ sub schedule
     }
 
     $self->_check_selections();
+    $self->_check_not_empty();
+}
+
+# Every specification can be fine, but we still have nothing to run, because a
+# negation can cancel out a selection: "ACL !ACL" is nothing.
+sub _check_not_empty ($self)
+{
+    foreach my $item (values $self->{schedule}->%*)
+    {
+        my @names = map {; s/^test_//r } $item->_get_loaded_suite()->names()->@*;
+
+        return if grep {; $item->_is_allowed($_) } @names;
+    }
+
+    die "No tests to run: the test plan is empty\n";
 }
 
 # Check what the specifications that named individual tests actually selected.
