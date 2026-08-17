@@ -10,5 +10,4 @@ Support/Community
 
     Found a bug? <imap/support/feedback-bugs>
     Mailing lists <imap/support/feedback-mailing-lists>
-    Weekly meetings <imap/support/feedback-meetings>
     About <overview/about_cyrus>

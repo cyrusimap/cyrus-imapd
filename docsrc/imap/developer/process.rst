@@ -62,6 +62,4 @@ Community Participation
 
 Join us! The project is only as good as the sum of its people. We all work together, despite the tyranny of distance and timezones.
 
-Meetings are currently :ref:`held online via Zoom <feedback-meetings>`.
-
-There's also :ref:`mailing lists <support>`.
+We communicate via the :ref:`mailing lists <support>`.
