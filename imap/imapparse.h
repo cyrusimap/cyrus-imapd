@@ -97,7 +97,7 @@ int getmodseq(struct protstream *pin, modseq_t *num);
 void eatline(struct protstream *pin, int c);
 
 int get_search_program(struct protstream *pin, struct protstream *pout,
-                       struct searchargs *searchargs);
+                       unsigned client_quirks, struct searchargs *searchargs);
 int get_search_return_opts(struct protstream *pin, struct protstream *pout,
                            struct searchargs *searchargs);
 
