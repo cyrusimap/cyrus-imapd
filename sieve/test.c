@@ -42,6 +42,7 @@
 #ifdef WITH_JMAP
 #include "imap/jmap_mail_query.h"
 #endif
+#include "imap/ical_support.h"
 
 static char vacation_answer;
 

@@ -1,0 +1,82 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Read the SMTP telemetry log of the redirect we just did, and return
+# the lines of the conversation.
+#
+sub _smtpclient_telemetry
+{
+    my ($self) = @_;
+
+    my $telemetry_dir =
+        $self->{instance}->get_basedir() . '/conf/log/smtpclient.host';
+    opendir(my $dh, $telemetry_dir) or die "opendir $telemetry_dir: $!";
+
+    my @lines = ();
+
+    while (readdir $dh) {
+        next if not m/^lmtp-/;
+
+        my $telemetry_file = "$telemetry_dir/$_";
+        open(my $fh, '<', $telemetry_file) or die "open $telemetry_file: $!";
+        @lines = <$fh>;
+        close $fh;
+        last;
+    }
+    closedir $dh;
+
+    return @lines;
+}
+
+sub test_redirect_utf8_address
+    :want_smtpdaemon :min_version_3_13
+    ($self)
+{
+    xlog $self, "Install a Sieve script redirecting to a UTF-8 address";
+    $self->{instance}->install_sieve_script(<<EOF
+redirect "info\@grå.org";
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    my @lines = _smtpclient_telemetry($self);
+
+    xlog $self, "MAIL FROM must announce SMTPUTF8, per RFC 6531";
+    my @from = grep { m/MAIL FROM:/ } @lines;
+    $self->assert_num_equals(1, scalar @from);
+    $self->assert_matches(qr/SMTPUTF8/, $from[0]);
+
+    xlog $self, "and the recipient goes out as UTF-8, not punycode";
+    my @rcpt = grep { m/RCPT TO:/ } @lines;
+    $self->assert_num_equals(1, scalar @rcpt);
+    $self->assert_matches(qr/info\@grå\.org/, $rcpt[0]);
+
+    xlog $self, "The message was redirected, so it is not in INBOX";
+    my $talk = $self->{store}->get_client();
+    $talk->select("INBOX");
+    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+}
+
+sub test_redirect_ascii_address_no_smtputf8
+    :want_smtpdaemon :min_version_3_13
+    ($self)
+{
+    xlog $self, "Install a Sieve script redirecting to an ASCII address";
+    $self->{instance}->install_sieve_script(<<EOF
+redirect "example\@example.com";
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "An ASCII envelope stays plain SMTP";
+    my @from = grep { m/MAIL FROM:/ } _smtpclient_telemetry($self);
+    $self->assert_num_equals(1, scalar @from);
+    $self->assert_does_not_match(qr/SMTPUTF8/, $from[0]);
+}

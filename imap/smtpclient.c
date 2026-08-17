@@ -50,6 +50,7 @@ struct smtpclient {
     char *by;
     char *jmapid;
     unsigned long msgsize;
+    int smtputf8;
     smtp_resp_t resp;
 };
 
@@ -62,6 +63,7 @@ enum {
     SMTPCLIENT_CAPA_PRIORITY  = (1 << 8),
     SMTPCLIENT_CAPA_SENDCHECK = (1 << 9),
     SMTPCLIENT_CAPA_JMAPID    = (1 << 10),
+    SMTPCLIENT_CAPA_SMTPUTF8  = (1 << 11),
 };
 
 static const char *smtpclient_ehlo_hostname = NULL;
@@ -82,6 +84,7 @@ static struct protocol_t smtp_protocol =
           { "MT-PRIORITY", SMTPCLIENT_CAPA_PRIORITY },
           { "SENDCHECK", SMTPCLIENT_CAPA_SENDCHECK },
           { "JMAPIDENTITY", SMTPCLIENT_CAPA_JMAPID },
+          { "SMTPUTF8", SMTPCLIENT_CAPA_SMTPUTF8 },
           { NULL, 0 } } },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
@@ -509,7 +512,8 @@ static void smtp_params_set_extra(ptrarray_t *params, ptrarray_t *extra,
     if (i == params->count) {
         smtp_param_t *param = xzmalloc(sizeof(smtp_param_t));
         param->key = xstrdup(key);
-        param->val = xstrdup(val);
+        /* SMTPUTF8 has no value */
+        param->val = xstrdupnull(val);
         ptrarray_add(extra, param);
     }
 }
@@ -526,10 +530,46 @@ static void smtp_params_fini(ptrarray_t *params)
     ptrarray_fini(params);
 }
 
+/* Does this envelope address need SMTPUTF8? */
+EXPORTED int smtp_addr_needs_utf8(const char *addr)
+{
+    const unsigned char *p = (const unsigned char *) addr;
+
+    if (!p) return 0;
+
+    for ( ; *p; p++) {
+        if (*p >= 128) return 1;
+    }
+    return 0;
+}
+
+/*
+ * Does this envelope need SMTPUTF8?
+ *
+ * Strictly speaking, a header field with UTF8 should also trigger it,
+ * but that's tricky to implement and readers are used to just-send-8
+ * anyway. So we just look at the envelope.
+ */
+EXPORTED int smtp_envelope_needs_utf8(smtp_envelope_t *env)
+{
+    int i;
+
+    if (smtp_addr_needs_utf8(env->from.addr)) return 1;
+
+    for (i = 0; i < ptrarray_size(&env->rcpts); i++) {
+        smtp_addr_t *addr = ptrarray_nth(&env->rcpts, i);
+        if (smtp_addr_needs_utf8(addr->addr)) return 1;
+    }
+    return 0;
+}
+
 /* Write a MAIL FROM command for address addr. */
 static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr)
 {
     ptrarray_t extra_params = PTRARRAY_INITIALIZER;
+    if (sm->smtputf8) {
+        smtp_params_set_extra(&addr->params, &extra_params, "SMTPUTF8", NULL);
+    }
     if (sm->authid && CAPA(sm->backend, CAPA_AUTH)) {
         smtp_params_set_extra(&addr->params, &extra_params, "AUTH", sm->authid);
     }
@@ -717,6 +757,15 @@ static int smtpclient_sendenv(smtpclient_t *sm, smtp_envelope_t *env)
 
     r = validate_envelope(env);
     if (r) goto done;
+
+    sm->smtputf8 = smtp_envelope_needs_utf8(env);
+    if (sm->smtputf8 && !CAPA(sm->backend, SMTPCLIENT_CAPA_SMTPUTF8)) {
+        syslog(LOG_ERR, "smtpclient: sessionid=<%s> "
+               "UTF-8 envelope but no SMTPUTF8 from %s",
+               session_id(), sm->backend->hostname);
+        r = IMAP_REMOTE_NO_SMTPUTF8;
+        goto done;
+    }
 
     r = smtpclient_from(sm, &env->from);
     if (r) goto done;

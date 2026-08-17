@@ -47,6 +47,7 @@
 #include "imap/mupdate_err.h"
 
 #include "lmtpengine.h"
+#include "smtpclient.h"
 #include "tls.h"
 #include "telemetry.h"
 
@@ -169,6 +170,7 @@ static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
     case IMAP_MESSAGE_CONTAINS8BIT:
     case IMAP_MESSAGE_BADHEADER:
     case IMAP_MESSAGE_NOBLANKLINE:
+    case IMAP_REMOTE_NO_SMTPUTF8:
         code = LMTP_MESSAGE_INVALID;
         break;
 
@@ -1688,6 +1690,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
     int j, code, r = 0;
     char buf[8192];
     int onegood;
+    int needs_utf8;
     const char *traceid = trace_id();
 
     assert(conn && txn);
@@ -1712,6 +1715,20 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
         }
     }
 
+    /* does this envelope need SMTPUTF8? */
+    needs_utf8 = smtp_addr_needs_utf8(txn->from);
+    for (j = 0; !needs_utf8 && j < txn->rcpt_num; j++) {
+        needs_utf8 = smtp_addr_needs_utf8(txn->rcpt[j].addr);
+    }
+    if (needs_utf8 && !CAPA(conn, CAPA_SMTPUTF8)) {
+        /* Very odd: we advertised SMTPUTF8 but the backend doesn't? */
+        syslog(LOG_ERR, "lmtp_runtxn: UTF-8 envelope but no SMTPUTF8 from %s",
+               conn->hostname);
+        code = 550;
+        r = 0;
+        goto failall;
+    }
+
     /* mail from */
     if (!txn->from) {
         prot_printf(conn->out, "MAIL FROM:<>");
@@ -1723,6 +1740,9 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
     if (CAPA(conn, CAPA_AUTH)) {
         prot_printf(conn->out, " AUTH=%s",
                     txn->auth && txn->auth[0] ? txn->auth : "<>");
+    }
+    if (needs_utf8) {
+        prot_printf(conn->out, " SMTPUTF8");
     }
     prot_printf(conn->out, "\r\n");
     r = getlastresp(buf, sizeof(buf)-1, &code, conn->in, NULL);

@@ -1,0 +1,52 @@
+#include <stdarg.h>
+#include <stdlib.h>
+#include "cunit/unit.h"
+#include "imap/smtpclient.h"
+
+static void test_addr_needs_utf8(void)
+{
+    CU_ASSERT_EQUAL(smtp_addr_needs_utf8("arnt@example.com"), 0);
+    CU_ASSERT_EQUAL(smtp_addr_needs_utf8("arnt@xn--gr-zia.org"), 0);
+    CU_ASSERT_EQUAL(smtp_addr_needs_utf8(""), 0);
+    CU_ASSERT_EQUAL(smtp_addr_needs_utf8(NULL), 0);
+
+    CU_ASSERT(smtp_addr_needs_utf8("arnt@grå.org"));
+    CU_ASSERT(smtp_addr_needs_utf8("gøril@example.com"));
+    CU_ASSERT(smtp_addr_needs_utf8("उदाहरण@उदाहरण.भारत"));
+    CU_ASSERT(smtp_addr_needs_utf8("例子@例子.中国"));
+}
+
+/* Build an envelope from 'from' and the NULL-terminated rcpts, ask
+ * whether it needs SMTPUTF8, and clean up. */
+static int needs_utf8(const char *from, ...)
+{
+    smtp_envelope_t env = SMTP_ENVELOPE_INITIALIZER;
+    const char *rcpt;
+    va_list ap;
+    int r;
+
+    smtp_envelope_set_from(&env, from);
+
+    va_start(ap, from);
+    while ((rcpt = va_arg(ap, const char *))) {
+        smtp_envelope_add_rcpt(&env, rcpt);
+    }
+    va_end(ap);
+
+    r = smtp_envelope_needs_utf8(&env);
+    smtp_envelope_fini(&env);
+
+    return r;
+}
+
+static void test_envelope_needs_utf8(void)
+{
+    CU_ASSERT(needs_utf8("arnt@example.com", "gøril@example.com", NULL));
+    CU_ASSERT(needs_utf8("arnt@grå.org", "info@example.com", NULL));
+    CU_ASSERT(needs_utf8("arnt@example.com", "info@example.com",
+                         "info@grå.org", "arnt@example.com", NULL));
+    CU_ASSERT_EQUAL(needs_utf8("arnt@xn--gr-zia.org", "info@example.com",
+                               "info@xn--fsqu00a.xn--fiqs8s", NULL), 0);
+}
+
+/* vim: set ft=c: */

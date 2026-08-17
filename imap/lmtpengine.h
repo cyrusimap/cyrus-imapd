@@ -107,6 +107,7 @@ enum {
     CAPA_PIPELINING     = (1 << 3),
     CAPA_IGNOREQUOTA    = (1 << 4),
     CAPA_TRACE          = (1 << 5),
+    CAPA_SMTPUTF8       = (1 << 6),
 };
 
 struct lmtp_txn {

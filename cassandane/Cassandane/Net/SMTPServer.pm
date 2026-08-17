@@ -72,7 +72,8 @@ sub helo {
     $Self->mylog("SMTP: HELO $Host");
     return if $Self->override('helo');
     $Self->send_client_resp(250, "localhost",
-                            "AUTH", "DSN", "SIZE 10000", "ENHANCEDSTATUSCODES");
+                            "AUTH", "DSN", "SIZE 10000", "ENHANCEDSTATUSCODES",
+                            "SMTPUTF8");
 }
 
 sub mail_from {

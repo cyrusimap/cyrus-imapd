@@ -36,6 +36,11 @@ typedef struct {
 /* The empty SMTP envelope */
 #define SMTP_ENVELOPE_INITIALIZER { { NULL, PTRARRAY_INITIALIZER, 0 }, PTRARRAY_INITIALIZER }
 
+/* Return non-zero if addr, or any address in env, needs SMTPUTF8
+ * as defined in RFC 6531. */
+extern int smtp_addr_needs_utf8(const char *addr);
+extern int smtp_envelope_needs_utf8(smtp_envelope_t *env);
+
 /* Return non-zero if val is a valid esmtp-keyword
  * as defined in RFC 5321, section 4.1.2. */
 extern int smtp_is_valid_esmtp_keyword(const char *val);

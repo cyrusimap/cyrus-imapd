@@ -119,6 +119,9 @@ ec IMAP_MESSAGE_CONTAINSNL,
 ec IMAP_MESSAGE_CONTAINS8BIT,
    "Message contains non-ASCII characters in headers"
 
+ec IMAP_REMOTE_NO_SMTPUTF8,
+   "Remote server does not support SMTPUTF8"
+
 ec IMAP_MESSAGE_BADHEADER,
    "Message contains invalid header"
 

@@ -663,6 +663,7 @@ cunit_TESTS = \
     cunit/seqset.testc \
     cunit/sessionid.testc \
     cunit/slowio.testc \
+    cunit/smtpclient.testc \
     cunit/smallarrayu64.testc \
     cunit/xsyslog_ev.testc
 
