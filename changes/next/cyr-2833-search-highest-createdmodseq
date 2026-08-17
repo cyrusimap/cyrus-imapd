@@ -1,0 +1,28 @@
+Description:
+
+Squatter now stores the highest createdmodseq of all indexed messages
+for Xapian search backends. This is to avoid a race conditions between
+squatter and JMAP Email/queryChanges requests. This does not apply to
+the squat backend.
+
+Documentation:
+
+None
+
+Config changes:
+
+None
+
+Upgrade instructions:
+
+Rolling squatters will automatically set the highest createdmodseq for
+newly indexed messages. It does not verify that the createdmodseq for any
+messages that already was indexed indeed is lower than that. Installations
+that once fully built their index and then updated it with rolling squatters
+do not need to take any action. Other installations may consider rebuilding
+their search index if they want to avoid inconsistent Email/queryChanges
+results.
+
+GitHub issue:
+
+None

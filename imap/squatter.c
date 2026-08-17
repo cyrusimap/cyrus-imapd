@@ -127,6 +127,7 @@ __attribute__((noreturn)) static int usage(const char *name)
             "Experimental options:\n"
             "  --attachextract-cache-dir=DIR  cache extracted attachment text in DIR\n"
             "  --attachextract-cache-only     only extract attachment text from the cache\n"
+            "  --highest-createdmodseq        print index highest createdmodseq and generation (requires -u)\n"
             "\n"
 
             "General options:\n"
@@ -269,10 +270,16 @@ done:
 
 /* ====================================================================== */
 
+/* How many times to repeat an update of the same mailbox that indexed no
+ * message at all. Such an update can only complete if whatever kept it from
+ * indexing goes away, so give up rather than block this run on it. */
+#define MAX_UNPRODUCTIVE_UPDATES 3
+
 /* This is called once for each mailbox we're told to index. */
 static int index_one(const char *name, int blocking)
 {
     struct mailbox *mailbox = NULL;
+    int nunproductive = 0;
     int r;
     int flags = SEARCH_UPDATE_BATCH;
 
@@ -375,14 +382,28 @@ again:
         }
     }
 
-    r = search_update_mailbox(rx, &mailbox, reindex_minlevel, flags);
+    size_t nindexed = 0;
+    r = search_update_mailbox(rx, &mailbox, reindex_minlevel, flags, &nindexed);
 
     mailbox_close(&mailbox);
 
     /* in non-blocking (rolling) mode, only do one batch per mailbox at
      * a time for fairness [IRIS-2471].  The squatter will re-insert the
      * mailbox in the queue */
-    if (blocking && r == IMAP_AGAIN) goto again;
+    if (blocking && r == IMAP_AGAIN) {
+        /* Batching an update indexes messages, so keep going. An update
+         * that indexed nothing, e.g. because the mailbox got recreated
+         * while we extracted its attachment text, may never complete. */
+        if (nindexed) {
+            nunproductive = 0;
+            goto again;
+        }
+        if (++nunproductive <= MAX_UNPRODUCTIVE_UPDATES) goto again;
+
+        xsyslog_ev(LOG_ERR, "giving up on mailbox that indexes no message",
+                lf_s("mboxname", name),
+                lf_d("updates", nunproductive));
+    }
     free(extname);
 
     return r;
@@ -432,6 +453,7 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
 static int do_indexer(const strarray_t *mboxnames)
 {
     int r = 0;
+    int rincomplete = 0;
     int i;
 
     rx = search_begin_update(verbose);
@@ -446,6 +468,12 @@ static int do_indexer(const strarray_t *mboxnames)
             r = 0;
         if (r == IMAP_MAILBOX_LOCKED)
             r = 0; /* XXX - try again? */
+        if (r == IMAP_AGAIN) {
+            /* index_one gave up on this mailbox. Keep indexing the others,
+             * but report the incomplete index for this run. */
+            rincomplete = r;
+            r = 0;
+        }
         if (r) break;
         if (sleepmicroseconds)
             usleep(sleepmicroseconds);
@@ -453,7 +481,7 @@ static int do_indexer(const strarray_t *mboxnames)
 
     search_end_update(rx);
 
-    return r;
+    return r ? r : rincomplete;
 }
 
 static int squatter_build_query(search_builder_t *bx, const char *query)
@@ -657,15 +685,53 @@ static int do_search(const char *query, int single, const strarray_t *mboxnames)
         if (single)
             printf("mailbox %s\n", mboxname);
 
-        bx = search_begin_search(mailbox, opts);
-        if (bx) {
-            r = squatter_build_query(bx, query);
-            if (!r)
-                bx->run(bx, print_search_hit, &single);
-            search_end_search(bx);
+        search_session_t *session = search_begin_session(mailbox, opts);
+        if (session) {
+            bx = search_begin_search(session);
+            if (bx) {
+                r = squatter_build_query(bx, query);
+                if (!r)
+                    bx->run(bx, print_search_hit, &single);
+                search_end_search(bx);
+            }
+            search_end_session(session);
         }
 
         mailbox_close(&mailbox);
+    }
+
+    return 0;
+}
+
+static int do_highest_createdmodseq(int nuserids, const char **userids)
+{
+    int opts = SEARCH_VERBOSE(verbose);
+
+    /* For each user, open a session on their inbox and report the
+     * highest createdmodseq and index generation of their index. */
+    for (int i = 0 ; i < nuserids ; i++) {
+        const char *userid = userids[i];
+        char *inboxname = mboxname_user_mbox(userid, NULL);
+
+        struct mailbox *mailbox = NULL;
+        int r = mailbox_open_irl(inboxname, &mailbox);
+        if (r) {
+            fprintf(stderr, "Cannot open inbox for user %s: %s\n",
+                    userid, error_message(r));
+            free(inboxname);
+            continue;
+        }
+
+        search_session_t *session = search_begin_session(mailbox, opts);
+        uint64_t index_generation = 0;
+        modseq_t highest_createdmodseq =
+            search_session_get_highest_createdmodseq(session, &index_generation);
+        printf("%s " MODSEQ_FMT " " UINT64_FMT "\n", userid,
+               highest_createdmodseq, index_generation);
+        search_end_session(session);
+
+        mailbox_close(&mailbox);
+        free(inboxname);
     }
 
     return 0;
@@ -834,22 +900,21 @@ static void do_rolling(const char *channel)
 
 static int audit_one(const char *mboxname, bitvector_t *unindexed)
 {
-    int r2, r = 0;
     struct mailbox *mailbox = NULL;
 
-    r = mailbox_open_irl(mboxname, &mailbox);
-    if (r) goto done;
+    int r = mailbox_open_irl(mboxname, &mailbox);
+    if (r) return r;
 
+    /* only end a mailbox that we did begin */
     r = rx->begin_mailbox(rx, mailbox, SEARCH_UPDATE_AUDIT);
-    if (r) goto done;
+    if (!r) {
+        r = rx->audit_mailbox(rx, unindexed);
 
-    r = rx->audit_mailbox(rx, unindexed);
-    if (r) goto done;
+        int r2 = rx->end_mailbox(rx, mailbox);
+        if (!r) r = r2;
+    }
 
-done:
-    r2 = rx->end_mailbox(rx, mailbox);
     mailbox_close(&mailbox);
-    if (!r) r = r2;
     return r;
 }
 
@@ -930,7 +995,7 @@ int main(int argc, char **argv)
     const char *desttier = NULL;
     char *errstr = NULL;
     enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG,
-           COMPACT, AUDIT, LIST } mode = UNKNOWN;
+           COMPACT, AUDIT, LIST, HIGHEST_CREATEDMODSEQ } mode = UNKNOWN;
     const char *axcachedir = NULL;
     int axcacheonly = 0;
     FILE *waitdaemon_status = NULL;
@@ -943,6 +1008,7 @@ int main(int argc, char **argv)
     enum squatter_long_options {
         SQUATTER_ATTACHEXTRACT_CACHE_DIR = 1024,
         SQUATTER_ATTACHEXTRACT_CACHE_ONLY,
+        SQUATTER_HIGHEST_CREATEDMODSEQ,
     };
 
     /* Keep these ordered by mode */
@@ -997,6 +1063,8 @@ int main(int argc, char **argv)
             SQUATTER_ATTACHEXTRACT_CACHE_DIR },
         {"attachextract-cache-only", no_argument, 0,
             SQUATTER_ATTACHEXTRACT_CACHE_ONLY },
+        {"highest-createdmodseq", no_argument, 0,
+            SQUATTER_HIGHEST_CREATEDMODSEQ },
 
         /* misc */
         {"help", no_argument, 0, 'h' },
@@ -1174,6 +1242,11 @@ int main(int argc, char **argv)
             axcacheonly = 1;
             break;
 
+        case SQUATTER_HIGHEST_CREATEDMODSEQ:
+            if (mode != UNKNOWN) usage(argv[0]);
+            mode = HIGHEST_CREATEDMODSEQ;
+            break;
+
         case 'h':
         default:
             usage("squatter");
@@ -1287,6 +1360,11 @@ int main(int argc, char **argv)
         if (recursive_flag && optind == argc) usage(argv[0]);
         expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
         r = do_list(&mboxnames);
+        break;
+    case HIGHEST_CREATEDMODSEQ:
+        /* require -u and at least one user */
+        if (!user_mode || optind == argc) usage(argv[0]);
+        r = do_highest_createdmodseq(argc-optind, (const char **)argv+optind);
         break;
     }
 

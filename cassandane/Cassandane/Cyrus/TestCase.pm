@@ -363,6 +363,15 @@ magic(SearchAttachmentExtractor => sub {
     $self->config_set('search_attachment_extractor_request_timeout' => '3s');
     $self->config_set('search_attachment_extractor_idle_timeout' => '3s');
 });
+magic(SearchAttachmentExtractorBlocking => sub {
+    # For tests that hold up the extractor on purpose. With the timeouts that
+    # SearchAttachmentExtractor sets, squatter would give up on the extraction
+    # and carry on, and the test would not exercise what it means to. Apply
+    # this after :SearchAttachmentExtractor.
+    my $self = shift;
+    $self->config_set('search_attachment_extractor_request_timeout' => '60s');
+    $self->config_set('search_attachment_extractor_idle_timeout' => '60s');
+});
 magic(SearchLanguage => sub {
     shift->config_set('search_index_language' => 'yes');
 });
