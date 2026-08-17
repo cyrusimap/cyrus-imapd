@@ -466,11 +466,13 @@ enum xsyslog_ev_arg_type {
  * We need this shim because, unlike gettimeofday, clock_gettime itself is
  * not a weak alias, so it can't be overridden directly.
  */
+#ifndef __cplusplus
 static int wrap_clock_gettime(clockid_t id, struct timespec *ts)
 {
     return clock_gettime(id, ts);
 }
 __attribute__((weak, alias("wrap_clock_gettime"), visibility("default")))
 extern int cyrus_gettime(clockid_t, struct timespec *);
+#endif
 
 #endif /* INCLUDED_UTIL_H */
