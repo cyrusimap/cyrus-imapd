@@ -132,16 +132,16 @@ static void *index_thread_getnext(Thread *thread);
 static void index_thread_setnext(Thread *thread, Thread *next);
 static int index_thread_compare(Thread *t1, Thread *t2,
                                 const struct sortcrit *call_data);
-static void index_thread_orderedsubj(struct index_state *state,
+static bool index_thread_orderedsubj(struct index_state *state,
                                      unsigned *msgno_list, unsigned int nmsg,
                                      int usinguid);
 static void index_thread_sort(Thread *root, const struct sortcrit *sortcrit);
 static void index_thread_print(struct index_state *state,
                                Thread *threads, int usinguid);
-static void index_thread_references(struct index_state *state,
+static bool index_thread_references(struct index_state *state,
                                     unsigned *msgno_list, unsigned int nmsg,
                                     int usinguid);
-static void index_thread_refs(struct index_state *state,
+static bool index_thread_refs(struct index_state *state,
                               unsigned *msgno_list, unsigned int nmsg,
                               int usinguid);
 
@@ -2220,9 +2220,15 @@ EXPORTED int index_thread(struct index_state *state, int algorithm,
 
     if (nmsg) {
         /* Thread messages using given algorithm */
-        (*thread_algs[algorithm].threader)(state, msgno_list, nmsg, usinguid);
+        bool ok = (*thread_algs[algorithm].threader)(state, msgno_list,
+                                                     nmsg, usinguid);
 
         free(msgno_list);
+
+        if (!ok) {
+            nmsg = -1;
+            goto out;
+        }
 
         if (highestmodseq)
             prot_printf(state->out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
@@ -5760,6 +5766,7 @@ static char *_index_extract_subject(char *s, int *is_refwd)
 }
 
 /* Get message-id, and references/in-reply-to */
+#define REFERENCES_ID_LIMIT 20
 
 void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
                    unsigned size)
@@ -5793,8 +5800,18 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
         /* find references */
         refstr = buf.s;
         massage_header(refstr);
-        while ((ref = message_iter_msgid(refstr, 0, &refstr)) != NULL)
+        while ((ref = message_iter_msgid(refstr, 0, &refstr)) != NULL) {
+            /* We only load 20 references.
+             * If the number of references exceeds that limit, we load:
+             *   - the root id (first message),
+             *   - the parent id (last message),
+             *   - the ids of the 18 most-recent predecessors of the parent
+             */
+            if (strarray_size(&msgdata->ref) == REFERENCES_ID_LIMIT) {
+                free(strarray_remove(&msgdata->ref, 1));
+            }
             strarray_appendm(&msgdata->ref, ref);
+        }
     }
 
     /* if we have no references, try in-reply-to */
@@ -6225,7 +6242,7 @@ static void index_thread_sort(Thread *root,
 /*
  * Thread a list of messages using the ORDEREDSUBJECT algorithm.
  */
-static void index_thread_orderedsubj(struct index_state *state,
+static bool index_thread_orderedsubj(struct index_state *state,
                                      unsigned *msgno_list, unsigned int nmsg,
                                      int usinguid)
 {
@@ -6303,6 +6320,8 @@ static void index_thread_orderedsubj(struct index_state *state,
 
     /* free the msgdata array */
     index_msgdata_free(msgdata, nmsg);
+
+    return true;
 }
 
 /*
@@ -6884,26 +6903,20 @@ static void index_thread_search(struct index_state *state,
  * Guts of the REFERENCES algorithms.  Behavior is tweaked with loadcrit[],
  * threadproc(), searchproc() and sortcrit[].
  */
-static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
+static bool _index_thread_ref(struct index_state *state, unsigned *msgno_list,
                               unsigned int nmsg,
                               const struct sortcrit loadcrit[],
                               MsgData **(*threadproc) (struct rootset *, Thread **),
                               int (*searchproc) (MsgData *),
                               const struct sortcrit sortcrit[], int usinguid)
 {
-    MsgData **msgdata, **thrdata = NULL;
+    MsgData **msgdata = NULL, **thrdata = NULL;
     unsigned int mi;
-    int tref, nnode;
+    uint64_t tref, nnode, ref_limit;
     Thread *newnode;
     struct hash_table id_table;
-    struct rootset rootset;
-
-    /* Create/load the msgdata array */
-    msgdata = index_msgdata_load(state, msgno_list, nmsg, loadcrit, 0, NULL);
-
-    /* calculate the sum of the number of references for all messages */
-    for (mi = 0, tref = 0 ; mi < nmsg ; mi++)
-        tref += msgdata[mi]->ref.count;
+    struct rootset rootset = { 0 };
+    bool ret = true;
 
     /* create an array of Thread to use as nodes of thread tree (including
      * empty containers)
@@ -6922,7 +6935,25 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
      * and our parent/child/next pointers will no longer be correct
      * (been there, done that).
      */
-    nnode = (int) (1.5 * nmsg + 1 + tref);
+    /* nmsg is 32 bits wide, so this can't overflow, but the arithmetic must
+     * be done in 64 bits or the sum itself will wrap. -- claude, 2026-08-16 */
+    nnode = (uint64_t) nmsg + nmsg / 2 + 1;
+    ref_limit = UINT64_MAX - nnode;
+
+    /* Create/load the msgdata array */
+    msgdata = index_msgdata_load(state, msgno_list, nmsg, loadcrit, 0, NULL);
+
+    /* calculate the sum of the number of references for all messages */
+    for (mi = 0, tref = 0; mi < nmsg ; mi++) {
+        if ((uint64_t) msgdata[mi]->ref.count > ref_limit - tref) {
+            ret = false;
+            goto done;
+        }
+
+        tref += msgdata[mi]->ref.count;
+    }
+
+    nnode += tref;
     rootset.root = (Thread *) xmalloc(nnode * sizeof(Thread));
     memset(rootset.root, 0, nnode * sizeof(Thread));
 
@@ -6961,10 +6992,13 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
 
     /* free the thread array */
     free(rootset.root);
+    index_msgdata_free(thrdata, rootset.nroot);
 
+ done:
     /* free the msgdata array */
     index_msgdata_free(msgdata, nmsg);
-    index_msgdata_free(thrdata, rootset.nroot);
+
+    return ret;
 }
 
 /*
@@ -6982,7 +7016,7 @@ static MsgData **references_thread_proc(struct rootset *rootset,
     return NULL;
 }
 
-static void index_thread_references(struct index_state *state,
+static bool index_thread_references(struct index_state *state,
                                     unsigned *msgno_list, unsigned int nmsg,
                                     int usinguid)
 {
@@ -6995,8 +7029,8 @@ static void index_thread_references(struct index_state *state,
                                  {{ SORT_DATE,     0, {{NULL,NULL}} },
                                   { SORT_SEQUENCE, 0, {{NULL,NULL}} }};
 
-    _index_thread_ref(state, msgno_list, nmsg, loadcrit,
-                      references_thread_proc, NULL, sortcrit, usinguid);
+    return _index_thread_ref(state, msgno_list, nmsg, loadcrit,
+                             references_thread_proc, NULL, sortcrit, usinguid);
 }
 
 /* Find most recent internaldate of all messages in thread */
@@ -7055,7 +7089,7 @@ static MsgData **refs_thread_proc(struct rootset *rootset,
 /*
  * Thread a list of messages using the REFS algorithm.
  */
-static void index_thread_refs(struct index_state *state,
+static bool index_thread_refs(struct index_state *state,
                               unsigned *msgno_list, unsigned int nmsg,
                               int usinguid)
 {
@@ -7069,8 +7103,8 @@ static void index_thread_refs(struct index_state *state,
                                   { SORT_ARRIVAL,  0, {{NULL,NULL}} },
                                   { SORT_SEQUENCE, 0, {{NULL,NULL}} }};
 
-    _index_thread_ref(state, msgno_list, nmsg, loadcrit,
-                      refs_thread_proc, NULL, sortcrit, usinguid);
+    return _index_thread_ref(state, msgno_list, nmsg, loadcrit,
+                             refs_thread_proc, NULL, sortcrit, usinguid);
 }
 
 /*
