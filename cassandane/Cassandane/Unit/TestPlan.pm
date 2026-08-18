@@ -822,6 +822,9 @@ sub check_sanity
             my ($tt, $suite, $test) = split q{/}, $fname, 3;
             return if not $suite;
 
+            # ignore dot-dirs
+            return if $suite =~ m{\A\.};
+
             if (not $test) {
                 # explicit initialisation to detect directories with no files
                 $real_tt_dirs{"$tt/$suite"} //= 0;
