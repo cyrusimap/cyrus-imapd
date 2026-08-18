@@ -9,14 +9,13 @@ sub bogus_test_append_same_internaldate ($self)
 
     xlog $self, "Append messages with same internaldates";
     for (1..100000) {
-        my $mimeMessage = << "EOF";
+        my $mimeMessage = to_crlf(<< "EOF");
 From: <from\@local>
 To: to\@local
 Subject: test $_
 
 test
 EOF
-        $mimeMessage =~ s/\r?\n/\r\n/gs;
 
         $imaptalk->append('INBOX',
                           '26-Jan-2025 15:13:54 -0500', $mimeMessage) || die $@;
