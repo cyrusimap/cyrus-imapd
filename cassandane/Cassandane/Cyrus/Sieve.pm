@@ -16,6 +16,7 @@ use DateTime;
 use Date::Parse;
 
 use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use Encode qw(decode encode);
 use MIME::Base64 qw(encode_base64);

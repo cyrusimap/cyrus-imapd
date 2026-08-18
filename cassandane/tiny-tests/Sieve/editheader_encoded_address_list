@@ -6,7 +6,7 @@ sub test_editheader_encoded_address_list
     ($self)
 {
     xlog $self, "Install a sieve script with editheader actions";
-    my $script = <<EOF;
+    my $script = to_crlf(<<EOF);
 require ["editheader", "encoded-character", "variables"];
 if header :matches "To" "*bbb\@example.com*" {
   deleteheader "To";
@@ -16,8 +16,6 @@ addheader :last "X-Foo" "must encode star (\${unicode:2217})";
 addheader :last "X-Bar" "don't need to encode this";
 addheader :last "X-Blah" "can encode <ddd\@example.com> in non-list \${unicode:2217}";
 EOF
-
-    $script =~ s/\r?\n/\r\n/gs;
     $script =~ s/\\/\\\\/gs;
 
     $self->{instance}->install_sieve_script($script);

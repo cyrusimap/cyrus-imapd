@@ -22,7 +22,7 @@ if
 EOF
     );
 
-    my $body = << 'EOF';
+    my $body = to_crlf(<< 'EOF');
 --047d7b33dd729737fe04d3bde348
 Content-Type: text/plain; charset=UTF-8
 
@@ -36,7 +36,6 @@ abc=
 
 --047d7b33dd729737fe04d3bde348--
 EOF
-    $body =~ s/\r?\n/\r\n/gs;
 
     xlog $self, "Deliver a message without in-reply-to";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
