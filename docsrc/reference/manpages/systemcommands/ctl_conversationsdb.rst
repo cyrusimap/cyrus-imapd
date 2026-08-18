@@ -19,6 +19,7 @@ Synopsis
     **ctl_conversationsdb** [ -C *config-file* ] **-u** *userid* < text
     **ctl_conversationsdb** [ -C *config-file* ] [ **-v** ] [ **-z** | **-b** | **-R** ] *userid*
     **ctl_conversationsdb** [ -C *config-file* ] [ **-v** ] [ **-z** | **-b** | **-R** ] **-r**
+    **ctl_conversationsdb** [ -C *config-file* ] [ **-v** ] **-I** *switch* *userid*
 
 Description
 ===========
@@ -124,6 +125,25 @@ Options
     If given with **-b**, allows splitting of conversations during the
     rewrite.   Only do this if changing the maximum conversation size
     and you need to split those existing conversations.
+
+.. option:: -U, --upgrade
+
+    Upgrade the conversations database for user *userid* to the current
+    version, recalculating counts as needed.
+
+.. option:: -I switch, --enable-compact-emailids switch
+
+    Enable or disable compact ids for user *userid*, where *switch* is one
+    of ``1``, ``on`` or ``yes`` to enable, or ``0``, ``off`` or ``no`` to
+    disable.
+
+    Compact ids may only be enabled once the user's conversations database
+    is at version 2 or later and every one of the user's mailboxes is at
+    index version 20 or later; both are checked, and enabling fails if
+    either is not yet true.  Use **-U** and :cyrusman:`reconstruct(8)` to
+    get there.
+
+    Disabling fails if :imapdconf:`compact_ids` is set to ``always``.
 
 Examples
 ========
