@@ -845,6 +845,8 @@ static int dav_store_notification(struct transaction_t *txn,
                                NULL, NULL);
     }
 
+    dlist_free(&dl);
+
 done:
     buf_destroy(xmlbuf);
     mboxlist_entry_free(&mbentry);
@@ -2020,6 +2022,8 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
             }
             else if (!xmlStrcmp(node->name, BAD_CAST "share-access")) {
                 xmlNodePtr share = xmlFirstElementChild(node);
+
+                if (!share) continue;
 
                 if (!xmlStrcmp(share->name, BAD_CAST "no-access")) {
                     access = SHARE_NONE;
