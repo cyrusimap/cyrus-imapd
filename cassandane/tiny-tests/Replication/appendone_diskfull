@@ -8,7 +8,7 @@ sub test_appendone_diskfull
     :NoStartInstances :min_version_3_5
     ($self)
 {
-    my $canary = << 'EOF';
+    my $canary = to_crlf(<< 'EOF');
 From: Fred J. Bloggs <fbloggs@fastmail.fm>
 To: Sarah Jane Smith <sjsmith@tard.is>
 Subject: this is just to say
@@ -29,7 +29,6 @@ it was delicious
 so tweet
 and so coaled
 EOF
-    $canary =~ s/\n/\r\n/g;
     my $canaryguid = "f2eaa91974c50ec3cfb530014362e92efb06a9ba";
 
     $self->{replica}->{config}->set('debug_writefail_guid' => $canaryguid);
