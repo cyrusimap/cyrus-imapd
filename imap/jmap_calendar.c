@@ -10244,8 +10244,12 @@ static void principal_getavailability(jmap_req_t *req,
      * property. If there are overlapping BusyPeriod time ranges with
      * different “busyStatus” properties the server MUST choose the value in
      * the following order: confirmed > unavailable > tentative. */
-    cyr_qsort_r(busyperiods->data, busyperiods->count, sizeof(struct busyperiod),
-            (int(*)(const void*, const void*, void*))busyperiod_cmp, NULL);
+    if (busyperiods->count) {
+        cyr_qsort_r(busyperiods->data, busyperiods->count,
+                    sizeof(struct busyperiod),
+                    (int (*)(const void *, const void *, void *))busyperiod_cmp,
+                    NULL);
+    }
     int count = dynarray_size(busyperiods) ? 1 : 0;
     int i;
     for (i = 1; i < dynarray_size(busyperiods); i++) {
