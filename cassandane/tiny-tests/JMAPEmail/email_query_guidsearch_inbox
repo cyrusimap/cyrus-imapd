@@ -18,7 +18,7 @@ sub test_email_query_guidsearch_inbox
     ];
 
     xlog "Create message in mailbox A";
-    my $email = <<'EOF';
+    my $email = to_crlf(<<'EOF');
 From: from@local
 To: to@local
 Subject: email1
@@ -28,7 +28,6 @@ Content-Type: text/plain; charset="UTF-8"
 
 email1
 EOF
-    $email =~ s/\r?\n/\r\n/gs;
     my $data = $jmap->Upload($email, "message/rfc822");
     my $blobId = $data->{blobId};
     $self->assert_not_null($blobId);

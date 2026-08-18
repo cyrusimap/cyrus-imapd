@@ -7,7 +7,7 @@ sub test_email_get_calendarevents_standalone_instances
 {
     my $jmap = $self->{jmap};
 
-    my $body = <<'EOF';
+    my $body = to_crlf(<<'EOF');
 --boundary_1
 Content-Type: text/plain
 
@@ -44,7 +44,6 @@ END:VEVENT
 END:VCALENDAR
 --boundary_1--
 EOF
-    $body =~ s/\r?\n/\r\n/gs;
 
     $self->make_message('test', mime_type => 'multipart/related',
         mime_boundary => 'boundary_1', body => $body) or die;

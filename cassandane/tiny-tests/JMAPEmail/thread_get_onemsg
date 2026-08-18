@@ -31,7 +31,7 @@ sub test_thread_get_onemsg
     $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
-    my $email = <<'EOF';
+    my $email = to_crlf(<<'EOF');
 Return-Path: <Hannah.Smith@gmail.com>
 Received: from gateway (gateway.vmtom.com [10.0.0.1])
     by ahost (ahost.vmtom.com[10.0.0.2]); Wed, 07 Dec 2016 11:43:25 +1100
@@ -49,7 +49,6 @@ X-Cassandane-Unique: 294f71c341218d36d4bda75aad56599b7be3d15b
 
 a
 EOF
-    $email =~ s/\r?\n/\r\n/gs;
     my $data = $jmap->Upload($email, "message/rfc822");
     my $blobid = $data->{blobId};
     xlog $self, "import email from blob $blobid";

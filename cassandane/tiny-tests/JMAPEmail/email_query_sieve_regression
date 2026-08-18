@@ -206,7 +206,7 @@ EOF
         my $uuid    = $uuidgen->create_str;
         my $subject = $tc->{subject} // "subject$i";
         my $body    = $tc->{body}    // "body$i";
-        my $mime    = <<"EOF";
+        my $mime    = to_crlf(<<"EOF");
 From: from\@local
 To: to\@local
 Subject: $subject
@@ -218,7 +218,6 @@ Content-Transfer-Encoding: 7bit
 
 $body
 EOF
-        $mime =~ s/\r?\n/\r\n/gs;
         my $msg = Cassandane::Message->new();
         $msg->set_lines(split /\n/, $mime);
         $self->{instance}->deliver($msg);

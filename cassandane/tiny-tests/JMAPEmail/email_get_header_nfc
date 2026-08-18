@@ -24,7 +24,7 @@ sub test_email_get_header_nfc
     my $nonNfcXHeaderValue =       "0.5\N{U+212B}";
     my $normalizedXHeaderValue =   "0.5\N{U+00C5}";
 
-    my $mime = <<"EOF";
+    my $mime = to_crlf(<<"EOF");
 From: from\@local
 To: $nonNfcEmailAddress
 Subject: test
@@ -35,7 +35,6 @@ Mime-Version: 1.0
 
 test
 EOF
-    $mime =~ s/\r?\n/\r\n/gs;
 
     my $msg = Cassandane::Message->new();
     $msg->set_lines(split /\n/, $mime);

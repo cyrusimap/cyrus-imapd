@@ -21,7 +21,7 @@ sub test_email_get_encoded_message
     # Define some MIME message. Its content doesn't matter,
     # but let's mix an 8bit character in the headers to
     # make the content transfer encoding actually matter.
-    my $mime8Bit = <<'EOF';
+    my $mime8Bit = to_crlf(<<'EOF');
 From: hello@example.com
 To: world@example.com
 Subject: töst
@@ -31,7 +31,6 @@ Content-Type: text/plain; charset=utf-8
 
 täst
 EOF
-    $mime8Bit =~ s/\r?\n/\r\n/gs;
     my $mime8BitSize = bytes::length($mime8Bit);
 
     # Define test cases.
@@ -75,7 +74,7 @@ EOF
         xlog $self, "Testing content-type $tc->{type} and encoding $tc->{encoding}";
 
         xlog $self, "Delivering test message";
-        my $mime = <<"EOF";
+        my $mime = to_crlf(<<"EOF");
 From: from\@local
 To: to\@local
 Subject: $testId
@@ -95,7 +94,6 @@ Content-Transfer-Encoding: $tc->{encoding}
 $tc->{body}
 --8c438cf1-a6ac-4d99-b388-b1dfd9550725=_--
 EOF
-        $mime =~ s/\r?\n/\r\n/gs;
 
         my $msg = Cassandane::Message->new();
         $msg->set_lines(split /\n/, $mime);

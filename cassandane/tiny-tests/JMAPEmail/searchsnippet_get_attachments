@@ -27,7 +27,7 @@ sub test_searchsnippet_get_attachments
     };
     $instance->start_httpd($handler, $uri->port());
 
-    my $rawMessage = <<'EOF';
+    my $rawMessage = to_crlf(<<'EOF');
 From: <from@local>
 To: to@local
 Reply-To: replyto@local
@@ -58,7 +58,6 @@ ZGF0YQ==
 
 --6c3338934661485f87537c19b5f9d933--
 EOF
-    $rawMessage =~ s/\r?\n/\r\n/gs;
     $imap->append('INBOX', $rawMessage) || die $@;
 
     xlog $self, "run squatter";

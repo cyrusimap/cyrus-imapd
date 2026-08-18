@@ -7,7 +7,7 @@ sub test_email_get_detect_utf32
 {
     my $jmap = $self->{jmap};
 
-    my $email = <<'EOF';
+    my $email = to_crlf(<<'EOF');
 From: "Some Example Sender" <example@example.com>
 To: baseball@vitaead.com
 Subject: Here are some base64-encoded UTF-32LE bytes without BOM.
@@ -74,7 +74,6 @@ AACLMAAAaDAAAAEwAAB2UQAAbjAAAEJmAACkWwAAbjAAADZiAACSMAAAB2MAAEhRAABnMAAAszAA
 AMgwAAAzMAAANTAAAGgwAAAVjwAATzAAAOlTAABPMAAAgjAAAG4wAABMMAAAQjAAAIswAAACMAAA
 DQAAAAoA
 EOF
-    $email =~ s/\r?\n/\r\n/gs;
     my $data = $jmap->Upload($email, "message/rfc822");
     my $blobid = $data->{blobId};
     my $inboxid = $self->getinbox()->{id};

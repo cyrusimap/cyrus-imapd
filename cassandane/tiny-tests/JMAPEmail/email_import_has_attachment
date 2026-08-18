@@ -10,7 +10,7 @@ sub test_email_import_has_attachment
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    my $emailSimple = <<'EOF';
+    my $emailSimple = to_crlf(<<'EOF');
 From: example@example.com
 To: example@example.biz
 Subject: This is a test
@@ -20,10 +20,9 @@ MIME-Version: 1.0
 
 This is a very simple message.
 EOF
-    $emailSimple =~ s/\r?\n/\r\n/gs;
     my $blobIdSimple = $jmap->Upload($emailSimple, "message/rfc822")->{blobId};
 
-    my $emailMixed = <<'EOF';
+    my $emailMixed = to_crlf(<<'EOF');
 From: example@example.com
 To: example@example.biz
 Subject: This is a test
@@ -45,7 +44,6 @@ data
 
 --123456789--
 EOF
-    $emailMixed =~ s/\r?\n/\r\n/gs;
     my $blobIdMixed = $jmap->Upload($emailMixed, "message/rfc822")->{blobId};
 
     my $inboxId = $self->getinbox()->{id};

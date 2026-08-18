@@ -137,7 +137,7 @@ EOF
             ($maj eq $tc->{sinceVersion}[0] &&
                 $min le $tc->{sinceVersion}[1]));
 
-        $tc->{ical} =~ s/\r?\n/\r\n/gs;
+        $tc->{ical} = to_crlf($tc->{ical});
         $self->make_message("test$i",
             mime_type => 'multipart/related',
             mime_boundary => 'boundary',

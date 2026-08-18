@@ -15,7 +15,7 @@ sub test_email_import_encoded_contenttype
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    my $email = <<'EOF';
+    my $email = to_crlf(<<'EOF');
 From: example@example.com
 To: example@example.biz
 Subject: This is a test
@@ -37,7 +37,6 @@ data
 
 --123456789--
 EOF
-    $email =~ s/\r?\n/\r\n/gs;
     my $blobId = $jmap->Upload($email, "message/rfc822")->{blobId};
 
     my $inboxId = $self->getinbox()->{id};

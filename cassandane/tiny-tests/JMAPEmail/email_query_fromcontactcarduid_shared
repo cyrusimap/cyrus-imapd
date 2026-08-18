@@ -251,7 +251,7 @@ if
 EOF
     );
 
-    my $rawMessage = <<'EOF';
+    my $rawMessage = to_crlf(<<'EOF');
 From: sharedContact@local
 To: to@local
 Subject: sieve1
@@ -261,7 +261,6 @@ Content-Type: text/plain; charset="UTF-8"
 
 hello
 EOF
-    $rawMessage =~ s/\r?\n/\r\n/gs;
 
     my $msg = Cassandane::Message->new();
     $msg->set_lines(split /\n/, $rawMessage);

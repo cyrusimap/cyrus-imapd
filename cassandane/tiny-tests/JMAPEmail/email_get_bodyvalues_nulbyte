@@ -8,7 +8,7 @@ sub test_email_get_bodyvalues_nulbyte
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    my $mimeMsg = <<'EOF';
+    my $mimeMsg = to_crlf(<<'EOF');
 From: <from@local>
 To: to@local
 Bcc: bcc@local
@@ -20,7 +20,6 @@ Content-Type: text/html;charset=utf-8
 
 <html><body>hello=00 world</body></html>
 EOF
-    $mimeMsg =~ s/\r?\n/\r\n/gs;
     $mimeMsg =~ s/\r\n$//;
     $imap->append('INBOX', $mimeMsg) || die $@;
 

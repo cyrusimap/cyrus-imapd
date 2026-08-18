@@ -88,7 +88,7 @@ MIME-Version: 1.0
 Content-Type: text/plain; charset='UTF-8'
 Content-Transfer-Encoding: quoted-printable
 EOF
-        $mime =~ s/\r?\n/\r\n/gs;
+        $mime = to_crlf($mime);
         $mime .= "\r\n";
         $mime .= $tc->{desc} || 'foo';
 

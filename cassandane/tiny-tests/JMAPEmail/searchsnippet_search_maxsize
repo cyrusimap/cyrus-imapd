@@ -24,7 +24,7 @@ EOF
     $kbody .=   "foo\n"; # last line of included text
     $kbody .=   "bar\n"; # first line of excluded text
     $rawMessage .= $kbody;
-    $rawMessage =~ s/\r?\n/\r\n/gs;
+    $rawMessage = to_crlf($rawMessage);
     $imap->append('INBOX', $rawMessage) || die $@;
 
     xlog "Assert indexer only processes maxsize bytes of text";

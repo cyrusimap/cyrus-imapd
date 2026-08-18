@@ -85,15 +85,13 @@ sub test_email_legacy_ids
     # This will create a v4 G record in conv.db
     # (nanoseconds-based internaldate), but should still sort BEFORE
     # the existing v3 G records (seconds-based internaldate)
-    my $email = <<EOF;
+    my $email = to_crlf(<<EOF);
 Subject: foo
 Date: bar
 From: <foobar\@gmail.com>
 
 Body
 EOF
-
-    $email =~ s/\r?\n/\r\n/gs;
 
     $talk->append("INBOX", "()", " 7-Feb-1994 22:43:04 -0800",
                   { Literal => "$email" });
