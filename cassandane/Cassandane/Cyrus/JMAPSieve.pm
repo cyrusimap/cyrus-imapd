@@ -14,6 +14,7 @@ use IO::File;
 use Cwd qw(abs_path getcwd);
 
 use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 
 use charnames ':full';

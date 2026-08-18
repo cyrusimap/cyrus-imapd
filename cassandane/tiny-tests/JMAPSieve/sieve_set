@@ -5,22 +5,19 @@ sub test_sieve_set
     :min_version_3_3 :JMAPExtensions :MagicPlus :NoAltNamespace
     ($self)
 {
-    my $script1 = <<EOF;
+    my $script1 = to_crlf(<<EOF);
 keep;
 EOF
-    $script1 =~ s/\r?\n/\r\n/gs;
 
-    my $script2 = <<EOF;
+    my $script2 = to_crlf(<<EOF);
 # comment
 discard;
 EOF
-    $script2 =~ s/\r?\n/\r\n/gs;
 
-    my $script3 = <<EOF;
+    my $script3 = to_crlf(<<EOF);
 require "imap4flags";
 keep :flags "\\flagged";
 EOF
-    $script3 =~ s/\r?\n/\r\n/gs;
 
     my $jmap = $self->{jmap};
 
