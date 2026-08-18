@@ -62,6 +62,14 @@ msg.subject             the message's subject, as UTF-8
 msg.sysflags            the message's system flags, as a string
 msg.to                  the message's envelope recipient
 
+### part. - a body part of a message
+
+part.cachefile          path to the extracted-text cache file for this part
+part.count              how many parts an operation covered
+part.failed             how many of them it could not handle
+part.subtype            the part's MIME subtype
+part.type               the part's MIME type
+
 ### login. - authentication
 
 login.anonymous         1 if the login was anonymous
@@ -86,13 +94,22 @@ send.time               when the message was actually sent
 cal.organizer           a calendar component's ORGANIZER
 cal.uid                 a calendar component's iCalendar UID
 imip.error              why an iMIP operation failed
+jmap.accountid          the JMAP account the request was for
 pop.subfolder           the subfolder a POP session was restricted to
 quota.root              the quota root a quota applies to
 sched.addresses         the scheduling addresses considered, one per indexed subkey
 sched.userid            the userid whose scheduling addresses were used
 scope                   the scope a duplicate-delivery check applied to
+search.batch_highest_createdmodseq  highest createdmodseq indexed in this batch
+search.batch_lowest_createdmodseq   lowest createdmodseq indexed in this batch
+search.committed        how many documents a Xapian commit wrote
+search.createdmodseq    highest createdmodseq the search index covers
+search.duration         how long a search index operation took, in seconds
 search.expr             a search expression, serialised
+search.generation       the search index generation
 search.op               a search operator, e.g. OR
+search.uncommitted      how many documents were pending when a commit failed
+search.updates          how many update passes indexed nothing
 sieve.target            the target of a Sieve action: a folder, address or url
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
@@ -106,9 +123,12 @@ out.msg.id              Message-ID we sent, where msg.id is the one we got
 old.mbox.acl            the mailbox ACL before the change
 old.mbox.name           the mailbox name before the rename
 old.mbox.part           the partition before the move
+old.mbox.uidvalidity    the mailbox's uidvalidity before it changed
 old.mbox.uniqueid       the uniqueid of the mailbox a message moved out of
 old.msg.imapuid         the message's IMAP uid before a move
 old.msg.sysflags        the message's system flags before the change
+old.search.createdmodseq  the createdmodseq the client last saw
+old.search.generation   the search index generation the client last saw
 
 ### usage counters
 

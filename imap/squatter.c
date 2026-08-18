@@ -401,9 +401,9 @@ again:
         }
         if (++nunproductive <= MAX_UNPRODUCTIVE_UPDATES) goto again;
 
-        xsyslog_ev(LOG_ERR, "giving up on mailbox that indexes no message",
-                lf_s("mboxname", name),
-                lf_d("updates", nunproductive));
+        xsyslog_ev(LOG_ERR, "search.index.abandoned",
+                lf_s("mbox.name", name),
+                lf_d("search.updates", nunproductive));
     }
     free(extname);
 

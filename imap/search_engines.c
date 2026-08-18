@@ -571,10 +571,10 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     size_t nfailed = warmup_attachextract_cache(&attachparts);
     if (nfailed) {
         // The messages of those parts can not get indexed fully.
-        xsyslog_ev(LOG_WARNING, "could not extract all attachment text",
-                lf_s("mboxname", mboxname),
-                lf_d("parts", dynarray_size(&attachparts)),
-                lf_zu("failed_parts", nfailed));
+        xsyslog_ev(LOG_WARNING, "search.attachextract.incomplete",
+                lf_s("mbox.name", mboxname),
+                lf_d("part.count", dynarray_size(&attachparts)),
+                lf_zu("part.failed", nfailed));
     }
 
     // Retake mailbox lock
@@ -585,12 +585,12 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     // got renumbered, has nothing in common with the messages we selected.
     if (strcmpsafe(uniqueid, mailbox_uniqueid(mailbox)) ||
             uidvalidity != mailbox->i.uidvalidity) {
-        xsyslog_ev(LOG_NOTICE, "mailbox changed while extracting attachments",
-                lf_s("mboxname", mboxname),
-                lf_s("uniqueid", uniqueid),
-                lf_s("new_uniqueid", mailbox_uniqueid(mailbox)),
-                lf_u("uidvalidity", uidvalidity),
-                lf_u("new_uidvalidity", mailbox->i.uidvalidity));
+        xsyslog_ev(LOG_NOTICE, "search.index.mailbox_changed",
+                lf_s("mbox.name", mboxname),
+                lf_s("old.mbox.uniqueid", uniqueid),
+                lf_s("mbox.uniqueid", mailbox_uniqueid(mailbox)),
+                lf_u("old.mbox.uidvalidity", uidvalidity),
+                lf_u("mbox.uidvalidity", mailbox->i.uidvalidity));
         // None of the selected messages got indexed. Have the caller retry
         // this mailbox from the start, rather than reporting it as indexed.
         is_incomplete = 1;
