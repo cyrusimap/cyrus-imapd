@@ -101,7 +101,7 @@ $CREATE_VIA{CD3} = sub ($test_case, $uid)
                     : qq{urn:uuid:$uid};
 
     my $href = "Default/$group_uid.vcf";
-    my $card = <<~"EOF";
+    my $card = to_crlf(<<~"EOF");
     BEGIN:VCARD
     VERSION:3.0
     X-ADDRESSBOOKSERVER-KIND:group
@@ -111,8 +111,6 @@ $CREATE_VIA{CD3} = sub ($test_case, $uid)
     X-ADDRESSBOOKSERVER-MEMBER:$encoded_uid
     END:VCARD
     EOF
-
-    $card =~ s/\r?\n/\r\n/gs;
     $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
     return $group_uid;
@@ -126,7 +124,7 @@ $CREATE_VIA{CD4} = sub ($test_case, $uid)
     my $group_uid = guid_string();
 
     my $href = "Default/$group_uid.vcf";
-    my $card = <<~"EOF";
+    my $card = to_crlf(<<~"EOF");
     BEGIN:VCARD
     VERSION:4.0
     KIND:group
@@ -135,8 +133,6 @@ $CREATE_VIA{CD4} = sub ($test_case, $uid)
     MEMBER:$uid
     END:VCARD
     EOF
-
-    $card =~ s/\r?\n/\r\n/gs;
     $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
     return $group_uid;

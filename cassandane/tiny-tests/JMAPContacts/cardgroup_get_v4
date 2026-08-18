@@ -44,7 +44,7 @@ sub test_cardgroup_get_v4
         }
 
         my $href = "Default/$id.vcf";
-        my $card = <<~"EOF";
+        my $card = to_crlf(<<~"EOF");
         BEGIN:VCARD
         VERSION:4.0
         KIND:group
@@ -54,8 +54,6 @@ sub test_cardgroup_get_v4
         MEMBER:$member2
         END:VCARD
         EOF
-
-        $card =~ s/\r?\n/\r\n/gs;
         $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
         $res = $jmap->CallMethods([

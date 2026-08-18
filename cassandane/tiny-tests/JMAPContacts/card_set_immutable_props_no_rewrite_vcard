@@ -7,7 +7,7 @@ sub test_card_set_immutable_props_no_rewrite_vcard
     my $user = $self->default_user;
 
     xlog $self, "PUT a version 3.0 vCard";
-    my $card = <<~"EOF";
+    my $card = to_crlf(<<~"EOF");
     BEGIN:VCARD
     VERSION:3.0
     UID:574E6CCF-BAE4-4005-B478-222DD257224A
@@ -16,7 +16,6 @@ sub test_card_set_immutable_props_no_rewrite_vcard
     LABEL;TYPE=WORK:1501 Broadway\\nNew York NY 10036\\nUSA
     END:VCARD
     EOF
-    $card =~ s/\r?\n/\r\n/gs;
     $user->carddav->Request('PUT', "Default/forrest.vcf",
         $card, 'Content-Type' => 'text/vcard');
 

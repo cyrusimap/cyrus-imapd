@@ -29,7 +29,7 @@ sub test_card_get_localizations
     # PROP-IDs added so we can easily compare the results
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
     my $href = "Default/test.vcf";
-    my $card = <<EOF;
+    my $card = to_crlf(<<EOF);
 BEGIN:VCARD
 VERSION:4.0
 UID:$id
@@ -52,8 +52,6 @@ ADR;ALTID=addr1;LANGUAGE=jp:;;;東京;;;
 ADR;ALTID=addr1:;;;Tokio;;;
 END:VCARD
 EOF
- 
-    $card =~ s/\r?\n/\r\n/gs;
     $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
     $res = $jmap->CallMethods([
