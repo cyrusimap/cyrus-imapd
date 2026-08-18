@@ -6833,11 +6833,11 @@ HIDDEN json_t *jscal_from_ical(jscal_cfg_t *cfg, icalcomponent *ical)
 
     icalcomponent *myical = icalcomponent_clone(ical);
 
-    // Initialize timezone guessing.
-    guess_timezones(&ctx, myical);
-
     // Apply general sanitizations.
     sanitize_icalobj(myical);
+
+    // Initialize timezone guessing.
+    guess_timezones(&ctx, myical);
 
     // Combine components with same UID and kind.
     ptrarray_t complists = ical_comps_by_uid(myical);
