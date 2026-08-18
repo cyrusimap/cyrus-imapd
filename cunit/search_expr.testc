@@ -438,6 +438,59 @@ static void test_get_search_program(void)
 #undef TESTCASE
 }
 
+/*
+ * Parse a search program made of 'nparens' nested parentheses wrapped
+ * around a single ALL criterion, and check that the parser said what we
+ * expected to the client: nothing at all if the program is acceptable, or
+ * the given error text if it should have been rejected.
+ */
+static void check_nesting(unsigned nparens, const char *expected_errs)
+{
+    struct buf in = BUF_INITIALIZER;
+    struct buf actual_errs = BUF_INITIALIZER;
+    struct searchargs *searchargs;
+    struct protstream *pin;
+    struct protstream *pout;
+    unsigned i;
+    int c;
+
+    for (i = 0 ; i < nparens ; i++) buf_putc(&in, '(');
+    buf_appendcstr(&in, "all");
+    for (i = 0 ; i < nparens ; i++) buf_putc(&in, ')');
+    buf_appendcstr(&in, "\r\n");
+
+    searchargs = new_searchargs(".", 0, &ns, userid, authstate, isadmin);
+    pin = prot_readmap(buf_base(&in), buf_len(&in));
+    pout = prot_writebuf(&actual_errs);
+
+    c = get_search_program(pin, pout, 0/*quirks*/, searchargs);
+
+    prot_flush(pout);
+    buf_cstring(&actual_errs);
+    CU_ASSERT_STRING_EQUAL(actual_errs.s, expected_errs);
+    CU_ASSERT_EQUAL(c, expected_errs[0] ? EOF : '\r');
+
+    buf_free(&in);
+    buf_free(&actual_errs);
+    prot_free(pin);
+    prot_free(pout);
+    freesearchargs(searchargs);
+}
+
+static void test_nesting_depth(void)
+{
+    static const char toodeep[] = ". BAD Search program too deeply nested\r\n";
+
+    check_nesting(1, "");
+    check_nesting(2, "");
+    check_nesting(MAX_SEARCH_DEPTH, "");
+
+    check_nesting(MAX_SEARCH_DEPTH+1, toodeep);
+
+    /* absurdly deep nesting used to recurse until the stack overflowed */
+    check_nesting(60000, toodeep);
+}
+
 static void test_unserialise(void)
 {
     search_expr_t *e;
