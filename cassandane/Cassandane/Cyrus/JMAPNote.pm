@@ -12,6 +12,7 @@ use MIME::Base64 qw(encode_base64);
 use Cwd qw(abs_path getcwd);
 
 use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 
 use lib '../perl/imap/lib';
