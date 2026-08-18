@@ -14,6 +14,7 @@ use Text::VCardFast;
 use Cwd qw(abs_path);
 
 use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use utf8;
 
