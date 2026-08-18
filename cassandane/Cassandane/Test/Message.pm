@@ -8,6 +8,7 @@ use warnings;
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Message;
 use Cassandane::Address;
+use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_rfc3501);
 
@@ -27,10 +28,9 @@ sub test_empty
     $self->assert_null($m->get_headers('to'));
     $self->assert_null($m->get_body());
 
-    my $exp = <<'EOF';
+    my $exp = to_crlf(<<'EOF');
 
 EOF
-    $exp =~ s/\n/\r\n/g;
 
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
@@ -50,11 +50,10 @@ sub test_header_case
     $self->assert_str_equals('Hello World', $m->get_headers('subject')->[0]);
     $self->assert_str_equals('Hello World', $m->get_headers('sUbJeCt')->[0]);
 
-    my $exp = <<'EOF';
+    my $exp = to_crlf(<<'EOF');
 Subject: Hello World
 
 EOF
-    $exp =~ s/\n/\r\n/g;
 
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
@@ -74,12 +73,11 @@ sub test_address_stringification
     $self->assert_null($m->get_body);
     $self->assert_str_equals('Fred J. Bloggs <fbloggs@fastmail.fm>',
                              $m->get_headers('from')->[0]);
-    my $exp = <<'EOF';
+    my $exp = to_crlf(<<'EOF');
 Subject: Hello World
 From: Fred J. Bloggs <fbloggs@fastmail.fm>
 
 EOF
-    $exp =~ s/\n/\r\n/g;
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
 }
@@ -106,12 +104,11 @@ sub test_address_list_stringification
     $self->assert_str_equals(
         'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
         $m->get_headers('to')->[0]);
-    my $exp = <<'EOF';
+    my $exp = to_crlf(<<'EOF');
 Subject: Hello World
 To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
 
 EOF
-    $exp =~ s/\n/\r\n/g;
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
 }
@@ -130,14 +127,13 @@ sub test_multiple_headers
         "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
         "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers("received"));
-    my $exp = <<'EOF';
+    my $exp = to_crlf(<<'EOF');
 Subject: Hello World
 Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100
 Received: from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
 Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
 
 EOF
-    $exp =~ s/\n/\r\n/g;
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
 }
@@ -156,11 +152,10 @@ sub test_replacing_headers
     $self->assert_str_equals(
         'No, scratch that',
         $m->get_header('subject'));
-    my $exp = <<'EOF';
+    my $exp = to_crlf(<<'EOF');
 Subject: No, scratch that
 
 EOF
-    $exp =~ s/\n/\r\n/g;
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
 }
@@ -177,13 +172,12 @@ sub test_deleting_headers
     $self->assert_str_equals('Hello World', $m->get_header('subject'));
     $m->remove_headers('subject');
     $self->assert_null($m->get_header('subject'));
-    my $exp = <<'EOF';
+    my $exp = to_crlf(<<'EOF');
 Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100
 Received: from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
 Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
 
 EOF
-    $exp =~ s/\n/\r\n/g;
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
 }
@@ -195,13 +189,12 @@ sub test_add_body
     my $m = Cassandane::Message->new();
     $m->add_header('subject', 'Hello World');
     $m->set_body("This is a message to let you know\r\nthat I'm alive and well\r\n");
-    my $exp = <<'EOF';
+    my $exp = to_crlf(<<'EOF');
 Subject: Hello World
 
 This is a message to let you know
 that I'm alive and well
 EOF
-    $exp =~ s/\n/\r\n/g;
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
 }
@@ -229,8 +222,7 @@ EOF
     my @lines = split(/\n/, $txt);
     map { $_ .= "\r\n" } @lines;
 
-    my $exp = $txt;
-    $exp =~ s/\n/\r\n/g;
+    my $exp = to_crlf($txt);
 
     $m->set_lines(@lines);
     $self->assert_str_equals(
@@ -275,7 +267,7 @@ sub test_setting_raw
     my ($self) = @_;
     my $m = Cassandane::Message->new();
 
-    my $txt = <<"EOF";
+    my $txt = to_crlf(<<"EOF");
 From: Fred J. Bloggs <fbloggs\@fastmail.fm>
 To: Sarah Jane Smith <sjsmith\@tard.is>, Genghis Khan <gkhan\@horde.mo>
 Subject: Hello World
@@ -289,7 +281,6 @@ Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by
 This is a message to let you know
 that I'm alive and well
 EOF
-    $txt =~ s/\n/\r\n/g;
 
     my $exp = $txt;
 
@@ -412,8 +403,7 @@ EOF
     my @lines = split(/\n/, $txt);
     map { $_ .= "\r\n" } @lines;
 
-    my $exp = $txt;
-    $exp =~ s/\n/\r\n/g;
+    my $exp = to_crlf($txt);
 
     $m->set_lines(@lines);
     $self->assert_str_equals(
@@ -468,13 +458,12 @@ sub test_clone
     $m->set_body("This is a message to let you know\r\nthat I'm alive and well\r\n");
     $m->set_attribute('uid', 42);
 
-    my $exp = <<'EOF';
+    my $exp = to_crlf(<<'EOF');
 Subject: Hello World
 
 This is a message to let you know
 that I'm alive and well
 EOF
-    $exp =~ s/\n/\r\n/g;
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_num_equals(42, $m->get_attribute('uid'));
     $self->assert_str_equals('Hello World', $m->get_header('subject'));
@@ -491,14 +480,13 @@ EOF
     $m->add_header('From', $addr);
     $self->assert_str_equals($addr->as_string, $m->get_header('from'));
     $self->assert_null($m2->get_header('from'));
-    my $exp2 = <<'EOF';
+    my $exp2 = to_crlf(<<'EOF');
 Subject: Hello World
 From: Fred J. Bloggs <fbloggs@fastmail.fm>
 
 This is a message to let you know
 that I'm alive and well
 EOF
-    $exp2 =~ s/\n/\r\n/g;
     $self->assert_str_equals($exp2, $m->as_string);
     $self->assert_str_equals($exp, $m2->as_string);
 }
@@ -791,7 +779,7 @@ sub test_header_normalisation
         "helvetica\rwayfarers keytar\nshoreditch\r\n \t portland");
 
     $m->set_body("This is a message to let you know\r\nthat I'm alive and well\r\n");
-    my $exp = <<"EOF";
+    my $exp = to_crlf(<<"EOF");
 Subject: Hello World
 X-Cliche: sartorial
 X-Cliche: mixtape
@@ -808,8 +796,6 @@ X-Vegan: helvetica
 This is a message to let you know
 that I'm alive and well
 EOF
-
-    $exp =~ s/\n/\r\n/g;
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
 }
@@ -826,7 +812,7 @@ sub test_add_empty
             localpart => 'fbloggs',
             domain => 'fastmail.fm'));
     $m->set_body("This is a message to let you know\r\nthat I'm alive and well\r\n");
-    my $exp = <<'EOF';
+    my $exp = to_crlf(<<'EOF');
 Subject: Hello World
 X-Justin-Beiber: 
 From: Fred J. Bloggs <fbloggs@fastmail.fm>
@@ -834,7 +820,6 @@ From: Fred J. Bloggs <fbloggs@fastmail.fm>
 This is a message to let you know
 that I'm alive and well
 EOF
-    $exp =~ s/\n/\r\n/g;
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
 }
