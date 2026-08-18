@@ -47,7 +47,7 @@ sub test_emailid_threadid
 
     $talk->select('INBOX');
 
-    my $email = <<EOF;
+    my $email = to_crlf(<<EOF);
 Subject: foo
 Date: bar
 From: <foobar\@example.com>
@@ -55,16 +55,13 @@ From: <foobar\@example.com>
 Body
 EOF
 
-    my $email2 = <<EOF;
+    my $email2 = to_crlf(<<EOF);
 Subject: foo
 Date: bar
 From: <foobar\@example.com>
 
 Body2
 EOF
-
-    $email =~ s/\r?\n/\r\n/gs;
-    $email2 =~ s/\r?\n/\r\n/gs;
 
     $talk->append("INBOX", "()", " 7-Feb-1994 22:43:04 -0800", { Literal => "$email" },
                            "()", " 7-Feb-1994 22:43:04 -0800", { Literal => "$email2" });
