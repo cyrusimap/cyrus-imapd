@@ -157,7 +157,7 @@ EOF
     });
 
     for my $tc (@testCases) {
-        $tc->{ical} =~ s/\r?\n/\r\n/gs;
+        $tc->{ical} = to_crlf($tc->{ical});
         my @properties = keys %{$tc->{wantParsed}};
         push(@properties, @{$tc->{wantAlsoProperties} || []});
 

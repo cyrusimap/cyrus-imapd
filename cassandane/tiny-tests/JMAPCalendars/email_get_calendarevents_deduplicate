@@ -9,7 +9,7 @@ sub test_email_get_calendarevents_deduplicate
     my $caldav = $self->{caldav};
 
     xlog "Create event via CalDAV";
-    my $ical = <<'EOF';
+    my $ical = to_crlf(<<'EOF');
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
@@ -25,9 +25,7 @@ SEQUENCE:0
 END:VEVENT
 END:VCALENDAR
 EOF
-    $ical =~ s/\r?\n/\r\n/gs;
-    my $b64Ical = encode_base64($ical);
-    $b64Ical =~ s/\r?\n/\r\n/gs;
+    my $b64Ical = to_crlf(encode_base64($ical));
 
     $self->make_message('test',
         mime_type => 'multipart/related',
