@@ -1,0 +1,67 @@
+#!perl
+use Cassandane::Tiny;
+
+# The vnd.fastmail.jmapStates event parameter reports a state string per JMAP
+# data type.  It is built from the canonical jmap_data_types table, so it must
+# list the modern types (AddressBook, ContactCard) and must NOT list the types
+# that were superseded (Contact, ContactGroup) or that have no state counter
+# (Quota, Racl).  We also check that the state advances when its type changes.
+
+# Returns the jmapStates hash from the (single) MessageNew event produced by
+# delivering one message.
+sub _deliver_and_states ($self, $subject, $uid) {
+    $self->{instance}->getnotify();
+
+    my $msg = $self->{gen}->generate(subject => $subject, uid => $uid);
+    my $ret = $self->{instance}->deliver($msg, user => "cassandane");
+    $self->assert_num_equals(0, $ret);
+
+    my @events = map { decode_json($_->{MESSAGE}) }
+                 $self->{instance}->getnotify->@*;
+    my ($new) = grep { $_->{event} eq 'MessageNew' } @events;
+    $self->assert_not_null($new, "got a MessageNew event");
+
+    my $states = $new->{'vnd.fastmail.jmapStates'};
+    $self->assert_not_null($states, "MessageNew carried vnd.fastmail.jmapStates");
+    return $states;
+}
+
+sub test_jmap_states ($self) {
+    my $states = $self->_deliver_and_states("first", 1);
+
+    # These are the types where (for compact ids, which are on by default in
+    # test users) we have a "J" prefix.
+    my %expect_j = map {; $_ => 1 } qw( Mailbox Email Calendar CalendarEvent );
+
+    # The modern type set, drawn from the canonical jmap_data_types table.
+    for my $type (qw(
+        Mailbox Email EmailSubmission
+        Calendar CalendarEvent
+        AddressBook ContactCard
+        Note SieveScript VacationResponse
+    )) {
+        $self->assert_not_null($states->{$type}, "jmapStates has $type");
+
+        my $maybe_j = $expect_j{$type} ? 'J' : q{};
+        # A state string is an optional "J" prefix followed by a modseq.
+        $self->assert_matches(
+            qr/^${maybe_j}\d+$/,
+            $states->{$type},
+            "jmapStates $type looks about right",
+        );
+    }
+
+    # Superseded or stateless types must not appear.
+    for my $type (qw(Contact ContactGroup Quota Racl)) {
+        $self->assert(! exists $states->{$type}, "jmapStates omits $type");
+    }
+
+    # Delivering another message must advance the Email/Mailbox state.
+    my $states2 = $self->_deliver_and_states("second", 2);
+
+    my sub strip ($n) { $n =~ s/^J//; return $n + 0 }
+    $self->assert(
+        strip($states2->{Email}) > strip($states->{Email}),
+        "Email state advanced after a new message ($states->{Email} -> $states2->{Email})"
+    );
+}
