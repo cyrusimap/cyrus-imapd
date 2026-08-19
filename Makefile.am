@@ -70,6 +70,19 @@ if HAVE_LDAP
 AM_CPPFLAGS += $(LDAP_CPPFLAGS)
 endif # HAVE_LDAP
 
+# Where "make install" puts the VTIMEZONEs and the guesstz database.
+zoneinfodir = $(pkgdatadir)/zoneinfo
+
+# The compile-time default for the zoneinfo_dir imapd.conf option.  Either an
+# explicit --with-zoneinfo-dir, or -- when we build the data ourselves -- the
+# directory we install it in.  configure.ac makes these mutually exclusive.
+if HAVE_ZONEINFO_DIR
+AM_CPPFLAGS += -DDEFAULT_ZONEINFO_DIR=\"$(ZONEINFO_DIR)\"
+endif # HAVE_ZONEINFO_DIR
+if ZONEINFO_DIR_FROM_BUILD
+AM_CPPFLAGS += -DDEFAULT_ZONEINFO_DIR=\"$(zoneinfodir)\"
+endif # ZONEINFO_DIR_FROM_BUILD
+
 AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
 
 AM_YFLAGS = -d
@@ -276,6 +289,10 @@ noinst_PROGRAMS += imap/ical_apply_patch
 sbin_PROGRAMS += \
     imap/ctl_zoneinfo \
     imap/dav_reconstruct
+
+if HAVE_GUESSTZ
+sbin_PROGRAMS += imap/cyr_guesstz
+endif # HAVE_GUESSTZ
 
 if REPLICATION
 libexec_PROGRAMS += imap/sync_server
@@ -491,7 +508,8 @@ EXTRA_DIST = \
     sieve/tests/actionExtensions/serverm/ueamail-vacation \
     timsieved/TODO \
     tools/mkimap.in \
-    tools/rehash.in
+    tools/rehash.in \
+    tzdata
 
 IMAPOPTIONS_LIBS = \
     tools/lib/Cyrus/IMAPOptions/AllowedValues.pm \
@@ -513,6 +531,7 @@ dist_noinst_SCRIPTS = \
     perl/sieve/scripts/sieveshell.pl \
     tools/arbitronsort.pl \
     tools/fixsearchpath.pl \
+    tools/fixup-zoneinfo.pl \
     tools/git-version.sh \
     tools/gperf-build-prop-set.pl \
     tools/imapoptions.pl \
@@ -520,7 +539,8 @@ dist_noinst_SCRIPTS = \
     tools/masssievec \
     tools/mknewsgroups \
     tools/perl2rst \
-    tools/translatesieve
+    tools/translatesieve \
+    tools/update-tzdata.sh
 noinst_MAN = \
     com_err/et/com_err.3 \
     com_err/et/compile_et.1
@@ -590,12 +610,6 @@ if USE_JANSSON
 AM_LDFLAGS += $(JANSSON_LIBS)
 AM_CPPFLAGS += $(JANSSON_CFLAGS)
 LD_SERVER_ADD += $(JANSSON_LIBS)
-endif
-
-if HAVE_GUESSTZ
-AM_LDFLAGS += $(GUESSTZ_LIBS)
-AM_CPPFLAGS += $(GUESSTZ_CFLAGS)
-LD_SERVER_ADD += $(GUESSTZ_LIBS)
 endif
 
 cunit_FRAMEWORK = \
@@ -669,6 +683,10 @@ cunit_TESTS = \
 if SIEVE
 cunit_TESTS += cunit/sieve.testc
 endif
+
+if HAVE_GUESSTZ
+cunit_TESTS += cunit/guesstz.testc
+endif # HAVE_GUESSTZ
 
 cunit_TESTS += \
     cunit/spool.testc \
@@ -879,6 +897,11 @@ imap_cyr_withlock_run_LDADD = $(LD_UTILITY_ADD)
 imap_cyr_expire_SOURCES = imap/cli_fatal.c imap/cyr_expire.c imap/mutex_fake.c
 imap_cyr_expire_LDADD = $(LD_UTILITY_ADD)
 
+if HAVE_GUESSTZ
+imap_cyr_guesstz_SOURCES = imap/cli_fatal.c imap/cyr_guesstz.c imap/mutex_fake.c
+imap_cyr_guesstz_LDADD = $(LD_UTILITY_ADD)
+endif # HAVE_GUESSTZ
+
 imap_cyr_info_SOURCES = imap/cli_fatal.c imap/cyr_info.c imap/mutex_fake.c master/masterconf.c
 imap_cyr_info_LDADD = $(LD_UTILITY_ADD)
 
@@ -1087,6 +1110,12 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/version.h \
     imap/webdav_db.c \
     imap/webdav_db.h
+
+if HAVE_GUESSTZ
+imap_libcyrus_imap_la_SOURCES += \
+    imap/guesstz.c \
+    imap/guesstz.h
+endif # HAVE_GUESSTZ
 
 if SIEVE
 imap_libcyrus_imap_la_SOURCES += \
@@ -1747,6 +1776,10 @@ dist_man8_MANS = \
     man/tls_prune.8 \
     man/unexpunge.8
 
+if HAVE_GUESSTZ
+dist_man8_MANS += man/cyr_guesstz.8
+endif # HAVE_GUESSTZ
+
 if BENCH
 noinst_PROGRAMS += bench/cyrdbbench
 bench_cyrdbbench_SOURCES = bench/cyrdbbench.c imap/mutex_fake.c
@@ -2085,7 +2118,67 @@ doc: man doc-html doc-text doc-examples
 clean-doc: clean-man clean-doc-html clean-doc-text clean-doc-examples clean-doc-doxygen
 
 .PHONY: clean-local
-clean-local: clean-doc clean-sphinx-cache clean-docsrc
+clean-local: clean-doc clean-sphinx-cache clean-docsrc clean-zoneinfo
+
+## Time zone data.
+##
+## We ship the IANA time zone database in tzdata/ and convert it to the
+## VTIMEZONEs that the TZDist service serves and that guesstz indexes.  This
+## needs vzic; without it we build nothing here and an administrator has to
+## populate zoneinfo_dir by hand -- see the TZDist chapter of the docs.
+##
+## vzic writes some 600 files, so a stamp file stands in for them all.  Some of
+## them may be symlinked aliases, which we install as symlinks, and all of them
+## go through fixup-zoneinfo.pl first.
+
+ZONEINFO_STAMP = zoneinfo/.stamp
+ZONEINFO_FIXUP = $(top_srcdir)/tools/fixup-zoneinfo.pl
+ZONEINFO_DEPS = $(top_srcdir)/tzdata/version $(ZONEINFO_FIXUP)
+
+if HAVE_GUESSTZ
+ZONEINFO_DEPS += imap/cyr_guesstz
+endif # HAVE_GUESSTZ
+
+if BUILD_ZONEINFO
+
+all-local: $(ZONEINFO_STAMP)
+
+$(ZONEINFO_STAMP): $(ZONEINFO_DEPS)
+	$(AM_V_GEN)rm -rf zoneinfo
+	$(AM_V_at)$(VZIC) --pure --olson-dir $(top_srcdir)/tzdata \
+	    --output-dir zoneinfo
+	$(AM_V_at)$(PERL) $(ZONEINFO_FIXUP) zoneinfo
+	$(AM_V_at)cp $(top_srcdir)/tzdata/version zoneinfo/version
+if HAVE_GUESSTZ
+## We run cyr_guesstz here to generate data, not to test it: an ASan build
+## would otherwise leak-check it at exit, and look for the suppressions file
+## next to the libtool-wrapped binary, where there is none.  The cunit suite
+## and the Valgrind build check guesstz for leaks.
+	$(AM_V_at)ASAN_OPTIONS="$$ASAN_OPTIONS:detect_leaks=0" \
+	    ./imap/cyr_guesstz -z zoneinfo zoneinfo/guesstz.db
+endif # HAVE_GUESSTZ
+	$(AM_V_at)touch $@
+
+install-data-local: $(ZONEINFO_STAMP)
+	@echo "installing time zone data in $(DESTDIR)$(zoneinfodir)"
+	cd zoneinfo \
+	    && find . -type d -exec $(MKDIR_P) $(DESTDIR)$(zoneinfodir)/{} \; \
+	    && find . -type f ! -name .stamp \
+	        -exec $(INSTALL_DATA) {} $(DESTDIR)$(zoneinfodir)/{} \; \
+	    && find . -type l | while read -r link; do \
+	        target=`readlink "$$link"` || exit 1; \
+	        rm -f "$(DESTDIR)$(zoneinfodir)/$$link" || exit 1; \
+	        ln -s "$$target" "$(DESTDIR)$(zoneinfodir)/$$link" || exit 1; \
+	    done
+
+uninstall-local:
+	rm -rf $(DESTDIR)$(zoneinfodir)
+
+endif # BUILD_ZONEINFO
+
+.PHONY: clean-zoneinfo
+clean-zoneinfo:
+	rm -rf zoneinfo
 
 distgit:
 	$(MKDIR_P) dist

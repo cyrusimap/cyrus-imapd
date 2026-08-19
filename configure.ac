@@ -1369,19 +1369,18 @@ AS_IF([test "x$with_cld2" = "xyes"],
 AM_CONDITIONAL([HAVE_CLD2], [test "x$with_cld2" = xyes])
 
 dnl
-dnl Check for guesstz library
+dnl see if we're building the guesstz library
+dnl
+dnl guesstz used to be a separate package (cyrus-timezones) that we found with
+dnl pkg-config.  It now lives in imap/ and needs nothing that a --enable-http
+dnl build doesn't already require, so this is a plain feature switch.
 dnl
 AC_ARG_WITH([guesstz],
-       [AS_HELP_STRING([--without-guesstz], [ignore presence of guesstz library and disable it])],
+       [AS_HELP_STRING([--without-guesstz], [disable guessing IANA timezone names from VTIMEZONE])],
     [],
     [with_guesstz=yes])
 AS_IF([test "x$with_guesstz" = "xyes"],
-       [ PKG_CHECK_MODULES([GUESSTZ], [guesstz],
-               [ AC_DEFINE(HAVE_GUESSTZ, [], [Build with guesstz library support])
-                 with_guesstz=yes ],
-          with_guesstz=no)])
-AC_SUBST([GUESSTZ_LIBS])
-AC_SUBST([GUESSTZ_CFLAGS])
+      [AC_DEFINE(HAVE_GUESSTZ, [], [Build with guesstz library support])])
 AM_CONDITIONAL([HAVE_GUESSTZ], [test "x$with_guesstz" = xyes])
 
 dnl
@@ -1575,19 +1574,63 @@ AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
 
 dnl
+dnl Find the vzic timezone compiler.  We use it to convert the IANA time zone
+dnl database bundled in tzdata/ into the VTIMEZONEs that the TZDist service and
+dnl guesstz need.  Without it we build no time zone data, and an administrator
+dnl has to populate zoneinfo_dir by hand.
+dnl
+dnl vzic hard-codes TZID_PREFIX, CREATE_SYMLINK and IGNORE_TOP_LEVEL_LINK and
+dnl we cannot detect them here.  The TZDist chapter of the docs says what the
+dnl build does about that.
+dnl
+dnl TODO Ask the vzic maintainers to make these settings runtime options.
+dnl
+AC_ARG_WITH([vzic],
+            [AS_HELP_STRING([--with-vzic=PATH],
+                            [path to the vzic timezone compiler (default: search PATH)])])
+AS_IF([test "x$with_vzic" = "xno"],
+      [VZIC=''
+       no_vzic_reason='vzic disabled'],
+      [test "x$with_vzic" = "x" || test "x$with_vzic" = "xyes"],
+      [AC_PATH_PROG([VZIC], [vzic])
+       no_vzic_reason='vzic not found'],
+      [VZIC=$with_vzic
+       AS_IF([test ! -x "$VZIC"],
+             [AC_MSG_ERROR([vzic is not executable: $VZIC])])])
+AC_SUBST([VZIC])
+AS_IF([test "x$VZIC" != "x"],
+      [build_zoneinfo=yes],
+      [build_zoneinfo=no
+       AC_MSG_NOTICE([$no_vzic_reason: will not build or install time zone data])])
+AM_CONDITIONAL([BUILD_ZONEINFO], [test "x$build_zoneinfo" = xyes])
+
+dnl
 dnl allow setting a compile-time default for zoneinfo_dir
+dnl
+dnl When we build the time zone data ourselves, default to where we install it,
+dnl so that a stock build finds it with no imapd.conf setting at all.  That
+dnl path is only known to the Makefile, so it passes the -D itself; see
+dnl DEFAULT_ZONEINFO_DIR in Makefile.am.
 dnl
 AC_ARG_WITH([zoneinfo-dir],
             [AS_HELP_STRING([--with-zoneinfo-dir=path],
-                            [set default zoneinfo_dir to path (otherwise NULL)])])
+                            [set default zoneinfo_dir to path (default: where the built time zone data is installed, otherwise NULL)])])
 AS_CASE([$with_zoneinfo_dir],
         [yes],  [AC_MSG_ERROR([--with-zoneinfo-dir requires a path])],
-        [no],   [with_zoneinfo_dir=''],
-        [*],    []);
-AS_IF([test "x$with_zoneinfo_dir" != "x"],
-      AC_DEFINE_UNQUOTED(DEFAULT_ZONEINFO_DIR,
-                         ["$with_zoneinfo_dir"],
-                         [Default zoneinfo_dir]))
+        [no],   [with_zoneinfo_dir=''
+                 zoneinfo_dir_from_build=no],
+        [''],   [zoneinfo_dir_from_build=$build_zoneinfo],
+        [*],    [zoneinfo_dir_from_build=no]);
+ZONEINFO_DIR=$with_zoneinfo_dir
+AC_SUBST([ZONEINFO_DIR])
+AS_IF([test "x$zoneinfo_dir_from_build" = xyes],
+      [zoneinfo_dir_summary='(where the built time zone data is installed)'],
+      [test "x$with_zoneinfo_dir" != "x"],
+      [zoneinfo_dir_summary=$with_zoneinfo_dir],
+      [zoneinfo_dir_summary='(none: must be set in imapd.conf)'])
+AM_CONDITIONAL([HAVE_ZONEINFO_DIR], [test "x$with_zoneinfo_dir" != "x"])
+AM_CONDITIONAL([ZONEINFO_DIR_FROM_BUILD],
+               [test "x$zoneinfo_dir_from_build" = xyes])
 
 dnl
 dnl see if we're compiling with JMAP support
@@ -2449,5 +2492,7 @@ Build info:
    perl:               $PERL
    xxd:                $XXD
    release checks:     $enable_release_checks
-   zoneinfo_dir:       $with_zoneinfo_dir
+   vzic:               $VZIC
+   time zone data:     $build_zoneinfo
+   zoneinfo_dir:       $zoneinfo_dir_summary
 "

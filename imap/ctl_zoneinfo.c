@@ -39,8 +39,8 @@ static int verbose = 0;
 void usage(void) __attribute__((noreturn));
 void free_zoneinfo(void *data);
 void store_zoneinfo(const char *tzid, void *data, void *rock);
-void do_zonedir(const char *prefix, struct hash_table *tzentries,
-                struct zoneinfo *info);
+void do_zonedir(const char *basedir, const char *dir,
+                struct hash_table *tzentries, struct zoneinfo *info);
 void shut_down(int code) __attribute__((noreturn));
 
 
@@ -163,7 +163,7 @@ int main(int argc, char **argv)
         }
 
         /* Add ZONE/LINK records */
-        do_zonedir(config_zoneinfo_dir, &tzentries, info);
+        do_zonedir(config_zoneinfo_dir, config_zoneinfo_dir, &tzentries, info);
 
         zoneinfo_open(NULL);
 
@@ -304,9 +304,13 @@ void usage(void)
 }
 
 
-/* Add all ZONEs and LINKs in the given directory to the hash table */
-void do_zonedir(const char *dir, struct hash_table *tzentries,
-                struct zoneinfo *info)
+/* Add all ZONEs and LINKs in the directory 'dir' to the hash table.
+ *
+ * 'basedir' is the top of the zoneinfo directory, and 'dir' is either that
+ * same directory or a region directory below it, which is where recursing
+ * lands us.  A tzid is a path relative to 'basedir', so we need both. */
+void do_zonedir(const char *basedir, const char *dir,
+                struct hash_table *tzentries, struct zoneinfo *info)
 {
     DIR *dirp;
     struct dirent *dirent;
@@ -334,7 +338,7 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
 
         if (S_ISDIR(sbuf.st_mode)) {
             /* Path is a directory (region) */
-          do_zonedir(path, tzentries, info);
+          do_zonedir(basedir, path, tzentries, info);
         }
         else if (S_ISLNK(sbuf.st_mode)) {
             /* Path is a symlink (alias) */
@@ -348,7 +352,7 @@ void do_zonedir(const char *dir, struct hash_table *tzentries,
 
             /* Isolate alias in path */
             path[plen-4] = '\0';  /* Trim ".ics" */
-            alias = path + strlen(dir) + 1;
+            alias = path + strlen(basedir) + 1;
 
             if (verbose) printf("\tLINK: %s -> %s\n", alias, tzid);
 

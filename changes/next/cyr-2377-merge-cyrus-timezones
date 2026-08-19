@@ -1,0 +1,44 @@
+Description:
+
+The cyrus-timezones package is now part of Cyrus: the IANA time zone database
+is bundled in tzdata/, the guesstz library lives in imap/, and "make install"
+generates and installs the VTIMEZONEs and the timezone guessing database that
+were previously supplied by cyruslibs.
+
+Along the way, "ctl_zoneinfo -r" fixes the zoneinfo index entry it writes for a
+time zone alias that is a symlink in a region directory: Indian/Mayotte was
+indexed as Mayotte, and so could not be resolved.
+
+Documentation:
+
+docsrc/download/installation/http/caldav.rst (TZDist chapter) and the new
+cyr_guesstz(8) man page.
+
+Config changes:
+
+None.  zoneinfo_dir is unchanged, but now defaults to the directory the build
+installed its time zone data into, rather than to nothing.
+
+New configure options:
+
+  --with-vzic=PATH        where to find the vzic timezone compiler
+                          (default: search PATH; --without-vzic builds no
+                          time zone data)
+
+--without-guesstz is now a plain feature switch rather than a probe for an
+external package, and no longer needs the guesstz.pc pkg-config file that
+cyruslibs installed.
+
+Upgrade instructions:
+
+Nothing is required: an existing zoneinfo_dir setting still wins, and existing
+time zone data keeps working.  The TZDist chapter of the documentation
+describes how to hand over to the data Cyrus now installs.
+
+Packagers: vzic is now a build-time dependency for the time zone data, and how
+it was built matters -- see the same chapter.  Configure --without-vzic to keep
+on shipping time zone data separately.
+
+GitHub issue:
+
+None.

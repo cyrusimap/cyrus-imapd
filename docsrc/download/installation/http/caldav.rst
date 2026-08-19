@@ -342,26 +342,103 @@ Configuration
 The TZDist module requires the :imapdconf:`zoneinfo_dir` setting to be set
 to the directory where your time zone data is stored.
 
+If ``configure`` found the ``vzic`` timezone compiler, ``make install``
+generates that data from the IANA time zone database bundled in ``tzdata/``
+and installs it under ``<datadir>/cyrus-imapd/zoneinfo`` -- e.g.
+``/usr/cyrus/share/cyrus-imapd/zoneinfo`` -- and :imapdconf:`zoneinfo_dir`
+defaults to that directory.  In that case there is nothing to configure, and
+you can skip to :ref:`tzdist_administration`, which you still need when a new
+IANA release comes out.
+
+The ``configure`` summary reports the directory as "time zone data" and
+"zoneinfo_dir".  Note that this default is compiled in rather than stored in
+the config file, so :cyrusman:`cyr_info(8)` ``conf-all`` reports
+:imapdconf:`zoneinfo_dir` as empty unless it is set in
+:cyrusman:`imapd.conf(5)` explicitly.
+
+An upgraded installation keeps the :imapdconf:`zoneinfo_dir` it has configured,
+and its existing data stays in use.  To switch over to the data the build
+installs, remove the setting from :cyrusman:`imapd.conf(5)` and rebuild the
+index as :ref:`tzdist_administration` describes.
+
+Pass ``--with-vzic=PATH`` to ``configure`` if ``vzic`` is not on your
+``PATH``, or ``--without-vzic`` to build no time zone data at all and manage
+:imapdconf:`zoneinfo_dir` entirely yourself as described below.  Setting
+``--with-zoneinfo-dir=PATH`` overrides the default regardless.
+
+.. _tzdist_vzic:
+
+.. note::
+
+    ``vzic`` hard-codes three settings when it is itself compiled, and
+    ``configure`` cannot tell how the ``vzic`` it found was built:
+
+    ``TZID_PREFIX``
+        The vendor prefix ``vzic`` writes on every ``TZID``, ``/citadel.org/%D_1/``
+        by default.  Cyrus needs bare IANA names, and the build strips any
+        prefix from the data it generates.
+
+    ``CREATE_SYMLINK``
+        Whether a time zone alias becomes a symlink to the zone it aliases
+        rather than a VTIMEZONE of its own.  Either way works: Cyrus reads such
+        a symlink as an alias, and ``make install`` installs it as a symlink.
+
+    ``IGNORE_TOP_LEVEL_LINK``
+        Whether to skip the aliases that have no region, such as ``EST5EDT``.
+        A ``vzic`` built with ``IGNORE_TOP_LEVEL_LINK=1`` writes no data at all
+        for them, and Cyrus cannot tell that from an IANA release that never
+        had them.  Build ``vzic`` with ``IGNORE_TOP_LEVEL_LINK=0`` to serve
+        those time zones.
+
 The data is indexed by a database whose location is specified by the
 :imapdconf:`zoneinfo_db_path` option, using the format specified by the
 :imapdconf:`zoneinfo_db` option.
 
+.. _tzdist_administration:
+
 Administration
 --------------
 
-The TZDist module is designed to use the IANA Time Zone Database data (a.k.a.
-Olson Database) converted to the iCalendar format.
+The time zone data in :imapdconf:`zoneinfo_dir` is the IANA Time Zone Database
+(a.k.a. Olson Database) converted to the iCalendar format.  More than TZDist
+reads it: CalDAV and JMAP Calendars expect a VTIMEZONE for every IANA name, and
+JMAP Calendars also uses the guessing database built from it to name the custom
+time zones that clients send -- see :cyrusman:`cyr_guesstz(8)`.
 
-`vzic <https://github.com/libical/vzic>`_ does convert the IANA TZ DB to iCalendar
-format.  For each time zone it creates a separate file with its own TZID property.
-The TZID property can have a vendor prefix, that is fixed when compiling vzic by the
-``TZID_PREFIX`` Makefile variable, which defaults to `/citadel.org/%D_1/`.  Cyrus
-IMAP requires that the vendor prefix is the empty string.
+Cyrus bundles a copy of the database in ``tzdata/`` and converts it during the
+build, so a stock build starts out with current data.  What the build cannot do
+is keep it current: IANA publishes several releases a year, and installing them
+must be done by the packager or the administrator.
 
-The `cyrus-timezones package <https://github.com/cyrusimap/cyrus-timezones>`_ provides
-a vzic, which sets TZID_PREFIX to the empty string.
+Take one of the two routes below, then rebuild the index.
 
-The steps to populate the :imapdconf:`zoneinfo_dir` directory are:
+Updating the bundled data
+#########################
+
+``tzdata/`` holds one unmodified IANA release.  ``tools/update-tzdata.sh``
+replaces it with a newer one -- it downloads the data-only tarball from IANA,
+unpacks it over ``tzdata/`` and stages the result -- so that ``make install``
+produces the new data from then on::
+
+    tools/update-tzdata.sh 2026d
+    make && make install
+
+This is also how the bundled copy gets updated for everybody, so a pull request
+with that commit is welcome.
+
+Managing zoneinfo_dir yourself
+##############################
+
+If you would rather not have the build touch your time zone data -- configure
+with ``--without-vzic`` -- then populate :imapdconf:`zoneinfo_dir` by hand.
+
+`vzic <https://github.com/libical/vzic>`_ converts the IANA TZ DB to iCalendar
+format, writing a separate file with its own TZID property for each time zone.
+Build it with ``TZID_PREFIX="" IGNORE_TOP_LEVEL_LINK=0``: nothing strips the
+vendor prefix for you here, since that is part of the build you just turned
+off.  See :ref:`the note above <tzdist_vzic>` for what these settings mean.
+
+The steps are:
 
 1. Acquire and build your choice of ``vzic`` tool.
 
@@ -394,14 +471,31 @@ The steps to populate the :imapdconf:`zoneinfo_dir` directory are:
       by running vzic-merge.pl in your current location:
       ``vzic-merge.pl``
 
-6. Rebuild the Cyrus zoneinfo index by running :cyrusman:`ctl_zoneinfo(8)` as
-   follows:
-   ``ctl_zoneinfo -r <version-string>``
+6. Copy the **version** file from the raw data to ``<zoneinfo_dir>``, and
+   rebuild the timezone guessing database that JMAP CalendarEvent objects
+   use::
 
-   where <version-string> contains description of the recently downloaded time
-   zone data, colon, and the version of the data (e.g. "IANA Time Zone Database:2020a").
+       cyr_guesstz -z <zoneinfo_dir> <zoneinfo_dir>/guesstz.db
 
-7. Check that the zoneinfo index database and all iCalendar data files/links
+   See :cyrusman:`cyr_guesstz(8)`.  Skip this if Cyrus was built
+   ``--without-guesstz``.
+
+Rebuilding the index
+####################
+
+Either route ends here, whether the data came from the build or from your own
+``vzic`` run:
+
+1. Rebuild the index by running :cyrusman:`ctl_zoneinfo(8)`::
+
+       ctl_zoneinfo -r <version-string>
+
+   where <version-string> contains a description of the time zone data, a
+   colon, and the version of the data, e.g. ``"IANA Time Zone
+   Database:2026c"``.  The version Cyrus built with is in the **version** file
+   in :imapdconf:`zoneinfo_dir`.
+
+2. Check that the zoneinfo index database and all iCalendar data files/links
    are readable by the cyrus user.
 
 iSchedule

@@ -8,7 +8,7 @@
 #include <syslog.h>
 
 #ifdef HAVE_GUESSTZ
-#include <guesstz.h>
+#include "guesstz.h"
 #endif
 
 #include "bsearch.h"

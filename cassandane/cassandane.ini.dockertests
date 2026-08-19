@@ -57,7 +57,9 @@ cleanup = pre
 [gdb]
 
 [config]
-zoneinfo_dir = /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
+# zoneinfo_dir is deliberately unset: the build compiles in the directory it
+# installed the time zone data into, and we want the tests to exercise that
+# default.  Set it here if you need to point the tests at another zoneinfo.
 
 [imaptest]
 basedir = /srv/imaptest

@@ -1,0 +1,267 @@
+#if HAVE_CONFIG_H
+#include <config.h>
+#endif
+#include "cunit/unit.h"
+
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include "util.h"
+
+#include "imap/guesstz.h"
+
+/* The database time range.  Wide enough that the fixture RRULEs below expand
+ * to the same observances the real IANA data would. */
+#define TRSTART "20000101T000000Z"
+#define TREND   "20320101T000000Z"
+
+/* The time range we guess over, well inside the database range. */
+#define QSTART  "20201227T140000Z"
+#define QEND    "20211227T150000Z"
+
+#define VCAL_BEGIN \
+    "BEGIN:VCALENDAR\r\n" \
+    "PRODID:-//cyrus//guesstz test//EN\r\n" \
+    "VERSION:2.0\r\n"
+#define VCAL_END "END:VCALENDAR\r\n"
+
+/* Europe/Berlin as the EU rules have stood since 1996. */
+#define BERLIN_BODY \
+    "BEGIN:DAYLIGHT\r\n" \
+    "TZNAME:CEST\r\n" \
+    "TZOFFSETFROM:+0100\r\n" \
+    "TZOFFSETTO:+0200\r\n" \
+    "DTSTART:19810329T020000\r\n" \
+    "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU\r\n" \
+    "END:DAYLIGHT\r\n" \
+    "BEGIN:STANDARD\r\n" \
+    "TZNAME:CET\r\n" \
+    "TZOFFSETFROM:+0200\r\n" \
+    "TZOFFSETTO:+0100\r\n" \
+    "DTSTART:19961027T030000\r\n" \
+    "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU\r\n" \
+    "END:STANDARD\r\n"
+
+/* America/New_York as the US rules have stood since 2007. */
+#define NEWYORK_BODY \
+    "BEGIN:DAYLIGHT\r\n" \
+    "TZNAME:EDT\r\n" \
+    "TZOFFSETFROM:-0500\r\n" \
+    "TZOFFSETTO:-0400\r\n" \
+    "DTSTART:20070311T020000\r\n" \
+    "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU\r\n" \
+    "END:DAYLIGHT\r\n" \
+    "BEGIN:STANDARD\r\n" \
+    "TZNAME:EST\r\n" \
+    "TZOFFSETFROM:-0400\r\n" \
+    "TZOFFSETTO:-0500\r\n" \
+    "DTSTART:20071104T020000\r\n" \
+    "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU\r\n" \
+    "END:STANDARD\r\n"
+
+static char zonedir[1024];
+static char *dbpath;
+
+/* Write a VCALENDAR holding one VTIMEZONE with this tzid into the zoneinfo
+ * directory, in the layout vzic produces: <zonedir>/<tzid>.ics */
+static void write_vtimezone(const char *tzid, const char *body)
+{
+    char *path = strconcat(zonedir, "/", tzid, ".ics", (char *)NULL);
+
+    /* Create the intermediate "Europe" / "America" directory. */
+    char *slash = strrchr(path, '/');
+    *slash = '\0';
+    if (strcmp(path, zonedir))
+        CU_ASSERT_EQUAL_FATAL(mkdir(path, 0755), 0);
+    *slash = '/';
+
+    FILE *fp = fopen(path, "w");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
+    fprintf(fp, "%sBEGIN:VTIMEZONE\r\nTZID:%s\r\n%sEND:VTIMEZONE\r\n%s",
+            VCAL_BEGIN, tzid, body, VCAL_END);
+    fclose(fp);
+    free(path);
+}
+
+static int set_up(void)
+{
+    cunit_tmpdir(zonedir, sizeof(zonedir), "guesstz-XXXXXX");
+    dbpath = strconcat(zonedir, "/guesstz.db", (char *)NULL);
+
+    write_vtimezone("Europe/Berlin", BERLIN_BODY);
+    write_vtimezone("America/New_York", NEWYORK_BODY);
+
+    FILE *fp = fopen(dbpath, "w");
+    if (!fp) return -1;
+    int r = guesstz_create(zonedir,
+                           icaltime_from_string(TRSTART),
+                           icaltime_from_string(TREND), fp);
+    fclose(fp);
+
+    return r;
+}
+
+static int tear_down(void)
+{
+    /* cunit_tmpdir's directories are cleaned up by the harness. */
+    free(dbpath);
+    dbpath = NULL;
+    return 0;
+}
+
+/* Guess the IANA name of a VTIMEZONE whose own TZID says nothing. */
+static char *guess(const char *body)
+{
+    char *ical = strconcat(VCAL_BEGIN,
+                           "BEGIN:VTIMEZONE\r\nTZID:Custom\r\n",
+                           body,
+                           "END:VTIMEZONE\r\n",
+                           VCAL_END, (char *)NULL);
+    icalcomponent *comp = icalparser_parse_string(ical);
+    free(ical);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(comp);
+
+    icalcomponent *vtz =
+        icalcomponent_get_first_component(comp, ICAL_VTIMEZONE_COMPONENT);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(vtz);
+
+    guesstz_t *gtz = guesstz_open(dbpath);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+
+    char *tzid = guesstz_guess(gtz, vtz,
+                               icaltime_from_string(QSTART),
+                               icaltime_from_string(QEND));
+    CU_ASSERT_PTR_NULL((void *)guesstz_error(gtz));
+
+    guesstz_close(&gtz);
+    icalcomponent_free(comp);
+
+    return tzid;
+}
+
+static void test_berlin(void)
+{
+    char *tzid = guess(BERLIN_BODY);
+    CU_ASSERT_STRING_EQUAL(tzid, "Europe/Berlin");
+    free(tzid);
+}
+
+static void test_newyork(void)
+{
+    char *tzid = guess(NEWYORK_BODY);
+    CU_ASSERT_STRING_EQUAL(tzid, "America/New_York");
+    free(tzid);
+}
+
+/* A single whole-hour observance is answered from the Etc/GMT+X family,
+ * whether or not those zones are in the database. */
+static void test_etc_gmt(void)
+{
+    char *tzid = guess("BEGIN:STANDARD\r\n"
+                       "TZNAME:-08\r\n"
+                       "TZOFFSETFROM:-0800\r\n"
+                       "TZOFFSETTO:-0800\r\n"
+                       "DTSTART:16010101T000000\r\n"
+                       "END:STANDARD\r\n");
+    CU_ASSERT_STRING_EQUAL(tzid, "Etc/GMT+8");
+    free(tzid);
+}
+
+/* A timezone that matches nothing in the database is not guessed. */
+static void test_unknown(void)
+{
+    char *tzid = guess("BEGIN:STANDARD\r\n"
+                       "TZNAME:WEIRD\r\n"
+                       "TZOFFSETFROM:+0037\r\n"
+                       "TZOFFSETTO:+0037\r\n"
+                       "DTSTART:19700101T000000\r\n"
+                       "END:STANDARD\r\n");
+    CU_ASSERT_PTR_NULL(tzid);
+    free(tzid);
+}
+
+/* Guessing outside the database time range is an error, not a wrong answer. */
+static void test_trstart_out_of_range(void)
+{
+    icalcomponent *comp = icalparser_parse_string(
+        VCAL_BEGIN "BEGIN:VTIMEZONE\r\nTZID:Custom\r\n" BERLIN_BODY
+        "END:VTIMEZONE\r\n" VCAL_END);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(comp);
+    icalcomponent *vtz =
+        icalcomponent_get_first_component(comp, ICAL_VTIMEZONE_COMPONENT);
+
+    guesstz_t *gtz = guesstz_open(dbpath);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+
+    char *tzid = guesstz_guess(gtz, vtz,
+                               icaltime_from_string("19800101T000000Z"),
+                               icaltime_from_string("19810101T000000Z"));
+    CU_ASSERT_PTR_NULL(tzid);
+    CU_ASSERT_PTR_NOT_NULL((void *)guesstz_error(gtz));
+
+    guesstz_close(&gtz);
+    icalcomponent_free(comp);
+}
+
+/* Opening a database that isn't there reports an error rather than crashing. */
+static void test_open_missing(void)
+{
+    guesstz_t *gtz = guesstz_open("/nonexistent/guesstz.db");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(gtz);
+    CU_ASSERT_PTR_NOT_NULL((void *)guesstz_error(gtz));
+    guesstz_close(&gtz);
+}
+
+/* A zoneinfo directory may name an alias with a symlink to the zone it
+ * aliases, and indexing one must not file that zone a second time. */
+static void test_symlinked_alias(void)
+{
+    char *alias = strconcat(zonedir, "/Europe/Berlin-alias.ics", (char *)NULL);
+    CU_ASSERT_EQUAL_FATAL(symlink("Berlin.ics", alias), 0);
+
+    char *path = strconcat(zonedir, "/aliased.db", (char *)NULL);
+    FILE *fp = fopen(path, "w");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
+    int r = guesstz_create(zonedir,
+                           icaltime_from_string(TRSTART),
+                           icaltime_from_string(TREND), fp);
+    fclose(fp);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    /* The database of the fixture without the symlink is our reference. */
+    guesstz_t *gtz = guesstz_open(dbpath);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+    char *want = guesstz_encode(gtz);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(want);
+    guesstz_close(&gtz);
+
+    gtz = guesstz_open(path);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+    char *have = guesstz_encode(gtz);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(have);
+    CU_ASSERT_STRING_EQUAL(have, want);
+
+    free(have);
+    free(want);
+    guesstz_close(&gtz);
+
+    /* Leave the fixture as we found it for the tests after this one. */
+    CU_ASSERT_EQUAL(unlink(alias), 0);
+    free(path);
+    free(alias);
+}
+
+/* The JSON dump round-trips the database header. */
+static void test_encode(void)
+{
+    guesstz_t *gtz = guesstz_open(dbpath);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+
+    char *json = guesstz_encode(gtz);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(json);
+    CU_ASSERT_PTR_NOT_NULL(strstr(json, "Europe/Berlin"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(json, "America/New_York"));
+
+    free(json);
+    guesstz_close(&gtz);
+}
