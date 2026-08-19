@@ -25,7 +25,7 @@ if
 EOF
     );
 
-    my $rawMessage = <<'EOF';
+    my $rawMessage = to_crlf(<<'EOF');
 From: from@local
 To: to@local
 Subject: test
@@ -53,7 +53,6 @@ Sent from my supercalifragilisticexpialidocious device
 
 --e523eb44-40ae-463e-9261-2f935700196d--
 EOF
-    $rawMessage =~ s/\r?\n/\r\n/gs;
 
     my $msg = Cassandane::Message->new();
     $msg->set_lines(split /\n/, $rawMessage);

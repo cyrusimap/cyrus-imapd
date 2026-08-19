@@ -6,14 +6,13 @@ sub test_append_utf8 ($self)
     my $result;
 
     my $frontend = $self->{frontend_store}->get_client();
-    my $MsgTxt = <<EOF;
+    my $MsgTxt = to_crlf(<<EOF);
 From: blah\@xyz.com
 To: whoever\@whereever.com
 Subject: you are a ☀
 
 Hello
 EOF
-    $MsgTxt =~ s/\n/\015\012/g;
 
     xlog $self, "ENABLE UTF8=ACCEPT";
     my $res = $frontend->_imap_cmd('ENABLE', 0, "enabled", "UTF8=ACCEPT");

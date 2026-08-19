@@ -44,7 +44,7 @@ sub test_email_query_emailaddress
         ),
         body => "msg3"
     ) || die;
-    my $mime = <<'EOF';
+    my $mime = to_crlf(<<'EOF');
 From: <from@local>
 To: toa@example.com, RecipientB <tob@example.com>
 Subject: msg4
@@ -54,10 +54,9 @@ Content-Type: text/plain
 
 msg4
 EOF
-    $mime =~ s/\r?\n/\r\n/gs;
     $imap->append('INBOX', $mime) || die $@;
 
-    $mime = <<'EOF';
+    $mime = to_crlf(<<'EOF');
 From: <from@local>
 To: Jøran Øygårdvær <sjöhäst712@example.com>, Dømi <info@xn--dmi-0na.fo>, xn--ls8ha@outlook.com, foo@ümlaut.example.com, δοκιμή@παράδειγμα.δοκιμή
 Date: Mon, 13 Apr 2020 15:34:03 +0200
@@ -67,7 +66,6 @@ Content-Type: text/plain
 
 msg5
 EOF
-    $mime =~ s/\r?\n/\r\n/gs;
 
     my $msg = Cassandane::Message->new();
     $msg->set_lines(split /\n/, $mime);

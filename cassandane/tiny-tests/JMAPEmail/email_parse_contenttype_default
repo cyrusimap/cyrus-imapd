@@ -78,8 +78,7 @@ EOF
 
     foreach (@testCases) {
         xlog $self, "Running test: $_->{desc}";
-        my $rawEmail = $_->{rawEmail};
-        $rawEmail =~ s/\r?\n/\r\n/gs;
+        my $rawEmail = to_crlf($_->{rawEmail});
         my $data = $jmap->Upload($rawEmail, "application/data");
         my $blobId = $data->{blobId};
 

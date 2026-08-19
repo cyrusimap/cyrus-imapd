@@ -10,8 +10,7 @@ sub test_normalize_snippets
 use utf8;
     my @terms = ( "gären", "советской", "diĝir", "naïve", "léger" );
 no utf8;
-    my $body = encode_base64(encode('UTF-8', join(' ', @terms)));
-    $body =~ s/\r?\n/\r\n/gs;
+    my $body = to_crlf(encode_base64(encode('UTF-8', join(' ', @terms))));
 
     xlog $self, "Generate and index test messages.";
     my %params = (

@@ -10,6 +10,7 @@ use DateTime;
 use Data::Dumper;
 
 use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use Cassandane::Util::NetString;
 

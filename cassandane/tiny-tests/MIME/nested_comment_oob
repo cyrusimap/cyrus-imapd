@@ -26,7 +26,7 @@ EOF
 
     # Remove trailing newline so backslash is the final byte before NUL
     chomp $msg;
-    $msg =~ s/\r?\n/\r\n/gs;
+    $msg = to_crlf($msg);
 
     # Append the message
     $talk->append('INBOX', $msg) || die $@;

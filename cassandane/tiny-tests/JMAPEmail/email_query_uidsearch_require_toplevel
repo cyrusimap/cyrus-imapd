@@ -27,7 +27,7 @@ sub test_email_query_uidsearch_require_toplevel
     $self->assert_not_null($mboxIdB);
 
     xlog $self, "Create message A in mailbox A";
-    my $mimeA = <<'EOF';
+    my $mimeA = to_crlf(<<'EOF');
 From: fromA@local
 To: fromA@local
 Subject: msgASubject
@@ -39,11 +39,10 @@ Content-Transfer-Encoding: 7bit
 
 msgAbody
 EOF
-    $mimeA =~ s/\r?\n/\r\n/gs;
     $imap->append('A', $mimeA);
 
     xlog $self, "Create message B in mailbox B, having message A as attachment";
-    my $mimeB = <<EOF;
+    my $mimeB = to_crlf(<<EOF);
 From: fromB\@local
 To: fromB\@local
 Subject: msgBSubject
@@ -63,7 +62,6 @@ Content-Type: message/rfc822
 $mimeA
 --a2a6fdfb746e--
 EOF
-    $mimeB =~ s/\r?\n/\r\n/gs;
     $imap->append('B', $mimeB);
 
     $self->{instance}->run_command({ cyrus => 1 }, 'squatter');

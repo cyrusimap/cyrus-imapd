@@ -88,7 +88,7 @@ sub _do_test ($self, $from_version, $to_version, $from_prefix, $to_prefix, $to_r
     my $to_uid = ($to_prefix eq 'y' ? "urn:uuid:" : "") . $bare_uid;
 
     xlog $self, "PUT initial vCard";
-    my $vcard = <<~EOF;
+    my $vcard = to_crlf(<<~EOF);
     BEGIN:VCARD
     PRODID:-//foo//bar//EN
     VERSION:$from_version.0
@@ -98,12 +98,11 @@ sub _do_test ($self, $from_version, $to_version, $from_prefix, $to_prefix, $to_r
     NOTE:Original UID was $from_uid with version $from_version
     END:VCARD
     EOF
-    $vcard =~ s/\r?\n/\r\n/gs;
     $carddav->Request('PUT', "Default/a.vcf", $vcard, 'Content-Type' => 'text/vcard');
 
     if ($to_uid_exists eq "y") {
         xlog $self, "PUT vCard with target UID to different resource";
-        my $vcardx = <<~EOF;
+        my $vcardx = to_crlf(<<~EOF);
         BEGIN:VCARD
         PRODID:-//foo//bar//EN
         VERSION:3.0
@@ -112,7 +111,6 @@ sub _do_test ($self, $from_version, $to_version, $from_prefix, $to_prefix, $to_r
         FN:
         END:VCARD
         EOF
-        $vcardx =~ s/\r?\n/\r\n/gs;
         $carddav->Request('PUT', "Default/x.vcf", $vcardx, 'Content-Type' => 'text/vcard');
     }
 

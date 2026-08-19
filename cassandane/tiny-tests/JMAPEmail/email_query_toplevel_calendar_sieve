@@ -26,7 +26,7 @@ if
 EOF
     );
 
-    my $rawMessage = <<'EOF';
+    my $rawMessage = to_crlf(<<'EOF');
 From: from@local
 To: to@local
 Subject: test
@@ -51,7 +51,6 @@ LAST-MODIFIED:20150928T132434Z
 END:VEVENT
 END:VCALENDAR
 EOF
-    $rawMessage =~ s/\r?\n/\r\n/gs;
 
     my $msg = Cassandane::Message->new();
     $msg->set_lines(split /\n/, $rawMessage);

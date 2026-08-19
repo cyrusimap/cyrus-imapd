@@ -13,7 +13,7 @@ sub test_get_control_char
     # Assert that CONTROL chars are omitted when reading
     # iCalendar data from disk.
 
-    my $mimeMsg = <<EOF;
+    my $mimeMsg = to_crlf(<<EOF);
 User-Agent: Net-DAVTalk/0.01
 From: <cassandane\@local>
 Subject: test
@@ -43,7 +43,6 @@ LAST-MODIFIED:20150928T132434Z
 END:VEVENT
 END:VCALENDAR
 EOF
-    $mimeMsg =~ s/\r?\n/\r\n/gs;
     $imap->append('#calendars.Default', $mimeMsg) || die $@;
 
     my $res = $caldav->Request('GET', '/dav/calendars/user/cassandane/Default/test.ics');

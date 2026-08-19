@@ -8,7 +8,7 @@ sub test_card_get_no_type_vcardparams
     my $jmap = $self->default_user->jmap;
 
     xlog $self, "Create vCard with unknown TYPE parameter value";
-    my $vcard = <<~"EOF";
+    my $vcard = to_crlf(<<~"EOF");
     BEGIN:VCARD
     VERSION:3.0
     UID:EE433ED1-C99B-434C-8B67-716907A1E9BA
@@ -17,7 +17,6 @@ sub test_card_get_no_type_vcardparams
     EMAIL;TYPE=INTERNET:user\@example.com
     END:VCARD
     EOF
-    $vcard =~ s/\r?\n/\r\n/gs;
     $carddav->Request('PUT', 'Default/test.vcf', $vcard, 'Content-Type' => 'text/vcard');
 
     xlog $self, "Assert no vCardParams is set in the EmailAddress object";

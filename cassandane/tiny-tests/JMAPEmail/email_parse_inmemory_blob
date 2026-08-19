@@ -10,7 +10,7 @@ sub test_email_parse_inmemory_blob
     # XXX: replace with the upstream one once RFC 9404 is finished
     $jmap->AddUsing('urn:ietf:params:jmap:blob');
 
-    my $mimeMsg = <<'EOF';
+    my $mimeMsg = to_crlf(<<'EOF');
 From: <from@local>
 To: to@local
 Bcc: bcc@local
@@ -21,7 +21,6 @@ Content-Type: text/plain
 
 hello
 EOF
-    $mimeMsg =~ s/\r?\n/\r\n/gs;
 
     # XXX: can't use a result reference in array
     my $blobId = 'G67501cd2e1eaaf65d25e6f3b49554d2193f06ee8';

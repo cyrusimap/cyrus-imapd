@@ -21,7 +21,7 @@ END:VCARD
 EOF
 
     xlog $self, "create card";
-    $card1 =~ s/\r?\n/\r\n/gs;
+    $card1 = to_crlf($card1);
     $carddav->Request('PUT', $href, $card1, 'Content-Type' => 'text/vcard');
 
     xlog $self, "get card and current state";
@@ -51,7 +51,7 @@ END:VCARD
 EOF
 
     xlog $self, "create new card using same href";
-    $card2 =~ s/\r?\n/\r\n/gs;
+    $card2 = to_crlf($card2);
     $carddav->Request('PUT', $href, $card2, 'Content-Type' => 'text/vcard');
 
     xlog $self, "get most recent card updates";

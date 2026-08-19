@@ -5,7 +5,7 @@ sub test_sieve_test_singlecommand
     :min_version_3_3 :JMAPExtensions
     ($self)
 {
-    my $email1 = <<'EOF';
+    my $email1 = to_crlf(<<'EOF');
 From: "Some Example Sender" <example@example.com>
 To: cassandane@example.com
 Subject: test email
@@ -16,9 +16,8 @@ Content-Transfer-Encoding: quoted-printable
 
 This is a test email.
 EOF
-    $email1 =~ s/\r?\n/\r\n/gs;
 
-    my $email2 = <<'EOF';
+    my $email2 = to_crlf(<<'EOF');
 From: "Some Example Sender" <example@example.com>
 To: cassandane@example.com
 Subject: Hello!
@@ -29,9 +28,8 @@ Content-Transfer-Encoding: quoted-printable
 
 This is a test email.
 EOF
-    $email2 =~ s/\r?\n/\r\n/gs;
 
-    my $script = <<EOF;
+    my $script = to_crlf(<<EOF);
 require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use", "vacation"];
 if header :contains "subject" "test" {
   setflag "\\Seen\";
@@ -41,7 +39,6 @@ else {
   vacation "Gone fishin'";
 }
 EOF
-    $script =~ s/\r?\n/\r\n/gs;
     $script =~ s/\\/\\\\/gs;
 
     my $jmap = $self->{jmap};

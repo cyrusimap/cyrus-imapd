@@ -50,13 +50,12 @@ sub test_oldname
     $self->assert_null($results[0]);
 
     xlog $self, "Append to mailbox with denormalized mailbox name";
-    my $MsgTxt = <<EOF;
+    my $MsgTxt = to_crlf(<<EOF);
 From: blah\@xyz.com
 To: whoever\@whereever.com
 
 Hello
 EOF
-    $MsgTxt =~ s/\n/\015\012/g;
     @results = ();
     $res = $talk->_imap_cmd('APPEND', 0, \%handlers, "INBOX.Å", { Literal => $MsgTxt });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());

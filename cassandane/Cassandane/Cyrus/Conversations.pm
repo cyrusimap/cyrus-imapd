@@ -9,6 +9,7 @@ use URI::Escape;
 
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::ThreadedGenerator;
+use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601

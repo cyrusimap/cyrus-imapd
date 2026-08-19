@@ -59,7 +59,7 @@ if
 EOF
     );
 
-    my $mime = <<'EOF';
+    my $mime = to_crlf(<<'EOF');
 From: from@local
 To: to@local
 Subject: testsubject
@@ -82,7 +82,6 @@ dGVzdGF0dGFjaG1lbnQK
 
 --c4683f7a320d4d20902b000486fbdf9b--
 EOF
-    $mime =~ s/\r?\n/\r\n/gs;
 
     my $msg = Cassandane::Message->new();
     $msg->set_lines(split /\n/, $mime);

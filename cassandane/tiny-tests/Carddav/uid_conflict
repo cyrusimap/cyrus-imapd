@@ -8,7 +8,7 @@ my sub put_vcard ($carddav, $args)
     $dt->set_time_zone('Etc/UTC');
     my $rev = $dt->strftime('%Y%m%dT%H%M%SZ');
 
-    my $vcard = <<EOF;
+    my $vcard = to_crlf(<<EOF);
 BEGIN:VCARD
 PRODID:-//foo//bar//EN
 VERSION:3.0
@@ -18,7 +18,6 @@ FN:test created in line $line
 REV:$rev
 END:VCARD
 EOF
-    $vcard =~ s/\r?\n/\r\n/gs;
 
     my $method = 'PUT';
     my $url = $carddav->request_url($args->{resource});

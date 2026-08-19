@@ -5,7 +5,7 @@ sub test_sieve_test_variables
     :min_version_3_3 :JMAPExtensions
     ($self)
 {
-    my $script = <<'EOF';
+    my $script = to_crlf(<<'EOF');
 require ["variables", "vnd.cyrus.log"];
 
 log "string: '${string}'";
@@ -13,7 +13,6 @@ log "int: '${int}'";
 log "empty: '${empty}'";
 log "missing: '${missing}'";
 EOF
-    $script =~ s/\r?\n/\r\n/gs;
     $script =~ s/\\/\\\\/gs;
 
     my $jmap = $self->{jmap};

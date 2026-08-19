@@ -7,14 +7,13 @@ sub test_append
 {
     my $talk = $self->{store}->get_client();
 
-    my $MsgTxt = <<EOF;
+    my $MsgTxt = to_crlf(<<EOF);
 From: blah\@xyz.com
 To: whoever\@whereever.com
 Subject: you are a ☀
 
 Hello
 EOF
-    $MsgTxt =~ s/\n/\015\012/g;
 
     xlog $self, "Create mailbox with mUTF7 encoded name";
     my $res = $talk->_imap_cmd('CREATE', 0, "", "INBOX.&JgA-");

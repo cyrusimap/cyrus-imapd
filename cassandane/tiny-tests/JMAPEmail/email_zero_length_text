@@ -7,7 +7,7 @@ sub test_email_zero_length_text
 {
     my $jmap = $self->{jmap};
 
-    my $email = <<'EOF';
+    my $email = to_crlf(<<'EOF');
 MIME-Version: 1.0
 From: "Example.com" <renewals@example.com>
 To: "Me" <me@example.com>
@@ -33,7 +33,6 @@ foo
 ----boundary_34056--
 
 EOF
-    $email =~ s/\r?\n/\r\n/gs;
     my $data = $jmap->Upload($email, "message/rfc822");
     my $blobid = $data->{blobId};
     my $inboxid = $self->getinbox()->{id};

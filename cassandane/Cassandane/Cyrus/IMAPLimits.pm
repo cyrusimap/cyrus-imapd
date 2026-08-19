@@ -7,19 +7,18 @@ use warnings;
 use Data::Dumper;
 
 use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 
 sub email
 {
-    my $email = <<~EOF;
+    my $email = to_crlf(<<~EOF);
     Subject: foo
     Date: bar
     From: <foobar\@example.com>
 
     Body
     EOF
-
-    $email =~ s/\r?\n/\r\n/gs;
 
     return $email;
 }

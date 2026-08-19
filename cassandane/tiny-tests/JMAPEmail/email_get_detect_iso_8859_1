@@ -8,7 +8,7 @@ sub test_email_get_detect_iso_8859_1
 {
     my $jmap = $self->{jmap};
 
-    my $email = <<'EOF';
+    my $email = to_crlf(<<'EOF');
 From: "Some Example Sender" <example@example.com>
 To: baseball@vitaead.com
 Subject: Here is some ISO-8859-1 text that claims to be ascii
@@ -20,7 +20,6 @@ Content-Transfer-Encoding: base64
 Ikvkc2Ugc2NobGllc3N0IGRlbiBNYWdlbiIsIGj2cnRlIGljaCBkZW4gU2NobG/faGVycm4gc2FnZW4uCg==
 
 EOF
-    $email =~ s/\r?\n/\r\n/gs;
     my $data = $jmap->Upload($email, "message/rfc822");
     my $blobid = $data->{blobId};
     my $inboxid = $self->getinbox()->{id};

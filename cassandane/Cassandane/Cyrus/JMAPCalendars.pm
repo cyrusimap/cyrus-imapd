@@ -19,6 +19,7 @@ use XML::Spice;
 use MIME::Base64 qw(encode_base64url decode_base64url encode_base64 decode_base64);
 
 use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 
@@ -535,7 +536,7 @@ EOF
 sub _parse_jscal ($self, $ical, $args) {
     my $jmap = $self->default_user->jmap;
 
-    $ical =~ s/\r?\n/\r\n/gs;
+    $ical = to_crlf($ical);
 
     my $res = $jmap->CallMethods(
         [

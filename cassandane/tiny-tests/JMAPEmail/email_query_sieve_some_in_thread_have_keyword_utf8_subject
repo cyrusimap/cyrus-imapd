@@ -27,7 +27,7 @@ EOF
     $self->{instance}->install_sieve_script($sieve);
 
     xlog $self, "Create message with UTF-8 subject";
-    my $mime = <<'EOF';
+    my $mime = to_crlf(<<'EOF');
 From: alice@local
 To: bob@local
 Subject: ¡Hola, señor!
@@ -39,7 +39,6 @@ Content-Transfer-Encoding: 7bit
 
 hello
 EOF
-    $mime =~ s/\r?\n/\r\n/gs;
     $imap->append('matches', $mime);
 
     xlog $self, "Set keyword on message";
@@ -60,7 +59,7 @@ EOF
     $self->assert(exists $res->[0][1]{updated}{$emailId});
 
     xlog $self, "Deliver reply with encoded UTF-8 subject";
-    $mime = <<'EOF';
+    $mime = to_crlf(<<'EOF');
 From: bob@local
 To: alic@local
 Subject: =?utf-8?q?Re:_=C2=A1Hola,_se=C3=B1or!?=
@@ -73,7 +72,6 @@ Content-Transfer-Encoding: 7bit
 
 hi there!
 EOF
-    $mime =~ s/\r?\n/\r\n/gs;
     my $msg = Cassandane::Message->new();
     $msg->set_lines(split /\n/, $mime);
     $self->{instance}->deliver($msg);

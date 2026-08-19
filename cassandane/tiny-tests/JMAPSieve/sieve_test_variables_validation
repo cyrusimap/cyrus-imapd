@@ -5,12 +5,11 @@ sub test_sieve_test_variables_validation
     :min_version_3_3 :JMAPExtensions
     ($self)
 {
-    my $script = <<'EOF';
+    my $script = to_crlf(<<'EOF');
 require ["variables", "vnd.cyrus.log"];
 
 log "not used, just here so we can test SieveScript/set";
 EOF
-    $script =~ s/\r?\n/\r\n/gs;
     $script =~ s/\\/\\\\/gs;
 
     my $jmap = $self->{jmap};

@@ -5,14 +5,13 @@ sub test_sieve_test
     :min_version_3_3 :JMAPExtensions
     ($self)
 {
-    my $script = <<EOF;
+    my $script = to_crlf(<<EOF);
 require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use"];
 if header "subject" "Memo" {
   fileinto :copy :flags ["\\flagged", "\\answered"] :specialuse "\\flagged" :create "INBOX.foo";
   setflag "\\seen\";
 }
 EOF
-    $script =~ s/\r?\n/\r\n/gs;
     $script =~ s/\\/\\\\/gs;
 
     my $jmap = $self->{jmap};

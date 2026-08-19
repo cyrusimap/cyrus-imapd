@@ -43,7 +43,7 @@ EOF
     # Generate MIME message
 
     my $subject = "nevents$nevents";
-    my $mimeMessage = <<"EOF";
+    my $mimeMessage = to_crlf(<<"EOF");
 From: from\@local
 To: to\@local
 Subject: $subject
@@ -70,7 +70,6 @@ END:VCALENDAR
 
 --c4683f7a320d4d20902b000486fbdf9b--
 EOF
-    $mimeMessage =~ s/\r?\n/\r\n/gs;
 
     xlog $self, "Generate MIME message";
     $imap->append('INBOX', $mimeMessage) || die $@;

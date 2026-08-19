@@ -141,7 +141,7 @@ if
 EOF
     );
 
-    my $mime = <<'EOF';
+    my $mime = to_crlf(<<'EOF');
 From: foo@local
 To: bar@local
 Message-Id: <091e0683cc1a@example.com>
@@ -153,13 +153,12 @@ Content-Type: text/plain
 
 test
 EOF
-    $mime =~ s/\r?\n/\r\n/gs;
     my $msg = Cassandane::Message->new();
     $msg->set_lines(split /\n/, $mime);
     $self->{instance}->deliver($msg);
     $self->assert_num_equals(1, $imap->message_count('matches'));
 
-    $mime = <<'EOF';
+    $mime = to_crlf(<<'EOF');
 From: foo@local
 To: bar@local
 Message-Id: <2931db203612@example.com>
@@ -171,7 +170,6 @@ Content-Type: text/plain
 
 test
 EOF
-    $mime =~ s/\r?\n/\r\n/gs;
     $msg = Cassandane::Message->new();
     $msg->set_lines(split /\n/, $mime);
     $self->{instance}->deliver($msg);

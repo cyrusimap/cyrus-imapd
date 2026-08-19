@@ -12,8 +12,7 @@ sub test_cjk_words
 use utf8;
     my $body = "明末時已經有香港地方的概念";
 no utf8;
-    $body = encode_base64(encode('UTF-8', $body));
-    $body =~ s/\r?\n/\r\n/gs;
+    $body = to_crlf(encode_base64(encode('UTF-8', $body)));
     my %params = (
         mime_charset => "utf-8",
         mime_encoding => 'base64',
@@ -25,8 +24,7 @@ no utf8;
 use utf8;
     $body = "申込み！月額円";
 no utf8;
-    $body = encode_base64(encode('UTF-8', $body));
-    $body =~ s/\r?\n/\r\n/gs;
+    $body = to_crlf(encode_base64(encode('UTF-8', $body)));
     %params = (
         mime_charset => "utf-8",
         mime_encoding => 'base64',

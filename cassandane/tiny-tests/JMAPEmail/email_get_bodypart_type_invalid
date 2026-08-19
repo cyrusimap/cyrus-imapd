@@ -7,7 +7,7 @@ sub test_email_get_bodypart_type_invalid ($self)
     my $imap   = $self->{store}->get_client();
 
     xlog $self, "Create message with invalid Content-Type header in bodypart";
-    my $mime = <<'EOF';
+    my $mime = to_crlf(<<'EOF');
 From: from@example.com
 To: to@example.com
 Subject: test
@@ -33,8 +33,6 @@ U6N9NWGNLKz1n5EIf6g=
 
 --c4683f7a320d4d20902b000486fbdf9b--
 EOF
-
-    $mime =~ s/\r?\n/\r\n/gs;
     $imap->append('INBOX', $mime) || die $@;
 
     xlog $self, "Assert invalid Content-Type becomes application/octet-stream";

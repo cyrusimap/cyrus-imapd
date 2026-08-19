@@ -20,7 +20,7 @@ sub test_email_query_angleuri
     # of indexing them for text search.
 
     xlog $self, "Append message with angle-bracket URI in plain text";
-    my $mimeMessage = <<'EOF';
+    my $mimeMessage = to_crlf(<<'EOF');
 From: from@local
 To: to@local
 Subject: needle_in_plain
@@ -41,11 +41,10 @@ Content-Type: text/html;charset=utf-8
 
 --c4683f7a320d4d20902b000486fbdf9b--
 EOF
-    $mimeMessage =~ s/\r?\n/\r\n/gs;
     $imap->append('INBOX', $mimeMessage) || die $@;
 
     xlog $self, "Append message with angle-bracket URI in HTML text";
-    $mimeMessage = <<'EOF';
+    $mimeMessage = to_crlf(<<'EOF');
 From: from@local
 To: to@local
 Subject: needle_in_html
@@ -66,7 +65,6 @@ Content-Type: text/html;charset=utf-8
 
 --c4683f7a320d4d20902b000486fbdf9b--
 EOF
-    $mimeMessage =~ s/\r?\n/\r\n/gs;
     $imap->append('INBOX', $mimeMessage) || die $@;
 
     xlog $self, "Run squatter";

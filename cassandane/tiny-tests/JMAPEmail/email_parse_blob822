@@ -10,7 +10,7 @@ sub test_email_parse_blob822
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    my $rawEmail = <<'EOF';
+    my $rawEmail = to_crlf(<<'EOF');
 From: "Some Example Sender" <example@example.com>
 To: baseball@vitaead.com
 Subject: test email
@@ -21,7 +21,6 @@ Content-Transfer-Encoding: quoted-printable
 
 This is a test email.
 EOF
-    $rawEmail =~ s/\r?\n/\r\n/gs;
     my $data = $jmap->Upload($rawEmail, "application/data");
     my $blobId = $data->{blobId};
 

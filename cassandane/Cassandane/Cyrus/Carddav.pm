@@ -15,6 +15,7 @@ use XML::Spice;
 use XML::Simple;
 
 use base qw(Cassandane::Cyrus::TestCase);
+use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 
 sub new

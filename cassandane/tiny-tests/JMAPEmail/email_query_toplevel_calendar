@@ -18,7 +18,7 @@ sub test_email_query_toplevel_calendar
         'https://cyrusimap.org/ns/jmap/performance',
     ];
 
-    my $rawMessage = <<'EOF';
+    my $rawMessage = to_crlf(<<'EOF');
 From: from@local
 To: to@local
 Subject: test
@@ -43,7 +43,6 @@ LAST-MODIFIED:20150928T132434Z
 END:VEVENT
 END:VCALENDAR
 EOF
-    $rawMessage =~ s/\r?\n/\r\n/gs;
     $imap->append('INBOX', $rawMessage) || die $@;
 
     xlog $self, 'run squatter';

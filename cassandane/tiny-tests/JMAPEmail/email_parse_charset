@@ -41,7 +41,7 @@ sub test_email_parse_charset
         . "\n"
         . "This is a test email.\n";
 
-        $rawEmail =~ s/\r?\n/\r\n/gs;
+        $rawEmail = to_crlf($rawEmail);
         my $data = $jmap->Upload($rawEmail, "application/octet-stream");
         my $blobId = $data->{blobId};
 

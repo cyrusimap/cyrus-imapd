@@ -24,7 +24,7 @@ sub test_append_insert_prohibited
     $imaptalk->create('INBOX.Snoozed', "(USE (\\Snoozed))") || die $@;
 
     xlog $self, "Append message into INBOX";
-    my $mimeMessage = <<'EOF';
+    my $mimeMessage = to_crlf(<<'EOF');
 From: <from@local>
 To: to@local
 Subject: test
@@ -34,7 +34,6 @@ Content-Type: text/plain
 
 test
 EOF
-    $mimeMessage =~ s/\r?\n/\r\n/gs;
 
     $imaptalk->append('INBOX', $mimeMessage) || die $@;
 

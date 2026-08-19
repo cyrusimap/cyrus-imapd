@@ -43,7 +43,7 @@ REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
     );
-    $card =~ s/\r?\n/\r\n/gs;
+    $card = to_crlf($card);
     $carddav->Request('PUT', 'Default/test.vcf', $card,
                       'Content-Type' => 'text/vcard');
 

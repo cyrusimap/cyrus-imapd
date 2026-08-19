@@ -11,7 +11,7 @@ sub test_multiget_strip_x_lic_error
     my $imap = $plusstore->get_client();
 
     xlog $self, "Append event having an X-LIC-ERROR property";
-    my $mimeMsg = <<EOF;
+    my $mimeMsg = to_crlf(<<EOF);
 From: <cassandane\@local>
 Subject: test
 Date: Mon, 28 Sep 2015 15:24:34 +0200
@@ -37,7 +37,6 @@ X-LIC-ERROR;X-LIC-ERRORTYPE=PARAMETER-VALUE-PARSE-ERROR:Invalid VALUE type for p
 END:VEVENT
 END:VCALENDAR
 EOF
-    $mimeMsg =~ s/\r?\n/\r\n/gs;
     $imap->append('#calendars.Default', $mimeMsg) || die $@;
 
     xlog $self, "Run calendar-multiget report";

@@ -21,7 +21,7 @@ sub test_card_parse
 
     # PROP-IDs added so we can easily compare the results
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $card = <<EOF;
+    my $card = to_crlf(<<EOF);
 BEGIN:VCARD
 VERSION:3.0
 UID:$id
@@ -34,8 +34,6 @@ PHOTO;PROP-ID=P1;ENCODING=b;TYPE=JPEG:c29tZSBwaG90bw==
 REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
-
-    $card =~ s/\r?\n/\r\n/gs;
 
     xlog $self, "upload vCard";
     my $res = $jmap->Upload($card, "text/vcard");

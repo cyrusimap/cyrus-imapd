@@ -12,9 +12,8 @@ sub test_email_parse_encoding
 
     my $decodedBody = "\N{LATIN SMALL LETTER A WITH GRAVE} la carte";
     my $encodedBody = '=C3=A0 la carte';
-    $encodedBody =~ s/\r?\n/\r\n/gs;
 
-    my $Header = <<'EOF';
+    my $Header = to_crlf(<<'EOF');
 From: "Some Example Sender" <example@example.com>
 To: baseball@vitaead.com
 Subject: test email
@@ -23,7 +22,6 @@ MIME-Version: 1.0
 Content-Type: text/plain; charset="UTF-8"
 Content-Transfer-Encoding: quoted-printable
 EOF
-    $Header =~ s/\r?\n/\r\n/gs;
     my $emailBlob = $Header . "\r\n" . $encodedBody;
 
     my $email;

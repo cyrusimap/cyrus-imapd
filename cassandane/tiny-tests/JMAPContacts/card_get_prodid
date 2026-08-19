@@ -22,7 +22,7 @@ sub test_card_get_prodid
 
     my $prodid = '-//CyrusIMAP.org//Cyrus 3.13.0-alpha0-298-g236a396a8b//EN';
 
-    my $card = << "EOF";
+    my $card = to_crlf(<< "EOF");
 BEGIN:VCARD
 PRODID;VALUE=X:$prodid
 VERSION:3.0
@@ -37,8 +37,6 @@ NOTE:
 REV:20210915T054744Z
 END:VCARD
 EOF
-
-    $card =~ s/\r?\n/\r\n/gs;
     $carddav->Request(
         'PUT', "Default/test.vcf", $card, 'Content-Type' => 'text/vcard'
     );

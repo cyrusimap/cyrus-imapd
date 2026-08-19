@@ -5,7 +5,7 @@ sub test_append_binary ($self)
 {
     my $imap = $self->{store}->get_client();
 
-    my $mime = <<'EOF' =~ s/\n/\r\n/gr;
+    my $mime = to_crlf(<<'EOF');
 To: to@local
 From: from@local
 Subject: test

@@ -28,7 +28,7 @@ sub test_card_get_v4
     # PROP-IDs added so we can easily compare the results
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
     my $href = "Default/test.vcf";
-    my $card = <<EOF;
+    my $card = to_crlf(<<EOF);
 BEGIN:VCARD
 VERSION:4.0
 UID;VALUE=TEXT:$id
@@ -65,8 +65,6 @@ JSPROP;JSPTR=phones/P1/features/foo:true
 JSPROP;JSPTR=addresses/A2/components:[{"kind":"foo"\,"value":"bar"}]
 END:VCARD
 EOF
-
-    $card =~ s/\r?\n/\r\n/gs;
     $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
     $res = $jmap->CallMethods([

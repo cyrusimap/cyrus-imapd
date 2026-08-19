@@ -18,7 +18,7 @@ sub test_email_query_fix_multiple_recipients
         'https://cyrusimap.org/ns/jmap/performance',
     ];
 
-    my $rawMessage = <<'EOF';
+    my $rawMessage = to_crlf(<<'EOF');
 From: from@local
 To: unquoted@local, "quot@ed" <quoted@local>
 Subject: test
@@ -28,7 +28,6 @@ Content-Type: text/plain; charset="UTF-8"
 
 test
 EOF
-    $rawMessage =~ s/\r?\n/\r\n/gs;
     $imap->append('INBOX', $rawMessage) || die $@;
 
     $self->{instance}->run_command({cyrus => 1}, 'squatter');

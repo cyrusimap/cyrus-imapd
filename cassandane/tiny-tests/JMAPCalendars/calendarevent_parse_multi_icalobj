@@ -6,7 +6,7 @@ sub test_calendarevent_parse_multi_icalobj ($self)
     my $jmap = $self->default_user->jmap;
 
     # Parse iCalendar stream with two iCalendar objects
-    my $ical = <<EOF;
+    my $ical = to_crlf(<<EOF);
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//ABC Corporation//NONSGML My Product//EN
@@ -28,7 +28,6 @@ SUMMARY:test2
 END:VEVENT
 END:VCALENDAR
 EOF
-    $ical =~ s/\r?\n/\r\n/gs;
 
     my $res = $jmap->CallMethods(
         [

@@ -8,7 +8,7 @@ sub test_email_get_deliveredto
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    my $rawMessage = <<'EOF';
+    my $rawMessage = to_crlf(<<'EOF');
 From: <from@local>
 To: to@local
 Bcc: bcc@local
@@ -20,10 +20,9 @@ Content-Type: text/plain
 
 msg1
 EOF
-    $rawMessage =~ s/\r?\n/\r\n/gs;
     $imap->append('INBOX', $rawMessage) || die $@;
 
-    $rawMessage = <<'EOF';
+    $rawMessage = to_crlf(<<'EOF');
 From: <from@local>
 To: to@local
 Bcc: bcc@local
@@ -36,10 +35,9 @@ Content-Type: text/plain
 
 msg2
 EOF
-    $rawMessage =~ s/\r?\n/\r\n/gs;
     $imap->append('INBOX', $rawMessage) || die $@;
 
-    $rawMessage = <<'EOF';
+    $rawMessage = to_crlf(<<'EOF');
 From: <from@local>
 To: to@local
 Subject: msg3
@@ -49,7 +47,6 @@ Content-Type: text/plain
 
 msg3
 EOF
-    $rawMessage =~ s/\r?\n/\r\n/gs;
     $imap->append('INBOX', $rawMessage) || die $@;
 
     xlog $self, "run squatter";

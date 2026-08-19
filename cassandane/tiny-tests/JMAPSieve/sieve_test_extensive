@@ -250,13 +250,11 @@ sub new_sieve_blob ($self, $sieve)
     my $jmap = $self->{jmap};
 
     xlog "create script";
-    my $fullscript = <<EOF;
+    my $fullscript = to_crlf(<<EOF);
 require ["fileinto", "extlists", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use", "vnd.cyrus.log", "vnd.cyrus.jmapquery", "vnd.cyrus.imip", "duplicate", "environment"];
 
 $sieve
 EOF
-
-    $fullscript =~ s/\r?\n/\r\n/gs;
 
     my $res = $jmap->CallMethods([
         ['Blob/upload', {

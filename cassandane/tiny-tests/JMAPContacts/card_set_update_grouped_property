@@ -15,7 +15,7 @@ sub test_card_set_update_grouped_property
 
     my $id   = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
     my $href = "Default/$id.vcf";
-    my $card = <<EOF;
+    my $card = to_crlf(<<EOF);
 BEGIN:VCARD
 VERSION:3.0
 UID:$id
@@ -27,8 +27,6 @@ TITLE:Shrimp Man
 REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
-
-    $card =~ s/\r?\n/\r\n/gs;
     $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
     xlog $self, "read card and find the org property id assigned by server";

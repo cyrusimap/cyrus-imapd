@@ -25,7 +25,7 @@ sub test_card_apple_label_handling
     xlog $self, "create a contact with 3 labels: unassociated, shared, & unshared";
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
     my $href = "Default/$id.vcf";
-    my $card = <<EOF;
+    my $card = to_crlf(<<EOF);
 BEGIN:VCARD
 VERSION:4.0
 UID:$id
@@ -41,8 +41,6 @@ email0.X-ABLabel:aaa
 email0.EMAIL;PROP-ID=e0;TYPE=work:shrimp\@local
 END:VCARD
 EOF
-
-    $card =~ s/\r?\n/\r\n/gs;
 
     $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 

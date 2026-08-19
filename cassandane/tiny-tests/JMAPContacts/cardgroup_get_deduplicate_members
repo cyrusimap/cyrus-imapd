@@ -41,7 +41,7 @@ X-FM-OTHERACCOUNT-MEMBER;USERID=foo:urn:uuid:5b3b9ce1-0b5e-4cbd-8add-018321cad51
 EOF
     $vgroup .= join("", map { "X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:". $_ . "\n"} @ids);
     $vgroup .= "END:VCARD";
-    $vgroup =~ s/\r?\n/\r\n/gs;
+    $vgroup = to_crlf($vgroup);
     $carddav->Request('PUT', $href, $vgroup, 'Content-Type' => 'text/vcard');
 
     my $res = $jmap->CallMethods([
