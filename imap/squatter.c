@@ -275,12 +275,21 @@ done:
  * indexing goes away, so give up rather than block this run on it. */
 #define MAX_UNPRODUCTIVE_UPDATES 3
 
+/* How many times to restart indexing the same mailbox because it got
+ * recreated between two batches. A client that keeps recreating a mailbox
+ * would otherwise block this run on that mailbox forever. */
+#define MAX_MAILBOX_RESTARTS 3
+
 /* This is called once for each mailbox we're told to index. */
 static int index_one(const char *name, int blocking)
 {
     struct mailbox *mailbox = NULL;
     int nunproductive = 0;
+    int nrestarts = 0;
     uint32_t resumeuid = 0;
+    uint32_t uidvalidity = 0;
+    char *prev_uniqueid = NULL;
+    int32_t batch_delay = config_getduration(IMAPOPT_SQUATTER_BATCH_DELAY);
     int r;
     int flags = SEARCH_UPDATE_BATCH;
 
@@ -350,17 +359,15 @@ again:
 
     if (r == IMAP_MAILBOX_LOCKED) {
         if (verbose) syslog(LOG_INFO, "mailbox %s locked, retrying", extname);
-        free(extname);
-        return r;
+        goto done;
     }
     if (r) {
         if (verbose) {
             printf("error opening %s: %s\n", extname, error_message(r));
         }
         syslog(LOG_INFO, "error opening %s: %s", extname, error_message(r));
-        free(extname);
 
-        return r;
+        goto done;
     }
 
     syslog(LOG_INFO, "indexing mailbox %s... ", extname);
@@ -378,11 +385,39 @@ again:
                 printf("Skipping mailbox %s\n", extname);
             }
             mailbox_close(&mailbox);
-            free(extname);
-            return 0;
+            goto done;
         }
     }
 
+    /* a mailbox that got recreated between batches restarts at uid 1 */
+    if (uidvalidity != mailbox->i.uidvalidity
+        || (prev_uniqueid && strcmpsafe(prev_uniqueid, mailbox_uniqueid(mailbox))))
+    {
+        if (prev_uniqueid) {
+            xsyslog_ev(LOG_NOTICE, "search.index.restarted",
+                    lf_s("mbox.name", name),
+                    lf_s("old.mbox.uniqueid", prev_uniqueid),
+                    lf_s("mbox.uniqueid", mailbox_uniqueid(mailbox)),
+                    lf_u("old.mbox.uidvalidity", uidvalidity),
+                    lf_u("mbox.uidvalidity", mailbox->i.uidvalidity));
+
+            /* Restarting resets the guard against unproductive updates, so
+             * a mailbox that keeps changing could loop here forever. */
+            if (++nrestarts > MAX_MAILBOX_RESTARTS) {
+                xsyslog_ev(LOG_ERR, "search.index.abandoned",
+                        lf_s("mbox.name", name),
+                        lf_d("search.restarts", nrestarts));
+                mailbox_close(&mailbox);
+                r = IMAP_AGAIN;
+                goto done;
+            }
+        }
+        uidvalidity = mailbox->i.uidvalidity;
+        resumeuid = 0;
+    }
+
+    free(prev_uniqueid);
+    prev_uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
     uint32_t prevuid = resumeuid;
     r = search_update_mailbox(rx, &mailbox, reindex_minlevel, flags, &resumeuid);
 
@@ -397,16 +432,22 @@ again:
          * while we extracted its attachment text, may never complete. */
         if (resumeuid > prevuid) {
             nunproductive = 0;
-            goto again;
         }
-        if (++nunproductive <= MAX_UNPRODUCTIVE_UPDATES) goto again;
+        else if (++nunproductive > MAX_UNPRODUCTIVE_UPDATES) {
+            xsyslog_ev(LOG_ERR, "search.index.abandoned",
+                    lf_s("mbox.name", name),
+                    lf_d("search.updates", nunproductive));
+            goto done;
+        }
 
-        xsyslog_ev(LOG_ERR, "search.index.abandoned",
-                lf_s("mbox.name", name),
-                lf_d("search.updates", nunproductive));
+        /* squatter holds no lock on the mailbox while it sleeps */
+        if (batch_delay > 0) sleep(batch_delay);
+        goto again;
     }
-    free(extname);
 
+done:
+    free(extname);
+    free(prev_uniqueid);
     return r;
 }
 
