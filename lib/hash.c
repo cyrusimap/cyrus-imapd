@@ -1,4 +1,3 @@
-/* +++Date last modified: 05-Jul-1997 */
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -6,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <syslog.h>
+#include <stdbool.h>
 
 #include "assert.h"
 #include "hash.h"
@@ -13,6 +13,14 @@
 #include "strhash.h"
 #include "util.h"
 #include "xmalloc.h"
+
+/* Ideally having this declaration with EXPORTED would be sufficient, and we
+ * could remove it from the definition in the header. gcc is fine with this,
+ * but clang treats it as an error.
+ * See the commit message for attempted approaches that failed. */
+
+EXPORTED extern inline size_t hash_count(const hash_table *table);
+EXPORTED extern inline bool hash_constructed(const hash_table *table);
 
 struct bucket {
     void *data;
@@ -43,8 +51,8 @@ struct bucket {
 
 /* Initialize the hash_table to the size asked for.  Allocates space
 ** for the correct number of pointers and sets them to NULL.  If it
-** can't allocate sufficient memory, signals error by setting the size
-** of the table to 0.
+** can't allocate sufficient memory it will terminate the program with the
+** diagnostic "Virtual memory exhausted"
 */
 
 EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
@@ -178,7 +186,7 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
 {
       bucket *ptr;
 
-      if (!table->size)
+      if (!table->size || !table->count)
           return NULL;
 
       uint32_t hash = strhash_seeded(table->seed, key);
@@ -346,12 +354,6 @@ EXPORTED strarray_t *hash_keys(const hash_table *table)
     }
 
     return sa;
-}
-
-EXPORTED int hash_numrecords(hash_table *table)
-{
-    /* XXX macro or inline this if we keep the count field long term */
-    return table->count;
 }
 
 EXPORTED void hash_enumerate_sorted(hash_table *table, void (*func)(const char *, void *, void *),

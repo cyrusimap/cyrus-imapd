@@ -3931,9 +3931,7 @@ static void getcalendarevents_reset_ical(struct getcalendarevents_rock *rock)
     rock->imap_uid = 0;
     rock->is_draft = 0;
     message_guid_set_null(&rock->guid);
-    if (rock->ical_instances_by_recurid.size)
-        free_hash_table(&rock->ical_instances_by_recurid,
-                        _icalcomponent_free_cb);
+    free_hash_table(&rock->ical_instances_by_recurid, _icalcomponent_free_cb);
 }
 
 static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
@@ -4076,7 +4074,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
     }
 
     if (jscal->ical_recurid[0]) {
-        if (!rock->ical_instances_by_recurid.size) {
+        if (!hash_constructed(&rock->ical_instances_by_recurid)) {
             // first time we see a recurrence instance for this ical data.
             // prepare for any further callback calls for the same UID
 
@@ -4507,8 +4505,7 @@ done:
     mboxlist_entry_free(&rock.mbentry);
     mbname_free(&rock.mbname);
     if (rock.ical) icalcomponent_free(rock.ical);
-    if (rock.ical_instances_by_recurid.size)
-        free_hash_table(&rock.ical_instances_by_recurid, _icalcomponent_free_cb);
+    free_hash_table(&rock.ical_instances_by_recurid, _icalcomponent_free_cb);
     free_hashu64_table(&rock.cache_jsevents, (void(*)(void*))json_decref);
     free_hash_table(&rock.floatingtz_by_mboxid, NULL); /* values owned by libical */
     if (ptrarray_size(&rock.malloced_fallbacktzs)) {
@@ -9403,8 +9400,7 @@ static void principalfilter_finiexpr(struct principalfilter_expr *expr)
 
 static void principalfilter_fini(struct principalfilter *filter)
 {
-    if (filter->props.size)
-        free_hash_table(&filter->props, NULL);
+    free_hash_table(&filter->props, NULL);
     if (filter->db)
         xapian_db_close(filter->db);
     if (filter->dbw)
@@ -11741,6 +11737,7 @@ static int jmap_calendareventnotification_query(struct jmap_req *req)
     struct jmap_query query = JMAP_QUERY_INITIALIZER;
     struct mailbox *notifmbox = NULL;
     hash_table eventids = HASH_TABLE_INITIALIZER;
+    bool has_eventids = false;
 
     /* Parse request */
     json_t *err = NULL;
@@ -11788,6 +11785,7 @@ static int jmap_calendareventnotification_query(struct jmap_req *req)
     }
     jval = json_object_get(query.filter, "calendarEventIds");
     if (json_is_array(jval)) {
+        has_eventids = true;
         construct_hash_table(&eventids, json_array_size(jval)+1, 0);
         json_t *jid;
         size_t i;
@@ -11829,7 +11827,7 @@ static int jmap_calendareventnotification_query(struct jmap_req *req)
             before,
             after,
             type,
-            eventids.size ? &eventids : NULL
+            has_eventids ? &eventids : NULL
         };
         struct notifsearch search = {
             JMAP_NOTIF_CALENDAREVENT,
@@ -11858,7 +11856,7 @@ static int jmap_calendareventnotification_query(struct jmap_req *req)
     jmap_ok(req, res);
 
 done:
-    if (eventids.size) free_hash_table(&eventids, NULL);
+    free_hash_table(&eventids, NULL);
     mailbox_close(&notifmbox);
     jmap_query_fini(&query);
     jmap_parser_fini(&parser);
@@ -12146,7 +12144,7 @@ static int jmap_participantidentity_changes(struct jmap_req *req)
 }
 
 HIDDEN json_t *jmap_calendar_events_from_msg(hash_table *icsbody_by_partid,
-                                             unsigned allow_max_uids,
+                                             size_t allow_max_uids,
                                              const struct buf *mime)
 {
     json_t *jsevents_by_partid = json_object();
@@ -12175,7 +12173,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(hash_table *icsbody_by_partid,
             construct_hash_table(&seen_uids, allow_max_uids + 1, 0);
 
             icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-            while (comp && (unsigned)hash_numrecords(&seen_uids) <= allow_max_uids) {
+            while (comp && hash_count(&seen_uids) <= allow_max_uids) {
                 icalcomponent_kind kind = icalcomponent_isa(comp);
 
                 const char *uid = icalcomponent_get_uid(comp);
@@ -12185,7 +12183,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(hash_table *icsbody_by_partid,
                 comp = icalcomponent_get_next_component(ical, kind);
             }
 
-            unsigned nseen_uids = hash_numrecords(&seen_uids);
+            size_t nseen_uids = hash_count(&seen_uids);
             free_hash_table(&seen_uids, NULL);
 
             if (nseen_uids > allow_max_uids) {

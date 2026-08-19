@@ -277,9 +277,7 @@ static void jscal_ctx_fini(jscal_ctx_t *ctx)
     guesstz_close(&ctx->gtz);
 #endif
 
-    if (ctx->iana_tzid_by_custom_tzid.size) {
-        free_hash_table(&ctx->iana_tzid_by_custom_tzid, free);
-    }
+    free_hash_table(&ctx->iana_tzid_by_custom_tzid, free);
 
     // VTIMEZONE pointers are owned by iCalendar object.
     ptrarray_fini(&ctx->unguessable_vtimezones);
@@ -292,7 +290,7 @@ static icaltimezone *get_icaltimezone_for_tzid(jscal_ctx_t *ctx, const char *tzi
     if (!tzid) return NULL;
 
     icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
-    if (!tz && ctx->iana_tzid_by_custom_tzid.size) {
+    if (!tz) {
         const char *iana_tzid =
             hash_lookup(tzid, &ctx->iana_tzid_by_custom_tzid);
         if (iana_tzid) {
@@ -351,7 +349,7 @@ static void guess_timezones(jscal_ctx_t *ctx, icalcomponent *ical)
         }
     }
 
-    if (!ctx->iana_tzid_by_custom_tzid.size) {
+    if (!hash_constructed(&ctx->iana_tzid_by_custom_tzid)) {
         construct_hash_table(&ctx->iana_tzid_by_custom_tzid,
                 ptrarray_size(&custom_vtzs), 0);
     }
