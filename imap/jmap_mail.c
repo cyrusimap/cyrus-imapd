@@ -1854,11 +1854,216 @@ static search_attr_t *emailsearch_jmapseen_new(void)
 
 /* ====================================================================== */
 
+static void emailsearch_readable_folders(jmap_req_t *req, bitvector_t *folders)
+{
+    /* Sets a bit for every conversations.db folder holding mail that this
+     * request may read. A JMAP property of an Email aggregates exactly these
+     * copies of its guid, so anything evaluating one from G records must
+     * agree on this set. */
+    uint32_t numfolders = conversations_num_folders(req->cstate);
+    bv_setsize(folders, numfolders);
+
+    for (uint32_t num = 0; num < numfolders; num++) {
+        const char *mboxname = conversations_folder_mboxname(req->cstate, num);
+        if (!mboxname || mboxname_isnondeliverymailbox(mboxname, 0)) continue;
+
+        mbentry_t *mbentry = NULL;
+        if (!mboxlist_lookup_allow_all(mboxname, &mbentry, NULL) &&
+            mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL &&
+            jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+            bv_set(folders, num);
+        }
+        mboxlist_entry_free(&mbentry);
+    }
+}
+
+/* ====================================================================== */
+
+/* The "jmap_systemflags" attribute replaces the IMAP "systemflags" attribute
+ * for Email/query. It evaluates system flags with JMAP semantics, where a
+ * keyword of an Email is the aggregate of the flags of its index records.
+ *
+ * Like "jmapseen", this attribute is created per request rather than being
+ * one of the singletons of search_expr.c, because the copies it aggregates
+ * over are the ones that this request may read. */
+
+struct emailsearch_systemflags_attrdata {
+    bitvector_t readable_folders;
+    size_t refcount;
+};
+
+struct emailsearch_systemflags_internal {
+    struct conversations_state *cstate;
+};
+
+static void emailsearch_systemflags_internalise(struct index_state *state,
+                                                const union search_value *v,
+                                                void *data1 __attribute__((unused)),
+                                                void **internalisedp)
+{
+    if (*internalisedp) {
+        free(*internalisedp);
+        *internalisedp = NULL;
+    }
+
+    if (state && v) {
+        struct emailsearch_systemflags_internal *internal =
+            xzmalloc(sizeof(struct emailsearch_systemflags_internal));
+        internal->cstate = mailbox_get_cstate(state->mailbox);
+        *internalisedp = internal;
+    }
+}
+
+struct emailsearch_systemflags_rock {
+    struct emailsearch_systemflags_attrdata *ad;
+    uint32_t system_flags;
+};
+
+static int emailsearch_systemflags_match_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct emailsearch_systemflags_rock *srock = rock;
+
+    if (rec->part) return 0;
+
+    if ((rec->system_flags & FLAG_DELETED) ||
+        (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) ||
+        !bv_isset(&srock->ad->readable_folders, rec->foldernum)) {
+        return 0;
+    }
+
+    return (rec->system_flags & srock->system_flags) ? IMAP_OK_COMPLETED : 0;
+}
+
+static int emailsearch_systemflags_match(message_t *m,
+                                         const union search_value *v,
+                                         void *internalised,
+                                         void *data1)
+{
+    struct emailsearch_systemflags_internal *internal = internalised;
+    struct emailsearch_systemflags_attrdata *ad = data1;
+    if (!internal || !internal->cstate || !ad) return 0;
+
+    const struct message_guid *guid = NULL;
+    if (message_get_guid(m, &guid)) return 0;
+
+    struct emailsearch_systemflags_rock rock = {
+        .ad = ad, .system_flags = (uint32_t) v->u
+    };
+    int r = conversations_guid_foreach(internal->cstate,
+            message_guid_encode(guid), emailsearch_systemflags_match_cb, &rock);
+
+    return r == IMAP_OK_COMPLETED;
+}
+
+static void emailsearch_systemflags_serialise(struct buf *b,
+                                              const union search_value *v)
+{
+    if ((v->u & FLAG_ANSWERED)) buf_appendcstr(b, "\\Answered");
+    if ((v->u & FLAG_FLAGGED)) buf_appendcstr(b, "\\Flagged");
+    if ((v->u & FLAG_DRAFT)) buf_appendcstr(b, "\\Draft");
+}
+
+static int emailsearch_systemflags_unserialise(struct protstream *prot,
+                                               union search_value *v)
+{
+    char tmp[64];
+    int c = search_getseword(prot, tmp, sizeof(tmp));
+
+    if (!strcasecmp(tmp, "\\Answered")) v->u = FLAG_ANSWERED;
+    else if (!strcasecmp(tmp, "\\Flagged")) v->u = FLAG_FLAGGED;
+    else if (!strcasecmp(tmp, "\\Draft")) v->u = FLAG_DRAFT;
+    else v->u = 0;
+
+    return c;
+}
+
+static void emailsearch_systemflags_decref(struct search_attr **attrp)
+{
+    if (!attrp || !*attrp) return;
+
+    search_attr_t *attr = *attrp;
+    struct emailsearch_systemflags_attrdata *ad = attr->data1;
+    if (!ad || !ad->refcount) return;
+
+    if (--ad->refcount) return;
+
+    bv_fini(&ad->readable_folders);
+    xzfree(attr->data1);
+    xzfree(*attrp);
+}
+
+static search_attr_t *emailsearch_systemflags_incref(search_attr_t *attr)
+{
+    if (!attr || !attr->data1) return attr;
+
+    struct emailsearch_systemflags_attrdata *ad = attr->data1;
+    ad->refcount++;
+    return attr;
+}
+
+static void emailsearch_systemflags_free(union search_value *v
+                                             __attribute__((unused)),
+                                         struct search_attr **attrp)
+{
+    emailsearch_systemflags_decref(attrp);
+}
+
+static search_attr_t *emailsearch_systemflags_new(jmap_req_t *req)
+{
+    static const search_attr_t template = {
+        "jmap_systemflags",
+        SEA_MUTABLE,
+        SEARCH_PART_NONE,
+        SEARCH_COST_CONV,
+        emailsearch_systemflags_internalise,
+        /*cmp*/NULL,
+        emailsearch_systemflags_match,
+        emailsearch_systemflags_serialise,
+        emailsearch_systemflags_unserialise,
+        /*get_countability*/NULL,
+        /*duplicate*/NULL,
+        emailsearch_systemflags_free,
+        emailsearch_systemflags_decref,
+        emailsearch_systemflags_incref,
+        (void *)0
+    };
+
+    search_attr_t *attr = xmalloc(sizeof(search_attr_t));
+    memcpy(attr, &template, sizeof(search_attr_t));
+
+    struct emailsearch_systemflags_attrdata *ad =
+        xzmalloc(sizeof(struct emailsearch_systemflags_attrdata));
+    bv_init(&ad->readable_folders);
+    emailsearch_readable_folders(req, &ad->readable_folders);
+    ad->refcount++;
+    attr->data1 = ad;
+
+    return attr;
+}
+
+/* ====================================================================== */
+
+static search_attr_t *_email_search_attr(ptrarray_t *search_attrs,
+                                        const char *name,
+                                        search_attr_t *(*newattr)(jmap_req_t *),
+                                        jmap_req_t *req)
+{
+    for (int i = 0; i < ptrarray_size(search_attrs); i++) {
+        search_attr_t *attr = ptrarray_nth(search_attrs, i);
+        if (!strcmpsafe(attr->name, name)) return attr;
+    }
+
+    search_attr_t *attr = newattr(req);
+    ptrarray_append(search_attrs, attr);
+    return attr;
+}
+
 static void _email_search_keyword(search_expr_t *parent,
                                   const char *keyword,
-                                  const char *userid,
+                                  jmap_req_t *req,
                                   ptrarray_t *search_attrs)
 {
+    const char *userid = req->userid;
     search_expr_t *e;
     if (!strcasecmp(keyword, "$Seen")) {
         search_attr_t *attr = NULL;
@@ -1878,20 +2083,16 @@ static void _email_search_keyword(search_expr_t *parent,
         e->attr = emailsearch_jmapseen_incref(attr);
         e->value.s = xstrdup(userid);
     }
-    else if (!strcasecmp(keyword, "$Draft")) {
+    else if (!strcasecmp(keyword, "$Draft") ||
+             !strcasecmp(keyword, "$Flagged") ||
+             !strcasecmp(keyword, "$Answered")) {
+        search_attr_t *attr = _email_search_attr(search_attrs,
+                "jmap_systemflags", emailsearch_systemflags_new, req);
         e = search_expr_new(parent, SEOP_MATCH);
-        e->attr = search_attr_find("systemflags");
-        e->value.u = FLAG_DRAFT;
-    }
-    else if (!strcasecmp(keyword, "$Flagged")) {
-        e = search_expr_new(parent, SEOP_MATCH);
-        e->attr = search_attr_find("systemflags");
-        e->value.u = FLAG_FLAGGED;
-    }
-    else if (!strcasecmp(keyword, "$Answered")) {
-        e = search_expr_new(parent, SEOP_MATCH);
-        e->attr = search_attr_find("systemflags");
-        e->value.u = FLAG_ANSWERED;
+        e->attr = emailsearch_systemflags_incref(attr);
+        e->value.u = !strcasecmp(keyword, "$Draft")   ? FLAG_DRAFT :
+                     !strcasecmp(keyword, "$Flagged") ? FLAG_FLAGGED :
+                                                        FLAG_ANSWERED;
     }
     else {
         e = search_expr_new(parent, SEOP_MATCH);
@@ -2591,11 +2792,11 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         }
 
         if (JNOTNULL((val = json_object_get(filter, "hasKeyword")))) {
-            _email_search_keyword(this, json_string_value(val), req->userid, search_attrs);
+            _email_search_keyword(this, json_string_value(val), req, search_attrs);
         }
         if (JNOTNULL((val = json_object_get(filter, "notKeyword")))) {
             e = search_expr_new(this, SEOP_NOT);
-            _email_search_keyword(e, json_string_value(val), req->userid, search_attrs);
+            _email_search_keyword(e, json_string_value(val), req, search_attrs);
         }
 
         if (JNOTNULL((val = json_object_get(filter, "maxSize")))) {
@@ -3574,9 +3775,10 @@ static struct guidsearch_expr *guidsearch_expr_build(struct conversations_state 
                     ge->v.v = val;
                     *need_folders = 1;
                 }
-                else if (e->attr == search_attr_find("systemflags")) {
+                else if (!strcmpsafe(e->attr->name, "jmap_systemflags")) {
+                    // hasKeyword or notKeyword. guidsearch_rank_clause
+                    // accepts this attribute for these flags only.
                     if (e->value.u & (FLAG_DRAFT|FLAG_FLAGGED|FLAG_ANSWERED)) {
-                        // hasKeyword or notKeyword
                         ge = xzmalloc(sizeof(struct guidsearch_expr));
                         ge->op = GSEOP_FLAGS;
                         ge->v.num = e->value.u;
@@ -3891,7 +4093,7 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
                 }
                 return 1;
             }
-            else if (e->attr == search_attr_find("systemflags") &&
+            else if (!strcmpsafe(e->attr->name, "jmap_systemflags") &&
                     (e->value.u & (FLAG_DRAFT|FLAG_FLAGGED|FLAG_ANSWERED))) {
                 /* hasKeyword
                  * notKeyword */
@@ -3943,6 +4145,7 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
                 *need_xapian_index_version = 17;
                 return 2;
             }
+            // TODO support hasKeyword:$seen
             // any other MATCH is unsupported
             else return -1;
         case SEOP_TRUE:
@@ -4160,35 +4363,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
 
     /* Determine readable folders for userid */
     uint32_t numfolders = conversations_num_folders(req->cstate);
-    bv_setsize(&gsq->readable_folders, numfolders);
-    if (strcmp(req->userid, req->accountid)) {
-        // filter all folders that can't be read by userid
-        uint32_t num;
-        for (num = 0; num < numfolders; num++) {
-            const char *mboxname = conversations_folder_mboxname(req->cstate, num);
-            if (!mboxname) continue;
-            if (jmap_hasrights(req, mboxname, ACL_READ|ACL_LOOKUP)) {
-                bv_set(&gsq->readable_folders, num);
-            }
-        }
-    }
-    else {
-        // all user-owned mailboxes are readable
-        bv_setall(&gsq->readable_folders);
-    }
-
-    // filter all folders that aren't regular mailboxes
-    uint32_t num;
-    for (num = 0; num < numfolders; num++) {
-        const char *mboxname = conversations_folder_mboxname(req->cstate, num);
-        mbentry_t *mbentry = NULL;
-        if (!mboxname || mboxname_isnondeliverymailbox(mboxname, 0) ||
-            mboxlist_lookup_allow_all(mboxname, &mbentry, NULL) ||
-            mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
-            bv_clear(&gsq->readable_folders, num);
-        }
-        mboxlist_entry_free(&mbentry);
-    }
+    emailsearch_readable_folders(req, &gsq->readable_folders);
 
     /* Prepare filter for post-processing */
     if (exprrank & 0x1) {
