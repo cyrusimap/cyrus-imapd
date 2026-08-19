@@ -1,0 +1,24 @@
+Description:
+
+Removes the non-standard "inCalendars" filter condition from
+CalendarEvent/query; use the standard "inCalendar" condition instead.
+
+
+Documentation:
+
+None.
+
+Config changes:
+
+None.
+
+Upgrade instructions:
+
+None.
+JMAP clients that filter CalendarEvent/query by "inCalendars" must switch to
+"inCalendar", combining several conditions with an "OR" filter operator if they
+need to match more than one calendar.
+
+GitHub issue:
+
+None.
