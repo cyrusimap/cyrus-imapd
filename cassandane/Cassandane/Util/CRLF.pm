@@ -13,14 +13,11 @@ our @EXPORT = qw(&to_crlf);
 # iCalendar and vCard payloads as LF-terminated here-docs, but IMAP, JMAP and
 # sieve all want them in wire format, so nearly every such here-doc needs this
 # on the way out.
-#
-# The \r? makes this idempotent: text that is already CRLF, or that mixes the
-# two, comes back correct rather than growing a second CR.  A lone CR with no
-# LF is not a line ending here, and is left alone.
 sub to_crlf ($str)
 {
     return $str unless defined $str;
 
+    # \r? for idempotency
     $str =~ s/\r?\n/\r\n/g;
     return $str;
 }
