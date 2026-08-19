@@ -26,11 +26,12 @@ sub test_seen_otheruser
 
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
-    $self->assert_num_equals(1, $talk->uid());
+    $talk->uid(1);
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
     my $otherstore = $self->{instance}->get_service('imap')->create_store(username => 'otheruser');
     my $othertalk = $otherstore->get_client(username => 'otheruser');
+    $othertalk->uid(1);
     $otherstore->set_fetch_attributes(qw(uid flags));
 
     xlog $self, "Add two messages";
@@ -53,27 +54,27 @@ sub test_seen_otheruser
 
     xlog $self, "Set \\Seen on message A";
     my $res = $talk->store('1', '+flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ '\\Seen' ] }}, $res);
     $self->check_messages(\%msg, store => $otherstore);
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg, store => $self->{store});
 
     xlog $self, "Set \\Seen on message A as otheruser";
     $res = $othertalk->store('1', '+flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ '\\Seen' ] }}, $res);
     $self->check_messages(\%msg, store => $otherstore);
     $self->check_messages(\%msg, store => $self->{store});
 
     xlog $self, "Clear \\Seen on message A";
     $res = $talk->store('1', '-flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
     $self->check_messages(\%msg, store => $otherstore);
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg, store => $self->{store});
 
     xlog $self, "Clear \\Seen on message A as otheruser";
     $res = $othertalk->store('1', '-flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
     $self->check_messages(\%msg, store => $otherstore);
     $self->check_messages(\%msg, store => $self->{store});
 }

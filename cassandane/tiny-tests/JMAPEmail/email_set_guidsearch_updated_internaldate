@@ -116,8 +116,11 @@ sub test_email_set_guidsearch_updated_internaldate
     xlog "Append blob of message A via IMAP";
     $imap->append('INBOX', $emailBlobA) || die $@;
 
-    $res = $imap->fetch('3', "(emailid)");
-    my $emailIdC = $res->{3}{emailid}[0];
+    # A was destroyed further up, so the UIDs here have a hole in them; take
+    # the new message's UID from the APPENDUID rather than counting.
+    my $uidC = $imap->get_response_code('appenduid')->[1];
+    $res = $imap->fetch($uidC, "(emailid)");
+    my $emailIdC = $res->{$uidC}{emailid}[0];
 
     xlog $self, "run incremental squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');

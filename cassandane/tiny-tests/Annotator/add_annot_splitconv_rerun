@@ -43,7 +43,7 @@ sub test_add_annot_splitconv_rerun
 
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->store('7', '-flags', '$X-FUN');
-    $imaptalk->_imap_cmd("uid xrunannotator", 0, {}, '7');
+    $imaptalk->_imap_cmd("xrunannotator", 1, {}, '7');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $exp{C}->set_annotation($entry, $attrib, $value1);
 

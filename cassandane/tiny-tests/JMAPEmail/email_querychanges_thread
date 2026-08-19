@@ -65,7 +65,8 @@ sub test_email_querychanges_thread
     $self->assert(ref($res->[0][1]{removed}) eq 'ARRAY');
     $self->assert_num_equals(0, scalar @{$res->[0][1]{removed}});
 
-    $talk->store('3', "+flags", '\\Deleted');
+    # UID 3 went in the expunge above, so the next one along is UID 4.
+    $talk->store('4', "+flags", '\\Deleted');
     $talk->expunge();
 
     $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, collapseThreads => JSON::true }, "R1"]]);

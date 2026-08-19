@@ -22,7 +22,7 @@ sub test_permessage_unknown ($self)
     $self->assert_not_null($res);
     $self->assert_deep_equals(
             {
-                1 => { annotation => { $entry => { $attrib => undef } } }
+                1 => { uid => 1, annotation => { $entry => { $attrib => undef } } }
             },
             $res);
 
@@ -38,7 +38,7 @@ sub test_permessage_unknown ($self)
     $self->assert_not_null($res);
     $self->assert_deep_equals(
             {
-                1 => { annotation => { $entry => { $attrib => undef } } }
+                1 => { uid => 1, annotation => { $entry => { $attrib => undef } } }
             },
             $res);
 }

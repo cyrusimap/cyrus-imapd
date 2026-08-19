@@ -23,8 +23,11 @@ sub test_store
     $self->assert_num_equals(1, $res->{uidonly});
     $self->assert_num_equals(1, $res->{condstore});
 
+    # Rejecting message sequence numbers is the whole point of UIDONLY, so
+    # this has to be asked in sequence numbers to mean anything.
     xlog $self, "attempt STORE";
-    $imaptalk->store('1,6', '+FLAGS', '(\\Deleted)');
+    $self->with_seq_mode($imaptalk,
+                         sub { $imaptalk->store('1,6', '+FLAGS', '(\\Deleted)') });
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
     # get_response_code() doesn't (yet) handle [UIDREQUIRED]
     $self->assert_matches(qr/\[UIDREQUIRED\]/, $imaptalk->get_last_error());

@@ -32,8 +32,9 @@ sub new
         # state for streaming read
         next_uid => undef,
         last_uid => undef,
-        last_batch_uid => undef,
+        next_id => undef,
         batch => undef,
+        batch_uids => undef,
         fetch_attrs => { uid => 1, 'body.peek[]' => 1 },
         # state for XCONVFETCH
         fetched => undef,
@@ -82,7 +83,7 @@ sub connect
                       UseBlocking => 1,  # must be blocking for SSL
                       Pedantic => 1,
                       PreserveINBOX => 1,
-                      Uid => 0,
+                      Uid => 1,
                       NoLiteralPlus => delete $params{NoLiteralPlus} || 0,
                       UseCompress => delete $params{UseCompress} || 0,
                   )
@@ -98,7 +99,7 @@ sub connect
                       Socket => $sock,
                       Pedantic => 1,
                       PreserveINBOX => 1,
-                      Uid => 0,
+                      Uid => 1,
                       NoLiteralPlus => delete $params{NoLiteralPlus} || 0,
                       UseCompress => delete $params{UseCompress} || 0,
                   )
@@ -224,6 +225,29 @@ sub set_fetch_attributes
     }
 }
 
+# Perform a UID FETCH, whatever UID mode the client is currently in, and
+# return the results keyed on UID.
+#
+# Mail::IMAPTalk has no uidfetch() method: it chooses between FETCH and UID
+# FETCH from a connection-wide flag.  Worse, its uid() accessor is write-only
+# -- it always returns 1, and called with no argument it *clears* the flag --
+# so we save and restore the flag by hand.  To be fixed in future IMAP test
+# library work...
+sub _uidfetch
+{
+    my ($self, @args) = @_;
+    my $client = $self->{client};
+
+    my $old_uid_mode = $client->{Uid};
+    $client->uid(1);
+    my $res = eval { $client->fetch(@args) };
+    my $err = $@;
+    $client->uid($old_uid_mode);
+
+    die $err if $err;
+    return $res;
+}
+
 sub read_begin
 {
     my ($self) = @_;
@@ -235,56 +259,58 @@ sub read_begin
 
     $self->{next_uid} = 1;
     $self->{last_uid} = -1 + $self->{client}->get_response_code('uidnext');
-    $self->{last_batch_uid} = undef;
+    $self->{next_id} = 1;
     $self->{batch} = undef;
+    $self->{batch_uids} = [];
 }
 
-sub read_message
-{
+# Return the next message in the folder, or undef at the end of the folder.
+#
+# Messages are fetched by UID, a batch of $BATCHSIZE UIDs at a time, and
+# returned in ascending UID order (same as ascending seqnum order).  Note that
+# a batch may well come back with fewer messages than UIDs asked for, or with
+# none at all, because UIDs of expunged messages are never reused and so leave
+# gaps.
+#
+# The message's "id" attribute is its IMAP sequence number, which we have to
+# count off ourselves because there is no FETCH item that reports it.
+sub read_message {
     my ($self, $msg) = @_;
 
     for (;;)
     {
-        while (defined $self->{batch})
+        while (@{$self->{batch_uids}})
         {
-            my $uid = $self->{next_uid};
-            last if $uid > $self->{last_batch_uid};
-            $self->{next_uid}++;
-            my $rr = $self->{batch}->{$uid};
-            next unless defined $rr;
-            delete $self->{batch}->{$uid};
+            my $uid = shift @{$self->{batch_uids}};
+            my $rr = delete $self->{batch}->{$uid};
 
             # xlog "found uid=$uid in batch";
             # xlog "rr=" . Dumper($rr);
-            my $raw = $rr->{'body'};
-            delete $rr->{'body'};
-            return Cassandane::Message->new(raw => $raw,
-                                            attrs => { id => $uid, %$rr });
+            my $raw = delete $rr->{'body'};
+            return Cassandane::Message->new(
+                        raw => $raw,
+                        attrs => { %$rr,
+                                   id => $self->{next_id}++,
+                                   uid => $uid });
         }
-        $self->{batch} = undef;
 
         # xlog "batch empty or no batch available";
 
-        for (;;)
-        {
-            my $first_uid = $self->{next_uid};
-            return undef
-                if $first_uid > $self->{last_uid};  # EOF
-            my $last_uid = $first_uid + $BATCHSIZE - 1;
-            $last_uid = $self->{last_uid}
-                if $last_uid > $self->{last_uid};
-            # xlog "fetching batch range $first_uid:$last_uid";
-            my $attrs = join(' ', keys %{$self->{fetch_attrs}});
-            $self->{batch} = $self->{client}->fetch("$first_uid:$last_uid",
-                                                    "($attrs)");
-            $self->{last_batch_uid} = $last_uid;
-            last if (defined $self->{batch} && scalar $self->{batch} > 0);
-            $self->{next_uid} = $last_uid + 1;
-        }
+        my $first_uid = $self->{next_uid};
+        return undef
+            if $first_uid > $self->{last_uid};  # EOF
+        my $last_uid = $first_uid + $BATCHSIZE - 1;
+        $last_uid = $self->{last_uid}
+            if $last_uid > $self->{last_uid};
+        $self->{next_uid} = $last_uid + 1;
+
+        # xlog "fetching batch range $first_uid:$last_uid";
+        my $attrs = join(' ', keys %{$self->{fetch_attrs}});
+        $self->{batch} = $self->_uidfetch("$first_uid:$last_uid", "($attrs)")
+                         || {};
+        $self->{batch_uids} = [ sort { $a <=> $b } keys %{$self->{batch}} ];
         # xlog "have a batch, next_uid=$self->{next_uid}";
     }
-
-    return undef;
 }
 
 sub read_end
@@ -293,8 +319,9 @@ sub read_end
 
     $self->{next_uid} = undef;
     $self->{last_uid} = undef;
-    $self->{last_batch_uid} = undef;
+    $self->{next_id} = undef;
     $self->{batch} = undef;
+    $self->{batch_uids} = [];
 }
 
 sub remove

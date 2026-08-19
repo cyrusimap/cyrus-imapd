@@ -224,15 +224,13 @@ EOF
     xlog $self, "Fetch using the search results";
     $res = $imaptalk->fetch('$', 'UID');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_num_equals(5, scalar keys %{$res});
-    $self->assert_str_equals('3', $res->{'2'}->{uid});
-    $self->assert_str_equals('4', $res->{'3'}->{uid});
-    $self->assert_str_equals('5', $res->{'4'}->{uid});
-    $self->assert_str_equals('6', $res->{'5'}->{uid});
-    $self->assert_str_equals('7', $res->{'6'}->{uid});
+    # The saved result still names the same five messages after the expunge.
+    $self->assert_deep_equals([ 3, 4, 5, 6, 7 ],
+                              [ sort { $a <=> $b } keys %{$res} ]);
 
     xlog $self, "Expunge the middle message in the search results range";
-    $res = $imaptalk->store('4', '+flags', '(\\Deleted)');
+    # The saved result is UIDs 3,4,5,6,7, so the middle of it is UID 5.
+    $res = $imaptalk->store('5', '+flags', '(\\Deleted)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $res = $imaptalk->expunge();
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
@@ -240,14 +238,12 @@ EOF
     xlog $self, "Fetch using the search results";
     $res = $imaptalk->fetch('$', 'UID');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_num_equals(4, scalar keys %{$res});
-    $self->assert_str_equals('3', $res->{'2'}->{uid});
-    $self->assert_str_equals('4', $res->{'3'}->{uid});
-    $self->assert_str_equals('6', $res->{'4'}->{uid});
-    $self->assert_str_equals('7', $res->{'5'}->{uid});
+    $self->assert_deep_equals([ 3, 4, 6, 7 ],
+                              [ sort { $a <=> $b } keys %{$res} ]);
 
     xlog $self, "Expunge the 1st message in the 1st range and the last in the 2nd";
-    $res = $imaptalk->store('2,5', '+flags', '(\\Deleted)');
+    # The saved result is now UIDs 3,5,6,7 -- ranges "3" and "5:7".
+    $res = $imaptalk->store('3,7', '+flags', '(\\Deleted)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $res = $imaptalk->expunge();
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
@@ -255,9 +251,8 @@ EOF
     xlog $self, "Fetch using the search results";
     $res = $imaptalk->fetch('$', 'UID');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_num_equals(2, scalar keys %{$res});
-    $self->assert_str_equals('4', $res->{'2'}->{uid});
-    $self->assert_str_equals('6', $res->{'3'}->{uid});
+    $self->assert_deep_equals([ 4, 6 ],
+                              [ sort { $a <=> $b } keys %{$res} ]);
 
     xlog $self, "Search the mailbox for a from address in the saved results";
     @results = ();
@@ -269,6 +264,6 @@ EOF
     xlog $self, "Fetch using the search results";
     $res = $imaptalk->fetch('$', 'UID');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_num_equals(1, scalar keys %{$res});
-    $self->assert_str_equals('6', $res->{'3'}->{uid});
+    $self->assert_deep_equals([ 6 ],
+                              [ sort { $a <=> $b } keys %{$res} ]);
 }
