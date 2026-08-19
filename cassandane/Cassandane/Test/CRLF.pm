@@ -29,6 +29,8 @@ sub test_to_crlf
     $self->_assert_crlf('empty string',           "",          "");
     $self->_assert_crlf('bare cr is not an eol',  "a\rb",      "a\rb");
     $self->_assert_crlf('cr before crlf kept',    "a\r\r\nb",  "a\r\r\nb");
+    $self->_assert_crlf('line fold (SP) safe',    "a\n b",      "a\r\n b");
+    $self->_assert_crlf('line fold (VT) safe',    "a\n\tb",     "a\r\n\tb");
 }
 
 # to_crlf returns a copy; the caller's string must be left as it was, because
