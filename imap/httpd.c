@@ -558,11 +558,9 @@ struct namespace_t *http_namespaces[] = {
     &namespace_applepush,       /* MUST be after namespace_cal & addr */
     &namespace_ischedule,
     &namespace_domainkey,
-    &namespace_rss,
     &namespace_dblookup,
     &namespace_admin,
     &namespace_prometheus,
-    &namespace_cgi,
     &namespace_default,         /* MUST be present and be last!! */
     NULL,
 };

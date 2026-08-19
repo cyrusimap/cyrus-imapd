@@ -222,15 +222,15 @@ sub test_bitfields
     $c->set_bits('httpmodules', 'caldav', 'carddav');
     $self->assert_str_equals('caldav carddav jmap prometheus',
                              scalar $c->get('httpmodules'));
-    $c->set_bits('httpmodules', 'ischedule rss');
-    $self->assert_str_equals('caldav carddav ischedule jmap prometheus rss',
+    $c->set_bits('httpmodules', 'ischedule');
+    $self->assert_str_equals('caldav carddav ischedule jmap prometheus',
                              scalar $c->get('httpmodules'));
 
     # can clear a few bits
     $c->clear_bits('httpmodules', 'caldav', 'carddav');
-    $self->assert_str_equals('ischedule jmap prometheus rss',
+    $self->assert_str_equals('ischedule jmap prometheus',
                              scalar $c->get('httpmodules'));
-    $c->clear_bits('httpmodules', 'ischedule rss');
+    $c->clear_bits('httpmodules', 'ischedule');
     $self->assert_str_equals('jmap prometheus',
                              scalar $c->get('httpmodules'));
 
