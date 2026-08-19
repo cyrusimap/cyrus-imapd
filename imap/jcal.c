@@ -12,7 +12,6 @@
 #include "ical_support.h"
 #include "json_support.h"
 #include "jcal.h"
-#include "xcal.h"
 #include "tok.h"
 #include "util.h"
 #include "version.h"

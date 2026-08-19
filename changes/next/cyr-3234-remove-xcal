@@ -1,0 +1,22 @@
+
+Description:
+
+Support for fetching calendar events in the xCal format (RFC 6321)
+has been removed.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+If you have calendar clients that use the xCal format, you will either need
+to configure them to use iCalendar, or replace the clients with ones that
+use iCalendar.

@@ -42,7 +42,6 @@
 #include "ical_support.h"
 #include "jmap_notif.h"
 #include "jcal.h"
-#include "xcal.h"
 #include "map.h"
 #include "mailbox.h"
 #include "mboxlist.h"
@@ -270,11 +269,6 @@ static struct mime_type_t caldav_mime_types[] = {
       (struct buf* (*)(void *)) &my_icalcomponent_as_ical_string,
       (void * (*)(const struct buf*)) &ical_string_as_icalcomponent,
       (void (*)(void *)) &icalcomponent_free, &begin_icalendar, &end_icalendar
-    },
-    { "application/calendar+xml; charset=utf-8", NULL, "xcs",
-      (struct buf* (*)(void *)) &icalcomponent_as_xcal_string,
-      (void * (*)(const struct buf*)) &xcal_string_as_icalcomponent,
-      NULL, &begin_xcal, &end_xcal
     },
     { "application/calendar+json; charset=utf-8", NULL, "jcs",
       (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
@@ -8138,10 +8132,6 @@ static struct mime_type_t freebusy_mime_types[] = {
     /* First item MUST be the default type */
     { ICALENDAR_CONTENT_TYPE, "2.0", "ifb",
       (struct buf* (*)(void *)) &my_icalcomponent_as_ical_string,
-      NULL, NULL, NULL, NULL
-    },
-    { "application/calendar+xml; charset=utf-8", NULL, "xfb",
-      (struct buf* (*)(void *)) &icalcomponent_as_xcal_string,
       NULL, NULL, NULL, NULL
     },
     { "application/calendar+json; charset=utf-8", NULL, "jfb",

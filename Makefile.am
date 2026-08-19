@@ -1185,7 +1185,7 @@ imap_lmtpd_SOURCES += imap/jmap_util.c imap/caldav_util.c imap/defaultalarms.c i
 if JMAP
 imap_lmtpd_SOURCES += \
     imap/jmap_mail_query.c imap/jmap_mail_query_parse.c \
-    imap/dav_util.c imap/jmap_notif.c imap/jcal.c imap/xcal.c \
+    imap/dav_util.c imap/jmap_notif.c imap/jcal.c \
     imap/jscalendar.c
 endif # JMAP
 
@@ -1276,8 +1276,6 @@ imap_httpd_SOURCES = \
     imap/spool.c \
     imap/sync_support.c \
     imap/sync_support.h \
-    imap/xcal.c \
-    imap/xcal.h \
     imap/xml_support.c \
     imap/xml_support.h \
     imap/zoneinfo_db.c \
