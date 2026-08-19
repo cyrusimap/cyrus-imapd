@@ -1,0 +1,21 @@
+
+Description:
+
+Support for the RSS and CGI modules in HTTPd has been removed.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+The rss_* options have been deprecated.
+
+The 'cgi' and 'rss' values are no longer valid in the httpmodules option. 
+
+
+Upgrade instructions:
+
+None.
