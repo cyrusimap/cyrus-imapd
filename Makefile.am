@@ -539,6 +539,7 @@ dist_noinst_SCRIPTS = \
     tools/masssievec \
     tools/mknewsgroups \
     tools/perl2rst \
+    tools/pod-index \
     tools/translatesieve \
     tools/update-tzdata.sh
 noinst_MAN = \
@@ -1986,6 +1987,38 @@ docsrc/reference/manpages/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/perl2rst sieveshell < $< > $@.NEW && mv $@.NEW $@
 
+# The generated Cassandane API docs: one reST page per Cassandane module that
+# carries Pod, plus a cross-reference file (so L<...> between them renders as an
+# internal :doc: link rather than a metacpan link) and a listing that
+# developer/cassandane.rst includes.  It's all a build artifact, gitignored
+# like the other perl2rst output.  The module list is discovered at make time
+# (see docsrc/cassandane-pod.mk), shared with docsrc/Makefile.
+cassandane_srcdir = $(top_srcdir)/cassandane
+include docsrc/cassandane-pod.mk
+
+cassandane_apidir  = docsrc/developer/cassandane-api
+cassandane_pod_rst = $(CASSANDANE_POD:%=$(cassandane_apidir)/%.rst)
+cassandane_pod_pm  = $(CASSANDANE_POD:%=$(cassandane_srcdir)/%.pm)
+
+# module -> doc-page map, read by perl2rst to resolve internal L<...> links
+$(cassandane_apidir)/.xref: $(top_srcdir)/tools/pod-index $(cassandane_pod_pm)
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/pod-index --xref $(CASSANDANE_POD) >$@.NEW && mv $@.NEW $@
+
+# one page per module, from its .pm and the shared xref
+$(cassandane_apidir)/%.rst: $(cassandane_srcdir)/%.pm $(cassandane_apidir)/.xref $(top_srcdir)/tools/perl2rst
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)PERL2RST_NAMESPACE=Cassandane PERL2RST_XREF_FILE=$(cassandane_apidir)/.xref \
+	    $(PERL) $(top_srcdir)/tools/perl2rst $(subst /,::,$*) <$< >$@.NEW && mv $@.NEW $@
+
+# the reST bullet list + hidden toctree that developer/cassandane.rst includes
+$(cassandane_apidir)/listing.inc: $(top_srcdir)/tools/pod-index $(cassandane_pod_pm)
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/pod-index --listing --srcdir $(cassandane_srcdir) $(CASSANDANE_POD) >$@.NEW && mv $@.NEW $@
+
+$(cassandane_apidir)/.stamp: $(cassandane_pod_rst) $(cassandane_apidir)/listing.inc
+	@touch $@
+
 %.1: man/.sphinx-build.stamp
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)touch $@
@@ -2019,7 +2052,7 @@ SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
 ## that we have a single "source directory" for sphinx-build to use.
-docsrc/.sphinx-build.stamp: docsrc/reference/manpages/configs/imapd.conf.rst docsrc/reference/manpages/usercommands/cyradm.rst docsrc/reference/manpages/usercommands/sieveshell.rst
+docsrc/.sphinx-build.stamp: docsrc/reference/manpages/configs/imapd.conf.rst docsrc/reference/manpages/usercommands/cyradm.rst docsrc/reference/manpages/usercommands/sieveshell.rst docsrc/developer/cassandane-api/.stamp
 	$(AM_V_GEN)test x"$(top_srcdir)" = x"$(top_builddir)" || \
         (cd $(top_srcdir) && tar cf - --mode=gu+w docsrc doc/examples) | tar xf -
 	@touch $@
