@@ -32,7 +32,6 @@
 #include "tok.h"
 #include "util.h"
 #include "version.h"
-#include "xcal.h"
 #include "xstrlcpy.h"
 #include "zoneinfo_db.h"
 
@@ -68,10 +67,6 @@ static struct mime_type_t tz_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics",
       (struct buf* (*)(void *)) &my_icalcomponent_as_ical_string,
-      NULL, NULL, NULL, NULL
-    },
-    { "application/calendar+xml; charset=utf-8", NULL, "xcs",
-      (struct buf* (*)(void *)) &icalcomponent_as_xcal_string,
       NULL, NULL, NULL, NULL
     },
     { "application/calendar+json; charset=utf-8", NULL, "jcs",

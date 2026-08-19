@@ -26,7 +26,6 @@
 #include "tok.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "xcal.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
@@ -66,11 +65,6 @@ static struct mime_type_t isched_mime_types[] = {
       (struct buf* (*)(void *)) &my_icalcomponent_as_ical_string,
       (void * (*)(const struct buf*)) &ical_string_as_icalcomponent,
       (void (*)(void *)) &icalcomponent_free, NULL, NULL
-    },
-    { "application/calendar+xml; charset=utf-8", NULL, "xcs",
-      (struct buf* (*)(void *)) &icalcomponent_as_xcal_string,
-      (void * (*)(const struct buf*)) &xcal_string_as_icalcomponent,
-      NULL, NULL, NULL
     },
     { "application/calendar+json; charset=utf-8", NULL, "jcs",
       (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,

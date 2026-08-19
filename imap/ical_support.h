@@ -280,4 +280,14 @@ extern void icalcomponent_strip_jmap_xprops(icalcomponent *comp);
 extern vcardparameter *vcardproperty_get_parameter_by_name(vcardproperty *prop,
                                                            const char *name);
 
+extern const char *icalproperty_value_kind_as_string(icalproperty *prop);
+extern const char *icaltime_as_iso_string(const struct icaltimetype tt);
+extern const char *icalvalue_utcoffset_as_iso_string(const icalvalue* value);
+extern void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur,
+                                          void *obj,
+                                          void (*add_int)(void *, const char *,
+                                                          int),
+                                          void (*add_str)(void *, const char *,
+                                                          const char *));
+
 #endif /* ICAL_SUPPORT_H */

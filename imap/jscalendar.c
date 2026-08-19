@@ -20,7 +20,6 @@
 #include "ptrarray.h"
 #include "strarray.h"
 #include "util.h"
-#include "xcal.h"
 #include "xstrlcpy.h"
 
 // ---------------

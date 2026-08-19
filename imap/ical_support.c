@@ -19,6 +19,7 @@
 #include "message.h"
 #include "strhash.h"
 #include "stristr.h"
+#include "tok.h"
 #include "util.h"
 #include "xsha1.h"
 
@@ -3335,4 +3336,201 @@ EXPORTED void icalcomponent_strip_jmap_xprops(icalcomponent *comp)
             icalproperty_free(prop);
         }
     }
+}
+
+/*
+ * Determine the type (kind) of an iCalendar property value.
+ */
+EXPORTED const char *icalproperty_value_kind_as_string(icalproperty *prop)
+{
+    icalvalue_kind kind = ICAL_NO_VALUE;
+    icalparameter *val_param;
+
+    val_param = icalproperty_get_first_parameter(prop, ICAL_VALUE_PARAMETER);
+    if (val_param) {
+        /* Use the kind specified in the VALUE param */
+        kind = icalparameter_value_to_value_kind(
+            icalparameter_get_value(val_param));
+    }
+
+    if (kind == ICAL_NO_VALUE) {
+        icalvalue *value = icalproperty_get_value(prop);
+
+        if (value) {
+            /* Use the kind determined from the property value */
+            kind = icalvalue_isa(value);
+        }
+    }
+
+    if (kind == ICAL_NO_VALUE) {
+        /* Use the default kind for the property */
+        kind = icalproperty_kind_to_value_kind(icalproperty_isa(prop));
+    }
+
+    // do NOT add a default label here
+    switch (kind) {
+
+    case ICAL_ANY_VALUE:
+    case ICAL_NO_VALUE:
+    case ICAL_X_VALUE:
+    case ICAL_XLICCLASS_VALUE:
+        return "unknown";
+
+    case ICAL_ACTION_VALUE:
+    case ICAL_BUSYTYPE_VALUE:
+    case ICAL_CARLEVEL_VALUE:
+    case ICAL_CLASS_VALUE:
+    case ICAL_COLOR_VALUE:
+    case ICAL_CMD_VALUE:
+    case ICAL_METHOD_VALUE:
+    case ICAL_PARTICIPANTTYPE_VALUE:
+    case ICAL_POLLCOMPLETION_VALUE:
+    case ICAL_POLLMODE_VALUE:
+    case ICAL_PROXIMITY_VALUE:
+    case ICAL_REQUESTSTATUS_VALUE:
+    case ICAL_QUERYLEVEL_VALUE:
+    case ICAL_RELATEDTO_VALUE:
+    case ICAL_RESOURCETYPE_VALUE:
+    case ICAL_STATUS_VALUE:
+    case ICAL_STRING_VALUE:
+    case ICAL_TASKMODE_VALUE:
+    case ICAL_TRANSP_VALUE:
+        return "text";
+
+    case ICAL_QUERY_VALUE:
+        return "cal-query";
+
+    case ICAL_ATTACH_VALUE:
+    case ICAL_BINARY_VALUE:
+    case ICAL_BOOLEAN_VALUE:
+    case ICAL_CALADDRESS_VALUE:
+    case ICAL_DATE_VALUE:
+    case ICAL_DATETIME_VALUE:
+    case ICAL_DATETIMEDATE_VALUE:
+    case ICAL_DATETIMEPERIOD_VALUE:
+    case ICAL_DURATION_VALUE:
+    case ICAL_FLOAT_VALUE:
+    case ICAL_GEO_VALUE:
+    case ICAL_INTEGER_VALUE:
+    case ICAL_LINK_VALUE:
+    case ICAL_PERIOD_VALUE:
+    case ICAL_RECUR_VALUE:
+    case ICAL_TEXT_VALUE:
+    case ICAL_TRIGGER_VALUE:
+    case ICAL_UID_VALUE:
+    case ICAL_URI_VALUE:
+    case ICAL_UTCOFFSET_VALUE:
+    case ICAL_XMLREFERENCE_VALUE:
+        return icalvalue_kind_to_string(kind);
+    }
+
+    return "unknown";
+}
+
+
+/*
+ * Construct an ISO.8601.2004 string for an iCalendar Date/Date-Time.
+ */
+EXPORTED const char *icaltime_as_iso_string(const struct icaltimetype tt)
+{
+    static char str[21];
+    const char *fmt;
+
+    if (icaltime_is_date(tt)) fmt = "%04d-%02d-%02d";
+    else if (icaltime_is_utc(tt)) fmt = "%04d-%02d-%02dT%02d:%02d:%02dZ";
+    else fmt = "%04d-%02d-%02dT%02d:%02d:%02d";
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+    /* format string decided above */
+    snprintf(str, sizeof(str), fmt, tt.year, tt.month, tt.day,
+             tt.hour, tt.minute, tt.second);
+#pragma GCC diagnostic pop
+
+    return str;
+}
+
+
+/*
+ * Construct an ISO.8601.2004 string for an iCalendar UTC Offset.
+ */
+EXPORTED const char *icalvalue_utcoffset_as_iso_string(const icalvalue* value)
+{
+    static char str[10];
+    const char *fmt;
+    int off, h, m, s;
+    char sign;
+
+    off = icalvalue_get_utcoffset(value);
+
+    if (abs(off) == off) sign = '+';
+    else sign = '-';
+
+    h = off/3600;
+    m = (off - (h*3600))/ 60;
+    s = (off - (h*3600) - (m*60));
+
+    if (s > 0) fmt = "%c%02d:%02d:%02d";
+    else fmt = "%c%02d:%02d";
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+    /* format string decided above */
+    snprintf(str, sizeof(str), fmt, sign, abs(h), abs(m), abs(s));
+#pragma GCC diagnostic pop
+
+    return str;
+}
+
+/*
+ * Add iCalendar recur-rule-parts to a structured element.
+ */
+EXPORTED void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur,
+                                            void *obj,
+                                            void (*add_int)(void *, const char *,
+                                                            int),
+                                            void (*add_str)(void *, const char *,
+                                                            const char *))
+{
+    char *rrule, *rpart;
+    tok_t rparts;
+
+    /* generate an iCal RRULE string */
+    rrule = icalrecurrencetype_as_string_r(recur);
+    
+    /* split string into rparts & values */
+    tok_initm(&rparts, rrule, "=;", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+    while ((rpart = tok_next(&rparts))) {
+        if (!strcmp(rpart, "UNTIL")) {
+            /* need to translate date format to ISO */
+            struct icaltimetype until = icaltime_from_string(tok_next(&rparts));
+
+            add_str(obj, "until", icaltime_as_iso_string(until));
+        }
+        else {
+            /* assume the rpart has multiple values - split them */
+            tok_t vlist;
+            char *val, *p;
+
+            tok_init(&vlist, tok_next(&rparts), ",",
+                     TOK_TRIMLEFT|TOK_TRIMRIGHT);
+            while ((val = tok_next(&vlist))) {
+                if (add_int) {
+                    /* try converting value to integer */
+                    int n = strtol(val, &p, 10);
+
+                    if (n && !*p) {
+                        add_int(obj, lcase(rpart), n);
+                        continue;
+                    }
+                }
+
+                add_str(obj, lcase(rpart), val);
+            }
+            tok_fini(&vlist);
+        }
+    }
+    tok_fini(&rparts);
+
+    free(rrule);
 }
