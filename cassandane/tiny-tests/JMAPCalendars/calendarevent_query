@@ -162,39 +162,15 @@ sub test_calendarevent_query
         wantFastPath => JSON::true,
     }, {
         filter => {
-            inCalendars => [$calendarIdA, $calendarIdB],
-        },
-        wantIds => [$eventA1{id}, $eventA2{id}, $eventB1{id}],
-        wantFastPath => JSON::true,
-    }, {
-        filter => {
-            operator => 'NOT',
-            conditions => [{
-                inCalendars => [$calendarIdA],
-            }],
-        },
-        wantIds => [$eventB1{id}],
-        wantFastPath => JSON::true,
-    }, {
-        filter => {
             operator => 'OR',
             conditions => [{
-                inCalendars => [$calendarIdA, $calendarIdB],
+                inCalendar => $calendarIdA,
+            }, {
+                inCalendar => $calendarIdB,
             }],
         },
         wantIds => [$eventA1{id}, $eventA2{id}, $eventB1{id}],
         wantFastPath => JSON::true,
-    }, {
-        filter => {
-            operator => 'AND',
-            conditions => [{
-                inCalendars => [$calendarIdA],
-            }, {
-                text => 'test',
-            }],
-        },
-        wantIds => [$eventA1{id}, $eventA2{id}],
-        wantFastPath => JSON::false,
     }, {
         filter => {
             inCalendar => $calendarIdA,
@@ -234,6 +210,14 @@ sub test_calendarevent_query
         wantErr => {
             type => 'invalidArguments',
             arguments => [ 'filter/inCalendar' ],
+        },
+    }, {
+        filter => {
+            inCalendars => [$calendarIdA], # invalid - no such filter condition
+        },
+        wantErr => {
+            type => 'invalidArguments',
+            arguments => [ 'filter/inCalendars' ],
         },
     }, {
         filter => undef,
