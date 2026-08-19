@@ -214,8 +214,7 @@ static int search_batch_size(void)
 static int flush_batch(search_text_receiver_t *rx,
                        struct mailbox *mailbox,
                        int flags,
-                       seqset_t *uids,
-                       size_t *nindexedptr)
+                       seqset_t *uids)
 {
     int i;
     int r = 0;
@@ -284,8 +283,6 @@ static int flush_batch(search_text_receiver_t *rx,
         r = rx->flush(rx);
         if (r) goto done;
     }
-
-    if (nindexedptr) *nindexedptr = msgs.count;
 
 done:
     for (i = 0 ; i < msgs.count ; i++) {
@@ -461,9 +458,11 @@ static void select_messages_to_index(search_text_receiver_t *rx,
                                      struct mailbox *mailbox,
                                      int min_indexlevel,
                                      int flags,
+                                     uint32_t resumeuid,
                                      seqset_t *uids,
                                      dynarray_t *attachparts,
-                                     int *is_incomplete)
+                                     int *is_incomplete,
+                                     uint32_t *nextuid)
 {
     int reindex_partials = flags & SEARCH_UPDATE_REINDEX_PARTIALS;
     int batch_size = search_batch_size();
@@ -474,15 +473,21 @@ static void select_messages_to_index(search_text_receiver_t *rx,
      * ranges matching the GUID in conversations DB later, we might think we've
      * indexed it when we actually haven't */
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    if ((flags & SEARCH_UPDATE_INCREMENTAL) && !reindex_partials)
-        mailbox_iter_startuid(iter, rx->first_unindexed_uid(rx));
+    uint32_t startuid = resumeuid;
+    if ((flags & SEARCH_UPDATE_INCREMENTAL) && !reindex_partials) {
+        uint32_t first_unindexed = rx->first_unindexed_uid(rx);
+        if (first_unindexed > startuid) startuid = first_unindexed;
+    }
+    if (startuid) mailbox_iter_startuid(iter, startuid);
 
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         if ((flags & SEARCH_UPDATE_BATCH) && nmsgs >= batch_size) {
             syslog(LOG_INFO, "search_update_mailbox batching %d messages to %s",
                     nmsgs, mailbox_name(mailbox));
+            /* the next update resumes from this message */
             *is_incomplete = 1;
+            *nextuid = record->uid;
             break;
         }
 
@@ -511,12 +516,12 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
                                    struct mailbox **mailboxptr,
                                    int min_indexlevel,
                                    int flags,
-                                   size_t *nindexedptr)
+                                   uint32_t *resumeuidptr)
 {
     int r = 0;                  /* Using IMAP_* not SQUAT_* return codes here */
     int is_incomplete = 0;
+    uint32_t nextuid = 0;
     bool in_mailbox = false;
-    size_t nindexed = 0;
     seqset_t *uids = seqset_init(0, SEQ_SPARSE);
     dynarray_t attachparts = DYNARRAY_INITIALIZER(sizeof(struct attachpart));
     char *mycachedir = NULL;
@@ -531,15 +536,15 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 
     // Determine the messages to index, and the parts to extract text from
 
-    select_messages_to_index(rx, mailbox, min_indexlevel, flags, uids,
-                             &attachparts, &is_incomplete);
+    select_messages_to_index(rx, mailbox, min_indexlevel, flags, *resumeuidptr,
+                             uids, &attachparts, &is_incomplete, &nextuid);
 
     if (!seqset_first(uids))
         goto done;
 
     if (!dynarray_size(&attachparts)) {
         // No attachment text to extract, index these messages right away.
-        r = flush_batch(rx, mailbox, flags, uids, &nindexed);
+        r = flush_batch(rx, mailbox, flags, uids);
         goto done;
     }
 
@@ -587,8 +592,9 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
                 lf_u("uidvalidity", uidvalidity),
                 lf_u("new_uidvalidity", mailbox->i.uidvalidity));
         // None of the selected messages got indexed. Have the caller retry
-        // this mailbox, rather than reporting it as indexed.
+        // this mailbox from the start, rather than reporting it as indexed.
         is_incomplete = 1;
+        nextuid = 0;
         goto done;
     }
 
@@ -610,14 +616,13 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         attachextract_set_cacheonly(1);
     }
 
-    r = flush_batch(rx, mailbox, flags, uids, &nindexed);
+    r = flush_batch(rx, mailbox, flags, uids);
 
     if (!txcacheonly) {
         attachextract_set_cacheonly(0);
     }
 
  done:
-    if (nindexedptr) *nindexedptr = nindexed;
     if (mycachedir) {
         attachextract_set_cachedir(NULL);
         removedir(mycachedir);
@@ -633,7 +638,11 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         if (!r) r = r2;
     }
     if (r) return r;
-    return is_incomplete ? IMAP_AGAIN : 0;
+    if (is_incomplete) {
+        *resumeuidptr = nextuid;
+        return IMAP_AGAIN;
+    }
+    return 0;
 }
 
 EXPORTED int search_end_update(search_text_receiver_t *rx)

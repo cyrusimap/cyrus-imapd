@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+use POSIX qw(WNOHANG);
+
+sub test_squatter_index_default
+    :SearchBatchsize20
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    my $basedir = $self->{instance}->{basedir};
+    my $outfile = "$basedir/audit.tmp";
+
+    xlog $self, "append enough messages for three full batches and a partial one";
+    my $nmsgs = 65;
+    foreach my $i (1..$nmsgs) {
+        $self->make_message("filler $i") || die;
+    }
+
+    xlog $self, "a bare squatter run must complete: when broken it re-selects the same batch forever";
+    my $pid = $self->{instance}->run_command(
+        {cyrus => 1, background => 1}, 'squatter');
+    my $done = 0;
+    my $batchlines = 0;
+    eval {
+        timed_wait(sub {
+            if (waitpid($pid, WNOHANG) == $pid) {
+                $done = 1;
+                return 1;
+            }
+            # a correct run logs one batching line per full batch, so a
+            # fourth one means it is looping
+            $batchlines += scalar $self->{instance}->getsyslog(qr/batching/);
+            return $batchlines > 3;
+        }, description => "squatter to finish", maxwait => 60);
+    };
+    # kill a looping squatter rather than letting it outlive the test
+    eval { $self->{instance}->stop_command($pid) } if not $done;
+    $self->assert($done);
+
+    xlog $self, "every message must be searchable";
+    $talk->select('INBOX');
+    my $uids = $talk->search('fuzzy', 'subject', 'filler');
+    $self->assert_num_equals($nmsgs, scalar @$uids);
+
+    xlog $self, "one run indexes each message once: no batch may re-add an earlier one";
+    my $xapdirs = ($self->{instance}->run_mbpath(-u => 'cassandane'))->{xapian};
+    my ($gdocs, $parts) = $self->delve_docs($xapdirs->{t1} . "/xapian");
+    $self->assert_num_equals($nmsgs, scalar @$gdocs);
+
+    xlog $self, "audit reports no unindexed messages";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        'squatter', '-A');
+    open my $fh, '<', $outfile or die "open $outfile: $!";
+    my @audits = readline($fh);
+    close $fh;
+    $self->assert_num_equals(0, scalar @audits);
+
+    xlog $self, "an incremental run must find nothing left to index";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+    ($gdocs, $parts) = $self->delve_docs($xapdirs->{t1} . "/xapian");
+    $self->assert_num_equals($nmsgs, scalar @$gdocs);
+}
