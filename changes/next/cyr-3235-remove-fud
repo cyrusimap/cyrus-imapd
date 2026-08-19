@@ -1,0 +1,20 @@
+
+Description:
+
+Support for the fud service has been removed.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Any SERVICES entries in cyrus.conf utilizing the fud binary
+should be removed
