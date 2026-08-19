@@ -204,14 +204,14 @@ Assertions
 
 A test passes unless it dies or an assertion fails, so assertions are how you
 state what "correct" means.  The ones you'll reach for most often come from
-Test::Unit:
+`Test::Unit::Assert <https://metacpan.org/pod/Test::Unit::Assert>`__:
 
 * ``assert_str_equals($expect, $got)``
 * ``assert_num_equals($expect, $got)``
 * ``assert_null($value)``
 * ``assert_not_null($value)``
 * ``assert_matches($regex, $string)``
-* ``assert_not_matches($regex, $string)``
+* ``assert_does_not_match($regex, $string)``
 * ``assert_deep_equals($expect, $got)`` for data structures
 
 Cassandane adds more in ``Cassandane::Unit::TestCase``.  The most generally
