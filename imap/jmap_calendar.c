@@ -2329,6 +2329,35 @@ static int jmap_calendar_set(struct jmap_req *req)
     default_calname = caldav_scheddefault(req->accountid, 1);
     default_cal_mboxname = caldav_mboxname(req->accountid, default_calname);
 
+    /* destroy */
+    size_t index;
+    json_t *jid;
+
+    json_array_foreach(set.destroy, index, jid) {
+        const char *id = json_string_value(jid);
+        if (json_object_get(set.not_destroyed, id)) {
+            continue;
+        }
+        /* Resolve calid */
+        const char *calid = id;
+        if (calid && calid[0] == '#') {
+            const char *newcalid = jmap_lookup_id(req, calid + 1);
+            if (!newcalid) {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(set.not_destroyed, id, err);
+                continue;
+            }
+            calid = newcalid;
+        }
+        json_t *err = NULL;
+        setcalendars_destroy(req, calid, default_cal_mboxname,
+                             setargs.on_destroy_remove_events, &err);
+        if (!err) {
+            json_array_append_new(set.destroyed, json_string(id));
+        }
+        else json_object_set_new(set.not_destroyed, id, err);
+    }
+
     /* create */
     const char *key;
     json_t *arg;
@@ -2379,35 +2408,6 @@ static int jmap_calendar_set(struct jmap_req *req)
             json_object_set_new(set.updated, id, record);
         }
         else json_object_set_new(set.not_updated, id, err);
-    }
-
-    /* destroy */
-    size_t index;
-    json_t *jid;
-
-    json_array_foreach(set.destroy, index, jid) {
-        const char *id = json_string_value(jid);
-        if (json_object_get(set.not_destroyed, id)) {
-            continue;
-        }
-        /* Resolve calid */
-        const char *calid = id;
-        if (calid && calid[0] == '#') {
-            const char *newcalid = jmap_lookup_id(req, calid + 1);
-            if (!newcalid) {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(set.not_destroyed, id, err);
-                continue;
-            }
-            calid = newcalid;
-        }
-        json_t *err = NULL;
-        setcalendars_destroy(req, calid, default_cal_mboxname,
-                             setargs.on_destroy_remove_events, &err);
-        if (!err) {
-            json_array_append_new(set.destroyed, json_string(id));
-        }
-        else json_object_set_new(set.not_destroyed, id, err);
     }
 
     if (setargs.on_success_set_is_default &&
