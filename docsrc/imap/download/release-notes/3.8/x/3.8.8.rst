@@ -1,0 +1,88 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.8.8 Release Notes
+===============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.8/cyrus-imapd-3.8.8.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.8.8/cyrus-imapd-3.8.8.tar.gz.sig
+
+.. _relnotes-3.8.8-changes:
+
+Changes since 3.8.7
+====================
+
+Security fixes
+--------------
+
+* :cve:`CVE-2026-61907`: JMAP snooze bypasses destination-mailbox ACL
+
+  An authenticated user with insert permissions on another user's snoozed
+  mailbox could cause insertion of mail to that user's inbox, or any other of
+  their mailboxes whose id was known to the user, despite having no insert
+  permissions to the target mailbox.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+* :cve:`CVE-2026-61908`: JMAP email-header blob ID out-of-bounds index
+
+  An authenticated user could attempt to download a specially crafted JMAP blob
+  ID of the form ``H<emailid>-<index>``, which could read past the end of the
+  internal blob_headers array during download, exposing adjacent heap memory.
+
+  Reported by: Ahmed Said.
+
+* :cve:`CVE-2026-61909`: CalDAV/CardDAV multiget bypasses per-href ACL
+
+  An authenticated DAV user with some shared access to another user's calendar
+  or address book could read even unshared events or contacts by including the
+  target hrefs in a calendar-multiget or addressbook-multiget REPORT.
+
+  Reported by: Ahmed Said.
+
+* :cve:`CVE-2026-61910` Mailbox/set let sharee change special-use role on
+  shared mailboxes
+
+  An authenticated user with maySetKeywords on another user's mailbox could
+  change that mailbox's specialuse annotation.  This could allow the sharee to
+  change the shared mailbox to perform the archived, snoozed, or other role,
+  which might cause mail mail to be written to the shared mailbox, sharing more
+  content than intended.
+
+  This is likely to be an unusual situation, made more unusual because if the
+  target already has an non-shared mailbox with that role, role duplication
+  suppression will prevent the update.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+* :cve:`CVE-2026-61911` Sieve mailbox existence oracle
+
+  An authenticated user could install a Sieve script that probed whether
+  another user's private mailbox existed, or read the value of shared mailbox
+  annotations, by observing which fileinto branch fired during LMTP delivery.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+* :cve:`CVE-2026-61915`: VPATCH BYPARAM double-free
+
+  An authenticated calendar user could crash a Cyrus CalDAV worker with a PATCH
+  containing ``PATCH-ACTION="BYPARAM@..."`` against a resource with two or more
+  properties of the matched kind.  The memory holding the selector would be
+  freed once on each iteration over the properties.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+Build changes
+-------------
+
+* Fixed: :issue:`5189`: detect cld2 and wslay without pkg-config
+* Fixed: :issue:`6142`: build failure in lmtp_sieve on Alpine Linux
+
+Bug fixes
+---------
+
+* Fixed: :issue:`6064`: escape JMAP logHeaders values before logging
+* Fixed: :issue:`6165`: JMAP ``EmailSubmission/set`` now reports bad ``rcptTo``
+  values as ``invalidRecipients`` rather than ``invalidProperties``
