@@ -2590,6 +2590,7 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
     tombstone.name = icalmemory_tmp_copy(proleptic_prop ?
                                          icalproperty_get_x(proleptic_prop) :
                                          "LMT");
+    tombstone.offset_from = tombstone.offset_to = INT_MAX;
     if (!proleptic_prop ||
         !icalproperty_get_parameter_as_string(prop, "X-NO-BIG-BANG"))
       tombstone.onset.year = -1;
@@ -2607,6 +2608,7 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
         nextc = icalcomponent_get_next_component(vtz, ICAL_ANY_COMPONENT);
 
         memset(&obs, 0, sizeof(struct observance));
+        obs.name = "";
         obs.offset_from = obs.offset_to = INT_MAX;
         obs.is_daylight = (icalcomponent_isa(comp) == ICAL_XDAYLIGHT_COMPONENT);
 
@@ -2618,6 +2620,7 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
             switch (icalproperty_isa(prop)) {
             case ICAL_TZNAME_PROPERTY:
                 obs.name = icalproperty_get_tzname(prop);
+                if (!obs.name) obs.name = "";
                 break;
 
             case ICAL_DTSTART_PROPERTY:
@@ -2653,8 +2656,8 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
             }
         }
 
-        /* We MUST have DTSTART, TZNAME, TZOFFSETFROM, and TZOFFSETTO */
-        if (!dtstart_prop || !obs.name ||
+        /* We MUST have DTSTART, TZOFFSETFROM, and TZOFFSETTO */
+        if (!dtstart_prop ||
             obs.offset_from == INT_MAX || obs.offset_to == INT_MAX) {
             icalarray_free(rdate_array);
             continue;
@@ -2679,6 +2682,12 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
             continue;
         }
 
+        /* Ignore RRULE with invalid or no value */
+        struct icalrecurrencetype *rrule = NULL;
+        if (rrule_prop && !(rrule = icalproperty_get_recurrence(rrule_prop))) {
+            rrule_prop = NULL;
+        }
+
         /* Check DTSTART vs window open */
         r = icaltime_compare(obs.onset, start);
         if (r < 0) {
@@ -2701,8 +2710,7 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
             }
         }
 
-        struct icalrecurrencetype *rrule = NULL;
-        if (rrule_prop && (rrule = icalproperty_get_recurrence(rrule_prop))) {
+        if (rrule_prop) {
             icalrecur_iterator *ritr = NULL;
             unsigned eternal = icaltime_is_null_time(rrule->until);
             unsigned trunc_until = 0;
@@ -2963,8 +2971,9 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
         icalcomponent *tomb;
         icalproperty *prop, *nextp;
 
-        if (obsarray) {
-            /* Add the tombstone to our array */
+        /* Add the tombstone, but only if we could determine its offset */
+        if (obsarray && (tombstone.offset_to != INT_MAX ||
+                         obsarray->num_elements)) {
             tombstone.onset = start;
             tombstone.is_gmt = tombstone.is_std = 1;
             icalarray_append(obsarray, &tombstone);
@@ -2981,7 +2990,9 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
         }
 
         /* Set property values on our tombstone */
-        for (prop = icalcomponent_get_first_property(tomb, ICAL_ANY_PROPERTY);
+        for (prop = tomb ?
+                 icalcomponent_get_first_property(tomb, ICAL_ANY_PROPERTY) :
+                 NULL;
              prop; prop = nextp) {
 
             nextp = icalcomponent_get_next_property(tomb, ICAL_ANY_PROPERTY);
@@ -3027,15 +3038,25 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
         icalcomponent_free(tomb_day);
     }
 
-    if (obsarray) {
+    if (obsarray && obsarray->num_elements) {
         struct observance *obs;
 
         /* Sort the observances by onset */
         icalarray_sort(obsarray, &observance_compare);
 
-        /* Set offset_to for tombstone, if necessary */
         obs = icalarray_element_at(obsarray, 0);
-        if (!tombstone.offset_to) tombstone.offset_to = obs->offset_from;
+
+        /* A tombstone with no offset of its own sorts first, and its offset
+           equals the offset_from of the next observance */
+        if (obs->offset_to == INT_MAX && obsarray->num_elements > 1) {
+            struct observance *next = icalarray_element_at(obsarray, 1);
+            obs->offset_from = obs->offset_to = next->offset_from;
+        }
+
+        /* Set offset_to for tombstone, if necessary */
+        if (tombstone.offset_to == INT_MAX) {
+            tombstone.offset_from = tombstone.offset_to = obs->offset_from;
+        }
 
         /* Adjust actual range if necessary */
         if (adjust_start) {
@@ -3049,6 +3070,11 @@ EXPORTED void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
     }
 
     if (proleptic) {
+        if (tombstone.offset_to == INT_MAX) {
+            /* We could not determine the offset before the VTIMEZONE onsets
+               start */
+            tombstone.offset_from = tombstone.offset_to = 0;
+        }
         memcpy(proleptic, &tombstone, sizeof(struct observance));
     }
 }
