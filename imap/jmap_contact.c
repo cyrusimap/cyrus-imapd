@@ -1936,6 +1936,10 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
             /* Users always subscribe their own addressbooks */
             is_subscribed = 1;
         }
+        else if (rights & ACL_AUTOSUB) {
+            /* ACL keeps this user subscribed */
+            is_subscribed = 1;
+        }
         else {
             /* Lookup mailbox subscriptions */
             is_subscribed = mboxlist_checksub(mbentry->name, req->userid) == 0;
@@ -2679,8 +2683,16 @@ static void setaddressbooks_update(jmap_req_t *req,
         goto done;
     }
 
-    /* Report addressbook as updated. */
-    *record = json_null();
+    /* Report addressbook as updated. If the client asked to
+     * unsubscribe but an auto-subscribe ACL keeps them subscribed,
+     * report the effective value back as server-set. */
+    if (props.isSubscribed == 0 &&
+            (jmap_myrights(req, mbentry->name) & ACL_AUTOSUB)) {
+        *record = json_pack("{s:b}", "isSubscribed", 1);
+    }
+    else {
+        *record = json_null();
+    }
 
 done:
     mboxlist_entry_free(&mbentry);
