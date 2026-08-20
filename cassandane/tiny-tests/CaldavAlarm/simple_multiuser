@@ -1,9 +1,10 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_simple_multiuser
-    :min_version_3_1 :NoAltNameSpace
-    ($self)
+# A sharee's own alarms on a shared calendar fire because the sharee is
+# subscribed to it.  The subscription is either a real one, or implied by
+# the '1' (ACL_AUTOSUB) right.
+sub assert_simple_multiuser ($self, %opt)
 {
     my $CalDAV = $self->{caldav};
 
@@ -11,24 +12,14 @@ sub test_simple_multiuser
     $self->assert_not_null($CalendarId);
 
     my $AdminTalk = $self->{adminstore}->get_client();
-    $AdminTalk->create("user.foo");
-    $AdminTalk->setacl("user.cassandane.#calendars.$CalendarId", "foo", "lrswipkxtecdn789");
+    my $foo = $self->{instance}->create_user('foo');
+    $AdminTalk->setacl("user.cassandane.#calendars.$CalendarId",
+                       foo => $opt{acl});
 
-    my $foostore = $self->{instance}->get_service('imap')->create_store(
-                        username => "foo");
-    my $footalk = $foostore->get_client();
-    $footalk->subscribe("user.cassandane.#calendars.$CalendarId");
+    $foo->imap->subscribe("user.cassandane.#calendars.$CalendarId")
+        if $opt{subscribe};
 
-    my $service = $self->{instance}->get_service("http");
-    my $FooDAV = Net::CalDAVTalk->new(
-        user => 'foo',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+    my $FooDAV = $foo->caldav;
 
     my $cal = $FooDAV->GetCalendar("cassandane.$CalendarId");
     $self->assert_not_null($cal);
@@ -153,4 +144,18 @@ EOF
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 900 );
 
     $self->assert_alarms();
+}
+
+sub test_simple_multiuser
+    :NoAltNameSpace
+    ($self)
+{
+    $self->assert_simple_multiuser(acl => 'lrswipkxtecdn789', subscribe => 1);
+}
+
+sub test_simple_multiuser_autosub
+    :NoAltNameSpace :ReverseACLs
+    ($self)
+{
+    $self->assert_simple_multiuser(acl => 'lrswipkxtecdn7891', subscribe => 0);
 }
