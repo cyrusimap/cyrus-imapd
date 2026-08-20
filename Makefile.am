@@ -748,6 +748,18 @@ check-discrete: cunit/unit
 		echo "$$fails/$$tests tests failed" ; \
 		exit $$fails
 
+# cyd (and so dar) runs "make check-fast" by default, but the parallel cunit
+# runner that makes it fast doesn't exist before 3.13.  Alias it to the plain
+# serial check so that tooling works here: on this branch, "fast" names an
+# interface, not a speed.
+#
+# The empty recipe is load-bearing.  A rule with prerequisites but no recipe
+# still lets make search pattern rules for one, so without the "@:" this would
+# fall through to check-% below and go looking for a suite named "fast".
+# -- claude, 2026-08-20
+check-fast: check
+	@:
+
 check-%: cunit/unit
 	@echo "Running unit tests for $*"
 	@vg= ; \
