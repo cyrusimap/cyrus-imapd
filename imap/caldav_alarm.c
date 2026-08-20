@@ -711,8 +711,22 @@ static icalcomponent *vpatch_from_peruserdata(struct dlist *dl)
     return vpatch;
 }
 
+/* mboxlist_issubscribed already avoids building an auth state for a mailbox
+ * that grants '1' to nobody, but it still has to read the mbentry to find
+ * that out.  These callbacks run once per per-user annotation record, and
+ * has_alarms() runs on every record store, so hoist the answer to once per
+ * mailbox and keep the unsubscribed sharee down to a single subs-db fetch */
+static int is_sharee_subscribed(const char *mailbox, const char *userid,
+                                int mbox_autosub)
+{
+    if (!mbox_autosub) return mboxlist_checksub(mailbox, userid) == 0;
+
+    return mboxlist_issubscribed(mailbox, userid, NULL);
+}
+
 struct has_alarms_rock {
     uint32_t mbox_options;
+    int mbox_autosub;   /* mailbox ACL grants '1' to somebody */
     int *has_alarms;
 };
 
@@ -729,7 +743,7 @@ static int has_peruser_alarms_cb(const char *mailbox,
 
     if (!mboxname_userownsmailbox(userid, mailbox) &&
         ((hrock->mbox_options & OPT_IMAP_SHAREDSEEN) ||
-         mboxlist_checksub(mailbox, userid) != 0)) {
+         !is_sharee_subscribed(mailbox, userid, hrock->mbox_autosub))) {
         /* No per-user-data, or sharee has unsubscribed from this calendar */
         return 0;
     }
@@ -960,7 +974,11 @@ static int has_alarms(void *data, struct mailbox *mailbox,
     }
 
     /* Check all per-user-cal-data for VALARMs */
-    struct has_alarms_rock hrock = { mailbox->i.options, &has_alarms };
+    struct has_alarms_rock hrock = {
+        mailbox->i.options,
+        cyrus_acl_anygrants(mailbox_acl(mailbox), ACL_AUTOSUB),
+        &has_alarms
+    };
 
     syslog(LOG_DEBUG, "checking per-user-data");
     mailbox_get_annotate_state(mailbox, uid, NULL);
@@ -1244,6 +1262,7 @@ static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
 
 struct process_alarms_rock {
     uint32_t mbox_options;
+    int mbox_autosub;   /* mailbox ACL grants '1' to somebody */
     modseq_t createdmodseq; // for CalendarEvent ID
     icalcomponent *ical;
     struct lastalarm_data *alarm;
@@ -1266,7 +1285,7 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
 
     if (!mboxname_userownsmailbox(userid, mailbox) &&
         ((prock->mbox_options & OPT_IMAP_SHAREDSEEN) ||
-         mboxlist_checksub(mailbox, userid) != 0)) {
+         !is_sharee_subscribed(mailbox, userid, prock->mbox_autosub))) {
         /* No per-user-data, or sharee has unsubscribed from this calendar */
         return 0;
     }
@@ -1362,7 +1381,9 @@ static int process_valarms(struct mailbox *mailbox,
 
     /* Process VALARMs in per-user-cal-data */
     struct process_alarms_rock prock = {
-        mailbox->i.options, record->createdmodseq,
+        mailbox->i.options,
+        cyrus_acl_anygrants(mailbox_acl(mailbox), ACL_AUTOSUB),
+        record->createdmodseq,
         ical, &data, runtime, dryrun
     };
 
