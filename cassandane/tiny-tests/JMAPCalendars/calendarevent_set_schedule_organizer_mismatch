@@ -49,5 +49,5 @@ sub test_calendarevent_set_schedule_organizer_mismatch
 
     xlog $self, "We should have generated a syslog message about the mismatch";
     $self->assert_syslog_matches($self->{instance},
-        qr/Not scheduling calendar component/);
+        qr/event=caldav\.schedule\.skipped/);
 }

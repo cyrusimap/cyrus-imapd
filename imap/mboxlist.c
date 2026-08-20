@@ -6189,3 +6189,27 @@ EXPORTED json_t *mbentry_paths_json(const struct mboxlist_entry *mbentry)
 
     return jres;
 }
+
+EXPORTED void logfmt_push_mbentry(struct logfmt *lf, const mbentry_t *mbentry)
+{
+    if (mbentry) {
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+
+        logfmt_push_mbname(lf, "mbox.name", mbname);
+        logfmt_push(lf, "mbox.uniqueid", mbentry->uniqueid);
+        logfmt_push(lf, "mbox.mailboxid", mbentry->jmapid);
+        logfmt_push(lf, "mbox.type", mboxlist_mbtype_to_string(mbentry->mbtype));
+
+        mbname_free(&mbname);
+    }
+    else {
+        logfmt_push(lf, "mbox", NULL);
+    }
+}
+
+EXPORTED void logfmt_arg_mbentry(struct logfmt *lf,
+                                 const char *key __attribute__((unused)),
+                                 const void *value)
+{
+    logfmt_push_mbentry(lf, (const mbentry_t *) value);
+}

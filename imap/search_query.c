@@ -902,9 +902,9 @@ static void subquery_run_indexed(const char *serialised_sub __attribute__((unuse
             // only. But in lack of debug_assert let's rather log and
             // continue evaluating the query instead of aborting.
             char *s = search_expr_serialise(sub->indexed);
-            xsyslog_ev(LOG_ERR,
-                       "unexpected OR, expected DNF subclause",
-                       lf_s("indexed", s));
+            xsyslog_ev(LOG_ERR, "search.query.unexpected_op",
+                       lf_s("search.op", "OR"),
+                       lf_s("search.expr", s));
             free(s);
         }
         /* fall through */

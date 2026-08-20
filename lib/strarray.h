@@ -92,4 +92,22 @@ int strarray_cmp(const strarray_t *a, const strarray_t *b);
          idx < strarray_size(sa) && (str = strarray_nth(sa, idx));    \
          idx++)
 
+/* Push the array onto a logfmt event as key.0, key.1, ... -- one pair per
+ * element, so that a list stays machine-readable instead of becoming a
+ * joined string the reader has to split again.
+ *
+ * A NULL array logs key=~null~ and an empty one logs key="", the same way a
+ * NULL or empty string value would.  Otherwise only the indexed keys are
+ * logged, never the bare one.
+ *
+ * This is for short lists: scheduling addresses, flag names, that sort of
+ * thing.  syslog truncates long lines, so don't hand it something unbounded.
+ */
+struct logfmt;
+void logfmt_push_strarray(struct logfmt *lf, const char *key,
+                          const strarray_t *sa);
+void logfmt_arg_strarray(struct logfmt *lf, const char *key,
+                         const void *value);
+#define lf_strarray(key, sap) lf_fn(key, logfmt_arg_strarray, (sap))
+
 #endif /* __CYRUS_STRARRAY_H__ */

@@ -530,6 +530,7 @@ dist_noinst_SCRIPTS = \
     lib/mkchartable.pl \
     perl/sieve/scripts/sieveshell.pl \
     tools/arbitronsort.pl \
+    tools/lint-logfmt-keys \
     tools/fixsearchpath.pl \
     tools/fixup-zoneinfo.pl \
     tools/git-version.sh \
@@ -737,7 +738,7 @@ check_PROGRAMS += cunit/unit
 # To run unit tests under Valgrind, do:
 #     make VG=1 check
 # This applies to all check rules except check-fast.
-check-local: cunit/run
+check-local: cunit/run lint-logfmt-keys
 	@echo "Running unit tests"
 	$(PERL) cunit/run --verbose --tmpdir=$(CYRUS_CUNIT_TMPDIR)
 
@@ -769,6 +770,19 @@ check-discrete-%: cunit/run cunit/unit
 	$(PERL) cunit/run --discrete --tmpdir=$(CYRUS_CUNIT_TMPDIR) $*
 
 endif # CUNIT
+
+# Check that every logfmt key used in the source is registered in
+# doc/logfmt-keys.  See doc/README.logfmt.md.
+#
+# n.b. neither the target nor the script is named check-something.  The
+# check-% pattern rule above matches after the directory part is stripped,
+# so a "tools/check-logfmt-keys" prerequisite sends make off trying to run
+# a cunit suite called "tools/logfmt-keys".
+lint-logfmt-keys:
+	@echo "Checking logfmt keys"
+	$(AM_V_at)$(PERL) $(top_srcdir)/tools/lint-logfmt-keys $(top_srcdir)
+
+.PHONY: lint-logfmt-keys
 
 includedir=@includedir@/cyrus
 

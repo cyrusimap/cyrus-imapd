@@ -1,0 +1,48 @@
+Description:
+
+Groundwork for converting Cyrus's syslogging to logfmt.  The logfmt event
+and key vocabulary is now written down and enforced, xsyslog_ev() has
+helpers for booleans, times, durations, errors, optional fields and whole
+structs, and it no longer builds events that the log mask will discard.
+
+The handful of logfmt call sites that predated the vocabulary have been
+renamed to conform to it.  These events changed name and field names:
+
+  "unexpected OR, expected DNF subclause" -> search.query.unexpected_op
+  "Not scheduling calendar component..."  -> caldav.schedule.skipped
+  "append_setup_mbox failed"              -> jmap.calendarevent.move.failed
+  "append_copy failed"                    -> jmap.calendarevent.move.failed
+  "append_commit failed"                  -> jmap.calendarevent.move.failed
+  "mailbox_rewrite_index_record failed"   -> jmap.calendarevent.move.failed
+  "moved calendar event via fast path"    -> jmap.calendarevent.moved
+  "attachment text is not cached"         -> search.attachextract.uncached
+  "could not extract all attachment text" -> search.attachextract.incomplete
+  "giving up on mailbox that indexes..."  -> search.index.abandoned
+  "mailbox changed while extracting..."   -> search.index.mailbox_changed
+  "not updating indexed.db after..."      -> search.index.state.skipped
+  "bumping index generation"              -> search.index.generation.bumped
+  "committed Xapian transaction"          -> search.xapian.transaction.committed
+  "failed to commit transaction"          -> search.xapian.transaction.failed
+  "cannot calculate changes: search..."   -> jmap.querychanges.index_changed
+
+
+Documentation:
+
+doc/README.logfmt.md
+doc/logfmt-keys
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Deployments parsing the events listed above will need to update their
+tooling.  No other log output has changed yet.
+
+
+GitHub issue:
+
+None

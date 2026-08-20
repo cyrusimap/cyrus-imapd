@@ -1530,6 +1530,24 @@ EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
         case LF_LLX: logfmt_pushf(&lf, name, "%llx", arg->data[i].llu); break;
         case LF_F:   logfmt_pushf(&lf, name, "%f", arg->data[i].f);     break;
 
+        case LF_B:
+            logfmt_push(&lf, name, arg->data[i].d ? "1" : "0");
+            break;
+        case LF_TIME:
+            logfmt_pushf(&lf, name, "%lld", arg->data[i].lld);
+            break;
+        case LF_DURATION:
+            logfmt_pushf(&lf, name, "%.3f", arg->data[i].f);
+            break;
+
+        case LF_SKIP:
+            /* lf_s_opt()/lf_flag() decided this field doesn't apply */
+            break;
+
+        case LF_FN:
+            arg->data[i].fn.push(&lf, name, arg->data[i].fn.value);
+            break;
+
         case LF_S:
             logfmt_push(&lf, name, arg->data[i].s);
             break;
@@ -1554,8 +1572,7 @@ EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
         logfmt_push_caller(&lf, file, line, func);
     }
 
-    syslog(priority, "%s", logfmt_cstring(&lf));
-    logfmt_fini(&lf);
+    logfmt_emit(&lf, priority);
 
     errno = saved_errno;
 }

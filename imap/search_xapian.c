@@ -2443,17 +2443,17 @@ static int commit_transaction(xapian_update_receiver_t *tr)
     gettimeofday(&end, NULL);
     if (r) {
         tr->commit_failed = true; // keep track of failed commit
-        xsyslog_ev(LOG_ERR, "failed to commit transaction",
-                lf_s("mailbox", mailbox_name(tr->super.mailbox)),
-                lf_u("uncommitted", uncommitted),
-                lf_f("seconds", timesub(&start, &end)),
-                lf_s("error", error_message(r)));
+        xsyslog_ev(LOG_ERR, "search.xapian.transaction.failed",
+                lf_mailbox(tr->super.mailbox),
+                lf_u("search.uncommitted", uncommitted),
+                lf_duration("search.duration", timesub(&start, &end)),
+                lf_err("error", r));
         return r;
     }
 
-    xsyslog_ev(LOG_INFO, "committed Xapian transaction",
-                lf_u("committed", uncommitted),
-                lf_f("seconds", timesub(&start, &end)));
+    xsyslog_ev(LOG_INFO, "search.xapian.transaction.committed",
+                lf_u("search.committed", uncommitted),
+                lf_duration("search.duration", timesub(&start, &end)));
 
     tr->commits++;
     return 0;
@@ -2467,8 +2467,8 @@ static int commit_transaction(xapian_update_receiver_t *tr)
 static int update_indexeddb(xapian_update_receiver_t *tr)
 {
     if (tr->commit_failed) {
-        xsyslog_ev(LOG_ERR, "not updating indexed.db after failed commit",
-                lf_s("mailbox", mailbox_name(tr->super.mailbox)));
+        xsyslog_ev(LOG_ERR, "search.index.state.skipped",
+                lf_mailbox(tr->super.mailbox));
         return IMAP_IOERROR;
     }
 
@@ -2485,14 +2485,14 @@ static int update_indexeddb(xapian_update_receiver_t *tr)
              * createdmodseq suggested we had. We need to invalidate the
              * index generation. */
             tr->index_generation++;
-            xsyslog_ev(LOG_INFO, "bumping index generation",
-                    lf_s("mailbox", mailbox_name(tr->super.mailbox)),
-                    lf_llu("batch_lowest_createdmodseq",
+            xsyslog_ev(LOG_INFO, "search.index.generation.bumped",
+                    lf_mailbox(tr->super.mailbox),
+                    lf_llu("search.batch_lowest_createdmodseq",
                         tr->batch_lowest_createdmodseq),
-                    lf_llu("batch_highest_createdmodseq",
+                    lf_llu("search.batch_highest_createdmodseq",
                         tr->batch_highest_createdmodseq),
-                    lf_llu("highest_createdmodseq", tr->highest_createdmodseq),
-                    lf_llu("index_generation", tr->index_generation));
+                    lf_llu("search.createdmodseq", tr->highest_createdmodseq),
+                    lf_llu("search.generation", tr->index_generation));
         }
 
         /* Update the highest createdmodseq */

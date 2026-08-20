@@ -14,6 +14,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <syslog.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -381,6 +382,15 @@ void xsyslog_fn(int priority, const char *description,
                      + __GNUC_MINOR__ * 100     \
                      + __GNUC_PATCHLEVEL__)
 
+struct logfmt;
+
+/* Pushes some struct's fields onto an event.  `key` is the key to log the
+ * value under, for types that log a single field; types that log a whole
+ * set of fields under fixed keys ignore it.
+ */
+typedef void (*lf_push_fn)(struct logfmt *lf, const char *key,
+                           const void *value);
+
 typedef struct xsyslog_ev_arg {
     const char *name;
     int type;
@@ -396,6 +406,10 @@ typedef struct xsyslog_ev_arg {
         size_t zu;
         double f;
         const char *s;
+        struct {
+            lf_push_fn push;
+            const void *value;
+        } fn;
     };
 } xsyslog_ev_arg;
 
@@ -414,12 +428,36 @@ void _xsyslog_ev(int saved_errno, int priority, const char *event,
                  const char *file, int line, const char *func,
                  xsyslog_ev_arg_list *arg);
 
+/* Would syslog actually keep a message logged at this priority?
+ *
+ * setlogmask(0) asks libc for the current mask without changing it, which is
+ * just a read of a global.  We check before building the argument list so
+ * that masked-out events -- LOG_DEBUG, most of the time -- don't pay for
+ * formatting nobody will read.
+ */
+static inline int logfmt_want(int priority)
+{
+    return setlogmask(0) & LOG_MASK(LOG_PRI(priority));
+}
+
+/* Log a structured event.  See doc/README.logfmt.md.
+ *
+ * Arguments are built with the lf_*() macros below, e.g.
+ *
+ *     xsyslog_ev(LOG_ERR, "mailbox.append.failed",
+ *                lf_s("mbox.uniqueid", mailbox_uniqueid(mailbox)),
+ *                lf_u("msg.imapuid", record->uid),
+ *                lf_err("error", r));
+ *
+ * n.b. the arguments are only evaluated if the event will be logged.
+ */
 #define xsyslog_ev(priority, event, ...)                                    \
     do {                                                                    \
         int se = errno;                                                     \
-        _xsyslog_ev(se, priority, event,                                    \
-                    __FILE__, __LINE__, __func__,                           \
-                    XSYSLOG_EV_ARG_LIST(__VA_ARGS__));                      \
+        if (logfmt_want(priority))                                          \
+            _xsyslog_ev(se, priority, event,                                \
+                        __FILE__, __LINE__, __func__,                       \
+                        XSYSLOG_EV_ARG_LIST(__VA_ARGS__));                  \
     } while (0)
 
 enum xsyslog_ev_arg_type {
@@ -436,7 +474,12 @@ enum xsyslog_ev_arg_type {
     LF_F,
     LF_S,
     LF_UTF8,
-    LF_RAW
+    LF_RAW,
+    LF_B,
+    LF_TIME,
+    LF_DURATION,
+    LF_SKIP,
+    LF_FN
 };
 
 #define lf_c(key, value)    (xsyslog_ev_arg){ key, LF_C,    { .c   = value } }
@@ -458,6 +501,59 @@ enum xsyslog_ev_arg_type {
     buf_printf(&value, fmt, __VA_ARGS__);                                   \
     (xsyslog_ev_arg){ key, LF_RAW, { .s = buf_release(&value) } };          \
 })
+
+/* An argument that isn't there.  _xsyslog_ev() drops these, which is how the
+ * conditional helpers below manage to contribute nothing to the event.
+ */
+#define lf_skip()           (xsyslog_ev_arg){ "-", LF_SKIP, { .s = NULL } }
+
+/* A boolean, as 1 or 0.  Use this rather than lf_c(), which takes a char and
+ * would log lf_c("k", 1) as the control character 0x01.
+ */
+#define lf_b(key, value)    (xsyslog_ev_arg){ key, LF_B,                    \
+                                              { .d = (value) ? 1 : 0 } }
+
+/* A time_t, as epoch seconds. */
+#define lf_time(key, value) (xsyslog_ev_arg){ key, LF_TIME,                 \
+                                              { .lld = (long long)(value) } }
+
+/* An elapsed time, in seconds, to millisecond precision.  Always seconds:
+ * don't log milliseconds under a key that doesn't say so.
+ */
+#define lf_duration(key, secs)                                              \
+    (xsyslog_ev_arg){ key, LF_DURATION, { .f = (secs) } }
+
+/* A struct buf.  Takes a pointer, calls buf_cstring on it. */
+#define lf_buf(key, bufp)   lf_s(key, buf_cstring(bufp))
+
+/* A Cyrus error code, as its error_message() text.  The caller needs an
+ * *_err.h included for that, which anything with an `int r` will have.
+ */
+#define lf_err(key, r)      lf_s(key, error_message(r))
+
+/* A string, or nothing at all if it's NULL.
+ *
+ * This is for fields that only apply to some variants of an event.  Where a
+ * missing value is itself worth recording, use lf_s(), which logs ~null~.
+ */
+#define lf_s_opt(key, value) ({                                             \
+    const char *_lf_value = (value);                                        \
+    _lf_value ? lf_s(key, _lf_value) : lf_skip();                           \
+})
+
+/* key=1 if the condition holds, and nothing at all if it doesn't. */
+#define lf_flag(key, cond)  ((cond) ? lf_b(key, 1) : lf_skip())
+
+/* Log a whole struct, using a push function that knows its fields.
+ *
+ * lib/ can't see the structs that most events are about, so the actual
+ * helpers are declared alongside the struct they log -- lf_mailbox() in
+ * imap/mailbox.h, and so on.  Find them with:
+ *
+ *     $ git grep 'define lf_'
+ */
+#define lf_fn(key, pushfn, valuep)                                          \
+    (xsyslog_ev_arg){ key, LF_FN, { .fn = { (pushfn), (valuep) } } }
 
 /* Set up cyrus_gettime as a weak alias for a wrapper around clock_gettime.
  * We then use cyrus_gettime everywhere instead of clock_gettime, and unit

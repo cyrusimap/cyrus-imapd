@@ -4,6 +4,7 @@
 
 #include "strarray.h"
 #include <memory.h>
+#include "logfmt.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -479,4 +480,36 @@ EXPORTED void strarray_addfirst_case(strarray_t *sa, const char *s)
 {
     strarray_remove_all_case(sa, s);
     strarray_unshift(sa, s);
+}
+
+EXPORTED void logfmt_push_strarray(struct logfmt *lf, const char *key,
+                                   const strarray_t *sa)
+{
+    struct buf subkey = BUF_INITIALIZER;
+    int i;
+
+    if (!sa) {
+        /* as for the other push functions: logging mustn't be what crashes us */
+        logfmt_push(lf, key, NULL);
+        return;
+    }
+
+    if (!strarray_size(sa)) {
+        logfmt_push(lf, key, "");
+        return;
+    }
+
+    for (i = 0; i < strarray_size(sa); i++) {
+        buf_reset(&subkey);
+        buf_printf(&subkey, "%s.%d", key, i);
+        logfmt_push(lf, buf_cstring(&subkey), strarray_nth(sa, i));
+    }
+
+    buf_free(&subkey);
+}
+
+EXPORTED void logfmt_arg_strarray(struct logfmt *lf, const char *key,
+                                  const void *value)
+{
+    logfmt_push_strarray(lf, key, (const strarray_t *) value);
 }

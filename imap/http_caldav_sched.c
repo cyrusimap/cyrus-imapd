@@ -3049,14 +3049,14 @@ void sched_reply(const char *cal_ownerid, const char *sched_userid,
             icalcomponent_get_first_real_component(newical ? newical : oldical);
         if (comp && icalcomponent_get_first_invitee(comp)) {
             const char *organizer = get_organizer(comp);
-            char *addrs = strarray_join(schedule_addresses, ", ");
-            xsyslog_ev(LOG_WARNING, "Not scheduling calendar component, "
-                    "ORGANIZER or ATTENDEE not found in scheduling addresses",
-                    lf_s("ical_uid", icalcomponent_get_uid(comp)),
-                    lf_s("sched_userid", sched_userid),
-                    lf_s("organizer", organizer),
-                    lf_s("sched_addrs", addrs));
-            free(addrs);
+            /* neither the ORGANIZER nor any ATTENDEE matched one of the
+             * user's scheduling addresses, so there's nothing to schedule
+             */
+            xsyslog_ev(LOG_WARNING, "caldav.schedule.skipped",
+                    lf_s("cal.uid", icalcomponent_get_uid(comp)),
+                    lf_s("cal.organizer", organizer),
+                    lf_s("sched.userid", sched_userid),
+                    lf_strarray("sched.addresses", schedule_addresses));
         }
     }
 

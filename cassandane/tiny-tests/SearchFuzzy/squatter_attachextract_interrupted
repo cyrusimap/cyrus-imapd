@@ -154,6 +154,6 @@ sub test_squatter_attachextract_interrupted_mbox_recreated
         $self->create_message_in_mailbox("A", { subject => "recreatedmsg1" });
         $self->create_message_in_mailbox("A", { subject => "recreatedmsg2" });
         $self->create_message_in_mailbox("A", { subject => "recreatedmsg3" });
-    }, expect_syslog => qr/mailbox changed while extracting attachments/,
+    }, expect_syslog => qr/event=search\.index\.mailbox_changed/,
        expect_reindexed => ["recreatedmsg1", "recreatedmsg2", "recreatedmsg3"]);
 }

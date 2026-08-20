@@ -3405,5 +3405,18 @@ EXPORTED void logfmt_push_mbname(struct logfmt *lf,
 
     if (!key) key = "mbox.name";
 
+    if (!mbname) {
+        /* logging shouldn't be the thing that crashes us */
+        logfmt_push(lf, key, NULL);
+        return;
+    }
+
     logfmt_push(lf, key, mbname_extname(mbname, admin_namespace, NULL));
+}
+
+EXPORTED void logfmt_arg_mbname(struct logfmt *lf,
+                                const char *key,
+                                const void *value)
+{
+    logfmt_push_mbname(lf, key, (const mbname_t *) value);
 }

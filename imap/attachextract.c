@@ -408,11 +408,11 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     }
 
     if (attachextract_cacheonly) {
-        xsyslog_ev(LOG_DEBUG, "attachment text is not cached",
-                lf_s("guid", guidstr),
-                lf_s("type", axrec->type),
-                lf_s("subtype", axrec->subtype),
-                lf_s("cachefname", cachefname));
+        xsyslog_ev(LOG_DEBUG, "search.attachextract.uncached",
+                lf_s("msg.guid", guidstr),
+                lf_s("part.type", axrec->type),
+                lf_s("part.subtype", axrec->subtype),
+                lf_s("part.cachefile", cachefname));
         r = IMAP_NOTFOUND;
         goto done;
     }

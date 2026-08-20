@@ -1,13 +1,17 @@
 #include "cunit/unit.h"
 #include "lib/util.h"
 
+#include "imap/imap_err.h"
+
 #include "lib/libconfig.h"
 #include "lib/logfmt.h"
 #include "lib/sessionid.h"
+#include "lib/strarray.h"
 
 #include <syslog.h>
 #include <limits.h>
 #include <errno.h>
+#include <time.h>
 
 #define DBDIR "test-xsyslogev-dbdir"
 
@@ -353,6 +357,232 @@ static void test_trace_id(void)
     xsyslog_ev(LOG_ERR, "trace id test",
                         lf_d("first", 1));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_lf_b(void)
+{
+    int falsey = 0;
+
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_b"
+                           " yes=1 no=0 truthy=1 falsey=0");
+    xsyslog_ev(LOG_ERR, "test.lf_b",
+        lf_b("yes", 1), lf_b("no", 0), lf_b("truthy", 42),
+        lf_b("falsey", falsey));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_lf_time(void)
+{
+    time_t when = 1723150181;
+
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_time"
+                           " when=1723150181 epoch=0");
+    xsyslog_ev(LOG_ERR, "test.lf_time",
+        lf_time("when", when), lf_time("epoch", (time_t) 0));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_lf_duration(void)
+{
+    /* always seconds, always three decimal places, so that durations
+     * logged in different places are directly comparable
+     */
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_duration"
+                           " half=0.500 long=12.000 tiny=0.000 whole=3.142");
+    xsyslog_ev(LOG_ERR, "test.lf_duration",
+        lf_duration("half", 0.5),
+        lf_duration("long", 12.0),
+        lf_duration("tiny", 0.0004),
+        lf_duration("whole", 3.14159));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_lf_buf(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    buf_setcstr(&buf, "two words");
+
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_buf value=\"two words\"");
+    xsyslog_ev(LOG_ERR, "test.lf_buf", lf_buf("value", &buf));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    buf_free(&buf);
+}
+
+static void test_lf_err(void)
+{
+    struct buf escaped = BUF_INITIALIZER;
+    struct buf want = BUF_INITIALIZER;
+
+    logfmt_escape_bytestring(&escaped, error_message(IMAP_MAILBOX_NONEXISTENT));
+    buf_printf(&want, "event=test.lf_err error=%s", buf_cstring(&escaped));
+
+    CU_SYSLOG_MATCH_SUBSTR(buf_cstring(&want));
+    xsyslog_ev(LOG_ERR, "test.lf_err",
+        lf_err("error", IMAP_MAILBOX_NONEXISTENT));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    buf_free(&want);
+    buf_free(&escaped);
+}
+
+static void test_lf_s_opt(void)
+{
+    unsigned pat_line = 0, pat_gone = 0;
+
+    /* a NULL lf_s_opt() contributes nothing at all, where a NULL lf_s()
+     * would have logged ~null~
+     */
+    pat_line = CU_SYSLOG_MATCH_SUBSTR("event=test.lf_s_opt"
+                                      " here=yes null=~null~");
+    pat_gone = CU_SYSLOG_MATCH_SUBSTR("gone=");
+
+    xsyslog_ev(LOG_ERR, "test.lf_s_opt",
+        lf_s_opt("here", "yes"),
+        lf_s_opt("gone", NULL),
+        lf_s("null", NULL));
+
+    CU_ASSERT_SYSLOG(pat_line, 1);
+    CU_ASSERT_SYSLOG(pat_gone, 0);
+}
+
+static void test_lf_s_opt_evaluates_once(void)
+{
+    const char *values[] = { "first", "second" };
+    int i = 0;
+
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_s_opt_once value=first");
+    xsyslog_ev(LOG_ERR, "test.lf_s_opt_once",
+        lf_s_opt("value", values[i++]));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    CU_ASSERT_EQUAL(1, i);
+}
+
+static void test_lf_flag(void)
+{
+    unsigned pat_line = 0, pat_off = 0;
+
+    pat_line = CU_SYSLOG_MATCH_SUBSTR("event=test.lf_flag on=1 after=1");
+    pat_off = CU_SYSLOG_MATCH_SUBSTR("off=");
+
+    xsyslog_ev(LOG_ERR, "test.lf_flag",
+        lf_flag("on", 1),
+        lf_flag("off", 0),
+        lf_d("after", 1));
+
+    CU_ASSERT_SYSLOG(pat_line, 1);
+    CU_ASSERT_SYSLOG(pat_off, 0);
+}
+
+static void test_lf_strarray(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+    strarray_t empty = STRARRAY_INITIALIZER;
+    unsigned pat_line = 0, pat_bare = 0;
+
+    strarray_append(&sa, "one@example.com");
+    strarray_append(&sa, "two words");
+
+    /* one indexed key per element, and the bare key doesn't appear at all */
+    pat_line = CU_SYSLOG_MATCH_SUBSTR("event=test.lf_strarray"
+                                      " addrs.0=one@example.com"
+                                      " addrs.1=\"two words\" after=1");
+    pat_bare = CU_SYSLOG_MATCH_SUBSTR(" addrs=");
+
+    xsyslog_ev(LOG_ERR, "test.lf_strarray",
+        lf_strarray("addrs", &sa),
+        lf_d("after", 1));
+
+    CU_ASSERT_SYSLOG(pat_line, 1);
+    CU_ASSERT_SYSLOG(pat_bare, 0);
+
+    /* empty and NULL stay distinguishable, as they are for a string value */
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_strarray empty=\"\" null=~null~");
+    xsyslog_ev(LOG_ERR, "test.lf_strarray",
+        lf_strarray("empty", &empty),
+        lf_strarray("null", NULL));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    strarray_fini(&sa);
+}
+
+struct pair {
+    const char *one;
+    const char *two;
+};
+
+/* stands in for the real push functions, which live over in imap/ */
+static void push_pair(struct logfmt *lf, const char *key, const void *value)
+{
+    const struct pair *pair = value;
+    struct buf subkey = BUF_INITIALIZER;
+
+    buf_printf(&subkey, "%s.one", key);
+    logfmt_push(lf, buf_cstring(&subkey), pair->one);
+
+    buf_setcstr(&subkey, key);
+    buf_appendcstr(&subkey, ".two");
+    logfmt_push(lf, buf_cstring(&subkey), pair->two);
+
+    buf_free(&subkey);
+}
+
+static void test_lf_fn(void)
+{
+    struct pair pair = { "hello", "there" };
+
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_fn"
+                           " thing.one=hello thing.two=there");
+    xsyslog_ev(LOG_ERR, "test.lf_fn", lf_fn("thing", push_pair, &pair));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* the same struct under a different key */
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_fn old.one=hello old.two=there");
+    xsyslog_ev(LOG_ERR, "test.lf_fn", lf_fn("old", push_pair, &pair));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_no_args(void)
+{
+    CU_SYSLOG_MATCH_SUBSTR("event=test.no_args");
+    xsyslog_ev(LOG_ERR, "test.no_args");
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static int side_effects = 0;
+
+static int have_a_side_effect(void)
+{
+    side_effects++;
+
+    return 1;
+}
+
+static void test_masked_priority(void)
+{
+    int oldmask = setlogmask(LOG_UPTO(LOG_INFO));
+
+    /* a masked-out event isn't logged, and -- the point of the exercise --
+     * its arguments aren't even evaluated
+     */
+    side_effects = 0;
+    CU_SYSLOG_MATCH_SUBSTR("event=test.masked");
+    xsyslog_ev(LOG_DEBUG, "test.masked", lf_d("n", have_a_side_effect()));
+    CU_ASSERT_SYSLOG(/*all*/0, 0);
+    CU_ASSERT_EQUAL(0, side_effects);
+
+    /* ... and once it's not masked out, both happen again */
+    setlogmask(LOG_UPTO(LOG_DEBUG));
+
+    side_effects = 0;
+    CU_SYSLOG_MATCH_SUBSTR("event=test.unmasked n=1");
+    xsyslog_ev(LOG_DEBUG, "test.unmasked", lf_d("n", have_a_side_effect()));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+    CU_ASSERT_EQUAL(1, side_effects);
+
+    setlogmask(oldmask);
 }
 
 static int mess_with_errno(void)
