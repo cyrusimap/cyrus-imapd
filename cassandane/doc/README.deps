@@ -21,6 +21,21 @@ Cassandane needs the following software to work:
     Similar idea to Mail::IMAPTalk, but for JMAP/DAV/CalDAV/CardDAV
     respectively.  These are all available on CPAN.
 
+    Net::CalDAVTalk and Net::CardDAVTalk are vendored into cassandane/Net/,
+    and you want the vendored copies, not whatever CPAN has.  Net::CalDAVTalk
+    0.13 and Net::CardDAVTalk 0.10 rewrote both APIs around JSCalendar and
+    JSContact: NewContact takes a JSContact hashref rather than a vCard
+    object, Net::CardDAVTalk::VCard was removed outright, and a pile of
+    event fields were renamed.  Cassandane on this branch is written against
+    the older API, so the vendored copies pin the last releases that speak
+    it -- Net::CalDAVTalk 0.12 and Net::CardDAVTalk 0.09.  They're unmodified
+    CPAN copies, so don't hand-edit them; testrunner.pl's "use lib '.'" is
+    what makes them win over anything installed system-wide.
+
+    3.13 and later took the API migration instead, and vendor the newer
+    releases.  If you're backporting a cassandane change from there, expect
+    to have to translate it.
+
  * Encode::IMAPUTF7
     Needed by Mail::IMAPTalk
     CPAN package http://search.cpan.org/perldoc?Encode::IMAPUTF7
