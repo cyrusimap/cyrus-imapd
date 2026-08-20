@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+# CYR-3131: the HTTP/2 DATA-frame path must enforce maxmessagesize the way the
+# HTTP/1.x reader does.  Without it, a client can stream a body far larger than
+# the cap; the server buffers all of it (pre-auth memory exhaustion) and then
+# stores it.
+#
+# The request is an authenticated PUT of a *valid, oversized* calendar
+# resource.  It has to be a request the server will read a body for
+# (examine_request must return 0), or the body is discarded before the DATA
+# path runs; http2_request sends no Content-Length, so the declared-length
+# pre-check in http_parse_framing can't stand in for the DATA-path check under
+# test.  The body is a well-formed iCalendar above maxmessagesize (8k, set by
+# the attribute below) but well under the default icalendar_max_size, so that
+# *with* the cap the PUT is rejected and the resource is never created, while
+# *without* it the whole body is accepted and the event is stored.
+#
+# We assert on server state -- did the oversized event get stored? -- which is
+# unambiguous.  (The server answers an over-cap upload with repeated 413 header
+# blocks on the one stream, which Protocol::HTTP2 can't reduce to a single
+# status, so reading the response status would be fragile anyway.)
+sub test_data_frame_maxmessagesize
+    :SetMaxMessageSize(8k)
+    ($self)
+{
+    my $caldav = $self->{caldav};
+    $caldav->GetCalendars();  # provision the calendar home
+
+    my $rpath = '/dav/calendars/user/cassandane/Default/oversize.ics';
+    my $uid   = 'cyr3131-oversize@example.com';
+
+    my $pad = 'x' x (40 * 1024);
+    my $ical = <<"EOF";
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//CYR-3131//EN
+BEGIN:VEVENT
+UID:$uid
+DTSTAMP:20260101T000000Z
+DTSTART:20260101T100000Z
+DURATION:PT1H
+SUMMARY:oversize
+DESCRIPTION:$pad
+END:VEVENT
+END:VCALENDAR
+EOF
+    $ical =~ s/\r?\n/\r\n/g;
+    $self->assert(length($ical) > 8 * 1024);
+
+    xlog $self, "PUT an oversized (but valid) event over HTTP/2";
+    # The response is uninteresting here (see the comment above); we only care
+    # whether the body was stored, so ignore it -- and the repeated 413s may
+    # even prevent a clean terminal response.
+    eval { $self->http2_request(
+        method  => 'PUT',
+        path    => $rpath,
+        headers => [ 'content-type' => 'text/calendar' ],
+        body    => $ical,
+    ) };
+
+    xlog $self, "the oversized event must not have been stored";
+    my $stored = eval { $caldav->Request('GET', $rpath); 1 } ? 1 : 0;
+    $self->assert(!$stored,
+        "an oversized HTTP/2 body must be rejected, not stored");
+}
