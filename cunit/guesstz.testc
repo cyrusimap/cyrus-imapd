@@ -297,6 +297,44 @@ static void test_walk_is_name_ordered(void)
     json_decref(jdb);
 }
 
+/* An alias with a file of its own names the zone it aliases in
+ * TZID-ALIAS-OF, and stays out of the database so that a guess answers with
+ * the canonical zone rather than the alias. */
+static void test_aliasof_excluded(void)
+{
+    char *path = strconcat(zonedir, "/Europe/Berlin-alias.ics", (char *)NULL);
+    FILE *fp = fopen(path, "w");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
+    fprintf(fp, "%sBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin-alias\r\n"
+                "TZID-ALIAS-OF:Europe/Berlin\r\n%sEND:VTIMEZONE\r\n%s",
+            VCAL_BEGIN, BERLIN_BODY, VCAL_END);
+    fclose(fp);
+
+    char *dbwith = strconcat(zonedir, "/aliasof.db", (char *)NULL);
+    fp = fopen(dbwith, "w");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
+    int r = guesstz_create(zonedir,
+                           icaltime_from_string(TRSTART),
+                           icaltime_from_string(TREND), fp);
+    fclose(fp);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    guesstz_t *gtz = guesstz_open(dbwith);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+    char *json = guesstz_encode(gtz);
+    guesstz_close(&gtz);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(json);
+    CU_ASSERT_PTR_NULL(strstr(json, "Europe/Berlin-alias"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(json, "Europe/Berlin"));
+    free(json);
+
+    /* Leave the fixture as we found it for the tests after this one. */
+    CU_ASSERT_EQUAL(unlink(path), 0);
+    CU_ASSERT_EQUAL(unlink(dbwith), 0);
+    free(dbwith);
+    free(path);
+}
+
 /* The JSON dump round-trips the database header. */
 static void test_encode(void)
 {
