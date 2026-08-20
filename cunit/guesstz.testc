@@ -6,6 +6,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <jansson.h>
+
 #include "util.h"
 
 #include "imap/guesstz.h"
@@ -212,6 +214,31 @@ static void test_open_missing(void)
     guesstz_close(&gtz);
 }
 
+/* Encode a database for comparison against another one.  The header carries
+ * the time it was built at one-second resolution, so two databases built
+ * moments apart disagree on it whenever they straddle a second -- which says
+ * nothing about the zones they hold, so drop it. */
+static char *encode_for_compare(const char *path)
+{
+    guesstz_t *gtz = guesstz_open(path);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+    char *raw = guesstz_encode(gtz);
+    guesstz_close(&gtz);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(raw);
+
+    json_t *jdb = json_loads(raw, 0, NULL);
+    free(raw);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(jdb);
+
+    json_object_del(json_object_get(jdb, "config"), "createdAt");
+
+    char *encoded = json_dumps(jdb, JSON_SORT_KEYS|JSON_INDENT(2));
+    json_decref(jdb);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(encoded);
+
+    return encoded;
+}
+
 /* A zoneinfo directory may name an alias with a symlink to the zone it
  * aliases, and indexing one must not file that zone a second time. */
 static void test_symlinked_alias(void)
@@ -229,21 +256,12 @@ static void test_symlinked_alias(void)
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
     /* The database of the fixture without the symlink is our reference. */
-    guesstz_t *gtz = guesstz_open(dbpath);
-    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
-    char *want = guesstz_encode(gtz);
-    CU_ASSERT_PTR_NOT_NULL_FATAL(want);
-    guesstz_close(&gtz);
-
-    gtz = guesstz_open(path);
-    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
-    char *have = guesstz_encode(gtz);
-    CU_ASSERT_PTR_NOT_NULL_FATAL(have);
+    char *want = encode_for_compare(dbpath);
+    char *have = encode_for_compare(path);
     CU_ASSERT_STRING_EQUAL(have, want);
 
     free(have);
     free(want);
-    guesstz_close(&gtz);
 
     /* Leave the fixture as we found it for the tests after this one. */
     CU_ASSERT_EQUAL(unlink(alias), 0);
