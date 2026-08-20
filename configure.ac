@@ -1401,15 +1401,6 @@ AM_CONDITIONAL([IDLED], [test "$enable_idled" != "no"])
 if test "x$enable_idled" = "xyes"; then
         AC_DEFINE(USE_IDLED,[],[Build with idled functionality])
 fi
-dnl
-dnl see if we're compiling with NNTP support
-dnl
-AC_ARG_ENABLE(nntp,
-        [AS_HELP_STRING([--enable-nntp], [enable NNTP support])],,[enable_nntp="no";])
-AM_CONDITIONAL([NNTPD], [test "$enable_nntp" != "no"])
-if test "x$enable_nntp" = "xyes"; then
-        AC_DEFINE(USE_NNTPD,[],[Build with nntpd functionality])
-fi
 
 dnl
 dnl see if we're compiling the Murder support programs
@@ -2432,7 +2423,6 @@ Cyrus Server configured components
    autocreate:         $enable_autocreate
    idled:              $enable_idled
    murder:             $enable_murder
-   nntpd:              $enable_nntp
    replication:        $enable_replication
    sieve:              $enable_sieve
    srs:                $enable_srs

@@ -1,0 +1,22 @@
+
+Description:
+
+Support for NNTP and the associated tooling has been removed
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+The nntptimeout and news* options have been deprecated.
+
+
+Upgrade instructions:
+
+Any SERVICES entries in cyrus.conf utilizing the nntpd binary
+should be removed.
+Any EVENTS entries in cyrus.conf utilizing the fetchnews binary
+should be removed.
