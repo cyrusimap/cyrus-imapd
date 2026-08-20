@@ -269,6 +269,34 @@ static void test_symlinked_alias(void)
     free(alias);
 }
 
+/* The zoneinfo directory is walked in name order, so a zone's place in the
+ * database doesn't depend on the order the filesystem hands its entries
+ * back.  The fixture writes Europe/Berlin before America/New_York, so
+ * creation order and name order disagree, and preftzs is stored in database
+ * order -- if the walk followed readdir this would be the writing order on
+ * some filesystems and not others. */
+static void test_walk_is_name_ordered(void)
+{
+    guesstz_t *gtz = guesstz_open(dbpath);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+    char *json = guesstz_encode(gtz);
+    guesstz_close(&gtz);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(json);
+
+    json_t *jdb = json_loads(json, 0, NULL);
+    free(json);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(jdb);
+
+    json_t *jpreftzs = json_object_get(jdb, "preftzs");
+    CU_ASSERT_EQUAL_FATAL(json_array_size(jpreftzs), 2);
+    CU_ASSERT_STRING_EQUAL(json_string_value(json_array_get(jpreftzs, 0)),
+                           "America/New_York");
+    CU_ASSERT_STRING_EQUAL(json_string_value(json_array_get(jpreftzs, 1)),
+                           "Europe/Berlin");
+
+    json_decref(jdb);
+}
+
 /* The JSON dump round-trips the database header. */
 static void test_encode(void)
 {

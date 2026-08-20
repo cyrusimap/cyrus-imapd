@@ -1144,12 +1144,23 @@ static void add_vtimezone(icalarray *timezones, icalcomponent *vtz,
     icalarray_free(icalobs);
 }
 
+/* Walk the zoneinfo directory in name order.  fts_open with no comparator
+ * hands back each directory in readdir order, which differs between
+ * filesystems - and a zone's position in the database is what breaks ties
+ * between zones whose observances are identical, of which IANA has many.  So
+ * without this the database, and the guesses it answers with, depend on how
+ * the zoneinfo directory happens to be laid out on disk. */
+static int compare_ftsent(const FTSENT **a, const FTSENT **b)
+{
+    return strcmp((*a)->fts_name, (*b)->fts_name);
+}
+
 EXPORTED int guesstz_create(const char *zoneinfo_dir,
                    icaltimetype trstart, icaltimetype trend,
                    FILE *fp)
 {
     char *paths[2] = { (char *) zoneinfo_dir, NULL };
-    FTS *fts = fts_open(paths, FTS_PHYSICAL, NULL);
+    FTS *fts = fts_open(paths, FTS_PHYSICAL, compare_ftsent);
     if (!fts) {
         fprintf(stderr, "fts_open(%s): %s\n", zoneinfo_dir, strerror(errno));
         return EX_IOERR;
