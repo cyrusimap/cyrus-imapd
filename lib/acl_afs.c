@@ -22,6 +22,40 @@
 #include "lib/libcyr_cfg.h"
 
 /*
+ * Return non-zero if any positive ACE in 'acl' grants any right in 'mask'.
+ * A cheap way to skip a per-identifier rights calculation entirely: no
+ * positive grant means nobody can hold the right, whatever the auth state,
+ * since negative ACEs only ever take rights away.
+ */
+EXPORTED int cyrus_acl_anygrants(const char *acl, int mask)
+{
+    const char *thisid, *rights, *nextid;
+
+    for (thisid = acl; thisid && *thisid; thisid = nextid) {
+        rights = strchr(thisid, '\t');
+        if (!rights) break;
+        rights++;
+
+        nextid = strchr(rights, '\t');
+        if (!nextid) break;
+
+        if (*thisid != '-') {
+            char *rightstr = xstrndup(rights, nextid - rights);
+            int thismask = 0;
+
+            cyrus_acl_strtomask(rightstr, &thismask);
+            free(rightstr);
+
+            if (thismask & mask) return 1;
+        }
+
+        nextid++;
+    }
+
+    return 0;
+}
+
+/*
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
  */
 EXPORTED int cyrus_acl_myrights(const struct auth_state *auth_state, const char *origacl)
