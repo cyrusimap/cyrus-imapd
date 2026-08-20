@@ -1,0 +1,139 @@
+#!perl
+use Cassandane::Tiny;
+
+# The emails of this test, in the order that sorting by receivedAt ascending
+# puts them in. Each names the keywords it is created with.
+my @EMAILS = (
+    { subject    => 'flagged1',
+      receivedAt => '2020-01-01T00:00:00Z',
+      keywords   => { '$flagged' => JSON::true } },
+    { subject    => 'plain',
+      receivedAt => '2021-01-01T00:00:00Z',
+      keywords   => {} },
+    { subject    => 'flagged2',
+      receivedAt => '2022-01-01T00:00:00Z',
+      keywords   => { '$flagged' => JSON::true } },
+    { subject    => 'draft',
+      receivedAt => '2023-01-01T00:00:00Z',
+      keywords   => { '$draft' => JSON::true } },
+);
+
+# Query the emails above with a category sort that groups the flagged emails
+# first and the drafts second, and assert the order of the result and its
+# groupByCounts for both Email/query implementations.
+sub assert_email_query_sort_category ($self, %params)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing(
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/performance',
+    );
+
+    my $mbox = $user->mailboxes->create({ name => 'A' });
+
+    my %id_by_subject;
+    for my $spec (@EMAILS) {
+        my $email = $user->emails->create({
+            mailboxIds    => { $mbox->id => JSON::true },
+            keywords      => $spec->{keywords},
+            subject       => $spec->{subject},
+            receivedAt    => $spec->{receivedAt},
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+        });
+        $id_by_subject{$spec->{subject}} = q{} . $email->id;
+    }
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $sort = [
+        {
+            property    => 'category',
+            isAscending => $params{is_ascending},
+            groupBy     => [
+                { hasKeyword => '$flagged' },
+                { hasKeyword => '$draft' },
+            ],
+        },
+        {
+            property    => 'receivedAt',
+            isAscending => JSON::true,
+        },
+    ];
+
+    # Query once per implementation. The filter matches every email, and its
+    # body condition makes the query eligible for guidsearch.
+    my @methods;
+    for my $impl (qw(guidsearch uidsearch)) {
+        push @methods, [ 'Email/query', {
+            filter            => { body => 'hello' },
+            sort              => $sort,
+            disableGuidSearch => $impl eq 'uidsearch'
+                                    ? JSON::true : JSON::false,
+            ($params{position} ? (position => $params{position}) : ()),
+            ($params{limit}    ? (limit    => $params{limit})    : ()),
+        }, $impl ];
+    }
+
+    my $res = $jmap->request(\@methods);
+    $res->assert_successful;
+
+    my @want_ids = map { $id_by_subject{$_} } $params{subjects}->@*;
+
+    for my $impl (qw(guidsearch uidsearch)) {
+        my $args = $res->paragraph_by_client_id($impl)
+                       ->single('Email/query')->arguments;
+
+        $self->assert_cmp_deeply(
+            $impl eq 'guidsearch' ? jtrue() : jfalse(),
+            $args->{performance}{details}{isGuidSearch},
+            "isGuidSearch for $impl",
+        );
+
+        $self->assert_cmp_deeply(\@want_ids, $args->{ids}, "ids for $impl");
+
+        # The email matching no groupBy filter is in no group
+        $self->assert_cmp_deeply([2, 1], $args->{groupByCounts},
+            "groupByCounts for $impl");
+    }
+}
+
+sub test_email_query_sort_category__ascending
+    :JMAPExtensions
+    ($self)
+{
+    # Sort the flagged emails first, then the draft, then what matched no
+    # groupBy filter
+    $self->assert_email_query_sort_category(
+        is_ascending => JSON::true,
+        subjects     => [ qw(flagged1 flagged2 draft plain) ],
+    );
+}
+
+sub test_email_query_sort_category__descending
+    :JMAPExtensions
+    ($self)
+{
+    # Sort the categories in reverse order, but keep the emails within each
+    # of them in the order of receivedAt
+    $self->assert_email_query_sort_category(
+        is_ascending => JSON::false,
+        subjects     => [ qw(plain draft flagged1 flagged2) ],
+    );
+}
+
+sub test_email_query_sort_category__window
+    :JMAPExtensions
+    ($self)
+{
+    # Return a window over the result. Sorting it and counting its categories
+    # still needs the whole result, which the groupByCounts assert covers.
+    $self->assert_email_query_sort_category(
+        is_ascending => JSON::true,
+        position     => 1,
+        limit        => 2,
+        subjects     => [ qw(flagged2 draft) ],
+    );
+}

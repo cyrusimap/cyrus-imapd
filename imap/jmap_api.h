@@ -592,6 +592,7 @@ struct jmap_comparator {
     const char *property;
     short is_ascending;
     const char *collation;
+    json_t *jcomp;   /* the Comparator object, for non-standard properties */
 };
 
 typedef int jmap_comparator_parse_cb(jmap_req_t *req, struct jmap_comparator *comp,

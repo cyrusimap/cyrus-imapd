@@ -1,0 +1,141 @@
+#!perl
+use Cassandane::Tiny;
+
+# Three threads of two emails each. A thread counts as unread unless every
+# one of its emails is seen, so the first and the last thread are unread.
+# The emails are created in the order below, which is also the order that
+# sorting by receivedAt ascending puts them in.
+my @EMAILS = (
+    { messageId  => 'unread_a1',
+      references => 'unread_a',
+      receivedAt => '2020-01-01T00:00:00Z',
+      keywords   => {} },
+    { messageId  => 'unread_a2',
+      references => 'unread_a',
+      receivedAt => '2021-01-01T00:00:00Z',
+      keywords   => {} },
+    { messageId  => 'read_b1',
+      references => 'read_b',
+      receivedAt => '2022-01-01T00:00:00Z',
+      keywords   => { '$seen' => JSON::true } },
+    { messageId  => 'read_b2',
+      references => 'read_b',
+      receivedAt => '2023-01-01T00:00:00Z',
+      keywords   => { '$seen' => JSON::true } },
+    { messageId  => 'unread_c1',
+      references => 'unread_c',
+      receivedAt => '2024-01-01T00:00:00Z',
+      keywords   => {} },
+    { messageId  => 'unread_c2',
+      references => 'unread_c',
+      receivedAt => '2025-01-01T00:00:00Z',
+      keywords   => { '$seen' => JSON::true } },
+);
+
+# Sort the emails above by a category that puts the unread threads first,
+# and within each category by receivedAt descending. Assert the result and
+# its groupByCounts for both Email/query implementations.
+sub assert_email_query_sort_category_threads ($self, %params)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing(
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/performance',
+    );
+
+    my $mbox = $user->mailboxes->create({ name => 'A' });
+
+    my %id_by_messageid;
+    for my $spec (@EMAILS) {
+        my $email = $user->emails->create({
+            mailboxIds    => { $mbox->id => JSON::true },
+            keywords      => $spec->{keywords},
+            messageId     => [ "$spec->{messageId}\@local" ],
+            references    => [ "$spec->{references}\@local" ],
+            subject       => "Re: $spec->{references}",
+            receivedAt    => $spec->{receivedAt},
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+        });
+        $id_by_messageid{$spec->{messageId}} = q{} . $email->id;
+    }
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $sort = [
+        {
+            property    => 'category',
+            isAscending => JSON::true,
+            groupBy     => [{
+                operator   => 'NOT',
+                conditions => [ { allInThreadHaveKeyword => '$seen' } ],
+            }],
+        },
+        {
+            property    => 'receivedAt',
+            isAscending => JSON::false,
+        },
+    ];
+
+    # Query once per implementation. The filter matches every email, and its
+    # body condition makes the query eligible for guidsearch.
+    my @methods;
+    for my $impl (qw(guidsearch uidsearch)) {
+        push @methods, [ 'Email/query', {
+            filter            => { body => 'hello' },
+            sort              => $sort,
+            collapseThreads   => $params{collapse_threads},
+            disableGuidSearch => $impl eq 'uidsearch'
+                                    ? JSON::true : JSON::false,
+        }, $impl ];
+    }
+
+    my $res = $jmap->request(\@methods);
+    $res->assert_successful;
+
+    my @want_ids = map { $id_by_messageid{$_} } $params{messageIds}->@*;
+
+    for my $impl (qw(guidsearch uidsearch)) {
+        my $args = $res->paragraph_by_client_id($impl)
+                       ->single('Email/query')->arguments;
+
+        $self->assert_cmp_deeply(
+            $impl eq 'guidsearch' ? jtrue() : jfalse(),
+            $args->{performance}{details}{isGuidSearch},
+            "isGuidSearch for $impl",
+        );
+
+        $self->assert_cmp_deeply(\@want_ids, $args->{ids}, "ids for $impl");
+
+        $self->assert_cmp_deeply($params{counts}, $args->{groupByCounts},
+            "groupByCounts for $impl");
+    }
+}
+
+sub test_email_query_sort_category_threads__uncollapsed
+    :JMAPExtensions
+    ($self)
+{
+    $self->assert_email_query_sort_category_threads(
+        collapse_threads => JSON::false,
+        messageIds => [ qw(unread_c2 unread_c1 unread_a2 unread_a1
+                           read_b2 read_b1) ],
+        counts => [ 4 ],
+    );
+}
+
+sub test_email_query_sort_category_threads__collapsed
+    :JMAPExtensions
+    ($self)
+{
+    # The representative of a thread is its first email in sort order, so
+    # the categories must be assigned before the threads are collapsed, and
+    # the counts are over the collapsed result.
+    $self->assert_email_query_sort_category_threads(
+        collapse_threads => JSON::true,
+        messageIds => [ qw(unread_c2 unread_a2 read_b2) ],
+        counts => [ 2 ],
+    );
+}
