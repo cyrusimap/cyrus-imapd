@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+# A basic exercise of the HTTP/2 client library and the server's cleartext
+# (prior-knowledge) HTTP/2 support: store a calendar resource with a PUT, then
+# read it back with a GET, both over HTTP/2, and check the bytes survive the
+# round trip.  This proves request bodies (DATA frames out) and response bodies
+# (DATA frames in) both work.
+sub test_put_get_roundtrip ($self)
+{
+    # Provision the calendar home so the PUT has a collection to land in.
+    $self->{caldav}->GetCalendars();
+
+    my $rpath = '/dav/calendars/user/cassandane/Default/roundtrip.ics';
+    my $uid   = 'cyr3396-roundtrip@example.com';
+
+    my $ical = <<"EOF";
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//HttpH2//EN
+BEGIN:VEVENT
+UID:$uid
+DTSTAMP:20260101T000000Z
+DTSTART:20260101T100000Z
+DURATION:PT1H
+SUMMARY:HTTP/2 round trip
+END:VEVENT
+END:VCALENDAR
+EOF
+    $ical =~ s/\r?\n/\r\n/g;
+
+    xlog $self, "PUT the event over HTTP/2";
+    my $put = $self->http2_request(
+        method  => 'PUT',
+        path    => $rpath,
+        headers => [ 'content-type' => 'text/calendar; charset=utf-8' ],
+        body    => $ical,
+    );
+    $self->assert_num_equals(201, $put->{status});
+
+    xlog $self, "GET it back over HTTP/2";
+    my $get = $self->http2_request(method => 'GET', path => $rpath);
+    $self->assert_num_equals(200, $get->{status});
+    $self->assert_matches(qr/\bBEGIN:VCALENDAR\b/, $get->{body});
+    $self->assert_matches(qr/\Q$uid\E/, $get->{body});
+
+    xlog $self, "an unauthenticated GET of the same resource is refused";
+    my $anon = $self->http2_request(
+        method   => 'GET',
+        path     => $rpath,
+        username => undef,
+    );
+    $self->assert_num_equals(401, $anon->{status});
+}
