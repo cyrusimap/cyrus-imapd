@@ -8,6 +8,3 @@ Space-separated list of relative URLs (paths) rooted at
 limit served static content to only those paths specified (returning "404
 Not Found" to any other client requested URLs).  Otherwise, httpd will
 serve any content found in *httpdocroot*.
-
-Note that any path specified by :imapdconf:`rss_feedlist_template` is an
-exception to this rule.
