@@ -1862,7 +1862,12 @@ sub _syslog_line_is_error
     return scalar $line =~ $error_severity
         if $line =~ m/\]: event=/;
 
-    return scalar $line =~ m/ERROR|TRACELOG|Unknown code ____/;
+    # "NO_ERROR" is nghttp2's name for a clean HTTP/2 stream/connection close;
+    # httpd logs it on every close, so don't let its ERROR substring trip the
+    # text match.
+    (my $text = $line) =~ s/\bNO_ERROR\b//g;
+
+    return scalar $text =~ m/ERROR|TRACELOG|Unknown code ____/;
 }
 
 sub _check_syslog
