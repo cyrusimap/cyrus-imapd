@@ -94,7 +94,35 @@ struct notify_rock {
     json_t *msg;
     pid_t last_pid;
     arrayu64_t *failed_pids;
+    /* one message fans out to every registered client, and several of them
+     * can be the same user, so keep the auth state the '1' right needs for
+     * the length of the fan-out rather than per client.  the userid is our
+     * own copy: the caller's comes out of the row's json, which goes away
+     * when that row's callback returns */
+    char *authstate_userid;
+    struct auth_state *authstate;
 };
+
+/* is userid subscribed to mbentry, counting the ACL_AUTOSUB grant?
+ * mboxlist_issubscribed answers this, but it has to read the mbentry to
+ * decide whether the right is in play and it can't hold an auth state
+ * across calls -- we have the mbentry already and the rock outlives the
+ * fan-out, so do the same steps here and keep both */
+static int is_subscribed(struct notify_rock *nrock,
+                         const mbentry_t *mbentry, const char *userid)
+{
+    if (mboxlist_checksub(mbentry->name, userid) == 0) return 1;
+    if (!cyrus_acl_anygrants(mbentry->acl, ACL_AUTOSUB)) return 0;
+
+    if (strcmpsafe(nrock->authstate_userid, userid)) {
+        auth_freestate(nrock->authstate);
+        free(nrock->authstate_userid);
+        nrock->authstate = auth_newstate(userid);
+        nrock->authstate_userid = xstrdup(userid);
+    }
+
+    return cyrus_acl_myrights(nrock->authstate, mbentry->acl) & ACL_AUTOSUB;
+}
 
 static int notify_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -156,14 +184,11 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
                 notify = 1;
             break;
 
-        case FILTER_SUBSCRIBED: {
+        case FILTER_SUBSCRIBED:
             /* keyval is userid */
-            strarray_t *sublist = mboxlist_sublist(keyval);
-            if (strarray_contains(sublist, mbentry->name))
+            if (is_subscribed(nrock, mbentry, keyval))
                 notify = 1;
-            strarray_free(sublist);
             break;
-        }
 
         case FILTER_SUBTREE:
             json_array_foreach(keys, i, key) {
@@ -285,7 +310,7 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
         const char *jevent = json_string_value(json_object_get(msg, "event"));
         enum event_type event = name_to_mboxevent(jevent);
         arrayu64_t failed_pids = ARRAYU64_INITIALIZER;
-        struct notify_rock nrock = { msg, 0, &failed_pids };
+        struct notify_rock nrock = { msg, 0, &failed_pids, NULL, NULL };
 
         if (verbose || debugmode) {
             syslog(LOG_DEBUG, "idle notify '%s'", jevent);
@@ -318,6 +343,8 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
         }
 
         arrayu64_fini(&failed_pids);
+        auth_freestate(nrock.authstate);
+        free(nrock.authstate_userid);
     }
     else {
         syslog(LOG_ERR, "unrecognized message: %s", type);
