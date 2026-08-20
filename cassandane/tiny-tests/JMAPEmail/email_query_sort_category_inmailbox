@@ -1,0 +1,94 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_sort_category_inmailbox
+    :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing(
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/performance',
+    );
+
+    my $mboxa = $user->mailboxes->create({ name => 'A' });
+    my $mboxb = $user->mailboxes->create({ name => 'B' });
+
+    # The emails are created in the order below, which is also the order that
+    # sorting by receivedAt ascending puts them in.
+    my @emails = (
+        { subject    => 'in_a',
+          receivedAt => '2020-01-01T00:00:00Z',
+          mailboxes  => [ $mboxa ] },
+        { subject    => 'in_b',
+          receivedAt => '2021-01-01T00:00:00Z',
+          mailboxes  => [ $mboxb ] },
+        { subject    => 'in_both',
+          receivedAt => '2022-01-01T00:00:00Z',
+          mailboxes  => [ $mboxa, $mboxb ] },
+    );
+
+    my %id_by_subject;
+    for my $spec (@emails) {
+        my $email = $user->emails->create({
+            mailboxIds    => { map { $_->id => JSON::true }
+                                   $spec->{mailboxes}->@* },
+            subject       => $spec->{subject},
+            receivedAt    => $spec->{receivedAt},
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+        });
+        $id_by_subject{$spec->{subject}} = q{} . $email->id;
+    }
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $sort = [
+        {
+            property    => 'category',
+            isAscending => JSON::true,
+            groupBy     => [ { inMailbox => q{} . $mboxb->id } ],
+        },
+        {
+            property    => 'receivedAt',
+            isAscending => JSON::true,
+        },
+    ];
+
+    # Query once per implementation. The filter matches every email, and its
+    # body condition makes the query eligible for guidsearch. It does not
+    # read mailboxes, so only the category sort does.
+    my @methods;
+    for my $impl (qw(guidsearch uidsearch)) {
+        push @methods, [ 'Email/query', {
+            filter            => { body => 'hello' },
+            sort              => $sort,
+            disableGuidSearch => $impl eq 'uidsearch'
+                                    ? JSON::true : JSON::false,
+        }, $impl ];
+    }
+
+    my $res = $jmap->request(\@methods);
+    $res->assert_successful;
+
+    # An Email is in a mailbox if any of its copies is, so the email having
+    # a copy in each mailbox is in the category of mailbox B
+    my @want_ids = map { $id_by_subject{$_} } qw(in_b in_both in_a);
+
+    for my $impl (qw(guidsearch uidsearch)) {
+        my $args = $res->paragraph_by_client_id($impl)
+                       ->single('Email/query')->arguments;
+
+        $self->assert_cmp_deeply(
+            $impl eq 'guidsearch' ? jtrue() : jfalse(),
+            $args->{performance}{details}{isGuidSearch},
+            "isGuidSearch for $impl",
+        );
+
+        $self->assert_cmp_deeply(\@want_ids, $args->{ids}, "ids for $impl");
+        $self->assert_cmp_deeply([2], $args->{groupByCounts},
+            "groupByCounts for $impl");
+    }
+}
