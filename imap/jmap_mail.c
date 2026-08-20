@@ -1474,6 +1474,13 @@ static void _email_search_type(search_expr_t *parent, const char *s)
 
 /* ====================================================================== */
 
+static void emailsearch_readable_folders(jmap_req_t *req, bitvector_t *folders);
+
+/* JMAP defines the $seen keyword as a property of the Email, so an Email is
+ * seen if every copy of it that this request may read is seen. That is how
+ * Email/get reports it in _email_keywords_to_jmap(), and it is what the
+ * guidsearch implementation of Email/query evaluates from G records. */
+
 struct jmapseen_attrdata {
     struct jmapseen_folder {
         seqset_t *seendb_uids;
@@ -1484,6 +1491,7 @@ struct jmapseen_attrdata {
             jmapseen_ignore
         } seen_source;
     } *folders;
+    bitvector_t readable_folders;
     int numfolders;
     char *userid;
     struct seen *seendb;
@@ -1523,6 +1531,8 @@ static struct jmapseen_attrdata *jmapseen_attrdata_new(jmap_req_t *req)
     if (ad->numfolders) {
         ad->folders = xzmalloc(ad->numfolders * sizeof(struct jmapseen_folder));
     }
+    bv_init(&ad->readable_folders);
+    emailsearch_readable_folders(req, &ad->readable_folders);
 
     return ad;
 }
@@ -1537,6 +1547,7 @@ static void jmapseen_attrdata_free(struct jmapseen_attrdata **adp)
         if (ad->folders[i].seendb_uids)
             seqset_free(&ad->folders[i].seendb_uids);
     }
+    bv_fini(&ad->readable_folders);
     xzfree(ad->folders);
     xzfree(ad->userid);
     xzfree(*adp);
@@ -1642,16 +1653,21 @@ static enum jmapseen_source jmapseen_folder_source(struct jmapseen_attrdata *ad,
     return seen_source;
 }
 
-static int jmapseen_has_seenflag(struct jmapseen_attrdata *ad,
-                                 struct conversations_state *cstate,
-                                 uint32_t foldernum,
-                                 uint32_t uid,
-                                 uint32_t system_flags)
+static int jmapseen_copy_seen(struct jmapseen_attrdata *ad,
+                              struct conversations_state *cstate,
+                              uint32_t foldernum,
+                              uint32_t uid,
+                              uint32_t system_flags)
 {
+    /* Returns 1 if this copy of an email is seen, 0 if it is not, and -1 if
+     * it does not count towards the $seen keyword of the email at all */
+    if (foldernum >= (uint32_t) ad->numfolders) return -1;
+    if (!bv_isset(&ad->readable_folders, foldernum)) return -1;
+
     enum jmapseen_source seen_source =
         jmapseen_folder_source(ad, cstate, foldernum);
 
-    if (seen_source == jmapseen_ignore) return 0;
+    if (seen_source == jmapseen_ignore) return -1;
 
     if (seen_source == jmapseen_db) {
         // read seen flag from seendb
@@ -1706,19 +1722,19 @@ static int jmapseen_guid_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct jmapseen_guid_counts *counts = rock;
 
-    if (jmapseen_folder_source(counts->ad, counts->cstate, rec->foldernum) ==
-            jmapseen_ignore)
+    if (rec->part) return 0;
+
+    if ((rec->system_flags & FLAG_DELETED) ||
+        (rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
         return 0;
-
-    if (!(rec->system_flags & FLAG_DELETED) &&
-        !(rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-
-        counts->exists++;
-
-        if (jmapseen_has_seenflag(counts->ad, counts->cstate, rec->foldernum,
-                    rec->uid, rec->system_flags))
-            counts->seen++;
     }
+
+    int is_seen = jmapseen_copy_seen(counts->ad, counts->cstate,
+            rec->foldernum, rec->uid, rec->system_flags);
+    if (is_seen < 0) return 0;
+
+    counts->exists++;
+    if (is_seen) counts->seen++;
 
     return 0;
 }
@@ -1738,41 +1754,15 @@ static int emailsearch_jmapseen_match(message_t *m,
         return 0;
     }
 
-    uint32_t uid, flags;
-    message_get_uid(m, &uid);
-    message_get_systemflags(m, &flags);
-    int has_seenflag = jmapseen_has_seenflag(ad, md->cstate, md->foldernum, uid, flags);
+    // The email is seen if all its readable copies are seen
+    const struct message_guid *guid = NULL;
+    if (message_get_guid(m, &guid)) return 0;
 
-    // Trash only counts its own seen messages
-    if (md->foldernum == md->cstate->trashfolder)
-        return has_seenflag;
-
-    // The mail is unseen if it unseen in this mailbox
-    if (!has_seenflag)
-        return 0;
-
-    if (ad->folders[md->foldernum].seen_source == jmapseen_flags) {
-        // The email is seen if we do not need to look at seendb and
-        // the whole conversation is seen
-        conversation_id_t cid = NULLCONVERSATION;
-        if (!message_get_cid(m, &cid)) {
-            conversation_t conv = CONVERSATION_INIT;
-            if (!conversation_load_advanced(md->cstate, cid, &conv, 0)) {
-                int is_seen = conv.exists && conv.unseen == 0;
-                conversation_fini(&conv);
-                if (is_seen) return 1;
-            }
-        }
-    }
-
-    // The email is seen if all G records for the guid are seen
     struct jmapseen_guid_counts counts = { .ad = ad, .cstate = md->cstate };
-    const struct message_guid *guid;
-    if (!message_get_guid(m, &guid)) {
-        conversations_guid_foreach(md->cstate,
-                message_guid_encode(guid), jmapseen_guid_cb, &counts);
-    }
-    return counts.exists == counts.seen;
+    conversations_guid_foreach(md->cstate,
+            message_guid_encode(guid), jmapseen_guid_cb, &counts);
+
+    return counts.exists && counts.exists == counts.seen;
 }
 
 static void emailsearch_jmapseen_serialise(struct buf *b, const union search_value *v)
@@ -3508,6 +3498,7 @@ static int emailsearch_is_mutable(struct emailsearch *search)
 struct guidsearch_match {
     char guidrep[MESSAGE_GUID_SIZE*2+1];
     uint32_t system_flags;
+    uint32_t num_unseen;    // only counted if the query needs $seen
     uint64_t nano_internaldate;  // nanoseconds since epoch
     conversation_id_t cid;
     bitvector_t folders;    // only set if numfolders > 0
@@ -3579,6 +3570,7 @@ enum guidsearch_expr_op {
     GSEOP_INMAILBOX,
     GSEOP_INMAILBOX_OTHERTHAN,
     GSEOP_FLAGS,
+    GSEOP_SEEN,
     GSEOP_CONVFLAGS,
     GSEOP_ALLCONVFLAGS,
     GSEOP_INTERNALDATE,
@@ -3627,6 +3619,7 @@ struct guidsearch_build_context {
     struct conversations_state *cstate;
     hash_table *foldernum_by_mboxname;
     bool need_folders;
+    bool need_seen;
 };
 
 static struct guidsearch_expr *
@@ -3778,6 +3771,12 @@ guidsearch_expr_build(struct guidsearch_build_context *build_ctx,
                     ge->v.v = val;
                     build_ctx->need_folders = true;
                 }
+                else if (!strcmpsafe(e->attr->name, "jmapseen")) {
+                    // hasKeyword or notKeyword for $seen
+                    ge = xzmalloc(sizeof(struct guidsearch_expr));
+                    ge->op = GSEOP_SEEN;
+                    build_ctx->need_seen = true;
+                }
                 else if (!strcmpsafe(e->attr->name, "jmap_systemflags")) {
                     // hasKeyword or notKeyword. guidsearch_rank_clause
                     // accepts this attribute for these flags only.
@@ -3861,6 +3860,9 @@ static void guidsearch_expr_serialise(struct buf *buf, struct guidsearch_expr *e
             break;
         case GSEOP_FLAGS:
             buf_appendcstr(buf, "FLAGS");
+            break;
+        case GSEOP_SEEN:
+            buf_appendcstr(buf, "SEEN");
             break;
         case GSEOP_CONVFLAGS:
             buf_appendcstr(buf, "CONVFLAGS");
@@ -3957,6 +3959,9 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
             }
         case GSEOP_FLAGS:
             return (match->system_flags & e->v.num) != 0;
+        case GSEOP_SEEN:
+            /* The email is seen if all its readable copies are seen */
+            return match->num_unseen == 0;
         case GSEOP_CONVFLAGS:
         case GSEOP_ALLCONVFLAGS:
             {
@@ -4106,6 +4111,14 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
                 }
                 return 1;
             }
+            else if (!strcmpsafe(e->attr->name, "jmapseen")) {
+                /* hasKeyword $seen
+                 * notKeyword $seen */
+                if (nonxapian_hash) {
+                    guidsearch_hash_expr(e, nonxapian_hash);
+                }
+                return 1;
+            }
             else if (e->attr == search_attr_find("convflags") ||
                      e->attr == search_attr_find("allconvflags")) {
                 /* allInThreadHaveKeyword
@@ -4149,7 +4162,6 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
                 *need_xapian_index_version = 17;
                 return 2;
             }
-            // TODO support hasKeyword:$seen
             // any other MATCH is unsupported
             else return -1;
         case SEOP_TRUE:
@@ -4227,6 +4239,8 @@ struct guidsearch_query {
     bitvector_t readable_folders;
     uint32_t numfolders;
     int want_expunged;
+    bool need_seen;
+    struct jmapseen_attrdata *seendata;  // set if need_seen, not owned
     struct guidsearch_expr *matchexpr;
     struct guidsearch_match *matches;
     size_t total;
@@ -4235,14 +4249,23 @@ struct guidsearch_query {
     uint64_t index_generation;
 };
 
-/* Merge the G record of one copy of an email into the match of that email.
- * The caller must have asserted that this request may read the copy. */
 static void guidsearch_match_add_guidrec(struct guidsearch_match *match,
                                          const conv_guidrec_t *rec,
-                                         uint32_t numfolders)
+                                         uint32_t numfolders,
+                                         struct conversations_state *cstate,
+                                         struct jmapseen_attrdata *seendata)
 {
+    /* Merges the G record of one copy into the match of its email. The
+     * caller must have asserted that this request may read the copy. */
     if (numfolders) bv_set(&match->folders, rec->foldernum);
     match->system_flags |= rec->system_flags;
+    if (seendata) {
+        int is_seen = jmapseen_copy_seen(seendata, cstate,
+                rec->foldernum, rec->uid, rec->system_flags);
+        /* A copy that does not count towards $seen is neither seen nor
+         * unseen, see jmapseen_copy_seen() */
+        if (is_seen == 0) match->num_unseen++;
+    }
 }
 
 static int guidsearch_add_guidrec(const conv_guidrec_t *rec,
@@ -4264,7 +4287,8 @@ static int guidsearch_add_guidrec(const conv_guidrec_t *rec,
     if (prev && !memcmp(rec->guidrep, prev->guidrep, MESSAGE_GUID_SIZE*2)) {
         /* Update match for same guid. All copies of a guid carry the same
          * internaldate, so only folders and flags need merging. */
-        guidsearch_match_add_guidrec(prev, rec, gsq->numfolders);
+        guidsearch_match_add_guidrec(prev, rec, gsq->numfolders,
+                gsq->req->cstate, gsq->need_seen ? gsq->seendata : NULL);
         return 0;
     }
 
@@ -4274,7 +4298,8 @@ static int guidsearch_add_guidrec(const conv_guidrec_t *rec,
     next->guidrep[MESSAGE_GUID_SIZE*2] = '\0';
     next->nano_internaldate = rec->nano_internaldate;
     next->cid = rec->cid;
-    guidsearch_match_add_guidrec(next, rec, gsq->numfolders);
+    guidsearch_match_add_guidrec(next, rec, gsq->numfolders,
+            gsq->req->cstate, gsq->need_seen ? gsq->seendata : NULL);
     return 1;
 }
 
@@ -4349,6 +4374,17 @@ static void free_search_value_string(union search_value *v,
     v->s = NULL;
 }
 
+static struct jmapseen_attrdata *jmapseen_attrdata_find(ptrarray_t *attrs)
+{
+    /* Returns the $seen state shared by all jmapseen filters built into this
+     * list of search attributes, or NULL if none of them reads $seen */
+    for (int i = 0; i < ptrarray_size(attrs); i++) {
+        search_attr_t *attr = ptrarray_nth(attrs, i);
+        if (!strcmpsafe(attr->name, "jmapseen")) return attr->data1;
+    }
+    return NULL;
+}
+
 static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
                           struct guidsearch_query *gsq)
 {
@@ -4395,6 +4431,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         search_expr_t *expr = use_dnf ? search->expr_dnf : search->expr_orig;
         gsq->matchexpr = guidsearch_expr_build(&build_ctx, NULL, expr);
         gsq->numfolders = build_ctx.need_folders ? numfolders : 0;
+        gsq->need_seen = build_ctx.need_seen;
         free_hash_table(&foldernum_by_mboxname, NULL);
     }
 
@@ -4581,7 +4618,8 @@ static int emailquery_guidsearch(jmap_req_t *req,
     struct guidsearch_query gsq = {
         .req = req,
         .readable_folders = BV_INITIALIZER,
-        .want_expunged = search->want_expunged
+        .want_expunged = search->want_expunged,
+        .seendata = jmapseen_attrdata_find(&search->attrs)
     };
 
     int r = guidsearch_run(req, search, &gsq);
