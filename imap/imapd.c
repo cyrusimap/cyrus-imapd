@@ -6364,7 +6364,9 @@ static void cmd_search(const char *tag, const char *cmd)
                 break;
 
             case SEARCH_SOURCE_SUBSCRIBED:
-                mboxlist_usersubs(searchargs->userid, multisearch_cb, &mrock, 0);
+                mboxlist_usersubs_effective(searchargs->userid,
+                                            searchargs->authstate,
+                                            multisearch_cb, &mrock, 0);
                 break;
 
             default: {
@@ -13392,8 +13394,17 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
 
 static void _addsubs(struct list_rock *rock)
 {
+    /* rock->subs is only populated for RETURN (SUBSCRIBED) on a normal
+     * LIST; that's also the only case where this ACL check should apply
+     * -- otherwise \Subscribed would leak into plain LIST responses that
+     * never asked for subscription state */
     if (!rock->subs) return;
     if (!rock->last_mbentry) return;
+
+    if (cyrus_acl_myrights(imapd_authstate, rock->last_mbentry->acl)
+        & ACL_AUTOSUB)
+        rock->last_attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
+
     int i;
     const char *last_name = rock->last_mbentry->name;
     int namelen = strlen(last_name);
@@ -15203,7 +15214,8 @@ static void cmd_notify(char *tag, int set)
             if (do_status && (new_egroups->subscribed_events & IMAP_NOTIFY_MESSAGE)) {
                 srock.filter = FILTER_SUBSCRIBED;
                 srock.events = new_egroups->subscribed_events;
-                mboxlist_usersubs(imapd_userid, &notify_set_status, &srock, 0);
+                mboxlist_usersubs_effective(imapd_userid, imapd_authstate,
+                                            &notify_set_status, &srock, 0);
             }
         }
         if (new_egroups->subtree.events) {

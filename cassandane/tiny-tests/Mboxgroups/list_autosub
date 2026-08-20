@@ -1,0 +1,195 @@
+#!perl
+use Cassandane::Tiny;
+
+# Share a folder with the '1' (ACL_AUTOSUB) right, and give cassandane a
+# folder of its own subscribed the ordinary way, for the merge/dedup case.
+sub setup_list_autosub ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $imaptalk  = $self->{store}->get_client();
+
+    $admintalk->create("user.otheruser.autoshared") or die "create: $@";
+    $admintalk->setacl("user.otheruser.autoshared", "group:group co", "lrs1")
+        or die "setacl: $@";
+
+    $imaptalk->create("INBOX.mine") or die "create: $@";
+    $imaptalk->subscribe("INBOX.mine") or die "subscribe: $@";
+
+    return $imaptalk;
+}
+
+# assert_mailbox_structure() indexes responses by name, so a duplicated
+# response would collapse and go unnoticed -- count them first, since not
+# duplicating the merged-in mailboxes is the point of these tests.
+sub assert_list_autosub ($self, $data, $expected, $msg)
+{
+    my %count;
+    $count{ $_->[2] }++ for $data->@*;
+    my @dupes = grep {; $count{$_} > 1 } sort keys %count;
+    $self->assert_num_equals(0, scalar @dupes, "duplicated in LIST: @dupes");
+
+    $self->assert_mailbox_structure($data, '.', $expected, 0, $msg);
+}
+
+sub test_list_autosub_subscribed
+    :NoAltNamespace :ReverseACLs
+    ($self)
+{
+    my $imaptalk = $self->setup_list_autosub;
+
+    xlog $self, "subscribe the shared folder for real as well";
+    $imaptalk->subscribe("user.otheruser.autoshared") or die "subscribe: $@";
+
+    my $subscribed = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
+    my $recursive = $imaptalk->list([qw(SUBSCRIBED RECURSIVEMATCH)], "", "*");
+
+    $self->assert_list_autosub(
+        $subscribed,
+        {
+            'INBOX.mine' => [ '\\Subscribed' ],
+            'user.otheruser.autoshared' => [ '\\Subscribed' ],
+        },
+        "LIST (SUBSCRIBED) shows the real and the flag-granted subscription",
+    );
+
+    $self->assert_list_autosub(
+        $recursive,
+        {
+            'INBOX.mine' => [ '\\Subscribed' ],
+            'user.otheruser.autoshared' => [ '\\Subscribed' ],
+        },
+        "... and RECURSIVEMATCH does not report it twice either",
+    );
+}
+
+sub test_list_autosub_after_unsubscribe
+    :NoAltNamespace :ReverseACLs
+    ($self)
+{
+    my $imaptalk = $self->setup_list_autosub;
+
+    xlog $self, "unsubscribing the flag-granted folder succeeds";
+    $imaptalk->subscribe("user.otheruser.autoshared") or die "subscribe: $@";
+    $imaptalk->unsubscribe("user.otheruser.autoshared")
+        or die "unsubscribe: $@";
+
+    my $subscribed = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
+    my $lsub = $imaptalk->lsub("", "*");
+    my $returned = $imaptalk->list([qw()], "", "*", 'RETURN', [qw(SUBSCRIBED)]);
+    my $recursive = $imaptalk->list([qw(SUBSCRIBED RECURSIVEMATCH)], "", "*");
+
+    $self->assert_list_autosub(
+        $subscribed,
+        {
+            'INBOX.mine' => [ '\\Subscribed' ],
+            'user.otheruser.autoshared' => [ '\\Subscribed' ],
+        },
+        "... but the folder stays listed via the flag",
+    );
+
+    $self->assert_list_autosub(
+        $lsub,
+        {
+            'INBOX.mine' => [],
+            'user.otheruser.autoshared' => [],
+        },
+        "LSUB shows it too",
+    );
+
+    $self->assert_list_autosub(
+        $returned,
+        {
+            'INBOX' => [],
+            'INBOX.mine' => [ '\\Subscribed' ],
+            'user.otheruser.autoshared' => [ '\\Subscribed' ],
+        },
+        "RETURN (SUBSCRIBED) annotates the flag-granted folder",
+    );
+
+    # RECURSIVEMATCH takes its own path through the LIST code, so it needs
+    # asserting separately from the LSUB and LIST (SUBSCRIBED) cases above
+    $self->assert_list_autosub(
+        $recursive,
+        {
+            'INBOX.mine' => [ '\\Subscribed' ],
+            'user.otheruser.autoshared' => [ '\\Subscribed' ],
+        },
+        "RECURSIVEMATCH shows the flag-granted folder with no real subscription",
+    );
+}
+
+# A hierarchical pattern only partially matches a name deeper in the tree,
+# which is how the LIST code learns a parent has subscribed children.  An
+# ACL-granted subscription has to reach that same machinery, or the parent
+# goes unmentioned where a real subscription would have named it.
+sub test_list_autosub_parent
+    :NoAltNamespace :ReverseACLs
+    ($self)
+{
+    my $imaptalk  = $self->setup_list_autosub;
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "grant '1' on a child, nothing on the folder above it";
+    $admintalk->create("user.otheruser.tree") or die "create: $@";
+    $admintalk->create("user.otheruser.tree.deep") or die "create: $@";
+    $admintalk->setacl("user.otheruser.tree.deep", "group:group co", "lrs1")
+        or die "setacl: $@";
+
+    my $lsub = $imaptalk->lsub("", "user.otheruser.%");
+    my $recursive = $imaptalk->list([qw(SUBSCRIBED RECURSIVEMATCH)],
+                                    "", "user.otheruser.%");
+
+    $self->assert_list_autosub(
+        $lsub,
+        {
+            'user.otheruser.autoshared' => [],
+            'user.otheruser.tree' => [ '\\Noselect', '\\HasChildren' ],
+        },
+        "LSUB names the unsubscribed parent of the flag-granted child",
+    );
+
+    $self->assert_list_autosub(
+        $recursive,
+        {
+            'user.otheruser.autoshared' => [ '\\Subscribed' ],
+            'user.otheruser.tree' => [ '\\NonExistent', '\\HasChildren' ],
+        },
+        "RECURSIVEMATCH reports the parent of the flag-granted child",
+    );
+}
+
+sub test_list_autosub_dav_excluded
+    :NoAltNamespace :ReverseACLs
+    ($self)
+{
+    my $imaptalk  = $self->setup_list_autosub;
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "grant '1' on a DAV mailbox as well";
+    $admintalk->create("user.otheruser.#addressbooks.Shared",
+                       [ 'TYPE', 'ADDRESSBOOK' ]) or die "create: $@";
+    $admintalk->setacl("user.otheruser.#addressbooks.Shared",
+                       "group:group co", "lrs1") or die "setacl: $@";
+
+    # the DAV mailbox is absent from both expected listings: all three
+    # listing paths must agree that '1' does not surface it
+    my $expected = {
+        'INBOX.mine' => [ '\\Subscribed' ],
+        'user.otheruser.autoshared' => [ '\\Subscribed' ],
+    };
+
+    my $subscribed = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
+    my $recursive = $imaptalk->list([qw(SUBSCRIBED RECURSIVEMATCH)], "", "*");
+
+    $self->assert_list_autosub(
+        $subscribed,
+        $expected,
+        "LIST (SUBSCRIBED) does not surface the DAV mailbox",
+    );
+
+    $self->assert_list_autosub(
+        $recursive,
+        $expected,
+        "LIST (SUBSCRIBED RECURSIVEMATCH) does not surface it either",
+    );
+}
