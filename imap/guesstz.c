@@ -1144,12 +1144,23 @@ static void add_vtimezone(icalarray *timezones, icalcomponent *vtz,
     icalarray_free(icalobs);
 }
 
+/* Walk the zoneinfo directory in name order.  fts_open with no comparator
+ * hands back each directory in readdir order, which differs between
+ * filesystems - and a zone's position in the database is what breaks ties
+ * between zones whose observances are identical, of which IANA has many.  So
+ * without this the database, and the guesses it answers with, depend on how
+ * the zoneinfo directory happens to be laid out on disk. */
+static int compare_ftsent(const FTSENT **a, const FTSENT **b)
+{
+    return strcmp((*a)->fts_name, (*b)->fts_name);
+}
+
 EXPORTED int guesstz_create(const char *zoneinfo_dir,
                    icaltimetype trstart, icaltimetype trend,
                    FILE *fp)
 {
     char *paths[2] = { (char *) zoneinfo_dir, NULL };
-    FTS *fts = fts_open(paths, FTS_PHYSICAL, NULL);
+    FTS *fts = fts_open(paths, FTS_PHYSICAL, compare_ftsent);
     if (!fts) {
         fprintf(stderr, "fts_open(%s): %s\n", zoneinfo_dir, strerror(errno));
         return EX_IOERR;
@@ -1163,12 +1174,7 @@ EXPORTED int guesstz_create(const char *zoneinfo_dir,
     while ((fe = fts_read(fts))) {
         /* Skip symlinks.  A zoneinfo directory may name a time zone alias
          * with a link to the zone it aliases, and we index that zone by its
-         * own file already.
-         *
-         * TODO An alias that has a file of its own still enters the database
-         * under its own TZID, so a guess may name an alias rather than the
-         * canonical zone.  Skip the VTIMEZONEs that carry TZID-ALIAS-OF as
-         * well. */
+         * own file already. */
         if (fe->fts_info != FTS_F) {
             continue;
         }
@@ -1195,6 +1201,15 @@ EXPORTED int guesstz_create(const char *zoneinfo_dir,
             for (vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
                  vtz;
                  vtz = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
+
+                /* An alias that has a file of its own carries TZID-ALIAS-OF
+                 * naming the zone it aliases.  That zone is indexed by its
+                 * own file, so filing the alias too would only give a guess
+                 * the chance to answer with the alias instead. */
+                if (icalcomponent_get_first_property(vtz,
+                            ICAL_TZIDALIASOF_PROPERTY)) {
+                    continue;
+                }
 
                 add_vtimezone(timezones, vtz, trstart, trend, tzoffsets);
             }
