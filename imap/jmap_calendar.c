@@ -349,20 +349,30 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
                                        const char *authuserid,
                                        const char *accountid)
 {
-    char *calhomename = caldav_mboxname(accountid, NULL);
+    char *calhomename = NULL;
     struct buf buf = BUF_INITIALIZER;
     mbentry_t *mbentry = NULL;
-    int r = mboxlist_lookup(calhomename, &mbentry, NULL);
-    if (r) {
-        xsyslog(LOG_ERR, "can't lookup calendar home",
-                "calhomename=%s error=%s",
-                calhomename, error_message(r));
-        goto done;
+    int rights;
+    bool is_main_account;
+
+    if (httpd_userisadmin) {
+        rights = ACL_ALL;
+        is_main_account = true;
     }
-    int rights = httpd_myrights(authstate, mbentry);
+    else {
+        calhomename = caldav_mboxname(accountid, NULL);
+        int r = mboxlist_lookup(calhomename, &mbentry, NULL);
+        if (r) {
+            xsyslog(LOG_ERR, "can't lookup calendar home",
+                    "calhomename=%s error=%s",
+                    calhomename, error_message(r));
+            goto done;
+        }
+        rights = httpd_myrights(authstate, mbentry);
+        is_main_account = !strcmpsafe(authuserid, accountid);
+    }
 
     json_t *calcapa = json_object();
-    int is_main_account = !strcmpsafe(authuserid, accountid);
 
     /* minDateTime, maxDateTime */
     char timebuf[RFC3339_DATETIME_MAX+1];
@@ -409,7 +419,8 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
             is_main_account ? json_true() : json_boolean(rights & JACL_READFB));
 
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
-    get_schedule_addresses(calhomename, accountid, &schedule_addresses);
+    if (calhomename)
+        get_schedule_addresses(calhomename, accountid, &schedule_addresses);
     if (strarray_size(&schedule_addresses)) {
         const char *addr = strarray_nth(&schedule_addresses, 0);
         if (strncasecmp(addr, "mailto:", 7)) {
@@ -2290,7 +2301,6 @@ static int jmap_calendar_set(struct jmap_req *req)
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set = JMAP_SET_INITIALIZER;
     struct calendar_set_args setargs = { 0 };
-    char *default_calname = NULL;
     char *default_cal_mboxname = NULL;
     json_t *err = NULL;
     int r = 0;
@@ -2326,8 +2336,11 @@ static int jmap_calendar_set(struct jmap_req *req)
         goto done;
     }
 
-    default_calname = caldav_scheddefault(req->accountid, 1);
-    default_cal_mboxname = caldav_mboxname(req->accountid, default_calname);
+    char *default_calname = caldav_scheddefault(req->accountid, 1);
+    if (default_calname) {
+        default_cal_mboxname = caldav_mboxname(req->accountid, default_calname);
+        free(default_calname);
+    }
 
     /* destroy */
     size_t index;
@@ -2449,14 +2462,16 @@ static int jmap_calendar_set(struct jmap_req *req)
                 jmap_report_isdefault(&set, mbentry->name,
                                       setargs.on_success_set_is_default, true);
 
-                /* report that isDefault has been removed from old default */
-                mboxlist_entry_free(&mbentry);
-                mboxlist_lookup(default_cal_mboxname, &mbentry, NULL);
-                if (mbentry) {
-                    char oldid[JMAP_MAX_CALENDARID_SIZE];
-
-                    jmap_set_calendarid(req->cstate, mbentry, oldid);
-                    jmap_report_isdefault(&set, mbentry->name, oldid, false);
+                if (default_cal_mboxname) {
+                    /* report that isDefault has been removed from old default */
+                    mboxlist_entry_free(&mbentry);
+                    mboxlist_lookup(default_cal_mboxname, &mbentry, NULL);
+                    if (mbentry) {
+                        char oldid[JMAP_MAX_CALENDARID_SIZE];
+                        
+                        jmap_set_calendarid(req->cstate, mbentry, oldid);
+                        jmap_report_isdefault(&set, mbentry->name, oldid, false);
+                    }
                 }
             }
         }
@@ -2473,7 +2488,6 @@ static int jmap_calendar_set(struct jmap_req *req)
 done:
     jmap_parser_fini(&argparser);
     jmap_set_fini(&set);
-    free(default_calname);
     free(default_cal_mboxname);
     return r;
 }
