@@ -815,7 +815,7 @@ static void truncate_obs(struct observances *obs, int64_t onset)
     }
 
     obs->data += i * OBSERVANCE_SIZE;
-    obs->count = obs->count - i + 1;
+    obs->count -= i;
 }
 
 static int is_preferred_tzidx(struct db *db, uint64_t idx)
@@ -893,9 +893,8 @@ static char *guess_timezone(struct db *db,
         }
 
         /* Compare remaining obervances */
-        if (dbobs->count > 1 && obs.count > 1) {
-            size_t cmplen = obs.count < dbobs->count ?
-                obs.count - 1 : dbobs->count - 1;
+        if (obs.count > 1) {
+            size_t cmplen = (obs.count - 1) * OBSERVANCE_SIZE;
             if (memcmp(obs.data + OBSERVANCE_SIZE,
                        dbobs->data + OBSERVANCE_SIZE, cmplen)) {
                 continue;

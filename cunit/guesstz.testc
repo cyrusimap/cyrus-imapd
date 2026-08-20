@@ -3,6 +3,7 @@
 #endif
 #include "cunit/unit.h"
 
+#include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -61,6 +62,44 @@
     "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU\r\n" \
     "END:STANDARD\r\n"
 
+/* Two zones that match except for their last transition of the guessed
+ * window: both leave +0300 for +0400 on the last Sunday of March, and return
+ * on the last Sunday of October and the first Sunday of November
+ * respectively.  Neither is a preferred zone, so their observances are the
+ * only difference between them.  Test/DstEndsNov is walked first, so a guess
+ * that stops comparing too early yields Test/DstEndsOct for both of them. */
+#define DST_ENDS_OCT_BODY \
+    "BEGIN:DAYLIGHT\r\n" \
+    "TZNAME:TESTDT\r\n" \
+    "TZOFFSETFROM:+0300\r\n" \
+    "TZOFFSETTO:+0400\r\n" \
+    "DTSTART:19810329T030000\r\n" \
+    "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU\r\n" \
+    "END:DAYLIGHT\r\n" \
+    "BEGIN:STANDARD\r\n" \
+    "TZNAME:TESTST\r\n" \
+    "TZOFFSETFROM:+0400\r\n" \
+    "TZOFFSETTO:+0300\r\n" \
+    "DTSTART:19811025T040000\r\n" \
+    "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU\r\n" \
+    "END:STANDARD\r\n"
+
+#define DST_ENDS_NOV_BODY \
+    "BEGIN:DAYLIGHT\r\n" \
+    "TZNAME:TESTDT\r\n" \
+    "TZOFFSETFROM:+0300\r\n" \
+    "TZOFFSETTO:+0400\r\n" \
+    "DTSTART:19810329T030000\r\n" \
+    "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU\r\n" \
+    "END:DAYLIGHT\r\n" \
+    "BEGIN:STANDARD\r\n" \
+    "TZNAME:TESTST\r\n" \
+    "TZOFFSETFROM:+0400\r\n" \
+    "TZOFFSETTO:+0300\r\n" \
+    "DTSTART:19811101T040000\r\n" \
+    "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU\r\n" \
+    "END:STANDARD\r\n"
+
 static char zonedir[1024];
 static char *dbpath;
 
@@ -73,8 +112,8 @@ static void write_vtimezone(const char *tzid, const char *body)
     /* Create the intermediate "Europe" / "America" directory. */
     char *slash = strrchr(path, '/');
     *slash = '\0';
-    if (strcmp(path, zonedir))
-        CU_ASSERT_EQUAL_FATAL(mkdir(path, 0755), 0);
+    if (strcmp(path, zonedir) && mkdir(path, 0755))
+        CU_ASSERT_EQUAL_FATAL(errno, EEXIST);
     *slash = '/';
 
     FILE *fp = fopen(path, "w");
@@ -92,6 +131,8 @@ static int set_up(void)
 
     write_vtimezone("Europe/Berlin", BERLIN_BODY);
     write_vtimezone("America/New_York", NEWYORK_BODY);
+    write_vtimezone("Test/DstEndsOct", DST_ENDS_OCT_BODY);
+    write_vtimezone("Test/DstEndsNov", DST_ENDS_NOV_BODY);
 
     FILE *fp = fopen(dbpath, "w");
     if (!fp) return -1;
@@ -166,6 +207,19 @@ static void test_etc_gmt(void)
                        "DTSTART:16010101T000000\r\n"
                        "END:STANDARD\r\n");
     CU_ASSERT_STRING_EQUAL(tzid, "Etc/GMT+8");
+    free(tzid);
+}
+
+/* Two zones whose observances match except for the last one of the guessed
+ * window are distinguished, rather than matched on their common prefix. */
+static void test_near_miss(void)
+{
+    char *tzid = guess(DST_ENDS_OCT_BODY);
+    CU_ASSERT_STRING_EQUAL(tzid, "Test/DstEndsOct");
+    free(tzid);
+
+    tzid = guess(DST_ENDS_NOV_BODY);
+    CU_ASSERT_STRING_EQUAL(tzid, "Test/DstEndsNov");
     free(tzid);
 }
 
