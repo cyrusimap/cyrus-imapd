@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_querychanges_sort_category
+    :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    my $sort = [
+        {
+            property => 'category',
+            groupBy  => [ {
+                operator   => 'NOT',
+                conditions => [ { allInThreadHaveKeyword => '$seen' } ],
+            } ],
+        },
+    ];
+
+    my $res = $jmap->request([
+        [ 'Email/query', { sort => $sort }, 'R1' ],
+    ]);
+    $res->assert_successful;
+
+    my $args = $res->single_sentence('Email/query')->arguments;
+
+    # A category groups by keyword state, which makes the sort order change
+    # without any Email being added to or removed from the result
+    $self->assert_cmp_deeply(jfalse(), $args->{canCalculateChanges},
+        'canCalculateChanges');
+
+    $res = $jmap->request([
+        [ 'Email/queryChanges', {
+            sinceQueryState => $args->{queryState},
+            sort            => $sort,
+        }, 'R1' ],
+    ]);
+
+    $self->assert_str_equals('cannotCalculateChanges',
+        $res->single_sentence('error')->arguments->{type});
+}

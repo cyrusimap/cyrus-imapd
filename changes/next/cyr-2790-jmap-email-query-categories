@@ -1,0 +1,37 @@
+Description:
+
+Email/query now supports the non-standard "category" comparator to sort
+query results by filter conditions. Only a subset of Email filter
+conditions is supported, the account capabilities report which ones and how
+many filters a category sort takes.
+
+The semantics of keywords now align between Email/get and Email/query.
+Before, Email/query could evaluate the $draft, $flagged, $answered and
+$seen keywords for the index record in only one mailbox, rather than for
+the Email as a whole.
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None. The "category" comparator requires jmap_nonstandard_extensions to
+be enabled in imapd.conf.
+
+
+Upgrade instructions:
+
+The semantics for Email keyword queries now align with Email/get:
+"notKeyword" now matches an Email if no copy of it has the flag, where it
+used to match as soon as any copy did not have it. A filter that combines
+"inMailbox" with "hasKeyword" now matches an Email whose flagged copy is in
+another mailbox. An Email whose only seen copy is in Trash no longer matches
+hasKeyword $seen.
+
+
+GitHub issue:
+
+None
