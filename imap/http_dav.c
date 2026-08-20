@@ -2488,6 +2488,14 @@ static void add_privs(int rights, unsigned flags,
     xmlNodePtr priv;
     int do_contained;
 
+    /* CYRUS:auto-subscribe (not implied by DAV:all, so emitted first,
+       ahead of the DAV:all early return) */
+    if (rights & ACL_AUTOSUB) {
+        ensure_ns(ns, NS_CYRUS, root, XML_NS_CYRUS, "CY");
+        priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+        xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST "auto-subscribe", NULL);
+    }
+
     /* DAV:all */
     if ((rights & DACL_ALL) == DACL_ALL &&
         /* DAV:all on CALDAV:schedule-in/outbox MUST include CALDAV:schedule */
@@ -2747,10 +2755,11 @@ int propfind_acl(const xmlChar *name, xmlNsPtr ns,
 
     if (!propstat) {
         /* Prescreen "property" request */
+        /* Add namespaces for possible privileges */
+        ensure_ns(fctx->ns, NS_CYRUS, fctx->root, XML_NS_CYRUS, "CY");
         if (fctx->req_tgt->namespace->id == URL_NS_CALENDAR &&
             (fctx->req_tgt->collection ||
              (fctx->req_tgt->userid && fctx->depth >= 1) || fctx->depth >= 2)) {
-            /* Add namespaces for possible privileges */
             ensure_ns(fctx->ns, NS_CALDAV, fctx->root, XML_NS_CALDAV, "C");
         }
 
@@ -6523,9 +6532,10 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 
                 case URL_NS_ADDRESSBOOK:
                     /* Add responses for shared collections */
-                    mboxlist_usersubs(txn->req_tgt.userid,
-                                      propfind_by_collection, &fctx,
-                                      MBOXTREE_SKIP_PERSONAL);
+                    mboxlist_usersubs_effective(txn->req_tgt.userid,
+                                                httpd_authstate,
+                                                propfind_by_collection, &fctx,
+                                                MBOXTREE_SKIP_PERSONAL);
                     break;
                 }
             }
@@ -7930,9 +7940,10 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
             case URL_NS_CALENDAR:
             case URL_NS_ADDRESSBOOK:
                 /* Add responses for shared collections */
-                mboxlist_usersubs(fctx->req_tgt->userid,
-                                  propfind_by_collection, fctx,
-                                  MBOXTREE_SKIP_PERSONAL);
+                mboxlist_usersubs_effective(fctx->req_tgt->userid,
+                                            httpd_authstate,
+                                            propfind_by_collection, fctx,
+                                            MBOXTREE_SKIP_PERSONAL);
                 break;
             }
         }
