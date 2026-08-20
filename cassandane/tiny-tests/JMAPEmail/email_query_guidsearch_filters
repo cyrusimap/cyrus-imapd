@@ -405,8 +405,9 @@ my @TESTCASES = (
         want_guidsearch => 0,
     },
 
-    # $seen is not a system flag of the message, it depends on the seen state of
-    # the mailboxes the message is in.
+    # $seen is not a system flag of the message, it depends on the seen state
+    # of the mailboxes the message is in, but it is answered from the G
+    # records of the guid just like a system flag is.
     {
         name            => 'has_keyword_seen',
         filter          => { hasKeyword => '$seen' },
@@ -415,7 +416,7 @@ my @TESTCASES = (
     {
         name            => 'has_keyword_seen_and_body',
         filter          => with_body_search({ hasKeyword => '$seen' }),
-        want_guidsearch => 0,
+        want_guidsearch => 1,
     },
     {
         name            => 'not_keyword_seen',
@@ -425,7 +426,7 @@ my @TESTCASES = (
     {
         name            => 'not_keyword_seen_and_body',
         filter          => with_body_search({ notKeyword => '$seen' }),
-        want_guidsearch => 0,
+        want_guidsearch => 1,
     },
 
     # Any other keyword is neither a system flag nor Xapian-backed.
