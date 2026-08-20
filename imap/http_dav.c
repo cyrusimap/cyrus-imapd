@@ -3998,6 +3998,12 @@ int meth_acl(struct transaction_t *txn, void *params)
                 }
             }
 
+            if (!prin) {
+                txn->error.desc = "Missing principal in ACE";
+                ret = HTTP_BAD_REQUEST;
+                goto done;
+            }
+
             if (!xmlStrcmp(prin->name, BAD_CAST "self")) {
                 userid = httpd_userid;
             }

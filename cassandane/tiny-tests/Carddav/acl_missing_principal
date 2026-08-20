@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_acl_missing_principal ($self)
+{
+    my $carddav = $self->{carddav};
+    my $book = $carddav->NewAddressBook('acl-crash-controlled');
+    $self->assert_not_null($book);
+
+    my $xml = <<'EOF';
+<?xml version="1.0" encoding="utf-8"?>
+<D:acl xmlns:D="DAV:">
+  <D:ace>
+    <D:grant>
+      <D:privilege><D:read/></D:privilege>
+    </D:grant>
+  </D:ace>
+</D:acl>
+EOF
+
+    my %headers = (
+        'Content-Type'  => 'application/xml; charset=utf-8',
+        'Authorization' => $carddav->auth_header(),
+    );
+
+    my $res = $carddav->{ua}->request(
+        'ACL', $carddav->request_url($book),
+        { content => $xml, headers => \%headers });
+
+    $self->assert_num_equals(400, $res->{status});
+}
