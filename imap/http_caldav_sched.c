@@ -98,6 +98,21 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
         mbentry_t *mbentry = NULL;
         /* Lookup user's cal-home-set to see if it is on this server */
         mbname_t *mbname = mbname_from_recipient(param->userid, &httpd_namespace);
+
+        /* Take the canonical userid rather than the address it was written as.
+           With virtdomains enabled and a defaultdomain configured, the domain
+           above is only trimmed when virtdomains is off, so param->userid keeps
+           "@defaultdomain" - while the mailbox and its ACL are keyed by the bare
+           userid.  Everything downstream compares against that ACL, notably the
+           auth_state that caldav_store_preprocess() builds from this userid, so
+           an uncanonicalised one matches no entry and every local delivery ends
+           in DAV:need-privileges. */
+        const char *canon_userid = mbname_userid(mbname);
+        if (canon_userid && strcmp(canon_userid, param->userid)) {
+            free(param->userid);
+            param->userid = xstrdup(canon_userid);
+        }
+
         mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
         int r = proxy_mlookup(mbname_intname(mbname), &mbentry, NULL, NULL);
         mbname_free(&mbname);
