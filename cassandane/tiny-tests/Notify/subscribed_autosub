@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+# The subscribed filter keys off the userid alone, so both halves of it have
+# to resolve subscriptions the same way the listings do: imapd expands the
+# set for the initial STATUS burst, and idled decides per event which idling
+# sessions to wake.  Neither may miss a mailbox granted the '1' right.
+sub test_subscribed_autosub
+    :needs_component_idled :ReverseACLs :NoAltNamespace :min_version_3_9
+    ($self)
+{
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    # the suite starts its own instance, so the usual stores aren't wired up
+    my $svc = $self->{instance}->get_service('imap');
+    my $adminstore = $svc->create_store(username => 'admin',
+                                        folder => 'user.cassandane');
+    my $admintalk = $adminstore->get_client();
+
+    xlog $self, "another user's folder, granted '1' but never subscribed";
+    $admintalk->create("user.otheruser") or die "create: $@";
+    $admintalk->create("user.otheruser.autoshared") or die "create: $@";
+    $admintalk->setacl("user.otheruser.autoshared", "cassandane", "lrsip1")
+        or die "setacl: $@";
+
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+
+    $self->assert($talk->capability()->{notify});
+
+    xlog $self, "the initial STATUS burst covers the flag-granted folder";
+    $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET', 'STATUS',
+                     "(subscribed (MessageNew MessageExpunge))");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $status = $talk->get_response_code('status');
+    $self->assert_num_equals(0, $status->{'user.otheruser.autoshared'}{messages});
+
+    xlog $self, "and a new message there wakes the idling session";
+    my $otherstore = $svc->create_store();
+    my $othertalk = $otherstore->get_client();
+    $othertalk->append('user.otheruser.autoshared', "()",
+                       $self->{gen}->generate(subject => "findme")->as_string())
+        || die "append: $@";
+
+    my $res = $store->idle_response('STATUS', 5);
+    $self->assert($res, "received an unsolicited response");
+
+    $status = $talk->get_response_code('status');
+    $self->assert_num_equals(1, $status->{'user.otheruser.autoshared'}{messages});
+}
