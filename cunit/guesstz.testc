@@ -19,8 +19,8 @@
 #define TREND   "20320101T000000Z"
 
 /* The time range we guess over, well inside the database range. */
-#define QSTART  "20201227T140000Z"
-#define QEND    "20211227T150000Z"
+#define GUESS_START "20201227T140000Z"
+#define GUESS_END   "20211227T150000Z"
 
 #define VCAL_BEGIN \
     "BEGIN:VCALENDAR\r\n" \
@@ -153,7 +153,7 @@ static int tear_down(void)
 }
 
 /* Guess the IANA name of a VTIMEZONE whose own TZID says nothing. */
-static char *guess(const char *body)
+static char *guess_range(const char *body, const char *start, const char *end)
 {
     char *ical = strconcat(VCAL_BEGIN,
                            "BEGIN:VTIMEZONE\r\nTZID:Custom\r\n",
@@ -172,14 +172,19 @@ static char *guess(const char *body)
     CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
 
     char *tzid = guesstz_guess(gtz, vtz,
-                               icaltime_from_string(QSTART),
-                               icaltime_from_string(QEND));
+                               icaltime_from_string(start),
+                               icaltime_from_string(end));
     CU_ASSERT_PTR_NULL((void *)guesstz_error(gtz));
 
     guesstz_close(&gtz);
     icalcomponent_free(comp);
 
     return tzid;
+}
+
+static char *guess(const char *body)
+{
+    return guess_range(body, GUESS_START, GUESS_END);
 }
 
 static void test_berlin(void)
@@ -220,6 +225,78 @@ static void test_near_miss(void)
 
     tzid = guess(DST_ENDS_NOV_BODY);
     CU_ASSERT_STRING_EQUAL(tzid, "Test/DstEndsNov");
+    free(tzid);
+}
+
+/* A VTIMEZONE whose data starts after the database range opens still gets an
+ * observance at the range open, carrying the offset that was in force before
+ * its first transition, so that it can be guessed over a window that lies
+ * entirely before that transition. */
+static void test_proleptic_offset(void)
+{
+    guesstz_t *gtz = guesstz_open(dbpath);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+    char *json = guesstz_encode(gtz);
+    guesstz_close(&gtz);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(json);
+
+    json_t *jdb = json_loads(json, 0, NULL);
+    free(json);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(jdb);
+
+    /* America/New_York's own data starts in 2007, well after TRSTART */
+    json_t *jobs = json_object_get(json_object_get(jdb, "timezones"),
+                                   "America/New_York");
+    json_t *jfirst = json_array_get(jobs, 0);
+    CU_ASSERT_EQUAL_FATAL(json_array_size(jfirst), 2);
+    CU_ASSERT_STRING_EQUAL(json_string_value(json_array_get(jfirst, 0)),
+                           TRSTART);
+    CU_ASSERT_STRING_EQUAL(json_string_value(json_array_get(jfirst, 1)),
+                           "-0500");
+
+    json_decref(jdb);
+
+    /* A VTIMEZONE that has an offset before 2007, guessed over a window that
+     * opens before then, only matches a database timezone with that same
+     * offset, not one with a zero offset that never was in force. */
+    char *tzid = guess_range("BEGIN:STANDARD\r\n"
+                             "TZNAME:EST\r\n"
+                             "TZOFFSETFROM:-0500\r\n"
+                             "TZOFFSETTO:-0500\r\n"
+                             "DTSTART:19700101T000000\r\n"
+                             "END:STANDARD\r\n"
+                             NEWYORK_BODY,
+                             "20060101T000000Z", "20080101T000000Z");
+    CU_ASSERT_STRING_EQUAL(tzid, "America/New_York");
+    free(tzid);
+}
+
+/* An RRULE with no value cannot be expanded, and the observance produced by
+ * its component's DTSTART is kept regardless. */
+static void test_empty_rrule(void)
+{
+    char *tzid = guess("BEGIN:STANDARD\r\n"
+                       "TZNAME:-08\r\n"
+                       "TZOFFSETFROM:-0800\r\n"
+                       "TZOFFSETTO:-0800\r\n"
+                       "DTSTART:16010101T000000\r\n"
+                       "RRULE:\r\n"
+                       "END:STANDARD\r\n");
+    CU_ASSERT_STRING_EQUAL(tzid, "Etc/GMT+8");
+    free(tzid);
+
+    /* The DTSTART observance is still there: with it dropped the zone would
+     * have no observance in the window at all, and no guess to make. */
+    tzid = guess_range(BERLIN_BODY
+                       "BEGIN:STANDARD\r\n"
+                       "TZNAME:CET\r\n"
+                       "TZOFFSETFROM:+0100\r\n"
+                       "TZOFFSETTO:+0100\r\n"
+                       "DTSTART:20210601T000000\r\n"
+                       "RRULE:\r\n"
+                       "END:STANDARD\r\n",
+                       GUESS_START, GUESS_END);
+    CU_ASSERT_PTR_NULL(tzid);
     free(tzid);
 }
 
