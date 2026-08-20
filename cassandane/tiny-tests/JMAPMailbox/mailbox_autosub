@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+
+# The '1' (ACL_AUTOSUB) right makes a shared mailbox look subscribed to
+# Mailbox/get and Mailbox/query, and survives an explicit unsubscribe.
+sub test_mailbox_autosub ($self)
+{
+    my $jmap  = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "create another user with a shared folder";
+    $self->{instance}->create_user("other");
+    $admin->create("user.other.shared") or die "create: $@";
+    $admin->setacl("user.other.shared", cassandane => 'lrs1') or die "setacl: $@";
+
+    my $res = $jmap->request([
+        [ 'Mailbox/get', {
+            accountId  => 'other',
+            properties => [ 'name', 'isSubscribed' ],
+        } ],
+    ]);
+
+    my $mailboxes = $res->single_sentence('Mailbox/get')->arguments->{list};
+    my ($mbox) = grep {; $_->{name} eq 'shared' } $mailboxes->@*;
+
+    $self->assert_cmp_deeply(
+        superhashof({ name => 'shared', isSubscribed => jtrue() }),
+        $mbox,
+        "the '1' right alone makes the mailbox subscribed",
+    );
+
+    xlog $self, "query with isSubscribed filter must agree with get";
+    $res = $jmap->request([
+        [ 'Mailbox/query', {
+            accountId => 'other',
+            filter    => { isSubscribed => JSON::true },
+        } ],
+    ]);
+
+    my $ids = $res->single_sentence('Mailbox/query')->arguments->{ids};
+
+    $self->assert_cmp_deeply(
+        [ $mbox->{id} ],
+        $ids,
+        "Mailbox/query finds exactly the autosub mailbox",
+    );
+
+    xlog $self, "unsubscribe is accepted and reports effective true";
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            accountId => 'other',
+            update    => { $mbox->{id} => { isSubscribed => JSON::false } },
+        } ],
+    ]);
+
+    my $set = $res->single_sentence('Mailbox/set')->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            updated => { $mbox->{id} => superhashof({ isSubscribed => jtrue() }) },
+        }),
+        $set,
+        "unsubscribing succeeds but the '1' right keeps it subscribed",
+    );
+}

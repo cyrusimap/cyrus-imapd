@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+# The '1' (ACL_AUTOSUB) right on a shared addressbook makes AddressBook/get
+# report isSubscribed even though the sharee never subscribed.
+sub assert_addressbook_get_autosub ($self, $grantee)
+{
+    my $jmap  = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    my $other = $self->{instance}->create_user('other');
+    my $abook = $other->addressbooks->default;
+
+    for my $case ([ lrs => jfalse() ], [ lrs1 => jtrue() ]) {
+        my ($acl, $want) = @$case;
+
+        xlog $self, "grant '$acl' to $grantee";
+        $admin->setacl('user.other.#addressbooks.Default', $grantee => $acl)
+            or die "setacl: $@";
+
+        my $res = $jmap->request([
+            [ 'AddressBook/get', {
+                accountId  => 'other',
+                ids        => [ $abook->id ],
+                properties => [ 'isSubscribed' ],
+            } ],
+        ]);
+
+        my $books = $res->single_sentence('AddressBook/get')->arguments->{list};
+
+        $self->assert_cmp_deeply(
+            [ superhashof({ id => $abook->id, isSubscribed => $want }) ],
+            $books,
+            "isSubscribed for ACL '$acl'",
+        );
+    }
+}
+
+sub test_addressbook_get_autosub_user ($self)
+{
+    $self->assert_addressbook_get_autosub('cassandane');
+}
+
+sub test_addressbook_get_autosub_group
+    :Mboxgroups
+    ($self)
+{
+    $self->{adminstore}->get_client
+         ->_imap_cmd('SETUSERGROUP', 0, '', 'cassandane', 'group:c1-all');
+
+    $self->assert_addressbook_get_autosub('group:c1-all');
+}

@@ -828,6 +828,10 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             /* Users always subscribe their own calendars */
             is_subscribed = 1;
         }
+        else if (rights & ACL_AUTOSUB) {
+            /* ACL keeps this user subscribed */
+            is_subscribed = 1;
+        }
         else {
             /* Lookup mailbox subscriptions */
             is_subscribed = mboxlist_checksub(mbentry->name, req->userid) == 0;
@@ -2248,8 +2252,16 @@ static void setcalendars_update(jmap_req_t *req,
         goto done;
     }
 
-    /* Report calendar as updated. */
-    *record = json_null();
+    /* Report calendar as updated. If the client asked to
+     * unsubscribe but an auto-subscribe ACL keeps them subscribed,
+     * report the effective value back as server-set. */
+    if (props.isSubscribed == 0 &&
+            (jmap_myrights(req, mboxname) & ACL_AUTOSUB)) {
+        *record = json_pack("{s:b}", "isSubscribed", 1);
+    }
+    else {
+        *record = json_null();
+    }
 
 done:
     setcalendar_props_fini(&props);
