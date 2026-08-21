@@ -2130,7 +2130,7 @@ AS_IF(
     )]
 )
 
-dnl documentation generation (sphinx, sphinx_rtd_theme, perl2rst, gitpython)
+dnl documentation generation (sphinx, sphinx_rtd_theme, perl2rst)
 AC_DEFUN([WARN_DOCDEPS], [
     AM_COND_IF([ENABLE_RELEASE_CHECKS],
                [AC_MSG_ERROR([No $1, cannot regenerate docs])],
@@ -2160,11 +2160,6 @@ AS_CASE([$HAVE_PYMOD_BREATHE],
         [yes],  [],
         [*],    [WARN_DOCDEPS([breathe])])
 
-AX_PYTHON_MODULE([git], [], [python3])
-AS_CASE([$HAVE_PYMOD_GIT],
-        [yes],  [],
-        [*],    [WARN_DOCDEPS([GitPython])])
-
 AX_PYTHON_MODULE([myst_parser], [], [python3])
 AS_CASE([$HAVE_PYMOD_MYST_PARSER],
         [yes],  [],
@@ -2193,7 +2188,6 @@ AM_CONDITIONAL([HAVE_SPHINX_BUILD],
            -a -n "$DOXYGEN" \
            -a x"$have_ppvr" = xyes \
            -a x"$HAVE_PYMOD_BREATHE" = xyes \
-           -a x"$HAVE_PYMOD_GIT" = xyes \
            -a x"$HAVE_PYMOD_MYST_PARSER" = xyes \
            -a x"$HAVE_PYMOD_SPHINX_RTD_THEME" = xyes])
 
@@ -2461,7 +2455,6 @@ Documentation dependencies:
    doxygen:            $DOXYGEN
    sphinx_rtd_theme:   $HAVE_PYMOD_SPHINX_RTD_THEME
    Pod::POM::View::Restructured:  $have_ppvr
-   GitPython:          $HAVE_PYMOD_GIT
    myst_parser:        $HAVE_PYMOD_MYST_PARSER
    breathe:            $HAVE_PYMOD_BREATHE
 
