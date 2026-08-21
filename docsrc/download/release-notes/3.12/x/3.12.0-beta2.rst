@@ -44,7 +44,7 @@ Major changes since the 3.10 series
   :cyrusman:`imapd.conf(5)` options are disabled
 * User-defined flags are now replicated even when not in use on any messages.
 * Adds support for the `HAProxy`_ protocol.  The :cyrusman:`imapd(8)`,
-  :cyrusman:`pop3d(8)`, :cyrusman:`lmtpd(8)`, :cyrusman:`nntpd(8)`,
+  :cyrusman:`pop3d(8)`, :cyrusman:`lmtpd(8)`, ``nntpd(8)``,
   :cyrusman:`httpd(8)`, and :cyrusman:`timsieved(8)` service daemons now accept
   a ``-H`` argument to enable this.
 * Adds support for ``comparator-i;unicode-casemap`` (:rfc:`5051`) to Sieve

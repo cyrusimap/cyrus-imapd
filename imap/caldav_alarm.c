@@ -617,7 +617,7 @@ static int process_alarm_cb(icalcomponent *comp,
                     /* outcome "sent" reflects successful dispatch to the
                      * notification subsystem; send_alarm() can't report
                      * downstream delivery failure */
-                    struct auditlog_send as = {
+                    struct auditlog_send_event as = {
                         .action = "calalarmd.send.imip",
                         .outcome = "sent",
                         .userid = data->userid,
@@ -1892,7 +1892,7 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         }
 
         if (cancel) {
-            struct auditlog_send as = {
+            struct auditlog_send_event as = {
                 .action = "calalarmd.send.futurerelease",
                 .outcome = "cancelled",
                 .userid = userid,
@@ -1943,7 +1943,7 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         /* Mark the email as sent */
         record->system_flags |= FLAG_ANSWERED;
 
-        struct auditlog_send as = {
+        struct auditlog_send_event as = {
             .action = "calalarmd.send.futurerelease",
             .outcome = "sent",
             .userid = userid,
@@ -2087,7 +2087,7 @@ static int process_snoozed(struct caldav_alarm_data *data,
 
     if (!r) {
         char *userid = mboxname_to_userid(mailbox_name(mailbox));
-        struct auditlog_send as = {
+        struct auditlog_send_event as = {
             .action = "calalarmd.send.snooze",
             .outcome = "unsnoozed",
             .userid = userid,

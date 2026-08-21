@@ -56,6 +56,10 @@ breathe_projects = {
 }
 breathe_default_project = "cyrus"
 
+# Cyrus is C, but breathe assumes .h is C++.  Tell it better.  (Otherwise, it
+# complains about name conflicts that aren't real in C.)
+breathe_domain_by_extension = {"h": "c", "c": "c"}
+
 # Default options for Breathe directives
 breathe_default_members = ('members', 'undoc-members')
 

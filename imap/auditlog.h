@@ -91,7 +91,7 @@ extern void auditlog_sieve(const char *action,
                            const char *vac_to_addr);
 
 /** @brief A calalarmd send event, for auditlog_send() */
-struct auditlog_send {
+struct auditlog_send_event {
     const char *action;    /* e.g. "calalarmd.send.futurerelease" */
     const char *outcome;   /* "sent" | "cancelled" | "unsnoozed" */
     const char *userid;
@@ -107,7 +107,7 @@ struct auditlog_send {
 };
 
 /** @brief Log a calalarmd send with scheduled-vs-actual delay */
-extern void auditlog_send(const struct auditlog_send *s);
+extern void auditlog_send(const struct auditlog_send_event *s);
 
 /** @brief Log session traffic statistics */
 extern void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out);
