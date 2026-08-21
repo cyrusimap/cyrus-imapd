@@ -568,4 +568,27 @@ sub test_literal_minus
     $self->assert_bye_toobig();
 }
 
+# If you can't APPEND a message because it's too long, you shouldn't be able to
+# APPEND it via CATENATE either!
+
+sub test_maxmessagesize_catenate_text
+{
+    my ($self) = @_;
+
+    my $talk  = $self->{store}->get_client();
+    my $tag   = $talk->{CmdId}++;
+
+    my $payload = ('X' x 58) . "\x0d\x0a";
+
+    my $cmd = "$tag APPEND INBOX CATENATE ("
+            . "TEXT {60+}\r\n$payload "
+            . "TEXT {60+}\r\n$payload"
+            . ")\r\n";
+
+    $talk->_imap_socket_out($cmd);
+
+    $self->assert_no_toobig($talk);
+    $self->assert_bye_toobig();
+}
+
 1;
