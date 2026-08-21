@@ -1,13 +1,13 @@
 #!perl
 use Cassandane::Tiny;
-use POSIX qw(WNOHANG);
 
 sub test_squatter_index_default
     :SearchBatchsize20
     ($self)
 {
     my $talk = $self->{store}->get_client();
-    my $basedir = $self->{instance}->{basedir};
+    my $instance = $self->{instance};
+    my $basedir = $instance->{basedir};
     my $outfile = "$basedir/audit.tmp";
 
     xlog $self, "append enough messages for three full batches and a partial one";
@@ -16,26 +16,45 @@ sub test_squatter_index_default
         $self->make_message("filler $i") || die;
     }
 
+    xlog $self, "Clear syslog";
+    $instance->getsyslog();
+
     xlog $self, "a bare squatter run must complete: when broken it re-selects the same batch forever";
-    my $pid = $self->{instance}->run_command(
-        {cyrus => 1, background => 1}, 'squatter');
-    my $done = 0;
-    my $batchlines = 0;
+    my $pid = $instance->run_command({cyrus => 1, background => 1}, 'squatter');
+
+    xlog $self, "wait for squatter to index every message";
     eval {
         timed_wait(sub {
-            if (waitpid($pid, WNOHANG) == $pid) {
-                $done = 1;
-                return 1;
-            }
-            # a correct run logs one batching line per full batch, so a
-            # fourth one means it is looping
-            $batchlines += scalar $self->{instance}->getsyslog(qr/batching/);
-            return $batchlines > 3;
-        }, description => "squatter to finish", maxwait => 60);
+            $talk->select('INBOX') || die;
+            return scalar @{$talk->search('fuzzy', 'subject', 'filler')} == $nmsgs;
+        }, description => "squatter to index all messages", maxwait => 60);
     };
-    # kill a looping squatter rather than letting it outlive the test
-    eval { $self->{instance}->stop_command($pid) } if not $done;
-    $self->assert($done);
+    if (my $err = $@) {
+        # kill a looping squatter rather than letting it outlive the test
+        eval { $instance->stop_command($pid) };
+        die $err;
+    }
+
+    xlog $self, "squatter must terminate normally";
+    eval {
+        # a looping squatter would block waitpid forever, and there is no
+        # per-test timeout, so make sure it does not hang the whole run
+        local $SIG{ALRM} = sub { die "Timed out waiting for squatter to exit\n" };
+        alarm 60;
+        $instance->reap_command($pid);
+        alarm 0;
+    };
+    if (my $err = $@) {
+        alarm 0;
+        eval { $instance->stop_command($pid) };
+        die $err;
+    }
+
+    if ($instance->{have_syslog_replacement}) {
+        xlog $self, "a correct run batches once per full batch, and no more";
+        my @log = $instance->getsyslog(qr/search_update_mailbox batching/);
+        $self->assert_num_equals(3, scalar @log);
+    }
 
     xlog $self, "every message must be searchable";
     $talk->select('INBOX');
@@ -43,12 +62,12 @@ sub test_squatter_index_default
     $self->assert_num_equals($nmsgs, scalar @$uids);
 
     xlog $self, "one run indexes each message once: no batch may re-add an earlier one";
-    my $xapdirs = ($self->{instance}->run_mbpath(-u => 'cassandane'))->{xapian};
+    my $xapdirs = ($instance->run_mbpath(-u => 'cassandane'))->{xapian};
     my ($gdocs, $parts) = $self->delve_docs($xapdirs->{t1} . "/xapian");
     $self->assert_num_equals($nmsgs, scalar @$gdocs);
 
     xlog $self, "audit reports no unindexed messages";
-    $self->{instance}->run_command(
+    $instance->run_command(
         { cyrus => 1, redirects => { stdout => $outfile } },
         'squatter', '-A');
     open my $fh, '<', $outfile or die "open $outfile: $!";
@@ -57,7 +76,7 @@ sub test_squatter_index_default
     $self->assert_num_equals(0, scalar @audits);
 
     xlog $self, "an incremental run must find nothing left to index";
-    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+    $instance->run_command({cyrus => 1}, 'squatter', '-i');
     ($gdocs, $parts) = $self->delve_docs($xapdirs->{t1} . "/xapian");
     $self->assert_num_equals($nmsgs, scalar @$gdocs);
 }

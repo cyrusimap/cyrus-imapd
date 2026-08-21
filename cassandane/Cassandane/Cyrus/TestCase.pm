@@ -396,6 +396,9 @@ magic(SearchNormalizationMax20000 => sub {
 magic(SearchBatchsize20 => sub {
     shift->config_set(search_batchsize => 20);
 });
+magic(SquatterBatchDelay => sub {
+    shift->config_set(squatter_batch_delay => '10s');
+});
 magic(SearchMaxtime1Sec => sub {
     shift->config_set(search_maxtime => 1);
 });
