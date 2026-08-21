@@ -523,7 +523,8 @@ dist_noinst_SCRIPTS = \
     tools/perl2rst \
     tools/pod-index \
     tools/translatesieve \
-    tools/update-tzdata.sh
+    tools/update-tzdata.sh \
+    tools/with-lock
 noinst_MAN = \
     com_err/et/com_err.3 \
     com_err/et/compile_et.1
@@ -2015,6 +2016,13 @@ docsrc/_doxygen: Doxyfile
 
 SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 
+## The builders below share one doctree cache, which helps: later builds can
+## reuse the cached parse from earlier ones.  You can't run these at the same
+## time, though, because only one sphinx-build can own the cache for writing.
+## We'll lock.  Serializing the builders is still a win compared to using three
+## different cache dirs.
+SPHINX_LOCK = $(PERL) $(top_srcdir)/tools/with-lock $(SPHINX_CACHE)/.lock
+
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
 ## that we have a single "source directory" for sphinx-build to use.
@@ -2029,7 +2037,7 @@ clean-docsrc:
 
 ## XXX doesn't detect if other rst sources are updated...
 man/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
-	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b man $(top_builddir)/docsrc $(top_builddir)/man
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b man $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
 
 clean-man:
@@ -2037,12 +2045,12 @@ clean-man:
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/html/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
-	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
 	@touch $@
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
-	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
 
 else # (! HAVE_SPHINX_BUILD)
