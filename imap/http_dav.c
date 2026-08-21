@@ -273,7 +273,7 @@ static const struct prop_entry principal_props[] = {
 
 struct meth_params princ_params = {
     .parse_path = &principal_parse_path,
-    .propfind = { 0, principal_props },
+    .propfind = { 0, principal_props, NULL },
     .reports = principal_reports
 };
 
@@ -6384,7 +6384,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.record = NULL;
     fctx.get_validators = fparams->get_validators;
     fctx.reqd_privs = DACL_READ;
-    fctx.filter = NULL;
+    fctx.filter = fparams->propfind.filter;
     fctx.filter_crit = NULL;
     if (fparams->mime_types) fctx.free_obj = fparams->mime_types[0].free;
     fctx.open_db = fparams->davdb.open_db;
@@ -7588,7 +7588,11 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
             ddata->resource = tgt.resource;
             /* XXX  Check errors */
 
-            fctx->proc_by_resource(fctx, ddata);
+            if (fctx->filter && !fctx->filter(fctx, ddata)) {
+                /* Report a filtered out resource as if it did not exist. */
+                xml_add_response(fctx, HTTP_NOT_FOUND, 0, NULL, NULL);
+            }
+            else fctx->proc_by_resource(fctx, ddata);
 
             rparams->davdb.close_db(fctx->davdb);
 
@@ -7615,6 +7619,7 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 struct updates_rock {
     struct propfind_ctx *fctx;
     get_modseq_t get_modseq;
+    is_visible_t is_visible;
     uint32_t limit;
     modseq_t syncmodseq;
     modseq_t basemodseq;
@@ -7635,6 +7640,16 @@ static int updates_cb(void *rock, void *data)
             return 0;
         }
 
+        if (urock->is_visible) {
+            bool was_visible = false;
+
+            urock->is_visible(fctx->mailbox, data,
+                              urock->syncmodseq, &was_visible);
+
+            /* Nothing to remove for a user that never saw this resource */
+            if (!was_visible) return 0;
+        }
+
         /* Report resource as NOT FOUND
            IMAP UID of 0 will cause index record to be ignored
            propfind_by_resource() will append our resource name */
@@ -7643,6 +7658,19 @@ static int updates_cb(void *rock, void *data)
     else if (modseq <= urock->syncmodseq) {
         /* Per-user modseq hasn't changed */
         return 0;
+    }
+    else if (urock->is_visible) {
+        bool was_visible = false;
+
+        if (!urock->is_visible(fctx->mailbox, data,
+                               urock->syncmodseq, &was_visible)) {
+            /* Invisible to this user now. Report it as removed if they could
+               have synced it while it still was visible, otherwise as if it
+               never existed at all. */
+            if (!was_visible || modseq <= urock->basemodseq) return 0;
+
+            ddata->imap_uid = 0;
+        }
     }
 
 
@@ -7808,8 +7836,9 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     xml_response(HTTP_MULTI_STATUS, txn, fctx->root->doc);
 
     /* Report the resources within the client requested limit (if any) */
-    struct updates_rock rock = { fctx, rparams->get_modseq, limit,
-                                 syncmodseq, basemodseq, &respmodseq, &nresp };
+    struct updates_rock rock = { fctx, rparams->get_modseq, rparams->is_visible,
+                                 limit, syncmodseq, basemodseq,
+                                 &respmodseq, &nresp };
 
     r = rparams->davdb.foreach_update(fctx->davdb, syncmodseq, fctx->mbentry,
                                       -1 /* ALL kinds of resources */,
@@ -8442,6 +8471,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.record = NULL;
     fctx.get_validators = rparams->get_validators;
     fctx.reqd_privs = report->reqd_privs;
+    fctx.filter = rparams->propfind.filter;
     if (rparams->mime_types) fctx.free_obj = rparams->mime_types[0].free;
     fctx.proc_by_resource = &propfind_by_resource;
     fctx.elist = NULL;

@@ -1,112 +1,132 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_calendarevent_set_privacy
-    :min_version_3_7
+# A sharee may not write a non-public event in a calendar they do not own,
+# whatever rights they have on it: they may neither create one nor turn a public
+# event into one, and they may not touch one that the owner created.
+
+# Share the owner's default calendar with sharee, granting every right short of
+# administering the calendar.
+my sub share_calendar ($self)
+{
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    $self->default_user->calendars->default->share_with(sharee => [qw(
+        mayReadItems mayWriteAll mayUpdatePrivate mayRSVP mayDelete
+    )]);
+
+    return $sharee;
+}
+
+# The properties of an event in the owner's default calendar, for a sharee to
+# send in a CalendarEvent/set of their own.
+my sub event_props ($self, %props)
+{
+    return {
+        version => '2.0',
+        calendarIds => {
+            $self->default_user->calendars->default->id => JSON::true,
+        },
+        title => 'an event',
+        start => '2026-08-01T09:00:00',
+        duration => 'PT1H',
+        timeZone => 'Etc/UTC',
+        %props,
+    };
+}
+
+# Create an event of $privacy in the owner's default calendar, as the owner.
+my sub create_event ($self, $privacy)
+{
+    xlog $self, "create a $privacy event";
+    return $self->default_user->calendars->default
+                ->create_event({ privacy => $privacy });
+}
+
+# The owner may set any privacy on an event of their own, a sharee may not set
+# one other than public.
+sub test_calendarevent_set_privacy__nonpublic
     ($self)
 {
-    my $jmap = $self->default_user->jmap;
+    my $sharee = share_calendar($self);
 
-    my $sharer = $self->{instance}->create_user('sharer');
-    my $sharerJmap = $sharer->jmap;
-    my $default_cal_id = $sharer->calendars->default->id;
+    xlog $self, "the owner creates a secret event";
+    create_event($self, 'secret');
 
-    xlog "share calendar with cassandane user";
-    my $res = $sharerJmap->CallMethods([
-        ['Calendar/set', {
-            update => {
-                $default_cal_id => {
-                    shareWith => {
-                        cassandane => {
-                            mayReadItems => JSON::true,
-                            mayWriteAll => JSON::true,
-                        },
-                    },
-                },
-            },
-        }, 'R1'],
-    ], [
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:calendars',
-        'https://cyrusimap.org/ns/jmap/jscalendarbis',
-        'urn:ietf:params:jmap:principals',
-        'https://cyrusimap.org/ns/jmap/calendars',
-    ]);
-    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
-
-    xlog "may only create private event on owned calendar";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            accountId => 'sharer',
+    xlog $self, "sharee may only create the public event";
+    my $set = $sharee->jmap->request([[
+        'CalendarEvent/set' => {
+            accountId => 'cassandane',
             create => {
-                eventShared1 => {
-                    version => '2.0',
-                    calendarIds => {
-                        $default_cal_id => JSON::true,
-                    },
-                    title => 'eventShared1',
-                    start => '2022-01-24T09:00:00',
-                    timeZone => 'America/New_York',
-                    privacy => 'public',
-                },
-                eventShared2 => {
-                    version => '2.0',
-                    calendarIds => {
-                        $default_cal_id => JSON::true,
-                    },
-                    title => 'eventShared2',
-                    start => '2022-01-24T10:00:00',
-                    timeZone => 'America/New_York',
-                    privacy => 'secret',
-                },
+                public => event_props($self, privacy => 'public'),
+                private => event_props($self, privacy => 'private'),
             },
-        }, 'R1'],
-        ['CalendarEvent/set', {
-            create => {
-                eventOwned1 => {
-                    version => '2.0',
-                    calendarIds => {
-                        $default_cal_id => JSON::true,
-                    },
-                    title => 'eventOwned1',
-                    start => '2022-01-24T11:00:00',
-                    timeZone => 'America/New_York',
-                    privacy => 'secret',
-                },
-            },
-        }, 'R2'],
-    ]);
+        },
+    ]])->single_sentence('CalendarEvent/set')->as_set;
 
-    my $eventShared1Id = $res->[0][1]{created}{eventShared1}{id};
-    $self->assert_not_null($eventShared1Id);
-    $self->assert_str_equals('invalidProperties',
-        $res->[0][1]{notCreated}{eventShared2}{type});
-    $self->assert_deep_equals(['privacy'],
-        $res->[0][1]{notCreated}{eventShared2}{properties});
-    my $eventOwned1Id = $res->[1][1]{created}{eventOwned1}{id};
-    $self->assert_not_null($eventOwned1Id);
+    my $public_id = q{} . $set->created_id('public');
+    $self->assert_not_null($set->created->{public});
+    $self->assert_cmp_deeply(superhashof({
+        type => 'invalidProperties',
+        properties => ['privacy'],
+    }), $set->create_errors->{private});
 
-    xlog "may not change public privacy on shared calendar";
-    $res = $jmap->CallMethods([
-        ['CalendarEvent/set', {
-            accountId => 'sharer',
+    xlog $self, "sharee may not turn their public event non-public";
+    $set = $sharee->jmap->request([[
+        'CalendarEvent/set' => {
+            accountId => 'cassandane',
             update => {
-                $eventShared1Id => {
+                $public_id => {
                     privacy => 'secret',
                 },
             },
-        }, 'R1'],
-        ['CalendarEvent/set', {
+        },
+    ]])->single_sentence('CalendarEvent/set')->as_set;
+
+    $self->assert_cmp_deeply(superhashof({
+        type => 'invalidProperties',
+        properties => ['privacy'],
+    }), $set->update_errors->{$public_id});
+}
+
+my sub assert_calendarevent_set_privacy ($self, $privacy, $want_error)
+{
+    $self->assert_str_not_equals('public', $privacy);
+
+    my $sharee = share_calendar($self);
+    my $event_id = create_event($self, $privacy)->id;
+
+    xlog $self, "sharee can neither update nor destroy the $privacy event";
+    my ($update, $destroy) = $sharee->jmap->request([
+        [ 'CalendarEvent/set' => {
+            accountId => 'cassandane',
             update => {
-                $eventOwned1Id => {
-                    privacy => 'private',
+                $event_id => {
+                    start => '2026-08-02T02:00:00',
                 },
             },
-        }, 'R2'],
-    ]);
-    $self->assert_str_equals('invalidProperties',
-        $res->[0][1]{notUpdated}{$eventShared1Id}{type});
-    $self->assert_deep_equals(['privacy'],
-        $res->[0][1]{notUpdated}{$eventShared1Id}{properties});
-    $self->assert(exists $res->[1][1]{updated}{$eventOwned1Id});
+        } ],
+        [ 'CalendarEvent/set' => {
+            accountId => 'cassandane',
+            destroy => [ $event_id ],
+        } ],
+    ])->assert_n_sentences(2);
+
+    $self->assert_str_equals($want_error,
+        $update->as_set->update_errors->{$event_id}{type});
+    $self->assert_str_equals($want_error,
+        $destroy->as_set->destroy_errors->{$event_id}{type});
+}
+
+sub test_calendarevent_set_privacy__write_private
+    ($self)
+{
+    assert_calendarevent_set_privacy($self, 'private', 'forbidden');
+}
+
+sub test_calendarevent_set_privacy__write_secret
+    ($self)
+{
+    assert_calendarevent_set_privacy($self, 'secret', 'notFound');
 }

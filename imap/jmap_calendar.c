@@ -3108,6 +3108,14 @@ static void jmapical_duration_as_string(const struct jmapical_duration *dur, str
     buf_cstring(buf);
 }
 
+/* Return true if the requesting user is a sharee of the calendar objects in
+ * the account of 'ownerid'. The owner never is, and neither is an admin. */
+static bool jmap_is_sharee(jmap_req_t *req, const char *ownerid)
+{
+    return strcmpsafe(ownerid, req->userid)
+        && !global_authisa(req->authstate, IMAPOPT_ADMINS);
+}
+
 struct getcalendarevents_rock {
     /* Request-scoped context */
     struct caldav_db *db;
@@ -3639,6 +3647,7 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
     static json_t *publicprops = NULL;
     if (!publicprops) {
         publicprops = json_object();
+        json_object_set_new(publicprops, "baseEventId", json_true());
         json_object_set_new(publicprops, "calendarIds", json_true());
         json_object_set_new(publicprops, "created", json_true());
         json_object_set_new(publicprops, "due", json_true());
@@ -3648,6 +3657,7 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
         json_object_set_new(publicprops, "freeBusyStatus", json_true());
         json_object_set_new(publicprops, "id", json_true());
         json_object_set_new(publicprops, "isDraft", json_true());
+        json_object_set_new(publicprops, "isOrigin", json_true());
         json_object_set_new(publicprops, "privacy", json_true());
         json_object_set_new(publicprops, "recurrenceId", json_true());
         json_object_set_new(publicprops, "recurrenceIdTimeZone", json_true());
@@ -3661,6 +3671,7 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
         json_object_set_new(publicprops, "updated", json_true());
         json_object_set_new(publicprops, "utcStart", json_true());
         json_object_set_new(publicprops, "utcEnd", json_true());
+        json_object_set_new(publicprops, "version", json_true());
     }
 
     const char *key;
@@ -4372,7 +4383,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         .req = req,
         .get = &get,
         .check_acl = checkacl,
-        .is_sharee = strcmp(req->accountid, req->userid)
+        .is_sharee = jmap_is_sharee(req, req->accountid)
     };
     construct_hashu64_table(&rock.cache_jsevents, 512, 0);
     construct_hash_table(&rock.floatingtz_by_mboxid, 64, 0);
@@ -4845,7 +4856,7 @@ static int createevent_toical(jmap_req_t *req,
     }
 
     // Validate privacy on shared calendars
-    if (strcmp(req->accountid, req->userid)) {
+    if (jmap_is_sharee(req, req->accountid)) {
         const char *privacy =
             json_string_value(json_object_get(create->jsevent, "privacy"));
         if (privacy && strcmp(privacy, "public")) {
@@ -5217,8 +5228,10 @@ static int createevent_store(jmap_req_t *req,
         jmap_calendarevent_remove_peruserprops(myevent);
         r2 = jmap_create_caleventnotif(notifmbox, req->userid, req->authstate,
                 mailbox_name(mbox), "created", &eid,
-                &create->schedule_addresses, NULL,
-                is_draft, myevent, NULL);
+                &create->schedule_addresses, NULL, is_draft,
+                caldav_privacy_from_ical(
+                    icalcomponent_get_first_real_component(create->ical)),
+                myevent, NULL);
         if (r2) {
             xsyslog(LOG_WARNING, "could not create notification",
                     "uid=%s error=%s", create->ical_uid, error_message(r2));
@@ -5873,7 +5886,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
     }
     else {
         // Validate privacy on shared calendars
-        if (strcmp(req->accountid, req->userid)) {
+        if (jmap_is_sharee(req, req->accountid)) {
             const char *new_privacy =
                 json_string_value(json_object_get(update->event_patch, "privacy"));
             if (new_privacy && strcmp(new_privacy, "public")) {
@@ -6083,10 +6096,12 @@ static void setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
 
+    enum caldav_privacy old_privacy = cdata->comp_flags.privacy;
+
     /* Check privacy for sharees */
-    if (strcmp(req->accountid, req->userid)) {
-        if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
-            r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
+    if (jmap_is_sharee(req, req->accountid)) {
+        if (old_privacy != CAL_PRIVACY_PUBLIC) {
+            r = old_privacy == CAL_PRIVACY_SECRET ?
                 IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
             goto done;
         }
@@ -6340,10 +6355,15 @@ static void setcalendarevents_update(jmap_req_t *req,
                 jmap_calendarevent_remove_peruserprops(patch_copy);
                 jmap_calendarevent_remove_peruserprops(update.old_event);
                 if (json_object_size(patch_copy)) {
+                    /* Most restrictive of the old and the new privacy */
+                    enum caldav_privacy privacy = caldav_privacy_from_ical(
+                        icalcomponent_get_first_real_component(update.newical));
+                    if (old_privacy > privacy) privacy = old_privacy;
+
                     int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
                             req->authstate, mailbox_name(mbox), "updated",
                             eid, &schedule_addresses, NULL,
-                            record.system_flags & FLAG_DRAFT,
+                            record.system_flags & FLAG_DRAFT, privacy,
                             update.old_event, patch_copy);
                     if (r2) {
                         xsyslog(LOG_WARNING, "could not create notification",
@@ -6573,10 +6593,12 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         }
     }
 
+    enum caldav_privacy privacy = cdata->comp_flags.privacy;
+
     /* Check privacy for sharees */
-    if (strcmp(req->accountid, req->userid)) {
-        if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
-            r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
+    if (jmap_is_sharee(req, req->accountid)) {
+        if (privacy != CAL_PRIVACY_PUBLIC) {
+            r = privacy == CAL_PRIVACY_SECRET ?
                 IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
             goto done;
         }
@@ -6676,7 +6698,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
                 req->authstate, mailbox_name(mbox), "destroyed",
                 eid, &schedule_addresses, NULL,
-                record.system_flags & FLAG_DRAFT, old_event, NULL);
+                record.system_flags & FLAG_DRAFT, privacy, old_event, NULL);
         if (r2) {
             xsyslog(LOG_WARNING, "could not create notification",
                     "uid=%s error=%s", eid->ical_uid, error_message(r2));
@@ -7013,8 +7035,18 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
     if (mbtype_isa(mbentry->mbtype) != MBTYPE_CALENDAR)
         goto done;
 
-    // check privacy
-    if (rock->is_sharee && jscal->cdata.comp_flags.privacy == CAL_PRIVACY_SECRET)
+    /* Check privacy. Events that were secret but became visible to this sharee
+     * get reported as created, events that became secret as destroyed. */
+    bool is_secret = rock->is_sharee &&
+        jscal->cdata.comp_flags.privacy == CAL_PRIVACY_SECRET;
+    bool was_secret = rock->is_sharee &&
+        caldav_was_secret(&jscal->cdata, changes->since_modseq);
+    bool was_visible =
+        jscal->added_at_modseq <= changes->since_modseq && !was_secret;
+
+    /* Nothing to report about an event a sharee cannot see now and could not
+     * see then either. */
+    if (is_secret && !was_visible)
         goto done;
 
     if (jscal->cdata.comp_type != CAL_COMP_VEVENT)
@@ -7033,14 +7065,14 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
     };
     const char *id = jmap_caleventid_encode(&eid, &rock->buf);
 
-    /* Report item as updated or destroyed. */
-    if (jscal->alive) {
-        if (jscal->added_at_modseq <= changes->since_modseq)
+    /* Report item as created, updated or destroyed. */
+    if (jscal->alive && !is_secret) {
+        if (was_visible)
             json_array_append_new(changes->updated, json_string(id));
         else
             json_array_append_new(changes->created, json_string(id));
     } else {
-        if (jscal->added_at_modseq <= changes->since_modseq)
+        if (was_visible)
             json_array_append_new(changes->destroyed, json_string(id));
     }
 
@@ -7064,7 +7096,7 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
         .req = req,
         .changes = &changes,
         .check_acl = strcmp(req->accountid, req->userid),
-        .is_sharee = strcmp(req->accountid, req->userid),
+        .is_sharee = jmap_is_sharee(req, req->accountid),
     };
     int r = 0;
 
@@ -7481,7 +7513,7 @@ static int eventquery_textsearch_run(jmap_req_t *req,
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct mailbox *mailbox = NULL;
     const char *wantuid = json_string_value(json_object_get(filter, "uid"));
-    int is_sharee = strcmp(req->accountid, req->userid);
+    int is_sharee = jmap_is_sharee(req, req->accountid);
     char *sched_inboxname = caldav_mboxname(req->accountid, SCHED_INBOX);
 
     if (before != caldav_eternity) {
@@ -7830,7 +7862,7 @@ static int eventquery_run(jmap_req_t *req,
     enum caldav_sort *sort = NULL;
     struct buf buf = BUF_INITIALIZER;
     size_t nsort = 0;
-    int is_sharee = strcmp(req->accountid, req->userid);
+    int is_sharee = jmap_is_sharee(req, req->accountid);
     struct caldav_jscal_filter *jscal_filter = NULL;
     int is_fastpath = 0;
 
@@ -8197,24 +8229,12 @@ static void _calendarevent_copy(jmap_req_t *req,
     jmap_caleventid_free(&eid);
 
     /* Check privacy */
-    if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
-        if (strcmp(copy->from_account_id, req->userid)) {
-            // can't copy a non-public shared event anywhere
-            *set_err = json_pack("{s:s}", "type",
-                    cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
-                    "notFound" : "forbidden");
-        }
-        else {
-            // may copy own event anywhere if made public
-            const char *new_privacy =
-                json_string_value(json_object_get(jevent, "privacy"));
-            if (strcmpsafe(new_privacy, "public")) {
-                *set_err = json_pack("{s:s s:[s]}",
-                        "type", "invalidProperties",
-                        "properties", "privacy");
-            }
-        }
-        if (*set_err) goto done;
+    if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC &&
+        jmap_is_sharee(req, copy->from_account_id)) {
+        *set_err = json_pack("{s:s}", "type",
+                cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
+                "notFound" : "forbidden");
+        goto done;
     }
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
@@ -8266,7 +8286,10 @@ done:
             *set_err = json_pack("{s:s}", "type", "notFound");
         else
             *set_err = jmap_server_error(r);
-        return;
+    }
+    if (*set_err) {
+        json_decref(*new_event);
+        *new_event = NULL;
     }
     mboxlist_entry_free(&mbentry);
     mailbox_close(&src_mbox);
@@ -8651,7 +8674,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     }
 
     /* Check privacy for sharees */
-    if (strcmp(req->accountid, req->userid)) {
+    if (jmap_is_sharee(req, req->accountid)) {
         if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
             syslog(LOG_NOTICE, "no permissions for sharee to read event");
             r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
@@ -8815,6 +8838,7 @@ no_op:
     /* Build response */
     req->accountid = NULL;
     jmap_ok(req, res);
+    res = NULL; // ownership passed to the response
 
 done:
     if (!err) {
@@ -8841,6 +8865,7 @@ done:
         jmap_error(req, err);
     }
 
+    json_decref(res);
     jmap_parser_fini(&parser);
     jmap_caleventid_free(&update.eid);
     if (db) caldav_close(db);
@@ -9824,6 +9849,7 @@ struct principal_getavailability_rock {
     icaltimetype icalstart;
     icaltimetype icalend;
     const char *principalid;
+    bool is_sharee;
     struct dynarray *busyperiods;
     int show_details;
     hash_table *eventprops;
@@ -9837,6 +9863,7 @@ struct principal_getavailability_rock {
     icaltimezone *floatingtz;
     /* Event-scoped context */
     json_t *jevent;
+    enum caldav_privacy privacy;
 };
 
 static int getavailability_ishidden(icalcomponent *comp)
@@ -9844,10 +9871,6 @@ static int getavailability_ishidden(icalcomponent *comp)
     icalproperty *prop;
     prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
     if (prop && icalproperty_get_transp(prop) == ICAL_TRANSP_TRANSPARENT) {
-        return 0;
-    }
-    prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
-    if (prop && icalproperty_get_class(prop) == ICAL_CLASS_CONFIDENTIAL) {
         return 0;
     }
     prop = icalcomponent_get_first_property(comp, ICAL_STATUS_PROPERTY);
@@ -9892,11 +9915,9 @@ static int principal_getavailability_ical_cb(icalcomponent *comp,
     }
 
     /* event */
-    enum icalproperty_class class = ICAL_CLASS_NONE;
-    prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
-    if (prop) class = icalproperty_get_class(prop);
-    if (rock->show_details && rock->jevent &&
-            class != ICAL_CLASS_PRIVATE && class != ICAL_CLASS_CONFIDENTIAL) {
+    if (rock->show_details && rock->jevent
+        && rock->privacy == CAL_PRIVACY_PUBLIC)
+    {
 
         /* Build event instance */
         json_t *jevent = NULL;
@@ -10006,6 +10027,14 @@ static int principal_getavailability_cb(void *vrock, struct caldav_jscal *jscal)
     }
     icalcomponent_kind kind = icalcomponent_isa(comp);
 
+    /* Determine privacy of calendar object */
+    rock->privacy = rock->is_sharee ?
+        cdata->comp_flags.privacy : CAL_PRIVACY_PUBLIC;
+    if (rock->privacy == CAL_PRIVACY_SECRET) {
+        /* A secret event must not contribute any busy time */
+        goto done;
+    }
+
     /* Check mailbox-scoped ACL for showDetails */
     if (rock->show_details && rock->checkacl && !(rock->rights & ACL_READ)) {
         rock->show_details = 0;
@@ -10105,6 +10134,7 @@ static void principal_getavailability(jmap_req_t *req,
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct buf buf = BUF_INITIALIZER;
     int checkacl = strcmp(req->userid, principalid);
+    bool is_sharee = jmap_is_sharee(req, principalid);
     struct dynarray *busyperiods = dynarray_new(sizeof(struct busyperiod));
 
     /* Lookup busytime across calendars */
@@ -10118,6 +10148,7 @@ static void principal_getavailability(jmap_req_t *req,
         icalstart,
         icalend,
         principalid,
+        is_sharee,
         busyperiods,
         show_details,
         props,
@@ -10128,7 +10159,8 @@ static void principal_getavailability(jmap_req_t *req,
         checkacl,
         0,
         NULL,
-        NULL
+        NULL,
+        CAL_PRIVACY_PUBLIC
     };
 
     enum caldav_sort sort[] = { CAL_SORT_MAILBOX };
@@ -10167,8 +10199,12 @@ static void principal_getavailability(jmap_req_t *req,
      * property. If there are overlapping BusyPeriod time ranges with
      * different “busyStatus” properties the server MUST choose the value in
      * the following order: confirmed > unavailable > tentative. */
-    cyr_qsort_r(busyperiods->data, busyperiods->count, sizeof(struct busyperiod),
-            (int(*)(const void*, const void*, void*))busyperiod_cmp, NULL);
+    if (busyperiods->count) {
+        cyr_qsort_r(busyperiods->data, busyperiods->count,
+                    sizeof(struct busyperiod),
+                    (int (*)(const void *, const void *, void *))busyperiod_cmp,
+                    NULL);
+    }
     int count = dynarray_size(busyperiods) ? 1 : 0;
     int i;
     for (i = 1; i < dynarray_size(busyperiods); i++) {
@@ -11453,7 +11489,7 @@ static json_t *eventnotif_tojmap(jmap_req_t *req,
     }
 
     if (rock->check_acl) {
-        /* Check ACL */
+        /* Check ACL and privacy */
         // XXX - we really want to use mailbox-by-id here
         int have_rights = 0;
         const struct body *body;
@@ -11462,7 +11498,17 @@ static json_t *eventnotif_tojmap(jmap_req_t *req,
             if (!dlist_parsemap(&dl, 1, body->description,
                         strlen(body->description))) {
                 const char *mboxname;
-                if (dlist_getatom(dl, "M", &mboxname)) {
+                const char *privacyatom = NULL;
+                dlist_getatom(dl, "P", &privacyatom);
+                enum caldav_privacy privacy =
+                    caldav_privacy_from_string(privacyatom);
+                /* A sharee only sees a notification about a public event: its
+                   mere existence tells them that the event changed and when,
+                   so it is suppressed entirely rather than redacted. */
+                if (dlist_getatom(dl, "M", &mboxname)
+                    && (privacy == CAL_PRIVACY_PUBLIC
+                        || !jmap_is_sharee(req, req->accountid)))
+                {
                     have_rights = jmap_hasrights(req, mboxname, JACL_READITEMS);
                 }
             }
@@ -11647,21 +11693,25 @@ static int eventnotif_match(message_t *msg, struct notifsearch_entry *entry, voi
         const char *ical_uid = NULL;
         const char *type = NULL;
         const char *mboxname = NULL;
+        enum caldav_privacy privacy = CAL_PRIVACY_PUBLIC;
         struct dlist *dl = NULL;
         const struct body *body;
         if (!message_get_cachebody(msg, &body)) {
             if (!dlist_parsemap(&dl, 1, body->description,
                         strlen(body->description))) {
+                const char *privacyatom = NULL;
                 dlist_getatom(dl, "M", &mboxname);
                 dlist_getatom(dl, "ID", &ical_uid);
                 dlist_getatom(dl, "NT", &type);
+                dlist_getatom(dl, "P", &privacyatom);
+                privacy = caldav_privacy_from_string(privacyatom);
             }
         }
         if (!dl || !ical_uid || !type || !mboxname) {
             dlist_free(&dl);
             return 0;
         }
-        /* Evaluate criteria and ACL */
+        /* Evaluate criteria, ACL and privacy */
         int matches = 1;
         if (rock->eventids && !hash_lookup(ical_uid, rock->eventids)) {
             matches = 0;
@@ -11670,6 +11720,12 @@ static int eventnotif_match(message_t *msg, struct notifsearch_entry *entry, voi
             matches = 0;
         }
         if (rock->check_acl && !jmap_hasrights(rock->req, mboxname, JACL_READITEMS)) {
+            matches = 0;
+        }
+        /* Suppress notifications about non-public events, as in
+           eventnotif_tojmap() */
+        if (rock->check_acl && privacy != CAL_PRIVACY_PUBLIC
+            && jmap_is_sharee(rock->req, rock->req->accountid)) {
             matches = 0;
         }
         dlist_free(&dl);

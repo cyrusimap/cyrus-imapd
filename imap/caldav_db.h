@@ -64,11 +64,27 @@ enum {
 };
 
 /* Privacy values */
-enum {
+enum caldav_privacy {
     CAL_PRIVACY_PUBLIC = 0,
     CAL_PRIVACY_PRIVATE,
     CAL_PRIVACY_SECRET
 };
+
+/** @brief Determine the privacy of a calendar object from its CLASS property.
+ *
+ *  @param comp  An iCalendar component, or NULL.
+ *  @return      The privacy. A NULL component reads as CAL_PRIVACY_PUBLIC. */
+enum caldav_privacy caldav_privacy_from_ical(icalcomponent *comp);
+
+/** @brief Return the JSCalendar "privacy" property value for 'privacy'. */
+const char *caldav_privacy_as_string(enum caldav_privacy privacy);
+
+/** @brief Return the privacy for a JSCalendar "privacy" property value.
+ *
+ *  @param str  A property value, or NULL.
+ *  @return     The privacy. NULL reads as CAL_PRIVACY_PUBLIC, an unknown
+ *              value as CAL_PRIVACY_SECRET. */
+enum caldav_privacy caldav_privacy_from_string(const char *str);
 
 struct caldav_data {
     struct dav_data dav;  /* MUST be first so we can typecast */
@@ -79,7 +95,19 @@ struct caldav_data {
     const char *dtend;
     struct comp_flags comp_flags;
     const char *sched_tag;
+    /**
+     *  When privacy last crossed CAL_PRIVACY_SECRET. Only the latest crossing
+     *  is kept, so any number of crossings since the queried modseq looks like
+     *  a single one. An event with an even number of crossings may be reported
+     *  to a sharee as destroyed although the sharee never knew of it, or as
+     *  created despite having been visible before.
+     */
+    modseq_t privacy_modseq;
 };
+
+/** @brief Return whether 'cdata' was secret at 'modseq', and so was hidden
+ *         then from the sharees of its calendar. */
+bool caldav_was_secret(const struct caldav_data *cdata, modseq_t modseq);
 
 typedef int caldav_cb_t(void *rock, struct caldav_data *cdata);
 

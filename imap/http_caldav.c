@@ -113,6 +113,9 @@ static int caldav_parse_path(const char *path, struct request_target_t *tgt,
 static modseq_t caldav_get_modseq(struct mailbox *mailbox,
                                   void *data, const char *userid);
 
+static bool caldav_is_visible(struct mailbox *mailbox, void *data,
+                              modseq_t modseq, bool *was_visible);
+
 static int caldav_check_precond(struct transaction_t *txn,
                                 struct meth_params *params,
                                 struct mailbox *mailbox, const void *data,
@@ -129,6 +132,8 @@ static int caldav_delete_cal(struct transaction_t *txn,
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data, void **obj,
                       struct mime_type_t *mime);
+
+static int caldav_privacy_filter(struct propfind_ctx *fctx, void *data);
 
 static int caldav_mkcol(struct mailbox *mailbox);
 static int caldav_post(struct transaction_t *txn);
@@ -556,6 +561,7 @@ static struct meth_params caldav_params = {
     &caldav_parse_path,
     &caldav_get_validators,
     &caldav_get_modseq,
+    &caldav_is_visible,
     &caldav_check_precond,
     { (db_open_proc_t) &caldav_open_mailbox,
       (db_close_proc_t) &caldav_close,
@@ -577,7 +583,8 @@ static struct meth_params caldav_params = {
     { POST_ADDMEMBER | POST_SHARE, &caldav_post,
       { NS_CALDAV, "calendar-data", &caldav_import } },
     { CALDAV_SUPP_DATA, &caldav_put },
-    { 0, caldav_props },                        /* Allow infinite depth */
+    { 0, caldav_props,                          /* Allow infinite depth */
+      &caldav_privacy_filter },
     caldav_reports
 };
 // clang-format on
@@ -1008,6 +1015,58 @@ static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
     return precond ? HTTP_FORBIDDEN : 0;
 }
 
+/* Return whether the authenticated user is a sharee of 'mailbox', for whom
+   privacy is to be enforced: they neither own it nor are an admin. */
+static bool caldav_is_sharee(struct mailbox *mailbox)
+{
+    return !httpd_userisadmin &&
+           !mboxname_userownsmailbox(httpd_userid, mailbox_name(mailbox));
+}
+
+/* Return the privacy of 'cdata' as it applies to the authenticated user.
+   Returns CAL_PRIVACY_PUBLIC if there is nothing to enforce. */
+static enum caldav_privacy caldav_privacy_for_sharee(
+    struct mailbox *mailbox,
+    const struct caldav_data *cdata)
+{
+    if (!cdata || cdata->comp_flags.privacy == CAL_PRIVACY_PUBLIC) {
+        return CAL_PRIVACY_PUBLIC;
+    }
+
+    if (!caldav_is_sharee(mailbox)) {
+        return CAL_PRIVACY_PUBLIC;
+    }
+
+    return cdata->comp_flags.privacy;
+}
+
+static bool caldav_is_visible(struct mailbox *mailbox, void *data,
+                              modseq_t modseq, bool *was_visible)
+{
+    const struct caldav_data *cdata = (const struct caldav_data *) data;
+
+    if (!cdata || !caldav_is_sharee(mailbox)) {
+        *was_visible = true;
+        return true;
+    }
+
+    *was_visible = cdata->dav.createdmodseq <= modseq &&
+                   !caldav_was_secret(cdata, modseq);
+
+    return cdata->comp_flags.privacy != CAL_PRIVACY_SECRET;
+}
+
+static int caldav_privacy_filter(struct propfind_ctx *fctx, void *data)
+{
+    struct caldav_data *cdata = (struct caldav_data *) data;
+
+    if (caldav_privacy_for_sharee(fctx->mailbox, cdata) == CAL_PRIVACY_SECRET) {
+        return 0;
+    }
+
+    return 1;
+}
+
 /* Check headers for any preconditions */
 static int caldav_check_precond(struct transaction_t *txn,
                                 struct meth_params *params,
@@ -1019,6 +1078,45 @@ static int caldav_check_precond(struct transaction_t *txn,
     const char *stag = cdata && cdata->organizer ? cdata->sched_tag : NULL;
     const char **hdr;
     int precond = 0;
+
+    /* Only the owner may remove a non-public resource from their calendar,
+       or duplicate it elsewhere. */
+    enum caldav_privacy privacy = caldav_privacy_for_sharee(mailbox, cdata);
+
+    if (privacy != CAL_PRIVACY_PUBLIC
+        && (txn->meth == METH_DELETE || txn->meth == METH_MOVE
+            || txn->meth == METH_COPY))
+    {
+        xsyslog_ev(LOG_NOTICE, "sharee may not remove non-public resource",
+                   lf_s("method", http_methods[txn->meth].name),
+                   lf_s("userid", httpd_userid),
+                   lf_s("mboxname", mailbox_name(mailbox)),
+                   lf_s("resource", cdata->dav.resource),
+                   lf_s("privacy", caldav_privacy_as_string(privacy)));
+
+        if (privacy == CAL_PRIVACY_SECRET) {
+            /* Report a secret resource as if it did not exist */
+            return HTTP_NOT_FOUND;
+        }
+
+        /* Report as if the sharee had no access to remove the resource */
+        txn->error.precond = DAV_NEED_PRIVS;
+        txn->error.resource = txn->req_tgt.path;
+        txn->error.rights = DACL_RMRSRC;
+        return HTTP_NO_PRIVS;
+    }
+
+    if (privacy == CAL_PRIVACY_SECRET
+        && (txn->meth == METH_GET || txn->meth == METH_HEAD))
+    {
+        /* Report a secret resource as if it did not exist. */
+        xsyslog_ev(LOG_NOTICE, "hiding secret resource from sharee",
+                   lf_s("method", http_methods[txn->meth].name),
+                   lf_s("userid", httpd_userid),
+                   lf_s("mboxname", mailbox_name(mailbox)),
+                   lf_s("resource", cdata->dav.resource));
+        return HTTP_NOT_FOUND;
+    }
 
     if (txn->meth == METH_DELETE) {
         if (!cdata) {
@@ -1815,6 +1913,21 @@ static int export_calendar(struct transaction_t *txn)
         if (!r) ical = caldav_record_to_ical(mailbox, cdata, httpd_userid, NULL);
 
         if (ical) {
+            /* Enforce privacy for sharees */
+            enum caldav_privacy privacy =
+                caldav_privacy_for_sharee(mailbox, cdata);
+
+            if (privacy == CAL_PRIVACY_SECRET) {
+                /* Omit a secret resource as if it did not exist */
+                icalcomponent_free(ical);
+                continue;
+            }
+            else if (privacy == CAL_PRIVACY_PRIVATE) {
+                caldav_redact_private_ical(ical);
+            }
+        }
+
+        if (ical) {
             icalcomponent *comp;
 
             if (!syncmodseq) {
@@ -2579,6 +2692,16 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         const char **hdr;
         icalcomponent *ical = NULL;
 
+        enum caldav_privacy privacy = caldav_privacy_for_sharee(mailbox, cdata);
+        if (privacy == CAL_PRIVACY_SECRET) {
+            /* Report a secret resource as if it did not exist. */
+            xsyslog_ev(LOG_NOTICE, "hiding secret resource from sharee",
+                       lf_s("userid", httpd_userid),
+                       lf_s("mboxname", mailbox_name(mailbox)),
+                       lf_s("resource", cdata->dav.resource));
+            return HTTP_NOT_FOUND;
+        }
+
         /* Check for optional CalDAV-Timezones header */
         hdr = spool_getheader(txn->req_hdrs, "CalDAV-Timezones");
         if (hdr && !strcmp(hdr[0], "T")) need_tz = 1;
@@ -2643,6 +2766,9 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         if (!ical) *obj = ical = record_to_ical(mailbox, record, NULL);
         personalize_and_add_defaultalarms(mailbox, cdata, record, ical, NULL);
 
+        if (privacy == CAL_PRIVACY_PRIVATE) {
+            caldav_redact_private_ical(ical);
+        }
 
         /* iCalendar data in response should not be transformed */
         txn->flags.cc |= CC_NOTRANSFORM;
@@ -5028,6 +5154,15 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
     struct caldav_data *cdata = (struct caldav_data *) data;
     icalcomponent *ical = fctx->obj;
 
+    /* Enforce privacy for sharees. */
+    enum caldav_privacy privacy =
+        caldav_privacy_for_sharee(fctx->mailbox, cdata);
+
+    if (privacy == CAL_PRIVACY_SECRET) {
+        /* Never match a secret resource */
+        return 0;
+    }
+
     if (calfilter->comp_types) {
         /* Check if we can short-circuit based on
            comp-filter(s) vs component type of resource */
@@ -5051,6 +5186,12 @@ static int apply_calfilter(struct propfind_ctx *fctx, void *data)
                                         fctx->record->header_size);
         }
         if (!ical) return 0;
+    }
+
+    if (privacy == CAL_PRIVACY_PRIVATE && ical) {
+        /* Match on what the sharee is allowed to see, otherwise a prop-filter
+           could be used to probe the properties we are about to redact */
+        caldav_redact_private_ical(ical);
     }
 
     return apply_compfilter(calfilter->comp, calfilter->tz, ical, cdata, fctx);
@@ -5095,6 +5236,11 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
     if (sqlite3_libversion_number() < 3003008) {
         /* Can't write to a table while a SELECT is active */
+        goto done;
+    }
+
+    if (caldav_privacy_for_sharee(fctx->mailbox, cdata) == CAL_PRIVACY_SECRET) {
+        /* Don't rewrite a resource that caldav_privacy_filter() will hide */
         goto done;
     }
 
@@ -5757,6 +5903,26 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
             }
 
             prune_properties(ical, partial->comp);
+        }
+
+        switch (caldav_privacy_for_sharee(fctx->mailbox, cdata)) {
+        case CAL_PRIVACY_SECRET:
+            /* Should have been hidden by caldav_privacy_filter() already */
+            return HTTP_NOT_FOUND;
+
+        case CAL_PRIVACY_PRIVATE:
+            if (!fctx->obj) {
+                ical = fctx->obj = icalparser_parse_string(data);
+                if (!ical) {
+                    return HTTP_SERVER_ERROR;
+                }
+            }
+
+            caldav_redact_private_ical(ical);
+            break;
+
+        default:
+            break;
         }
 
         if (ical) {
@@ -7513,6 +7679,12 @@ HIDDEN int busytime_add_resource(struct mailbox *mailbox,
                                  struct caldav_data *cdata)
 {
     if (!cdata->dav.imap_uid) return 0;
+
+    if (caldav_privacy_for_sharee(mailbox, cdata) == CAL_PRIVACY_SECRET) {
+        /* A secret object contributes no busy time. A private one still does,
+           but free-busy carries no detail anyway. */
+        return 0;
+    }
 
     /* Perform component filtering */
     if (!(cdata->comp_type &

@@ -1,0 +1,121 @@
+#!perl
+use Cassandane::Tiny;
+
+my sub deliver_imip ($self, $ical)
+{
+    my $msg = $self->{gen}->generate(
+        from => Cassandane::Address->new(localpart => 'sender',
+                                         domain => 'example.net'),
+        to => Cassandane::Address->new(localpart => 'cassandane',
+                                       domain => 'example.com'),
+        mime_type => 'text/calendar; method=REQUEST; component=VEVENT',
+        body => $ical,
+    );
+
+    $self->{instance}->deliver($msg);
+}
+
+sub test_itip_privacy_incoming_request
+    :needs_component_sieve
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $uid = guid_string();
+    my $organizer = 'organizer@example.net';
+    my $attendee = 'cassandane@example.com';
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<~"EOF");
+    require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+    if body :content "text/calendar" :contains "\nMETHOD:" {
+        processimip :deletecanceled :outcome "outcome";
+    }
+    EOF
+
+    xlog $self, "Organizer sends invite with CLASS:PRIVATE";
+    deliver_imip($self, <<~"EOF");
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+    METHOD:REQUEST
+    BEGIN:VEVENT
+    CREATED:20210923T034327Z
+    UID:$uid
+    SUMMARY:test
+    CLASS:PRIVATE
+    DTSTART;TZID=America/New_York:20210923T153000
+    DURATION:PT1H
+    DTSTAMP:20210923T034327Z
+    RRULE:FREQ=DAILY;COUNT=3
+    SEQUENCE:0
+    ORGANIZER:MAILTO:$organizer
+    ATTENDEE;RSVP=TRUE;PARTSTAT=NEEDS-ACTION;X-JMAP-ID=cassandane:MAILTO:$attendee
+    END:VEVENT
+    END:VCALENDAR
+    EOF
+
+    xlog $self, "the privacy of the new event is the one the organizer sent";
+    my $event_id = $jmap->request([
+        [ 'CalendarEvent/get' => { properties => ['id'] } ],
+    ])->single_sentence('CalendarEvent/get')->arguments->{list}[0]{id};
+    $self->assert_not_null($event_id);
+
+    my $event = $user->calendarevents->get($event_id);
+    $self->assert_str_equals('private', $event->privacy);
+
+    my $xhref = q{} . $event->properties->{'x-href'};
+    $self->assert_not_null($xhref);
+    $self->assert_matches(qr/CLASS:PRIVATE/,
+        $user->caldav->Request('GET', $xhref)->{content});
+
+    xlog $self, "the user reclassifies their copy as secret";
+    $event->update({ privacy => 'secret' });
+
+    xlog $self, "Organizer updates the invite, adding a recurrence override";
+    deliver_imip($self, <<~"EOF");
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+    METHOD:REQUEST
+    BEGIN:VEVENT
+    CREATED:20210923T034327Z
+    UID:$uid
+    SUMMARY:test
+    CLASS:PRIVATE
+    DTSTART;TZID=America/New_York:20210923T153000
+    DURATION:PT1H
+    DTSTAMP:20210923T034327Z
+    RRULE:FREQ=DAILY;COUNT=3
+    SEQUENCE:0
+    ORGANIZER:MAILTO:$organizer
+    ATTENDEE;RSVP=TRUE;PARTSTAT=ACCEPTED;X-JMAP-ID=cassandane:MAILTO:$attendee
+    END:VEVENT
+    BEGIN:VEVENT
+    CREATED:20210923T034327Z
+    UID:$uid
+    SUMMARY:test
+    CLASS:PRIVATE
+    RECURRENCE-ID;TZID=America/New_York:20210924T153000
+    DTSTART;TZID=America/New_York:20210924T163000
+    DURATION:PT1H
+    DTSTAMP:20210923T034327Z
+    SEQUENCE:0
+    ORGANIZER:MAILTO:$organizer
+    ATTENDEE;RSVP=TRUE;PARTSTAT=NEEDS-ACTION;X-JMAP-ID=cassandane:MAILTO:$attendee
+    END:VEVENT
+    END:VCALENDAR
+    EOF
+
+    xlog $self, "the update does not change the privacy the user set";
+    $event = $user->calendarevents->get($event_id);
+    $self->assert_str_equals('secret', $event->privacy);
+
+    xlog $self, "the privacy of the override matches the main event";
+    my $override = $event->recurrenceOverrides->{'2021-09-24T15:30:00'};
+    $self->assert_not_null($override);
+    $self->assert_null($override->{privacy});
+    $self->assert_does_not_match(qr/CLASS:PRIVATE/,
+        $user->caldav->Request('GET', $xhref)->{content});
+}

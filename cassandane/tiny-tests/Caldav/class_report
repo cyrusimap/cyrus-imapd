@@ -1,0 +1,262 @@
+#!perl
+use Cassandane::Tiny;
+
+use Text::VCardFast qw(vcard2hash);
+
+# These tests assert the CLASS property for the CalDAV REPORT method: the
+# calendar-query, calendar-multiget and free-busy-query reports.
+
+my $CAL_HREF = '/dav/calendars/user/cassandane/Default';
+
+my %UID = (
+    public  => 'aaaaaaaa-0000-4000-8000-000000000001',
+    private => 'bbbbbbbb-0000-4000-8000-000000000002',
+    secret  => 'cccccccc-0000-4000-8000-000000000003',
+);
+
+my sub put_event ($caldav, $uid, $dtstart, $summary, $class)
+{
+    $caldav->Request('PUT', "Default/$uid.ics", join("\r\n",
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN',
+        'BEGIN:VEVENT',
+        "UID:$uid",
+        'DTSTAMP:20260101T000000Z',
+        "DTSTART:$dtstart",
+        'DURATION:PT1H',
+        "SUMMARY:$summary",
+        "DESCRIPTION:Description of $summary",
+        "LOCATION:Location of $summary",
+        'SEQUENCE:0',
+        ($class ? "CLASS:$class" : ()),
+        'BEGIN:VALARM',
+        'UID:alarm-for-' . $uid,
+        'ACTION:DISPLAY',
+        'DESCRIPTION:Reminder',
+        'TRIGGER:-PT5M',
+        'END:VALARM',
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ) . "\r\n", 'Content-Type' => 'text/calendar');
+}
+
+# Create a public, a private and a secret event as the calendar owner.
+my sub create_events ($self)
+{
+    my $owner_caldav = $self->default_user->caldav;
+
+    xlog $self, "create a public, a private and a secret event as the owner";
+    put_event($owner_caldav, $UID{public}, '20260801T100000Z',
+              'Public Event', undef);
+    put_event($owner_caldav, $UID{private}, '20260802T100000Z',
+              'Private Event', 'PRIVATE');
+    put_event($owner_caldav, $UID{secret}, '20260803T100000Z',
+              'Secret Event', 'CONFIDENTIAL');
+
+}
+
+# Return the sorted property names of the first VEVENT in $ical.
+my sub sort_vevent_props ($ical)
+{
+    my $hash = vcard2hash($ical);
+    my ($vevent) =
+        grep { $_->{type} eq 'vevent' } @{$hash->{objects}[0]{objects}};
+    return [ sort keys %{$vevent->{properties}} ];
+}
+
+# Return the sorted resource names of a multistatus response. Cyrus reports a
+# shared calendar under the sharee's own calendar home, so only compare the
+# last path segment.
+my sub sort_resource_names ($res)
+{
+    my @hrefs = map { $_->{'{DAV:}href'}{content} }
+                @{$res->{'{DAV:}response'} // []};
+    return [ sort map { m{([^/]+\.ics)$} ? $1 : () } @hrefs ];
+}
+
+my sub report ($caldav, $xml)
+{
+    return $caldav->Request('REPORT', "$CAL_HREF/", $xml,
+                            'Content-Type' => 'application/xml',
+                            'Depth' => 1);
+}
+
+sub test_class_report__calendar_query
+    ($self)
+{
+    create_events($self);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    xlog $self, "sharee runs a calendar-query for all events";
+    my $res = report($sharee_caldav, <<"EOF");
+<?xml version="1.0" encoding="UTF-8"?>
+<calendar-query xmlns="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:">
+  <D:prop>
+    <D:getetag/>
+    <calendar-data/>
+  </D:prop>
+  <filter>
+    <comp-filter name="VCALENDAR">
+      <comp-filter name="VEVENT"/>
+    </comp-filter>
+  </filter>
+</calendar-query>
+EOF
+
+    xlog $self, "the secret event does not match";
+    $self->assert_cmp_deeply(
+        [sort ("$UID{private}.ics", "$UID{public}.ics")],
+        sort_resource_names($res));
+
+    xlog $self, "the returned data of the private event is redacted";
+    my ($private) = grep {
+        $_->{'{DAV:}href'}{content} =~ m/\Q$UID{private}\E\.ics$/
+    } @{$res->{'{DAV:}response'}};
+    my $ical = $private->{'{DAV:}propstat'}[0]{'{DAV:}prop'}
+                       {'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content};
+    # These are the properties of the private event that survive redaction.
+    $self->assert_cmp_deeply([qw(class dtstamp dtstart duration sequence uid)],
+                             sort_vevent_props($ical));
+}
+
+# A prop-filter must not be usable to probe the properties that a sharee is
+# not allowed to read back.
+sub test_class_report__calendar_query_propfilter
+    ($self)
+{
+    create_events($self);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    my $query = <<'EOF';
+<?xml version="1.0" encoding="UTF-8"?>
+<calendar-query xmlns="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:">
+  <D:prop>
+    <D:getetag/>
+  </D:prop>
+  <filter>
+    <comp-filter name="VCALENDAR">
+      <comp-filter name="VEVENT">
+        <prop-filter name="SUMMARY">
+          <text-match collation="i;unicode-casemap">SUMMARYVALUE</text-match>
+        </prop-filter>
+      </comp-filter>
+    </comp-filter>
+  </filter>
+</calendar-query>
+EOF
+
+    xlog $self, "a prop-filter matches the summary of the public event";
+    my $public_query = $query;
+    my $nsubst = ($public_query =~ s/SUMMARYVALUE/Public Event/);
+    $self->assert_num_equals(1, $nsubst);
+    $self->assert_cmp_deeply(["$UID{public}.ics"],
+        sort_resource_names(report($sharee_caldav, $public_query)));
+
+    xlog $self, "the same prop-filter does not match the private event";
+    my $private_query = $query;
+    $nsubst = ($private_query =~ s/SUMMARYVALUE/Private Event/);
+    $self->assert_num_equals(1, $nsubst);
+    $self->assert_cmp_deeply([],
+        sort_resource_names(report($sharee_caldav, $private_query)));
+}
+
+# Every href of a calendar-multiget gets a response, so a secret event must
+# read exactly like an event that does not exist at all.
+sub test_class_report__calendar_multiget
+    ($self)
+{
+    create_events($self);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    my $nonexistent = 'eeeeeeee-0000-4000-8000-000000000005';
+
+    xlog $self, "look up the calendar path that the multiget hrefs must use";
+    my $propfind = <<'EOF';
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propfind xmlns:D="DAV:">
+  <D:prop>
+    <D:resourcetype/>
+  </D:prop>
+</D:propfind>
+EOF
+
+    my $res = $sharee_caldav->Request('PROPFIND', "$CAL_HREF/", $propfind,
+                                      'Content-Type' => 'application/xml',
+                                      'Depth' => 0);
+
+    my $shared_href = $res->{'{DAV:}response'}[0]{'{DAV:}href'}{content};
+    $shared_href .= '/' unless $shared_href =~ m{/$};
+
+    my $hrefs = join "\n",
+                map { "  <D:href>$shared_href$_.ics</D:href>" }
+                ($UID{public}, $UID{private}, $UID{secret}, $nonexistent);
+
+    my $xml = <<"EOF";
+<?xml version="1.0" encoding="UTF-8"?>
+<calendar-multiget xmlns="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:">
+  <D:prop>
+    <D:getetag/>
+    <calendar-data/>
+  </D:prop>
+$hrefs
+</calendar-multiget>
+EOF
+
+    xlog $self, "sharee runs a calendar-multiget for all four hrefs";
+    $res = $sharee_caldav->Request('REPORT', $shared_href, $xml,
+                                   'Content-Type' => 'application/xml');
+
+    my %status;
+    for my $resp (@{$res->{'{DAV:}response'} // []}) {
+        my ($name) = $resp->{'{DAV:}href'}{content} =~ m{([^/]+\.ics)$};
+        $status{$name} = $resp->{'{DAV:}status'}{content} if $name;
+    }
+
+    $self->assert_cmp_deeply({
+        "$UID{public}.ics"  => undef,
+        "$UID{private}.ics" => undef,
+        "$UID{secret}.ics"  => 'HTTP/1.1 404 Not Found',
+        "$nonexistent.ics"  => 'HTTP/1.1 404 Not Found',
+    }, \%status);
+}
+
+# A secret object contributes no busy time to a free-busy-query, a private one
+# still does.
+sub test_class_report__freebusy
+    ($self)
+{
+    create_events($self);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    xlog $self, "sharee asks for the free-busy of the shared calendar";
+    my ($data) = $sharee_caldav->GetFreeBusy($CAL_HREF, AlwaysRange => 1);
+
+    $self->assert_cmp_deeply(
+        ['2026-08-01T10:00:00', '2026-08-02T10:00:00'],
+        [sort map { $_->{start} } @$data]);
+}

@@ -103,6 +103,10 @@ extern int caldav_get_usedefaultalerts(struct dlist *dl,
                                        icalcomponent **icalp);
 
 
+/* Remove everything from the calendar object in 'ical' that a sharee may
+ * not see in a calendar object having CLASS=PRIVATE. */
+extern void caldav_redact_private_ical(icalcomponent *ical);
+
 #ifdef WITH_JMAP
 extern int caldav_init_jmapcalendar(const char *userid, struct mailbox *mailbox);
 #endif

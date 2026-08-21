@@ -1,0 +1,247 @@
+#!perl
+use Cassandane::Tiny;
+
+# These tests assert the CLASS property for the CalDAV sync-collection REPORT.
+
+my $CAL_HREF = '/dav/calendars/user/cassandane/Default';
+
+my %UID = (
+    public  => 'aaaaaaaa-0000-4000-8000-000000000001',
+    private => 'bbbbbbbb-0000-4000-8000-000000000002',
+    secret  => 'cccccccc-0000-4000-8000-000000000003',
+);
+
+# The iCalendar CLASS values that Cyrus reads as each JSCalendar privacy.
+my %CLASS = (
+    public  => undef,
+    private => 'PRIVATE',
+    secret  => 'CONFIDENTIAL',
+);
+
+my sub put_event ($caldav, $uid, $dtstart, $summary, $class)
+{
+    $caldav->Request('PUT', "Default/$uid.ics", join("\r\n",
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN',
+        'BEGIN:VEVENT',
+        "UID:$uid",
+        'DTSTAMP:20260101T000000Z',
+        "DTSTART:$dtstart",
+        'DURATION:PT1H',
+        "SUMMARY:$summary",
+        "DESCRIPTION:Description of $summary",
+        "LOCATION:Location of $summary",
+        'SEQUENCE:0',
+        ($class ? "CLASS:$class" : ()),
+        'BEGIN:VALARM',
+        'UID:alarm-for-' . $uid,
+        'ACTION:DISPLAY',
+        'DESCRIPTION:Reminder',
+        'TRIGGER:-PT5M',
+        'END:VALARM',
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ) . "\r\n", 'Content-Type' => 'text/calendar');
+}
+
+# Create a public, a private and a secret event as the calendar owner.
+my sub create_events ($self)
+{
+    my $owner_caldav = $self->default_user->caldav;
+
+    xlog $self, "create a public, a private and a secret event as the owner";
+    put_event($owner_caldav, $UID{public}, '20260801T100000Z',
+              'Public Event', undef);
+    put_event($owner_caldav, $UID{private}, '20260802T100000Z',
+              'Private Event', 'PRIVATE');
+    put_event($owner_caldav, $UID{secret}, '20260803T100000Z',
+              'Secret Event', 'CONFIDENTIAL');
+
+}
+
+# Run a sync-collection REPORT, returning the resource names it reports as
+# changed, the ones it reports as removed, and the new sync token. Passing no
+# token runs an initial sync.
+my sub sync_collection ($self, $caldav, $sync_token)
+{
+    my ($added, $removed, $errors, $new_token) = $caldav->SyncEventLinks(
+        $CAL_HREF, ($sync_token ? (syncToken => $sync_token) : ()));
+
+    $self->assert_deep_equals([], $errors);
+
+    my $names = sub { [ sort map { m{([^/]+\.ics)$} ? $1 : () } @{$_[0]} ] };
+
+    return ($names->([ keys %$added ]), $names->($removed), $new_token);
+}
+
+sub test_class_report_sync_collection__initial
+    ($self)
+{
+    create_events($self);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    xlog $self, "sharee runs an initial sync-collection report";
+    my ($changed, $removed) = sync_collection($self, $sharee_caldav, undef);
+
+    $self->assert_cmp_deeply(
+        [sort ("$UID{private}.ics", "$UID{public}.ics")], $changed);
+    $self->assert_cmp_deeply([], $removed);
+}
+
+# A sharee sees every event but a secret one, so their view of an event begins
+# and ends where its CLASS crosses that boundary.
+my sub assert_sync_collection_change ($self, $from, $to, $want)
+{
+    my $uid = 'eeeeeeee-0000-4000-8000-000000000005';
+    my $secret_uid = 'ffffffff-0000-4000-8000-000000000006';
+    my $owner_caldav = $self->default_user->caldav;
+
+    xlog $self, "create a $from event, and one that stays secret throughout";
+    put_event($owner_caldav, $uid, '20260801T100000Z', 'Event',
+              $CLASS{$from});
+    put_event($owner_caldav, $secret_uid, '20260802T100000Z', 'Secret Event',
+              $CLASS{secret});
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    xlog $self, "sharee runs an initial sync-collection report";
+    my (undef, undef, $token) = sync_collection($self, $sharee_caldav, undef);
+
+    xlog $self, "change the event to $to, and retitle the secret one";
+    put_event($owner_caldav, $uid, '20260801T100000Z', 'Event', $CLASS{$to});
+    put_event($owner_caldav, $secret_uid, '20260802T100000Z', 'Retitled',
+              $CLASS{secret});
+
+    xlog $self, "sharee syncs again and sees the event as $want, nothing else";
+    my ($changed, $removed) = sync_collection($self, $sharee_caldav, $token);
+
+    my %want = (changed => [], removed => [], $want => ["$uid.ics"]);
+    $self->assert_cmp_deeply($want{changed}, $changed);
+    $self->assert_cmp_deeply($want{removed}, $removed);
+}
+
+# A secret resource that the sharee never could have synced must not be
+# reported as removed just because it is invisible to them now.
+my sub assert_sync_collection_secret_after_token ($self, @privacies)
+{
+    create_events($self);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    my $owner_caldav = $self->default_user->caldav;
+
+    xlog $self, "sharee runs an initial sync-collection report";
+    my (undef, undef, $token) = sync_collection($self, $sharee_caldav, undef);
+
+    my $uid = 'eeeeeeee-0000-4000-8000-000000000005';
+
+    for my $privacy (@privacies) {
+        xlog $self, "store another event as $privacy";
+        put_event($owner_caldav, $uid, '20260804T100000Z', 'Event',
+                  $CLASS{$privacy});
+    }
+
+    xlog $self, "sharee syncs again and sees no change at all";
+    my ($changed, $removed) = sync_collection($self, $sharee_caldav, $token);
+
+    $self->assert_cmp_deeply([], $changed);
+    $self->assert_cmp_deeply([], $removed);
+}
+
+# A deletion only is visible to a sharee if they could see the resource before.
+my sub assert_sync_collection_delete ($self, $privacy, $want_removed)
+{
+    create_events($self);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    my $owner_caldav = $self->default_user->caldav;
+
+    xlog $self, "sharee runs an initial sync-collection report";
+    my (undef, undef, $token) = sync_collection($self, $sharee_caldav, undef);
+
+    xlog $self, "the owner deletes the $privacy event";
+    $owner_caldav->Request('DELETE', "Default/$UID{$privacy}.ics");
+
+    xlog $self, "sharee syncs again and sees the event as $privacy demands";
+    my ($changed, $removed) = sync_collection($self, $sharee_caldav, $token);
+
+    $self->assert_cmp_deeply([], $changed);
+    $self->assert_cmp_deeply($want_removed, $removed);
+}
+
+sub test_class_report_sync_collection__delete_secret
+    ($self)
+{
+    assert_sync_collection_delete($self, 'secret', []);
+}
+
+sub test_class_report_sync_collection__delete_public
+    ($self)
+{
+    assert_sync_collection_delete($self, 'public', ["$UID{public}.ics"]);
+}
+
+sub test_class_report_sync_collection__secret_created_after_token
+    ($self)
+{
+    assert_sync_collection_secret_after_token($self, 'secret');
+}
+
+sub test_class_report_sync_collection__public_then_secret_after_token
+    ($self)
+{
+    assert_sync_collection_secret_after_token($self, 'public', 'secret');
+}
+
+sub test_class_report_sync_collection__secret_to_public
+    ($self)
+{
+    assert_sync_collection_change($self, 'secret', 'public', 'changed');
+}
+
+sub test_class_report_sync_collection__secret_to_private
+    ($self)
+{
+    assert_sync_collection_change($self, 'secret', 'private', 'changed');
+}
+
+sub test_class_report_sync_collection__public_to_secret
+    ($self)
+{
+    assert_sync_collection_change($self, 'public', 'secret', 'removed');
+}
+
+sub test_class_report_sync_collection__private_to_secret
+    ($self)
+{
+    assert_sync_collection_change($self, 'private', 'secret', 'removed');
+}
+
+sub test_class_report_sync_collection__public_to_private
+    ($self)
+{
+    assert_sync_collection_change($self, 'public', 'private', 'changed');
+}

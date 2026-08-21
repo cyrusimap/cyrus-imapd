@@ -164,6 +164,13 @@ typedef int (*get_validators_t)(struct mailbox *mailbox, void *data,
 typedef modseq_t (*get_modseq_t)(struct mailbox *mailbox,
                                  void *data, const char *userid);
 
+/* Function to check whether a resource is visible to the authenticated user
+ * (optional). Sets 'was_visible' to whether it was visible at 'modseq'.
+ * A resource that becomes invisible must be reported as removed by a
+ * sync-collection REPORT, so that clients holding it drop it. */
+typedef bool (*is_visible_t)(struct mailbox *mailbox, void *data,
+                             modseq_t modseq, bool *was_visible);
+
 typedef void *(*db_open_proc_t)(struct mailbox *mailbox);
 typedef int (*db_close_proc_t)(void *davdb);
 
@@ -422,6 +429,8 @@ struct put_params {
 struct propfind_params {
     unsigned finite_depth_precond;      /* precond code for finite depth */
     const struct prop_entry *lprops;    /* array of "live" properties */
+    int (*filter)(struct propfind_ctx *,
+                  void *data);          /* default resource filter, may be NULL */
 };
 
 /* meth_report() parameters */
@@ -457,6 +466,7 @@ struct meth_params {
     parse_path_t parse_path;            /* parse URI path & generate mboxname */
     get_validators_t get_validators;    /* fetch resource validators */
     get_modseq_t get_modseq;            /* fetch resource modseq */
+    is_visible_t is_visible;            /* check resource visibility (optional) */
     check_precond_t check_precond;      /* check headers for preconditions */
     struct davdb_params davdb;          /* DAV DB access functions */
     acl_proc_t acl_ext;                 /* special ACL handling (extensions) */

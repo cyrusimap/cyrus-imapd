@@ -7,6 +7,7 @@
 
 #include <jansson.h>
 
+#include "caldav_db.h"
 #include "ical_support.h"
 #include "jmap_util.h"
 #include "mboxlist.h"
@@ -25,6 +26,7 @@ extern int jmap_create_caleventnotif(struct mailbox *notifmbox,
                                      const strarray_t *schedule_addresses,
                                      const char *comment,
                                      int is_draft,
+                                     enum caldav_privacy privacy,
                                      json_t *jevent,
                                      json_t *jpatch);
 

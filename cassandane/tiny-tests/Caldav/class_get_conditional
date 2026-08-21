@@ -1,0 +1,83 @@
+#!perl
+use Cassandane::Tiny;
+
+# A conditional CalDAV request is replied to before the resource is read, so
+# it must not tell a sharee that a secret resource exists.
+
+my %UID = (
+    public  => 'aaaaaaaa-0000-4000-8000-000000000001',
+    secret  => 'cccccccc-0000-4000-8000-000000000003',
+    missing => 'eeeeeeee-0000-4000-8000-000000000005',
+);
+
+my sub put_event ($caldav, $uid, $dtstart, $summary, $class)
+{
+    $caldav->Request('PUT', "Default/$uid.ics", join("\r\n",
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN',
+        'BEGIN:VEVENT',
+        "UID:$uid",
+        'DTSTAMP:20260101T000000Z',
+        "DTSTART:$dtstart",
+        'DURATION:PT1H',
+        "SUMMARY:$summary",
+        'SEQUENCE:0',
+        ($class ? "CLASS:$class" : ()),
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ) . "\r\n", 'Content-Type' => 'text/calendar');
+}
+
+# Create a public and a secret event as the calendar owner.
+my sub create_events ($self)
+{
+    my $owner_caldav = $self->default_user->caldav;
+
+    xlog $self, "create a public and a secret event as the owner";
+    put_event($owner_caldav, $UID{public}, '20260801T100000Z',
+              'Public Event', undef);
+    put_event($owner_caldav, $UID{secret}, '20260803T100000Z',
+              'Secret Event', 'CONFIDENTIAL');
+
+}
+
+my sub assert_class_get_conditional ($self, $method)
+{
+    create_events($self);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+    my $cal_href = '/dav/calendars/user/cassandane/Default';
+
+    xlog $self, "a conditional $method of the public event is not modified";
+    my $res = $sharee_caldav->SafeRequest($method,
+        "$cal_href/$UID{public}.ics", '', 'If-None-Match' => '*');
+    $self->assert_num_equals(304, $res->{http_response}{status});
+
+    xlog $self, "a conditional $method of the secret event is not found";
+    $res = $sharee_caldav->SafeRequest($method,
+        "$cal_href/$UID{secret}.ics", '', 'If-None-Match' => '*');
+    $self->assert_num_equals(404, $res->{http_response}{status});
+
+    xlog $self, "an event that does not exist reads the same";
+    $res = $sharee_caldav->SafeRequest($method,
+        "$cal_href/$UID{missing}.ics", '', 'If-None-Match' => '*');
+    $self->assert_num_equals(404, $res->{http_response}{status});
+}
+
+sub test_class_get_conditional__get
+    ($self)
+{
+    assert_class_get_conditional($self, 'GET');
+}
+
+sub test_class_get_conditional__head
+    ($self)
+{
+    assert_class_get_conditional($self, 'HEAD');
+}

@@ -1,0 +1,205 @@
+#!perl
+use Cassandane::Tiny;
+
+use Data::GUID qw(guid_string);
+
+# Notifications are only created for a calendar that already has sharees, so
+# this must run before any event is created.
+my sub share_calendar ($self)
+{
+    my $sharee_user = $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    $self->default_user->calendars->default
+        ->share_with(sharee => [qw( mayReadItems )]);
+
+    return $sharee_user->jmap;
+}
+
+# Returns the events, keyed by privacy.
+my sub create_events ($self)
+{
+    my $default_cal = $self->default_user->calendars->default;
+
+    xlog $self, "create one event for each privacy value";
+    return {
+        map {; $_ => $default_cal->create_event({
+            privacy => $_,
+            title => "$_ event",
+            description => 'a private detail',
+        }) } qw( public private secret )
+    };
+}
+
+# Fetch every notification. A null "ids" makes notif_get() iterate the whole
+# notification mailbox, so this exercises eventnotif_tojmap() on its own
+# rather than on whatever /query already filtered out.
+my sub get_all_notifications ($self, $jmap)
+{
+    return $jmap->request([[
+        'CalendarEventNotification/get' => {
+            accountId => 'cassandane',
+            ids => JSON::null,
+            properties => ['calendarEventId', 'type', 'event', 'eventPatch'],
+        },
+    ]])->single_sentence('CalendarEventNotification/get')->arguments->{list};
+}
+
+sub test_calendareventnotification_privacy__get
+    ($self)
+{
+    my $sharee_jmap = share_calendar($self);
+    my $event = create_events($self);
+
+    xlog $self, "sharee only gets the notification of the public event";
+    $self->assert_cmp_deeply([superhashof({
+        calendarEventId => $event->{public}->id,
+        type => 'created',
+        event => superhashof({
+            title => 'public event',
+        }),
+    })], get_all_notifications($self, $sharee_jmap));
+}
+
+sub test_calendareventnotification_privacy__query
+    ($self)
+{
+    my $sharee_jmap = share_calendar($self);
+    my $event = create_events($self);
+
+    xlog $self, "sharee only queries the notification of the public event";
+    my $ids = $sharee_jmap->request([[
+        'CalendarEventNotification/query' => {
+            accountId => 'cassandane',
+        },
+    ]])->single_sentence('CalendarEventNotification/query')->arguments->{ids};
+    $self->assert_num_equals(1, scalar @$ids);
+
+    xlog $self, "and it is the public one";
+    my $get = $sharee_jmap->request([[
+        'CalendarEventNotification/get' => {
+            accountId => 'cassandane',
+            ids => $ids,
+            properties => ['calendarEventId'],
+        },
+    ]])->single_sentence('CalendarEventNotification/get')->arguments;
+
+    $self->assert_cmp_deeply([superhashof({
+        calendarEventId => $event->{public}->id,
+    })], $get->{list});
+}
+
+my sub assert_update ($self, $from_privacy, $to_privacy, $want_notification)
+{
+    my $sharee_jmap = share_calendar($self);
+
+    xlog $self, "create a $from_privacy event";
+    my $event = $self->default_user->calendars->default
+                     ->create_event({ privacy => $from_privacy });
+
+    xlog $self, "change privacy from $from_privacy to $to_privacy";
+    $event->privacy($to_privacy);
+
+    xlog $self, "assert notifications";
+    $self->assert_cmp_deeply($want_notification,
+        [sort map { q{} . $_->{type} }
+            get_all_notifications($self, $sharee_jmap)->@*]);
+}
+
+my sub assert_destroy ($self, $privacy, $want_notification)
+{
+    my $sharee_jmap = share_calendar($self);
+
+    xlog $self, "create a $privacy event";
+    my $event = $self->default_user->calendars->default
+                     ->create_event({ privacy => $privacy });
+
+    xlog $self, "destroy it";
+    $event->destroy;
+
+    xlog $self, "assert notifications";
+    $self->assert_cmp_deeply($want_notification,
+        [sort map { q{} . $_->{type} }
+            get_all_notifications($self, $sharee_jmap)->@*]);
+}
+
+sub test_calendareventnotification_privacy__update_public_to_private
+    ($self)
+{
+    assert_update($self, 'public', 'private', ['created']);
+}
+
+sub test_calendareventnotification_privacy__update_public_to_secret
+    ($self)
+{
+    assert_update($self, 'public', 'secret', ['created']);
+}
+
+sub test_calendareventnotification_privacy__update_private_to_public
+    ($self)
+{
+    assert_update($self, 'private', 'public', []);
+}
+
+sub test_calendareventnotification_privacy__update_secret_to_public
+    ($self)
+{
+    assert_update($self, 'secret', 'public', []);
+}
+
+sub test_calendareventnotification_privacy__destroy_public
+    ($self)
+{
+    assert_destroy($self, 'public', ['destroyed']);
+}
+
+sub test_calendareventnotification_privacy__destroy_private
+    ($self)
+{
+    assert_destroy($self, 'private', []);
+}
+
+sub test_calendareventnotification_privacy__destroy_secret
+    ($self)
+{
+    assert_destroy($self, 'secret', []);
+}
+
+# The CalDAV write path builds its notification from the iCalendar data instead.
+sub test_calendareventnotification_privacy__caldav
+    ($self)
+{
+    my $sharee_jmap = share_calendar($self);
+    my $owner_caldav = $self->default_user->caldav;
+
+    my %CLASS = (
+        private => 'CLASS:PRIVATE',
+        secret => 'CLASS:CONFIDENTIAL',
+    );
+
+    foreach my $privacy (qw(public private secret)) {
+        xlog $self, "owner PUTs a $privacy event";
+        my $uid = guid_string();
+        $owner_caldav->Request('PUT', "Default/$uid.ics", join("\r\n",
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN',
+            'BEGIN:VEVENT',
+            "UID:$uid",
+            'DTSTAMP:20260101T000000Z',
+            'DTSTART:20260801T100000Z',
+            'DURATION:PT1H',
+            "SUMMARY:$privacy event",
+            ($CLASS{$privacy} // ()),
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ) . "\r\n", 'Content-Type' => 'text/calendar');
+    }
+
+    xlog $self, "sharee only gets the notification of the public event";
+    $self->assert_cmp_deeply([superhashof({
+        event => superhashof({
+            title => 'public event',
+        }),
+    })], get_all_notifications($self, $sharee_jmap));
+}
