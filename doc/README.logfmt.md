@@ -215,8 +215,8 @@ Prefer these to spelling the fields out.  They're the reason the same
 mailbox is described the same way in every event, and adding a field to one
 of them improves every call site at once.  To log a struct that doesn't have
 one yet, write the push function next to the struct and give it an `lf_` macro
-there.  For anything in `imap/` that's forced — `lib/logfmt.c` can't see those
-types — but do it for `lib/` types too, so there's one place to look.
+there.  It doesn't matter whether the struct is defined in `imap/` or `lib/` or
+somewhere else, put the logging helper with the struct.
 
 Conventions these encode, so you don't have to decide each time:
 
