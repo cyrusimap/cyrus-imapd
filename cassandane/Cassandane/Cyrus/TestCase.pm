@@ -396,8 +396,8 @@ magic(SearchNormalizationMax20000 => sub {
 magic(SearchBatchsize20 => sub {
     shift->config_set(search_batchsize => 20);
 });
-magic(SearchMaxtime1Sec => sub {
-    shift->config_set(search_maxtime => 1);
+magic(SearchMaxtime => sub($self, $seconds) {
+    shift->config_set(search_maxtime => $seconds);
 });
 magic(SearchMaxSize4k => sub {
     shift->config_set(search_maxsize => 4);

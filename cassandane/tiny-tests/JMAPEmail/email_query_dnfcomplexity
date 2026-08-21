@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 
 sub test_email_query_dnfcomplexity
     :min_version_3_4 :needs_component_sieve
-    :JMAPExtensions :SearchNormalizationMax20000 :SearchMaxTime1Sec
+    :JMAPExtensions :SearchNormalizationMax20000 :SearchMaxTime(1)
     ($self)
 {
     my $jmap = $self->{jmap};

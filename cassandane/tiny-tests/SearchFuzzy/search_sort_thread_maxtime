@@ -1,8 +1,12 @@
 #!perl
 use Cassandane::Tiny;
 
+# search_maxtime of 0 is treated as no timeout (see cmdtime_checksearch)
+# so we need something small.
+# (Don't use a negative timeout, as that seems like a bug we should fix)
+
 sub test_search_sort_thread_maxtime
-    :needs_search_xapian :SearchMaxtime1Sec :SearchNormalizationMax20000
+    :needs_search_xapian :SearchMaxtime(1.e-18)
     ($self)
 {
     my $talk = $self->{store}->get_client();
@@ -10,10 +14,8 @@ sub test_search_sort_thread_maxtime
     $self->make_message("needle") || die;
     $talk->select('INBOX');
 
-    # criteria whose DNF normalisation reliably exceeds search_maxtime,
-    # independent of mailbox size
+    # With search_maxtime set to nothing, any search times out immediately
     my $crit = 'SUBJECT a';
-    $crit = "OR NOT $crit NOT $crit" for (1..15);
 
     xlog "SEARCH must report the timeout";
     my $uids = $talk->search(\$crit);
