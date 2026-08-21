@@ -100,6 +100,17 @@
     "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU\r\n" \
     "END:STANDARD\r\n"
 
+/* A zone that never transitions, at an offset that is not a whole hour so
+ * that the Etc/GMT+X shortcut does not apply to it.  Its only record in the
+ * database is the one at the start of the database range. */
+#define FIXED_OFFSET_BODY \
+    "BEGIN:STANDARD\r\n" \
+    "TZNAME:+0530\r\n" \
+    "TZOFFSETFROM:+0530\r\n" \
+    "TZOFFSETTO:+0530\r\n" \
+    "DTSTART:16010101T000000\r\n" \
+    "END:STANDARD\r\n"
+
 static char zonedir[1024];
 static char *dbpath;
 
@@ -133,6 +144,7 @@ static int set_up(void)
     write_vtimezone("America/New_York", NEWYORK_BODY);
     write_vtimezone("Test/DstEndsOct", DST_ENDS_OCT_BODY);
     write_vtimezone("Test/DstEndsNov", DST_ENDS_NOV_BODY);
+    write_vtimezone("Test/FixedOffset", FIXED_OFFSET_BODY);
 
     FILE *fp = fopen(dbpath, "w");
     if (!fp) return -1;
@@ -225,6 +237,16 @@ static void test_near_miss(void)
 
     tzid = guess(DST_ENDS_NOV_BODY);
     CU_ASSERT_STRING_EQUAL(tzid, "Test/DstEndsNov");
+    free(tzid);
+}
+
+/* A zone whose last transition precedes the guessed window -- here one that
+ * never transitions at all -- is guessed from the observance still in force
+ * at the window open, which is the only record such a zone has. */
+static void test_fixed_offset(void)
+{
+    char *tzid = guess(FIXED_OFFSET_BODY);
+    CU_ASSERT_STRING_EQUAL(tzid, "Test/FixedOffset");
     free(tzid);
 }
 
