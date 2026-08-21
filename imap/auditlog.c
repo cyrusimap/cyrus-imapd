@@ -330,7 +330,7 @@ EXPORTED void auditlog_sieve(const char *action,
     auditlog_finish(&lf);
 }
 
-EXPORTED void auditlog_send(const struct auditlog_send *s)
+EXPORTED void auditlog_send(const struct auditlog_send_event *s)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
 
