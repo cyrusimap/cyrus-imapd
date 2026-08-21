@@ -2091,42 +2091,46 @@ doc/text/.sphinx-build.stamp:
 	@false
 endif
 
-.PHONY: man man-force clean-man
-man-force:
-	## trash the timestamps, so we always re-run sphinx-build.
-	## sphinx-build tracks source modifications itself, so forced
-	## rebuilds will still be a lot quicker once it has run once.
-	@$(RM) docsrc/.sphinx-build.stamp man/.sphinx-build.stamp
+SPHINX_MANS = $(dist_man1_MANS) $(dist_man3_MANS) $(dist_man5_MANS) $(dist_man8_MANS)
 
-man: man-force $(dist_man1_MANS) $(dist_man3_MANS) $(dist_man5_MANS) $(dist_man8_MANS)
+## Each of the doc entry points below trashes the timestamps and then recurses.
+##
+## Trashing them is what makes us always re-run sphinx-build.  sphinx-build
+## tracks source modifications itself, so forced rebuilds will still be a lot
+## quicker once it has run once -- and the stamps deliberately don't list the
+## reST sources (see the XXX comments above), so without this, editing a page
+## and asking for docs would build nothing.
+
+.PHONY: man clean-man
+man:
+	@$(RM) docsrc/.sphinx-build.stamp man/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) $(SPHINX_MANS)
 
 # clean-man is conditionally defined above. We do not want to remove
 # man pages if the user is unable to rebuild them.
 
-.PHONY: doc-html doc-html-force clean-doc-html clean-doc-doxygen
-doc-html-force:
+.PHONY: doc-html clean-doc-html clean-doc-doxygen
+doc-html:
 	@$(RM) docsrc/.sphinx-build.stamp doc/html/.sphinx-build.stamp
-
-doc-html: doc-html-force doc/html/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) doc/html/.sphinx-build.stamp
 
 clean-doc-html:
 	@$(RM) -r doc/html
 
-.PHONY: doc-text doc-text-force clean-doc-text
-doc-text-force:
+.PHONY: doc-text clean-doc-text
+doc-text:
 	@$(RM) docsrc/.sphinx-build.stamp doc/text/.sphinx-build.stamp
-
-doc-text: doc-text-force doc/text/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) doc/text/.sphinx-build.stamp
 
 clean-doc-text:
 	@$(RM) -r doc/text
 
 GENERATED_EXAMPLES = doc/examples/imapd_conf/imapd.conf.sample
 
-.PHONY: doc-examples doc-examples-force clean-doc-examples clean-doc-doxygen
-doc-examples-force:
-
-doc-examples: doc-examples-force $(GENERATED_EXAMPLES)
+## No forcing here: unlike the sphinx-build stamps, this one lists the sources
+## it is generated from, so make can tell when it's stale.
+.PHONY: doc-examples clean-doc-examples clean-doc-doxygen
+doc-examples: $(GENERATED_EXAMPLES)
 
 clean-doc-examples:
 	@$(RM) $(GENERATED_EXAMPLES)
@@ -2134,8 +2138,18 @@ clean-doc-examples:
 clean-doc-doxygen:
 	@$($RM) -r docsrc/_doxygen
 
+## "doc" is man + doc-html + doc-text + doc-examples, but spelled out rather
+## than depending on those four, so that the whole doc build is one make
+## instance.  Depending on them would start three sub-makes, each trashing and
+## rebuilding docsrc/.sphinx-build.stamp on its own schedule.  In a VPATH
+## build, the stamp's recipe extracts a tar of docsrc into the build tree, so
+## two could extract it while a third sphinx-build reads the result.
 .PHONY: doc clean-doc
-doc: man doc-html doc-text doc-examples
+doc:
+	@$(RM) docsrc/.sphinx-build.stamp man/.sphinx-build.stamp \
+	    doc/html/.sphinx-build.stamp doc/text/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) $(SPHINX_MANS) doc/html/.sphinx-build.stamp \
+	    doc/text/.sphinx-build.stamp $(GENERATED_EXAMPLES)
 
 clean-doc: clean-man clean-doc-html clean-doc-text clean-doc-examples clean-doc-doxygen
 
