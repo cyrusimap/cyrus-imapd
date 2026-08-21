@@ -106,10 +106,10 @@ int main(int argc, char * argv[])
     }
 
     /*get script*/
-    script_fd = open(argv[optind++], O_RDONLY);
+    script_fd = open(argv[optind], O_RDONLY);
     if (script_fd == -1)
     {
-        fprintf(stderr, "can not open script '%s'\n", argv[1]);
+        fprintf(stderr, "can not open script '%s'\n", argv[optind]);
         exit(1);
     }
 
