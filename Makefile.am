@@ -348,7 +348,15 @@ EXTRA_DIST = \
     cunit/pcunit \
     cunit/vg.supp \
     doc/legacy/murder.png \
-    doc \
+    doc/README.autocreate \
+    doc/README.autosievefolder \
+    doc/README.cyrusdb.md \
+    doc/README.twom.md \
+    doc/README.xapian \
+    doc/README.zeroskip.md \
+    doc/examples \
+    doc/legacy \
+    doc/logfmt-keys \
     docsrc \
     imap/css3_color_array.gperf \
     imap/http_cal_abook_admin.js \
@@ -2074,6 +2082,11 @@ doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
 
+## What dist-hook needs built before it can put the documentation in the
+## tarball.  Empty without Sphinx, so "make dist" still works there and just
+## ships no HTML or text.
+DIST_DOC_STAMPS = doc/html/.sphinx-build.stamp doc/text/.sphinx-build.stamp
+
 else # (! HAVE_SPHINX_BUILD)
 
 docsrc/_doxygen/.stamp:
@@ -2095,6 +2108,8 @@ doc/html/.sphinx-build.stamp:
 doc/text/.sphinx-build.stamp:
 	@echo "error: missing documentation dependencies. cannot build text documentation" 1>&2
 	@false
+
+DIST_DOC_STAMPS =
 endif
 
 SPHINX_MANS = $(dist_man1_MANS) $(dist_man3_MANS) $(dist_man5_MANS) $(dist_man8_MANS)
@@ -2228,10 +2243,14 @@ distgit:
 	git archive --format=tar --prefix=$(PACKAGE_NAME)-$(PACKAGE_VERSION)/ $(PACKAGE_NAME)-$(PACKAGE_VERSION) | tar -C dist -x -f -
 	touch distgit
 
-dist-hook:
+dist-hook: $(DIST_DOC_STAMPS)
+	@$(MKDIR_P) $(top_distdir)/doc
+	test ! -d doc/html || cp -R doc/html $(top_distdir)/doc/
+	test ! -d doc/text || cp -R doc/text $(top_distdir)/doc/
 	find $(top_distdir) -type f -name .sphinx-build.stamp -delete
 	find $(top_distdir) -type f -name .gitignore -delete
 	rm -rf $(top_distdir)/$(SPHINX_CACHE)
+	rm -rf $(top_distdir)/docsrc/_doxygen
 
 VERSION: tools/git-version.sh
 	$(AM_V_GEN)$< > $@.NEW && mv $@.NEW $@
