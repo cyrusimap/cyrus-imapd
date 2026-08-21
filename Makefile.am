@@ -2011,8 +2011,29 @@ clean-sphinx-cache:
 
 if HAVE_SPHINX_BUILD
 
-docsrc/_doxygen: Doxyfile
+## What Doxygen reads: every header under these directories, per the Doxyfile's
+## INPUT, FILE_PATTERNS and RECURSIVE.  Keep this in step with the Doxyfile.
+## The list is discovered at make time, like the Cassandane module list, so
+## adding a header doesn't mean remembering to add it here.
+##
+## We look in the build tree because that is where Doxygen looks: it runs from
+## $(top_builddir) and the Doxyfile's INPUT is relative.  In a VPATH build that
+## means it only ever sees the generated headers, which is a wart older than
+## this rule.
+DOXYGEN_INPUT_DIRS = imap lib sieve
+DOXYGEN_INPUTS := $(shell find $(DOXYGEN_INPUT_DIRS) -name '*.h' 2>/dev/null)
+
+## The pages that read Doxygen's output, so we can tell Sphinx they changed.
+DOXYGEN_PAGES := $(shell grep -rl '^\.\. doxygen' docsrc --include='*.rst' 2>/dev/null)
+
+## breathe doesn't manage dependencies well enough to rebuild doxygen-centric
+## pages just because a *.h file changed.  Touching the pages gets through to
+## it.
+docsrc/_doxygen/.stamp: Doxyfile $(DOXYGEN_INPUTS)
 	$(AM_V_GEN)$(DOXYGEN) Doxyfile
+	@$(if $(DOXYGEN_PAGES),touch $(DOXYGEN_PAGES))
+	@$(MKDIR_P) $(@D)
+	@touch $@
 
 SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 
@@ -2036,7 +2057,7 @@ clean-docsrc:
 		$(RM) -r $(top_builddir)/docsrc $(top_builddir)/doc/examples
 
 ## XXX doesn't detect if other rst sources are updated...
-man/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
+man/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b man $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
 
@@ -2044,18 +2065,18 @@ clean-man:
 	@$(RM) -r man
 
 ## XXX doesn't detect if other rst sources are updated...
-doc/html/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
+doc/html/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
 	@touch $@
 
 ## XXX doesn't detect if other rst sources are updated...
-doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
+doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
 
 else # (! HAVE_SPHINX_BUILD)
 
-docsrc/_doxygen:
+docsrc/_doxygen/.stamp:
 	@echo "warning: missing documentation dependencies. can not run doxygen" 1>&2
 
 clean-docsrc:
