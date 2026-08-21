@@ -7,7 +7,7 @@
 #include "mpool.h"
 #include "strarray.h"
 
-#define HASH_TABLE_INITIALIZER {0, 0, 0, 0, 0, NULL, NULL}
+#define HASH_TABLE_INITIALIZER {NULL, NULL, 0, 0, 0, 0}
 
 /* This is an installed header, so it can't assume that EXPORTED is already
  * defined. */
@@ -35,13 +35,12 @@ typedef struct bucket bucket;
 */
 
 typedef struct hash_table {
-    size_t size;
-    size_t mask;
+    bucket **table;
+    struct mpool *pool;
     size_t count;
     uint32_t seed;
     int hash_load_warned_at;
-    bucket **table;
-    struct mpool *pool;
+    uint8_t size_log2;
 } hash_table;
 
 /*
