@@ -956,6 +956,9 @@ static int eval_if(const char *hdr, struct meth_params *params,
 
             tag = ++list;
             list = strchr(tag, '>');
+            /* A tagged-list with no closing '>' is malformed; bail rather
+             * than dereferencing NULL. */
+            if (!list) break;
             *list++ = '\0';
 
             mailbox = NULL;
@@ -1062,9 +1065,10 @@ static int eval_if(const char *hdr, struct meth_params *params,
             lock_token = tgt_lock_token;
         }
 
+        /* With no '(' there is no condition list, don't eval_list it. */
         list = strchr(list, '(');
 
-        ret |= eval_list(list, mailbox, etag, lock_token, locked);
+        if (list) ret |= eval_list(list, mailbox, etag, lock_token, locked);
 
         if (davdb) params->davdb.close_db(davdb);
         mailbox_close(&my_mailbox);

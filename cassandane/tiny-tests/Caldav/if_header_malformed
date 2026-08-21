@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+
+# eval_if() parses the DAV If: header.  Two unparseable forms used to reach a
+# NULL dereference and take the httpd worker down with them: a tagged-list
+# whose resource tag has no closing ">", and an If header with no condition
+# list at all.
+sub test_if_header_malformed
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $caldav = $self->{caldav};
+
+    my $ics = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+BEGIN:VEVENT
+UID:if-header-malformed
+DTSTAMP:20260101T000000Z
+DTSTART:20260101T100000Z
+DURATION:PT1H
+SUMMARY:If header
+END:VEVENT
+END:VCALENDAR
+EOF
+    $ics =~ s/\r?\n/\r\n/gs;
+
+    my @malformed = (
+        # tagged-list resource tag with no closing '>'
+        '<http://localhost/dav/calendars/user/cassandane/Default/ (["etag"])',
+
+        # no condition list at all
+        'no-parens-at-all',
+    );
+
+    my $path = 'Default/if-header-malformed.ics';
+
+    for my $if (@malformed) {
+        xlog $self, "PUT with malformed If: $if";
+
+        # We don't care what status this gets -- the header is nonsense, so
+        # any answer is defensible.  What matters is that the worker answers
+        # instead of dying, and that the next request still works.
+        eval {
+            $caldav->Request('PUT', $path, $ics,
+                             'Content-Type' => 'text/calendar',
+                             'If' => $if);
+        };
+
+        xlog $self, "the worker is still alive and serving";
+        my $cals = $caldav->GetCalendars();
+        $self->assert_not_null($cals);
+    }
+}
