@@ -1,0 +1,67 @@
+#!perl
+use Cassandane::Tiny;
+
+# Asserts that events carry vnd.fastmail.mailboxJMAPId and, for
+# copy/move events, vnd.fastmail.oldMailboxJMAPId: the JMAP mailbox id
+# of the destination and source folders.  Without compact email ids
+# the JMAP mailbox id is the mailbox uniqueid.
+#
+# Also asserts oldMailboxUniqueId, the always-on counterpart of
+# mailboxUniqueId for the source folder.
+
+sub test_mailbox_jmapid_params
+    :min_version_3_13
+    ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Target");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    $self->make_message("Message A");
+
+    # discard events from setup
+    $self->{instance}->getnotify();
+
+    # copy from INBOX to Target
+    $imaptalk->select("INBOX");
+    $imaptalk->copy("1", "INBOX.Target");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    my @events = map { decode_json($_->{MESSAGE}) }
+                     $self->{instance}->getnotify->@*;
+    my ($copy1) = grep { $_->{event} eq 'vnd.cmu.MessageCopy' } @events;
+    $self->assert_not_null($copy1);
+
+    my $target_id = $copy1->{'vnd.fastmail.mailboxJMAPId'};
+    my $inbox_id = $copy1->{'vnd.fastmail.oldMailboxJMAPId'};
+    $self->assert_not_null($target_id);
+    $self->assert_not_null($inbox_id);
+    $self->assert_str_not_equals($target_id, $inbox_id);
+
+    # this suite does not use compact email ids, so the JMAP mailbox id
+    # is the mailbox uniqueid
+    $self->assert_str_equals($copy1->{mailboxUniqueId}, $target_id);
+    $self->assert_str_equals($copy1->{oldMailboxUniqueId}, $inbox_id);
+
+    # copy back: the two ids must swap roles
+    $imaptalk->select("INBOX.Target");
+    $imaptalk->copy("1", "INBOX");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    @events = map { decode_json($_->{MESSAGE}) }
+                  $self->{instance}->getnotify->@*;
+    my ($copy2) = grep { $_->{event} eq 'vnd.cmu.MessageCopy' } @events;
+    $self->assert_not_null($copy2);
+    $self->assert_str_equals($inbox_id,
+        $copy2->{'vnd.fastmail.mailboxJMAPId'});
+    $self->assert_str_equals($target_id,
+        $copy2->{'vnd.fastmail.oldMailboxJMAPId'});
+    $self->assert_str_equals($inbox_id, $copy2->{mailboxUniqueId});
+    $self->assert_str_equals($target_id, $copy2->{oldMailboxUniqueId});
+
+    $imaptalk->logout();
+}

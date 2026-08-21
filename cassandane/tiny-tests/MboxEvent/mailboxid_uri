@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+# Asserts that mailboxID is a URI describing the mailbox, per RFC 5423.
+# For message events uri points at the message, so mailboxID is a
+# prefix of it; for other events the two are the same mailbox URI.
+
+sub test_mailboxid_uri
+    :min_version_3_13
+    ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+
+    # discard events from setup
+    $self->{instance}->getnotify();
+
+    $self->make_message("Message A");
+
+    my @events = map { decode_json($_->{MESSAGE}) }
+                     $self->{instance}->getnotify->@*;
+    my ($append) = grep { $_->{event} eq 'MessageAppend' } @events;
+    $self->assert_not_null($append);
+
+    $self->assert_matches(qr{^imap://}, $append->{mailboxID});
+    $self->assert_not_null($append->{mailboxUniqueId});
+
+    # uri references the appended message inside the mailbox that
+    # mailboxID describes
+    $self->assert_str_equals($append->{mailboxID},
+        substr($append->{uri}, 0, length($append->{mailboxID})));
+    $self->assert_matches(qr{;UID=\d+$}, $append->{uri});
+
+    # for a flags event uri and mailboxID are the same mailbox URI
+    $imaptalk->select("INBOX");
+    $imaptalk->store('1', '+flags', '(\\Flagged)');
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    @events = map { decode_json($_->{MESSAGE}) }
+                  $self->{instance}->getnotify->@*;
+    my ($flagsset) = grep { $_->{event} eq 'FlagsSet' } @events;
+    $self->assert_not_null($flagsset);
+    $self->assert_matches(qr{^imap://}, $flagsset->{mailboxID});
+    $self->assert_str_equals($flagsset->{uri}, $flagsset->{mailboxID});
+
+    $imaptalk->logout();
+}

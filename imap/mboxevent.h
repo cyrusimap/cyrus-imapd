@@ -71,6 +71,9 @@ enum event_param {
     /*  5 */ EVENT_OLD_UIDSET,
     /*  6 */ EVENT_MAILBOX_ID,
              EVENT_MAILBOX_UNIQUEID,
+             EVENT_MAILBOX_JMAPID,
+             EVENT_OLD_MAILBOX_JMAPID,
+             EVENT_OLD_MAILBOX_UNIQUEID,
     /*  7 */ EVENT_URI,
     /*  8 */ EVENT_MODSEQ,
     /*  9 */ EVENT_QUOTA_STORAGE,
@@ -106,8 +109,11 @@ enum event_param {
     EVENT_COMPACT_CALIDS,
     EVENT_MESSAGE_EMAILID,
     EVENT_MESSAGE_THREADID,
+    EVENT_EMAILIDS,
     EVENT_JMAP_EMAIL,
     EVENT_JMAP_STATES,
+    EVENT_SPECIAL_USE,
+    EVENT_OLD_SPECIAL_USE,
     EVENT_CALENDAR_ALARM_TIME,
     EVENT_CALENDAR_ALARM_RECIPIENTS,
     EVENT_CALENDAR_ALERTID,
@@ -179,6 +185,7 @@ struct mboxevent {
     struct timeval timestamp;
     seqset_t *uidset;
     strarray_t midset;
+    strarray_t emailids;
     seqset_t *olduidset;
 
     struct mboxevent *prev;
