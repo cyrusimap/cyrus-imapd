@@ -149,7 +149,7 @@ static void test_fill(void)
 
     /* Setup @pin to point to the start of a file open for (at least)
      * reading containing the message. */
-    fd = cunit_tmpfile(tempfile, sizeof(tempfile), "spooltestAXXXXXX");
+    fd = cunit_tmpfile(tempfile, sizeof(tempfile), "spool.testc-XXXXXX");
     CU_ASSERT(fd >= 0);
     r = retry_write(fd, MSG, sizeof(MSG)-1);
     CU_ASSERT_EQUAL(r, sizeof(MSG)-1);
@@ -229,7 +229,7 @@ static void test_folded_headers(void)
 
     /* Setup @pin to point to the start of a file open for (at least)
      * reading containing the message. */
-    fd = cunit_tmpfile(tempfile, sizeof(tempfile), "spooltestAXXXXXX");
+    fd = cunit_tmpfile(tempfile, sizeof(tempfile), "spool.testc-XXXXXX");
     CU_ASSERT(fd >= 0);
     r = retry_write(fd, MSG, sizeof(MSG)-1);
     CU_ASSERT_EQUAL(r, sizeof(MSG)-1);
@@ -301,7 +301,7 @@ static void test_empty_headers(void)
 
     /* Setup @pin to point to the start of a file open for (at least)
      * reading containing the message. */
-    fd = cunit_tmpfile(tempfile, sizeof(tempfile), "spooltestAXXXXXX");
+    fd = cunit_tmpfile(tempfile, sizeof(tempfile), "spool.testc-XXXXXX");
     CU_ASSERT(fd >= 0);
     r = retry_write(fd, MSG, sizeof(MSG)-1);
     CU_ASSERT_EQUAL(r, sizeof(MSG)-1);
@@ -415,7 +415,7 @@ static void test_fill_null(void)
 
     /* Setup @pin to point to the start of a file open for (at least)
      * reading containing the message. */
-    fd = cunit_tmpfile(tempfile, sizeof(tempfile), "spooltestAXXXXXX");
+    fd = cunit_tmpfile(tempfile, sizeof(tempfile), "spool.testc-XXXXXX");
     CU_ASSERT(fd >= 0);
     r = retry_write(fd, MSG, sizeof(MSG)-1);
     CU_ASSERT_EQUAL(r, sizeof(MSG)-1);

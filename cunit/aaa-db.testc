@@ -44,7 +44,7 @@ static char *make_basedir(const char *const *reldirs)
     char basedir[PATH_MAX] = {0};
     const char *const *d;
 
-    if (!cunit_tmpdir(basedir, sizeof(basedir), "cunit-db-test.XXXXXX"))
+    if (!cunit_tmpdir(basedir, sizeof(basedir), "aaa-db.testc-XXXXXX"))
         return NULL;
 
     for (d = reldirs; *d; d++) {
