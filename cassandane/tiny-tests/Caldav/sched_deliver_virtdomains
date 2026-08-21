@@ -1,0 +1,76 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sched_deliver_virtdomains
+    :min_version_3_4 :VirtDomains :DefaultDomain
+    ($self)
+{
+    my $CalDAV = $self->{caldav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.friend");
+    $admintalk->setacl("user.friend", admin => "lrswipkxtecdan");
+    $admintalk->setacl("user.friend", friend => "lrswipkxtecdn");
+
+    # The recipient needs a calendar home before anything can be delivered
+    # into it: caladdress_lookup() falls back to iMIP when the cal-home-set
+    # cannot be found, and the local delivery path this tests is then never
+    # entered at all.  Connecting over DAV provisions it.
+    my $service = $self->{instance}->get_service("http");
+    my $friendtalk = Net::CalDAVTalk->new(
+        user => "friend",
+        password => "pass",
+        host => $service->host(),
+        port => $service->port(),
+        scheme => "http",
+        url => "/",
+        expandurl => 1,
+    );
+
+    my $CalendarId = $CalDAV->NewCalendar({name => "invitations"});
+    $self->assert_not_null($CalendarId);
+
+    my $uid = "B0C4A0F2-3F4E-4A2E-9C1B-7E5C6B2A9D31";
+    my $ics = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//NONSGML//EN
+BEGIN:VEVENT
+UID:$uid
+DTSTAMP:20210802T131858Z
+DTSTART:20210902T210000Z
+DTEND:20210902T220000Z
+SUMMARY:An invitation
+ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED;ROLE=CHAIR:MAILTO:cassandane\@example.com
+ATTENDEE;RSVP=TRUE;PARTSTAT=NEEDS-ACTION:MAILTO:friend\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "organiser stores an event inviting a local user";
+    $CalDAV->Request("PUT", "$CalendarId/$uid.ics", $ics,
+                     "Content-Type" => "text/calendar");
+
+    # The organiser copy records what became of each attendee.  With the
+    # recipient userid left as "friend@example.com" while the mailbox and its
+    # ACL are keyed "friend", the rights check in caldav_store_preprocess()
+    # matches nothing, the store is refused with DAV:need-privileges, and that
+    # shows up here as 5.1 instead of 1.2.
+    xlog $self, "the attendee SCHEDULE-STATUS says the invitation was delivered";
+    my $res = $CalDAV->Request("GET", "$CalendarId/$uid.ics");
+    $self->assert_matches(qr/SCHEDULE-STATUS=1\.2/, $res->{content});
+
+    # Read it back over DAV rather than IMAP: a calendar collection is not a
+    # mail mailbox, and SELECT on one is refused with "Invalid mailbox type".
+    xlog $self, "and the invitation is really in the attendee scheduling Inbox";
+    my $inbox = $friendtalk->Request("PROPFIND", "/dav/calendars/user/friend/Inbox/",
+                                     <<XML, Depth => 1, "Content-Type" => "application/xml");
+<?xml version="1.0" encoding="utf-8"?>
+<D:propfind xmlns:D="DAV:"><D:prop><D:getetag/></D:prop></D:propfind>
+XML
+    my $responses = $inbox->{'{DAV:}response'} || [];
+    my @hrefs = map { $_->{'{DAV:}href'}{content} } @$responses;
+    $self->assert_num_gte(1, scalar grep { /\.ics$/ } @hrefs);
+}
