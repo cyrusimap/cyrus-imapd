@@ -318,6 +318,8 @@ static void truncate_obs(struct observances *obs, int64_t onset)
 {
     ssize_t i;
     struct guesstzdb_observance ob;
+    if (!obs->count) return;
+
     for (i = 0; i < obs->count; i++) {
         ob = observances_nth(obs, i);
         if (ob.onset >= onset) {
@@ -325,10 +327,10 @@ static void truncate_obs(struct observances *obs, int64_t onset)
         }
     }
     if (i == obs->count) {
-        obs->count = 0;
-        return;
+        /* All observances precede onset, so the last one is still in force */
+        i = obs->count - 1;
     }
-    if (ob.onset > onset) {
+    else if (ob.onset > onset) {
         if (i == 0) {
             obs->count = 0;
             return;
