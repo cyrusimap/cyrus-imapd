@@ -1,0 +1,47 @@
+#!/usr/bin/perl
+# SPDX-License-Identifier: BSD-3-Clause-CMU
+# See COPYING file at the root of the distribution for more details.
+use v5.28.0;
+use warnings;
+
+use File::Basename qw(dirname);
+use File::Path qw(make_path);
+use Fcntl qw(LOCK_EX);
+
+# Run a command while holding an exclusive lock, so that two make jobs running
+# under -j can't run it at the same time.  This exists for sphinx-build: the
+# doc builders share one doctree cache, and sphinx-build rewrites each doctree
+# pickle in place with no locking of its own, so two builders at once will
+# eventually have one read a doctree in the instant the other has truncated it.
+#
+#   usage: with-lock LOCKFILE COMMAND [ARG...]
+#
+# The lock is held for as long as the command runs, and the command's exit
+# status becomes ours, so make sees exactly what it would have seen had it run
+# the command itself.
+
+my ($lockfile, @command) = @ARGV;
+
+unless (defined $lockfile && @command) {
+    die "usage: $0 LOCKFILE COMMAND [ARG...]\n";
+}
+
+make_path(dirname $lockfile);
+
+open my $lock, '>>', $lockfile or die "$0: can't open $lockfile: $!\n";
+flock $lock, LOCK_EX           or die "$0: can't lock $lockfile: $!\n";
+
+system { $command[0] } @command;
+
+if ($? == -1) {
+    die "$0: can't run $command[0]: $!\n";
+}
+
+# Killed by a signal: die of it ourselves, so that make (and whoever is
+# waiting on make) sees the death rather than a plain non-zero exit.
+if (my $signal = $? & 127) {
+    kill $signal, $$;
+    exit 128 + $signal;   # ...if that signal turned out to be ignored
+}
+
+exit $? >> 8;
