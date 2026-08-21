@@ -1,0 +1,27 @@
+Description:
+
+Fixes IMAP SEARCH (and FUZZY SEARCH) for non-ASCII search terms if the
+client enabled UTF8=ACCEPT or IMAP4rev2 rather than passing the CHARSET
+argument. Before, non-ASCII bytes were ignored in the search terms of all
+string-valued search keys, such as SUBJECT, FROM, HEADER, BODY and TEXT.
+Now, they are correctly processed by the search backend.
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+None

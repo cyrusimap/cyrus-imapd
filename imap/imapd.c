@@ -6223,7 +6223,7 @@ static void cmd_search(const char *tag, const char *cmd)
         break;
     }
 
-    /* RFC 9855, Section 3: MUST reject SEARCH with a charset specification */ 
+    /* RFC 9755, Section 3: MUST reject SEARCH with a charset specification */
     if (!(client_capa & CAPA_UTF8_ACCEPT)) {
         state |= GETSEARCH_CHARSET_KEYWORD;
     }
@@ -6232,6 +6232,13 @@ static void cmd_search(const char *tag, const char *cmd)
     searchargs = new_searchargs(tag, state,
                                 &imapd_namespace, imapd_userid, imapd_authstate,
                                 imapd_userisadmin || imapd_userisproxyadmin);
+
+    /* RFC 9755, Section 3 and RFC 9051, Section 6.4.4: the default charset
+       is UTF-8, rather than US-ASCII */
+    if (client_capa & (CAPA_UTF8_ACCEPT | CAPA_IMAP4REV2)) {
+        charset_free(&searchargs->charset);
+        searchargs->charset = charset_lookupname("utf-8");
+    }
 
     searchargs->maxargssize_mark = maxargssize_mark;
 

@@ -1,0 +1,74 @@
+#!perl
+use Cassandane::Tiny;
+
+sub assert_search_utf8_value($self, %params)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Create and index test message";
+    $self->make_message("=?utf-8?Q?Gr=C3=BC=C3=9Fe?=") || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    my $term = encode('UTF-8', "Gr\x{fc}\x{df}e");
+
+    my @charset = ('charset', 'utf-8');
+    my $isrev2 = 0;
+    if (my $capa = $params{enable}) {
+        xlog $self, "ENABLE $capa";
+        my $res = $talk->_imap_cmd('ENABLE', 0, 'enabled', $capa);
+        $self->assert_num_equals(1, $res->{lc $capa});
+        @charset = ();
+        $isrev2 = $capa eq 'IMAP4REV2';
+
+        if ($capa eq 'UTF8=ACCEPT') {
+            xlog $self, "SEARCH with a CHARSET is rejected";
+            $talk->search('charset', 'utf-8', 'subject', { Quote => $term });
+            $self->assert_str_equals('bad',
+                $talk->get_last_completion_response());
+        }
+    }
+
+    my $search = sub (@args) {
+        return $talk->search(@charset, @args) if !$isrev2;
+
+        # RFC 9051, Appendix E.4: SEARCH returns an ESEARCH response
+        my @esearch;
+        my %handlers = (esearch => sub { push @esearch, $_[1] });
+        $talk->_imap_cmd('SEARCH', 0, \%handlers, @args);
+        $self->assert_num_equals(1, scalar @esearch);
+        return [split /,/, $esearch[0][2]];
+    };
+
+    xlog $self, "SUBJECT matches a non-ASCII term";
+    my $seqnos = $search->('subject', { Quote => $term });
+    $self->assert_cmp_deeply([1], $seqnos);
+
+    xlog $self, "HEADER Subject matches a non-ASCII term";
+    $seqnos = $search->('header', 'subject', { Quote => $term });
+    $self->assert_cmp_deeply([1], $seqnos);
+
+    xlog $self, "FUZZY SUBJECT matches a non-ASCII term";
+    $seqnos = $search->('fuzzy', ['subject', { Quote => $term }]);
+    $self->assert_cmp_deeply([1], $seqnos);
+
+    xlog $self, "FUZZY HEADER Subject matches a non-ASCII term";
+    $seqnos = $search->('fuzzy', ['header', 'subject', { Quote => $term }]);
+    $self->assert_cmp_deeply([1], $seqnos);
+}
+
+sub test_search_utf8_value__charset($self)
+{
+    $self->assert_search_utf8_value();
+}
+
+sub test_search_utf8_value__utf8accept
+    :NoMunge8Bit
+    ($self)
+{
+    $self->assert_search_utf8_value(enable => 'UTF8=ACCEPT');
+}
+
+sub test_search_utf8_value__imap4rev2($self)
+{
+    $self->assert_search_utf8_value(enable => 'IMAP4REV2');
+}
