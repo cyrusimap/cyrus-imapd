@@ -31,8 +31,9 @@ enum twom_ret {
     TWOM_BADCHECKSUM = -9,
 };
 
-// we don't reuse flags for different operations (e.g. open, fetch, foreach), as
-// there's 32 bits of space available - though not all flags have meaning in all contexts.
+/* we don't reuse flags for different operations (e.g. open, fetch, foreach), as
+ * there's 32 bits of space available - though not all flags have meaning in all contexts.
+ */
 enum twom_flagspec {
     TWOM_CREATE          = 1<<0,    /* Create the database if not existent */
     TWOM_SHARED          = 1<<1,    /* Open in shared lock mode */
@@ -71,77 +72,99 @@ struct twom_open_data {
 
 #define TWOM_OPEN_DATA_INITIALIZER { 0, NULL, NULL, NULL }
 
-// database operations
+/* database operations
+ *
+ * twom_db_open's txnp is optional; when given, *txnp must be initialised
+ * (see twom_db_begin_txn) and receives a transaction on the opened database.
+ */
 int twom_db_open(const char *fname, struct twom_open_data *setup,
-                 struct twom_db **dbptr,
-                 struct twom_txn **tidptr);
-int twom_db_close(struct twom_db **dbptr);
+                 struct twom_db **ret,
+                 struct twom_txn **txnp);
+int twom_db_close(struct twom_db **dbp);
 
-// non-transactional operations
+/* non-transactional operations, each an implicit single-operation transaction
+ *
+ * A store with data == NULL deletes the key; a non-NULL zero-length value
+ * stores an empty value, which is a different thing from an absent key.
+ */
 int twom_db_fetch(struct twom_db *db,
                   const char *key, size_t keylen,
-                  const char **keyp, size_t *keylenp,
-                  const char **valp, size_t *vallenp,
+                  const char **foundkey, size_t *foundkeylen,
+                  const char **data, size_t *datalen,
                   int flags);
 int twom_db_foreach(struct twom_db *db,
                     const char *prefix, size_t prefixlen,
-                    twom_cb *p, twom_cb *cb, void *rock,
+                    twom_cb *goodp, twom_cb *cb, void *rock,
                     int flags);
 int twom_db_store(struct twom_db *db,
                   const char *key, size_t keylen,
-                  const char *val, size_t vallen,
+                  const char *data, size_t datalen,
                   int flags);
 
-// utility
-int twom_db_dump(struct twom_db *, int detail);
+/* utility */
+int twom_db_dump(struct twom_db *db, int detail);
 int twom_db_repair(struct twom_db *db, size_t *nfixedp);
 int twom_db_check_consistency(struct twom_db *db);
 int twom_db_repack(struct twom_db *db);
-bool twom_db_should_repack(struct twom_db *db); // returns 1 for true
+bool twom_db_should_repack(struct twom_db *db);  /* returns 1 for true */
 
-// release any read lock if doing something else for a while
+/* release any read lock if doing something else for a while */
 int twom_db_yield(struct twom_db *db);
 
-// cursor operations
+/* cursor operations
+ *
+ * The cursor starts at prefix, or at the first record when prefixlen is 0.
+ * Without TWOM_CURSOR_PREFIX it is a start key and iteration runs to the end
+ * of the database; with it, iteration stops when the key leaves the prefix.
+ */
 int twom_db_begin_cursor(struct twom_db *db,
-                         const char *key, size_t keylen,
+                         const char *prefix, size_t prefixlen,
                          struct twom_cursor **curp, int flags);
 int twom_cursor_next(struct twom_cursor *cur,
-                     const char **keyp, size_t *keylenp,
-                     const char **valp, size_t *vallenp);
+                     const char **foundkey, size_t *foundkeylen,
+                     const char **data, size_t *datalen);
 
 int twom_cursor_replace(struct twom_cursor *cur,
-                        const char *val, size_t vallen,
+                        const char *data, size_t datalen,
                         int flags);
 int twom_cursor_commit(struct twom_cursor **curp);
 int twom_cursor_abort(struct twom_cursor **curp);
 
-// cursors within a transaction
+/* cursors within a transaction */
 int twom_txn_begin_cursor(struct twom_txn *txn,
-                          const char *key, size_t keylen,
+                          const char *prefix, size_t prefixlen,
                           struct twom_cursor **curp, int flags);
 void twom_cursor_fini(struct twom_cursor **curp);
 
-// transactional operations
-int twom_db_begin_txn(struct twom_db *db, int shared, struct twom_txn **tidptr);
+/* transactional operations
+ *
+ * begin_txn takes a FLAGS word, not a boolean: TWOM_SHARED for a read-only
+ * transaction, 0 for read-write, optionally with TWOM_MVCC, TWOM_NOSYNC,
+ * TWOM_NOYIELD or TWOM_NONBLOCKING.  Passing 1 means TWOM_CREATE, which is
+ * not TWOM_SHARED and gets you a write transaction.
+ *
+ * *txnp must be initialised: NULL to begin a new transaction, or a
+ * transaction from an earlier call to re-acquire a lock released by yield.
+ */
+int twom_db_begin_txn(struct twom_db *db, int flags, struct twom_txn **txnp);
 int twom_txn_abort(struct twom_txn **txnp);
 int twom_txn_commit(struct twom_txn **txnp);
 int twom_txn_yield(struct twom_txn *txn);
 int twom_txn_fetch(struct twom_txn *txn,
                    const char *key, size_t keylen,
-                   const char **keyp, size_t *keylenp,
-                   const char **valp, size_t *vallenp,
+                   const char **foundkey, size_t *foundkeylen,
+                   const char **data, size_t *datalen,
                    int flags);
 int twom_txn_foreach(struct twom_txn *txn,
                      const char *prefix, size_t prefixlen,
-                     twom_cb *p, twom_cb *cb, void *rock,
+                     twom_cb *goodp, twom_cb *cb, void *rock,
                      int flags);
 int twom_txn_store(struct twom_txn *txn,
                    const char *key, size_t keylen,
-                   const char *val, size_t vallen,
+                   const char *data, size_t datalen,
                    int flags);
 
-// header info
+/* header info */
 size_t twom_db_generation(struct twom_db *db);
 size_t twom_db_num_records(struct twom_db *db);
 size_t twom_db_size(struct twom_db *db);
