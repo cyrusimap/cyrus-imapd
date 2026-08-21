@@ -9,10 +9,8 @@ Welcome
 This is the Cyrus IMAP Server, developer version 3.13.  This version is under
 active development, and is not considered "stable".
 
-The current stable series is 3.12.
-
-Versions 3.8 to 3.10 still receive security updates, and some non-security bug
-fixes.
+The current stable series is 3.12.  That release still receives security
+updates and some non-security bug fixes.
 
 What is Cyrus
 =============
