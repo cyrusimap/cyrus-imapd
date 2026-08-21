@@ -1,0 +1,29 @@
+Description:
+
+Revoking a user's DAV access to a shared calendar or addressbook now also
+drops that user's subscription to the share.  Previously, a sharee whose
+access had been revoked lost their access to the collection but remained
+subscribed to it, so alarms -- including event titles, times, and locations
+-- continued to be delivered to them.
+
+Tracked as GitHub security advisory GHSA-2pch-vwxc-h4mm.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
