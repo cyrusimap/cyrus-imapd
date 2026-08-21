@@ -355,6 +355,9 @@ magic(JMAPNoHasAttachment => sub {
 magic(JMAPExtensions => sub {
     shift->config_set('jmap_nonstandard_extensions' => 'yes');
 });
+magic(SearchIndexHeaders => sub {
+    shift->config_set(search_index_headers => 'yes');
+});
 magic(SearchAttachmentExtractor => sub {
     my $port = Cassandane::PortManager::alloc("localhost");
     my $self = shift;

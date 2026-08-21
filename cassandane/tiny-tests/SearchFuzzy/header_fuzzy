@@ -1,0 +1,84 @@
+#!perl
+use Cassandane::Tiny;
+
+# This test asserts that a FUZZY HEADER search for a header which has a
+# designated search part in Xapian (like 'Subject') is evaluated equally
+# as if FUZZY search would have been requested for that particular field.
+# That is: searches for 'FUZZY HEADER Subject' and 'FUZZY SUBJECT' are
+# evaluated equally.
+#
+# A FUZZY HEADER search for a header without a designated search part is
+# evaluated equally to a non-FUZZY search, regardless how the config sets
+# `search_index_headers`: such a header either is not indexed at all,
+# or is indexed in one lumped part that does not record which field a term
+# came from, so it never is fuzzable.
+sub assert_header_fuzzy($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Create and index test messages";
+    $self->make_message("running fast",
+        extra_headers => [ [ 'X-Nice-Day-For', 'running fast' ] ]) || die;
+    $self->make_message("walking slowly") || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "FUZZY SUBJECT matches a stemmed variant";
+    my $seqnos = $talk->search('fuzzy', 'subject', 'runs');
+    $self->assert_cmp_deeply([1], $seqnos);
+
+    xlog $self, "FUZZY HEADER Subject matches a stemmed variant";
+    $seqnos = $talk->search('fuzzy', 'header', 'subject', 'runs');
+    $self->assert_cmp_deeply([1], $seqnos);
+
+    xlog $self, "FUZZY SUBJECT does not match a mid-word substring";
+    $seqnos = $talk->search('fuzzy', 'subject', 'unning');
+    $self->assert_cmp_deeply([], $seqnos);
+
+    xlog $self, "FUZZY HEADER Subject does not match a mid-word substring";
+    $seqnos = $talk->search('fuzzy', 'header', 'subject', 'unning');
+    $self->assert_cmp_deeply([], $seqnos);
+
+    xlog $self, "HEADER Subject without FUZZY matches a mid-word substring";
+    $seqnos = $talk->search('header', 'subject', 'unning');
+    $self->assert_cmp_deeply([1], $seqnos);
+
+    xlog $self, "FUZZY SUBJECT does not match an empty string";
+    $seqnos = $talk->search('fuzzy', 'subject', '');
+    $self->assert_cmp_deeply([], $seqnos);
+
+    xlog $self, "FUZZY HEADER Subject does not match an empty string";
+    $seqnos = $talk->search('fuzzy', 'header', 'subject', '');
+    $self->assert_cmp_deeply([], $seqnos);
+
+    xlog $self, "HEADER Subject without FUZZY matches an empty string";
+    $seqnos = $talk->search('header', 'subject', '');
+    $self->assert_cmp_deeply([1,2], $seqnos);
+
+    xlog $self, "FUZZY HEADER of an unindexed field matches a mid-word substring";
+    $seqnos = $talk->search('fuzzy', 'header', 'x-nice-day-for', 'unning');
+    $self->assert_cmp_deeply([1], $seqnos);
+
+    xlog $self, "HEADER of an unindexed field without FUZZY matches the same";
+    $seqnos = $talk->search('header', 'x-nice-day-for', 'unning');
+    $self->assert_cmp_deeply([1], $seqnos);
+
+    xlog $self, "FUZZY HEADER does not match a term from another header field";
+    $seqnos = $talk->search('fuzzy', 'header', 'x-nice-day-for', 'walking');
+    $self->assert_cmp_deeply([], $seqnos);
+
+    xlog $self, "FUZZY HEADER of an unindexed field does not match a stemmed variant";
+    $seqnos = $talk->search('fuzzy', 'header', 'x-nice-day-for', 'runs');
+    $self->assert_cmp_deeply([], $seqnos);
+}
+
+sub test_header_fuzzy__unindexed_headers($self)
+{
+    $self->assert_header_fuzzy();
+}
+
+sub test_header_fuzzy__indexed_headers
+    :SearchIndexHeaders
+    ($self)
+{
+    $self->assert_header_fuzzy();
+}

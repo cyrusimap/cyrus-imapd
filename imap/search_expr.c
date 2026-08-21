@@ -3353,7 +3353,7 @@ EXPORTED const search_attr_t *search_attr_find_field(const char *field)
     char *key = NULL;
     static const search_attr_t proto = {
         "name",
-        SEA_FUZZABLE,
+        /*flags*/0,
         SEARCH_PART_NONE,
         SEARCH_COST_NONE,
         search_string_internalise,

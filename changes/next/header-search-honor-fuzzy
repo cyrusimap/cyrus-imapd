@@ -1,0 +1,27 @@
+Description:
+
+Under FUZZY search, a HEADER search of a field with a designated search
+part (Subject, From, To, Cc, Bcc) is now evaluated like the dedicated
+search key: it is served from the search engine and gains stemming, and
+no longer matches substrings or the empty string. HEADER searches of
+other fields are unchanged.
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+#6157

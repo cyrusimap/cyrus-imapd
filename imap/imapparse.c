@@ -796,18 +796,18 @@ bad:
 }
 
 
-static void string_match(search_expr_t *parent, const char *val,
-                         const char *aname, struct searchargs *base)
+static void attr_match(search_expr_t *parent, const char *val,
+                       const search_attr_t *attr, struct searchargs *base)
 {
     search_expr_t *e;
-    const search_attr_t *attr = search_attr_find(aname);
     enum search_op op = SEOP_MATCH;
     char *searchval;
 
     if (base->fuzzy_depth > 0 &&
         search_attr_is_fuzzable(attr)) {
         op = SEOP_FUZZYMATCH;
-        searchval = xstrdup(val); // keep search value as-is
+        // transcode to UTF-8, but leave normalization to the search engine
+        searchval = charset_convert(val, base->charset, CHARSET_KEEPCASE);
     }
     else searchval = charset_convert(val, base->charset, charset_flags|CHARSET_KEEPCASE);
 
@@ -818,6 +818,12 @@ static void string_match(search_expr_t *parent, const char *val,
         e->op = SEOP_FALSE;
         e->attr = NULL;
     }
+}
+
+static void string_match(search_expr_t *parent, const char *val,
+                         const char *aname, struct searchargs *base)
+{
+    attr_match(parent, val, search_attr_find(aname), base);
 }
 
 static void bytestring_match(search_expr_t *parent, const char *val,
@@ -1151,13 +1157,7 @@ static int get_search_criterion(struct protstream *pin,
             c = getastring(pin, pout, &arg2);
             if (c <= EOF) goto missingarg;
 
-            e = search_expr_new(parent, SEOP_MATCH);
-            e->attr = search_attr_find_field(arg.s);
-            e->value.s = charset_convert(arg2.s, base->charset, charset_flags|CHARSET_KEEPCASE);
-            if (!e->value.s) {
-                e->op = SEOP_FALSE;
-                e->attr = NULL;
-            }
+            attr_match(parent, arg2.s, search_attr_find_field(arg.s), base);
         }
         else goto badcri;
         break;
