@@ -1468,7 +1468,7 @@ static void imapd_check(struct backend *be, unsigned tell_flags)
         prot_printf(backend_current->out, "%s Noop\r\n", mytag);
         pipe_until_tag(backend_current, mytag, 0);
     }
-    else {
+    else if (imapd_index && index_hasrights(imapd_index, ACL_READ)) {
         /* local mailbox */
         if (notify_event_groups &&
             !(notify_event_groups->selected.events & IMAP_NOTIFY_FLAG_CHANGE))
@@ -1657,6 +1657,22 @@ static void cmdloop(void)
             plaintextloginalert = NULL;
         }
 
+        /* Have access rights changed? */
+        if (imapd_index) {
+            bool was_readonly = !index_hasrights(imapd_index, ACL_READ_WRITE);
+            mbentry_t *mbentry = NULL;
+
+            mlookup(NULL, NULL, index_mboxname(imapd_index), &mbentry);
+            index_calc_myrights(imapd_index, imapd_authstate,
+                                mbentry ? mbentry->acl : NULL);
+            mboxlist_entry_free(&mbentry);
+
+            if (was_readonly != !index_hasrights(imapd_index, ACL_READ_WRITE)) {
+                prot_printf(imapd_out, "* OK [READ-%s] Ok\r\n",
+                            was_readonly ? "WRITE" : "ONLY");
+            }
+        }
+
         /* Only Authenticate/Login/Logout/Noop/Capability/Id/Starttls
            allowed when not logged in */
         if (!imapd_userid && !strchr("ALNCIS", cmd.s[0])) goto nologin;
@@ -1732,7 +1748,11 @@ static void cmdloop(void)
             }
 #endif /* HAVE_ZLIB */
             else if (!strcmp(cmd.s, "Check")) {
-                if (!imapd_index && !backend_current) goto nomailbox;
+                if (imapd_index) {
+                    if (!index_hasrights(imapd_index, ACL_READ))
+                        goto noreadright;
+                }
+                else if (!backend_current) goto nomailbox;
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
 
                 cmd_noop(tag.s, cmd.s);
@@ -1741,7 +1761,11 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Copy")) {
                 if (readonly) goto noreadonly;
-                if (!imapd_index && !backend_current) goto nomailbox;
+                if (imapd_index) {
+                    if (!index_hasrights(imapd_index, ACL_READ))
+                        goto noreadright;
+                }
+                else if (!backend_current) goto nomailbox;
                 if (client_capa & CAPA_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
@@ -1868,7 +1892,11 @@ static void cmdloop(void)
 
         case 'F':
             if (!strcmp(cmd.s, "Fetch")) {
-                if (!imapd_index && !backend_current) goto nomailbox;
+                if (imapd_index) {
+                    if (!index_hasrights(imapd_index, ACL_READ))
+                        goto noreadright;
+                }
+                else if (!backend_current) goto nomailbox;
                 if (client_capa & CAPA_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
@@ -2111,7 +2139,11 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Move")) {
                 if (readonly) goto noreadonly;
-                if (!imapd_index && !backend_current) goto nomailbox;
+                if (imapd_index) {
+                    if (!index_hasrights(imapd_index, ACL_READ))
+                        goto noreadright;
+                }
+                else if (!backend_current) goto nomailbox;
                 if (client_capa & CAPA_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
@@ -2367,7 +2399,11 @@ static void cmdloop(void)
                 prometheus_increment(CYRUS_IMAP_SELECT_TOTAL);
             }
             else if (!strcmp(cmd.s, "Search")) {
-                if (!imapd_index && !backend_current) goto nomailbox;
+                if (imapd_index) {
+                    if (!index_hasrights(imapd_index, ACL_READ))
+                        goto noreadright;
+                }
+                else if (!backend_current) goto nomailbox;
                 if (client_capa & CAPA_UIDONLY) goto uidonly;
                 if (c != ' ') goto missingargs;
             search:
@@ -2450,7 +2486,11 @@ static void cmdloop(void)
                 prometheus_increment(CYRUS_IMAP_SETQUOTA_TOTAL);
             }
             else if (!strcmp(cmd.s, "Sort")) {
-                if (!imapd_index && !backend_current) goto nomailbox;
+                if (imapd_index) {
+                    if (!index_hasrights(imapd_index, ACL_READ))
+                        goto noreadright;
+                }
+                else if (!backend_current) goto nomailbox;
                 if (client_capa & CAPA_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
@@ -2513,7 +2553,11 @@ static void cmdloop(void)
 
         case 'T':
             if (!strcmp(cmd.s, "Thread")) {
-                if (!imapd_index && !backend_current) goto nomailbox;
+                if (imapd_index) {
+                    if (!index_hasrights(imapd_index, ACL_READ))
+                        goto noreadright;
+                }
+                else if (!backend_current) goto nomailbox;
                 if (client_capa & CAPA_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
@@ -2527,7 +2571,11 @@ static void cmdloop(void)
 
         case 'U':
             if (!strcmp(cmd.s, "Uid")) {
-                if (!imapd_index && !backend_current) goto nomailbox;
+                if (imapd_index) {
+                    if (!index_hasrights(imapd_index, ACL_READ))
+                        goto noreadright;
+                }
+                else if (!backend_current) goto nomailbox;
                 usinguid = 1;
                 if (c != ' ') goto missingargs;
                 c = getword(imapd_in, &arg1);
@@ -2694,7 +2742,11 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Xrunannotator")) {
                 if (readonly) goto noreadonly;
-                if (!imapd_index && !backend_current) goto nomailbox;
+                if (imapd_index) {
+                    if (!index_hasrights(imapd_index, ACL_READ))
+                        goto noreadright;
+                }
+                else if (!backend_current) goto nomailbox;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             xrunannotator:
@@ -2843,6 +2895,12 @@ static void cmdloop(void)
     nomailbox:
         prot_printf(imapd_out,
                     "%s BAD Please select a mailbox first\r\n", tag.s);
+        eatline(imapd_in, c);
+        continue;
+
+    noreadright:
+        prot_printf(imapd_out, "%s NO %s\r\n", tag.s,
+                    error_message(IMAP_PERMISSION_DENIED));
         eatline(imapd_in, c);
         continue;
 
@@ -3715,6 +3773,16 @@ static void cmd_idle(char *tag)
 
             done = proxy_check_input(protin, imapd_in, imapd_out, be_in, NULL,
                                      extra_fd, &extra_fd_flag, idle_period);
+
+            /* Have access rights changed? */
+            if (imapd_index) {
+                mbentry_t *mbentry = NULL;
+
+                mlookup(NULL, NULL, index_mboxname(imapd_index), &mbentry);
+                index_calc_myrights(imapd_index, imapd_authstate,
+                                    mbentry ? mbentry->acl : NULL);
+                mboxlist_entry_free(&mbentry);
+            }
 
             if (extra_fd_flag) {
                 /* Message from idled */
@@ -6315,14 +6383,21 @@ static void cmd_search(const char *tag, const char *cmd)
 
     if (searchargs->multi.filter) {
         /* Multisearch */
-        if ((searchargs->multi.filter & SEARCH_SOURCE_SELECTED) && !imapd_index) {
-            /* RFC 7377: 2.2
-             * If the source options include (or default to) "selected", the IMAP
-             * session MUST be in "selected" state.
-             */
-            prot_printf(imapd_out,
-                        "%s BAD Please select a mailbox first\r\n", tag);
-            goto done;
+        if (searchargs->multi.filter & SEARCH_SOURCE_SELECTED) {
+            if (!imapd_index) {
+                /* RFC 7377: 2.2
+                 * If the source options include (or default to) "selected",
+                 * the IMAP session MUST be in "selected" state.
+                 */
+                prot_printf(imapd_out,
+                            "%s BAD Please select a mailbox first\r\n", tag);
+                goto done;
+            }
+            if (!index_hasrights(imapd_index, ACL_READ)) {
+                /* We lost read access to the selected mailbox,
+                   so ignore that source option */
+                searchargs->multi.filter &= ~SEARCH_SOURCE_SELECTED;
+            }
         }
         if (searchargs->multi.filter & ~SEARCH_SOURCE_SELECTED) {
             if (searchargs->returnopts & SEARCH_RETURN_SAVE) {
@@ -15814,7 +15889,8 @@ static void push_updates(int idling)
 
         if (!etype || !mboxid) goto done;
 
-        if (imapd_index && !strcmp(mboxid, index_mboxid(imapd_index))) {
+        if (imapd_index && index_hasrights(imapd_index, ACL_READ) &&
+            !strcmp(mboxid, index_mboxid(imapd_index))) {
             /* Notification for currently selected mailbox */
             if ((etype & IMAP_NOTIFY_MESSAGE_NEW) &&
                 notify_event_groups &&

@@ -302,6 +302,24 @@ EXPORTED void index_close(struct index_state **stateptr)
     *stateptr = NULL;
 }
 
+EXPORTED void index_calc_myrights(struct index_state *state,
+                                  struct auth_state *authstate, const char *acl)
+{
+    state->myrights = cyrus_acl_myrights(authstate, acl);
+
+    if (state->examining)
+        state->myrights &= ~ACL_READ_WRITE;
+
+    /* Only allow setting flags on \Scheduled mailbox */
+    if (state->mailbox &&
+        mboxname_isscheduledmailbox(mailbox_name(state->mailbox),
+                                    mailbox_mbtype(state->mailbox))) {
+        state->myrights &= ~(ACL_INSERT | ACL_POST |
+                             ACL_CREATE | ACL_DELETEMBOX |
+                             ACL_DELETEMSG | ACL_EXPUNGE);
+    }
+}
+
 /*
  * A new mailbox has been selected and already opened, map it into
  * memory and do the initial CHECK.
@@ -325,18 +343,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
         state->want_mbtype = init->want_mbtype;
         state->want_expunged = init->want_expunged;
 
-        state->myrights = cyrus_acl_myrights(init->authstate,
-                                             mailbox_acl(state->mailbox));
-        if (state->examining)
-            state->myrights &= ~ACL_READ_WRITE;
-
-        /* Only allow setting flags on \Scheduled mailbox */
-        if (mboxname_isscheduledmailbox(mailbox_name(state->mailbox),
-                                        mailbox_mbtype(state->mailbox))) {
-            state->myrights &= ~(ACL_INSERT | ACL_POST |
-                                 ACL_CREATE | ACL_DELETEMBOX |
-                                 ACL_DELETEMSG | ACL_EXPUNGE);
-        }
+        index_calc_myrights(state, init->authstate, mailbox_acl(state->mailbox));
 
         state->internalseen = mailbox_internal_seen(state->mailbox,
                                                     state->userid);

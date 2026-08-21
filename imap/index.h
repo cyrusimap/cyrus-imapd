@@ -397,4 +397,7 @@ extern int insert_into_mailbox_allowed(struct mailbox *mailbox);
 
 extern int index_want_attachextract(const char *type, const char *subtype);
 
+extern void index_calc_myrights(struct index_state *state,
+                                struct auth_state *authstate, const char *acl);
+
 #endif /* INDEX_H */
