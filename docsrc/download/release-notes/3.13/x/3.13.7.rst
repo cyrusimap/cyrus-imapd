@@ -96,7 +96,7 @@ Updates to default configuration
 ================================
 
 * OpenSSL version 3.0 or greater is now required for all builds.
-* HTTP support, *DAV (CalDAV, CardDAV, WebDAV) and the calendar alarm daemon
+* HTTP support, \*DAV (CalDAV, CardDAV, WebDAV) and the calendar alarm daemon
   are now mandatory parts of every Cyrus IMAP build.  The ``--enable-http`` and
   ``--enable-calalarmd`` configure options have been removed; the httpd binary
   and calalarmd are always built.  libical, libxml2 and SQLite3 are now
