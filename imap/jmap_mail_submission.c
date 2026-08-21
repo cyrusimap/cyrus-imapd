@@ -374,6 +374,8 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     int r;
     time_t now = time(0);
     time_t internaldate = holduntil;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+    quota_t *qptr = NULL;
 
     if (!holduntil) {
         /* Already sent */
@@ -437,11 +439,23 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
         r = IMAP_IOERROR;
         goto done;
     }
+
+    /* A futurerelease submission stages a real copy of the message into
+     * the submission collection; charge the user's quota for it.  The
+     * non-futurerelease cases either insta-expunge the record or stage
+     * only the small JMAP_SUBMISSION_HDR header, so we keep the
+     * historical behavior of skipping the quota check there. */
+    if (holduntil) {
+        qdiffs[QUOTA_STORAGE] = ftell(f);
+        qdiffs[QUOTA_MESSAGE] = 1;
+        qptr = qdiffs;
+    }
+
     fclose(f);
 
     /* Prepare to append the message to the mailbox */
     r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate,
-                          0, /*quota*/NULL, 0, 0, /*event*/0);
+                          0, qptr, 0, 0, /*event*/0);
     if (r) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
                mailbox_name(mailbox), error_message(r));
