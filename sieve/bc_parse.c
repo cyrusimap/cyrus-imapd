@@ -154,7 +154,7 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.n.priority),
         offsetof(struct Commandlist, u.n.message)
       } },
-    { B_ERROR,                   "",                                     /* 34 */
+    { B_ERROR,                   "s",                                    /* 34 */
       { offsetof(struct Commandlist, u.str)
       } },
     { B_KEEP,                    "S",                                    /* 35 */
