@@ -1,0 +1,44 @@
+Description:
+
+Setting the "shareWith" property of a JMAP Mailbox now requires administrative
+access to that mailbox.  Previously, the nonstandard mailbox sharing feature of
+JMAP for Mail let any user with whom a mailbox had been shared change the
+permissions on it, including granting themselves or others further access.
+
+Creating a mailbox with "shareWith" now likewise requires administrative access
+to the parent mailbox, matching the behavior of the JMAP calendar and
+addressbook sharing handlers.
+
+
+CVE number: CVE-2026-111859
+
+
+CVE description:
+
+Changing mailbox permissions gated by wrong permissions
+
+Through the nonstandard mailbox sharing feature of JMAP for Mail, an
+authenticated JMAP user with whom a mailbox had been shared could update the
+permissions on that mailbox, including granting themselves or others further
+access.  The correct behavior (now enforced) is to require administrative
+access to the mailbox.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

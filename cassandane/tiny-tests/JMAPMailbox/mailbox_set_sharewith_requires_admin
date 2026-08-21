@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_sharewith_requires_admin
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+
+    # shareWith is a Cyrus extension to JMAP Mail, and Mailbox/set only
+    # recognizes the property if the client asked for the extension.  Without
+    # this, every request below is rejected as invalidProperties and the test
+    # passes no matter what the ACL check does.
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    # sharer is the mailbox owner; cassandane is the would-be attacker.
+    $self->{instance}->create_user("sharer");
+
+    my $service = $self->{instance}->get_service("http");
+    my $sharer_jmap = Mail::JMAPTalk->new(
+        user => 'sharer',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $sharer_jmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ]);
+
+    xlog $self, "sharer shares their INBOX with cassandane, read-only";
+    $admin->setacl("user.sharer", "cassandane", "lr") or die;
+
+    # Cassandane's view of the sharer account holds exactly the one mailbox
+    # that was shared with her, so there is no ambiguity about which id this is.
+    my $sharer_inbox_id = do {
+        my $get = $jmap->CallMethods([
+            ['Mailbox/get', {
+                accountId => 'sharer',
+                properties => ['name', 'parentId'],
+            }, 'R1'],
+        ]);
+
+        my ($inbox) = grep {; ! defined $_->{parentId} } @{ $get->[0][1]{list} };
+
+        $inbox->{id};
+    };
+    $self->assert_not_null($sharer_inbox_id);
+
+    my %acl_before = @{ $admin->getacl("user.sharer") };
+
+    xlog $self, "as cassandane, try to grant 'third' admin rights on sharer's INBOX";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            accountId => "sharer",
+            update => {
+                $sharer_inbox_id => {
+                    shareWith => {
+                        third      => { mayAdmin => JSON::true },
+                        cassandane => { mayAdmin => JSON::true },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $set = $res->[0][1];
+
+    xlog $self, "Mailbox/set must not report success";
+    $self->assert_null($set->{updated}{$sharer_inbox_id});
+    $self->assert_str_equals('forbidden',
+        $set->{notUpdated}{$sharer_inbox_id}{type});
+
+    # The error alone proves nothing!  Before the fix, Mailbox/set wrote the
+    # new ACL and *then* reported "forbidden" when it failed to provision the
+    # new sharee's upload collection.  The ACL is the test.
+    xlog $self, "ask sharer what their INBOX is actually shared with now";
+    $res = $sharer_jmap->CallMethods([
+        ['Mailbox/get', {
+            ids => [$sharer_inbox_id],
+            properties => ['shareWith'],
+        }, 'R1'],
+    ]);
+    my $sharing = $res->[0][1]{list}[0]{shareWith};
+
+    $self->assert(
+      ! exists $sharing->{third},
+      "no sharing added for 'third'",
+    );
+
+    $self->assert(
+      ! $sharing->{cassandane}{mayAdmin},
+      "cassandane hasn't got mayAdmin"
+    );
+
+    my %acl_after = @{ $admin->getacl("user.sharer") };
+    $self->assert_deep_equals(\%acl_before, \%acl_after);
+}
+
