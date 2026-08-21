@@ -648,7 +648,8 @@ static json_t *_mbox_get(jmap_req_t *req,
     }
 
     if (jmap_wantprop(props, "isSubscribed")) {
-        int is_subscribed = strarray_contains(sublist, mbentry->name);
+        int is_subscribed = strarray_contains(sublist, mbentry->name) ||
+            (jmap_myrights_mbentry(req, mbentry) & ACL_AUTOSUB);
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
 
@@ -993,7 +994,8 @@ static int _mboxquery_eval_filter(mboxquery_t *query,
         }
         if (JNOTNULL(filter->is_subscribed)) {
             int want_subscribed = json_boolean_value(filter->is_subscribed);
-            int is_subscribed = strarray_contains(query->sublist, rec->mboxname);
+            int is_subscribed = strarray_contains(query->sublist, rec->mboxname) ||
+                (jmap_myrights(query->req, rec->mboxname) & ACL_AUTOSUB);
             if (want_subscribed && !is_subscribed) return 0;
             if (!want_subscribed && is_subscribed) return 0;
         }
@@ -3173,7 +3175,14 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
                 ptrarray_append(&skipped_put, args);
             }
             else {
-                json_object_set(set->super.updated, args->mbox_id, json_null());
+                if (args->is_subscribed == 0 &&
+                    (jmap_myrights_mboxid(req, args->mbox_id) & ACL_AUTOSUB)) {
+                    json_object_set_new(set->super.updated, args->mbox_id,
+                                        json_pack("{s:b}", "isSubscribed", 1));
+                }
+                else {
+                    json_object_set(set->super.updated, args->mbox_id, json_null());
+                }
                 if (result.tmp_imapname) {
                     struct tmp_rename *tmp = xzmalloc(sizeof(struct tmp_rename));
                     tmp->old_imapname = xstrdupnull(result.old_imapname);

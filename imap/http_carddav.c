@@ -2401,9 +2401,10 @@ static int report_card_query(struct transaction_t *txn,
                               MBOXTREE_SKIP_ROOT);
 
             /* Add responses for all shared addressbook collections */
-            mboxlist_usersubs(txn->req_tgt.userid,
-                              propfind_by_collection, fctx,
-                              MBOXTREE_SKIP_PERSONAL);
+            mboxlist_usersubs_effective(txn->req_tgt.userid,
+                                        httpd_authstate,
+                                        propfind_by_collection, fctx,
+                                        MBOXTREE_SKIP_PERSONAL);
         }
     }
 

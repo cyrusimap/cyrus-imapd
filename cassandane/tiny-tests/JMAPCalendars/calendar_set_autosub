@@ -1,0 +1,81 @@
+#!perl
+use Cassandane::Tiny;
+
+# Subscribing and unsubscribing an autosub calendar both succeed, but the
+# '1' right keeps isSubscribed true until the right itself goes away.
+sub test_calendar_set_autosub ($self)
+{
+    my $jmap  = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    my $other = $self->{instance}->create_user('other');
+    my $cal = $other->calendars->default;
+
+    $admin->setacl('user.other.#calendars.Default', cassandane => 'lrs1')
+        or die "setacl: $@";
+
+    xlog $self, "subscribe for real, then unsubscribe: both must succeed";
+    my $res = $jmap->request([
+        [ 'Calendar/set', {
+            accountId => 'other',
+            update => { $cal->id => { isSubscribed => JSON::true } },
+        }, 'subscribe' ],
+        [ 'Calendar/set', {
+            accountId => 'other',
+            update => { $cal->id => { isSubscribed => JSON::false } },
+        }, 'unsubscribe' ],
+        [ 'Calendar/get', {
+            accountId  => 'other',
+            ids        => [ $cal->id ],
+            properties => [ 'isSubscribed' ],
+        }, 'get' ],
+    ]);
+
+    my $subscribe = $res->paragraph_by_client_id('subscribe')
+                        ->single('Calendar/set')->arguments;
+    my $unsubscribe = $res->paragraph_by_client_id('unsubscribe')
+                          ->single('Calendar/set')->arguments;
+    my $calendars = $res->paragraph_by_client_id('get')
+                        ->single('Calendar/get')->arguments->{list};
+
+    $self->assert_cmp_deeply(
+        superhashof({ updated => { $cal->id => ignore() } }),
+        $subscribe,
+        "subscribing an autosub calendar succeeds",
+    );
+
+    xlog $self, "server reports the still-true effective state";
+    $self->assert_cmp_deeply(
+        superhashof({
+            updated => { $cal->id => superhashof({ isSubscribed => jtrue() }) },
+        }),
+        $unsubscribe,
+        "unsubscribing succeeds but the '1' right keeps it subscribed",
+    );
+
+    $self->assert_cmp_deeply(
+        [ superhashof({ id => $cal->id, isSubscribed => jtrue() }) ],
+        $calendars,
+        "and Calendar/get agrees",
+    );
+
+    xlog $self, "removing the flag reveals the real (removed) entry";
+    $admin->setacl('user.other.#calendars.Default', cassandane => 'lrs')
+        or die "setacl: $@";
+
+    $res = $jmap->request([
+        [ 'Calendar/get', {
+            accountId  => 'other',
+            ids        => [ $cal->id ],
+            properties => [ 'isSubscribed' ],
+        } ],
+    ]);
+
+    $calendars = $res->single_sentence('Calendar/get')->arguments->{list};
+
+    $self->assert_cmp_deeply(
+        [ superhashof({ id => $cal->id, isSubscribed => jfalse() }) ],
+        $calendars,
+        "without the '1' right the earlier unsubscribe takes effect",
+    );
+}

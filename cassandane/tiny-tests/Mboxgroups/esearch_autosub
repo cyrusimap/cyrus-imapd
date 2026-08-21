@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+# The subscribed source of an ESEARCH multisearch resolves subscriptions
+# separately from LIST, so the '1' right has to be honoured there too.
+sub test_esearch_autosub
+    :NoAltNamespace :ReverseACLs :min_version_3_7
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $imaptalk  = $self->{store}->get_client();
+
+    $admintalk->create("user.otheruser.autoshared") or die "create: $@";
+    $admintalk->setacl("user.otheruser.autoshared", "group:group co", "lrsip1")
+        or die "setacl: $@";
+
+    my $raw = <<"EOF";
+From: <from\@local>\r
+To: to\@local\r
+Subject: findme\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+body\r
+EOF
+
+    $imaptalk->append('user.otheruser.autoshared', "()", $raw) || die $@;
+
+    my @results;
+    my %handlers = (
+        esearch => sub { push @results, $_[1] },
+    );
+
+    xlog $self, "the flag-granted folder is searched without a subs entry";
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(SUBSCRIBED)', 'subject', 'findme');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(1, scalar @results);
+    $self->assert_str_equals('user.otheruser.autoshared', $results[0][0][3]);
+
+    xlog $self, "subscribing for real does not double up the result";
+    $imaptalk->subscribe("user.otheruser.autoshared") or die "subscribe: $@";
+
+    @results = ();
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(SUBSCRIBED)', 'subject', 'findme');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(1, scalar @results);
+    $self->assert_str_equals('user.otheruser.autoshared', $results[0][0][3]);
+}

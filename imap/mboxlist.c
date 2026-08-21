@@ -29,6 +29,7 @@
 #include "assert.h"
 #include "global.h"
 #include "cyrusdb.h"
+#include "hash.h"
 #include "util.h"
 #include "mailbox.h"
 #include "mboxevent.h"
@@ -3688,23 +3689,18 @@ struct find_rock {
     void *procrock;
 };
 
-/* return non-zero if we like this one */
-static int find_p(void *rockp,
-                  const char *key, size_t keylen,
-                  const char *data, size_t datalen)
+/* return non-zero if we like this one.  dbname is the record's name;
+ * data/datalen are its db value, unused for subscriptions which have empty
+ * values, so an ACL-only subscription can be fed through here with no
+ * record at all */
+static int find_dbname_p(struct find_rock *rock,
+                         const char *dbname, size_t dbnamelen,
+                         const char *data, size_t datalen)
 {
-    struct find_rock *rock = (struct find_rock *) rockp;
-    struct buf dbname = BUF_INITIALIZER;
     int i;
 
-    /* skip any non-name keys */
-    if (key[0] != KEY_TYPE_NAME) return 0;
-
-    mboxlist_dbname_from_key(key, keylen,
-                             rock->issubs ? rock->userid : NULL, &dbname);
-
     assert(!rock->mbname);
-    rock->mbname = mbname_from_dbname(buf_cstring(&dbname));
+    rock->mbname = mbname_from_dbname(dbname);
 
     if (!rock->isadmin && !config_getswitch(IMAPOPT_CROSSDOMAINS)) {
         /* don't list mailboxes outside of the default domain */
@@ -3739,8 +3735,7 @@ static int find_p(void *rockp,
         goto good;
 
     /* ignore entirely deleted records */
-    if (mboxlist_parse_entry(&rock->mbentry,
-                             buf_cstring(&dbname), buf_len(&dbname),
+    if (mboxlist_parse_entry(&rock->mbentry, dbname, dbnamelen,
                              data, datalen))
         goto nomatch;
 
@@ -3761,8 +3756,6 @@ static int find_p(void *rockp,
     }
 
 good:
-    buf_free(&dbname);
-
     if (rock->p) {
         struct findall_data fdata = { extname, 0, rock->mbentry, rock->mbname, 0 };
         /* mbname confirms that it's an exact match */
@@ -3778,8 +3771,27 @@ good:
 nomatch:
     mboxlist_entry_free(&rock->mbentry);
     mbname_free(&rock->mbname);
-    buf_free(&dbname);
     return 0;
+}
+
+static int find_p(void *rockp,
+                  const char *key, size_t keylen,
+                  const char *data, size_t datalen)
+{
+    struct find_rock *rock = (struct find_rock *) rockp;
+    struct buf dbname = BUF_INITIALIZER;
+
+    /* skip any non-name keys */
+    if (key[0] != KEY_TYPE_NAME) return 0;
+
+    mboxlist_dbname_from_key(key, keylen,
+                             rock->issubs ? rock->userid : NULL, &dbname);
+
+    int r = find_dbname_p(rock, buf_cstring(&dbname), buf_len(&dbname),
+                          data, datalen);
+
+    buf_free(&dbname);
+    return r;
 }
 
 static int find_cb(void *rockp,
@@ -3845,6 +3857,17 @@ static int find_cb(void *rockp,
     mboxlist_entry_free(&rock->mbentry);
     mbname_free(&rock->mbname);
     return r;
+}
+
+/* run one name through find_p/find_cb without a db record behind it.  Only
+ * valid for subscriptions, where find_dbname_p never looks at the value */
+static int find_emit_dbname(struct find_rock *rock, const char *dbname)
+{
+    assert(rock->issubs);
+
+    if (!find_dbname_p(rock, dbname, strlen(dbname), NULL, 0)) return 0;
+
+    return find_cb(rock, NULL, 0, NULL, 0);
 }
 
 struct allmb_rock {
@@ -4254,6 +4277,108 @@ EXPORTED int mboxlist_usermboxtree(const char *userid,
     return r;
 }
 
+struct subsname_rock {
+    const char *userid;
+    strarray_t *names;
+};
+
+static int subsname_cb(void *rockp, const char *key, size_t keylen,
+                       const char *data __attribute__((unused)),
+                       size_t datalen __attribute__((unused)))
+{
+    struct subsname_rock *srock = (struct subsname_rock *) rockp;
+    struct buf dbname = BUF_INITIALIZER;
+
+    if (key[0] == KEY_TYPE_NAME) {
+        mboxlist_dbname_from_key(key, keylen, srock->userid, &dbname);
+        strarray_append(srock->names, buf_cstring(&dbname));
+        buf_free(&dbname);
+    }
+
+    return 0;
+}
+
+/* collect mailboxes in this category where the user's effective rights
+ * include ACL_AUTOSUB - subscribed by grant rather than by a subs record.
+ * Needs reverseacls: the reverse index is the only way to find the grants
+ * without walking every mailbox on the server */
+static void mboxlist_autosub_matches(struct find_rock *rock,
+                                     const char *prefix, size_t len,
+                                     strarray_t *names)
+{
+    strarray_t matches = STRARRAY_INITIALIZER;
+    int i;
+
+    /* rock->db is the subs db here, the grants live in mailboxes.db */
+    mboxlist_racl_matches(mbdb,
+                          (rock->mb_category == MBNAME_OTHERUSER),
+                          rock->userid,
+                          rock->auth_state,
+                          prefix, len,
+                          &matches);
+
+    for (i = 0; i < strarray_size(&matches); i++) {
+        const char *dbname = strarray_nth(&matches, i);
+        mbentry_t *mbentry = NULL;
+
+        /* skips reserved, deleted and intermediate records for us */
+        if (mboxlist_mylookup(dbname, &mbentry, NULL, 0, 0)) continue;
+
+        if (cyrus_acl_myrights(rock->auth_state, mbentry->acl) & ACL_AUTOSUB)
+            strarray_append(names, dbname);
+
+        mboxlist_entry_free(&mbentry);
+    }
+
+    strarray_fini(&matches);
+}
+
+/* Subscriptions outside the user's own tree have two sources: the subs db,
+ * and mailboxes carrying the '1' right.  Merge them into one sorted stream
+ * rather than running a second pass - the LIST callbacks compare each name
+ * against the previous one to derive \HasChildren and the LSUB parent
+ * mention, so names arriving out of order come out wrong. */
+static int mboxlist_find_subs_category(struct find_rock *rock,
+                                       const char *prefix, size_t len)
+{
+    strarray_t autosubs = STRARRAY_INITIALIZER;
+    strarray_t names = STRARRAY_INITIALIZER;
+    struct subsname_rock srock = { rock->userid, &names };
+    struct buf key = BUF_INITIALIZER;
+    int r = 0;
+    int i;
+
+    mboxlist_autosub_matches(rock, prefix, len, &autosubs);
+
+    mboxlist_dbname_to_key(prefix, len, rock->userid, &key);
+
+    if (!strarray_size(&autosubs)) {
+        /* nothing granted anywhere in reach, which is the usual case - walk
+         * the subs db directly rather than paying for a merge of one list */
+        r = cyrusdb_foreach(rock->db, buf_base(&key), buf_len(&key),
+                            &find_p, &find_cb, rock, NULL);
+        goto done;
+    }
+
+    r = cyrusdb_foreach(rock->db, buf_base(&key), buf_len(&key),
+                        NULL, subsname_cb, &srock, NULL);
+    if (r) goto done;
+
+    /* a mailbox can be both really subscribed and granted the right */
+    strarray_cat(&names, &autosubs);
+    strarray_sort(&names, cmpstringp_raw);
+    strarray_uniq(&names);
+
+    for (i = 0; !r && i < strarray_size(&names); i++)
+        r = find_emit_dbname(rock, strarray_nth(&names, i));
+
+ done:
+    strarray_fini(&names);
+    strarray_fini(&autosubs);
+    buf_free(&key);
+    return r;
+}
+
 static int mboxlist_find_category(struct find_rock *rock, const char *prefix, size_t len)
 {
     struct buf key = BUF_INITIALIZER;
@@ -4261,7 +4386,14 @@ static int mboxlist_find_category(struct find_rock *rock, const char *prefix, si
 
     init_internal();
 
-    if (!rock->issubs && !rock->isadmin && have_racl) {
+    if (rock->issubs && !rock->isadmin && have_racl &&
+        (rock->mb_category == MBNAME_OTHERUSER ||
+         rock->mb_category == MBNAME_SHARED)) {
+        /* only these two categories can hold someone else's mailbox, and
+         * mboxlist_update_racl never writes a key for a mailbox's own owner */
+        r = mboxlist_find_subs_category(rock, prefix, len);
+    }
+    else if (!rock->issubs && !rock->isadmin && have_racl) {
         /* we're using reverse ACLs */
         strarray_t matches = STRARRAY_INITIALIZER;
         int i;
@@ -5359,6 +5491,59 @@ EXPORTED int mboxlist_usersubs(const char *userid, mboxlist_cb *proc,
     return r;
 }
 
+struct effsubs_rock {
+    const char *userid;
+    const struct auth_state *auth_state;
+    hash_table seen;
+    mboxlist_cb *proc;
+    void *rock;
+    int flags;
+};
+
+static int effsubs_subs_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct effsubs_rock *erock = vrock;
+    hash_insert(mbentry->name, (void *)1, &erock->seen);
+    return erock->proc(mbentry, erock->rock);
+}
+
+static int effsubs_acl_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct effsubs_rock *erock = vrock;
+
+    if (hash_lookup(mbentry->name, &erock->seen)) return 0;
+    if ((erock->flags & MBOXTREE_SKIP_PERSONAL) &&
+        mboxname_userownsmailbox(erock->userid, mbentry->name))
+        return 0;
+    if (!(cyrus_acl_myrights(erock->auth_state, mbentry->acl) & ACL_AUTOSUB))
+        return 0;
+
+    return erock->proc(mbentry, erock->rock);
+}
+
+/* like mboxlist_usersubs, but also visits mailboxes whose effective
+ * rights for userid include ACL_AUTOSUB, each mailbox at most once.
+ * shared-mailbox coverage relies on reverseacls being enabled, same
+ * as any other MBOXTREE_PLUS_RACL caller.
+ * rights are computed from auth_state, while RACL enumeration keys
+ * off userid, so callers must pass a (userid, auth_state) pair that
+ * name the same principal */
+EXPORTED int mboxlist_usersubs_effective(const char *userid,
+                                         const struct auth_state *auth_state,
+                                         mboxlist_cb *proc, void *rock,
+                                         int flags)
+{
+    struct effsubs_rock erock = { userid, auth_state, HASH_TABLE_INITIALIZER,
+                                  proc, rock, flags };
+    construct_hash_table(&erock.seen, 1024, 0);
+
+    int r = mboxlist_usersubs(userid, effsubs_subs_cb, &erock, flags);
+    if (!r) r = mboxlist_usermboxtree(userid, auth_state, effsubs_acl_cb,
+                                      &erock, MBOXTREE_PLUS_RACL);
+
+    free_hash_table(&erock.seen, NULL);
+    return r;
+}
 
 
 
@@ -5388,6 +5573,37 @@ EXPORTED int mboxlist_checksub(const char *name, const char *userid)
 
     mboxlist_closesubs(subs);
     return r;
+}
+
+/* effective subscription: a real subs entry, or ACL_AUTOSUB in the
+ * user's effective rights. auth_state may be NULL, in which case one
+ * is constructed for userid. Returns nonzero if subscribed. */
+EXPORTED int mboxlist_issubscribed(const char *name, const char *userid,
+                                   const struct auth_state *auth_state)
+{
+    if (mboxlist_checksub(name, userid) == 0) return 1;
+
+    mbentry_t *mbentry = NULL;
+    if (mboxlist_lookup(name, &mbentry, NULL)) return 0;
+
+    int rights = 0;
+
+    /* the miss is the common case, and building an auth state for it would
+     * invert mboxlist_checksub's cost -- so ask the ACL whether anybody at
+     * all is granted the right before working out whether this user is */
+    if (cyrus_acl_anygrants(mbentry->acl, ACL_AUTOSUB)) {
+        struct auth_state *mystate = NULL;
+        if (!auth_state)
+            auth_state = mystate = auth_newstate(userid);
+
+        rights = cyrus_acl_myrights(auth_state, mbentry->acl);
+
+        if (mystate) auth_freestate(mystate);
+    }
+
+    mboxlist_entry_free(&mbentry);
+
+    return (rights & ACL_AUTOSUB) ? 1 : 0;
 }
 
 /*
