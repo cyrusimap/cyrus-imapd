@@ -2121,7 +2121,7 @@ clean-doc-examples:
 	@$(RM) $(GENERATED_EXAMPLES)
 
 clean-doc-doxygen:
-	@$($RM) -r docsrc/_doxygen
+	@$(RM) -r docsrc/_doxygen
 
 ## "doc" is man + doc-html + doc-text + doc-examples, but spelled out rather
 ## than depending on those four, so that the whole doc build is one make
