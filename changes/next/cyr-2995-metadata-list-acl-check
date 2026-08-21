@@ -1,0 +1,29 @@
+Description:
+
+The parenthesized-list form of the IMAP GETMETADATA command now performs the
+same mailbox ACL checks as the single-mailbox form.  Previously, an
+authenticated user could use that form to distinguish between
+"mailbox does not exist" and "mailbox exists, but you have no access to it",
+creating an oracle for mailbox existence.
+
+Tracked as GitHub security advisory GHSA-3wp4-ff49-m839.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
