@@ -73,9 +73,11 @@ particular meaning.  We make these at our discretion.  You should think of them
 as major versions that might includer larger new features or a more complex
 upgrade than usual.
 
-We stop releasing minor versions for major versions after two years.  While we
-*might* push bugfixes for significant problems to the git branch for an old
-major release, we won't undertake a new release.  If you're running an old
+We generally don't release minor versions for major versions other than the
+current stable one.  That is, once 3.14.0 is released, there may not be further
+3.12.x releases.  In practice, we *sometimes* push bugfixes for significant
+problems to the git branch for an old major release, and *might* make a minor
+version to ship security updates.  Really, though, if you're running an old
 version of Cyrus, it's up to you (or your package manager) to track and package
 new patches.
 
@@ -84,5 +86,5 @@ of Cyrus, we practice responsible disclosure.  We produce a fix, then inform
 downstream package mangers of that fix.  The fix comes with an embargo date so
 it can be released publicly at the same time that updated packages become
 available.  In general, we do not pursue security fixes for major versions of
-Cyrus over three years old. There may be exceptions to this, but generally you
+Cyrus over one year old.  There may be exceptions to this, but generally you
 should try to run a recent release.
