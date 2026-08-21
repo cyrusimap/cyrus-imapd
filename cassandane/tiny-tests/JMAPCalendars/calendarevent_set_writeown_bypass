@@ -1,0 +1,188 @@
+#!perl
+use Cassandane::Tiny;
+
+# A sharee with mayWriteOwn may only rewrite or remove events that they
+# organize.  If they can patch owner-controlled properties (title, timing,
+# location, ...) of somebody else's event, or destroy it outright, that's
+# CVE-2026-61914 all over again.
+sub test_calendarevent_set_writeown_bypass
+{
+    my ($self) = @_;
+
+    my $sharee_jmap = $self->{jmap};
+
+    xlog $self, 'create the calendar owner and the calendar to share';
+    my ($sharer_jmap) = $self->create_user('sharer');
+
+    my $res = $sharer_jmap->CallMethods([
+        ['Calendar/set', {
+            create => { cal => { name => 'Sharer Calendar' } },
+        }, 'R1'],
+    ]);
+    my $sharer_cal_id = $res->[0][1]{created}{cal}{id};
+    $self->assert_not_null($sharer_cal_id);
+
+    my $share_calendar_as = sub {
+        my (%rights) = @_;
+
+        my $set = $sharer_jmap->CallMethods([
+            ['Calendar/set', {
+                update => {
+                    $sharer_cal_id => {
+                        shareWith => { cassandane => \%rights },
+                    },
+                },
+            }, 'R1'],
+        ]);
+
+        $self->assert(exists $set->[0][1]{updated}{$sharer_cal_id});
+    };
+
+    my $sharer_creates_event = sub {
+        my ($event) = @_;
+
+        my $set = $sharer_jmap->CallMethods([
+            ['CalendarEvent/set', {
+                create => {
+                    ev => {
+                        calendarIds => { $sharer_cal_id => JSON::true },
+                        start       => '2025-01-01T10:00:00',
+                        duration    => 'PT1H',
+                        timeZone    => 'Etc/UTC',
+                        %$event,
+                    },
+                },
+            }, 'R1'],
+        ]);
+
+        my $event_id = $set->[0][1]{created}{ev}{id};
+        $self->assert_null($set->[0][1]{notCreated}{ev});
+        $self->assert_not_null($event_id);
+
+        return $event_id;
+    };
+
+    my $sharer_event_title = sub {
+        my ($event_id) = @_;
+
+        my $get = $sharer_jmap->CallMethods([
+            ['CalendarEvent/get', {
+                ids        => [ $event_id ],
+                properties => [ 'title' ],
+            }, 'R1'],
+        ]);
+
+        return $get->[0][1]{list}[0]{title};
+    };
+
+    my $sharee_retitles_event = sub {
+        my ($event_id, $title) = @_;
+
+        my $set = $sharee_jmap->CallMethods([
+            ['CalendarEvent/set', {
+                accountId => 'sharer',
+                update    => { $event_id => { title => $title } },
+            }, 'R1'],
+        ]);
+
+        return $set->[0][1];
+    };
+
+    my $sharee_destroys_event = sub {
+        my ($event_id) = @_;
+
+        my $set = $sharee_jmap->CallMethods([
+            ['CalendarEvent/set', {
+                accountId => 'sharer',
+                destroy   => [ $event_id ],
+            }, 'R1'],
+        ]);
+
+        return $set->[0][1];
+    };
+
+    my $assert_sharee_cannot_touch = sub {
+        my ($desc, $event) = @_;
+
+        xlog $self, "owner creates an event $desc";
+        my $event_id = $sharer_creates_event->($event);
+
+        xlog $self, "sharee tries to retitle the event $desc";
+        my $set = $sharee_retitles_event->($event_id, 'Attacker Rewrote This');
+
+        $self->assert_null($set->{updated}{$event_id});
+        $self->assert_str_equals('forbidden',
+            $set->{notUpdated}{$event_id}{type});
+        $self->assert_str_equals($event->{title},
+            $sharer_event_title->($event_id));
+
+        xlog $self, "sharee tries to destroy the event $desc";
+        $set = $sharee_destroys_event->($event_id);
+
+        $self->assert(! grep {; $_ eq $event_id } @{ $set->{destroyed} || [] });
+        $self->assert_str_equals('forbidden',
+            $set->{notDestroyed}{$event_id}{type});
+        $self->assert_str_equals($event->{title},
+            $sharer_event_title->($event_id));
+    };
+
+    xlog $self, 'share the calendar with the sharee as mayWriteOwn';
+    $share_calendar_as->(
+        mayReadItems => JSON::true,
+        mayWriteOwn  => JSON::true,
+    );
+
+    $assert_sharee_cannot_touch->('organized by the owner' => {
+        title        => "Owner's Meeting",
+        replyTo      => { imip => 'mailto:sharer@example.com' },
+        participants => {
+            sharer => {
+                roles  => { owner => JSON::true, attendee => JSON::true },
+                sendTo => { imip => 'mailto:sharer@example.com' },
+            },
+        },
+    });
+
+    # The CalDAV code path (caldav_util.c) counts an event with no ORGANIZER as
+    # the sharee's own, and so lets a mayWriteOwn sharee update and delete it.
+    # The JMAP path does not: an unorganized event in somebody else's calendar
+    # was never organized by the sharee.
+    $assert_sharee_cannot_touch->('with no organizer at all' => {
+        title => "Owner's Private Reminder",
+    });
+
+    xlog $self, 'owner creates an event that the sharee organizes';
+    my $own_id = $sharer_creates_event->({
+        title        => "Sharee's Meeting",
+        replyTo      => { imip => 'mailto:cassandane@example.com' },
+        participants => {
+            cassandane => {
+                roles  => { owner => JSON::true, attendee => JSON::true },
+                sendTo => { imip => 'mailto:cassandane@example.com' },
+            },
+        },
+    });
+
+    xlog $self, 'sharee may retitle the event they organize';
+    my $own_set = $sharee_retitles_event->($own_id, 'Retitled By Organizer');
+    $self->assert(exists $own_set->{updated}{$own_id});
+    $self->assert_str_equals('Retitled By Organizer',
+        $sharer_event_title->($own_id));
+
+    xlog $self, 'as a control, re-share the calendar as mayWriteAll';
+    $share_calendar_as->(
+        mayReadItems => JSON::true,
+        mayWriteAll  => JSON::true,
+    );
+
+    my $event_id = $sharer_creates_event->({ title => "Owner's Other Event" });
+
+    my $set = $sharee_retitles_event->($event_id, 'Retitled');
+    $self->assert_null($set->{notUpdated}{$event_id});
+    $self->assert(exists $set->{updated}{$event_id},
+        'a mayWriteAll sharee can still retitle the owner-created event');
+
+    $set = $sharee_destroys_event->($event_id);
+    $self->assert_null($set->{notDestroyed}{$event_id});
+    $self->assert_deep_equals([ $event_id ], $set->{destroyed});
+}
