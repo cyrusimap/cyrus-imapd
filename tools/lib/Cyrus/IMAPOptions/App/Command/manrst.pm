@@ -130,7 +130,6 @@ sub footer ($self)
 
     :cyrusman:`imapd(8)`,
     :cyrusman:`pop3d(8)`,
-    :cyrusman:`nntpd(8)`,
     :cyrusman:`lmtpd(8)`,
     :cyrusman:`httpd(8)`,
     :cyrusman:`timsieved(8)`,
