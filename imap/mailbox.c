@@ -4201,6 +4201,21 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
     /* Get script name from Subject */
     name = body->subject;
 
+    /* The subject is attacker-controllable.  Reject anything that would escape
+     * that prefix, just like the management entry points (timsieved,
+     * jmap_sieve) already do. */
+    {
+        struct buf namebuf = BUF_INITIALIZER;
+        buf_init_ro_cstr(&namebuf, name);
+        if (!sievedir_valid_name(&namebuf)) {
+            xsyslog(LOG_ERR, "invalid sieve script name",
+                    "mailbox=<%s> script=<%s>",
+                    mailbox_name(mailbox), name ? name : "");
+            r = IMAP_MAILBOX_BADNAME;
+            goto done;
+        }
+    }
+
     sievedb = mailbox_open_sieve(mailbox);
 
     /* Find existing record for this id */

@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+use Cwd qw(abs_path);
+
+# It doesn't matter how much the subject of an email appended to #sieve wants
+# you to, we should never write outside the sievedir.
+sub test_sieve_subject_path_traversal
+    :MagicPlus :NoAltNameSpace :needs_component_sieve
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.cassandane.#sieve", ['TYPE', 'SIEVE'])
+        or die "create #sieve: " . $admintalk->get_last_error();
+
+    # Drop the IMAPTalk client and reconnect with the +dav magic plus so
+    # cmd_append's non-IMAP-mailbox guard lets us through to the actual sieve
+    # update hook.
+    $self->{store}->disconnect();
+    my $talk = $self->{store}->get_client(NoLogin => 1);
+    $talk->login('cassandane+dav', 'secret')
+        or die "+dav login failed: " . $talk->get_last_error();
+
+    my $slug = 'cyr-2993-traversal-target';
+    my $subject = "../$slug";
+
+    my $message = <<"EOF";
+From: <cassandane>
+Subject: $subject
+Date: Mon, 13 May 2026 12:00:00 +0000
+Message-Id: <cyr-2993-poc\@cassandane.local>
+Content-Type: application/sieve; charset=utf-8
+Content-Length: 6
+Content-Disposition: attachment;
+\tfilename="cyr2993poc.sieve"
+MIME-Version: 1.0
+
+keep;
+EOF
+    $message =~ s/\r?\n/\r\n/gs;
+
+    $talk->append('INBOX.#sieve', '(\\Flagged)', { Literal => $message });
+    my $resp = $talk->get_last_completion_response();
+
+    # Regardless of how the IMAP layer reports the outcome, we MUST NOT have
+    # written a .bc file outside the user's sievedir.  Look in the parent of
+    # the sievedir for our slug.
+    my $sievedir = $self->{instance}->get_sieve_script_dir('cassandane');
+    my $parent = abs_path("$sievedir/..") // "$sievedir/..";
+    my $escaped_bc = "$parent/$slug.bc";
+
+    $self->assert(! -e $escaped_bc,
+                  "must not write Sieve bytecode outside sievedir, "
+                . "but $escaped_bc exists");
+
+    # And the IMAP layer should have surfaced the rejection.
+    $self->assert_str_equals(
+        'no',
+        $resp,
+        "APPEND with traversal Subject must be rejected (got: $resp)"
+    );
+}
