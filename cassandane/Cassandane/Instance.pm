@@ -1772,6 +1772,11 @@ sub deliver
         push(@cmd, '-m', $folder);
     }
 
+    if (defined $params{auth_id})
+    {
+        push(@cmd, '-a', $params{auth_id});
+    }
+
     my @users;
     if (defined $params{users})
     {
