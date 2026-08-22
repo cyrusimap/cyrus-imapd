@@ -724,8 +724,20 @@ static void my_caldav_init(struct buf *serverinfo)
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 
-    buf_printf(&ical_prodid_buf,
-               "-//CyrusIMAP.org/Cyrus %s//EN", CYRUS_VERSION);
+    /* PRODID names the product that wrote the object, which RFC 5545 3.7.3
+       asks for - but the version number inside it is server information like
+       any other, and serverinfo is the setting that says how much of that to
+       disclose.  Every other place that prints CYRUS_VERSION over HTTP tests
+       it first; this one did not, so any calendar object, and any answer from
+       the free/busy URL - which serves unauthenticated GETs - named the exact
+       build to whoever asked. */
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+        buf_printf(&ical_prodid_buf,
+                   "-//CyrusIMAP.org/Cyrus %s//EN", CYRUS_VERSION);
+    }
+    else {
+        buf_setcstr(&ical_prodid_buf, "-//CyrusIMAP.org/Cyrus//EN");
+    }
     ical_prodid = buf_cstring(&ical_prodid_buf);
 
     utc_zone = icaltimezone_get_utc_timezone();
