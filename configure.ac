@@ -1982,8 +1982,6 @@ if test "$enable_unit_tests" = "yes" ; then
     dnl Instead, assert that it already exists.
     AC_CHECK_FILE([$CYRUS_CUNIT_TMPDIR], [],
                   [AC_MSG_ERROR([$CYRUS_CUNIT_TMPDIR not found])])
-
-    USE_MAINTAINER_MODE=yes
 fi
 
 AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" = "yes"])
@@ -2004,10 +2002,6 @@ dnl Enable/disable cyrusdb benchmarks.
 dnl
 AC_ARG_ENABLE(cyrusdb-benchmarks,
         [AS_HELP_STRING([--enable-cyrusdb-benchmarks], [enable cyrdb benchmarks])])
-
-if test "$enable_cyrusbd_benchmarks" = "yes" ; then
-    USE_MAINTAINER_MODE=yes
-fi
 
 AM_CONDITIONAL([BENCH], [test "$enable_cyrusdb_benchmarks" = "yes"])
 
