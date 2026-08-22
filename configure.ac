@@ -125,6 +125,20 @@ AC_PROG_INSTALL
 AC_USE_SYSTEM_EXTENSIONS
 AC_ISC_POSIX
 AC_PROG_AWK
+
+dnl Every build needs lex and yacc, not only Sieve-enabled ones: lib/cron-lex.l
+dnl and lib/cron-parse.y are part of libcyrus_min.
+AC_PROG_YACC
+AM_PROG_LEX
+
+if test -z "$ac_cv_prog_YACC"; then
+    AC_MSG_ERROR([Cyrus requires bison or byacc, but neither is installed])
+fi
+
+if test -z "$ac_cv_prog_LEX"; then
+    AC_MSG_ERROR([Cyrus requires flex or lex, but neither is installed])
+fi
+
 AC_SYS_LONG_FILE_NAMES
 if test $ac_cv_sys_long_file_names = no; then
         AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
@@ -613,18 +627,6 @@ if test "$enable_sieve" != "no"; then
         AC_MSG_ERROR([Need sqlite3 for sieve])
     else
         use_sqlite="yes"
-    fi
-
-    dnl Sieve configure stuff
-    AC_PROG_YACC
-    AM_PROG_LEX
-
-    if test -z "$ac_cv_prog_YACC"; then
-        AC_MSG_ERROR([Sieve requires bison/byacc/yacc, but none is installed])
-    fi
-
-    if test -z "$ac_cv_prog_LEX"; then
-        AC_MSG_ERROR([Sieve requires flex/lex, but none is installed])
     fi
 fi
 
