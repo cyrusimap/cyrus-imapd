@@ -84,8 +84,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 void print_listresponse(unsigned cmd, const char *extname, char hier_sep,
                         uint32_t attributes, struct buf *extraflags);
 
-void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
-                int usinguid, struct backend *s);
+int proxy_copy(const char *tag, char *sequence, char *name, int myrights,
+                int usinguid, struct backend *s, int ismove);
 
 int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
                        size_t maxsize, unsigned long *size, const char **parseerr);
