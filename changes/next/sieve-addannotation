@@ -1,0 +1,42 @@
+Description:
+
+New "addannotation" Sieve action (capability "vnd.cyrus.addannotation") that
+records an IMAP message annotation on the delivered message.  Unlike
+"addheader", it does not change the message content, so a message filed into
+multiple folders keeps an identical emailid/GUID across every copy.
+
+
+Documentation:
+
+The vnd.cyrus.addannotation capability and the addannotation action.  The
+sieve_allowed_annotations option is documented in lib/imapoptions.
+
+Syntax: addannotation [:priv / :shared] <entry: string> <value: string>;
+(:shared is the default scope.)
+
+
+Config changes:
+
+- sieve_extensions: added "vnd.cyrus.addannotation" to the allowed/default set.
+- sieve_allowed_annotations: new option (default "/vendor/* /comment"); a
+  space-separated list of glob patterns for annotation entry names the
+  addannotation action is permitted to set.
+
+
+Upgrade instructions:
+
+No mailbox/db changes required.  To use the action, "vnd.cyrus.addannotation"
+must be enabled in sieve_extensions (it is by default) and the target entry
+must match a sieve_allowed_annotations glob.  The annotation must also be
+storable by the standard annotation store: "/comment" works out of the box;
+setting a custom entry additionally requires annotation_allow_undefined to be
+enabled and the entry must not be in the reserved /vendor/cmu/cyrus-imapd/
+namespace.
+
+Note: this bumps the Sieve bytecode version to 0x23.  Scripts are recompiled
+to bytecode automatically; no manual action is required.
+
+
+GitHub issue:
+
+(none)

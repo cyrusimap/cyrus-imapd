@@ -269,6 +269,11 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.cal.outcome_var),
         offsetof(struct Commandlist, u.cal.reason_var)
       } },
+    { B_ADDANNOTATION,           "iss",                                  /* 49 */
+      { offsetof(struct Commandlist, u.aan.scope),
+        offsetof(struct Commandlist, u.aan.entry),
+        offsetof(struct Commandlist, u.aan.value)
+      } },
 };
 // clang-format: on
 

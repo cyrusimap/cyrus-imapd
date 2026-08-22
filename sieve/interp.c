@@ -90,6 +90,9 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         if (i->addheader &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER))
             buf_appendcstr(&buf, " editheader");
+        if (i->addannotation &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_ADDANNOTATION))
+            buf_appendcstr(&buf, " vnd.cyrus.addannotation");
 #if 0  /* Don't advertise this to ManageSieve clients -
           We probably don't want end users adding this action themselves */
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_LOG)
@@ -287,6 +290,13 @@ EXPORTED int sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *
     return SIEVE_OK;
 }
 
+EXPORTED int sieve_register_addannotation(sieve_interp_t *interp,
+                                          sieve_add_annotation *f)
+{
+    interp->addannotation = f;
+    return SIEVE_OK;
+}
+
 EXPORTED int sieve_register_deleteheader(sieve_interp_t *interp, sieve_delete_header *f)
 {
     if (!interp->getheadersection) {
@@ -449,6 +459,7 @@ static const struct sieve_capa_t {
 
     /* Editheader - RFC 5293 */
     { "editheader", SIEVE_CAPA_EDITHEADER },
+    { "vnd.cyrus.addannotation", SIEVE_CAPA_ADDANNOTATION },
 
     /* [Extended] Reject - RFC 5429 */
     { "ereject", SIEVE_CAPA_EREJECT },
@@ -633,6 +644,11 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
     case SIEVE_CAPA_EDITHEADER:
         if (!(interp->addheader && interp->deleteheader &&
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_ADDANNOTATION:
+        if (!(interp->addannotation &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_ADDANNOTATION))) capa = 0;
         break;
 
     case SIEVE_CAPA_EREJECT:

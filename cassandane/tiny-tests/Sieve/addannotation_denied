@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addannotation_denied
+    :min_version_3_13 :NoStartInstances
+    ($self)
+{
+    xlog $self, "Restrict the allowlist so /comment is NOT permitted";
+    $self->{instance}->{config}->set(sieve_allowed_annotations => '/vendor/*');
+    $self->_start_instances();
+
+    xlog $self, "Install a script that sets a non-permitted entry";
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["vnd.cyrus.addannotation"];
+addannotation "/comment" "should be rejected";
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select("INBOX");
+
+    xlog $self, "Message delivered, but annotation absent";
+    my $res = $imaptalk->fetch(1, '(annotation (/comment (value.shared)))');
+    $self->assert_null($res->{1}{annotation}{'/comment'}{'value.shared'});
+}
