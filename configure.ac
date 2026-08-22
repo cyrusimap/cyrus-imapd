@@ -49,7 +49,13 @@ AC_ARG_WITH(extraident,
         [AS_HELP_STRING([--with-extraident=STRING],[use STRING as extra version information])],
         [AC_DEFINE_UNQUOTED(EXTRA_IDENT,"$withval", [Extra version information for imap/version.h])])
 
-AM_MAINTAINER_MODE
+dnl Maintainer mode is enabled by default.  With it off, Automake prefixes its
+dnl lex and yacc recipes with "test -f $@ ||", so an edit to (say) sieve/sieve.y
+dnl is silently ignored if sieve/sieve.c merely exists!
+dnl
+dnl The automake manual reports that whether the maintainer mode toggle itself
+dnl is a good idea is, itself, a matter of some dispute!
+AM_MAINTAINER_MODE([enable])
 
 dnl Coverage (disabled by default)
 GCOV_CFLAGS=
@@ -125,6 +131,20 @@ AC_PROG_INSTALL
 AC_USE_SYSTEM_EXTENSIONS
 AC_ISC_POSIX
 AC_PROG_AWK
+
+dnl Every build needs lex and yacc, not only Sieve-enabled ones: lib/cron-lex.l
+dnl and lib/cron-parse.y are part of libcyrus_min.
+AC_PROG_YACC
+AM_PROG_LEX
+
+if test -z "$ac_cv_prog_YACC"; then
+    AC_MSG_ERROR([Cyrus requires bison or byacc, but neither is installed])
+fi
+
+if test -z "$ac_cv_prog_LEX"; then
+    AC_MSG_ERROR([Cyrus requires flex or lex, but neither is installed])
+fi
+
 AC_SYS_LONG_FILE_NAMES
 if test $ac_cv_sys_long_file_names = no; then
         AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
@@ -606,18 +626,6 @@ if test "$enable_sieve" != "no"; then
         AC_MSG_ERROR([Need sqlite3 for sieve])
     else
         use_sqlite="yes"
-    fi
-
-    dnl Sieve configure stuff
-    AC_PROG_YACC
-    AM_PROG_LEX
-
-    if test -z "$ac_cv_prog_YACC"; then
-        AC_MSG_ERROR([Sieve requires bison/byacc/yacc, but none is installed])
-    fi
-
-    if test -z "$ac_cv_prog_LEX"; then
-        AC_MSG_ERROR([Sieve requires flex/lex, but none is installed])
     fi
 fi
 
@@ -1982,8 +1990,6 @@ if test "$enable_unit_tests" = "yes" ; then
     dnl Instead, assert that it already exists.
     AC_CHECK_FILE([$CYRUS_CUNIT_TMPDIR], [],
                   [AC_MSG_ERROR([$CYRUS_CUNIT_TMPDIR not found])])
-
-    USE_MAINTAINER_MODE=yes
 fi
 
 AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" = "yes"])
@@ -2004,10 +2010,6 @@ dnl Enable/disable cyrusdb benchmarks.
 dnl
 AC_ARG_ENABLE(cyrusdb-benchmarks,
         [AS_HELP_STRING([--enable-cyrusdb-benchmarks], [enable cyrdb benchmarks])])
-
-if test "$enable_cyrusbd_benchmarks" = "yes" ; then
-    USE_MAINTAINER_MODE=yes
-fi
 
 AM_CONDITIONAL([BENCH], [test "$enable_cyrusdb_benchmarks" = "yes"])
 
