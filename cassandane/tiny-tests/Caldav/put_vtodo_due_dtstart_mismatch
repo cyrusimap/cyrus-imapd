@@ -1,0 +1,82 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_put_vtodo_due_dtstart_mismatch
+    :min_version_3_13
+    ($self)
+{
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    # RFC 5545 3.8.2.3: in a VTODO, DUE MUST have the same value type as
+    # DTSTART.  Here DTSTART is a DATE-TIME but DUE is a DATE, which is invalid.
+    my $uuid = "5de280c9-edff-4019-8ebd-cfebc73f8202";
+    my $todo = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTODO
+CREATED:20150806T234327Z
+UID:$uuid
+DTSTAMP:20150806T234327Z
+DTSTART:20160831T153000Z
+DUE;VALUE=DATE:20160901
+SUMMARY:A Task
+END:VTODO
+END:VCALENDAR
+EOF
+
+    eval { $CalDAV->Request('PUT', "$CalendarId/$uuid.ics", $todo,
+                            'Content-Type' => 'text/calendar') };
+    $self->assert_matches(qr/valid-calendar-data/, $@);
+
+    # A VTODO with DUE but no DTSTART is valid - DTSTART is optional in a
+    # VTODO, so the value-type check must not reject it.
+    $uuid = "5de280c9-edff-4019-8ebd-cfebc73f8203";
+    my $todo2 = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTODO
+CREATED:20150806T234327Z
+UID:$uuid
+DTSTAMP:20150806T234327Z
+DUE;VALUE=DATE:20160901
+SUMMARY:A Task
+END:VTODO
+END:VCALENDAR
+EOF
+
+    my $Response = $CalDAV->{ua}->request('PUT',
+        $CalDAV->request_url("$CalendarId/$uuid.ics"),
+        { content => $todo2,
+          headers => { 'Content-Type' => 'text/calendar',
+                       'Authorization' => $CalDAV->auth_header() } });
+    $self->assert_num_equals(201, $Response->{status});
+
+    # DTSTART is *required* in a VEVENT (unlike VTODO), so a VEVENT with only
+    # DTEND must still be rejected - the VTODO relaxation must not leak here.
+    $uuid = "5de280c9-edff-4019-8ebd-cfebc73f8204";
+    my $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTSTAMP:20150806T234327Z
+DTEND;VALUE=DATE:20160901
+SUMMARY:An Event
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    eval { $CalDAV->Request('PUT', "$CalendarId/$uuid.ics", $event,
+                            'Content-Type' => 'text/calendar') };
+    $self->assert_matches(qr/valid-calendar-data/, $@);
+}
