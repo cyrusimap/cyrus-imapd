@@ -49,7 +49,13 @@ AC_ARG_WITH(extraident,
         [AS_HELP_STRING([--with-extraident=STRING],[use STRING as extra version information])],
         [AC_DEFINE_UNQUOTED(EXTRA_IDENT,"$withval", [Extra version information for imap/version.h])])
 
-AM_MAINTAINER_MODE
+dnl Maintainer mode is enabled by default.  With it off, Automake prefixes its
+dnl lex and yacc recipes with "test -f $@ ||", so an edit to (say) sieve/sieve.y
+dnl is silently ignored if sieve/sieve.c merely exists!
+dnl
+dnl The automake manual reports that whether the maintainer mode toggle itself
+dnl is a good idea is, itself, a matter of some dispute!
+AM_MAINTAINER_MODE([enable])
 
 dnl Coverage (disabled by default)
 GCOV_CFLAGS=
