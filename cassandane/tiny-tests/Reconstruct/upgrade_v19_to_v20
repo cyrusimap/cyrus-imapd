@@ -7,8 +7,16 @@ sub test_upgrade_v19_to_v20
     :min_version_3_13 :min_other_version_3_13
     ($self)
 {
-    $self->{instance}->{config}->set(mboxlist_db => 'twoskip');
-    $self->{replica}->{config}->set(mboxlist_db => 'twoskip');
+    # Every database the fixture tarball carries is a plain file, so each must
+    # be configured to a file-shaped backend: unpacking a file over the
+    # directory a backend like zeroskip creates fails with "Cannot open: File
+    # exists".  mailboxes.db is mboxlist_db, conf/user/*/*.conversations is
+    # conversations_db, and the per-mailbox cyrus.annotations are annotation_db.
+    foreach my $inst ($self->{instance}, $self->{replica}) {
+        $inst->{config}->set(mboxlist_db => 'twoskip');
+        $inst->{config}->set(conversations_db => 'twoskip');
+        $inst->{config}->set(annotation_db => 'twoskip');
+    }
     $self->_start_instances();
 
     my $talk = $self->{store}->get_client();

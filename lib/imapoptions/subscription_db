@@ -1,7 +1,7 @@
 Name: subscription_db
 Type: STRINGLIST
-Allowed-Values: flat skiplist twom twoskip
+Allowed-Values: flat skiplist twom twoskip zeroskip
 Default-Value: flat
-Last-Modified: 3.13.1
+Last-Modified: UNRELEASED
 
 The cyrusdb backend to use for the subscriptions list.

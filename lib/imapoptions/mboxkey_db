@@ -1,6 +1,6 @@
 Name: mboxkey_db
 Type: STRINGLIST
-Allowed-Values: skiplist twom twoskip
+Allowed-Values: skiplist twom twoskip zeroskip
 Default-Value: twoskip
 Last-Modified: UNRELEASED
 Deprecated-Since: UNRELEASED

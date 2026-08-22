@@ -5883,8 +5883,23 @@ static void mailbox_delete_files(const char *path)
     if (dirp) {
         while ((f = readdir(dirp))!=NULL) {
             if (f->d_type == DT_DIR) {
-                /* xunlink() will fail on a directory and create syslog noise.
-                   We rmdir() later in mailbox_delete_cleanup() anyways */
+                /* A "cyrus." entry is mailbox metadata whatever its shape --
+                   a directory-shaped database, not a child mailbox, since a
+                   mailbox name component can never contain a dot.  Anything
+                   else is (or may be) a child mailbox's directory, which
+                   mailbox_delete_cleanup()'s rmdir() correctly leaves alone
+                   while it is non-empty. */
+                if (!strncmp(f->d_name, "cyrus.", 6)) {
+                    if (strlen(buf) + strlen(f->d_name) >= sizeof(buf)) {
+                        xsyslog(LOG_ERR, "IOERROR: path too long",
+                                         "buf=<%s> d_name=<%s>",
+                                         buf, f->d_name);
+                        fatal("Path too long", EX_OSFILE);
+                    }
+                    strcpy(tail, f->d_name);
+                    removedir(buf);
+                    *tail = '\0';
+                }
                 continue;
             }
             if (f->d_name[0] == '.'

@@ -692,7 +692,8 @@ cunit_TESTS += \
     cunit/dynarray.testc \
     cunit/util.testc \
     cunit/ical_support.testc \
-    cunit/xsha1.testc
+    cunit/xsha1.testc \
+    cunit/zeroskip.testc
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
     imap/css3_color.c imap/mutex_fake.c imap/spool.c imap/search_expr.c \
@@ -831,7 +832,8 @@ include_HEADERS = \
     lib/wildmat.h \
     lib/xmalloc.h \
     lib/xsha1.h \
-    lib/xunlink.h
+    lib/xunlink.h \
+    lib/zeroskip.h
 
 nodist_include_HEADERS = \
     lib/imapopts.h
@@ -1544,6 +1546,7 @@ lib_libcyrus_la_SOURCES = \
     lib/cyrusdb_skiplist.c \
     lib/cyrusdb_twoskip.c \
     lib/cyrusdb_twom.c \
+    lib/cyrusdb_zeroskip.c \
     lib/glob.c \
     lib/htmlchar.h \
     lib/imapurl.c \
@@ -1567,7 +1570,8 @@ lib_libcyrus_la_SOURCES = \
     lib/times.c \
     lib/twom.c \
     lib/wildmat.c \
-    lib/xxhash.h
+    lib/xxhash.h \
+    lib/zeroskip.c
 
 if USE_CYRUSDB_SQL
 lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c

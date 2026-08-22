@@ -85,22 +85,22 @@ sub test_cvt_cyrusdb ($self)
         or die "Cannot rename $global_db to $global_db.NOT: $!";
     rename($mailbox_db, "$mailbox_db.NOT")
         or die "Cannot rename $mailbox_db to $mailbox_db.NOT: $!";
-    $self->assert_not_file_test($global_db, '-f');
-    $self->assert_not_file_test($mailbox_db, '-f');
+    $self->assert_not_file_test($global_db, '-e');
+    $self->assert_not_file_test($mailbox_db, '-e');
 
     xlog $self, "restore the global annotation db from flat";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'cvt_cyrusdb',
                                    $global_flat, 'flat',
                                    $global_db, $format);
-    $self->assert_file_test($global_db, '-f');
+    $self->assert_file_test($global_db, '-e');
 
     xlog $self, "restore the mailbox annotation db from flat";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'cvt_cyrusdb',
                                    $mailbox_flat, 'flat',
                                    $mailbox_db, $format);
-    $self->assert_file_test($mailbox_db, '-f');
+    $self->assert_file_test($mailbox_db, '-e');
 
     xlog $self, "Start the instance up again and reconnect";
     $self->{instance}->start();

@@ -1,0 +1,37 @@
+Description:
+
+zeroskip: a new cyrusdb backend
+
+
+Config changes:
+
+A new backend called 'zeroskip' is added to most of the database engine
+options in imapd.conf.  Unlike every other backend, a zeroskip database is a
+directory rather than a single file: it is append-only, readers take no lock
+at all, and compaction happens out of band.  It suits append-heavy workloads.
+
+There's also a new option 'zeroskip_index_path'.  zeroskip caches pointer
+tables, which speeds up opening a database that has accumulated unordered
+files; by default the cache lives in a zeroskip.cache directory inside each
+database, and this option moves it under a single directory shared by every
+database, which can be a tmpfs.  Do not point it at a directory untrusted
+users can write to, and do not point it at a database directory.
+
+'cyrusdb_autoconvert' now also detects zeroskip databases, and conversion works
+in both directions between zeroskip and the file-based backends.
+
+
+Upgrade instructions:
+
+No changes are required if you don't want to switch to zeroskip.  No defaults
+have been changed.  If you do want to change, you can optionally set
+cyrusdb_autoconvert, and also update the DB engine for individual database
+types.
+
+Note that anything which backs up or copies a Cyrus database by filename needs
+to handle a directory for these databases.  'ctl_cyrusdb -c' now does, having
+been fixed to remove directory-shaped backups when rotating.
+
+GitHub issue:
+
+No issue number.
