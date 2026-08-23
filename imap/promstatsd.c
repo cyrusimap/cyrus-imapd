@@ -182,8 +182,8 @@ static int promdir_foreach(promdir_foreach_cb *proc,
             if (mappedfile_size(mf) != 0) {
                 /* if it's not empty, that's a surprise! */
                 xsyslog(LOG_DEBUG, "unexpected file size",
-                                   "filename=<%s> expected=<" SIZE_T_FMT ">"
-                                   " actual=<" SIZE_T_FMT ">",
+                                   "filename=<%s> expected=<%zu>"
+                                   " actual=<%zu>",
                                    fname, sizeof(stats), mappedfile_size(mf));
             }
 

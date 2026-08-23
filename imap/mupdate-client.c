@@ -180,9 +180,9 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
 
     prot_printf(handle->conn->out,
                 "X%u ACTIVATE "
-                "{" SIZE_T_FMT "+}\r\n%s "
-                "{" SIZE_T_FMT "+}\r\n%s "
-                "{" SIZE_T_FMT "+}\r\n%s\r\n",
+                "{%zu+}\r\n%s "
+                "{%zu+}\r\n%s "
+                "{%zu+}\r\n%s\r\n",
                 handle->tagn++,
                 strlen(mailbox), mailbox,
                 strlen(location), location,
@@ -242,8 +242,8 @@ HIDDEN int mupdate_reserve(mupdate_handle *handle,
 
     prot_printf(handle->conn->out,
                 "X%u RESERVE "
-                "{" SIZE_T_FMT "+}\r\n%s "
-                "{" SIZE_T_FMT "+}\r\n%s\r\n",
+                "{%zu+}\r\n%s "
+                "{%zu+}\r\n%s\r\n",
                 handle->tagn++,
                 strlen(mailbox), mailbox,
                 strlen(location), location
@@ -302,8 +302,8 @@ EXPORTED int mupdate_deactivate(mupdate_handle *handle,
 
     prot_printf(handle->conn->out,
             "X%u DEACTIVATE "
-            "{" SIZE_T_FMT "+}\r\n%s "
-            "{" SIZE_T_FMT "+}\r\n%s\r\n",
+            "{%zu+}\r\n%s "
+            "{%zu+}\r\n%s\r\n",
             handle->tagn++,
             strlen(mailbox), mailbox,
             strlen(location), location
@@ -338,7 +338,7 @@ EXPORTED int mupdate_delete(mupdate_handle *handle,
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
 
     prot_printf(handle->conn->out,
-                "X%u DELETE {" SIZE_T_FMT "+}\r\n%s\r\n", handle->tagn++,
+                "X%u DELETE {%zu+}\r\n%s\r\n", handle->tagn++,
                 strlen(mailbox), mailbox);
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
@@ -407,7 +407,7 @@ EXPORTED int mupdate_find(mupdate_handle *handle, const char *mailbox,
     }
 
     prot_printf(handle->conn->out,
-                "X%u FIND {" SIZE_T_FMT "+}\r\n%s\r\n", handle->tagn++,
+                "X%u FIND {%zu+}\r\n%s\r\n", handle->tagn++,
                 strlen(mailbox), mailbox);
 
     memset(&(handle->mailboxdata_buf), 0, sizeof(handle->mailboxdata_buf));
@@ -448,7 +448,7 @@ EXPORTED int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 
     if (prefix) {
         prot_printf(handle->conn->out,
-                    "X%u LIST {" SIZE_T_FMT "+}\r\n%s\r\n", handle->tagn++,
+                    "X%u LIST {%zu+}\r\n%s\r\n", handle->tagn++,
                     strlen(prefix), prefix);
     } else {
         prot_printf(handle->conn->out,
@@ -752,7 +752,7 @@ EXPORTED void kick_mupdate(void)
     buf_appendcstr(&addrbuf, FNAME_MUPDATE_TARGET_SOCK);
     if (buf_len(&addrbuf) >= sizeof(srvaddr.sun_path)) {
         syslog(LOG_ERR, "kick_mupdate: configured socket path '%s' is too long"
-                        " (maximum length is " SIZE_T_FMT ")",
+                        " (maximum length is %zu)",
                         buf_cstring(&addrbuf), sizeof(srvaddr.sun_path) - 1);
         fatal("socket path too long", EX_CONFIG);
     }
