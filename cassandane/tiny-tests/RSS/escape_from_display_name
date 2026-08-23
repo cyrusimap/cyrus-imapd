@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_escape_from_display_name ($self)
+{
+    # A double-quoted display-name preserves arbitrary content verbatim
+    # through parseaddr_phrase, so this lands in the From header on disk
+    # as a literal "<script>...</script>" string.  display_address() in
+    # http_rss.c emits addr->name unescaped into the per-message HTML.
+    my $raw = <<'EOF';
+From: "<script>alert(1)</script>" <attacker@example.org>
+To: cassandane@example.com
+Subject: From display name XSS
+Message-ID: <rss-xss-from-name@example.org>
+Date: Mon, 01 Jan 2024 00:00:00 +0000
+Content-Type: text/plain
+
+body
+EOF
+
+    $self->_assert_rss_does_not_contain(
+        raw      => $raw,
+        sentinel => '<script>alert(1)</script>',
+        path     => '/rss/INBOX/1.',
+        label    => 'From display-name in per-message HTML',
+    );
+}
