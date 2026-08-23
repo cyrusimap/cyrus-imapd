@@ -328,7 +328,7 @@ EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
     written = retry_write(mf->fd, base, len);
     if (written < 0) {
         xsyslog(LOG_ERR, "IOERROR: retry_write failed",
-                         "filename=<%s> len=<" SIZE_T_FMT ">"
+                         "filename=<%s> len=<%zu>"
                             " offset=<" OFF_T_FMT ">",
                          mf->fname, len, offset);
         return -1;
@@ -381,7 +381,7 @@ EXPORTED ssize_t mappedfile_pwritev(struct mappedfile *mf,
             len += iov[i].iov_len;
         }
         xsyslog(LOG_ERR, "IOERROR: retry_writev failed",
-                         "filename=<%s> len=<" SIZE_T_FMT ">"
+                         "filename=<%s> len=<%zu>"
                             " offset=<" OFF_T_FMT ">",
                          mf->fname, len, offset);
         return -1;

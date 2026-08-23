@@ -392,7 +392,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     }
 
     if (strlen(fname) >= sizeof(srvaddr.sun_path)) {
-        syslog(LOG_ERR, "ptload(): socket filename %s too long for " SIZE_T_FMT "-byte buffer",
+        syslog(LOG_ERR, "ptload(): socket filename %s too long for %zu-byte buffer",
                         fname, sizeof(srvaddr.sun_path));
         rc = -1;
         goto done;

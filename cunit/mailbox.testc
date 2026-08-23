@@ -213,14 +213,14 @@ static void test_unique_header_offsets(void)
 
         /* better not overlap the next one */
         if (offsets[i].pos + offsets[i].val > offsets[i + 1].pos) {
-            CU_FAIL_FMT("%s at %u length " SIZE_T_FMT " overlaps %s at %u",
+            CU_FAIL_FMT("%s at %u length %zu overlaps %s at %u",
                         offsets[i].name, offsets[i].pos, offsets[i].val,
                         offsets[i + 1]. name, offsets[i + 1].pos);
         }
 
         /* not ideal to leave unnamed gaps either */
         if (offsets[i].pos + offsets[i].val < offsets[i + 1].pos) {
-            CU_FAIL_FMT("%s at %u length " SIZE_T_FMT " leaves gap before %s at %u",
+            CU_FAIL_FMT("%s at %u length %zu leaves gap before %s at %u",
                         offsets[i].name, offsets[i].pos, offsets[i].val,
                         offsets[i + 1]. name, offsets[i + 1].pos);
         }
@@ -266,14 +266,14 @@ static void test_unique_record_offsets(void)
 
         /* better not overlap the next one */
         if (offsets[i].pos + offsets[i].val > offsets[i + 1].pos) {
-            CU_FAIL_FMT("%s at %u length " SIZE_T_FMT " overlaps %s at %u",
+            CU_FAIL_FMT("%s at %u length %zu overlaps %s at %u",
                         offsets[i].name, offsets[i].pos, offsets[i].val,
                         offsets[i + 1]. name, offsets[i + 1].pos);
         }
 
         /* not ideal to leave unnamed gaps either */
         if (offsets[i].pos + offsets[i].val < offsets[i + 1].pos) {
-            CU_FAIL_FMT("%s at %u length " SIZE_T_FMT " leaves gap before %s at %u",
+            CU_FAIL_FMT("%s at %u length %zu leaves gap before %s at %u",
                         offsets[i].name, offsets[i].pos, offsets[i].val,
                         offsets[i + 1]. name, offsets[i + 1].pos);
         }

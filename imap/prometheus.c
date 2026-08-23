@@ -73,7 +73,7 @@ static void prometheus_init(void)
 
     r = snprintf(stats.ident, sizeof(stats.ident), "%s", config_ident);
     if (r < 0 || (size_t) r >= sizeof(stats.ident))
-        syslog(LOG_WARNING, "service name '%s' is longer than " SIZE_T_FMT
+        syslog(LOG_WARNING, "service name '%s' is longer than %zu"
                             " characters - prometheus label will be truncated",
                             config_ident,
                             sizeof(stats.ident) - 1);
@@ -95,7 +95,7 @@ static void prometheus_init(void)
 
     r = mappedfile_pwrite(handle->mf, &stats, sizeof(stats), 0);
     if (r != sizeof(stats)) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT "bytes, "
+        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write %zubytes, "
                         "actually wrote %d",
                         sizeof(stats), r);
         goto error;
@@ -198,7 +198,7 @@ static void prometheus_done(void *rock __attribute__((unused)))
     /* and write it out */
     r = mappedfile_pwrite(doneprocs, &accum, sizeof(accum), 0);
     if (r != sizeof(accum)) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT "bytes, "
+        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write %zubytes, "
                         "actually wrote %d",
                         sizeof(accum), r);
         goto done;
@@ -266,7 +266,7 @@ EXPORTED void prometheus_apply_delta(enum prom_metric_id metric_id,
     r = mappedfile_pwrite(promhandle->mf, &metric, sizeof(metric), offset);
     if (r != sizeof(metric)) {
         syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write "
-                        SIZE_T_FMT " bytes, actually wrote %d",
+                        "%zu bytes, actually wrote %d",
                         sizeof(metric), r);
     }
     else {

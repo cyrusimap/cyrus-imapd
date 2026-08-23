@@ -71,7 +71,7 @@ EXPORTED void ical_support_init(void)
 
     icalparser_set_ctrl(ICALPARSER_CTRL_OMIT);
 
-    syslog(LOG_DEBUG, "%s: found " SIZE_T_FMT " timezones",
+    syslog(LOG_DEBUG, "%s: found %zu timezones",
                        __func__, timezones->num_elements);
 
 #ifdef HAVE_LIBICALVCARD_XPROP_VALUE

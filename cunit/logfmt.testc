@@ -448,7 +448,7 @@ static void test_logfmt_push_msgrecord(void)
     message_guid_generate(&test_record.guid, msg, sizeof(msg));
     snprintf(expect_guid, sizeof(expect_guid), "msg.guid=%s",
              message_guid_encode(&test_record.guid));
-    snprintf(expect_size, sizeof(expect_size), "msg.size=" SIZE_T_FMT,
+    snprintf(expect_size, sizeof(expect_size), "msg.size=%zu",
              strlen(msg));
 
     logfmt_init(&lf, "test_logfmt_push_msgrecord");

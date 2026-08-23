@@ -91,8 +91,8 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
         if (t->hash_load_warned_at == 0                                 \
             || (int) load_factor > t->hash_load_warned_at) {            \
             xsyslog(LOG_DEBUG, "hash table load factor exceeds 3.0",    \
-                               "table=<%p> entries=<" SIZE_T_FMT ">"    \
-                               " buckets=<" SIZE_T_FMT "> load=<%.2g>", \
+                               "table=<%p> entries=<%zu>"    \
+                               " buckets=<%zu> load=<%.2g>", \
                                t, t->count, t->size, load_factor);      \
             t->hash_load_warned_at = (int) load_factor;                 \
         }                                                               \
