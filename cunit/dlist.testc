@@ -513,6 +513,90 @@ static void test_parse_allow_file_literal(void)
     config_read_string(DBDIR"/conf", NULL);
 }
 
+static void test_copy(void)
+{
+    struct dlist *dl = NULL;
+    struct dlist *copy = NULL;
+    struct buf in = BUF_INITIALIZER;
+    struct buf b1 = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int r;
+
+    buf_setcstr(&in,
+        "%(toplevel %(sub thing) ANOTHER (value is %(list here) (in it)) "
+        "READ \"all about it\" EMPTYLIST () NUM 123456)");
+
+    r = dlist_parsemap(&dl, 0, in.s, in.len);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(dl);
+
+    dlist_printbuf(dl, 0, &b1);
+
+    copy = dlist_copy(dl);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(copy);
+    CU_ASSERT_PTR_NOT_EQUAL(copy, dl);
+
+    /* free the original first to prove the copy is fully independent */
+    dlist_free(&dl);
+
+    dlist_printbuf(copy, 0, &b2);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), buf_cstring(&b1));
+
+    dlist_free(&copy);
+    buf_free(&in);
+    buf_free(&b1);
+    buf_free(&b2);
+}
+
+static void test_copy_file(void)
+{
+    struct dlist *dl = NULL;
+    struct dlist *copy = NULL;
+    struct protstream *stream;
+    struct buf b = BUF_INITIALIZER;
+    int r;
+    int c;
+
+    /* reservefile() needs a configured partition to stage bytes into */
+    r = system("mkdir -p " DBDIR "/data");
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    config_read_string(DBDIR"/conf", "partition-default: " DBDIR "/data\n");
+
+    buf_printf(&b,
+        "TESTFILE %%{default "
+        "0000000000000000000000000000000000000001 5}\r\nHELLO");
+
+    stream = prot_readmap(buf_base(&b), buf_len(&b));
+    prot_setisclient(stream, 1);
+    c = dlist_parse(&dl, /*parsekey*/ 1, /*isarchive*/ 0,
+                    DLIST_PARSE_ALLOW_FILE_LITERALS, stream);
+    prot_free(stream);
+    CU_ASSERT_EQUAL(c, EOF);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(dl);
+    CU_ASSERT_EQUAL(dl->type, DL_FILE);
+
+    /* dlist_copy() must reproduce the file node by copying its on-disk
+     * reference, not by round-tripping through the parser (which rejects
+     * the %{...} literal and would return NULL) */
+    copy = dlist_copy(dl);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(copy);
+    CU_ASSERT_PTR_NOT_EQUAL(copy, dl);
+    CU_ASSERT_EQUAL(copy->type, DL_FILE);
+    CU_ASSERT_EQUAL(copy->nval, 5);
+    CU_ASSERT_STRING_EQUAL(copy->part, "default");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(copy->sval);
+    CU_ASSERT_STRING_EQUAL(copy->sval, dl->sval);
+
+    /* the copy references the same staged file; unlink it once */
+    dlist_unlink_files(dl);
+    dlist_free(&dl);
+    dlist_free(&copy);
+    buf_free(&b);
+
+    /* restore the plain config for the remaining tests in this suite */
+    config_read_string(DBDIR"/conf", NULL);
+}
+
 static void test_printiter(void)
 {
     struct dlist *dl = NULL;

@@ -1685,13 +1685,59 @@ EXPORTED void dlist_rename(struct dlist *dl, const char *name)
     dl->name = xstrdup(name);
 }
 
-EXPORTED struct dlist *dlist_copy(const struct dlist *dl)
+static struct dlist *dlist_clone(const struct dlist *dl, struct dlist *parent)
 {
     if (!dl) return NULL;
-    struct buf buf = BUF_INITIALIZER;
-    struct dlist *new = NULL;
-    dlist_printbuf(dl, 1, &buf);
-    dlist_parsemap(&new, 1, buf_base(&buf), buf_len(&buf));
-    buf_free(&buf);
-    return new;
+
+    struct dlist *copy = dlist_child(parent, dl->name);
+
+    switch (dl->type) {
+    case DL_NIL:
+        break;
+    case DL_ATOM:
+        dlist_makeatom(copy, dl->sval);
+        break;
+    case DL_FLAG:
+        dlist_makeflag(copy, dl->sval);
+        break;
+    case DL_NUM:
+        dlist_makenum64(copy, dl->nval);
+        break;
+    case DL_DATE:
+        dlist_makedate(copy, dl->nval);
+        break;
+    case DL_HEX:
+        dlist_makehex64(copy, dl->nval);
+        break;
+    case DL_BUF:
+        dlist_makemap(copy, dl->sval, dl->nval);
+        break;
+    case DL_GUID:
+        dlist_makeguid(copy, dl->gval);
+        break;
+    case DL_FILE:
+        /* a file node only references bytes on disk (dl->sval); copy the
+         * reference directly rather than round-tripping through the parser,
+         * which would rewrite the file and reject the %{...} literal */
+        dlist_makefile(copy, dl->part, dl->gval, dl->nval, dl->sval);
+        break;
+    case DL_KVLIST:
+        copy->type = DL_KVLIST;
+        for (const struct dlist *i = dl->head; i; i = i->next)
+            dlist_clone(i, copy);
+        break;
+    case DL_ATOMLIST:
+        copy->type = DL_ATOMLIST;
+        copy->nval = dl->nval; /* preserve print-keys flag (pklist) */
+        for (const struct dlist *i = dl->head; i; i = i->next)
+            dlist_clone(i, copy);
+        break;
+    }
+
+    return copy;
+}
+
+EXPORTED struct dlist *dlist_copy(const struct dlist *dl)
+{
+    return dlist_clone(dl, NULL);
 }
