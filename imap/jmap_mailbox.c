@@ -2418,6 +2418,18 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         if (result->skipped) goto done;
     }
 
+    /* isSeenShared flips a mailbox-wide option, not a per-user annotation like
+     * most of the other properties handled below.  Don't let a sharee with only
+     * JACL_READITEMS turn shared seen state on (or off!) for the owner's
+     * mailbox.  We check before doing any of the work below, so that a rejected
+     * update doesn't leave the other properties half-applied.
+     */
+    if (args->is_seenshared >= 0 &&
+            !jmap_hasrights_mbentry(req, mbentry, JACL_ADMIN_MAILBOX)) {
+        result->err = json_pack("{s:s}", "type", "forbidden");
+        goto done;
+    }
+
     /* Now parent_id always has a proper mailbox id */
     parent_id = args->is_toplevel ? mbinbox->uniqueid : parent_id;
 
