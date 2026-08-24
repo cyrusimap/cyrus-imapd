@@ -10,6 +10,7 @@
 #endif
 
 #include "grammar.h"
+#include "imparse.h"
 #include "xmalloc.h"
 
 
@@ -28,16 +29,6 @@ EXPORTED int sieve_is_identifier(char *s)
         }
     }
     return 1;
-}
-
-static int is_number(char *s)
-{
-    char *tail;
-
-    if (s && *s && (strtol(s, &tail, 10) || !*tail) && !*tail) {
-        return 1;
-    }
-    return 0;
 }
 
 /* TODO: implement parse_string() with a proper yacc/bison lexer/parser */
@@ -87,8 +78,8 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
         }
         /* create a null-terminated string for comparison */
         *variable_ref_end = '\0';
-        /* check if the string is a number */
-        is_match_var = is_number(test_str);
+        /* check if the string is a number (RFC 5229 num-variable = 1*DIGIT) */
+        is_match_var = imparse_isnumber(test_str);
         /* if we've found a valid variable, add its value to stringparts */
         if (sieve_is_identifier(test_str) || is_match_var) {
             /* capture the match_var variable number */
@@ -98,7 +89,7 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
             /* attempt to find the variable */
             if (is_match_var) {
                 variable = varlist_select(vars, VL_MATCH_VARS);
-                if (match_var >= variable->var->count) {
+                if (match_var < 0 || match_var >= variable->var->count) {
                     variable = NULL;
                 }
             } else {
