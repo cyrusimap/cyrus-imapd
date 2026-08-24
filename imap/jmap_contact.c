@@ -2991,7 +2991,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
         struct buf blobid = BUF_INITIALIZER;
 
         jmap_encode_rawdata_blobid('V', mbentry->uniqueid, record.uid,
-                                   NULL, NULL, NULL, NULL, &blobid);
+                                   NULL, NULL, "G", &record.guid, &blobid);
         json_object_set_new(obj, "cyrusimap.org:blobId",
                             json_string(buf_cstring(&blobid)));
         buf_free(&blobid);
@@ -4200,7 +4200,7 @@ static int _card_set_create(jmap_req_t *req,
 
     if (jmap_is_using(req, JMAP_CONTACTS_EXTENSION)) {
         jmap_encode_rawdata_blobid('V', mailbox_uniqueid(*mailbox), record.uid,
-                                   NULL, NULL, NULL, NULL, &buf);
+                                   NULL, NULL, "G", &record.guid, &buf);
         json_object_set_new(item, "cyrusimap.org:blobId",
                             json_string(buf_cstring(&buf)));
 
@@ -4586,7 +4586,8 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
                                       this_mailbox->i.last_uid, &record);
 
             jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox),
-                                       record.uid, NULL, NULL, NULL, NULL, &buf);
+                                       record.uid, NULL, NULL, "G",
+                                       &record.guid, &buf);
             json_object_set_new(*item, "cyrusimap.org:blobId",
                                 json_string(buf_cstring(&buf)));
 
@@ -4858,6 +4859,10 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
         res = HTTP_BAD_REQUEST;
         goto done;
     }
+    if (!strcmpsafe(propname, "G")) {
+        // G subpart encodes the guid of the whole vCard blob
+        xzfree(propname);
+    }
 
     if (!propname && ctx->accept_mime) {
         /* Make sure client can handle blob type. */
@@ -4943,6 +4948,12 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
     else {
         /* Load message containing the resource */
         struct buf buf = BUF_INITIALIZER;
+
+        /* The blobId encodes the guid of the whole vCard resource */
+        if (!message_guid_equal(&guid, &record.guid)) {
+            res = HTTP_NOT_FOUND;
+            goto done;
+        }
 
         if (mailbox_map_record(mailbox, &record, &buf)) {
             ctx->errstr = "failed to load vCard";
