@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+use MIME::Base64 qw(encode_base64url decode_base64url);
+
+# Legacy blobIds for vCard do not encode the vCard content guid in the blobId.
+# This test asserts that such blob_ids are rejected now, a vCard blobId must
+# include the content guid.
+sub test_card_blobid_reject_legacy_blob_id($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Create contact";
+    my $res = $jmap->CallMethods([['ContactCard/set', {
+        create => {
+            "1" => {
+                '@type' => 'Card',
+                version => '1.0',
+                name => { full => "foo last1" }
+            },
+    }}, "R1"]]);
+    my $contactId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($contactId);
+
+    xlog $self, "Get blob_id";
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+            ids => [$contactId],
+            properties => ['cyrusimap.org:blobId'],
+        }, 'R2']
+    ]);
+    my $blob_id = $res->[0][1]{list}[0]{'cyrusimap.org:blobId'};
+    $self->assert_not_null($blob_id);
+
+    xlog $self, "Assert that blob_id downloads the vCard";
+    $res = $jmap->Download('cassandane', $blob_id);
+    $self->assert_num_equals(200, $res->{status});
+    $self->assert_str_equals("BEGIN:VCARD", substr($res->{content}, 0, 11));
+
+    xlog $self, "Transform blob_id to legacy blob_id";
+    $self->assert_str_equals('V', substr($blob_id, 0, 1));
+    my $decoded = decode_base64url(substr($blob_id, 1));
+    # The new-style blob_id encodes "M<mboxid>:<uid>SG[<guid>]"; keep only the
+    # mailbox and UID to reconstruct the legacy identifier
+    $self->assert_matches(qr/^M.*:\d+SG\[/, $decoded);
+    my ($legacy) = $decoded =~ /^(M.*:\d+)/;
+    $self->assert_not_null($legacy);
+    my $legacy_blob_id = 'V' . encode_base64url($legacy, '');
+    $self->assert_str_not_equals($blob_id, $legacy_blob_id);
+
+    xlog $self, "The legacy blob_id must not download a vCard";
+    $res = $jmap->Download('cassandane', $legacy_blob_id);
+    $self->assert_num_not_equals(200, $res->{status});
+}
