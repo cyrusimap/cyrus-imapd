@@ -1,0 +1,30 @@
+Description:
+
+The JMAP Mailbox/set property isSeenShared now requires the "a" (admin) right
+on the mailbox.  Unlike the other properties set alongside it, isSeenShared
+writes an option on the mailbox itself rather than a per-user annotation, so
+a sharee holding only lookup and read rights could previously turn shared
+seen state on or off for the mailbox's owner.  The equivalent IMAP path
+already required write rights.
+
+Tracked as GitHub security advisory GHSA-4577-j69m-pj53.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
