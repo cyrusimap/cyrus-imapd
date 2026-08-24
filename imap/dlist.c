@@ -1067,11 +1067,8 @@ static int next_nonspace(struct protstream *in, int c)
     return c;
 }
 
-/* XXX accumulating a lot of flag arguments here, perhaps we should
- * XXX consolidate them into a single flags argument with defined bits
- */
-EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
-                          unsigned flags, struct protstream *in)
+EXPORTED int dlist_parse(struct dlist **dlp, unsigned flags,
+                          struct protstream *in)
 {
     struct dlist *dl = NULL;
     static struct buf kbuf;
@@ -1079,7 +1076,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
     int c;
 
     /* handle the key if wanted */
-    if (parsekey) {
+    if (flags & DLIST_PARSE_PARSEKEY) {
         c = getastring(in, NULL, &kbuf);
         c = next_nonspace(in, c);
     }
@@ -1098,7 +1095,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
         while (c != ')') {
             struct dlist *di = NULL;
             prot_ungetc(c, in);
-            c = dlist_parse(&di, 0, isarchive, flags, in);
+            c = dlist_parse(&di, flags & ~DLIST_PARSE_PARSEKEY, in);
             if (di) dlist_stitch(dl, di);
             c = next_nonspace(in, c);
             if (c == EOF) goto fail;
@@ -1114,7 +1111,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
             while (c != ')') {
                 struct dlist *di = NULL;
                 prot_ungetc(c, in);
-                c = dlist_parse(&di, 1, isarchive, flags, in);
+                c = dlist_parse(&di, flags | DLIST_PARSE_PARSEKEY, in);
                 if (di) dlist_stitch(dl, di);
                 c = next_nonspace(in, c);
                 if (c == EOF) goto fail;
@@ -1136,7 +1133,8 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
             if (c == '\r') c = prot_getc(in);
             if (c != '\n') goto fail;
             if (!message_guid_decode(&tmp_guid, gbuf.s)) goto fail;
-            if (reservefile(in, pbuf.s, &tmp_guid, size, isarchive, &fname)) goto fail;
+            if (reservefile(in, pbuf.s, &tmp_guid, size,
+                            flags & DLIST_PARSE_ISARCHIVE, &fname)) goto fail;
             dl = dlist_setfile(NULL, kbuf.s, pbuf.s, &tmp_guid, size, fname);
             /* file literal */
         }
@@ -1175,7 +1173,7 @@ fail:
 EXPORTED int dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
                             struct protstream *in)
 {
-    int c = dlist_parse(dlp, parsekey, 0, 0, in);
+    int c = dlist_parse(dlp, parsekey ? DLIST_PARSE_PARSEKEY : 0, in);
 
     /* make a list with one item */
     if (*dlp && !dlist_isatomlist(*dlp)) {
@@ -1199,7 +1197,7 @@ EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey,
     /* Allow LITERAL+ - this is silly, but required to parse personal CALDATA */
     prot_setisclient(stream, 1);
 
-    c = dlist_parse(&dl, parsekey, /*isarchive*/ 0, /*flags*/ 0, stream);
+    c = dlist_parse(&dl, parsekey ? DLIST_PARSE_PARSEKEY : 0, stream);
     prot_free(stream);
 
     if (c != EOF) {

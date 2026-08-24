@@ -480,8 +480,8 @@ static void test_parse_allow_file_literal(void)
      * parses and the file is created */
     stream = prot_readmap(buf_base(&b), buf_len(&b));
     prot_setisclient(stream, 1);
-    c = dlist_parse(&dl, /*parsekey*/ 1, /*isarchive*/ 0,
-                    DLIST_PARSE_ALLOW_FILE_LITERALS, stream);
+    c = dlist_parse(&dl, DLIST_PARSE_PARSEKEY | DLIST_PARSE_ALLOW_FILE_LITERALS,
+                    stream);
     prot_free(stream);
 
     CU_ASSERT_EQUAL(c, EOF);   /* whole buffer consumed */
@@ -502,7 +502,7 @@ static void test_parse_allow_file_literal(void)
     dl = NULL;
     stream = prot_readmap(buf_base(&b), buf_len(&b));
     prot_setisclient(stream, 1);
-    c = dlist_parse(&dl, 1, 0, /*flags*/ 0, stream);
+    c = dlist_parse(&dl, DLIST_PARSE_PARSEKEY, stream);
     prot_free(stream);
     CU_ASSERT_PTR_NULL(dl);
 
@@ -568,8 +568,8 @@ static void test_copy_file(void)
 
     stream = prot_readmap(buf_base(&b), buf_len(&b));
     prot_setisclient(stream, 1);
-    c = dlist_parse(&dl, /*parsekey*/ 1, /*isarchive*/ 0,
-                    DLIST_PARSE_ALLOW_FILE_LITERALS, stream);
+    c = dlist_parse(&dl, DLIST_PARSE_PARSEKEY | DLIST_PARSE_ALLOW_FILE_LITERALS,
+                    stream);
     prot_free(stream);
     CU_ASSERT_EQUAL(c, EOF);
     CU_ASSERT_PTR_NOT_NULL_FATAL(dl);
