@@ -1583,6 +1583,51 @@ static void test_imap4flags_setflag(void)
     /* Test #2 */
 }
 
+static void test_variable_ref_number_out_of_bounds(void)
+{
+    /* Test that variable references out of bounds get handled. */
+    static const struct {
+        const char *body;
+        const char *expect;
+    } cases[] = {
+        /* negative index: this always is illegal, kept verbatim */
+        { "reject \"a:${-5}:b\";\n", "a:${-5}:b" },
+        /* MAX_MATCH_VARS is 9, so "${9}" compiles, but with no prior match
+         * the array is empty and the index is out of bounds -> expands to
+         * empty */
+        { "reject \"a:${9}:b\";\n", "a::b" },
+    };
+
+    static const char MSG[] =
+    "Date: Mon, 13 Jul 2026 08:51:06 -0500\r\n"
+    "From: foo@example.com\r\n"
+    "To: bar@example.com\r\n"
+    "Subject: test\r\n"
+    "\r\n"
+    "test\n"
+    ;
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        struct buf script = BUF_INITIALIZER;
+        sieve_test_context_t ctx;
+
+        buf_setcstr(&script, "require [\"variables\", \"reject\"];\n");
+        buf_appendcstr(&script, cases[i].body);
+
+        context_setup(&ctx, buf_cstring(&script));
+        CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+
+        run_message(&ctx, MSG);
+        CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+        CU_ASSERT_EQUAL(ctx.stats.rejects, 1);
+        CU_ASSERT_PTR_NOT_NULL(ctx.reject_message);
+        CU_ASSERT_STRING_EQUAL(ctx.reject_message, cases[i].expect);
+
+        context_cleanup(&ctx);
+        buf_free(&script);
+    }
+}
+
 static void test_prevars_bad(void)
 {
     sieve_test_context_t ctx;
