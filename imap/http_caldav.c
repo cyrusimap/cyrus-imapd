@@ -132,7 +132,6 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
 static int caldav_mkcol(struct mailbox *mailbox);
 static int caldav_post(struct transaction_t *txn);
-static int caldav_patch(struct transaction_t *txn, void *obj);
 static int caldav_put(struct transaction_t *txn, void *obj,
                       struct mailbox *mailbox, const char *resource,
                       void *destdb, unsigned flags);
@@ -276,14 +275,6 @@ static struct mime_type_t caldav_mime_types[] = {
       NULL, &begin_jcal, &end_jcal
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
-};
-// clang-format on
-
-// clang-format off
-static struct patch_doc_t caldav_patch_docs[] = {
-    { ICALENDAR_CONTENT_TYPE "; component=VPATCH; optinfo=\"PATCH-VERSION:1\"",
-      &caldav_patch },
-    { NULL, &caldav_patch }
 };
 // clang-format on
 
@@ -573,7 +564,7 @@ static struct meth_params caldav_params = {
     &caldav_delete_cal,
     &caldav_get,
     { CALDAV_LOCATION_OK, MBTYPE_CALENDAR, &caldav_mkcol },
-    caldav_patch_docs,
+    NULL,                                       /* No PATCH handling */
     { POST_ADDMEMBER | POST_SHARE, &caldav_post,
       { NS_CALDAV, "calendar-data", &caldav_import } },
     { CALDAV_SUPP_DATA, &caldav_put },
@@ -590,7 +581,7 @@ struct namespace_t namespace_calendar = {
     http_allow_noauth_get, /*authschemes*/0,
     MBTYPE_CALENDAR,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
-     ALLOW_PATCH | ALLOW_USERDATA |
+     ALLOW_USERDATA |
      ALLOW_CAL_AVAIL |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL | ALLOW_CAL ),
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
@@ -608,7 +599,7 @@ struct namespace_t namespace_calendar = {
         { &meth_mkcol,          &caldav_params },       /* MKCOL        */
         { &meth_copy_move,      &caldav_params },       /* MOVE         */
         { &meth_options_cal,    &caldav_params },       /* OPTIONS      */
-        { &meth_patch,          &caldav_params },       /* PATCH        */
+        { NULL,                 NULL           },       /* PATCH        */
         { &meth_post,           &caldav_params },       /* POST         */
         { &meth_propfind,       &caldav_params },       /* PROPFIND     */
         { &meth_proppatch,      &caldav_params },       /* PROPPATCH    */
@@ -887,7 +878,7 @@ static int caldav_parse_path(const char *path, struct request_target_t *tgt,
     }
     else if (tgt->resource) {
         /* Resource in regular calendar collection (POST for managed attach) */
-        tgt->allow |= (namespace_calendar.allow & ALLOW_PATCH) | ALLOW_POST;
+        tgt->allow |= ALLOW_POST;
     }
 
     return 0;
@@ -3709,68 +3700,6 @@ static int caldav_post(struct transaction_t *txn)
     }
 
     return ret;
-}
-
-
-/* Perform a PATCH request
- *
- * preconditions:
- */
-static int caldav_patch(struct transaction_t *txn, void *obj)
-{
-    icalcomponent *ical = (icalcomponent *) obj;
-    icalcomponent *pdoc, *vpatch;
-    icalproperty *prop;
-    int num_changes = 0;
-    int ret = 0;
-
-    /* Validate the iCal patch */
-    pdoc = ical_string_as_icalcomponent(&txn->req_body.payload);
-    if (!pdoc || (icalcomponent_isa(pdoc) != ICAL_VCALENDAR_COMPONENT)) {
-        txn->error.desc = "Missing VCALENDAR";
-        txn->error.precond = CALDAV_VALID_DATA;
-        ret = HTTP_BAD_REQUEST;
-    }
-    else if (!icalrestriction_check(pdoc) || icalcomponent_count_errors(pdoc)) {
-        if ((txn->error.desc = get_icalcomponent_errstr(pdoc, ICAL_SUPPORT_STRICT)) ||
-            (txn->error.desc =
-             get_icalcomponent_errstr(icalcomponent_get_first_real_component(pdoc),
-                 ICAL_SUPPORT_STRICT))) {
-            buf_setcstr(&txn->buf, txn->error.desc);
-            txn->error.desc = buf_cstring(&txn->buf);
-        }
-        else txn->error.desc = "Error in VPATCH";
-        txn->error.precond = CALDAV_VALID_DATA;
-        ret = HTTP_BAD_REQUEST;
-    }
-    else if (!(vpatch = icalcomponent_get_first_real_component(pdoc)) ||
-             icalcomponent_isa(vpatch) != ICAL_VPATCH_COMPONENT) {
-        txn->error.desc = "Missing VPATCH";
-        txn->error.precond = CALDAV_VALID_DATA;
-        ret = HTTP_BAD_REQUEST;
-    }
-    else if ((prop =
-              icalcomponent_get_first_property(vpatch,
-                                               ICAL_PATCHVERSION_PROPERTY)) &&
-             strcmp(icalproperty_get_patchversion(prop), "1")) {
-        txn->error.desc = "Unsupported PATCH-VERSION";
-        txn->error.precond = CALDAV_SUPP_DATA;
-        ret = HTTP_BAD_REQUEST;
-    }
-    else {
-        ret = icalcomponent_apply_vpatch(ical, vpatch,
-                                         &num_changes, &txn->error.desc);
-    }
-
-    icalcomponent_free(pdoc);
-
-    if (ret) return ret;
-    else if (!num_changes) {
-        /* If no changes are made,
-           return HTTP_NO_CONTENT to suppress storing of resource */
-        return HTTP_NO_CONTENT;
-    }
-    else return 0;
 }
 
 
@@ -8338,10 +8267,6 @@ static int meth_options_cal(struct transaction_t *txn, void *params)
     r = dav_parse_req_target(txn, oparams);
     if (r) return r;
 
-    if (txn->req_tgt.allow & ALLOW_PATCH) {
-        /* Add Accept-Patch formats to response */
-        txn->resp_body.patch = caldav_patch_docs;
-    }
     if (txn->req_tgt.collection && !txn->req_tgt.resource) {
         /* Add subscription upgrade links */
         struct buf link = BUF_INITIALIZER;

@@ -610,10 +610,10 @@ HIDDEN unsigned long calcarddav_allow_cb(struct request_target_t *tgt)
         allow &= ALLOW_READ_MASK;
     }
     else if (!tgt->collection) {
-        allow &= ~(ALLOW_DELETE | ALLOW_PATCH | ALLOW_POST | ALLOW_WRITE);
+        allow &= ~(ALLOW_DELETE | ALLOW_POST | ALLOW_WRITE);
     }
     else if (!tgt->resource) {
-        allow &= ~(ALLOW_MKCOL | ALLOW_PATCH);
+        allow &= ~ALLOW_MKCOL;
     }
     else {
         allow &= ~(ALLOW_MKCOL | ALLOW_POST);
@@ -1094,7 +1094,6 @@ EXPORTED int dav_check_precond(struct transaction_t *txn,
         case METH_DELETE:
         case METH_LOCK:
         case METH_MOVE:
-        case METH_PATCH:
         case METH_POST:
         case METH_PUT:
             /* State-changing method: Only the lock owner can execute
@@ -1169,7 +1168,6 @@ EXPORTED unsigned get_preferences(struct transaction_t *txn)
     switch (txn->meth) {
     case METH_COPY:
     case METH_MOVE:
-    case METH_PATCH:
     case METH_POST:
     case METH_PUT:
         mask = PREFER_REP;
@@ -2219,10 +2217,6 @@ int propfind_methodset(const xmlChar *name, xmlNsPtr ns,
     if (allow & ALLOW_READ) {
         node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
         xmlSetProp(node, BAD_CAST "name", BAD_CAST "OPTIONS");
-    }
-    if (allow & ALLOW_PATCH) {
-        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
-        xmlSetProp(node, BAD_CAST "name", BAD_CAST "PATCH");
     }
     if (allow & ALLOW_POST) {
         node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
@@ -6949,232 +6943,6 @@ int meth_post(struct transaction_t *txn, void *params)
 }
 
 
-/* Perform a PATCH request
- *
- * preconditions:
- */
-int meth_patch(struct transaction_t *txn, void *params)
-{
-    struct meth_params *pparams = (struct meth_params *) params;
-    int ret, r, precond, rights;
-    const char **hdr, *etag;
-    struct patch_doc_t *patch_doc = NULL;
-    struct mailbox *mailbox = NULL;
-    struct dav_data *ddata;
-    struct index_record oldrecord;
-    time_t lastmod;
-    unsigned flags = 0;
-    void *davdb = NULL, *obj = NULL;
-    struct buf msg_buf = BUF_INITIALIZER;
-
-    /* Response should not be cached */
-    txn->flags.cc |= CC_NOCACHE;
-
-    /* Parse the path */
-    r = dav_parse_req_target(txn, pparams);
-    if (r) return r;
-
-    /* Make sure method is allowed (only allowed on resources) */
-    if (!(txn->req_tgt.allow & ALLOW_PATCH)) return HTTP_NOT_ALLOWED;
-
-    /* Check Content-Type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
-        for (patch_doc = pparams->patch_docs; patch_doc->format; patch_doc++) {
-            if (is_mediatype(patch_doc->format, hdr[0])) break;
-        }
-    }
-    if (!patch_doc || !patch_doc->format) {
-        txn->resp_body.patch = pparams->patch_docs;
-        return HTTP_BAD_MEDIATYPE;
-    }
-
-    /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & DACL_WRITECONT)) {
-        /* DAV:need-privileges */
-        txn->error.precond = DAV_NEED_PRIVS;
-        txn->error.resource = txn->req_tgt.path;
-        txn->error.rights = DACL_WRITECONT;
-        return HTTP_NO_PRIVS;
-    }
-
-    if (txn->req_tgt.mbentry->server) {
-        /* Remote mailbox */
-        struct backend *be;
-
-        be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, httpd_userid,
-                              &backend_cached, NULL, NULL, httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
-
-        return http_pipe_req_resp(be, txn);
-    }
-
-    /* Local Mailbox */
-
-    /* Read body */
-    txn->req_body.flags |= BODY_DECODE;
-    ret = http_read_req_body(txn);
-    if (ret) {
-        txn->flags.conn = CONN_CLOSE;
-        return ret;
-    }
-
-    /* Check if we can append a new message to mailbox */
-    /* XXX  Can we guess-timate the size difference? */
-    if ((r = append_check(txn->req_tgt.mbentry->name, httpd_authstate,
-                          ACL_INSERT, NULL))) {
-        syslog(LOG_ERR, "append_check(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
-        txn->error.desc = error_message(r);
-        return HTTP_SERVER_ERROR;
-    }
-
-    /* Open mailbox for writing */
-    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
-    if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
-        txn->error.desc = error_message(r);
-        return HTTP_SERVER_ERROR;
-    }
-
-    /* Open the DAV DB corresponding to the mailbox */
-    davdb = pparams->davdb.open_db(mailbox);
-
-    /* Find message UID for the resource */
-    pparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry,
-                                   txn->req_tgt.resource, (void *) &ddata, 0);
-    if (!ddata->imap_uid) {
-        ret = HTTP_NOT_FOUND;
-        goto done;
-    }
-
-    /* Fetch resource validators */
-    r = pparams->get_validators(mailbox, (void *) ddata, httpd_userid,
-                                &oldrecord, &etag, &lastmod);
-    if (r) {
-        txn->error.desc = error_message(r);
-        ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
-    /* Check any preferences */
-    flags = get_preferences(txn);
-
-    /* Check any preconditions */
-    ret = precond = pparams->check_precond(txn, params, mailbox,
-                                           (void *) ddata, etag, lastmod,
-                                           NULL, NULL);
-
-    switch (precond) {
-    case HTTP_PRECOND_FAILED:
-        if (!(flags & PREFER_REP)) goto done;
-
-        /* Fill in ETag and Last-Modified */
-        txn->resp_body.etag = etag;
-        txn->resp_body.lastmod = lastmod;
-
-        /* Fall through and load message */
-        GCC_FALLTHROUGH
-
-    case HTTP_OK: {
-        unsigned offset;
-        struct buf buf = BUF_INITIALIZER;
-
-        /* Load message containing the resource */
-        mailbox_map_record(mailbox, &oldrecord, &msg_buf);
-
-        /* Resource length doesn't include RFC 5322 header */
-        offset = oldrecord.header_size;
-
-        /* Parse existing resource */
-        buf_init_ro(&buf, buf_base(&msg_buf) + offset,
-                    buf_len(&msg_buf) - offset);
-        obj = pparams->mime_types[0].to_object(&buf);
-        buf_free(&buf);
-
-        if (precond == HTTP_OK) {
-            /* Parse, validate, and apply the patch document to the resource */
-            ret = patch_doc->proc(txn, obj);
-            if (!ret) {
-                ret = pparams->put.proc(txn, obj, mailbox,
-                                        txn->req_tgt.resource, davdb, flags);
-                if (ret == HTTP_FORBIDDEN) ret = HTTP_UNPROCESSABLE;
-            }
-        }
-
-        break;
-    }
-
-    case HTTP_LOCKED:
-        txn->error.precond = DAV_NEED_LOCK_TOKEN;
-        txn->error.resource = txn->req_tgt.path;
-
-    default:
-        /* We failed a precondition */
-        goto done;
-    }
-
-    if (flags & PREFER_REP) {
-        struct resp_body_t *resp_body = &txn->resp_body;
-        struct mime_type_t *mime = pparams->mime_types;
-        struct buf *data;
-
-        if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
-            mime = get_accept_type(hdr, pparams->mime_types);
-            if (!mime) goto done;
-        }
-
-        switch (ret) {
-        case HTTP_NO_CONTENT:
-            ret = HTTP_OK;
-
-            GCC_FALLTHROUGH
-
-        case HTTP_CREATED:
-        case HTTP_PRECOND_FAILED:
-            /* Convert into requested MIME type */
-            data = mime->from_object(obj);
-
-            /* Fill in Content-Type, Content-Length */
-            resp_body->type = mime->content_type;
-            resp_body->len = buf_len(data);
-
-            /* Fill in Content-Location */
-            resp_body->loc = txn->req_tgt.path;
-
-            /* Fill in Expires and Cache-Control */
-            resp_body->maxage = 3600;   /* 1 hr */
-            txn->flags.cc = CC_MAXAGE
-                | CC_REVALIDATE         /* don't use stale data */
-                | CC_NOTRANSFORM;       /* don't alter iCal data */
-
-            /* Output current representation */
-            write_body(ret, txn, buf_base(data), buf_len(data));
-
-            buf_destroy(data);
-            ret = 0;
-            break;
-
-        default:
-            /* failure - do nothing */
-            break;
-        }
-    }
-
-  done:
-    if (obj) {
-        if (pparams->mime_types[0].free) pparams->mime_types[0].free(obj);
-        buf_free(&msg_buf);
-    }
-    if (davdb) pparams->davdb.close_db(davdb);
-    mailbox_close(&mailbox);
-
-    return ret;
-}
-
-
 /* Perform a PUT request
  *
  * preconditions:
@@ -7421,11 +7189,6 @@ int meth_put(struct transaction_t *txn, void *params)
     default:
         /* We failed a precondition */
         goto done;
-    }
-
-    if (txn->req_tgt.allow & ALLOW_PATCH) {
-        /* Add Accept-Patch formats to response */
-        txn->resp_body.patch = pparams->patch_docs;
     }
 
     if (flags & PREFER_REP) {
