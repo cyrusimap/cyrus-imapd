@@ -491,12 +491,32 @@ EXPORTED int http_parse_auth_params(const char *params,
         size_t tok_len, val_len;
         const char *value;
 
-        /* Trim leading and trailing BWS */
-        while (strchr(", \t", *param)) param++;
+        /* Trim leading BWS */
+        param += strspn(param, ", \t");
+        if (!*param) {
+            /* Before this if block was added, code instead would make an out of
+             * bounds read, and (probably) end up in the "Missing value" logging
+             * below, with param pointing to garbage.
+             * I believe that this code path is only reachable for a header with
+             * a trailing comma, but have not tested it exhaustively to confirm
+             * that. If it is, we could tighten this log message. */
+            syslog(LOG_ERR,
+                   "Expected another parameter in credentials, but reached end of string");
+            return SASL_BADAUTH;
+        }
+        /* Trim trailing BWS */
         tok_len = strcspn(param, "= \t");
 
         /* Find value */
         value = strchr(param + tok_len, '=');
+        if (value) {
+            ++value;
+            /* Trim leading BWS */
+            value += strspn(value, " \t");
+            /* token is defined as 1*tchar hence zero length is not allowed */
+            if (!*value) value = NULL;
+        }
+
         if (!value) {
             syslog(LOG_ERR,
                    "Missing value for '%.*s' parameter in credentials",
@@ -504,8 +524,7 @@ EXPORTED int http_parse_auth_params(const char *params,
             return SASL_BADAUTH;
         }
 
-        /* Trim leading and trailing BWS */
-        while (strchr(" \t", *++value));
+        /* Trim trailing BWS */
         val_len = strcspn(value, ", \t");
 
         /* Check known parameters */

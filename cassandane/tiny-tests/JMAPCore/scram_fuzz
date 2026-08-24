@@ -1,0 +1,301 @@
+#!perl
+use Cassandane::Tiny;
+use Path::Tiny;
+use MIME::Base64;
+use Authen::SCRAM::Client;
+use HTTP::Headers::Auth;
+use HTTP::Headers::Util qw(split_header_words);
+use Fcntl;
+use DB_File;
+
+my $SCRAM = 'scram-sha-256';
+
+sub test_scram_fuzz
+    :min_version_3_5 :NoStartInstances
+    ($self)
+{
+    $self->config_set(
+        sasl_mech_list => 'PLAIN LOGIN SCRAM-SHA-256',
+        sasl_sasldb_path => $self->{instance}->get_basedir() . "/etc/sasldb2",
+    );
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+
+    my $auth = $jmap->get_client_session;
+    $self->assert($auth->is_success, 'default success');
+    $self->assert_str_equals('200', $auth->http_response->code, 'default 200');
+
+    my $correct_auth = $jmap->ua->get_default_header('Authorization');
+    my ($token68) = $correct_auth =~ /\ABasic\s+(\S+)/i
+        or die "Can't parse <$correct_auth>";
+    my ($user, $pass) = split ':', decode_base64($token68);
+
+    $jmap->ua->set_default_header('Authorization', undef);
+
+    $auth = $jmap->get_client_session;
+    my %schemes = $auth->http_response->www_authenticate();
+    $self->assert_cmp_deeply({'basic' => {}}, \%schemes,
+                             'First call only offers the existing scheme');
+
+    $auth = $jmap->get_client_session;
+    # The second call - a failed reply to the first challenge of 'Basic' -
+    # causes the connection to be "reset", and all schemes are offered
+    %schemes = $auth->http_response->www_authenticate();
+    $self->assert_cmp_deeply(set('basic', $SCRAM), [keys %schemes],
+                             'Second call offers all schemes');
+    my $realm = $schemes{$SCRAM}{realm};
+    $self->assert(length $realm, "WWW-Authenticate $SCRAM offers a realm");
+    my $sid = $schemes{$SCRAM}{sid};
+    $self->assert(!length $sid, "WWW-Authenticate $SCRAM no sid yet");
+
+    # Current behaviour is that the realm is set in http_auth() in httpd.c,
+    # the same for all auth methods, with the fallback being the hostname
+    # For a docker image built by dar, the hostname is based on checkout path
+    $self->assert_str_equals($realm, $schemes{basic}{realm},
+                             "$SCRAM and Basic offer the same realm");
+
+    # This is blatant implementation details abuse.
+    # We don't have the SASL password setting binary handy
+    my $etc_dir = path($self->{instance}->{basedir})->child('etc');
+    $etc_dir->mkpath();
+    my $sasldb_file = $etc_dir->child('sasldb2')->stringify;
+    tie my %sasldb, 'DB_File', $sasldb_file, O_RDWR|O_CREAT, 0640, $DB_HASH
+        or die "Can't tie $sasldb_file: $!";
+    $sasldb{join "\0", $user, $realm, 'userPassword'} = $pass;
+    untie %sasldb;
+
+    my $client = Authen::SCRAM::Client->new(
+        username => $user,
+        password => $pass,
+        digest   => 'SHA-256',
+    );
+
+    for my $override (
+        {
+            desc => 'simple',
+        },
+        {
+            desc => 'with realm',
+            first => '%1$s data=%2$s, realm=%3$s',
+        },
+        {
+            # the callers of http_parse_auth_params() don't use this:
+            desc => 'with bogus realm',
+            first => '%1$s realm=Narnia, data=%2$s',
+        },
+        {
+            desc => 'with sid',
+            second => '%1$s data=%2$s, sid=%3$s',
+        },
+        {
+            desc => 'sid first',
+            second => '%1$s sid=%3$s,data=%2$s',
+        },
+        {
+            desc => 'bonus parameter',
+            second => '%1$s sid=%3$s, perl=rules, data=%2$s',
+        },
+
+        {
+            desc => 'no data first',
+            first => '%1$s realm=%3$s',
+            fail_at => 'retry',
+        },
+        {
+            desc => 'no data second',
+            second => '%1$s sid=%3$s',
+            fail_at => 'second',
+        },
+
+        {
+            desc => 'overlong data first',
+            first => sub($in) {
+                return 'WOOF' . $in;
+            },
+            fail_at => 'first',
+        },
+        {
+            desc => 'rot13 data first',
+            first => sub($in) {
+                return $in =~ tr/A-Za-z/N-ZA-Mn-za-m/r;
+            },
+            fail_at => 'first',
+        },
+
+        # sid is optional, but if present it must match
+        {
+            desc => 'bogus sid',
+            second => '%1$s data=%2$s, sid=bogus',
+            fail_at => 'second',
+        },
+        {
+            desc => 'bogus sid later',
+            second => '%1$s data=%2$s, perl=rules, sid=bogus',
+            fail_at => 'second',
+        },
+
+        # RFC 7804 says 1*SP - we correctly reject a tab here:
+        {
+            desc => 'tab',
+            first => "%1\$s\tdata=%2\$s",
+            fail_at => 'first',
+        },
+        {
+            desc => 'tab space',
+            first => "%1\$s\t data=%2\$s",
+            fail_at => 'first',
+        },
+
+        {
+            desc => 'trailing comma',
+            first => '%1$s data=%2$s,',
+            fail_at => 'first',
+        },
+
+        # RFC 7804 says 1*SP, so all these are bogus, but we accept them
+        {
+            desc => 'spaces',
+            first => "%1\$s   data=%2\$s",
+        },
+        {
+            desc => 'space tab',
+            first => "%1\$s \tdata=%2\$s",
+        },
+
+        # the "realm" attribute MUST NOT appear more than once -- oops!
+        {
+            desc => 'double realm',
+            first => '%1$s data=%2$s, realm=%3$s, realm=%3$s',
+        },
+        # Arguably all of these are parse errors - we should reject them?
+        {
+            desc => 'double data',
+            first => '%1$s data=bogus, data=%2$s',
+        },
+        {
+            desc => 'two commas',
+            first => '%1$s realm=%3$s,,data=%2$s',
+        },
+        {
+            desc => 'missing comma',
+            second => '%1$s data=%2$s sid=bogus',
+        },
+    ) {
+        my $desc = $override->{desc};
+        my $client_first = encode_base64($client->first_msg(), "");
+        if (ref $override->{first}) {
+            my $munge = delete $override->{first};
+            $client_first = $munge->($client_first);
+        }
+
+        my %testcase = (
+            fail_at => '',
+            first => '%1$s data=%2$s',
+            second => '%1$s data=%2$s',
+            %$override,
+        );
+
+        $jmap->ua->set_default_header('Authorization',
+                                      sprintf $testcase{first}, $SCRAM, $client_first, $realm);
+        $auth = $jmap->get_client_session;
+
+        $self->assert(!$auth->is_success, "$desc - no authorization yet");
+        $self->assert_str_equals('401', $auth->http_response->code,
+                                 "$desc - no authorization yet 401");
+
+        my @offered = $auth->http_response->www_authenticate();
+
+        if ($testcase{fail_at} eq 'first') {
+            my %schemes = @offered;
+            $self->assert_cmp_deeply(set('basic', $SCRAM), [keys %schemes],
+                                     "$desc - failed after client first, server resets state");
+            next;
+        } elsif ($testcase{fail_at} eq 'retry') {
+            # For this failure case, BASIC auth is no longer offered
+            $self->assert_cmp_deeply([$SCRAM, {}], \@offered,
+                                     "$desc - failed after client first, server retries state");
+            next;
+        }
+
+        $self->assert_cmp_deeply([$SCRAM, superhashof({})], \@offered,
+                                 "$desc - no SCRAM yet");
+
+        my $params = $offered[1];
+        $sid = $params->{sid};
+
+        $self->assert(length $sid, "$desc - we have a session ID");
+        $self->assert(length $params->{data}, "$desc - we have data");
+        my $server_first = decode_base64($params->{data});
+
+        my $client_final = encode_base64($client->final_msg($server_first), "");
+        $jmap->ua->set_default_header('Authorization',
+                                      sprintf $testcase{second}, $SCRAM, $client_final, $sid);
+        $auth = $jmap->get_client_session;
+
+        if ($testcase{fail_at}) {
+            my %schemes = $auth->http_response->www_authenticate();
+            $self->assert_cmp_deeply(set('basic', $SCRAM), [keys %schemes],
+                                     "$desc - failed after client final, server restarts state machine");
+            next;
+        }
+        $self->assert($auth->is_success, "$desc - authorization \\o/");
+        $self->assert_str_equals('200', $auth->http_response->code,
+                                 "$desc - authorization 200");
+
+        my $response = $auth->http_response;
+        my @headers = $response->header("Authorization");
+        $self->assert_cmp_deeply([], \@headers, "$desc - no Authorization header");
+
+        @headers = $response->header("Authentication-Info");
+        $self->assert_num_equals(1, scalar @headers,
+                                 "$desc - 1 Authentication-Info header");
+
+        my @split = split_header_words(@headers);
+        $self->assert_cmp_deeply(set(['sid', $sid], ['data', re(qr/./)]),
+                                 \@split,
+                                 "$desc - same session ID and we have data");
+
+        my ($data) = map {$_->[1]} grep {$_->[0] eq 'data'} @split;
+        my $server_final = decode_base64($data);
+        $client->validate($server_final);
+
+        # auth_check_hdrs() in httpd.c has logic with the comment
+        # /* Drop auth credentials, if not a backend in a Murder */
+        # we're not testing with a configuration that acts like it's in Murder,
+        # hence every request is going to need repeated reauthorisation. Hence:
+        $auth = $jmap->get_client_session;
+        $self->assert(!$auth->is_success, "$desc - authorization no longer valid");
+        $self->assert_str_equals('401', $auth->http_response->code,
+                                 "$desc - authorization no longer valid 401");
+    }
+
+    my @fuzz = (
+        ['tab',             "$SCRAM\tkey=value"],
+        ['space after',     "$SCRAM key=value "],
+        ['tab after',       "$SCRAM key=value\t"],
+        ['trailing comma',  "$SCRAM key=value,"],
+        ['trailing commas', "$SCRAM key=value,,"],
+        ['two commas',      "$SCRAM beer=foamy,,perl=rules"],
+        ['no value',        "$SCRAM key="],
+        ['no equals',       "$SCRAM key"],
+        ['comma only',      "$SCRAM ,"],
+        ['leading comma',   "$SCRAM ,key=value"],
+        ['no params',       "$SCRAM"],
+        ['trailing space',  "$SCRAM "],
+        ['trailing spaces', "$SCRAM  "],
+    );
+
+    for my $case (@fuzz) {
+        my ($desc, $header, $code) = @$case;
+        $code //= '401';
+        $jmap->ua->set_default_header('Authorization', $header);
+
+        $auth = $jmap->get_client_session;
+        $self->assert(!$auth->is_success, "$desc denied");
+        $self->assert_str_equals($code, $auth->http_response->code, "$desc $code");
+        %schemes = $auth->http_response->www_authenticate();
+        my $sid = $schemes{$SCRAM}{sid};
+        $self->assert(!length $sid, "$desc no sid");
+    }
+}
