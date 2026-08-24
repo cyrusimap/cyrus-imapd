@@ -6827,8 +6827,8 @@ static void _email_keywords_fini(struct email_keywords *keywords)
 static void _email_keywords_add_keyword(struct email_keywords *keywords,
                                         const char *keyword)
 {
-    uintptr_t count = (uintptr_t) hash_lookup(keyword, &keywords->counts);
-    hash_insert(keyword, (void*) count+1, &keywords->counts);
+    uintptr_t count = 1 + (uintptr_t) hash_lookup(keyword, &keywords->counts);
+    hash_insert(keyword, (void*) count, &keywords->counts);
 }
 
 static int _email_keywords_add_msgrecord(struct email_keywords *keywords,
