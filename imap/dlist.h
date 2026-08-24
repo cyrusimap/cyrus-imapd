@@ -178,8 +178,26 @@ void dlist_print(const struct dlist *dl, int printkeys,
                  struct protstream *out);
 void dlist_printbuf(const struct dlist *dl, int printkeys,
                     struct buf *outbuf);
-int dlist_parse(struct dlist **dlp, int parsekeys, int isarchive,
-                struct protstream *in);
+
+/* flags for dlist_parse() */
+enum dlist_parse_flags {
+    /**
+     * Parse a leading key/name for the item.
+     */
+    DLIST_PARSE_PARSEKEY = (1 << 0),
+    /**
+     * Reserve file literals in the archive rather than the spool partition.
+     * Only has an effect in combination with DLIST_PARSE_ALLOW_FILE_LITERALS.
+     */
+    DLIST_PARSE_ISARCHIVE = (1 << 1),
+    /**
+     * Allow %{...} file literals. If this is not set, then the parse
+     * fails at the first file literal in the dlist.
+     */
+    DLIST_PARSE_ALLOW_FILE_LITERALS = (1 << 2),
+};
+
+int dlist_parse(struct dlist **dlp, unsigned flags, struct protstream *in);
 int dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
                             struct protstream *in);
 int dlist_parsemap(struct dlist **dlp, int parsekeys,

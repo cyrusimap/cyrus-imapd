@@ -1060,16 +1060,14 @@ EXPORTED int dlist_parsesax(const char *base, size_t len, int parsekey,
     return 0;
 }
 
-static char next_nonspace(struct protstream *in, char c)
+static int next_nonspace(struct protstream *in, int c)
 {
-    while (Uisspace(c)) c = prot_getc(in);
+    /* Must be int, not char for platforms where char is unsigned (e.g. ARM) */
+    while (c != EOF && Uisspace(c)) c = prot_getc(in);
     return c;
 }
 
-/* XXX accumulating a lot of flag arguments here, perhaps we should
- * XXX consolidate them into a single flags argument with defined bits
- */
-EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
+EXPORTED int dlist_parse(struct dlist **dlp, unsigned flags,
                           struct protstream *in)
 {
     struct dlist *dl = NULL;
@@ -1078,7 +1076,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
     int c;
 
     /* handle the key if wanted */
-    if (parsekey) {
+    if (flags & DLIST_PARSE_PARSEKEY) {
         c = getastring(in, NULL, &kbuf);
         c = next_nonspace(in, c);
     }
@@ -1097,7 +1095,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
         while (c != ')') {
             struct dlist *di = NULL;
             prot_ungetc(c, in);
-            c = dlist_parse(&di, 0, isarchive, in);
+            c = dlist_parse(&di, flags & ~DLIST_PARSE_PARSEKEY, in);
             if (di) dlist_stitch(dl, di);
             c = next_nonspace(in, c);
             if (c == EOF) goto fail;
@@ -1113,7 +1111,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
             while (c != ')') {
                 struct dlist *di = NULL;
                 prot_ungetc(c, in);
-                c = dlist_parse(&di, 1, isarchive, in);
+                c = dlist_parse(&di, flags | DLIST_PARSE_PARSEKEY, in);
                 if (di) dlist_stitch(dl, di);
                 c = next_nonspace(in, c);
                 if (c == EOF) goto fail;
@@ -1124,6 +1122,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
             static struct buf pbuf, gbuf;
             unsigned size = 0;
             const char *fname;
+            if (!(flags & DLIST_PARSE_ALLOW_FILE_LITERALS)) goto fail;
             c = getastring(in, NULL, &pbuf);
             if (c != ' ') goto fail;
             c = getastring(in, NULL, &gbuf);
@@ -1134,7 +1133,8 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
             if (c == '\r') c = prot_getc(in);
             if (c != '\n') goto fail;
             if (!message_guid_decode(&tmp_guid, gbuf.s)) goto fail;
-            if (reservefile(in, pbuf.s, &tmp_guid, size, isarchive, &fname)) goto fail;
+            if (reservefile(in, pbuf.s, &tmp_guid, size,
+                            flags & DLIST_PARSE_ISARCHIVE, &fname)) goto fail;
             dl = dlist_setfile(NULL, kbuf.s, pbuf.s, &tmp_guid, size, fname);
             /* file literal */
         }
@@ -1173,7 +1173,7 @@ fail:
 EXPORTED int dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
                             struct protstream *in)
 {
-    int c = dlist_parse(dlp, parsekey, 0, in);
+    int c = dlist_parse(dlp, parsekey ? DLIST_PARSE_PARSEKEY : 0, in);
 
     /* make a list with one item */
     if (*dlp && !dlist_isatomlist(*dlp)) {
@@ -1197,7 +1197,7 @@ EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey,
     /* Allow LITERAL+ - this is silly, but required to parse personal CALDATA */
     prot_setisclient(stream, 1);
 
-    c = dlist_parse(&dl, parsekey, /*isarchive*/ 0, stream);
+    c = dlist_parse(&dl, parsekey ? DLIST_PARSE_PARSEKEY : 0, stream);
     prot_free(stream);
 
     if (c != EOF) {
@@ -1683,13 +1683,59 @@ EXPORTED void dlist_rename(struct dlist *dl, const char *name)
     dl->name = xstrdup(name);
 }
 
-EXPORTED struct dlist *dlist_copy(const struct dlist *dl)
+static struct dlist *dlist_clone(const struct dlist *dl, struct dlist *parent)
 {
     if (!dl) return NULL;
-    struct buf buf = BUF_INITIALIZER;
-    struct dlist *new = NULL;
-    dlist_printbuf(dl, 1, &buf);
-    dlist_parsemap(&new, 1, buf_base(&buf), buf_len(&buf));
-    buf_free(&buf);
-    return new;
+
+    struct dlist *copy = dlist_child(parent, dl->name);
+
+    switch (dl->type) {
+    case DL_NIL:
+        break;
+    case DL_ATOM:
+        dlist_makeatom(copy, dl->sval);
+        break;
+    case DL_FLAG:
+        dlist_makeflag(copy, dl->sval);
+        break;
+    case DL_NUM:
+        dlist_makenum64(copy, dl->nval);
+        break;
+    case DL_DATE:
+        dlist_makedate(copy, dl->nval);
+        break;
+    case DL_HEX:
+        dlist_makehex64(copy, dl->nval);
+        break;
+    case DL_BUF:
+        dlist_makemap(copy, dl->sval, dl->nval);
+        break;
+    case DL_GUID:
+        dlist_makeguid(copy, dl->gval);
+        break;
+    case DL_FILE:
+        /* a file node only references bytes on disk (dl->sval); copy the
+         * reference directly rather than round-tripping through the parser,
+         * which would rewrite the file and reject the %{...} literal */
+        dlist_makefile(copy, dl->part, dl->gval, dl->nval, dl->sval);
+        break;
+    case DL_KVLIST:
+        copy->type = DL_KVLIST;
+        for (const struct dlist *i = dl->head; i; i = i->next)
+            dlist_clone(i, copy);
+        break;
+    case DL_ATOMLIST:
+        copy->type = DL_ATOMLIST;
+        copy->nval = dl->nval; /* preserve print-keys flag (pklist) */
+        for (const struct dlist *i = dl->head; i; i = i->next)
+            dlist_clone(i, copy);
+        break;
+    }
+
+    return copy;
+}
+
+EXPORTED struct dlist *dlist_copy(const struct dlist *dl)
+{
+    return dlist_clone(dl, NULL);
 }

@@ -403,7 +403,7 @@ static int callout_receive_reply(const char *callout,
     p = prot_new(fd, /*write*/0);
 
     /* read and parse the reply as a dlist */
-    c = dlist_parse(results, /*parsekeys*/0, /*isarchive*/0, p);
+    c = dlist_parse(results, DLIST_PARSE_ALLOW_FILE_LITERALS, p);
     r = (c == EOF ? IMAP_SYS_ERROR : 0);
 
 out:

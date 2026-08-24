@@ -1,3 +1,5 @@
+#include <sys/stat.h>
+
 #include "config.h"
 #include "cunit/unit.h"
 #include "prot.h"
@@ -433,6 +435,166 @@ static void test_deepstructure(void)
     dlist_free(&dl);
     buf_free(&b);
     buf_free(&b2);
+}
+
+static void test_parsemap_reject_file_literal(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    struct dlist *dl = NULL;
+    int r;
+
+    /* file literals always are rejected in parsemap */
+    buf_setcstr(&b,
+        "DEFAULTALARMS %(WITH_TIME %(DROP %{default "
+        "0000000000000000000000000000000000000001 5}\r\nHELLO))");
+
+    r = dlist_parsemap(&dl, 1, b.s, b.len);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NULL(dl);
+
+    dlist_free(&dl);
+    buf_free(&b);
+}
+
+static void test_parse_allow_file_literal(void)
+{
+    struct dlist *dl = NULL;
+    struct protstream *stream;
+    struct buf b = BUF_INITIALIZER;
+    struct stat sbuf;
+    int r;
+    int c;
+
+    /* reservefile() needs a configured partition to stage bytes into */
+    r = system("mkdir -p " DBDIR "/data");
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    config_read_string(DBDIR"/conf", "partition-default: " DBDIR "/data\n");
+
+    /* "TESTFILE %{<partition> <guid> <size>}\r\n<size bytes>" */
+    buf_printf(&b,
+        "TESTFILE %%{default "
+        "0000000000000000000000000000000000000001 5}\r\nHELLO");
+
+    /* with the DLIST_PARSE_ALLOW_FILE_LITERALS flag set, the file literal
+     * parses and the file is created */
+    stream = prot_readmap(buf_base(&b), buf_len(&b));
+    prot_setisclient(stream, 1);
+    c = dlist_parse(&dl, DLIST_PARSE_PARSEKEY | DLIST_PARSE_ALLOW_FILE_LITERALS,
+                    stream);
+    prot_free(stream);
+
+    CU_ASSERT_EQUAL(c, EOF);   /* whole buffer consumed */
+    CU_ASSERT_PTR_NOT_NULL_FATAL(dl);
+    CU_ASSERT_EQUAL(dl->type, DL_FILE);
+    CU_ASSERT_EQUAL(dl->nval, 5);
+    CU_ASSERT_STRING_EQUAL(dl->part, "default");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(dl->sval);
+    CU_ASSERT_EQUAL_FATAL(stat(dl->sval, &sbuf), 0);
+    CU_ASSERT_EQUAL(sbuf.st_size, 5);
+
+    /* dlist_unlink_files() removes the staged file the parser created */
+    dlist_unlink_files(dl);
+    CU_ASSERT_NOT_EQUAL(stat(dl->sval, &sbuf), 0);
+    dlist_free(&dl);
+
+    /* without the flag, the same input is rejected and nothing is staged */
+    dl = NULL;
+    stream = prot_readmap(buf_base(&b), buf_len(&b));
+    prot_setisclient(stream, 1);
+    c = dlist_parse(&dl, DLIST_PARSE_PARSEKEY, stream);
+    prot_free(stream);
+    CU_ASSERT_PTR_NULL(dl);
+
+    dlist_free(&dl);
+    buf_free(&b);
+
+    /* restore the plain config for the remaining tests in this suite */
+    config_read_string(DBDIR"/conf", NULL);
+}
+
+static void test_copy(void)
+{
+    struct dlist *dl = NULL;
+    struct dlist *copy = NULL;
+    struct buf in = BUF_INITIALIZER;
+    struct buf b1 = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int r;
+
+    buf_setcstr(&in,
+        "%(toplevel %(sub thing) ANOTHER (value is %(list here) (in it)) "
+        "READ \"all about it\" EMPTYLIST () NUM 123456)");
+
+    r = dlist_parsemap(&dl, 0, in.s, in.len);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(dl);
+
+    dlist_printbuf(dl, 0, &b1);
+
+    copy = dlist_copy(dl);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(copy);
+    CU_ASSERT_PTR_NOT_EQUAL(copy, dl);
+
+    /* free the original first to prove the copy is fully independent */
+    dlist_free(&dl);
+
+    dlist_printbuf(copy, 0, &b2);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), buf_cstring(&b1));
+
+    dlist_free(&copy);
+    buf_free(&in);
+    buf_free(&b1);
+    buf_free(&b2);
+}
+
+static void test_copy_file(void)
+{
+    struct dlist *dl = NULL;
+    struct dlist *copy = NULL;
+    struct protstream *stream;
+    struct buf b = BUF_INITIALIZER;
+    int r;
+    int c;
+
+    /* reservefile() needs a configured partition to stage bytes into */
+    r = system("mkdir -p " DBDIR "/data");
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    config_read_string(DBDIR"/conf", "partition-default: " DBDIR "/data\n");
+
+    buf_printf(&b,
+        "TESTFILE %%{default "
+        "0000000000000000000000000000000000000001 5}\r\nHELLO");
+
+    stream = prot_readmap(buf_base(&b), buf_len(&b));
+    prot_setisclient(stream, 1);
+    c = dlist_parse(&dl, DLIST_PARSE_PARSEKEY | DLIST_PARSE_ALLOW_FILE_LITERALS,
+                    stream);
+    prot_free(stream);
+    CU_ASSERT_EQUAL(c, EOF);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(dl);
+    CU_ASSERT_EQUAL(dl->type, DL_FILE);
+
+    /* dlist_copy() must reproduce the file node by copying its on-disk
+     * reference, not by round-tripping through the parser (which rejects
+     * the %{...} literal and would return NULL) */
+    copy = dlist_copy(dl);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(copy);
+    CU_ASSERT_PTR_NOT_EQUAL(copy, dl);
+    CU_ASSERT_EQUAL(copy->type, DL_FILE);
+    CU_ASSERT_EQUAL(copy->nval, 5);
+    CU_ASSERT_STRING_EQUAL(copy->part, "default");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(copy->sval);
+    CU_ASSERT_STRING_EQUAL(copy->sval, dl->sval);
+
+    /* the copy references the same staged file; unlink it once */
+    dlist_unlink_files(dl);
+    dlist_free(&dl);
+    dlist_free(&copy);
+    buf_free(&b);
+
+    /* restore the plain config for the remaining tests in this suite */
+    config_read_string(DBDIR"/conf", NULL);
 }
 
 static void test_printiter(void)
