@@ -1,0 +1,29 @@
+Description:
+
+The dlist parser now rejects file literals unless the caller has explicitly
+allowed them, which only the replication protocol does.  Previously a dlist
+parsed from stored metadata -- an annotation, for instance -- could hold a
+file literal, and parsing it wrote a file to disk containing the bytes that
+followed the literal.  Parsing an annotation no longer creates files.
+
+Tracked as GitHub security advisory GHSA-v644-h89x-hwgx.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
