@@ -1,9 +1,9 @@
 Name: httpmodules
 Type: BITFIELD
-Allowed-Values: admin caldav carddav convert cgi domainkey freebusy ischedule
- jmap prometheus rss tzdist webdav
+Allowed-Values: admin caldav carddav convert domainkey freebusy ischedule
+ jmap prometheus tzdist webdav
 Default-Value:
-Last-Modified: 3.1.7
+Last-Modified: UNRELEASED
 
 Space-separated list of HTTP modules that will be enabled in
 :cyrusman:`httpd(8)`.  Running multiple httpd instances, each with a

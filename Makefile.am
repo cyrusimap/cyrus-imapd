@@ -1231,7 +1231,6 @@ imap_httpd_SOURCES = \
     imap/http_caldav_sched.h \
     imap/http_carddav.c \
     imap/http_carddav.h \
-    imap/http_cgi.c \
     imap/http_convert.c \
     imap/http_dav.c \
     imap/http_dav.h \
@@ -1246,7 +1245,6 @@ imap_httpd_SOURCES = \
     imap/http_prometheus.c \
     imap/http_proxy.c \
     imap/http_proxy.h \
-    imap/http_rss.c \
     imap/http_tzdist.c \
     imap/http_webdav.c \
     imap/http_ws.c \
