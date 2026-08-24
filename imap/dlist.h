@@ -178,8 +178,18 @@ void dlist_print(const struct dlist *dl, int printkeys,
                  struct protstream *out);
 void dlist_printbuf(const struct dlist *dl, int printkeys,
                     struct buf *outbuf);
+
+/* flags for dlist_parse() */
+enum dlist_parse_flags {
+    /**
+     * Allow %{...} file literals. If this is not set, then the parse
+     * fails at the first file literal in the dlist.
+     */
+    DLIST_PARSE_ALLOW_FILE_LITERALS = (1 << 0),
+};
+
 int dlist_parse(struct dlist **dlp, int parsekeys, int isarchive,
-                struct protstream *in);
+                unsigned flags, struct protstream *in);
 int dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
                             struct protstream *in);
 int dlist_parsemap(struct dlist **dlp, int parsekeys,

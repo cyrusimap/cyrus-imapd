@@ -1966,7 +1966,7 @@ struct dlist *sync_parseline(struct protstream *in, int isarchive)
     struct dlist *dl = NULL;
     int c;
 
-    c = dlist_parse(&dl, 1, isarchive, in);
+    c = dlist_parse(&dl, 1, isarchive, DLIST_PARSE_ALLOW_FILE_LITERALS, in);
 
     /* end line - or fail */
     if (c == '\r') c = prot_getc(in);

@@ -1060,9 +1060,10 @@ EXPORTED int dlist_parsesax(const char *base, size_t len, int parsekey,
     return 0;
 }
 
-static char next_nonspace(struct protstream *in, char c)
+static int next_nonspace(struct protstream *in, int c)
 {
-    while (Uisspace(c)) c = prot_getc(in);
+    /* Must be int, not char for platforms where char is unsigned (e.g. ARM) */
+    while (c != EOF && Uisspace(c)) c = prot_getc(in);
     return c;
 }
 
@@ -1070,7 +1071,7 @@ static char next_nonspace(struct protstream *in, char c)
  * XXX consolidate them into a single flags argument with defined bits
  */
 EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
-                          struct protstream *in)
+                          unsigned flags, struct protstream *in)
 {
     struct dlist *dl = NULL;
     static struct buf kbuf;
@@ -1097,7 +1098,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
         while (c != ')') {
             struct dlist *di = NULL;
             prot_ungetc(c, in);
-            c = dlist_parse(&di, 0, isarchive, in);
+            c = dlist_parse(&di, 0, isarchive, flags, in);
             if (di) dlist_stitch(dl, di);
             c = next_nonspace(in, c);
             if (c == EOF) goto fail;
@@ -1113,7 +1114,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
             while (c != ')') {
                 struct dlist *di = NULL;
                 prot_ungetc(c, in);
-                c = dlist_parse(&di, 1, isarchive, in);
+                c = dlist_parse(&di, 1, isarchive, flags, in);
                 if (di) dlist_stitch(dl, di);
                 c = next_nonspace(in, c);
                 if (c == EOF) goto fail;
@@ -1124,6 +1125,7 @@ EXPORTED int dlist_parse(struct dlist **dlp, int parsekey, int isarchive,
             static struct buf pbuf, gbuf;
             unsigned size = 0;
             const char *fname;
+            if (!(flags & DLIST_PARSE_ALLOW_FILE_LITERALS)) goto fail;
             c = getastring(in, NULL, &pbuf);
             if (c != ' ') goto fail;
             c = getastring(in, NULL, &gbuf);
@@ -1173,7 +1175,7 @@ fail:
 EXPORTED int dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
                             struct protstream *in)
 {
-    int c = dlist_parse(dlp, parsekey, 0, in);
+    int c = dlist_parse(dlp, parsekey, 0, 0, in);
 
     /* make a list with one item */
     if (*dlp && !dlist_isatomlist(*dlp)) {
@@ -1197,7 +1199,7 @@ EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey,
     /* Allow LITERAL+ - this is silly, but required to parse personal CALDATA */
     prot_setisclient(stream, 1);
 
-    c = dlist_parse(&dl, parsekey, /*isarchive*/ 0, stream);
+    c = dlist_parse(&dl, parsekey, /*isarchive*/ 0, /*flags*/ 0, stream);
     prot_free(stream);
 
     if (c != EOF) {
