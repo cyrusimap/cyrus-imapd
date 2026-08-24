@@ -1,0 +1,130 @@
+#!perl
+use Cassandane::Tiny;
+
+# Don't let a read-only sharee turn on shared-seen for the owner's mailbox.
+sub test_mailbox_set_sharee_is_seen_shared
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for the
+    # isSeenShared property
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    xlog $self, 'create owner account "victim"';
+
+    my $victim = $self->{instance}->create_user('victim');
+    my $victim_jmap = $victim->jmap;
+    $victim_jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    xlog $self, 'victim creates a mailbox, shared read-only with cassandane';
+
+    my $victim_mbox = $victim->mailboxes->create({ name => 'Confidential' });
+    $victim_mbox->share_with(cassandane => [ 'mayRead' ]);
+
+    xlog $self, 'sharee Mailbox/get confirms shared-seen is off (default)';
+
+    my $res = $jmap->request([
+        ['Mailbox/get', {
+            accountId  => 'victim',
+            ids        => [ $victim_mbox->id ],
+            properties => [ 'id', 'isSeenShared', 'myRights' ],
+        }],
+    ]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            accountId => 'victim',
+            list => [ superhashof({
+                isSeenShared => jfalse(),
+                myRights     => superhashof({
+                    mayReadItems   => jtrue(),
+                    maySetKeywords => jfalse(),
+                    mayAdmin       => jfalse(),
+                }),
+            }) ],
+        }),
+        $res->sentence_named('Mailbox/get')->arguments,
+        'sharee sees a read-only mailbox with shared-seen off',
+    );
+
+    xlog $self, 'sharee Mailbox/set tries to enable shared-seen';
+
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            accountId => 'victim',
+            update    => {
+                $victim_mbox->id => {
+                    isSeenShared => JSON::true,
+                },
+            },
+        }],
+    ]);
+
+    # If the mailbox turns up in {updated}, the sharee has flipped a
+    # mailbox-wide option across the auth boundary.
+    my $set = $res->sentence_named('Mailbox/set')->arguments;
+
+    $self->assert(
+        ! exists $set->{updated}{$victim_mbox->id},
+        "read-only sharee must not be allowed to set isSeenShared on the owner's mailbox",
+    );
+
+    $self->assert(
+        exists $set->{notUpdated}{$victim_mbox->id},
+        'expected the mailbox in notUpdated',
+    );
+
+    xlog $self, 'owner Mailbox/get confirms shared-seen is still off';
+
+    $res = $victim_jmap->request([
+        ['Mailbox/get', {
+            ids        => [ $victim_mbox->id ],
+            properties => [ 'isSeenShared' ],
+        }],
+    ]);
+
+    $self->assert_equals(
+        JSON::false,
+        $res->sentence_named('Mailbox/get')->arguments->{list}[0]{isSeenShared},
+        "sharee's attempted Mailbox/set must not have changed the mailbox-wide"
+            . ' shared-seen option',
+    );
+
+    xlog $self, 'victim promotes cassandane to an administrator of the mailbox';
+
+    $victim_mbox->share_with(cassandane => [ qw( mayRead mayWrite mayAdmin ) ]);
+
+    xlog $self, 'sharee Mailbox/set may now enable shared-seen';
+
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            accountId => 'victim',
+            update    => {
+                $victim_mbox->id => {
+                    isSeenShared => JSON::true,
+                },
+            },
+        }],
+    ]);
+
+    $self->assert(
+        exists $res->sentence_named('Mailbox/set')->arguments->{updated}
+                                                  ->{$victim_mbox->id},
+        'sharee with mayAdmin can set isSeenShared',
+    );
+
+    $res = $victim_jmap->request([
+        ['Mailbox/get', {
+            ids        => [ $victim_mbox->id ],
+            properties => [ 'isSeenShared' ],
+        }],
+    ]);
+
+    $self->assert_equals(
+        JSON::true,
+        $res->sentence_named('Mailbox/get')->arguments->{list}[0]{isSeenShared},
+        'shared-seen is on after an administrator turns it on',
+    );
+}

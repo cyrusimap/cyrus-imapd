@@ -58,7 +58,7 @@ sub new
                  httpprettytelemetry => 'yes',
                  imapidresponse => 'no',
                  imapmagicplus => 'yes',
-                 implicit_owner_rights => 'lkn',
+                 implicit_owner_rights => 'lkan',
                  internaldate_heuristic => 'receivedheader',
                  jmap_preview_annot => '/shared/vendor/messagingengine.com/preview',
                  jmap_nonstandard_extensions => 'yes',
