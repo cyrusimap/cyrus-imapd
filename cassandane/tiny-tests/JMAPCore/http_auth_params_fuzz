@@ -1,0 +1,67 @@
+#!perl
+use Cassandane::Tiny;
+
+# http_parse_auth_params() trimmed whitespace with strchr(", \t", *param),
+# which is also true for the string's own NUL terminator, so an Authorization
+# header whose parameters end in separator characters walked the pointer off
+# the end of the header value and parsed adjacent heap as auth parameters.
+#
+# Only the SCRAM schemes carry auth-params (AUTH_DATA_PARAM), so the mech has
+# to be enabled for any of this to be reachable.
+sub test_http_auth_params_fuzz
+    :min_version_3_5 :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->config_set(sasl_mech_list => 'PLAIN LOGIN SCRAM-SHA-256');
+    $self->_start_instances();
+
+    my $service = $self->{instance}->get_service('http');
+
+    my @fuzz = (
+        ['tab',             "SCRAM-SHA-256\tkey=value"],
+        ['space after',     "SCRAM-SHA-256 key=value "],
+        ['tab after',       "SCRAM-SHA-256 key=value\t"],
+        ['trailing comma',  "SCRAM-SHA-256 key=value,"],
+        ['trailing commas', "SCRAM-SHA-256 key=value,,"],
+        ['two commas',      "SCRAM-SHA-256 beer=foamy,,perl=rules"],
+        ['no value',        "SCRAM-SHA-256 key="],
+        ['no equals',       "SCRAM-SHA-256 key"],
+        ['comma only',      "SCRAM-SHA-256 ,"],
+        ['leading comma',   "SCRAM-SHA-256 ,key=value"],
+        ['no params',       "SCRAM-SHA-256"],
+    );
+
+    # A scheme followed by nothing but whitespace is deliberately absent: that
+    # input never reaches this parser, it trips the separate over-read in
+    # http_auth() that CYR-3130 fixes, and its test covers it there.
+
+    for my $case (@fuzz) {
+        my ($desc, $header) = @$case;
+
+        xlog $self, "Authorization: $desc";
+
+        my $sock = $service->get_socket();
+        $sock->autoflush(1);
+
+        $sock->print(join("\r\n",
+            'GET /jmap/ HTTP/1.1',
+            'Host: localhost',
+            "Authorization: $header",
+            'Connection: close',
+            '', ''));
+
+        my $resp = '';
+        while (defined(my $line = $sock->getline())) {
+            $resp .= $line;
+        }
+        $sock->close();
+
+        # None of these carry usable credentials, so the only correct answer
+        # is a challenge.  What we're really watching for is that the worker
+        # answers at all, and that no session id is handed back -- a sid means
+        # the parser accepted whatever it found past the end of the header.
+        $self->assert_matches(qr{^HTTP/1\.1 401 }, "$resp");
+        $self->assert_does_not_match(qr{sid=}, $resp);
+    }
+}
