@@ -1,0 +1,149 @@
+#!perl
+use Cassandane::Tiny;
+
+# Don't let a read-only sharee turn on shared-seen for the owner's mailbox.
+sub test_mailbox_set_sharee_is_seen_shared
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for the
+    # isSeenShared property
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    xlog $self, 'create owner account "victim"';
+
+    $self->{instance}->create_user('victim');
+
+    my $service = $self->{instance}->get_service("http");
+    my $victim_jmap = Mail::JMAPTalk->new(
+        user => 'victim',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $victim_jmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ]);
+
+    xlog $self, 'victim creates a mailbox, shared read-only with cassandane';
+
+    my $res = $victim_jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mbox => {
+                    name => 'Confidential',
+                    shareWith => { cassandane => { mayRead => JSON::true } },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $mboxid = $res->[0][1]{created}{mbox}{id};
+    $self->assert_null($res->[0][1]{notCreated}{mbox});
+    $self->assert_not_null($mboxid);
+
+    # Read back the owner's view of isSeenShared, so each assertion below is
+    # about the mailbox itself rather than about what the sharee is shown.
+    my $owner_is_seen_shared = sub {
+        my $get = $victim_jmap->CallMethods([
+            ['Mailbox/get', {
+                ids        => [ $mboxid ],
+                properties => [ 'isSeenShared' ],
+            }, 'R1'],
+        ]);
+
+        return $get->[0][1]{list}[0]{isSeenShared};
+    };
+
+    my $sharee_sets_seen_shared = sub {
+        my $set = $jmap->CallMethods([
+            ['Mailbox/set', {
+                accountId => 'victim',
+                update    => {
+                    $mboxid => { isSeenShared => JSON::true },
+                },
+            }, 'R1'],
+        ]);
+
+        return $set->[0][1];
+    };
+
+    xlog $self, 'sharee Mailbox/get confirms shared-seen is off (default)';
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            accountId  => 'victim',
+            ids        => [ $mboxid ],
+            properties => [ 'id', 'isSeenShared', 'myRights' ],
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('victim', $res->[0][1]{accountId});
+    my $seen = $res->[0][1]{list}[0];
+    $self->assert_equals(JSON::false, $seen->{isSeenShared});
+    $self->assert_equals(JSON::true,  $seen->{myRights}{mayReadItems});
+    $self->assert_equals(JSON::false, $seen->{myRights}{maySetKeywords});
+    $self->assert_equals(JSON::false, $seen->{myRights}{mayAdmin});
+
+    xlog $self, 'sharee Mailbox/set tries to enable shared-seen';
+
+    my $set = $sharee_sets_seen_shared->();
+
+    # If the mailbox turns up in {updated}, the sharee has flipped a
+    # mailbox-wide option across the auth boundary.
+    $self->assert(
+        ! exists $set->{updated}{$mboxid},
+        "read-only sharee must not be allowed to set isSeenShared on the owner's mailbox",
+    );
+
+    $self->assert(
+        exists $set->{notUpdated}{$mboxid},
+        'expected the mailbox in notUpdated',
+    );
+
+    xlog $self, 'owner Mailbox/get confirms shared-seen is still off';
+
+    $self->assert_equals(
+        JSON::false,
+        $owner_is_seen_shared->(),
+        "sharee's attempted Mailbox/set must not have changed the mailbox-wide"
+            . ' shared-seen option',
+    );
+
+    xlog $self, 'victim promotes cassandane to an administrator of the mailbox';
+
+    $res = $victim_jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxid => {
+                    shareWith => {
+                        cassandane => {
+                            mayRead  => JSON::true,
+                            mayWrite => JSON::true,
+                            mayAdmin => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxid});
+
+    xlog $self, 'sharee Mailbox/set may now enable shared-seen';
+
+    $set = $sharee_sets_seen_shared->();
+    $self->assert_null($set->{notUpdated}{$mboxid});
+    $self->assert(exists $set->{updated}{$mboxid},
+                  'sharee with mayAdmin can set isSeenShared');
+
+    $self->assert_equals(
+        JSON::true,
+        $owner_is_seen_shared->(),
+        'shared-seen is on after an administrator turns it on',
+    );
+}
