@@ -315,7 +315,7 @@ void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *msgrec);
  * Called once per message and always before mboxevent_extract_mailbox
  */
 void mboxevent_extract_copied_record(struct mboxevent *event,
-                                     const struct mailbox *mailbox, struct index_record *record);
+                                     struct mailbox *mailbox, struct index_record *record);
 
 extern void mboxevent_extract_copied_msgrecord(struct mboxevent *event, msgrecord_t *msgrec);
 
@@ -364,7 +364,7 @@ void mboxevent_extract_mailbox(struct mboxevent *event, struct mailbox *mailbox)
  * Extract meta-data from the given mailbox to fill oldMailboxID event parameter
  */
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
-                                   const struct mailbox *mailbox);
+                                   struct mailbox *mailbox);
 
 /*
  * set the client tag used by vnd.fastmail.clientTagj

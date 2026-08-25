@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+# A mailbox's JMAP id must not depend on which code path emitted the event.
+# Message events open the user's conversations db as a side effect of writing
+# an index record; header-only events like AclChange never touch it.  Since an
+# open conversations state lives only as long as one index lock, asking only
+# for an already-open one makes header-only events report the uniqueid while
+# their message-event siblings report the compact JMAP id.
+
+sub test_mailbox_jmapid_compactids
+    :Conversations
+    ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+
+    # discard events from setup
+    $self->{instance}->getnotify();
+
+    my $named_event = sub ($name) {
+        my @events = map { decode_json($_->{MESSAGE}) }
+                         $self->{instance}->getnotify->@*;
+        my ($event) = grep { $_->{event} eq $name } @events;
+        $self->assert_not_null($event);
+        return $event;
+    };
+
+    # a message event: this path opens the conversations db itself, so it
+    # sees the compact ids this user has and reports a JMAP id
+    $self->make_message("Message A");
+
+    my $append = $named_event->('MessageAppend');
+    my $jmapid = $append->{'vnd.fastmail.mailboxJMAPId'};
+    $self->assert_not_null($jmapid);
+    $self->assert_str_not_equals($append->{mailboxUniqueId}, $jmapid);
+
+    # a header-only event for the same mailbox: nothing on this path has any
+    # reason to open the conversations db, but the id must still agree
+    $imaptalk->setacl("INBOX", "anyone" => "lr");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    my $acl = $named_event->('AclChange');
+    $self->assert_str_equals($jmapid, $acl->{'vnd.fastmail.mailboxJMAPId'});
+
+    $imaptalk->logout();
+}

@@ -285,10 +285,9 @@ static char *mboxevent_mailbox_specialuse(const struct mailbox *mailbox)
 
 /* Return the JMAP id of the mailbox: the short JMAP id when the user's
  * conversations db uses compact ids, otherwise the mailbox's uniqueid */
-static const char *mboxevent_mailbox_jmapid(const struct mailbox *mailbox)
+static const char *mboxevent_mailbox_jmapid(struct mailbox *mailbox)
 {
-    struct conversations_state *cstate =
-        conversations_get_mbox(mailbox_name(mailbox));
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
     const char *jmapid = mailbox_jmapid(mailbox);
 
     return jmapid && USER_COMPACT_EMAILIDS(cstate) ?
@@ -1479,7 +1478,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
 }
 
 void mboxevent_extract_copied_record(struct mboxevent *event,
-                                     const struct mailbox *mailbox,
+                                     struct mailbox *mailbox,
                                      struct index_record *record)
 {
     int first = 0;
@@ -1932,7 +1931,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 }
 
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
-                                   const struct mailbox *mailbox)
+                                   struct mailbox *mailbox)
 {
     struct imapurl imapurl;
 
