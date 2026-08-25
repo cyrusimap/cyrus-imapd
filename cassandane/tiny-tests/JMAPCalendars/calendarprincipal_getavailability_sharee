@@ -1,0 +1,79 @@
+#!perl
+use Cassandane::Tiny;
+
+# Availability for somebody else's principal, the only getAvailability case
+# which reads a DAV DB other than the account's own.  mayReadFreeBusy on its
+# own has to be enough.
+sub test_calendarprincipal_getavailability_sharee
+    :min_version_3_3
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $admin = $self->{adminstore}->get_client();
+
+    $admin->create("user.manifold");
+    my $manifold_user = $self->{instance}->create_user_without_setup('manifold');
+    my $manjmap = $manifold_user->jmap;
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
+    ]);
+
+    my $res = $manjmap->CallMethods([
+        ['Calendar/get', { properties => ['id'] }, 'R1'],
+    ]);
+    my $man_cal_id = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($man_cal_id);
+
+    xlog "manifold shares free/busy with cassandane";
+    $res = $manjmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $man_cal_id => {
+                    shareWith => {
+                        cassandane => {
+                            mayReadFreeBusy => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    version => '2.0',
+                    title => 'event1',
+                    calendarIds => {
+                        $man_cal_id => JSON::true,
+                    },
+                    uid => 'manifoldevent1uid',
+                    start => '2020-08-07T11:00:00',
+                    timeZone => 'Europe/Vienna',
+                    duration => 'PT3H',
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$man_cal_id});
+    $self->assert_not_null($res->[1][1]{created}{event1});
+
+    xlog "cassandane asks for manifold's availability";
+    $res = $jmap->CallMethods([
+        ['Principal/getAvailability', {
+            id => 'manifold',
+            utcStart => '2020-08-01T00:00:00Z',
+            utcEnd => '2020-09-01T00:00:00Z',
+        }, 'R1'],
+    ]);
+
+    $self->assert_deep_equals([{
+        utcStart => "2020-08-07T09:00:00Z",
+        utcEnd => "2020-08-07T12:00:00Z",
+        busyStatus => 'unavailable',
+        event => undef,
+    }], $res->[0][1]{list});
+}

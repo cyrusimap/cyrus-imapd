@@ -30,9 +30,10 @@ sub test_calendar_set_sharewith_acl
 
     my @testCases = ({
         rights => {
+            # free/busy implies lookup
             mayReadFreeBusy => JSON::true,
         },
-        acl => '9',
+        acl => 'l9',
     }, {
         rights => {
             mayReadItems => JSON::true,
