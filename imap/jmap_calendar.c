@@ -191,7 +191,10 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         "CalendarEvent/participantReply",
         JMAP_CALENDARS_EXTENSION,
         &jmap_calendarevent_participantreply,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        /* only reads the account; everything written belongs to the
+           organizer and the participant.  Takes its own lock and drops it
+           before scheduling */
+        JMAP_READ_WRITE | JMAP_NO_USERLOCK
     },
     {
         "CalendarEventNotification/get",
@@ -8570,7 +8573,12 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     json_t *res = json_object();
     char *part_id = NULL;
     json_t *err = NULL;
+    modseq_t createdmodseq = 0;
     int r = 0;
+
+    /* we only read this account, so share the lock, and drop it before
+       scheduling takes the organizer's and the participant's in turn */
+    user_nslock_t *nslock = user_nslock_lock(req->accountid, LOCK_SHARED);
 
     db = caldav_open_userid(req->accountid);
     if (!db) {
@@ -8832,10 +8840,18 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
         goto done;
     }
 
+    /* everything we need is in memory now, so drop this account before
+       reaching for anybody else's */
+    createdmodseq = cdata->dav.createdmodseq;
+    caldav_close(db);
+    db = NULL;
+    cdata = NULL;
+    user_nslock_release(&nslock);
+
     /* Create and send the reply */
     sched_reply(req->accountid, req->accountid, &reply_addr,
                 update.oldical, update.newical,
-                cdata->dav.createdmodseq, SCHED_MECH_JMAP_PARTREPLY);
+                createdmodseq, SCHED_MECH_JMAP_PARTREPLY);
 
     /* Get SCHEDULE-STATUS */
     const char *organizer = NULL;
@@ -8875,7 +8891,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     schedule_one_attendee(req->accountid, req->accountid, NULL, organizer,
                           part_email, caldav_get_historical_cutoff(),
                           update.oldical, update.newical,
-                          cdata->dav.createdmodseq,
+                          createdmodseq,
                           SCHED_MECH_JMAP_PARTREPLY);
 
 no_op:
@@ -8913,6 +8929,7 @@ done:
     jmap_caleventid_free(&update.eid);
     if (db) caldav_close(db);
     mailbox_close(&mbox);
+    user_nslock_release(&nslock);
     if (update.oldical) icalcomponent_free(update.oldical);
     if (update.newical) icalcomponent_free(update.newical);
     json_decref(res);
