@@ -34,6 +34,11 @@ HIDDEN char *jmap_notifmboxname(const char *userid)
 
 HIDDEN int jmap_create_notify_collection(const char *userid, mbentry_t **mbentryptr)
 {
+    /* this is the user's own collection and we may have to create it, which
+       a shared lock can't be promoted to do.  Every caller holds it
+       exclusively, and one which doesn't is a bug */
+    assert(user_nslock_islocked(userid) & LOCK_EXCLUSIVE);
+
     /* notifications collection */
     char *notifmboxname = jmap_notifmboxname(userid);
 
@@ -364,14 +369,6 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
     int r = 0;
 
     assert(oldical || newical);
-
-    if ((user_nslock_islocked(accountid) == LOCK_SHARED) ||
-        (user_nslock_islocked(userid) == LOCK_SHARED)) {
-        /* bail out, before notification mailbox crashes on invalid lock */
-        xsyslog(LOG_ERR, "can not exlusively lock jmapnotify collection",
-                "accountid=%s", accountid);
-        goto done;
-    }
 
     r = jmap_create_notify_collection(accountid, &notifmb);
     if (r) {
