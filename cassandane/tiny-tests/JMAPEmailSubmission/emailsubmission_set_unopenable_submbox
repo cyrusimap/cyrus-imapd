@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_set_unopenable_submbox
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([ [ 'Identity/get', {}, "R1" ] ]);
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog $self, "Generate an email via IMAP";
+    $self->make_message("foo", body => "an email\r\n") or die;
+
+    xlog $self, "get email id";
+    $res = $jmap->CallMethods([ [ 'Email/query', {}, "R1" ] ]);
+    my $emailid = $res->[0][1]->{ids}[0];
+    $self->assert_not_null($emailid);
+
+    xlog $self, "an empty set is enough to create the submission folder";
+    $res = $jmap->CallMethods([ [ 'EmailSubmission/set', {}, "R1" ] ]);
+    $self->assert_str_equals('EmailSubmission/set', $res->[0][0]);
+
+    xlog $self, "hide the submission folder's index, so it can't be opened";
+    my $dir = $self->{instance}->folder_to_directory(
+        'user.cassandane.#jmapsubmission');
+    $self->assert_not_null($dir);
+    $self->assert_num_equals(1, rename("$dir/cyrus.index", "$dir/index.hidden"));
+
+    xlog $self, "submit an email";
+    $res = eval {
+        $jmap->CallMethods([ [ 'EmailSubmission/set', {
+            create => {
+                '1' => {
+                    identityId => $identityid,
+                    emailId    => $emailid,
+                },
+            },
+        }, "R1" ] ]);
+    };
+    my $error = $@;
+
+    # Put the mailbox back together before we start asserting, so that the
+    # end-of-test consistency checks don't drown out whatever went wrong.
+    $self->assert_num_equals(1, rename("$dir/index.hidden", "$dir/cyrus.index"));
+
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: opening index failed/);
+
+    xlog $self, "the failure is reported, rather than aborting httpd";
+    $self->assert_str_equals('', "$error");
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('serverFail', $res->[0][1]->{type});
+}
