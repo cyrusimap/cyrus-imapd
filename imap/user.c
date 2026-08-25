@@ -32,6 +32,7 @@
 #endif
 
 #include "assert.h"
+#include "bsearch.h"
 #include "dav_db.h"
 #include "global.h"
 #include "mailbox.h"
@@ -689,7 +690,7 @@ static const char *_namelock_name_from_userid(const char *userid)
 {
     static struct buf buf = BUF_INITIALIZER;
 
-    buf_setcstr(&buf, "*U*");
+    buf_setcstr(&buf, USER_NAMELOCK_PREFIX);
     if (userid) {
         char *inbox = mboxname_user_mbox(userid, NULL);
         buf_appendcstr(&buf, inbox);
@@ -715,11 +716,14 @@ EXPORTED int user_run_with_lock(const char *userid, int (*cb)(void *), void *roc
 
 // we don't need two separate APIs for this because a NULL mboxname means a single mailbox, so you
 // can pass NULL to the second argument and mean "just lock one mailbox please".
-EXPORTED user_nslock_t *user_nslock_bymboxname(const char *mboxname1, const char *mboxname2, int locktype)
+EXPORTED user_nslock_t *user_nslock_bymboxname_full(const char *mboxname1,
+                                                   const char *mboxname2,
+                                                   int locktype,
+                                                   const char *caller)
 {
     char *userid1 = mboxname_to_userid(mboxname1);
     if (!mboxname2) {
-        user_nslock_t *locks = user_nslock_lock(userid1, locktype);
+        user_nslock_t *locks = user_nslock_lock_full(userid1, locktype, caller);
         free(userid1);
         return locks;
     }
@@ -730,16 +734,72 @@ EXPORTED user_nslock_t *user_nslock_bymboxname(const char *mboxname1, const char
     return locks;
 }
 
-EXPORTED user_nslock_t *user_nslock_lock(const char *userid, int locktype)
+/* track who took each held user lock, so an out-of-order report can name
+   both sides rather than only the caller */
+static strarray_t nslock_holders = STRARRAY_INITIALIZER;
+
+static const char *_lockholder(const char *lockname)
 {
-    if (!user_nslock_islocked(userid)) {
+    int i = strarray_find(&nslock_holders, lockname, 0);
+    /* stored as name, caller pairs */
+    return i < 0 ? "unknown" : strarray_nth(&nslock_holders, i+1);
+}
+
+static int _addlock(user_nslock_t *locks, const char *userid, int locktype,
+                    const char *caller)
+{
+    struct mboxlock *lock = NULL;
+    /* n.b. _namelock_name_from_userid() returns a static buffer, so lock
+       before working out the next name; mboxname_lock() copies it */
+    const char *name = _namelock_name_from_userid(userid);
+
+    if (mboxname_lock(name, &lock, locktype)) {
+        assert(locktype == LOCK_NONBLOCKING);
+        return IMAP_MAILBOX_LOCKED;
+    }
+
+    ptrarray_append(&locks->locks, lock);
+
+    if (strarray_find(&nslock_holders, lock->name, 0) < 0) {
+        strarray_append(&nslock_holders, lock->name);
+        strarray_append(&nslock_holders, caller);
+    }
+
+    return 0;
+}
+
+EXPORTED user_nslock_t *user_nslock_lock_full(const char *userid, int locktype,
+                                             const char *caller)
+{
+    int haslock = user_nslock_islocked(userid);
+
+    if (!haslock) {
         assert(!open_mailboxes_namelocked(userid));
         assert(!annotate_anydb_islocked());
     }
     user_nslock_t *locks = xzmalloc(sizeof(struct usernamespacelocks));
     const char *lockname = _namelock_name_from_userid(userid);
-    if (mboxname_lock(lockname, &locks->l1, locktype)) {
-        assert(locktype == LOCK_NONBLOCKING);
+
+    /* taking a second user's lock while holding one deadlocks against the
+       same pair taken the other way around.  Use user_nslock_lockmulti() to
+       hold more than one, or finish with one user before starting the next.
+
+       Only an acquisition blocks, so re-taking a lock we already hold is just
+       a refcount and can't deadlock, e.g. a rename holding both users through
+       lockdouble() and mboxlist_setacl() asking for one of them again */
+    const char *held = haslock
+                     ? NULL
+                     : mboxname_findlocked(USER_NAMELOCK_PREFIX, lockname);
+
+    /* holding an earlier-sorting user is the order lockdouble() uses, and a
+       consistent order is allowed.  Only the reverse deadlocks */
+    if (held && strcmp(held, lockname) > 0) {
+        xsyslog(LOG_ERR, "locking a user out of order while another is locked",
+                         "userid=<%s> lockname=<%s> caller=<%s>"
+                         " heldlock=<%s> heldby=<%s>",
+                         userid, lockname, caller, held, _lockholder(held));
+    }
+    if (_addlock(locks, userid, locktype, caller)) {
         user_nslock_release(&locks);
         return NULL;
     }
@@ -749,48 +809,52 @@ EXPORTED user_nslock_t *user_nslock_lock(const char *userid, int locktype)
 // we need separate double and single locks because a NULL userid might mean a shared namespace,
 // so there's no other way to distinguish between an operation involving a shared mailbox and
 // an single mailbox operation
-EXPORTED user_nslock_t *user_nslock_lockdouble(const char *userid1, const char *userid2, int locktype)
+
+EXPORTED user_nslock_t *user_nslock_lockmulti(const strarray_t *userids,
+                                              int locktype)
 {
-    int cmp = strcmpsafe(userid1, userid2);
-    // if it's the same user (including both NULL, aka: both shared) then
-    // we can use full1 to lock it.
-    if (!cmp) return user_nslock_lock(userid1, locktype);
+    /* the fixed order must match lockdouble() */
+    strarray_t *sorted = strarray_dup(userids);
+    strarray_sort(sorted, cmpstringp_raw);
+    strarray_uniq(sorted);
 
-    // otherwise we have ordering to follow.  The alphabetically first user is always
-    // locked first to avoid deadlocks.
-    const char *l1user = userid1, *l2user = userid2;
-    if (cmp > 0) {
-        l1user = userid2;
-        l2user = userid1;
-    }
+    int i;
 
-    // ensure locking invariants - we are allowed to have the first lock already, but
-    // we MUST NOT have the second lock if we don't have the first lock, and we can't
-    // have any mailboxes open for a user which is not yet locked.
-    if (!user_nslock_islocked(l1user)) {
-        assert(!user_nslock_islocked(l2user));
-        assert(!open_mailboxes_namelocked(l1user));
-        assert(!open_mailboxes_namelocked(l2user));
-        assert(!annotate_anydb_islocked());
-    }
-    else if (!user_nslock_islocked(l2user)) {
-        assert(!open_mailboxes_namelocked(l2user));
+    /* we may already hold any of these, but never a later one without the
+       ones before it, and never a mailbox for an unlocked user */
+    for (i = 0; i < strarray_size(sorted); i++) {
+        const char *userid = strarray_nth(sorted, i);
+        if (user_nslock_islocked(userid)) continue;
+        assert(!open_mailboxes_namelocked(userid));
+        if (!i) assert(!annotate_anydb_islocked());
     }
 
     user_nslock_t *locks = xzmalloc(sizeof(struct usernamespacelocks));
-    // take the two locks in order (even if already locked, we refcount add it again)
-    const char *name = _namelock_name_from_userid(l1user);
-    if (mboxname_lock(name, &locks->l1, locktype)) {
-        assert(locktype == LOCK_NONBLOCKING);
-        user_nslock_release(&locks);
-        return NULL;
+
+    for (i = 0; i < strarray_size(sorted); i++) {
+        if (_addlock(locks, strarray_nth(sorted, i), locktype, __func__)) {
+            user_nslock_release(&locks);
+            break;
+        }
     }
-    name = _namelock_name_from_userid(l2user);
-    if (mboxname_lock(name, &locks->l2, locktype)) {
-        assert(locktype == LOCK_NONBLOCKING);
-        user_nslock_release(&locks);
-        return NULL;
-    }
+
+    strarray_free(sorted);
+
+    return locks;
+}
+
+EXPORTED user_nslock_t *user_nslock_lockdouble(const char *userid1, const char *userid2, int locktype)
+{
+    strarray_t userids = STRARRAY_INITIALIZER;
+
+    /* both NULL is the shared namespace; lockmulti() collapses duplicates */
+    strarray_append(&userids, userid1);
+    strarray_append(&userids, userid2);
+
+    user_nslock_t *locks = user_nslock_lockmulti(&userids, locktype);
+
+    strarray_fini(&userids);
+
     return locks;
 }
 
@@ -798,8 +862,18 @@ EXPORTED void user_nslock_release(user_nslock_t **ptr)
 {
     user_nslock_t *locks = *ptr;
     if (!locks) return;
-    mboxname_release(&locks->l2);
-    mboxname_release(&locks->l1);
+
+    struct mboxlock *lock;
+    while ((lock = ptrarray_pop(&locks->locks))) {
+        int i = strarray_find(&nslock_holders, lock->name, 0);
+        if (i >= 0) {
+            free(strarray_remove(&nslock_holders, i));
+            free(strarray_remove(&nslock_holders, i));
+        }
+        mboxname_release(&lock);
+    }
+
+    ptrarray_fini(&locks->locks);
     free(locks);
     *ptr = NULL;
 }

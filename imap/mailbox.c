@@ -980,7 +980,8 @@ static int mailbox_open_advanced(const char *name,
                                  int locktype,
                                  int index_locktype,
                                  const mbentry_t *mbe,
-                                 struct mailbox **mailboxptr)
+                                 struct mailbox **mailboxptr,
+                                 const char *caller)
 {
     int r = 0;
     assert(*mailboxptr == NULL);
@@ -994,7 +995,7 @@ static int mailbox_open_advanced(const char *name,
             r = IMAP_MAILBOX_LOCKED;
     }
     else {
-        user_nslock = user_nslock_lock(userid, index_locktype);
+        user_nslock = user_nslock_lock_full(userid, index_locktype, caller);
     }
     free(userid);
     if (r) return r;
@@ -1095,37 +1096,47 @@ done:
     return r;
 }
 
-EXPORTED int mailbox_open_irl(const char *name, struct mailbox **mailboxptr)
+EXPORTED int mailbox_open_irl_full(const char *name,
+                                   struct mailbox **mailboxptr,
+                                   const char *caller)
 {
     return mailbox_open_advanced(name, LOCK_SHARED, LOCK_SHARED,
-                                 NULL, mailboxptr);
+                                 NULL, mailboxptr, caller);
 }
 
-EXPORTED int mailbox_open_iwl(const char *name, struct mailbox **mailboxptr)
+EXPORTED int mailbox_open_iwl_full(const char *name,
+                                   struct mailbox **mailboxptr,
+                                   const char *caller)
 {
     return mailbox_open_advanced(name, LOCK_SHARED, LOCK_EXCLUSIVE,
-                                 NULL, mailboxptr);
+                                 NULL, mailboxptr, caller);
 }
 
-EXPORTED int mailbox_open_irlnb(const char *name, struct mailbox **mailboxptr)
+EXPORTED int mailbox_open_irlnb_full(const char *name,
+                                     struct mailbox **mailboxptr,
+                                     const char *caller)
 {
     return mailbox_open_advanced(name,
                                  LOCK_SHARED|LOCK_NONBLOCK,
                                  /* cannot do nonblocking lock on index...why? */
                                  LOCK_SHARED,
-                                 NULL, mailboxptr);
+                                 NULL, mailboxptr, caller);
 }
 
-EXPORTED int mailbox_open_exclusive(const char *name, struct mailbox **mailboxptr)
+EXPORTED int mailbox_open_exclusive_full(const char *name,
+                                         struct mailbox **mailboxptr,
+                                         const char *caller)
 {
     return mailbox_open_advanced(name, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE,
-                                 NULL, mailboxptr);
+                                 NULL, mailboxptr, caller);
 }
 
-EXPORTED int mailbox_open_from_mbe(const mbentry_t *mbe, struct mailbox **mailboxptr)
+EXPORTED int mailbox_open_from_mbe_full(const mbentry_t *mbe,
+                                        struct mailbox **mailboxptr,
+                                        const char *caller)
 {
     return mailbox_open_advanced(mbe->name, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE,
-                                 mbe, mailboxptr);
+                                 mbe, mailboxptr, caller);
 }
 
 EXPORTED const mbentry_t *mailbox_mbentry(const struct mailbox *mailbox)
@@ -1281,7 +1292,7 @@ static void _delayed_cleanup(void *rock)
     if (in_shutdown) goto done;
 
     int r = mailbox_open_advanced(mboxname, LOCK_EXCLUSIVE|LOCK_NONBLOCK,
-                                  LOCK_EXCLUSIVE, NULL, &mailbox);
+                                  LOCK_EXCLUSIVE, NULL, &mailbox, __func__);
     if (r) goto done;
 
     if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK) {

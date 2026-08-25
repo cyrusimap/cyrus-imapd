@@ -555,15 +555,29 @@ unsigned cacheitem_size(const struct index_record *record, int field);
 struct buf *cacheitem_buf(const struct index_record *record, int field);
 
 /* opening and closing */
-extern int mailbox_open_iwl(const char *name,
-                            struct mailbox **mailboxptr);
-extern int mailbox_open_irlnb(const char *name, struct mailbox **);
-extern int mailbox_open_irl(const char *name,
-                            struct mailbox **mailboxptr);
-extern int mailbox_open_exclusive(const char *name,
-                                  struct mailbox **mailboxptr);
-extern int mailbox_open_from_mbe(const struct mboxlist_entry *mbe,
-                                 struct mailbox **mailboxptr);
+/* the _full forms carry the calling function's name, so that opening a mailbox
+   while another user is locked can report who did it */
+extern int mailbox_open_iwl_full(const char *name,
+                                 struct mailbox **mailboxptr,
+                                 const char *caller);
+#define mailbox_open_iwl(n, m) mailbox_open_iwl_full((n), (m), __func__)
+extern int mailbox_open_irlnb_full(const char *name, struct mailbox **,
+                                   const char *caller);
+#define mailbox_open_irlnb(n, m) mailbox_open_irlnb_full((n), (m), __func__)
+extern int mailbox_open_irl_full(const char *name,
+                                 struct mailbox **mailboxptr,
+                                 const char *caller);
+#define mailbox_open_irl(n, m) mailbox_open_irl_full((n), (m), __func__)
+extern int mailbox_open_exclusive_full(const char *name,
+                                       struct mailbox **mailboxptr,
+                                       const char *caller);
+#define mailbox_open_exclusive(n, m) \
+    mailbox_open_exclusive_full((n), (m), __func__)
+extern int mailbox_open_from_mbe_full(const struct mboxlist_entry *mbe,
+                                      struct mailbox **mailboxptr,
+                                      const char *caller);
+#define mailbox_open_from_mbe(e, m) \
+    mailbox_open_from_mbe_full((e), (m), __func__)
 extern void mailbox_close(struct mailbox **mailboxptr);
 extern int mailbox_delete(struct mailbox **mailboxptr);
 
