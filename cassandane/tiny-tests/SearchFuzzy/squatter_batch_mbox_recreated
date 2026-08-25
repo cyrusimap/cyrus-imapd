@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+# Squatter indexes a mailbox in batches, and holds no lock on that mailbox
+# between two batches. A mailbox that got deleted and created again by that
+# name in this window has nothing in common with the one squatter started
+# on, so squatter must restart at its first message rather than resume at
+# the uid it had reached before.
+
+sub test_squatter_batch_mbox_recreated
+    :SearchBatchsize20 :SquatterBatchDelay
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    my $instance = $self->{instance};
+
+    xlog $self, "Create mailbox A with more messages than fit in one batch";
+    $talk->create("A") || die;
+    $self->{store}->set_folder("A");
+    foreach my $i (1..21) {
+        $self->make_message("oldmsg$i") || die;
+    }
+
+    xlog $self, "Clear syslog";
+    $instance->getsyslog();
+
+    xlog $self, "Index mailbox A in the background";
+    my $pid = $instance->run_command({ cyrus => 1, background => 1 },
+        'squatter', 'user.cassandane.A');
+
+    xlog $self, "Wait for squatter to have indexed the first batch";
+    # The mailbox must get recreated while squatter sleeps between batches,
+    # so poll at a fixed rate rather than with the backoff of timed_wait,
+    # which could grow past that sleep.
+    my $deadline = time() + 60;
+    while (1) {
+        $talk->select("A") || die;
+        last if scalar @{$talk->search('fuzzy', 'subject', 'oldmsg2')};
+        die "Timed out waiting for squatter to index the first batch"
+            if time() >= $deadline;
+        sleep 1;
+    }
+
+    xlog $self, "Delete A and create a new mailbox A while squatter waits";
+    $talk->delete("A") || die;
+    $talk->create("A") || die;
+    # Uid 1 and 2 are below the uid that squatter resumes at, so a batch
+    # that keeps resuming there never indexes these messages.
+    $self->{store}->set_folder("A");
+    $self->make_message("newmsg1") || die;
+    $self->make_message("newmsg2") || die;
+
+    xlog $self, "Assert squatter terminated normally";
+    eval {
+        # a looping squatter would block waitpid forever, and there is no
+        # per-test timeout, so make sure it does not hang the whole run
+        local $SIG{ALRM} = sub { die "Timed out waiting for squatter to exit\n" };
+        alarm 60;
+        $instance->reap_command($pid);
+        alarm 0;
+    };
+    if (my $err = $@) {
+        alarm 0;
+        eval { $instance->stop_command($pid) };
+        die $err;
+    }
+
+    xlog $self, "Assert the messages of the new mailbox A got indexed";
+    $talk->select("A") || die;
+    foreach my $subject ("newmsg1", "newmsg2") {
+        my $uids = $talk->search('fuzzy', 'subject', $subject);
+        $self->assert_num_equals(1, scalar @{$uids});
+    }
+
+    if ($instance->{have_syslog_replacement}) {
+        xlog $self, "Assert squatter reported the recreated mailbox";
+        my @log = $instance->getsyslog(qr/event=search\.index\.restarted/);
+        $self->assert_num_equals(1, scalar @log);
+    }
+}
