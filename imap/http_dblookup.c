@@ -9,6 +9,7 @@
 #include "json_support.h"
 #include "spool.h"
 #include "mboxlist.h"
+#include "user.h"
 #include "util.h"
 #include "xstrlcpy.h"
 
@@ -484,23 +485,30 @@ static int meth_get_db(struct transaction_t *txn,
                       txn->req_hdrs);
 
 
+    /* each of these opens the user's DAV DB, which needs the namespace lock
+       or the files can go away underneath us.  All read-only, so share */
+    user_nslock_t *user_nslock = user_nslock_lock(userhdrs[0], LOCK_SHARED);
+    int ret = HTTP_NOT_FOUND;
+
     if (!strcmp(txn->req_uri->path, "/dblookup/email"))
-        return get_email(txn, userhdrs[0], keyhdrs[0]);
+        ret = get_email(txn, userhdrs[0], keyhdrs[0]);
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/email2uids"))
-        return get_email2uids(txn, userhdrs[0], keyhdrs[0]);
+    else if (!strcmp(txn->req_uri->path, "/dblookup/email2uids"))
+        ret = get_email2uids(txn, userhdrs[0], keyhdrs[0]);
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/email2details"))
-        return get_email2details(txn, userhdrs[0], keyhdrs[0]);
+    else if (!strcmp(txn->req_uri->path, "/dblookup/email2details"))
+        ret = get_email2details(txn, userhdrs[0], keyhdrs[0]);
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/uid2groups"))
-        return get_uid2groups(txn, userhdrs[0], keyhdrs[0]);
+    else if (!strcmp(txn->req_uri->path, "/dblookup/uid2groups"))
+        ret = get_uid2groups(txn, userhdrs[0], keyhdrs[0]);
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/expandcard"))
-        return get_expandcard(txn, userhdrs[0], keyhdrs[0]);
+    else if (!strcmp(txn->req_uri->path, "/dblookup/expandcard"))
+        ret = get_expandcard(txn, userhdrs[0], keyhdrs[0]);
 
-    if (!strcmp(txn->req_uri->path, "/dblookup/mbpath"))
-        return get_mbpath(txn, userhdrs[0], keyhdrs[0]);
+    else if (!strcmp(txn->req_uri->path, "/dblookup/mbpath"))
+        ret = get_mbpath(txn, userhdrs[0], keyhdrs[0]);
 
-    return HTTP_NOT_FOUND;
+    user_nslock_release(&user_nslock);
+
+    return ret;
 }

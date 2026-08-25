@@ -84,13 +84,13 @@ EXPORTED int sievedb_done(void)
 }
 
 /* Open Sieve DB corresponding to userid */
-EXPORTED struct sieve_db *sievedb_open_userid(const char *userid)
+EXPORTED struct sieve_db *sievedb_open_userid_full(const char *userid, const char *caller)
 {
     struct sieve_db *sievedb = NULL;
 
     init_internal();
 
-    sqldb_t *db = dav_open_userid(userid);
+    sqldb_t *db = dav_open_userid_full(userid, caller);
     if (!db) return NULL;
 
     sievedb = xzmalloc(sizeof(struct sieve_db));

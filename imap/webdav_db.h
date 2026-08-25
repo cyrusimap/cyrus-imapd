@@ -34,7 +34,8 @@ struct webdav_data {
 typedef int webdav_cb_t(void *rock, struct webdav_data *wdata);
 
 /* get a database handle corresponding to userid */
-struct webdav_db *webdav_open_userid(const char *userid);
+struct webdav_db *webdav_open_userid_full(const char *userid, const char *caller);
+#define webdav_open_userid(userid) webdav_open_userid_full((userid), __func__)
 
 /* get a database handle corresponding to mailbox */
 struct webdav_db *webdav_open_mailbox(struct mailbox *mailbox);

@@ -329,15 +329,56 @@ EXPORTED void dav_getpath_byuserid(struct buf *fname, const char *userid)
     free(path);
 }
 
-EXPORTED sqldb_t *dav_open_userid(const char *userid)
+/* callers are expected to hold the lock covering the files this DB is keyed
+   by.  Report rather than assert, until we know every caller does */
+static void _check_namespacelock(int scope, const char *owner, const char *caller)
+{
+    if (scope == SQLDB_SCOPE_USER) {
+        if (user_nslock_islocked(owner)) return;
+    }
+    else {
+        if (user_nslock_islockedmb(owner)) return;
+    }
+
+    xsyslog(LOG_NOTICE, "opening DAV DB without the namespace lock",
+                        "scope=<%s> owner=<%s> caller=<%s>",
+                        scope == SQLDB_SCOPE_USER ? "user" : "mailbox", owner,
+                        caller);
+}
+
+static sqldb_t *_dav_open(const struct buf *fname, int scope, const char *owner,
+                          const char *caller)
+{
+    _check_namespacelock(scope, owner, caller);
+
+    return sqldb_open_full(buf_cstring(fname), CMD_CREATE, DB_VERSION,
+                           davdb_upgrade,
+                           config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000,
+                           scope, owner);
+}
+
+EXPORTED sqldb_t *dav_open_userid_full(const char *userid, const char *caller)
 {
     if (reconstruct_db) return reconstruct_db;
 
-    sqldb_t *db = NULL;
     struct buf fname = BUF_INITIALIZER;
     dav_getpath_byuserid(&fname, userid);
-    db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade,
-                    config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
+    sqldb_t *db = _dav_open(&fname, SQLDB_SCOPE_USER, userid, caller);
+    buf_free(&fname);
+    return db;
+}
+
+/* no _check_namespacelock() here on purpose - see the header */
+EXPORTED sqldb_t *dav_open_userid_unlocked(const char *userid)
+{
+    if (reconstruct_db) return reconstruct_db;
+
+    struct buf fname = BUF_INITIALIZER;
+    dav_getpath_byuserid(&fname, userid);
+    sqldb_t *db = sqldb_open_full(buf_cstring(&fname), CMD_CREATE, DB_VERSION,
+                                 davdb_upgrade,
+                                 config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000,
+                                 SQLDB_SCOPE_USER, userid);
     buf_free(&fname);
     return db;
 }
@@ -346,12 +387,18 @@ EXPORTED sqldb_t *dav_open_mailbox(struct mailbox *mailbox)
 {
     if (reconstruct_db) return reconstruct_db;
 
-    sqldb_t *db = NULL;
+    /* a mailbox with no userid is shared, and keeps its DAV DB in its own
+       metadata rather than in any user's files */
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+
     struct buf fname = BUF_INITIALIZER;
     dav_getpath(&fname, mailbox);
-    db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade,
-                    config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
+    sqldb_t *db = userid
+                ? _dav_open(&fname, SQLDB_SCOPE_USER, userid, __func__)
+                : _dav_open(&fname, SQLDB_SCOPE_MAILBOX, mailbox_name(mailbox),
+                            __func__);
     buf_free(&fname);
+    free(userid);
     return db;
 }
 

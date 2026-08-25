@@ -1920,36 +1920,10 @@ static void _email_search_contactgroup(search_expr_t *parent,
 {
     if (!contactgroups) return;
 
-    /* At this point contactgroups must have entries - we can only get here if
-     * jmap_email_contactfilter_from_filtercondition() has been called,
-     * it called construct_hash_table(), and made one or more calls to
-     * hash_insert()
-     * The previous code assumed that it was possible for contactgroups to be
-     * non-NULL but point to an uninitialised hash table, and returned early
-     * in that case. That choice seemed conceptually buggy, because it's not
-     * consistent with the "hard false" SEOP_FALSE return just below - if the
-     * user is asking to filter on a groupid, and there are *no* group IDs, then
-     * the filter should return zero results, not return all results.
-     *
-     * It's actually already handled this way (failure) -
-     * _email_parse_filter_cb() correctly checks and propagates the error
-     * returned from jmap_email_contactfilter_from_filtercondition() and the
-     * search fails. In that function, for carddav_open_userid() to return NULL
-     * dav_open_userid() must fail - the user's SQLite DB on disk must be
-     * present AND corrupt. However, before we even reach that code path Cyrus
-     * has called my_dav_auth() in http_dav_sharing.c
-     * That calls webdav_open_userid(userid), which also calls
-     * dav_open_userid(userid). The failure path there is:
-     * if (!auth_webdavdb) {
-     *     syslog(LOG_ERR, "Unable to open WebDAV DB for userid: %s", userid);
-     *     return HTTP_UNAVAILABLE;
-     * }
-     * Hence that failure isn't even possible via the functions this source file
-     * - the only path that might cause contactgroups not be initialised is
-     * unreachable, because Cyrus will have already returned a 503 status
-     * response if the dav.db exists but can't be read.
-     * (Hence I can't write a test for it)
-     */
+    /* an empty table means the user has no groups, so a groupid filter
+       matches nothing, same as the SEOP_FALSE below.  Don't return early and
+       match everything.  A DAV DB which wouldn't open is an error, already
+       propagated by _email_parse_filter_cb(), so we never get here */
 
     strarray_t *members = hash_lookup(groupid, contactgroups);
     if (!members || !strarray_size(members)) {

@@ -55,7 +55,11 @@ int carddav_done(void);
 
 /* get a database handle corresponding to mailbox */
 struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox);
-struct carddav_db *carddav_open_userid(const char *userid);
+struct carddav_db *carddav_open_userid_full(const char *userid, const char *caller);
+#define carddav_open_userid(userid) carddav_open_userid_full((userid), __func__)
+
+/* see dav_open_userid_unlocked() */
+struct carddav_db *carddav_open_userid_unlocked(const char *userid);
 
 /* add another DB */
 int carddav_set_otheruser(struct carddav_db *db, const char *userid);

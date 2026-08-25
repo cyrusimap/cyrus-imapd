@@ -77,13 +77,13 @@ EXPORTED int webdav_done(void)
 }
 
 /* Open DAV DB corresponding to userid */
-EXPORTED struct webdav_db *webdav_open_userid(const char *userid)
+EXPORTED struct webdav_db *webdav_open_userid_full(const char *userid, const char *caller)
 {
     struct webdav_db *webdavdb = NULL;
 
     init_internal();
 
-    sqldb_t *db = dav_open_userid(userid);
+    sqldb_t *db = dav_open_userid_full(userid, caller);
     if (!db) return NULL;
 
     webdavdb = xzmalloc(sizeof(struct webdav_db));
