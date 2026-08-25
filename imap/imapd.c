@@ -8246,6 +8246,11 @@ submboxes:
     mboxlist_update_intermediaries(oldmailboxname, mbtype);
     mboxlist_update_intermediaries(newmailboxname, mbtype);
 
+    /* the rename is done.  Everything below reaches for other users' locks -
+       sharees whose subscriptions move, and whatever imapd_check() opens -
+       and holding these while taking those deadlocks two opposed renames */
+    user_nslock_release(&user_nslock);
+
     /* take care of renaming subscriptions to shared mailboxes */
     hash_enumerate(&sharedmboxes_by_username, &rename_subs, NULL);
     free_hash_table(&sharedmboxes_by_username, NULL);
