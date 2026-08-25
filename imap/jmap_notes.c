@@ -824,9 +824,14 @@ static int jmap_note_set(jmap_req_t *req)
     rights = jmap_myrights_mbentry(req, mbentry);
 
     r = mailbox_open_iwl(mbentry->name, &mbox);
-    assert(mbox);
+    if (r) {
+        syslog(LOG_ERR, "jmap_note_set: mailbox_open_iwl(%s): %s",
+               mbentry->name, error_message(r));
+        mboxlist_entry_free(&mbentry);
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
     mboxlist_entry_free(&mbentry);
-    if (r) goto done;
 
     buf_printf(&buf, MODSEQ_FMT, mbox->i.highestmodseq);
     set.old_state = buf_release(&buf);
