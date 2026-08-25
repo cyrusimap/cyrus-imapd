@@ -256,8 +256,6 @@ if SQUATTER
 sbin_PROGRAMS += imap/squatter
 endif
 
-libexec_PROGRAMS += imap/fud
-
 if IDLED
 libexec_PROGRAMS += imap/idled
 endif # IDLED
@@ -332,7 +330,6 @@ EXTRA_DIST = \
     com_err/et/test2.et \
     com_err/et/test_et.c \
     contrib/sieve-spamassassin \
-    contrib/fud-client.c \
     contrib/deliver-notify-zephyr.patch \
     contrib/add-cyrus-user \
     contrib/README \
@@ -933,9 +930,6 @@ imap_deliver_SOURCES = \
 nodist_imap_deliver_SOURCES = imap/lmtp_err.c
 
 imap_deliver_LDADD = $(LD_UTILITY_ADD)
-
-imap_fud_SOURCES = imap/fud.c imap/mutex_fake.c master/service.c
-imap_fud_LDADD = $(LD_SERVER_ADD)
 
 imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
 imap_idled_LDADD = $(LD_UTILITY_ADD)
@@ -1722,7 +1716,6 @@ dist_man8_MANS = \
     man/cyr_withlock_run.8 \
     man/cyrdump.8 \
     man/deliver.8 \
-    man/fud.8 \
     man/httpd.8 \
     man/idled.8 \
     man/imapd.8 \
