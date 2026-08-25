@@ -1,0 +1,26 @@
+
+Description:
+
+Support for the HTTP PATCH method on the CalDAV endpoint has been removed.
+
+No known CalDAV client uses PATCH, and the VPATCH format was never standardized.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
