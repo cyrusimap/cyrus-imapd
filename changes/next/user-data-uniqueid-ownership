@@ -1,0 +1,46 @@
+Description:
+
+Deleting a user no longer removes another user's files, and a replaced sqlite
+DB is now reported as such instead of as a generic failure.
+
+The per-user files - dav.db, conversations.db, counters.db, seen.db, sub.db and
+the search indexes - are keyed by the INBOX uniqueid, which survives both a
+rename and a delayed delete.  So a tombstone can name the very same files as a
+live user, and user_deletedata() would happily remove them: "sync_reset" of a
+user which had since been renamed away wiped the renamed user's data, as did a
+DELETE of the old name.  Only the mailbox which still owns the uniqueid now
+removes them, and the refusal is logged.  cyr_expire already made this check
+for itself and is unaffected.
+
+Any process still holding one of those files open then failed every write with
+sqlite's SQLITE_READONLY_DBMOVED, reported only as "DBERROR: step failed".
+sqldb_exec() now returns SQLDB_ERR_DBMOVED and logs that the file was removed
+or replaced.  The open-DB cache is keyed on filename, so it also checked that
+the file it opened is still there before handing a cached handle back out -
+otherwise every later open in that process inherited the dead handle.  This
+also covers dav_reconstruct_user() renaming a rebuilt dav.db into place.
+
+
+Documentation:
+
+(none)
+
+
+Config changes:
+
+(none)
+
+
+Upgrade instructions:
+
+Sites which have renamed users may have lost the renamed user's dav.db,
+conversations.db, counters.db, seen.db or search index to a later "sync_reset"
+or DELETE of the old name.  A "dav_reconstruct -u <user>" rebuilds dav.db,
+"ctl_conversationsdb -b -u <user>" the conversations DB, and "squatter -u
+<user>" the search index; seen state and subscriptions can only come back from
+a replica or a backup.
+
+
+GitHub issue:
+
+(none)
