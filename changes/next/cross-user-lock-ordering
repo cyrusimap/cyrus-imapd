@@ -1,0 +1,53 @@
+Description:
+
+Operations which touch more than one user now take those users' namespace locks
+in a consistent order, or one at a time, so they can't deadlock against each
+other.
+
+A user namespace lock has always been per-user, and taking two of them in
+opposite orders deadlocks.  user_nslock_lockmulti() locks any number of users in
+a fixed order for the cases where the whole set is known up front, and
+user_nslock_lock() now logs an acquisition made in the wrong order against one
+already held, naming both locks and the functions on each end.
+
+Fixed with that: renaming a user held both users' locks while moving sharees'
+subscriptions and while re-selecting; the DAV DB, the sieve helpers in
+sync_server and timsieved reached into other users without a lock at all;
+Principal/getAvailability read the principal's calendars under the requesting
+account's lock; and iTIP delivered to attendees while still holding the
+organizer's.  The DAV DBs are now tagged with the scope which protects them and
+complain if it isn't held.
+
+A Sieve "fileinto" whose target belongs to another user, or to the shared
+namespace, is likewise delivered after the recipient's own delivery has
+committed, and all the appends for one owner are grouped so they stay atomic
+for that user.  A failure there still puts one copy in the recipient's INBOX,
+as a failed fileinto always has.  Creating the target folder now locks the
+namespace it is being created in rather than the recipient's.
+
+iTIP scheduling messages are now delivered after the request which caused them
+has finished with the organizer's calendar.  For CalDAV that means the
+SCHEDULE-STATUS of each attendee is written to the stored resource in a second
+store afterwards, so a scheduling PUT no longer returns an ETag - clients must
+re-read the resource, as they already must when default alarms rewrite it.
+
+
+Documentation:
+
+doc/internal/cross-user-lock-ordering.md covers the locking rules and what is
+still outstanding.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
