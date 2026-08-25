@@ -667,6 +667,7 @@ cunit_TESTS = \
     cunit/sessionid.testc \
     cunit/slowio.testc \
     cunit/smallarrayu64.testc \
+    cunit/sqldb.testc \
     cunit/xsyslog_ev.testc
 
 if SIEVE
