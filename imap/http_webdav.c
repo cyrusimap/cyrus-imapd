@@ -199,6 +199,7 @@ struct meth_params webdav_params = {
     &webdav_parse_path,
     &dav_get_validators,
     &dav_get_modseq,
+    NULL,                       /* is_visible */
     &dav_check_precond,
     { (db_open_proc_t) &webdav_open_mailbox,
       (db_close_proc_t) &webdav_close,
@@ -219,7 +220,7 @@ struct meth_params webdav_params = {
     NULL,                                       /* No PATCH handling */
     { POST_ADDMEMBER, NULL, { 0, NULL, NULL } },/* No special POST handling */
     { 0, &webdav_put },                         /* Allow any MIME type */
-    { DAV_FINITE_DEPTH, webdav_props},
+    { DAV_FINITE_DEPTH, webdav_props, NULL },
     webdav_reports
 };
 // clang-format on

@@ -1,0 +1,211 @@
+#!perl
+use Cassandane::Tiny;
+
+use Text::VCardFast qw(vcard2hash);
+
+# These tests assert the CLASS property for CalDAV GET, of a single resource
+# and of a whole calendar.
+
+my $CAL_HREF = '/dav/calendars/user/cassandane/Default';
+
+my %UID = (
+    public  => 'aaaaaaaa-0000-4000-8000-000000000001',
+    private => 'bbbbbbbb-0000-4000-8000-000000000002',
+    secret  => 'cccccccc-0000-4000-8000-000000000003',
+);
+
+my sub put_event ($caldav, $uid, $dtstart, $summary, $class)
+{
+    $caldav->Request('PUT', "Default/$uid.ics", join("\r\n",
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN',
+        'BEGIN:VEVENT',
+        "UID:$uid",
+        'DTSTAMP:20260101T000000Z',
+        "DTSTART:$dtstart",
+        'DURATION:PT1H',
+        "SUMMARY:$summary",
+        "DESCRIPTION:Description of $summary",
+        "LOCATION:Location of $summary",
+        'SEQUENCE:0',
+        ($class ? "CLASS:$class" : ()),
+        'BEGIN:VALARM',
+        'UID:alarm-for-' . $uid,
+        'ACTION:DISPLAY',
+        'DESCRIPTION:Reminder',
+        'TRIGGER:-PT5M',
+        'END:VALARM',
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ) . "\r\n", 'Content-Type' => 'text/calendar');
+}
+
+# Create a public, a private and a secret event as the calendar owner.
+my sub create_events ($self)
+{
+    my $owner_caldav = $self->default_user->caldav;
+
+    xlog $self, "create a public, a private and a secret event as the owner";
+    put_event($owner_caldav, $UID{public}, '20260801T100000Z',
+              'Public Event', undef);
+    put_event($owner_caldav, $UID{private}, '20260802T100000Z',
+              'Private Event', 'PRIVATE');
+    put_event($owner_caldav, $UID{secret}, '20260803T100000Z',
+              'Secret Event', 'CONFIDENTIAL');
+}
+
+# Return the sorted property names of the first VEVENT in $ical.
+my sub sort_vevent_props ($ical)
+{
+    my $hash = vcard2hash($ical);
+    my ($vevent) =
+        grep { $_->{type} eq 'vevent' } @{$hash->{objects}[0]{objects}};
+    return [ sort keys %{$vevent->{properties}} ];
+}
+
+sub test_class_get__as_sharee
+    ($self)
+{
+    create_events($self);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    xlog $self, "sharee reads the public event in full";
+    my $res = $sharee_caldav->Request('GET', "$CAL_HREF/$UID{public}.ics");
+    $self->assert_matches(qr/SUMMARY:Public Event/, $res->{content});
+    $self->assert_matches(qr/DESCRIPTION:Description of Public Event/,
+                          $res->{content});
+
+    xlog $self, "sharee reads the private event redacted";
+    $res = $sharee_caldav->Request('GET', "$CAL_HREF/$UID{private}.ics");
+    # These are the properties of the private event that survive redaction.
+    $self->assert_cmp_deeply([qw(class dtstamp dtstart duration sequence uid)],
+                             sort_vevent_props($res->{content}));
+    $self->assert_does_not_match(qr/Private Event/, $res->{content});
+    $self->assert_does_not_match(qr/BEGIN:VALARM/, $res->{content});
+
+    xlog $self, "sharee does not find the secret event";
+    $res = $sharee_caldav->SafeRequest('GET', "$CAL_HREF/$UID{secret}.ics");
+    $self->assert_num_equals(404, $res->{http_response}{status});
+}
+
+# The CLASS property never is enforced for the calendar owner.
+sub test_class_get__as_owner
+    ($self)
+{
+    create_events($self);
+
+    $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    my $owner_caldav = $self->default_user->caldav;
+    for my $privacy (qw(public private secret)) {
+        xlog $self, "owner reads the $privacy event in full";
+        my $res = $owner_caldav->Request('GET', "Default/$UID{$privacy}.ics");
+        $self->assert_matches(qr/DESCRIPTION:Description of/, $res->{content});
+        $self->assert_matches(qr/BEGIN:VALARM/, $res->{content});
+    }
+}
+
+# A GET of the calendar itself exports every object in it.
+sub test_class_get__export
+    ($self)
+{
+    create_events($self);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    xlog $self, "sharee exports the whole calendar";
+    my $res = $sharee_caldav->Request('GET', "$CAL_HREF/");
+
+    $self->assert_matches(qr/SUMMARY:Public Event/, $res->{content});
+
+    xlog $self, "the secret event is not in the export";
+    $self->assert_does_not_match(qr/$UID{secret}/, $res->{content});
+    $self->assert_does_not_match(qr/Secret Event/, $res->{content});
+
+    xlog $self, "the private event is in the export, redacted";
+    $self->assert_matches(qr/$UID{private}/, $res->{content});
+    $self->assert_does_not_match(qr/Description of Private Event/,
+                                 $res->{content});
+    $self->assert_does_not_match(qr/Location of Private Event/,
+                                 $res->{content});
+}
+
+# Privacy is a property of the whole calendar event, so a recurrence override
+# is redacted even if the recurrence exception does not set CLASS on its own.
+sub test_class_get__override
+    ($self)
+{
+    my $uid = 'dddddddd-0000-4000-8000-000000000004';
+    my $owner_caldav = $self->default_user->caldav;
+
+    xlog $self, "create a recurring private event with an override";
+    $owner_caldav->Request('PUT', "Default/$uid.ics", join("\r\n",
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN',
+        'BEGIN:VEVENT',
+        "UID:$uid",
+        'DTSTAMP:20260101T000000Z',
+        'DTSTART:20260801T100000Z',
+        'DURATION:PT1H',
+        'RRULE:FREQ=DAILY;COUNT=3',
+        'SUMMARY:Recurring Event',
+        'SEQUENCE:0',
+        'CLASS:PRIVATE',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        "UID:$uid",
+        'DTSTAMP:20260101T000000Z',
+        'RECURRENCE-ID:20260802T100000Z',
+        'DTSTART:20260802T113000Z',
+        'DURATION:PT1H',
+        'SUMMARY:Overridden Instance',
+        'DESCRIPTION:Detail of the override',
+        'SEQUENCE:0',
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ) . "\r\n", 'Content-Type' => 'text/calendar');
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    xlog $self, "sharee reads the event";
+    my $res = $sharee_caldav->Request('GET', "$CAL_HREF/$uid.ics");
+
+    xlog $self, "both the main component and the override are redacted";
+    $self->assert_does_not_match(qr/Recurring Event/, $res->{content});
+    $self->assert_does_not_match(qr/Overridden Instance/, $res->{content});
+    $self->assert_does_not_match(qr/Detail of the override/, $res->{content});
+
+    xlog $self, "the override is still there, with its recurrence properties";
+    my $hash = vcard2hash($res->{content});
+    my @vevents =
+        grep { $_->{type} eq 'vevent' } @{$hash->{objects}[0]{objects}};
+    $self->assert_num_equals(2, scalar @vevents);
+    my ($override) =
+        grep { exists $_->{properties}{'recurrence-id'} } @vevents;
+    $self->assert_cmp_deeply(
+        [sort qw(dtstamp dtstart duration recurrence-id sequence uid)],
+        [sort keys %{$override->{properties}}]);
+}

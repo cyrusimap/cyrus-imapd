@@ -1,0 +1,150 @@
+#!perl
+use Cassandane::Tiny;
+
+# These tests assert the CLASS property for CalDAV PUT for existing events.
+
+my $NO_PRIVS = { status => 403, precondition => 'need-privileges' };
+my $NOT_FOUND = { status => 404 };
+
+my $uid = '2a358cee-6489-4f14-a57f-c104db4b8b4c';
+my $href = "/dav/calendars/user/cassandane/Default/$uid.ics";
+
+my sub assert_error ($self, $res, $want_error)
+{
+    $self->assert_num_equals($want_error->{status},
+                             $res->{http_response}{status});
+
+    if ($want_error->{precondition}) {
+        $self->assert_matches(qr/$want_error->{precondition}/,
+                              $res->{http_response}{content});
+    }
+}
+
+# Create an event having $privacy_prop as the calendar owner. Returns the
+# iCalendar data as the server stored it.
+my sub create_event ($self, $privacy_prop)
+{
+    my $owner_caldav = $self->default_user->caldav;
+
+    xlog $self, "create the event as the calendar owner";
+    $owner_caldav->Request('PUT', "Default/$uid.ics", join("\r\n",
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN',
+        'BEGIN:VEVENT',
+        "UID:$uid",
+        'DTSTAMP:20150806T234327Z',
+        'DTSTART:20160831T153000Z',
+        'DURATION:PT1H',
+        'SUMMARY:An Event',
+        'SEQUENCE:0',
+        ($privacy_prop ? $privacy_prop : ()),
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ) . "\r\n", 'Content-Type' => 'text/calendar');
+
+    xlog $self, "read back the stored iCalendar data";
+    my $stored = $owner_caldav->Request('GET', "Default/$uid.ics")->{content};
+
+    return $stored;
+}
+
+my sub assert_sharee_update ($self, $privacy_prop, $want_error)
+{
+    my $owner_caldav = $self->default_user->caldav;
+    my $updated = create_event($self, $privacy_prop);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    # Send back exactly what the server stored, with only the summary changed
+    my $nsubst = ($updated =~ s/SUMMARY:An Event/SUMMARY:Updated by sharee/);
+    $self->assert_num_equals(1, $nsubst);
+
+    if (!$want_error) {
+        xlog $self, "sharee updates the event";
+        $sharee_caldav->Request('PUT', $href, $updated,
+            'Content-Type' => 'text/calendar');
+
+        xlog $self, "the update took effect";
+        my $res = $owner_caldav->Request('GET', "Default/$uid.ics");
+        $self->assert_matches(qr/SUMMARY:Updated by sharee/, $res->{content});
+    }
+    else {
+        xlog $self, "sharee is denied updating the event";
+        assert_error($self, $sharee_caldav->SafeRequest('PUT', $href, $updated,
+            'Content-Type' => 'text/calendar'), $want_error);
+
+        xlog $self, "the event is unchanged";
+        my $res = $owner_caldav->Request('GET', "Default/$uid.ics");
+        $self->assert_matches(qr/SUMMARY:An Event/, $res->{content});
+    }
+}
+
+my sub assert_sharee_set_privacy ($self, $privacy_prop, $want_error)
+{
+    my $owner_caldav = $self->default_user->caldav;
+    my $updated = create_event($self, undef);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    # Send back exactly what the server stored, only adding the privacy
+    my $nsubst = ($updated =~
+        s/^SUMMARY:An Event\r\n/SUMMARY:An Event\r\n$privacy_prop\r\n/m);
+    $self->assert_num_equals(1, $nsubst);
+
+    xlog $self, "sharee is denied setting $privacy_prop on the event";
+    assert_error($self, $sharee_caldav->SafeRequest('PUT', $href, $updated,
+        'Content-Type' => 'text/calendar'), $want_error);
+
+    xlog $self, "the event is still public";
+    my $res = $owner_caldav->Request('GET', "Default/$uid.ics");
+    $self->assert_does_not_match(qr/CLASS:/, $res->{content});
+}
+
+sub test_class_put_update__public
+    ($self)
+{
+    assert_sharee_update($self, 'CLASS:PUBLIC', undef);
+}
+
+sub test_class_put_update__default
+    ($self)
+{
+    assert_sharee_update($self, undef, undef);
+}
+
+sub test_class_put_update__private
+    ($self)
+{
+    assert_sharee_update($self, 'CLASS:PRIVATE', $NO_PRIVS);
+}
+
+sub test_class_put_update__secret
+    ($self)
+{
+    assert_sharee_update($self, 'CLASS:CONFIDENTIAL', $NOT_FOUND);
+}
+
+# A sharee that submits a non-public object is denied for lack of write
+# access, even for a secret one: what they submitted is no secret to them.
+sub test_class_put_update__set_private
+    ($self)
+{
+    assert_sharee_set_privacy($self, 'CLASS:PRIVATE', $NO_PRIVS);
+}
+
+sub test_class_put_update__set_secret
+    ($self)
+{
+    assert_sharee_set_privacy($self, 'CLASS:CONFIDENTIAL', $NO_PRIVS);
+}

@@ -1,0 +1,83 @@
+#!perl
+use Cassandane::Tiny;
+
+# These tests assert the CLASS property for CalDAV PUT for new events.
+
+my $NO_PRIVS = { status => 403, precondition => 'need-privileges' };
+
+my sub assert_sharee_create ($self, $privacy_prop, $want_error)
+{
+    my $owner_caldav = $self->default_user->caldav;
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    my $uid = '2a358cee-6489-4f14-a57f-c104db4b8b4c';
+    my $href = "/dav/calendars/user/cassandane/Default/$uid.ics";
+    my $event = join("\r\n",
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN',
+        'BEGIN:VEVENT',
+        "UID:$uid",
+        'DTSTAMP:20150806T234327Z',
+        'DTSTART:20160831T153000Z',
+        'DURATION:PT1H',
+        'SUMMARY:Created by sharee',
+        'SEQUENCE:0',
+        ($privacy_prop ? $privacy_prop : ()),
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ) . "\r\n";
+
+    if (!$want_error) {
+        xlog $self, "sharee creates the event";
+        $sharee_caldav->Request('PUT', $href, $event,
+            'Content-Type' => 'text/calendar');
+
+        xlog $self, "the event exists in the owner's calendar";
+        my $res = $owner_caldav->Request('GET', "Default/$uid.ics");
+        $self->assert_matches(qr/SUMMARY:Created by sharee/, $res->{content});
+    }
+    else {
+        xlog $self, "sharee is denied creating the event";
+        my $res = $sharee_caldav->SafeRequest('PUT', $href, $event,
+            'Content-Type' => 'text/calendar');
+        $self->assert_num_equals($want_error->{status},
+                                 $res->{http_response}{status});
+        $self->assert_matches(qr/$want_error->{precondition}/,
+                              $res->{http_response}{content});
+
+        xlog $self, "no event was created";
+        $res = $owner_caldav->SafeRequest('GET', "Default/$uid.ics");
+        $self->assert_num_equals(404, $res->{http_response}{status});
+    }
+}
+
+sub test_class_put_create__public
+    ($self)
+{
+    assert_sharee_create($self, 'CLASS:PUBLIC', undef);
+}
+
+sub test_class_put_create__default
+    ($self)
+{
+    assert_sharee_create($self, undef, undef);
+}
+
+sub test_class_put_create__private
+    ($self)
+{
+    assert_sharee_create($self, 'CLASS:PRIVATE', $NO_PRIVS);
+}
+
+sub test_class_put_create__secret
+    ($self)
+{
+    assert_sharee_create($self, 'CLASS:CONFIDENTIAL', $NO_PRIVS);
+}

@@ -1,0 +1,206 @@
+#!perl
+use Cassandane::Tiny;
+
+# These tests assert the CLASS property for CalDAV COPY and MOVE. Only the
+# owner may take a non-public event out of their calendar, or duplicate it
+# elsewhere. Nor may anyone put a non-public event into a calendar they do
+# not own.
+
+my $NO_PRIVS = { status => 403, precondition => 'need-privileges' };
+my $NOT_FOUND = { status => 404 };
+
+my $UID = '2a358cee-6489-4f14-a57f-c104db4b8b4c';
+
+my sub assert_error ($self, $res, $want_error)
+{
+    $self->assert_num_equals($want_error->{status},
+                             $res->{http_response}{status});
+
+    if ($want_error->{precondition}) {
+        $self->assert_matches(qr/$want_error->{precondition}/,
+                              $res->{http_response}{content});
+    }
+}
+
+my sub put_event ($caldav, $privacy_prop)
+{
+    $caldav->Request('PUT', "Default/$UID.ics", join("\r\n",
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN',
+        'BEGIN:VEVENT',
+        "UID:$UID",
+        'DTSTAMP:20150806T234327Z',
+        'DTSTART:20160831T153000Z',
+        'DURATION:PT1H',
+        'SUMMARY:An Event',
+        'SEQUENCE:0',
+        $privacy_prop,
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ) . "\r\n", 'Content-Type' => 'text/calendar');
+}
+
+my sub assert_sharee_copy_move ($self, $method, $privacy_prop, $want_error)
+{
+    my $owner_caldav = $self->default_user->caldav;
+
+    xlog $self, "create the event as the calendar owner";
+    put_event($owner_caldav, $privacy_prop);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    my $href = "/dav/calendars/user/cassandane/Default/$UID.ics";
+    my @args = ('', 'Destination' =>
+                    "/dav/calendars/user/sharee/Default/$UID.ics");
+
+    if (!$want_error) {
+        xlog $self, "sharee performs $method on the event";
+        $sharee_caldav->Request($method, $href, @args);
+
+        if ($method eq 'MOVE') {
+            xlog $self, "the event is gone from the owner's calendar";
+            my $res = $owner_caldav->SafeRequest('GET', "Default/$UID.ics");
+            $self->assert_num_equals(404, $res->{http_response}{status});
+        }
+    }
+    else {
+        xlog $self, "sharee is denied performing $method on the event";
+        assert_error($self,
+                     $sharee_caldav->SafeRequest($method, $href, @args),
+                     $want_error);
+
+        xlog $self, "the event is still in the owner's calendar";
+        my $event = $owner_caldav->Request('GET', "Default/$UID.ics");
+        $self->assert_matches(qr/SUMMARY:An Event/, $event->{content});
+    }
+}
+
+# The owner puts their own event into a calendar that sharer shares with them.
+my sub assert_copy_move_into_shared ($self, $method, $privacy_prop,
+                                     $want_error)
+{
+    my $owner_caldav = $self->default_user->caldav;
+
+    xlog $self, "cassandane creates the event in their own calendar";
+    put_event($owner_caldav, $privacy_prop);
+
+    xlog $self, "create sharer and share their default calendar";
+    $self->{instance}->create_user('sharer')->caldav;
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.sharer.#calendars.Default",
+                   cassandane => 'lrswipkxtecdn9');
+
+    my $href = "/dav/calendars/user/cassandane/Default/$UID.ics";
+    my $dst_href = "/dav/calendars/user/cassandane/sharer.Default/$UID.ics";
+    my @args = ('', 'Destination' => $dst_href);
+
+    if (!$want_error) {
+        xlog $self, "cassandane performs $method into sharer's calendar";
+        $owner_caldav->Request($method, $href, @args);
+
+        xlog $self, "the event is in sharer's calendar";
+        my $event = $owner_caldav->Request('GET', $dst_href);
+        $self->assert_matches(qr/SUMMARY:An Event/, $event->{content});
+
+        if ($method eq 'MOVE') {
+            xlog $self, "the event is gone from cassandane's calendar";
+            my $res = $owner_caldav->SafeRequest('GET', "Default/$UID.ics");
+            $self->assert_num_equals(404, $res->{http_response}{status});
+        }
+    }
+    else {
+        xlog $self, "cassandane is denied performing $method on that calendar";
+        assert_error($self,
+                     $owner_caldav->SafeRequest($method, $href, @args),
+                     $want_error);
+
+        xlog $self, "nothing was stored in sharer's calendar";
+        my $res = $owner_caldav->SafeRequest('GET', $dst_href);
+        $self->assert_num_equals(404, $res->{http_response}{status});
+
+        xlog $self, "the event is still in cassandane's calendar";
+        my $event = $owner_caldav->Request('GET', "Default/$UID.ics");
+        $self->assert_matches(qr/SUMMARY:An Event/, $event->{content});
+    }
+}
+
+sub test_class_copy_move__move_public
+    ($self)
+{
+    assert_sharee_copy_move($self, 'MOVE', 'CLASS:PUBLIC', undef);
+}
+
+sub test_class_copy_move__move_private
+    ($self)
+{
+    assert_sharee_copy_move($self, 'MOVE', 'CLASS:PRIVATE', $NO_PRIVS);
+}
+
+# A secret event does not exist as far as the sharee is concerned.
+sub test_class_copy_move__move_secret
+    ($self)
+{
+    assert_sharee_copy_move($self, 'MOVE', 'CLASS:CONFIDENTIAL', $NOT_FOUND);
+}
+
+sub test_class_copy_move__copy_public
+    ($self)
+{
+    assert_sharee_copy_move($self, 'COPY', 'CLASS:PUBLIC', undef);
+}
+
+sub test_class_copy_move__copy_private
+    ($self)
+{
+    assert_sharee_copy_move($self, 'COPY', 'CLASS:PRIVATE', $NO_PRIVS);
+}
+
+sub test_class_copy_move__copy_secret
+    ($self)
+{
+    assert_sharee_copy_move($self, 'COPY', 'CLASS:CONFIDENTIAL', $NOT_FOUND);
+}
+
+sub test_class_copy_move__into_shared_move_public
+    ($self)
+{
+    assert_copy_move_into_shared($self, 'MOVE', 'CLASS:PUBLIC', undef);
+}
+
+sub test_class_copy_move__into_shared_move_private
+    ($self)
+{
+    assert_copy_move_into_shared($self, 'MOVE', 'CLASS:PRIVATE', $NO_PRIVS);
+}
+
+sub test_class_copy_move__into_shared_move_secret
+    ($self)
+{
+    assert_copy_move_into_shared($self, 'MOVE', 'CLASS:CONFIDENTIAL',
+                                 $NO_PRIVS);
+}
+
+sub test_class_copy_move__into_shared_copy_public
+    ($self)
+{
+    assert_copy_move_into_shared($self, 'COPY', 'CLASS:PUBLIC', undef);
+}
+
+sub test_class_copy_move__into_shared_copy_private
+    ($self)
+{
+    assert_copy_move_into_shared($self, 'COPY', 'CLASS:PRIVATE', $NO_PRIVS);
+}
+
+sub test_class_copy_move__into_shared_copy_secret
+    ($self)
+{
+    assert_copy_move_into_shared($self, 'COPY', 'CLASS:CONFIDENTIAL',
+                                 $NO_PRIVS);
+}

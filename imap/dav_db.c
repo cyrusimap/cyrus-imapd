@@ -50,6 +50,7 @@
     " comp_flags INTEGER,"                                              \
     " sched_tag TEXT,"                                                  \
     " alive INTEGER,"                                                   \
+    " privacy_modseq INTEGER NOT NULL DEFAULT 0,"                       \
     " UNIQUE( mailbox, imap_uid ),"                                     \
     " UNIQUE( mailbox, resource ) );"                                   \
     "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"  \
@@ -282,6 +283,12 @@
     "CREATE INDEX IF NOT EXISTS idx_ical_cmodseq ON ical_objs ( createdmodseq );" \
     "CREATE INDEX IF NOT EXISTS idx_vcard_cmodseq ON vcard_objs ( createdmodseq );"
 
+/* A default of 0 says the object's current privacy has held all along, which
+ * is what pre-upgrade data implies. See caldav_writeical(). */
+#define CMD_DBUPGRADEv20                                                \
+    "ALTER TABLE ical_objs"                                             \
+    " ADD COLUMN privacy_modseq INTEGER NOT NULL DEFAULT 0;"
+
 static int sievedb_upgrade(sqldb_t *db);
 
 static const struct sqldb_upgrade davdb_upgrade[] = {
@@ -303,10 +310,11 @@ static const struct sqldb_upgrade davdb_upgrade[] = {
   { 17, CMD_DBUPGRADEv17, NULL },
   { 18, CMD_DBUPGRADEv18, NULL },
   { 19, CMD_DBUPGRADEv19, NULL },
+  { 20, CMD_DBUPGRADEv20, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 19
+#define DB_VERSION 20
 
 static sqldb_t *reconstruct_db;
 

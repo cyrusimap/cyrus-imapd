@@ -1,14 +1,205 @@
 #!perl
 use Cassandane::Tiny;
 
+# The privacy of an event limits which of its properties a sharee of the
+# calendar may read back, and a secret event does not exist for them at all.
+# The calendar owner always reads their events in full.
+
+# An event carrying a value in every property that a sharee might read back.
+my %EVENT_TEMPLATE = (
+    version => '2.0',
+    color => 'blue',
+    created => '2020-12-21T07:47:00Z',
+    description => 'description',
+    duration => 'PT1H',
+    keywords => {
+        keyword1 => JSON::true,
+    },
+    links => {
+        link1 => {
+            href => 'https://local/link1.jpg',
+        },
+    },
+    locale => 'en',
+    locations => {
+        loc1 => {
+            name => 'name',
+        },
+    },
+    participants => {
+        participant1 => {
+            calendarAddress => 'mailto:participant1@local',
+        },
+    },
+    priority => 7,
+    prodId => '-//Foo//Bar//EN',
+    recurrenceOverrides => {
+        '2021-01-02T01:00:00' => {
+            title => 'overrideTitle',
+            duration => 'PT2H',
+        },
+    },
+    recurrenceRule => {
+        frequency => 'daily',
+        count => 3,
+    },
+    relatedTo => {
+        '3a996522-dfc3-484c-bea9-070c408143ea' => { },
+    },
+    organizerCalendarAddress => 'mailto:orga@local',
+    sequence => 3,
+    showWithoutTime => JSON::true,
+    start => '2021-01-01T01:00:00',
+    status => 'tentative',
+    timeZone => 'Europe/Berlin',
+    title => 'title',
+    updated => '2020-12-21T07:47:00Z',
+    virtualLocations => {
+        virtloc1 => {
+            name => 'name',
+            uri => 'tel:+1-555-555-5555',
+        },
+    },
+);
+
+my @WANT_PROPS = (keys %EVENT_TEMPLATE,
+    qw( calendarIds isDraft utcStart utcEnd baseEventId isOrigin ));
+
+# Create one fullblown event per privacy value in the owner's default calendar.
+#
+# Returns the events as the owner reads them, keyed by privacy.
+my sub create_events ($self)
+{
+    my $default_cal = $self->default_user->calendars->default;
+
+    xlog $self, "create a fullblown event for each privacy value";
+    my %id = map {; $_ => $default_cal->create_event({ %EVENT_TEMPLATE,
+        privacy => $_,
+    })->id } qw( public private secret );
+
+    # The events are read back here, rather than taken from the instances, so
+    # that the owner and the sharee ask for the same set of properties.
+    xlog $self, "the owner reads them back";
+    my @gets = $self->default_user->jmap->request([
+        map {; [ 'CalendarEvent/get' => {
+            ids => [ $id{$_} ],
+            properties => \@WANT_PROPS,
+        } ] } qw( public private secret ),
+    ])->assert_n_sentences(3);
+
+    my %event;
+    foreach my $privacy (qw( public private secret )) {
+        my $list = (shift @gets)->arguments->{list};
+        $self->assert_num_equals(1, scalar @$list);
+        $event{$privacy} = $list->[0];
+    }
+
+    return \%event;
+}
+
 sub test_calendarevent_get_privacy
-    :min_version_3_1
     ($self)
 {
-    my ($id, $ical) = $self->icalfile('privacy');
+    my $event = create_events($self);
 
-    my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_not_null($event);
-    # CLASS takes precedence over X-JMAP-PRIVACY
-    $self->assert_str_equals("secret", $event->{privacy});
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    $self->default_user->calendars->default
+         ->share_with(sharee => [qw( mayReadItems mayWriteAll )]);
+
+    xlog $self, "the owner reads every event with every property set";
+    foreach my $privacy (qw( public private secret )) {
+        foreach my $prop (keys %EVENT_TEMPLATE) {
+            $self->assert_not_null($event->{$privacy}{$prop});
+        }
+    }
+
+    xlog $self, "sharee reads every property of the public event";
+    my $get = $sharee->jmap->request([[
+        'CalendarEvent/get' => {
+            accountId => 'cassandane',
+            ids => [ q{} . $event->{public}{id} ],
+            properties => \@WANT_PROPS,
+        },
+    ]])->single_sentence('CalendarEvent/get')->arguments;
+
+    my $want = $event->{public};
+    my $got = $get->{list}[0];
+    delete @{$want}{qw( x-href blobId debugBlobId )};
+    delete @{$got}{qw( x-href blobId debugBlobId )};
+    $self->assert_cmp_deeply($want, $got);
+
+    xlog $self, "sharee only reads the public properties of the private event";
+    $get = $sharee->jmap->request([[
+        'CalendarEvent/get' => {
+            accountId => 'cassandane',
+            ids => [ q{} . $event->{private}{id} ],
+            properties => \@WANT_PROPS,
+        },
+    ]])->single_sentence('CalendarEvent/get')->arguments;
+
+    # These are the properties of a private event that a sharee may read back.
+    my %public_prop = map {; $_ => 1 } qw(
+        @type baseEventId calendarIds created due duration estimatedDuration
+        excludedRecurrenceRules freeBusyStatus id isDraft isOrigin privacy
+        recurrenceRule recurrenceOverrides sequence showWithoutTime start
+        timeZone timeZones uid updated utcStart utcEnd version
+    );
+
+    $want = $event->{private};
+    delete @{$want}{grep { !$public_prop{$_} } keys %$want};
+    delete $want->{recurrenceOverrides}{'2021-01-02T01:00:00'}{title};
+    $self->assert_cmp_deeply($want, $get->{list}[0]);
+
+    xlog $self, "sharee does not find the secret event";
+    $get = $sharee->jmap->request([[
+        'CalendarEvent/get' => {
+            accountId => 'cassandane',
+            ids => [ q{} . $event->{secret}{id} ],
+            properties => \@WANT_PROPS,
+        },
+    ]])->single_sentence('CalendarEvent/get')->arguments;
+
+    $self->assert_cmp_deeply([$event->{secret}{id}], $get->{notFound});
+}
+
+# A standalone instance of a private event keeps its baseEventId: §5.7 of the
+# JMAP Calendars draft permits it.
+sub test_calendarevent_get_privacy__baseeventid
+    ($self)
+{
+    my $event = create_events($self);
+
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    $self->default_user->calendars->default
+         ->share_with(sharee => [qw( mayReadItems mayWriteAll )]);
+
+    xlog $self, "sharee expands the second instance of the private event";
+    my @sentences = $sharee->jmap->request([
+        [ 'CalendarEvent/query' => {
+            accountId => 'cassandane',
+            filter => {
+                uid => q{} . $event->{private}{uid},
+                after => '2021-01-02T00:00:00',
+                before => '2021-01-03T00:00:00',
+            },
+            expandRecurrences => JSON::true,
+        }, 'R1' ],
+        [ 'CalendarEvent/get' => {
+            accountId => 'cassandane',
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids',
+            },
+            properties => ['baseEventId'],
+        }, 'R2' ],
+    ])->assert_n_sentences(2);
+
+    $self->assert_cmp_deeply([superhashof({
+        baseEventId => $event->{private}{id},
+    })], $sentences[1]->arguments->{list});
 }

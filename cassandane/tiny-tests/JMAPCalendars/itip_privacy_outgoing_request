@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_itip_privacy_outgoing_request
+    ($self)
+{
+    my $user = $self->default_user;
+
+    $self->{instance}->getnotify();
+
+    xlog $self, "Create a private event with an attendee";
+    $user->calendars->default->create_event({
+        privacy => 'private',
+        organizerCalendarAddress => 'mailto:cassandane@example.com',
+        participants => {
+            cassandane => {
+                roles => { owner => JSON::true },
+                calendarAddress => 'mailto:cassandane@example.com',
+            },
+            bugs => {
+                calendarAddress => 'mailto:bugs@example.com',
+            },
+        },
+    });
+
+    xlog $self, "the iTIP REQUEST carries the privacy of the event";
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+    my $ical = decode_json($imip->{MESSAGE})->{ical};
+    $self->assert_matches(qr/METHOD:REQUEST/, $ical);
+    $self->assert_matches(qr/CLASS:PRIVATE/, $ical);
+}

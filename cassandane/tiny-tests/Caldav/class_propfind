@@ -1,0 +1,94 @@
+#!perl
+use Cassandane::Tiny;
+
+# This test asserts the CLASS property for CalDAV PROPFIND.
+
+my $CAL_HREF = '/dav/calendars/user/cassandane/Default';
+
+my %UID = (
+    public  => 'aaaaaaaa-0000-4000-8000-000000000001',
+    private => 'bbbbbbbb-0000-4000-8000-000000000002',
+    secret  => 'cccccccc-0000-4000-8000-000000000003',
+);
+
+my sub put_event ($caldav, $uid, $dtstart, $summary, $class)
+{
+    $caldav->Request('PUT', "Default/$uid.ics", join("\r\n",
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN',
+        'BEGIN:VEVENT',
+        "UID:$uid",
+        'DTSTAMP:20260101T000000Z',
+        "DTSTART:$dtstart",
+        'DURATION:PT1H',
+        "SUMMARY:$summary",
+        "DESCRIPTION:Description of $summary",
+        "LOCATION:Location of $summary",
+        'SEQUENCE:0',
+        ($class ? "CLASS:$class" : ()),
+        'BEGIN:VALARM',
+        'UID:alarm-for-' . $uid,
+        'ACTION:DISPLAY',
+        'DESCRIPTION:Reminder',
+        'TRIGGER:-PT5M',
+        'END:VALARM',
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ) . "\r\n", 'Content-Type' => 'text/calendar');
+}
+
+# Create a public, a private and a secret event as the calendar owner.
+my sub create_events ($self)
+{
+    my $owner_caldav = $self->default_user->caldav;
+
+    xlog $self, "create a public, a private and a secret event as the owner";
+    put_event($owner_caldav, $UID{public}, '20260801T100000Z',
+              'Public Event', undef);
+    put_event($owner_caldav, $UID{private}, '20260802T100000Z',
+              'Private Event', 'PRIVATE');
+    put_event($owner_caldav, $UID{secret}, '20260803T100000Z',
+              'Secret Event', 'CONFIDENTIAL');
+
+}
+
+# Return the sorted resource names of a multistatus response. Cyrus reports a
+# shared calendar under the sharee's own calendar home, so only compare the
+# last path segment.
+my sub sort_resource_names ($res)
+{
+    my @hrefs = map { $_->{'{DAV:}href'}{content} }
+                @{$res->{'{DAV:}response'} // []};
+    return [ sort map { m{([^/]+\.ics)$} ? $1 : () } @hrefs ];
+}
+
+# A response that only lists resources must not disclose that a secret object
+# exists either, even though it returns no calendar data at all.
+sub test_class_propfind
+    ($self)
+{
+    create_events($self);
+
+    my $sharee_caldav = $self->{instance}->create_user('sharee')->caldav;
+
+    xlog $self, "share the default calendar with sharee";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl("user.cassandane.#calendars.Default",
+                   sharee => 'lrswipkxtecdn9');
+
+    xlog $self, "sharee runs a PROPFIND for etags only";
+    my $res = $sharee_caldav->Request('PROPFIND', "$CAL_HREF/", <<'EOF',
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propfind xmlns:D="DAV:">
+  <D:prop>
+    <D:getetag/>
+  </D:prop>
+</D:propfind>
+EOF
+        'Content-Type' => 'application/xml', 'Depth' => 1);
+
+    $self->assert_cmp_deeply(
+        [sort ("$UID{private}.ics", "$UID{public}.ics")],
+        sort_resource_names($res));
+}

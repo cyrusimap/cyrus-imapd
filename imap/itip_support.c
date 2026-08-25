@@ -599,6 +599,34 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
     return attendee;
 }
 
+HIDDEN void itip_strip_privacy(icalcomponent *comp)
+{
+    icalproperty *prop, *nextprop;
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+         prop;
+         prop = nextprop)
+    {
+        nextprop = icalcomponent_get_next_property(comp, ICAL_CLASS_PROPERTY);
+
+        icalcomponent_remove_property(comp, prop);
+        icalproperty_free(prop);
+    }
+}
+
+/** @brief Replace the privacy of 'new_comp' with the privacy of 'old_comp'. */
+static void preserve_privacy(icalcomponent *new_comp, icalcomponent *old_comp)
+{
+    icalproperty *prop;
+
+    /* An iTIP sender does not get to set the privacy */
+    itip_strip_privacy(new_comp);
+
+    prop = icalcomponent_get_first_property(old_comp, ICAL_CLASS_PROPERTY);
+    if (prop) {
+        icalcomponent_add_property(new_comp, icalproperty_clone(prop));
+    }
+}
 
 static int deliver_merge_request(const char *attendee,
                                  icalcomponent *ical,     // current iCalendar
@@ -750,11 +778,7 @@ static int deliver_merge_request(const char *attendee,
             }
 
             /* Copy over privacy from current component to iTIP component */
-            prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
-            if (prop) {
-                icalcomponent_add_property(new_comp,
-                                           icalproperty_clone(prop));
-            }
+            preserve_privacy(new_comp, comp);
 
             if (master == comp) {
                 /* Use updated master component since we will remove the old */
@@ -786,11 +810,7 @@ static int deliver_merge_request(const char *attendee,
                 }
 
                 /* Inherit privacy from master */
-                prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
-                if (prop) {
-                    icalcomponent_add_property(new_comp,
-                                               icalproperty_clone(prop));
-                }
+                preserve_privacy(new_comp, master);
             }
         }
 
@@ -1019,11 +1039,6 @@ HIDDEN void itip_strip_personal_data(icalcomponent *comp, bool remove_transp)
             if (!ical_categories_is_color(prop)) break;
 
             GCC_FALLTHROUGH
-
-        case ICAL_CLASS_PROPERTY:
-            icalcomponent_remove_property(comp, prop);
-            icalproperty_free(prop);
-            break;
 
         case ICAL_COLOR_PROPERTY:
             icalcomponent_remove_property(comp, prop);

@@ -211,6 +211,7 @@ static struct meth_params notify_params = {
     &notify_parse_path,
     &dav_get_validators,
     &dav_get_modseq,
+    NULL,                       /* is_visible */
     &dav_check_precond,
     { (db_open_proc_t) &webdav_open_mailbox,
       (db_close_proc_t) &webdav_close,
@@ -231,7 +232,7 @@ static struct meth_params notify_params = {
     NULL,                                       /* No PATCH handling */
     { 0, &notify_post, { 0, NULL, NULL } },     /* No generic POST handling */
     { 0, NULL },
-    { DAV_FINITE_DEPTH, notify_props},
+    { DAV_FINITE_DEPTH, notify_props, NULL },
     notify_reports
 };
 // clang-format on

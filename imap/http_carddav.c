@@ -306,6 +306,7 @@ static struct meth_params carddav_params = {
     &carddav_parse_path,
     &dav_get_validators,
     &dav_get_modseq,
+    NULL,                       /* is_visible */
     &dav_check_precond,
     { (db_open_proc_t) &carddav_open_mailbox,
       (db_close_proc_t) &carddav_close,
@@ -327,7 +328,7 @@ static struct meth_params carddav_params = {
     { POST_ADDMEMBER | POST_SHARE, NULL,        /* No special POST handling */
       { NS_CARDDAV, "addressbook-data", &carddav_import } },
     { CARDDAV_SUPP_DATA, &carddav_put },
-    { DAV_FINITE_DEPTH, carddav_props },        /* Disable infinite depth */
+    { DAV_FINITE_DEPTH, carddav_props, NULL },  /* Disable infinite depth */
     carddav_reports
 };
 // clang-format on

@@ -1,0 +1,136 @@
+#!perl
+use Cassandane::Tiny;
+
+my sub sharee_state ($sharee)
+{
+    return q{} . $sharee->jmap->request([[
+        'CalendarEvent/get' => {
+            accountId => 'cassandane',
+            ids => [],
+        },
+    ]])->single_sentence('CalendarEvent/get')->arguments->{state};
+}
+
+my sub sharee_changes ($sharee, $state)
+{
+    return $sharee->jmap->request([[
+        'CalendarEvent/changes' => {
+            accountId => 'cassandane',
+            sinceState => $state,
+        },
+    ]])->single_sentence('CalendarEvent/changes')->arguments;
+}
+
+sub test_calendarevent_changes_privacy__at_create
+    ($self)
+{
+    my $default_cal = $self->default_user->calendars->default;
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    $default_cal->share_with(sharee => [qw( mayReadItems )]);
+
+    xlog $self, "get calendar event state as sharee";
+    my $state = sharee_state($sharee);
+
+    xlog $self, "create one event for each privacy value";
+    my %event = map {; $_ => $default_cal->create_event({ privacy => $_ }) }
+        qw( public private secret );
+
+    xlog $self, "sharee sees the public and the private event created";
+    my $changes = sharee_changes($sharee, $state);
+
+    $self->assert_cmp_deeply(
+        bag($event{public}->id, $event{private}->id),
+        $changes->{created});
+}
+
+# A sharee sees every event but a secret one, so their view of an event begins
+# and ends where its privacy crosses that boundary, wherever the event itself
+# was created and destroyed: an event that stops being secret is reported to
+# them as created, and one that becomes secret as destroyed.
+my sub assert_privacy_change ($self, $from, $to, $want)
+{
+    my $default_cal = $self->default_user->calendars->default;
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    $default_cal->share_with(sharee => [qw( mayReadItems )]);
+
+    xlog $self, "create a $from event, and one that stays secret throughout";
+    my $event = $default_cal->create_event({ privacy => $from });
+    my $secret = $default_cal->create_event({ privacy => 'secret' });
+
+    xlog $self, "get calendar event state as sharee";
+    my $state = sharee_state($sharee);
+
+    xlog $self, "change the event to $to, and retitle the secret one";
+    $event->update({ privacy => $to });
+    $secret->update({ title => 'Retitled' });
+
+    xlog $self, "sharee sees the $from to $to change as $want, and nothing else";
+    my $changes = sharee_changes($sharee, $state);
+
+    $self->assert_cmp_deeply(superhashof({
+        created   => [],
+        updated   => [],
+        destroyed => [],
+        $want     => [ $event->id ],
+    }), $changes);
+}
+
+# A secret event that the sharee never could have synced must not be reported
+# as destroyed just because it is invisible to them now.
+sub test_calendarevent_changes_privacy__secret_created_after_state
+    ($self)
+{
+    my $default_cal = $self->default_user->calendars->default;
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    $default_cal->share_with(sharee => [qw( mayReadItems )]);
+
+    xlog $self, "get calendar event state as sharee";
+    my $state = sharee_state($sharee);
+
+    xlog $self, "create a secret event, and destroy another one";
+    $default_cal->create_event({ privacy => 'secret' });
+    $default_cal->create_event({ privacy => 'secret' })->destroy;
+
+    xlog $self, "sharee sees no change at all";
+    $self->assert_cmp_deeply(superhashof({
+        created   => [],
+        updated   => [],
+        destroyed => [],
+    }), sharee_changes($sharee, $state));
+}
+
+sub test_calendarevent_changes_privacy__secret_to_public
+    ($self)
+{
+    assert_privacy_change($self, 'secret', 'public', 'created');
+}
+
+sub test_calendarevent_changes_privacy__secret_to_private
+    ($self)
+{
+    assert_privacy_change($self, 'secret', 'private', 'created');
+}
+
+sub test_calendarevent_changes_privacy__public_to_secret
+    ($self)
+{
+    assert_privacy_change($self, 'public', 'secret', 'destroyed');
+}
+
+sub test_calendarevent_changes_privacy__private_to_secret
+    ($self)
+{
+    assert_privacy_change($self, 'private', 'secret', 'destroyed');
+}
+
+sub test_calendarevent_changes_privacy__public_to_private
+    ($self)
+{
+    assert_privacy_change($self, 'public', 'private', 'updated');
+}

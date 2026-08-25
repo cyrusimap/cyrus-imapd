@@ -1,0 +1,100 @@
+#!perl
+use Cassandane::Tiny;
+
+use Data::GUID qw(guid_string);
+
+# This test asserts CalendarEventNotification and the privacy property for
+# events updated by iTIP.
+
+my sub notification_types ($self, $jmap)
+{
+    my $notifs = $jmap->request([[
+        'CalendarEventNotification/get' => {
+            accountId => 'cassandane',
+            ids => JSON::null,
+            properties => ['type'],
+        },
+    ]])->single_sentence('CalendarEventNotification/get')->arguments->{list};
+
+    return [sort map { q{} . $_->{type} } @$notifs];
+}
+
+my sub assert_calendareventnotification_privacy_itip ($self, $class,
+                                                      $want_sharee)
+{
+    my $organizer = 'organizer@example.net';
+    my $attendee = 'cassandane@example.com';
+    my $uid = guid_string();
+
+    my $sharee_user = $self->{instance}->create_user('sharee');
+
+    xlog $self, "share the default calendar with sharee";
+    $self->default_user->calendars->default
+        ->share_with(sharee => [qw( mayReadItems )]);
+
+    xlog $self, "install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<~"EOF");
+    require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+    if body :content "text/calendar" :contains "\nMETHOD:" {
+        processimip :deletecanceled :outcome "outcome";
+    }
+    EOF
+
+    xlog $self, "organizer invites cassandane to a CLASS:$class event";
+    my $msg = $self->{gen}->generate(
+        from => Cassandane::Address->new(localpart => 'sender',
+                                         domain => 'example.net'),
+        to => Cassandane::Address->new(localpart => 'cassandane',
+                                       domain => 'example.com'),
+        mime_type => 'text/calendar; method=REQUEST; component=VEVENT',
+        body => <<~"EOF");
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+        METHOD:REQUEST
+        BEGIN:VEVENT
+        CREATED:20210923T034327Z
+        UID:$uid
+        SUMMARY:An Event
+        CLASS:$class
+        DTSTART;TZID=America/New_York:20210923T153000
+        DURATION:PT1H
+        DTSTAMP:20210923T034327Z
+        SEQUENCE:0
+        ORGANIZER:MAILTO:$organizer
+        ATTENDEE;RSVP=TRUE;PARTSTAT=NEEDS-ACTION;X-JMAP-ID=cassandane:MAILTO:$attendee
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "assert notifications of the calendar owner";
+    $self->assert_cmp_deeply(['created'],
+        notification_types($self, $self->default_user->jmap));
+
+    xlog $self, "assert notifications of the sharee";
+    $self->assert_cmp_deeply($want_sharee,
+        notification_types($self, $sharee_user->jmap));
+}
+
+sub test_calendareventnotification_privacy_itip__public
+    :needs_component_sieve
+    ($self)
+{
+    assert_calendareventnotification_privacy_itip($self, 'PUBLIC', ['created']);
+}
+
+sub test_calendareventnotification_privacy_itip__private
+    :needs_component_sieve
+    ($self)
+{
+    assert_calendareventnotification_privacy_itip($self, 'PRIVATE', []);
+}
+
+sub test_calendareventnotification_privacy_itip__secret
+    :needs_component_sieve
+    ($self)
+{
+    assert_calendareventnotification_privacy_itip($self, 'CONFIDENTIAL', []);
+}
