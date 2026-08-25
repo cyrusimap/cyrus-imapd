@@ -1506,20 +1506,24 @@ static int caldav_delete_cal(struct transaction_t *txn,
         char *cal_ownerid = mboxname_to_userid(txn->req_tgt.mbentry->name);
         char *sched_userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
             xstrdup(txn->req_tgt.userid) : NULL;
+        /* the resource is going, so there's no SCHEDULE-STATUS to write
+           back, but the cancellations still take each recipient's lock */
         if (strarray_contains_case(&schedule_addresses, cdata->organizer)) {
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && !is_draft)
-                sched_request(cal_ownerid, sched_userid, &schedule_addresses,
-                              cdata->organizer, ical, NULL,
-                              cdata->dav.createdmodseq, SCHED_MECH_CALDAV);
+                sched_defer_request(cal_ownerid, sched_userid,
+                                    &schedule_addresses, cdata->organizer,
+                                    ical, NULL, cdata->dav.createdmodseq,
+                                    SCHED_MECH_CALDAV, NULL, NULL, 0);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses) && !is_draft)
-                sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
-                            ical, NULL,
-                            cdata->dav.createdmodseq, SCHED_MECH_CALDAV);
+                sched_defer_reply(cal_ownerid, sched_userid,
+                                  &schedule_addresses, ical, NULL,
+                                  cdata->dav.createdmodseq,
+                                  SCHED_MECH_CALDAV, NULL, NULL, 0);
         }
 
         free(sched_userid);
@@ -3214,6 +3218,14 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     /* Finished with attachment collection */
     mailbox_unlock_index(attachments, NULL);
 
+    enum { NO_SCHED = 0, DEFER_REQUEST, DEFER_REPLY } defer_sched = NO_SCHED;
+    char *cal_ownerid = NULL;
+    char *sched_userid = NULL;
+    /* caldav_store_resource() rewrites the db under us, so copy what we
+       need from cdata first */
+    char *sched_organizer = xstrdupnull(cdata->organizer);
+    modseq_t sched_cmodseq = cdata->dav.createdmodseq;
+
     if (cdata->organizer) {
         /* Scheduling object resource */
         const char **hdr;
@@ -3223,28 +3235,21 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         caldav_get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
                                       txn->req_tgt.userid, &schedule_addresses);
 
-        char *cal_ownerid = mboxname_to_userid(txn->req_tgt.mbentry->name);
-        char *sched_userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
+        cal_ownerid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+        sched_userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
             xstrdup(txn->req_tgt.userid) : NULL;
-            
+
         if (strarray_contains_case(&schedule_addresses, cdata->organizer)) {
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, calendar))
-                sched_request(cal_ownerid, sched_userid, &schedule_addresses,
-                              cdata->organizer, oldical, ical,
-                              cdata->dav.createdmodseq, SCHED_MECH_CALDAV);
+                defer_sched = DEFER_REQUEST;
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             if (_scheduling_enabled(txn, calendar) && strarray_size(&schedule_addresses))
-                sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
-                            oldical, ical,
-                            cdata->dav.createdmodseq, SCHED_MECH_CALDAV);
+                defer_sched = DEFER_REPLY;
         }
-
-        free(sched_userid);
-        free(cal_ownerid);
     }
 
     /* Store updated calendar resource */
@@ -3252,6 +3257,31 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
                                 record.createdmodseq,
                                 caldavdb, return_rep, NULL, NULL, NULL,
                                 &schedule_addresses);
+
+    if (defer_sched && (ret == HTTP_CREATED || ret == HTTP_NO_CONTENT)) {
+        /* iTIP delivery takes other users' locks, so it waits until this
+           request drops ours - see caldav_put() */
+        if (defer_sched == DEFER_REQUEST) {
+            sched_defer_request(cal_ownerid, sched_userid, &schedule_addresses,
+                                sched_organizer, oldical, ical,
+                                sched_cmodseq, SCHED_MECH_CALDAV,
+                                mailbox_name(calendar), txn->req_tgt.resource,
+                                calendar->i.last_uid);
+        }
+        else {
+            sched_defer_reply(cal_ownerid, sched_userid, &schedule_addresses,
+                              oldical, ical, sched_cmodseq,
+                              SCHED_MECH_CALDAV, mailbox_name(calendar),
+                              txn->req_tgt.resource, calendar->i.last_uid);
+        }
+        /* the resource changes again when the status comes back */
+        txn->resp_body.lastmod = 0;
+        txn->resp_body.etag = NULL;
+    }
+
+    free(sched_organizer);
+    free(sched_userid);
+    free(cal_ownerid);
 
     if (ret == HTTP_NO_CONTENT) {
         if (aprop) {
@@ -3895,6 +3925,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     int remove_etag = 0;
     int is_draft = 0;
     const char **hdr;
+    enum { NO_SCHED = 0, DEFER_REQUEST, DEFER_REPLY } defer_sched = NO_SCHED;
 
     /* Validate the iCal data */
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
@@ -4151,9 +4182,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
                 else {
                     if (_scheduling_enabled(txn, mailbox) && !is_draft)
-                        sched_request(cal_ownerid, sched_userid, &schedule_addresses,
-                                      organizer, oldical, ical,
-                                      cmodseq, SCHED_MECH_CALDAV);
+                        defer_sched = DEFER_REQUEST;
                 }
             }
             else {
@@ -4171,8 +4200,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 #endif
                 else {
                     if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses) && !is_draft)
-                        sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
-                                    oldical, ical, cmodseq, SCHED_MECH_CALDAV);
+                        defer_sched = DEFER_REPLY;
                 }
             }
 
@@ -4273,6 +4301,29 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             /* iCal data has been rewritten - don't return validators */
             txn->resp_body.lastmod = 0;
             txn->resp_body.etag = NULL;
+        }
+
+        if (defer_sched && (ret == HTTP_CREATED || ret == HTTP_NO_CONTENT)) {
+            /* delivery takes each recipient's namespace lock, which we
+               can't do while holding the organizer's.  Queue it for once this
+               request has let go, and let it write SCHEDULE-STATUS back.  The
+               resource therefore changes after we reply, so drop the ETag and
+               make the client re-read it */
+            if (defer_sched == DEFER_REQUEST) {
+                sched_defer_request(cal_ownerid, sched_userid,
+                                    &schedule_addresses, organizer,
+                                    oldical, ical, cmodseq, SCHED_MECH_CALDAV,
+                                    mailbox_name(mailbox), resource,
+                                    mailbox->i.last_uid);
+            }
+            else {
+                sched_defer_reply(cal_ownerid, sched_userid,
+                                  &schedule_addresses,
+                                  oldical, ical, cmodseq, SCHED_MECH_CALDAV,
+                                  mailbox_name(mailbox), resource,
+                                  mailbox->i.last_uid);
+            }
+            remove_etag = 1;
         }
 
 #ifdef WITH_JMAP

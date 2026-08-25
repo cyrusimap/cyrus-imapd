@@ -72,6 +72,7 @@
 #include "master/service.h"
 
 #include "http_dav.h"
+#include "http_caldav_sched.h"
 
 #include <libxml/tree.h>
 #include <libxml/HTMLtree.h>
@@ -1959,6 +1960,10 @@ EXPORTED int process_request(struct transaction_t *txn)
             &txn->req_tgt.namespace->methods[txn->meth];
         
         ret = (*meth_t->proc)(txn, meth_t->params);
+
+        /* the method has closed its mailboxes and dropped its user lock, so
+           queued iTIP deliveries can now take the recipients' locks */
+        sched_run_deferred();
 
         prometheus_increment(
             prometheus_lookup_label(http_methods[txn->meth].metric,

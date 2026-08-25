@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+
+# The organizer's stored copy records each attendee's SCHEDULE-STATUS.  A local
+# attendee is delivered after the organizer's lock is dropped, so the status
+# arrives late and has to be written back by a second store.
+sub test_schedule_status_local_attendee
+    :min_version_3_1 :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.test");
+
+    my $service = $self->{instance}->get_service("http");
+    my $testtalk = Net::CalDAVTalk->new(
+        user => "test",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "give the attendee an address we can invite";
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-user-address-set>
+        <D:href>mailto:test\@example.com</D:href>
+      </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $testtalk->Request('PROPPATCH', "/dav/principals/user/test", $xml,
+                       'Content-Type' => 'text/xml');
+
+    my $CalDAV = $self->{caldav};
+    my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
+    $self->assert_not_null($CalendarId);
+
+    my $uuid = $CalDAV->genuuid();
+    $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+EOF
+
+    my $response = $CalDAV->Request('GET', "$CalendarId/$uuid.ics");
+
+    # unfold, so a long ATTENDEE property is one line to match against
+    my $ical = $response->{content};
+    $ical =~ s/\r?\n[ \t]//g;
+
+    # 1.2 is "delivered", set only by sched_deliver_local(), so this shows
+    # both that the invitation landed and that the status came back
+    my ($attendee) = grep { m/^ATTENDEE.*test\@example\.com/ }
+                          split /\r?\n/, $ical;
+    $self->assert_not_null($attendee);
+    $self->assert_matches(qr/SCHEDULE-STATUS=1\.2/, $attendee);
+
+    # the rest of the event survived the second store
+    $self->assert_matches(qr/SUMMARY:An Event/, $ical);
+    $self->assert_matches(qr/ORGANIZER[^\r\n]*cassandane\@example\.com/, $ical);
+}
