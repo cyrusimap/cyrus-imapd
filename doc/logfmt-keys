@@ -108,6 +108,7 @@ search.duration         how long a search index operation took, in seconds
 search.expr             a search expression, serialised
 search.generation       the search index generation
 search.op               a search operator, e.g. OR
+search.restarts         how many times indexing restarted from the first message
 search.uncommitted      how many documents were pending when a commit failed
 search.updates          how many update passes indexed nothing
 sieve.target            the target of a Sieve action: a folder, address or url
