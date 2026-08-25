@@ -275,7 +275,9 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         "Principal/getAvailability",
         JMAP_URN_PRINCIPALS,
         &jmap_principal_getavailability,
-        JMAP_NEED_CSTATE
+        /* reads the principal's calendars, not the account's, so it takes
+           the principal's lock rather than holding two at once */
+        JMAP_NO_USERLOCK
     },
     {
         "ShareNotification/get",
@@ -10159,10 +10161,14 @@ static void principal_getavailability(jmap_req_t *req,
                                       int show_details,
                                       hash_table *props)
 {
+    /* everything we read belongs to the principal, so lock only them */
+    user_nslock_t *user_nslock = user_nslock_lock(principalid, LOCK_SHARED);
+
     struct caldav_db *db = caldav_open_userid(principalid);
     if (!db) {
         jmap_error(req, json_pack("{s:s s:s}", "type", "serverFail",
                     "description", "cannot open caldav db"));
+        user_nslock_release(&user_nslock);
         return;
     }
 
@@ -10298,6 +10304,7 @@ static void principal_getavailability(jmap_req_t *req,
 done:
     buf_free(&buf);
     caldav_close(db);
+    user_nslock_release(&user_nslock);
     for (i = 0; i < dynarray_size(busyperiods); i++) {
         struct busyperiod *bp = dynarray_nth(busyperiods, i);
         json_decref(bp->jevent);
