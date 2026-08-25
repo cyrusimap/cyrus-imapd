@@ -974,17 +974,23 @@ static int sieve_reject(void *ac, void *ic,
     }
 }
 
+/* more than one deferred fileinto can be waiting at once, so these can't be
+   static.  dd is first, so cleanup can recover the allocation from the
+   pointer we handed out */
+struct special_delivery {
+    deliver_data_t dd;
+    message_data_t md;
+    struct message_content mc;
+};
+
 static deliver_data_t *setup_special_delivery(deliver_data_t *mydata,
                                               struct buf *headers)
 {
-    static deliver_data_t dd;
-    static message_data_t md;
-    static struct message_content mc;
+    struct special_delivery *special = xzmalloc(sizeof(struct special_delivery));
 
-    memcpy(&dd, mydata, sizeof(deliver_data_t));
-    dd.m = memcpy(&md, mydata->m, sizeof(message_data_t));
-    dd.content = &mc;
-    memset(&mc, 0, sizeof(struct message_content));
+    memcpy(&special->dd, mydata, sizeof(deliver_data_t));
+    special->dd.m = memcpy(&special->md, mydata->m, sizeof(message_data_t));
+    special->dd.content = &special->mc;
 
     /* build the mailboxname from the recipient address */
     const mbname_t *origmbname = msg_getrcpt(mydata->m, mydata->cur_rcpt);
@@ -996,35 +1002,40 @@ static deliver_data_t *setup_special_delivery(deliver_data_t *mydata,
     }
 
     const char *intname = mbname_intname(mbname);
-    md.f = append_newstage(intname, time(0),
-                           strhash(intname) /* unique msgnum for modified msg */,
-                           &dd.stage);
+    special->md.f = append_newstage(intname, time(0),
+                                    strhash(intname) /* unique msgnum */,
+                                    &special->dd.stage);
     mbname_free(&mbname);
-    if (!md.f) return NULL;
+    if (!special->md.f) {
+        free(special);
+        return NULL;
+    }
 
     char buf[4096];
 
     /* write updated message headers */
-    fwrite(buf_base(headers), buf_len(headers), 1, md.f);
+    fwrite(buf_base(headers), buf_len(headers), 1, special->md.f);
 
     /* get offset of message body */
-    md.body_offset = ftell(md.f);
+    special->md.body_offset = ftell(special->md.f);
 
     /* write message body */
     fseek(mydata->m->f, mydata->m->body_offset, SEEK_SET);
-    while (fgets(buf, sizeof(buf), mydata->m->f)) fputs(buf, md.f);
+    while (fgets(buf, sizeof(buf), mydata->m->f)) fputs(buf, special->md.f);
 
-    if (fflush(md.f) || ferror(md.f) || fdatasync(fileno(md.f))) {
+    if (fflush(special->md.f) || ferror(special->md.f) ||
+        fdatasync(fileno(special->md.f))) {
         xsyslog_ev(LOG_ERR, "sieve.delivery.stage.failed",
                    lf_mbname("mbox.name", origmbname));
-        fclose(md.f);
+        fclose(special->md.f);
+        free(special);
         return NULL;
     }
 
     /* XXX  do we look for updated Date and Message-ID? */
-    md.size = ftell(md.f);
-    md.data = prot_new(fileno(md.f), 0);
-    return &dd;
+    special->md.size = ftell(special->md.f);
+    special->md.data = prot_new(fileno(special->md.f), 0);
+    return &special->dd;
 }
 
 static void cleanup_special_delivery(deliver_data_t *mydata)
@@ -1040,6 +1051,162 @@ static void cleanup_special_delivery(deliver_data_t *mydata)
         message_free_body(mydata->content->body);
         free(mydata->content->body);
     }
+    /* dd is the first member, so this is the whole allocation */
+    free(mydata);
+}
+
+/* the append, and the create-and-retry if the target isn't there yet.  The
+   immediate and deferred paths both do exactly this, at different times */
+static int do_fileinto(deliver_data_t *mdata, const char *userid,
+                       const struct auth_state *authstate,
+                       const strarray_t *flags, unsigned mode,
+                       const char *intname, const char *specialuse,
+                       int do_create, int quotaoverride)
+{
+    message_data_t *md = mdata->m;
+    struct imap4flags imap4flags = { flags, authstate };
+    int ret;
+
+    ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
+                          &imap4flags, NULL, userid, authstate, md->id,
+                          userid, mdata->notifyheader, mode,
+                          intname, md->date, 0 /*savedate*/, quotaoverride, 0);
+
+    if (ret == IMAP_MAILBOX_NONEXISTENT) {
+        /* if "plus" folder under INBOX, then try to create it */
+        ret = autosieve_createfolder(userid, authstate, intname, do_create);
+
+        /* Try to deliver the mail again. */
+        if (!ret) {
+            if (specialuse) {
+                /* Attempt to add special-use flag to newly created mailbox */
+                struct buf buf = BUF_INITIALIZER;
+                int r = specialuse_validate(NULL, userid, specialuse, &buf, 0);
+
+                if (!r) {
+                    annotatemore_write(intname, "/specialuse", userid, &buf);
+                }
+                buf_free(&buf);
+            }
+
+            ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
+                                  &imap4flags, NULL, userid, authstate, md->id,
+                                  userid, mdata->notifyheader, mode,
+                                  intname, md->date, 0 /*savedate*/,
+                                  quotaoverride, 0);
+        }
+    }
+
+    return ret;
+}
+
+/* a fileinto whose target belongs to somebody else waits here until lmtpd has
+   committed the recipient's conversations state and dropped their lock.  They
+   drain grouped by owner, keeping each owner's appends atomic, and never
+   holding one owner's lock while taking another's */
+struct deferred_fileinto {
+    char *owner;                /* who owns the target, NULL if it's shared */
+    char *userid;               /* the recipient, whose script this was */
+    char *intname;
+    char *specialuse;
+    strarray_t flags;
+    unsigned mode;
+    int do_create;
+    int quotaoverride;
+    deliver_data_t *mdata;
+    int mdata_is_special;       /* ours to clean up */
+};
+
+static ptrarray_t deferred_fileintos = PTRARRAY_INITIALIZER;
+
+static void defer_fileinto(const char *owner, const char *userid,
+                           const char *intname, deliver_data_t *mdata,
+                           int mdata_is_special, const strarray_t *flags,
+                           unsigned mode, const char *specialuse,
+                           int do_create, int quotaoverride)
+{
+    struct deferred_fileinto *item = xzmalloc(sizeof(struct deferred_fileinto));
+
+    item->owner = xstrdupnull(owner);
+    item->userid = xstrdupnull(userid);
+    item->intname = xstrdup(intname);
+    item->specialuse = xstrdupnull(specialuse);
+    if (flags) strarray_cat(&item->flags, flags);
+    item->mode = mode;
+    item->do_create = do_create;
+    item->quotaoverride = quotaoverride;
+    item->mdata = mdata;
+    item->mdata_is_special = mdata_is_special;
+
+    ptrarray_append(&deferred_fileintos, item);
+}
+
+static void free_deferred_fileinto(struct deferred_fileinto *item)
+{
+    if (item->mdata_is_special) cleanup_special_delivery(item->mdata);
+    free(item->owner);
+    free(item->userid);
+    free(item->intname);
+    free(item->specialuse);
+    strarray_fini(&item->flags);
+    free(item);
+}
+
+/* deliver everything we put aside.  Returns true if anything failed, so lmtpd
+   can put one copy in the recipient's INBOX, where a failed fileinto has
+   always ended up; the script has finished and can't be told */
+EXPORTED int sieve_run_deferred_fileinto(void)
+{
+    int fallback = 0;
+
+    while (ptrarray_size(&deferred_fileintos)) {
+        struct deferred_fileinto *first = ptrarray_nth(&deferred_fileintos, 0);
+        char *owner = xstrdupnull(first->owner);
+        struct conversations_state *state = NULL;
+        int i;
+
+        /* one conversations state for the whole group.  Carry on without it
+           if we can't get it: each mailbox opens its own, so we lose the
+           grouping but not the mail */
+        if (owner) {
+            int r = conversations_open_user(owner, 0/*shared*/, &state);
+            if (r) {
+                xsyslog_ev(LOG_WARNING,
+                           "sieve.fileinto.deferred.conversations.failed",
+                           lf_s("u.username", owner),
+                           lf_err("error", r));
+            }
+        }
+
+        for (i = 0; i < ptrarray_size(&deferred_fileintos); i++) {
+            struct deferred_fileinto *item =
+                ptrarray_nth(&deferred_fileintos, i);
+            if (strcmpsafe(item->owner, owner)) continue;
+
+            struct auth_state *authstate = auth_newstate(item->userid);
+            int ret = do_fileinto(item->mdata, item->userid, authstate,
+                                  &item->flags, item->mode, item->intname,
+                                  item->specialuse, item->do_create,
+                                  item->quotaoverride);
+            if (ret) {
+                xsyslog_ev(LOG_WARNING, "sieve.fileinto.deferred.failed",
+                           lf_s("u.username", item->userid),
+                           lf_intname("mbox.name", item->intname),
+                           lf_err("error", ret));
+                fallback = 1;
+            }
+            auth_freestate(authstate);
+
+            free_deferred_fileinto(item);
+            ptrarray_remove(&deferred_fileintos, i);
+            i--;
+        }
+
+        conversations_commit(&state);
+        free(owner);
+    }
+
+    return fallback;
 }
 
 static int sieve_fileinto(void *ac,
@@ -1094,7 +1261,6 @@ static int sieve_fileinto(void *ac,
 
     message_data_t *md = mdata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
-    struct imap4flags imap4flags = { fc->imapflags, sd->authstate };
     unsigned mode = ACTION_FILEINTO;
 
     if (fc->ikeep_target) mode = ACTION_IMPLICIT | TARGET_SET;
@@ -1108,36 +1274,22 @@ static int sieve_fileinto(void *ac,
         else md = mdata->m;
     }
 
-    ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
-                          &imap4flags, NULL, userid, sd->authstate, md->id,
-                          userid, mdata->notifyheader, mode,
-                          intname, md->date, 0 /*savedate*/, quotaoverride, 0);
-
-    if (ret == IMAP_MAILBOX_NONEXISTENT) {
-        /* if "plus" folder under INBOX, then try to create it */
-        ret = autosieve_createfolder(userid, sd->authstate,
-                                     intname, fc->do_create);
-
-        /* Try to deliver the mail again. */
-        if (!ret) {
-            if (fc->specialuse) {
-                /* Attempt to add special-use flag to newly created mailbox */
-                struct buf specialuse = BUF_INITIALIZER;
-                int r = specialuse_validate(NULL, userid, fc->specialuse, &specialuse, 0);
-
-                if (!r) {
-                    annotatemore_write(intname, "/specialuse",
-                                       userid, &specialuse);
-                }
-                buf_free(&specialuse);
-            }
-
-            ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
-                                  &imap4flags, NULL, userid, sd->authstate, md->id,
-                                  userid, mdata->notifyheader, mode,
-                                  intname, md->date, 0 /*savedate*/, quotaoverride, 0);
-        }
+    /* filing into a mailbox somebody else owns takes their namespace lock,
+       and we hold the recipient's.  Put it aside until lmtpd lets go.  We must
+       report success before we know, and a failure falls back to INBOX */
+    char *owner = mboxname_to_userid(intname);
+    if (strcmpsafe(owner, userid)) {
+        defer_fileinto(owner, userid, intname, mdata, fc->headers != NULL,
+                       fc->imapflags, mode, fc->specialuse, fc->do_create,
+                       quotaoverride);
+        free(owner);
+        ret = 0;
+        goto done;
     }
+    free(owner);
+
+    ret = do_fileinto(mdata, userid, sd->authstate, fc->imapflags, mode,
+                      intname, fc->specialuse, fc->do_create, quotaoverride);
 
     if (fc->headers) cleanup_special_delivery(mdata);
 
@@ -2501,8 +2653,11 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
     // unless configured to create it, drop out now
     if (!createsievefolder) return IMAP_MAILBOX_NONEXISTENT;
 
-    // lock the namespace and check again before trying to create
-    user_nslock_t *user_nslock = user_nslock_lock_w(userid);
+    // lock the namespace we're creating in - which is only the recipient's
+    // when they're filing into their own account - and check again
+    char *owner = mboxname_to_userid(internalname);
+    user_nslock_t *user_nslock = user_nslock_lock_w(owner);
+    free(owner);
 
     // did we lose the race?
     r = mboxlist_lookup(internalname, 0, 0);
