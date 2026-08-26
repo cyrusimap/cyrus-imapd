@@ -468,6 +468,25 @@ static void test_encode_mimeheader(void)
 #undef TESTCASE
 }
 
+static void test_b64encode_mimebody_length(void)
+{
+    /* Sanity: a small input encodes correctly and reports the right length. */
+    static const char PLAIN[] = "foobar";
+    static const char B64[] = "Zm9vYmFy";
+    char buf[64];
+    size_t outlen = 0;
+    size_t outlines = 0;
+
+    charset_b64encode_mimebody(PLAIN, sizeof(PLAIN)-1, buf, &outlen, &outlines, 0);
+    CU_ASSERT_EQUAL(outlen, sizeof(B64)-1);
+    CU_ASSERT_MEMEQUAL(buf, B64, sizeof(B64)-1);
+
+    /* Check that outlen is computed in a width wide enough to hold it. */
+    outlen = 0;
+    charset_b64encode_mimebody(NULL, (size_t) 3221225470UL, NULL, &outlen, NULL, 0);
+    CU_ASSERT_EQUAL(outlen, (size_t) 4294967296ULL);
+}
+
 static void test_encode_addrheader(void)
 {
     /* corner cases in Quoted-Printable */
@@ -1672,7 +1691,7 @@ static void test_encode_mimebody(void)
         size_t inlen = strlen(in); \
         size_t wantlen = strlen(want); \
         size_t preflight_outlen = 0xffee; \
-        int preflight_outlines = 0x1234; \
+        size_t preflight_outlines = 0x1234; \
         char *preflight_retval = charset_b64encode_mimebody(NULL, inlen, NULL, \
             &preflight_outlen, &preflight_outlines, wrap); \
         CU_ASSERT_PTR_NULL(preflight_retval); \
@@ -1680,7 +1699,7 @@ static void test_encode_mimebody(void)
         CU_ASSERT_EQUAL(wantlines, preflight_outlines); \
         char *retval = malloc(preflight_outlen); \
         size_t encode_outlen = 0x1234; \
-        int encode_outlines = 0xffee; \
+        size_t encode_outlines = 0xffee; \
         char *encode_retval = charset_b64encode_mimebody(in, inlen, \
                 retval, &encode_outlen, &encode_outlines, wrap); \
         CU_ASSERT_PTR_EQUAL(retval, encode_retval); \

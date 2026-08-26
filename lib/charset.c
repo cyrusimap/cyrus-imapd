@@ -3994,12 +3994,12 @@ static const char base_64[] =
 
 EXPORTED char *charset_b64encode_mimebody(const char *msg_base, size_t len,
                                           char *retval, size_t *outlen,
-                                          int *outlines, int wrap)
+                                          size_t *outlines, int wrap)
 {
     const unsigned char *s;
     unsigned char s0, s1, s2;
     char *d;
-    int b64_len, b64_lines, cnt;
+    size_t b64_len, b64_lines, cnt;
 
     b64_len = ((len + 2) / 3) * 4;
     if (wrap) {

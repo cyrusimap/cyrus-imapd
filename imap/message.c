@@ -1971,8 +1971,8 @@ static void message_parse_content(struct msg *msg, struct body *body,
     }
 
     if (encode) {
-        size_t b64_size;
-        int b64_lines, delta;
+        size_t b64_size, b64_lines;
+        int delta;
 
         /* Determine encoded size */
         charset_b64encode_mimebody(NULL, body->content_size, NULL,
