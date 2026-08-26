@@ -6,7 +6,9 @@ use Cassandane::Tiny;
 # read it back with a GET, both over HTTP/2, and check the bytes survive the
 # round trip.  This proves request bodies (DATA frames out) and response bodies
 # (DATA frames in) both work.
-sub test_put_get_roundtrip ($self)
+sub test_put_get_roundtrip
+    :needs_dependency_nghttp2
+    ($self)
 {
     # Provision the calendar home so the PUT has a collection to land in.
     $self->{caldav}->GetCalendars();
