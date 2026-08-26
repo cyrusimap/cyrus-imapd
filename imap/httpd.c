@@ -2611,6 +2611,17 @@ EXPORTED const char *http_statusline(unsigned ver, long code)
 }
 
 
+/* Return true if s[0..len) contains a control character other than HTAB,
+ * see RFC 9110 5.6.4. */
+static bool has_illegal_hdr_char(const char *s, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = s[i];
+        if ((c < ' ' && c != '\t') || c == 127) return true;
+    }
+    return false;
+}
+
 /* Output an HTTP response header.
  * 'code' specifies the HTTP Status-Code and Reason-Phrase.
  * 'txn' contains the transaction context
@@ -2627,6 +2638,16 @@ EXPORTED void simple_hdr(struct transaction_t *txn,
     va_end(args);
 
     syslog(LOG_DEBUG, "simple_hdr(%s: %s)", name, buf_cstring(&buf));
+
+    /* Drop headers with illegal characters. */
+    if (has_illegal_hdr_char(name, strlen(name)) ||
+        has_illegal_hdr_char(buf_base(&buf), buf_len(&buf))) {
+        xsyslog_ev(LOG_NOTICE, "http.header.dropped",
+                   lf_s("http.header.name", name),
+                   lf_s("http.header.value", buf_cstring(&buf)));
+        buf_free(&buf);
+        return;
+    }
 
     txn->conn->add_resp_header(txn, name, &buf);
 }
@@ -3339,7 +3360,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             /* Construct Content-Disposition header */
             char *encfname = NULL;
             for (const unsigned char *p = (unsigned char *)resp_body->dispo.fname; p && *p; p++) {
-                if (*p >= 0x80) {
+                if (*p < ' ' || *p >= 127) {
                     encfname = charset_encode_mimexvalue(resp_body->dispo.fname, NULL);
                     break;
                 }
@@ -3351,9 +3372,17 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 free(encfname);
             }
             else {
+                /* filename is printable ASCII: emit as a quoted-string,
+                 * backslash-escaping DQUOTE and backslash (RFC 9110, 5.6.4) */
+                struct buf fname = BUF_INITIALIZER;
+                for (const char *p = resp_body->dispo.fname; *p; p++) {
+                    if (*p == '"' || *p == '\\') buf_putc(&fname, '\\');
+                    buf_putc(&fname, *p);
+                }
                 simple_hdr(txn, "Content-Disposition", "%s; filename=\"%s\"",
                         resp_body->dispo.attach ? "attachment" : "inline",
-                        resp_body->dispo.fname);
+                        buf_cstring(&fname));
+                buf_free(&fname);
             }
         }
         if (txn->resp_body.enc.type) {

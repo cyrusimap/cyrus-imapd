@@ -1,0 +1,100 @@
+#!perl
+use Cassandane::Tiny;
+use XML::Spice;
+
+# This test asserts that special characters in a CalDAV calendar
+# collection display name get escaped.
+# The display name is set both with JMAP Calendar/set and PROPPATCH.
+
+sub set_displayname_and_get_headers ($self, $method, $name)
+{
+    my $caldav = $self->{caldav};
+
+    # cassandane's own default calendar
+    my $calhref = '/dav/calendars/user/cassandane/Default';
+
+    if ($method eq 'jmap') {
+        my $jmap = $self->default_user->jmap;
+        my $cal_id = $self->default_user->calendars->default->id;
+
+        xlog $self, "set the display name via JMAP";
+        my $set = $jmap->request([[
+            'Calendar/set', {
+                update => { $cal_id => { name => $name } },
+            }, 'R1',
+        ]])->single_sentence('Calendar/set')->arguments;
+        $self->assert(exists $set->{updated}{$cal_id});
+    }
+    elsif ($method eq 'caldav') {
+        xlog $self, "set the display name via CalDAV PROPPATCH";
+        my $res = $caldav->Request(
+            'PROPPATCH', $calhref,
+            x('D:propertyupdate', $caldav->NS(),
+                x('D:set',
+                    x('D:prop',
+                        x('D:displayname', $name),
+                    ),
+                ),
+            ),
+            'Content-Type' => 'text/xml',
+        );
+        $self->assert_matches(qr{HTTP/[0-9.]+ 207\b}, $res->{headers}{status})
+            if ref $res eq 'HASH' && exists $res->{headers}{status};
+    }
+    else {
+        die "unknown method '$method'";
+    }
+
+    xlog $self, "GET the calendar as cassandane: $calhref";
+    my $service = $self->{instance}->get_service('http');
+    my $sock = $service->get_socket()
+        or die "cannot connect to http service: $!";
+    my $authority = $service->host() . ':' . $service->port();
+
+    $sock->print(
+        "GET $calhref HTTP/1.1\r\n"
+      . "Host: $authority\r\n"
+      . "Authorization: " . $caldav->auth_header() . "\r\n"
+      . "Connection: close\r\n"
+      . "\r\n"
+    );
+
+    my $raw = do { local $/; <$sock> };
+    close($sock);
+
+    xlog $self, "raw HTTP response:\n$raw";
+
+    $self->assert_matches(qr{^HTTP/[0-9.]+ 200\b}, $raw);
+
+    # Everything up to the first blank line is the response header block.
+    my ($rawheaders) = split /\r\n\r\n/, $raw, 2;
+    return $rawheaders;
+}
+
+sub assert_escape_displayname ($self, %params)
+{
+    my $method = $params{method}
+        // die "'method' parameter must be 'jmap' or 'caldav'";
+
+    # Handle CRLF in name.
+    my $rawheaders = $self->set_displayname_and_get_headers(
+        $method, "hello\r\nx-foo: world\r\n\r\n");
+    $self->assert_does_not_match(qr/^x-foo:/im, $rawheaders);
+
+    # Handle double quote or backslash in name.
+    $rawheaders = $self->set_displayname_and_get_headers($method, 'a"b\\c');
+    $self->assert_matches(qr/\Qfilename="a\"b\\c.ics"\E/, $rawheaders);
+}
+
+sub test_calendar_caldav_get_escape_displayname_jmap
+    :needs_component_jmap
+    ($self)
+{
+    $self->assert_escape_displayname(method => 'jmap');
+}
+
+sub test_calendar_caldav_get_escape_displayname_proppatch
+    ($self)
+{
+    $self->assert_escape_displayname(method => 'caldav');
+}
