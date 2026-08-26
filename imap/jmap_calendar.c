@@ -8192,6 +8192,7 @@ static void _calendarevent_copy(jmap_req_t *req,
         syslog(LOG_ERR, "caldav_lookup(%s) failed: %s",
                src_id, error_message(r));
         *set_err = json_pack("{s:s}", "type", "notFound");
+        jmap_caleventid_free(&eid);
         goto done;
     }
     jmap_caleventid_free(&eid);
@@ -8266,7 +8267,10 @@ done:
             *set_err = json_pack("{s:s}", "type", "notFound");
         else
             *set_err = jmap_server_error(r);
-        return;
+    }
+    if (*set_err) {
+        json_decref(*new_event);
+        *new_event = NULL;
     }
     mboxlist_entry_free(&mbentry);
     mailbox_close(&src_mbox);
