@@ -55,6 +55,7 @@ sub new
     $config->set(virtdomains => 'no');
     $config->set(jmap_nonstandard_extensions => 'yes');
     $config->set(conversations => 'yes');
+    $config->set(sieve_maxscripts => 10);
 
     my $self = $class->SUPER::new({
             config => $config,
@@ -474,6 +475,48 @@ sub ihave_common
         "}\n");
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/"variables".*MUST NOT be used in "ihave"/, $errs);
+
+    # Regression test: requiring "ihave" must NOT act as a blanket
+    # unlock for every other extension.  Using an extension's syntax
+    # without requiring it (and without a preceding successful ihave
+    # test on it) is still a compile error.
+    ($res, $errs) = $self->compile_sieve_script('ihave_no_blanket_unlock',
+        "require [\"ihave\"];\n" .
+        "fileinto \"INBOX\";\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/fileinto.*MUST be enabled/, $errs);
+
+    # A successful ihave test on a capability enables that capability
+    # for the remainder of the script, even outside the guarded block
+    # (RFC 5463 section 4, point 1).
+    ($res, $errs) = $self->compile_sieve_script('ihave_success_enables_after',
+        "require [\"ihave\"];\n" .
+        "if ihave \"fileinto\" {\n" .
+        "  stop;\n" .
+        "}\n" .
+        "fileinto \"INBOX\";\n");
+    $self->assert_str_equals('success', $res);
+
+    # ...but not before that ihave test has been evaluated.
+    ($res, $errs) = $self->compile_sieve_script('ihave_success_not_before',
+        "require [\"ihave\"];\n" .
+        "fileinto \"INBOX\";\n" .
+        "if ihave \"fileinto\" {\n" .
+        "  stop;\n" .
+        "}\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/fileinto.*MUST be enabled/, $errs);
+
+    # A successful ihave test only enables the capabilities it
+    # actually names, not every extension.
+    ($res, $errs) = $self->compile_sieve_script('ihave_success_only_named',
+        "require [\"ihave\"];\n" .
+        "if ihave \"envelope\" {\n" .
+        "  stop;\n" .
+        "}\n" .
+        "fileinto \"INBOX\";\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/fileinto.*MUST be enabled/, $errs);
 
     # Regression test: an unsupported ihave test combined with
     # another test in an anyof() must not leak parse-error
