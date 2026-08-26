@@ -7955,7 +7955,10 @@ static int eventquery_run(jmap_req_t *req,
         matches = mymatches;
 
         struct eventquery_cmp_rock rock = { sort, nsort };
-        cyr_qsort_r(matches.data, matches.count, sizeof(void*), eventquery_cmp, &rock);
+        if (matches.count) {
+            cyr_qsort_r(matches.data, matches.count, sizeof(void*),
+                        eventquery_cmp, &rock);
+        }
     }
 
     query->total = ptrarray_size(&matches);
@@ -9608,8 +9611,10 @@ static int principal_query(jmap_req_t *req, struct jmap_query *query, json_t **e
             is_ascending = 0;
         }
     }
-    cyr_qsort_r(matches.data, matches.count, sizeof(char*),
-                principalid_cmp, (void*)(intptr_t) is_ascending);
+    if (matches.count) {
+        cyr_qsort_r(matches.data, matches.count, sizeof(char*),
+                    principalid_cmp, (void*)(intptr_t) is_ascending);
+    }
 
     /* Apply windowing */
     size_t startpos = 0;
@@ -10208,8 +10213,12 @@ static void principal_getavailability(jmap_req_t *req,
      * property. If there are overlapping BusyPeriod time ranges with
      * different “busyStatus” properties the server MUST choose the value in
      * the following order: confirmed > unavailable > tentative. */
-    cyr_qsort_r(busyperiods->data, busyperiods->count, sizeof(struct busyperiod),
-            (int(*)(const void*, const void*, void*))busyperiod_cmp, NULL);
+    if (busyperiods->count) {
+        cyr_qsort_r(busyperiods->data, busyperiods->count,
+                    sizeof(struct busyperiod),
+                    (int (*)(const void *, const void *, void *))busyperiod_cmp,
+                    NULL);
+    }
     int count = dynarray_size(busyperiods) ? 1 : 0;
     int i;
     for (i = 1; i < dynarray_size(busyperiods); i++) {
@@ -10220,6 +10229,8 @@ static void principal_getavailability(jmap_req_t *req,
             if (count != i) {
                 /* Insert new busy period */
                 dynarray_set(busyperiods, count, bp);
+                /* Ownership of jevent moved to the new slot */
+                bp->jevent = NULL;
             }
             count++;
         }

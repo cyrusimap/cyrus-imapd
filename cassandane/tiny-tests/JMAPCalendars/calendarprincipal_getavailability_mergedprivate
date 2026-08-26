@@ -1,0 +1,76 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarprincipal_getavailability_mergedprivate
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    # Two private events merge into a single busy period without event
+    # details, followed by a public event that keeps its details. This
+    # exercises compacting the busy period array while an event is set.
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                'private-0900-1000' => {
+                    version => '2.0',
+                    calendarIds => {
+                        $default_cal_id => JSON::true,
+                    },
+                    title => "private-0900-1000",
+                    start => "2020-08-01T09:00:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT1H",
+                    privacy => 'private',
+                },
+                'private-0930-1100' => {
+                    version => '2.0',
+                    calendarIds => {
+                        $default_cal_id => JSON::true,
+                    },
+                    title => "private-0930-1100",
+                    start => "2020-08-01T09:30:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT1H30M",
+                    privacy => 'private',
+                },
+                'public-1200-1300' => {
+                    version => '2.0',
+                    calendarIds => {
+                        $default_cal_id => JSON::true,
+                    },
+                    title => "public-1200-1300",
+                    start => "2020-08-01T12:00:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT1H",
+                    privacy => 'public',
+                },
+            },
+        }, 'R1'],
+        ['Principal/getAvailability', {
+            id => 'cassandane',
+            utcStart => '2020-08-01T00:00:00Z',
+            utcEnd => '2020-09-01T00:00:00Z',
+            showDetails => JSON::true,
+            eventProperties => ['start', 'title'],
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(3, scalar keys %{$res->[0][1]{created}});
+
+    $self->assert_cmp_deeply([{
+        utcStart => "2020-08-01T09:00:00Z",
+        utcEnd => "2020-08-01T11:00:00Z",
+        busyStatus => 'unavailable',
+        event => undef,
+    }, {
+        utcStart => "2020-08-01T12:00:00Z",
+        utcEnd => "2020-08-01T13:00:00Z",
+        busyStatus => 'unavailable',
+        event => {
+            start => "2020-08-01T12:00:00",
+            title => 'public-1200-1300',
+        },
+    }], $res->[1][1]{list});
+}
