@@ -60,4 +60,4 @@ In development
 Not implemented
 ---------------
 * JMAP for Tasks (:draft:`draft-ietf-jmap-tasks`)
-* JMAP SMIME Signature Verification Extensions(:rfc:`9219`)
+* JMAP SMIME Signature Verification Extensions (:rfc:`9219`)
