@@ -47,9 +47,9 @@ true C<isDefault> property.
         @extra && Carp::confess("user has more than one default Calendar");
 
         $self->instance_class->new({
-            id  => "$objs[0]{id}",
+            id  => "$default->{id}",
             factory    => $self,
-            properties => $objs[0],
+            properties => $default,
         })
     }
 
@@ -65,11 +65,32 @@ true C<isDefault> property.
 package Cassandane::TestEntity::Instance::Calendar {
     use Moo;
 
+    use JSON ();
+
     use Cassandane::TestEntity::AutoSetup properties => [ qw(
         name
     ) ];
 
     with 'Cassandane::TestEntity::Role::ShareableInstance';
+
+=head2 create_event
+
+    my $event = $cal->create_event({ ... });
+
+This method creates a CalendarEvent instance that's in C<< $cal >> and no other
+calendars.
+
+=cut
+
+    sub create_event {
+        my ($self, $prop) = @_;
+        $prop //= {};
+
+        $self->user->calendarevents->create({
+            %$prop,
+            calendarIds => { $self->id => JSON::true() },
+        });
+    }
 
     no Moo;
 }
