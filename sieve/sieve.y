@@ -438,13 +438,14 @@ control:  IF thenelse            { $$ = $2; }
         ;
 
 
-thenelse: test block elsif       { 
+thenelse: test block             {
                                      if ($1->ignore_err) {
-                                         /* end of block - decrement counter */
+                                         /* end of then-block - decrement counter */
                                          sscript->ignore_err--;
                                      }
-
-                                     $$ = new_if($1, $2, $3);
+                                 }
+          elsif                  {
+                                     $$ = new_if($1, $2, $4);
                                  }
         ;
 
@@ -3006,7 +3007,7 @@ static test_t *build_anyof(sieve_script_t *sscript, testlist_t *tl)
         t->u.tl = tl;
 
         /* find first test that did/didn't set ignore_err */
-        for ( ; tl && !fail && !maybe; tl = tl->next) {
+        for ( ; tl && !(fail && maybe); tl = tl->next) {
             if (tl->t->ignore_err) {
                 if (!fail) fail = tl->t;
             }
