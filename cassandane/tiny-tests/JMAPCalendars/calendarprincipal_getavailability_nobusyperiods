@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarprincipal_getavailability_nobusyperiods($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    my $calendar_id = $user->calendars->default->id;
+
+    xlog $self, "create event outside of the availability time range";
+    my $res = $jmap->request([[
+        'CalendarEvent/set' => {
+            create => {
+                event1 => {
+                    version => '2.0',
+                    calendarIds => {
+                        $calendar_id => JSON::true,
+                    },
+                    title => 'event1',
+                    start => '2020-09-15T09:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                },
+            },
+        },
+    ]])->single_sentence('CalendarEvent/set')->arguments;
+
+    $self->assert_not_null($res->{created}{event1});
+
+    xlog $self, "assert that no busy periods are returned";
+    $res = $jmap->request([[
+        'Principal/getAvailability' => {
+            id => 'cassandane',
+            utcStart => '2020-08-01T00:00:00Z',
+            utcEnd => '2020-09-01T00:00:00Z',
+        },
+    ]])->single_sentence('Principal/getAvailability')->arguments;
+
+    $self->assert_cmp_deeply([], $res->{list});
+}
