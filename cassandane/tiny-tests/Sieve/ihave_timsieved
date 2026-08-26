@@ -1,0 +1,9 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_ihave_timsieved ($self)
+{
+    xlog $self, "Testing sieve ihave (RFC 5463) compile behaviour, via timsieved";
+    $self->{compile_method} = 'timsieved';
+    $self->ihave_common();
+}
