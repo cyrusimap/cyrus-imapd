@@ -787,7 +787,9 @@ sub _check_selections ($self)
 
 sub check_sanity
 {
-    my ($self) = @_;
+    my ($self, %params) = @_;
+
+    my $nonfatal = delete $params{nonfatal};
 
     # collect tiny-tests directories that are used by test modules
     my %used_tt_dirs;
@@ -872,7 +874,13 @@ sub check_sanity
 
     if (@tt_errors) {
         print STDERR "$_\n" for @tt_errors;
-        die 'bad tiny-tests detected';
+
+        if ($nonfatal) {
+            warn 'bad tiny-tests detected';
+        }
+        else {
+            die 'bad tiny-tests detected';
+        }
     }
 }
 
