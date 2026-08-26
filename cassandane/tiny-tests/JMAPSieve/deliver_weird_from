@@ -1,0 +1,115 @@
+#!perl
+use Cassandane::Tiny;
+use Path::Tiny;
+
+# Sieve and Email/query with fromAnyContact should agree on if a specific
+# From header is that # of a contact or not. In this case, an encoded header
+# decodes to something that looks invalid. Which implemntation is right?
+# This header:
+#
+#    From: =?iso-8859-1?b?KHbtYQ==?= test <example@example.com>
+#
+# decodes to:
+#
+#    From: (vía test <example@example.com>
+#
+# ... and now I imagine that '(' confuses the parser in Sieve, but not the
+# later indexing in squatter, but this is a guess.
+
+sub test_deliver_weird_from
+    :min_version_3_3 :JMAPExtensions
+    :needs_component_sieve
+    ($self)
+{
+    my $user = $self->default_user;
+
+    my $contactId1 = $user->contacts->create({
+        emails => {
+            personal => {
+                contexts => { private => JSON::true },
+                address => 'example@example.com'
+            }
+        },
+    });
+    $self->assert_not_null($contactId1);
+
+    my $inbox = $user->mailboxes->inbox;
+
+    my $screening = $user->mailboxes->create({
+        name => 'screening',
+    });
+
+    $self->{instance}->install_sieve_script(<<~'EOF'
+        require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+        if
+            allof( not string :is "${stop}" "Y",
+                jmapquery text:
+            {
+                "operator" : "NOT",
+                "conditions" : [
+                    {
+                       "fromAnyContact" : true
+                    }
+                ]
+            }
+        .
+            )
+        {
+            fileinto "screening";
+        }
+        EOF
+    );
+
+    my $msg1 = $self->{gen}->generate(
+        from => Cassandane::Address->new(
+            localpart => 'replaceme', domain => 'replaceme'
+        ),
+        subject => 'Message 1'
+    );
+
+    my $from = 'From: =?iso-8859-1?b?KHbtYQ==?= test <example@example.com>';
+
+    my $str = $msg1->as_string;
+    $self->assert($str =~ s/\nFrom:\s*<replaceme\@replaceme>/\n$from/i);
+    $self->{instance}->deliver($str);
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Email/query fromAnyContact finds the message";
+    my $res = $user->jmap->request([[
+        "Email/query" => {
+            filter => {
+                fromAnyContact => $JSON::true
+            },
+        },
+    ]]);
+    my $eids = $res->sentence_named('Email/query')->arguments->{ids};
+    $self->assert_num_equals(1, 0+@$eids);
+
+    my $eid = $eids->[0];
+
+    xlog $self, "Message should have been delivered to inbox";
+    $res = $user->jmap->request([
+        [ "Email/query" => {}, 'a' ],
+        [ "Email/get" => {
+             '#ids' => {
+                 resultOf => 'a',
+                 name     => 'Email/query',
+                 path     => '/ids',
+             },
+        }],
+    ]);
+
+    my $email = $res->sentence_named("Email/get")->arguments->{list}[0];
+    $self->assert_cmp_deeply(
+        superhashof({
+            mailboxIds => { $inbox->id => jtrue },
+            id         => $eid,
+            from       => [ superhashof({
+                email => 'example@example.com',
+            })],
+        }),
+        $email,
+    );
+}
+

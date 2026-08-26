@@ -2060,7 +2060,7 @@ sub _setup_for_deliver
 sub deliver
 {
     my ($self, $msg, %params) = @_;
-    my $str = $msg->as_string();
+    my $str = ref $msg ? $msg->as_string() : $msg;
     my @cmd = ( 'deliver' );
 
     my $folder = $params{folder};
