@@ -1,0 +1,86 @@
+#!perl
+use Cassandane::Tiny;
+
+# Assert that a failing CalendarEvent/copy reports the expected error.
+
+sub assert_calendarevent_copy_error($self, $create, $want_error)
+{
+    my $jmap = $self->default_user->jmap;
+    my $calendar_id = $self->default_user->calendars->default->id;
+
+    xlog "share calendar of other user";
+    my $other_user = $self->{instance}->create_user('other');
+    my $other_calendar = $other_user->calendars->default;
+    $other_calendar->share_with(
+        $self->default_user => [qw(mayReadItems mayWriteAll)]
+    );
+
+    xlog "create event";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        $calendar_id => JSON::true,
+                    },
+                    version => '2.0',
+                    title => 'test',
+                    start => '2026-01-01T09:00:00',
+                    duration => 'PT1H',
+                    timeZone => 'Etc/UTC',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $event_id = $res->[0][1]{created}{event}{id};
+    $self->assert_not_null($event_id);
+
+    xlog "copy event to other user";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/copy', {
+            fromAccountId => 'cassandane',
+            accountId => $other_user->username,
+            create => {
+                copy => {
+                    id => $event_id,
+                    calendarIds => {
+                        $other_calendar->id => JSON::true,
+                    },
+                    %{$create},
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_null($res->[0][1]{created});
+    $self->assert_str_equals($want_error,
+        $res->[0][1]{notCreated}{copy}{type});
+}
+
+sub test_calendarevent_copy_error__invalid_patch($self)
+{
+    # The patch can not be applied to the source event, so the copy
+    # fails after the source event got read from the source calendar.
+    $self->assert_calendarevent_copy_error({
+        'title/nosuchproperty' => 'test',
+    }, 'serverFail');
+}
+
+sub test_calendarevent_copy_error__unknown_calendar($self)
+{
+    # The destination calendar does not exist, so the copy fails after
+    # the destination event got built.
+    $self->assert_calendarevent_copy_error({
+        calendarIds => {
+            nosuchcalendar => JSON::true,
+        },
+    }, 'invalidProperties');
+}
+
+sub test_calendarevent_copy_error__unknown_event($self)
+{
+    # The source event does not exist, so the copy fails right after
+    # the mandatory properties got validated.
+    $self->assert_calendarevent_copy_error({
+        id => 'nosuchevent',
+    }, 'notFound');
+}
