@@ -515,7 +515,14 @@ if test "x$enable_xapian" != xno ; then
         fi
 
         dnl Xapian requires CXX17
+        dnl this probe breaks under -Werror for clang++, so work around that
+        saved_CFLAGS="$CFLAGS"
+        saved_CPPFLAGS="$CPPFLAGS"
+        CFLAGS="$CFLAGS -Wno-error"
+        CPPFLAGS="$CPPFLAGS -Wno-error"
         AX_CXX_COMPILE_STDCXX(17)
+        CFLAGS="$saved_CFLAGS"
+        CPPFLAGS="$saved_CPPFLAGS"
 
         dnl If AC_PROG_LIBTOOL (or the deprecated older version AM_PROG_LIBTOOL)
         dnl has already been expanded, enable libtool support now, otherwise add
