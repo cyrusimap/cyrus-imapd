@@ -1,0 +1,25 @@
+Description:
+
+The JMAP CalendarEvent/participantReply method now enforces that the event's
+organizer is one of the calendar owner's scheduling addresses. Calendar sharees
+acting on behalf of the owner must have the mayWriteAll JMAP calendar right set.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

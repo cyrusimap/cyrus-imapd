@@ -1,0 +1,151 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_participantreply_reply_rsvp_attendee
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    xlog $self, "create an event with some remote organizer";
+    my $res = $jmap->request([[
+        'CalendarEvent/set', {
+            sendSchedulingMessages => JSON::false,
+            create => {
+                1 => {
+                    version => "2.0",
+                    calendarIds => { $default_cal_id => JSON::true },
+                    sequence => 1,
+                    title => "An Event",
+                    freeBusyStatus => "busy",
+                    showWithoutTime => JSON::false,
+                    start => "2022-11-23T16:45:00",
+                    timeZone => "Australia/Melbourne",
+                    duration => "PT1H",
+                    organizerCalendarAddress =>
+                        "mailto:organizer\@example.com",
+                    participants => {
+                        organizer => {
+                            roles => { owner => JSON::true },
+                            calendarAddress =>
+                                'mailto:organizer@example.com',
+                        },
+                        cassandane => {
+                            roles => { attendee => JSON::true },
+                            participationStatus => "needs-action",
+                            calendarAddress => 'mailto:cassandane@example.com',
+                        },
+                        other => {
+                            roles => { attendee => JSON::true },
+                            participationStatus => "needs-action",
+                            calendarAddress => 'mailto:other@example.com',
+                        },
+                    },
+                },
+            },
+        },
+    ]])->single_sentence('CalendarEvent/set')->arguments;
+    my $id = $res->{created}{1}{id};
+    $self->assert_not_null($id);
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "Attempt to RSVP on behalf of other attendee";
+    my $sentence = $jmap->request([[
+        'CalendarEvent/participantReply' => {
+            eventId => $id,
+            participantEmail => "other\@example.com",
+            updates => {
+                participationStatus => "accepted"
+            }
+        },
+    ]])->sentence(0);
+
+    xlog $self, "The RSVP attempt must be rejected";
+    $self->assert_str_equals('error', $sentence->name);
+    $self->assert_str_equals('forbidden', $sentence->arguments->{type});
+
+    xlog $self, "Check that no iMIP reply was sent";
+    my $data = $self->{instance}->getnotify();
+    my @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+    foreach my $imip (@imips) {
+        my $payload = decode_json($imip->{MESSAGE});
+        $self->assert_str_not_equals("other\@example.com",
+                                     $payload->{sender});
+    }
+
+    xlog $self, "Check that participation status is unchanged";
+    $res = $jmap->request([[
+        'CalendarEvent/get' => {
+            ids => [$id],
+            properties => ['participants'],
+        },
+    ]])->single_sentence('CalendarEvent/get')->arguments;
+    $self->assert_str_equals("needs-action",
+        $res->{list}[0]{participants}{other}{participationStatus});
+
+    xlog $self, "create an event whose organizer is the account";
+    $res = $jmap->request([[
+        'CalendarEvent/set', {
+            sendSchedulingMessages => JSON::false,
+            create => {
+                2 => {
+                    version => "2.0",
+                    calendarIds => { $default_cal_id => JSON::true },
+                    sequence => 1,
+                    title => "Another Event",
+                    freeBusyStatus => "busy",
+                    showWithoutTime => JSON::false,
+                    start => "2022-11-23T16:45:00",
+                    timeZone => "Australia/Melbourne",
+                    duration => "PT1H",
+                    organizerCalendarAddress =>
+                        "mailto:cassandane\@example.com",
+                    participants => {
+                        cassandane => {
+                            roles => { owner => JSON::true },
+                            calendarAddress => 'mailto:cassandane@example.com',
+                        },
+                        other => {
+                            roles => { attendee => JSON::true },
+                            participationStatus => "needs-action",
+                            calendarAddress => 'mailto:other@example.com',
+                        },
+                    },
+                },
+            },
+        },
+    ]])->single_sentence('CalendarEvent/set')->arguments;
+    my $id2 = $res->{created}{2}{id};
+    $self->assert_not_null($id2);
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "RSVP on behalf of other attendee is allowed when the "
+              . "organizer is one of the account's scheduling addresses";
+    $res = $jmap->request([[
+        'CalendarEvent/participantReply' => {
+            eventId => $id2,
+            participantEmail => "other\@example.com",
+            updates => {
+                participationStatus => "accepted"
+            }
+        },
+    ]])->single_sentence('CalendarEvent/participantReply')->arguments;
+    $self->assert_not_null($res->{scheduleStatus});
+
+    xlog $self, "Check that participation status changed";
+    $res = $jmap->request([[
+        'CalendarEvent/get' => {
+            ids => [$id2],
+            properties => ['participants'],
+        },
+    ]])->single_sentence('CalendarEvent/get')->arguments;
+    $self->assert_str_equals("accepted",
+        $res->{list}[0]{participants}{other}{participationStatus});
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+}
