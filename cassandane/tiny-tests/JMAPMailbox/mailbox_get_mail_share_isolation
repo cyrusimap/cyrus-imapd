@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+# A client that asks for JMAP Mail Sharing gets shareWith and nothing else from
+# our own mail extension.  This is the whole reason shareWith is gated on a list
+# of capabilities, rather than by implying one capability from the other.
+sub test_mailbox_get_mail_share_isolation
+    :JMAPExtensions
+    ($self)
+{
+    my $owner   = $self->default_user;
+    my $mailbox = $owner->mailboxes->create({ name => 'A' });
+
+    my $jmap  = $owner->jmap;
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:mail:share',
+    ];
+
+    my $res = $jmap->request({
+        using       => $using,
+        methodCalls => [
+            [ 'Mailbox/get', { ids => [ $mailbox->id ] }, 'R1' ],
+        ],
+    });
+
+    my $props = $res->sentence_named('Mailbox/get')->arguments->{list}[0];
+
+    $self->assert(exists $props->{shareWith}, 'we get shareWith');
+
+    for my $name (qw( color showAsLabel isSeenShared uniqueId isCollapsed )) {
+        $self->assert(! exists $props->{$name}, "we do not get $name");
+    }
+
+    xlog $self, 'and asking for one of those by name is an error';
+
+    $res = $jmap->request({
+        using       => $using,
+        methodCalls => [
+            [ 'Mailbox/get', {
+                ids        => [ $mailbox->id ],
+                properties => [ 'id', 'color' ],
+            }, 'R1' ],
+        ],
+    });
+
+    my $err = $res->sentence(0);
+    $self->assert_str_equals('error', $err->name);
+    $self->assert_str_equals('invalidArguments', $err->arguments->{type});
+}

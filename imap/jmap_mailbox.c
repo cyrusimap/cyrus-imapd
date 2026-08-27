@@ -543,6 +543,111 @@ static json_t *_mboxrights_tosharewith(int rights)
     return jrights;
 }
 
+/* The rights of a JMAP Mail Sharing MailboxRights object, and the ACL rights
+ * they stand for.  mayRename has no mask of its own: it's derived from mayDelete
+ * on the mailbox and mayCreateChild on the parent, so there is nothing to store.
+ *
+ * maySetKeywords grants JACL_SETMETADATA, not just JACL_SETKEYWORDS, so that it
+ * grants everything our own mayWrite used to.  Nothing in MailboxRights
+ * corresponds to ACL_ANNOTATEMSG on its own, and a sharee who can set keywords
+ * but not annotations would be a new and unhelpful kind of sharee.  Reading the
+ * right back only asks about JACL_SETKEYWORDS, as myRights always has, which
+ * still round-trips: granting it sets "w", and clearing it clears "w".
+ */
+static const struct mboxright {
+    const char *name;
+    int mask;
+} MAILBOX_RIGHTS[] = {
+    { "mayReadItems",   JACL_READITEMS   },
+    { "mayAddItems",    JACL_ADDITEMS    },
+    { "mayRemoveItems", JACL_REMOVEITEMS },
+    { "mayCreateChild", JACL_CREATECHILD },
+    { "mayDelete",      JACL_DELETE      },
+    { "mayRename",      0                },
+    { "maySubmit",      JACL_SUBMIT      },
+    { "maySetSeen",     JACL_SETSEEN     },
+    { "maySetKeywords", JACL_SETMETADATA },
+    { "mayShare",       ACL_ADMIN        },
+    { NULL,             0                }
+};
+
+static const struct mboxright *_mboxright_named(const char *name)
+{
+    const struct mboxright *right;
+
+    for (right = MAILBOX_RIGHTS; right->name; right++) {
+        if (!strcmp(name, right->name)) return right;
+    }
+
+    return NULL;
+}
+
+struct sharee_rights_rock {
+    const char *sharee;
+    int rights;
+};
+
+static void _sharee_rights_cb(const char *sharee, int rights, void *vrock)
+{
+    struct sharee_rights_rock *rock = vrock;
+
+    if (!strcmp(sharee, rock->sharee)) rock->rights = rights;
+}
+
+/* The rights a mailbox's ACL grants to exactly this sharee.  Unlike
+ * jmap_myrights_mbentry, this is a literal lookup, with no groups and no
+ * negative rights -- which is what we want, because the keys of shareWith are
+ * ACL identifiers.  A NULL mbentry (no such parent) grants nothing.
+ */
+static int _mbox_sharee_rights(const mbentry_t *mbentry, const char *sharee)
+{
+    struct sharee_rights_rock rock = { sharee, 0 };
+
+    if (mbentry) jmap_foreach_sharee(mbentry, &_sharee_rights_cb, &rock);
+
+    return rock.rights;
+}
+
+struct mbox_sharewith_rock {
+    json_t *sharewith;
+    const mbentry_t *parent;
+    int is_inbox;
+};
+
+static void _mbox_sharewith_cb(const char *sharee, int rights, void *vrock)
+{
+    struct mbox_sharewith_rock *rock = vrock;
+
+    int may_rename = !rock->is_inbox
+        && ((rights & JACL_DELETE) == JACL_DELETE)
+        && ((_mbox_sharee_rights(rock->parent, sharee) & JACL_CREATECHILD)
+                == JACL_CREATECHILD);
+
+    json_t *jrights = _mboxrights_to_jmap(rights, rock->is_inbox, may_rename);
+    json_object_set_new(jrights, "mayShare", _json_has(rights, ACL_ADMIN));
+
+    if (!JNOTNULL(rock->sharewith)) rock->sharewith = json_object();
+
+    json_object_set_new(rock->sharewith, sharee, jrights);
+}
+
+/* Under JMAP Mail Sharing, the values of shareWith are MailboxRights objects,
+ * the same shape as myRights.  Our own extension uses a much coarser set of
+ * rights, and will go away once clients have moved over.
+ */
+static json_t *_mbox_get_sharewith(jmap_req_t *req, const mbentry_t *mbentry,
+                                   const mbentry_t *parent, int is_inbox)
+{
+    if (!jmap_is_using(req, JMAP_URN_MAIL_SHARE))
+        return jmap_get_sharewith(mbentry, _mboxrights_tosharewith);
+
+    struct mbox_sharewith_rock rock = { json_null(), parent, is_inbox };
+
+    jmap_foreach_sharee(mbentry, &_mbox_sharewith_cb, &rock);
+
+    return rock.sharewith;
+}
+
 static json_t *_mbox_get(jmap_req_t *req,
                          const mbentry_t *mbentry,
                          hash_table *roles,
@@ -559,7 +664,9 @@ static json_t *_mbox_get(jmap_req_t *req,
     _mbox_is_inbox(mbname, &is_inbox, &parent_is_inbox);
     char *role = _mbox_get_role(req, mbname);
 
-    if (jmap_wantprop(props, "myRights") || jmap_wantprop(props, "parentId")) {
+    if (jmap_wantprop(props, "myRights") || jmap_wantprop(props, "parentId")
+            || (jmap_wantprop(props, "shareWith")
+                    && jmap_is_using(req, JMAP_URN_MAIL_SHARE))) {
         /* Need to lookup parent mailbox */
         _findparent(mbname_intname(mbname), &parent);
     }
@@ -605,8 +712,7 @@ static json_t *_mbox_get(jmap_req_t *req,
     }
 
     if (jmap_wantprop(props, "shareWith")) {
-        json_t *sharewith = jmap_get_sharewith(mbentry,
-                _mboxrights_tosharewith);
+        json_t *sharewith = _mbox_get_sharewith(req, mbentry, parent, is_inbox);
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
@@ -1888,6 +1994,7 @@ static void _mboxset_args_parse(json_t *jargs,
     }
     if (json_is_object(args->shareWith)) {
         // Validate rights
+        int is_mail_sharing = jmap_is_using(req, JMAP_URN_MAIL_SHARE);
         const char *sharee;
         json_t *jrights;
         json_object_foreach(args->shareWith, sharee, jrights) {
@@ -1895,11 +2002,13 @@ static void _mboxset_args_parse(json_t *jargs,
                 const char *right;
                 json_t *jval;
                 json_object_foreach(jrights, right, jval) {
-                    if (!json_is_boolean(jval) ||
-                        (strcmp(right, "mayRead") &&
-                         strcmp(right, "mayWrite") &&
-                         strcmp(right, "mayAdmin"))) {
+                    int is_known = is_mail_sharing
+                        ? _mboxright_named(right) != NULL
+                        : (!strcmp(right, "mayRead") ||
+                           !strcmp(right, "mayWrite") ||
+                           !strcmp(right, "mayAdmin"));
 
+                    if (!json_is_boolean(jval) || !is_known) {
                         jmap_parser_push(parser, "shareWith");
                         jmap_parser_push(parser, sharee);
                         jmap_parser_invalid(parser, right);
@@ -2076,6 +2185,65 @@ static int _mbox_sharewith_to_rights(int rights, json_t *jsharewith)
     return newrights;
 }
 
+/* The rights named in a JMAP Mail Sharing MailboxRights object, patched onto
+ * the rights the sharee has already.
+ */
+static int _mbox_mailboxrights_to_rights(int rights, json_t *jsharewith)
+{
+    int newrights = rights;
+    const char *name;
+    json_t *jval;
+
+    json_object_foreach(jsharewith, name, jval) {
+        const struct mboxright *right = _mboxright_named(name);
+
+        /* mayRename has no mask, and _mbox_sharewith_mayrename_ok has already
+         * refused any attempt to change it, so there is nothing to do here. */
+        if (!right || !right->mask) continue;
+
+        if (json_boolean_value(jval))
+            newrights |= right->mask;
+        else
+            newrights &= ~right->mask;
+    }
+
+    return newrights;
+}
+
+/* JMAP Mail Sharing puts mayRename among the rights in shareWith, but we have
+ * no bit to store it in: it's derived from mayDelete on the mailbox and
+ * mayCreateChild on the parent.  A client may send back the value we would have
+ * given it -- anything doing a read-modify-write of shareWith will -- but it
+ * must not ask us to change it.  We would like to support this properly some
+ * day. -- rjbs, 2026-08-27
+ */
+static int _mbox_sharewith_mayrename_ok(json_t *shareWith,
+                                        const mbentry_t *mbentry,
+                                        const mbentry_t *parent,
+                                        int is_inbox,
+                                        int overwrite)
+{
+    const char *sharee;
+    json_t *jrights;
+
+    json_object_foreach(shareWith, sharee, jrights) {
+        json_t *jmayrename = json_object_get(jrights, "mayRename");
+        if (!jmayrename) continue;
+
+        int rights = overwrite ? 0 : _mbox_sharee_rights(mbentry, sharee);
+        rights = _mbox_mailboxrights_to_rights(rights, jrights);
+
+        int may_rename = !is_inbox
+            && ((rights & JACL_DELETE) == JACL_DELETE)
+            && ((_mbox_sharee_rights(parent, sharee) & JACL_CREATECHILD)
+                    == JACL_CREATECHILD);
+
+        if (json_boolean_value(jmayrename) != may_rename) return 0;
+    }
+
+    return 1;
+}
+
 #define MBOXSET_RESULT_INITIALIZER { NULL, 0, NULL, NULL, NULL }
 
 struct mboxset {
@@ -2126,6 +2294,13 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     if (!mbparent || !jmap_hasrights_mbentry(req, mbparent, JACL_CREATECHILD) ||
                 mboxname_isnondeliverymailbox(mbparent->name, mbparent->mbtype)) {
         jmap_parser_invalid(&parser, "parentId");
+        goto done;
+    }
+
+    if (args->shareWith && jmap_is_using(req, JMAP_URN_MAIL_SHARE) &&
+            !_mbox_sharewith_mayrename_ok(args->shareWith, NULL, mbparent,
+                                          /*is_inbox*/0, args->overwrite_acl)) {
+        result->err = json_pack("{s:s}", "type", "forbidden");
         goto done;
     }
 
@@ -2227,7 +2402,9 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     /* shareWith */
     if (args->shareWith) {
         r = jmap_set_sharewith(mailbox, args->shareWith, args->overwrite_acl,
-                _mbox_sharewith_to_rights);
+                jmap_is_using(req, JMAP_URN_MAIL_SHARE)
+                    ? &_mbox_mailboxrights_to_rights
+                    : &_mbox_sharewith_to_rights);
         mailbox_close(&mailbox);
     }
     if (r) goto done;
@@ -2462,6 +2639,18 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         goto done;
     }
 
+    /* We check against the parent the mailbox has now.  An update that moves
+     * the mailbox and sends mayRename in the same request will be checked
+     * against the old parent, but since mayRename can't be changed *anyway*,
+     * all that's at stake is which error the client gets. -- rjbs, 2026-08-27
+     */
+    if (args->shareWith && jmap_is_using(req, JMAP_URN_MAIL_SHARE) &&
+            !_mbox_sharewith_mayrename_ok(args->shareWith, mbentry, mbparent,
+                                          is_inbox, args->overwrite_acl)) {
+        result->err = json_pack("{s:s}", "type", "forbidden");
+        goto done;
+    }
+
     /* Now parent_id always has a proper mailbox id */
     parent_id = args->is_toplevel ? mbinbox->uniqueid : parent_id;
 
@@ -2686,7 +2875,9 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
         if (args->shareWith) {
             r = jmap_set_sharewith(mbox, args->shareWith, args->overwrite_acl,
-                    _mbox_sharewith_to_rights);
+                    jmap_is_using(req, JMAP_URN_MAIL_SHARE)
+                        ? &_mbox_mailboxrights_to_rights
+                        : &_mbox_sharewith_to_rights);
             bump_modseq = false;
         }
 
