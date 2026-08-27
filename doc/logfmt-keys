@@ -86,12 +86,15 @@ send.delay              seconds between when a message was due and when it went
 send.numrcpts           how many recipients the message went to
 send.outcome            what happened: sent, cancelled, unsnoozed
 send.retries            how many times sending had been retried
+send.return_path        the envelope return path a message was sent with
 send.scheduled          when the message was due to be sent
 send.time               when the message was actually sent
 
 ### per-subsystem
 
+annot.entry             an annotation entry name
 cal.organizer           a calendar component's ORGANIZER
+cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID
 http.header.name        the name of an HTTP header
 http.header.value       the value of an HTTP header
@@ -119,7 +122,12 @@ search.op               a search operator, e.g. OR
 search.restarts         how many times indexing restarted from the first message
 search.uncommitted      how many documents were pending when a commit failed
 search.updates          how many update passes indexed nothing
+sieve.lineno            the line of a Sieve script an error was found on
+sieve.result            a SIEVE_* result code
+sieve.script            the name of a Sieve script
+sieve.srs.domain        the domain SRS rewrites a return path into
 sieve.target            the target of a Sieve action: a folder, address or url
+sieve.text              text a Sieve script logged with the log action
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
 
