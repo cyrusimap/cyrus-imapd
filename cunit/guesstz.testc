@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <stdbool.h>
 
 #include <jansson.h>
 
@@ -562,8 +563,17 @@ static void corrupt_test_database(const vandalism what)
     }
     p += sizeof(tzoffsets_cnt);
 
+    bool toggle = false;
     while (tzoffsets_cnt-- > 0) {
-        if (what == timezone_index) {
+        if (what == timezone_offset) {
+            int32_t tzoffset;
+            memcpy(&tzoffset, p, sizeof(tzoffset));
+            CU_ASSERT(tzoffset < 24 * 60 * 60);
+            CU_ASSERT(tzoffset > -24 * 60 * 60);
+            tzoffset = toggle ? INT32_MIN : 24 * 60 * 60;
+            toggle = !toggle;
+            memcpy(p, &tzoffset, sizeof(tzoffset));
+        } else if (what == timezone_index) {
             uint64_t tzidx;
             memcpy(&tzidx, p + sizeof(uint32_t), sizeof(tzidx));
             CU_ASSERT(tzidx < (uint64_t) sb.st_size);
@@ -575,12 +585,36 @@ static void corrupt_test_database(const vandalism what)
         p += sizeof(int32_t) + sizeof(uint64_t);
     }
 
-    if (what == preftzs_count) {
+    if (what == timezone_offset || what == preftzs_count) {
         uint16_t preftzs_cnt;
         memcpy(&preftzs_cnt, p, sizeof(preftzs_cnt));
         if (what == preftzs_count) {
             uint16_t bogus = ~preftzs_cnt;
             memcpy(p, &bogus, sizeof(bogus));
+        }
+
+        p += sizeof(preftzs_cnt) + preftzs_cnt * sizeof(uint64_t);
+
+        while (*p) {
+            size_t tzid_length = strlen((const char *)p);
+            CU_ASSERT_NOT_EQUAL(tzid_length, 0);
+            p += tzid_length + 1;
+
+            uint32_t observances_cnt;
+            memcpy(&observances_cnt, p, sizeof(observances_cnt));
+            p += sizeof(observances_cnt);
+
+            while (observances_cnt-- > 0) {
+                p += sizeof(uint64_t);
+                int32_t tzoffset;
+                memcpy(&tzoffset, p, sizeof(tzoffset));
+                CU_ASSERT(tzoffset < 24 * 60 * 60);
+                CU_ASSERT(tzoffset > -24 * 60 * 60);
+                tzoffset = toggle ? INT32_MIN : 24 * 60 * 60;
+                toggle = !toggle;
+                memcpy(p, &tzoffset, sizeof(tzoffset));
+                p += sizeof(int32_t);
+            }
         }
     }
 
@@ -653,6 +687,24 @@ static void test_bad_timezone_index(void)
                              error, strlen(error));
     CU_ASSERT_PTR_NULL(tzid);
     free(tzid);
+
+    guesstz_t *gtz = guesstz_open(dbpath);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+
+    char *json = guesstz_encode(gtz);
+    CU_ASSERT_PTR_NULL(json);
+    const char *have = guesstz_error(gtz);
+    CU_ASSERT_PTR_NOT_NULL((void *)have);
+    CU_ASSERT_SUBSTR_EQUAL(have, error, sizeof(error) - 1);
+    guesstz_close(&gtz);
+}
+
+static void test_bad_timezone_offset(void)
+{
+    corrupt_test_database(timezone_offset);
+    /* tzoffsets_cnt offset records, sorted ascending by offset
+     * hence we should always see this timezone faulted first: */
+    const char error[] = "corrupt timezone offset in guesstz db for 'America/New_York':";
 
     guesstz_t *gtz = guesstz_open(dbpath);
     CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));

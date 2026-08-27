@@ -228,33 +228,6 @@ static int is_preferred_tzid(const char *tzid)
     return 0;
 }
 
-#define OFFSETSTR_MAX 8
-
-static int format_offset(int32_t offset, char *buffer)
-{
-    char sign = '+';
-    if (offset < 0) {
-        offset = -offset;
-        sign = '-';
-    }
-
-    int hours = offset / 3600;
-    int minutes = (offset % 3600) / 60;
-    int seconds = offset % 60;
-
-    if (hours > 23 || minutes > 59 || seconds > 59) {
-        return 0;
-    }
-
-    snprintf(buffer, 8, "%c%02i%02i", sign, hours, minutes);
-    if (seconds) {
-        snprintf(buffer + 5, 3, "%02i", seconds);
-    }
-
-    return strlen(buffer);
-}
-
-
 static void observances_from_ical(struct observances *obs, icalarray *icalobs)
 {
     obs->count = (uint32_t) icalobs->num_elements;
@@ -787,6 +760,31 @@ EXPORTED int guesstz_create(const char *zoneinfo_dir,
     return 0;
 }
 
+#define OFFSETSTR_MAX 8
+
+static int format_offset(guesstz_t *gtz, const char *name, int32_t offset, char *buffer)
+{
+    if (offset >= 24 * 60 * 60 || offset <= -24 * 60 * 60) {
+        print_error(gtz, "corrupt timezone offset in guesstz db for '%s': offset=%d",
+                    name, offset);
+        return 0;
+    }
+
+    char sign = '+';
+    if (offset < 0) {
+        offset = -offset;
+        sign = '-';
+    }
+
+    int hours = offset / 3600;
+    int minutes = (offset % 3600) / 60;
+    int seconds = offset % 60;
+
+    return seconds
+        ? snprintf(buffer, OFFSETSTR_MAX, "%c%02i%02i%02i", sign, hours, minutes, seconds)
+        : snprintf(buffer, OFFSETSTR_MAX, "%c%02i%02i", sign, hours, minutes);
+}
+
 static json_t *encode_db(guesstz_t *gtz)
 {
     struct db *db = &gtz->db;
@@ -826,19 +824,24 @@ static json_t *encode_db(guesstz_t *gtz)
         for (i = 0; i < db->tzoffsets.count; i++) {
             int32_t offset = load_int32_t(data);
             data += 4;
-            if (!jofftzs || prevoff != offset) {
-                format_offset(offset, offsetstr);
-                jofftzs = json_array();
-                json_object_set_new(jtzoffsets, offsetstr, jofftzs);
-                prevoff = offset;
-            }
-
             uint64_t tzidx = load_uint64_t(data);
             data += 8;
+
             struct guesstz_tz tz = timezones_idx(gtz, tzidx);
             if (!tz.tzid) {
                 goto corrupt;
             }
+
+            if (!jofftzs || prevoff != offset) {
+                int length = format_offset(gtz, tz.tzid, offset, offsetstr);
+                if (!length) {
+                    goto corrupt;
+                }
+                jofftzs = json_array();
+                json_object_setn_new(jtzoffsets, offsetstr, length, jofftzs);
+                prevoff = offset;
+            }
+
             json_array_append_new(jofftzs, json_string(tz.tzid));
         }
     }
@@ -882,9 +885,13 @@ static json_t *encode_db(guesstz_t *gtz)
 
             icaltimetype dt = icaltime_from_timet_with_zone(onset, 0, utc);
             char offsetstr[OFFSETSTR_MAX];
-            format_offset(offset, offsetstr);
-            json_array_append_new(jobs, json_pack("[s s]",
-                        icaltime_as_ical_string(dt), offsetstr));
+            int length = format_offset(gtz, tzid, offset, offsetstr);
+            if (!length) {
+                goto corrupt;
+            }
+            json_array_append_new(jobs, json_pack("[s s#]",
+                                                  icaltime_as_ical_string(dt),
+                                                  offsetstr, length));
         }
 
         json_object_setn_new(jtimezones, tzid, tzid_len, jobs);
