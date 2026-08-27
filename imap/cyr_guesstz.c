@@ -134,8 +134,13 @@ int main(int argc, char **argv)
 
     if (mode == ENCODE) {
         char *dump = guesstz_encode(gtz);
-        puts(dump);
-        free(dump);
+        if (dump) {
+            puts(dump);
+            free(dump);
+        } else {
+            fprintf(stderr, "%s\n", guesstz_error(gtz));
+            r = EX_DATAERR;
+        }
     }
     else {
         char *buf = slurp(stdin);
