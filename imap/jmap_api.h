@@ -36,6 +36,7 @@
 #define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
 #define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
 #define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
+#define JMAP_URN_MAIL_SHARE "urn:ietf:params:jmap:mail:share"
 
 #define JMAP_CORE_EXTENSION          "https://cyrusimap.org/ns/jmap/core"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
@@ -257,6 +258,7 @@ extern int jmap_initreq(jmap_req_t *req);
 extern void jmap_finireq(jmap_req_t *req);
 
 extern int jmap_is_using(jmap_req_t *req, const char *capa);
+extern int jmap_is_using_any(jmap_req_t *req, const char *capas);
 
 /* Protocol implementations */
 extern void jmap_core_init(jmap_settings_t *settings);
@@ -358,6 +360,12 @@ extern int jmap_parse_strings(json_t *arg,
 
 typedef struct jmap_property {
     const char *name;
+    /* The capability a client must use to see this property.  This may be a
+     * comma-separated list, in which case any one of them will do; see
+     * jmap_is_using_any().  Beware that the gperf files, and the script that
+     * parses them, both use the comma as a field separator: spell a list as a
+     * single macro, not as a literal with a comma in it.
+     */
     const char *capability;
     unsigned flags;
 } jmap_property_t;

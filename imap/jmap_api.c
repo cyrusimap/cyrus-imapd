@@ -1589,7 +1589,7 @@ HIDDEN hash_table *jmap_get_validate_props(jmap_req_t *req,
         if (name) {
             propdef = jmap_property_find(name, valid_props);
             if (propdef && propdef->capability &&
-                !jmap_is_using(req, propdef->capability)) {
+                !jmap_is_using_any(req, propdef->capability)) {
                 propdef = NULL;
             }
         }
@@ -1728,7 +1728,7 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
             if (prop->flags & JMAP_PROP_SKIP_GET) {
                 continue;
             }
-            if (!prop->capability || jmap_is_using(req, prop->capability)) {
+            if (!prop->capability || jmap_is_using_any(req, prop->capability)) {
                 hash_insert(prop->name, (void*)1, get->props);
             }
         }
@@ -1794,7 +1794,7 @@ static bool jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
         if (!prop) {
             json_array_append_new(invalid, json_string(path));
         }
-        else if (prop->capability && !jmap_is_using(req, prop->capability)) {
+        else if (prop->capability && !jmap_is_using_any(req, prop->capability)) {
             json_array_append_new(invalid, json_string(path));
         }
         else if (prop->flags & JMAP_PROP_REJECT_SET) {
@@ -3332,6 +3332,29 @@ HIDDEN void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith)
 HIDDEN int jmap_is_using(jmap_req_t *req, const char *capa)
 {
     return strarray_contains(req->using_capabilities, capa);
+}
+
+/* Like jmap_is_using(), but capas may be a comma-separated list of
+ * capabilities, any one of which is enough.
+ */
+HIDDEN int jmap_is_using_any(jmap_req_t *req, const char *capas)
+{
+    if (!strchr(capas, ',')) return jmap_is_using(req, capas);
+
+    strarray_t *wanted = strarray_split(capas, ",", 0);
+    const char *capa;
+    int i, is_using = 0;
+
+    strarray_foreach(wanted, i, capa) {
+        if (jmap_is_using(req, capa)) {
+            is_using = 1;
+            break;
+        }
+    }
+
+    strarray_free(wanted);
+
+    return is_using;
 }
 
 /*
