@@ -2891,12 +2891,13 @@ HIDDEN json_t *jmap_parse_reply(struct jmap_parse *parse)
 }
 
 
-HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights))
+HIDDEN void jmap_foreach_sharee(const mbentry_t *mbentry,
+                                void (*proc)(const char *sharee, int rights,
+                                             void *rock),
+                                void *rock)
 {
     char *aclstr = xstrdupnull(mbentry->acl);
     char *owner = mboxname_to_userid(mbentry->name);
-
-    json_t *sharewith = json_null();
 
     char *userid;
     char *nextid;
@@ -2918,20 +2919,39 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int
         if (is_system_user(userid)) continue;
         if (!strcmp(userid, owner)) continue;
 
-        json_t *jrights = tojmap(rights);
-        if (!jrights) continue;
-
-        // we've got one! Create the object if this is the first
-        if (!JNOTNULL(sharewith))
-            sharewith = json_object();
-
-        json_object_set_new(sharewith, userid, jrights);
+        proc(userid, rights, rock);
     }
 
     free(aclstr);
     free(owner);
+}
 
-    return sharewith;
+struct sharewith_rock {
+    json_t *(*tojmap)(int rights);
+    json_t *sharewith;
+};
+
+static void sharewith_cb(const char *sharee, int rights, void *vrock)
+{
+    struct sharewith_rock *rock = vrock;
+
+    json_t *jrights = rock->tojmap(rights);
+    if (!jrights) return;
+
+    // we've got one! Create the object if this is the first
+    if (!JNOTNULL(rock->sharewith))
+        rock->sharewith = json_object();
+
+    json_object_set_new(rock->sharewith, sharee, jrights);
+}
+
+HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights))
+{
+    struct sharewith_rock rock = { tojmap, json_null() };
+
+    jmap_foreach_sharee(mbentry, &sharewith_cb, &rock);
+
+    return rock.sharewith;
 }
 
 struct acl_change {

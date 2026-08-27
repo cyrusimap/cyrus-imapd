@@ -678,6 +678,10 @@ extern void jmap_parse_fini(struct jmap_parse *parse);
 extern json_t *jmap_parse_reply(struct jmap_parse *parse);
 
 
+extern void jmap_foreach_sharee(const mbentry_t *mbentry,
+                                void (*proc)(const char *sharee, int rights,
+                                             void *rock),
+                                void *rock);
 extern json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights));
 extern int jmap_set_sharewith(struct mailbox *mbox,
                               json_t *shareWith, int overwrite,
