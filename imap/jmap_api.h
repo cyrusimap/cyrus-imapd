@@ -51,6 +51,12 @@
 #define JMAP_USERCOUNTERS_EXTENSION  "https://cyrusimap.org/ns/jmap/usercounters"
 #define JMAP_JSCALENDARBIS_EXTENSION "https://cyrusimap.org/ns/jmap/jscalendarbis"
 
+/* Mailbox's shareWith is reachable through either JMAP Mail Sharing or our own
+ * mail extension, which disagree about what its values look like.  This must
+ * stay a single macro: the gperf files use the comma as a field separator.
+ */
+#define JMAP_SHAREWITH_CAPS JMAP_URN_MAIL_SHARE "," JMAP_MAIL_EXTENSION
+
 enum {
     MAX_SIZE_REQUEST = 0,
     MAX_CALLS_IN_REQUEST,
