@@ -499,6 +499,11 @@ static json_t *_mbox_get_myrights(jmap_req_t *req, const mbentry_t *mbentry)
     json_object_set_new(jrights, "mayAdmin",
             json_boolean((rights & JACL_ADMIN_MAILBOX) == JACL_ADMIN_MAILBOX));
 
+    if (jmap_is_using(req, JMAP_URN_MAIL_SHARE)) {
+        json_object_set_new(jrights, "mayShare",
+                json_boolean((rights & ACL_ADMIN) == ACL_ADMIN));
+    }
+
     int mayRename = 0;
     if (!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)) {
         mayRename = jmap_hasrights_mbentry(req, parent, JACL_CREATECHILD);
