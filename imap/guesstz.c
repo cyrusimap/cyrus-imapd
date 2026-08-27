@@ -136,14 +136,15 @@ struct guesstz_tz {
 
 struct db {
     uint8_t version;
-    time_t created_at;
     uint8_t bom[2];
+    time_t created_at;
     icaltimetype trstart;
     icaltimetype trend;
     const char *ianaversion;
     struct tzoffsets tzoffsets;
     struct preftzs preftzs;
     const uint8_t *timezones;
+    uint64_t timezones_max_idx;
 };
 
 static uint8_t db_version = 1;
@@ -186,6 +187,22 @@ static const char *preferred_tzids[] = {
     "Pacific/Norfolk",
     NULL
 };
+
+struct guesstz {
+    struct db db;
+    void *addr;
+    size_t length;
+    char err[1024];
+};
+
+__attribute__((format(printf, 2, 3)))
+static void print_error(guesstz_t *gtz, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(gtz->err, sizeof(gtz->err) - 1, fmt, args);
+    va_end(args);
+}
 
 /* Expand the observances of this VTIMEZONE within the time range. */
 static icalarray *expand_observances(icalcomponent *vtz,
@@ -299,9 +316,18 @@ static ssize_t tzoffsets_first(struct tzoffsets *tzoffs, int32_t offset)
     return -1;
 }
 
-static struct guesstz_tz timezones_idx(const uint8_t *timezones, uint64_t idx)
+static struct guesstz_tz timezones_idx(guesstz_t *gtz, uint64_t idx)
 {
+    struct db *db = &gtz->db;
+    const uint8_t *timezones = db->timezones;
     struct guesstz_tz tz;
+
+    if (idx >= db->timezones_max_idx) {
+        print_error(gtz, "corrupt timezone index in guesstz db: idx=%llu",
+                    (unsigned long long) idx);
+        tz.tzid = NULL;
+        return tz;
+    }
 
     const uint8_t *t = timezones + idx;
     tz.tzid = (char*) t;
@@ -352,11 +378,12 @@ static int is_preferred_tzidx(struct db *db, uint64_t idx)
     return 0;
 }
 
-static char *guess_timezone(struct db *db,
+static char *guess_timezone(guesstz_t *gtz,
                             icalcomponent *vtz,
                             icaltimetype trstart,
                             icaltimetype trend)
 {
+    struct db *db = &gtz->db;
     struct observances obs = { 0 };
     char etc_buf[11];
     const char *tzid = NULL;
@@ -399,7 +426,11 @@ static char *guess_timezone(struct db *db,
             break;
         }
 
-        struct guesstz_tz dbtz = timezones_idx(db->timezones, tzoff.tzidx);
+        struct guesstz_tz dbtz = timezones_idx(gtz, tzoff.tzidx);
+        if (!dbtz.tzid) {
+            /* corrupt file! */
+            goto done;
+        }
         struct observances *dbobs = &dbtz.obs;
 
         /* Truncate observances to start at or just before onset */
@@ -756,52 +787,9 @@ EXPORTED int guesstz_create(const char *zoneinfo_dir,
     return 0;
 }
 
-static int read_db(struct db *db, void *data)
+static json_t *encode_db(guesstz_t *gtz)
 {
-    const icaltimezone *utc = icaltimezone_get_utc_timezone();
-
-    if (strcmp(data, db_magic)) return -1;
-    data += strlen(db_magic) + 1;
-
-    db->version = *((uint8_t*)data);
-    data += 1;
-
-    memcpy(db->bom, data, 2);
-    data += 2;
-
-    db->created_at = (time_t) load_int64_t(data);
-    data += 8;
-
-    int64_t ttrstart = load_int64_t(data);
-    db->trstart = icaltime_from_timet_with_zone((time_t)ttrstart, 0, utc);
-    data += 8;
-
-    int64_t ttrend = load_int64_t(data);
-    db->trend = icaltime_from_timet_with_zone((time_t)ttrend, 0, utc);
-    data += 8;
-
-    db->ianaversion = data;
-    data += strlen(db->ianaversion) + 1;
-
-    db->tzoffsets.count = load_uint32_t(data);
-    data += 4;
-
-    db->tzoffsets.data = data;
-    data += TZOFFSET_SIZE * db->tzoffsets.count;
-
-    db->preftzs.count = load_uint16_t(data);
-    data += 2;
-
-    db->preftzs.tzidxs = data;
-    data += PREFTZ_SIZE * db->preftzs.count;
-
-    db->timezones = data;
-
-    return 0;
-}
-
-static json_t *encode_db(struct db *db)
-{
+    struct db *db = &gtz->db;
     const icaltimezone *utc = icaltimezone_get_utc_timezone();
     icaltimetype dt = icaltime_from_timet_with_zone(db->created_at, 0, utc);
 
@@ -847,8 +835,11 @@ static json_t *encode_db(struct db *db)
 
             uint64_t tzidx = load_uint64_t(data);
             data += 8;
-            const char *tzid = (const char *)db->timezones + tzidx;
-            json_array_append_new(jofftzs, json_string(tzid));
+            struct guesstz_tz tz = timezones_idx(gtz, tzidx);
+            if (!tz.tzid) {
+                goto corrupt;
+            }
+            json_array_append_new(jofftzs, json_string(tz.tzid));
         }
     }
 
@@ -860,7 +851,10 @@ static json_t *encode_db(struct db *db)
         uint16_t i;
         for (i = 0; i < db->preftzs.count; i++) {
             uint64_t tzidx = load_uint64_t(db->preftzs.tzidxs + i * PREFTZ_SIZE);
-            struct guesstz_tz tz = timezones_idx(db->timezones, tzidx);
+            struct guesstz_tz tz = timezones_idx(gtz, tzidx);
+            if (!tz.tzid) {
+                goto corrupt;
+            }
             json_array_append_new(jpreftzs, json_string(tz.tzid));
         }
     }
@@ -897,23 +891,11 @@ static json_t *encode_db(struct db *db)
     }
 
     return jdb;
-}
 
-struct guesstz {
-    struct db db;
-    int fd;
-    void *addr;
-    struct stat sb;
-    char err[1024];
-};
+ corrupt:
+    json_decref(jdb);
+    return NULL;
 
-__attribute__((format(printf, 2, 3)))
-static void print_error(guesstz_t *gtz, const char *fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(gtz->err, sizeof(gtz->err) - 1, fmt, args);
-    va_end(args);
 }
 
 EXPORTED char *guesstz_guess(guesstz_t *gtz,
@@ -930,36 +912,129 @@ EXPORTED char *guesstz_guess(guesstz_t *gtz,
                 icaltime_as_ical_string(gtz->db.trend));
         return NULL;
     }
-    return guess_timezone(&gtz->db, vtz, trstart, trend);
+    return guess_timezone(gtz, vtz, trstart, trend);
 }
 
 EXPORTED guesstz_t *guesstz_open(const char *path)
 {
     struct guesstz *gtz = xzmalloc(sizeof(struct guesstz));
+    gtz->addr = MAP_FAILED;
 
-    gtz->fd = open(path, O_RDONLY);
-    if (gtz->fd == -1) {
+    int fd = open(path, O_RDONLY);
+    if (fd == -1) {
         print_error(gtz, "open: %s", strerror(errno));
         goto done;
     }
 
-    if (fstat(gtz->fd, &gtz->sb) == -1) {
+    struct stat sb;
+    if (fstat(fd, &sb) == -1) {
         print_error(gtz, "fstat: %s", strerror(errno));
         goto done;
     }
 
-    gtz->addr = mmap(NULL, gtz->sb.st_size, PROT_READ, MAP_PRIVATE, gtz->fd, 0);
-    if (gtz->addr == MAP_FAILED) {
-        print_error(gtz, "mmap: %s", strerror(errno));
+    if (!sb.st_size) {
+        /* Avoid getting a confusing error from mmap for a zero-length file */
+        print_error(gtz, "database truncated");
+        close(fd);
         goto done;
     }
 
-    read_db(&gtz->db, gtz->addr);
+    gtz->addr = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (gtz->addr == MAP_FAILED) {
+        print_error(gtz, "mmap: %s", strerror(errno));
+        close(fd);
+        goto done;
+    }
+    close(fd);
+    gtz->length = sb.st_size;
+
+    const uint8_t *data = gtz->addr;
+    const icaltimezone *utc = icaltimezone_get_utc_timezone();
+    const size_t magic_length = strlen(db_magic) + 1;
+
+    /* The size calculation assumes ianaversion is at least 2 bytes
+     * We're not bothering here with adding the minimum size implied by the
+     * later "count" reads, as a bogus file's ianaversion could very long,
+     * so we always have to recheck the size later. */
+    if (gtz->length < magic_length + 1 + 2 + 3 * 8 + 2) {
+        print_error(gtz, "database truncated");
+        goto done;
+    }
+    if (memcmp(data, db_magic, magic_length)) {
+        print_error(gtz, "database magic string missing");
+        goto done;
+    }
+
+    size_t offset = magic_length;
+
+    gtz->db.version = data[offset];
+    offset += 1;
+
+    memcpy(gtz->db.bom, data + offset, 2);
+    offset += 2;
 
     if (memcmp(&db_bom, gtz->db.bom, 2)) {
         print_error(gtz, "database endianess differs");
         goto done;
     }
+
+    gtz->db.created_at = (time_t) load_int64_t(data + offset);
+    offset += 8;
+
+    int64_t ttrstart = load_int64_t(data + offset);
+    gtz->db.trstart = icaltime_from_timet_with_zone((time_t)ttrstart, 0, utc);
+    offset += 8;
+
+    int64_t ttrend = load_int64_t(data + offset);
+    gtz->db.trend = icaltime_from_timet_with_zone((time_t)ttrend, 0, utc);
+    offset += 8;
+
+    gtz->db.ianaversion = (const char *) data + offset;
+    size_t ianaversion_len = strnlen(gtz->db.ianaversion, gtz->length - offset);
+    if (ianaversion_len == gtz->length - offset) {
+        print_error(gtz, "database truncated");
+        goto done;
+    }
+    /* It's going to be at least the year, so 4 digits */
+    if (ianaversion_len < 4) {
+        print_error(gtz, "database ianaversion too short");
+        goto done;
+    }
+    offset += ianaversion_len + 1;
+
+    if (gtz->length < offset + 4) {
+        print_error(gtz, "database truncated");
+        goto done;
+    }
+
+    gtz->db.tzoffsets.count = load_uint32_t(data + offset);
+    offset += 4;
+
+    /* The multiplicands are both 32 bit, so can't overflow. *Provided* we
+     * remember to force the multiplication itself to be 64 bit: */
+    gtz->db.tzoffsets.data = data + offset;
+    offset += TZOFFSET_SIZE * (size_t) gtz->db.tzoffsets.count;
+
+    if (gtz->length < offset + 2) {
+        print_error(gtz, "database truncated");
+        goto done;
+    }
+
+    gtz->db.preftzs.count = load_uint16_t(data + offset);
+    offset += 2;
+
+    gtz->db.preftzs.tzidxs = data + offset;
+    offset += PREFTZ_SIZE * (size_t) gtz->db.preftzs.count;
+
+    /* Even if there are zero timezones, there's supposed to be a terminating
+     * NUL */
+    if (gtz->length < offset + 1) {
+        print_error(gtz, "database truncated");
+        goto done;
+    }
+
+    gtz->db.timezones = data + offset;
+    gtz->db.timezones_max_idx = gtz->length - 1 - offset;
 
 done:
     return gtz;
@@ -970,10 +1045,8 @@ EXPORTED void guesstz_close(guesstz_t **gtzp)
     if (!gtzp || !*gtzp) return;
 
     guesstz_t *gtz = *gtzp;
-    if (gtz->fd != -1) {
-        if (gtz->addr != MAP_FAILED)
-            munmap(gtz->addr, gtz->sb.st_size);
-        close(gtz->fd);
+    if (gtz->addr != MAP_FAILED) {
+        munmap(gtz->addr, gtz->length);
     }
     free(gtz);
 
@@ -987,7 +1060,7 @@ EXPORTED const char *guesstz_error(guesstz_t *gtz)
 
 EXPORTED char *guesstz_encode(guesstz_t *gtz)
 {
-    json_t *jdb = encode_db(&gtz->db);
+    json_t *jdb = encode_db(gtz);
     char *dump = json_dumps(jdb, JSON_INDENT(2)|JSON_SORT_KEYS);
     json_decref(jdb);
     return dump;
