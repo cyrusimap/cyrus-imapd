@@ -986,6 +986,10 @@ draft-ietf-calext-jscalendar-icalendar
 
     JSCalendar: Converting from and to iCalendar
 
+draft-ietf-jmap-mail-sharing
+
+    JMAP Mail Sharing
+
 ..
 
     caldav-ctag     Calendar Collection Entity Tag (CTag) in CalDAV

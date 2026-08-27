@@ -110,6 +110,12 @@ HIDDEN void jmap_mailbox_init(jmap_settings_t *settings)
     jmap_add_methods(jmap_mailbox_methods_standard, settings);
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        /* JMAP Mail Sharing is still only a draft, so we keep it with the
+         * non-standard extensions until it has an RFC number. -- rjbs, 2026-08-27
+         */
+        json_object_set_new(settings->server_capabilities,
+                JMAP_URN_MAIL_SHARE, json_object());
+
         jmap_add_methods(jmap_mailbox_methods_nonstandard, settings);
     }
 }
@@ -125,6 +131,11 @@ HIDDEN void jmap_mailbox_capabilities(json_t *account_capabilities,
                         json_integer(MAX_MAILBOX_NAME / 2));
     json_object_set_new(email_capa, "mayCreateTopLevelMailbox",
                         json_boolean(mayCreateTopLevel));
+
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        json_object_set_new(account_capabilities,
+                JMAP_URN_MAIL_SHARE, json_object());
+    }
 }
 
 
