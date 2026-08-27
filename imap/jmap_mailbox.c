@@ -469,6 +469,41 @@ static void _mbox_is_inbox(mbname_t *mbname, int *is_inbox, int *parent_is_inbox
     }
 }
 
+static json_t *_json_has(int rights, int need)
+{
+  return (((rights & need) == need) ? json_true() : json_false());
+}
+
+/* Build a JMAP MailboxRights object for a set of ACL rights.
+ *
+ * mayRename can't be worked out from the rights on the mailbox alone -- it also
+ * needs the right to create children of the parent -- so the caller works that
+ * one out and passes it in.
+ */
+static json_t *_mboxrights_to_jmap(int rights, int is_inbox, int may_rename)
+{
+    json_t *jrights = json_object();
+    json_object_set_new(jrights, "mayReadItems",
+            _json_has(rights, JACL_READITEMS));
+    json_object_set_new(jrights, "mayAddItems",
+            _json_has(rights, JACL_ADDITEMS));
+    json_object_set_new(jrights, "mayRemoveItems",
+            _json_has(rights, JACL_REMOVEITEMS));
+    json_object_set_new(jrights, "mayCreateChild",
+            _json_has(rights, JACL_CREATECHILD));
+    json_object_set_new(jrights, "mayDelete",
+            json_boolean(!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)));
+    json_object_set_new(jrights, "maySubmit",
+            _json_has(rights, JACL_SUBMIT));
+    json_object_set_new(jrights, "maySetSeen",
+            _json_has(rights, JACL_SETSEEN));
+    json_object_set_new(jrights, "maySetKeywords",
+            _json_has(rights, JACL_SETKEYWORDS));
+    json_object_set_new(jrights, "mayRename", json_boolean(may_rename));
+
+    return jrights;
+}
+
 static json_t *_mbox_get_myrights(jmap_req_t *req, const mbentry_t *mbentry)
 {
     int rights = jmap_myrights_mbentry(req, mbentry);
@@ -478,23 +513,13 @@ static json_t *_mbox_get_myrights(jmap_req_t *req, const mbentry_t *mbentry)
     int is_inbox = 0;
     _mbox_is_inbox(mbname, &is_inbox, NULL);
 
-    json_t *jrights = json_object();
-    json_object_set_new(jrights, "mayReadItems",
-            json_boolean((rights & JACL_READITEMS) == JACL_READITEMS));
-    json_object_set_new(jrights, "mayAddItems",
-            json_boolean((rights & JACL_ADDITEMS) == JACL_ADDITEMS));
-    json_object_set_new(jrights, "mayRemoveItems",
-            json_boolean((rights & JACL_REMOVEITEMS) == JACL_REMOVEITEMS));
-    json_object_set_new(jrights, "mayCreateChild",
-            json_boolean((rights & JACL_CREATECHILD) == JACL_CREATECHILD));
-    json_object_set_new(jrights, "mayDelete",
-            json_boolean(!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)));
-    json_object_set_new(jrights, "maySubmit",
-            json_boolean((rights & JACL_SUBMIT) == JACL_SUBMIT));
-    json_object_set_new(jrights, "maySetSeen",
-            json_boolean((rights & JACL_SETSEEN) == JACL_SETSEEN));
-    json_object_set_new(jrights, "maySetKeywords",
-            json_boolean((rights & JACL_SETKEYWORDS) == JACL_SETKEYWORDS));
+    int mayRename = 0;
+    if (!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)) {
+        mayRename = jmap_hasrights_mbentry(req, parent, JACL_CREATECHILD);
+    }
+
+    json_t *jrights = _mboxrights_to_jmap(rights, is_inbox, mayRename);
+
     // non-standard
     json_object_set_new(jrights, "mayAdmin",
             json_boolean((rights & JACL_ADMIN_MAILBOX) == JACL_ADMIN_MAILBOX));
@@ -504,20 +529,9 @@ static json_t *_mbox_get_myrights(jmap_req_t *req, const mbentry_t *mbentry)
                 json_boolean((rights & ACL_ADMIN) == ACL_ADMIN));
     }
 
-    int mayRename = 0;
-    if (!is_inbox && ((rights & JACL_DELETE) == JACL_DELETE)) {
-        mayRename = jmap_hasrights_mbentry(req, parent, JACL_CREATECHILD);
-    }
-    json_object_set_new(jrights, "mayRename", json_boolean(mayRename));
-
     mboxlist_entry_free(&parent);
     mbname_free(&mbname);
     return jrights;
-}
-
-static json_t *_json_has(int rights, int need)
-{
-  return (((rights & need) == need) ? json_true() : json_false());
 }
 
 static json_t *_mboxrights_tosharewith(int rights)
