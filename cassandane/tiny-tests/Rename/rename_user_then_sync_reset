@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+# The per-user files are keyed by the INBOX uniqueid, which a rename keeps -
+# and a rename leaves a DELETED tombstone behind at the old name with that
+# same uniqueid.  Resetting the old name must not take out the live user's
+# files.
+sub test_rename_user_then_sync_reset
+    :AllowMoves :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $talk = $self->{store}->get_client();
+    $talk->create("INBOX.sub") || die;
+    $self->{store}->set_folder("INBOX.sub");
+    $self->{store}->write_begin();
+    $self->{store}->write_message($self->{gen}->generate(subject => "subject 1"));
+    $self->{store}->write_end();
+    $talk->logout();
+
+    my $srcpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+
+    $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert_str_equals('ok',
+                             $admintalk->get_last_completion_response());
+
+    my $dstpath = $self->{instance}->run_mbpath('-u', 'newuser');
+
+    # with uuid paths the renamed user keeps the very same files
+    $self->assert_str_equals($srcpath->{user}{sub}, $dstpath->{user}{sub});
+
+    my @files = grep { -f $dstpath->{user}{$_} }
+                     qw(conversations counters dav seen sub);
+    $self->assert_num_not_equals(0, scalar @files);
+
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'sync_reset', '-f', 'cassandane');
+
+    foreach my $file (@files) {
+        $self->assert(-f $dstpath->{user}{$file},
+                      "$file survived reset of the old name");
+    }
+
+    # and the live user is still intact
+    my $res = $admintalk->select('user.newuser.sub');
+    $self->assert_str_equals('ok',
+                             $admintalk->get_last_completion_response());
+    $self->assert_num_equals(1, $admintalk->get_response_code('exists'));
+}

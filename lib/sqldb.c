@@ -54,9 +54,46 @@ static int _free_open(sqldb_t *open)
 {
     int rc = sqlite3_close(open->db);
     free(open->fname);
+    free(open->owner);
     free(open);
     int r = (rc == SQLITE_OK ? SQLDB_OK : SQLDB_ERR_UNKNOWN);
     return r;
+}
+
+/* record which file we opened, for _isunmoved() to compare against.  A zero
+   ino means we couldn't tell, and we skip the check for that handle */
+static void _stampfile(sqldb_t *open)
+{
+    struct stat sbuf;
+
+    if (!*open->fname || !strcmp(open->fname, ":memory:")) return;
+
+    if (stat(open->fname, &sbuf)) {
+        xsyslog(LOG_NOTICE, "couldn't stat sqldb we just opened",
+                            "fname=<%s>", open->fname);
+        return;
+    }
+
+    open->dev = sbuf.st_dev;
+    open->ino = sbuf.st_ino;
+}
+
+/* check that a cached handle still refers to the file it opened.  The cache
+   is keyed on filename, so the file may have been unlinked or replaced, and
+   sqlite fails every write through such a handle with
+   SQLITE_READONLY_DBMOVED */
+static int _isunmoved(sqldb_t *open)
+{
+    struct stat sbuf;
+
+    if (!*open->fname || !strcmp(open->fname, ":memory:")) return 1;
+
+    /* we never got a stat, so we can't tell */
+    if (!open->ino) return 1;
+
+    if (stat(open->fname, &sbuf)) return 0;
+
+    return (sbuf.st_dev == open->dev && sbuf.st_ino == open->ino);
 }
 
 static int _version_cb(void *rock, int ncol, char **vals, char **names __attribute__((unused)))
@@ -74,21 +111,48 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
                              int version, const struct sqldb_upgrade *upgrade,
                              int timeout_ms)
 {
+    return sqldb_open_full(fname, initsql, version, upgrade, timeout_ms,
+                           SQLDB_SCOPE_NONE, NULL);
+}
+
+EXPORTED sqldb_t *sqldb_open_full(const char *fname, const char *initsql,
+                                  int version, const struct sqldb_upgrade *upgrade,
+                                  int timeout_ms, int scope, const char *owner)
+{
     int rc = SQLITE_OK;
     struct stat sbuf;
     sqldb_t *open;
     int i;
 
     for (open = open_sqldbs; open; open = open->next) {
-        if (!strcmp(open->fname, fname)) {
-            /* already open! */
-            open->refcount++;
-            return open;
+        if (open->stale) continue;
+        if (strcmp(open->fname, fname)) continue;
+
+        if (!_isunmoved(open)) {
+            xsyslog(LOG_NOTICE, "sqldb file replaced while open, reopening",
+                                "fname=<%s>", open->fname);
+            open->stale = 1;
+            continue;
         }
+
+        /* disagreement here means somebody is taking the wrong lock */
+        if (open->scope != scope || strcmpsafe(open->owner, owner)) {
+            xsyslog(LOG_ERR, "DBERROR: sqldb already open with a different scope",
+                             "fname=<%s> scope=<%d> owner=<%s>"
+                             " openscope=<%d> openowner=<%s>",
+                             fname, scope, owner ? owner : "",
+                             open->scope, open->owner ? open->owner : "");
+        }
+
+        /* already open! */
+        open->refcount++;
+        return open;
     }
 
     open = xzmalloc(sizeof(sqldb_t));
     open->fname = xstrdup(fname);
+    open->scope = scope;
+    open->owner = xstrdupnull(owner);
 
     if (*fname && strcmp(fname, ":memory:")) {
         rc = stat(open->fname, &sbuf);
@@ -267,6 +331,8 @@ transout:
     }
 
 out:
+    _stampfile(open);
+
     /* stitch on up */
     open->refcount = 1;
     open->next = open_sqldbs;
@@ -406,7 +472,23 @@ EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bva
                          "fname=<%s> cmd=<%s> error=<%s>",
                 open->fname, buf_cstring(&newcmd), sqlite3_errmsg(open->db));
         buf_free(&newcmd);
-        r = SQLDB_ERR_UNKNOWN;
+
+        /* the file was unlinked or replaced, so this handle will never write
+           again.  Report that distinctly from a generic failure */
+        if (0
+#ifdef SQLITE_READONLY_DBMOVED
+            || rc == SQLITE_READONLY_DBMOVED
+#endif
+#ifdef SQLITE_READONLY_DIRECTORY
+            || rc == SQLITE_READONLY_DIRECTORY
+#endif
+           ) {
+            open->stale = 1;
+            xsyslog(LOG_ERR, "DBERROR: sqldb removed or replaced while open",
+                             "fname=<%s>", open->fname);
+            r = SQLDB_ERR_DBMOVED;
+        }
+        else r = SQLDB_ERR_UNKNOWN;
     }
 
     return r;
@@ -522,6 +604,23 @@ EXPORTED int sqldb_close(sqldb_t **dbp)
     *dbp = NULL;
 
     return _free_open(open);
+}
+
+EXPORTED int sqldb_isopen_forscope(int scope, const char *owner)
+{
+    sqldb_t *open;
+
+    /* an untagged database is protected by nothing */
+    if (scope == SQLDB_SCOPE_NONE) return 0;
+
+    for (open = open_sqldbs; open; open = open->next) {
+        if (open->stale) continue;
+        if (open->scope != scope) continue;
+        if (strcmpsafe(open->owner, owner)) continue;
+        return 1;
+    }
+
+    return 0;
 }
 
 EXPORTED int sqldb_attach(sqldb_t *open, const char *fname)

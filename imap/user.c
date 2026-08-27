@@ -42,6 +42,7 @@
 #include "search_engines.h"
 #include "seen.h"
 #include "sievedir.h"
+#include "sqldb.h"
 #include "sync_log.h"
 #include "user.h"
 #include "util.h"
@@ -232,7 +233,30 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
 
     assert(user_nslock_islocked(userid));
 
-    if (!(mbentry->mbtype & MBTYPE_LEGACY_DIRS) && mbentry->uniqueid) {
+    int byid = !(mbentry->mbtype & MBTYPE_LEGACY_DIRS) && mbentry->uniqueid;
+    int shared = 0;
+
+    /* the uniqueid survives a rename and a delayed delete, so a tombstone
+       can name the very same files as a live user.  Only remove them if we
+       still own the uniqueid, e.g. sync_reset of a renamed-away user */
+    if (byid) {
+        mbentry_t *owner = NULL;
+        if (!mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &owner, NULL)
+            && strcmpsafe(owner->name, mbentry->name)
+            && !mboxname_isdeletedmailbox(owner->name, NULL)) {
+            xsyslog(LOG_ERR, "keeping user files still owned by another mailbox",
+                             "userid=<%s> mboxname=<%s> uniqueid=<%s> ownername=<%s>",
+                             userid, mbentry->name, mbentry->uniqueid,
+                             owner->name);
+            shared = 1;
+        }
+        mboxlist_entry_free(&owner);
+    }
+
+    if (shared) {
+        /* nothing keyed by uniqueid is ours to remove */
+    }
+    else if (byid) {
         for (suffixes = user_file_suffixes; *suffixes; suffixes++) {
             strarray_appendm(&paths,
                              mboxid_conf_getpath(mbentry->uniqueid, *suffixes));
@@ -281,11 +305,18 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
     /* delete quotas */
     user_deletequotaroots(userid);
 
-    /* delete all the search engine data (if any) */
-    search_deluser(mbentry);
+    /* delete all the search engine data (if any) - also keyed by uniqueid */
+    if (!shared) search_deluser(mbentry);
 
     /* delete all the calendar alarms for the user */
     caldav_alarm_delete_user(userid);
+
+    /* a handle held over this write keeps writing to an inode which is no
+       longer there, and only finds out at SQLDB_ERR_DBMOVED time */
+    if (strarray_size(&paths) && sqldb_isopen_forscope(SQLDB_SCOPE_USER, userid)) {
+        xsyslog(LOG_ERR, "removing user files with a sqldb still open on them",
+                         "userid=<%s>", userid);
+    }
 
     /* delete paths in our list */
     /* XXX  MUST do this last in case one of the functions above

@@ -1,0 +1,233 @@
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include "config.h"
+#include "cunit/unit.h"
+#include "sqldb.h"
+
+#define DBDIR                   "test-sqldb-dbdir"
+#define DBFILE                  DBDIR "/test.db"
+#define OTHERFILE               DBDIR "/other.db"
+
+#define CMD_CREATE \
+    "CREATE TABLE IF NOT EXISTS t (" \
+    " k TEXT PRIMARY KEY," \
+    " v TEXT NOT NULL );"
+
+#define CMD_INSERT \
+    "INSERT OR REPLACE INTO t ( k, v ) VALUES ( :k, :v );"
+
+#define CMD_COUNT \
+    "SELECT COUNT(*) FROM t;"
+
+static sqldb_t *open_db(const char *fname)
+{
+    return sqldb_open(fname, CMD_CREATE, 1, NULL, SQLDB_DEFAULT_TIMEOUT);
+}
+
+static int write_row(sqldb_t *db, const char *key)
+{
+    struct sqldb_bindval bval[] = {
+        { ":k", SQLITE_TEXT, { .s = key      } },
+        { ":v", SQLITE_TEXT, { .s = "value"  } },
+        { NULL, SQLITE_NULL, { .s = NULL     } }
+    };
+
+    return sqldb_exec(db, CMD_INSERT, bval, NULL, NULL);
+}
+
+static int count_cb(sqlite3_stmt *stmt, void *rock)
+{
+    *((int *) rock) = sqlite3_column_int(stmt, 0);
+    return 0;
+}
+
+static int count_rows(sqldb_t *db)
+{
+    int count = -1;
+    int r = sqldb_exec(db, CMD_COUNT, NULL, &count_cb, &count);
+    return r ? -1 : count;
+}
+
+/* two opens of the same file share one handle, usable until the last close */
+static void test_refcount(void)
+{
+    sqldb_t *db1 = open_db(DBFILE);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db1);
+
+    sqldb_t *db2 = open_db(DBFILE);
+    CU_ASSERT_PTR_EQUAL_FATAL(db2, db1);
+
+    /* n.b. close only clears the caller's pointer on the last reference */
+    CU_ASSERT_EQUAL(sqldb_close(&db2), SQLDB_OK);
+
+    CU_ASSERT_EQUAL(write_row(db1, "one"), SQLDB_OK);
+    CU_ASSERT_EQUAL(count_rows(db1), 1);
+
+    CU_ASSERT_EQUAL(sqldb_close(&db1), SQLDB_OK);
+}
+
+/* a write through a handle whose file was unlinked reports SQLDB_ERR_DBMOVED */
+static void test_write_after_unlink(void)
+{
+    sqldb_t *db = open_db(DBFILE);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
+    CU_ASSERT_EQUAL(write_row(db, "one"), SQLDB_OK);
+
+    CU_ASSERT_EQUAL_FATAL(unlink(DBFILE), 0);
+
+    CU_ASSERT_EQUAL(write_row(db, "two"), SQLDB_ERR_DBMOVED);
+
+    CU_ASSERT_EQUAL(sqldb_close(&db), SQLDB_OK);
+}
+
+/* the cache must not hand back a handle onto an unlinked inode */
+static void test_reopen_after_unlink(void)
+{
+    sqldb_t *db = open_db(DBFILE);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
+    CU_ASSERT_EQUAL(write_row(db, "one"), SQLDB_OK);
+
+    CU_ASSERT_EQUAL_FATAL(unlink(DBFILE), 0);
+
+    sqldb_t *db2 = open_db(DBFILE);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db2);
+    CU_ASSERT_PTR_NOT_EQUAL_FATAL(db2, db);
+
+    /* the fresh handle is on a brand new file, and writable */
+    CU_ASSERT_EQUAL(count_rows(db2), 0);
+    CU_ASSERT_EQUAL(write_row(db2, "two"), SQLDB_OK);
+    CU_ASSERT_EQUAL(count_rows(db2), 1);
+
+    /* and a third open shares the fresh handle, not the stale one */
+    sqldb_t *db3 = open_db(DBFILE);
+    CU_ASSERT_PTR_EQUAL(db3, db2);
+    CU_ASSERT_EQUAL(sqldb_close(&db3), SQLDB_OK);
+
+    CU_ASSERT_EQUAL(sqldb_close(&db2), SQLDB_OK);
+    CU_ASSERT_EQUAL(sqldb_close(&db), SQLDB_OK);
+}
+
+/* likewise when the file was replaced rather than removed */
+static void test_reopen_after_replace(void)
+{
+    sqldb_t *db = open_db(DBFILE);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
+    CU_ASSERT_EQUAL(write_row(db, "one"), SQLDB_OK);
+
+    sqldb_t *other = open_db(OTHERFILE);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(other);
+    CU_ASSERT_EQUAL(write_row(other, "one"), SQLDB_OK);
+    CU_ASSERT_EQUAL(write_row(other, "two"), SQLDB_OK);
+    CU_ASSERT_EQUAL(sqldb_close(&other), SQLDB_OK);
+
+    CU_ASSERT_EQUAL_FATAL(rename(OTHERFILE, DBFILE), 0);
+
+    sqldb_t *db2 = open_db(DBFILE);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db2);
+    CU_ASSERT_PTR_NOT_EQUAL_FATAL(db2, db);
+    CU_ASSERT_EQUAL(count_rows(db2), 2);
+
+    CU_ASSERT_EQUAL(sqldb_close(&db2), SQLDB_OK);
+    CU_ASSERT_EQUAL(sqldb_close(&db), SQLDB_OK);
+}
+
+/* a tagged handle is findable by scope and owner */
+static void test_scope(void)
+{
+    sqldb_t *db = sqldb_open_full(DBFILE, CMD_CREATE, 1, NULL,
+                                  SQLDB_DEFAULT_TIMEOUT,
+                                  SQLDB_SCOPE_USER, "bob");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
+
+    CU_ASSERT_EQUAL(sqldb_isopen_forscope(SQLDB_SCOPE_USER, "bob"), 1);
+    CU_ASSERT_EQUAL(sqldb_isopen_forscope(SQLDB_SCOPE_USER, "alice"), 0);
+    CU_ASSERT_EQUAL(sqldb_isopen_forscope(SQLDB_SCOPE_MAILBOX, "bob"), 0);
+    CU_ASSERT_EQUAL(sqldb_isopen_forscope(SQLDB_SCOPE_GLOBAL, NULL), 0);
+
+    CU_ASSERT_EQUAL(sqldb_close(&db), SQLDB_OK);
+
+    CU_ASSERT_EQUAL(sqldb_isopen_forscope(SQLDB_SCOPE_USER, "bob"), 0);
+}
+
+/* an untagged open has no scope to be found by */
+static void test_scope_untagged(void)
+{
+    sqldb_t *db = open_db(DBFILE);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
+
+    CU_ASSERT_EQUAL(sqldb_isopen_forscope(SQLDB_SCOPE_USER, "bob"), 0);
+    CU_ASSERT_EQUAL(sqldb_isopen_forscope(SQLDB_SCOPE_NONE, NULL), 0);
+
+    CU_ASSERT_EQUAL(sqldb_close(&db), SQLDB_OK);
+}
+
+/* a stale handle is already stranded, so it doesn't count */
+static void test_scope_ignores_stale(void)
+{
+    sqldb_t *db = sqldb_open_full(DBFILE, CMD_CREATE, 1, NULL,
+                                  SQLDB_DEFAULT_TIMEOUT,
+                                  SQLDB_SCOPE_USER, "bob");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
+    CU_ASSERT_EQUAL_FATAL(unlink(DBFILE), 0);
+
+    sqldb_t *db2 = sqldb_open_full(DBFILE, CMD_CREATE, 1, NULL,
+                                   SQLDB_DEFAULT_TIMEOUT,
+                                   SQLDB_SCOPE_USER, "bob");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db2);
+    CU_ASSERT_PTR_NOT_EQUAL_FATAL(db2, db);
+    CU_ASSERT_EQUAL(sqldb_isopen_forscope(SQLDB_SCOPE_USER, "bob"), 1);
+
+    /* db is still held, but it's stale, so nobody is left to strand */
+    CU_ASSERT_EQUAL(sqldb_close(&db2), SQLDB_OK);
+    CU_ASSERT_EQUAL(sqldb_isopen_forscope(SQLDB_SCOPE_USER, "bob"), 0);
+
+    CU_ASSERT_EQUAL(sqldb_close(&db), SQLDB_OK);
+}
+
+/* in-memory databases have no file to check */
+static void test_memory(void)
+{
+    sqldb_t *db = open_db(":memory:");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
+
+    sqldb_t *db2 = open_db(":memory:");
+    CU_ASSERT_PTR_EQUAL_FATAL(db2, db);
+
+    CU_ASSERT_EQUAL(write_row(db, "one"), SQLDB_OK);
+    CU_ASSERT_EQUAL(count_rows(db2), 1);
+
+    CU_ASSERT_EQUAL(sqldb_close(&db2), SQLDB_OK);
+    CU_ASSERT_EQUAL(sqldb_close(&db), SQLDB_OK);
+}
+
+static int set_up(void)
+{
+    int r = system("rm -rf " DBDIR);
+    if (r) return r;
+
+    r = mkdir(DBDIR, 0777);
+    if (r < 0) {
+        int e = errno;
+        perror(DBDIR);
+        return e;
+    }
+
+    sqldb_init();
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    int r;
+
+    sqldb_done();
+
+    r = system("rm -rf " DBDIR);
+    if (r) r = -1;
+
+    return r;
+}
+/* vim: set ft=c: */
