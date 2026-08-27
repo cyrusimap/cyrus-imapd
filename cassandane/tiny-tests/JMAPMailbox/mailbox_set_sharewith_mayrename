@@ -1,0 +1,93 @@
+#!perl
+use Cassandane::Tiny;
+
+# mayRename isn't a right we can store: it's derived from mayDelete on the
+# mailbox and mayCreateChild on the parent.  A client may send back the value we
+# gave it -- anything doing a read-modify-write of shareWith will -- but it may
+# not ask us to change it.
+sub test_mailbox_set_sharewith_mayrename
+    :JMAPExtensions
+    ($self)
+{
+    my $owner = $self->default_user;
+    $self->{instance}->create_user('sharee');
+
+    my $mailbox = $owner->mailboxes->create({ name => 'A' });
+
+    my $admin = $self->{adminstore}->get_client();
+    my $jmap  = $owner->jmap;
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:mail:share',
+    ];
+
+    # Try to share the mailbox with exactly $rights.  If $want_rename is undef,
+    # the update must be forbidden; otherwise it must succeed and we must report
+    # that mayRename back.
+    my $assert_share = sub ($label, $rights, $want_rename) {
+        my $res = $jmap->request({
+            using       => $using,
+            methodCalls => [
+                [ 'Mailbox/set', {
+                    update => {
+                        $mailbox->id => { shareWith => { sharee => $rights } },
+                    },
+                }, 'R1' ],
+                [ 'Mailbox/get', {
+                    ids        => [ $mailbox->id ],
+                    properties => [ 'shareWith' ],
+                }, 'R2' ],
+            ],
+        });
+
+        my $set = $res->sentence_named('Mailbox/set')->arguments;
+
+        if (defined $want_rename) {
+            $self->assert(exists $set->{updated}{ $mailbox->id },
+                "$label: mailbox was updated");
+
+            $self->assert_equals(
+                $want_rename,
+                $res->sentence_named('Mailbox/get')
+                    ->arguments->{list}[0]{shareWith}{sharee}{mayRename},
+                "$label: mayRename",
+            );
+        }
+        else {
+            $self->assert(! exists $set->{updated}{ $mailbox->id },
+                "$label: mailbox was not updated");
+
+            $self->assert_str_equals('forbidden',
+                $set->{notUpdated}{ $mailbox->id }{type}, "$label: forbidden");
+        }
+    };
+
+    xlog $self, 'the sharee has no rights on the parent, so mayRename is false';
+
+    $assert_share->('echoing false',
+        { mayReadItems => JSON::true, mayRename => JSON::false }, JSON::false);
+
+    $assert_share->('asking for true',
+        { mayReadItems => JSON::true, mayRename => JSON::true }, undef);
+
+    $assert_share->('asking for true with mayDelete',
+        { mayDelete => JSON::true, mayRename => JSON::true }, undef);
+
+    xlog $self, 'let the sharee create children of the parent mailbox';
+
+    $admin->setacl('user.cassandane', sharee => 'lk')
+        or die "setacl failed: $@";
+
+    $assert_share->('mayDelete, with mayCreateChild on the parent',
+        { mayDelete => JSON::true, mayRename => JSON::true }, JSON::true);
+
+    $assert_share->('asking for false when it would be true',
+        { mayDelete => JSON::true, mayRename => JSON::false }, undef);
+
+    xlog $self, 'mayRename may be left out entirely';
+
+    $assert_share->('not mentioned at all',
+        { mayDelete => JSON::true }, JSON::true);
+}
