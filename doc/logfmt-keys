@@ -99,6 +99,7 @@ cal.uid                 a calendar component's iCalendar UID
 http.header.name        the name of an HTTP header
 http.header.value       the value of an HTTP header
 imip.error              why an iMIP operation failed
+imip.outcome            what an iMIP message did: added, updated, no_action, error
 jmap.accountid          the JMAP account the request was for
 lmtp.action             what delivery did with the message: implicit, keep, fileinto, ...
 lmtp.command            an LMTP command line as the client sent it

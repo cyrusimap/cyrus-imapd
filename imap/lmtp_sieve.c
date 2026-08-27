@@ -938,7 +938,7 @@ static int sieve_reject(void *ac, void *ic,
         msg_setrcpt_status(md, mydata->cur_rcpt, LMTP_MESSAGE_REJECTED, resp);
 
         prometheus_increment(CYRUS_LMTP_SIEVE_REJECT_TOTAL);
-        auditlog_sieve("sieve.lmtp-reject",
+        auditlog_sieve("sieve.reject.lmtp",
                        ctx->userid, md->id, NULL, NULL, NULL, NULL);
         return SIEVE_OK;
     }
@@ -950,7 +950,7 @@ static int sieve_reject(void *ac, void *ic,
     }
 
     if (strlen(md->return_path) == 0) {
-        auditlog_sieve("sieve.discard-reject",
+        auditlog_sieve("sieve.reject.discarded",
                        ctx->userid, md->id, NULL, NULL, NULL, NULL);
         return SIEVE_OK;
     }
@@ -961,7 +961,7 @@ static int sieve_reject(void *ac, void *ic,
                               origreceip, mbname_recipient(sd->mbname, ((deliver_data_t *) mc)->ns),
                               rc->msg, md->data)) == 0) {
         prometheus_increment(CYRUS_LMTP_SIEVE_REJECT_TOTAL);
-        auditlog_sieve("sieve.reject",
+        auditlog_sieve("sieve.reject.bounced",
                        ctx->userid, md->id, NULL, md->return_path, NULL, NULL);
         return SIEVE_OK;
     } else {

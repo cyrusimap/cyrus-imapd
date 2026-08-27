@@ -111,8 +111,12 @@ want them.
 
 ```
 event = segment *( "." segment )
-segment = 1*( lowercase / DIGIT / "_" )
+segment = 1*( lowercase / DIGIT / "_" / "-" )
 ```
+
+A hyphen is legal in an event name where the thing being named has one.
+Don't reach for it to join an object to its outcome, though -- that's what
+the dot is for.  (Keys are stricter: no hyphens.  See "Naming keys".)
 
 Read the name as **`<subsystem>.<object>.<outcome>`**, from general to
 specific, so that a prefix match selects a useful family:
