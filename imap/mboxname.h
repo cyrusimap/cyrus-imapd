@@ -375,4 +375,15 @@ void logfmt_arg_mbname(struct logfmt *lf, const char *key, const void *value);
  */
 #define lf_mbname(key, mbnamep) lf_fn(key, logfmt_arg_mbname, (mbnamep))
 
+void logfmt_push_intname(struct logfmt *lf,
+                         const char *key, const char *intname);
+
+void logfmt_arg_intname(struct logfmt *lf, const char *key, const void *value);
+
+/* Log an internal mailbox name under `key`, for xsyslog_ev().  Converts to
+ * the admin namespace on the way out, so that mbox.name means the same thing
+ * whether the call site had a mailbox, an mbname_t or just the name.
+ */
+#define lf_intname(key, intname) lf_fn(key, logfmt_arg_intname, (intname))
+
 #endif

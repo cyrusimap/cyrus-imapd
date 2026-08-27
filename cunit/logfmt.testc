@@ -431,6 +431,26 @@ static void test_logfmt_push_mbname(void)
     logfmt_fini(&lf);
 }
 
+static void test_logfmt_push_intname(void)
+{
+    #define INTNAME "user.sentinel.name"
+    #define EXTNAME "user/sentinel/name" /* admin namespace */
+    struct logfmt lf = LOGFMT_INITIALIZER;
+
+    logfmt_init(&lf, "test_logfmt_push_intname");
+
+    logfmt_push_intname(&lf, NULL, INTNAME);
+    logfmt_push_intname(&lf, "old.mbox.name", NULL);
+
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "mbox.name=" EXTNAME));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf),
+                                  "old.mbox.name=~null~"));
+
+    logfmt_fini(&lf);
+    #undef INTNAME
+    #undef EXTNAME
+}
+
 static void test_logfmt_push_msgrecord(void)
 {
     static const char msg[] = "banana";
