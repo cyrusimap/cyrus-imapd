@@ -15,7 +15,6 @@
 #include <sysexits.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <syslog.h>
 #include <unistd.h>
 
 #include <jansson.h>
@@ -23,6 +22,7 @@
 
 #include "guesstz.h"
 #include "ical_support.h"
+#include "xmalloc.h"
 
 /*
  *  A guesstz database file is formatted as follows:
@@ -241,7 +241,7 @@ static int format_offset(int32_t offset, char *buffer)
 static void observances_from_ical(struct observances *obs, icalarray *icalobs)
 {
     obs->count = (uint32_t) icalobs->num_elements;
-    obs->alloc = malloc(obs->count * OBSERVANCE_SIZE);
+    obs->alloc = xmalloc(obs->count * OBSERVANCE_SIZE);
     obs->data = obs->alloc;
 
     const icaltimezone *utc = icaltimezone_get_utc_timezone();
@@ -434,7 +434,7 @@ static char *guess_timezone(struct db *db,
 
 done:
     free(obs.alloc);
-    return tzid ? strdup(tzid) : NULL;
+    return xstrdupnull(tzid);
 }
 
 static int compare_tzoffset(const void *va, const void *vb)
@@ -550,26 +550,23 @@ static int write_timezones(icalarray *timezones, FILE *fp)
 static char *ianaversion_from_zonedir(const char *zoneinfo_dir)
 {
     char *ianaversion = NULL;
-    char *fname = malloc(strlen(zoneinfo_dir) + 9);
-    fname[0] = '\0';
-    strcat(fname, zoneinfo_dir);
-    strcat(fname, "/version");
+    char *fname = strconcat(zoneinfo_dir, "/version", (char *) NULL);
     FILE *fp = fopen(fname, "r");
+    xzfree(fname);
 
     if (fp) {
         char version[32];
         size_t n = fread(version, 1, 32, fp);
         if (n > 1) {
             version[n-1] = '\0';
-            ianaversion = strdup(version);
+            ianaversion = xstrdup(version);
         }
         fclose(fp);
     }
     if (!ianaversion) {
-        ianaversion = strdup("unknown");
+        ianaversion = xstrdup("unknown");
     }
 
-    free(fname);
     return ianaversion;
 }
 
@@ -612,7 +609,7 @@ static void add_vtimezone(icalarray *timezones, icalcomponent *vtz,
     if (icalobs->num_elements) {
         /* Initialize timezone */
         struct guesstz_tz tz = { 0 };
-        tz.tzid = tz.alloc = strdup(tzid);
+        tz.tzid = tz.alloc = xstrdup(tzid);
         observances_from_ical(&tz.obs, icalobs);
 
         /* Calculate timezone byte index */
@@ -938,7 +935,7 @@ EXPORTED char *guesstz_guess(guesstz_t *gtz,
 
 EXPORTED guesstz_t *guesstz_open(const char *path)
 {
-    struct guesstz *gtz = calloc(1, sizeof(struct guesstz));
+    struct guesstz *gtz = xzmalloc(sizeof(struct guesstz));
 
     gtz->fd = open(path, O_RDONLY);
     if (gtz->fd == -1) {
