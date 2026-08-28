@@ -4,6 +4,13 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/proc.h>
+#include <cyrus/retry.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -40,7 +47,6 @@
 
 #include "acl.h"
 #include "annotate.h"
-#include "assert.h"
 #include "auditlog.h"
 #include "bsearch.h"
 #include "caldav_db.h"
@@ -68,21 +74,14 @@
 #include "mboxevent.h"
 #include "mboxlist.h"
 #include "parseaddr.h"
-#include "proc.h"
-#include "retry.h"
 #include "seen.h"
 #include "user.h"
 #include "util.h"
 #include "seqset.h"
 #include "statuscache.h"
-#include "strarray.h"
 #include "sync_log.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
-#include "xunlink.h"
-
-
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

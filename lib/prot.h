@@ -4,13 +4,13 @@
 
 #ifndef INCLUDED_PROT_H
 #define INCLUDED_PROT_H
+#include <config.h>
 
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <sasl/sasl.h>
-#include <config.h>
 
 #include <openssl/ssl.h>
 

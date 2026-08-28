@@ -4,6 +4,13 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/proc.h>
+#include <cyrus/retry.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -57,14 +64,8 @@
 #include "master/masterconf.h"
 #include "master/service.h"
 
-#include "lib/assert.h"
 #include "lib/cyr_lock.h"
-#include "lib/proc.h"
-#include "lib/retry.h"
-#include "lib/strarray.h"
 #include "lib/util.h"
-#include "lib/xmalloc.h"
-#include "lib/xunlink.h"
 
 enum {
     child_table_size = 10000,

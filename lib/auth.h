@@ -5,7 +5,7 @@
 #ifndef INCLUDED_AUTH_H
 #define INCLUDED_AUTH_H
 
-#include "strarray.h"
+#include <cyrus/strarray.h>
 
 struct auth_state;
 

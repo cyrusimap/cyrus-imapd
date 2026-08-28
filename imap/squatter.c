@@ -11,6 +11,10 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -27,7 +31,6 @@
 #include <getopt.h>
 
 #include "annotate.h"
-#include "assert.h"
 #include "bitvector.h"
 #include "bsearch.h"
 #include "mboxlist.h"
@@ -35,11 +38,9 @@
 #include "search_engines.h"
 #include "sync_log.h"
 #include "mailbox.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "ptrarray.h"
-#include "tok.h"
 #include "acl.h"
 #include "seen.h"
 #include "mboxname.h"

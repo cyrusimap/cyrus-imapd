@@ -4,13 +4,14 @@
  * that was previously embedded in unit-timeofday.c
  */
 #include <config.h>
-#include <unistd.h>
-
 #include "cunit/unit.h"
 #include "cunit/unit-timeofday.h"
 
-#include "lib/assert.h"
+#include <cyrus/assert.h>
+
 #include "lib/util.h"
+
+#include <unistd.h>
 
 #if HAVE_VALGRIND_VALGRIND_H
 #include <valgrind/valgrind.h>

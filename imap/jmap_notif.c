@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus/strhash.h>
+
 #include <syslog.h>
 
 #include "append.h"
@@ -14,7 +16,6 @@
 #include "jmap_util.h"
 #include "jscalendar.h"
 #include "spool.h"
-#include "strhash.h"
 #include "times.h"
 #include "user.h"
 

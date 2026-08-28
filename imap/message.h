@@ -5,11 +5,12 @@
 #ifndef INCLUDED_MESSAGE_H
 #define INCLUDED_MESSAGE_H
 
+#include <cyrus/strarray.h>
+
 #include <stdio.h>
 
 #include "prot.h"
 #include "mailbox.h"
-#include "strarray.h"
 #include "util.h"
 #include "charset.h"
 
