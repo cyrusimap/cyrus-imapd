@@ -5,8 +5,9 @@
 #ifndef INCLUDED_CYRUSDB_H
 #define INCLUDED_CYRUSDB_H
 
+#include <cyrus-imap/strarray.h>
+
 #include <stdio.h>
-#include "strarray.h"
 
 struct db;
 struct txn;

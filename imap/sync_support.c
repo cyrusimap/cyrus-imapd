@@ -4,6 +4,13 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/retry.h>
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -21,14 +28,12 @@
 #include <dirent.h>
 #include <limits.h>
 
-#include "assert.h"
 #include "bsearch.h"
 #include "global.h"
 #include "imap_proxy.h"
 #include "mboxlist.h"
 #include "mailbox.h"
 #include "quota.h"
-#include "xmalloc.h"
 #include "seen.h"
 #include "mboxname.h"
 #include "map.h"
@@ -39,15 +44,11 @@
 #include "prot.h"
 #include "dlist.h"
 #include "xstrlcat.h"
-#include "strarray.h"
 #include "ptrarray.h"
 #include "sievedir.h"
-#include "xunlink.h"
 #include "conversations.h"
 #include "msgrecord.h"
 #include "charset.h"
-#include "hash.h"
-#include "retry.h"
 
 #include "caldav_alarm.h"
 

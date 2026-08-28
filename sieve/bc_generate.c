@@ -6,7 +6,9 @@
 #include <config.h>
 #endif
 
-#include "xmalloc.h"
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include "sieve_interface.h"
 
 #include "script.h"
@@ -14,7 +16,6 @@
 
 #include "bytecode.h"
 
-#include "assert.h"
 #include <string.h>
 
 

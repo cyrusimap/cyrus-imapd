@@ -1,7 +1,11 @@
+#include <config.h>
 #include "cunit/unit.h"
-#include "strarray.h"
+
+#include <cyrus-imap/hashset.h>
+
+#include <cyrus-imap/strarray.h>
+
 #include "util.h"
-#include "hashset.h"
 
 #define CU_ASSERT_MEMEQUAL(actual, expected, sz) \
     CU_ASSERT_EQUAL(memcmp(actual, expected, sz), 0)
@@ -103,3 +107,5 @@ static void test_collisions(void)
 
     hashset_free(&hs);
 }
+
+/* vim: set ft=c :*/

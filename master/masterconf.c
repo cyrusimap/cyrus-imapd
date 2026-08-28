@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,8 +16,6 @@
 #include <sysexits.h>
 
 #include "util.h"
-#include "libconfig.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 

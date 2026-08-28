@@ -9,14 +9,16 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/arrayu64.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/hashu64.h>
+#include <cyrus-imap/strarray.h>
+
 #include <stdio.h>
 #include <string.h>
-#include "arrayu64.h"
+
 #include "bitvector.h"
-#include "hash.h"
-#include "hashu64.h"
 #include "message_guid.h"
-#include "strarray.h"
 #include "util.h"
 
 #define FNAME_CONVERSATIONS_SUFFIX "conversations"

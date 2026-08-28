@@ -3,12 +3,14 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdio.h>
 #include <string.h>
-#include "assert.h"
 #include "util.h"
 #include "glob.h"
-#include "xmalloc.h"
 
 /* "compiled" glob structure: may change
  */

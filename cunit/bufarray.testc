@@ -1,7 +1,10 @@
 #include "cunit/unit.h"
-#include "xmalloc.h"
-#include "bsearch.h"
+
 #include "bufarray.h"
+
+#include <cyrus-imap/xmalloc.h>
+
+#include "bsearch.h"
 
 /* XXX bufarray_nth does NOT follow the same semantics as the other
  * XXX fooarray_nth's, so our tests need to be a little different too

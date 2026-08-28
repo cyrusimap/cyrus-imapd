@@ -6,6 +6,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+
 #if HAVE_DIRENT_H
 # include <dirent.h>
 # define NAMLEN(dirent) strlen((dirent)->d_name)
@@ -35,7 +38,6 @@
 #include <string.h>
 #include <sasl/sasl.h>
 
-#include "assert.h"
 #include "annotate.h"
 #include "dlist.h"
 #include "global.h"
@@ -46,7 +48,6 @@
 #include "mupdate.h"
 #include "user.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */

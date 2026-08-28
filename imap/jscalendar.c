@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/strarray.h>
+
 #include <string.h>
 #include <syslog.h>
 
@@ -18,7 +20,6 @@
 #include "jscalendar.h"
 #include "json_support.h"
 #include "ptrarray.h"
-#include "strarray.h"
 #include "util.h"
 #include "xstrlcpy.h"
 

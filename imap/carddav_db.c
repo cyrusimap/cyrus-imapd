@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <syslog.h>
 #include <string.h>
 
@@ -13,13 +16,11 @@
 #include "httpd.h"
 #include "http_dav.h"
 #include "jmap_util.h"
-#include "libconfig.h"
 #include "mboxevent.h"
 #include "times.h"
 #include "util.h"
 #include "vcard_support.h"
 #include "xstrlcat.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

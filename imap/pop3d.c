@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/proc.h>
+#include <cyrus-imap/xmalloc.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -25,7 +28,6 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "assert.h"
 #include "acl.h"
 #ifdef USE_AUTOCREATE
 #include "autocreate.h"
@@ -42,13 +44,11 @@
 #include "mailbox.h"
 #include "mboxevent.h"
 #include "version.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "mboxlist.h"
 #include "idle.h"
 #include "telemetry.h"
 #include "backend.h"
-#include "proc.h"
 #include "proxy.h"
 #include "sync_support.h"
 #include "seen.h"

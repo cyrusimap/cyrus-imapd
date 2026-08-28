@@ -8,12 +8,16 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/proc.h>
+#include <cyrus-imap/tok.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <ctype.h>
 #include <string.h>
-#include <assert.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
@@ -24,15 +28,12 @@
 #include "httpd.h"
 #include "http_proxy.h"
 #include "../master/masterconf.h"
-#include "proc.h"
 #include "procinfo.h"
 #include "proxy.h"
 #include "ptrarray.h"
 #include "time.h"
-#include "tok.h"
 #include "util.h"
 #include "version.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 

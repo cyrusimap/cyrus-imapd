@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/tok.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,23 +31,18 @@
 #include <syslog.h>
 
 #include "acl.h"
-#include "assert.h"
 #include "cyrusdb.h"
 #include "glob.h"
-#include "hash.h"
 #include "imapd.h"
 #include "global.h"
 #include "times.h"
 #include "mboxlist.h"
 #include "partlist.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "ptrarray.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
-#include "tok.h"
 #include "quota.h"
-#include "xunlink.h"
 
 #include "caldav_alarm.h"
 #include "dav_util.h"

@@ -4,10 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/xmalloc.h>
+
 #include <pthread.h>
 #include <sasl/sasl.h>
-
-#include "xmalloc.h"
 
 EXPORTED void *cyrus_mutex_alloc(void)
 {

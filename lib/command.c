@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <sys/types.h>
 #include <syslog.h>
 #include <stdlib.h>
@@ -14,10 +17,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "xmalloc.h"
 #include "command.h"
 #include "signals.h"
-#include "strarray.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

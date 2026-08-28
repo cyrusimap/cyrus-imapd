@@ -6,6 +6,8 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/xmalloc.h>
+
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -16,7 +18,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "xmalloc.h"
 #include "perl/sieve/lib/request.h"
 #include "perl/sieve/lib/lex.h"
 

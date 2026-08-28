@@ -8,6 +8,13 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/tok.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -18,8 +25,6 @@
 #include <stdlib.h>
 #include <sysexits.h>
 
-#include "libconfig.h"
-#include "assert.h"
 #include "sieve_interface.h"
 #include "bytecode.h"
 #include "comparator.h"
@@ -30,13 +35,9 @@
 #include "imap/mboxname.h"
 #include "imap/message.h"
 #include "imap/spool.h"
-#include "tok.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "xunlink.h"
-#include "hash.h"
 #include "times.h"
 
 #ifdef WITH_JMAP

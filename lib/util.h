@@ -6,6 +6,10 @@
 #define INCLUDED_UTIL_H
 
 #include <config.h>
+
+#include <cyrus-imap/buf.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <ctype.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -26,9 +30,6 @@
 #define STDOUT_FILENO   1       /* Standard output.  */
 #define STDERR_FILENO   2       /* Standard error output.  */
 #endif
-
-#include "buf.h"
-#include "xmalloc.h"
 
 /* version string printable in gdb tracking */
 extern const char CYRUS_VERSION[];

@@ -9,10 +9,10 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/xmalloc.h>
+
 #include "grammar.h"
 #include "imparse.h"
-#include "xmalloc.h"
-
 
 EXPORTED int sieve_is_identifier(char *s)
 {

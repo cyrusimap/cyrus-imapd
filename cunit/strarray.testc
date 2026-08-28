@@ -1,7 +1,9 @@
 #include "cunit/unit.h"
-#include "xmalloc.h"
+
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include "bsearch.h"
-#include "strarray.h"
 
 static void test_fini_null(void)
 {

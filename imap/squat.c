@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -11,9 +14,6 @@
 #include <string.h>
 
 #include "squat_internal.h"
-
-#include "assert.h"
-#include "xmalloc.h"
 
 struct _SquatSearchIndex {
   int         index_fd;               /* the index file */

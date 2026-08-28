@@ -5,10 +5,11 @@
 #ifndef SCHED_UTIL_H
 #define SCHED_UTIL_H
 
+#include <cyrus-imap/strarray.h>
+
 #include <libical/ical.h>
 
 #include "mailbox.h"
-#include "strarray.h"
 
 extern int caldav_caluseraddr_read(const char *mboxname,
                                    const char *userid,

@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -16,14 +19,12 @@
 #include <netinet/in.h>
 
 /* cyrus includes */
-#include "assert.h"
 #include "global.h"
 #include "append.h"
 #include "index.h"
 #include "mailbox.h"
 #include "map.h"
 #include "message.h"
-#include "xmalloc.h"
 #include "mboxlist.h"
 #include "parseaddr.h"
 #include "prot.h"

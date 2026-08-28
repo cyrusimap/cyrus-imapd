@@ -5,6 +5,8 @@
 #ifndef INCLUDED_APPEND_H
 #define INCLUDED_APPEND_H
 
+#include <cyrus-imap/strarray.h>
+
 #include <stdbool.h>
 
 #include "acl.h"
@@ -14,7 +16,6 @@
 #include "message.h"
 #include "prot.h"
 #include "seqset.h"
-#include "strarray.h"
 #include "annotate.h"
 #include "conversations.h"
 

@@ -4,6 +4,14 @@
 
 #include <config.h>
 
+#include <cyrus-imap/proc.h>
+
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/retry.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #ifdef HAVE_UNISTD_H
@@ -15,13 +23,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "assert.h"
-#include "libconfig.h"
-#include "proc.h"
-#include "retry.h"
 #include "util.h"
-#include "xmalloc.h"
-#include "xunlink.h"
 
 #ifdef HAVE_DIRENT_H
 # include <dirent.h>

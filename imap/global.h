@@ -5,8 +5,9 @@
 #ifndef INCLUDED_GLOBAL_H
 #define INCLUDED_GLOBAL_H
 
+#include <cyrus-imap/libconfig.h>
+
 #include <sasl/sasl.h>
-#include "libconfig.h"
 #include "auth.h"
 #include "prot.h"
 #include "mboxname.h"

@@ -4,15 +4,15 @@
 
 #include <config.h>
 
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/libconfig.h>
+
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sysexits.h>
 #include <syslog.h>
 #include <unistd.h>
-
-#include "lib/hash.h"
-#include "lib/libconfig.h"
 
 #include "imap/global.h"
 #include "imap/mboxlist.h"

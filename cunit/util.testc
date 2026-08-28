@@ -1,6 +1,7 @@
 #include "cunit/unit.h"
 #include "util.h"
-#include "xsha1.h"
+
+#include <cyrus-imap/xsha1.h>
 
 static void test_makeuuid5(void)
 {
@@ -37,3 +38,4 @@ static void test_makeuuid5(void)
         (const unsigned char*) "foo", 3));
 }
 
+/* vim: set ft=c :*/

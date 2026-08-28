@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -28,10 +32,7 @@
 #include <limits.h>
 
 #include "service.h"
-#include "libconfig.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "strarray.h"
 #include "signals.h"
 #include "util.h"
 

@@ -2,13 +2,14 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/hashu64.h>
+
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/mpool.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <string.h>
 #include <stdlib.h>
-
-#include "assert.h"
-#include "hashu64.h"
-#include "mpool.h"
-#include "xmalloc.h"
 
 EXPORTED extern inline size_t hashu64_count(const hashu64_table *table);
 

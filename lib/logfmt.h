@@ -5,7 +5,7 @@
 #ifndef INCLUDED_LOGFMT_H
 #define INCLUDED_LOGFMT_H
 
-#include "buf.h"
+#include <cyrus-imap/buf.h>
 
 struct logfmt
 {

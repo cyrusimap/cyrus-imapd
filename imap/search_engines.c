@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/dynarray.h>
+
 #include <sys/types.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -12,7 +14,6 @@
 #include <unistd.h>
 #endif
 
-#include "dynarray.h"
 #include "index.h"
 #include "map.h"
 #include "message.h"

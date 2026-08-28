@@ -4,7 +4,7 @@
 
 #include "config.h"
 
-#include "lib/strhash.h"
+#include <cyrus-imap/strhash.h>
 
 /* The well-known djb2 algorithm (e.g. http://www.cse.yorku.ca/~oz/hash.html),
  * with the addition of an optional seed to limit predictability.

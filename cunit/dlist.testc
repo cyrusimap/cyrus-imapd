@@ -1,10 +1,13 @@
-#include <sys/stat.h>
-
 #include "config.h"
 #include "cunit/unit.h"
-#include "prot.h"
-#include "lib/libconfig.h"
+
 #include "imap/dlist.h"
+
+#include <cyrus-imap/libconfig.h>
+
+#include <sys/stat.h>
+
+#include "prot.h"
 #include "util.h"
 
 #define DBDIR           "test-dlist-dbdir"

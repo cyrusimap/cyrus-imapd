@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -21,9 +24,7 @@
 #include "mboxevent.h"
 #include "quota.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "strarray.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

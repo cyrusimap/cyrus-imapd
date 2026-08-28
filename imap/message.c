@@ -4,6 +4,13 @@
 
 #include <config.h>
 
+#include <cyrus-imap/arrayu64.h>
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/retry.h>
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -21,12 +28,9 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 
-#include "arrayu64.h"
-#include "assert.h"
 #include "crc32.h"
 #include "dlist.h"
 #include "prot.h"
-#include "hash.h"
 #include "map.h"
 #include "mailbox.h"
 #include "message.h"
@@ -37,12 +41,9 @@
 #include "stristr.h"
 #include "user.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "strarray.h"
 #include "ptrarray.h"
 #include "global.h"
-#include "retry.h"
 #include "rfc822tok.h"
 #include "times.h"
 

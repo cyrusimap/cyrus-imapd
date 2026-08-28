@@ -6,6 +6,8 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/xmalloc.h>
+
 #include <sys/types.h>
 #include <sysexits.h>
 #include <syslog.h>
@@ -19,7 +21,6 @@
 #include <fcntl.h>
 
 #include "global.h"
-#include "xmalloc.h"
 #include "caldav_db.h"
 #include "caldav_alarm.h"
 

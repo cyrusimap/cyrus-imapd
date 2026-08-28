@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/proc.h>
+#include <cyrus-imap/tok.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -35,7 +38,6 @@
 #include "http_ws.h"
 
 #include "acl.h"
-#include "assert.h"
 #include "util.h"
 #include "iptostring.h"
 #include "global.h"
@@ -46,7 +48,6 @@
 #include "auditlog.h"
 #include "imapd.h"
 #include "loginlog.h"
-#include "proc.h"
 #include "version.h"
 #include "stristr.h"
 #include "xstrlcpy.h"
@@ -60,7 +61,6 @@
 #include "message.h"
 #include "idle.h"
 #include "times.h"
-#include "tok.h"
 #include "wildmat.h"
 #include "md5.h"
 #include "attachextract.h"

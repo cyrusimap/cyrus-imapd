@@ -6,13 +6,14 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "libconfig.h"
-#include "xmalloc.h"
 #include "imap/global.h"
 #include "imap/tls.h"
 #include "timsieved/codes.h"

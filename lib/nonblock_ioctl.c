@@ -3,13 +3,13 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus-imap/xmalloc.h>
+
 #include <sys/ioctl.h>
 #include <sysexits.h>
 
 #include "nonblock.h"
-
-/* for fatal */
-#include "xmalloc.h"
 
 EXPORTED const char nonblock_method_desc[] = "ioctl";
 

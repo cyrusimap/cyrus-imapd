@@ -6,16 +6,16 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include "sieve_interface.h"
 #include <syslog.h>
 #include <sysexits.h>
 
-#include "libconfig.h"
-#include "xmalloc.h"
-
 #include "script.h"
 #include "util.h"
-#include "assert.h"
 #include <getopt.h>
 #include <string.h>
 #include <stdlib.h>

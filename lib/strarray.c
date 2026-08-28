@@ -2,11 +2,12 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
-#include "strarray.h"
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <memory.h>
 #include "logfmt.h"
 #include "util.h"
-#include "xmalloc.h"
 
 EXPORTED strarray_t *strarray_new(void)
 {

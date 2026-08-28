@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -26,7 +28,6 @@
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "zoneinfo_db.h"
 

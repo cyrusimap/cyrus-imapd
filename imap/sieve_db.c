@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #include <syslog.h>
 #include <string.h>
 
@@ -13,15 +17,12 @@
 #include <errno.h>
 #include "global.h"
 #include "jmap_api.h"
-#include "libconfig.h"
 #include "mboxlist.h"
 #include "sieve_db.h"
 #include "sievedir.h"
 #include "times.h"
 #include "user.h"
 #include "util.h"
-#include "xmalloc.h"
-#include "xunlink.h"
 
 #include "sieve/bytecode.h"
 #include "sieve/bc_parse.h"

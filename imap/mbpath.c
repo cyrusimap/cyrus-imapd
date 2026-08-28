@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -20,9 +23,7 @@
 
 #include "global.h"
 #include "mailbox.h"
-#include "xmalloc.h"
 #include "mboxlist.h"
-#include "strarray.h"
 #include "user.h"
 #include "util.h"
 

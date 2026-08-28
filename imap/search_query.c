@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/smallarrayu64.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <errno.h>
 #include <sys/types.h>
 #include <stdlib.h>
@@ -13,7 +17,6 @@
 #include <unistd.h>
 #endif
 
-#include "assert.h"
 #include "cyr_qsort_r.h"
 #include "search_expr.h"
 #include "search_query.h"
@@ -23,8 +26,6 @@
 #include "global.h"
 #include "bsearch.h"
 #include "xstrlcpy.h"
-#include "xmalloc.h"
-#include "smallarrayu64.h"
 #include "statuscache.h"
 
 /* generated headers are not necessarily in current directory */

@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/tok.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -12,7 +14,6 @@
 
 #include "http_client.h"
 #include "prot.h"
-#include "tok.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

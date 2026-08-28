@@ -10,15 +10,17 @@
  */
 
 #include <config.h>
+
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
 #include "acl.h"
 #include "auth.h"
-#include "xmalloc.h"
-#include "strarray.h"
-#include "libconfig.h"
 #include "lib/libcyr_cfg.h"
 
 /*

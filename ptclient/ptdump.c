@@ -3,6 +3,9 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus-imap/libconfig.h>
+
 #include <getopt.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,7 +14,6 @@
 #include "auth_pts.h"
 #include "cyrusdb.h"
 #include "imap/global.h"
-#include "libconfig.h"
 
 static int dump_cb(void *rockp __attribute__((unused)),
                      const char *key, size_t keylen,

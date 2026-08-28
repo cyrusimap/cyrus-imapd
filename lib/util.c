@@ -4,6 +4,13 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/retry.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xsha1.h>
+#include <cyrus-imap/xunlink.h>
+
 #include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
@@ -30,17 +37,11 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
-#include "assert.h"
 #include "byteorder.h"
-#include "libconfig.h"
 #include "logfmt.h"
 #include "map.h"
-#include "retry.h"
 #include "sessionid.h"
 #include "util.h"
-#include "xmalloc.h"
-#include "xsha1.h"
-#include "xunlink.h"
 #ifdef HAVE_ZLIB
 #include "zlib.h"
 #endif

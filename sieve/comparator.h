@@ -5,6 +5,8 @@
 #ifndef COMPARATOR_H
 #define COMPARATOR_H
 
+#include <cyrus-imap/strarray.h>
+
 #include <sys/types.h>
 
 #ifdef ENABLE_REGEX
@@ -24,7 +26,6 @@
 #endif
 
 #include "sieve_interface.h"
-#include "strarray.h"
 
 #define MAX_MATCH_VARS 9  /* MUST support ${1} through ${9} per RFC 5229 */
 

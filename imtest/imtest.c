@@ -4,6 +4,12 @@
 
 #include "config.h"
 
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/retry.h>
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #include <fcntl.h>
 #include <getopt.h>
 #include <limits.h>
@@ -29,19 +35,14 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "hash.h"
 #include "imparse.h"
 #include "iptostring.h"
 #include "md5.h"
 #include "prot.h"
-#include "retry.h"
-#include "strarray.h"
 #include "stristr.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "xunlink.h"
 
 #include <openssl/ssl.h>
 

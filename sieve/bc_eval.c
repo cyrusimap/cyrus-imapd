@@ -6,6 +6,9 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/dynarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include "sieve_interface.h"
 #include "grammar.h"
 #include "interp.h"
@@ -21,8 +24,6 @@
 
 #include "gmtoff.h"
 #include "charset.h"
-#include "dynarray.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "util.h"
 #include "times.h"

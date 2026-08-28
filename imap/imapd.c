@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/proc.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -39,7 +44,6 @@
 #ifdef USE_AUTOCREATE
 #include "autocreate.h"
 #endif // USE_AUTOCREATE
-#include "assert.h"
 #include "backend.h"
 #include "bsearch.h"
 #include "bufarray.h"
@@ -65,7 +69,6 @@
 #include "mbdump.h"
 #include "mupdate-client.h"
 #include "partlist.h"
-#include "proc.h"
 #include "prometheus.h"
 #include "quota.h"
 #include "seen.h"
@@ -81,11 +84,9 @@
 #include "userdeny.h"
 #include "util.h"
 #include "version.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "ptrarray.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

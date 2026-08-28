@@ -4,16 +4,17 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 
-#include "hash.h"
 #include "http_jmap.h"
 #include "json_support.h"
 #include "map.h"

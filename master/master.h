@@ -2,10 +2,11 @@
 #define HAVE_MASTER_H
 
 #include <config.h>
-#include <sys/resource.h> /* for rlim_t */
 
-#include "libconfig.h" /* for config_dir and IMAPOPT_SYNC_MACHINEID */
-#include "strarray.h"
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/strarray.h>
+
+#include <sys/resource.h> /* for rlim_t */
 
 struct service {
     char *name;                 /* name of service */

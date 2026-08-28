@@ -5,14 +5,15 @@
 #ifndef HTTPD_H
 #define HTTPD_H
 
+#include <cyrus-imap/dynarray.h>
+#include <cyrus-imap/hash.h>
+
 #include <sasl/sasl.h>
 #include <libxml/tree.h>
 #include <libxml/uri.h>
 #include <libical/ical.h>
 
 #include "annotate.h" /* for strlist */
-#include "dynarray.h"
-#include "hash.h"
 #include "http_client.h"
 #include "mailbox.h"
 #include "md5.h"

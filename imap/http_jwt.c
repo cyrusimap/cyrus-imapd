@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -13,7 +15,6 @@
 
 #include <sasl/saslutil.h>
 
-#include "assert.h"
 #include "global.h"
 #include "util.h"
 

@@ -12,7 +12,8 @@
 #include <config.h>
 #endif
 
-#include <assert.h>
+#include <cyrus-imap/assert.h>
+
 #include <fcntl.h>
 #include <math.h>
 #include <stdint.h>

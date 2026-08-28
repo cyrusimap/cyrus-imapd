@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/tok.h>
+
 #include <stdio.h>  /* for snprintf() */
 #include <stddef.h> /* for offsetof() macro */
 #include <syslog.h>
@@ -12,7 +14,6 @@
 #include "ical_support.h"
 #include "json_support.h"
 #include "jcal.h"
-#include "tok.h"
 #include "util.h"
 #include "version.h"
 #include "xstrlcat.h"

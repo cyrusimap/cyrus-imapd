@@ -2,6 +2,9 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,12 +13,8 @@
 #include <sys/statvfs.h>
 #include <sys/types.h>
 
-
-#include "libconfig.h"
 #include "partlist.h"
 #include "util.h"
-#include "xmalloc.h"
-
 
 #define FREE(var) if (var) { free(var); (var) = NULL; }
 

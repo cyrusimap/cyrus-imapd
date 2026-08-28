@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -20,11 +24,9 @@
 #include <errno.h>
 
 #include "global.h"
-#include "assert.h"
 #include "mboxlist.h"
 #include "mailbox.h"
 #include "quota.h"
-#include "xmalloc.h"
 #include "seen.h"
 #include "mboxname.h"
 #include "map.h"
@@ -32,7 +34,6 @@
 #include "message.h"
 #include "util.h"
 #include "prot.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

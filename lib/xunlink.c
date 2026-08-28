@@ -4,12 +4,12 @@
 
 #include <config.h>
 
+#include <cyrus-imap/xunlink.h>
+
 #include <errno.h>
 #include <string.h>
 #include <syslog.h>
 #include <unistd.h>
-
-#include "lib/xunlink.h"
 
 EXPORTED int xunlink_fn(const char *sfile, int sline, const char *sfunc,
                         const char *pathname)

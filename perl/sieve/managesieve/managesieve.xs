@@ -11,6 +11,8 @@ extern "C" {
 }
 #endif
 
+#include <cyrus-imap/xmalloc.h>
+
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/file.h>
@@ -23,7 +25,6 @@ static char *globalerr = NULL;
 
 #include "isieve.h"
 #include "util.h"
-#include "xmalloc.h"
 
 void fatal(const char *s, int t)
 {

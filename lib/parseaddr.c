@@ -3,12 +3,14 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "parseaddr.h"
-#include "xmalloc.h"
 #include "util.h"
 
 static const char unknown_user[] = "unknown-user";

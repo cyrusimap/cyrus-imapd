@@ -10,6 +10,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/strarray.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -21,7 +23,6 @@
 #include "search_engines.h"
 #include "message_guid.h"
 #include "seqset.h"
-#include "strarray.h"
 
 /* Special "sort criteria" to load message-id and references/in-reply-to
  * into msgdata array for threaders that need them.

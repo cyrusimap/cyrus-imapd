@@ -3,6 +3,12 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus-imap/proc.h>
+#include <cyrus-imap/retry.h>
+#include <cyrus-imap/tok.h>
+#include <cyrus-imap/xsha1.h>
+
 #include <sysexits.h>
 
 #include "httpd.h"
@@ -17,11 +23,7 @@
 #include <sasl/saslutil.h>
 
 #include "http_h2.h"
-#include "proc.h"
-#include "retry.h"
 #include "telemetry.h"
-#include "tok.h"
-#include "xsha1.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

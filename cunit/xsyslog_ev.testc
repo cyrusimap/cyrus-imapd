@@ -1,12 +1,13 @@
 #include "cunit/unit.h"
 #include "lib/util.h"
 
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/strarray.h>
+
 #include "imap/imap_err.h"
 
-#include "lib/libconfig.h"
 #include "lib/logfmt.h"
 #include "lib/sessionid.h"
-#include "lib/strarray.h"
 
 #include <syslog.h>
 #include <limits.h>

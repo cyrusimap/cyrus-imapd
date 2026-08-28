@@ -5,10 +5,11 @@
 #ifndef INCLUDED_MBOXNAME_H
 #define INCLUDED_MBOXNAME_H
 
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/strarray.h>
+
 #include "auth.h"
-#include "libconfig.h"
 #include "logfmt.h"
-#include "strarray.h"
 #include "util.h"
 
 #define MAX_NAMESPACE_PREFIX 40

@@ -2,12 +2,13 @@
  * test ptsmodule_standard_root_dn
  * gcc -I.. -I ../lib ../lib/.libs/util.o ../lib/.libs/xmalloc.o ../lib/.libs/map_shared.o ../lib/.libs/retry.o ../lib/.libs/assert.o test3.c -lz -lpcre2-posix 
  */
-#include <assert.h>
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdio.h>
 #include <syslog.h>
 
 #include "util.h"
-#include "xmalloc.h"
 
 // ptsmodule_standard_root_dn is declared static, so we need to include its
 // source rather than just linking with the object it's in

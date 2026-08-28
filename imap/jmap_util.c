@@ -4,10 +4,11 @@
 
 #include <config.h>
 
-#include <assert.h>
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 
 #include <sasl/saslutil.h>
@@ -17,7 +18,6 @@
 #include "caldav_util.h"
 #include "carddav_db.h"
 #include "global.h"
-#include "hash.h"
 #include "ical_support.h"
 #include "index.h"
 #include "jmap_util.h"
