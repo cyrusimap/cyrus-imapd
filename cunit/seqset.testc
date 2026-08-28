@@ -1,8 +1,11 @@
-#include "config.h"
+#include <config.h>
 #include "cunit/unit.h"
-#include "xmalloc.h"
-#include "util.h"
+
 #include "seqset.h"
+
+#include <cyrus/xmalloc.h>
+
+#include "util.h"
 
 static void test_empty(void)
 {

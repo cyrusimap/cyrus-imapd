@@ -6,6 +6,10 @@
 #include <config.h>
 #endif
 
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <limits.h>
@@ -24,15 +28,12 @@
 #include <unistd.h>
 
 #include "auth.h"
-#include "libconfig.h"
 #include "slowio.h"
-#include "xmalloc.h"
 #include "imap/backend.h"
 #include "imap/global.h"
 #include "imap/mboxlist.h"
 #include "imap/proxy.h"
 #include "imap/sync_log.h"
-#include "lib/assert.h"
 #include "master/service.h"
 #include "sieve/sieve_interface.h"
 #include "timsieved/actions.h"

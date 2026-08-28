@@ -1,17 +1,16 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
+#include "cunit/unit.h"
+#include <cyrus/libconfig.h>
+
+#include <cyrus/buf.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
 
 #include <limits.h>
 #include <stdint.h>
 #include <sysexits.h>
 #include <unistd.h>
-
-#include "cunit/unit.h"
-
-#include "lib/buf.h"
-#include "lib/libconfig.h"
-#include "lib/retry.h"
-#include "lib/xmalloc.h"
 
 #define DBDIR "test-libconfig-dbdir"
 

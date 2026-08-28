@@ -3,13 +3,15 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
 #include <string.h>
 #include <sysexits.h>
 
 #include "auth.h"
 #include "libcyr_cfg.h"
-#include "xmalloc.h"
 
 struct auth_mech *auth_mechs[] = {
     &auth_unix,

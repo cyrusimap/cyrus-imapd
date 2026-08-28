@@ -4,22 +4,23 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/arrayu64.h>
+#include <cyrus/hash.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 
 #include "acl.h"
 #include "append.h"
-#include "arrayu64.h"
 #include "caldav_db.h"
 #include "caldav_util.h"
 #include "carddav_db.h"
-#include "hash.h"
 #include "http_caldav_sched.h"
 #include "http_jmap.h"
 #include "json_support.h"

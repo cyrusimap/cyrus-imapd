@@ -11,6 +11,9 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -23,9 +26,7 @@
 #include <sysexits.h>
 #include <string.h>
 
-#include "assert.h"
 #include "global.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "mboxlist.h"

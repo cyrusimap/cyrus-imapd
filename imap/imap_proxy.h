@@ -5,10 +5,11 @@
 #ifndef _IMAP_PROXY_H
 #define _IMAP_PROXY_H
 
+#include <cyrus/strarray.h>
+
 #include "annotate.h"
 #include "backend.h"
 #include "imapurl.h"
-#include "strarray.h"
 
 enum {
     PROXY_NOCONNECTION = -1,

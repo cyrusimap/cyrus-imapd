@@ -4,8 +4,9 @@
 
 #include <config.h>
 
-#include "lib/assert.h"
-#include "lib/logfmt.h"
+#include <cyrus/assert.h>
+#include <cyrus/logfmt.h>
+
 #include "lib/sessionid.h"
 
 #include "unicode/uchar.h"

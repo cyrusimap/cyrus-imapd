@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
@@ -18,7 +20,6 @@
 #include "imapd.h"      /* for struct searchargs */
 #include "prot.h"
 #include "util.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

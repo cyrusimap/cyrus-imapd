@@ -1,4 +1,7 @@
 #include <config.h>
+
+#include <cyrus/xmalloc.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -8,7 +11,6 @@
 #include <ctype.h>
 
 #include "procinfo.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 
 static struct proc_info *

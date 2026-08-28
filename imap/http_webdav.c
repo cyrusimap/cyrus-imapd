@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus/tok.h>
+
 #include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
@@ -14,7 +16,6 @@
 #include "mailbox.h"
 #include "proxy.h"
 #include "spool.h"
-#include "tok.h"
 #include "user.h"
 #include "util.h"
 #include "webdav_db.h"

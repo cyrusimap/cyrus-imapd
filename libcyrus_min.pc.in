@@ -8,6 +8,6 @@ Description: libcyrus_min library of Cyrus Imapd
 URL: http://www.cyrusimap.org/
 Version: @PACKAGE_VERSION@
 Requires: openssl >= 3.0
-Cflags: -I${includedir}/cyrus
+Cflags: -I${includedir}
 Libs: -L${libdir} -lcyrus_min
 Libs.private: @LIBS@

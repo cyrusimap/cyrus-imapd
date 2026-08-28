@@ -3,6 +3,9 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/mman.h>
@@ -12,7 +15,6 @@
 
 #include "map.h"
 #include "slowio.h"
-#include "xmalloc.h"
 
 EXPORTED const char map_method_desc[] = "stupidshared";
 
