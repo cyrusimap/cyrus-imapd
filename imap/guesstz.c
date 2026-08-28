@@ -358,7 +358,8 @@ static char *guess_timezone(struct db *db,
                             icaltimetype trend)
 {
     struct observances obs = { 0 };
-    char *tzid = NULL;
+    char etc_buf[11];
+    const char *tzid = NULL;
 
     /* Limit expansion span to database time span */
     if ((icaltime_is_null_time(trend)) ||
@@ -381,10 +382,8 @@ static char *guess_timezone(struct db *db,
 
             int32_t hh = firstob.offset / (60*60);
             if (-14 <= hh && hh <= 12) {
-                char buf[11];
-                snprintf(buf, 11, "Etc/GMT%+d", -hh);
-                buf[10] = '\0';
-                tzid = strdup(buf);
+                snprintf(etc_buf, sizeof(etc_buf), "Etc/GMT%+d", -hh);
+                tzid = etc_buf;
                 goto done;
             }
         }
@@ -425,8 +424,7 @@ static char *guess_timezone(struct db *db,
         }
 
         /* Found a match! */
-        free(tzid);
-        tzid = strdup(dbtz.tzid);
+        tzid = dbtz.tzid;
 
         /* Stop if this is a preferred timezone */
         if (is_preferred_tzidx(db, dbtz.idx)) {
@@ -436,7 +434,7 @@ static char *guess_timezone(struct db *db,
 
 done:
     free(obs.alloc);
-    return tzid;
+    return tzid ? strdup(tzid) : NULL;
 }
 
 static int compare_tzoffset(const void *va, const void *vb)
@@ -830,41 +828,37 @@ static json_t *encode_db(struct db *db)
 
     /* Encode offsets */
     json_t *jtzoffsets = json_object();
+    json_object_set_new(jdb, "tzoffsets", jtzoffsets);
 
     if (db->tzoffsets.count) {
-        json_t *jofftzs = json_array();
+        json_t *jofftzs = NULL;
         const uint8_t *data = db->tzoffsets.data;
         char offsetstr[OFFSETSTR_MAX];
+        /* gcc ubsan incorrectly assumes that this needs initialising */
         int32_t prevoff = 0;
         size_t i;
 
         for (i = 0; i < db->tzoffsets.count; i++) {
             int32_t offset = load_int32_t(data);
             data += 4;
-            if (i > 0 && prevoff != offset) {
-                format_offset(prevoff, offsetstr);
-                json_object_set_new(jtzoffsets, offsetstr, jofftzs);
+            if (!jofftzs || prevoff != offset) {
+                format_offset(offset, offsetstr);
                 jofftzs = json_array();
+                json_object_set_new(jtzoffsets, offsetstr, jofftzs);
+                prevoff = offset;
             }
-            prevoff = offset;
 
             uint64_t tzidx = load_uint64_t(data);
             data += 8;
             const char *tzid = (const char *)db->timezones + tzidx;
             json_array_append_new(jofftzs, json_string(tzid));
         }
-
-        if (json_array_size(jofftzs)) {
-            format_offset(prevoff, offsetstr);
-            json_object_set_new(jtzoffsets, offsetstr, jofftzs);
-        }
-        else json_decref(jofftzs);
     }
-
-    json_object_set_new(jdb, "tzoffsets", jtzoffsets);
 
     /* Encode preftzs */
     json_t *jpreftzs = json_array();
+    json_object_set_new(jdb, "preftzs", jpreftzs);
+
     if (db->preftzs.count) {
         uint16_t i;
         for (i = 0; i < db->preftzs.count; i++) {
@@ -873,16 +867,17 @@ static json_t *encode_db(struct db *db)
             json_array_append_new(jpreftzs, json_string(tz.tzid));
         }
     }
-    json_object_set_new(jdb, "preftzs", jpreftzs);
 
     /* Encode timezones */
     json_t *jtimezones = json_object();
+    json_object_set_new(jdb, "timezones", jtimezones);
 
     const uint8_t *data = db->timezones;
     while (*data) {
         json_t *jobs = json_array();
         const char *tzid = (const char *)data;
-        data += strlen(tzid) + 1;
+        size_t tzid_len = strlen(tzid);
+        data += tzid_len + 1;
         uint32_t obs_cnt = load_uint32_t(data);
         data += 4;
 
@@ -901,10 +896,8 @@ static json_t *encode_db(struct db *db)
                         icaltime_as_ical_string(dt), offsetstr));
         }
 
-        json_object_set_new(jtimezones, tzid, jobs);
+        json_object_setn_new(jtimezones, tzid, tzid_len, jobs);
     }
-
-    json_object_set_new(jdb, "timezones", jtimezones);
 
     return jdb;
 }
