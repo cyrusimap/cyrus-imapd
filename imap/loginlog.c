@@ -4,9 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus/logfmt.h>
+
 #include "imap/loginlog.h"
 
-#include "lib/logfmt.h"
 #include "lib/sessionid.h"
 
 #include <syslog.h>

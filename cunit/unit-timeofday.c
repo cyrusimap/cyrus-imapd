@@ -1,16 +1,16 @@
 /* unit-timeofday.c */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
+#include "cunit/unit-timeofday.h"
 
-#include <assert.h>
+#include <cyrus/assert.h>
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-
-#include "cunit/unit-timeofday.h"
 
 extern int verbose;
 

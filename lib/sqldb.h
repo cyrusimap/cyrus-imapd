@@ -5,11 +5,12 @@
 #ifndef SQLDB_H
 #define SQLDB_H
 
+#include <cyrus/strarray.h>
+
 #include <sys/types.h>
 
 #include <sqlite3.h>
 #include "ptrarray.h"
-#include "strarray.h"
 #include "util.h"
 
 struct sqldb_bindval {

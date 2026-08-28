@@ -5,8 +5,9 @@
 #ifndef __CYRUS_TOK_H__
 #define __CYRUS_TOK_H__
 
+#include <cyrus/xmalloc.h>
+
 #include <sys/types.h>
-#include "xmalloc.h"
 
 typedef struct
 {

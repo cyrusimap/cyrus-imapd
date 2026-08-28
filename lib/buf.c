@@ -4,13 +4,14 @@
 
 #include <config.h>
 
-#include "lib/buf.h"
+#include <cyrus/buf.h>
 
-#include "lib/assert.h"
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #include "lib/byteorder.h"
 #include "lib/map.h"
 #include "lib/util.h"
-#include "lib/xmalloc.h"
 
 #include <string.h>
 

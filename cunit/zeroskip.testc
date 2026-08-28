@@ -1,3 +1,10 @@
+#include "config.h"
+#include "cunit/unit.h"
+#include "cyrusdb.h"
+
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+
 #include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
@@ -5,12 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "config.h"
-#include "cunit/unit.h"
-#include "cyrusdb.h"
-#include "libconfig.h"
 #include "util.h"
-#include "xmalloc.h"
 
 static char *basedir;
 
@@ -491,3 +493,5 @@ static int tear_down(void)
 
     return r;
 }
+
+/* vim: set ft=c :*/

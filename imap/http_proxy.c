@@ -4,10 +4,13 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <sysexits.h>
@@ -25,9 +28,7 @@
 #include "proxy.h"
 #include "spool.h"
 #include "tls.h"
-#include "tok.h"
 #include "version.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 

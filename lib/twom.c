@@ -6,7 +6,8 @@
  * See LICENSE-CC0, LICENSE-0BSD, or LICENSE-MIT-0 for details.
  */
 
-#include <assert.h>
+#include <cyrus/assert.h>
+
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>

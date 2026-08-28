@@ -6,6 +6,8 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -20,7 +22,6 @@
 /* cyrus includes */
 #include "global.h"
 #include "mailbox.h"
-#include "xmalloc.h"
 #include "mboxlist.h"
 #include "util.h"
 
