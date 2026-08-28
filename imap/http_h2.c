@@ -3,6 +3,9 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/retry.h>
+
 #include <sysexits.h>
 
 #include "httpd.h"
@@ -18,7 +21,6 @@
 
 #include "http_ws.h"
 #include "prometheus.h"
-#include "retry.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -21,7 +23,6 @@
 #include "mboxlist.h"
 #include "seen.h"
 #include "util.h"
-#include "xmalloc.h"
 
 /* config.c stuff */
 static int do_remove = 0;

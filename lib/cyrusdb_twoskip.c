@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -14,7 +18,6 @@
 #include <unistd.h>
 #endif
 
-#include "assert.h"
 #include "bsearch.h"
 #include "byteorder.h"
 #include "cyrusdb.h"
@@ -22,8 +25,6 @@
 #include "libcyr_cfg.h"
 #include "mappedfile.h"
 #include "util.h"
-#include "xmalloc.h"
-#include "xunlink.h"
 
 /*
  * twoskip disk format.

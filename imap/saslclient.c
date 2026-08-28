@@ -4,13 +4,14 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "xmalloc.h"
 #include "saslclient.h"
 #include "global.h"
 

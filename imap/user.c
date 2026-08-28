@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/proc.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -31,13 +36,11 @@
 # endif
 #endif
 
-#include "assert.h"
 #include "dav_db.h"
 #include "global.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mboxname.h"
-#include "proc.h"
 #include "quota.h"
 #include "search_engines.h"
 #include "seen.h"
@@ -48,8 +51,6 @@
 #include "util.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "xmalloc.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

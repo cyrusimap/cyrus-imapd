@@ -5,11 +5,12 @@
 #ifndef JMAP_UTIL_H
 #define JMAP_UTIL_H
 
+#include <cyrus/hash.h>
+
 #include <jansson.h>
 
 #include "caldav_db.h"
 #include "carddav_db.h"
-#include "hash.h"
 #include "ical_support.h"
 #include "message.h"
 #include "mboxlist.h"

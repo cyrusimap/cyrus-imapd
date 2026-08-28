@@ -4,11 +4,13 @@
 
 #include <config.h>
 
+#include <cyrus/arrayu64.h>
+
+#include <cyrus/xmalloc.h>
+
 #include <string.h>
 
-#include "arrayu64.h"
 #include "util.h"
-#include "xmalloc.h"
 
 EXPORTED arrayu64_t *arrayu64_new(void)
 {

@@ -7,7 +7,8 @@
 
 #include <config.h>
 
-#include "hash.h"
+#include <cyrus/hash.h>
+
 #include "http_jmap.h"
 #include "jmap_util.h"
 #include "json_support.h"

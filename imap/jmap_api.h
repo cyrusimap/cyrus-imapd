@@ -1,22 +1,23 @@
 /* http_api.h -- Routines for handling JMAP API requests */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #ifndef JMAP_API_H
 #define JMAP_API_H
+#include <config.h>
+
+#include <cyrus/hash.h>
+#include <cyrus/strarray.h>
 
 #include "acl.h"
 #include "auth.h"
 #include "conversations.h"
 #include "dav_db.h"
-#include "hash.h"
 #include "jmap_util.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "ptrarray.h"
-#include "strarray.h"
 #include <stdbool.h>
 
 #define JMAP_INT_MAX    9007199254740991LL  /*  2^53-1 */

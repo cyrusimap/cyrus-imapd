@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/strarray.h>
+#include <cyrus/strhash.h>
+
 #include <errno.h>
 #include <string.h>
 
@@ -17,8 +20,6 @@
 #include "itip_support.h"
 #include "mailbox.h"
 #include "proxy.h"
-#include "strarray.h"
-#include "strhash.h"
 #include "syslog.h"
 #include "times.h"
 #include "user.h"

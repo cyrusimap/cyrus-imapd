@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,7 +19,6 @@
 #include <fcntl.h>
 #include <syslog.h>
 
-#include "assert.h"
 #include "cyrusdb.h"
 #include "imapd.h"
 #include "jmap_util.h"
@@ -26,7 +28,6 @@
 #include "seen.h"
 #include "user.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */

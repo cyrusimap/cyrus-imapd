@@ -3,6 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/mpool.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
@@ -24,13 +29,10 @@
 #endif
 
 #include "prot.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "global.h"
-#include "mpool.h"
 #include "mupdate.h"
-#include "xunlink.h"
 
 /* Returns file descriptor of kick socket (or does not return) */
 static int open_kick_socket(void)

@@ -6,6 +6,9 @@
 #include <config.h>
 #endif
 
+#include <cyrus/arrayu64.h>
+#include <cyrus/xmalloc.h>
+
 #include <sys/types.h>
 #include <sysexits.h>
 #include <syslog.h>
@@ -19,7 +22,6 @@
 #include <fcntl.h>
 
 #include "acl.h"
-#include "arrayu64.h"
 #include "idle.h"
 #include "idlemsg.h"
 #include "global.h"
@@ -27,7 +29,6 @@
 #include "mboxevent.h"
 #include "mboxlist.h"
 #include "sqldb.h"
-#include "xmalloc.h"
 
 #define CMD_CREATE                                  \
     "CREATE TABLE event_groups ("                   \

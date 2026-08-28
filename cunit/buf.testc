@@ -1,11 +1,12 @@
-#include "buf.h"
 #include "cunit/unit.h"
+#include <cyrus/buf.h>
+
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
 
 #include "map.h"
 #include "prot.h"
-#include "retry.h"
 #include "util.h"
-#include "xmalloc.h"
 
 #include <sys/mman.h>
 

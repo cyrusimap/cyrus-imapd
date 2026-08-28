@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -16,7 +18,6 @@
 #include "global.h"
 #include "mupdate-client.h"
 #include "proxy.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */

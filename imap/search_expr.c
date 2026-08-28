@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #include <sys/types.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -12,7 +15,6 @@
 #include <unistd.h>
 #endif
 
-#include "assert.h"
 #include "search_expr.h"
 #include "index.h"
 #include "message.h"
@@ -22,7 +24,6 @@
 #include "lsort.h"
 #include "seen.h"
 #include "xstrlcpy.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

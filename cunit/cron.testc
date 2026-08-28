@@ -3,7 +3,7 @@
 #include "cunit/unit.h"
 #include "cunit/unit-timezones.h"
 
-#include "lib/cron.h"
+#include <cyrus/cron.h>
 
 #define SENTINEL (struct cron_spec){            \
     .minutes = UINT64_C(0xcafef00dcafef00d),    \

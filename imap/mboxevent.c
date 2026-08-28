@@ -3,6 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,17 +19,14 @@
 #include <jansson.h>
 
 #include "annotate.h"
-#include "assert.h"
 #include "caldav_db.h"
 #include "carddav_db.h"
 #include "global.h"
 #include "imapurl.h"
-#include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "map.h"
 #include "times.h"
 #include "user.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 #include "jmap_util.h"

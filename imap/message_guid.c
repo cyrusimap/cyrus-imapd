@@ -3,13 +3,15 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/assert.h>
+#include <cyrus/xsha1.h>
+
 #include <string.h>
 
-#include "assert.h"
 #include "global.h"
 #include "message_guid.h"
 #include "util.h"
-#include "xsha1.h"
 
 /* Four possible forms of Message GUID:
  *

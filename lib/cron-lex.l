@@ -3,7 +3,8 @@
 %option case-insensitive
 
 %{
-#include "lib/cron.h"
+#include <cyrus/cron.h>
+
 #include "lib/cron-parse.h"
 
 #include <errno.h>

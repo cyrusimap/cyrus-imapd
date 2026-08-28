@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,9 +34,7 @@
 # endif
 #endif
 
-#include "assert.h"
 #include "auditlog.h"
-#include "xmalloc.h"
 #include "global.h"
 #include "util.h"
 #include "cyrusdb.h"

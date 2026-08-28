@@ -1,5 +1,8 @@
 #include "config.h"
 #include "cunit/unit.h"
+#include "imap/http_jwt.h"
+
+#include <cyrus/xunlink.h>
 
 #include <jansson.h>
 #include <openssl/err.h>
@@ -10,9 +13,6 @@
 
 #include "charset.h"
 #include "util.h"
-#include "xunlink.h"
-
-#include "imap/http_jwt.h"
 
 #define HMAC_KEY_RAW "01234567890123456789012345678901234567890123456789012345"
 #define HMAC_KEY_B64 "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU="

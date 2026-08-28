@@ -4,12 +4,13 @@
 
 #include <config.h>
 
+#include <cyrus/hash.h>
+#include <cyrus/libconfig.h>
+
 #include <stdbool.h>
 #include <string.h>
 #include <syslog.h>
 #include <errno.h>
-
-#include "libconfig.h"
 
 #include "jmap_mail_query.h"
 #include "jmap_util.h"
@@ -35,7 +36,6 @@
 #include "annotate.h"
 #include "carddav_db.h"
 #include "global.h"
-#include "hash.h"
 #include "index.h"
 #include "search_query.h"
 #include "times.h"

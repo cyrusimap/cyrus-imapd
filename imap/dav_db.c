@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include <stdlib.h>
 #include <syslog.h>
 #include <string.h>
@@ -15,7 +19,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "assert.h"
 #include "caldav_alarm.h"
 #include "cyrusdb.h"
 #include "dav_db.h"
@@ -23,8 +26,6 @@
 #include "sieve_db.h"
 #include "user.h"
 #include "util.h"
-#include "xmalloc.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

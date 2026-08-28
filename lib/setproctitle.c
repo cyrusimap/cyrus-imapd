@@ -38,11 +38,11 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-
-#include "xmalloc.h"
 
 # define VA_LOCAL_DECL  va_list ap;
 # define VA_START(f)    va_start(ap, f)

@@ -4,6 +4,14 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/arrayu64.h>
+#include <cyrus/hash.h>
+#include <cyrus/strarray.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -11,11 +19,8 @@
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 
-#include "arrayu64.h"
 #include "cyr_qsort_r.h"
-#include "hash.h"
 #include "http_jmap.h"
 #include "jmap_mail.h"
 #include "jmap_mail_query.h"
@@ -26,15 +31,11 @@
 #include "sievedir.h"
 #include "sieve/sieve_interface.h"
 #include "sieve/bc_parse.h"
-#include "strarray.h"
 #include "times.h"
-#include "tok.h"
 #include "user.h"
 #include "util.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "xmalloc.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

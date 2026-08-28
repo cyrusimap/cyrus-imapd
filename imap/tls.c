@@ -57,6 +57,10 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+#include <cyrus/xmalloc.h>
+
 /* System library. */
 
 #include <sys/types.h>
@@ -75,12 +79,9 @@
 #include <openssl/ssl.h>
 
 /* Application-specific. */
-#include "assert.h"
-#include "hash.h"
 #include "nonblock.h"
 #include "prot.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "tls.h"
 
 /* Session caching/reuse stuff */

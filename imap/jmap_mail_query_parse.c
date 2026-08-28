@@ -4,9 +4,9 @@
 
 #include <config.h>
 
-#include <string.h>
+#include <cyrus/libconfig.h>
 
-#include "libconfig.h"
+#include <string.h>
 
 #include "jmap_api.h"
 #include "jmap_mail_query_parse.h"

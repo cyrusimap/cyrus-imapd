@@ -1,13 +1,14 @@
 /* tok.c - utility for string tokenisation */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include <cyrus/tok.h>
+
+#include <cyrus/xmalloc.h>
+
 #include <string.h>
 #include <ctype.h>
-#include "tok.h"
-#include "xmalloc.h"
-
 EXPORTED void tok_init(tok_t *t, const char *str, const char *sep, int flags)
 {
     tok_initm(t, str ? xstrdup(str) : NULL, sep, flags|TOK_FREEBUFFER);

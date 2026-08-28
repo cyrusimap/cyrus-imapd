@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -35,7 +38,6 @@
 # endif
 #endif
 
-#include "assert.h"
 #include "index.h"
 #include "global.h"
 #include "mailbox.h"
@@ -46,7 +48,6 @@
 #include "seen.h"
 #include "util.h"
 #include "times.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */

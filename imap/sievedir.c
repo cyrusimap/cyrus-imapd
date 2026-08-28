@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -12,17 +15,14 @@
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "assert.h"
 #include "map.h"
 #include "sievedir.h"
 #include "util.h"
 #include "xstrlcpy.h"
-#include "xunlink.h"
 
 #ifdef USE_SIEVE
 #include "sieve/bc_parse.h"

@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+
 #include <ctype.h>
 #include <stdbool.h>
 #include <string.h>
@@ -15,9 +18,7 @@
 #include "bsearch.h"
 #include "charset.h"
 #include "dkim2_mi.h"
-#include "strarray.h"
 #include "util.h"
-#include "xmalloc.h"
 
 /* Section numbers below are draft-ietf-dkim-dkim2-spec-06. */
 

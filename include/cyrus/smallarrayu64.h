@@ -5,11 +5,11 @@
 #ifndef __CYRUS_SMALLARRAYU64_H__
 #define __CYRUS_SMALLARRAYU64_H__
 
+#include <cyrus/arrayu64.h>
+
 #include <sys/types.h>
 
 #include <stdint.h>
-
-#include "arrayu64.h"
 
 #define SMALLARRAYU64_ALLOC 8
 

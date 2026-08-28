@@ -3,12 +3,13 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sysexits.h>
-#include "xmalloc.h"
-
 
 EXPORTED void *xmalloc(size_t size)
 {

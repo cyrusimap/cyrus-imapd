@@ -5,6 +5,8 @@
 #ifndef __CYRUS_DYNARRAY_H__
 #define __CYRUS_DYNARRAY_H__
 
+#include <stddef.h>
+
 typedef struct dynarray {
     size_t membsize;
     int count;

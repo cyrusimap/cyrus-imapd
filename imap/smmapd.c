@@ -34,8 +34,11 @@
  * may contain an explanatory message.
  *
  */
-
 #include <config.h>
+
+#include <cyrus/proc.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -51,12 +54,10 @@
 #include "global.h"
 #include "mboxlist.h"
 #include "mupdate-client.h"
-#include "proc.h"
 #include "quota.h"
 #include "slowio.h"
 #include "userdeny.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 

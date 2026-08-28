@@ -11,10 +11,13 @@
 #include <config.h>
 #endif
 
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
-#include <assert.h>
 #include <string.h>
-#include "xmalloc.h"
 #include "sieve/bytecode.h"
 #include "sieve/comparator.h"
 #include "sieve/interp.h"
@@ -27,9 +30,7 @@
 
 #include "util.h"
 #include "imparse.h"
-#include "libconfig.h"
 #include "times.h"
-#include "tok.h"
 
 #define ERR_BUF_SIZE 1024
 
