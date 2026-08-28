@@ -7,6 +7,8 @@ use warnings;
 use Data::Dumper;
 use DateTime;
 
+use Cyrus::DList;
+
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
@@ -65,6 +67,28 @@ sub assert_user_sub_not_exists
     xlog $self, "Looking for subscriptions file $subs";
 
     $self->assert_not_file_test($subs, '-f');
+}
+
+sub imap_getusergroup
+{
+    my ($self, $talk, $item) = @_;
+
+    my $usergroups = {};
+    my $handlers = {
+        'usergroup' => sub {
+            my (undef, $response) = @_;
+
+            my %ug = @{$response};
+            while (my ($user, $groups) = each %ug) {
+                $usergroups->{$user} = { map { $_ => 1 } @{$groups} };
+            }
+        },
+    };
+
+    $talk->_imap_cmd('GETUSERGROUP', 0, $handlers, $item);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    return $usergroups;
 }
 
 use Cassandane::Tiny::Loader;

@@ -2078,14 +2078,17 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         if (raclmodseq)
             dlist_setnum64(kl, "RACLMODSEQ", raclmodseq);
         char *userid = mboxname_to_userid(mailbox_name(mailbox));
-        strarray_t groups = STRARRAY_INITIALIZER;
-        int r = mboxlist_lookup_usergroups(userid, &groups);
-        if (!r && strarray_size(&groups)) {
-            char *groupstxt = strarray_join(&groups, "\t");
-            dlist_setatom(kl, "USERGROUPS", groupstxt);
-            free(groupstxt);
+        if (userid) {
+            strarray_t groups = STRARRAY_INITIALIZER;
+            if (!mboxlist_lookup_usergroups(userid, &groups)) {
+                /* always sent, even empty: otherwise removing a user's last
+                 * group never reaches the replica */
+                char *groupstxt = strarray_join(&groups, "\t");
+                dlist_setatom(kl, "USERGROUPS", groupstxt ? groupstxt : "");
+                free(groupstxt);
+            }
+            strarray_fini(&groups);
         }
-        strarray_fini(&groups);
         free(userid);
     }
     dlist_setnum32(kl, "VERSION", mailbox->i.minor_version);
@@ -3715,7 +3718,9 @@ static int sync_apply_mailbox(struct dlist *kin,
         r = mailbox_update_xconvmodseq(mailbox, xconvmodseq, opt_force);
     }
 
-    if (config_getswitch(IMAPOPT_REVERSEACLS) && raclmodseq) {
+    /* record it even with reverseacls off here: it's just a counter, and the
+     * replica has to carry it or it can never converge with the master */
+    if (raclmodseq) {
         mboxname_setraclmodseq(mailbox_name(mailbox), raclmodseq);
     }
 
@@ -5677,6 +5682,7 @@ static int sync_kl_parse(struct dlist *kin,
             if (!dlist_getatom(kl, "ROOT", &root)) return IMAP_PROTOCOL_BAD_PARAMETERS;
             sq = sync_quota_list_add(quota_list, root);
             sync_decode_quota_limits(kl, sq->limits);
+            dlist_getnum64(kl, "MODSEQ", &sq->modseq);
         }
 
         else if (!strcmp(kl->name, "LSUB")) {
@@ -6089,6 +6095,10 @@ static int update_quota_work(struct sync_client_state *sync_cs,
             if (client->limits[res] != server->limits[res])
                 changed++;
         }
+        /* the modseq is the JMAP Quota state, so it has to converge in its own
+         * right - the master allocates a new one on every usage change */
+        if (client->modseq != server->modseq)
+            changed++;
         if (!changed)
             return 0;
     }
@@ -6901,8 +6911,24 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 
     if (config_getswitch(IMAPOPT_REVERSEACLS)) {
         modseq_t raclmodseq = mboxname_readraclmodseq(mailbox_name(mailbox));
-        // don't bail if either are zero, that could be version skew
-        if (raclmodseq && remote->raclmodseq && remote->raclmodseq != raclmodseq) return 0;
+        if (remote->raclmodseq != raclmodseq) return 0;
+    }
+
+    /* usergroups are per-user, but they ride along with every mailbox.  the
+     * empty string is a real value here - it means "this user is in no
+     * groups" - so only NULL means the peer didn't tell us */
+    if (remote->groups) {
+        char *userid = mboxname_to_userid(mailbox_name(mailbox));
+        strarray_t groups = STRARRAY_INITIALIZER;
+        int same = 1;
+        if (!mboxlist_lookup_usergroups(userid, &groups)) {
+            char *groupstxt = strarray_join(&groups, "\t");
+            same = !strcmp(groupstxt ? groupstxt : "", remote->groups);
+            free(groupstxt);
+        }
+        strarray_fini(&groups);
+        free(userid);
+        if (!same) return 0;
     }
 
     if (mailbox_has_conversations(mailbox)) {
@@ -7042,8 +7068,10 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
         if (r) goto done;
     }
 
-    /* bump the raclmodseq if it's higher on the replica */
-    if (remote && is_repeat && remote->raclmodseq) {
+    /* bump the raclmodseq if it's higher on the replica.  setraclmodseq only
+     * raises, so without this the higher side would never come back down and
+     * is_unchanged would send this mailbox on every run forever */
+    if (remote && remote->raclmodseq) {
         mboxname_setraclmodseq(mailbox_name(mailbox), remote->raclmodseq);
     }
 

@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub quota_record
+{
+    my ($self, $instance, $root) = @_;
+
+    my (undef, $rec) = $instance->run_dbcommand(
+        $instance->get_basedir() . '/conf/quotas.db', 'twoskip',
+        ['SHOW', $root]);
+    $self->assert_not_null($rec);
+
+    return Cyrus::DList->parse_string($rec)->as_perl();
+}
+
+sub set_quota_modseq
+{
+    my ($self, $instance, $root, $modseq) = @_;
+
+    my $hash = $self->quota_record($instance, $root);
+    $hash->{MODSEQ} = $modseq;
+    $instance->run_dbcommand(
+        $instance->get_basedir() . '/conf/quotas.db', 'twoskip',
+        ['SET', $root, Cyrus::DList->new_perl('', $hash)->as_string()]);
+}
+
+sub test_quota_modseq
+    :Conversations :NoStartInstances
+    ($self)
+{
+    # quotalegacy keeps one file per root, which run_dbcommand can't read
+    $_->{config}->set(quota_db => 'twoskip')
+        for ($self->{instance}, $self->{replica});
+    $self->_start_instances();
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->setquota("user.cassandane", "(storage 100000)");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->run_replication();
+
+    my $modseq = $self->quota_record($self->{instance},
+                                     'user.cassandane')->{MODSEQ};
+    $self->assert_num_not_equals(0, $modseq);
+    $self->assert_num_equals($modseq,
+        $self->quota_record($self->{replica}, 'user.cassandane')->{MODSEQ});
+
+    # the modseq drifts on its own: the master allocates a fresh one from its
+    # own counters on every usage change, while the replica applies silently
+    # and keeps whatever it had.  a difference in the modseq alone has to be
+    # enough to bring the two back together
+    $self->set_quota_modseq($self->{replica}, 'user.cassandane', $modseq - 1);
+    $self->assert_num_equals($modseq - 1,
+        $self->quota_record($self->{replica}, 'user.cassandane')->{MODSEQ});
+
+    $self->run_replication();
+    $self->assert_num_equals($modseq,
+        $self->quota_record($self->{replica}, 'user.cassandane')->{MODSEQ});
+
+    # and a usage change, which moves the modseq while leaving the limits
+    # exactly where they were
+    $self->make_message("quota bump");
+
+    my $bumped = $self->quota_record($self->{instance},
+                                     'user.cassandane')->{MODSEQ};
+    $self->assert_num_not_equals($modseq, $bumped);
+
+    $self->run_replication();
+    $self->assert_num_equals($bumped,
+        $self->quota_record($self->{replica}, 'user.cassandane')->{MODSEQ});
+}
