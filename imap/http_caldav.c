@@ -16,6 +16,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/strhash.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <sysexits.h>
 #include <syslog.h>
 
@@ -32,7 +36,6 @@
 #include "css3_color.h"
 #include "defaultalarms.h"
 #include "global.h"
-#include "hash.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
@@ -51,12 +54,10 @@
 #include "proxy.h"
 #include "times.h"
 #include "spool.h"
-#include "strhash.h"
 #include "user.h"
 #include "util.h"
 #include "version.h"
 #include "webdav_db.h"
-#include "xmalloc.h"
 #include "xml_support.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"

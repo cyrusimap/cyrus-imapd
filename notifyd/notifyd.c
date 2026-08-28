@@ -6,6 +6,10 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -24,10 +28,7 @@
 #include "notifyd.h"
 
 #include "imap/global.h"
-#include "libconfig.h"
 #include "imap/notify.h"
-#include "xmalloc.h"
-#include "strarray.h"
 
 #include "master/service.h"
 

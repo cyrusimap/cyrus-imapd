@@ -6,13 +6,14 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/xmalloc.h>
+
 #include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "prot.h"
-#include "xmalloc.h"
 #include "perl/sieve/lib/codes.h"
 #include "perl/sieve/lib/lex.h"
 

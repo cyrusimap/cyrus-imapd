@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/proc.h>
+#include <cyrus-imap/xmalloc.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -24,7 +27,6 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "assert.h"
 #include "acl.h"
 #ifdef USE_AUTOCREATE
 #include "autocreate.h"
@@ -40,10 +42,8 @@
 #include "map.h"
 #include "user.h"
 #include "version.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "mboxlist.h"
-#include "proc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "master/service.h"

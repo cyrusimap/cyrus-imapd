@@ -8,7 +8,7 @@
 #ifndef FLAGS_H_
 #define FLAGS_H_
 
-#include "strarray.h"
+#include <cyrus-imap/strarray.h>
 
 int verify_flaglist(strarray_t *sl);
 

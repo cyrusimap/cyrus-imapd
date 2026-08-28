@@ -1,7 +1,9 @@
 #include "cunit/unit.h"
-#include "xmalloc.h"
+
+#include <cyrus-imap/arrayu64.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include "bsearch.h"
-#include "arrayu64.h"
 
 static void test_fini_null(void)
 {

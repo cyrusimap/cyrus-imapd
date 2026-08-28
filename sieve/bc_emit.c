@@ -7,14 +7,13 @@
 #endif
 
 #include "sieve_interface.h"
-
-
 #include "bytecode.h"
+
+#include <cyrus-imap/assert.h>
 
 #include <syslog.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <assert.h>
 
 
 #if DUMPCODE

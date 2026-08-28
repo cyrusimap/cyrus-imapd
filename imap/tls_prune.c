@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/xmalloc.h>
+
 #include <getopt.h>
 #include <stdio.h>
 #include <sysexits.h>
@@ -12,7 +14,6 @@
 #include "global.h"
 #include "tls.h"
 #include "util.h"
-#include "xmalloc.h"
 
 static void usage(void)
 {

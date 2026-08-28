@@ -2,6 +2,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -10,7 +12,6 @@
 #include <time.h>
 
 #include "imapurl.h"
-#include "xmalloc.h"
 #include "times.h"
 #include "util.h"
 

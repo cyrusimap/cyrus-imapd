@@ -2,17 +2,18 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/mpool.h>
+#include <cyrus-imap/strhash.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <string.h>
 #include <stdlib.h>
 #include <syslog.h>
 #include <stdbool.h>
 
-#include "assert.h"
-#include "hash.h"
-#include "mpool.h"
-#include "strhash.h"
 #include "util.h"
-#include "xmalloc.h"
 
 /* Ideally having this declaration with EXPORTED would be sufficient, and we
  * could remove it from the definition in the header. gcc is fine with this,

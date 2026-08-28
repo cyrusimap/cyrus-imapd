@@ -2,13 +2,16 @@
 #include <config.h>
 #endif
 #include "cunit/unit.h"
-#include "assert.h"
-#include "xmalloc.h"
-#include "retry.h"
-#include "util.h"
-#include "xunlink.h"
-#include "imap/global.h"
+
 #include "imap/annotate.h"
+
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/retry.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
+#include "util.h"
+#include "imap/global.h"
 #include "imap/append.h"
 #include "imap/mboxlist.h"
 #include "imap/user.h"

@@ -4,19 +4,21 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 
 #include "annotate.h"
 #include "carddav_db.h"
 #include "cyr_qsort_r.h"
 #include "global.h"
-#include "hash.h"
 #include "http_carddav.h"
 #include "http_dav.h"
 #include "http_dav_sharing.h"
@@ -31,7 +33,6 @@
 #include "util.h"
 #include "vcard_support.h"
 #include "xapian_wrap.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */

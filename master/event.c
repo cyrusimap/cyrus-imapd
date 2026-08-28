@@ -6,7 +6,8 @@
 
 #include "master/event.h"
 
-#include "lib/assert.h"
+#include <cyrus-imap/assert.h>
+
 #include "lib/util.h"
 
 #include <sysexits.h>

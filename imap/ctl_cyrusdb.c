@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -45,9 +48,7 @@
 #include "statuscache.h"
 #include "tls.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xunlink.h"
 
 #define N(a) (sizeof(a) / sizeof(a[0]))
 

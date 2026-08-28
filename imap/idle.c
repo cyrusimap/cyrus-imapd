@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -17,7 +19,6 @@
 #include <string.h>
 #include <errno.h>
 
-#include "assert.h"
 #include "idle.h"
 #include "idlemsg.h"
 #include "global.h"

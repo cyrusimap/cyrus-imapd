@@ -6,11 +6,12 @@
 
 #include "imap/auditlog.h"
 
+#include <cyrus-imap/assert.h>
+
 #include "imap/mailbox.h"
 #include "imap/mboxname.h"
 #include "imap/jmap_util.h"
 
-#include "lib/assert.h"
 #include "lib/logfmt.h"
 #include "lib/sessionid.h"
 

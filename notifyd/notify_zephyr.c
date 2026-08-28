@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -15,7 +17,6 @@
 #include <zephyr/zephyr.h>
 #include <syslog.h>
 
-#include "xmalloc.h"
 #include "util.h"
 
 #ifndef MAIL_CLASS

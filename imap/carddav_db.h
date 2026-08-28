@@ -7,10 +7,11 @@
 
 #include <config.h>
 
+#include <cyrus-imap/strarray.h>
+
 #include "auth.h"
 #include "dav_db.h"
 #include "mboxlist.h"
-#include "strarray.h"
 #include "util.h"
 #include "vcard_support.h"
 

@@ -5,7 +5,7 @@
 #ifndef MASTER_CRONEVENT_H
 #define MASTER_CRONEVENT_H
 
-#include "lib/strarray.h"
+#include <cyrus-imap/strarray.h>
 
 #include <stdbool.h>
 

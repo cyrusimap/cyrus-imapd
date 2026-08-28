@@ -27,6 +27,8 @@
  *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -34,7 +36,6 @@
 
 #include "macros.h"
 
-#include "xmalloc.h"
 #include "imclient.h"
 #include "imparse.h"
 #include "wildmat.h"

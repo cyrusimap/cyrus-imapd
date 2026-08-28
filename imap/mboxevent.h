@@ -5,9 +5,9 @@
 #ifndef _MBOXEVENT_H
 #define _MBOXEVENT_H
 
-#include <jansson.h>
+#include <cyrus-imap/strarray.h>
 
-#include "strarray.h"
+#include <jansson.h>
 
 #include "mailbox.h"
 #include "mboxname.h"

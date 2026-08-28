@@ -6,6 +6,10 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
@@ -17,10 +21,7 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "assert.h"
-#include "libconfig.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 #include "imap/backend.h"

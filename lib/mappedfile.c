@@ -21,6 +21,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/retry.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <libgen.h>
 #include <stdlib.h>
 #include <limits.h>
@@ -33,13 +37,10 @@
 #include <unistd.h>
 #endif
 
-#include "assert.h"
 #include "cyr_lock.h"
 #include "libcyr_cfg.h"
 #include "map.h"
-#include "retry.h"
 #include "util.h"
-#include "xmalloc.h"
 
 static void _ensure_mapped(struct mappedfile *mf, size_t offset, int update)
 {

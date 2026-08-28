@@ -6,12 +6,14 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/hashset.h>
+
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdlib.h>
 #include <string.h>
 
-#include "assert.h"
-#include "hashset.h"
-#include "xmalloc.h"
 #include "util.h"
 
 EXPORTED struct hashset *hashset_new(size_t bytesize)

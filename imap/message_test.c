@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -14,7 +17,6 @@
 #include <sys/stat.h>
 
 /* cyrus includes */
-#include "assert.h"
 #include "bsearch.h"
 #include "global.h"
 #include "index.h"
@@ -24,7 +26,6 @@
 #include "mboxlist.h"
 #include "message.h"
 #include "util.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

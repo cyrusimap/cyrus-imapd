@@ -1,11 +1,12 @@
 #if HAVE_CONFIG_H
 #include <config.h>
 #endif
-#include <assert.h>
 #include "cunit/unit.h"
-#include "lib/libconfig.h"
-#include "lib/xunlink.h"
 #include "imap/mboxname.h"
+
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/xunlink.h>
+
 #include "imap/mailbox.h"
 #include "imap/global.h"
 

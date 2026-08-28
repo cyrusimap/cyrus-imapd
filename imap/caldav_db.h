@@ -7,13 +7,14 @@
 
 #include <config.h>
 
+#include <cyrus-imap/dynarray.h>
+
 extern time_t caldav_epoch;
 extern time_t caldav_eternity;
 
 #include <libical/ical.h>
 
 #include "dav_db.h"
-#include "dynarray.h"
 #include "ical_support.h"
 #include "mboxlist.h"
 

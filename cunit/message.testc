@@ -2,11 +2,13 @@
 #include <config.h>
 #endif
 #include "cunit/unit.h"
+#include "imap/message.h"
+
+#include <cyrus-imap/libconfig.h>
+
 #include "parseaddr.h"
 #include "util.h"
-#include "lib/libconfig.h"
 #include "imap/mailbox.h"
-#include "imap/message.h"
 
 #define DBDIR           "test-message-dbdir"
 

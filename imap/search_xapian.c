@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
@@ -18,13 +22,11 @@
 #endif
 #include <dirent.h>
 
-#include "assert.h"
 #include "bitvector.h"
 #include "bloom.h"
 #include "global.h"
 #include "ptrarray.h"
 #include "user.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "mappedfile.h"
@@ -35,7 +37,6 @@
 #include "cyr_lock.h"
 #include "xapian_wrap.h"
 #include "command.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

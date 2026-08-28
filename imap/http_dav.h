@@ -5,6 +5,8 @@
 #ifndef HTTP_DAV_H
 #define HTTP_DAV_H
 
+#include <cyrus-imap/strarray.h>
+
 #include <stdint.h>
 #include <libical/ical.h>
 #include <libxml/tree.h>
@@ -16,7 +18,6 @@
 #include "httpd.h"
 #include "spool.h"
 #include "quota.h"
-#include "strarray.h"
 
 #define NULL_ETAG       "da39a3ee5e6b4b0d3255bfef95601890afd80709"
                         /* SHA1("") */

@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/mpool.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -19,13 +23,10 @@
 #include <sys/stat.h>
 
 #include "global.h"
-#include "hash.h"
 #include "mailbox.h"
-#include "mpool.h"
 #include "mboxlist.h"
 #include "seen.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */

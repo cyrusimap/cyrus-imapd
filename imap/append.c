@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/retry.h>
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -20,7 +26,6 @@
 
 #include "acl.h"
 #include "append.h"
-#include "assert.h"
 #include "mailbox.h"
 #include "notify.h"
 #include "message.h"
@@ -29,22 +34,18 @@
 #include "global.h"
 #include "prot.h"
 #include "sync_log.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "mboxlist.h"
 #include "seen.h"
-#include "retry.h"
 #include "quota.h"
 #include "util.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
 #include "annotate.h"
 #include "message_guid.h"
-#include "strarray.h"
 #include "conversations.h"
 
 struct stagemsg {

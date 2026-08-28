@@ -5,8 +5,8 @@
 #ifndef _MAPPEDFILE_H
 #define _MAPPEDFILE_H
 
-// includes
-#include "buf.h"
+#include <cyrus-imap/buf.h>
+
 #include <sys/types.h>
 #include <sys/uio.h>
 

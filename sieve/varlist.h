@@ -10,7 +10,7 @@
 
 #include <config.h>
 
-#include "strarray.h"
+#include <cyrus-imap/strarray.h>
 
 typedef struct variable_list {
     char *name;

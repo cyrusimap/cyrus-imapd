@@ -7,7 +7,8 @@
 
 #include <jansson.h>
 
-#include "strarray.h"
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/strarray.h>
 
 #include "jmap_mail_query_parse.h"
 #include "jmap_util.h"
@@ -16,7 +17,6 @@
 #include <time.h>
 
 #include "auth.h"
-#include "hash.h"
 #include "ptrarray.h"
 
 #include "carddav_db.h"

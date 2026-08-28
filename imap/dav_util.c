@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/strhash.h>
+
 #include <string.h>
 
 #include "append.h"
@@ -14,7 +16,6 @@
 #include "mailbox.h"
 #include "mboxname.h"
 #include "spool.h"
-#include "strhash.h"
 #include "syslog.h"
 #include "times.h"
 #include "user.h"

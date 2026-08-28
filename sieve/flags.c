@@ -9,11 +9,12 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include "flags.h"
 #include "imparse.h"
-#include "strarray.h"
 #include "util.h"
-#include "xmalloc.h"
 
 static int verify_flag(char *f)
 {

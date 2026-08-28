@@ -6,12 +6,13 @@
 
 #include "master/cronevent.h"
 
-#include "lib/assert.h"
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/dynarray.h>
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include "lib/cron.h"
-#include "lib/dynarray.h"
-#include "lib/strarray.h"
 #include "lib/util.h"
-#include "lib/xmalloc.h"
 
 #include <stdint.h>
 #include <stdlib.h>

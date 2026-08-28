@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -28,7 +31,6 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "assert.h"
 #include "auditlog.h"
 #include "loginlog.h"
 #include "util.h"
@@ -37,7 +39,6 @@
 #include "times.h"
 #include "global.h"
 #include "prometheus.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "version.h"
 

@@ -4,9 +4,14 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/dynarray.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xsha1.h>
+
 #include <ctype.h>
 #include <errno.h>
-#include <assert.h>
 #include <string.h>
 #include <syslog.h>
 #ifdef HAVE_UNISTD_H
@@ -22,9 +27,7 @@
 #include "caldav_util.h"
 #include "cyr_qsort_r.h"
 #include "defaultalarms.h"
-#include "dynarray.h"
 #include "global.h"
-#include "hash.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
@@ -45,8 +48,6 @@
 #include "user.h"
 #include "util.h"
 #include "xapian_wrap.h"
-#include "xmalloc.h"
-#include "xsha1.h"
 #include "xstrlcpy.h"
 #include "zoneinfo_db.h"
 

@@ -1,11 +1,14 @@
-#include <sysexits.h>
-
 #include "config.h"
 #include "cunit/unit.h"
-#include "xmalloc.h"
+
+#include "util.h"
+
+#include <cyrus-imap/xmalloc.h>
+
+#include <sysexits.h>
+
 #include "prot.h"
 #include "imap/global.h"
-#include "util.h"
 
 #define CANARY          0xdeadbeefcafebabe
 

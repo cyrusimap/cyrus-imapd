@@ -7,11 +7,12 @@
 
 #include <config.h>
 
+#include <cyrus-imap/strarray.h>
+
 #include <libical/ical.h>
 
 #include "acl.h"
 #include "parseaddr.h"
-#include "strarray.h"
 #include "util.h"
 
 

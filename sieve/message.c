@@ -6,15 +6,16 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdlib.h>
 #include <string.h>
 
-#include "assert.h"
 #include "md5.h"
 #include "sieve_interface.h"
 #include "interp.h"
 #include "message.h"
-#include "xmalloc.h"
 #include "util.h"
 
 /* [e]reject message m with message msg

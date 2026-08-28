@@ -6,6 +6,8 @@
 
 #include "notify_mailto.h"
 
+#include <cyrus-imap/libconfig.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -14,7 +16,6 @@
 #include <sys/wait.h>
 
 #include "imap/global.h"
-#include "libconfig.h"
 #include "sieve/sieve_interface.h"
 #include "times.h"
 

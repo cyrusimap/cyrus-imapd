@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/tok.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,13 +21,8 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 
-#include "assert.h"
-#include "hash.h"
-#include "libconfig.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "tok.h"
 #include "util.h"
 
 #define CONFIGHASHSIZE 30 /* relatively small,

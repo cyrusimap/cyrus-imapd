@@ -6,26 +6,29 @@
  *
  */
 #include "cunit/unit.h"
-#include <malloc.h>
+
 #include "sieve/bytecode.h"
 #include "sieve/comparator.h"
 #include "sieve/message.h"
 #include "sieve/sieve_interface.h"
 #include "sieve/variables.h"
+
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/retry.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
+#include <malloc.h>
 #include "imap/message.h"
 #include "prot.h"
-#include "retry.h"
-#include "hash.h"
 #include "imap/spool.h"
 #include "map.h"
 #include "util.h"
 #include "cyrusdb.h"
-#include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "xmalloc.h"
-#include "xunlink.h"
 
 #define DBDIR       "test-sieve-dbdir"
 #define PARTITION   "default"

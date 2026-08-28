@@ -1,9 +1,10 @@
-#include <assert.h>
+#include <cyrus-imap/smallarrayu64.h>
+
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <config.h>
 #include <string.h>
-
-#include "smallarrayu64.h"
-#include "xmalloc.h"
 
 EXPORTED smallarrayu64_t *smallarrayu64_new(void)
 {

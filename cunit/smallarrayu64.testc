@@ -1,6 +1,7 @@
 #include "cunit/unit.h"
-#include "xmalloc.h"
-#include "smallarrayu64.h"
+
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/smallarrayu64.h>
 
 static void test_fini_null(void)
 {

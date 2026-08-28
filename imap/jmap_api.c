@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/strhash.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <sys/time.h>
 #include <sys/resource.h>
 
@@ -12,7 +16,6 @@
 #include "append.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
-#include "hash.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "http_dav_sharing.h"
@@ -21,11 +24,9 @@
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "proxy.h"
-#include "strhash.h"
 #include "syslog.h"
 #include "times.h"
 #include "user.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */

@@ -17,12 +17,12 @@
 #ifndef INCLUDED_AUDITLOG_H
 #define INCLUDED_AUDITLOG_H
 
+#include <cyrus-imap/libconfig.h>
+
 #include "imap/duplicate.h"
 #include "imap/mailbox.h"
 #include "imap/mboxlist.h"
 #include "imap/quota.h"
-
-#include "lib/libconfig.h"
 
 #include <stdint.h>
 

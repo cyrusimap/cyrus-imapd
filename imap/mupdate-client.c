@@ -3,6 +3,9 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -30,7 +33,6 @@
 #include "prot.h"
 #include "protocol.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 

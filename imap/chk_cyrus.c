@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/xmalloc.h>
+
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +26,6 @@
 #include "mboxlist.h"
 #include "mailbox.h"
 #include "map.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

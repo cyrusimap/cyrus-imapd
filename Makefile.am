@@ -49,6 +49,8 @@ AM_CXXFLAGS = $(WARN_CFLAGS) $(GCOV_CXXFLAGS)
 
 AM_CPPFLAGS = \
     $(COM_ERR_CPPFLAGS) \
+    -I${top_builddir}/include \
+    -I${top_srcdir}/include \
     -I${top_builddir} \
     -I${top_builddir}/lib \
     -I${top_srcdir} \
@@ -776,13 +778,13 @@ includedir=@includedir@/cyrus
 
 include_HEADERS = \
     lib/acl.h \
-    lib/arrayu64.h \
-    lib/assert.h \
+    include/cyrus-imap/arrayu64.h \
+    include/cyrus-imap/assert.h \
     lib/auth.h \
     lib/bitvector.h \
     lib/bloom.h \
     lib/bsearch.h \
-    lib/buf.h \
+    include/cyrus-imap/buf.h \
     lib/charset.h \
     lib/command.h \
     lib/crc32.h \
@@ -790,46 +792,46 @@ include_HEADERS = \
     lib/cyr_lock.h \
     lib/cyr_qsort_r.h \
     lib/cyrusdb.h \
-    lib/dynarray.h \
+    include/cyrus-imap/dynarray.h \
     lib/glob.h \
     lib/gmtoff.h \
-    lib/hash.h \
-    lib/hashset.h \
-    lib/hashu64.h \
+    include/cyrus-imap/hash.h \
+    include/cyrus-imap/hashset.h \
+    include/cyrus-imap/hashu64.h \
     lib/imapurl.h \
     lib/imclient.h \
     lib/imparse.h \
     lib/iostat.h \
     lib/iptostring.h \
-    lib/libconfig.h \
+    include/cyrus-imap/libconfig.h \
     lib/libcyr_cfg.h \
     lib/logfmt.h \
     lib/lsort.h \
     lib/map.h \
     lib/mappedfile.h \
     lib/mkgmtime.h \
-    lib/mpool.h \
+    include/cyrus-imap/mpool.h \
     lib/murmurhash2.h \
     lib/nonblock.h \
     lib/parseaddr.h \
-    lib/proc.h \
+    include/cyrus-imap/proc.h \
     lib/procinfo.h \
-    lib/retry.h \
+    include/cyrus-imap/retry.h \
     lib/rfc822tok.h \
     lib/seqset.h \
     lib/signals.h \
-    lib/smallarrayu64.h \
+    include/cyrus-imap/smallarrayu64.h \
     lib/sqldb.h \
-    lib/strarray.h \
-    lib/strhash.h \
+    include/cyrus-imap/strarray.h \
+    include/cyrus-imap/strhash.h \
     lib/stristr.h \
     lib/times.h \
-    lib/tok.h \
+    include/cyrus-imap/tok.h \
     lib/twom.h \
     lib/wildmat.h \
-    lib/xmalloc.h \
-    lib/xsha1.h \
-    lib/xunlink.h
+    include/cyrus-imap/xmalloc.h \
+    include/cyrus-imap/xsha1.h \
+    include/cyrus-imap/xunlink.h
 
 nodist_include_HEADERS = \
     lib/imapopts.h

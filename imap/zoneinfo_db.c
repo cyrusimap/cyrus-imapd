@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/tok.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -15,12 +19,9 @@
 #include <sysexits.h>
 #include <syslog.h>
 
-#include "assert.h"
 #include "cyrusdb.h"
 #include "global.h"
-#include "tok.h"
 #include "util.h"
-#include "xmalloc.h"
 
 #include "zoneinfo_db.h"
 

@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -20,7 +22,6 @@
 #include "global.h"
 #include "libcyr_cfg.h"
 #include "util.h"
-#include "xmalloc.h"
 
 static void usage(void)
 {

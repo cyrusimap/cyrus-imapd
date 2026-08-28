@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/tok.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
@@ -32,9 +35,7 @@
 #include "global.h"
 #include "iptostring.h"
 #include "nonblock.h"
-#include "tok.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 

@@ -4,13 +4,14 @@
 
 #include <config.h>
 
-#include "lib/buf.h"
+#include <cyrus-imap/buf.h>
 
-#include "lib/assert.h"
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include "lib/byteorder.h"
 #include "lib/map.h"
 #include "lib/util.h"
-#include "lib/xmalloc.h"
 
 #include <string.h>
 

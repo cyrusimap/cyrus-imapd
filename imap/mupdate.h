@@ -14,9 +14,10 @@
  * mupdate-slave.c: Slave listener thread functions.
  */
 
+#include <cyrus-imap/mpool.h>
+
 #include "backend.h"
 #include "mailbox.h"
-#include "mpool.h"
 #include "mupdate-client.h"
 #include "global.h"
 

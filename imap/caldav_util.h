@@ -5,13 +5,13 @@
 #ifndef CALDAV_UTIL_H
 #define CALDAV_UTIL_H
 
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/strarray.h>
+
 #include <libical/ical.h>
 
 #include "caldav_db.h"
-#include "hash.h"
 #include "mailbox.h"
-#include "strarray.h"
-
 
 #define NEW_STAG (1<<8)           /* Make sure we skip over PREFER bits */
 #define TZ_STRIP (1<<9)

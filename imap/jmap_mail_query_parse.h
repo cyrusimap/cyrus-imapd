@@ -5,9 +5,9 @@
 #ifndef JMAP_MAIL_QUERY_PARSE_H
 #define JMAP_MAIL_QUERY_PARSE_H
 
-#include <jansson.h>
+#include <cyrus-imap/strarray.h>
 
-#include "strarray.h"
+#include <jansson.h>
 
 typedef struct jmap_email_filter_parse_context jmap_email_filter_parse_ctx_t;
 

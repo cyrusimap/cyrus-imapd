@@ -1,9 +1,11 @@
 #include "config.h"
-#include <stdio.h>
 #include "cunit/unit.h"
-#include <sys/stat.h>
 #include "command.h"
-#include "xunlink.h"
+
+#include <cyrus-imap/xunlink.h>
+
+#include <stdio.h>
+#include <sys/stat.h>
 
 const char canary[] = "canary.txt";
 

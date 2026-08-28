@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,7 +27,6 @@
 #endif
 
 #include "acl.h"
-#include "assert.h"
 #include "charset.h"
 #include "cyr_lock.h"
 #include "gmtoff.h"
@@ -30,15 +34,12 @@
 #include "iptostring.h"
 #include "global.h"
 #include "ical_support.h"
-#include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "mutex.h"
 #include "prot.h" /* for PROT_BUFSIZE */
-#include "strarray.h"
 #include "userdeny.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 

@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
@@ -29,12 +32,10 @@
 #include <pwd.h>
 
 #include "prot.h"
-#include "lib/libconfig.h"
 #include "lib/times.h"
 
 #include "imclient.h"
 #include "util.h"
-#include "xmalloc.h"
 
 #include "readconfig.h"
 

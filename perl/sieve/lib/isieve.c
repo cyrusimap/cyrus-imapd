@@ -6,6 +6,8 @@
 #include <config.h>
 #endif
 
+#include <cyrus-imap/xmalloc.h>
+
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sasl/saslutil.h>
@@ -17,7 +19,6 @@
 
 #include "iptostring.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "perl/sieve/lib/isieve.h"
 #include "perl/sieve/lib/lex.h"
 #include "perl/sieve/lib/request.h"

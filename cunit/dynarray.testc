@@ -1,8 +1,10 @@
-#include <stdint.h>
-#
 #include "cunit/unit.h"
-#include "xmalloc.h"
-#include "dynarray.h"
+
+#include <cyrus-imap/dynarray.h>
+
+#include <cyrus-imap/xmalloc.h>
+
+#include <stdint.h>
 
 #define CU_ASSERT_MEMEQUAL(actual, expected, sz) \
     CU_ASSERT_EQUAL(memcmp(actual, expected, sz), 0)

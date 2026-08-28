@@ -3,6 +3,13 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/dynarray.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xsha1.h>
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,15 +17,10 @@
 
 #include "unicode/ucnv.h"
 
-#include "assert.h"
 #include "charset.h"
-#include "dynarray.h"
-#include "xmalloc.h"
 #include "chartable.h"
-#include "hash.h"
 #include "htmlchar.h"
 #include "util.h"
-#include "xsha1.h"
 
 #include <unicode/ubrk.h>
 #include <unicode/ucasemap.h>

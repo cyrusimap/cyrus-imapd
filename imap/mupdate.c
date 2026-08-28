@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/mpool.h>
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -36,19 +41,15 @@
 #include "mupdate-client.h"
 #include "telemetry.h"
 
-#include "assert.h"
 #include "global.h"
 #include "loginlog.h"
 #include "mailbox.h"
 #include "mboxlist.h"
-#include "mpool.h"
 #include "nonblock.h"
 #include "prot.h"
-#include "strarray.h"
 #include "tls.h"
 #include "util.h"
 #include "version.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */

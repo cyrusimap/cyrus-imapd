@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/strarray.h>
+#include <cyrus-imap/tok.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -41,25 +47,20 @@
 #endif
 
 #include "acl.h"
-#include "assert.h"
 #include "bsearch.h"
 #include "crc32.h"
-#include "hash.h"
 #include "global.h"
 #include "mailbox.h"
 #include "map.h"
 #include "message.h"
 #include "message_guid.h"
 #include "partlist.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
-#include "strarray.h"
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "quota.h"
 #include "seen.h"
-#include "tok.h"
 #include "user.h"
 #include "util.h"
 

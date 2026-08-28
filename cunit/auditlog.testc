@@ -1,7 +1,7 @@
 #include "cunit/unit.h"
 #include "imap/auditlog.h"
 
-#include "lib/libconfig.h"
+#include <cyrus-imap/libconfig.h>
 
 #include <syslog.h>
 

@@ -3,6 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,15 +23,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
 #include "cyr_lock.h"
 #include "util.h"
 #include "libcyr_cfg.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xunlink.h"
 
 //#define DEBUGDB 1
 

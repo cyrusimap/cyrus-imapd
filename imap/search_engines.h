@@ -5,12 +5,13 @@
 #ifndef INCLUDED_SEARCH_ENGINES_H
 #define INCLUDED_SEARCH_ENGINES_H
 
+#include <cyrus-imap/strarray.h>
+
 #include <stdbool.h>
 
 #include "mailbox.h"
 #include "message_guid.h"
 #include "util.h"
-#include "strarray.h"
 #include "bitvector.h"
 
 #include "search_expr.h"

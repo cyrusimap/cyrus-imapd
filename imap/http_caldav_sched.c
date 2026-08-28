@@ -5,6 +5,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/dynarray.h>
+#include <cyrus-imap/strhash.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <syslog.h>
 
 #include <jansson.h>
@@ -18,7 +22,6 @@
 #include <sasl/saslutil.h>
 
 #include "caldav_util.h"
-#include "dynarray.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
@@ -30,10 +33,8 @@
 #include "notify.h"
 #include "crc32.h"
 #include "smtpclient.h"
-#include "strhash.h"
 #include "times.h"
 #include "webdav_db.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 

@@ -1,20 +1,23 @@
 #if HAVE_CONFIG_H
 #include <config.h>
 #endif
+#include "cunit/unit.h"
+
+#include "imap/backend.h"
+
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
-#include <assert.h>
-#include "cunit/unit.h"
 #include "imap/saslclient.h"
 #include <sasl/saslutil.h>
 #include <sasl/saslplug.h>
-#include "xmalloc.h"
 #include "imap/mutex.h"
 #include "prot.h"
-#include "imap/backend.h"
 
-#include "lib/libconfig.h"
 #include "lib/util.h"
 #include "lib/xstrlcpy.h"
 

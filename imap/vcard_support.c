@@ -3,6 +3,9 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus-imap/hash.h>
+
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 #include <libxml/uri.h>
@@ -11,7 +14,6 @@
 #include "syslog.h"
 
 #include "global.h"
-#include "hash.h"
 
 struct image_magic {
     size_t offset;

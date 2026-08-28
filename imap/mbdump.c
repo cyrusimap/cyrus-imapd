@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus-imap/retry.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -29,15 +33,12 @@
 #include "mbdump.h"
 #include "mboxlist.h"
 #include "quota.h"
-#include "retry.h"
 #include "seen.h"
 #include "seqset.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "user.h"
 #include "util.h"
 #include "index.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

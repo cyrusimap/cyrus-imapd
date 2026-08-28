@@ -9,6 +9,11 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/strhash.h>
+#include <cyrus-imap/tok.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -16,20 +21,16 @@
 #include <math.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 
 #include "global.h"
-#include "hash.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "ical_support.h"
 #include "jcal.h"
 #include "map.h"
-#include "strhash.h"
 #include "times.h"
-#include "tok.h"
 #include "util.h"
 #include "version.h"
 #include "xstrlcpy.h"

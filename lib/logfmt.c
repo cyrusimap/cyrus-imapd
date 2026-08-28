@@ -4,7 +4,8 @@
 
 #include <config.h>
 
-#include "lib/assert.h"
+#include <cyrus-imap/assert.h>
+
 #include "lib/logfmt.h"
 #include "lib/sessionid.h"
 

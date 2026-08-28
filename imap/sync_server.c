@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/proc.h>
+#include <cyrus-imap/xmalloc.h>
+#include <cyrus-imap/xunlink.h>
+
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
@@ -30,14 +36,12 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "assert.h"
 #include "annotate.h"
 #include "append.h"
 #include "auth.h"
 #include "dav_db.h"
 #include "dlist.h"
 #include "global.h"
-#include "hash.h"
 #include "imparse.h"
 #include "imap_proxy.h"
 #include "loginlog.h"
@@ -45,7 +49,6 @@
 #include "map.h"
 #include "mboxlist.h"
 #include "partlist.h"
-#include "proc.h"
 #include "prot.h"
 #include "quota.h"
 #include "seen.h"
@@ -56,9 +59,7 @@
 #include "user.h"
 #include "util.h"
 #include "version.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

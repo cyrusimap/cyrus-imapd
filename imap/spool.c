@@ -4,19 +4,20 @@
 
 #include <config.h>
 
+#include <cyrus-imap/assert.h>
+#include <cyrus-imap/hash.h>
+#include <cyrus-imap/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <stdio.h>
 #include <string.h>
 
-#include "assert.h"
 #include "spool.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "global.h"
 #include "ptrarray.h"
-#include "hash.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

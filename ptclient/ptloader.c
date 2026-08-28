@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include <cyrus-imap/libconfig.h>
+#include <cyrus-imap/proc.h>
+#include <cyrus-imap/retry.h>
+#include <cyrus-imap/xmalloc.h>
+
 #include <signal.h>
 #include <string.h>
 #include <stdio.h>
@@ -21,10 +26,6 @@
 #include "auth_pts.h"
 #include "cyrusdb.h"
 #include "imap/global.h"
-#include "libconfig.h"
-#include "proc.h"
-#include "retry.h"
-#include "xmalloc.h"
 #include "ptloader.h"
 
 #include "master/service.h"
