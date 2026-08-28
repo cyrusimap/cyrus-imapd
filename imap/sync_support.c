@@ -1807,6 +1807,18 @@ static int sync_getflags(struct dlist *kl,
     return 0;
 }
 
+/* basecid is only meaningful while SPLITCONVERSATION is set: below version 20
+ * it's read back from an annotation, and mailbox_rewrite_index_record()
+ * restores it from the old record while the flag is set.  The flag isn't on
+ * the wire, so anywhere we take a basecid from the peer we set it ourselves. */
+static void sync_set_splitconversation(struct index_record *record)
+{
+    if (record->basecid)
+        record->internal_flags |= FLAG_INTERNAL_SPLITCONVERSATION;
+    else
+        record->internal_flags &= ~FLAG_INTERNAL_SPLITCONVERSATION;
+}
+
 static int parse_upload(struct dlist *kr, struct mailbox *mailbox,
                         struct index_record *record,
                         struct sync_annot_list **salp)
@@ -1842,6 +1854,9 @@ static int parse_upload(struct dlist *kr, struct mailbox *mailbox,
     /* the ANNOTATIONS list is optional too */
     if (salp && dlist_getlist(kr, "ANNOTATIONS", &fl))
         r = decode_annotations(fl, salp, mailbox, record);
+
+    /* basecid arrives with the annotations */
+    sync_set_splitconversation(record);
 
     return r;
 }
@@ -3113,6 +3128,11 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
              * non-EXPUNGED, but master's internal_flags for EXPUNGED */
             copy.internal_flags = rrecord->internal_flags & ~FLAG_INTERNAL_EXPUNGED;
             copy.internal_flags |= mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED;
+            /* SPLITCONVERSATION guards basecid, which we just took from the
+             * master, so it has to come from there too - it isn't on the wire,
+             * and mailbox_rewrite_index_record() puts the replica's own
+             * basecid back while the flag is still set */
+            sync_set_splitconversation(&copy);
 
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
                 copy.user_flags[i] = mrecord.user_flags[i];
@@ -6523,6 +6543,9 @@ static int compare_one_record(struct sync_client_state *sync_cs,
             mp->internal_flags |= rp->internal_flags & FLAG_INTERNAL_EXPUNGED;
 
             mp->cid = rp->cid;
+            /* basecid is only meaningful against the cid we just took */
+            mp->basecid = rp->basecid;
+            sync_set_splitconversation(mp);
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
                 mp->user_flags[i] = rp->user_flags[i];
         }
