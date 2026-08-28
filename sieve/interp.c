@@ -6,15 +6,16 @@
 #include <config.h>
 #endif
 
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
 #include <string.h>
 
-#include "xmalloc.h"
 #include "xstrlcat.h"
 
 #include "sieve_interface.h"
 #include "interp.h"
-#include "libconfig.h"
 #include "times.h"
 #include "util.h"
 

@@ -3,16 +3,18 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/libconfig.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
+
 #include <sysexits.h>
 #include <syslog.h>
 #include <jansson.h>
 
 #include "auth_pts.h"
-#include "libconfig.h"
 #include "ptloader.h"
-#include "strhash.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 #include "imap/backend.h"

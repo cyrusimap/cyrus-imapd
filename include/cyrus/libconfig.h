@@ -5,8 +5,8 @@
 #ifndef INCLUDED_LIBCONFIG_H
 #define INCLUDED_LIBCONFIG_H
 
-#include "imapopts.h"
-#include "strarray.h"
+#include <cyrus/imapopts.h>
+#include <cyrus/strarray.h>
 
 #include <stdio.h>
 

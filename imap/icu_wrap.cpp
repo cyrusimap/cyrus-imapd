@@ -3,9 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 extern "C" {
-#include "config.h"
-#include "string.h"
-#include "xmalloc.h"
+#include <config.h>
+
+#include <cyrus/xmalloc.h>
+
+#include <string.h>
 };
 
 

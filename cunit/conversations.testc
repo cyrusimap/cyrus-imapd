@@ -2,15 +2,18 @@
 #include <config.h>
 #endif
 #include "cunit/unit.h"
+
 #include "imap/conversations.h"
+
+#include <cyrus/retry.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include "imap/global.h"
-#include "retry.h"
-#include "strarray.h"
 #include "cyrusdb.h"
 #include "lib/util.h"       /* for VECTOR_SIZE */
 //#include "message.h"      /* for VECTOR_SIZE */
-#include "xmalloc.h"
-#include "xunlink.h"
 
 #define DBDIR   "test-conversations-dbdir"
 #define DBNAME  DBDIR "/conversations.db"

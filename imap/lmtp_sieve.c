@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/strhash.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -20,7 +25,6 @@
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
-#include "assert.h"
 #include "auditlog.h"
 #include "auth.h"
 #include "duplicate.h"
@@ -37,12 +41,9 @@
 #include "sieve_db.h"
 #include "sievedir.h"
 #include "smtpclient.h"
-#include "strhash.h"
-#include "tok.h"
 #include "user.h"
 #include "util.h"
 #include "version.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "imap/zoneinfo_db.h"

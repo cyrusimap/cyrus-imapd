@@ -5,13 +5,14 @@
 #ifndef ANNOTATE_H
 #define ANNOTATE_H
 
+#include <cyrus/strarray.h>
+
 #include "auth.h"
 #include "charset.h" /* for comp_pat */
 #include "imapd.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "util.h"
-#include "strarray.h"
 
 #define FNAME_GLOBALANNOTATIONS "/annotations.db"
 

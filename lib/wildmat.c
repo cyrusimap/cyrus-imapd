@@ -39,14 +39,15 @@
 **  released version unless you have a good test data base to try it out
 **  on.
 */
+#include "config.h"
+
+#include "wildmat.h"
+
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
-
-#include "config.h"
-#include "wildmat.h"
-#include "xmalloc.h"
-
 
 #define TRUE                    1
 #define FALSE                   0

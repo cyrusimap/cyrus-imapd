@@ -153,13 +153,13 @@ imap/tz_err.c
 imap/tz_err.h
 imap/unexpunge
 imtest/imtest
+include/cyrus/imapopts.h
 install-sh
 lib/chartable.c
 lib/cron-lex.c
 lib/cron-parse.c
 lib/cron-parse.h
 lib/imapopts.c
-lib/imapopts.h
 lib/htmlchar.h
 lib/mkchartable
 libcyrus.pc

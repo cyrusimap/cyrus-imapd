@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/proc.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -25,9 +28,7 @@
 #include "seen.h"
 #include "mboxname.h"
 #include "map.h"
-#include "proc.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "imapd.h"
 #include "user.h"

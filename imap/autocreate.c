@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,10 +28,8 @@
 #include "annotate.h"
 #include "util.h"
 #include "user.h"
-#include "xmalloc.h"
 #include "mailbox.h"
 #include "mboxlist.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

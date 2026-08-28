@@ -4,13 +4,18 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/hashset.h>
+#include <cyrus/smallarrayu64.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xsha1.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 #include <sys/mman.h>
 
@@ -26,7 +31,6 @@
 #include "bsearch.h"
 #include "carddav_db.h"
 #include "cyr_qsort_r.h"
-#include "hashset.h"
 #include "http_dav.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
@@ -45,7 +49,6 @@
 #include "proxy.h"
 #include "search_query.h"
 #include "seen.h"
-#include "smallarrayu64.h"
 #include "smtpclient.h"
 #include "statuscache.h"
 #include "sync_log.h"
@@ -53,9 +56,6 @@
 #include "user.h"
 #include "util.h"
 #include "xapian_wrap.h"
-#include "xmalloc.h"
-#include "xsha1.h"
-
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

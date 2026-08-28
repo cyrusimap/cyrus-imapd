@@ -13,6 +13,13 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -44,20 +51,14 @@
 # endif
 #endif
 
-#include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
-#include "hash.h"
 #include "map.h"
-#include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "cyr_lock.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
-#include "xunlink.h"
-#include "strarray.h"
 
 #define FNAME_QUOTADIR "/quota/"
 #define MAX_QUOTA_PATH 4096

@@ -12,6 +12,10 @@
 
 #include <config.h>
 
+#include <cyrus/hash.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -32,15 +36,12 @@
 #include "annotate.h"
 #include "duplicate.h"
 #include "global.h"
-#include "hash.h"
 #include "libcyr_cfg.h"
 #include "mboxevent.h"
 #include "mboxlist.h"
 #include "conversations.h"
 #include "user.h"
 #include "util.h"
-#include "xmalloc.h"
-#include "strarray.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

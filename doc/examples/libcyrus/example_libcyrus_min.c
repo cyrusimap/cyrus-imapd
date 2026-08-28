@@ -13,25 +13,25 @@
 
 /* DEPS: libcyrus_min */
 
-#include "arrayu64.h"
-#include "assert.h"
-#include "buf.h"
-#include "dynarray.h"
-#include "hash.h"
-#include "hashset.h"
-#include "hashu64.h"
-#include "imapopts.h"
-#include "libconfig.h"
-#include "mpool.h"
-#include "proc.h"
-#include "retry.h"
-#include "smallarrayu64.h"
-#include "strarray.h"
-#include "strhash.h"
-#include "tok.h"
-#include "xmalloc.h"
-#include "xunlink.h"
-#include "xsha1.h"
+#include <cyrus/arrayu64.h>
+#include <cyrus/assert.h>
+#include <cyrus/buf.h>
+#include <cyrus/dynarray.h>
+#include <cyrus/hash.h>
+#include <cyrus/hashset.h>
+#include <cyrus/hashu64.h>
+#include <cyrus/imapopts.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/mpool.h>
+#include <cyrus/proc.h>
+#include <cyrus/retry.h>
+#include <cyrus/smallarrayu64.h>
+#include <cyrus/strarray.h>
+#include <cyrus/strhash.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xsha1.h>
+#include <cyrus/xunlink.h>
 
 #include <getopt.h>
 #include <inttypes.h>

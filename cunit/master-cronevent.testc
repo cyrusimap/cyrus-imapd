@@ -1,10 +1,12 @@
+#include <config.h>
 #include "cunit/unit.h"
 #include "cunit/unit-timezones.h"
 #include "master/cronevent.h"
 
+#include <cyrus/dynarray.h>
+#include <cyrus/hash.h>
+
 #include "lib/cron.h"
-#include "lib/dynarray.h"
-#include "lib/hash.h"
 
 #include <stdlib.h>
 #include <sysexits.h>

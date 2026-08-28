@@ -1,8 +1,10 @@
+#include "config.h"
+
+#include <cyrus/libconfig.h>
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <syslog.h>
-#include "config.h"
-#include "libconfig.h"
 #include "iostat.h"
 
 EXPORTED void read_io_count(struct io_count *iocount) {

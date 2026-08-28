@@ -3,6 +3,10 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
 #include <pwd.h>
 #include <grp.h>
@@ -11,8 +15,6 @@
 
 #include "auth.h"
 #include "libcyr_cfg.h"
-#include "xmalloc.h"
-#include "strarray.h"
 #include "util.h"
 
 struct auth_state {

@@ -1,9 +1,10 @@
+#include "cunit/unit.h"
+#include <cyrus/xsha1.h>
+
 #include <stdint.h>
 
-#include "cunit/unit.h"
 #include "charset.h"
 #include "util.h"
-#include "xsha1.h"
 
 static void _checksha(const char *text, size_t len, const char *expect)
 {

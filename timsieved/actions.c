@@ -6,6 +6,9 @@
 #include <config.h>
 #endif
 
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -19,8 +22,6 @@
 #include <syslog.h>
 #include <unistd.h>
 
-#include "libconfig.h"
-#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "imap/global.h"

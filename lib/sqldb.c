@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
 #include <syslog.h>
 #include <string.h>
@@ -15,10 +18,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "assert.h"
 #include "sqldb.h"
 #include "util.h"
-#include "xmalloc.h"
 
 static int sqldb_active = 0;
 

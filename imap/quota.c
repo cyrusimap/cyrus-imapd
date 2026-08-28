@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -39,14 +42,12 @@
 #include "bsearch.h"
 #include "global.h"
 #include "mailbox.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "quota.h"
 #include "convert_code.h"
 #include "util.h"
-#include "xunlink.h"
 #include <jansson.h>
 
 /* generated headers are not necessarily in current directory */

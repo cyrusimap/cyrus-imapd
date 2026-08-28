@@ -1,14 +1,17 @@
-#include <unistd.h>
-#include <stdlib.h>
 #include "config.h"
 #include "cunit/unit.h"
+
 #include "imap/duplicate.h"
-#include "xmalloc.h"
-#include "retry.h"
+
+#include <cyrus/libconfig.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
+
+#include <unistd.h>
+#include <stdlib.h>
 #include "imap/global.h"
 #include "imap/imap_err.h"
 #include "cyrusdb.h"
-#include "libconfig.h"
 
 #define DBDIR                   "test-duplicate-dbdir"
 

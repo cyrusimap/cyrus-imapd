@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/proc.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -14,9 +17,7 @@
 #include <sysexits.h>
 #include <jansson.h>
 
-#include "lib/proc.h"
 #include "lib/util.h"
-#include "lib/xmalloc.h"
 
 #include "imap/conversations.h"
 #include "imap/global.h"

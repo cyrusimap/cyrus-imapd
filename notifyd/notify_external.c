@@ -4,6 +4,7 @@
 
 #include <config.h>
 
+#include <cyrus/libconfig.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -14,7 +15,6 @@
 #include <errno.h>
 
 #include "imap/global.h"
-#include "libconfig.h"
 #include "notify_external.h"
 
 char* notify_external(const char *class, const char *priority,

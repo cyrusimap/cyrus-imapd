@@ -3,12 +3,14 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/assert.h>
+
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <sysexits.h>
 #include <syslog.h>
-
-#include "xmalloc.h"
-#include "assert.h"
 
 extern int config_fatals_abort;
 

@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+
 #include <errno.h>
 #include <libgen.h>
 #include <syslog.h>
@@ -14,7 +16,6 @@
 #include "libcyr_cfg.h"
 #include "twom.h"
 #include "util.h"
-#include "xmalloc.h"
 
 /* type aliases */
 #define LLU long long unsigned int
