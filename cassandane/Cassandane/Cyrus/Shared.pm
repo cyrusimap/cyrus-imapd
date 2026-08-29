@@ -38,6 +38,40 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+# A mailbox created without anyone being granted 'x' must still be
+# deletable by an admin: admins are not subject to ACL checks anywhere
+# else, and a top-level shared folder only ever gets 'defaultacl'.
+sub shared_admin_delete_common
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "create a top-level shared folder";
+    $admintalk->create('shared');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "nobody has been granted 'x' on it";
+    my %acl = @{$admintalk->getacl('shared')};
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_does_not_match(qr/x/, $acl{admin} // '');
+
+    xlog $self, "admin can delete it anyway";
+    $admintalk->delete('shared');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "same for a user mailbox with no admin entry in its acl";
+    $admintalk->create('user.orphan');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    %acl = @{$admintalk->getacl('user.orphan')};
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_does_not_match(qr/x/, $acl{admin} // '');
+
+    $admintalk->delete('user.orphan');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}
+
 sub shared_subscribe_common
 {
     my ($self, $user1, $user2) = @_;

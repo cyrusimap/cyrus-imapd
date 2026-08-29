@@ -198,6 +198,8 @@ int mboxlist_createmailboxlock(const mbentry_t *mbentry,
                                const struct auth_state *auth_state,
                                unsigned flags, struct mailbox **mboxptr);
 
+/* require ACL_DELETEMBOX on the mailbox - ignored if isadmin, just like the
+ * ACL checks in mboxlist_create_namecheck() and mboxlist_renamemailbox() */
 #define MBOXLIST_DELETE_CHECKACL            (1<<0)
 /* setting local_only disables any communication with the mupdate server
  * and deletes the mailbox from the filesystem regardless of if it is
