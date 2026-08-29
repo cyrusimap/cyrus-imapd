@@ -1,0 +1,18 @@
+Name: modseq_base
+Type: INT
+Default-Value: 0
+Last-Modified: 3.15.0
+
+The residue class this host mints identifiers in.  Together with
+:imapdconf:`modseq_modulus` this partitions the modseq, uidvalidity and
+nanosecond-timestamp spaces so that no two hosts can ever allocate the same
+value, even while split-brained.  Must be at least zero and less than
+:imapdconf:`modseq_modulus`.
+
+Every host that is ever allowed to allocate for the same user - a master and
+each of its replicas, since any of them may be promoted - MUST be given a
+different value.  Two hosts sharing a base defeats the entire mechanism, so
+:cyrusman:`sync_client(8)` reports a mismatch at connection time.
+
+The default of 0, with the default modulus of 1, reproduces the historical
+behaviour exactly: identifiers are simply incremented.
