@@ -204,4 +204,67 @@ static void test_icalcomponent_myforeach_duplicate_rrule(void)
     buf_free(&buf);
 }
 
+struct vtodo_occurrence {
+    int count;
+    icaltimetype start;
+    icaltimetype end;
+};
+
+static int icalcomponent_myforeach_vtodo_cb(icalcomponent *comp __attribute__((unused)),
+                                            icaltimetype start,
+                                            icaltimetype end,
+                                            icaltimetype recurid __attribute__((unused)),
+                                            int is_standalone __attribute__((unused)),
+                                            void *data)
+{
+    struct vtodo_occurrence *seen = data;
+    seen->count++;
+    seen->start = start;
+    seen->end = end;
+    return 1;
+}
+
+static void test_icalcomponent_myforeach_vtodo_due_only(void)
+{
+    init_caldav();
+
+    /* Per RFC 5545, Section 3.6.2, a VTODO may carry DUE and no DTSTART.
+       It has one occurrence, at DUE - which is where a VALARM written with
+       TRIGGER;RELATED=END is anchored. */
+    struct buf buf = BUF_INITIALIZER;
+    buf_setcstr(&buf,
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Foo//Bar//EN\r\n"
+            "CALSCALE:GREGORIAN\r\n"
+            "BEGIN:VTODO\r\n"
+            "UID:8E9C0A2E-2A8F-4E1B-9E2A-7C3F1B0D5A64\r\n"
+            "SUMMARY:renew the certificate\r\n"
+            "DTSTAMP:20240101T000000Z\r\n"
+            "DUE:20240102T090000Z\r\n"
+            "STATUS:NEEDS-ACTION\r\n"
+            "BEGIN:VALARM\r\n"
+            "ACTION:DISPLAY\r\n"
+            "DESCRIPTION:renew the certificate\r\n"
+            "TRIGGER;RELATED=END:-PT180M\r\n"
+            "END:VALARM\r\n"
+            "END:VTODO\r\n"
+            "END:VCALENDAR");
+
+    icalcomponent *ical = ical_string_as_icalcomponent(&buf);
+    CU_ASSERT_PTR_NOT_NULL(ical);
+
+    struct vtodo_occurrence seen = { 0, icaltime_null_time(), icaltime_null_time() };
+    struct icalperiodtype range = ICALPERIODTYPE_INITIALIZER;
+    int r = icalcomponent_myforeach(ical, range, NULL,
+        icalcomponent_myforeach_vtodo_cb, &seen);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(seen.count, 1);
+    CU_ASSERT_STRING_EQUAL(icaltime_as_ical_string(seen.start), "20240102T090000Z");
+    CU_ASSERT_STRING_EQUAL(icaltime_as_ical_string(seen.end), "20240102T090000Z");
+
+    icalcomponent_free(ical);
+    buf_free(&buf);
+}
+
 /* vim: set ft=c: */
