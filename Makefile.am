@@ -633,6 +633,7 @@ cunit_TESTS = \
     cunit/guid.testc \
     cunit/hash.testc \
     cunit/hashset.testc \
+    cunit/idclass.testc \
     cunit/imapurl.testc \
     cunit/imparse.testc \
     cunit/index_file.testc \
@@ -792,6 +793,7 @@ include_HEADERS = \
     lib/hash.h \
     lib/hashset.h \
     lib/hashu64.h \
+    lib/idclass.h \
     lib/imapurl.h \
     lib/imclient.h \
     lib/imparse.h \
@@ -1603,6 +1605,7 @@ lib_libcyrus_min_la_SOURCES = \
     lib/hash.c \
     lib/hashset.c \
     lib/hashu64.c \
+    lib/idclass.c \
     lib/libconfig.c \
     lib/logfmt.c \
     lib/mpool.c \
