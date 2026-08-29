@@ -3237,7 +3237,6 @@ static int sync_apply_mailbox(struct dlist *kin,
     struct synccrcs since_crcs = { 0, 0 };
 
     struct mailbox *mailbox = NULL;
-    bool created = false;
     struct dlist *kr;
     struct dlist *ka = NULL;
     struct dlist *userflags = NULL;
@@ -3371,10 +3370,7 @@ static int sync_apply_mailbox(struct dlist *kin,
         }
         /* set a highestmodseq of 0 so ALL changes are future
          * changes and get applied */
-        if (!r) {
-            mailbox->i.highestmodseq = 0;
-            created = true;
-        }
+        if (!r) mailbox->i.highestmodseq = 0;
 
 #ifdef USE_SIEVE
         if (mbtype_isa(mbtype) == MBTYPE_SIEVE) {
@@ -3437,10 +3433,7 @@ static int sync_apply_mailbox(struct dlist *kin,
                                                flags, &mailbox);
             /* set a highestmodseq of 0 so ALL changes are future
              * changes and get applied */
-            if (!r) {
-                mailbox->i.highestmodseq = 0;
-                created = true;
-            }
+            if (!r) mailbox->i.highestmodseq = 0;
         }
         else {
             xsyslog(LOG_ERR, "SYNCERROR: mailbox uniqueid changed - retry",
@@ -3686,10 +3679,12 @@ static int sync_apply_mailbox(struct dlist *kin,
     mailbox->i.pop3_last_login.tv_sec = pop3_last_login;
     mailbox->i.pop3_show_after.tv_sec = pop3_show_after;
     mailbox->i.createdmodseq = createdmodseq;
-    /* Replicate the deletedmodseq, but only when we just (re)created the
-     * mailbox, as otherwise it would get reset to 1. In all other cases
-     * the replica keeps track on its own of deletedmodseq. */
-    if (created && deletedmodseq > mailbox->i.deletedmodseq)
+    /* Raise the deletedmodseq to master's if it's higher.  The replica also
+     * tracks its own as it repacks, so this can only ever go up: a replica
+     * which was behind when master expunged and repacked never sees those
+     * expunged records, and must not claim it can calculate changes from
+     * before they vanished. */
+    if (deletedmodseq > mailbox->i.deletedmodseq)
         mailbox->i.deletedmodseq = deletedmodseq;
     /* only alter the syncable options */
     mailbox->i.options = (options & MAILBOX_OPTIONS_MASK) |
@@ -3698,8 +3693,8 @@ static int sync_apply_mailbox(struct dlist *kin,
     /* always set the highestmodseq */
     mboxname_setmodseq(mailbox_name(mailbox), highestmodseq, mailbox_mbtype(mailbox), /*flags*/0);
 
-    /* Also set the per-user maildeletedmodseq counter in case of a full reset */
-    if (created && deletedmodseq)
+    /* and the per-user deleted counter, which is also raise-only */
+    if (deletedmodseq)
         mboxname_setmodseq(mailbox_name(mailbox), deletedmodseq,
                            mailbox_mbtype(mailbox), MBOXMODSEQ_ISDELETE);
 
