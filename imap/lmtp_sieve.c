@@ -22,6 +22,7 @@
 #include "assert.h"
 #include "auditlog.h"
 #include "auth.h"
+#include "dkim2_mi.h"
 #include "duplicate.h"
 #include "global.h"
 #include "imapurl.h"
@@ -715,10 +716,88 @@ static int list_addresses(void *rock, struct carddav_data *cdata)
     return 0;
 }
 
+/* The message's header block as it was spooled, blank line included */
+static void read_header_block(message_data_t *m, struct buf *hdrs)
+{
+    long pos = ftell(m->f);
+    char *base;
+    size_t n;
+
+    if (m->body_offset <= 0 || fseek(m->f, 0, SEEK_SET)) return;
+
+    base = xmalloc(m->body_offset);
+    n = fread(base, 1, m->body_offset, m->f);
+    buf_setmap(hdrs, base, n);
+    free(base);
+
+    fseek(m->f, pos, SEEK_SET);
+}
+
+/* Offset of the blank line ending the header block, or the whole length if
+ * there isn't one.
+ */
+static size_t header_block_len(const struct buf *msg)
+{
+    const char *base = buf_base(msg);
+    size_t len = buf_len(msg);
+
+    for (size_t i = 0; i + 3 < len; i++)
+        if (!memcmp(base + i, "\r\n\r\n", 4)) return i + 2;
+
+    return len;
+}
+
+/* §9.1: declare the header fields "editheader" changed, for whichever hop
+ * signs this message next - Cyrus itself never signs.
+ */
+static void add_message_instance(struct buf *msgbuf,
+                                 const struct buf *orig_hdrs,
+                                 const char *msgid)
+{
+    struct buf mi = BUF_INITIALIZER;
+    int mode = config_getenum(IMAPOPT_DKIM2_MESSAGE_INSTANCE);
+    size_t hdrlen = header_block_len(msgbuf);
+    size_t bodyoff = MIN(hdrlen + 2, buf_len(msgbuf));
+    const char *why = NULL;
+
+    switch (dkim2_mi_calculate(buf_base(orig_hdrs), buf_len(orig_hdrs),
+                               buf_base(msgbuf), hdrlen,
+                               buf_base(msgbuf) + bodyoff,
+                               buf_len(msgbuf) - bodyoff,
+                               mode == IMAP_ENUM_DKIM2_MESSAGE_INSTANCE_VERIFY,
+                               &mi)) {
+    case DKIM2_MI_ADDED: {
+        struct buf hdr = BUF_INITIALIZER;
+
+        buf_printf(&hdr, "Message-Instance: %s\r\n", buf_cstring(&mi));
+        buf_insert(msgbuf, 0, &hdr);
+        buf_free(&hdr);
+        break;
+    }
+
+    case DKIM2_MI_CHAIN_MISMATCH:
+        why = "message does not match the Message-Instance it carries";
+        break;
+
+    case DKIM2_MI_NONE:
+        break;
+    }
+
+    if (why) {
+        xsyslog(LOG_NOTICE, "DKIM2 no Message-Instance added",
+                            "msg.id=<%s> dkim2.declined=<%s>",
+                            msgid ? msgid : "~null~", why);
+    }
+
+    buf_free(&mi);
+}
+
 static int send_forward(sieve_redirect_context_t *rc,
                         struct sieve_interp_ctx *ctx,
                         char *return_path,
-                        struct protstream *file)
+                        struct protstream *file,
+                        const struct buf *orig_hdrs,
+                        const char *msgid)
 {
     int r = 0;
     char buf[1024];
@@ -808,6 +887,8 @@ static int send_forward(sieve_redirect_context_t *rc,
                  prot_fgets(buf, sizeof(buf), file));
     }
 
+    if (orig_hdrs) add_message_instance(&msgbuf, orig_hdrs, msgid);
+
     r = smtpclient_open(&sm);
     if (r) goto done;
 
@@ -835,6 +916,7 @@ static int sieve_redirect(void *ac, void *ic,
     message_data_t *m = mdata->m;
     char buf[8192], *sievedb = NULL;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
+    struct buf orig_hdrs = BUF_INITIALIZER;
     int res;
 
     /* if we have a msgid, we can track our redirects */
@@ -853,12 +935,27 @@ static int sieve_redirect(void *ac, void *ic,
     }
 
     if (rc->headers) {
+        /* The script edited header fields, so DKIM2 may have something to
+         * declare.  Take the incoming header block off the spool file: the
+         * cache those edits went through no longer holds it.
+         */
+        if (config_getenum(IMAPOPT_DKIM2_MESSAGE_INSTANCE) !=
+            IMAP_ENUM_DKIM2_MESSAGE_INSTANCE_OFF) {
+            read_header_block(m, &orig_hdrs);
+        }
+
         mdata = setup_special_delivery(mdata, rc->headers);
-        if (!mdata) return SIEVE_FAIL;
+        if (!mdata) {
+            buf_free(&orig_hdrs);
+            return SIEVE_FAIL;
+        }
         else m = mdata->m;
     }
 
-    res = send_forward(rc, ctx, m->return_path, m->data);
+    res = send_forward(rc, ctx, m->return_path, m->data,
+                       buf_len(&orig_hdrs) ? &orig_hdrs : NULL, m->id);
+
+    buf_free(&orig_hdrs);
 
     if (rc->headers) cleanup_special_delivery(mdata);
 
