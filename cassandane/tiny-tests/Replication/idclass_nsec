@@ -7,7 +7,7 @@ use Cassandane::Util::Base64JMAP;
 # residue class too, and stay inside UTIME_SAFE_NSEC.
 #
 sub test_idclass_nsec
-    :min_version_3_13 :IdClass
+    :min_version_3_13 :ResidueClass
     ($self)
 {
     my $base = 1;
