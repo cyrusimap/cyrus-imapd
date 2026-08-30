@@ -2999,12 +2999,11 @@ EXPORTED void conversation_free(conversation_t *conv)
 }
 
 struct prune_rock {
-    struct conversations_state *state;
     arrayu64_t *cidfilter;
     arrayu64_t cids;
+    strarray_t *todelete;
     time_t thresh;
     unsigned int nseen;
-    unsigned int ndeleted;
 };
 
 static int prunecb(void *rock,
@@ -3013,39 +3012,32 @@ static int prunecb(void *rock,
 {
     struct prune_rock *prock = (struct prune_rock *)rock;
     time_t stamp;
-    int r;
 
     prock->nseen++;
-    r = check_msgid(key, keylen, NULL);
-    if (r) goto done;
+
+    /* not a msgid record: skip it, but keep scanning */
+    if (check_msgid(key, keylen, NULL)) return 0;
 
     arrayu64_truncate(&prock->cids, 0);
 
-    r = _conversations_parse(data, datalen, &prock->cids, &stamp);
-    if (r) goto done;
+    if (_conversations_parse(data, datalen, &prock->cids, &stamp)) return 0;
 
     if (prock->cidfilter) {
         size_t i;
         for (i = 0; i < arrayu64_size(&prock->cids); i++) {
             if (arrayu64_bsearch(prock->cidfilter, arrayu64_nth(&prock->cids, i)))
-                goto done; // found a match
+                return 0; // found a match
         }
     }
     else {
         /* keep records newer than the threshold */
         if (stamp >= prock->thresh)
-            goto done;
+            return 0;
     }
 
-    prock->ndeleted++;
+    strarray_appendm(prock->todelete, xstrndup(key, keylen));
 
-    r = cyrusdb_delete(prock->state->db,
-                       key, keylen,
-                       &prock->state->txn,
-                       /*force*/1);
-
-done:
-    return r;
+    return 0;
 }
 
 static int addknowncid(void *rock,
@@ -3064,20 +3056,25 @@ static int addknowncid(void *rock,
     return 0;
 }
 
-EXPORTED int conversations_prune(struct conversations_state *state,
-                                 time_t thresh, unsigned int *nseenp,
-                                 unsigned int *ndeletedp)
+/* read-only pass: collect the prunable msgid records, so the expensive
+ * scan never needs the write lock */
+static int prune_scan(struct conversations_state *state, time_t thresh,
+                      strarray_t *todelete, unsigned int *nseenp)
 {
-    struct prune_rock rock = { state, NULL, ARRAYU64_INITIALIZER, thresh, 0, 0 };
+    struct prune_rock rock = { NULL, ARRAYU64_INITIALIZER, todelete, thresh, 0 };
+    int r = 0;
 
     if (config_getswitch(IMAPOPT_CONVERSATIONS_KEEP_EXISTING)) {
         // these will be added in CID order, so we don't need to sort them
         rock.cidfilter = arrayu64_new();
-        cyrusdb_foreach(state->db, "B", 1, NULL, addknowncid, rock.cidfilter, &state->txn);
+        r = cyrusdb_foreach(state->db, "B", 1, NULL, addknowncid,
+                            rock.cidfilter, &state->txn);
+        if (r) goto done;
     }
 
-    cyrusdb_foreach(state->db, "<", 1, NULL, prunecb, &rock, &state->txn);
+    r = cyrusdb_foreach(state->db, "<", 1, NULL, prunecb, &rock, &state->txn);
 
+done:
     arrayu64_fini(&rock.cids);
     if (rock.cidfilter) {
         arrayu64_fini(rock.cidfilter);
@@ -3086,10 +3083,129 @@ EXPORTED int conversations_prune(struct conversations_state *state,
 
     if (nseenp)
         *nseenp = rock.nseen;
-    if (ndeletedp)
-        *ndeletedp = rock.ndeleted;
 
-    return 0;
+    return r;
+}
+
+/* the scan may have run without the write lock, so anything it turned up has
+ * to be re-checked against the database as it stands now */
+static int prune_still_stale(struct conversations_state *state,
+                             const char *key, time_t thresh,
+                             int keep_existing)
+{
+    const char *data = NULL;
+    size_t datalen = 0;
+    arrayu64_t cids = ARRAYU64_INITIALIZER;
+    time_t stamp;
+    int stale = 0;
+    size_t i;
+
+    if (cyrusdb_fetch(state->db, key, strlen(key),
+                      &data, &datalen, &state->txn))
+        goto done;  /* gone already */
+
+    if (_conversations_parse(data, datalen, &cids, &stamp))
+        goto done;
+
+    if (!keep_existing) {
+        stale = (stamp < thresh);
+        goto done;
+    }
+
+    for (i = 0; i < arrayu64_size(&cids); i++) {
+        char bkey[CONVERSATION_ID_STRMAX+2];
+        snprintf(bkey, sizeof(bkey), "B" CONV_FMT, arrayu64_nth(&cids, i));
+        data = NULL;
+        datalen = 0;
+        if (!cyrusdb_fetch(state->db, bkey, strlen(bkey),
+                           &data, &datalen, &state->txn))
+            goto done;  /* the conversation is still around */
+    }
+
+    stale = 1;
+
+done:
+    arrayu64_fini(&cids);
+    return stale;
+}
+
+EXPORTED int conversations_prune(struct conversations_state *state,
+                                 time_t thresh, unsigned int *nseenp,
+                                 unsigned int *ndeletedp)
+{
+    strarray_t todelete = STRARRAY_INITIALIZER;
+    unsigned int nseen = 0, ndeleted = 0;
+    int i;
+
+    int r = prune_scan(state, thresh, &todelete, &nseen);
+
+    for (i = 0; !r && i < strarray_size(&todelete); i++) {
+        const char *key = strarray_nth(&todelete, i);
+        r = cyrusdb_delete(state->db, key, strlen(key),
+                           &state->txn, /*force*/1);
+        if (!r) ndeleted++;
+    }
+
+    strarray_fini(&todelete);
+
+    if (nseenp)
+        *nseenp = nseen;
+    if (ndeletedp)
+        *ndeletedp = ndeleted;
+
+    return r;
+}
+
+EXPORTED int conversations_prune_user(const char *userid, time_t thresh,
+                                      unsigned int *nseenp,
+                                      unsigned int *ndeletedp)
+{
+    struct conversations_state *state = NULL;
+    strarray_t todelete = STRARRAY_INITIALIZER;
+    unsigned int nseen = 0, ndeleted = 0;
+    int keep_existing;
+    int i;
+    int r;
+
+    /* first pass is read-only, so the user isn't locked out for however
+     * long it takes to read their entire conversations database */
+    r = conversations_open_user(userid, 1/*shared*/, &state);
+    if (r) goto done;
+
+    r = prune_scan(state, thresh, &todelete, &nseen);
+    conversations_abort(&state);
+    if (r) goto done;
+
+    /* nothing to remove: never take the write lock at all */
+    if (!strarray_size(&todelete)) goto done;
+
+    keep_existing = config_getswitch(IMAPOPT_CONVERSATIONS_KEEP_EXISTING);
+
+    r = conversations_open_user(userid, 0/*shared*/, &state);
+    if (r) goto done;
+
+    for (i = 0; i < strarray_size(&todelete); i++) {
+        const char *key = strarray_nth(&todelete, i);
+        if (!prune_still_stale(state, key, thresh, keep_existing))
+            continue;
+        r = cyrusdb_delete(state->db, key, strlen(key),
+                           &state->txn, /*force*/1);
+        if (r) goto done;
+        ndeleted++;
+    }
+
+    r = conversations_commit(&state);
+
+done:
+    conversations_abort(&state);
+    strarray_fini(&todelete);
+
+    if (nseenp)
+        *nseenp = nseen;
+    if (ndeletedp)
+        *ndeletedp = ndeleted;
+
+    return r;
 }
 
 /* NOTE: this makes an "ATOM" return */

@@ -355,6 +355,11 @@ extern void conversation_update_thread(conversation_t *conv,
 extern int conversations_prune(struct conversations_state *state,
                                time_t thresh, unsigned int *,
                                unsigned int *);
+/* as above, but does its own opening: the (expensive) scan runs with a
+ * shared lock, and the write lock is only taken if there's work to do */
+extern int conversations_prune_user(const char *userid,
+                                    time_t thresh, unsigned int *,
+                                    unsigned int *);
 extern void conversations_dump(struct conversations_state *, FILE *);
 extern int conversations_undump(struct conversations_state *, FILE *);
 
