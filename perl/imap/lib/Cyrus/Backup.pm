@@ -624,24 +624,20 @@ sub ParseIndex {
   my $index = eval { Cyrus::IndexFile->new($fh, strict_crc => 1) };
 
   my $o_uid = $index->record_offset_for('Uid');
-  my $o_last = $index->record_offset_for('LastUpdated');
   my $o_sysflags = $index->record_offset_for('SystemFlags');
   my $o_guid = $index->record_offset_for('MessageGuid');
 
   unless ($index) {
-    die "Failed to read index for $FolderName ($uniqueid, $is_expunge)\n";
+    die "Failed to read index for $FolderName ($uniqueid)\n";
   }
 
   # speed things up again!
   if ($index->{version} < 10 or $index->{version} > $MAX_INDEXVERSION) {
-    die "Don't know how to handle indexes with version $index->{version} for $FolderName ($uniqueid, $is_expunge)\n";
+    die "Don't know how to handle indexes with version $index->{version} for $FolderName ($uniqueid)\n";
   }
 
   my $sth = $dbh->prepare("SELECT uid,fileid,deleted FROM indexed WHERE folderid = ? ORDER BY uid ASC");
   $sth->execute($folderid);
-
-  my $Now = time();
-  my $ExpireTime = $Now - $MAX_AGE;
 
   # scan through the database and the index file in step
 
@@ -654,7 +650,6 @@ sub ParseIndex {
 
   my $uid = $record ? unpack('N', substr($record, $o_uid, 4)) : undef;
   my $guid;
-  my $last;
 
   # cases:
   # 1) they both exist and are the same,
@@ -676,16 +671,16 @@ sub ParseIndex {
     # RARE - this would be something like an undelete?
     elsif ($record and (not $dbitem or $uid < $dbitem->[0])) {
 
-      # ignore it if it's old, otherwise create and fetch
+      # create and fetch, unless the message file is already gone
       my $sysflags = unpack('N', substr($record, $o_sysflags, 4));
       unless ($sysflags & (1<<30)) { # unlinked
         $guid = unpack('H40', substr($record, $o_guid, 20));
-        push @toadd, [$uid, $guid, $is_expunge ? $last : 0];
+        push @toadd, [$uid, $guid];
       }
 
       # move forward
       $record = $index->next_record_raw();
-      $uid = $record ? unpack('N', substr($record, 0, 4)) : undef;
+      $uid = $record ? unpack('N', substr($record, $o_uid, 4)) : undef;
     }
 
     # 3) $uid is less or $record is blank and $uid exists
@@ -717,10 +712,10 @@ sub ParseIndex {
   }
 
   if (@toadd) {
-    my $sth = $dbh->prepare("INSERT INTO indexed (folderid, uid, fileid, deleted) VALUES (?, ?, ?, ?)");
+    my $sth = $dbh->prepare("INSERT INTO indexed (folderid, uid, fileid, deleted) VALUES (?, ?, ?, 0)");
     my %need;
     foreach my $need_create (@toadd) {
-      my ($uid, $guid, $last) = @$need_create;
+      my ($uid, $guid) = @$need_create;
       my $fileid = $state->fileid($guid);
       unless ($fileid) {
         $need{$uid} = $guid;
@@ -728,12 +723,12 @@ sub ParseIndex {
     }
     $missingsub->(\%need) if (keys %need and $missingsub);
     foreach my $need_create (@toadd) {
-      my ($uid, $guid, $last) = @$need_create;
+      my ($uid, $guid) = @$need_create;
       my $fileid = $state->fileid($guid);
       unless ($fileid) {
         die "no file for $uniqueid $uid ($guid) and no way to get it\n";
       }
-      unless ($sth->execute($folderid, $uid, $fileid, $last)) {
+      unless ($sth->execute($folderid, $uid, $fileid)) {
         die "failed to add to DB: " . $dbh->errstr;
       }
     }
