@@ -1,0 +1,29 @@
+Description:
+
+Sieve "redirect" can now add a DKIM2 Message-Instance header field
+documenting the header fields the script changed, so that a later hop can
+sign the forwarded message without breaking its chain of custody.
+
+
+Documentation:
+
+lib/imapoptions/dkim2_message_instance, and
+draft-ietf-dkim-dkim2-spec-06 for the header field itself.
+
+
+Config changes:
+
+dkim2_message_instance (new, ENUM, default "off")
+
+
+Upgrade instructions:
+
+Nothing to do.  The feature is off by default; Cyrus never signs, so it is
+only worth turning on where something downstream adds the DKIM2-Signature.
+Use "verify" unless every step between the incoming SMTP conversation and
+Sieve is known to leave signed header fields alone.
+
+
+GitHub issue:
+
+None.
