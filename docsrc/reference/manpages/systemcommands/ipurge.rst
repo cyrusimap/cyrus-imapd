@@ -96,6 +96,15 @@ Options
 
     Enable verbose output/logging.
 
+.. option:: --batchsize=num
+
+    Purge at most "num" messages per batch, unlocking the mailbox between
+    batches so that a mailbox with a lot to purge isn't held locked for the
+    whole run.  Default is 4096; 0 means purge everything in one batch.
+
+    Note that this option is long-form only, because **-b** already means
+    *bytes* for this command.
+
 Examples
 ========
 
