@@ -241,6 +241,12 @@ magic(AnnotationAllowUndefined => sub {
 magic(AllowDeleted => sub {
     shift->config_set(allowdeleted => 1);
 });
+magic(DKIM2MessageInstanceTrust => sub {
+    shift->config_set(dkim2_message_instance => 'trust');
+});
+magic(DKIM2MessageInstanceVerify => sub {
+    shift->config_set(dkim2_message_instance => 'verify');
+});
 magic(ImmediateDelete => sub {
     shift->config_set(delete_mode => 'immediate');
 });

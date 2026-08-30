@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+# "trust" skips the incoming hash check, for a pipeline known to leave
+# signed header fields alone - the same message that "verify" declines to
+# document gets a Message-Instance here.
+
+sub test_message_instance_trust
+    :want_smtpdaemon :DKIM2MessageInstanceTrust
+    ($self)
+{
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $msg->add_header('Message-Instance',
+                     'm=1; h=sha256:' . ('A' x 43) . '=:' . ('B' x 43) . '=;');
+
+    my $out = $self->sieve_redirect_message(<<'EOF', $msg);
+require ["editheader"];
+deleteheader "Subject";
+redirect "redirect@example.com";
+EOF
+
+    my @mis = dkim2_mi_values($out);
+    $self->assert_num_equals(2, scalar @mis);
+    $self->assert_matches(qr/^m\s*=\s*2\s*;/, $mis[0]);
+
+    $self->assert_deep_equals({ h => { 'subject' => [ { d => [ 'Message 1' ] } ] } },
+                              dkim2_mi_recipes($mis[0]));
+
+    # The hashes still describe the message that goes out, checked or not
+    my ($outhdrs, $outbody) = dkim2_split($out);
+    my ($hh, $bh) = $mis[0] =~ m/h\s*=\s*sha256:([^:;]+):([^;]+)/;
+    $self->assert_str_equals(dkim2_header_hash($outhdrs), $hh);
+    $self->assert_str_equals(dkim2_body_hash($outbody), $bh);
+}
