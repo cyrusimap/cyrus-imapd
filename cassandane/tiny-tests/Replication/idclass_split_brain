@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# The point of the whole scheme: two hosts writing independently produce no
+# colliding identifiers, so a later merge has nothing to resolve.
+#
+sub test_idclass_split_brain_no_clash
+    :min_version_3_13 :ResidueClass :NoReplicaonly
+    ($self)
+{
+    my $modulus = 16;
+
+    # :ResidueClass gives the master base 1 and the replica base 2.
+    # :NoReplicaonly lets the replica accept writes, i.e. split brain.
+    foreach my $n (1..10) {
+        $self->make_message("master $n", store => $self->{master_store});
+        $self->make_message("replica $n", store => $self->{replica_store});
+    }
+
+    my %seen;
+    my %bases;
+    foreach my $store ($self->{master_store}, $self->{replica_store}) {
+        my $talk = $store->get_client();
+        $talk->select("INBOX");
+        my $res = $talk->fetch('1:*', '(modseq)');
+        foreach my $uid (keys %$res) {
+            my $modseq = $res->{$uid}{modseq}[0];
+            $self->assert(!exists $seen{$modseq},
+                          "modseq $modseq minted on both hosts");
+            $seen{$modseq} = 1;
+            $bases{$modseq % $modulus} = 1;
+        }
+    }
+
+    $self->assert_num_equals(20, scalar keys %seen);
+
+    # and they really did come from two different classes
+    $self->assert_num_equals(2, scalar keys %bases);
+}
