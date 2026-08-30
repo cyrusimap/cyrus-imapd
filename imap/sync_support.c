@@ -214,7 +214,10 @@ static const char *_synclock_name(const char *hostname, const char *userid)
     static struct buf buf = BUF_INITIALIZER;
     if (!userid) userid = ""; // no userid == global lock
 
-    buf_setcstr(&buf, "*S*");
+    /* replication is read-only unless it finds something to fix, in which
+     * case it takes a real write lock (and hence $GLOBAL) then - so the
+     * sync lock itself lives in the namespace which doesn't take $GLOBAL */
+    buf_setcstr(&buf, NOGLOBAL_LOCK_PREFIX "S*");
 
     for (p = hostname; *p; p++) {
         switch(*p) {

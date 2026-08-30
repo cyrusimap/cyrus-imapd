@@ -94,6 +94,10 @@ char *mboxname_from_external(const char *extname, const struct namespace *ns, co
 char *mboxname_to_external(const char *intname, const struct namespace *ns, const char *userid);
 
 
+/* namelocks in this namespace don't protect user data, so taking one
+ * exclusively doesn't imply taking the shared $GLOBAL lock as well */
+#define NOGLOBAL_LOCK_PREFIX "*N*"
+
 int open_mboxlocks_exist(void);
 int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
                   int locktype);
