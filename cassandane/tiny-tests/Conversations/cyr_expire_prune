@@ -16,12 +16,10 @@ sub _convdb_msgids
     return [ grep { m/^</ } split /\n/, slurp_file($outfile) ];
 }
 
-# cyr_expire prunes the msgid records out of the conversations database,
-# a -b batchsize at a time
-sub test_cyr_expire_prune
-    :NoStartInstances :Conversations
-    ($self)
+sub _check_cyr_expire_prune
 {
+    my ($self) = @_;
+
     # prune everything we find, on age, so we don't have to arrange for
     # the conversations themselves to go away as well
     $self->{instance}->{config}->set('conversations_keep_existing' => 'no');
@@ -47,4 +45,23 @@ sub test_cyr_expire_prune
     my $talk = $self->{store}->get_client();
     $talk->select('INBOX');
     $self->assert_num_equals(5, $talk->get_response_code('exists'));
+}
+
+# cyr_expire prunes the msgid records a -b batchsize at a time, on a
+# backend with no fetchnext, so each batch restarts the scan
+sub test_cyr_expire_prune
+    :NoStartInstances :Conversations
+    ($self)
+{
+    $self->{instance}->{config}->set('conversations_db' => 'skiplist');
+    $self->_check_cyr_expire_prune();
+}
+
+# ... and on a backend which can resume an iteration with fetchnext
+sub test_cyr_expire_prune_chunked
+    :NoStartInstances :Conversations
+    ($self)
+{
+    $self->{instance}->{config}->set('conversations_db' => 'twom');
+    $self->_check_cyr_expire_prune();
 }
