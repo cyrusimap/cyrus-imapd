@@ -1264,9 +1264,9 @@ EXPORTED int prot_printliteral(struct protstream *out, const char *s, size_t siz
 {
     int r;
     if (out->isclient)
-        r = prot_printf(out, "{" SIZE_T_FMT "+}\r\n", size);
+        r = prot_printf(out, "{%zu+}\r\n", size);
     else
-        r = prot_printf(out, "{" SIZE_T_FMT "}\r\n", size);
+        r = prot_printf(out, "{%zu}\r\n", size);
     if (r) return r;
     return prot_write(out, s, size);
 }

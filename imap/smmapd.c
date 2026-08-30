@@ -231,7 +231,7 @@ static int verify_user(const char *key, struct auth_state *authstate)
 
     char msg[MAX_MAILBOX_PATH+1];
     if (userdeny(mbname_userid(mbname), config_ident, msg, sizeof(msg))) {
-        prot_printf(map_out, SIZE_T_FMT ":NOTFOUND %s,", 9 + strlen(msg), msg);
+        prot_printf(map_out, "%zu:NOTFOUND %s,", 9 + strlen(msg), msg);
         mbname_free(&mbname);
         return -1;
     }
@@ -306,7 +306,7 @@ static int verify_user(const char *key, struct auth_state *authstate)
             goto done;
         }
 
-        snprintf(buf,sizeof(buf),SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
+        snprintf(buf,sizeof(buf),"%zu:cyrus %s,%c",strlen(key)+6,key,4);
         sendto(soc,buf,strlen(buf),0,(struct sockaddr *)&sin,sizeof(sin));
 
         x = sizeof(sfrom);
@@ -398,19 +398,19 @@ static int begin_handling(void)
 
         case 0:
             auditlog_client("ok", key, smmapd_clienthost);
-            prot_printf(map_out, SIZE_T_FMT ":OK %s,", 3+strlen(key), key);
+            prot_printf(map_out, "%zu:OK %s,", 3+strlen(key), key);
             break;
 
         case IMAP_MAILBOX_NONEXISTENT:
             auditlog_client("nonexistent", key, smmapd_clienthost);
-            prot_printf(map_out, SIZE_T_FMT ":NOTFOUND %s,",
+            prot_printf(map_out, "%zu:NOTFOUND %s,",
                         9+strlen(error_message(r)), error_message(r));
             break;
 
         case IMAP_QUOTA_EXCEEDED:
             auditlog_client("overquota", key, smmapd_clienthost);
             if (!config_getswitch(IMAPOPT_LMTP_OVER_QUOTA_PERM_FAILURE)) {
-                prot_printf(map_out, SIZE_T_FMT ":TEMP %s,", strlen(error_message(r))+5,
+                prot_printf(map_out, "%zu:TEMP %s,", strlen(error_message(r))+5,
                             error_message(r));
                 break;
             }
@@ -419,11 +419,11 @@ static int begin_handling(void)
         default:
             auditlog_client("failed", key, smmapd_clienthost);
             if (errstring)
-                prot_printf(map_out, SIZE_T_FMT ":PERM %s (%s),",
+                prot_printf(map_out, "%zu:PERM %s (%s),",
                             5+strlen(error_message(r))+3+strlen(errstring),
                             error_message(r), errstring);
             else
-                prot_printf(map_out, SIZE_T_FMT ":PERM %s,",
+                prot_printf(map_out, "%zu:PERM %s,",
                             5+strlen(error_message(r)), error_message(r));
             /* Malformed netstring: do not re-parse leftover bytes as new requests. */
             if (r == IMAP_PROTOCOL_ERROR)

@@ -409,7 +409,7 @@ static void buf_replace_bindvals(struct buf *cmd, struct sqldb_bindval bval[])
             break;
 
         case SQLITE_BLOB:
-            buf_printf(&buf, "<" SIZE_T_FMT " bytes>", buf_len(&bval->val.b));
+            buf_printf(&buf, "<%zu bytes>", buf_len(&bval->val.b));
             break;
         }
 

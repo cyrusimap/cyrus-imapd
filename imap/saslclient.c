@@ -207,7 +207,7 @@ HIDDEN int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 
         /* send to server */
         if (sendliteral) {
-            prot_printf(pout, "{" SIZE_T_FMT "+}\r\n", strlen(base64));
+            prot_printf(pout, "{%zu+}\r\n", strlen(base64));
             prot_flush(pout);
         }
         prot_printf(pout, "%s", base64);

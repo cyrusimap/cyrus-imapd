@@ -995,7 +995,7 @@ int proxy_copy(const char *tag, char *sequence, char *name, int myrights,
     }
 
     /* start the append */
-    prot_printf(s->out, "%s Append {" SIZE_T_FMT "+}\r\n%s",
+    prot_printf(s->out, "%s Append {%zu+}\r\n%s",
                 tag, strlen(name), name);
 
     if (crock.uidset) sequence = freeme = seqset_cstring(crock.uidset);
@@ -1272,7 +1272,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
 
     /* select the mailbox (read-only) */
     proxy_gentag(mytag, sizeof(mytag));
-    prot_printf(s->out, "%s Examine {" SIZE_T_FMT "+}\r\n%s\r\n",
+    prot_printf(s->out, "%s Examine {%zu+}\r\n%s\r\n",
                 mytag, strlen(url->mailbox), url->mailbox);
     for (/* each examine response */;;) {
         /* read a line */
