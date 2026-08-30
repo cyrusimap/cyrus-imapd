@@ -2,6 +2,8 @@
 # See COPYING file at the root of the distribution for more details.
 
 package Cyrus::Mbentry;
+use strict;
+use warnings;
 use Moo;
 
 use Cyrus::DList;

@@ -2,6 +2,8 @@
 # See COPYING file at the root of the distribution for more details.
 
 package Cyrus::Backup::Restore;
+use strict;
+use warnings;
 
 use Archive::Tar::Stream;
 use Cyrus::Backup;

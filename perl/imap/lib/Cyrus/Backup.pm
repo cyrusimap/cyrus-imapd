@@ -9,6 +9,8 @@
 #
 # XXX - tune the when-to-rebuild figures
 package Cyrus::Backup;
+use strict;
+use warnings;
 
 use Cyrus::Backup::State;
 use Cyrus::Backup::Tar;

@@ -2,6 +2,8 @@
 # See COPYING file at the root of the distribution for more details.
 
 package Cyrus::Backup::State;
+use strict;
+use warnings;
 
 use Cyrus::Backup;
 use DBI;
