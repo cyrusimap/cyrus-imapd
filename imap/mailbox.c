@@ -48,6 +48,7 @@
 #include "carddav_db.h"
 #include "webdav_db.h"
 #include "ical_support.h"
+#include "idclass.h"
 #include "jmap_util.h"
 #include "vcard_support.h"
 #ifdef USE_SIEVE
@@ -1259,7 +1260,7 @@ EXPORTED modseq_t mailbox_modseq_dirty(struct mailbox *mailbox)
         mailbox_index_dirty(mailbox);
     }
 
-    mailbox->i.highestmodseq++;
+    mailbox->i.highestmodseq = modseq_next(mailbox->i.highestmodseq);
 
     return mailbox->i.highestmodseq;
 }

@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Every modseq this host mints is congruent to its configured base.
+#
+sub test_idclass_modseq
+    :min_version_3_13 :IdClass
+    ($self)
+{
+    my $base = 1;
+    my $modulus = 16;
+
+    my $talk = $self->{store}->get_client();
+
+    $self->make_message("first");
+    $self->make_message("second");
+    $self->make_message("third");
+
+    $talk->select("INBOX");
+    my $res = $talk->fetch('1:*', '(modseq)');
+    $self->assert_num_equals(3, scalar keys %$res);
+
+    foreach my $uid (keys %$res) {
+        my $modseq = $res->{$uid}{modseq}[0];
+        $self->assert_num_equals($base, $modseq % $modulus);
+    }
+
+    my $status = $talk->status("INBOX", '(highestmodseq)');
+    $self->assert_num_equals($base, $status->{highestmodseq} % $modulus);
+}

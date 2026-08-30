@@ -488,6 +488,25 @@ magic(NoReplicaonly => sub {
     my $self = shift;
     $self->{no_replicaonly} = 1;
 });
+magic(IdClass => sub {
+    my $self = shift;
+    # the counters file, and therefore the whole scheme, is conversations-only
+    $self->config_set(conversations => 'yes');
+    $self->config_set(modseq_modulus => 16);
+    $self->config_set(modseq_base => 1);
+    # the replica must mint in a different class, or a promotion after a
+    # split brain would reissue identifiers the master already handed out
+    $self->{replica_modseq_base} = 2;
+});
+magic(IdClassClash => sub {
+    my $self = shift;
+    $self->config_set(conversations => 'yes');
+    $self->config_set(modseq_modulus => 16);
+    $self->config_set(modseq_base => 1);
+    # deliberately the same base at both ends: the misconfiguration the
+    # replication handshake check exists to catch
+    $self->{replica_modseq_base} = 1;
+});
 magic(ConversationsMaxThread10 => sub {
     my $self = shift;
     $self->config_set('conversations_max_thread' => 10);
@@ -693,6 +712,10 @@ sub _create_instances
             $replica_params{config}->set(sync_rightnow_channel => undef);
             unless ($self->{no_replicaonly}) {
                 $replica_params{config}->set(replicaonly => 'yes');
+            }
+            if (defined $self->{replica_modseq_base}) {
+                $replica_params{config}->set(
+                    modseq_base => $self->{replica_modseq_base});
             }
             my $cyrus_other_prefix = $cassini->val('cyrus other', 'prefix');
             if (defined $cyrus_other_prefix and -d $cyrus_other_prefix) {

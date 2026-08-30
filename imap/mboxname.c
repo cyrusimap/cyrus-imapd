@@ -18,6 +18,7 @@
 #include "crc32.h"
 #include "glob.h"
 #include "global.h"
+#include "idclass.h"
 #include "mailbox.h"
 #include "map.h"
 #include "retry.h"
@@ -3062,11 +3063,11 @@ static modseq_t mboxname_domodseq(const char *fname,
     int isdelete = flags & MBOXMODSEQ_ISDELETE;
 
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-        return last + add;
+        return add ? modseq_next(last) : last;
 
     /* XXX error handling */
     if (mboxname_load_fcounters(fname, &counters, &fd))
-        return last + add;
+        return add ? modseq_next(last) : last;
 
     oldcounters = counters;
 
@@ -3153,9 +3154,11 @@ static modseq_t mboxname_domodseq(const char *fname,
     if (dofolder && *foldersmodseqp < last)
         *foldersmodseqp = last;
 
-    /* if adding, bring all counters up to the overall highest modseq */
+    /* if adding, bring all counters up to the overall highest modseq.
+     * The clamps above may have adopted a peer's value from a different
+     * residue class - rounding up here is what puts us back in ours. */
     if (add) {
-        counters.highestmodseq += add;
+        counters.highestmodseq = modseq_next(counters.highestmodseq);
         *typemodseqp = counters.highestmodseq;
         if (dofolder) *foldersmodseqp = counters.highestmodseq;
     }

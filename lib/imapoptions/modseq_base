@@ -1,7 +1,7 @@
 Name: modseq_base
 Type: INT
 Default-Value: 0
-Last-Modified: 3.15.0
+Last-Modified: UNRELEASED
 
 The residue class this host mints identifiers in.  Together with
 :imapdconf:`modseq_modulus` this partitions the modseq, uidvalidity and
