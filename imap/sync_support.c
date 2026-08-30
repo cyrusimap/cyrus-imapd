@@ -6792,15 +6792,18 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     }
 
     if (mailbox->i.highestmodseq < highestmodseq) {
-        /* highestmodseq on replica is dirty - we must copy and then dirty
-         * so we go one higher! */
-        xsyslog(LOG_NOTICE, "SYNCNOTICE: highestmodseq higher on replica, updating",
-                            "mailbox=<%s> oldhighestmodseq=<" MODSEQ_FMT ">"
-                                " newhighestmodseq=<" MODSEQ_FMT ">",
-                            mailbox_name(mailbox), mailbox->i.highestmodseq, highestmodseq+1);
+        /* highestmodseq on replica is dirty - we must copy and then dirty so
+         * we go higher.  With a residue class configured that lands us back
+         * in our own class, which is how a promoted replica self-heals. */
+        modseq_t oldhighestmodseq = mailbox->i.highestmodseq;
         mailbox->modseq_dirty = 0;
         mailbox->i.highestmodseq = highestmodseq;
         mailbox_modseq_dirty(mailbox);
+        xsyslog(LOG_NOTICE, "SYNCNOTICE: highestmodseq higher on replica, updating",
+                            "mailbox=<%s> oldhighestmodseq=<" MODSEQ_FMT ">"
+                                " newhighestmodseq=<" MODSEQ_FMT ">",
+                            mailbox_name(mailbox), oldhighestmodseq,
+                            mailbox->i.highestmodseq);
         remote_modseq_was_higher = 1;
     }
 
