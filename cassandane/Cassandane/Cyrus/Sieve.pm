@@ -19,7 +19,9 @@ use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use Encode qw(decode encode);
-use MIME::Base64 qw(encode_base64);
+use MIME::Base64 qw(encode_base64 decode_base64);
+use Digest::SHA qw(sha256);
+use JSON;
 use Data::Dumper;
 
 use experimental 'signatures';
@@ -470,6 +472,173 @@ sub timsieved_write {
     $sock->write($str);
 
     xlog "timsieved: C: $str";
+}
+
+# A second implementation of the DKIM2 hashes, from the spec rather than
+# from imap/dkim2_mi.c, so that the two have to agree.  Section numbers are
+# draft-ietf-dkim-dkim2-spec-06.
+
+# §4, plus the two §6.2 excludes: header fields no hash covers
+my @dkim2_unsigned = qw(
+    apparently-to arc-authentication-results arc-message-signature arc-seal
+    authentication-results auto-submitted delivered-to dkim-signature
+    dkim2-signature dl-expansion-history message-instance original-recipient
+    received return-path sio-label-history vbr-info x400-received x400-trace
+);
+
+sub dkim2_is_unsigned
+{
+    my ($name) = @_;
+
+    $name = lc $name;
+
+    return 1 if grep { $_ eq $name } @dkim2_unsigned;
+    return 1 if $name =~ m/^x-/;
+    return 1 if $name =~ m/^received-/;
+    return 0;
+}
+
+# Whole header fields, each keeping its folds, up to the blank line
+sub dkim2_fields
+{
+    my ($hdrs) = @_;
+    my @fields;
+
+    foreach my $line (split /(?<=\n)/, $hdrs) {
+        last if $line =~ m/^\r?\n?$/;
+
+        if (@fields && $line =~ m/^[ \t]/) {
+            $fields[-1] .= $line;
+        }
+        else {
+            push @fields, $line;
+        }
+    }
+
+    return @fields;
+}
+
+# §6.2 canonicalisation, or undef for a field that isn't hashed
+sub dkim2_canon_field
+{
+    my ($field) = @_;
+
+    my ($name, $value) = split /:/, $field, 2;
+    return undef if not defined $value;
+
+    $name =~ s/[ \t]+$//;
+    return undef if dkim2_is_unsigned($name);
+
+    $value =~ s/[\r\n]//g;
+    $value =~ s/[ \t]+/ /g;
+    $value =~ s/^ +//;
+    $value =~ s/ +$//;
+
+    return lc($name) . ':' . $value . "\r\n";
+}
+
+sub dkim2_header_hash
+{
+    my ($hdrs) = @_;
+
+    # Collected bottom up, then sorted by name only and stably, so that
+    # same-name fields keep the §6.2 order
+    my $n = 0;
+    my @canon = map { [ $_, $n++ ] }
+                grep { defined }
+                map { dkim2_canon_field($_) } reverse dkim2_fields($hdrs);
+
+    @canon = sort {
+        (split /:/, $a->[0])[0] cmp (split /:/, $b->[0])[0]
+            || $a->[1] <=> $b->[1]
+    } @canon;
+
+    return encode_base64(sha256(join '', map { $_->[0] } @canon), '');
+}
+
+sub dkim2_body_hash
+{
+    my ($body) = @_;
+
+    # §6.1: "*CRLF" at the end of the body becomes "CRLF"
+    $body =~ s/(\r\n)*$//;
+
+    return encode_base64(sha256($body . "\r\n"), '');
+}
+
+# A Message-Instance value for a message nobody has modified yet
+sub dkim2_mi_header
+{
+    my ($hdrs, $body) = @_;
+
+    return sprintf("m=1; h=sha256:%s:%s;",
+                   dkim2_header_hash($hdrs), dkim2_body_hash($body));
+}
+
+# The Message-Instance values on a message, in the order they appear,
+# unfolded but otherwise untouched
+sub dkim2_mi_values
+{
+    my ($msg) = @_;
+
+    return map {
+               my $v = $_;
+               $v =~ s/^[^:]*:\s*//;
+               $v =~ s/\r?\n[ \t]+//g;   # unfold
+               $v =~ s/\r?\n$//;         # the field's own terminator
+               $v;
+           }
+           grep { m/^message-instance\s*:/i } dkim2_fields($msg);
+}
+
+# The r= Recipes of a Message-Instance value, decoded
+sub dkim2_mi_recipes
+{
+    my ($value) = @_;
+
+    my ($r) = $value =~ m/(?:^|;)\s*r\s*=\s*([^;]*)/;
+    return undef if not defined $r;
+
+    $r =~ s/\s//g;
+
+    return decode_json(decode_base64($r));
+}
+
+# Split a message into its header block and its body
+sub dkim2_split
+{
+    my ($msg) = @_;
+
+    my ($hdrs, $body) = split /\r\n\r\n/, $msg, 2;
+
+    return ($hdrs . "\r\n", $body);
+}
+
+# Run $script over $msg and return the message Sieve redirected, as it
+# reached the fake SMTP daemon
+sub sieve_redirect_message
+{
+    my ($self, $script, $msg) = @_;
+
+    $self->{instance}->install_sieve_script($script);
+    $self->{instance}->deliver($msg);
+
+    my $dir = $self->{instance}->get_basedir() . '/smtpd';
+    opendir(my $dh, $dir) or die "opendir $dir: $!";
+    my @files = sort grep { m/\.smtp$/ } readdir $dh;
+    closedir $dh;
+
+    $self->assert_num_equals(1, scalar @files);
+
+    open(my $fh, '<', "$dir/$files[0]") or die "open $dir/$files[0]: $!";
+    my $out = do { local $/; <$fh> };
+    close $fh;
+
+    # The daemon stores the message as it parsed it, so put the line
+    # endings back before anything gets hashed
+    $out =~ s/\r?\n/\r\n/g;
+
+    return $out;
 }
 
 use Cassandane::Tiny::Loader;

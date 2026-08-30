@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+# Adding a signed header field is a change like any other: the Recipe is
+# the empty array, which §5.1 reads as "remove every instance of this name".
+
+sub test_message_instance_added_header
+    :want_smtpdaemon :DKIM2MessageInstanceVerify
+    ($self)
+{
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    my ($hdrs, $body) = dkim2_split($msg->as_string());
+    $msg->add_header('Message-Instance', dkim2_mi_header($hdrs, $body));
+
+    my $out = $self->sieve_redirect_message(<<'EOF', $msg);
+require ["editheader"];
+addheader "List-Id" "<l.example.com>";
+redirect "redirect@example.com";
+EOF
+
+    my @mis = dkim2_mi_values($out);
+    $self->assert_num_equals(2, scalar @mis);
+    $self->assert_matches(qr/^m\s*=\s*2\s*;/, $mis[0]);
+
+    $self->assert_deep_equals({ h => { 'list-id' => [] } },
+                              dkim2_mi_recipes($mis[0]));
+}
