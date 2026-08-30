@@ -1352,6 +1352,13 @@ EXPORTED void jmap_set_threadid(struct conversations_state *cstate,
     char prefix = USER_COMPACT_EMAILIDS(cstate) ?
         JMAP_THREADID_PREFIX : JMAP_LEGACY_THREADID_PREFIX;
 
+    /* conversation_id_encode() renders no conversation as the atom "NIL",
+     * which prefixed would be the nonsense id "TNIL" */
+    if (cid == NULLCONVERSATION) {
+        thrid[0] = '\0';
+        return;
+    }
+
     snprintf(thrid, JMAP_THREADID_SIZE, "%c%s",
              prefix, conversation_id_encode(cstate, cid));
 }
