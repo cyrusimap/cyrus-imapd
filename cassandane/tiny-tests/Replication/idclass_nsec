@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Base64JMAP;
+
+#
+# internaldate.tv_nsec is the JMAP emailId, so it must land in this host's
+# residue class too, and stay inside UTIME_SAFE_NSEC.
+#
+sub test_idclass_nsec
+    :min_version_3_13 :IdClass
+    ($self)
+{
+    my $base = 1;
+    my $modulus = 16;
+
+    foreach my $n (1..5) {
+        $self->make_message("message $n");
+    }
+
+    my $talk = $self->{store}->get_client();
+    $talk->select("INBOX");
+    my $res = $talk->fetch('1:*', '(emailid)');
+    $self->assert_num_equals(5, scalar keys %$res);
+
+    foreach my $uid (keys %$res) {
+        my $emailid = $res->{$uid}{emailid}[0];
+        $self->assert_str_equals('S', substr($emailid, 0, 1));
+
+        # emailid encodes UINT64_MAX - (nanoseconds since epoch), big-endian
+        my $packed = decode_base64jmap(substr($emailid, 1));
+        my $nanosec = ~0 - unpack('Q>', $packed);
+        my $nsec = $nanosec % 1000000000;
+
+        # the seconds we decoded must be now, which proves the decode itself
+        # is right and the residue assertion below is not vacuous
+        $self->assert_num_lte(60, abs(time() - int($nanosec / 1000000000)));
+
+        $self->assert_num_equals($base, $nsec % $modulus);
+        $self->assert_num_gte(1, $nsec);
+        $self->assert_num_lte(999999999, $nsec);
+    }
+}
