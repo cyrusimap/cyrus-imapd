@@ -97,6 +97,7 @@ static struct protocol_t imap_csync_protocol =
           { "X-REPLICATION", CAPA_REPLICATION },
           { "X-SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
           { "X-REPLICATION-ARCHIVE", CAPA_REPLICATION_ARCHIVE },
+          { "X-UNMAILBOX-ID", CAPA_UNMAILBOX_ID },
           { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
@@ -117,6 +118,7 @@ static struct protocol_t csync_protocol =
           { "COMPRESS=DEFLATE", CAPA_COMPRESS },
           { "SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
           { "REPLICATION-ARCHIVE", CAPA_REPLICATION_ARCHIVE },
+          { "UNMAILBOX-ID", CAPA_UNMAILBOX_ID },
           { NULL, 0 } } },
       { "STARTTLS", "OK", "NO", 1 },
       { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
@@ -4310,18 +4312,57 @@ bail:
 
 static int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
 {
-    const char *mboxname = kin->sval;
+    const char *mboxname;
+    const char *uniqueid = NULL;
+    uint32_t uidvalidity = 0;
+
+    if (dlist_getatom(kin, "MBOXNAME", &mboxname)) {
+        /* the master identifies the mailbox it means */
+        if (!dlist_getatom(kin, "UNIQUEID", &uniqueid))
+            return IMAP_PROTOCOL_BAD_PARAMETERS;
+        dlist_getnum32(kin, "UIDVALIDITY", &uidvalidity);
+    }
+    else {
+        /* a master too old to identify it: delete whatever is here */
+        mboxname = kin->sval;
+        if (!mboxname) return IMAP_PROTOCOL_BAD_PARAMETERS;
+    }
 
     user_nslock_t *user_nslock = user_nslock_lockmb_w(mboxname);
+    mbentry_t *mbentry = NULL;
+    int r = 0;
+
+    if (uniqueid) {
+        r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
+        if (r) goto done;
+
+        /* a name can be reused, so the mailbox here may be a different one
+           entirely - the master only asked us to delete the one it named.
+           A zero uidvalidity is "unknown" (intermediates have none), so only
+           a disagreement between two real values counts */
+        if (strcmpsafe(mbentry->uniqueid, uniqueid) ||
+            (uidvalidity && mbentry->uidvalidity &&
+             mbentry->uidvalidity != uidvalidity)) {
+            xsyslog(LOG_ERR, "SYNCERROR: refusing to UNMAILBOX a different mailbox",
+                             "mailbox=<%s> uniqueid=<%s> uidvalidity=<%u>"
+                             " wanted_uniqueid=<%s> wanted_uidvalidity=<%u>",
+                             mboxname, mbentry->uniqueid, mbentry->uidvalidity,
+                             uniqueid, uidvalidity);
+            r = IMAP_MAILBOX_MOVED;
+            goto done;
+        }
+    }
 
     /* Delete with admin privileges */
     int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT;
     if (sstate->flags & SYNC_FLAG_LOCALONLY)
         delflags |= MBOXLIST_DELETE_LOCALONLY;
-    int r = mboxlist_deletemailbox(mboxname, sstate->userisadmin,
-                                   sstate->userid, sstate->authstate,
-                                   NULL, delflags);
+    r = mboxlist_deletemailbox(mboxname, sstate->userisadmin,
+                               sstate->userid, sstate->authstate,
+                               NULL, delflags);
 
+ done:
+    mboxlist_entry_free(&mbentry);
     user_nslock_release(&user_nslock);
 
     return r;
@@ -4917,6 +4958,12 @@ static int sync_apply_capabilities(struct dlist *kin, struct sync_state *sstate)
                 sstate->flags |= SYNC_FLAG_ARCHIVE;
                 dlist_setatom(kout, NULL, capa);
             }
+        }
+
+        /* we always understand both UNMAILBOX forms, so there's no state to
+           keep - the client just needs to know it can send the longer one */
+        if (!strcasecmp(capa, "UNMAILBOX-ID")) {
+            dlist_setatom(kout, NULL, capa);
         }
     }
 
@@ -5793,7 +5840,8 @@ static int folder_rename(struct sync_client_state *sync_cs,
     return r;
 }
 
-int sync_do_folder_delete(struct sync_client_state *sync_cs, const char *mboxname)
+int sync_do_folder_delete(struct sync_client_state *sync_cs, const char *mboxname,
+                          const char *uniqueid, uint32_t uidvalidity)
 {
     const char *cmd =
         (sync_cs->flags & SYNC_FLAG_LOCALONLY) ? "LOCAL_UNMAILBOX" :"UNMAILBOX";
@@ -5806,7 +5854,17 @@ int sync_do_folder_delete(struct sync_client_state *sync_cs, const char *mboxnam
     if (sync_cs->flags & SYNC_FLAG_LOGGING)
         syslog(LOG_INFO, "%s %s", cmd, mboxname);
 
-    kl = dlist_setatom(NULL, cmd, mboxname);
+    /* the kvlist form names which mailbox we mean, so the replica can refuse
+       to delete a different one which has since taken over the name */
+    if (uniqueid && (sync_cs->flags & SYNC_FLAG_UNMAILBOX_ID)) {
+        kl = dlist_newkvlist(NULL, cmd);
+        dlist_setatom(kl, "MBOXNAME", mboxname);
+        dlist_setatom(kl, "UNIQUEID", uniqueid);
+        dlist_setnum32(kl, "UIDVALIDITY", uidvalidity);
+    }
+    else {
+        kl = dlist_setatom(NULL, cmd, mboxname);
+    }
     sync_send_apply(kl, sync_cs->backend->out);
     dlist_free(&kl);
 
@@ -7407,7 +7465,8 @@ static int do_folders(struct sync_client_state *sync_cs,
                         continue;
                     }
                 }
-                r = sync_do_folder_delete(sync_cs, rfolder->name);
+                r = sync_do_folder_delete(sync_cs, rfolder->name,
+                                          rfolder->uniqueid, rfolder->uidvalidity);
                 if (r) {
                     syslog(LOG_ERR, "SYNCERROR: sync_do_folder_delete(): failed: %s (%s)",
                                     rfolder->name, error_message(r));
@@ -7444,7 +7503,8 @@ static int do_folders(struct sync_client_state *sync_cs,
             /* we're forcing a delete */
             syslog(LOG_NOTICE, "SYNCNOTICE: forcing delete of remote folder despite no tombstone %s",
                    rfolder->name);
-            r = sync_do_folder_delete(sync_cs, rfolder->name);
+            r = sync_do_folder_delete(sync_cs, rfolder->name,
+                                      rfolder->uniqueid, rfolder->uidvalidity);
             if (r) {
                 syslog(LOG_ERR, "SYNCERROR: sync_do_folder_delete(): failed: %s (%s)",
                                 rfolder->name, error_message(r));
@@ -8402,7 +8462,8 @@ static int do_unmailbox(struct sync_client_state *sync_cs, const char *mboxname)
                             mboxname);
         }
         else {
-            r = sync_do_folder_delete(sync_cs, mboxname);
+            r = sync_do_folder_delete(sync_cs, mboxname, tombstone->uniqueid,
+                                      tombstone->uidvalidity);
             if (r) {
                 syslog(LOG_ERR, "%s: sync_do_folder_delete(): failed: %s '%s'",
                                 __func__, mboxname, error_message(r));
@@ -8954,6 +9015,11 @@ connected:
         capabilities |= CAPA_SIEVE_MAILBOX;
     }
 
+    if (CAPA(backend, CAPA_UNMAILBOX_ID)) {
+        syslog(LOG_INFO, "Destination supports identified UNMAILBOX");
+        capabilities |= CAPA_UNMAILBOX_ID;
+    }
+
     if (sync_cs->flags & SYNC_FLAG_ARCHIVE) {
         if (CAPA(backend, CAPA_REPLICATION_ARCHIVE)) {
             syslog(LOG_INFO, "Destination supports replication to archive");
@@ -9090,6 +9156,9 @@ int sync_do_enable(struct sync_client_state *sync_cs, unsigned capabilities)
     if (capabilities & CAPA_REPLICATION_ARCHIVE) {
         dlist_setatom(kl, NULL, "REPLICATION-ARCHIVE");
     }
+    if (capabilities & CAPA_UNMAILBOX_ID) {
+        dlist_setatom(kl, NULL, "UNMAILBOX-ID");
+    }
 
     sync_send_apply(kl, sync_cs->backend->out);
     dlist_free(&kl);
@@ -9113,6 +9182,8 @@ int sync_do_enable(struct sync_client_state *sync_cs, unsigned capabilities)
                     sync_cs->flags |= SYNC_FLAG_SIEVE_MAILBOX;
                 if (!strcasecmp(capa, "REPLICATION-ARCHIVE"))
                     sync_cs->flags |= SYNC_FLAG_ARCHIVE;
+                if (!strcasecmp(capa, "UNMAILBOX-ID"))
+                    sync_cs->flags |= SYNC_FLAG_UNMAILBOX_ID;
             }
         }
     }

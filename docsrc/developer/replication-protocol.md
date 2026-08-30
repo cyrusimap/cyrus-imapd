@@ -927,6 +927,7 @@ its capabilities, followed by an OK greeting:
 * STARTTLS
 * COMPRESS DEFLATE
 * SIEVE-MAILBOX
+* UNMAILBOX-ID
 * REPLICATION-ARCHIVE
 * OK servername Cyrus sync server v3.12.0-...
 ```
@@ -939,6 +940,7 @@ Each `* CAPABILITY` line is optional and depends on server configuration:
 | STARTTLS | Advertised when TLS is configured and not yet active |
 | COMPRESS DEFLATE | Advertised when zlib support is compiled in and compression is not yet active |
 | SIEVE-MAILBOX | Always advertised; indicates sieve scripts can be synced as a `#sieve` mailbox |
+| UNMAILBOX-ID | Always advertised; indicates APPLY UNMAILBOX accepts the kvlist form which identifies the mailbox to delete |
 | REPLICATION-ARCHIVE | Advertised when `archive_enabled` is set in imapd.conf |
 
 ### AUTHENTICATE
@@ -1492,9 +1494,27 @@ multi-tier replication setups.
 Deletes a mailbox on the replica.
 
 ```
-C: S3 APPLY UNMAILBOX %(MBOXNAME user.cassandane.OldFolder)
+C: S3 APPLY UNMAILBOX %(MBOXNAME user.cassandane.OldFolder
+       UNIQUEID d4f5a6b7-... UIDVALIDITY 1711200000)
 S: S3 OK Success
 ```
+
+The replica deletes the mailbox only if the one holding that name is
+the one named by UNIQUEID and UIDVALIDITY; otherwise it returns
+`IMAP_MAILBOX_MOVED` and leaves it alone.  A name can be reused, so
+without the identity check a delete of the master's mailbox could take
+out a completely different mailbox which had since taken over the name.
+A UIDVALIDITY of 0 means "unknown" and is not compared.
+
+This form is only sent to a replica which advertised and enabled the
+UNMAILBOX-ID capability.  Otherwise the older form is sent:
+
+```
+C: S3 APPLY UNMAILBOX user.cassandane.OldFolder
+S: S3 OK Success
+```
+
+which deletes whatever holds the name.  A replica accepts both forms.
 
 #### APPLY LOCAL\_UNMAILBOX
 
@@ -1690,8 +1710,8 @@ client has inspected the banner and wants to opt in to features
 like SIEVE-MAILBOX or REPLICATION-ARCHIVE.
 
 ```
-C: S19 APPLY CAPABILITIES (SIEVE-MAILBOX REPLICATION-ARCHIVE)
-S: * %(ENABLED (SIEVE-MAILBOX REPLICATION-ARCHIVE))
+C: S19 APPLY CAPABILITIES (SIEVE-MAILBOX UNMAILBOX-ID REPLICATION-ARCHIVE)
+S: * %(ENABLED (SIEVE-MAILBOX UNMAILBOX-ID REPLICATION-ARCHIVE))
 S: S19 OK Success
 ```
 

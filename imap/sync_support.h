@@ -298,6 +298,7 @@ const char *sync_restore(struct dlist *kin,
 #define SYNC_FLAG_ARCHIVE (1<<8)
 #define SYNC_FLAG_USECACHE (1<<9)
 #define SYNC_FLAG_NOCACHE (1<<10)
+#define SYNC_FLAG_UNMAILBOX_ID (1<<11)
 
 int sync_do_annotation(struct sync_client_state *sync_cs, const char *mboxname);
 int sync_do_mailboxes(struct sync_client_state *sync_cs,
@@ -327,7 +328,8 @@ int sync_do_update_mailbox(struct sync_client_state *sync_cs,
                            struct sync_reserve_list *reserve_guids);
 
 int sync_do_folder_delete(struct sync_client_state *sync_cs,
-                          const char *mboxname);
+                          const char *mboxname, const char *uniqueid,
+                          uint32_t uidvalidity);
 int sync_do_user_quota(struct sync_client_state *sync_cs,
                        struct sync_name_list *master_quotaroots,
                        struct sync_quota_list *replica_quota);
