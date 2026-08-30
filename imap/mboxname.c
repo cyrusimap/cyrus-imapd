@@ -3323,7 +3323,7 @@ EXPORTED uint32_t mboxname_readuidvalidity(const char *mboxname)
 EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
 {
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
-        return last + 1;
+        return uidvalidity_next(last);
 
     struct mboxname_counters counters;
     int fd = -1;
@@ -3333,14 +3333,14 @@ EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
 
     /* XXX error handling */
     if (mboxname_load_fcounters(fname, &counters, &fd)) {
-        counters.uidvalidity = last + 1;
+        counters.uidvalidity = uidvalidity_next(last);
         goto done;
     }
 
     if (counters.uidvalidity < last)
         counters.uidvalidity = last;
 
-    counters.uidvalidity++;
+    counters.uidvalidity = uidvalidity_next(counters.uidvalidity);
 
     /* always set, because we always increased */
     mboxname_set_fcounters(fname, &counters, fd);
