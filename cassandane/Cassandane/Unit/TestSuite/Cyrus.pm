@@ -506,7 +506,7 @@ magic(NoReplicaonly => sub {
     my $self = shift;
     $self->{no_replicaonly} = 1;
 });
-magic(IdClass => sub {
+magic(ResidueClass => sub {
     my $self = shift;
     # the counters file, and therefore the whole scheme, is conversations-only
     $self->config_set(conversations => 'yes');
@@ -516,7 +516,7 @@ magic(IdClass => sub {
     # split brain would reissue identifiers the master already handed out
     $self->{replica_modseq_base} = 2;
 });
-magic(IdClassClash => sub {
+magic(ResidueClassClash => sub {
     my $self = shift;
     $self->config_set(conversations => 'yes');
     $self->config_set(modseq_modulus => 16);

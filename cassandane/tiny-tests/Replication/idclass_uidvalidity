@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Every uidvalidity this host mints is congruent to its configured base.
 #
 sub test_idclass_uidvalidity
-    :min_version_3_13 :IdClass
+    :min_version_3_13 :ResidueClass
     ($self)
 {
     my $base = 1;

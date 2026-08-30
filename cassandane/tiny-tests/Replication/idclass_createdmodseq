@@ -7,7 +7,7 @@ use Cassandane::Tiny;
 # mailbox.
 #
 sub test_idclass_createdmodseq_preserved
-    :min_version_3_13 :IdClass
+    :min_version_3_13 :ResidueClass
     ($self)
 {
     $self->make_message("replicated", store => $self->{master_store});
