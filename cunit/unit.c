@@ -308,7 +308,7 @@ EXPORTED void config_read_string(const char *confdir, const char *s)
     }
 
     /* write config to the tmp file and then read it normally */
-    fd = cunit_tmpfile(fname, sizeof(fname), "cyrus-cunit-configXXXXXX");
+    fd = cunit_tmpfile(fname, sizeof(fname), "imapd.conf-XXXXXX");
     if (!fd) fatal("cunit_tmpfile", errno);
     retry_write(fd, buf_cstring(&opt_confdir), buf_len(&opt_confdir));
     buf_free(&opt_confdir);
