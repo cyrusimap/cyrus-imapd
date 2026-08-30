@@ -3157,13 +3157,14 @@ EXPORTED int conversations_prune(struct conversations_state *state,
 }
 
 EXPORTED int conversations_prune_user(const char *userid, time_t thresh,
-                                      unsigned int *nseenp,
+                                      int batchsize, unsigned int *nseenp,
                                       unsigned int *ndeletedp)
 {
     struct conversations_state *state = NULL;
     strarray_t todelete = STRARRAY_INITIALIZER;
     unsigned int nseen = 0, ndeleted = 0;
     int keep_existing;
+    int nkeys;
     int i;
     int r;
 
@@ -3177,24 +3178,38 @@ EXPORTED int conversations_prune_user(const char *userid, time_t thresh,
     if (r) goto done;
 
     /* nothing to remove: never take the write lock at all */
-    if (!strarray_size(&todelete)) goto done;
+    nkeys = strarray_size(&todelete);
+    if (!nkeys) goto done;
 
     keep_existing = config_getswitch(IMAPOPT_CONVERSATIONS_KEEP_EXISTING);
 
-    r = conversations_open_user(userid, 0/*shared*/, &state);
-    if (r) goto done;
+    if (batchsize <= 0) batchsize = nkeys;
 
-    for (i = 0; i < strarray_size(&todelete); i++) {
-        const char *key = strarray_nth(&todelete, i);
-        if (!prune_still_stale(state, key, thresh, keep_existing))
-            continue;
-        r = cyrusdb_delete(state->db, key, strlen(key),
-                           &state->txn, /*force*/1);
+    /* second pass takes the write lock, but only a batch at a time */
+    for (i = 0; i < nkeys; ) {
+        int end = i + batchsize;
+        unsigned int n = 0;
+
+        if (end > nkeys) end = nkeys;
+
+        r = conversations_open_user(userid, 0/*shared*/, &state);
         if (r) goto done;
-        ndeleted++;
-    }
 
-    r = conversations_commit(&state);
+        for (; i < end; i++) {
+            const char *key = strarray_nth(&todelete, i);
+            if (!prune_still_stale(state, key, thresh, keep_existing))
+                continue;
+            r = cyrusdb_delete(state->db, key, strlen(key),
+                               &state->txn, /*force*/1);
+            if (r) goto done;
+            n++;
+        }
+
+        r = conversations_commit(&state);
+        if (r) goto done;
+
+        ndeleted += n;
+    }
 
 done:
     conversations_abort(&state);

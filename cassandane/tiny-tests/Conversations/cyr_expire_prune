@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+sub _convdb_msgids
+{
+    my ($self) = @_;
+
+    my $outfile = $self->{instance}->{basedir} . "/convdb-dump.txt";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        'ctl_conversationsdb', '-d', 'cassandane',
+    );
+
+    # dump format is "key\tvalue", and msgid records are the ones keyed
+    # by the literal Message-ID, angle brackets and all
+    return [ grep { m/^</ } split /\n/, slurp_file($outfile) ];
+}
+
+# cyr_expire prunes the msgid records out of the conversations database,
+# a -b batchsize at a time
+sub test_cyr_expire_prune
+    :NoStartInstances :Conversations
+    ($self)
+{
+    # prune everything we find, on age, so we don't have to arrange for
+    # the conversations themselves to go away as well
+    $self->{instance}->{config}->set('conversations_keep_existing' => 'no');
+    $self->{instance}->{config}->set('conversations_expire_after' => '0d');
+    $self->_start_instances();
+
+    $self->{store}->get_client();
+
+    xlog $self, "generating some messages";
+    $self->make_message("Message $_") for (1..5);
+
+    my $msgids = $self->_convdb_msgids();
+    $self->assert_num_equals(5, scalar @{$msgids});
+
+    xlog $self, "pruning with a batchsize smaller than the work to do";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'cyr_expire', '-E', '1', '-b', '2');
+
+    $msgids = $self->_convdb_msgids();
+    $self->assert_num_equals(0, scalar @{$msgids});
+
+    xlog $self, "the messages themselves are still there";
+    my $talk = $self->{store}->get_client();
+    $talk->select('INBOX');
+    $self->assert_num_equals(5, $talk->get_response_code('exists'));
+}

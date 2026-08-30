@@ -103,6 +103,7 @@ struct expire_rock {
 struct conversations_rock {
     struct hash_table seen;
     time_t expire_mark;
+    int batchsize;
     unsigned long databases_seen;
     unsigned long msgids_seen;
     unsigned long msgids_expired;
@@ -612,7 +613,8 @@ static int expire_conversations_user(const char *userid, void *rock)
 
     verbosep("Pruning conversations from db %s", filename);
 
-    conversations_prune_user(userid, crock->expire_mark, &nseen, &ndeleted);
+    conversations_prune_user(userid, crock->expire_mark, crock->batchsize,
+                             &nseen, &ndeleted);
     libcyrus_run_delayed();
 
     crock->databases_seen++;
@@ -781,6 +783,7 @@ static int do_cid_expire(struct cyr_expire_ctx *ctx)
 
         cid_expire_seconds = config_getduration(IMAPOPT_CONVERSATIONS_EXPIRE_AFTER);
         ctx->crock.expire_mark = time(0) - cid_expire_seconds + 1;
+        ctx->crock.batchsize = ctx->args.batchsize;
 
         verbosep("Removing conversation entries older than %0.2f days",
                        (double)(cid_expire_seconds/SECS_IN_A_DAY));
