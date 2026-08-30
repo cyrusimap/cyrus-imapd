@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+# No hash and no Recipe covers an "X-" header field (§4), so editing one
+# leaves nothing to declare.
+
+sub test_message_instance_unsigned_header
+    :want_smtpdaemon :DKIM2MessageInstanceVerify
+    ($self)
+{
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    my ($hdrs, $body) = dkim2_split($msg->as_string());
+    my $mi = dkim2_mi_header($hdrs, $body);
+    $msg->add_header('Message-Instance', $mi);
+
+    my $out = $self->sieve_redirect_message(<<'EOF', $msg);
+require ["editheader"];
+addheader "X-Sieve-Touched" "yes";
+redirect "redirect@example.com";
+EOF
+
+    my @mis = dkim2_mi_values($out);
+    $self->assert_num_equals(1, scalar @mis);
+    $self->assert_str_equals($mi, $mis[0]);
+}
