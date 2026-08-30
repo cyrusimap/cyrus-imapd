@@ -2340,7 +2340,10 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     int r = 0;
     long myrights;
 
-    int checkacl = flags & MBOXLIST_DELETE_CHECKACL;
+    /* admins aren't subject to ACL checks anywhere else, and a mailbox can
+     * easily have an ACL which grants nobody 'x' - a top-level shared folder
+     * only ever gets 'defaultacl' - so don't let one become undeletable */
+    int checkacl = !isadmin && (flags & MBOXLIST_DELETE_CHECKACL);
     int localonly = flags & MBOXLIST_DELETE_LOCALONLY;
     int force = flags & MBOXLIST_DELETE_FORCE;
     int keep_intermediaries = flags & MBOXLIST_DELETE_KEEP_INTERMEDIARIES;
@@ -2464,7 +2467,8 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     int isremote = 0;
     mupdate_handle *mupdate_h = NULL;
 
-    int checkacl = flags & MBOXLIST_DELETE_CHECKACL;
+    /* see the comment in mboxlist_delayed_deletemailbox() */
+    int checkacl = !isadmin && (flags & MBOXLIST_DELETE_CHECKACL);
     int localonly = flags & MBOXLIST_DELETE_LOCALONLY;
     int force = flags & MBOXLIST_DELETE_FORCE;
     int keep_intermediaries = flags & MBOXLIST_DELETE_KEEP_INTERMEDIARIES;

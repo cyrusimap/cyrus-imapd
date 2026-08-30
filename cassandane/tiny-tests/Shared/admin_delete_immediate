@@ -1,0 +1,9 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_admin_delete_immediate
+    :ImmediateDelete
+    ($self)
+{
+    $self->shared_admin_delete_common();
+}
