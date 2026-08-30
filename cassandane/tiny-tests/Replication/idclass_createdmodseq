@@ -1,0 +1,24 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# createdmodseq is JMAP identity: the mailbox id is a base64 encoding of it.
+# Replication must never renumber it, or clients holding the id lose the
+# mailbox.
+#
+sub test_idclass_createdmodseq_preserved
+    :min_version_3_13 :IdClass
+    ($self)
+{
+    $self->make_message("replicated", store => $self->{master_store});
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    # run_replication() disconnects the stores, so ask for the clients after
+    my $master = $self->{master_store}->get_client();
+    my $master_id = $master->status("INBOX", '(mailboxid)')->{mailboxid}[0];
+    my $replica = $self->{replica_store}->get_client();
+    my $replica_id = $replica->status("INBOX", '(mailboxid)')->{mailboxid}[0];
+
+    $self->assert_str_equals($master_id, $replica_id);
+}
