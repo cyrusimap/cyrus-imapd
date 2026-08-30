@@ -1,7 +1,7 @@
 Name: modseq_modulus
 Type: INT
 Default-Value: 1
-Last-Modified: 3.15.0
+Last-Modified: UNRELEASED
 
 How many residue classes the identifier space is divided into - that is, the
 maximum number of hosts that can ever mint identifiers for a given user.  See
