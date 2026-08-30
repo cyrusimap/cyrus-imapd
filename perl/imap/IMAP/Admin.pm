@@ -3,6 +3,7 @@
 
 package Cyrus::IMAP::Admin;
 use strict;
+use warnings;
 use Cyrus::IMAP;
 use vars qw($VERSION
             *create *delete *deleteacl *listacl *list *rename *setacl
