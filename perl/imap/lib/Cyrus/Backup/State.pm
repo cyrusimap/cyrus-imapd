@@ -78,7 +78,6 @@ CREATE TABLE indexed (
   folderid INTEGER NOT NULL,
   uid INTEGER NOT NULL,
   fileid INTEGER NOT NULL,
-  deleted INTEGER NOT NULL,
   PRIMARY KEY (folderid, uid)
 );
   },

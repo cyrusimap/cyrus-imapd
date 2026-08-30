@@ -36,7 +36,7 @@ our $LOGGER_CB = sub { 'Cyrus::NullLogger' };
 
 sub logger { $LOGGER_CB->() }
 
-our $BackupVersion = 5;
+our $BackupVersion = 6;
 # UPDATE THIS WHENEVER A NEW CYRUS INDEX MINOR_VERSION IS CREATED
 our $MAX_INDEXVERSION = 20;
 
@@ -638,7 +638,7 @@ sub ParseIndex {
     die "Don't know how to handle indexes with version $index->{version} for $FolderName ($uniqueid)\n";
   }
 
-  my $sth = $dbh->prepare("SELECT uid,fileid,deleted FROM indexed WHERE folderid = ? ORDER BY uid ASC");
+  my $sth = $dbh->prepare("SELECT uid,fileid FROM indexed WHERE folderid = ? ORDER BY uid ASC");
   $sth->execute($folderid);
 
   # scan through the database and the index file in step
@@ -688,9 +688,7 @@ sub ParseIndex {
     # 3) $uid is less or $record is blank and $uid exists
     elsif ($dbitem and (not $record or $dbitem->[0] < $uid)) {
       # remove the stale record
-      unless ($dbitem->[2]) {
-        push @todel, $dbitem->[0];
-      }
+      push @todel, $dbitem->[0];
 
       # move forward
       $dbitem = $sth->fetchrow_arrayref();
@@ -714,7 +712,12 @@ sub ParseIndex {
   }
 
   if (@toadd) {
-    my $sth = $dbh->prepare("INSERT INTO indexed (folderid, uid, fileid, deleted) VALUES (?, ?, ?, 0)");
+    # a version < 6 state still has the indexed.deleted column, and it's NOT
+    # NULL with no default, so keep naming it until the next compact rewrites
+    # the state with the current schema
+    my $sth = $state->{version} < 6
+      ? $dbh->prepare("INSERT INTO indexed (folderid, uid, fileid, deleted) VALUES (?, ?, ?, 0)")
+      : $dbh->prepare("INSERT INTO indexed (folderid, uid, fileid) VALUES (?, ?, ?)");
     my %need;
     foreach my $need_create (@toadd) {
       my ($uid, $guid) = @$need_create;

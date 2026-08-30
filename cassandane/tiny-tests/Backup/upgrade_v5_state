@@ -1,0 +1,81 @@
+#!perl
+use Cassandane::Tiny;
+
+use Cyrus::Backup;
+use Cyrus::Backup::Restore;
+
+# Version 6 dropped the indexed.deleted column.  A state database that hasn't
+# been compacted since the upgrade still has it, and it's NOT NULL with no
+# default, so backups have to keep filling it in until a compact rewrites the
+# state with the current schema.
+sub test_upgrade_v5_state
+    :min_version_3_13 :want_service_backupcyrusd
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $self->make_message("Email 1") or die;
+
+    my ($meta, $data, $service, $servername) = $self->_backup_setup();
+    $self->_do_backup($meta, $data, $service, $servername);
+
+    # rewrite the state the way a version 5 one looks on disk: indexed with a
+    # deleted column, and the version to match.  Dropping the table takes its
+    # triggers with it, so replay them from their own recorded DDL.
+    my $dbh = $self->_open_backup_db($meta);
+    my $triggers = $dbh->selectcol_arrayref(
+        "SELECT sql FROM sqlite_master
+          WHERE type = 'trigger' AND tbl_name = 'indexed'");
+    $self->assert_num_gt(0, scalar @$triggers);
+
+    $dbh->do("CREATE TABLE indexed_v5 (
+                folderid INTEGER NOT NULL,
+                uid INTEGER NOT NULL,
+                fileid INTEGER NOT NULL,
+                deleted INTEGER NOT NULL,
+                PRIMARY KEY (folderid, uid))");
+    $dbh->do("INSERT INTO indexed_v5 SELECT folderid, uid, fileid, 0 FROM indexed");
+    $dbh->do("DROP TABLE indexed");
+    $dbh->do("ALTER TABLE indexed_v5 RENAME TO indexed");
+    $dbh->do($_) foreach @$triggers;
+    $dbh->do("UPDATE status SET version = 5");
+    $dbh->disconnect;
+
+    $self->assert($self->_has_indexed_deleted($meta),
+                  'test set the state back to the version 5 schema');
+
+    # a backup against that state still has to work, and still has to index
+    # the new message
+    my $msg = $self->make_message("Email 2") or die;
+    my ($version) = $self->_do_backup($meta, $data, $service, $servername);
+    $self->assert_num_equals(5, $version);
+
+    $dbh = $self->_open_backup_db($meta);
+    my ($count) = $dbh->selectrow_array(
+        "SELECT COUNT(*) FROM indexed JOIN files USING (fileid) WHERE guid = ?",
+        {}, $msg->guid);
+    $dbh->disconnect;
+    $self->assert_num_equals(1, $count, 'new message indexed in a v5 state');
+
+    # compacting rewrites the state from scratch, which is where the upgrade
+    # actually happens
+    my $restore = Cyrus::Backup::Restore->new($meta);
+    my $oldfile = $restore->TarFileName();
+    undef $restore;
+    sleep 1 while Cyrus::Backup::NewDataFilename(0) eq $oldfile;
+
+    my ($cversion) = Cyrus::Backup::CompressBackup($meta, $data, 'cassandane',
+                                                   undef, 101);
+    $self->assert_num_equals(Cyrus::Backup::CurrentBackupVersion(), $cversion);
+
+    $dbh = $self->_open_backup_db($meta);
+    my ($dbversion) = $dbh->selectrow_array("SELECT version FROM status");
+    ($count) = $dbh->selectrow_array(
+        "SELECT COUNT(*) FROM indexed JOIN files USING (fileid) WHERE guid = ?",
+        {}, $msg->guid);
+    $dbh->disconnect;
+
+    $self->assert_num_equals(6, $dbversion);
+    $self->assert_num_equals(1, $count, 'message survived the upgrade');
+    $self->assert(!$self->_has_indexed_deleted($meta),
+                  'compact dropped the indexed.deleted column');
+}
