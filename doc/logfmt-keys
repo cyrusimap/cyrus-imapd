@@ -52,6 +52,7 @@ msg                     placeholder for "no message"; value is always ~null~
 msg.cid                 the message's conversation id
 msg.date                the message's date, as sent
 msg.emailid             the message's JMAP id
+msg.flag                a single message flag name
 msg.from                the message's envelope sender
 msg.guid                the message's guid
 msg.id                  the message's RFC 5322 Message-ID
@@ -93,7 +94,13 @@ send.time               when the message was actually sent
 
 ### per-subsystem
 
+acl.needed              the ACL rights an operation needed but didn't have
+annot.entries           a set of annotations and values, serialised
 annot.entry             an annotation entry name
+append.callout          the annotation callout program or socket
+append.stage.dir        the staging directory a message is spooled through
+append.stage.file       the staged copy of a message
+append.stage.source     the file a staged message was copied from
 cal.organizer           a calendar component's ORGANIZER
 cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID
@@ -170,6 +177,7 @@ error                   why the operation failed, as human-readable text
 error.description       the human-readable detail paired with error.type
 error.type              a machine-readable error type, e.g. a JMAP SetError type
 sys.error               strerror() of errno at the point of logging
+sys.pid                 a process id
 
 ### caller. - where in the C source the event was logged
 

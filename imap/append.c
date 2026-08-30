@@ -255,9 +255,9 @@ EXPORTED int append_commit(struct appendstate *as)
      * duplicate DB consistency */
     r = mailbox_commit(as->mailbox);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: committing mailbox append",
-                         "mailbox=<%s> error=<%s>",
-                         mailbox_name(as->mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "append.commit.failed",
+                   lf_mailbox(as->mailbox),
+                   lf_err("error", r));
         append_abort(as);
         return r;
     }
@@ -309,8 +309,9 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
 
     r = mboxlist_findstage(mailboxname, stagedir, sizeof(stagedir));
     if (r) {
-        syslog(LOG_ERR, "couldn't find stage directory for mbox: '%s': %s",
-               mailboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "append.stage.dir.missing",
+                   lf_intname("mbox.name", mailboxname),
+                   lf_err("error", r));
         free(stage);
         return NULL;
     }
@@ -322,8 +323,10 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
     if (sourcefile) {
         r = cyrus_copyfile(sourcefile, stagefile, COPYFILE_NODIRSYNC);
         if (r) {
-            syslog(LOG_ERR, "couldn't copy stagefile '%s' for mbox: '%s': %s",
-                   sourcefile, mailboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "append.stage.copy.failed",
+                       lf_s("append.stage.source", sourcefile),
+                       lf_intname("mbox.name", mailboxname),
+                       lf_err("error", r));
             free(stage);
             return NULL;
         }
@@ -334,17 +337,17 @@ EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate
     }
     if (!f) {
         if (mkdir(stagedir, 0755) != 0) {
-            syslog(LOG_ERR, "couldn't create stage directory: %s: %m",
-                   stagedir);
+            xsyslog_ev(LOG_ERR, "append.stage.dir.create.failed",
+                       lf_s("append.stage.dir", stagedir));
         } else {
-            syslog(LOG_NOTICE, "created stage directory %s",
-                   stagedir);
+            xsyslog_ev(LOG_NOTICE, "append.stage.dir.created",
+                       lf_s("append.stage.dir", stagedir));
             f = fopen(stagefile, "w+");
         }
     }
     if (!f) {
-        xsyslog(LOG_ERR, "IOERROR: creating message file",
-                         "filename=<%s>", stagefile);
+        xsyslog_ev(LOG_ERR, "append.stage.file.create.failed",
+                   lf_s("append.stage.file", stagefile));
         strarray_fini(&stage->parts);
         free(stage);
         return NULL;
@@ -399,14 +402,14 @@ static int callout_receive_reply(const char *callout,
 
     r = poll(&pfd, 1, CALLOUT_TIMEOUT_MS);
     if (r < 0) {
-        syslog(LOG_ERR, "cannot poll() waiting for callout %s: %m",
-               callout);
+        xsyslog_ev(LOG_WARNING, "append.callout.read.failed",
+                   lf_s("append.callout", callout));
         r = IMAP_SYS_ERROR;
         goto out;
     }
     if (r == 0) {
-        syslog(LOG_ERR, "timed out waiting for callout %s",
-               callout);
+        xsyslog_ev(LOG_WARNING, "append.callout.timeout",
+                   lf_s("append.callout", callout));
         r = IMAP_SYS_ERROR;
         goto out;
     }
@@ -438,7 +441,8 @@ static int callout_run_socket(const char *callout,
 
     sock = socket(PF_UNIX, SOCK_STREAM, 0);
     if (sock < 0) {
-        syslog(LOG_ERR, "cannot create socket for callout: %m");
+        xsyslog_ev(LOG_WARNING, "append.callout.start.failed",
+                   lf_s("append.callout", callout));
         r = IMAP_SYS_ERROR;
         goto out;
     }
@@ -448,7 +452,8 @@ static int callout_run_socket(const char *callout,
     xstrncpy(mysun.sun_path, callout, sizeof(mysun.sun_path));
     r = connect(sock, (struct sockaddr *)&mysun, sizeof(mysun));
     if (r < 0) {
-        syslog(LOG_ERR, "cannot connect socket for callout: %m");
+        xsyslog_ev(LOG_WARNING, "append.callout.start.failed",
+                   lf_s("append.callout", callout));
         r = IMAP_SYS_ERROR;
         goto out;
     }
@@ -486,14 +491,16 @@ static int callout_run_executable(const char *callout,
     if (!r)
         r = pipe(outpipe);
     if (r < 0) {
-        syslog(LOG_ERR, "cannot create pipe for callout: %m");
+        xsyslog_ev(LOG_WARNING, "append.callout.start.failed",
+                   lf_s("append.callout", callout));
         r = IMAP_SYS_ERROR;
         goto out;
     }
 
     pid = fork();
     if (pid < 0) {
-        syslog(LOG_ERR, "cannot fork for callout: %m");
+        xsyslog_ev(LOG_WARNING, "append.callout.start.failed",
+                   lf_s("append.callout", callout));
         r = IMAP_SYS_ERROR;
         goto out;
     }
@@ -510,7 +517,8 @@ static int callout_run_executable(const char *callout,
         close(outpipe[PIPE_WRITE]);
 
         execl(callout, callout, (char *)NULL);
-        syslog(LOG_ERR, "cannot exec callout %s: %m", callout);
+        xsyslog_ev(LOG_WARNING, "append.callout.start.failed",
+                   lf_s("append.callout", callout));
         exit(1);
     }
     /* parent process */
@@ -537,8 +545,8 @@ static int callout_run_executable(const char *callout,
                 break;
             if (errno == ECHILD)
                 break;
-            syslog(LOG_ERR, "error reaping callout pid %d: %m",
-                    (int)pid);
+            xsyslog_ev(LOG_WARNING, "append.callout.reap.failed",
+                       lf_d("sys.pid", (int) pid));
             r = IMAP_SYS_ERROR;
             goto out;
         }
@@ -707,8 +715,8 @@ static void callout_decode_results(const char *callout,
 
     return;
 error:
-    syslog(LOG_WARNING, "Unexpected data in response from callout %s",
-           callout);
+    xsyslog_ev(LOG_WARNING, "append.callout.response.invalid",
+               lf_s("append.callout", callout));
 }
 
 static int callout_run(const char *fname,
@@ -730,7 +738,8 @@ static int callout_run(const char *fname,
     callout_encode_args(&args, fname, body, *user_annots, flags);
 
     if (stat(callout, &sb) < 0) {
-        syslog(LOG_ERR, "cannot stat annotation_callout %s: %m", callout);
+        xsyslog_ev(LOG_WARNING, "append.callout.unusable",
+                   lf_s("append.callout", callout));
         r = IMAP_IOERROR;
         goto out;
     }
@@ -748,7 +757,8 @@ static int callout_run(const char *fname,
             goto out;
     }
     else {
-        syslog(LOG_ERR, "cannot classify annotation_callout %s", callout);
+        xsyslog_ev(LOG_WARNING, "append.callout.unusable",
+                   lf_s("append.callout", callout));
         r = IMAP_IOERROR;
         goto out;
     }
@@ -837,9 +847,11 @@ static int append_apply_flags(struct appendstate *as,
             // One or more ACLs were missing to set the flag
             char aclstr[ACL_STRING_MAX];
             cyrus_acl_masktostr(need_rights, aclstr);
-            xsyslog(LOG_ERR, "could not write flag due missing ACL",
-                    "flag=<%s> need_rights=<%s> mailboxid=<%s>",
-                    flag, aclstr, mailbox_uniqueid(as->mailbox));
+            /* the append still happens, just without the flag */
+            xsyslog_ev(LOG_WARNING, "append.flag.denied",
+                       lf_s("msg.flag", flag),
+                       lf_s("acl.needed", aclstr),
+                       lf_mailbox(as->mailbox));
         }
     }
 
@@ -966,8 +978,10 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 
         // if we found a file, use it
         if (rock.fname) {
-            syslog(LOG_NOTICE, "found existing file %s for %s; linking",
-                   guidrep, rock.fname);
+            /* n.b. the old text had these two the wrong way round */
+            xsyslog_ev(LOG_NOTICE, "append.stage.file.reused",
+                       lf_s("msg.guid", guidrep),
+                       lf_s("append.stage.file", rock.fname));
             linkfile = rock.fname;
             goto havefile;
         }
@@ -993,19 +1007,19 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
             /* XXX check errors */
             mboxlist_findstage(mailbox_name(mailbox), stagedir, sizeof(stagedir));
             if (mkdir(stagedir, 0755) != 0) {
-                syslog(LOG_ERR, "couldn't create stage directory: %s: %m",
-                       stagedir);
+                xsyslog_ev(LOG_ERR, "append.stage.dir.create.failed",
+                           lf_s("append.stage.dir", stagedir));
             } else {
-                syslog(LOG_NOTICE, "created stage directory %s",
-                       stagedir);
+                xsyslog_ev(LOG_NOTICE, "append.stage.dir.created",
+                           lf_s("append.stage.dir", stagedir));
                 r = cyrus_copyfile(stage->parts.data[0], stagefile, COPYFILE_NODIRSYNC);
             }
         }
         if (r) {
             /* oh well, we tried */
 
-            xsyslog(LOG_ERR, "IOERROR: creating message file",
-                             "filename=<%s>", stagefile);
+            xsyslog_ev(LOG_ERR, "append.stage.file.create.failed",
+                       lf_s("append.stage.file", stagefile));
             xunlink(stagefile);
             goto out;
         }
@@ -1088,7 +1102,10 @@ havefile:
             newflags = strarray_new();
         r = callout_run(fname, *body, &user_annots, &system_annots, newflags);
         if (r) {
-            syslog(LOG_ERR, "Annotation callout failed, ignoring");
+            /* deliberately not fatal: the append goes ahead without
+             * whatever the callout would have contributed */
+            xsyslog_ev(LOG_WARNING, "append.callout.failed",
+                       lf_err("error", r));
             r = 0;
         }
         flags = newflags;
@@ -1099,7 +1116,8 @@ havefile:
     if (flags) {
         r = append_apply_flags(as, mboxevent, msgrec, flags);
         if (r) {
-            syslog(LOG_ERR, "Annotation callout failed to apply flags %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "append.callout.apply.failed",
+                       lf_err("error", r));
             goto out;
         }
     }
@@ -1117,7 +1135,8 @@ havefile:
            if (!r) r = msgrecord_annot_writeall(msgrec, user_annots);
         }
         if (r) {
-            syslog(LOG_ERR, "Annotation callout failed to apply user annots %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "append.callout.apply.failed",
+                       lf_err("error", r));
             goto out;
         }
         if (system_annots) {
@@ -1125,7 +1144,8 @@ havefile:
            if (!r) r = msgrecord_annot_writeall(msgrec, system_annots);
         }
         if (r) {
-            syslog(LOG_ERR, "Annotation callout failed to apply system annots %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "append.callout.apply.failed",
+                       lf_err("error", r));
             goto out;
         }
     }
@@ -1236,8 +1256,8 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     xunlink(fname);
     destfile = fopen(fname, "w+");
     if (!destfile) {
-        xsyslog(LOG_ERR, "IOERROR: creating message file",
-                         "filename=<%s>", fname);
+        xsyslog_ev(LOG_ERR, "append.stage.file.create.failed",
+                   lf_s("append.stage.file", fname));
         r = IMAP_IOERROR;
         goto out;
     }
@@ -1308,7 +1328,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         return 0;
 
     if (config_getswitch(IMAPOPT_ANNOTATION_CALLOUT_DISABLE_APPEND)) {
-        syslog(LOG_DEBUG, "append_run_annotator: Append disabled.");
+        xsyslog_ev(LOG_DEBUG, "append.annotator.skipped");
         return 0;
     }
 
@@ -1360,9 +1380,8 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     /* Apply annotator flags */
     r = append_apply_flags(as, NULL, msgrec, flags);
     if (r) {
-        syslog(LOG_ERR, "Setting flags from annotator "
-                        "callout failed (%s)",
-                        error_message(r));
+        xsyslog_ev(LOG_ERR, "append.annotator.apply.failed",
+                   lf_err("error", r));
         goto out;
     }
 
@@ -1373,9 +1392,9 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         r = msgrecord_annot_writeall(msgrec, system_annots);
         if (r) {
             char *res = dumpentryatt(system_annots);
-            syslog(LOG_ERR, "Setting system annotations from annotator "
-                            "callout failed (%s) for %s",
-                            error_message(r), res);
+            xsyslog_ev(LOG_ERR, "append.annotator.apply.failed",
+                       lf_err("error", r),
+                       lf_s("annot.entries", res));
             free(res);
             goto out;
         }
@@ -1510,14 +1529,13 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
                     int num;
                     r = mailbox_user_flag(as->mailbox, mailbox->h.flagname[userflag], &num, 1);
                     if (r)
-                        xsyslog(LOG_ERR, "IOERROR: unable to copy flag",
-                                         "flag=<%s> src_mailbox=<%s> dest_mailbox=<%s>"
-                                         " uid=<%u> error=<%s>",
-                                         mailbox->h.flagname[userflag],
-                                         mailbox_name(mailbox),
-                                         mailbox_name(as->mailbox),
-                                         src_uid,
-                                         error_message(r));
+                        xsyslog_ev(LOG_ERR, "append.flag.copy.failed",
+                                   lf_s("msg.flag", mailbox->h.flagname[userflag]),
+                                   lf_intname("old.mbox.name",
+                                              mailbox_name(mailbox)),
+                                   lf_mailbox(as->mailbox),
+                                   lf_u("msg.imapuid", src_uid),
+                                   lf_err("error", r));
                     else
                         dst_user_flags[num/32] |= 1U<<(num&31);
                 }
@@ -1525,10 +1543,11 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
             r = msgrecord_set_userflags(dst_msgrec, dst_user_flags);
             if (r) {
-                xsyslog(LOG_ERR, "IOERROR: unable to copy user flags",
-                                 "source=<%s> dest=<%s> uid=<%u> error=<%s>",
-                                 mailbox_name(mailbox), mailbox_name(as->mailbox),
-                                 src_uid, error_message(r));
+                xsyslog_ev(LOG_ERR, "append.flag.copy.failed",
+                           lf_intname("old.mbox.name", mailbox_name(mailbox)),
+                           lf_mailbox(as->mailbox),
+                           lf_u("msg.imapuid", src_uid),
+                           lf_err("error", r));
             }
         }
         else {
@@ -1647,16 +1666,18 @@ static int append_addseen(struct mailbox *mailbox,
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: seen_open failed",
-                         "userid=<%s>", userid);
+        xsyslog_ev(LOG_ERR, "append.seen.failed",
+                   lf_s("u.username", userid),
+                   lf_err("error", r));
         goto done;
     }
 
     r = seen_lockread(seendb, mailbox_uniqueid(mailbox), &sd);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: seen_lockread failed",
-                         "userid=<%s> uniqueid=<%s>",
-                         userid, mailbox_uniqueid(mailbox));
+        xsyslog_ev(LOG_ERR, "append.seen.failed",
+                   lf_s("u.username", userid),
+                   lf_mailbox(mailbox),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -1673,9 +1694,10 @@ static int append_addseen(struct mailbox *mailbox,
     sd.lastchange = time(NULL);
     r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: seen_write failed",
-                         "userid=<%s> uniqueid=<%s>",
-                         userid, mailbox_uniqueid(mailbox));
+        xsyslog_ev(LOG_ERR, "append.seen.failed",
+                   lf_s("u.username", userid),
+                   lf_mailbox(mailbox),
+                   lf_err("error", r));
     }
     seen_freedata(&sd);
 
