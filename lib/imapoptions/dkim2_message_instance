@@ -1,0 +1,21 @@
+Name: dkim2_message_instance
+Type: ENUM
+Allowed-Values: off verify trust
+Default-Value: off
+Last-Modified: UNRELEASED
+
+Whether a Sieve "redirect" adds a DKIM2 "Message-Instance" header field
+documenting the header fields the script changed with "addheader" or
+"deleteheader".  Cyrus never signs: the header field is there for whichever
+later hop adds the "DKIM2-Signature", and is only added to a message which
+already carries a "Message-Instance", since a message outside the DKIM2
+chain of custody has nothing to stay attached to.
+
+In "verify" mode the incoming message is hashed and checked against the
+highest numbered "Message-Instance" it carries before anything is added,
+so that a change made earlier in the delivery pipeline and never declared
+cannot be misattributed to this hop.  In "trust" mode that check is
+skipped, which is only safe if everything upstream of Sieve is known to
+leave signed header fields alone.  In either mode, a message that cannot
+be documented honestly is forwarded with no "Message-Instance" added and
+the reason logged.
