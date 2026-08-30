@@ -27,6 +27,7 @@
 #include "msgrecord.h"
 #include "append.h"
 #include "global.h"
+#include "idclass.h"
 #include "prot.h"
 #include "sync_log.h"
 #include "xmalloc.h"
@@ -1212,6 +1213,9 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     struct timespec now;
     if (!internaldate) {
         cyrus_gettime(CLOCK_REALTIME, &now);
+        /* no GUID yet, so no JMAPID clash check here - but the residue
+         * class still keeps us disjoint from every other host */
+        now.tv_nsec = nsec_align(now.tv_nsec);
         internaldate = &now;
     }
     r = msgrecord_set_internaldate(msgrec, internaldate);
