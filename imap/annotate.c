@@ -620,16 +620,16 @@ static int _annotate_getdb(const char *mboxid,
 
     if (r)
         goto error;
-#if DEBUG
-    syslog(LOG_ERR, "Opening annotations db %s", fname);
-#endif
+    xsyslog_ev(LOG_DEBUG, "annot.db.opened",
+               lf_s("annot.db", fname));
 
     r = cyrusdb_open(DB, fname, dbflags | CYRUSDB_CONVERT, &db);
     if (r != 0) {
         if (!(dbflags & CYRUSDB_CREATE) && r == CYRUSDB_NOTFOUND)
             goto error;
-        syslog(LOG_ERR, "DBERROR: opening %s: %s",
-                        fname, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "annot.db.open.failed",
+                   lf_s("annot.db", fname),
+                   lf_s("error", cyrusdb_strerror(r)));
         goto error;
     }
 
@@ -654,7 +654,7 @@ error:
 HIDDEN int annotate_getdb(const struct mailbox *mailbox, annotate_db_t **dbp)
 {
     if (!mailbox) {
-        syslog(LOG_ERR, "IOERROR: annotate_getdb called with no mailbox");
+        xsyslog_ev(LOG_ERR, "annot.db.request.invalid");
         return IMAP_INTERNAL;   /* we don't return the global db */
     }
     /* ANNOTATE_ANY_UID forces UID mode */
@@ -674,14 +674,14 @@ static void annotate_closedb(annotate_db_t *d)
     assert(d == dx);
     detach_db(prev, d);
 
-#if DEBUG
-    syslog(LOG_ERR, "Closing annotations db %s", d->filename);
-#endif
+    xsyslog_ev(LOG_DEBUG, "annot.db.closed",
+               lf_s("annot.db", d->filename));
 
     r = cyrusdb_close(d->db);
     if (r)
-        syslog(LOG_ERR, "DBERROR: error closing annotations %s: %s",
-               d->filename, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "annot.db.close.failed",
+                   lf_s("annot.db", d->filename),
+                   lf_s("error", cyrusdb_strerror(r)));
 
     free(d->filename);
     free(d->mboxid);
@@ -698,10 +698,8 @@ HIDDEN void annotate_putdb(annotate_db_t **dbp)
     assert(d->refcount > 0);
     if (--d->refcount == 0) {
         if (d->in_txn && d->txn) {
-            syslog(LOG_ERR, "IOERROR: dropped last reference on "
-                            "database %s with uncommitted updates, "
-                            "aborting - DATA LOST!",
-                            d->filename);
+            xsyslog_ev(LOG_ERR, "annot.db.txn.abandoned",
+                       lf_s("annot.db", d->filename));
             annotate_abort(d);
         }
         assert(!d->in_txn);
@@ -744,9 +742,8 @@ static void annotate_abort(annotate_db_t *d)
     if (!d || !d->in_txn) return;
 
     if (d->txn) {
-#if DEBUG
-        syslog(LOG_ERR, "Aborting annotations db %s", d->filename);
-#endif
+        xsyslog_ev(LOG_DEBUG, "annot.db.txn.aborted",
+                   lf_s("annot.db", d->filename));
         cyrusdb_abort(d->db, d->txn);
     }
     d->txn = NULL;
@@ -761,9 +758,8 @@ static int annotate_commit(annotate_db_t *d)
     if (!d || !d->in_txn) return 0;
 
     if (d->txn) {
-#if DEBUG
-        syslog(LOG_ERR, "Committing annotations db %s", d->filename);
-#endif
+        xsyslog_ev(LOG_DEBUG, "annot.db.txn.committed",
+                   lf_s("annot.db", d->filename));
         if (cyrusdb_commit(d->db, d->txn))
             r = IMAP_IOERROR;
         d->txn = NULL;
@@ -898,24 +894,6 @@ static int split_key(const annotate_db_t *d,
     return 0;
 }
 
-#if DEBUG
-static const char *key_as_string(const annotate_db_t *d,
-                                 const char *key, int keylen)
-{
-    const char *mboxid, *entry, *userid;
-    unsigned int uid;
-    static struct buf buf = BUF_INITIALIZER;
-
-    buf_reset(&buf);
-    if (split_key(d, key, keylen, &mboxid, &uid, &entry, &userid))
-        buf_appendcstr(&buf, "invalid");
-    else
-        buf_printf(&buf, "{ mboxid=\"%s\" uid=%u entry=\"%s\" userid=\"%s\" }",
-                   mboxid, uid, entry, userid);
-    return buf_cstring(&buf);
-}
-#endif
-
 static int split_attribs(const char *data, int datalen,
                          struct buf *value, struct annotate_metadata *mdata)
 {
@@ -1028,14 +1006,18 @@ static int find_cb(void *rock, const char *key, size_t keylen,
     r = split_key(frock->d, key, keylen, &mboxid,
                   &uid, &entry, &userid);
     if (r) {
-        syslog(LOG_ERR, "find_cb: can't split bogus key %*.s", (int)keylen, key);
+        xsyslog_ev(LOG_ERR, "annot.key.invalid",
+                   lf_raw("annot.key", "%.*s", (int) keylen, key));
         return r;
     }
 
     newkeylen = make_key(NULL, mboxid, uid, entry, userid, newkey, sizeof(newkey));
     if (keylen != newkeylen || strncmp(newkey, key, keylen)) {
-        syslog(LOG_ERR, "find_cb: bogus key %s %d %s %s (%d %d)",
-               mboxid, uid, entry, userid, (int)keylen, (int)newkeylen);
+        xsyslog_ev(LOG_ERR, "annot.key.invalid",
+                   lf_s("mbox.uniqueid", mboxid),
+                   lf_u("msg.imapuid", uid),
+                   lf_s("annot.entry", entry),
+                   lf_s("u.username", userid));
     }
 
     r = split_attribs(data, datalen, &value, &mdata);
@@ -1043,26 +1025,33 @@ static int find_cb(void *rock, const char *key, size_t keylen,
         buf_free(&value);
         return r;
     }
-#if DEBUG
-    syslog(LOG_ERR, "find_cb: found key %s in %s with modseq " MODSEQ_FMT,
-            key_as_string(frock->d, key, keylen), frock->d->filename, mdata.modseq);
-#endif
+    xsyslog_ev(LOG_DEBUG, "annot.find.matched",
+               lf_s("mbox.uniqueid", mboxid),
+               lf_u("msg.imapuid", uid),
+               lf_s("annot.entry", entry),
+               lf_s("u.username", userid),
+               lf_s("annot.db", frock->d->filename),
+               lf_llu("msg.modseq", mdata.modseq));
 
     if (frock->since_modseq && frock->since_modseq >= mdata.modseq) {
-#if DEBUG
-        syslog(LOG_ERR,"find_cb: ignoring key %s: " " modseq " MODSEQ_FMT " is <= " MODSEQ_FMT,
-                key_as_string(frock->d, key, keylen), mdata.modseq, frock->since_modseq);
-#endif
+        xsyslog_ev(LOG_DEBUG, "annot.find.skipped.stale",
+                   lf_s("mbox.uniqueid", mboxid),
+                   lf_u("msg.imapuid", uid),
+                   lf_s("annot.entry", entry),
+                   lf_s("u.username", userid),
+                   lf_llu("msg.modseq", mdata.modseq),
+                   lf_llu("annot.since_modseq", frock->since_modseq));
         buf_free(&value);
         return 0;
     }
 
     if (((mdata.flags & ANNOTATE_FLAG_DELETED) || !buf_len(&value)) &&
         !(frock->flags & ANNOTATE_TOMBSTONES)) {
-#if DEBUG
-    syslog(LOG_ERR, "find_cb: ignoring key %s, tombstones are ignored",
-            key_as_string(frock->d, key, keylen));
-#endif
+    xsyslog_ev(LOG_DEBUG, "annot.find.skipped.tombstone",
+               lf_s("mbox.uniqueid", mboxid),
+               lf_u("msg.imapuid", uid),
+               lf_s("annot.entry", entry),
+               lf_s("u.username", userid));
         buf_free(&value);
         return 0;
     }
@@ -1449,8 +1438,9 @@ static int annotate_state_need_mbentry(annotate_state_t *state)
     if (!state->mbentry && state->mailbox) {
         r = mboxlist_lookup(mailbox_name(state->mailbox), &state->ourmbentry, NULL);
         if (r) {
-            syslog(LOG_ERR, "Failed to lookup mbentry for %s: %s",
-                    mailbox_name(state->mailbox), error_message(r));
+            xsyslog_ev(LOG_ERR, "annot.mbentry.lookup.failed",
+                       lf_mailbox(state->mailbox),
+                       lf_err("error", r));
             goto out;
         }
         state->mbentry = state->ourmbentry;
@@ -2710,9 +2700,9 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
             if (GLOB_MATCH(g, annotation_attributes[attribcount].name)) {
                 if (annotation_attributes[attribcount].entry & ATTRIB_DEPRECATED) {
                     if (strcmp(s, "*"))
-                        syslog(LOG_WARNING, "annotatemore_fetch: client used "
-                                            "deprecated attribute \"%s\", ignoring",
-                                            annotation_attributes[attribcount].name);
+                        xsyslog_ev(LOG_WARNING, "annot.attrib.deprecated",
+                                   lf_s("annot.attrib",
+                                        annotation_attributes[attribcount].name));
                 }
                 else
                     state->attribs |= annotation_attributes[attribcount].entry;
@@ -2738,7 +2728,8 @@ EXPORTED int annotate_state_fetch(annotate_state_t *state,
         db_entry = &message_db_entry;
     }
     else {
-        syslog(LOG_ERR, "IOERROR: unknown annotation scope %d", state->which);
+        xsyslog_ev(LOG_ERR, "annot.scope.unknown",
+                   lf_d("annot.scope", state->which));
         r = IMAP_INTERNAL;
         goto out;
     }
@@ -3065,9 +3056,10 @@ static int write_entry(struct mailbox *mailbox,
 
     r = _annotate_getdb(mboxid, mailbox, uid, CYRUSDB_CREATE, &d);
     if (r) {
-        xsyslog(LOG_ERR, "_annotate_getdb failed",
-                "mailbox=<%s> uid=<%u> error=<%s>",
-                mailbox_name(mailbox), uid, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "annot.write.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", uid),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
         goto out;
     }
@@ -3080,9 +3072,11 @@ static int write_entry(struct mailbox *mailbox,
     struct annotate_metadata oldmdata;
     r = read_old_value(d, key, keylen, &oldval, &oldmdata);
     if (r) {
-        xsyslog(LOG_ERR, "read_old_value failed",
-                "mailbox=<%s> uid=<%u> key=<%.*s> error=<%s>",
-                mailbox_name(mailbox), uid, keylen, key, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "annot.write.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", uid),
+                   lf_raw("annot.key", "%.*s", (int) keylen, key),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
         goto out;
     }
@@ -3117,18 +3111,22 @@ static int write_entry(struct mailbox *mailbox,
      * keep tombstones for message annotations */
     if (!value->len && !uid) {
 
-#if DEBUG
-        syslog(LOG_ERR, "write_entry: deleting key %s from %s",
-                key_as_string(d, key, keylen), d->filename);
-#endif
+        xsyslog_ev(LOG_DEBUG, "annot.entry.deleting",
+                   lf_s("mbox.uniqueid", mboxid),
+                   lf_u("msg.imapuid", uid),
+                   lf_s("annot.entry", entry),
+                   lf_s("u.username", userid),
+                   lf_s("annot.db", d->filename));
 
         do {
             r = cyrusdb_delete(d->db, key, keylen, tid(d), /*force*/1);
         } while (r == CYRUSDB_AGAIN);
         if (r) {
-            xsyslog(LOG_ERR, "cyrusdb_delete failed",
-                    "mailbox=<%s> uid=<%u> key=<%.*s> error=<%s>",
-                    mailbox_name(mailbox), uid, keylen, key, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "annot.write.failed",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", uid),
+                       lf_raw("annot.key", "%.*s", (int) keylen, key),
+                       lf_s("error", cyrusdb_strerror(r)));
             r = IMAP_IOERROR;
             goto out;
         }
@@ -3149,19 +3147,25 @@ static int write_entry(struct mailbox *mailbox,
         }
         make_entry(&data, value, modseq, flags);
 
-#if DEBUG
-        syslog(LOG_ERR, "write_entry: storing key %s (value: %s) to %s (modseq=" MODSEQ_FMT ")",
-                key_as_string(d, key, keylen), value->s, d->filename, modseq);
-#endif
+        xsyslog_ev(LOG_DEBUG, "annot.entry.storing",
+                   lf_s("mbox.uniqueid", mboxid),
+                   lf_u("msg.imapuid", uid),
+                   lf_s("annot.entry", entry),
+                   lf_s("u.username", userid),
+                   lf_buf("annot.value", value),
+                   lf_s("annot.db", d->filename),
+                   lf_llu("msg.modseq", modseq));
 
         do {
             r = cyrusdb_store(d->db, key, keylen, data.s, data.len, tid(d));
         } while (r == CYRUSDB_AGAIN);
         buf_free(&data);
         if (r) {
-            xsyslog(LOG_ERR, "cyrusdb_store failed",
-                    "mailbox=<%s> uid=<%u> key=<%.*s> error=<%s>",
-                    mailbox_name(mailbox), uid, keylen, key, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "annot.write.failed",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", uid),
+                       lf_raw("annot.key", "%.*s", (int) keylen, key),
+                       lf_s("error", cyrusdb_strerror(r)));
             r = IMAP_IOERROR;
             goto out;
         }
@@ -3524,7 +3528,8 @@ static int annotation_set_tofile(annotate_state_t *state
         return r;
     FILE *f = fopen(path, "w");
     if (!f) {
-        syslog(LOG_ERR, "cannot open %s for writing: %m", path);
+        xsyslog_ev(LOG_ERR, "annot.file.write.failed",
+                   lf_s("sys.path", path));
         return IMAP_IOERROR;
     }
     fwrite(entry->shared.s, 1, entry->shared.len, f);
@@ -3797,7 +3802,8 @@ static int find_desc_store(annotate_state_t *state,
         db_entry = &message_db_entry;
     }
     else {
-        syslog(LOG_ERR, "IOERROR: unknown scope in find_desc_store %d", scope);
+        xsyslog_ev(LOG_ERR, "annot.scope.unknown",
+                   lf_d("annot.scope", scope));
         return IMAP_INTERNAL;
     }
 
@@ -3890,9 +3896,8 @@ EXPORTED int annotate_state_store(annotate_state_t *state, struct entryattlist *
             }
             else if (!strcmp(av->attrib, "content-type.shared") ||
                      !strcmp(av->attrib, "content-type.priv")) {
-                syslog(LOG_WARNING, "annotatemore_store: client used "
-                                    "deprecated attribute \"%s\", ignoring",
-                                    av->attrib);
+                xsyslog_ev(LOG_WARNING, "annot.attrib.deprecated",
+                           lf_s("annot.attrib", av->attrib));
             }
             else if (!strcmp(av->attrib, "value.priv")) {
                 if (!(attribs & ATTRIB_VALUE_PRIV)) {
@@ -4294,15 +4299,14 @@ static void parse_error(struct parse_state *state, const char *err)
 {
     if (++state->nerrors < ANNOT_MAX_ERRORS)
     {
-        struct buf msg = BUF_INITIALIZER;
-
-        buf_printf(&msg, "%s:%u:%u:error: %s",
-                   state->filename, state->lineno,
-                   tok_offset(&state->tok), err);
-        if (state->context && *state->context)
-            buf_printf(&msg, ", at or near '%s'", state->context);
-        syslog(LOG_ERR, "%s", buf_cstring(&msg));
-        buf_free(&msg);
+        xsyslog_ev(LOG_ERR, "annot.def.parse.failed",
+                   lf_s("sys.path", state->filename),
+                   lf_u("annot.lineno", state->lineno),
+                   lf_u("annot.column", tok_offset(&state->tok)),
+                   lf_s("error", err),
+                   lf_s_opt("annot.context",
+                            state->context && *state->context
+                                ? state->context : NULL));
     }
 
     state->context = NULL;
@@ -4448,8 +4452,8 @@ static void init_annotation_definitions(void)
 
     f = fopen(state.filename,"r");
     if (!f) {
-        syslog(LOG_ERR, "%s: could not open annotation definition file: %m",
-               state.filename);
+        xsyslog_ev(LOG_ERR, "annot.def.open.failed",
+                   lf_s("sys.path", state.filename));
         return;
     }
 
@@ -4638,8 +4642,9 @@ EXPORTED int annotatemore_upgrade(void)
     r = cyrusdb_open(DB, buf_cstring(&buf), 0, &backup);
 
     if (r) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", buf_cstring(&buf),
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "annot.db.open.failed",
+                   lf_buf("annot.db", &buf),
+                   lf_s("error", cyrusdb_strerror(r)));
         fatal("can't open annotations file", EX_TEMPFAIL);
     }
 
@@ -4654,8 +4659,9 @@ EXPORTED int annotatemore_upgrade(void)
 
     r2 = cyrusdb_close(backup);
     if (r2) {
-        syslog(LOG_ERR, "DBERROR: error closing %s: %s", buf_cstring(&buf),
-               cyrusdb_strerror(r2));
+        xsyslog_ev(LOG_ERR, "annot.db.close.failed",
+                   lf_buf("annot.db", &buf),
+                   lf_s("error", cyrusdb_strerror(r2)));
     }
 
     /* complete txn on new db */
@@ -4667,8 +4673,9 @@ EXPORTED int annotatemore_upgrade(void)
         }
 
         if (r2) {
-            syslog(LOG_ERR, "DBERROR: error %s txn in annotations_upgrade: %s",
-                   r ? "aborting" : "committing", cyrusdb_strerror(r2));
+            xsyslog_ev(LOG_ERR, "annot.db.txn.failed",
+                       lf_s("annot.txn.op", r ? "abort" : "commit"),
+                       lf_s("error", cyrusdb_strerror(r2)));
         }
     }
 

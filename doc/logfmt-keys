@@ -95,8 +95,18 @@ send.time               when the message was actually sent
 ### per-subsystem
 
 acl.needed              the ACL rights an operation needed but didn't have
+annot.attrib            an annotation attribute name, e.g. value.shared
+annot.column            the column of a line in the annotation definition file
+annot.context           the text a definition-file parse error happened near
+annot.db                the annotations database a operation used
 annot.entries           a set of annotations and values, serialised
 annot.entry             an annotation entry name
+annot.key               a raw annotations database key
+annot.lineno            the line of the annotation definition file
+annot.scope             the annotation scope: server, mailbox or message
+annot.since_modseq      the modseq an annotation search started from
+annot.txn.op            what was being done to a transaction: abort or commit
+annot.value             an annotation's value
 append.callout          the annotation callout program or socket
 append.stage.dir        the staging directory a message is spooled through
 append.stage.file       the staged copy of a message
@@ -177,6 +187,7 @@ error                   why the operation failed, as human-readable text
 error.description       the human-readable detail paired with error.type
 error.type              a machine-readable error type, e.g. a JMAP SetError type
 sys.error               strerror() of errno at the point of logging
+sys.path                a filesystem path
 sys.pid                 a process id
 
 ### caller. - where in the C source the event was logged
