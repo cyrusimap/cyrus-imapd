@@ -10,8 +10,6 @@
 /* for free() */
 #include <stdlib.h>
 
-#include "assert.h"
-
 extern void *xmalloc(size_t size);
 extern void *xzmalloc(size_t size);
 extern void *xcalloc(size_t nmemb, size_t size);
@@ -27,10 +25,10 @@ extern void *xmemdup(const void *ptr, size_t size);
  *
  * CAUTION: ptr argument is evaluated multiple times, beware side effects!
  */
-#define xzfree(ptr) do {    \
-    assert((ptr) == (ptr)); \
-    free(ptr);              \
-    (ptr) = NULL;           \
+#define xzfree(ptr) do {                                                \
+    _Static_assert((ptr) == (ptr), "xzfree argument has side effects"); \
+    free(ptr);                                                          \
+    (ptr) = NULL;                                                       \
 } while (0)
 
 /* Functions using xmalloc.h must provide a function called fatal() conforming
