@@ -24,6 +24,7 @@ WriteMakefile(
                               "-I$build->{top_srcdir}/lib",
                               "-I$build->{top_srcdir}/perl/sieve",
                               "-I$build->{top_srcdir}/perl/sieve/lib",
+                              "-I$build->{top_srcdir}/com_err/et",
                               "$build->{SASLFLAGS}",
                               "$build->{SSL_CFLAGS}"),
     'OBJECT'    => 'managesieve.o',
