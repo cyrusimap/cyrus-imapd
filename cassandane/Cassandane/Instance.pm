@@ -1747,6 +1747,7 @@ sub find_cores
         if (defined $prog) {
            xlog "   from program $prog";
            my ($bin) = $prog =~ m/^(\S+)/; # binary only
+           $core =~ s/!/\\!/g;
            xlog "   debug: sudo gdb $bin $core";
         }
     }
