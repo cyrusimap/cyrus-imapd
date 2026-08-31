@@ -769,17 +769,17 @@ lint-logfmt-keys:
 
 .PHONY: lint-logfmt-keys
 
-includedir=@includedir@/cyrus
+includedir=@includedir@
 
 include_HEADERS = \
     lib/acl.h \
-    include/cyrus-imap/arrayu64.h \
-    include/cyrus-imap/assert.h \
+    include/cyrus/arrayu64.h \
+    include/cyrus/assert.h \
     lib/auth.h \
     lib/bitvector.h \
     lib/bloom.h \
     lib/bsearch.h \
-    include/cyrus-imap/buf.h \
+    include/cyrus/buf.h \
     lib/charset.h \
     lib/command.h \
     lib/crc32.h \
@@ -787,46 +787,46 @@ include_HEADERS = \
     lib/cyr_lock.h \
     lib/cyr_qsort_r.h \
     lib/cyrusdb.h \
-    include/cyrus-imap/dynarray.h \
+    include/cyrus/dynarray.h \
     lib/glob.h \
     lib/gmtoff.h \
-    include/cyrus-imap/hash.h \
-    include/cyrus-imap/hashset.h \
-    include/cyrus-imap/hashu64.h \
+    include/cyrus/hash.h \
+    include/cyrus/hashset.h \
+    include/cyrus/hashu64.h \
     lib/imapurl.h \
     lib/imclient.h \
     lib/imparse.h \
     lib/iostat.h \
     lib/iptostring.h \
-    include/cyrus-imap/libconfig.h \
+    include/cyrus/libconfig.h \
     lib/libcyr_cfg.h \
     lib/logfmt.h \
     lib/lsort.h \
     lib/map.h \
     lib/mappedfile.h \
     lib/mkgmtime.h \
-    include/cyrus-imap/mpool.h \
+    include/cyrus/mpool.h \
     lib/murmurhash2.h \
     lib/nonblock.h \
     lib/parseaddr.h \
-    include/cyrus-imap/proc.h \
+    include/cyrus/proc.h \
     lib/procinfo.h \
-    include/cyrus-imap/retry.h \
+    include/cyrus/retry.h \
     lib/rfc822tok.h \
     lib/seqset.h \
     lib/signals.h \
-    include/cyrus-imap/smallarrayu64.h \
+    include/cyrus/smallarrayu64.h \
     lib/sqldb.h \
-    include/cyrus-imap/strarray.h \
-    include/cyrus-imap/strhash.h \
+    include/cyrus/strarray.h \
+    include/cyrus/strhash.h \
     lib/stristr.h \
     lib/times.h \
-    include/cyrus-imap/tok.h \
+    include/cyrus/tok.h \
     lib/twom.h \
     lib/wildmat.h \
-    include/cyrus-imap/xmalloc.h \
-    include/cyrus-imap/xsha1.h \
-    include/cyrus-imap/xunlink.h \
+    include/cyrus/xmalloc.h \
+    include/cyrus/xsha1.h \
+    include/cyrus/xunlink.h \
     lib/zeroskip.h
 
 nodist_include_HEADERS = \
