@@ -102,6 +102,23 @@ ever write targets.
 3. `deliver_mailbox()`'s duplicate-suppression mark has to move with the
    append, or a failed group cannot be retried because it is already marked.
 
+**Sieve `redirect` rides along**
+
+Not a cross-user lock at all, but the same window and the same cure: sending a
+redirect is an SMTP transaction with another server, run from `send_forward()`
+while the recipient's lock is held.  Unlike an append, its duration is a third
+party's to decide, so it is the one case here where the wait is genuinely
+unbounded.
+
+It defers onto its own queue beside the fileintos and drains from the same
+`sieve_run_deferred()`, local work first and then the wire.  Two details differ
+from a fileinto:
+
+* The interpreter frees `sieve_redirect_context_t`'s strings when the script
+  ends, so the queued copy owns its own.
+* `duplicate_mark()` moves to the drain, so a message is only recorded as
+  redirected once it has actually gone - the same reasoning as point 3 above.
+
 ## Fix 2: iTIP - lock the organizer and attendees together
 
 **Symptom** `caller=<sched_deliver_local> heldlock=<*U*user.other>

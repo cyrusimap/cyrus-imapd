@@ -25,6 +25,11 @@ for that user.  A failure there still puts one copy in the recipient's INBOX,
 as a failed fileinto always has.  Creating the target folder now locks the
 namespace it is being created in rather than the recipient's.
 
+A Sieve "redirect" is held over in the same way.  Sending one is a whole SMTP
+transaction with another server, which was previously done while holding the
+recipient's lock; a failure now falls back to their INBOX, and the message is
+only recorded as redirected once it has actually gone.
+
 iTIP scheduling messages are now delivered after the request which caused them
 has finished with the organizer's calendar.  For CalDAV that means the
 SCHEDULE-STATUS of each attendee is written to the stored resource in a second
