@@ -213,6 +213,10 @@ EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unus
 
     if (!default_method) fatal("unknown notification method %s", EX_USAGE);
 
+    /* A client that hangs up before reading our reply must not take us with
+     * it: every other service does this, and we are shared by all of them. */
+    signal(SIGPIPE, SIG_IGN);
+
     signals_set_shutdown(&shut_down);
 
     return 0;
