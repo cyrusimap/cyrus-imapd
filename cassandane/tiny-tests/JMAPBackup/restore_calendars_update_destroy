@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+
+# regression test to ensure we can restore an event that's been updated and
+# then destroyed
+
+sub test_restore_calendars_update_destroy
+    :min_version_3_3
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $self->{jmap};
+
+    my $cal = $self->default_user->calendars->default;
+
+    my $event = $cal->create_event({ title => "an event" });
+
+    sleep 2;
+
+    my $mark = time();
+
+    sleep 2;
+
+    xlog "update an event then destroy it";
+    $event->update({ title => "an updated event" });
+    $event->destroy;
+
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
+
+    xlog "restore calendars to before update/destroy";
+    my $res = $jmap->request([
+        ['Backup/restoreCalendars', {
+            undoPeriod     => $period,
+            undoAll        => JSON::true,
+            verboseLogging => JSON::true,
+        } ],
+        ['CalendarEvent/get', {
+            properties => ['title'],
+        } ],
+    ]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            numCreatesUndone  => 0,
+            numUpdatesUndone  => 1,
+            numDestroysUndone => 1,
+        }),
+        $res->sentence_named('Backup/restoreCalendars')->arguments,
+    );
+
+    $self->assert_cmp_deeply(
+        [ superhashof({ title => 'an event' }) ],
+        $res->sentence_named('CalendarEvent/get')->arguments->{list},
+    );
+}
