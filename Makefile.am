@@ -629,6 +629,7 @@ cunit_TESTS = \
     cunit/command.testc \
     cunit/conversations.testc \
     cunit/cron.testc \
+    cunit/signals.testc \
     cunit/css3_color.testc \
     cunit/cyr_qsort_r.testc \
     cunit/crc32.testc \
