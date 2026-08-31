@@ -1,0 +1,28 @@
+Description:
+
+A graceful shutdown now waits for any write transaction in progress to finish,
+so a service signalled mid-delivery can no longer leave a mailbox committed
+without its conversations DB, or an LMTP message delivered but unacknowledged.
+Several places that held a lock while waiting on the network have been fixed so
+that wait is bounded by local work.
+
+
+Documentation:
+
+None; behaviour of existing shutdown handling.
+
+
+Config changes:
+
+None.  Note that the new behaviour relies on the global lock, so it does not
+apply when global_lock is turned off.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
