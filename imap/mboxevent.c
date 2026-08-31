@@ -20,6 +20,7 @@
 #include "global.h"
 #include "imapurl.h"
 #include "libconfig.h"
+#include "libcyr_cfg.h"
 #include "map.h"
 #include "times.h"
 #include "user.h"
@@ -652,6 +653,74 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     return type & (MESSAGE_EVENTS|FLAGS_EVENTS);
 }
 
+/* Sending a notification means a synchronous round-trip to notifyd, and we are
+ * called from inside append_commit() - before mailbox_commit(), holding the
+ * mailbox and an exclusive user namespace lock.  Blocking there stalls every
+ * other writer for as long as notifyd takes to answer.
+ *
+ * So queue the formatted messages and hand them to notifyd once the locks are
+ * gone.  Formatting stays here, where the event data is; only the socket work
+ * is deferred.  The queue is FIFO because event order is meaningful - see the
+ * FlagsSet/FlagsClear swap below, and mailbox_commit()'s Modseq event.
+ *
+ * Services drive this by calling mboxevent_flush_notifications() once their
+ * locks are gone but before the client has been answered, which is where the
+ * notification used to be sent from - a client that acts and then asks what
+ * was notified must still see it.  That is a different moment from
+ * libcyrus_run_delayed(), which services deliberately run *after* answering
+ * ("while a user isn't waiting on a reply") because it does things like
+ * cyrusdb checkpoints; putting notifications there would make them arrive
+ * after the response.  A delayed action is still registered as a backstop for
+ * code paths that never reach an explicit flush, and libcyrus_done() runs it,
+ * so nothing is silently dropped. */
+struct pending_notify {
+    struct pending_notify *next;
+    char *notifier;
+    char *message;
+};
+
+static struct pending_notify *pending_notifies = NULL;
+static struct pending_notify **pending_notifies_tail = &pending_notifies;
+
+EXPORTED void mboxevent_flush_notifications(void)
+{
+    while (pending_notifies) {
+        struct pending_notify *p = pending_notifies;
+        pending_notifies = p->next;
+        if (!pending_notifies) pending_notifies_tail = &pending_notifies;
+
+        notify(p->notifier, "EVENT", NULL, NULL, NULL, 0, NULL, p->message, NULL);
+
+        free(p->notifier);
+        free(p->message);
+        free(p);
+    }
+}
+
+static void mboxevent_delayed_flush(void *rock __attribute__((unused)))
+{
+    mboxevent_flush_notifications();
+}
+
+/* takes ownership of message */
+static void mboxevent_queue_notify(const char *notifier, char *message)
+{
+    struct pending_notify *p = xzmalloc(sizeof(struct pending_notify));
+
+    p->notifier = xstrdup(notifier);
+    p->message = message;
+
+    *pending_notifies_tail = p;
+    pending_notifies_tail = &p->next;
+
+    /* Backstop only.  Services call mboxevent_flush_notifications() directly at
+     * the point where their locks are gone but the client has not yet been
+     * answered; this catches anything that never reaches such a point.  Keyed,
+     * so however many events we queue there is only ever one action. */
+    libcyrus_delayed_action("mboxevent_notify", mboxevent_delayed_flush,
+                            NULL, NULL);
+}
+
 #define TIMESTAMP_MAX 32
 EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
 {
@@ -659,7 +728,6 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
     struct mboxevent *event;
     char stimestamp[TIMESTAMP_MAX+1];
     char *formatted_message;
-    const char *fname = NULL;
 
     /* nothing to notify */
     if (!*mboxevents)
@@ -775,9 +843,9 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
 
                 formatted_message = json_dumps(jevent,
                                                JSON_PRESERVE_ORDER|JSON_COMPACT);
-                notify(notifier, "EVENT", NULL, NULL, NULL, 0, NULL,
-                       formatted_message, fname);
-                free(formatted_message);
+                /* this path never passes a file to notifyd, so there is no
+                 * file lifetime to keep open until it has been read */
+                mboxevent_queue_notify(notifier, formatted_message);
             }
 
             if (idle_notifier &&

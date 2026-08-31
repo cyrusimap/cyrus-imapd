@@ -36,6 +36,7 @@
 #include "prot.h"
 #include "times.h"
 #include "global.h"
+#include "mboxevent.h"
 #include "prometheus.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -1139,6 +1140,10 @@ void lmtpmode(struct lmtp_func *func,
 
                 /* do delivery, report status */
                 func->deliver(msg, msg->authuser, msg->authstate, msg->ns);
+
+                /* Delivery is over and its locks are gone, so send the
+                 * notifications it queued before we answer the client. */
+                mboxevent_flush_notifications();
 
                 for (j = 0; j < msg->rcpt_num; j++) {
                     if (!msg->rcpt[j]->status) delivered++;

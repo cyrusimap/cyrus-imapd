@@ -241,6 +241,13 @@ struct mboxevent *mboxevent_enqueue(enum event_type type,
 void mboxevent_notify(struct mboxevent **mboxevents);
 
 /*
+ * Send the notifications queued by mboxevent_notify().  Call once no locks are
+ * held, but before answering the client - a client that acts and then asks what
+ * was notified must still see it.
+ */
+void mboxevent_flush_notifications(void);
+
+/*
  * Release any allocated resources of this given event
  */
 void mboxevent_free(struct mboxevent **event);
