@@ -8,6 +8,7 @@ use JSON::XS;
 
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 
 sub new
 {

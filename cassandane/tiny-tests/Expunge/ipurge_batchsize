@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# ipurge unlocks the mailbox between batches, so it has to pick up where it
+# left off - and the messages it decided to keep get looked at again each
+# time round, which the stats have to account for.
+#
+sub test_ipurge_batchsize
+    :min_version_3_13 :NoAltNameSpace
+    ($self)
+{
+    my $shared_folder = 'shared.folder';
+
+    # set up a shared folder that's easy to write to
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create($shared_folder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl($shared_folder, 'cassandane' => 'lrswipkxtecd');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->set_folder($shared_folder);
+    $self->{store}->_select();
+    for (1..6) {
+        $self->make_message("message in $shared_folder $_");
+    }
+    $talk->unselect();
+    $talk->select($shared_folder);
+
+    # flag two of them so -s will keep them: they're the ones which get
+    # walked over again on every batch
+    $talk->store('3:4', '+flags', '(\\Flagged)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $stat = $talk->status($shared_folder, '(messages)');
+    $self->assert_num_equals(6, $stat->{messages});
+
+    # one message per batch, so we go round five times for four deletes
+    my $outfile = $self->{instance}->{basedir} . "/ipurge-out.txt";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        qw( ipurge --batchsize 1 -s -i -d 2 ), $shared_folder
+    );
+    my $out = slurp_file($outfile);
+
+    $talk->unselect();
+    $stat = $talk->status($shared_folder, '(messages)');
+    $self->assert_num_equals(2, $stat->{messages});
+
+    # the counts must describe the mailbox we started with, not the sum of
+    # every batch's traversal
+    $self->assert_matches(qr/Total messages\s+6$/m, $out);
+    $self->assert_matches(qr/Deleted messages\s+4$/m, $out);
+    $self->assert_matches(qr/Remaining messages\s+2$/m, $out);
+}

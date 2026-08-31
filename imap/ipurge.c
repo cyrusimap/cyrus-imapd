@@ -47,6 +47,12 @@ typedef struct mbox_stats_s {
 static int dryrun = 0;
 static int verbose = 0;
 static int forceall = 0;
+static int batchsize = 4096;
+
+/* -b is already "bytes" here, so batchsize is long-only */
+enum {
+    OPT_BATCHSIZE = 256,
+};
 
 /* current namespace */
 static struct namespace purge_namespace;
@@ -71,6 +77,7 @@ int main (int argc, char *argv[]) {
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
+        { "batchsize", required_argument, NULL, OPT_BATCHSIZE },
         { "no-recursive", no_argument, NULL, 'M' },
         { "delivery-time", no_argument, NULL, 'X' },
         { "bytes", required_argument, NULL, 'b' },
@@ -117,6 +124,9 @@ int main (int argc, char *argv[]) {
                 usage(argv[0]);
             }
             size = atoi(optarg) * 1048576; /* 1024 * 1024 */
+            break;
+        case OPT_BATCHSIZE:
+            batchsize = atoi(optarg);
             break;
         case 'n':
             dryrun = 1;
@@ -197,6 +207,7 @@ static int usage(const char *name)
     printf("\t -o only purge messages that are deleted.\n");
     printf("\t -n only print messages that would be deleted (dry run).\n");
     printf("\t -v enable verbose output/logging.\n");
+    printf("\t --batchsize num purge num messages per locked batch (default 4096, 0 for no limit).\n");
     exit(0);
 }
 
@@ -204,6 +215,7 @@ static int usage(const char *name)
 static int purge_one(const mbname_t *mbname)
 {
     struct mailbox *mailbox = NULL;
+    uint64_t already_deleted = 0, already_deleted_bytes = 0;
     int r;
     mbox_stats_t stats;
     const char *name = mbname_intname(mbname);
@@ -220,15 +232,31 @@ static int purge_one(const mbname_t *mbname)
         printf("Working on %s...\n", name);
     }
 
-    r = mailbox_open_iwl(name, &mailbox);
-    if (r) { /* did we find it? */
-        syslog(LOG_ERR, "Couldn't find %s, check spelling", name);
-        return r;
-    }
+    /* Purge a batch at a time, dropping the lock in between, so that a
+     * mailbox with a lot to remove doesn't hold its index locked for the
+     * entire purge. */
+    do {
+        r = mailbox_open_iwl(name, &mailbox);
+        if (r) { /* did we find it? */
+            syslog(LOG_ERR, "Couldn't find %s, check spelling", name);
+            return r;
+        }
 
-    mailbox_expunge(mailbox, NULL, purge_check, &stats, NULL, EVENT_MESSAGE_EXPUNGE, /*limit*/0);
+        /* each round only sees what's left, so count from scratch and add
+         * the earlier rounds back in once we're done */
+        already_deleted = stats.deleted;
+        already_deleted_bytes = stats.deleted_bytes;
+        stats.total = 0;
+        stats.total_bytes = 0;
 
-    mailbox_close(&mailbox);
+        r = mailbox_expunge(mailbox, NULL, purge_check, &stats, NULL,
+                            EVENT_MESSAGE_EXPUNGE, batchsize);
+
+        mailbox_close(&mailbox);
+    } while (r == IMAP_AGAIN);
+
+    stats.total += already_deleted;
+    stats.total_bytes += already_deleted_bytes;
 
     print_stats(&stats);
 
