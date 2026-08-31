@@ -6,6 +6,7 @@ use strict;
 use warnings;
 
 use Net::HTTP;
+use Net::HTTPS;
 
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
@@ -14,8 +15,15 @@ sub new
 {
     my $class = shift;
 
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(tls_server_cert => '@basedir@/conf/certs/cert.pem',
+                 tls_server_key => '@basedir@/conf/certs/key.pem',
+                 http_h2_altsvc => '127.0.0.1:8443');
+
     my $self = $class->SUPER::new({
-        services => [ 'imap', 'http' ],
+        config => $config,
+        install_certificates => 1,
+        services => [ 'imap', 'http', 'https' ],
     }, @_);
 
     $self->needs('component', 'httpd');
@@ -49,8 +57,24 @@ sub http1_connect
     return $s;
 }
 
+# Same as http1_connect(), but TLS-wrapped from the start (the
+# "https" service) -- cert verification is off since Cassandane's is
+# self-signed and this suite doesn't care about TLS trust.
+sub https1_connect
+{
+    my ($self) = @_;
+    my $service = $self->{instance}->get_service('https');
+
+    my $s = Net::HTTPS->new(PeerAddr => $service->host,
+                            PeerPort => $service->port,
+                            SSL_verify_mode => 0);
+    $self->assert_not_null($s, "couldn't connect to https service: $@");
+    return $s;
+}
+
 # Read one HTTP/1.x response (status, headers lowercased, and the
-# entity body if any) from a socket returned by http1_connect().
+# entity body if any) from a socket returned by http1_connect() or
+# https1_connect().
 sub http1_read_response
 {
     my ($s) = @_;
@@ -97,6 +121,24 @@ sub http1_read_bytes
     }
 
     return $buf;
+}
+
+# Read one HTTP/2 frame (RFC 7540 4.1: 9-byte header + payload) off a
+# socket already upgraded to h2c.
+sub h2_read_frame
+{
+    my ($s) = @_;
+
+    my $header = http1_read_bytes($s, 9);
+    my ($b0, $b1, $b2, $type, $flags) = unpack('C5', $header);
+    my $len = ($b0 << 16) | ($b1 << 8) | $b2;
+    my ($stream_id) = unpack('N', substr($header, 5, 4));
+    $stream_id &= 0x7fffffff;
+
+    my $payload = $len ? http1_read_bytes($s, $len) : '';
+
+    return { type => $type, flags => $flags,
+            stream_id => $stream_id, payload => $payload };
 }
 
 use Cassandane::Tiny::Loader;
