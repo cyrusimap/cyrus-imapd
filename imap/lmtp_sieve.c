@@ -825,8 +825,12 @@ done:
 }
 
 
-static int sieve_redirect(void *ac, void *ic,
-                          void *sc, void *mc, const char **errmsg)
+static void defer_redirect(sieve_redirect_context_t *rc, const char *userid,
+                           const char *return_path, deliver_data_t *mdata,
+                           int mdata_is_special, const duplicate_key_t *dkey);
+
+static int sieve_redirect(void *ac, void *ic, void *sc, void *mc,
+                          const char **errmsg __attribute__((unused)))
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
@@ -835,7 +839,6 @@ static int sieve_redirect(void *ac, void *ic,
     message_data_t *m = mdata->m;
     char buf[8192], *sievedb = NULL;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
-    int res;
 
     /* if we have a msgid, we can track our redirects */
     if (m->id) {
@@ -858,26 +861,15 @@ static int sieve_redirect(void *ac, void *ic,
         else m = mdata->m;
     }
 
-    res = send_forward(rc, ctx, m->return_path, m->data);
+    /* Put it aside until lmtpd has committed this user's conversations state
+       and let go of their lock: sending is a whole SMTP transaction with
+       another server, and we must not hold a lock across that.  We have to
+       claim success now, before we know - a later failure puts one copy in the
+       recipient's INBOX, where a failed redirect has always ended up. */
+    defer_redirect(rc, ctx->userid, m->return_path, mdata,
+                   rc->headers ? 1 : 0, sievedb ? &dkey : NULL);
 
-    if (rc->headers) cleanup_special_delivery(mdata);
-
-    if (res == 0) {
-        /* mark this message as redirected */
-        if (sievedb) duplicate_mark(&dkey, time(NULL), 0);
-
-        prometheus_increment(CYRUS_LMTP_SIEVE_REDIRECT_TOTAL);
-        auditlog_sieve("sieve.redirect",
-                       ctx->userid, m->id, NULL, rc->addr, NULL, NULL);
-        return SIEVE_OK;
-    } else {
-        if (res == -1) {
-            *errmsg = "Could not spawn sendmail process";
-        } else {
-            *errmsg = error_message(res);
-        }
-        return SIEVE_FAIL;
-    }
+    return SIEVE_OK;
 }
 
 static int sieve_discard(void *ac __attribute__((unused)),
@@ -1152,10 +1144,121 @@ static void free_deferred_fileinto(struct deferred_fileinto *item)
     free(item);
 }
 
+/* a redirect waits here for the same reason a foreign fileinto does: sending
+   is a whole SMTP transaction with another server, and the recipient's
+   conversations state - and so their namespace lock - is held across the
+   script run */
+struct deferred_redirect {
+    sieve_redirect_context_t rc;        /* strings below are ours */
+    char *addr;
+    char *deliverby;
+    char *dsn_notify;
+    char *dsn_ret;
+    char *userid;                       /* the recipient, for auth */
+    char *return_path;
+    deliver_data_t *mdata;
+    int mdata_is_special;               /* ours to clean up */
+    char *dkey_id;                      /* marked once the send worked */
+    char *dkey_to;
+    char *dkey_date;
+};
+
+static ptrarray_t deferred_redirects = PTRARRAY_INITIALIZER;
+
+static void defer_redirect(sieve_redirect_context_t *rc, const char *userid,
+                           const char *return_path, deliver_data_t *mdata,
+                           int mdata_is_special, const duplicate_key_t *dkey)
+{
+    struct deferred_redirect *item = xzmalloc(sizeof(struct deferred_redirect));
+
+    /* copy the context, then re-point every string at our own copy: the
+       interpreter frees the original when the script finishes */
+    item->rc = *rc;
+    item->addr = xstrdupnull(rc->addr);
+    item->deliverby = xstrdupnull(rc->deliverby);
+    item->dsn_notify = xstrdupnull(rc->dsn_notify);
+    item->dsn_ret = xstrdupnull(rc->dsn_ret);
+    item->rc.addr = item->addr;
+    item->rc.deliverby = item->deliverby;
+    item->rc.dsn_notify = item->dsn_notify;
+    item->rc.dsn_ret = item->dsn_ret;
+    item->rc.headers = NULL;    /* already applied to mdata below */
+
+    item->userid = xstrdupnull(userid);
+    item->return_path = xstrdupnull(return_path);
+    item->mdata = mdata;
+    item->mdata_is_special = mdata_is_special;
+
+    if (dkey && dkey->id) {
+        item->dkey_id = xstrdup(dkey->id);
+        item->dkey_to = xstrdupnull(dkey->to);
+        item->dkey_date = xstrdupnull(dkey->date);
+    }
+
+    ptrarray_append(&deferred_redirects, item);
+}
+
+static void free_deferred_redirect(struct deferred_redirect *item)
+{
+    if (item->mdata_is_special) cleanup_special_delivery(item->mdata);
+    free(item->addr);
+    free(item->deliverby);
+    free(item->dsn_notify);
+    free(item->dsn_ret);
+    free(item->userid);
+    free(item->return_path);
+    free(item->dkey_id);
+    free(item->dkey_to);
+    free(item->dkey_date);
+    free(item);
+}
+
+static int run_deferred_redirects(void)
+{
+    int fallback = 0;
+
+    while (ptrarray_size(&deferred_redirects)) {
+        struct deferred_redirect *item = ptrarray_shift(&deferred_redirects);
+        /* a fresh context: the script's is long gone, and the CardDAV DB it
+           may open is only wanted for an ext_list redirect */
+        struct sieve_interp_ctx ctx = { item->userid, NULL, NULL };
+
+        int r = send_forward(&item->rc, &ctx, item->return_path,
+                             item->mdata->m->data);
+
+        if (ctx.carddavdb) carddav_close(ctx.carddavdb);
+
+        if (r) {
+            xsyslog_ev(LOG_WARNING, "sieve.redirect.deferred.failed",
+                       lf_s("u.username", item->userid),
+                       lf_s("sieve.target", item->addr),
+                       lf_err("error", r));
+            fallback = 1;
+        }
+        else {
+            if (item->dkey_id) {
+                duplicate_key_t dkey = DUPLICATE_INITIALIZER;
+                dkey.id = item->dkey_id;
+                dkey.to = item->dkey_to;
+                dkey.date = item->dkey_date;
+                duplicate_mark(&dkey, time(NULL), 0);
+            }
+
+            prometheus_increment(CYRUS_LMTP_SIEVE_REDIRECT_TOTAL);
+            auditlog_sieve("sieve.redirect", item->userid, item->mdata->m->id,
+                           NULL, item->addr, NULL, NULL);
+        }
+
+        free_deferred_redirect(item);
+    }
+
+    return fallback;
+}
+
 /* deliver everything we put aside.  Returns true if anything failed, so lmtpd
    can put one copy in the recipient's INBOX, where a failed fileinto has
    always ended up; the script has finished and can't be told */
-EXPORTED int sieve_run_deferred_fileinto(void)
+EXPORTED int sieve_run_deferred(void)
 {
     int fallback = 0;
 
@@ -1205,6 +1308,9 @@ EXPORTED int sieve_run_deferred_fileinto(void)
         conversations_commit(&state);
         free(owner);
     }
+
+    /* local work first, then the wire */
+    if (run_deferred_redirects()) fallback = 1;
 
     return fallback;
 }

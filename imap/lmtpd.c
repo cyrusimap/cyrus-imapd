@@ -929,7 +929,7 @@ int deliver(message_data_t *msgdata, char *authuser,
                other users can go, an owner at a time.  On any failure put one
                copy in this user's INBOX, where a failed fileinto has always
                ended up */
-            if (sieve_run_deferred_fileinto()) {
+            if (sieve_run_deferred()) {
                 strarray_t fbflags = STRARRAY_INITIALIZER;
                 struct imap4flags fbimap4flags = { &fbflags, authstate };
 
