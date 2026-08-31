@@ -339,6 +339,7 @@ my ($opt, $usage) = describe_options(
     [],
     [ 'verbose|v+',    "make Cassandane and Cyrus much noisier; repeat (-vvv)"
                      . " for more (default: 0)", { default => 0 } ],
+    [ 'no-fatal-plan', "test plan sanity check failures are not fatal" ],
     [ 'no-ok',         "report only failures and errors, omitting passing tests" ],
     [ 'log-directory|L=s', "collect per-test logs under this directory" ],
     [ 'config=s',      "use this Cassandane config file instead of the default" ],
@@ -490,7 +491,7 @@ else
 {
     # Build the schedule per commandline
     $plan->schedule(@names);
-    $plan->check_sanity();
+    $plan->check_sanity(nonfatal => $opt->no_fatal_plan);
 
     # Run the schedule
     $want_formats{prettier} = 1 if not scalar keys %want_formats;
