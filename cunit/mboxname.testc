@@ -4,8 +4,8 @@
 #include "cunit/unit.h"
 #include "imap/mboxname.h"
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xunlink.h>
 
 #include "imap/mailbox.h"
 #include "imap/global.h"

@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/hash.h>
+#include <cyrus/hash.h>
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>

@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/dynarray.h>
+#include <cyrus/dynarray.h>
 
 #include <sys/types.h>
 #include <stdlib.h>

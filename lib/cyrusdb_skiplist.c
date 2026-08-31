@@ -8,10 +8,10 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/retry.h>
-#include <cyrus-imap/xmalloc.h>
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/assert.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
 
 #include <stdlib.h>
 #include <string.h>

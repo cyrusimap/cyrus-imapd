@@ -6,10 +6,10 @@
 #define SIEVE_H
 #include <config.h>
 
-#include <cyrus-imap/arrayu64.h>
-#include <cyrus-imap/buf.h>
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/strarray.h>
+#include <cyrus/arrayu64.h>
+#include <cyrus/buf.h>
+#include <cyrus/hash.h>
+#include <cyrus/strarray.h>
 
 #include <stdio.h>
 

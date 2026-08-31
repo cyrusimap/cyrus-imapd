@@ -2,8 +2,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
 
 #include <errno.h>
 #include <stdlib.h>

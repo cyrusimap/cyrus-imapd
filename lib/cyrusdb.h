@@ -5,7 +5,7 @@
 #ifndef INCLUDED_CYRUSDB_H
 #define INCLUDED_CYRUSDB_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include <stdio.h>
 

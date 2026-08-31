@@ -9,7 +9,7 @@
 #include "sieve_interface.h"
 #include "bytecode.h"
 
-#include <cyrus-imap/assert.h>
+#include <cyrus/assert.h>
 
 #include <syslog.h>
 #include <sys/types.h>

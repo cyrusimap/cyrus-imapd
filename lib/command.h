@@ -5,7 +5,7 @@
 #ifndef INCLUDED_COMMAND_H
 #define INCLUDED_COMMAND_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include <sys/types.h>
 

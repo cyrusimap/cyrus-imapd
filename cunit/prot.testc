@@ -3,8 +3,8 @@
 
 #include "prot.h"
 
-#include <cyrus-imap/xmalloc.h>
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
 
 #include <sys/stat.h>
 #include "imap/global.h"

@@ -7,7 +7,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/hash.h>
+#include <cyrus/hash.h>
 
 /* name of the duplicate delivery database */
 #define FNAME_DELIVERDB "/deliver.db"

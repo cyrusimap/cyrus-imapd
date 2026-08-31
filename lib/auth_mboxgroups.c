@@ -4,8 +4,8 @@
 
 #include <config.h>
 
-#include <cyrus-imap/strarray.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
 
 #include <stdlib.h>
 #include <string.h>

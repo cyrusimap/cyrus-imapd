@@ -11,9 +11,9 @@
 
 extern "C" {
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
 
 #include "util.h"
 #include "search_engines.h"

@@ -3,8 +3,8 @@
 #include "cunit/unit-timezones.h"
 #include "master/cronevent.h"
 
-#include <cyrus-imap/dynarray.h>
-#include <cyrus-imap/hash.h>
+#include <cyrus/dynarray.h>
+#include <cyrus/hash.h>
 
 #include "lib/cron.h"
 

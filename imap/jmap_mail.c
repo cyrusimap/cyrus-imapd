@@ -4,11 +4,11 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/hashset.h>
-#include <cyrus-imap/smallarrayu64.h>
-#include <cyrus-imap/xmalloc.h>
-#include <cyrus-imap/xsha1.h>
+#include <cyrus/assert.h>
+#include <cyrus/hashset.h>
+#include <cyrus/smallarrayu64.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xsha1.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

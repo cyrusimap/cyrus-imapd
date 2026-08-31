@@ -5,7 +5,7 @@
 #ifndef SCHED_UTIL_H
 #define SCHED_UTIL_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include <libical/ical.h>
 

@@ -1,7 +1,7 @@
 #include "cunit/unit.h"
 #include "lib/logfmt.h"
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include "imap/mailbox.h"
 #include "imap/mboxlist.h"

@@ -6,8 +6,8 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
 
 #include "sieve_interface.h"
 

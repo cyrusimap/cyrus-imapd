@@ -5,7 +5,7 @@
  *      Author: James Cassell
  */
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include "varlist.h"
 

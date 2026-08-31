@@ -5,8 +5,8 @@
 #ifndef INCLUDED_IMAPD_H
 #define INCLUDED_IMAPD_H
 
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/strarray.h>
+#include <cyrus/hash.h>
+#include <cyrus/strarray.h>
 
 #include "annotate.h"
 #include "bufarray.h"

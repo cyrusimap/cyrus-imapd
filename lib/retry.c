@@ -4,9 +4,9 @@
 
 #include <config.h>
 
-#include <cyrus-imap/retry.h>
+#include <cyrus/retry.h>
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <errno.h>
 #include <sys/types.h>

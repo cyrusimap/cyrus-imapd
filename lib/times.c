@@ -9,7 +9,7 @@
 #include <string.h>
 #include <strings.h>
 
-#include <cyrus-imap/assert.h>
+#include <cyrus/assert.h>
 
 #include "times.h"
 #include "util.h"

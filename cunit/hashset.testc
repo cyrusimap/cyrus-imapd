@@ -1,9 +1,9 @@
 #include <config.h>
 #include "cunit/unit.h"
 
-#include <cyrus-imap/hashset.h>
+#include <cyrus/hashset.h>
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include "util.h"
 

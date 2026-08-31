@@ -1,8 +1,8 @@
 #include "cunit/unit.h"
-#include <cyrus-imap/buf.h>
+#include <cyrus/buf.h>
 
-#include <cyrus-imap/retry.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
 
 #include "map.h"
 #include "prot.h"

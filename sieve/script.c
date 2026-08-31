@@ -6,9 +6,9 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
 
 #include <stdlib.h>
 #include <string.h>

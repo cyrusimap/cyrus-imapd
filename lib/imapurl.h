@@ -5,7 +5,7 @@
 #ifndef IMAPURL_H
 #define IMAPURL_H
 
-#include <cyrus-imap/buf.h>
+#include <cyrus/buf.h>
 
 struct imapurl {
     char *freeme;               /* copy of original URL + decoded mailbox;

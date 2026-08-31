@@ -3,10 +3,10 @@
 /* See COPYING file at the root of the distribution for more details. */
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/strhash.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
 
 #include <sysexits.h>
 #include <syslog.h>

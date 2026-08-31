@@ -7,7 +7,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include "auth.h"
 #include "dav_db.h"

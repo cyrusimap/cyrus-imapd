@@ -7,7 +7,7 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/assert.h>
+#include <cyrus/assert.h>
 
 /* Here's a description of the API that Cyrus is expecting and that we try
  * to provide on top of whatever the underlying library has.

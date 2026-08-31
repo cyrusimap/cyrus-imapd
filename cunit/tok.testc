@@ -1,9 +1,9 @@
 #include "config.h"
 #include "cunit/unit.h"
 
-#include <cyrus-imap/tok.h>
+#include <cyrus/tok.h>
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #define WORD0   "lorem"
 #define WORD1   "ipsum"

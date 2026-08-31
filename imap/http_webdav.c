@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/tok.h>
+#include <cyrus/tok.h>
 
 #include <string.h>
 #include <sysexits.h>

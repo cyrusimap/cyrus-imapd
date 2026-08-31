@@ -5,8 +5,8 @@
 #ifndef HTTPD_H
 #define HTTPD_H
 
-#include <cyrus-imap/dynarray.h>
-#include <cyrus-imap/hash.h>
+#include <cyrus/dynarray.h>
+#include <cyrus/hash.h>
 
 #include <sasl/sasl.h>
 #include <libxml/tree.h>

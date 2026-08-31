@@ -4,11 +4,11 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/tok.h>
-#include <cyrus-imap/xmalloc.h>
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
 
 #include <stdio.h>
 #include <stdlib.h>

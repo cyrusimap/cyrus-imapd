@@ -3,7 +3,7 @@
 /* See COPYING file at the root of the distribution for more details. */
 #include "ptrarray.h"
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <memory.h>
 #include "util.h"

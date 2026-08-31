@@ -7,7 +7,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/hash.h>
+#include <cyrus/hash.h>
 
 #include "http_jmap.h"
 #include "jmap_util.h"

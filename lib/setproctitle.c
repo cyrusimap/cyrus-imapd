@@ -38,7 +38,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <stdio.h>
 #include <stdarg.h>

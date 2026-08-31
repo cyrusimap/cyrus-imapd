@@ -1,6 +1,6 @@
 #include <config.h>
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>

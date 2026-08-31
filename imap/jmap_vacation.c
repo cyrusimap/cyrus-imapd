@@ -4,8 +4,8 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/hash.h>
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

@@ -5,7 +5,7 @@
 #ifndef HTTP_DAV_H
 #define HTTP_DAV_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include <stdint.h>
 #include <libical/ical.h>

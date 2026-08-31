@@ -5,7 +5,7 @@
 #ifndef INCLUDED_SYNC_SUPPORT_H
 #define INCLUDED_SYNC_SUPPORT_H
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include "backend.h"
 #include "dlist.h"

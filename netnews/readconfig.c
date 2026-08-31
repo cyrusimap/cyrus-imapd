@@ -27,7 +27,7 @@
  *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <stdlib.h>
 #include <stdio.h>

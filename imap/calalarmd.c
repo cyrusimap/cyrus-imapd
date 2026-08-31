@@ -6,7 +6,7 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <sys/types.h>
 #include <sysexits.h>

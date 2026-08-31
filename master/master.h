@@ -3,8 +3,8 @@
 
 #include <config.h>
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/strarray.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/strarray.h>
 
 #include <sys/resource.h> /* for rlim_t */
 

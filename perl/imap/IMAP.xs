@@ -12,7 +12,7 @@
 #include <pwd.h>
 #include <unistd.h>
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include "lib/imclient.h"
 #include "lib/imapurl.h"

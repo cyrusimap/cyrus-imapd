@@ -2,7 +2,7 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
-#include <cyrus-imap/assert.h>
+#include <cyrus/assert.h>
 
 #include <stdint.h>
 #include <syslog.h>

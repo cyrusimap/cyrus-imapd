@@ -7,8 +7,8 @@
 
 #include <jansson.h>
 
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/strarray.h>
+#include <cyrus/hash.h>
+#include <cyrus/strarray.h>
 
 #include "jmap_mail_query_parse.h"
 #include "jmap_util.h"

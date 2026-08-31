@@ -13,25 +13,25 @@
 
 /* DEPS: libcyrus_min */
 
-#include <cyrus-imap/arrayu64.h>
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/buf.h>
-#include <cyrus-imap/dynarray.h>
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/hashset.h>
-#include <cyrus-imap/hashu64.h>
-#include <cyrus-imap/imapopts.h>
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/mpool.h>
-#include <cyrus-imap/proc.h>
-#include <cyrus-imap/retry.h>
-#include <cyrus-imap/smallarrayu64.h>
-#include <cyrus-imap/strarray.h>
-#include <cyrus-imap/strhash.h>
-#include <cyrus-imap/tok.h>
-#include <cyrus-imap/xmalloc.h>
-#include <cyrus-imap/xsha1.h>
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/arrayu64.h>
+#include <cyrus/assert.h>
+#include <cyrus/buf.h>
+#include <cyrus/dynarray.h>
+#include <cyrus/hash.h>
+#include <cyrus/hashset.h>
+#include <cyrus/hashu64.h>
+#include <cyrus/imapopts.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/mpool.h>
+#include <cyrus/proc.h>
+#include <cyrus/retry.h>
+#include <cyrus/smallarrayu64.h>
+#include <cyrus/strarray.h>
+#include <cyrus/strhash.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xsha1.h>
+#include <cyrus/xunlink.h>
 
 #include <getopt.h>
 #include <inttypes.h>

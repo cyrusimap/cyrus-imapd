@@ -1,7 +1,7 @@
 #include "cunit/unit.h"
 
-#include <cyrus-imap/strarray.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
 
 #include "bsearch.h"
 

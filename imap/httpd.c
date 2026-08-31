@@ -4,9 +4,9 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/proc.h>
-#include <cyrus-imap/tok.h>
+#include <cyrus/assert.h>
+#include <cyrus/proc.h>
+#include <cyrus/tok.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

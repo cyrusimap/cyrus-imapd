@@ -5,7 +5,7 @@
 #ifndef IDLE_H
 #define IDLE_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include "json_support.h"
 #include "mailbox.h"

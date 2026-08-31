@@ -6,8 +6,8 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
 
 #include <dirent.h>
 #include <errno.h>

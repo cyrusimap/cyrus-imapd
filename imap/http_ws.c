@@ -4,10 +4,10 @@
 
 #include <config.h>
 
-#include <cyrus-imap/proc.h>
-#include <cyrus-imap/retry.h>
-#include <cyrus-imap/tok.h>
-#include <cyrus-imap/xsha1.h>
+#include <cyrus/proc.h>
+#include <cyrus/retry.h>
+#include <cyrus/tok.h>
+#include <cyrus/xsha1.h>
 
 #include <sysexits.h>
 

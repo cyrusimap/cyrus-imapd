@@ -6,7 +6,7 @@
 
 #include "lib/sessionid.h"
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include <string.h>
 #include <unistd.h>

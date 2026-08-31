@@ -4,9 +4,9 @@
 
 #include <config.h>
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/strarray.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
 
 #include <stdio.h>
 #include <sys/time.h>

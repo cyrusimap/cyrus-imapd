@@ -4,10 +4,10 @@
 
 #include <config.h>
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/proc.h>
-#include <cyrus-imap/retry.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/proc.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
 
 #include <signal.h>
 #include <string.h>

@@ -5,7 +5,7 @@
 #ifndef __CYRUS_SEARCH_RESULT_H__
 #define __CYRUS_SEARCH_RESULT_H__
 
-#include <cyrus-imap/dynarray.h>
+#include <cyrus/dynarray.h>
 
 #include "index.h"
 #include "mailbox.h"

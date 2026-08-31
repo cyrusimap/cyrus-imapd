@@ -24,9 +24,9 @@
  *
  */
 
-#include <cyrus-imap/strhash.h>
-#include <cyrus-imap/tok.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/strhash.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
 
 #include <sysexits.h>
 

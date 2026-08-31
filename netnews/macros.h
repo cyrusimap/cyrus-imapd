@@ -7,7 +7,7 @@
 **  Don't replace any existing definitions, for use with malloc-debug
 **  packages, e.g.
 */
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #if     defined(_DEBUG_MALLOC_INC)
 #undef _DEBUG_MALLOC_INC

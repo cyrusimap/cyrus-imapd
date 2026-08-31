@@ -1,8 +1,8 @@
 #include "cunit/unit.h"
 #include "lib/sessionid.h"
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
 
 #define DBDIR "test-sessionid-dbdir"
 

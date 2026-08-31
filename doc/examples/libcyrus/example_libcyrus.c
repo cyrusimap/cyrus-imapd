@@ -15,7 +15,7 @@
 
 #define _GNU_SOURCE 1
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include "acl.h"
 #include "auth.h"

@@ -4,9 +4,9 @@
 
 #include <config.h>
 
-#include <cyrus-imap/arrayu64.h>
+#include <cyrus/arrayu64.h>
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <string.h>
 

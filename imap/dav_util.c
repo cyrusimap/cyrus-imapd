@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/strhash.h>
+#include <cyrus/strhash.h>
 
 #include <string.h>
 

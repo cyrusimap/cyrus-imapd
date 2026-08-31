@@ -7,7 +7,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/dynarray.h>
+#include <cyrus/dynarray.h>
 
 extern time_t caldav_epoch;
 extern time_t caldav_eternity;

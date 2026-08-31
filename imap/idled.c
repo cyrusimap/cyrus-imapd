@@ -6,8 +6,8 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/arrayu64.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/arrayu64.h>
+#include <cyrus/xmalloc.h>
 
 #include <sys/types.h>
 #include <sysexits.h>

@@ -4,11 +4,11 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/dynarray.h>
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/xmalloc.h>
-#include <cyrus-imap/xsha1.h>
+#include <cyrus/assert.h>
+#include <cyrus/dynarray.h>
+#include <cyrus/hash.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xsha1.h>
 
 #include <stdbool.h>
 #include <stdlib.h>

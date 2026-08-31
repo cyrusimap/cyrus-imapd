@@ -3,7 +3,7 @@
 
 #include "imap/dlist.h"
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include <sys/stat.h>
 

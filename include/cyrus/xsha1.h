@@ -9,7 +9,7 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/assert.h>
+#include <cyrus/assert.h>
 
 /* since an SSL library is available, just use its implementation */
 

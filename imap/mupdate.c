@@ -4,10 +4,10 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/mpool.h>
-#include <cyrus-imap/strarray.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/assert.h>
+#include <cyrus/mpool.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

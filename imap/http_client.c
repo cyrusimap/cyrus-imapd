@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/tok.h>
+#include <cyrus/tok.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

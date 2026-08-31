@@ -5,7 +5,7 @@
 #ifndef INCLUDED_MESSAGE_H
 #define INCLUDED_MESSAGE_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include <stdio.h>
 

@@ -5,7 +5,7 @@
 #ifndef JMAP_MAIL_QUERY_PARSE_H
 #define JMAP_MAIL_QUERY_PARSE_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include <jansson.h>
 

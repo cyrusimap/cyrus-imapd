@@ -11,7 +11,7 @@ extern "C" {
 }
 #endif
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <netdb.h>
 #include <netinet/in.h>

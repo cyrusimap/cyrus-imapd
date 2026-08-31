@@ -4,9 +4,9 @@
 
 #include <config.h>
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/xmalloc.h>
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
 
 #include <syslog.h>
 #include <string.h>
