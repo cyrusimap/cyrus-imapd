@@ -507,17 +507,12 @@ HIDDEN int http2_init(struct http_connection *conn, struct buf *serverinfo)
 
 HIDDEN void http2_altsvc(struct buf *altsvc)
 {
-    if (!https && http2_callbacks) {
+    if (http2_callbacks) {
         const char *sep = buf_len(altsvc) ? ", " : "";
         const char *config_altsvc = config_getstring(IMAPOPT_HTTP_H2_ALTSVC);
 
         if (config_altsvc) {
             buf_printf(altsvc, "%sh2=\"%s\"", sep, config_altsvc);
-            sep = ", ";
-        }
-        if (httpd_localip) {
-            const char *port = strchr(httpd_localip, ';');
-            buf_printf(altsvc, "%sh2c=\":%s\"", sep, port ? port+1 : "80");
         }
     }
 }
@@ -893,29 +888,16 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
     }
 
     if (httpd_altsvc) {
-        /* Remove h2c from Alt-Svc value */
-        char *p = strstr(httpd_altsvc, "h2c=");
-        if (p == httpd_altsvc) {
-            free(httpd_altsvc);
-            httpd_altsvc = NULL;
-        }
-        else if (p) {
-            while (*--p == ' ');
-            *p  = '\0';
-        }
+        char *origin = strconcat("https://", config_servername, NULL);
 
-        if (httpd_altsvc) {
-            char *origin = strconcat("https://", config_servername, NULL);
+        r = nghttp2_submit_altsvc(ctx->session, NGHTTP2_FLAG_NONE, 0,
+                                  (uint8_t *) origin, strlen(origin),
+                                  (uint8_t *) httpd_altsvc, strlen(httpd_altsvc));
+        free(origin);
 
-            r = nghttp2_submit_altsvc(ctx->session, NGHTTP2_FLAG_NONE, 0,
-                                      (uint8_t *) origin, strlen(origin),
-                                      (uint8_t *) httpd_altsvc, strlen(httpd_altsvc));
-            free(origin);
-
-            if (r) {
-                syslog(LOG_ERR, "nghttp2_submit_altsvc: %s", nghttp2_strerror(r));
-                return HTTP_SERVER_ERROR;
-            }
+        if (r) {
+            syslog(LOG_ERR, "nghttp2_submit_altsvc: %s", nghttp2_strerror(r));
+            return HTTP_SERVER_ERROR;
         }
     }
 
