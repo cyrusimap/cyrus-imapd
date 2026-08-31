@@ -40,6 +40,12 @@ Cassandane needs the following software to work:
     Ubuntu package libencode-imaputf7-perl
     On RH/CentOS, may need to install perl-Test-NoWarnings to build from source
 
+ * Authen::SCRAM::Client
+    SCRAM authentication client, used for testing SASL SCRAM mechanisms.
+    CPAN package https://metacpan.org/pod/Authen::SCRAM::Client
+    Ubuntu package libauthen-scram-perl
+    RH/CentOS package perl-Authen-SCRAM
+
  * URI, URI::Escape
     Handles URIs.
     CPAN package at http://search.cpan.org/dist/URI/
@@ -179,7 +185,7 @@ Debian/Ubuntu copypasta:
        libtest-nowarnings-perl libtest-longstring-perl \
        libtest-warn-perl libnet-ldap-server-perl \
        libdbd-sqlite3-perl libdigest-crc-perl libxml-simple-perl \
-       libemail-mime-perl
+       libemail-mime-perl libauthen-scram-perl
 
   sudo cpan Math::Int64 Mail::IMAPTalk \
        Text::JSCalendar Text::JSContact \
@@ -198,5 +204,6 @@ Fedora copypasta:
         perl-Mail-IMAPTalk perl-String-CRC32 perl-File-chdir \
         perl-Unix-Syslog perl-Net-Server \
         perl-Net-CalDAVTalk perl-Net-CardDAVTalk perl-AnyEvent \
-        perl-File-Slurp perl-Pod-POM perl-experimental
+        perl-File-Slurp perl-Pod-POM perl-experimental \
+        perl-Authen-SCRAM
 
