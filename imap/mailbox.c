@@ -2547,6 +2547,17 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
 
     // release the namespacelock here
     user_nslock_release(&mailbox->user_nslock);
+
+    /* And the namelock.  Callers stream responses to a client after unlocking,
+     * which blocks for as long as the client takes to read them; a namelock
+     * held across that stalls repack, rename and delete on this mailbox.  The
+     * struct and its mappings stay usable, and mailbox_lock_index() re-takes
+     * both locks via mailbox_relock() if we come back for more.
+     *
+     * The cost is that a repack can now unlink message files we are still
+     * streaming from.  mailbox_map_record() then fails with ENOENT and the
+     * caller reports the message as gone - see IMAP_NO_MSGGONE in index.c. */
+    mboxname_release(&mailbox->namelock);
 }
 
 static char *mailbox_header_data_cstring(struct mailbox *mailbox)
