@@ -1,0 +1,77 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_http2_upgrade_settings
+    # :NoCheckSyslog -- a successful h2c upgrade logs "...NO_ERROR" on
+    # teardown, which the syslog checker misflags on the "ERROR" substring.
+    :NoCheckSyslog
+    ($self)
+{
+    my $service = $self->{instance}->get_service('http');
+    my $s = http1_connect($self);
+
+    # Missing HTTP2-Settings header: declines the upgrade, stays HTTP/1.1.
+    print $s "GET /.well-known HTTP/1.1\r\n"
+           . "Host: " . $service->host . ":" . $service->port . "\r\n"
+           . "Connection: Upgrade\r\n"
+           . "Upgrade: h2c\r\n"
+           . "\r\n";
+
+    my $res = http1_read_response($s);
+    xlog $self, "response 1: $res->{status}";
+    $self->assert_num_equals(200, $res->{status});
+    $self->assert(!exists $res->{headers}{upgrade});
+
+    # Well-formed HTTP2-Settings header: upgrades to h2c.
+    print $s "GET /.well-known HTTP/1.1\r\n"
+           . "Host: " . $service->host . ":" . $service->port . "\r\n"
+           . "Connection: Upgrade, HTTP2-Settings\r\n"
+           . "Upgrade: h2c\r\n"
+           . "HTTP2-Settings: AAMAAABkAAQAAQAAAAIAAAAA\r\n"
+           . "\r\n";
+
+    $res = http1_read_response($s);
+    xlog $self, "response 2: $res->{status}";
+    $self->assert_num_equals(101, $res->{status});
+    $self->assert_matches(qr/\bh2c\b/i, $res->{headers}{upgrade} // '');
+    $self->assert_matches(qr/\bupgrade\b/i, $res->{headers}{connection} // '');
+
+    # First bytes are a SETTINGS frame header.
+    my $frame_header = http1_read_bytes($s, 9);
+    my $frame_type = unpack('C', substr($frame_header, 3, 1));
+    $self->assert_num_equals(0x4, $frame_type);
+
+    close($s);
+
+    # Malformed HTTP2-Settings header (invalid base64url): 400, connection closes.
+    $s = http1_connect($self);
+
+    print $s "GET /.well-known HTTP/1.1\r\n"
+           . "Host: " . $service->host . ":" . $service->port . "\r\n"
+           . "Connection: Upgrade, HTTP2-Settings\r\n"
+           . "Upgrade: h2c\r\n"
+           . "HTTP2-Settings: not!valid!base64url\r\n"
+           . "\r\n";
+
+    $res = http1_read_response($s);
+    xlog $self, "response (bad settings): $res->{status}";
+    $self->assert_num_equals(400, $res->{status});
+    $self->assert_str_equals('close', $res->{headers}{connection});
+    close($s);
+
+    # HTTP2-Settings decodes to fewer than 6 octets: 400, connection closes.
+    $s = http1_connect($self);
+
+    print $s "GET /.well-known HTTP/1.1\r\n"
+           . "Host: " . $service->host . ":" . $service->port . "\r\n"
+           . "Connection: Upgrade, HTTP2-Settings\r\n"
+           . "Upgrade: h2c\r\n"
+           . "HTTP2-Settings: AAAA\r\n"
+           . "\r\n";
+
+    $res = http1_read_response($s);
+    xlog $self, "response (short settings): $res->{status}";
+    $self->assert_num_equals(400, $res->{status});
+    $self->assert_str_equals('close', $res->{headers}{connection});
+    close($s);
+}

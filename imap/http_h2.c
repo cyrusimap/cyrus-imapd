@@ -801,69 +801,65 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
     };
     size_t niv = (sizeof(iv) / sizeof(iv[0])) - !ws_enabled;
     struct http2_context *ctx;
+    const uint8_t *settings = NULL;
+    size_t settings_len = 0;
     int r;
 
     if (!conn) conn = txn->conn;
 
     if (conn->sess_ctx) return 0;
 
+    if (txn && (txn->flags.conn & CONN_UPGRADE)) {
+        /* RFC 7540 3.2 requires exactly one HTTP2-Settings header on an
+         * h2c Upgrade request. Validate and decode it *before* creating
+         * any HTTP/2 session state, so a bad or missing header falls
+         * through to HTTP/1.1 instead of leaving a half-wired session. */
+        const char **hdr = spool_getheader(txn->req_hdrs, "HTTP2-Settings");
+        if (!hdr || hdr[1]) return 0;
+
+        if (charset_decode(&txn->buf,
+                           hdr[0], strlen(hdr[0]), ENCODING_BASE64URL)) {
+            xsyslog(LOG_WARNING, "Cannot decode HTTP2-Settings", NULL);
+            return HTTP_BAD_REQUEST;
+        }
+
+        settings = (const uint8_t *) buf_cstring(&txn->buf);
+        settings_len = buf_len(&txn->buf);
+    }
+
     ctx = xzmalloc(sizeof(struct http2_context));
 
     r = nghttp2_option_new(&ctx->options);
+    if (!r) r = nghttp2_session_server_new2(&ctx->session,
+                                            http2_callbacks, conn, ctx->options);
     if (r) {
-        syslog(LOG_WARNING,
-               "nghttp2_option_new: %s", nghttp2_strerror(r));
-        free(ctx);
-        return HTTP_SERVER_ERROR;
-    }
+        const char *func = "nghttp2_option_new";
 
-    r = nghttp2_session_server_new2(&ctx->session,
-                                    http2_callbacks, conn, ctx->options);
-    if (r) {
-        syslog(LOG_WARNING,
-               "nghttp2_session_server_new2: %s", nghttp2_strerror(r));
+        if (ctx->options) {
+            func = "nghttp2_session_server_new2";
+            nghttp2_option_del(ctx->options);
+        }
         free(ctx);
+
+        syslog(LOG_WARNING, "%s: %s", func, nghttp2_strerror(r));
         return HTTP_SERVER_ERROR;
     }
 
     conn->sess_ctx = ctx;
     ptrarray_add(&conn->reset_callbacks, &session_free);
 
-    if (txn && (txn->flags.conn & CONN_UPGRADE)) {
+    if (settings) {
         struct http2_stream *strm;
-        struct buf *buf = &txn->buf;
-        unsigned outlen;
 
-        const char **hdr = spool_getheader(txn->req_hdrs, "HTTP2-Settings");
-        if (!hdr || hdr[1]) return 0;
-
-        /* base64url decode the settings.
-           Use the SASL base64 decoder after replacing the encoded values
-           for chars 62 and 63 and adding appropriate padding. */
-        buf_setcstr(buf, hdr[0]);
-        buf_replace_char(buf, '-', '+');
-        buf_replace_char(buf, '_', '/');
-        buf_appendmap(buf, "==", (4 - (buf_len(buf) % 4)) % 4);
-        r = sasl_decode64(buf_base(buf), buf_len(buf),
-                          (char *) buf_base(buf), buf_len(buf), &outlen);
-        if (r != SASL_OK) {
-            syslog(LOG_WARNING, "sasl_decode64 failed: %s",
-                   sasl_errstring(r, NULL, NULL));
-        }
-        else {
-            r = nghttp2_session_upgrade2(ctx->session,
-                                         (const uint8_t *) buf_base(buf),
-                                         outlen, txn->meth == METH_HEAD, NULL);
-            if (r) {
-                syslog(LOG_WARNING, "nghttp2_session_upgrade: %s",
-                       nghttp2_strerror(r));
-            }
+        r = nghttp2_session_upgrade2(ctx->session, settings, settings_len,
+                                     txn->meth == METH_HEAD, NULL);
+        if (r) {
+            syslog(LOG_WARNING, "nghttp2_session_upgrade: %s",
+                   nghttp2_strerror(r));
+            return HTTP_BAD_REQUEST;
         }
 
-        buf_reset(buf);
-        if (r) return HTTP_BAD_REQUEST;
-
-        /* tell client to start h2c upgrade (RFC 7540) */
+        /* Tell client to start h2c upgrade (RFC 7540) */
         response_header(HTTP_SWITCH_PROT, txn);
 
         strm = xzmalloc(sizeof(struct http2_stream));
@@ -873,7 +869,8 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         ptrarray_add(&txn->done_callbacks, &stream_free);
 
         /* Tell syslog our stream-id */
-        buf_printf(buf, "%d", strm->id);
+        buf_reset(&txn->buf);
+        buf_printf(&txn->buf, "%d", strm->id);
         spool_replace_header(xstrdup(":stream-id"),
                              buf_release(&txn->buf), txn->req_hdrs);
     }
