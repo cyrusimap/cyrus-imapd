@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_sharing_rename_sharee
-    :AllowMoves :NoAltNamespace :ReverseACLs :min_version_3_7
+    :AllowMoves :MagicPlus :NoAltNamespace :ReverseACLs
     ($self)
 {
     my $CardDAV = $self->{carddav};
@@ -26,8 +26,10 @@ sub test_sharing_rename_sharee
     $admintalk->setacl("user.cassandane.#addressbooks.Shared", "foo", 'lrsn');
 
     xlog $self, "subscribe to shared calendar";
+    # Subscribing to a shared DAV mailbox needs the magic "+dav" userid
+    # suffix.
     my $imapstore = $self->{instance}->get_service('imap')->create_store(
-                        username => "foo");
+                        username => "foo+dav");
     my $imaptalk = $imapstore->get_client();
     $imaptalk->subscribe("user.cassandane.#addressbooks.Shared");
 

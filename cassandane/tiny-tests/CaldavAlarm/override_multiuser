@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_override_multiuser
-    :min_version_3_1 :NoAltNameSpace
+    :MagicPlus :NoAltNameSpace
     ($self)
 {
     my $CalDAV = $self->{caldav};
@@ -14,8 +14,10 @@ sub test_override_multiuser
     $AdminTalk->create("user.foo");
     $AdminTalk->setacl("user.cassandane.#calendars.$CalendarId", "foo", "lrswipkxtecdn789");
 
+    # Subscribing to a shared DAV mailbox needs the magic "+dav" userid
+    # suffix.
     my $foostore = $self->{instance}->get_service('imap')->create_store(
-                        username => "foo");
+                        username => "foo+dav");
     my $footalk = $foostore->get_client();
     $footalk->subscribe("user.cassandane.#calendars.$CalendarId");
 

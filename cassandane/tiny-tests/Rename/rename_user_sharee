@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_rename_user_sharee
-    :AllowMoves :NoAltNameSpace :ReverseACLs :min_version_3_6
+    :AllowMoves :MagicPlus :NoAltNameSpace :ReverseACLs
     ($self)
 {
     my $admintalk = $self->{adminstore}->get_client();
@@ -19,7 +19,11 @@ sub test_rename_user_sharee
     $admintalk->create("user.foo.#calendars.events") || die;
     $admintalk->setacl("user.foo.#calendars.events", 'cassandane' => 'lrs') || die;
 
-    my $imaptalk = $self->{store}->get_client();
+    # Subscribing to a shared DAV mailbox (the calendar below) needs the
+    # magic "+dav" userid suffix.
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(
+                        username => "cassandane+dav");
+    my $imaptalk = $plusstore->get_client();
     $imaptalk->create("INBOX.sub");
     $imaptalk->subscribe("INBOX.sub");
     $imaptalk->subscribe("user.foo.shared");

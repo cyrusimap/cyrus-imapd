@@ -818,6 +818,27 @@ static int mlookup(const char *tag, const char *ext_name,
     return r;
 }
 
+/*
+ * Return true if the current session was authenticated with the magic
+ * "+dav" userid suffix.
+ */
+static int imapd_want_dav(void)
+{
+    return !strcasecmpsafe(imapd_magicplus, "+dav");
+}
+
+/*
+ * Return true if the current session is not permitted to access mailbox
+ * 'name' of type 'mbtype'.  Admins may always access non-IMAP mailboxes;
+ * everyone else needs imapd_want_dav().  Pass mbtype 0 to test by name
+ * alone, e.g. before the mailbox has been created or looked up.
+ */
+static int imapd_mailbox_isdav_forbidden(const char *name, int mbtype)
+{
+    return !imapd_userisadmin && !imapd_want_dav() &&
+        mboxname_isnonimapmailbox(name, mbtype);
+}
+
 static void event_groups_free(struct event_groups **groups)
 {
     if (!groups || !*groups) return;
@@ -1979,7 +2000,7 @@ static void cmdloop(void)
                 memset(&listargs, 0, sizeof(struct listargs));
                 listargs.cmd = LIST_CMD_LSUB;
                 listargs.sel = LIST_SEL_SUBSCRIBED;
-                if (!strcasecmpsafe(imapd_magicplus, "+dav"))
+                if (imapd_want_dav())
                     listargs.sel |= LIST_SEL_DAV;
                 listargs.ref = arg1.s;
                 strarray_append(&listargs.pat, arg2.s);
@@ -4190,8 +4211,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name,
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
 
     /* Prohibit APPENDing to non-IMAP mailboxes unless using magic +DAV */
-    if (strcasecmpsafe(imapd_magicplus, "+dav") &&
-        mboxname_isnonimapmailbox(intname, 0)) {
+    if (imapd_mailbox_isdav_forbidden(intname, 0)) {
         r = IMAP_MAILBOX_NOTSUPPORTED;
     }
     else {
@@ -4951,7 +4971,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
                      || config_getswitch(IMAPOPT_REPLICAONLY);
     init.select = 1;
     init.stay_locked = 1;
-    if (!strcasecmpsafe(imapd_magicplus, "+dav")) init.want_dav = 1;
+    if (imapd_userisadmin || imapd_want_dav()) init.want_dav = 1;
 
     if (!imapd_userisadmin && !allowdeleted && mboxname_isdeletedmailbox(intname, NULL))
         r = IMAP_MAILBOX_NONEXISTENT;
@@ -6649,8 +6669,7 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
 
     /* Prohibit COPYing to non-IMAP mailboxes unless using magic +DAV */
-    if (strcasecmpsafe(imapd_magicplus, "+dav") &&
-        mboxname_isnonimapmailbox(intname, 0)) {
+    if (imapd_mailbox_isdav_forbidden(intname, 0)) {
         r = IMAP_MAILBOX_NOTSUPPORTED;
     }
     else {
@@ -6961,6 +6980,12 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
             goto err;
         }
     }
+
+    if (imapd_mailbox_isdav_forbidden(mbname_intname(mbname), mbtype)) {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+        goto err;
+    }
+
     use = dlist_getchild(extargs, "USE");
     if (use) {
         /* only user mailboxes can have specialuse, and if allowspecialusesubfolders is not enabled they must be user toplevel folders */
@@ -7437,6 +7462,11 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
     r = mlookup(NULL, NULL, mbname_intname(mbname), &mbentry);
 
+    if (!r &&
+        imapd_mailbox_isdav_forbidden(mbname_intname(mbname), mbentry->mbtype)) {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+    }
+
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         /* remote mailbox */
         struct backend *s = NULL;
@@ -7874,6 +7904,13 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
     }
 
     mbtype = mbentry->mbtype;
+
+    if (imapd_mailbox_isdav_forbidden(oldmailboxname, mbtype) ||
+        imapd_mailbox_isdav_forbidden(newmailboxname, 0)) {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+        goto done;
+    }
 
     if (!r && mbentry->mbtype & MBTYPE_REMOTE) {
         /* remote mailbox */
@@ -8511,7 +8548,7 @@ static void getlistargs(char *tag, struct listargs *listargs)
         prot_ungetc(c, imapd_in);
 
     if (!strcmpsafe(imapd_magicplus, "+")) listargs->sel |= LIST_SEL_SUBSCRIBED;
-    else if (!strcasecmpsafe(imapd_magicplus, "+dav")) listargs->sel |= LIST_SEL_DAV;
+    else if (imapd_want_dav()) listargs->sel |= LIST_SEL_DAV;
 
     /* Read in reference name */
     c = getastring(imapd_in, imapd_out, &reference);
@@ -8766,7 +8803,16 @@ static void cmd_changesub(char *tag, char *namespace, char *name, int add)
         }
         else {
             char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-            r = mboxlist_changesub(intname, imapd_userid, imapd_authstate, add, force, 1, 0);
+            /* Prohibit SUBSCRIBEing to non-IMAP mailboxes unless using +DAV;
+             * allowallsubscribe is only about tolerating a nonexistent
+             * mailbox, not about non-IMAP mailbox types.  Always allow
+             * UNSUBSCRIBE so a stale subscription can be cleared. */
+            if (add && imapd_mailbox_isdav_forbidden(intname, 0)) {
+                r = IMAP_MAILBOX_NOTSUPPORTED;
+            }
+            else {
+                r = mboxlist_changesub(intname, imapd_userid, imapd_authstate, add, force, 1, 0);
+            }
             free(intname);
         }
     }
@@ -8819,6 +8865,9 @@ static void cmd_getacl(const char *tag, const char *name)
             !mboxname_userownsmailbox(imapd_userid, intname)) {
             r = (access & ACL_LOOKUP) ?
               IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+        }
+        else if (imapd_mailbox_isdav_forbidden(intname, mbentry->mbtype)) {
+            r = IMAP_MAILBOX_NOTSUPPORTED;
         }
     }
 
@@ -8915,6 +8964,9 @@ static void cmd_listrights(char *tag, char *name, char *identifier)
             !mboxname_userownsmailbox(imapd_userid, intname)) {
             r = (rights & ACL_LOOKUP) ?
                 IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+        }
+        else if (imapd_mailbox_isdav_forbidden(intname, mbentry->mbtype)) {
+            r = IMAP_MAILBOX_NOTSUPPORTED;
         }
     }
 
@@ -9026,6 +9078,10 @@ static void cmd_myrights(const char *tag, const char *name)
     free(intname);
     if (r == IMAP_MAILBOX_MOVED) return;
 
+    if (!r && imapd_mailbox_isdav_forbidden(mbentry->name, mbentry->mbtype)) {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+    }
+
     if (!r) r = printmyrights(name, mbentry);
 
     mboxlist_entry_free(&mbentry);
@@ -9059,6 +9115,11 @@ static void cmd_setacl(char *tag, const char *name,
 
     if (!config_getswitch(IMAPOPT_ALLOWSETACL))
         r = IMAP_DISABLED;
+
+    if (!r &&
+        imapd_mailbox_isdav_forbidden(mbname_intname(mbname), mbentry->mbtype)) {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+    }
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         /* remote mailbox */
@@ -9233,6 +9294,11 @@ static void cmd_getquota(const char *tag, const char *name)
     }
 
     r = mlookup(NULL, NULL, intname, &mbentry);
+
+    if (!r && imapd_mailbox_isdav_forbidden(intname, mbentry->mbtype)) {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+    }
+
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         /* remote mailbox */
 
@@ -9295,6 +9361,10 @@ static void cmd_getquotaroot(const char *tag, const char *name)
     if (r == IMAP_MAILBOX_MOVED) {
         free(intname);
         return;
+    }
+
+    if (!r && imapd_mailbox_isdav_forbidden(intname, mbentry->mbtype)) {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
     }
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
@@ -9451,6 +9521,11 @@ void cmd_setquota(const char *tag, const char *quotaroot)
         r = 0;      /* will create a quotaroot anyway */
     if (r)
         goto out;
+
+    if (imapd_mailbox_isdav_forbidden(intname, mbentry ? mbentry->mbtype : 0)) {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+        goto out;
+    }
 
     if (mbentry && (mbentry->mbtype & MBTYPE_REMOTE)) {
         /* remote mailbox */
@@ -9865,6 +9940,9 @@ static void cmd_status(char *tag, char *name)
         if (!(myrights & ACL_READ)) {
             r = (imapd_userisadmin || (myrights & ACL_LOOKUP)) ?
                 IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+        }
+        else if (imapd_mailbox_isdav_forbidden(intname, mbentry->mbtype)) {
+            r = IMAP_MAILBOX_NOTSUPPORTED;
         }
     }
 
@@ -10468,7 +10546,7 @@ static int parse_metadata_store_data(const char *tag,
         }
         /* DAV code uses case significant metadata entries, so if you log in with +dav,
          * we make the metadata commands case significant! */
-        if (strcasecmpsafe(imapd_magicplus, "+dav"))
+        if (!imapd_want_dav())
             lcase(entry.s);
 
         /* get value */
@@ -10604,7 +10682,6 @@ struct apply_rock {
     void *data;
     char lastname[MAX_MAILBOX_PATH+1];
     unsigned int nseen;
-    unsigned want_dav : 1;
 };
 
 static int apply_cb(struct findall_data *data, void* rock)
@@ -10616,7 +10693,8 @@ static int apply_cb(struct findall_data *data, void* rock)
     annotate_state_t *state = arock->state;
     int r;
 
-    if (!arock->want_dav && mbtype_isa(data->mbentry->mbtype) != MBTYPE_EMAIL) {
+    if (imapd_mailbox_isdav_forbidden(mbname_intname(data->mbname),
+                                      data->mbentry->mbtype)) {
         return 0;
     }
 
@@ -10651,7 +10729,6 @@ static int apply_mailbox_pattern(annotate_state_t *state,
     arock.state = state;
     arock.proc = proc;
     arock.data = data;
-    arock.want_dav = !strcasecmpsafe(imapd_magicplus, "+dav");
 
     r = mboxlist_findall(&imapd_namespace,
                          pattern,
@@ -10683,6 +10760,11 @@ static int apply_mailbox_array(annotate_state_t *state,
         r = mboxlist_lookup(intname, &mbentry, NULL);
         if (r)
             break;
+
+        if (imapd_mailbox_isdav_forbidden(intname, mbentry->mbtype)) {
+            r = IMAP_MAILBOX_NOTSUPPORTED;
+            break;
+        }
 
         if (!imapd_userisadmin
             && (!mbentry->acl
@@ -11333,7 +11415,11 @@ syntax_error:
         r = 0;
     if (r) goto out;
 
-    if (mbentry->mbtype & MBTYPE_REMOTE) {
+    if (imapd_mailbox_isdav_forbidden(intname, mbentry->mbtype)) {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+    }
+
+    if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         /* remote mailbox */
         struct backend *be;
 
@@ -11391,7 +11477,7 @@ syntax_error:
     c = prot_getc(imapd_in);
     if (!IS_EOL(c, imapd_in)) goto syntax_error;
 
-    r = index_warmup(mbentry, warmup_flags, uids);
+    if (!r) r = index_warmup(mbentry, warmup_flags, uids);
 
 out:
     snprintf(mytime, sizeof(mytime), "%2.3f",
@@ -14719,7 +14805,14 @@ static void cmd_replace(char *tag, char *seqno, char *name, int usinguid)
     if (!r) {
         /* Check location of destination mailbox */
         intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-        r = mlookup(NULL, NULL, intname, &mbentry);
+
+        /* Prohibit REPLACEing into non-IMAP mailboxes unless using +DAV */
+        if (imapd_mailbox_isdav_forbidden(intname, 0)) {
+            r = IMAP_MAILBOX_NOTSUPPORTED;
+        }
+        else {
+            r = mlookup(NULL, NULL, intname, &mbentry);
+        }
     }
 
     if (r) goto done;
@@ -14867,7 +14960,7 @@ static int notify_set_status(const mbentry_t *mbentry, void *rock)
 
     if (hash_lookup(mbentry->name, srock->mboxnames)) return 0;
 
-    if (mboxname_isnonimapmailbox(mbentry->name, mbentry->mbtype)) return 0;
+    if (imapd_mailbox_isdav_forbidden(mbentry->name, mbentry->mbtype)) return 0;
 
     /* check permissions */
     switch (srock->filter) {
@@ -15022,7 +15115,8 @@ static void cmd_notify(char *tag, int set)
                         int myrights =
                             cyrus_acl_myrights(imapd_authstate, mbentry->acl);
 
-                        if (myrights & ACL_LOOKUP) {
+                        if ((myrights & ACL_LOOKUP) &&
+                            !imapd_mailbox_isdav_forbidden(mboxname, mbentry->mbtype)) {
                             if (myrights & ACL_READ) {
                                 strarray_add(mboxes, mbentry->name);
                             }

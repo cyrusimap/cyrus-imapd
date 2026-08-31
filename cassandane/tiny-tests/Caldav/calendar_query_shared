@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_calendar_query_shared
-    :NoAltNameSpace
+    :MagicPlus :NoAltNameSpace
     ($self)
 {
     my $admintalk = $self->{adminstore}->get_client();
@@ -26,7 +26,11 @@ sub test_calendar_query_shared
     $admintalk->setacl("user.test.#calendars.Default", "cassandane" => 'lrswin');
 
     xlog $self, "Subscribe to shared calendar";
-    my $imaptalk = $self->{store}->get_client();
+    # Subscribing to a shared DAV mailbox needs the magic "+dav" userid
+    # suffix.
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(
+                        username => "cassandane+dav");
+    my $imaptalk = $plusstore->get_client();
     $imaptalk->subscribe("user.test.#calendars.Default");
 
     xlog $self, "Get calendars as cassandane";
