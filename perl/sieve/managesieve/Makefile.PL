@@ -19,8 +19,8 @@ WriteMakefile(
     'LIBS'      => ["$LIB_SASL $build->{SSL_LIBS} $build->{LIB_UUID} $build->{LIB_REGEX} $build->{ZLIB} $build->{SQLITE_LIBADD} $build->{MYSQL_LIBADD} $build->{PGSQL_LIBADD} $build->{ICU_LIBS}"],
     'CCFLAGS'   => "$build->{GCOV_CFLAGS}",
     'DEFINE'    => '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING'
-    'INC'       => join(q{ }, "-I$build->{top_srcdir}/include",
-                              "-I$build->{top_builddir}/include",
+    'INC'       => join(q{ }, "-I$build->{top_srcdir}",
+                              "-I$build->{top_builddir}",
                               "-I$build->{top_srcdir}/lib",
                               "-I$build->{top_srcdir}/perl/sieve",
                               "-I$build->{top_srcdir}/perl/sieve/lib",

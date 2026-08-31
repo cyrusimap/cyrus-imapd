@@ -25,9 +25,8 @@ WriteMakefile(
     'MYEXTLIB'  => "$build->{top_builddir}/perl/.libs/libcyrus.a $build->{top_builddir}/perl/.libs/libcyrus_min.a",
     'LIBS'      => [ "$LIB_SASL $build->{SSL_LIBS} $build->{LIB_UUID} $build->{LIB_REGEX} $build->{ZLIB} $build->{GCOV_LIBS}"],
     'DEFINE'    => '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING'
-    'INC'       => join(q{ }, "-I$build->{top_srcdir}/include",
-                              "-I$build->{top_builddir}/include",
-                              "-I$build->{top_srcdir}",
+    'INC'       => join(q{ }, "-I$build->{top_srcdir}",
+                              "-I$build->{top_builddir}",
                               "-I$build->{top_srcdir}/com_err/et",
                               "$build->{SASLFLAGS}",
                               "$build->{SSL_CFLAGS}",

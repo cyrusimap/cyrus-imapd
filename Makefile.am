@@ -49,8 +49,6 @@ AM_CXXFLAGS = $(WARN_CFLAGS) $(GCOV_CXXFLAGS)
 
 AM_CPPFLAGS = \
     $(COM_ERR_CPPFLAGS) \
-    -I${top_builddir}/include \
-    -I${top_srcdir}/include \
     -I${top_builddir} \
     -I${top_builddir}/lib \
     -I${top_srcdir} \
@@ -769,17 +767,19 @@ lint-logfmt-keys:
 
 .PHONY: lint-logfmt-keys
 
-includedir=@includedir@
+# XXX This isn't the only way to do this, but it's the neatest...
+# XXX (write a better comment)
+includedir=@includedir@/cyrus
 
 include_HEADERS = \
     lib/acl.h \
-    include/cyrus/arrayu64.h \
-    include/cyrus/assert.h \
+    cyrus/arrayu64.h \
+    cyrus/assert.h \
     lib/auth.h \
     lib/bitvector.h \
     lib/bloom.h \
     lib/bsearch.h \
-    include/cyrus/buf.h \
+    cyrus/buf.h \
     lib/charset.h \
     lib/command.h \
     lib/crc32.h \
@@ -787,46 +787,46 @@ include_HEADERS = \
     lib/cyr_lock.h \
     lib/cyr_qsort_r.h \
     lib/cyrusdb.h \
-    include/cyrus/dynarray.h \
+    cyrus/dynarray.h \
     lib/glob.h \
     lib/gmtoff.h \
-    include/cyrus/hash.h \
-    include/cyrus/hashset.h \
-    include/cyrus/hashu64.h \
+    cyrus/hash.h \
+    cyrus/hashset.h \
+    cyrus/hashu64.h \
     lib/imapurl.h \
     lib/imclient.h \
     lib/imparse.h \
     lib/iostat.h \
     lib/iptostring.h \
-    include/cyrus/libconfig.h \
+    cyrus/libconfig.h \
     lib/libcyr_cfg.h \
     lib/logfmt.h \
     lib/lsort.h \
     lib/map.h \
     lib/mappedfile.h \
     lib/mkgmtime.h \
-    include/cyrus/mpool.h \
+    cyrus/mpool.h \
     lib/murmurhash2.h \
     lib/nonblock.h \
     lib/parseaddr.h \
-    include/cyrus/proc.h \
+    cyrus/proc.h \
     lib/procinfo.h \
-    include/cyrus/retry.h \
+    cyrus/retry.h \
     lib/rfc822tok.h \
     lib/seqset.h \
     lib/signals.h \
-    include/cyrus/smallarrayu64.h \
+    cyrus/smallarrayu64.h \
     lib/sqldb.h \
-    include/cyrus/strarray.h \
-    include/cyrus/strhash.h \
+    cyrus/strarray.h \
+    cyrus/strhash.h \
     lib/stristr.h \
     lib/times.h \
-    include/cyrus/tok.h \
+    cyrus/tok.h \
     lib/twom.h \
     lib/wildmat.h \
-    include/cyrus/xmalloc.h \
-    include/cyrus/xsha1.h \
-    include/cyrus/xunlink.h \
+    cyrus/xmalloc.h \
+    cyrus/xsha1.h \
+    cyrus/xunlink.h \
     lib/zeroskip.h
 
 nodist_include_HEADERS = \
