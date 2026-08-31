@@ -568,6 +568,9 @@ static void add_resp_header(struct transaction_t *txn,
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
 
     if (strm->num_resp_hdrs >= HTTP2_MAX_HEADERS) {
+        syslog(LOG_ERR, "add_resp_header(id=%d): dropping '%s' header,"
+                        " HTTP2_MAX_HEADERS (%d) reached",
+               strm->id, name, HTTP2_MAX_HEADERS);
         buf_free(value);
         return;
     }
@@ -664,6 +667,24 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     return r;
 }
 
+/* A response body chunk handed to nghttp2 via data_source_read_cb().
+ * This is a copy of the data rather than a reference into the caller's
+ * own buffer because nghttp2's read callback may defer reading a
+ * submitted DATA frame's source across any number of later
+ * nghttp2_session_mem_send2() calls when the stream's HTTP/2 flow-
+ * control window is exhausted.
+ */
+struct h2_body_chunk {
+    struct buf data;
+    size_t pos;
+};
+
+static void free_body_chunk(struct h2_body_chunk *chunk)
+{
+    buf_free(&chunk->data);
+    free(chunk);
+}
+
 static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((unused)),
                                          int32_t stream_id,
                                          uint8_t *buf, size_t length,
@@ -671,16 +692,20 @@ static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((un
                                          nghttp2_data_source *source,
                                          void *user_data __attribute__((unused)))
 {
-    struct protstream *s = source->ptr;
-    nghttp2_ssize n = prot_read(s, (char *) buf, length);
+    struct h2_body_chunk *chunk = source->ptr;
+    size_t remain = buf_len(&chunk->data) - chunk->pos;
+    size_t n = length < remain ? length : remain;
+
+    if (n) memcpy(buf, buf_base(&chunk->data) + chunk->pos, n);
+    chunk->pos += n;
 
     syslog(LOG_DEBUG,
            "http2_data_source_read_cb(id=%d, len=%zu): n=%zu, eof=%d",
-           stream_id, length, n, !s->cnt);
+           stream_id, length, n, chunk->pos == buf_len(&chunk->data));
 
-    if (!s->cnt) {
+    if (chunk->pos == buf_len(&chunk->data)) {
         *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-        prot_free(s);  /* Done with the protstream */
+        free_body_chunk(chunk);  /* Done with our copy */
     }
 
     return n;
@@ -716,11 +741,13 @@ static int resp_body_chunk(struct transaction_t *txn,
         retry_writev(txn->conn->logfd, iov, niov);
     }
 
-    /* NOTE: The protstream that we use as the data source MUST remain
-       available until the data source read callback has retrieved all data.
-    */
+    /* Own copy of this chunk -- see struct h2_body_chunk's comment for
+     * why we can't just alias 'data' instead of copying it. */
+    struct h2_body_chunk *chunk = xzmalloc(sizeof(struct h2_body_chunk));
+    if (datalen) buf_setmap(&chunk->data, data, datalen);
+
     nghttp2_data_provider2 prd = {
-        .source.ptr    = prot_readmap(data, datalen),
+        .source.ptr    = chunk,
         .read_callback = data_source_read_cb
     };
 
@@ -744,7 +771,7 @@ static int resp_body_chunk(struct transaction_t *txn,
     int r = nghttp2_submit_data2(ctx->session, flags, strm->id, &prd);
     if (r) {
         syslog(LOG_ERR, "nghttp2_submit_data2: %s", nghttp2_strerror(r));
-        prot_free(prd.source.ptr);
+        free_body_chunk(chunk);
         return HTTP_SERVER_ERROR;
     }
     else {
