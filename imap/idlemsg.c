@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xunlink.h>
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -17,12 +20,10 @@
 #include <signal.h>
 #include <string.h>
 
-#include "assert.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "idlemsg.h"
 #include "global.h"
-#include "xunlink.h"
 #include "util.h"
 
 /* generated headers are not necessarily in current directory */

@@ -12,6 +12,9 @@
 
 #include <config.h>
 
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+
 #include <sys/param.h>
 #ifndef MAXPATHLEN
 #define MAXPATHLEN MAXPATHNAMELEN
@@ -30,8 +33,6 @@
 #include "auth_pts.h"
 #include "cyrusdb.h"
 #include "imap/global.h"
-#include "libconfig.h"
-#include "xmalloc.h"
 
 /* global */
 static time_t timenow;

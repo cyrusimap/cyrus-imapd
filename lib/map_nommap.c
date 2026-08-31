@@ -3,6 +3,9 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -11,7 +14,6 @@
 #include <syslog.h>
 
 #include "slowio.h"
-#include "xmalloc.h"
 #include "map.h"
 
 #define SLOP (4*1024)

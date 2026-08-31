@@ -4,15 +4,16 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <syslog.h>
 
-#include "assert.h"
 #include "libcyr_cfg.h"
 #include "charset.h"
 #include "cyrusdb.h"
-#include "xmalloc.h"
 #include "util.h"
 
 struct delayed_action {

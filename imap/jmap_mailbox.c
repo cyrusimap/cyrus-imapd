@@ -4,13 +4,15 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 
 #include "acl.h"
 #include "annotate.h"
@@ -32,7 +34,6 @@
 #include "sync_log.h"
 #include "user.h"
 #include "util.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

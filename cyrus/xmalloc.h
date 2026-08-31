@@ -5,12 +5,12 @@
 #ifndef INCLUDED_XMALLOC_H
 #define INCLUDED_XMALLOC_H
 
+#include <cyrus/assert.h>
+
 /* for size_t */
 #include <stdio.h>
 /* for free() */
 #include <stdlib.h>
-
-#include "assert.h"
 
 extern void *xmalloc(size_t size);
 extern void *xzmalloc(size_t size);

@@ -1,15 +1,17 @@
 #if HAVE_CONFIG_H
 #include <config.h>
 #endif
+#include "cunit/unit.h"
+
+#include <cyrus/proc.h>
+
+#include <cyrus/hash.h>
+#include <cyrus/libconfig.h>
 
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "cunit/unit.h"
-#include "lib/hash.h"
-#include "lib/libconfig.h"
-#include "lib/proc.h"
 #include "lib/util.h"
 
 /* this is not re-entrant, but nor is cunit, so it can't hurt. */

@@ -1,11 +1,12 @@
 #ifndef HASH__H
 #define HASH__H
 
+#include <cyrus/mpool.h>
+#include <cyrus/strarray.h>
+
 #include <stddef.h>           /* For size_t     */
 #include <stdint.h>
 #include <stdbool.h>
-#include "mpool.h"
-#include "strarray.h"
 
 #define HASH_TABLE_INITIALIZER {0, 0, 0, 0, NULL, NULL}
 

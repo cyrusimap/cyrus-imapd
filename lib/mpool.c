@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus/mpool.h>
+
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -13,9 +17,6 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <sysexits.h>
-
-#include "mpool.h"
-#include "xmalloc.h"
 
 struct mpool
 {

@@ -1,10 +1,11 @@
 #include "cunit/unit.h"
 #include "lib/logfmt.h"
 
+#include <cyrus/libconfig.h>
+
 #include "imap/mailbox.h"
 #include "imap/mboxlist.h"
 
-#include "lib/libconfig.h"
 #include "lib/sessionid.h"
 
 #include <stdbool.h>

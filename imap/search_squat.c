@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
@@ -15,10 +18,8 @@
 #include <unistd.h>
 #endif
 
-#include "assert.h"
 #include "index.h"
 #include "global.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "bitvector.h"

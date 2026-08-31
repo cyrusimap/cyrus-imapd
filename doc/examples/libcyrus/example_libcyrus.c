@@ -15,6 +15,8 @@
 
 #define _GNU_SOURCE 1
 
+#include <cyrus/libconfig.h>
+
 #include "acl.h"
 #include "auth.h"
 #include "bitvector.h"
@@ -30,7 +32,6 @@
 #include "imparse.h"
 #include "iostat.h"
 #include "iptostring.h"
-#include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "lsort.h"
 #include "mappedfile.h"

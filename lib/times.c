@@ -9,7 +9,8 @@
 #include <string.h>
 #include <strings.h>
 
-#include "assert.h"
+#include <cyrus/assert.h>
+
 #include "times.h"
 #include "util.h"
 #include "gmtoff.h"

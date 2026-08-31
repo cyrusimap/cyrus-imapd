@@ -3,6 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/retry.h>
+
+#include <cyrus/xmalloc.h>
+
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/uio.h>
@@ -11,9 +16,7 @@
 #include <unistd.h>
 #endif
 
-#include "retry.h"
 #include "slowio.h"
-#include "xmalloc.h"
 
 /*
  * Keep calling the read() system call with 'fd', 'buf', and 'nbyte'

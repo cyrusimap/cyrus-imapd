@@ -6,6 +6,9 @@
 #include <config.h>
 #endif
 
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+
 #include "sieve_interface.h"
 
 #include "bc_parse.h"
@@ -13,7 +16,6 @@
 #include "script.h"
 #include "interp.h"
 
-#include "xmalloc.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -25,7 +27,6 @@
 
 #include <string.h>
 
-#include "libconfig.h"
 #include "map.h"
 #include "times.h"
 

@@ -5,9 +5,9 @@
 #ifndef MASTER_EVENT_H
 #define MASTER_EVENT_H
 
-#include <sys/time.h>
+#include <cyrus/strarray.h>
 
-#include "lib/strarray.h"
+#include <sys/time.h>
 
 struct event {
     char *name;

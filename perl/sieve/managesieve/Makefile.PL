@@ -19,7 +19,14 @@ WriteMakefile(
     'LIBS'      => ["$LIB_SASL $build->{SSL_LIBS} $build->{LIB_UUID} $build->{LIB_REGEX} $build->{ZLIB} $build->{SQLITE_LIBADD} $build->{MYSQL_LIBADD} $build->{PGSQL_LIBADD} $build->{ICU_LIBS}"],
     'CCFLAGS'   => "$build->{GCOV_CFLAGS}",
     'DEFINE'    => '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING'
-    'INC'       => "-I$build->{top_srcdir}/lib -I$build->{top_srcdir}/perl/sieve -I$build->{top_srcdir}/perl/sieve/lib $build->{SASLFLAGS} $build->{SSL_CFLAGS}",
+    'INC'       => join(q{ }, "-I$build->{top_srcdir}",
+                              "-I$build->{top_builddir}",
+                              "-I$build->{top_srcdir}/lib",
+                              "-I$build->{top_srcdir}/perl/sieve",
+                              "-I$build->{top_srcdir}/perl/sieve/lib",
+                              "-I$build->{top_srcdir}/com_err/et",
+                              "$build->{SASLFLAGS}",
+                              "$build->{SSL_CFLAGS}"),
     'OBJECT'    => 'managesieve.o',
     'LD'        => $Config{ld} . " $build->{GCOV_LDFLAGS}",
 );

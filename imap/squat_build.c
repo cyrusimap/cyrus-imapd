@@ -53,6 +53,10 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -62,11 +66,8 @@
 #include "mailbox.h"
 #include "message.h"
 
-#include "assert.h"
 #include "util.h"
 #include "index.h"
-#include "xmalloc.h"
-#include "xunlink.h"
 
 /* A simple write-buffering module which avoids copying of the output data. */
 

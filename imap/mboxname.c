@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
+
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -13,17 +17,14 @@
 #include <unistd.h>
 #endif
 
-#include "assert.h"
 #include "byteorder.h"
 #include "crc32.h"
 #include "glob.h"
 #include "global.h"
 #include "mailbox.h"
 #include "map.h"
-#include "retry.h"
 #include "user.h"
 #include "util.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

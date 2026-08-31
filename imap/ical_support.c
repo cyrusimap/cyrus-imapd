@@ -4,12 +4,16 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/strhash.h>
+#include <cyrus/tok.h>
+#include <cyrus/xsha1.h>
+
 #include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
 #include <libxml/uri.h>
 
-#include "assert.h"
 #include "bsearch.h"
 #include "caldav_db.h"
 #include "css3_color.h"
@@ -17,11 +21,8 @@
 #include "ical_support.h"
 #include "icu_wrap.h"
 #include "message.h"
-#include "strhash.h"
 #include "stristr.h"
-#include "tok.h"
 #include "util.h"
-#include "xsha1.h"
 
 #ifdef WITH_JMAP
 #endif

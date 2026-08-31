@@ -24,6 +24,10 @@
  *
  */
 
+#include <cyrus/strhash.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+
 #include <sysexits.h>
 
 #include "annotate.h"
@@ -38,13 +42,10 @@
 #include "proxy.h"
 #include "times.h"
 #include "syslog.h"
-#include "strhash.h"
 #include "sync_support.h"
-#include "tok.h"
 #include "user.h"
 #include "util.h"
 #include "version.h"
-#include "xmalloc.h"
 #include "xml_support.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"

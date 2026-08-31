@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus/strarray.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -16,7 +18,6 @@
 #include "global.h"
 #include "mboxname.h"
 #include "command.h"
-#include "strarray.h"
 #include "user.h"
 
 /* generated headers are not necessarily in current directory */

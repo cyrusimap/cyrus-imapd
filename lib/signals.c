@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
@@ -12,10 +16,7 @@
 #include <string.h>
 #include <errno.h>
 
-#include "assert.h"
-#include "libconfig.h"
 #include "signals.h"
-#include "xmalloc.h"
 #include "util.h"
 
 #ifndef _NSIG

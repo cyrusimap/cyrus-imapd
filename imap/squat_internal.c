@@ -1,9 +1,10 @@
 /* Internal routines used by SQUAT. */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
+#include <config.h>
 
-#include "config.h"
-#include "assert.h"
+#include <cyrus/assert.h>
+
 #include "squat_internal.h"
 
 static int last_err = SQUAT_ERR_OK;

@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -18,12 +23,10 @@
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
-#include "assert.h"
 #include "bsearch.h"
 #include "charset.h"
 #include "crc32.h"
 #include "dlist.h"
-#include "hash.h"
 #include "global.h"
 #include "imapd.h"
 #include "lsort.h"
@@ -35,12 +38,10 @@
 #include "search_engines.h"
 #include "seen.h"
 #include "statuscache.h"
-#include "strhash.h"
 #include "sync_log.h"
 #include "syslog.h"
 #include "user.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "times.h"

@@ -2,8 +2,10 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
-#include <assert.h>
 #include <config.h>
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -15,7 +17,6 @@
 #include <syslog.h>
 
 #include "backend.h"
-#include "xmalloc.h"
 #include "global.h"
 #include "smtpclient.h"
 #include "telemetry.h"

@@ -772,17 +772,19 @@ lint-logfmt-keys:
 
 .PHONY: lint-logfmt-keys
 
+# XXX This isn't the only way to do this, but it's the neatest...
+# XXX (write a better comment)
 includedir=@includedir@/cyrus
 
 include_HEADERS = \
     lib/acl.h \
-    lib/arrayu64.h \
-    lib/assert.h \
+    cyrus/arrayu64.h \
+    cyrus/assert.h \
     lib/auth.h \
     lib/bitvector.h \
     lib/bloom.h \
     lib/bsearch.h \
-    lib/buf.h \
+    cyrus/buf.h \
     lib/charset.h \
     lib/command.h \
     lib/crc32.h \
@@ -790,46 +792,46 @@ include_HEADERS = \
     lib/cyr_lock.h \
     lib/cyr_qsort_r.h \
     lib/cyrusdb.h \
-    lib/dynarray.h \
+    cyrus/dynarray.h \
     lib/glob.h \
     lib/gmtoff.h \
-    lib/hash.h \
-    lib/hashset.h \
-    lib/hashu64.h \
+    cyrus/hash.h \
+    cyrus/hashset.h \
+    cyrus/hashu64.h \
     lib/imapurl.h \
     lib/imclient.h \
     lib/imparse.h \
     lib/iostat.h \
     lib/iptostring.h \
-    lib/libconfig.h \
+    cyrus/libconfig.h \
     lib/libcyr_cfg.h \
     lib/logfmt.h \
     lib/lsort.h \
     lib/map.h \
     lib/mappedfile.h \
     lib/mkgmtime.h \
-    lib/mpool.h \
+    cyrus/mpool.h \
     lib/murmurhash2.h \
     lib/nonblock.h \
     lib/parseaddr.h \
-    lib/proc.h \
+    cyrus/proc.h \
     lib/procinfo.h \
-    lib/retry.h \
+    cyrus/retry.h \
     lib/rfc822tok.h \
     lib/seqset.h \
     lib/signals.h \
-    lib/smallarrayu64.h \
+    cyrus/smallarrayu64.h \
     lib/sqldb.h \
-    lib/strarray.h \
-    lib/strhash.h \
+    cyrus/strarray.h \
+    cyrus/strhash.h \
     lib/stristr.h \
     lib/times.h \
-    lib/tok.h \
+    cyrus/tok.h \
     lib/twom.h \
     lib/wildmat.h \
-    lib/xmalloc.h \
-    lib/xsha1.h \
-    lib/xunlink.h
+    cyrus/xmalloc.h \
+    cyrus/xsha1.h \
+    cyrus/xunlink.h
 
 nodist_include_HEADERS = \
     lib/imapopts.h

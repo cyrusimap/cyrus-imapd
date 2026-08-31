@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include <cyrus/retry.h>
+#include <cyrus/xunlink.h>
+
 #include <string.h>
 #include <syslog.h>
 
@@ -11,9 +14,7 @@
 #include "global.h"
 #include "http_client.h"
 #include "map.h"
-#include "retry.h"
 #include "util.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

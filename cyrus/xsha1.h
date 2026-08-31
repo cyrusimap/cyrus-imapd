@@ -9,12 +9,12 @@
 #include <config.h>
 #endif
 
+#include <cyrus/assert.h>
+
 /* since an SSL library is available, just use its implementation */
 
 #include <openssl/sha.h>
 #include <openssl/evp.h>
-
-#include "assert.h"
 
 #ifndef SHA1_DIGEST_LENGTH
 #define SHA1_DIGEST_LENGTH (SHA_DIGEST_LENGTH)

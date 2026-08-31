@@ -4,13 +4,14 @@
 
 #include <config.h>
 
+#include <cyrus/assert.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 
 #include "http_jmap.h"

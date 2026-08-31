@@ -3,9 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include "bufarray.h"
+
+#include <cyrus/xmalloc.h>
+
 #include <memory.h>
 #include "util.h"
-#include "xmalloc.h"
 
 EXPORTED bufarray_t *bufarray_new(void)
 {

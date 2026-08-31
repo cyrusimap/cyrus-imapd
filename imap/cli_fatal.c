@@ -4,12 +4,13 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
 
 #include "global.h"
-#include "xmalloc.h"
 
 /* generic fatal() routine for command line utilities */
 EXPORTED void fatal(const char *message, int code)
