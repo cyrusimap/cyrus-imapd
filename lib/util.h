@@ -7,8 +7,8 @@
 
 #include <config.h>
 
-#include <cyrus-imap/buf.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/buf.h>
+#include <cyrus/xmalloc.h>
 
 #include <ctype.h>
 #include <errno.h>

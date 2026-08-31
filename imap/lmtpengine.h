@@ -7,7 +7,7 @@
 
 /***************** server-side LMTP *******************/
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include "spool.h"
 #include "mboxname.h"

@@ -1,8 +1,8 @@
 #include "cunit/unit.h"
 
-#include <cyrus-imap/dynarray.h>
+#include <cyrus/dynarray.h>
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <stdint.h>
 

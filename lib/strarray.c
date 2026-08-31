@@ -2,8 +2,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
-#include <cyrus-imap/strarray.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
 
 #include <memory.h>
 #include "logfmt.h"

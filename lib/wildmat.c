@@ -43,7 +43,7 @@
 
 #include "wildmat.h"
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <stdio.h>
 #include <string.h>

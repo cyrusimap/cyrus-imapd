@@ -32,8 +32,8 @@
 #define MIME_MAX_HEADER_LENGTH 78
 #define MIME_MAX_LINE_LENGTH 998
 
-#include <cyrus-imap/buf.h>
-#include <cyrus-imap/xsha1.h>
+#include <cyrus/buf.h>
+#include <cyrus/xsha1.h>
 
 #define charset_base64_len_unpadded(n) \
     ((n) * 4 / 3)

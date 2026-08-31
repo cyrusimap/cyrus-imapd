@@ -12,7 +12,7 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/assert.h>
+#include <cyrus/assert.h>
 
 #include <fcntl.h>
 #include <math.h>

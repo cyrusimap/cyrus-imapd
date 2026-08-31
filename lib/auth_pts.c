@@ -4,9 +4,9 @@
 
 #include <config.h>
 
-#include <cyrus-imap/retry.h>
-#include <cyrus-imap/strhash.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/retry.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
 
 #include <stdio.h>
 #include <stdlib.h>

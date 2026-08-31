@@ -4,9 +4,9 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/smallarrayu64.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/assert.h>
+#include <cyrus/smallarrayu64.h>
+#include <cyrus/xmalloc.h>
 
 #include <errno.h>
 #include <sys/types.h>

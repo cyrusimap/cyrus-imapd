@@ -5,7 +5,7 @@
 #ifndef INCLUDED_SEARCH_ENGINES_H
 #define INCLUDED_SEARCH_ENGINES_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include <stdbool.h>
 

@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/retry.h>
+#include <cyrus/retry.h>
 
 #include <sysexits.h>
 

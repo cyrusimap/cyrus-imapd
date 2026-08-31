@@ -4,10 +4,10 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/strhash.h>
-#include <cyrus-imap/tok.h>
-#include <cyrus-imap/xsha1.h>
+#include <cyrus/assert.h>
+#include <cyrus/strhash.h>
+#include <cyrus/tok.h>
+#include <cyrus/xsha1.h>
 
 #include <string.h>
 #include <sysexits.h>

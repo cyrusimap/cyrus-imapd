@@ -5,8 +5,8 @@
 #define JMAP_API_H
 #include <config.h>
 
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/strarray.h>
+#include <cyrus/hash.h>
+#include <cyrus/strarray.h>
 
 #include "acl.h"
 #include "auth.h"

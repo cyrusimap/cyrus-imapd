@@ -1,6 +1,6 @@
 #include "config.h"
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include <stdio.h>
 #include <sys/types.h>

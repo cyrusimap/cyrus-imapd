@@ -3,7 +3,7 @@
 /* See COPYING file at the root of the distribution for more details. */
 #include "cunit/unit-timeofday.h"
 
-#include <cyrus-imap/assert.h>
+#include <cyrus/assert.h>
 
 #include <errno.h>
 #include <stdio.h>

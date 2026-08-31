@@ -3,7 +3,7 @@
 /* See COPYING file at the root of the distribution for more details. */
 #include <config.h>
 
-#include <cyrus-imap/strhash.h>
+#include <cyrus/strhash.h>
 
 #include <sysexits.h>
 

@@ -5,7 +5,7 @@
 #ifndef _IMAP_PROXY_H
 #define _IMAP_PROXY_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include "annotate.h"
 #include "backend.h"

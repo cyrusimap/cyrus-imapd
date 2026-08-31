@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <errno.h>
 #include <libgen.h>

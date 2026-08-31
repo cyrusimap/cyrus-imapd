@@ -5,7 +5,7 @@
 #ifndef ANNOTATE_H
 #define ANNOTATE_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include "auth.h"
 #include "charset.h" /* for comp_pat */

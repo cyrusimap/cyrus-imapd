@@ -5,7 +5,7 @@
 
 #include "lib/cron.h"
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <sysexits.h>
 #include <syslog.h>

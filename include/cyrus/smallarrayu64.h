@@ -5,7 +5,7 @@
 #ifndef __CYRUS_SMALLARRAYU64_H__
 #define __CYRUS_SMALLARRAYU64_H__
 
-#include <cyrus-imap/arrayu64.h>
+#include <cyrus/arrayu64.h>
 
 #include <sys/types.h>
 

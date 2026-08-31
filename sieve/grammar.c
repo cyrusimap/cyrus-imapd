@@ -9,7 +9,7 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include "grammar.h"
 #include "imparse.h"

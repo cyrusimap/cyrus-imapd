@@ -14,7 +14,7 @@
 #ifndef INCLUDED_AUDITLOG_H
 #define INCLUDED_AUDITLOG_H
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include "imap/duplicate.h"
 #include "imap/mailbox.h"

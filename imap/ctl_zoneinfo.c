@@ -4,8 +4,8 @@
 
 #include <config.h>
 
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/hash.h>
+#include <cyrus/xmalloc.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

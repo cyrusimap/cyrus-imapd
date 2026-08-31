@@ -5,7 +5,7 @@
 #ifndef __CYRUS_IMAP_XAPIAN_WRAP__
 #define __CYRUS_IMAP_XAPIAN_WRAP__
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include "message_guid.h"
 #include "util.h"

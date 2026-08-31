@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
+#include <cyrus/assert.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

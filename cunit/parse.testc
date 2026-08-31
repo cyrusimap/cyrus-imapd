@@ -3,7 +3,7 @@
 
 #include "util.h"
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <sysexits.h>
 

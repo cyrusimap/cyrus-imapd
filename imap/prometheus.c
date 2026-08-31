@@ -4,9 +4,9 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xunlink.h>
 
 #include <sys/types.h>
 

@@ -5,8 +5,8 @@
 #ifndef TREE_H
 #define TREE_H
 
-#include <cyrus-imap/arrayu64.h>
-#include <cyrus-imap/strarray.h>
+#include <cyrus/arrayu64.h>
+#include <cyrus/strarray.h>
 
 #include <jansson.h>
 

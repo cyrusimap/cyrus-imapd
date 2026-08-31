@@ -1,7 +1,7 @@
 #include "cunit/unit.h"
 #include "imap/loginlog.h"
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include "lib/sessionid.h"
 

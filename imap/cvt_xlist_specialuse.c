@@ -4,8 +4,8 @@
 
 #include <config.h>
 
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/hash.h>
+#include <cyrus/libconfig.h>
 
 #include <getopt.h>
 #include <stdio.h>

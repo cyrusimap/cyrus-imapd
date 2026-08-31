@@ -5,7 +5,7 @@
 #ifndef _MAPPEDFILE_H
 #define _MAPPEDFILE_H
 
-#include <cyrus-imap/buf.h>
+#include <cyrus/buf.h>
 
 #include <sys/types.h>
 #include <sys/uio.h>

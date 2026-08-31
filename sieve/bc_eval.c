@@ -6,8 +6,8 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/dynarray.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/dynarray.h>
+#include <cyrus/xmalloc.h>
 
 #include "sieve_interface.h"
 #include "grammar.h"

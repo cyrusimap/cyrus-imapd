@@ -4,13 +4,13 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/arrayu64.h>
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/strarray.h>
-#include <cyrus-imap/tok.h>
-#include <cyrus-imap/xmalloc.h>
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/assert.h>
+#include <cyrus/arrayu64.h>
+#include <cyrus/hash.h>
+#include <cyrus/strarray.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>

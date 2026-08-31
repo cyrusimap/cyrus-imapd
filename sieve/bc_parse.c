@@ -8,8 +8,8 @@
 
 #include "bc_parse.h"
 
-#include <cyrus-imap/arrayu64.h>
-#include <cyrus-imap/strarray.h>
+#include <cyrus/arrayu64.h>
+#include <cyrus/strarray.h>
 
 #include <stdio.h>
 

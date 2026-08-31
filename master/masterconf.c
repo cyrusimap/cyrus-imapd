@@ -4,8 +4,8 @@
 
 #include <config.h>
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
 
 #include <stdio.h>
 #include <stdlib.h>

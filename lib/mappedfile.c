@@ -21,9 +21,9 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/retry.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/assert.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
 
 #include <libgen.h>
 #include <stdlib.h>

@@ -6,9 +6,9 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/strarray.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
 
 #include <stdlib.h>
 #include <stdio.h>

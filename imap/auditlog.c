@@ -6,7 +6,7 @@
 
 #include "imap/auditlog.h"
 
-#include <cyrus-imap/assert.h>
+#include <cyrus/assert.h>
 
 #include "imap/mailbox.h"
 #include "imap/mboxname.h"

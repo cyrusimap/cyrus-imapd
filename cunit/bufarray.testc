@@ -2,7 +2,7 @@
 
 #include "bufarray.h"
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include "bsearch.h"
 

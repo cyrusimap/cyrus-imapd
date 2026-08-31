@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/xunlink.h>
 
 #include <errno.h>
 #include <string.h>

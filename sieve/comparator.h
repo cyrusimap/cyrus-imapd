@@ -5,7 +5,7 @@
 #ifndef COMPARATOR_H
 #define COMPARATOR_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include <sys/types.h>
 

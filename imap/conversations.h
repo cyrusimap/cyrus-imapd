@@ -9,10 +9,10 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/arrayu64.h>
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/hashu64.h>
-#include <cyrus-imap/strarray.h>
+#include <cyrus/arrayu64.h>
+#include <cyrus/hash.h>
+#include <cyrus/hashu64.h>
+#include <cyrus/strarray.h>
 
 #include <stdio.h>
 #include <string.h>

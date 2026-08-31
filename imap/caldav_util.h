@@ -5,8 +5,8 @@
 #ifndef CALDAV_UTIL_H
 #define CALDAV_UTIL_H
 
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/strarray.h>
+#include <cyrus/hash.h>
+#include <cyrus/strarray.h>
 
 #include <libical/ical.h>
 

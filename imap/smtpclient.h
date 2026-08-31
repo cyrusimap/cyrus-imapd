@@ -5,7 +5,7 @@
 #ifndef INCLUDED_SMTPCLIENT_H
 #define INCLUDED_SMTPCLIENT_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include "prot.h"
 #include "ptrarray.h"

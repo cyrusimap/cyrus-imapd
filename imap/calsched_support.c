@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include <errno.h>
 #include <string.h>

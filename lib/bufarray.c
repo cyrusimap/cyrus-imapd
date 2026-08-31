@@ -4,7 +4,7 @@
 
 #include "bufarray.h"
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <memory.h>
 #include "util.h"

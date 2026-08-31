@@ -1,7 +1,7 @@
 #include "cunit/unit.h"
 #include "master/event.h"
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include "lib/util.h"
 

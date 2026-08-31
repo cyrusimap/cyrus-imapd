@@ -5,7 +5,7 @@
 #ifndef INCLUDED_GLOBAL_H
 #define INCLUDED_GLOBAL_H
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include <sasl/sasl.h>
 #include "auth.h"

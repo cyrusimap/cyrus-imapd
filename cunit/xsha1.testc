@@ -1,5 +1,5 @@
 #include "cunit/unit.h"
-#include <cyrus-imap/xsha1.h>
+#include <cyrus/xsha1.h>
 
 #include <stdint.h>
 

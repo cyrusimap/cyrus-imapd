@@ -4,8 +4,8 @@
 #include "cunit/unit-timezones.h"
 #include "cunit/unit-timeofday.h"
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
 
 #include "lib/prot.h"
 #include "lib/util.h"

@@ -5,7 +5,7 @@
 #ifndef __CYRUS_IMAP_PARSE_H__
 #define __CYRUS_IMAP_PARSE_H__
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include "prot.h"
 #include "index.h"

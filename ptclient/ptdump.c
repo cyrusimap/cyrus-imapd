@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include <getopt.h>
 #include <stdio.h>

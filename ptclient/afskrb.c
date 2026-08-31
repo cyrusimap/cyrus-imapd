@@ -4,9 +4,9 @@
 
 #include <config.h>
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/strhash.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
 
 #include <ctype.h>
 #include <sysexits.h>

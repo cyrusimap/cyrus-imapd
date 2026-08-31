@@ -3,9 +3,9 @@
 /* See COPYING file at the root of the distribution for more details. */
 #include <config.h>
 
-#include <cyrus-imap/tok.h>
+#include <cyrus/tok.h>
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <string.h>
 #include <ctype.h>

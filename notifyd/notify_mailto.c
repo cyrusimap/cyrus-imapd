@@ -6,7 +6,7 @@
 
 #include "notify_mailto.h"
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include <stdio.h>
 #include <string.h>

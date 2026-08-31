@@ -2,7 +2,7 @@
 #include "cunit/unit.h"
 #include "imap/http_jwt.h"
 
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/xunlink.h>
 
 #include <jansson.h>
 #include <openssl/err.h>

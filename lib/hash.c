@@ -2,11 +2,11 @@
 #include <config.h>
 #endif
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/mpool.h>
-#include <cyrus-imap/strhash.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+#include <cyrus/mpool.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
 
 #include <string.h>
 #include <stdlib.h>

@@ -6,7 +6,7 @@
 
 #include "bitvector.h"
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <sys/types.h>
 #include <stdlib.h>

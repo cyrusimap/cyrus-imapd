@@ -5,7 +5,7 @@
 #ifndef INCLUDED_XMALLOC_H
 #define INCLUDED_XMALLOC_H
 
-#include <cyrus-imap/assert.h>
+#include <cyrus/assert.h>
 
 /* for size_t */
 #include <stdio.h>

@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
+#include <cyrus/assert.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>

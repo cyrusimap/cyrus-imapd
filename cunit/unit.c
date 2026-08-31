@@ -3,12 +3,12 @@
 /* See COPYING file at the root of the distribution for more details. */
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/buf.h>
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/retry.h>
-#include <cyrus-imap/xmalloc.h>
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/assert.h>
+#include <cyrus/buf.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
 
 #include <stdio.h>
 #include <stdlib.h>

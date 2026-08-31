@@ -5,9 +5,9 @@
 
 #include <config.h>
 
-#include <cyrus-imap/dynarray.h>
-#include <cyrus-imap/strhash.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/dynarray.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
 
 #include <syslog.h>
 

@@ -1,7 +1,7 @@
-#include <cyrus-imap/smallarrayu64.h>
+#include <cyrus/smallarrayu64.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
 
 #include <config.h>
 #include <string.h>

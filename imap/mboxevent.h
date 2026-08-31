@@ -5,7 +5,7 @@
 #ifndef _MBOXEVENT_H
 #define _MBOXEVENT_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include <jansson.h>
 

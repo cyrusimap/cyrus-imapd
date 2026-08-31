@@ -1,8 +1,8 @@
 #ifndef HASH__H
 #define HASH__H
 
-#include <cyrus-imap/mpool.h>
-#include <cyrus-imap/strarray.h>
+#include <cyrus/mpool.h>
+#include <cyrus/strarray.h>
 
 #include <stddef.h>           /* For size_t     */
 #include <stdint.h>

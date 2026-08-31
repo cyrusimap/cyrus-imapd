@@ -5,7 +5,7 @@
 #ifndef SQLDB_H
 #define SQLDB_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include <sys/types.h>
 

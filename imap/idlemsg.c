@@ -4,8 +4,8 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/assert.h>
+#include <cyrus/xunlink.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>

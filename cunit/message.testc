@@ -4,7 +4,7 @@
 #include "cunit/unit.h"
 #include "imap/message.h"
 
-#include <cyrus-imap/libconfig.h>
+#include <cyrus/libconfig.h>
 
 #include "parseaddr.h"
 #include "util.h"

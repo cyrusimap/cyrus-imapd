@@ -5,7 +5,7 @@
 #ifndef MASTER_EVENT_H
 #define MASTER_EVENT_H
 
-#include <cyrus-imap/strarray.h>
+#include <cyrus/strarray.h>
 
 #include <sys/time.h>
 

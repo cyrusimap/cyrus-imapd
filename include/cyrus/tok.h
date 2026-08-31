@@ -5,7 +5,7 @@
 #ifndef __CYRUS_TOK_H__
 #define __CYRUS_TOK_H__
 
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/xmalloc.h>
 
 #include <sys/types.h>
 

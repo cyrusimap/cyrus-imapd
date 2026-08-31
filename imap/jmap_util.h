@@ -5,7 +5,7 @@
 #ifndef JMAP_UTIL_H
 #define JMAP_UTIL_H
 
-#include <cyrus-imap/hash.h>
+#include <cyrus/hash.h>
 
 #include <jansson.h>
 

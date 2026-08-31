@@ -6,8 +6,8 @@
 
 #include <config.h>
 
-#include <cyrus-imap/assert.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
 
 #if HAVE_DIRENT_H
 # include <dirent.h>

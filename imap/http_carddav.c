@@ -10,9 +10,9 @@
 
 #include <config.h>
 
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/strhash.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/hash.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
 
 #include <sysexits.h>
 #include <syslog.h>

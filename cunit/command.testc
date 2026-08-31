@@ -2,7 +2,7 @@
 #include "cunit/unit.h"
 #include "command.h"
 
-#include <cyrus-imap/xunlink.h>
+#include <cyrus/xunlink.h>
 
 #include <stdio.h>
 #include <sys/stat.h>

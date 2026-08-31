@@ -1,8 +1,8 @@
 #include "cunit/unit.h"
 #include "lib/util.h"
 
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/strarray.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/strarray.h>
 
 #include "imap/imap_err.h"
 

@@ -3,10 +3,10 @@
 
 #include "imap/quota.h"
 
-#include <cyrus-imap/hash.h>
-#include <cyrus-imap/libconfig.h>
-#include <cyrus-imap/retry.h>
-#include <cyrus-imap/xmalloc.h>
+#include <cyrus/hash.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
 
 #include <unistd.h>
 #include <stdlib.h>
