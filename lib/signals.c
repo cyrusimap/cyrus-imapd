@@ -98,10 +98,27 @@ EXPORTED void signals_reset_sighup_handler(int restartable)
 
 static shutdownfn *shutdown_cb = NULL;
 static int signals_in_shutdown = 0;
+static int signals_deferred = 0;
+static int signals_deferral_logged = 0;
 
 EXPORTED void signals_set_shutdown(shutdownfn *s)
 {
     shutdown_cb = s;
+}
+
+EXPORTED void signals_defer_shutdown(void)
+{
+    signals_deferred++;
+}
+
+EXPORTED void signals_resume_shutdown(void)
+{
+    assert(signals_deferred > 0);
+
+    if (--signals_deferred) return;
+
+    /* runs any shutdown we held off, and so may not return */
+    signals_poll();
 }
 
 /* Build a human-readable description of another process from just the
@@ -148,7 +165,21 @@ static int signals_poll_mask(sigset_t *oldmaskp)
 {
     int sig;
 
-    if (!signals_in_shutdown &&
+    if (!signals_in_shutdown && signals_deferred &&
+        (gotsignal[SIGINT] || gotsignal[SIGQUIT] || gotsignal[SIGTERM])) {
+
+        /* A write transaction is open.  Leave the signal set and act on it in
+         * signals_resume_shutdown(), so we exit between transactions rather
+         * than halfway through one.  Say so once: a process that then wedges
+         * mid-transaction is otherwise a mystery to whoever is waiting for it
+         * to die. */
+        if (!signals_deferral_logged) {
+            signals_deferral_logged = 1;
+            syslog(LOG_NOTICE,
+                   "graceful shutdown deferred: write transaction in progress");
+        }
+    }
+    else if (!signals_in_shutdown &&
         (gotsignal[SIGINT] || gotsignal[SIGQUIT] || gotsignal[SIGTERM])) {
 
         if (killer_pid && killer_pid != getppid()) {
@@ -178,6 +209,15 @@ static int signals_poll_mask(sigset_t *oldmaskp)
                 gotsignal[sig] = 0;
                 config_toggle_debug();
             }
+            break;
+        case SIGINT:
+        case SIGQUIT:
+        case SIGTERM:
+            /* Only reachable while deferred - otherwise we shut down above and
+             * never got here.  Must NOT be reported: callers read a nonzero
+             * return as "stop what you are doing", and prot.c uses it to
+             * abandon a read (lib/prot.c:700), which would tear apart the very
+             * transaction we are deferring for. */
             break;
         default:
             if (gotsignal[sig]) return sig;
