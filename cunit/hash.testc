@@ -372,37 +372,42 @@ static void test_iter(void)
     free_hash_table(&ht, NULL);
 }
 
-static void test_load_factor_warning(void)
+static void test_hash_size_rounding(void)
 {
-    const char *const words[] = {
-        "id", "faucibus", "nisl", "tincidunt", "eget", "nullam", "non", "nisi",
-        "est", "sit", "amet", "facilisis", "magna", "etiam", "tempor", "orci",
-        "eu", "lobortis", "elementum", "nibh", "tellus", "molestie"
+    size_t tests[][2] = {
+        { 0, 3 },
+        { 1, 3 },
+        { 2, 3 },
+        { 3, 3 },
+        { 4, 3 },
+        { 5, 3 },
+        { 6, 3 },
+        { 7, 3 },
+        { 8, 3 },
+        { 9, 4 },
+        { 15, 4 },
+        { 16, 4 },
+        { 17, 5 },
+        { 42, 6 },
+        { 54, 6 },
+        { 255, 8 },
+        { 256, 8 },
+        { 257, 9 },
+        { 65535, 16 },
+        { 65536, 16 },
+        { 65537, 17 },
     };
-    const size_t n_words = sizeof words / sizeof words[0]; /* 22 */
-    const size_t n_buckets = n_words / 4; /* 5 */
-    unsigned i;
-    unsigned int syslog_index;
 
-    hash_table ht;
+    unsigned i = sizeof(tests) / sizeof(size_t) / 2;
 
-    /* make sure numeric assumptions hold */
-    CU_ASSERT_EQUAL_FATAL(22, n_words);
-    CU_ASSERT_EQUAL_FATAL(5, n_buckets);
+    while(--i) {
+        size_t *test = tests[i];
+        hash_table ht;
 
-    construct_hash_table(&ht, n_buckets, 0);
-    CU_ASSERT_EQUAL(n_buckets, ht.size);
-
-    syslog_index = CU_SYSLOG_MATCH("hash table load factor exceeds 3.0");
-    /* 5 buckets will hit load factor 3.0 after 15 insertions, 4.0 after 20
-     * insertions, and it won't reach 5.0, so we should warn exactly twice */
-    for (i = 0; i < n_words; i++) {
-        hash_insert(words[i], NULL, &ht);
+        construct_hash_table(&ht, test[0], 0);
+        CU_ASSERT_EQUAL(test[1], ht.size_log2);
+        free_hash_table(&ht, NULL);
     }
-    CU_ASSERT_EQUAL(n_words, hash_count(&ht));
-    CU_ASSERT_SYSLOG(syslog_index, 2);
-
-    free_hash_table(&ht, NULL);
 }
 
 /* vim: set ft=c: */
