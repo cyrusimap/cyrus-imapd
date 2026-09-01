@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+# A mailbox arriving from a peer that didn't send COMPACT_EMAILIDS deletes the
+# key for the whole user, since absence on the wire is indistinguishable from
+# an explicit "off".  With compact_ids set to "always", replication must not be
+# able to leave either end handing out legacy ids.
+sub test_compactids_always_survives_replication
+    :min_version_3_13 :CompactIdsAlways :Replication
+    ($self)
+{
+    $self->make_message("test compactids");
+    $self->assert_email_id_shape('compact');
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    $self->assert_num_equals(1, $self->compact_ids_key_is_set());
+    $self->assert_num_equals(1,
+        $self->compact_ids_key_is_set('cassandane', $self->{replica}));
+
+    xlog $self, "Lose the key on the replica, then sync again";
+    $self->delete_compact_ids_key('cassandane', $self->{replica});
+    $self->assert_num_equals(0,
+        $self->compact_ids_key_is_set('cassandane', $self->{replica}));
+
+    $self->make_message("test compactids again");
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "The master restored it, and never handed out legacy ids";
+    $self->assert_num_equals(1,
+        $self->compact_ids_key_is_set('cassandane', $self->{replica}));
+    $self->assert_email_id_shape('compact');
+}
