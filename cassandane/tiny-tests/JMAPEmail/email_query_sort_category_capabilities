@@ -1,0 +1,117 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_sort_category_capabilities
+    :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    my $capabilities = $self->get_account_capabilities()
+                            ->{'https://cyrusimap.org/ns/jmap/mail'};
+
+    # The keywords of the thread conditions are $seen plus the flags of the
+    # conversations_counted_flags config option, lowercased like Email/get
+    # reports them. Any flag of that option that is not a JMAP keyword, such
+    # as \Deleted, is not reported.
+    my @keywords = qw($draft $flagged $answered $seen);
+    my @threadkeywords = qw($seen $draft $flagged $ismailinglist
+                            $isnotification $hasattachment $muted);
+
+    $self->assert_cmp_deeply(
+        {
+            inMailbox               => jtrue(),
+            inMailboxOtherThan      => jtrue(),
+            before                  => jtrue(),
+            after                   => jtrue(),
+            hasKeyword              => [ @keywords ],
+            notKeyword              => [ @keywords ],
+            allInThreadHaveKeyword  => [ @threadkeywords ],
+            someInThreadHaveKeyword => [ @threadkeywords ],
+            noneInThreadHaveKeyword => [ @threadkeywords ],
+        },
+        $capabilities->{emailQueryGroupByConditions},
+        'emailQueryGroupByConditions');
+
+    my $maxcategories = $capabilities->{maxCategoriesPerEmailQuery};
+    $self->assert_cmp_deeply(32, $maxcategories,
+        'maxCategoriesPerEmailQuery');
+
+    # Every condition that the capability advertises must be accepted in a
+    # groupBy filter, so that the capability can not drift away from what
+    # emailquery_category_init() supports.
+    my $mbox = $user->mailboxes->create({ name => 'A' });
+
+    my %value_for = (
+        inMailbox          => q{} . $mbox->id,
+        inMailboxOtherThan => [ q{} . $mbox->id ],
+        before             => '2020-01-01T00:00:00Z',
+        after              => '2020-01-01T00:00:00Z',
+    );
+
+    my @conditions;
+    my $advertised = $capabilities->{emailQueryGroupByConditions};
+    for my $name (sort keys %$advertised) {
+        if (ref $advertised->{$name} eq 'ARRAY') {
+            # The condition takes a keyword, and the capability says which
+            push @conditions, { $name => $_ }
+                for $advertised->{$name}->@*;
+        }
+        else {
+            push @conditions, { $name => $value_for{$name} };
+        }
+    }
+
+    # Four conditions that take no keyword, four keywords each for hasKeyword
+    # and notKeyword, and seven for each of the three thread conditions
+    $self->assert_num_equals(33, scalar @conditions);
+
+    my @methods = map {
+        my $client_id = JSON::XS->new->canonical->encode($_);
+        [ 'Email/query',
+          { sort => [ { property => 'category', groupBy => [ $_ ] } ] },
+          $client_id ];
+    } @conditions;
+
+    # Stay well below maxCallsInRequest, however many keywords this account
+    # counts per thread
+    while (my @batch = splice @methods, 0, 16) {
+        my $res = $jmap->request(\@batch);
+        for my $call (@batch) {
+            my $client_id = $call->[2];
+            $self->assert_cmp_deeply([],
+                $res->paragraph_by_client_id($client_id)
+                    ->single('Email/query')->arguments->{ids},
+                "advertised condition is supported: $client_id");
+        }
+    }
+
+    # A category sort takes as many groupBy filters as the capability says
+    my $res = $jmap->request([
+        [ 'Email/query', {
+            sort => [ {
+                property => 'category',
+                groupBy  => [ map { { hasKeyword => '$seen' } }
+                                  1 .. $maxcategories ],
+            } ],
+        }, 'maxcategories' ],
+        [ 'Email/query', {
+            sort => [ {
+                property => 'category',
+                groupBy  => [ map { { hasKeyword => '$seen' } }
+                                  0 .. $maxcategories ],
+            } ],
+        }, 'toomanycategories' ],
+    ]);
+
+    $self->assert_cmp_deeply([], $res->paragraph_by_client_id('maxcategories')
+                                     ->single('Email/query')->arguments->{ids},
+        "groupBy takes $maxcategories filters");
+
+    $self->assert_str_equals('unsupportedSort',
+        $res->paragraph_by_client_id('toomanycategories')
+            ->single('error')->arguments->{type},
+        'groupBy rejects one filter too many');
+}

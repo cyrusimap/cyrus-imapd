@@ -2477,7 +2477,7 @@ HIDDEN void jmap_comparator_parse(jmap_req_t *req, struct jmap_parser *parser,
         return;
     }
 
-    struct jmap_comparator comp = { NULL, 0, NULL };
+    struct jmap_comparator comp = { .jcomp = jsort };
 
     /* property */
     json_t *val = json_object_get(jsort, "property");

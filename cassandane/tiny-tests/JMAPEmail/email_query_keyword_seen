@@ -1,0 +1,139 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_keyword_seen
+    :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing(
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/performance',
+    );
+
+    my $mboxa  = $user->mailboxes->create({ name => 'A' });
+    my $mboxb  = $user->mailboxes->create({ name => 'B' });
+    my $trash  = $user->mailboxes->create({ name => 'Trash', role => 'trash' });
+
+    # Each email has two copies. The emails are created in the order below,
+    # so within each mailbox they get sequence numbers in that same order.
+    #
+    # A copy in Trash counts like any other copy, in both directions: the
+    # email whose only seen copy is in Trash is unseen, and so is the email
+    # whose only unseen copy is in Trash.
+    my @emails = (
+        { subject    => 'allseen',
+          receivedAt => '2020-01-01T00:00:00Z',
+          mailboxes  => [ $mboxa, $mboxb ] },
+        { subject    => 'partseen',
+          receivedAt => '2021-01-01T00:00:00Z',
+          mailboxes  => [ $mboxa, $mboxb ] },
+        { subject    => 'noneseen',
+          receivedAt => '2022-01-01T00:00:00Z',
+          mailboxes  => [ $mboxa, $mboxb ] },
+        { subject    => 'trashseen',
+          receivedAt => '2023-01-01T00:00:00Z',
+          mailboxes  => [ $mboxa, $trash ] },
+        { subject    => 'trashunseen',
+          receivedAt => '2024-01-01T00:00:00Z',
+          mailboxes  => [ $mboxa, $trash ] },
+    );
+
+    my %id_by_subject;
+    for my $spec (@emails) {
+        my $email = $user->emails->create({
+            mailboxIds    => { map { $_->id => JSON::true }
+                                   $spec->{mailboxes}->@* },
+            subject       => $spec->{subject},
+            receivedAt    => $spec->{receivedAt},
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+        });
+        $id_by_subject{$spec->{subject}} = q{} . $email->id;
+    }
+
+    xlog $self, 'set \\Seen on some copies only';
+    my $imap = $self->{store}->get_client();
+    $imap->select('A');
+    $imap->store('1,2,5', '+flags', '(\\Seen)'); # allseen, partseen,
+                                                 # trashunseen
+    $imap->select('B');
+    $imap->store('1', '+flags', '(\\Seen)');     # allseen
+    $imap->select('Trash');
+    $imap->store('1', '+flags', '(\\Seen)');     # trashseen
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    # $seen is a property of the Email, so an Email is seen only if every one
+    # of its copies is seen. This is what Email/query must agree with, for
+    # the copy in Trash just like for any other copy.
+    my $res = $jmap->request([
+        [ 'Email/get', {
+            ids        => [ map { $id_by_subject{$_->{subject}} } @emails ],
+            properties => [ 'keywords' ],
+        }, 'R1' ],
+    ]);
+    $res->assert_successful;
+    my $list = $res->single_sentence('Email/get')->arguments->{list};
+    $self->assert_cmp_deeply(
+        [ jtrue(), undef, undef, undef, undef ],
+        [ map { $_->{keywords}{'$seen'} } $list->@* ],
+        'only the email with all copies seen has $seen',
+    );
+
+    my @testcases = (
+        {
+            desc     => 'has_keyword',
+            cond     => { hasKeyword => '$seen' },
+            subjects => [ qw(allseen) ],
+        },
+        {
+            desc     => 'not_keyword',
+            cond     => { notKeyword => '$seen' },
+            subjects => [ qw(partseen noneseen trashseen trashunseen) ],
+        },
+    );
+
+    # Query each case twice, once answered by guidsearch and once by uidsearch.
+    my @methods;
+    for my $case (@testcases) {
+        for my $impl (qw(guidsearch uidsearch)) {
+            push @methods, [ 'Email/query', {
+                filter => {
+                    operator   => 'AND',
+                    conditions => [ { body => 'hello' }, $case->{cond} ],
+                },
+                sort => [{
+                    property    => 'receivedAt',
+                    isAscending => JSON::true,
+                }],
+                disableGuidSearch => $impl eq 'uidsearch'
+                                        ? JSON::true : JSON::false,
+            }, "$case->{desc}_$impl" ];
+        }
+    }
+
+    $res = $jmap->request(\@methods);
+    $res->assert_successful;
+
+    for my $case (@testcases) {
+        my @want_ids = map { $id_by_subject{$_} } $case->{subjects}->@*;
+
+        for my $impl (qw(guidsearch uidsearch)) {
+            my $client_id = "$case->{desc}_$impl";
+            my $args = $res->paragraph_by_client_id($client_id)
+                           ->single('Email/query')->arguments;
+
+            $self->assert_cmp_deeply(
+                $impl eq 'guidsearch' ? jtrue() : jfalse(),
+                $args->{performance}{details}{isGuidSearch},
+                "isGuidSearch for $client_id",
+            );
+
+            $self->assert_cmp_deeply(\@want_ids, $args->{ids},
+                "ids for $client_id");
+        }
+    }
+}

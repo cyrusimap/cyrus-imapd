@@ -1,0 +1,117 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_sort_category_unsupported
+    :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    my $unread = {
+        operator   => 'NOT',
+        conditions => [ { allInThreadHaveKeyword => '$seen' } ],
+    };
+
+    my @testcases = (
+        {
+            desc => 'no_group_by',
+            sort => [ { property => 'category' } ],
+        },
+        {
+            desc => 'empty_group_by',
+            sort => [ { property => 'category', groupBy => [] } ],
+        },
+        {
+            desc => 'group_by_not_an_array',
+            sort => [ { property => 'category', groupBy => $unread } ],
+        },
+        {
+            desc => 'invalid_condition',
+            sort => [ {
+                property => 'category',
+                groupBy  => [ { noSuchCondition => JSON::true } ],
+            } ],
+        },
+        # Only conditions that are answered from conversations.db can be
+        # evaluated for each Email of a result
+        {
+            desc => 'condition_needs_search_index',
+            sort => [ {
+                property => 'category',
+                groupBy  => [ { subject => 'hello' } ],
+            } ],
+        },
+        {
+            desc => 'condition_needs_index_record',
+            sort => [ {
+                property => 'category',
+                groupBy  => [ { minSize => 42 } ],
+            } ],
+        },
+        {
+            # A user keyword is not in the G records of a guid
+            desc => 'condition_needs_user_keyword',
+            sort => [ {
+                property => 'category',
+                groupBy  => [ { hasKeyword => 'pinned' } ],
+            } ],
+        },
+        {
+            # One unsupported condition rejects the whole filter, wherever
+            # it sits in the boolean tree
+            desc => 'condition_nested_in_operator',
+            sort => [ {
+                property => 'category',
+                groupBy  => [ {
+                    operator   => 'OR',
+                    conditions => [ { hasKeyword => '$flagged' },
+                                    { subject => 'hello' } ],
+                } ],
+            } ],
+        },
+        {
+            # The second filter is what is unsupported here
+            desc => 'second_filter_unsupported',
+            sort => [ {
+                property => 'category',
+                groupBy  => [ $unread, { subject => 'hello' } ],
+            } ],
+        },
+        {
+            desc => 'not_the_primary_sort',
+            pos  => 1,
+            sort => [
+                { property => 'receivedAt' },
+                { property => 'category', groupBy => [ $unread ] },
+            ],
+        },
+        {
+            desc => 'two_category_comparators',
+            pos  => 1,
+            sort => [
+                { property => 'category', groupBy => [ $unread ] },
+                { property => 'category', groupBy => [ $unread ] },
+            ],
+        },
+    );
+
+    my @methods = map {
+        [ 'Email/query', { sort => $_->{sort} }, $_->{desc} ]
+    } @testcases;
+
+    my $res = $jmap->request(\@methods);
+
+    for my $case (@testcases) {
+        my $args = $res->paragraph_by_client_id($case->{desc})
+                       ->single('error')->arguments;
+
+        $self->assert_str_equals('unsupportedSort', $args->{type},
+            "error type for $case->{desc}");
+
+        # The error names the comparator that is not supported
+        $self->assert_cmp_deeply([ sprintf('sort[%d]', $case->{pos} // 0) ],
+            $args->{sort}, "unsupported sort for $case->{desc}");
+    }
+}
