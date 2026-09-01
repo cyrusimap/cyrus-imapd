@@ -3708,26 +3708,13 @@ static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
     icalproperty *prop;
 
     prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-    if (prop) {
-        /* Make sure DTEND > DTSTART, and both values have value same type */
-        icaltimetype dtstart = icalcomponent_get_dtstart(comp);
-        icaltimetype dtend =
-            icalproperty_get_datetime_with_component(prop, comp);
-
-        if (icaltime_is_date(dtend) != icaltime_is_date(dtstart)) {
-            error->desc = "DTSTART and DTEND must have same value type";
-            error->precond = CALDAV_VALID_DATA;
-            return HTTP_FORBIDDEN;
-        }
-        if (icaltime_compare(dtend, dtstart) < 0) {
-            /* NOTE: Per RFC 5545, DTEND != DTSTART, but this occurs
-               frequently enough in the wild for us to allow it */
-            error->desc = "DTEND must occur after DTSTART";
-            error->precond = CALDAV_VALID_DATA;
-            return HTTP_FORBIDDEN;
-        }
+    if (!prop) {
+        /* A VTODO may use DUE in place of DTEND - same constraints apply
+           (RFC 5545, Section 3.8.2.3) */
+        prop = icalcomponent_get_first_property(comp, ICAL_DUE_PROPERTY);
     }
-    else {
+
+    if (!prop) {
         /* Make sure DURATION > 0 */
         prop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
         if (prop) {
@@ -3742,6 +3729,30 @@ static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
                 return HTTP_FORBIDDEN;
             }
         }
+        return 0;
+    }
+
+    /* Make sure DTEND/DUE > DTSTART, and both values have same value type.
+       DTSTART is optional in a VTODO, so skip the check when it is absent;
+       it is required in a VEVENT, so a missing one there still fails below. */
+    icaltimetype dtstart = icalcomponent_get_dtstart(comp);
+    if (icalcomponent_isa(comp) == ICAL_VTODO_COMPONENT &&
+        icaltime_is_null_time(dtstart)) {
+        return 0;
+    }
+
+    icaltimetype dtend = icalproperty_get_datetime_with_component(prop, comp);
+    if (icaltime_is_date(dtend) != icaltime_is_date(dtstart)) {
+        error->desc = "DTSTART and DTEND/DUE must have same value type";
+        error->precond = CALDAV_VALID_DATA;
+        return HTTP_FORBIDDEN;
+    }
+    if (icaltime_compare(dtend, dtstart) < 0) {
+        /* NOTE: Per RFC 5545, DTEND != DTSTART, but this occurs
+           frequently enough in the wild for us to allow it */
+        error->desc = "DTEND/DUE must occur after DTSTART";
+        error->precond = CALDAV_VALID_DATA;
+        return HTTP_FORBIDDEN;
     }
 
     return 0;
