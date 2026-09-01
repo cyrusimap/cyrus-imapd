@@ -254,6 +254,8 @@ int main(int argc, char **argv)
         }
     }
 
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
     cyrus_init(alt_config, "reconstruct", 0, CONFIG_NEED_PARTITION_DATA);
     global_sasl_init(1,0,NULL);
 
