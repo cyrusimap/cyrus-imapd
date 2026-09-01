@@ -249,6 +249,7 @@ struct restore_info {
     unsigned char type;
     uint32_t uid_todestroy;
     uint32_t uid_torecreate;
+    bool currently_destroyed;
 };
 
 static int restore_resource_cb(const char *resource __attribute__((unused)),
@@ -276,6 +277,13 @@ static int restore_resource_cb(const char *resource __attribute__((unused)),
 
     case CREATES:
         if (!(rrock->jrestore->mode & UNDO_ALL)) goto done;
+
+        if (restore->currently_destroyed && !restore->uid_torecreate) {
+            /* This resource was created and destroyed entirely within
+               the undo window, and no earlier, pre-cutoff version was
+               found - it's already gone, so there's nothing to undo */
+            goto done;
+        }
 
         syslog(log_level, "undo create %s", resource);
         break;
@@ -305,7 +313,16 @@ static int restore_resource_cb(const char *resource __attribute__((unused)),
 
     }
 
-    if (!r) rrock->jrestore->num_undone[restore->type]++;
+    if (!r) {
+        rrock->jrestore->num_undone[restore->type]++;
+
+        if (restore->currently_destroyed && restore->type == UPDATES) {
+            /* This resource was updated and then destroyed within the
+               undo window - both the update and the destroy have now
+               been undone by a single recreate */
+            rrock->jrestore->num_undone[DESTROYS]++;
+        }
+    }
 
   done:
     message_unref(&recreatemsg);
@@ -390,8 +407,26 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 
             if (record->savedate.tv_sec > rrock->jrestore->cutoff &&
                 (rrock->jrestore->mode & UNDO_ALL)) {
-                syslog(log_level, "skipping UID %u: created AND deleted",
-                       record->uid);
+                if (!restore) {
+                    /* This revision was itself created/updated after
+                       cutoff, but the resource has since been destroyed.
+                       Remember it as the version to destroy, and keep
+                       looking further back for a pre-cutoff version to
+                       restore. */
+                    restore = xzmalloc(sizeof(struct restore_info));
+                    hash_insert(resource, restore, &resources);
+                    restore->type = CREATES;
+                    restore->uid_todestroy = record->uid;
+                    restore->currently_destroyed = true;
+
+                    syslog(log_level,
+                           "UID %u: created/updated after cutoff (tombstone)",
+                           record->uid);
+                }
+                else {
+                    syslog(log_level, "skipping UID %u: created AND deleted",
+                           record->uid);
+                }
 
                 free(resource);
                 continue;
@@ -1315,8 +1350,8 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
 
     /* Build response */
     if (r) {
-        jmap_error(req, (r == HTTP_UNPROCESSABLE) ? 
-                   json_pack("{s:s}", "type", "cannotCalculateChanges") : 
+        jmap_error(req, (r == HTTP_UNPROCESSABLE) ?
+                   json_pack("{s:s}", "type", "cannotCalculateChanges") :
                    jmap_server_error(r));
     }
     else {
