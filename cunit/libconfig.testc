@@ -12,8 +12,19 @@
 #include "lib/libconfig.h"
 #include "lib/retry.h"
 #include "lib/xmalloc.h"
+#include "lib/xunlink.h"
 
 #define DBDIR "test-libconfig-dbdir"
+
+typedef struct tempfile tempfile;
+
+struct tempfile {
+    tempfile *next;
+    int fd;
+    char pathname[PATH_MAX];
+};
+
+static struct tempfile *tempfiles;
 
 static int set_up(void)
 {
@@ -22,14 +33,35 @@ static int set_up(void)
 
 static int tear_down(void)
 {
-    int r;
-
     /* all these tests will initialise some config, clean up after! */
     config_reset();
 
-    r = system("rm -rf " DBDIR);
+    struct tempfile *current;
+    while ((current = tempfiles)) {
+        tempfiles = current->next;
+        xunlink(current->pathname);
+        free(current);
+    }
 
-    return r;
+    return 0;
+}
+
+/* Creates a new temporary file, which will be deleted at "tear down"
+ * Returns a structure with the file name and open file descriptor.
+ * The caller is responsible for closing the file descriptor.
+ *
+ * Useful for cases where more than 1 temporary config file is needed, or the
+ * code needs to know the file name (eg @include), or the contents to generate
+ * can't easily be expressed as a single string passed to config_read_string. */
+
+static tempfile *new_tempfile(void) {
+  tempfile *file = xmalloc(sizeof(tempfile));
+
+  file->fd = cunit_tmpfile(file->pathname, PATH_MAX, "imapd.conf-XXXXXX");
+  if (!file->fd) fatal("new_tmpfile", errno);
+  file->next = tempfiles;
+  tempfiles = file;
+  return file;
 }
 
 static void test_int(void)
@@ -1157,6 +1189,204 @@ static void test_partition_sanity_bad_dups(void)
     r = config_check_partitions(NULL);
     CU_ASSERT_EQUAL(r, -2);
     CU_ASSERT_SYSLOG(/*all*/0, 2);
+}
+
+static void test_missing_file(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN;
+    config_read("/dev/bollocks", 0);
+    CU_EXPECT_CYRFATAL_END(EX_CONFIG,
+        "can't open configuration file /dev/bollocks: No such file or directory"
+    );
+}
+
+static void fatal_config_read_with_filename(const char *config,
+                                            const char *message,
+                                            unsigned int line)
+{
+    tempfile *file = new_tempfile();
+    char want[PATH_MAX + 256];
+    snprintf(want, sizeof(want),
+             "%s on line %u of configuration file %s",
+             message, line, file->pathname);
+
+    config_write_configdirectory_directive(file->fd, DBDIR "/conf");
+
+    retry_write(file->fd, config, strlen(config));
+    close(file->fd);
+
+    CU_EXPECT_CYRFATAL_BEGIN;
+    config_read(file->pathname, 0);
+    CU_EXPECT_CYRFATAL_END(EX_CONFIG, want);
+}
+
+static void test_empty_option_key(void)
+{
+    fatal_config_read_with_filename(
+        ": value\n",
+        "empty option name",
+        2
+    );
+}
+
+static void test_empty_option_value(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN;
+    config_read_string(DBDIR"/conf",
+        "key: \n"
+    );
+    CU_EXPECT_CYRFATAL_END(EX_CONFIG,
+        "empty option value on line 2 of configuration file"
+    );
+}
+
+static void test_invalid_option(void)
+{
+    fatal_config_read_with_filename(
+        ";: value\n",
+        "invalid option name",
+        2
+    );
+}
+
+static void test_invalid_directive(void)
+{
+    fatal_config_read_with_filename(
+        "@hoedown: dance!\n",
+        "invalid directive",
+        2
+    );
+}
+
+static void test_parsing(void)
+{
+    const char *autocreate_sieve_folders = NULL;
+    const char *autocreate_sieve_script = NULL;
+    const char *addressbookprefix = NULL;
+
+    config_read_string(DBDIR"/conf",
+        "\tautocreate_sieve_folders:   Leading Whitespace\n"
+        "autocreate_sieve_\\\n" "script: contin\\\n" "uation\n"
+        "addressbookprefix: Trailing Whitespace \v\t\f\r\n"
+    );
+
+    autocreate_sieve_folders = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_FOLDERS);
+    CU_ASSERT_PTR_NOT_NULL(autocreate_sieve_folders);
+    CU_ASSERT_STRING_EQUAL(autocreate_sieve_folders, "Leading Whitespace");
+
+    autocreate_sieve_script = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_SCRIPT);
+    CU_ASSERT_PTR_NOT_NULL(autocreate_sieve_script);
+    CU_ASSERT_STRING_EQUAL(autocreate_sieve_script, "continuation");
+
+    addressbookprefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
+    CU_ASSERT_PTR_NOT_NULL(addressbookprefix);
+    CU_ASSERT_STRING_EQUAL(addressbookprefix, "Trailing Whitespace");
+}
+
+static void test_overlong_lines(void)
+{
+    struct buf leading_spaces = BUF_INITIALIZER;
+    buf_printf(&leading_spaces,
+               "%5000s\n", "autocreate_sieve_folders: Junk | Trash");
+    config_read_string(DBDIR"/conf", buf_cstring(&leading_spaces));
+    buf_free(&leading_spaces);
+
+    const char *autocreate_sieve_folders = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_FOLDERS);
+    CU_ASSERT_PTR_NOT_NULL(autocreate_sieve_folders);
+    CU_ASSERT_STRING_EQUAL(autocreate_sieve_folders, "Junk | Trash");
+}
+
+static void test_duplicate(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN;
+    config_read_string(DBDIR"/conf",
+        "autocreate_sieve_folders: Junk | Trash\n"
+        "\n"
+        "autocreate_sieve_folders: Junk | Trash\n"
+    );
+    CU_EXPECT_CYRFATAL_END(EX_CONFIG,
+        "option 'autocreate_sieve_folders' was specified twice in config file"
+        " (second occurrence on line 4)");
+}
+
+static void test_duplicate_overflow(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN;
+    config_read_string(DBDIR"/conf",
+        "but-first: coffee\n"
+        " but-first:coffee\n"
+    );
+    CU_EXPECT_CYRFATAL_END(EX_CONFIG,
+        "option 'but-first' was specified twice in config file"
+        " (second occurrence on line 3)");
+}
+
+static void test_include(void)
+{
+    tempfile *first = new_tempfile();
+    tempfile *second = new_tempfile();
+
+    config_write_configdirectory_directive(first->fd, DBDIR "/conf");
+    FILE *fh = fdopen(first->fd, "w");
+    fprintf(fh, "@include: %s\n", second->pathname);
+    fclose(fh);
+
+    char config[] = "But-First: Coffee\n";
+    retry_write(second->fd, config, strlen(config));
+    close(second->fd);
+
+    config_read(first->pathname, 0);
+
+    const char *directive = config_getoverflowstring("but-first", "Tea");
+    CU_ASSERT_PTR_NOT_NULL(directive);
+    CU_ASSERT_STRING_EQUAL(directive, "Coffee");
+}
+
+static void test_include_self(void)
+{
+    tempfile *first = new_tempfile();
+    tempfile *second = new_tempfile();
+    tempfile *third = new_tempfile();
+    char want[PATH_MAX + 256];
+    snprintf(want, sizeof(want),
+             "configuration file %s included twice",
+             second->pathname);
+
+    config_write_configdirectory_directive(first->fd, DBDIR "/conf");
+    FILE *fh = fdopen(first->fd, "w");
+    fprintf(fh, "@include: %s\n", second->pathname);
+    fclose(fh);
+
+    fh = fdopen(second->fd, "w");
+    fprintf(fh, "@INCLUDE: %s\n", third->pathname);
+    fclose(fh);
+
+    fh = fdopen(third->fd, "w");
+    fprintf(fh, " @include: %s\n", second->pathname);
+    fclose(fh);
+
+    CU_EXPECT_CYRFATAL_BEGIN;
+    config_read(first->pathname, 0);
+    CU_EXPECT_CYRFATAL_END(EX_CONFIG, want);
+}
+
+
+static void test_include_loop(void)
+{
+    tempfile *first = new_tempfile();
+    char want[PATH_MAX + 256];
+    snprintf(want, sizeof(want),
+             "configuration file %s included twice",
+             first->pathname);
+
+    config_write_configdirectory_directive(first->fd, DBDIR "/conf");
+    FILE *fh = fdopen(first->fd, "w");
+    fprintf(fh, "@include: %s\n", first->pathname);
+    fclose(fh);
+
+    CU_EXPECT_CYRFATAL_BEGIN;
+    config_read(first->pathname, 0);
+    CU_EXPECT_CYRFATAL_END(EX_CONFIG, want);
 }
 
 /* vim: set ft=c: */
