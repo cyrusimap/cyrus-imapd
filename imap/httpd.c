@@ -1015,24 +1015,28 @@ int service_main(int argc __attribute__((unused)),
         httpd_altsvc = buf_releasenull(&buf);
     }
 
-    if (do_h2 && http2_start_session(NULL, &http_conn) != 0)
-        fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
+    if (do_h2) {
+        if (http2_start_session(NULL, &http_conn) != 0)
+            fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
+    }
+    else {
+        /* Setup the signal handler for keepalive heartbeat */
+        httpd_keepalive = config_getduration(IMAPOPT_HTTPKEEPALIVE);
+        if (httpd_keepalive < 0) httpd_keepalive = 0;
+        if (httpd_keepalive) {
+            struct sigaction action;
 
-    /* Setup the signal handler for keepalive heartbeat */
-    httpd_keepalive = config_getduration(IMAPOPT_HTTPKEEPALIVE);
-    if (httpd_keepalive < 0) httpd_keepalive = 0;
-    if (httpd_keepalive) {
-        struct sigaction action;
-
-        sigemptyset(&action.sa_mask);
-        action.sa_flags = 0;
+            sigemptyset(&action.sa_mask);
+            action.sa_flags = 0;
 #ifdef SA_RESTART
-        action.sa_flags |= SA_RESTART;
+            action.sa_flags |= SA_RESTART;
 #endif
-        action.sa_handler = sigalrm_handler;
-        if (sigaction(SIGALRM, &action, NULL) < 0) {
-            syslog(LOG_ERR, "unable to install signal handler for %d: %m", SIGALRM);
-            httpd_keepalive = 0;
+            action.sa_handler = sigalrm_handler;
+            if (sigaction(SIGALRM, &action, NULL) < 0) {
+                syslog(LOG_ERR,
+                       "unable to install signal handler for %d: %m", SIGALRM);
+                httpd_keepalive = 0;
+            }
         }
     }
 
