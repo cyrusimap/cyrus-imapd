@@ -67,7 +67,8 @@ static int jmap_eventsource(struct transaction_t *txn);
 static ws_data_callback jmap_ws;
 
 static struct connect_params ws_params = {
-    &jmap_parse_path, { JMAP_BASE_URL JMAP_WS_COL, JMAP_WS_PROTOCOL, &jmap_ws }
+    &jmap_parse_path, { JMAP_BASE_URL JMAP_WS_COL, JMAP_WS_PROTOCOL, &jmap_ws,
+                        0 /* max_msgsize: resolved in jmap_init() */ }
 };
 
 
@@ -164,6 +165,11 @@ static void jmap_init(struct buf *serverinfo)
     if (jmap_push_poll < 0) jmap_push_poll = 0;
 
     if (ws_enabled) {
+        ws_params.ws.max_msgsize =
+            config_getbytesize(IMAPOPT_JMAP_MAX_SIZE_REQUEST);
+        if (ws_params.ws.max_msgsize <= 0)
+            ws_params.ws.max_msgsize = BYTESIZE_UNLIMITED;
+
         json_object_set_new(my_jmap_settings.server_capabilities,
                 JMAP_URN_WEBSOCKET,
                 json_pack("{s:s s:b}",
@@ -370,7 +376,8 @@ static int meth_get(struct transaction_t *txn,
     /* Upgrade to WebSockets over HTTP/1.1 on WS endpoint, if requested */
     else if ((txn->req_tgt.flags == JMAP_ENDPOINT_WS) &&
              (txn->flags.upgrade & UPGRADE_WS)) {
-        return ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
+        return ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws,
+                                ws_params.ws.max_msgsize);
     }
     else if (txn->req_tgt.flags == JMAP_ENDPOINT_EVENTSOURCE) {
         return jmap_eventsource(txn);
