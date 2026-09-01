@@ -1,0 +1,110 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_test_emailblobids_validation
+    :JMAPExtensions
+    ($self)
+{
+    my $script = to_crlf(<<'EOF');
+require ["vnd.cyrus.log"];
+
+log "not used, just here so we can test SieveScript/set";
+EOF
+    $script =~ s/\\/\\\\/gs;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create script";
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "A" => { data => [{'data:asText' => $script}] }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    blobId => "#A"
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res);
+
+    my $scriptid = $res->[1][1]{created}{"1"}{blobId};
+
+    xlog "create email";
+    $res = $jmap->CallMethods([['Mailbox/get', { properties => ["id"] }, "R1"]]);
+    my $inboxid = $res->[0][1]{list}[0]{id};
+
+    my $email =  {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [ { name => "Bugs Bunny", email => "bugs\@acme.local" }, ],
+        subject => "Memo",
+        textBody => [{ partId => '1' }],
+        bodyValues => { '1' => { value => "Whoa!" }}
+    };
+
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R2"],
+    ]);
+
+    my $emailid = $res->[0][1]{created}{"1"}{blobId};
+
+    xlog "sanity check - normal string emailBlobIds works";
+    $res = $jmap->CallMethods([
+        ['SieveScript/test', {
+            scriptBlobId => "$scriptid",
+            emailBlobIds => [ "$emailid" ],
+            envelope => JSON::null,
+            lastVacationResponse => JSON::null
+         }, "R3"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{completed});
+
+    xlog "test bad emailBlobIds form";
+    for my $val ({}, [], "string", 1, JSON::true, JSON::null) {
+        $res = $jmap->CallMethods([
+            ['SieveScript/test', {
+                scriptBlobId => "$scriptid",
+                emailBlobIds => $val,
+                envelope => JSON::null,
+                lastVacationResponse => JSON::null,
+             }, "R4"]
+        ]);
+
+        $self->assert_str_equals("error", $res->[0][0]);
+        $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
+        $self->assert_deep_equals([ "emailBlobIds" ], $res->[0][1]{'arguments'});
+    }
+
+    xlog "test non-string entries in emailBlobIds - must not crash the worker";
+    for my $val (1, JSON::true, JSON::false, JSON::null, {}, []) {
+        $res = $jmap->CallMethods([
+            ['SieveScript/test', {
+                scriptBlobId => "$scriptid",
+                emailBlobIds => [ $val ],
+                envelope => JSON::null,
+                lastVacationResponse => JSON::null,
+             }, "R5"],
+            ['SieveScript/test', {
+                scriptBlobId => "$scriptid",
+                emailBlobIds => [ "$emailid" ],
+                envelope => JSON::null,
+                lastVacationResponse => JSON::null
+             }, "R6"],
+        ]);
+
+        $self->assert_not_null($res);
+        $self->assert_str_equals("error", $res->[0][0]);
+        $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
+        $self->assert_deep_equals([ "emailBlobIds[0]" ], $res->[0][1]{'arguments'});
+
+        # verify the connection/worker survived to answer the next call
+        $self->assert_str_equals("SieveScript/test", $res->[1][0]);
+        $self->assert_not_null($res->[1][1]{completed});
+    }
+}
