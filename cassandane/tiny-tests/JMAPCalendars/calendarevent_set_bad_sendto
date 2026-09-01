@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+# Make sure we don't crash with badly formed sendTo arguments
+
+sub test_calendarevent_set_bad_sendto
+    :min_version_3_4
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    for my $bad (
+        { sendTo => { imip  => JSON::true } },
+        { sendTo => { other => JSON::true } },
+        { sendTo => { fake  => JSON::true } },
+        { sendTo => JSON::true },
+        { sendTo => [ JSON::true ] },
+    ) {
+        my $res = $jmap->CallMethods([
+            [ "CalendarEvent/set", {
+                create => {
+                    new => {
+                        calendarIds => { Default => JSON::true, },
+                        participants => {
+                            foo => $bad,
+                        },
+                        start => "2020-08-01T01:30:00",
+                    },
+                },
+            }, "a", ],
+        ]);
+
+        $self->assert_str_equals('CalendarEvent/set', $res->[0][0]);
+        $self->assert_deep_equals(
+            {
+                new => {
+                    properties => [
+                       'participants/foo/sendTo',
+                    ],
+                    type => 'invalidProperties',
+                },
+            },
+            $res->[0][1]{notCreated}
+        );
+    }
+}

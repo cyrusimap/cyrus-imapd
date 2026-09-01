@@ -5915,14 +5915,14 @@ static void participants_to_ical(icalcomponent *comp,
         char *caladdress = NULL;
         json_t *sendTo = json_object_get(jval, "sendTo");
         if (json_object_get(sendTo, "imip")) {
-            caladdress = xstrdup(json_string_value(json_object_get(sendTo, "imip")));
+            caladdress = xstrdupnull(json_string_value(json_object_get(sendTo, "imip")));
         }
         else if (json_object_get(sendTo, "other")) {
-            caladdress = xstrdup(json_string_value(json_object_get(sendTo, "other")));
+            caladdress = xstrdupnull(json_string_value(json_object_get(sendTo, "other")));
         }
         else if (json_object_size(sendTo)) {
             const char *anymethod = json_object_iter_key(json_object_iter(sendTo));
-            caladdress = xstrdup(json_string_value(json_object_get(sendTo, anymethod)));
+            caladdress = xstrdupnull(json_string_value(json_object_get(sendTo, anymethod)));
         }
         if (!caladdress) continue; /* reported later as error */
         hash_insert(partid, caladdress, &caladdress_by_participant_id);
