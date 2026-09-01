@@ -1220,6 +1220,15 @@ static void fatal_config_read_with_filename(const char *config,
     CU_EXPECT_CYRFATAL_END(EX_CONFIG, want);
 }
 
+static void test_empty_option_key(void)
+{
+    fatal_config_read_with_filename(
+        ": value\n",
+        "empty option name",
+        2
+    );
+}
+
 static void test_empty_option_value(void)
 {
     CU_EXPECT_CYRFATAL_BEGIN;

@@ -995,10 +995,10 @@ static void config_read_file(const char *filename)
             if (Uisupper(*p)) *p = tolower((unsigned char) *p);
             p++;
         }
-        if (*p != ':') {
+        if (key == p || *p != ':') {
             snprintf(errbuf, sizeof(errbuf),
-                     "invalid option name on line %d of configuration file %s",
-                     lineno, filename);
+                     "%s option name on line %d of configuration file %s",
+                     *p == ':' ? "empty" : "invalid", lineno, filename);
             free(buf);
             fatal(errbuf, EX_CONFIG);
         }
