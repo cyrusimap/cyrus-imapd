@@ -112,6 +112,7 @@ AM_DISTCHECK_CONFIGURE_FLAGS = \
 
 BUILT_SOURCES = \
     cassandane/Cassandane/Config/Bitfields.pm \
+    imap/jmap_data_types.h \
     lib/imapopts.c \
     lib/imapopts.h
 
@@ -1037,6 +1038,7 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/index_file.h \
     imap/index.c \
     imap/index.h \
+    imap/jmap_data_types.h \
     imap/jmap_util.c \
     imap/jmap_util.h \
     imap/json_support.c \
@@ -1268,7 +1270,6 @@ imap_httpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 if JMAP
 BUILT_SOURCES += \
-    imap/jmap_data_types.h \
     imap/jmap_err.c \
     imap/jmap_err.h
 
@@ -1392,7 +1393,6 @@ imap_jmap_props_libcyrus_jmap_props_la_SOURCES += \
 endif
 
 nodist_imap_httpd_SOURCES += \
-    imap/jmap_data_types.h \
     imap/jmap_err.c \
     imap/jmap_err.h
 
