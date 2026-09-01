@@ -1506,9 +1506,15 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     }
 
     r = mailbox_open_iwl(mbentry->name, &submbox);
-    assert(submbox);
+    if (r) {
+        syslog(LOG_ERR,
+               "jmap_emailsubmission_set: mailbox_open_iwl(%s): %s",
+               mbentry->name, error_message(r));
+        mboxlist_entry_free(&mbentry);
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
     mboxlist_entry_free(&mbentry);
-    if (r) goto done;
 
     if (set.if_in_state) {
         if (atomodseq_t(set.if_in_state) != jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0)) {
