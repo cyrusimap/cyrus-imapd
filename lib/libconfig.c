@@ -1029,9 +1029,10 @@ static int config_read_file(const char *filename, struct buf *err)
             if (Uisupper(*p)) *p = tolower((unsigned char) *p);
             p++;
         }
-        if (*p != ':') {
+        if (key == p || *p != ':') {
             if (err) {
-                buf_printf(err, "%s:%d: invalid option\n", filename, lineno);
+                buf_printf(err, "%s:%d: %s\n", filename, lineno,
+                           *p == ':' ? "empty option" : "invalid option");
             }
             r = EX_CONFIG;
             goto done;

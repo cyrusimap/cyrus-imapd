@@ -1296,6 +1296,17 @@ static void test_missing_file(void)
     buf_free(&err);
 }
 
+static void test_empty_option_key(void)
+{
+    struct buf err = BUF_INITIALIZER;
+    int r = config_read_string(DBDIR"/conf", &err, ": value\n");
+
+    CU_ASSERT_EQUAL(r, EX_CONFIG);
+    CU_ASSERT_STRING_CONTAINS(buf_cstring(&err), ":2: empty option\n");
+
+    buf_free(&err);
+}
+
 static void test_empty_option_value(void)
 {
     struct buf err = BUF_INITIALIZER;
