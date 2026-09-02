@@ -2137,6 +2137,39 @@ AS_IF(
     )]
 )
 
+AC_CACHE_CHECK(
+    [whether the C compiler folds constants early],
+    [cyrus_cv_early_constant_fold],
+    [
+        AC_LANG_PUSH([C])
+        saved_CFLAGS="$CFLAGS"
+        saved_CPPFLAGS="$CPPFLAGS"
+        CFLAGS="$CFLAGS -Wall -Werror -Wno-tautological-compare"
+        CPPFLAGS="$CPPFLAGS -Wall -Werror -Wno-tautological-compare"
+        AC_COMPILE_IFELSE(
+            [AC_LANG_PROGRAM(
+                [   struct { char *bar; } *foo; ],
+                [   /* _Static_assert requires its first argument to be an
+                     * integer constant expression.  That is only the case
+                     * here if the tautology was already resolved to 1.
+                     */
+                    _Static_assert((foo->bar) == (foo->bar), "uh-oh");
+                ]
+            )],
+            [cyrus_cv_early_constant_fold=yes],
+            [cyrus_cv_early_constant_fold=no]
+        )
+        CFLAGS="$saved_CFLAGS"
+        CPPFLAGS="$saved_CPPFLAGS"
+        AC_LANG_POP([C])
+    ])
+AS_IF(
+    [test "x$cyrus_cv_early_constant_fold" = "xyes"],
+    [AC_DEFINE(HAVE_EARLY_CONSTANT_FOLDING,[],
+        [Does the C compiler fold constants early?]
+    )]
+)
+
 dnl lib/zeroskip.c compiles xxhash inline (XXH_INLINE_ALL) because not doing so
 dnl costs about 3x on ALL hashing -- one-shot as well as streaming, so every span
 dnl checksum, conversion, repack and consistency check pays it.  Some compilers
