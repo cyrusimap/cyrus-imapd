@@ -50,6 +50,12 @@ middle version number, such as 3.13.x) is *always* fixed directly on `master`
 with no embargo, whatever its severity. Development snapshots are not for
 production use.
 
+Finally: sometimes, a report will cover *only* maintenance versions, having
+been accidentally fixed in some other way on `master`.  When this happens,
+either the "embargoed release" or "backport" strategies may apply — but instead
+of shipping to the master branch first, it's applied directly to the newest
+relevant maintenance branch.
+
 ## What we embargo
 
 An issue is embargoed only if it gives an attacker a **self-contained** means
