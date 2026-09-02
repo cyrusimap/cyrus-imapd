@@ -66,4 +66,11 @@ sub test_list_return_status_noaccess
     $attribs = [ qw( \\Noselect \\Subscribed \\HasNoChildren ) ];
     $self->do_list($imaptalk, 0, 0, $attribs);
     $self->do_list($imaptalk, 1, 0, $attribs);
+
+    # Delete all rights and check LIST output
+    $admintalk->deleteacl('user.victim', 'cassandane');
+
+    $self->do_list($imaptalk, 0, 0, undef);
+    $self->do_list($imaptalk, 1, 0,
+                   [qw( \\NonExistent \\Subscribed \\HasNoChildren )]);
 }

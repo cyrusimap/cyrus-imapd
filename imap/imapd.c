@@ -13499,7 +13499,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     buf_free(&specialuse);
     free(oldname);
 
-    if (attributes & (MBOX_ATTRIBUTE_NOSELECT))
+    if (attributes & (MBOX_ATTRIBUTE_NONEXISTENT | MBOX_ATTRIBUTE_NOSELECT))
         return;
 
     if (listargs->ret & LIST_RET_STATUS) {
@@ -13786,12 +13786,22 @@ static int subscribed_cb(struct findall_data *data, void *rockp)
 
     if (data->is_exactmatch) {
         mbentry_t *mbentry = NULL;
+        bool exists = false;
+        int myrights = 0;
+
         mboxlist_lookup(mbname_intname(data->mbname), &mbentry, NULL);
+        if (mbentry) {
+            exists = true;
+            myrights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
+            if (imapd_userisadmin) myrights |= ACL_LOOKUP;
+        }
         perform_output(extname, mbentry, rock);
         mboxlist_entry_free(&mbentry);
 
         rock->last_attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
-        if (mboxlist_lookup(mbname_intname(data->mbname), NULL, NULL))
+        if (!exists ||
+            /* LSUB still needs to surface unLISTable mailboxes */
+            (!(myrights & ACL_LOOKUP) && rock->listargs->cmd != LIST_CMD_LSUB))
             rock->last_attributes |= MBOX_ATTRIBUTE_NONEXISTENT;
         if (is_noinferiors(data, rock))
             rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
