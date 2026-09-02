@@ -106,12 +106,24 @@ apply:
 
 # Documentation
 
-The project documentation is managed by Sphinx, and found mostly in the docsrc
-directory.  C files are documented with Doxygen.  Perl programs and modules are
-documented with Pod.  Write documentation, which should be very concise.  When
-writing pages for the Sphinx site, favor Markdown over reStructuredText.  Your
-audience is generally "experts who need a quick refresher or to be reminded of
-exact semantics".
+The project documentation is a Sphinx site built from three sources: the pages
+under docsrc, Doxygen comments in C headers, and Pod in Perl programs and
+modules.
+
+Work from those source files, not from the built site.  The site is a
+convenience for human readers and it isn't checked in, so in a clone you can
+only read the source files.  They have all the actual content, though!  One
+consequence: cross-references appear as `:ref:` labels rather than links, and
+you resolve one by grepping docsrc for the label.
+
+Doxygen coverage is currently an aspiration.  The Doxyfile reads only headers
+under imap, lib, and sieve, almost none of them carry Doxygen comments yet.  We
+want that to grow, so give new and edited C headers Doxygen comments even
+though the neighbouring declarations have none.
+
+Write documentation, which should be very concise.  When writing pages for the
+Sphinx site, favor Markdown over reStructuredText.  Your audience is generally
+"experts who need a quick refresher or to be reminded of exact semantics".
 
 To build the documentation, you can use dar and run `dar makedocs`.
 
