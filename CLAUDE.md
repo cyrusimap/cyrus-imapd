@@ -76,6 +76,11 @@ nearby tests that use them.
 
 # Coding style
 
+Two automated lints will reject source that builds and tests perfectly well:
+no hard tabs, and no "FIXME" markers.  Both cover C, header, Perl and reST
+files; docsrc/developer/process.rst has the exact rules and how to run them.
+Say what you would have marked FIXME in an ordinary comment, or leave it out.
+
 When you write C code in this project then the following general rules apply:
 
 - When you edit existing C code and the code change does not create a new block

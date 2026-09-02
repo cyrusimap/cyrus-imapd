@@ -48,6 +48,26 @@ Pull requests are automatically tested against the test suites, address
 sanitizer, and other checks.  PRs with failing tests won't be merged.  PR that
 make changes without matching test changes will face close scrutiny.
 
+Content linters
+---------------
+
+Two of those checks are about what the source *contains* rather than what it
+does, so they can fail a PR that builds and tests perfectly well.  They live in
+``tools/``, run on every push and pull request, and you can easily run them
+locally.
+
+``tools/hard-tab-tool``
+    Fails if a file contains a hard tab.  Run it with no arguments to check the
+    whole tree, or pass paths to check part of it.  With ``--really`` it fixes
+    the files instead of listing them, expanding each tab to the next
+    eight-column stop.
+
+``tools/find-fixme-markers``
+    Fails if a file contains a FIXME marker.  A "FIXME" that lives in the tree
+    forever isn't a reminder, it's noise.  If you want to flag unfinished
+    business, file an issue.  A file that genuinely has to contain the word can
+    be listed in ``.fixme_ignore``.
+
 The release cycle
 =================
 
