@@ -4,7 +4,7 @@ use Cassandane::Tiny;
 use Cyrus::Backup;
 
 sub test_backupcyrusd_folders
-    :min_version_3_13 :want_service_backupcyrusd
+    :want_service_backupcyrusd
     ($self)
 {
     my ($host, $port, $servername, $meta, $data) = $self->_backup_dirs();

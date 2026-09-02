@@ -7,7 +7,7 @@ use Cyrus::Backup::Restore;
 # Test that Cyrus::Backup::Restore::GetTar can stream through a backup
 # and that the tar contains the expected entry types.
 sub test_restore_tar_contents
-    :min_version_3_13 :want_service_backupcyrusd
+    :want_service_backupcyrusd
     ($self)
 {
     my $talk = $self->{store}->get_client();

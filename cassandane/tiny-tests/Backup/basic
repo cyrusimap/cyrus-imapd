@@ -5,7 +5,7 @@ use Cyrus::Backup;
 use Cyrus::Backup::Restore;
 
 sub test_basic
-    :min_version_3_13 :want_service_backupcyrusd
+    :want_service_backupcyrusd
     ($self)
 {
     $self->make_message("Email 1") or die;

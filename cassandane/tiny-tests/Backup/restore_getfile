@@ -7,7 +7,7 @@ use Cyrus::Backup::Restore;
 # Test that Cyrus::Backup::Restore can extract message files from a backup
 # by their SHA1 guid, both before and after compression.
 sub test_restore_getfile
-    :min_version_3_13 :want_service_backupcyrusd
+    :want_service_backupcyrusd
     ($self)
 {
     my $talk = $self->{store}->get_client();
