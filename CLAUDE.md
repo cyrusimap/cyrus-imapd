@@ -59,7 +59,7 @@ When appropriate, prefer `assert_cmp_deeply` over `assert_deep_equals` or
 multiple simple assertions.  For JMAP tests, use the Cassandane::JMAPTester and
 Cassandane::TestEntity packages and subpackages.  In general, when creating
 test data, prefer the TestEntity system over explicit JMAP calls.  On the other
-hand, do not rely on the specific JMAP created by TestEntity methods.  If the
+hand, do not rely on the specific JMAP default values created by TestEntity methods.  If the
 test requires careful control of the JMAP method calls made, make them with
 `->request`.
 
