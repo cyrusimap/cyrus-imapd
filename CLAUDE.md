@@ -102,11 +102,6 @@ apply:
   subroutine signatures, and lexical subroutines can be especially helpful for
   clarity.
 
-# Git conventions
-
-When creating a worktree, do not prefix the name with "worktree-", use the
-same name for the branch and the worktree.
-
 # Documentation
 
 The project documentation is managed by Sphinx, and found mostly in the docsrc
