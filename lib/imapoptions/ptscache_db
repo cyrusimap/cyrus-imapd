@@ -1,7 +1,7 @@
 Name: ptscache_db
 Type: STRINGLIST
-Allowed-Values: skiplist twom twoskip
+Allowed-Values: skiplist twom twoskip zeroskip
 Default-Value: twoskip
-Last-Modified: 3.13.1
+Last-Modified: UNRELEASED
 
 The cyrusdb backend to use for the pts cache.

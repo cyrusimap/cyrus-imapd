@@ -2137,6 +2137,52 @@ AS_IF(
     )]
 )
 
+dnl lib/zeroskip.c compiles xxhash inline (XXH_INLINE_ALL) because not doing so
+dnl costs about 3x on ALL hashing -- one-shot as well as streaming, so every span
+dnl checksum, conversion, repack and consistency check pays it.  Some compilers
+dnl cannot honour those hints at low optimisation and fail the build outright
+dnl rather than fall back, e.g. gcc 14 at -Og never devirtualises the function
+dnl pointers xxhash's long-input loop reaches its accumulate and scramble helpers
+dnl through, so their always_inline becomes an error.  XXH_NO_INLINE_HINTS
+dnl demotes every internal xxhash function to a plain static and pays that 3x, so
+dnl probe with the real CFLAGS and set it only where the build needs it to
+dnl compile at all.  Mirror zeroskip.c's usage: unreferenced statics never reach
+dnl the inliner, so a probe that only includes the header always passes.
+AC_CACHE_CHECK(
+    [whether xxhash's inline hints compile at this optimisation level],
+    [cyrus_cv_xxhash_inline_hints],
+    [
+        AC_LANG_PUSH([C])
+        saved_CPPFLAGS="$CPPFLAGS"
+        CPPFLAGS="$CPPFLAGS -I$srcdir/lib"
+        AC_COMPILE_IFELSE(
+            [AC_LANG_PROGRAM(
+                [
+                    #define XXH_INLINE_ALL
+                    #define XXH3_STREAM_USE_STACK 1
+                    #include "xxhash.h"
+                ],
+                [
+                    char buf[[8192]];
+                    XXH3_state_t st;
+
+                    XXH3_64bits_reset(&st);
+                    XXH3_64bits_update(&st, buf, sizeof(buf));
+                    if (XXH3_64bits_digest(&st) != XXH3_64bits(buf, sizeof(buf)))
+                        return 1;
+                ])
+            ],
+            [cyrus_cv_xxhash_inline_hints=yes],
+            [cyrus_cv_xxhash_inline_hints=no]
+        )
+        CPPFLAGS="$saved_CPPFLAGS"
+        AC_LANG_POP([C])
+    ])
+AS_IF(
+    [test "x$cyrus_cv_xxhash_inline_hints" != "xyes"],
+    [CPPFLAGS="$CPPFLAGS -DXXH_NO_INLINE_HINTS=1"]
+)
+
 dnl documentation generation (sphinx, sphinx_rtd_theme, perl2rst, gitpython)
 AC_DEFUN([WARN_DOCDEPS], [
     AM_COND_IF([ENABLE_RELEASE_CHECKS],

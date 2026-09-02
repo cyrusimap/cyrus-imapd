@@ -322,7 +322,14 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
     /* XXX  MUST do this last in case one of the functions above
        needs to operate on the userdata directory (e.g. Xapian) */
     for (i = 0; i < strarray_size(&paths); i++) {
-        (void) remove(strarray_nth(&paths, i));
+        const char *path = strarray_nth(&paths, i);
+        struct stat sbuf;
+
+        if (stat(path, &sbuf) < 0) continue;
+
+        /* a database may be a directory of files, not a single file */
+        if (S_ISDIR(sbuf.st_mode)) removedir(path);
+        else xunlink(path);
     }
     strarray_fini(&paths);
 

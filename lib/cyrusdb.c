@@ -17,6 +17,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <dirent.h>
+#include <errno.h>
 
 #include "assert.h"
 #include "bsearch.h"
@@ -38,6 +40,7 @@ extern struct cyrusdb_backend cyrusdb_quotalegacy;
 extern struct cyrusdb_backend cyrusdb_sql;
 extern struct cyrusdb_backend cyrusdb_twom;
 extern struct cyrusdb_backend cyrusdb_twoskip;
+extern struct cyrusdb_backend cyrusdb_zeroskip;
 
 static struct cyrusdb_backend *_backends[] = {
     &cyrusdb_flat,
@@ -48,6 +51,7 @@ static struct cyrusdb_backend *_backends[] = {
 #endif
     &cyrusdb_twom,
     &cyrusdb_twoskip,
+    &cyrusdb_zeroskip,
     NULL };
 
 #define DEFAULT_BACKEND "twoskip"
@@ -169,6 +173,21 @@ static int _myopen(const char *backend, const char *fname,
 
     /* check if it opens normally.  Horray */
     r = db->backend->open(fname, flags, &db->engine, tid);
+
+    /* handing a backend a database of the wrong shape fails deep inside it as
+       an I/O error, EISDIR opening a directory as a file or ENOTDIR the
+       reverse, and an I/O error never reaches the conversion path.  Recognise
+       it here, where the backend's declared shape is known, and report it as
+       the format mismatch it is. */
+    if (r && r != CYRUSDB_NOTFOUND) {
+        struct stat sbuf;
+        if (!stat(fname, &sbuf)) {
+            int isdir = S_ISDIR(sbuf.st_mode) ? 1 : 0;
+            int wantdir = (db->backend->flags & CYRUSDB_BACKEND_ISDIR) ? 1 : 0;
+            if (isdir != wantdir) r = CYRUSDB_BADFORMAT;
+        }
+    }
+
     if (r == CYRUSDB_BADFORMAT) {
         r = _detect_or_convert(db, backend, fname, flags);
         if (r) goto done;
@@ -433,7 +452,47 @@ EXPORTED void cyrusdb_done(void)
 
 EXPORTED int cyrusdb_copyfile(const char *srcname, const char *dstname)
 {
-    return cyrus_copyfile(srcname, dstname, COPYFILE_NOLINK);
+    struct stat sbuf;
+
+    if (stat(srcname, &sbuf) < 0)
+        return -1;
+
+    if (!S_ISDIR(sbuf.st_mode))
+        return cyrus_copyfile(srcname, dstname, COPYFILE_NOLINK);
+
+    /* A directory-shaped database.  Replace the destination wholesale --
+     * merging into leftovers of an older copy would corrupt the new one --
+     * then copy each regular file.  Lock files carry no state and are
+     * recreated on open, so they are not copied. */
+    if (removedir(dstname) < 0 && errno != ENOENT)
+        return -1;
+    if (mkdir(dstname, 0755) < 0)
+        return -1;
+
+    DIR *d = opendir(srcname);
+    if (!d) return -1;
+
+    struct dirent *de;
+    int r = 0;
+    while (!r && (de = readdir(d)) != NULL) {
+        const char *suffix = strrchr(de->d_name, '.');
+        if (suffix && !strcmp(suffix, ".lock"))
+            continue;
+
+        char *srcpath = strconcat(srcname, "/", de->d_name, NULL);
+        char *dstpath = strconcat(dstname, "/", de->d_name, NULL);
+
+        if (stat(srcpath, &sbuf) < 0)
+            r = -1;
+        else if (S_ISREG(sbuf.st_mode))
+            r = cyrus_copyfile(srcpath, dstpath, COPYFILE_NOLINK);
+
+        free(dstpath);
+        free(srcpath);
+    }
+    closedir(d);
+
+    return r;
 }
 
 struct db_rock {
@@ -552,6 +611,7 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
                     const char *frombackend, const char *tobackend)
 {
     char *newfname = NULL;
+    char *oldfname = NULL;
     struct db *fromdb = NULL;
     struct db *todb = NULL;
     struct db_rock cr;
@@ -567,8 +627,9 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
     if (!strcmp(tofname, fromfname))
         tofname = newfname = strconcat(fromfname, ".NEW", NULL);
 
-    /* remove any rubbish lying around */
-    xunlink(tofname);
+    /* remove any rubbish lying around.  Through the backend, because the
+     * target may be a directory. */
+    cyrusdb_unlink(tobackend, tofname, 0);
 
     r = cyrusdb_open(tobackend, tofname, CYRUSDB_CREATE, &todb);
     if (r) goto err;
@@ -577,8 +638,13 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
     cr.db = todb;
     cr.tid = &totid;
 
-    /* copy each record to the destination DB */
-    cyrusdb_foreach(fromdb, "", 0, NULL, converter_cb, &cr, &fromtid);
+    /* copy each record to the destination DB.  If this fails partway
+     * through (CYRUSDB_FULL on a full disk, IOERROR reading a damaged
+     * source, ...), don't fall through to commit and install a truncated
+     * destination: abort via the err label instead, leaving the untouched
+     * original in place under fromfname. */
+    r = cyrusdb_foreach(fromdb, "", 0, NULL, converter_cb, &cr, &fromtid);
+    if (r) goto err;
 
     /* commit destination transaction */
     if (totid) cyrusdb_commit(todb, totid);
@@ -587,10 +653,56 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
     todb = NULL;
     if (r) goto err;
 
-    /* created a new filename - so it's a replace-in-place */
+    /* created a new filename - so it's a replace-in-place.  Try the plain
+     * atomic rename(2) first: for a same-shape convert (the common case,
+     * e.g. twoskip to twom) it either succeeds outright or fails for a
+     * reason unrelated to shape, and the source is never disturbed.  It
+     * only fails with EISDIR/ENOTDIR when the convert changed shape, in
+     * which case rename(2) cannot replace a file with a directory or the
+     * reverse; fall back to moving the original aside first, so a complete
+     * copy of the data exists at every point and the original is only
+     * removed once the new database is in place under its name. */
     if (newfname) {
         r = cyrus_rename(newfname, fromfname);
-        if (r) goto err;
+        if (r && (errno == EISDIR || errno == ENOTDIR)) {
+            oldfname = strconcat(fromfname, ".OLD", NULL);
+
+            cyrusdb_unlink(frombackend, oldfname, 0);
+
+            /* between this rename and the one below, nothing exists at
+             * fromfname: rename(2) cannot swap a file for a directory (or
+             * vice versa) atomically.  A crash in that window followed by
+             * a normal CYRUSDB_CREATE open would silently start a fresh,
+             * empty database, with the real data left behind under
+             * oldfname.  Log the breadcrumb an operator needs to notice
+             * and recover it. */
+            xsyslog(LOG_NOTICE, "moving database aside for shape-changing "
+                                 "convert; if a crash follows before this "
+                                 "completes, recover data from the .OLD path",
+                                 "fname=<%s> oldfname=<%s>",
+                                 fromfname, oldfname);
+
+            if (rename(fromfname, oldfname)) {
+                xsyslog(LOG_ERR, "DBERROR: failed to move aside",
+                                 "fname=<%s> to=<%s>", fromfname, oldfname);
+                r = CYRUSDB_IOERROR;
+                goto err;
+            }
+
+            r = cyrus_rename(newfname, fromfname);
+            if (r) {
+                /* put it back rather than leaving nothing under the real name */
+                if (rename(oldfname, fromfname)) {
+                    xsyslog(LOG_ERR, "DBERROR: failed to restore original "
+                                     "after failed rename",
+                                     "fname=<%s> from=<%s>", fromfname, oldfname);
+                }
+                goto err;
+            }
+
+            cyrusdb_unlink(frombackend, oldfname, 0);
+        }
+        else if (r) goto err;
     }
 
     /* and close the source database - nothing should have
@@ -599,6 +711,7 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
     cyrusdb_close(fromdb);
 
     free(newfname);
+    free(oldfname);
 
     return 0;
 
@@ -608,8 +721,13 @@ err:
     if (fromtid) cyrusdb_abort(fromdb, fromtid);
     if (fromdb) cyrusdb_close(fromdb);
 
-    xunlink(tofname);
+    /* tofname might still equal fromfname here, if opening the source
+     * database failed before the same-file check below reassigned it to
+     * newfname: don't let a failed convert delete the untouched source. */
+    if (strcmp(tofname, fromfname))
+        cyrusdb_unlink(tobackend, tofname, 0);
     free(newfname);
+    free(oldfname);
 
     return r;
 }
@@ -618,7 +736,34 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
 {
     FILE *f;
     char buf[32];
+    struct stat sbuf;
     int n;
+
+    if (stat(fname, &sbuf)) return NULL;
+
+    /* a directory-shaped database has no magic to read, so identify it by the
+       names inside it.  zeroskip calls both its data files and its lock file
+       "zeroskip*", so a created-but-never-written database is still
+       identified.  quotalegacy is the other directory backend, but it never
+       arrives here: it's opened with a sentinel path rather than with its
+       directory, so the stat above fails. */
+    if (S_ISDIR(sbuf.st_mode)) {
+        DIR *d = opendir(fname);
+        struct dirent *de;
+        const char *ret = NULL;
+
+        if (!d) return NULL;
+
+        while ((de = readdir(d)) != NULL) {
+            if (!strncmp(de->d_name, "zeroskip", 8)) {
+                ret = "zeroskip";
+                break;
+            }
+        }
+        closedir(d);
+
+        return ret;
+    }
 
     f = fopen(fname, "r");
     if (!f) return NULL;

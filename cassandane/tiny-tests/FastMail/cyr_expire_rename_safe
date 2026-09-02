@@ -38,7 +38,7 @@ sub test_cyr_expire_rename_safe
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-X' => 0, '-E' => 0 , '-v');
 
     # the conversationsdb file still exists
-    $self->assert_file_test($dirs->{user}{conversations}, '-f');
+    $self->assert_file_test($dirs->{user}{conversations}, '-e');
     $self->assert_file_test($dirs->{user}{xapianactive}, '-f');
 
     # Rename the user
@@ -55,7 +55,7 @@ sub test_cyr_expire_rename_safe
     $self->assert_contains(qr{$subid}, \@files);
 
     xlog $self, "the conversations db still exists";
-    $self->assert_file_test($dirs->{user}{conversations}, '-f');
+    $self->assert_file_test($dirs->{user}{conversations}, '-e');
     $self->assert_file_test($dirs->{user}{xapianactive}, '-f');
 
     xlog $self, "Run cyr_expire -D now.";
@@ -72,7 +72,7 @@ sub test_cyr_expire_rename_safe
     $self->assert_contains(qr{$subid}, \@files);
 
     xlog $self, "the conversations db still exists";
-    $self->assert_file_test($dirs->{user}{conversations}, '-f');
+    $self->assert_file_test($dirs->{user}{conversations}, '-e');
     $self->assert_file_test($dirs->{user}{xapianactive}, '-f');
 
     # Now delete the user
@@ -100,6 +100,6 @@ sub test_cyr_expire_rename_safe
     $self->assert_not_contains(qr{$inboxid}, \@files);
 
     xlog $self, "the conversations db no longer exists";
-    $self->assert_not_file_test($dirs->{user}{conversations}, '-f');
+    $self->assert_not_file_test($dirs->{user}{conversations}, '-e');
 
 }

@@ -18,9 +18,9 @@ struct binary_result
 
 #if defined(USE_CYRUSDB_SQL) && defined(HAVE_SQLITE)
 /* if we've built cyrusdb_sql with the sqlite engine, then we can test it */
-#define BACKENDS "skiplist,flat,twom,twoskip,sql"
+#define BACKENDS "skiplist,flat,twom,twoskip,zeroskip,sql"
 #else
-#define BACKENDS "skiplist,flat,twom,twoskip"
+#define BACKENDS "skiplist,flat,twom,twoskip,zeroskip"
 #endif
 
 static const char *backend = CUNIT_PARAM(BACKENDS);

@@ -2582,5 +2582,6 @@ HIDDEN struct cyrusdb_backend cyrusdb_twoskip =
     &dump,
     &consistent,
     &mycheckpoint,
-    &bsearch_ncompare_raw
+    &bsearch_ncompare_raw,
+    0, /* flags */
 };

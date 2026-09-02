@@ -73,6 +73,8 @@ enum cyrus_opt {
     CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE,
     /* cyrusdb autoconvert */
     CYRUSOPT_CYRUSDB_AUTOCONVERT,
+    /* Directory for zeroskip pointer-table caches (NULL) */
+    CYRUSOPT_ZEROSKIP_INDEX_PATH,
 
     CYRUSOPT_LAST
 

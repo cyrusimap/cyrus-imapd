@@ -1,7 +1,7 @@
 Name: mboxlist_db
 Type: STRINGLIST
-Allowed-Values: flat skiplist sql twom twoskip
+Allowed-Values: flat skiplist sql twom twoskip zeroskip
 Default-Value: twoskip
-Last-Modified: 3.13.1
+Last-Modified: UNRELEASED
 
 The cyrusdb backend to use for the mailbox list.

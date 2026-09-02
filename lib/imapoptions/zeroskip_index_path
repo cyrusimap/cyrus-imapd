@@ -1,0 +1,15 @@
+Name: zeroskip_index_path
+Type: STRING
+Default-Value: NULL
+Last-Modified: UNRELEASED
+
+The directory under which the zeroskip backend caches pointer tables, which
+speed up opening a database that has accumulated unordered files.  Each
+database gets its own subdirectory beneath this path.  If not specified,
+the cache lives in a zeroskip.cache directory inside each database instead.
+
+A tmpfs is a good choice: the cache is a pure optimisation, and losing it
+costs only time.  It must not be the directory of any database, and it must
+not be writable by untrusted users -- a planted table yields wrong records,
+which is why the default stays inside the database directory rather than
+somewhere shared.

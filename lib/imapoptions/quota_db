@@ -1,7 +1,7 @@
 Name: quota_db
 Type: STRINGLIST
-Allowed-Values: flat skiplist sql quotalegacy twom twoskip
+Allowed-Values: flat skiplist sql quotalegacy twom twoskip zeroskip
 Default-Value: quotalegacy
-Last-Modified: 3.13.1
+Last-Modified: UNRELEASED
 
 The cyrusdb backend to use for quotas.

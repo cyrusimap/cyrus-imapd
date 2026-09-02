@@ -2468,5 +2468,6 @@ EXPORTED struct cyrusdb_backend cyrusdb_skiplist =
     &dump,
     &consistent,
     &mycheckpoint,
-    &compare_signed
+    &compare_signed,
+    0, /* flags */
 };
