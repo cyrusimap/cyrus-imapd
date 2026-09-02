@@ -127,6 +127,52 @@ Sphinx site, favor Markdown over reStructuredText.  Your audience is generally
 
 To build the documentation, you can use dar and run `dar makedocs`.
 
+## Where to look things up
+
+docsrc/developer/index.rst is the table of contents for the developer docs, and
+names every page in it by path.  Beyond the pages already cited above:
+
+**Getting oriented**
+
+- `docsrc/developer/quickstart.rst` -- the shortest path from a checkout to a
+  passing test, and the conventions for writing one
+- `docsrc/developer/process.rst` -- how a change gets reviewed and merged, and
+  what the version numbers mean
+- `docsrc/developer/documentation.rst` -- the Sphinx setup, the custom roles
+  like `:rfc:` and `:cyrusman:`, and the man page conventions
+
+**Internals**
+
+- `docsrc/developer/API/` -- the mailbox, index and cyrusdb APIs
+- `docsrc/developer/replication-protocol.md` and
+  `docsrc/developer/annotator-protocol.md` -- both written as internal
+  references for the Cyrus team
+- `docsrc/developer/thoughts/` -- often the only description of a subsystem:
+  `locking.rst`, `namelocks.rst`, `prot.rst` (the stdio replacement for network
+  i/o), `bytecode.rst` (Sieve), `mailbox-format.rst`,
+  `var_directory_structure.rst`, `namespaces.rst`, and `hacking.rst`, which is
+  where the xmalloc family and the strlcpy/memcpy conventions are written down
+- `doc/README.cyrusdb.md`, `doc/README.twom.md`, `doc/README.zeroskip.md` --
+  the key-value store interface, and two of its backends
+
+**Protocols and standards**
+
+- `docsrc/rfc-support.rst` -- what Cyrus implements and how completely.  Update
+  it when that changes.
+- `docsrc/reference/extensions/` -- Cyrus's own non-standard protocol
+  extensions
+
+**Conventions to check before landing a change**
+
+- `lib/imapoptions/README.md` -- the format of an imapd.conf option definition
+- `changes/next/0000-TEMPLATE` -- the release-note entry a user-visible change
+  needs, and the fields it has to fill in
+- `doc/README.logfmt.md` -- the rulebook for structured logging
+
+The pages in docsrc/developer/thoughts and the cyrusdb pages under
+docsrc/developer/API are often dated (bordering on abandoned).  Where they and
+the code disagree, the code is right.
+
 ## Comments
 
 - Keep inline comments in code as tight as possible, ideally 1-2 lines.  Longer
