@@ -20,6 +20,7 @@ Getting Started
     process
     quickstart
     overview
+    The source tree <source-tree>
 
 Contributing
 ============
@@ -27,6 +28,7 @@ Contributing
 .. toctree::
     :maxdepth: 1
 
+    C style <c-style>
     Contributing to the documentation <documentation>
     The CUnit (C) test suite <cunit>
     The Cassandane (Perl) test suite <cassandane>

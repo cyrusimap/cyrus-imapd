@@ -65,26 +65,22 @@ no hard tabs, and no "FIXME" markers.  Both cover C, header, Perl and reST
 files; docsrc/developer/process.rst has the exact rules and how to run them.
 Say what you would have marked FIXME in an ordinary comment, or leave it out.
 
-When you write C code in this project then the following general rules apply:
+C style is defined by the `.clang-format` file at the repository root and
+described in docsrc/developer/c-style.md, which covers when to reformat and
+when to match the surrounding code, the memory and string conventions, and the
+logging requirement.  Read it before writing C.  The rules most easily got
+wrong:
 
-- When you edit existing C code and the code change does not create a new block
-  scope (e.g. it's not starting with curly braces), then try to emulate the
-  code style of the existing code snippet to reduce git diff noise.
-
-- When you edit C code and the code change does introduce a new block scope or
-  a new function or the like, then use clang-format using the ".clang-format"
-  file to format that code.
-
-- When you define new variables with boolean semantics, use `bool` instead of
-  `int`. Generally prefer to use C23 constructs over older C language
-  revisions.  For C++, use revision C++17.
-
-- When you declare new variables, try to keep the variable scope to the most
-  inner scope, e.g. a `size_t i` iterator for a for loop should be declared in
-  the initializer of the for loop like `for (size_t i = 0;`.
-
-- When you write new logging messages in the code, you must use the
-  `xsyslog_ev` function.  Consult doc/README.logfmt.md for more information.
+- Format new code with clang-format.  For a small edit inside older code,
+  match the local style instead -- a three-line fix should be a three-line
+  diff.
+- Use `bool` for boolean variables, including `<stdbool.h>` where it isn't
+  already included.  Don't use C23-only constructs: `configure.ac` doesn't
+  request a C standard, so C compiles at the compiler's default, which is C17
+  on the reference image.  C++ is C++17.
+- Declare a variable in the innermost scope that needs it, e.g. `for (size_t i
+  = 0;`.
+- Log with `xsyslog_ev`, never `syslog`.  See doc/README.logfmt.md.
 
 When you write Perl code in this project then the following general rules
 apply:
@@ -152,6 +148,10 @@ names every page in it by path.  Beyond the pages already cited above:
 
 - `docsrc/developer/quickstart.rst` -- the shortest path from a checkout to a
   passing test, and the conventions for writing one
+- `docsrc/developer/source-tree.md` -- what's in each top-level directory, and
+  what the four installed libraries are for
+- `docsrc/developer/c-style.md` -- clang-format, the memory and string
+  conventions, and the process startup and shutdown rules
 - `docsrc/developer/process.rst` -- how a change gets reviewed and merged, and
   what the version numbers mean
 - `docsrc/developer/documentation.rst` -- the Sphinx setup, the custom roles
