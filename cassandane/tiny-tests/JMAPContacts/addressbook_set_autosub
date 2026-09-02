@@ -1,0 +1,81 @@
+#!perl
+use Cassandane::Tiny;
+
+# Subscribing and unsubscribing an autosub addressbook both succeed, but the
+# '1' right keeps isSubscribed true until the right itself goes away.
+sub test_addressbook_set_autosub ($self)
+{
+    my $jmap  = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    my $other = $self->{instance}->create_user('other');
+    my $abook = $other->addressbooks->default;
+
+    $admin->setacl('user.other.#addressbooks.Default', cassandane => 'lrs1')
+        or die "setacl: $@";
+
+    xlog $self, "subscribe for real, then unsubscribe: both must succeed";
+    my $res = $jmap->request([
+        [ 'AddressBook/set', {
+            accountId => 'other',
+            update => { $abook->id => { isSubscribed => JSON::true } },
+        }, 'subscribe' ],
+        [ 'AddressBook/set', {
+            accountId => 'other',
+            update => { $abook->id => { isSubscribed => JSON::false } },
+        }, 'unsubscribe' ],
+        [ 'AddressBook/get', {
+            accountId  => 'other',
+            ids        => [ $abook->id ],
+            properties => [ 'isSubscribed' ],
+        }, 'get' ],
+    ]);
+
+    my $subscribe = $res->paragraph_by_client_id('subscribe')
+                        ->single('AddressBook/set')->arguments;
+    my $unsubscribe = $res->paragraph_by_client_id('unsubscribe')
+                          ->single('AddressBook/set')->arguments;
+    my $books = $res->paragraph_by_client_id('get')
+                    ->single('AddressBook/get')->arguments->{list};
+
+    $self->assert_cmp_deeply(
+        superhashof({ updated => { $abook->id => ignore() } }),
+        $subscribe,
+        "subscribing an autosub addressbook succeeds",
+    );
+
+    xlog $self, "server reports the still-true effective state";
+    $self->assert_cmp_deeply(
+        superhashof({
+            updated => { $abook->id => superhashof({ isSubscribed => jtrue() }) },
+        }),
+        $unsubscribe,
+        "unsubscribing succeeds but the '1' right keeps it subscribed",
+    );
+
+    $self->assert_cmp_deeply(
+        [ superhashof({ id => $abook->id, isSubscribed => jtrue() }) ],
+        $books,
+        "and AddressBook/get agrees",
+    );
+
+    xlog $self, "removing the flag reveals the real (removed) entry";
+    $admin->setacl('user.other.#addressbooks.Default', cassandane => 'lrs')
+        or die "setacl: $@";
+
+    $res = $jmap->request([
+        [ 'AddressBook/get', {
+            accountId  => 'other',
+            ids        => [ $abook->id ],
+            properties => [ 'isSubscribed' ],
+        } ],
+    ]);
+
+    $books = $res->single_sentence('AddressBook/get')->arguments->{list};
+
+    $self->assert_cmp_deeply(
+        [ superhashof({ id => $abook->id, isSubscribed => jfalse() }) ],
+        $books,
+        "without the '1' right the earlier unsubscribe takes effect",
+    );
+}

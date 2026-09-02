@@ -7230,9 +7230,10 @@ static int report_cal_query(struct transaction_t *txn,
                               MBOXTREE_SKIP_ROOT);
 
             /* Add responses for all shared calendar collections */
-            mboxlist_usersubs(txn->req_tgt.userid,
-                              calquery_by_collection, fctx,
-                              MBOXTREE_SKIP_PERSONAL);
+            mboxlist_usersubs_effective(txn->req_tgt.userid,
+                                        httpd_authstate,
+                                        calquery_by_collection, fctx,
+                                        MBOXTREE_SKIP_PERSONAL);
         }
     }
 

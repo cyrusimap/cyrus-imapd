@@ -335,6 +335,12 @@ int mboxlist_usermboxtree(const char *userid, const struct auth_state *auth_stat
                           mboxlist_cb *proc, void *rock, int flags);
 int mboxlist_usersubs(const char *userid, mboxlist_cb *proc, void *rock, int flags);
 
+/* like mboxlist_usersubs, but also visits mailboxes whose effective
+ * rights for userid include ACL_AUTOSUB, each mailbox at most once */
+int mboxlist_usersubs_effective(const char *userid,
+                                const struct auth_state *auth_state,
+                                mboxlist_cb *proc, void *rock, int flags);
+
 strarray_t *mboxlist_sublist(const char *userid);
 
 /* Find subscribed mailboxes that match 'pattern'. */
@@ -366,6 +372,14 @@ int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len);
 
 /* Check 'user's subscription status for mailbox 'name' */
 int mboxlist_checksub(const char *name, const char *userid);
+
+/* effective subscription: a real subs entry, or ACL_AUTOSUB in the
+ * user's effective rights. auth_state may be NULL, in which case one
+ * is constructed for userid -- but only for a mailbox whose ACL grants
+ * the right to somebody, so passing NULL is cheap on the mailboxes
+ * nobody has been granted it on. Returns nonzero if subscribed. */
+int mboxlist_issubscribed(const char *name, const char *userid,
+                          const struct auth_state *auth_state);
 
 /* Change 'user's subscription status for mailbox 'name'. */
 int mboxlist_changesub(const char *name, const char *userid,

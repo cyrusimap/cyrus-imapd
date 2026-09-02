@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+# An addressbook shared with the '1' (ACL_AUTOSUB) right shows up in the
+# sharee's home-set listing without the sharee ever subscribing to it.
+sub test_autosub_listing
+    :ReverseACLs
+    ($self)
+{
+    my $admin = $self->{adminstore}->get_client();
+
+    my $owner  = $self->{instance}->create_user('owner');
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    xlog $self, "provision the owner's default addressbook";
+    $self->assert_num_equals(1, scalar $owner->carddav->GetAddressBooks->@*);
+
+    xlog $self, "grant the sharee the '1' right on it";
+    $admin->setacl('user.owner.#addressbooks.Default', sharee => 'lrs1')
+        or die "setacl: $@";
+
+    # Not GetAddressBooks(): it also asks for D:acl, and dies on any ace
+    # carrying a single D:privilege, which XML::Fast hands back as a hashref
+    # rather than a one-element array -- a shared collection has several.
+    my $dav = $sharee->carddav;
+    my $NS_D = $dav->ns('D');
+    my $res = $dav->Request(
+        'PROPFIND', '',
+        x('D:propfind', $dav->NS(), x('D:prop', x('D:resourcetype'))),
+        Depth => 1,
+    );
+
+    my @hrefs = map {; $_->{"{$NS_D}href"}{content} }
+                ($res->{"{$NS_D}response"} // [])->@*;
+
+    $self->assert_cmp_deeply(
+        supersetof('/dav/addressbooks/user/sharee/owner.Default/'),
+        \@hrefs,
+        "home-set listing includes the flag-granted addressbook",
+    );
+}

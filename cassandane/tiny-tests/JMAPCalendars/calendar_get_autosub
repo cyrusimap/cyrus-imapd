@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+# The '1' (ACL_AUTOSUB) right on a shared calendar makes Calendar/get report
+# isSubscribed even though the sharee never subscribed. The group-granted
+# case is ACL-level and covered by JMAPContacts.addressbook_get_autosub_group.
+sub test_calendar_get_autosub ($self)
+{
+    my $jmap  = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    my $other = $self->{instance}->create_user('other');
+    my $cal = $other->calendars->default;
+
+    for my $case ([ lrs => jfalse() ], [ lrs1 => jtrue() ]) {
+        my ($acl, $want) = @$case;
+
+        xlog $self, "grant '$acl' to cassandane";
+        $admin->setacl('user.other.#calendars.Default', cassandane => $acl)
+            or die "setacl: $@";
+
+        my $res = $jmap->request([
+            [ 'Calendar/get', {
+                accountId  => 'other',
+                ids        => [ $cal->id ],
+                properties => [ 'isSubscribed' ],
+            } ],
+        ]);
+
+        my $calendars = $res->single_sentence('Calendar/get')->arguments->{list};
+
+        $self->assert_cmp_deeply(
+            [ superhashof({ id => $cal->id, isSubscribed => $want }) ],
+            $calendars,
+            "isSubscribed for ACL '$acl'",
+        );
+    }
+}

@@ -374,3 +374,50 @@ Individual Rights Reference
         :ref:`imap-admin-access-control-right-e`,
         :ref:`imap-admin-access-control-right-t` and
         :ref:`imap-admin-access-control-right-x` rights.
+
+.. _imap-admin-access-control-right-1:
+
+``1``
+-----
+
+    Stands for **auto-subscribe**. This is a Cyrus-specific right: one
+    of the :rfc:`4314` digit rights reserved for local or site-defined
+    use.
+
+    Any user whose effective rights on a mailbox include the
+    :ref:`imap-admin-access-control-right-1` right -- whether granted
+    directly, or through a ``group:`` identifier (see
+    :ref:`imap-admin-access-control-identifiers`) -- is treated as
+    subscribed to that mailbox. Such a mailbox appears in the ``LSUB``
+    response and in ``LIST (SUBSCRIBED)`` / ``LIST`` ``RETURN
+    (SUBSCRIBED)`` responses, is searched by the subscribed-scope
+    ``ESEARCH`` multisearch, wakes an ``IDLE`` session that asked for
+    ``NOTIFY`` on the ``subscribed`` mailbox filter, is reported with
+    ``isSubscribed: true`` over JMAP for Mailbox, Calendar and
+    AddressBook objects, is listed among the user's shared CalDAV and
+    CardDAV collections, and has its per-user calendar alarms fire as
+    normal.
+
+    Enumerating another user's or a shared mailbox this way requires
+    :imapdconf:`reverseacls` to be enabled: the reverse index is what
+    makes it possible to find the mailboxes a user has been granted a
+    right on without walking every mailbox on the server. Without it,
+    the right still governs anything that asks about one named mailbox
+    -- ``isSubscribed``, alarm delivery -- but such mailboxes will not
+    appear in listings.
+
+    ``SUBSCRIBE`` and ``UNSUBSCRIBE`` still operate on the user's real
+    subscription entry for the mailbox and succeed as usual. However,
+    while the :ref:`imap-admin-access-control-right-1` right is held,
+    the mailbox's effective subscription state remains subscribed
+    regardless of that entry; removing the right restores whatever the
+    user's real subscription state was.
+
+    This right is intended for centrally-managed shared folders, such
+    as an organisation-wide address book shared to a group, where
+    subscription should not depend on individual users managing it
+    themselves.
+
+    Granting this right to the ``anyone`` identifier auto-subscribes
+    every user with access to the mailbox. That's coherent, but almost
+    never what's wanted; grant it to a ``group:`` identifier instead.
