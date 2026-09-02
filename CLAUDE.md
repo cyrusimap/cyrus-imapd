@@ -160,3 +160,9 @@ the primary interface.
   and gives the reader a direct pointer. Never cite one from the branch under
   development, as the branch is extremely likely to be rebased during merge, so
   any referenced hash will become invalid.
+
+## General Style Rules
+
+- Do not anthropomorphize inanimate or abstract entities. Verbs like "speak",
+  "answer", "scrutinize" almost always are wrong, unless they actually refer
+  to human activity.
