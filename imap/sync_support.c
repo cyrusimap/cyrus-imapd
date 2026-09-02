@@ -674,6 +674,7 @@ void sync_folder_list_free(struct sync_folder_list **lp)
         free(current->name);
         free(current->partition);
         free(current->acl);
+        free(current->groups);
         sync_annot_list_free(&current->annots);
         free(current);
         current = next;
