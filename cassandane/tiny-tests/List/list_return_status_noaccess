@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub do_list
+{
+    my ($self, $imaptalk, $subscribed, $can_read, $expected_attribs) = @_;
+
+    my $sel_opts = [qw()];
+    my $expected_mboxes = {};
+
+    if ($subscribed) {
+        $sel_opts = [qw(SUBSCRIBED)];
+    }
+
+    my $data = $imaptalk->list($sel_opts, "",
+                            "user.victim", 'RETURN',
+                            ['SUBSCRIBED', 'MYRIGHTS',
+                             'STATUS', [qw(MESSAGES)],
+                             'METADATA', [qw(/shared/comment)]]);
+
+    if ($expected_attribs) {
+        $expected_mboxes = { 'user.victim' => $expected_attribs };
+    }
+
+    $self->assert_mailbox_structure($data, '.', $expected_mboxes);
+
+    my $status = $imaptalk->get_response_code('status');
+    my $myrights = $imaptalk->get_response_code('myrights');
+    my $metadata = $imaptalk->get_response_code('metadata');
+
+    if ($can_read) {
+        $self->assert_not_null($status);
+        $self->assert_not_null($myrights);
+        $self->assert_not_null($metadata);
+    }
+    else {
+        $self->assert_null($status);
+        $self->assert_null($myrights);
+        $self->assert_null($metadata);
+    }
+
+    $imaptalk->clear_response_code('status');
+    $imaptalk->clear_response_code('myrights');
+    $imaptalk->clear_response_code('metadata');
+}
+
+sub test_list_return_status_noaccess
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user.victim');
+    $admintalk->setmetadata("user.victim", "/shared/comment", "Hello World");
+    $admintalk->setacl('user.victim', 'cassandane', 'lr');
+
+    # Subscribe to mailbox and check LIST output
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->subscribe("user.victim");
+
+    my $attribs = [ qw( \\Subscribed \\HasNoChildren ) ];
+    $self->do_list($imaptalk, 0, 1, $attribs);
+    $self->do_list($imaptalk, 1, 1, $attribs);
+
+    # Remove 'r' right and check LIST output
+    $admintalk->setacl('user.victim', 'cassandane', '-r');
+
+    $attribs = [ qw( \\Noselect \\Subscribed \\HasNoChildren ) ];
+    $self->do_list($imaptalk, 0, 0, $attribs);
+    $self->do_list($imaptalk, 1, 0, $attribs);
+}
