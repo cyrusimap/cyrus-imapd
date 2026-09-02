@@ -610,7 +610,9 @@ calendar_sharewith_to_rights_iter:
     json_object_foreach(jsharewith, name, jval) {
         int mask;
         if (!strcmp("mayReadFreeBusy", name))
-            mask = JACL_READFB;
+            /* grant lookup too: every check goes through JACL_LOOKUP
+               first, so free/busy alone is never visible */
+            mask = JACL_READFB|JACL_LOOKUP;
         else if (!strcmp("mayReadItems", name))
             mask = JACL_READITEMS;
         else if (!strcmp("mayWriteAll", name))
@@ -637,7 +639,7 @@ calendar_sharewith_to_rights_iter:
 
     /* Can always set calendar properties for read-only calendars,
        but we need to flag the account as isReadOnly=false, so include ACL_WRITE. */
-    if (newrights & ~JACL_READFB) {
+    if (newrights & ~(JACL_READFB|JACL_LOOKUP)) {
         newrights |= ACL_WRITE;
     }
 

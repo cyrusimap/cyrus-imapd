@@ -1,0 +1,37 @@
+Description:
+
+Granting somebody free/busy access to a calendar now works on its own.
+
+mayReadFreeBusy (JMAP), and the '9' ACL it maps to, only ever granted the
+free/busy right itself.  But every check which decides whether a sharee can see
+a calendar at all goes through the lookup right first, so granting free/busy
+and nothing else hid the principal from Principal/get and Principal/query, made
+the account look like it had no calendars, and turned Principal/getAvailability
+into a notFound.  It now grants lookup as well.
+
+The rule that anything beyond free/busy also implies the write right has to
+skip lookup now, or a free/busy share would quietly become writable.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Existing free/busy-only shares keep the ACL they were granted, which is still
+missing 'l', so they carry on not working until repaired.  Either re-share them,
+or add the lookup right anywhere '9' was granted without it:
+
+    cyradm> setaclmailbox user.example.#calendars.Default sharee +l
+
+
+GitHub issue:
+
+None.
