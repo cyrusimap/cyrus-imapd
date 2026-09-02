@@ -227,10 +227,21 @@ done:
     return r;
 }
 
+static int lock_needs_globallock(const char *mboxname)
+{
+    /* locks in the noglobal namespace don't protect user data, so they
+     * don't need to hold the global lock off for the duration */
+    if (!strncmp(mboxname, NOGLOBAL_LOCK_PREFIX, strlen(NOGLOBAL_LOCK_PREFIX)))
+        return 0;
+
+    return 1;
+}
+
 EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
                            int locktype_and_flags)
 {
-    if (config_take_globallock && locktype_and_flags & LOCK_EXCLUSIVE) {
+    if (config_take_globallock && locktype_and_flags & LOCK_EXCLUSIVE
+                               && lock_needs_globallock(mboxname)) {
         // if we have an exclusive lock, we MUST already be holding
         // the shared global lock, or we have to open it.
         if (!mboxname_islocked(GLOBAL_LOCKNAME)) {
