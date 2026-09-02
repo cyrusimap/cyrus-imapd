@@ -111,8 +111,12 @@ want them.
 
 ```
 event = segment *( "." segment )
-segment = 1*( lowercase / DIGIT / "_" )
+segment = 1*( lowercase / DIGIT / "_" / "-" )
 ```
+
+A hyphen is legal in an event name where the thing being named has one.
+Don't reach for it to join an object to its outcome, though -- that's what
+the dot is for.  (Keys are stricter: no hyphens.  See "Naming keys".)
 
 Read the name as **`<subsystem>.<object>.<outcome>`**, from general to
 specific, so that a prefix match selects a useful family:
@@ -202,14 +206,15 @@ the representation of a given type consistent across the whole log.
 
 And these log a whole struct, contributing several fields at once:
 
-| Macro                | Emits                                                               | Declared in       |
-| -------------------- | ------------------------------------------------------------------- | ----------------- |
-| `lf_mailbox(mb)`     | `mbox.name`, `mbox.uniqueid`, `mbox.mailboxid`                      | `imap/mailbox.h`  |
-| `lf_msgrecord(rec)`  | `msg.imapuid`, `msg.modseq`, `msg.sysflags`, `msg.guid`, `msg.size` | `imap/mailbox.h`  |
-| `lf_mbentry(mbe)`    | as `lf_mailbox`, plus `mbox.type`                                   | `imap/mboxlist.h` |
-| `lf_mbname(k, mb)`   | a mailbox name, under the key you give                              | `imap/mboxname.h` |
-| `lf_strarray(k, sa)` | each element as `k.0`, `k.1`, ...                                   | `lib/strarray.h`  |
-| `lf_fn(k, fn, p)`    | whatever `fn` pushes — the generic form                             | `lib/util.h`      |
+| Macro                 | Emits                                                               | Declared in       |
+| --------------------- | ------------------------------------------------------------------- | ----------------- |
+| `lf_mailbox(mb)`      | `mbox.name`, `mbox.uniqueid`, `mbox.mailboxid`                      | `imap/mailbox.h`  |
+| `lf_msgrecord(rec)`   | `msg.imapuid`, `msg.modseq`, `msg.sysflags`, `msg.guid`, `msg.size` | `imap/mailbox.h`  |
+| `lf_mbentry(mbe)`     | as `lf_mailbox`, plus `mbox.type`                                   | `imap/mboxlist.h` |
+| `lf_mbname(k, mb)`    | a mailbox name, under the key you give                              | `imap/mboxname.h` |
+| `lf_intname(k, name)` | an internal mailbox name, in the admin namespace                    | `imap/mboxname.h` |
+| `lf_strarray(k, sa)`  | each element as `k.0`, `k.1`, ...                                   | `lib/strarray.h`  |
+| `lf_fn(k, fn, p)`     | whatever `fn` pushes — the generic form                             | `lib/util.h`      |
 
 Prefer these to spelling the fields out.  They're the reason the same
 mailbox is described the same way in every event, and adding a field to one

@@ -206,9 +206,8 @@ int service_init(int argc __attribute__((unused)),
     unsigned options =
         config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO) ? NAMESPACE_OPTION_UTF8 : 0;
     if ((r = mboxname_init_namespace(&lmtpd_namespace, options))) {
-        xsyslog(LOG_ERR, "mboxname_init_namespace failed",
-                         "error=<%s>",
-                         error_message(r));
+        xsyslog_ev(LOG_ERR, "lmtp.startup.failed",
+                   lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -290,10 +289,13 @@ int service_main(int argc, char **argv,
 
     if (config_iolog) {
         read_io_count(io_count_stop);
-        xsyslog(LOG_INFO, "LMTP session stats",
-               "read_bytes=<%d> wrote_bytes=<%d>",
-                io_count_stop->io_read_count - io_count_start->io_read_count,
-                io_count_stop->io_write_count - io_count_start->io_write_count);
+        xsyslog_ev(LOG_INFO, "lmtp.session.ended",
+                   lf_d("used.bytes.in",
+                        io_count_stop->io_read_count
+                            - io_count_start->io_read_count),
+                   lf_d("used.bytes.out",
+                        io_count_stop->io_write_count
+                            - io_count_start->io_write_count));
         free (io_count_start);
         free (io_count_stop);
     }
@@ -615,13 +617,12 @@ int deliver_mailbox(FILE *f,
                 else if (mode & TARGET_FUZZY) target = "fuzzy";
                 else if (mode & TARGET_SET) target = "set";
 
-                xsyslog(LOG_INFO, "Delivered",
-                                  "action=<%s> target=<%s>"
-                                  " messageid=%s userid=<%s> mailbox=<%s>"
-                                  " uniqueid=<%s>",
-                                  action, target, id, user,
-                                  mailbox_name(mailbox),
-                                  mailbox_uniqueid(mailbox));
+                xsyslog_ev(LOG_NOTICE, "lmtp.message.delivered",
+                           lf_s("lmtp.action", action),
+                           lf_s("lmtp.target", target),
+                           lf_s("msg.id", id),
+                           lf_s("u.username", user),
+                           lf_mailbox(mailbox));
                 if (dupelim && id)
                     duplicate_mark(&dkey, time(NULL), as.baseuid);
             }
@@ -966,14 +967,16 @@ skipdelivery:
             case s_err:
             case s_done:
                 /* yikes, we haven't implemented sieve ! */
-                syslog(LOG_CRIT,
-                       "sieve states reached, but we don't implement sieve");
+                xsyslog_ev(LOG_CRIT, "lmtp.proxy.state.invalid",
+                           lf_d("lmtp.rcpt.index", n),
+                           lf_s("lmtp.rcpt.state", "sieve"));
                 abort();
             break;
             case nosieve:
                 /* yikes, we never got an answer on this one */
-                syslog(LOG_CRIT, "still waiting for response to rcpt %d",
-                       n);
+                xsyslog_ev(LOG_CRIT, "lmtp.proxy.state.invalid",
+                           lf_d("lmtp.rcpt.index", n),
+                           lf_s("lmtp.rcpt.state", "nosieve"));
                 abort();
                 break;
             case done:
@@ -1037,7 +1040,8 @@ EXPORTED void fatal(const char* s, int code)
     }
     if (stage) append_removestage(stage);
 
-    syslog(LOG_ERR, "FATAL: %s", s);
+    xsyslog_ev(LOG_ERR, "lmtp.process.fatal",
+               lf_s("error", s));
 
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
@@ -1191,9 +1195,9 @@ static int verify_user(const mbname_t *origmbname,
         }
     }
 
-    if (r) xsyslog(LOG_DEBUG, "verify_user failed",
-                              "user=<%s> error=<%s>",
-                              mbname_userid(mbname), error_message(r));
+    if (r) xsyslog_ev(LOG_DEBUG, "lmtp.rcpt.verify.failed",
+                      lf_s("u.username", mbname_userid(mbname)),
+                      lf_err("error", r));
 
 done:
     mbname_free(&mbname);

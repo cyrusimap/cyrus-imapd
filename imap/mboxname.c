@@ -3420,3 +3420,27 @@ EXPORTED void logfmt_arg_mbname(struct logfmt *lf,
 {
     logfmt_push_mbname(lf, key, (const mbname_t *) value);
 }
+
+EXPORTED void logfmt_push_intname(struct logfmt *lf,
+                                  const char *key,
+                                  const char *intname)
+{
+    mbname_t *mbname = NULL;
+
+    if (!intname) {
+        /* logging shouldn't be the thing that crashes us */
+        logfmt_push(lf, key ? key : "mbox.name", NULL);
+        return;
+    }
+
+    mbname = mbname_from_intname(intname);
+    logfmt_push_mbname(lf, key, mbname);
+    mbname_free(&mbname);
+}
+
+EXPORTED void logfmt_arg_intname(struct logfmt *lf,
+                                 const char *key,
+                                 const void *value)
+{
+    logfmt_push_intname(lf, key, (const char *) value);
+}

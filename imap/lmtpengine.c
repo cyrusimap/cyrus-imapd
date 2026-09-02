@@ -928,10 +928,9 @@ void lmtpmode(struct lmtp_func *func,
         buf_setcstr(&saslprops.iplocalport, localip);
     }
 
-    xsyslog(LOG_DEBUG, "new connection",
-                       "clienthost=<%s> preauth=<%s>",
-                       cd.clienthost,
-                       func->preauth ? "postman" : "none");
+    xsyslog_ev(LOG_DEBUG, "lmtp.connection.accepted",
+               lf_s("r.clienthost", cd.clienthost),
+               lf_s("lmtp.preauth", func->preauth ? "postman" : "none"));
 
     /* Setup SASL to go.  We need to do this *after* we decide if
      *  we are preauthed or not. */
@@ -996,7 +995,8 @@ void lmtpmode(struct lmtp_func *func,
       }
 
       if (config_getswitch(IMAPOPT_CHATTY))
-        xsyslog(LOG_NOTICE, "parsed command", "command=<%s>", buf);
+        xsyslog_ev(LOG_NOTICE, "lmtp.command.received",
+                   lf_s("lmtp.command", buf));
 
       switch (buf[0]) {
       case 'a':
@@ -1411,7 +1411,7 @@ void lmtpmode(struct lmtp_func *func,
                                         NULL);
 
                 if (r == -1) {
-                    xsyslog(LOG_ERR, "error initializing TLS", NULL);
+                    xsyslog_ev(LOG_ERR, "lmtp.starttls.unavailable");
                     prot_printf(pout, "454 4.3.3 %s\r\n", "Error initializing TLS");
                     continue;
                 }
@@ -1429,16 +1429,16 @@ void lmtpmode(struct lmtp_func *func,
 
                 /* if error */
                 if (r==-1) {
-                    xsyslog(LOG_NOTICE, "TLS negotiation failed",
-                                        "clienthost=<%s>",
-                                        cd.clienthost);
+                    xsyslog_ev(LOG_NOTICE, "lmtp.starttls.failed",
+                               lf_s("r.clienthost", cd.clienthost));
                     func->shutdown(EX_PROTOCOL);
                 }
 
                 /* tell SASL about the negotiated layer */
                 r = saslprops_set_tls(&saslprops, cd.conn);
                 if (r != SASL_OK) {
-                    syslog(LOG_NOTICE, "saslprops_set_tls() failed: STARTTLS");
+                    xsyslog_ev(LOG_NOTICE, "lmtp.starttls.sasl.failed",
+                               lf_s("error", sasl_errstring(r, NULL, NULL)));
                     func->shutdown(EX_TEMPFAIL);
                 }
                 if (buf_len(&saslprops.authid)) {
