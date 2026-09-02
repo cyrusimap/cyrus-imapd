@@ -4922,7 +4922,8 @@ static int meth_get(struct transaction_t *txn,
             return ws_start_channel(txn, NULL, &ws_echo);
         }
 
-        if (ws_enabled) {
+        /* Advertise WebSocket upgrade if not attempting some other upgrade */
+        if (ws_enabled && !spool_getheader(txn->req_hdrs, "Upgrade")) {
             txn->flags.upgrade |= UPGRADE_WS;
             txn->flags.conn |= CONN_UPGRADE;
         }
