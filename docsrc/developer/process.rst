@@ -87,6 +87,34 @@ Pure refactoring, test-only changes, and internal cleanups don't need an entry.
 If you're unsure, write one: a needless entry costs the release manager a
 moment's deletion, and a missing one costs an operator a surprise.
 
+Commit messages
+---------------
+
+Write for whoever arrives from ``git blame`` in a year asking what the point of
+the change was.  They have the commit message and nothing else: the reviewer
+had the PR description, the branch and the diff, but this reader has none of
+them.
+
+* Use an imperative subject line that names the outcome, prefixed with the
+  primary file or component edited: ``jmap_tasklist.c: implement priority
+  sort``, ``README.md: add cross-reference to security policy``.
+* Explain *why*, not *what*.  The diff already shows what changed; don't
+  enumerate it file by file.
+* Most commits want a subject and one to three sentences.
+* Earn any extra length.  A longer message is justified by things the reader
+  can't get from the diff: a trap they'd fall into again, a constraint that
+  forced an odd shape, a deliberate limitation, or an alternative you rejected
+  and they'd otherwise wonder about.
+* "Currently X, however that's a problem because Y, so we've chosen to do Z" is
+  a good shape when you're not sure how to begin.
+* A relaxed, concise, first-person voice is right.  It's fine to say "let's",
+  and fine to admit that something is a bit hacky.
+* Back a performance or behavioral claim with concrete evidence when you have
+  it: before-and-after timings, an strace excerpt, sample output.
+* Cite a commit by hash only once it's on upstream master, where it stays put.
+  A hash from the branch under development won't survive the rebase that lands
+  it.
+
 The release cycle
 =================
 

@@ -117,6 +117,20 @@ docsrc/developer/process.rst explains the fields and which changes are exempt,
 and also covers how a PR gets reviewed and what the automated checks will
 reject.
 
+## Commit messages
+
+The conventions are in docsrc/developer/process.rst.  Follow them.  These
+additional rules are for you specifically, and are not in that document:
+
+- Your audience is not the human guiding a coding session.  Talk to that person
+  via the primary interface, not the commit message.
+- Don't provide egregious counting of entities changed.
+- Don't defend every decision you made.  If the reviewer would have made the
+  same choice, it doesn't need a paragraph -- the code describes the choices.
+- Evidence for a claim belongs in the message.  A report of your work -- which
+  tests pass, what you verified, what you couldn't check -- does not.  That's
+  for the PR, if anywhere.
+
 # Documentation
 
 The project documentation is a Sphinx site built from three sources: the pages
@@ -196,43 +210,6 @@ the code disagree, the code is right.
   will explain usage, calling conventions, contract, invariants, and so on.
 - In general, comments should only explain the **current** code. Avoid
   explaining changes to prior implementation. That's what git history is for.
-
-## Commit messages
-
-Write for whoever lands on this from `git blame` in a year, asking what the
-point of the change was. They will have the commit message and nothing else;
-the reviewer has the PR description, the branch and the diff as well.  Your
-audience is not the human guiding a coding session -- talk to that person via
-the primary interface.
-
-- Use an imperative subject line that names the outcome or goal. Prefix with
-  the primary file edited. "jmap_tasklist.c: implement priority sort",
-  "README.md: add cross-reference to security policy".
-- Explain *why*, not *what*. The diff already shows what changed. Don't
-  enumerate the literal file-by-file changes.  Don't provide egregious counting
-  of entities changed.
-- Most commits want a subject and one to three sentences.
-- Earn any extra length.  Longer messages are justified by things the reader
-  can't see from the diff alone, a trap they'd fall into again, a constraint
-  that forced an odd shape, a deliberate limitation or a rejected alternative
-  they'd otherwise wonder about.
-- Walk it through as "Currently X… however that's a problem because Y… so we
-  have chosen to do Z".
-- Write in a relaxed, concise, first-person voice. It's fine to say "let's"
-  or admit something is "a bit hacky".
-- Deployment requirements belongs in the PR description, not here.  That will
-  matter for about a week, and the reader you're writing for arrives long after
-  it stopped being true.
-- Don't defend every decision you made. If the reviewer would have made the
-  same choice, it doesn't need a paragraph — the code describes the choices.
-- Back up performance or behavioural claims with concrete evidence when you
-  have it, such as before/after timings, an strace excerpt, sample output.
-  That's different from reporting your work — which tests pass, what you
-  verified, what you couldn't check. That's for the PR, if anywhere.
-- Cite a commit by hash only once it's on upstream master, where it stays put
-  and gives the reader a direct pointer. Never cite one from the branch under
-  development, as the branch is extremely likely to be rebased during merge, so
-  any referenced hash will become invalid.
 
 ## General Style Rules
 
