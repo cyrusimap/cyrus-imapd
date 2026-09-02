@@ -41,5 +41,5 @@ sub test_mailbox_rename_to_clash_name_only_deep
 
     # there were no renames
     $self->assert_syslog_does_not_match($self->{instance},
-                                        qr/auditlog: rename/);
+                                        qr/\bevent=auditlog\.rename\b/);
 }
