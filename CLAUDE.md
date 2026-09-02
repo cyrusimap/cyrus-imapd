@@ -6,7 +6,7 @@ These are instructions for Claude for work in the "cyrus-imapd" repository.
 The "dar" executable is the tool to manage development environments for code
 located in the "cyrus-imapd" repository. All builds and tests must happen
 in the Docker container managed by "dar" for the current branch or worktree.
-The reference architecture is Linux, not macOS.  For basic instructions on
+The reference architecture is Linux.  For basic instructions on
 development with this system, consult docsrc/developer/overview.rst
 
 When performing a first-time build, use `dar build -b`. The "b" switch tells dar
