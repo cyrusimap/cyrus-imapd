@@ -11,6 +11,9 @@ use Net::CardDAVTalk 0.11;
 use Text::JSContact 0.01 qw(vcard_to_jscontact);
 use Data::Dumper;
 use Storable 'dclone';
+use Cyrus::Backup;
+use Cyrus::Backup::Restore;
+use Cyrus::Backup::State;
 
 use base qw(Cassandane::Cyrus::TestCase Cassandane::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
@@ -194,6 +197,224 @@ sub _fmjmap_err
     my $res = $self->_fmjmap_req($cmd, %args);
     $self->assert_str_equals("error", $res->[0]);
     return $res->[1];
+}
+
+# Route Cyrus::Backup's chatter into the cassandane log when running verbose
+package Cassandane::Cyrus::FastMail::BackupLogger {
+    sub log
+    {
+        my (undef, $msg) = @_;
+        if (ref $msg eq 'ARRAY') {
+            my ($fmt, @args) = @$msg;
+            $msg = sprintf($fmt, @args);
+        }
+        Cassandane::Util::Log::xlog($msg);
+    }
+    *log_debug = \&log;
+    sub log_event {}
+    sub log_debug_event {}
+}
+
+# Create the meta and data directories a backup needs, and return them
+# along with everything needed to talk to this instance's backupcyrusd.
+sub _backup_dirs
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service('backupcyrusd');
+
+    my $meta = "$self->{instance}->{basedir}/backupmeta";
+    my $data = "$self->{instance}->{basedir}/backupdata";
+    mkdir($meta);
+    mkdir($data);
+
+    $Cyrus::Backup::LOGGER_CB = sub { 'Cassandane::Cyrus::FastMail::BackupLogger' }
+        if $self->{store}->{verbose};
+
+    return ($service->host, $service->port,
+            $self->{instance}->get_servername, $meta, $data);
+}
+
+# The uniqueid cyrus knows a folder by, which is also how the backup
+# names the folder's directory in the tar file.
+sub _mailbox_uniqueid
+{
+    my ($self, $folder) = @_;
+
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my $talk = $self->{store}->get_client();
+    my $res = $talk->getmetadata($folder, $entry);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_not_null($res->{$folder}{$entry});
+
+    return $res->{$folder}{$entry};
+}
+
+# Every mailbox cyrus has for a user, as { extname => uniqueid }, which is
+# what a complete backup's folder list should look like.  Only valid with
+# altnamespace off, which is how this suite configures cyrus.
+sub _mailboxes_by_extname
+{
+    my ($self, $userid) = @_;
+    $userid ||= 'cassandane';
+
+    my $mboxes = $self->{instance}->read_mailboxes_db();
+
+    my %res;
+    foreach my $intname (keys %$mboxes) {
+        my $extname = $intname;
+        next unless $extname =~ s{^user\.\Q$userid\E(\.|$)}{INBOX$1};
+        # tombstones ('d') and intermediates ('i') aren't real folders, and
+        # mboxlist_usermboxtree doesn't hand them to backupcyrusd
+        next if $mboxes->{$intname}{mbtype} =~ m/[di]/;
+        $res{$extname} = $mboxes->{$intname}{uniqueid};
+    }
+
+    return \%res;
+}
+
+# Summarise what a backup contains, by joining up the tables of its state
+# database into something a test can make readable assertions about:
+#
+#  {
+#    names   => { $foldername => $uniqueid },      # live folders only
+#    folders => { $uniqueid => { folderid => $id,
+#                                uniqueid => $uniqueid,
+#                                names => { $foldername => $deleted },
+#                                meta => { index => {...}, header => {...} },
+#                                uids => { $uid => $guid } } },
+#    meta    => { seen => {...}, sub => {...} },   # per-user files
+#    files   => { $guid => { size => $n, refcount => $n } },
+#  }
+sub _backup_content
+{
+    my ($self, $meta, $statefile) = @_;
+    $statefile ||= 'backupstate.sqlite3';
+
+    my $state = Cyrus::Backup::State->new($meta, $statefile);
+    my $dbh = $state->dbh();
+
+    my %res = (names => {}, folders => {}, meta => {}, files => {});
+
+    my %byid;
+    foreach my $row (@{$dbh->selectall_arrayref(
+        "SELECT folderid, uniqueid FROM folders", { Slice => {} })})
+    {
+        my $folder = {
+            folderid => $row->{folderid},
+            uniqueid => $row->{uniqueid},
+            names => {},
+            meta => {},
+            uids => {},
+        };
+        $byid{$row->{folderid}} = $folder;
+        $res{folders}{$row->{uniqueid}} = $folder;
+    }
+
+    # a name may appear more than once as folders are deleted and recreated,
+    # so walk them in the order they were backed up and let later win
+    foreach my $row (@{$dbh->selectall_arrayref(
+        "SELECT name, folderid, deleted FROM imap ORDER BY offset",
+        { Slice => {} })})
+    {
+        my $folder = $byid{$row->{folderid}};
+        next unless $folder;
+        $folder->{names}{$row->{name}} = $row->{deleted};
+        if ($row->{deleted}) {
+            delete $res{names}{$row->{name}};
+        }
+        else {
+            $res{names}{$row->{name}} = $folder->{uniqueid};
+        }
+    }
+
+    foreach my $row (@{$dbh->selectall_arrayref(
+        "SELECT folderid, name, sha1, size, mtime, inode, stale FROM fmeta",
+        { Slice => {} })})
+    {
+        my $folder = $byid{$row->{folderid}};
+        next unless $folder;
+        $folder->{meta}{$row->{name}} = $row;
+    }
+
+    foreach my $row (@{$dbh->selectall_arrayref(
+        "SELECT indexed.folderid, indexed.uid, files.guid
+           FROM indexed JOIN files USING (fileid)", { Slice => {} })})
+    {
+        my $folder = $byid{$row->{folderid}};
+        next unless $folder;
+        $folder->{uids}{$row->{uid}} = $row->{guid};
+    }
+
+    foreach my $row (@{$dbh->selectall_arrayref(
+        "SELECT guid, size, refcount FROM files", { Slice => {} })})
+    {
+        $res{files}{$row->{guid}} = $row;
+    }
+
+    # the meta table is keyed on (type, name), but 'annot' and 'sieve' are
+    # legacy types that nothing writes any more, so name alone will do
+    foreach my $row (@{$dbh->selectall_arrayref(
+        "SELECT type, name, sha1, size, mtime, inode, stale FROM meta",
+        { Slice => {} })})
+    {
+        $res{meta}{$row->{name}} = $row;
+    }
+
+    $state->cancel();
+
+    return \%res;
+}
+
+# Just the structure of a _backup_content, without the bookkeeping that
+# legitimately differs between two states describing the same content
+# (folderids, offsets, staleness counters, timestamps).
+sub _backup_summary
+{
+    my ($self, $content) = @_;
+
+    my %res = (
+        names => $content->{names},
+        meta => [sort keys %{$content->{meta}}],
+        folders => {},
+        files => {},
+    );
+
+    foreach my $uniqueid (keys %{$content->{folders}}) {
+        my $folder = $content->{folders}{$uniqueid};
+        $res{folders}{$uniqueid} = {
+            names => $folder->{names},
+            uids => $folder->{uids},
+            meta => [sort keys %{$folder->{meta}}],
+        };
+    }
+
+    foreach my $guid (keys %{$content->{files}}) {
+        $res{files}{$guid} = $content->{files}{$guid}{refcount};
+    }
+
+    return \%res;
+}
+
+# Extract a message from the backup's tar file and return its bytes.
+sub _backup_file
+{
+    my ($self, $meta, $guid) = @_;
+
+    my $restore = Cyrus::Backup::Restore->new($meta);
+    $restore->GetFile($guid);
+
+    # GetFile returns bare guids rather than paths when the file has
+    # already been extracted, so work out the path ourselves
+    my $path = "$meta/files/$guid";
+    return undef unless -f $path;
+
+    open(my $fh, '<', $path) or die "can't read $path: $!";
+    local $/ = undef;
+    my $content = <$fh>;
+    close($fh);
+
+    return $content;
 }
 
 use Cassandane::Tiny::Loader;

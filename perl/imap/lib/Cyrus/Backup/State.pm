@@ -2,6 +2,8 @@
 # See COPYING file at the root of the distribution for more details.
 
 package Cyrus::Backup::State;
+use strict;
+use warnings;
 
 use Cyrus::Backup;
 use DBI;
@@ -76,7 +78,6 @@ CREATE TABLE indexed (
   folderid INTEGER NOT NULL,
   uid INTEGER NOT NULL,
   fileid INTEGER NOT NULL,
-  deleted INTEGER NOT NULL,
   PRIMARY KEY (folderid, uid)
 );
   },

@@ -8,7 +8,7 @@ use DBI;
 # still restorable), then be reclaimed once its deletion timestamp ages past
 # MAX_AGE.
 sub test_compress_deleted_folder_ages_out
-    :min_version_3_13 :want_service_backupcyrusd
+    :want_service_backupcyrusd
     ($self)
 {
     my $talk = $self->{store}->get_client();

@@ -16,7 +16,7 @@ use Cyrus::Backup;
 # the folder's data) is retained, with its timestamp, until it genuinely ages
 # out.
 sub test_compress_deleted_folder
-    :min_version_3_13 :want_service_backupcyrusd
+    :want_service_backupcyrusd
     ($self)
 {
     my $talk = $self->{store}->get_client();

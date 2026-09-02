@@ -1,0 +1,104 @@
+#!perl
+use Cassandane::Tiny;
+
+use Cyrus::Backup;
+use Cyrus::Backup::Restore;
+
+sub test_backupcyrusd_compress
+    :want_service_backupcyrusd
+    ($self)
+{
+    my ($host, $port, $servername, $meta, $data) = $self->_backup_dirs();
+
+    my $talk = $self->{store}->get_client();
+    $talk->create("INBOX.keep") or die "can't create INBOX.keep";
+    $talk->create("INBOX.old") or die "can't create INBOX.old";
+    $talk->create("INBOX.gone") or die "can't create INBOX.gone";
+
+    my %msgs;
+    foreach my $folder (qw(keep old gone)) {
+        $self->{store}->set_folder("INBOX.$folder");
+        $msgs{$folder} = [$self->make_message("Email in $folder") or die];
+    }
+
+    my $keepid = $self->_mailbox_uniqueid("INBOX.keep");
+    my $oldid = $self->_mailbox_uniqueid("INBOX.old");
+    my $goneid = $self->_mailbox_uniqueid("INBOX.gone");
+
+    Cyrus::Backup::BackupUser($host, $port, $meta, $data,
+                              $servername, 'cassandane');
+
+    # churn: a second message rewrites cyrus.index, leaving the copy we
+    # already backed up as dead weight in the tar file
+    $self->{store}->set_folder("INBOX.keep");
+    push @{$msgs{keep}}, ($self->make_message("Another email in keep") or die);
+
+    # a rename leaves a deletion marker behind for the old name
+    $talk->rename("INBOX.old", "INBOX.renamed")
+        or die "can't rename INBOX.old: " . $talk->get_last_error();
+
+    # and a delete leaves one behind for a folder that's gone for good
+    $talk->delete("INBOX.gone")
+        or die "can't delete INBOX.gone: " . $talk->get_last_error();
+
+    Cyrus::Backup::BackupUser($host, $port, $meta, $data,
+                              $servername, 'cassandane');
+
+    my $before = $self->_backup_content($meta);
+    $self->assert_str_equals($keepid, $before->{names}{'INBOX.keep'});
+    $self->assert_str_equals($oldid, $before->{names}{'INBOX.renamed'});
+    $self->assert_num_gt(0, $before->{folders}{$oldid}{names}{'INBOX.old'});
+    $self->assert_num_gt(0, $before->{folders}{$goneid}{names}{'INBOX.gone'});
+
+    my $restore = Cyrus::Backup::Restore->new($meta);
+    my $oldfile = $restore->TarFileName();
+    undef $restore;
+    $self->assert(-f "$data/$oldfile");
+
+    # the new tar file is named for the time it was written, so don't try to
+    # compress until a new name is available
+    sleep 1 while Cyrus::Backup::NewDataFilename(0) eq $oldfile;
+
+    # 100% demands a tar file with nothing dead in it at all, which ours
+    # isn't, so this always rewrites
+    my ($version, $offset, $percentage)
+        = Cyrus::Backup::CompressBackup($meta, $data, 'cassandane',
+                                        undef, 100);
+
+    $self->assert_num_equals(Cyrus::Backup::CurrentBackupVersion(), $version);
+    $self->assert_num_gt(0, $offset);
+    $self->assert_num_lt(100, $percentage);
+
+    # we're on a new tar file now, and the old one has been cleaned up
+    $restore = Cyrus::Backup::Restore->new($meta);
+    my $newfile = $restore->TarFileName();
+    undef $restore;
+    $self->assert_str_not_equals($oldfile, $newfile);
+    $self->assert(-f "$data/$newfile");
+    $self->assert(!-e "$data/$oldfile");
+    $self->assert(-e "$meta/$newfile");
+
+    # compaction throws away dead data, not live content: everything we had
+    # before is still described by the state database
+    my $after = $self->_backup_content($meta);
+    $self->assert_deep_equals($self->_backup_summary($before),
+                              $self->_backup_summary($after));
+
+    # and the messages still come back out of the new tar file intact
+    foreach my $folder (qw(keep old gone)) {
+        foreach my $msg (@{$msgs{$folder}}) {
+            $self->assert_str_equals($msg->as_string(),
+                                     $self->_backup_file($meta, $msg->guid));
+        }
+    }
+
+    # the state database is only a cache of what the tar file says, so
+    # rebuilding it from scratch has to produce the same answer.  In
+    # particular the deletion markers have to keep naming the folder they
+    # deleted, or a rebuilt state loses the folder before it ages out.
+    Cyrus::Backup::RebuildState($meta, $data, $newfile, 'rebuilt.sqlite3');
+
+    my $rebuilt = $self->_backup_content($meta, 'rebuilt.sqlite3');
+    $self->assert_deep_equals($self->_backup_summary($after),
+                              $self->_backup_summary($rebuilt));
+}

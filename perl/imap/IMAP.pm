@@ -4,6 +4,7 @@
 package Cyrus::IMAP;
 
 use strict;
+use warnings;
 use vars qw($VERSION @ISA);
 
 require DynaLoader;

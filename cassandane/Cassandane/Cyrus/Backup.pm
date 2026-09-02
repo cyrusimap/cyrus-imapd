@@ -64,6 +64,17 @@ sub _open_backup_db ($self, $meta)
     );
 }
 
+# Helper: does the state's indexed table still have the version 5 column?
+sub _has_indexed_deleted ($self, $meta)
+{
+    my $dbh = $self->_open_backup_db($meta);
+    my $cols = $dbh->selectall_arrayref("PRAGMA table_info(indexed)",
+                                        { Slice => {} });
+    $dbh->disconnect;
+
+    return scalar grep { $_->{name} eq 'deleted' } @$cols;
+}
+
 use Cassandane::Tiny::Loader;
 
 1;

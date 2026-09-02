@@ -17,6 +17,7 @@
 
 package Cyrus::IMAP::Shell;
 use strict;
+use warnings;
 
 use IO::File;
 use Cyrus::IMAP::Admin;

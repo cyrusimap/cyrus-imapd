@@ -6,44 +6,92 @@ use Cyrus::Backup;
 use Cyrus::Backup::Restore;
 
 sub test_backupcyrusd
-    :min_version_3_13 :want_service_backupcyrusd
+    :want_service_backupcyrusd
     ($self)
 {
-    $self->make_message("Email 1") or die;
-    $self->make_message("Email 2") or die;
+    my $msg1 = $self->make_message("Email 1") or die;
+    my $msg2 = $self->make_message("Email 2") or die;
 
-    my $servername = $self->{instance}->get_servername;
-    my $service = $self->{instance}->get_service('backupcyrusd');
+    my ($host, $port, $servername, $meta, $data) = $self->_backup_dirs();
 
-    my $data = "$self->{instance}->{basedir}/backupdata";
-    my $meta = "$self->{instance}->{basedir}/backupmeta";
-    mkdir($data);
-    mkdir($meta);
-
-    $ENV{DEBUGIO} = 1 if $self->{store}->{verbose};
-
-    my @users = Cyrus::Backup::GetUsers($service->host, $service->port, $servername);
+    my @users = Cyrus::Backup::GetUsers($host, $port, $servername);
     $self->assert_str_equals('cassandane', join(',', @users));
 
-    my ($version, $size) = Cyrus::Backup::BackupUser($service->host, $service->port, $meta, $data, $servername, 'cassandane');
+    my ($version, $size) = Cyrus::Backup::BackupUser($host, $port,
+                                                     $meta, $data,
+                                                     $servername, 'cassandane');
     $self->assert_num_gt(0, $size);
+
+    # the backup contains every folder cyrus knows about for this user,
+    # under the same uniqueids
+    my $backup = $self->_backup_content($meta);
+    $self->assert_deep_equals($self->_mailboxes_by_extname(),
+                              $backup->{names});
+
+    my $uniqueid = $self->_mailbox_uniqueid("INBOX");
+    my $inbox = $backup->{folders}{$uniqueid};
+    $self->assert_not_null($inbox);
+
+    # we backed up the folder's metadata files
+    $self->assert_not_null($inbox->{meta}{header});
+    $self->assert_not_null($inbox->{meta}{index});
+    $self->assert_num_gt(0, $inbox->{meta}{index}{size});
+
+    # and both messages, indexed by the uid cyrus gave them
+    $self->assert_deep_equals({ 1 => $msg1->guid, 2 => $msg2->guid },
+                              $inbox->{uids});
+
+    # the messages are the only files: the other folders are all empty
+    $self->assert_deep_equals([sort ($msg1->guid, $msg2->guid)],
+                              [sort keys %{$backup->{files}}]);
+    $self->assert_num_equals(1, $backup->{files}{$msg1->guid}{refcount});
+    $self->assert_num_equals(1, $backup->{files}{$msg2->guid}{refcount});
+
+    # nothing has subscribed yet, so there's no subscriptions file to back up
+    $self->assert_deep_equals({}, $backup->{meta});
 
     # we'll get a new email and a subscription
     my $talk = $self->{store}->get_client();
     $talk->subscribe("INBOX");
-    $self->make_message("Email 3") or die;
+    my $msg3 = $self->make_message("Email 3") or die;
 
-    my ($newversion, $newsize) = Cyrus::Backup::BackupUser($service->host, $service->port, $meta, $data, $servername, 'cassandane');
+    my ($newversion, $newsize) = Cyrus::Backup::BackupUser($host, $port,
+                                                           $meta, $data,
+                                                           $servername,
+                                                           'cassandane');
 
     $self->assert_num_equals($version, $newversion);
     $self->assert_num_gt($size, $newsize);
 
-    # XXX - add more tests to check the content of the backups
+    $backup = $self->_backup_content($meta);
+
+    # the subscription showed up as a per-user meta file
+    $self->assert_not_null($backup->{meta}{sub});
+    $self->assert_num_gt(0, $backup->{meta}{sub}{size});
+
+    # same folders, and the INBOX now has the third message too
+    $self->assert_deep_equals($self->_mailboxes_by_extname(),
+                              $backup->{names});
+    $inbox = $backup->{folders}{$uniqueid};
+    $self->assert_deep_equals(
+        { 1 => $msg1->guid, 2 => $msg2->guid, 3 => $msg3->guid },
+        $inbox->{uids});
+    $self->assert_deep_equals(
+        [sort ($msg1->guid, $msg2->guid, $msg3->guid)],
+        [sort keys %{$backup->{files}}]);
 
     $self->assert(-f "$meta/backupstate.sqlite3");
 
     my $restore = Cyrus::Backup::Restore->new($meta);
     my $file = $restore->TarFileName();
+    undef $restore;
 
     $self->assert(-f "$data/$file");
+
+    # and the bytes we can get back out of the tar file are the bytes we
+    # delivered in the first place
+    foreach my $msg ($msg1, $msg2, $msg3) {
+        my $content = $self->_backup_file($meta, $msg->guid);
+        $self->assert_str_equals($msg->as_string(), $content);
+    }
 }

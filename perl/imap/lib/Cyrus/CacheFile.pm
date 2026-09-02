@@ -11,7 +11,7 @@ use IO::File;
 use IO::File::fcntl;
 use IO::Handle;
 use File::Temp;
-use YAML;
+use Data::Dumper;
 
 =pod
 
@@ -157,7 +157,7 @@ sub dump_record {
   my $Self = shift;
   my $rec = shift || $Self->{record};
   return unless $rec;
-  print Dump($rec->{records});
+  print Dumper($rec->{records});
 }
 
 sub print_record {

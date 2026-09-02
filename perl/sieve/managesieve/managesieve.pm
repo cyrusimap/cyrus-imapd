@@ -4,6 +4,7 @@
 package Cyrus::SIEVE::managesieve;
 
 use strict;
+use warnings;
 use Carp;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK $AUTOLOAD);
 

@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+use Cyrus::Backup;
+
+sub test_backupcyrusd_folders
+    :want_service_backupcyrusd
+    ($self)
+{
+    my ($host, $port, $servername, $meta, $data) = $self->_backup_dirs();
+
+    my $talk = $self->{store}->get_client();
+    $talk->create("INBOX.foo") or die "can't create INBOX.foo";
+    $self->{store}->set_folder("INBOX.foo");
+    my $msg = $self->make_message("Email in foo") or die;
+
+    my $uniqueid = $self->_mailbox_uniqueid("INBOX.foo");
+
+    Cyrus::Backup::BackupUser($host, $port, $meta, $data,
+                              $servername, 'cassandane');
+
+    my $backup = $self->_backup_content($meta);
+    $self->assert_deep_equals($self->_mailboxes_by_extname(),
+                              $backup->{names});
+    $self->assert_str_equals($uniqueid, $backup->{names}{'INBOX.foo'});
+
+    my $folder = $backup->{folders}{$uniqueid};
+    $self->assert_deep_equals({ 'INBOX.foo' => 0 }, $folder->{names});
+    $self->assert_deep_equals({ 1 => $msg->guid }, $folder->{uids});
+
+    # a rename keeps the same uniqueid, so the backup should keep pointing
+    # at the same folder rather than fetching everything again
+    $talk->rename("INBOX.foo", "INBOX.bar")
+        or die "can't rename INBOX.foo: " . $talk->get_last_error();
+    $self->assert_str_equals($uniqueid, $self->_mailbox_uniqueid("INBOX.bar"));
+
+    Cyrus::Backup::BackupUser($host, $port, $meta, $data,
+                              $servername, 'cassandane');
+
+    $backup = $self->_backup_content($meta);
+    $self->assert_deep_equals($self->_mailboxes_by_extname(),
+                              $backup->{names});
+    $self->assert_null($backup->{names}{'INBOX.foo'});
+    $self->assert_str_equals($uniqueid, $backup->{names}{'INBOX.bar'});
+
+    # the old name is retained, but marked as deleted at the time we noticed
+    $folder = $backup->{folders}{$uniqueid};
+    $self->assert_num_equals(0, $folder->{names}{'INBOX.bar'});
+    $self->assert_num_gt(0, $folder->{names}{'INBOX.foo'});
+
+    # and the message is still there, under the same folder
+    $self->assert_deep_equals({ 1 => $msg->guid }, $folder->{uids});
+    $self->assert_num_equals(1, $backup->{files}{$msg->guid}{refcount});
+
+    # now delete it entirely
+    $talk->delete("INBOX.bar")
+        or die "can't delete INBOX.bar: " . $talk->get_last_error();
+
+    Cyrus::Backup::BackupUser($host, $port, $meta, $data,
+                              $servername, 'cassandane');
+
+    $backup = $self->_backup_content($meta);
+
+    # delete_mode is delayed, so cyrus has moved the folder into the DELETED
+    # namespace rather than removing it: the backup follows it there, under
+    # the same uniqueid
+    my ($deleted) = grep { m/^DELETED\./ } keys %{$backup->{names}};
+    $self->assert_matches(qr/^DELETED\.user\.cassandane\.bar\./, $deleted);
+    $self->assert_str_equals($uniqueid, $backup->{names}{$deleted});
+
+    # apart from that, the backup still matches what cyrus has
+    delete $backup->{names}{$deleted};
+    $self->assert_deep_equals($self->_mailboxes_by_extname(),
+                              $backup->{names});
+
+    # both of the folder's old names are now marked deleted, but the folder
+    # and its message are still in the backup: they only go once they age out
+    $folder = $backup->{folders}{$uniqueid};
+    $self->assert_num_gt(0, $folder->{names}{'INBOX.foo'});
+    $self->assert_num_gt(0, $folder->{names}{'INBOX.bar'});
+    $self->assert_num_equals(0, $folder->{names}{$deleted});
+    $self->assert_deep_equals({ 1 => $msg->guid }, $folder->{uids});
+    $self->assert_str_equals($msg->as_string(),
+                             $self->_backup_file($meta, $msg->guid));
+}

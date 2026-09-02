@@ -2,6 +2,8 @@
 # See COPYING file at the root of the distribution for more details.
 
 package Cyrus::Backup::Tar;
+use strict;
+use warnings;
 
 sub new {
   my $class = shift;
@@ -48,7 +50,7 @@ sub _openfile {
     }
   }
   elsif (-f $tarfile) {
-    $Logger->log(["%s: bogus file, removing", $tarfile]);
+    Cyrus::Backup::logger->log(["%s: bogus file, removing", $tarfile]);
     unlink($tarfile);
   }
 
