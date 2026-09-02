@@ -83,7 +83,7 @@ sub new
                  rfc3028_strict => 'no',
                  savedate => 'yes',
                  servername => 'slot1',
-                 sieve_extensions => 'fileinto reject vacation imapflags notify envelope body relational regex subaddress copy mailbox mboxmetadata servermetadata date index variables imap4flags editheader duplicate vacation-seconds fcc x-cyrus-jmapquery x-cyrus-snooze x-cyrus-log mailboxid special-use',
+                 sieve_extensions => 'fileinto reject vacation notify envelope body relational regex subaddress copy mailbox mboxmetadata servermetadata date index variables imap4flags editheader duplicate vacation-seconds fcc vnd.cyrus.jmapquery vnd.cyrus.log mailboxid special-use snooze processcalendar vnd.cyrus.implicit_keep_target',
                  sieve_utf8fileinto => 'yes',
                  sieve_use_lmtp_reject => 'no',
                  sievenotifier => 'mailto',
