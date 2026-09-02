@@ -146,8 +146,16 @@ sub apply_unuser {
 sub apply_unmailbox {
   my $Self = shift;
   my $mailbox = shift;
+  my $uniqueid = shift;
+  my $uidvalidity = shift;
 
-  return $Self->dlwrite('APPLY', 'UNMAILBOX', $mailbox);
+  # without a uniqueid the replica deletes whatever holds the name now,
+  # which may no longer be the mailbox we meant
+  return $Self->dlwrite('APPLY', 'UNMAILBOX', $mailbox) unless $uniqueid;
+
+  return $Self->dlwrite('APPLY', 'UNMAILBOX', { MBOXNAME => $mailbox,
+                                                UNIQUEID => $uniqueid,
+                                                UIDVALIDITY => $uidvalidity || 0 });
 }
 
 sub get_user {

@@ -1,0 +1,40 @@
+Description:
+
+Replication no longer deletes the wrong mailbox when a name has been reused.
+
+"APPLY UNMAILBOX" named only the mailbox to delete, so the replica deleted
+whatever held that name at the time it arrived - which, after a delete and a
+recreate, or a rename onto the freed name, could be a completely different
+mailbox with its own messages.  The command now also carries the UNIQUEID and
+UIDVALIDITY of the mailbox the master meant, and the replica refuses the delete
+and logs "SYNCERROR: refusing to UNMAILBOX a different mailbox" if the one it
+finds is not that mailbox.  Where the folder came from the replica's own listing
+(the sweep for folders which no longer exist on the master, and XFER) this also
+closes the window between the listing and the delete.
+
+The identified form is gated on a new UNMAILBOX-ID capability, so a new master
+keeps talking to an old replica.  A replica still accepts the old form and
+deletes whatever holds the name, so an old master is unaffected - upgrade the
+master to get the protection.
+
+
+Documentation:
+
+The replication protocol reference documents the new command form and the
+UNMAILBOX-ID capability.
+
+
+Config changes:
+
+(none)
+
+
+Upgrade instructions:
+
+Both ends must run this version before the check takes effect; there is no
+ordering requirement between them.
+
+
+GitHub issue:
+
+(none)

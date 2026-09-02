@@ -464,6 +464,7 @@ static struct capa_struct base_capabilities[] = {
     { "X-REPLICATION",         CAPA_POSTAUTH,           { 0 } }, /* CY */
     { "X-REPLICATION-ARCHIVE", CAPA_POSTAUTH,           { 0 } }, /* CY */
     { "X-SIEVE-MAILBOX",       CAPA_POSTAUTH,           { 0 } }, /* CY */
+    { "X-UNMAILBOX-ID",        CAPA_POSTAUTH,           { 0 } }, /* CY */
     { "XAPPLEPUSHSERVICE",     CAPA_OMNIAUTH|CAPA_STATE,         /* NS */
       { .statep = &apns_enabled }                             },
     { "XLIST",                 CAPA_POSTAUTH,           { 0 } }, /* NS */
@@ -12295,7 +12296,8 @@ static int xfer_finalsync(struct xfer_header *xfer)
     for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
         if (rfolder->mark) continue;
 
-        r = sync_do_folder_delete(&xfer->sync_cs, rfolder->name);
+        r = sync_do_folder_delete(&xfer->sync_cs, rfolder->name,
+                                  rfolder->uniqueid, rfolder->uidvalidity);
         if (r) {
             syslog(LOG_ERR, "sync_folder_delete(): failed: %s '%s'",
                    rfolder->name, error_message(r));

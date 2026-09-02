@@ -256,6 +256,7 @@ static void dobanner(void)
 #endif
 
         prot_printf(sync_out, "* SIEVE-MAILBOX\r\n");
+        prot_printf(sync_out, "* UNMAILBOX-ID\r\n");
 
         if (config_getswitch(IMAPOPT_ARCHIVE_ENABLED)) {
             prot_printf(sync_out, "* REPLICATION-ARCHIVE\r\n");

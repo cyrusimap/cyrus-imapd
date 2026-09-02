@@ -367,7 +367,9 @@ sub syncmailboxes {
     if (delete $mbox{$mailbox->{MBOXNAME}}) {
       $Self->syncmailbox($mailbox->{MBOXNAME}, $mailbox);
     } else {
-      $Self->{syncer}->apply_unmailbox($mailbox->{MBOXNAME});
+      $Self->{syncer}->apply_unmailbox($mailbox->{MBOXNAME},
+                                       $mailbox->{UNIQUEID},
+                                       $mailbox->{UIDVALIDITY});
     }
   }
   foreach my $new (sort keys %mbox) {
