@@ -152,7 +152,12 @@ Write documentation, which should be very concise.  When writing pages for the
 Sphinx site, favor Markdown over reStructuredText.  Your audience is generally
 "experts who need a quick refresher or to be reminded of exact semantics".
 
-To build the documentation, you can use dar and run `dar makedocs`.
+To build the documentation, you can use dar and run `dar makedocs`.  The build
+is nitpicky and treats warnings as errors, so a dangling cross-reference fails
+it, and a clean run means CI will be clean too.
+
+docsrc/developer/documentation.rst covers the source formats, the custom roles,
+and which pages under docsrc are generated rather than written.
 
 ## Where to look things up
 
