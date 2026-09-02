@@ -68,6 +68,25 @@ locally.
     business, file an issue.  A file that genuinely has to contain the word can
     be listed in ``.fixme_ignore``.
 
+Describing your change for the release notes
+--------------------------------------------
+
+Changes significant enough to appear in the release notes for the next version
+need an entry in ``changes/next/``.  That means a new feature, a removed
+feature, changes to configuration options, things requiring pre-upgrade action,
+and so on.  The release manager will assemble the release notes from those
+entries, so missing these can put future upgraders in a bad situation.
+
+Add a file, named after your branch, using ``changes/next/0000-TEMPLATE`` as
+the template -- it lists the fields and explains what each is for.  In short: a
+one-line description for the release notes, where the full documentation lives,
+any ``lib/imapoptions`` changes, what an admin has to *do* when upgrading, and
+the GitHub issue if there is one.
+
+Pure refactoring, test-only changes, and internal cleanups don't need an entry.
+If you're unsure, write one: a needless entry costs the release manager a
+moment's deletion, and a missing one costs an operator a surprise.
+
 The release cycle
 =================
 

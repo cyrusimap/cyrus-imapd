@@ -109,6 +109,14 @@ apply:
   subroutine signatures, and lexical subroutines can be especially helpful for
   clarity.
 
+# Landing a change
+
+Changes significant enough to appear in the release notes for the next version
+should get an entry in `changes/next/`, in a file named after the branch.
+docsrc/developer/process.rst explains the fields and which changes are exempt,
+and also covers how a PR gets reviewed and what the automated checks will
+reject.
+
 # Documentation
 
 The project documentation is a Sphinx site built from three sources: the pages
