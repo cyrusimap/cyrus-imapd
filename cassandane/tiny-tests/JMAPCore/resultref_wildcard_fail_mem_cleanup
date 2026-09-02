@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_resultref_wildcard_fail_mem_cleanup
+    ($self)
+{
+    # Use compact JSON to keep us under the 4k jmap_max_request_size limit
+    my $jmap = $self->default_user->new_jmaptester({ json_pretty => 0 });
+    my $using = ['urn:ietf:params:jmap:core'];
+
+    # Create a multi-depth array
+    my $width = 2;
+    my $depth = 8;
+    my $nleaves = $width ** $depth;
+    my $seen = 0;
+
+    my $build_tree;
+    $build_tree = sub {
+        my ($d) = @_;
+        if ($d == 0) {
+            $seen++;
+            my $key = ($seen == $nleaves) ? 'NOTBAD' : 'BAD';
+            return { $key => JSON::true };
+        }
+        return [ map { $build_tree->($d - 1) } 1 .. $width ];
+    };
+    my $tree = $build_tree->($depth);
+
+    # Create a bogus wildcard result reference
+    my $path = '/x' . ('/*' x $depth) . '/BAD';
+
+    # Wildcard reference should fail with error
+    # and valgrind should report no leaks
+    my $res = $jmap->request({
+        methodCalls =>  [
+            ['Core/echo', { x => $tree }, 'R1'],
+            ['Core/echo', {
+                '#x' => {
+                    resultOf => 'R1',
+                    name => 'Core/echo',
+                    path => $path,
+                },
+             }, 'R2'],
+        ],
+        using => $using,
+    })->assert_successful;
+
+    $self->assert_cmp_deeply(
+        [
+            [ 'Core/echo', { x => $tree }, 'R1' ],
+            [ 'error', superhashof({ type => 'invalidResultReference' }), 'R2' ],
+        ],
+        $res->as_stripped_triples,
+    );
+}

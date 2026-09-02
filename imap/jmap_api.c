@@ -139,6 +139,9 @@ static int process_resultrefs(json_t *args, json_t *resp, json_t **err)
     const char *arg;
     int ret = -1;
 
+    /* Pool of newly created JSON objects */
+    ptrarray_t pool = PTRARRAY_INITIALIZER;
+
     void *tmp;
     json_object_foreach_safe(args, tmp, arg, ref) {
         if (*arg != '#' || *(arg+1) == '\0') {
@@ -186,11 +189,6 @@ static int process_resultrefs(json_t *args, json_t *resp, json_t **err)
         if (!res) goto fail;
 
         /* Extract the reference argument value. */
-        /* We maintain our own pool of newly created JSON objects, since
-         * tracking reference counts across newly created JSON arrays is
-         * a pain. Rule: If you incref an existing JSON value or create
-         * an entirely new one, put it into the pool for cleanup. */
-        ptrarray_t pool = PTRARRAY_INITIALIZER;
         json_t *val = extract_value(json_array_get(res, 1), path, &pool);
         if (!val) goto fail;
 
@@ -199,16 +197,19 @@ static int process_resultrefs(json_t *args, json_t *resp, json_t **err)
         json_object_del(args, arg);
 
         /* Clean up reference counts of pooled JSON objects */
-        json_t *ref;
         while ((ref = ptrarray_pop(&pool))) {
             json_decref(ref);
         }
-        ptrarray_fini(&pool);
     }
 
+    ptrarray_fini(&pool);
     return 0;
 
   fail:
+    while ((ref = ptrarray_pop(&pool))) {
+        json_decref(ref);
+    }
+    ptrarray_fini(&pool);
     return ret;
 }
 
