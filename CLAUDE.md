@@ -16,7 +16,7 @@ to build with the "bear" command in the container, to generate the
 To perform an increment rebuild, use `dar build -nr`.  The "r" switch tells dar
 to build incrementally, the "n" switch tells it to skip running the cunit
 tests.  Of course, if your task involves running a cunit test, you must omit
-the "n" switch).  Omit the "b" switch or you will truncate the
+the "n" switch.  Omit the "b" switch or you will truncate the
 `compile_commands.json` file.
 
 # Testing
@@ -48,7 +48,7 @@ methods that test a described variant, then install one test method for each
 variant.
 
 Conventionally, in multi-variant tests, the assertion method should be named
-`assert_{testname}` "testname" is the name of the file.  This assertion method
+`assert_{testname}` where "testname" is the name of the file.  This assertion method
 then can get called from multiple test methods in that same file, where each
 method is named `test_{testname}__{variant}`, where "variant" is some short but
 human-readable summary of what this scenario is all about.  Note the *double*
