@@ -9,15 +9,17 @@ in the Docker container managed by "dar" for the current branch or worktree.
 The reference architecture is Linux.  For basic instructions on
 development with this system, consult docsrc/developer/overview.rst
 
-When performing a first-time build, use `dar build -b`. The "b" switch tells dar
-to build with the "bear" command in the container, to generate the
-`compile_commands.json` file to use with clang tools.
+Every dar subcommand documents itself.  Run `dar help build`, `dar help test`,
+and so on to get the switches.  `dar help build` also names the reference build
+configuration, which is the set of ./configure options used both for
+development and for CI.
 
-To perform an increment rebuild, use `dar build -nr`.  The "r" switch tells dar
-to build incrementally, the "n" switch tells it to skip running the cunit
-tests.  Of course, if your task involves running a cunit test, you must omit
-the "n" switch.  Omit the "b" switch or you will truncate the
-`compile_commands.json` file.
+Two combinations are worth knowing up front.  For a first-time build, use `dar
+build -b`, which builds under the "bear" command so that clang tools have a
+`compile_commands.json` to read.  To rebuild, use `dar build -nr`, and omit the
+"b" switch: bear records only what it compiles, so running it over an
+incremental build truncates `compile_commands.json` to the few files that were
+rebuilt.
 
 # Testing
 
@@ -29,14 +31,14 @@ These are documented, respectively, in:
 * docsrc/developer/cassandane.rst
 * docsrc/developer/cunit.rst
 
-The "dar test" command allows running the full Cassandane test suite, but a
-typical workflow will involve only running some tests.  You can run a single
-test suite by naming that test suite in the "dar test" command.  To run the
-"Simple" test suite call "dar test Simple".  You can run a single test in a
-suite by naming that test suite and test name in the "dar test", e.g. to run
-the "append" test in the "Simple" suite call
-"dar test Simple.append".  For more on arguments you can pass, consult
-`cassandane/testrunner.pl`, to which "dar test" delegates.
+The "dar test" command runs Cassandane tests, and with no arguments runs all of
+them, which is rarely what you want.  Name a suite to run just that suite (`dar
+test Simple`), or a suite and a test to run one test (`dar test
+Simple.append`).  The rest of the grammar -- several suites at once, negation --
+is in docsrc/developer/cassandane.rst, and `dar help test` lists the switches
+that dar exposes.  "dar test" delegates to `cassandane/testrunner.pl`, whose
+own `--help` is the authoritative option list if you need something dar doesn't
+pass through.
 
 ## How to write Cassandane tests
 
