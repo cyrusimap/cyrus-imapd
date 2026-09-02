@@ -42,37 +42,21 @@ pass through.
 
 ## How to write Cassandane tests
 
-First, consult docsrc/developer/cassandane.rst
+First, consult docsrc/developer/cassandane.rst.  It covers the shape of a
+tiny-test, the test attributes, the object model, the assertions, the
+multi-variant convention, and how to compare iCalendar and vCard data.
 
-Sometimes, a test is best expressed as a set of variations to be tested, rather
-than a single test scenario.  In these cases, build specialized assertion
-methods that test a described variant, then install one test method for each
-variant.
+Beyond what's written there:
 
-Conventionally, in multi-variant tests, the assertion method should be named
-`assert_{testname}` where "testname" is the name of the file.  This assertion method
-then can get called from multiple test methods in that same file, where each
-method is named `test_{testname}__{variant}`, where "variant" is some short but
-human-readable summary of what this scenario is all about.  Note the *double*
-underscores between the test name and the variant name. The "test_" prefix
-tells Cassandane that this method is a test.
-
-When appropriate, prefer `assert_cmp_deeply` over `assert_deep_equals` or
-multiple simple assertions.  For JMAP tests, use the Cassandane::JMAPTester and
-Cassandane::TestEntity packages and subpackages.  In general, when creating
-test data, prefer the TestEntity system over explicit JMAP calls.  On the other
-hand, do not rely on the specific JMAP default values created by TestEntity methods.  If the
-test requires careful control of the JMAP method calls made, make them with
-`->request`.
-
-To compare iCalendar data, use `vcard2hash` from Text::VCardFast.  While their
-name suggests they are about VCard, they are also adequate for iCalendar data.
-That way your tests do not need to use string matching in Perl which could
-break if the iCalendar data contains continuation lines.
-
-Lastly, many older Cassandane tests have version-bounding annotations like
-`min_version_3`.  Do not use these version annotations, even if you copy from
-nearby tests that use them.
+- When appropriate, prefer `assert_cmp_deeply` over `assert_deep_equals` or
+  multiple simple assertions.
+- For JMAP tests, use the Cassandane::JMAPTester and Cassandane::TestEntity
+  packages and subpackages.
+- Many older Cassandane tests have version-bounding annotations like
+  `min_version_3`.  Don't add them, even though you'll copy from nearby tests
+  that have them.  The exception is the one cassandane.rst names: a test that
+  runs against an older or external Cyrus, such as a replication test, still
+  needs its guard.
 
 # Coding style
 

@@ -182,6 +182,14 @@ this test doesn't care about any of the properties the objects might have.  If
 it did, then those properties could be supplied in a hash reference passed to
 the method.  Missing mandatory properties will still be filled in.
 
+Prefer the factories to hand-written JMAP calls when you're setting test data
+up: they hide the boring mandatory properties, and they keep the test about the
+thing it's testing.  Do not, however, write assertions that depend on the
+values a factory picked for you.  Those defaults exist to make an object valid,
+not to be a contract; treat them as arbitrary, and set a property explicitly
+whenever the test cares what it is.  Where the test needs exact control over
+the method calls that get made, skip the factory and use ``->request``.
+
 Line 13 creates an AddressBook using the address book factory and then lines 14
 and 15 create new contact cards by using the ``create_card`` method on that
 address book object.  Most test entity objects have methods for finding or
@@ -198,6 +206,37 @@ got), and ``arguments`` to get at the arguments returned with the
 ContactCard/query response.
 
 The rest of the test is more of the same.
+
+One test, many variants
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Sometimes what you want to test isn't one scenario but the same scenario under
+several variations.  Writing them as one long test makes a failure hard to
+attribute, and copying the whole test per variation makes the differences hard
+to see.  Instead, write one assertion method that takes the variant as
+arguments, and one thin ``test_`` subroutine per variant that calls it.
+
+The naming convention makes the relationship obvious in a test list.  In a
+tiny-test file named ``squelch_replies``, the assertion method is
+``assert_squelch_replies`` and each variant is
+``test_squelch_replies__{variant}``, where the variant is a short readable
+summary of what makes that case different:
+
+.. code:: perl
+
+    sub assert_squelch_replies ($self, $mode, $expect) { ... }
+
+    sub test_squelch_replies__off      ($self) {
+        $self->assert_squelch_replies('off', 1)
+    }
+
+    sub test_squelch_replies__on       ($self) {
+        $self->assert_squelch_replies('on', 0)
+    }
+
+Note the *double* underscore between the test name and the variant.  Only the
+``test_`` subroutines are collected as tests, so the assertion method can take
+whatever arguments it likes.
 
 Assertions
 ^^^^^^^^^^
@@ -224,6 +263,20 @@ domain-specific assertions such as ``assert_mailbox_structure`` and
 
 Run ``perldoc Cassandane/Unit/TestCase.pm`` for the Cassandane assertions, and
 see the Test::Unit and Test::Deep documentation for the rest.
+
+Comparing iCalendar and vCard data
+""""""""""""""""""""""""""""""""""
+
+Don't match iCalendar or vCard data with string comparisons or regular
+expressions.  Both formats are free to fold a long line, so a property your
+test can see perfectly well in the debugger may be split across two physical
+lines in the bytes you're matching against, and the test breaks for reasons
+that have nothing to do with the behaviour under test.
+
+Parse it instead, with ``vcard2hash`` from `Text::VCardFast
+<https://metacpan.org/pod/Text::VCardFast>`__, and assert against the resulting
+structure.  The name says vCard, but it handles iCalendar too -- the two share
+a serialisation.
 
 Test attributes
 ---------------
@@ -350,7 +403,8 @@ Some Cassandane modules are documented in their source using Perl's Pod system.
 The pages below are rendered from that Pod when the docs are built.  (You can
 read the same text offline with ``perldoc``.)
 
-.. The listing below is generated: a bullet per module plus the hidden toctree
-   that puts the pages in the navigation tree.
+.. The listing below is generated from every module in cassandane/Cassandane
+   with a Pod (meaning a line starting with =head): a bullet per module plus
+   the hidden toctree that puts the pages in the navigation tree.
 
 .. include:: cassandane-api/listing.inc
