@@ -52,7 +52,7 @@ sub test_reconstruct_truncated ($self)
 
     # We should have generated a SYNCERROR or two
     $self->assert_syslog_matches($self->{instance},
-                                 qr/IOERROR: refreshing index/);
+                                 qr/event=mailbox\.index\.read\.failed/);
 }
 #
 # Test removed file

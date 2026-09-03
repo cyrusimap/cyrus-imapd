@@ -478,7 +478,7 @@ static void test_relock_notices_deleted(void)
     mboxlist_entry_free(&mbentry);
 
     unsigned int match = CU_SYSLOG_MATCH_SUBSTR(
-        "mailbox no longer usable after relock");
+        "event=mailbox.relock.unusable");
     r = mailbox_lock_index(m, LOCK_SHARED);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_SYSLOG(match, 1);
@@ -505,7 +505,7 @@ static void test_relock_notices_replaced(void)
     mboxlist_entry_free(&mbentry);
 
     unsigned int match = CU_SYSLOG_MATCH_SUBSTR(
-        "mailbox replaced while unlocked for relock");
+        "event=mailbox.relock.replaced");
     r = mailbox_lock_index(m, LOCK_SHARED);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_SYSLOG(match, 1);
@@ -530,7 +530,7 @@ static void test_relock_notices_vanished(void)
     mboxlist_entry_free(&mbentry);
 
     unsigned int match = CU_SYSLOG_MATCH_SUBSTR(
-        "mailbox vanished while unlocked for relock");
+        "event=mailbox.relock.vanished");
     r = mailbox_lock_index(m, LOCK_SHARED);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_SYSLOG(match, 1);

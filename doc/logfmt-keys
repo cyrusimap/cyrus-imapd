@@ -36,15 +36,23 @@ mbox                    placeholder for "no mailbox"; value is always ~null~
 mbox.acl                the mailbox ACL, in its stored form
 mbox.crcs.annot         annotation sync CRC
 mbox.crcs.basic         basic sync CRC
+mbox.crcs.header        the CRC of the cyrus.header file as read
 mbox.deletedmodseq      highest modseq of a deletion in this mailbox
 mbox.foldermodseq       the mailbox's folder modseq
 mbox.highestmodseq      the mailbox's highest modseq
+mbox.lock.duration      how long a mailbox index lock was held, in seconds
 mbox.mailboxid          the mailbox's JMAP id
 mbox.name               the mailbox name, in the admin namespace
 mbox.part               the partition the mailbox is on
+mbox.readonly           whether the mailbox was opened read-only
+mbox.recno              the physical record number in the index file
+mbox.refcount           how many open handles a mailbox struct has
+mbox.repack.dryrun      a repack that reports what it would do, without doing it
+mbox.repack.recalc_nanosec  a repack that recalculates nanosecond internaldates
 mbox.type               the mailbox type, as a string
 mbox.uidvalidity        the mailbox's uidvalidity
 mbox.uniqueid           the mailbox's uniqueid
+mbox.version            the mailbox index format version
 
 ### msg. - a message
 
@@ -166,6 +174,9 @@ other.mbox.uniqueid     the uniqueid of the other mailbox involved
 ### old. - the value before a change, paired with the unprefixed key
 
 old.mbox.acl            the mailbox ACL before the change
+old.mbox.crcs.annot     the annotation sync CRC before a repack
+old.mbox.crcs.basic     the basic sync CRC before a repack
+old.mbox.crcs.header    the header CRC the index recorded when it was written
 old.mbox.mailboxid      the mailbox's JMAP id before it changed
 old.mbox.name           the mailbox name before the rename
 old.mbox.part           the partition before the move
