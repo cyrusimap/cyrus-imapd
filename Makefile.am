@@ -2025,7 +2025,12 @@ if HAVE_SPHINX_BUILD
 docsrc/_doxygen: Doxyfile
 	$(AM_V_GEN)$(DOXYGEN) Doxyfile
 
-SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
+## Each builder gets its own doctree cache: make runs the man/html/text
+## targets concurrently, and a shared cache has them reading each other's
+## half-written pickles ("UnpicklingError: pickle data was truncated").
+## Costs a re-parse and some disk per builder; serialising them would cost
+## wall clock instead.
+SPHINX_OPTS = -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
@@ -2041,7 +2046,7 @@ clean-docsrc:
 
 ## XXX doesn't detect if other rst sources are updated...
 man/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
-	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b man $(top_builddir)/docsrc $(top_builddir)/man
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) -d $(SPHINX_CACHE)/man $(SPHINX_OPTS) -b man $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
 
 clean-man:
@@ -2049,12 +2054,12 @@ clean-man:
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/html/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
-	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) -d $(SPHINX_CACHE)/html $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
 	@touch $@
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
-	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) -d $(SPHINX_CACHE)/text $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
 
 else # (! HAVE_SPHINX_BUILD)
