@@ -5,11 +5,11 @@ Features
 ========
 
 The Cyrus IMAP (Internet Message Access Protocol) server provides
-access to personal mail, system-wide bulletin boards, news-feeds,
-calendar and contacts through the IMAP, NNTP, CalDAV and CardDAV
-protocols. The Cyrus IMAP server is a scalable enterprise groupware
-system designed for use from small to large enterprise environments
-using technologies based on well-established Open Standards.
+access to personal mail, system-wide bulletin boards, calendar and
+contacts through the IMAP, CalDAV and CardDAV protocols. The Cyrus
+IMAP server is a scalable enterprise groupware system designed for use
+from small to large enterprise environments using technologies based on
+well-established Open Standards.
 
 A full Cyrus IMAP implementation allows a seamless mail and bulletin
 board environment to be set up across one or more nodes. It differs

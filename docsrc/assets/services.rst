@@ -6,9 +6,7 @@ are required for any host using the listed services:
 ::
 
     pop3      110/tcp  # Post Office Protocol v3
-    nntp      119/tcp  # Network News Transport Protocol
     imap      143/tcp  # Internet Mail Access Protocol rev4
-    nntps     563/tcp  # NNTP over TLS
     imaps     993/tcp  # IMAP over TLS
     pop3s     995/tcp  # POP3 over TLS
     lmtp      2003/tcp # Lightweight Mail Transport Protocol service

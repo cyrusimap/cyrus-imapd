@@ -20,7 +20,7 @@ This then is delivered to **Cyrus imapd** over lmtp_ (Local Mail
 Transfer Protocol).
 
 Cyrus processes the inbound message and makes it available to the user
-over POP3, IMAP or even NNTP. Cyrus does not provide outbound SMTP
+over POP3 or IMAP. Cyrus does not provide outbound SMTP
 services: these are hooked back into the MTA.
 
 Cyrus usually uses **saslauthd** (Cyrus SASL) to provide authentication

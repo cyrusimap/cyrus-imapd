@@ -383,12 +383,6 @@ If a third argument to rename is not given and the first argument is
 ``INBOX``, the newly created mailbox gets the same partition it would
 get from the ``create`` command.
 
-News
-*****
-
-Cyrus has the ability to export Usenet via IMAP and/or export shared
-IMAP mailboxes via an NNTP server which is included with Cyrus.
-
 POP3 Server
 ***********
 
@@ -432,8 +426,6 @@ mailbox directory contains the following files:
 
 message files
     There is one file per message, containing the message in :rfc:`822` format.  Lines in the message are separated by CRLF, not just LF.  The file name of each message is the message's UID followed by a dot (.).
-
-    In netnews newsgroups, the message files instead follow the format and naming conventions imposed by the netnews software.
 
 ``cyrus.header``
     This file contains a magic number and variable-length information about the mailbox itself.

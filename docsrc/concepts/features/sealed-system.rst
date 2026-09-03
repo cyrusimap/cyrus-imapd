@@ -12,7 +12,7 @@ Cyrus IMAP to maintain a super-privileged process allowed to substitute
 user.
 
 The message spool directory or directories are held privately by the
-Cyrus IMAP software, and can be accessed by user through IMAP, POP, NNTP
+Cyrus IMAP software, and can be accessed by user through the IMAP, POP
 or JMAP protocols.
 
 This design concept vastly increases the efficiency, scalability and
