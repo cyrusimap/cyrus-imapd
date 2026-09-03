@@ -166,8 +166,7 @@ names every page in it by path.  Beyond the pages already cited above:
 - `docsrc/developer/thoughts/` -- often the only description of a subsystem:
   `locking.rst`, `namelocks.rst`, `prot.rst` (the stdio replacement for network
   i/o), `bytecode.rst` (Sieve), `mailbox-format.rst`,
-  `var_directory_structure.rst`, `namespaces.rst`, and `hacking.rst`, which is
-  where the xmalloc family and the strlcpy/memcpy conventions are written down
+  `var_directory_structure.rst` and `namespaces.rst`
 - `doc/README.cyrusdb.md`, `doc/README.twom.md`, `doc/README.zeroskip.md` --
   the key-value store interface, and two of its backends
 

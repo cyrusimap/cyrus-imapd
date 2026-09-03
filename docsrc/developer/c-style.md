@@ -1,3 +1,5 @@
+(developer-c-style)=
+
 # C style
 
 Cyrus is thirty years of C by many hands, so the tree is not uniformly styled.
@@ -34,7 +36,9 @@ can skip straight over it.
 - **Allocate through the libcyrus wrappers** — `xmalloc`, `xzmalloc`,
   `xrealloc`, `xstrdup`, `xstrndup` — which call `fatal()` on failure so
   callers don't each have to. `struct buf` and `strarray` exist so that most
-  code needn't hand-manage strings at all.
+  code needn't hand-manage strings at all. For a great many small allocations
+  that get freed together, the memory pool in `lib/mpool.h` is much faster,
+  at the cost of holding everything until the pool goes.
 - **`strlcpy` when you know the buffer size, `memcpy` when you're deliberately
   truncating.** Avoid `strncpy`: it's slower than `memcpy` and less safe than
   `strlcpy`, and its behaviour surprises people.
@@ -46,11 +50,20 @@ Two automated checks reject source on grounds of what it contains rather than
 what it does — no hard tabs, and no fix-me markers. Both are described under
 {ref}`the development process <devprocess>`.
 
-Some older conventions worth knowing, because you'll meet them: command-line
-tools link `cli_fatal.o` so they all fail the same way; a call to
-`cyrus_init()` must be paired with `cyrus_done()`; and services exit through
-`shut_down()` and nowhere else. {ref}`The hacking notes
-<imap-developer-guidance-hacking>` have more in this vein, though that page is
-old enough that you should check it against the code. Where its spacing rules
-disagree with `.clang-format` — it predates the config, and calls for mixed
-tabs and spaces — `.clang-format` wins.
+## Process conventions
+
+Long-standing rules about how a Cyrus program starts up and shuts down. They're
+not enforced by anything, so they're easy to miss and annoying to debug.
+
+- **A service exits through `shut_down()`, and nowhere else.** `fatal()` should
+  try to call it too, with a recursion guard in case `shut_down()` is what
+  broke. Command-line tools generally don't need one.
+- **Command-line tools link `cli_fatal.o`**, so they all fail the same way,
+  unless there's a good reason for one to be different.
+- **`cyrus_init()` must be paired with `cyrus_done()`** before the process
+  exits.
+- **Nothing calls the cyrusdb `init()` or `done()` methods** except
+  `libcyrus_init()`.
+- **A tool that must run as the cyrus user should check that first**, before
+  anything else, and `fatal()` if it isn't.
+- **Return from `main()`**; don't call `exit()` at the bottom of it.
