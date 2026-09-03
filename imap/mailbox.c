@@ -611,6 +611,19 @@ static struct mappedfile *cache_getfile(ptrarray_t *list, const char *fname,
     return cachefile;
 }
 
+/* The generation of the index this cache file was written for, stamped into
+ * the first four bytes by cache_getfile() above.  Records start after it, so
+ * offset 0 is never a real cache offset. */
+static uint32_t cache_generation(struct mappedfile *cachefile)
+{
+    const struct buf *buf = mappedfile_buf(cachefile);
+
+    if (mappedfile_size(cachefile) < 4)
+        return 0;
+
+    return ntohl(*(bit32 *)buf->s);
+}
+
 static struct mappedfile *mailbox_cachefile(struct mailbox *mailbox,
                                             const struct index_record *record)
 {
@@ -719,6 +732,18 @@ static int mailbox_cacherecord_internal(struct mailbox *mailbox,
     if (!record->cache_offset)
         goto err;
 
+    /* A repack rewrites every offset and bumps the generation, and unlinks
+     * any cache file it didn't rewrite - so a file stamped differently from
+     * our index is simply not the one our offsets came from.  Reachable two
+     * ways: we read without the index lock (see mailbox_unlock_index), or a
+     * repack died between renaming the index and renaming the caches, which
+     * mailbox_repack_commit() explicitly leaves for us to notice.  Either
+     * way there is nothing here to parse. */
+    if (cache_generation(cachefile) != mailbox->i.generation_no) {
+        r = IMAP_MAILBOX_REPACKED;
+        goto err;
+    }
+
     /* try to parse the cache record */
     r = cache_parserecord(cachefile, record->cache_offset, &backdoor->crec);
     if (r) goto err;
@@ -743,6 +768,13 @@ err:
         xsyslog(LOG_ERR, "IOERROR: missing cache offset",
                          "mailbox=<%s> uid=<%u>",
                          mailbox_name(mailbox), record->uid);
+    else if (r == IMAP_MAILBOX_REPACKED)
+        /* not an IOERROR: nothing is broken, we just lost the race */
+        xsyslog(LOG_NOTICE, "cache generation mismatch, reparsing",
+                            "mailbox=<%s> uid=<%u> ours=<%u> theirs=<%u>",
+                            mailbox_name(mailbox), record->uid,
+                            mailbox->i.generation_no,
+                            cache_generation(cachefile));
     else if (r)
         xsyslog(LOG_ERR, "IOERROR invalid cache record",
                          "mailbox=<%s> uid=<%u> error=<%s> crc=<%d> cache_offset=<%llu>",
@@ -2569,11 +2601,8 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
      * ENOENT and the caller reports the message as gone (IMAP_NO_MSGGONE in
      * index.c).  Cache files: we closed our mappings above, so the next read
      * reopens by name and can get the repacked file, where our offsets mean
-     * nothing.  cache_getfile() doesn't check generation_no on the read path,
-     * so that is caught one layer down by the CRC in
-     * mailbox_cacherecord_internal() - no garbage reaches the client, but it
-     * surfaces as IMAP_MAILBOX_CHECKSUM and an "invalid cache record" IOERROR,
-     * which reads like corruption and isn't. */
+     * nothing - mailbox_cacherecord_internal() sees the generation change and
+     * reparses from the spool file. */
     mboxname_release(&mailbox->namelock);
 }
 

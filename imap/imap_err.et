@@ -68,6 +68,9 @@ ec IMAP_SYNC_BADSIEVE,
 ec IMAP_MAILBOX_CHECKSUM,
    "Mailbox format corruption detected"
 
+ec IMAP_MAILBOX_REPACKED,
+   "Mailbox was repacked while we were reading it"
+
 ec IMAP_MAILBOX_NOTSUPPORTED,
    "Operation is not supported on mailbox"
 

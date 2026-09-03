@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+# The first four bytes of a cache file are the generation of the index it was
+# written for.  A repack under an unlocked mailbox leaves us holding offsets
+# into a file that no longer matches, which must be reported as staleness and
+# recovered from the spool file - not parsed as if it were ours and blamed on
+# the checksum.
+sub test_cache_generation_mismatch
+    :NoAltNameSpace
+    ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->make_message("cache test", body => "hello world\r\n");
+
+    my $mbpath = $self->{instance}->run_mbpath('user.cassandane');
+    my $cache = "$mbpath->{data}/cyrus.cache";
+
+    $imaptalk->select("INBOX");
+
+    open(my $fh, '+<', $cache) || die "open $cache: $!";
+    binmode($fh);
+    sysread($fh, my $generation, 4) == 4 || die "read $cache: $!";
+    sysseek($fh, 0, 0);
+    syswrite($fh, pack('N', 0xdeadbeef)) == 4 || die "write $cache: $!";
+    close($fh);
+
+    $self->{instance}->getsyslog();
+
+    my $res = $imaptalk->fetch('1', '(BODY.PEEK[TEXT])');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr/hello world/, $res->{'1'}->{body});
+
+    my @log = $self->{instance}->getsyslog();
+
+    # put the spool back before anything else looks at it
+    open($fh, '+<', $cache) || die "open $cache: $!";
+    binmode($fh);
+    syswrite($fh, $generation) == 4 || die "write $cache: $!";
+    close($fh);
+
+    $self->assert(scalar(grep { m/cache generation mismatch/ } @log),
+                  "the mismatch was not reported");
+    $self->assert(!scalar(grep { m/invalid cache record/ } @log),
+                  "the mismatch was reported as corruption");
+}
