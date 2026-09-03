@@ -93,11 +93,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "murder", json_false());
 #endif
-#ifdef USE_NNTPD
-    json_object_set_new(component, "nntpd", json_true());
-#else
-    json_object_set_new(component, "nntpd", json_false());
-#endif
 #ifdef USE_REPLICATION
     json_object_set_new(component, "replication", json_true());
 #else

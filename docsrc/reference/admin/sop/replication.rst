@@ -251,7 +251,7 @@ synchronizes itself with a replica.
 To configure rolling replication, perform the following:
 
 1.  Enable the ``sync_log`` option in :cyrusman:`imapd.conf(5)`. This
-    allows the imapd, pop3d, nntpd, and lmtpd services to log
+    allows the imapd, pop3d and lmtpd services to log
     synchronization actions which will be periodically serviced by
     sync_client::
 

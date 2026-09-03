@@ -23,7 +23,6 @@ Management
     admin/access-control
     admin/quotas
     admin/sieve
-    admin/nntp
     admin/protlayer
     admin/sop
     admin/eventsource    

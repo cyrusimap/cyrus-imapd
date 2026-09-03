@@ -1,0 +1,29 @@
+
+Description:
+
+The tooling and documentation left behind by the removal of NNTP support
+has been removed: the remotepurge utility, the mknewsgroups script, the
+INN patch, and the NNTP administrator guide.  The news2mail mailbox
+annotation, which only nntpd ever consulted, has been removed too.
+
+
+Documentation:
+
+The "Cyrus NNTP" page has been removed from the administrator guide, and
+the remaining references to NNTP throughout the documentation have been
+dropped.
+
+
+Config changes:
+
+The allownewnews option has been deprecated.
+
+
+Upgrade instructions:
+
+The /vendor/cmu/cyrus-imapd/news2mail annotation can no longer be set or
+fetched, and cyradm's mboxconfig, setmetadata and getmetadata commands no
+longer accept "news2mail" as a shorthand.  Any values still stored will
+be ignored; they can be removed ahead of time with:
+
+    cyradm> mboxconfig <mailbox> news2mail ""

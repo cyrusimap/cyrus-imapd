@@ -78,16 +78,19 @@ static void test_string(void)
     CU_ASSERT_STRING_EQUAL(addressbookprefix, "#addressbooks");
 }
 
+/* The options named here are only stand-ins for "a switch with this default":
+ * any of them can be swapped for another switch of the same default.
+ */
 static void test_switch(void)
 {
     int allowanonymouslogin = -1;
     int allowapop = -1;
-    int allownewnews = -1;
+    int allowusermoves = -1;
 
     config_read_string(DBDIR"/conf",
         "allowanonymouslogin: 1\n"
         /* allowapop: 1 (default) */
-        /* allownewnews: 0 (default) */
+        /* allowusermoves: 0 (default) */
     );
 
     /* test a value that has been set */
@@ -99,8 +102,8 @@ static void test_switch(void)
     CU_ASSERT_EQUAL(allowapop, true);
 
     /* test a value that has been defaulted to 0 */
-    allownewnews = config_getswitch(IMAPOPT_ALLOWNEWNEWS);
-    CU_ASSERT_EQUAL(allownewnews, false);
+    allowusermoves = config_getswitch(IMAPOPT_ALLOWUSERMOVES);
+    CU_ASSERT_EQUAL(allowusermoves, false);
 }
 
 static void test_stringlist_value(void)

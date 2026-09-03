@@ -179,17 +179,6 @@ struct thread_algorithm {
                      unsigned int nmsg, int usinguid);
 };
 
-struct nntp_overview {
-    unsigned long uid;
-    char *subj;
-    char *from;
-    char *date;
-    char *msgid;
-    char *ref;
-    unsigned long bytes;
-    unsigned long lines;
-};
-
 enum index_warmup_flags
 {
     WARMUP_INDEX            = (1<<0),

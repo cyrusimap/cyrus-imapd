@@ -103,12 +103,6 @@ Cassandane needs the following software to work:
     Ubuntu package libconfig-inifiles-perl
     RH/CentOS package perl-Config-IniFiles
 
- * News::NNTPClient
-    Perl 5 module to talk to NNTP (RFC977) server
-    CPAN package http://search.cpan.org/~rva/NNTPClient-0.37/
-    Ubuntu package libnews-nntpclient-perl
-    RH/CentOS package perl-NNTPClient
-
  * IO::Socket::INET6
     Object interface for AF_INET|AF_INET6 domain sockets
     CPAN package http://search.cpan.org/~shlomif/IO-Socket-INET6-2.69/lib/IO/Socket/INET6.pm
@@ -175,7 +169,7 @@ Debian/Ubuntu copypasta:
        libxml-generator-perl libxml-xpath-perl libclone-perl \
        libencode-imaputf7-perl libconfig-inifiles-perl \
        libio-socket-inet6-perl libio-socket-ssl-perl libnet-server-perl \
-       libunix-syslog-perl libnews-nntpclient-perl \
+       libunix-syslog-perl \
        libfile-chdir-perl libio-stringy-perl \
        libanyevent-perl libjson-perl libjson-xs-perl \
        libfile-libmagic-perl libtest-xml-perl \
@@ -199,7 +193,7 @@ Fedora copypasta:
         perl-Net-Server perl-Clone perl-Test-NoWarnings perl-URI \
         perl-Digest-SHA perl-BSD-Resource perl-Test-Unit \
         perl-Test-Unit-Runner-Xml perl-XML-Generator perl-Config-IniFiles \
-        perl-NNTPClient perl-IO-Socket-INET6 perl-Net-Server \
+        perl-IO-Socket-INET6 perl-Net-Server \
         perl-Unix-Syslog perl-File-chdir perl-Math-Int64 \
         perl-Mail-IMAPTalk perl-String-CRC32 perl-File-chdir \
         perl-Unix-Syslog perl-Net-Server \

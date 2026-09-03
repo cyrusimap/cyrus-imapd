@@ -10,7 +10,7 @@ balancing IMAP mailboxes, the aggregator allows users to access
 mailboxes on any of the IMAP servers in the system.
 
 Note that although this document focuses on IMAP and POP, the same
-concepts also apply to NNTP and HTTP (CalDAV, CardDAV, RSS).
+concepts also apply to HTTP (CalDAV, CardDAV, RSS).
 
 
 

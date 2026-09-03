@@ -118,8 +118,8 @@ cyrusdb backend.
 Duplicate Delivery (deliver.db)
 -------------------------------
 
-This database is used for duplicate delivery suppression, retrieving usenet
-articles by message-id, and tracking Sieve redirects and vacation responses.
+This database is used for duplicate delivery suppression, and tracking
+Sieve redirects and vacation responses.
 The database is indexed by message-id + recipient (either mailbox or email
 address) and each data record contains the timestamp of the record and the
 UID of the message within the mailbox (if delivered locally). The format of

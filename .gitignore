@@ -66,7 +66,6 @@ doc/examples/imapd_conf/imapd.conf.sample
 doc/examples/libcyrus/example_libcyrus_min
 doc/html/
 doc/legacy/murder.png
-doc/legacy/netnews.png
 doc/text/
 docsrc/.doctrees/
 docsrc/_doxygen/
@@ -134,9 +133,6 @@ imap/message_test
 imap/mupdate_err.c
 imap/mupdate_err.h
 imap/mupdate
-imap/nntp_err.c
-imap/nntp_err.h
-imap/nntpd
 imap/pop3d
 imap/promdata.c
 imap/promdata.h
@@ -176,7 +172,6 @@ makedepend.log
 man/
 master/master
 missing
-netnews/remotepurge
 notifyd/notifyd
 notifyd/notifytest
 perl/annotator/Cyrus-Annotator-Daemon-*/

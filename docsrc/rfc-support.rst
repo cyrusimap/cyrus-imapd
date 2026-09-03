@@ -11,14 +11,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     Standard for the format of ARPA Internet text messages, obsoleted by
     :rfc:`2822`.
 
-:rfc:`0977`
-
-    Network News Transfer Protocol
-
-:rfc:`1036`
-
-    Standard for interchange of USENET messages
-
 :rfc:`1176`
 
     Interactive Mail Access Protocol: Version 2
@@ -177,10 +169,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP4 ID extension
 
-:rfc:`2980`
-
-    Common NNTP Extensions
-
 :rfc:`3028`
 
     Sieve: A Mail Filtering Language
@@ -257,10 +245,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Extension: Copying Without Side Effects
 
-:rfc:`3977`
-
-    Network News Transfer Protocol (NNTP)
-
 :rfc:`4287`
 
     The Atom Syndication Format
@@ -316,19 +300,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`4616`
 
     The PLAIN Simple Authentication and Security Layer (SASL) Mechanism
-
-:rfc:`4642`
-
-    Using Transport Layer Security (TLS) with Network News Transfer
-    Protocol (NNTP)
-
-:rfc:`4643`
-
-    Network News Transfer Protocol (NNTP) Extension for Authentication
-
-:rfc:`4644`
-
-    Network News Transfer Protocol (NNTP) Extension for Streaming Feeds
 
 :rfc:`4731`
 
@@ -516,14 +487,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     The Sieve Mail-Filtering Language -- Extensions for Checking Mailbox
     Status and Accessing Mailbox Metadata
-
-:rfc:`5536`
-
-    Netnews Article Format
-
-:rfc:`5537`
-
-    Netnews Architecture and Protocols
 
 :rfc:`5545`
 

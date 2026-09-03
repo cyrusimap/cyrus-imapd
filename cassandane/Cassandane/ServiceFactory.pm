@@ -53,12 +53,6 @@ sub create
                                 argv => ['timsieved'],
                                 %params);
     }
-    elsif ($name =~ m/nntp/)
-    {
-        return Cassandane::Service->new(
-                                argv => ['nntpd'],
-                                %params);
-    }
     elsif ($name =~ m/smmap/)
     {
         return Cassandane::Service->new(
