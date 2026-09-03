@@ -716,6 +716,10 @@ static void cmdloop(void)
                       popd_mailbox ? mailbox_name(popd_mailbox) : NULL,
                       NULL);
 
+        /* Locks from the last command are gone now, and the client has not
+         * been answered yet: send the notifications it queued. */
+        mboxevent_flush_notifications();
+
         libcyrus_run_delayed();
 
         if (backend) {
