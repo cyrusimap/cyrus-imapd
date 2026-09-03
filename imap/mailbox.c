@@ -7190,8 +7190,9 @@ static int records_match(const char *mboxname,
     }
 
     if (!match) {
-        syslog(LOG_ERR, "%s uid %u record mismatch, rewriting",
-               mboxname, new->uid);
+        xsyslog_ev(LOG_WARNING, "mailbox.reconstruct.record.mismatch",
+                   lf_intname("mbox.name", mboxname),
+                   lf_u("msg.imapuid", new->uid));
     }
 
     /* cache issues - don't print, probably just a version
@@ -7252,7 +7253,9 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         }
 
         printf("%s uid %u not found\n", mailbox_name(mailbox), record->uid);
-        syslog(LOG_ERR, "%s uid %u not found", mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_WARNING, "mailbox.reconstruct.record.missing",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
 
         if (!make_changes) {
             r = 0 ;
@@ -7299,8 +7302,9 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
             printf("%s uid %u guid mismatch\n",
                    mailbox_name(mailbox), record->uid);
-            syslog(LOG_ERR, "%s uid %u guid mismatch",
-                   mailbox_name(mailbox), record->uid);
+            xsyslog_ev(LOG_WARNING, "mailbox.reconstruct.guid.mismatch",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", record->uid));
 
             if (!make_changes) {
                 r = 0 ;
@@ -7311,8 +7315,10 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
                 /* already expunged, just unlink it */
                 printf("%s uid %u already expunged, unlinking\n",
                        mailbox_name(mailbox), record->uid);
-                syslog(LOG_ERR, "%s uid %u already expunged, unlinking",
-                       mailbox_name(mailbox), record->uid);
+                xsyslog_ev(LOG_WARNING, "mailbox.reconstruct.record.unlinked",
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", record->uid),
+                           lf_s("mbox.reconstruct.reason", "expunged"));
                 do_unlink = 1;
             }
             else if (flags & RECONSTRUCT_GUID_REWRITE) {
@@ -7321,15 +7327,19 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
                           (record->internal_flags & FLAG_INTERNAL_ARCHIVED));
                 printf("%s uid %u marking for uid upgrade\n",
                        mailbox_name(mailbox), record->uid);
-                syslog(LOG_ERR, "%s uid %u marking for uid upgrade",
-                       mailbox_name(mailbox), record->uid);
+                xsyslog_ev(LOG_WARNING, "mailbox.reconstruct.record.unlinked",
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", record->uid),
+                           lf_s("mbox.reconstruct.reason", "uid_upgrade"));
                 do_unlink = 1;
             }
             else if (flags & RECONSTRUCT_GUID_UNLINK) {
                 printf("%s uid %u unlinking as requested with -U\n",
                        mailbox_name(mailbox), record->uid);
-                syslog(LOG_ERR, "%s uid %u unlinking as requested with -U",
-                       mailbox_name(mailbox), record->uid);
+                xsyslog_ev(LOG_WARNING, "mailbox.reconstruct.record.unlinked",
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", record->uid),
+                           lf_s("mbox.reconstruct.reason", "requested"));
                 do_unlink = 1;
             }
 
@@ -7345,7 +7355,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
             /* otherwise we just report it and move on - hopefully the
              * correct file can be restored from backup or something */
             printf("run reconstruct with -R to fix or -U to remove\n");
-            syslog(LOG_ERR, "run reconstruct with -R to fix or -U to remove");
+            xsyslog_ev(LOG_WARNING, "mailbox.reconstruct.action_required");
             r = 0 ;
             goto out;
         }
@@ -7355,7 +7365,9 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         /* dang, guess it failed to parse */
 
         printf("%s uid %u failed to parse\n", mailbox_name(mailbox), record->uid);
-        syslog(LOG_ERR, "%s uid %u failed to parse", mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_WARNING, "mailbox.record.unparseable",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
 
         if (!make_changes) {
             r = 0 ;
@@ -7407,8 +7419,10 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     if (record->modseq > mailbox->i.highestmodseq) {
         printf("%s uid %u future modseq " MODSEQ_FMT " found\n",
                    mailbox_name(mailbox), record->uid, record->modseq);
-        syslog(LOG_ERR, "%s uid %u future modseq " MODSEQ_FMT " found",
-                   mailbox_name(mailbox), record->uid, record->modseq);
+        xsyslog_ev(LOG_WARNING, "mailbox.reconstruct.modseq.future",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_llu("msg.modseq", record->modseq));
         mailbox_index_dirty(mailbox);
         mailbox->i.highestmodseq = mboxname_setmodseq(mailbox_name(mailbox),
                                                       record->modseq,
@@ -7418,8 +7432,9 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     if (record->uid > mailbox->i.last_uid) {
         printf("%s future uid %u found\n",
                mailbox_name(mailbox), record->uid);
-        syslog(LOG_ERR, "%s future uid %u found",
-               mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_WARNING, "mailbox.reconstruct.uid.future",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
         mailbox_index_dirty(mailbox);
         mailbox->i.last_uid = record->uid;
     }
@@ -7433,7 +7448,9 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)
       && !!(record->internal_flags & FLAG_INTERNAL_SNOOZED) != !!has_snoozedannot) {
         printf("%s uid %u snoozed mismatch\n", mailbox_name(mailbox), record->uid);
-        syslog(LOG_ERR, "%s uid %u snoozed mismatch", mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_WARNING, "mailbox.reconstruct.snoozed.mismatch",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
         if (has_snoozedannot) record->internal_flags |= FLAG_INTERNAL_SNOOZED;
         else record->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
     }
@@ -7465,10 +7482,14 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
                mailbox_name(mailbox), record->uid,
                (long long unsigned)oldoff, (long long unsigned)record->cache_offset,
                oldcrc, newcrc, record->cache_crc);
-        syslog(LOG_NOTICE, "%s rewrote cache for %u (offset %llu to %llu, crc %u to %u/%u)",
-               mailbox_name(mailbox), record->uid,
-               (long long unsigned)oldoff, (long long unsigned)record->cache_offset,
-               oldcrc, newcrc, record->cache_crc);
+        xsyslog_ev(LOG_NOTICE, "mailbox.reconstruct.cache.rewritten",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_zu("old.mbox.cache.offset", oldoff),
+                   lf_llu("mbox.cache.offset", record->cache_offset),
+                   lf_d("old.mbox.cache.crc", oldcrc),
+                   lf_d("mbox.cache.crc", newcrc),
+                   lf_d("mbox.cache.crc.written", record->cache_crc));
     }
 
     r = mailbox_rewrite_index_record(mailbox, record);
@@ -7597,6 +7618,22 @@ out:
 }
 
 
+/* reconstruct found a header field that didn't match what it recomputed, and
+ * is about to correct it.  All ten comparisons log the same event; mbox.field
+ * says which one.  The printf() next to each call is the reconstruct
+ * command's own output and is deliberately left alone.
+ */
+static void reconstruct_header_updated(const struct mailbox *mailbox,
+                                       const char *field,
+                                       long long oldval, long long newval)
+{
+    xsyslog_ev(LOG_WARNING, "mailbox.reconstruct.header.updated",
+               lf_mailbox(mailbox),
+               lf_s("mbox.field", field),
+               lf_lld("old.mbox.value", oldval),
+               lf_lld("mbox.value", newval));
+}
+
 static void reconstruct_compare_headers(struct mailbox *mailbox,
                                         struct index_header *old,
                                         struct index_header *new)
@@ -7605,76 +7642,72 @@ static void reconstruct_compare_headers(struct mailbox *mailbox,
         printf("%s updating quota_mailbox_used: "
                QUOTA_T_FMT " => " QUOTA_T_FMT "\n", mailbox_name(mailbox),
                old->quota_mailbox_used, new->quota_mailbox_used);
-        syslog(LOG_ERR, "%s updating quota_mailbox_used: "
-               QUOTA_T_FMT " => " QUOTA_T_FMT, mailbox_name(mailbox),
-               old->quota_mailbox_used, new->quota_mailbox_used);
+        reconstruct_header_updated(mailbox, "quota_mailbox_used",
+                                   old->quota_mailbox_used, new->quota_mailbox_used);
     }
 
     if (old->quota_annot_used != new->quota_annot_used) {
         printf("%s updating quota_annot_used: "
                QUOTA_T_FMT " => " QUOTA_T_FMT "\n", mailbox_name(mailbox),
                old->quota_annot_used, new->quota_annot_used);
-        syslog(LOG_ERR, "%s updating quota_annot_used: "
-               QUOTA_T_FMT " => " QUOTA_T_FMT, mailbox_name(mailbox),
-               old->quota_annot_used, new->quota_annot_used);
+        reconstruct_header_updated(mailbox, "quota_annot_used",
+                                   old->quota_annot_used, new->quota_annot_used);
     }
 
     if (old->quota_deleted_used != new->quota_deleted_used) {
         printf("%s updating quota_deleted_used: "
                QUOTA_T_FMT " => " QUOTA_T_FMT "\n", mailbox_name(mailbox),
                old->quota_deleted_used, new->quota_deleted_used);
-        syslog(LOG_ERR, "%s updating quota_deleted_used: "
-               QUOTA_T_FMT " => " QUOTA_T_FMT, mailbox_name(mailbox),
-               old->quota_deleted_used, new->quota_deleted_used);
+        reconstruct_header_updated(mailbox, "quota_deleted_used",
+                                   old->quota_deleted_used, new->quota_deleted_used);
     }
 
     if (old->quota_expunged_used != new->quota_expunged_used) {
         printf("%s updating quota_expunged_used: "
                QUOTA_T_FMT " => " QUOTA_T_FMT "\n", mailbox_name(mailbox),
                old->quota_expunged_used, new->quota_expunged_used);
-        syslog(LOG_ERR, "%s updating quota_expunged_used: "
-               QUOTA_T_FMT " => " QUOTA_T_FMT, mailbox_name(mailbox),
-               old->quota_expunged_used, new->quota_expunged_used);
+        reconstruct_header_updated(mailbox, "quota_expunged_used",
+                                   old->quota_expunged_used, new->quota_expunged_used);
     }
 
     if (old->answered != new->answered) {
-        syslog(LOG_ERR, "%s: updating answered %u => %u",
-               mailbox_name(mailbox), old->answered, new->answered);
+        reconstruct_header_updated(mailbox, "answered",
+                                   old->answered, new->answered);
         printf("%s: updating answered %u => %u\n",
                mailbox_name(mailbox), old->answered, new->answered);
     }
 
     if (old->flagged != new->flagged) {
-        syslog(LOG_ERR, "%s: updating flagged %u => %u",
-               mailbox_name(mailbox), old->flagged, new->flagged);
+        reconstruct_header_updated(mailbox, "flagged",
+                                   old->flagged, new->flagged);
         printf("%s: updating flagged %u => %u\n",
                mailbox_name(mailbox), old->flagged, new->flagged);
     }
 
     if (old->deleted != new->deleted) {
-        syslog(LOG_ERR, "%s: updating deleted %u => %u",
-               mailbox_name(mailbox), old->deleted, new->deleted);
+        reconstruct_header_updated(mailbox, "deleted",
+                                   old->deleted, new->deleted);
         printf("%s: updating deleted %u => %u\n",
                mailbox_name(mailbox), old->deleted, new->deleted);
     }
 
     if (old->exists != new->exists) {
-        syslog(LOG_ERR, "%s: updating exists %u => %u",
-               mailbox_name(mailbox), old->exists, new->exists);
+        reconstruct_header_updated(mailbox, "exists",
+                                   old->exists, new->exists);
         printf("%s: updating exists %u => %u\n",
                mailbox_name(mailbox), old->exists, new->exists);
     }
 
     if (old->synccrcs.basic != new->synccrcs.basic) {
-        syslog(LOG_ERR, "%s: updating sync_crc %u => %u",
-               mailbox_name(mailbox), old->synccrcs.basic, new->synccrcs.basic);
+        reconstruct_header_updated(mailbox, "sync_crc",
+                                   old->synccrcs.basic, new->synccrcs.basic);
         printf("%s: updating sync_crc %u => %u\n",
                mailbox_name(mailbox), old->synccrcs.basic, new->synccrcs.basic);
     }
 
     if (old->synccrcs.annot != new->synccrcs.annot) {
-        syslog(LOG_ERR, "%s: updating sync_crc_annot %u => %u",
-               mailbox_name(mailbox), old->synccrcs.annot, new->synccrcs.annot);
+        reconstruct_header_updated(mailbox, "sync_crc_annot",
+                                   old->synccrcs.annot, new->synccrcs.annot);
         printf("%s: updating sync_crc_annot %u => %u\n",
                mailbox_name(mailbox), old->synccrcs.annot, new->synccrcs.annot);
     }

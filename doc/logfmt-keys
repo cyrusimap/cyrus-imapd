@@ -35,6 +35,7 @@ u.username              the userid the event happened for or on behalf of
 mbox                    placeholder for "no mailbox"; value is always ~null~
 mbox.acl                the mailbox ACL, in its stored form
 mbox.cache.crc          the CRC recorded in a cache record
+mbox.cache.crc.written  the CRC actually written when a cache record was rebuilt
 mbox.cache.generation   the generation stamped on the cache file
 mbox.cache.item         which item within a cache record
 mbox.cache.length       the length of a cache entry, in bytes
@@ -45,6 +46,7 @@ mbox.crcs.basic         basic sync CRC
 mbox.crcs.header        the CRC of the cyrus.header file as read
 mbox.deletedmodseq      highest modseq of a deletion in this mailbox
 mbox.expunged           how many messages an expunge removed
+mbox.field              which header field reconstruct corrected
 mbox.foldermodseq       the mailbox's folder modseq
 mbox.generation         the generation the mailbox index expects of its cache
 mbox.highestmodseq      the mailbox's highest modseq
@@ -55,12 +57,14 @@ mbox.name               the mailbox name, in the admin namespace
 mbox.part               the partition the mailbox is on
 mbox.readonly           whether the mailbox was opened read-only
 mbox.recno              the physical record number in the index file
+mbox.reconstruct.reason why reconstruct unlinked a record
 mbox.refcount           how many open handles a mailbox struct has
 mbox.repack.dryrun      a repack that reports what it would do, without doing it
 mbox.repack.recalc_nanosec  a repack that recalculates nanosecond internaldates
 mbox.type               the mailbox type, as a string
 mbox.uidvalidity        the mailbox's uidvalidity
 mbox.uniqueid           the mailbox's uniqueid
+mbox.value              the value of the field named by mbox.field, after the change
 mbox.version            the mailbox index format version
 
 ### msg. - a message
@@ -183,6 +187,8 @@ other.mbox.uniqueid     the uniqueid of the other mailbox involved
 ### old. - the value before a change, paired with the unprefixed key
 
 old.mbox.acl            the mailbox ACL before the change
+old.mbox.cache.crc      the CRC of a cache record before it was rebuilt
+old.mbox.cache.offset   the offset of a cache record before it was rebuilt
 old.mbox.crcs.annot     the annotation sync CRC before a repack
 old.mbox.crcs.basic     the basic sync CRC before a repack
 old.mbox.crcs.header    the header CRC the index recorded when it was written
@@ -191,6 +197,7 @@ old.mbox.name           the mailbox name before the rename
 old.mbox.part           the partition before the move
 old.mbox.uidvalidity    the mailbox's uidvalidity before it changed
 old.mbox.uniqueid       the uniqueid of the mailbox a message moved out of
+old.mbox.value          the value of the field named by mbox.field, before the change
 old.msg.imapuid         the message's IMAP uid before a move
 old.msg.sysflags        the message's system flags before the change
 old.search.createdmodseq  the createdmodseq the client last saw
