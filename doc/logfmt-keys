@@ -54,6 +54,7 @@ mbox.limit              which exists limit was hit: addressbook, calendar or mai
 mbox.lock.duration      how long a mailbox index lock was held, in seconds
 mbox.mailboxid          the mailbox's JMAP id
 mbox.name               the mailbox name, in the admin namespace
+mbox.owner              the userid that owns the mailbox
 mbox.part               the partition the mailbox is on
 mbox.readonly           whether the mailbox was opened read-only
 mbox.recno              the physical record number in the index file
