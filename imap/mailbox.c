@@ -621,7 +621,14 @@ static struct mappedfile *mailbox_cachefile(struct mailbox *mailbox,
     else
         fname = mailbox_meta_fname(mailbox, META_CACHE);
 
-    int is_readonly = mailbox->is_readonly || mailbox->index_locktype == LOCK_SHARED;
+    /* Writing the cache needs the index write lock - mailbox_append_cache()
+     * asserts it.  Ask by the lock rather than by mailbox->is_readonly, which
+     * is set once at open time and says nothing about now: callers stream
+     * responses after mailbox_unlock_index(), and opening read-write there
+     * would create a fresh cyrus.cache stamped with our stale generation if a
+     * repack had unlinked the real one. */
+    int is_readonly = mailbox->is_readonly
+                   || !mailbox_index_islocked(mailbox, /*write*/1);
     return cache_getfile(&mailbox->caches, fname, is_readonly, mailbox->i.generation_no);
 }
 
@@ -4146,8 +4153,12 @@ EXPORTED struct conversations_state *mailbox_get_cstate_full(struct mailbox *mai
         return cstate;
     }
 
-    /* open the conversations DB - abort if this fails */
-    int is_readonly = mailbox->is_readonly || mailbox->index_locktype == LOCK_SHARED;
+    /* open the conversations DB - abort if this fails.  Same rule as the
+     * cache: without the index write lock we have no business opening it
+     * read-write, and mailbox_unlock_index() drops our cstate, so a caller
+     * after the unlock lands right back in here with no lock at all. */
+    int is_readonly = mailbox->is_readonly
+                   || !mailbox_index_islocked(mailbox, /*write*/1);
     int r = conversations_open_mbox(mailbox_name(mailbox), is_readonly, &mailbox->cstate_value);
     if (r) {
         xsyslog(LOG_ERR, "DBERROR: failed to open conversations",
