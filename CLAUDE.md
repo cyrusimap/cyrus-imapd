@@ -57,6 +57,10 @@ Beyond what's written there:
   that have them.  The exception is the one cassandane.rst names: a test that
   runs against an older or external Cyrus, such as a replication test, still
   needs its guard.
+- When you use `xlog` for logging in tests, you must not split a log message
+  over multiple `xlog` statements.  You should keep log messages short and to
+  the point but if necessary they may exceed the maximum character length limit
+  (either 80 characters or whatever is configured for perltidy).
 
 # Coding style
 
