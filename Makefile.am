@@ -623,7 +623,6 @@ cunit_TESTS = \
     cunit/command.testc \
     cunit/conversations.testc \
     cunit/cron.testc \
-    cunit/signals.testc \
     cunit/css3_color.testc \
     cunit/cyr_qsort_r.testc \
     cunit/crc32.testc \
@@ -660,6 +659,7 @@ cunit_TESTS = \
     cunit/search_expr.testc \
     cunit/seqset.testc \
     cunit/sessionid.testc \
+    cunit/signals.testc \
     cunit/slowio.testc \
     cunit/smallarrayu64.testc \
     cunit/sqldb.testc \
