@@ -9,6 +9,8 @@ on:
       - 'cyrus-imapd-*'
     paths:
       - 'docsrc/**'
+      - 'lib/imapoptions/**'
+      - 'cassandane/**/*.pm'
   pull_request:
     branches:
       - master
@@ -16,6 +18,8 @@ on:
       - 'cyrus-imapd-*'
     paths:
       - 'docsrc/**'
+      - 'lib/imapoptions/**'
+      - 'cassandane/**/*.pm'
 
 defaults:
   run:
