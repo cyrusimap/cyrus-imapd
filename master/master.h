@@ -2,17 +2,39 @@
 #define HAVE_MASTER_H
 
 #include <config.h>
+#include <stdbool.h>
 #include <sys/resource.h> /* for rlim_t */
 
 #include "libconfig.h" /* for config_dir and IMAPOPT_SYNC_MACHINEID */
 #include "strarray.h"
 
+struct quic_idle_worker;   /* defined in master.c, private to it */
+
 struct service {
     char *name;                 /* name of service */
     char *listen;               /* port/socket to listen to */
     char *proto;                /* protocol to accept */
+    bool is_quic;               /* proto == "quic"? */
     strarray_t *exec;           /* command (with args) to execute */
     int babysit;                /* babysit this service? */
+
+    /* proto="quic" only: singly-linked list (via quic_idle_worker's
+     * own next pointer) of workers idle and waiting for a connection
+     * (see quic_dispatch_connection(), MASTER_SERVICE_QUIC_IDLE in
+     * process_msg()). Deliberately separate from ready_workers, which
+     * doesn't fit quic's model (see quic_dispatch_connection()'s
+     * comment) -- this answers "is a worker available now" instead. */
+    struct quic_idle_worker *quic_idle_workers;
+
+    /* proto="quic" only: prefork workers spawned by
+     * quic_spawn_prefork_worker() that haven't yet reported
+     * MASTER_SERVICE_QUIC_IDLE (see process_msg()). Needed since,
+     * unlike ready_workers++ at fork time for everything else, a
+     * freshly-forked quic worker can't count as idle until it says so
+     * -- exec()+service_init() (SASL, TLS, ...) takes real time.
+     * Without this, check_undermanned() would see the same gap every
+     * pass and keep overspawning before the first batch reports in. */
+    int quic_pending_prefork;
 
     /* multiple address family support */
     int associate;              /* are we primary or additional instance? */

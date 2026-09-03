@@ -842,9 +842,17 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     HTTP/2
 
+:rfc:`9114`
+
+    HTTP/3
+
 :rfc:`9208`
 
     IMAP QUOTA Extension
+
+:rfc:`9220`
+
+    Bootstrapping WebSockets with HTTP/3
 
 :rfc:`9394`
 

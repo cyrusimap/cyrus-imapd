@@ -1,0 +1,14 @@
+Name: quic_ebpf
+Type: SWITCH
+Default-Value: 1
+Last-Modified: UNRELEASED
+
+Whether to use eBPF-based kernel steering to dispatch proto="quic"
+connections (see master/quic/quic_ebpf.c), when this build has that support
+compiled in (see :option:`quic_ebpf_iface`). Set to 0 to use master's
+userspace relay-based dispatch instead (see master/quic/quic_relay.c) even
+on a build/kernel that could use eBPF -- e.g. when the eBPF/TC
+machinery isn't permitted in this deployment (a restricted container,
+a kernel without the needed BPF features enabled, etc). Has no effect
+on a build without eBPF support at all, which always uses the
+userspace relay regardless of this setting.

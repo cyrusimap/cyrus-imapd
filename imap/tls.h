@@ -36,6 +36,13 @@ int tls_init_clientengine(int verifydepth,
                           const char *var_server_cert,
                           const char *var_server_key);
 
+/* QUIC-specific server engine */
+int tls_init_serverengine_quic(SSL_CTX **ret);
+
+/* Install (or, if alpn_map is empty/NULL, clear) the server-side ALPN
+* selection callback on ctx. */
+void tls_set_alpn_map(SSL_CTX *ctx, const struct tls_alpn_t *alpn_map);
+
 /* start tls negotiation */
 int tls_start_servertls(int readfd, int writefd, int timeout,
                         struct saslprops_t *saslprops,

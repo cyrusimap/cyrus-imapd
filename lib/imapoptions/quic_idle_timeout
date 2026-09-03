@@ -1,0 +1,10 @@
+Name: quic_idle_timeout
+Type: DURATION
+Default-Value: 5m
+Default-Unit: m
+Last-Modified: UNRELEASED
+
+Set the QUIC idle timeout for HTTP/3 connections, i.e. the length of time
+a QUIC connection may go without any network activity before the server
+closes it.  This is independent of, and not affected by, httptimeout or
+httpkeepalive, which apply only to HTTP/1.1 and HTTP/2 connections over TCP.

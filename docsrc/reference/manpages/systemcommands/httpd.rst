@@ -16,7 +16,7 @@ Synopsis
 .. parsed-literal::
 
     **httpd** [ **-C** *config-file* ] [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ]
-        [ **-H** ] [ **-s** ] [ **-p** *ssf* ] [ **-q** ]
+        [ **-H** ] [ **-3** ] [ **-s** ] [ **-p** *ssf* ] [ **-q** ]
 
 Description
 ===========
@@ -65,6 +65,11 @@ Options
 
     Serve HTTP over SSL (https).  All data to and from **httpd**
     is encrypted using the Secure Sockets Layer.
+
+.. option:: -3
+
+    Serve HTTP/3 over QUIC.  Requires proto="quic" in the cyrus.conf
+    services entry for this **httpd**.
 
 .. option:: -p  ssf
 

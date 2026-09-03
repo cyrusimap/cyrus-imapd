@@ -34,6 +34,8 @@
 #include <math.h>
 #include <inttypes.h>
 
+#include <openssl/rand.h>
+
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
@@ -55,6 +57,9 @@
 #include "master/cronevent.h"
 #include "master/event.h"
 #include "master/masterconf.h"
+#include "master/quic/quic_ebpf.h"
+#include "master/quic/quic_handoff.h"
+#include "master/quic/quic_relay.h"
 #include "master/service.h"
 
 #include "lib/assert.h"
@@ -74,6 +79,21 @@ enum {
 static int verbose = 0;
 static int listen_queue_backlog = 32;
 static int pidfd = -1;
+
+/* Set once, permanently, the first time a proto="quic" service is
+ * configured -- see master/quic/quic_ebpf.h for why that changes how master
+ * drops its own privileges, and quic_dispatch_connection() for the
+ * rest of what it changes. */
+static bool have_quic_service = false;
+
+/* Which QUIC dispatch backend is in use -- decided once at
+ * startup (see the have_quic_service block in main()) from
+ * HAVE_LIBBPF and the quic_ebpf config switch. Always false without
+ * both, so every quic_use_ebpf check below compiles and evaluates
+ * safely regardless -- only the bodies of eBPF-specific branches need
+ * their own #ifdef HAVE_LIBBPF, since they call functions that don't
+ * exist without it. */
+static bool quic_use_ebpf = false;
 
 static int in_shutdown = 0;
 
@@ -117,6 +137,15 @@ struct centry {
     struct timeval spawntime;   /* when the centry was allocated */
     time_t sighuptime;          /* when did we send a SIGHUP */
     struct proc_handle *proc_handle; /* for tracking proc registrations */
+
+    /* master's end of this worker's QUIC_HANDOFF_FD socketpair
+     * (see quic_dispatch_connection()), or -1 otherwise.
+     * Kept open for the worker's whole life, closed when it dies
+     * (reap_child()) -- unlike every other per-child fd here, master
+     * keeps sending fresh connections over this same fd for as long
+     * as the worker stays alive, not just handing off once. */
+    int quic_fd;
+
     struct centry *next;
 };
 static struct centry *ctable[child_table_size];
@@ -230,6 +259,7 @@ static struct centry *centry_alloc(void)
     t = xzmalloc(sizeof(*t));
     t->si = SERVICE_NONE;
     t->wdi = SERVICE_NONE;
+    t->quic_fd = -1;
     gettimeofday(&t->spawntime, NULL);
     t->sighuptime = (time_t)-1;
 
@@ -510,6 +540,15 @@ static void service_create(struct service *s, int is_startup)
             hints.ai_family = PF_INET6;
             hints.ai_socktype = SOCK_DGRAM;
 #endif
+        } else if (s->is_quic) {
+            /* a QUIC listener is just a UDP socket at the OS level;
+             * master itself demultiplexes it --
+             * one worker per connection, dispatched by
+             * quic_dispatch_connection() below, not the single
+             * long-lived process reading a shared socket forever that
+             * plain "udp" below means. */
+            hints.ai_family = PF_UNSPEC;
+            hints.ai_socktype = SOCK_DGRAM;
         } else {
             syslog(LOG_INFO, "invalid proto '%s', disabling %s",
                    s->proto, s->name);
@@ -576,9 +615,27 @@ static void service_create(struct service *s, int is_startup)
         r = setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR,
                        (void *) &on, sizeof(on));
         if (r < 0) {
-            syslog(LOG_ERR, "unable to setsocketopt(SO_REUSEADDR) service %s/%s: %m",
-                s->name, s->familyname);
+            syslog(LOG_ERR,
+                   "unable to setsocketopt(SO_REUSEADDR) service %s/%s: %m",
+                   s->name, s->familyname);
         }
+
+        if (s->is_quic) {
+            /* Only strictly needed for the eBPF backend -- see
+             * master/quic/quic_ebpf.h for why bpf_sk_assign() requires
+             * every socket sharing this port to opt into SO_REUSEPORT
+             * -- but harmless to set unconditionally for the relay
+             * backend too (nothing else binds this port then), which
+             * is simpler than threading quic_use_ebpf's decision (not
+             * computed until later in main()) down to here. */
+            r = setsockopt(s->socket, SOL_SOCKET, SO_REUSEPORT,
+                           (void *) &on, sizeof(on));
+            if (r < 0) {
+                xsyslog_ev(LOG_ERR, "quic.listen.reuseport_failed",
+                           lf_s("service.name", s->name));
+            }
+        }
+
 #if defined(IPV6_V6ONLY) && !(defined(__FreeBSD__) && __FreeBSD__ < 3)
         if (res->ai_family == AF_INET6) {
             r = setsockopt(s->socket, IPPROTO_IPV6, IPV6_V6ONLY,
@@ -980,12 +1037,537 @@ done:
     }
 }
 
+/* one node in Services[si].quic_idle_workers
+ * (master.h) -- a worker that reported itself ready via
+ * MASTER_SERVICE_QUIC_IDLE (see process_msg()). A plain linked list,
+ * not a ptrarray_t, since master doesn't link lib/ptrarray.c and this
+ * list is never more than a handful of entries long. */
+struct quic_idle_worker {
+    pid_t pid;
+    int fd;     /* == the owning centry's quic_fd */
+    struct quic_idle_worker *next;
+};
+
+/* Record that pid (whose centry already has fd stored) is
+ * idle and ready for quic_dispatch_connection() to hand it a
+ * connection. Called from process_msg()'s MASTER_SERVICE_QUIC_IDLE
+ * case. */
+static void quic_idle_pool_add(struct service *s, pid_t pid, int fd)
+{
+    struct quic_idle_worker *w = xmalloc(sizeof(*w));
+
+    w->pid = pid;
+    w->fd = fd;
+    w->next = s->quic_idle_workers;
+    s->quic_idle_workers = w;
+}
+
+/* Remove and return an idle worker for s, or NULL if none are
+ * available -- the caller takes ownership of the returned struct
+ * (and must free() it) and is responsible for actually handing it a
+ * connection (or, on failure to do so, treating it as dead: see
+ * quic_dispatch_connection()). */
+static struct quic_idle_worker *quic_idle_pool_take(struct service *s)
+{
+    struct quic_idle_worker *w = s->quic_idle_workers;
+
+    if (w) s->quic_idle_workers = w->next;
+    return w;
+}
+
+/* Remove pid from s's idle pool, if present, without touching its
+ * fd (the caller owns that decision -- reap_child() closes
+ * it since the worker is gone either way; quic_dispatch_connection()
+ * doesn't, since it's about to keep using it). Safe to call for a
+ * pid that was never in the pool (e.g. a busy worker dying) -- a
+ * plain no-op linear removal, not an error. */
+static void quic_idle_pool_remove(struct service *s, pid_t pid)
+{
+    struct quic_idle_worker **wp;
+
+    for (wp = &s->quic_idle_workers; *wp; wp = &(*wp)->next) {
+        if ((*wp)->pid == pid) {
+            struct quic_idle_worker *w = *wp;
+            *wp = w->next;
+            free(w);
+            return;
+        }
+    }
+}
+
+/* Undo whichever backend's add_conn()/add_alias() calls succeeded,
+ * for a connection dispatch that failed partway through -- the
+ * two-call cleanup quic_dispatch_connection() needs at each of its
+ * three post-registration failure points, factored out instead of
+ * repeated six times. Does not touch the connection's socket/fd; the
+ * caller still owns and closes that itself. */
+static void quic_backend_del_conn(uint8_t dcidlen, const uint8_t *dcid,
+                                  const uint8_t my_scid[QUIC_EBPF_CIDLEN])
+{
+    if (quic_use_ebpf) {
+#ifdef HAVE_LIBBPF
+        if (dcidlen >= QUIC_EBPF_CIDLEN) quic_ebpf_del_conn(dcid);
+        quic_ebpf_del_conn(my_scid);
+#endif
+    }
+    else {
+        if (dcidlen >= QUIC_EBPF_CIDLEN) quic_relay_del_conn(dcid);
+        quic_relay_del_conn(my_scid);
+    }
+}
+
+/* Handle one new QUIC connection on a QUIC service's
+ * rendezvous socket: read its Initial packet, give it its own socket
+ * -- a connected UDP socket registered in the eBPF steering map
+ * (freshly-chosen CID), or a socketpair to master registered in the
+ * relay table (master/quic/quic_relay.h) -- then hand it to an idle
+ * worker (Services[].quic_idle_workers) or fork a new one. Master's
+ * equivalent of accept() for a protocol with no such thing at the
+ * socket layer; see master/quic/quic_ebpf.h and quic_relay.h. */
+static void quic_dispatch_connection(struct service *s, int si)
+{
+    uint8_t pktbuf[QUIC_PKT_BUFSIZE];  /* this datagram gets relayed
+                                        * to the worker verbatim, via
+                                        * quic_handoff.pkt below */
+    struct sockaddr_storage peer, local;
+    socklen_t peerlen = sizeof(peer), locallen = sizeof(local);
+    ssize_t n;
+    struct quic_initial_cids cids;
+    uint8_t my_scid[QUIC_EBPF_CIDLEN];
+    int newsock;
+    int fd[2];
+    struct quic_handoff handoff;
+    char path[PATH_MAX];
+    static char name_env[100], name_env2[100], name_env4[100];
+    struct centry *c;
+    pid_t p;
+
+    if (service_is_fork_limited(s)) return;
+
+    n = recvfrom(s->socket, pktbuf, sizeof(pktbuf), 0,
+                (struct sockaddr *) &peer, &peerlen);
+    if (n < 0) {
+        if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
+            xsyslog_ev(LOG_ERR, "quic.dispatch.recvfrom_failed");
+        return;
+    }
+
+    /* Relay backend only: with eBPF, quic_relay_forward() is always a
+     * harmless miss (its table is never populated), since the kernel
+     * steers an existing connection's packets straight to its own
+     * socket. Without eBPF, every packet of every connection passes
+     * through this rendezvous socket, so most of them (anything past
+     * the first) need to go straight to an existing connection
+     * instead of through dispatch below. */
+    {
+        uint8_t dcid[QUIC_MAX_CIDLEN], dcidlen;
+
+        if (quic_extract_dcid(pktbuf, (size_t) n, QUIC_EBPF_CIDLEN,
+                              dcid, &dcidlen) == 0 &&
+            quic_relay_forward(dcid, dcidlen, pktbuf, (size_t) n,
+                               &peer, peerlen)) {
+            return;
+        }
+    }
+
+    if (quic_parse_initial(pktbuf, (size_t) n, &cids)) {
+        /* Not a valid Initial packet: stray/malformed/attack traffic,
+         * or a legitimate retransmit for a connection whose steering
+         * map/relay entry hasn't landed yet -- either way, nothing to
+         * dispatch; the client will retransmit if it needs to. */
+        return;
+    }
+
+    if (getsockname(s->socket, (struct sockaddr *) &local, &locallen)) {
+        xsyslog_ev(LOG_ERR, "quic.dispatch.getsockname_failed");
+        return;
+    }
+
+    RAND_bytes(my_scid, QUIC_EBPF_CIDLEN);
+
+    if (quic_use_ebpf) {
+#ifdef HAVE_LIBBPF
+        int one = 1;
+
+        newsock = socket(peer.ss_family, SOCK_DGRAM, 0);
+        if (newsock < 0) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.socket_failed");
+            return;
+        }
+        /* SO_REUSEPORT: needs to bind the same local address:port as
+         * the rendezvous socket -- bpf_sk_assign() requires the port
+         * to match (master/quic/quic_ebpf.h). IPV6_V6ONLY: without it,
+         * a dual-stack IPv6 socket would also claim the IPv4 address
+         * space at this port, which the kernel refuses even with
+         * SO_REUSEPORT set (every socket in a reuseport group must
+         * agree on v6-only-ness) -- match whatever the rendezvous
+         * socket set for its AF_INET6 case above. */
+        if (setsockopt(newsock, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one))) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.reuseport_failed");
+            close(newsock);
+            return;
+        }
+#if defined(IPV6_V6ONLY) && !(defined(__FreeBSD__) && __FreeBSD__ < 3)
+        if (peer.ss_family == AF_INET6 &&
+            setsockopt(newsock, IPPROTO_IPV6, IPV6_V6ONLY, &one, sizeof(one))) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.v6only_failed");
+            close(newsock);
+            return;
+        }
+#endif
+        if (bind(newsock, (struct sockaddr *) &local, locallen)) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.bind_failed");
+            close(newsock);
+            return;
+        }
+        if (connect(newsock, (struct sockaddr *) &peer, peerlen)) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.connect_failed");
+            close(newsock);
+            return;
+        }
+
+        if (quic_ebpf_add_conn(my_scid, newsock)) {
+            close(newsock);
+            return;
+        }
+
+        /* The client doesn't know our scid yet, so it keeps addressing
+         * the rest of its first flight (retransmits, later ClientHello
+         * packets) to the dcid it originally chose, not my_scid --
+         * without this second registration those packets miss the map
+         * above and each looks like a new connection attempt. The
+         * eBPF lookup key is just the first QUIC_EBPF_CIDLEN bytes of
+         * a packet's dcid (cyr_quic_steer.bpf.c), and
+         * quic_parse_initial() left-justifies cids.dcid the same way,
+         * so no new key format is needed. Skip if the (spec-violating)
+         * dcid is under 8 bytes, rather than register undefined
+         * bytes. */
+        if (cids.dcidlen >= QUIC_EBPF_CIDLEN &&
+            quic_ebpf_add_conn(cids.dcid, newsock)) {
+            /* BPF_NOEXIST failing here almost always means this dcid
+             * is already claimed by an earlier packet's dispatch: a
+             * second physical datagram for the same connection
+             * attempt, arriving before that first packet's eBPF
+             * registration could intercept it (real clients routinely
+             * burst two Initial packets microseconds apart, e.g. for
+             * an oversized ClientHello). Forking a second worker for
+             * it would spin up a redundant "ghost" connection the
+             * client never talks to, which eventually fails with
+             * ECONNREFUSED. Drop it instead: the eBPF entry for this
+             * dcid is already in place, so if this packet carried
+             * payload the first worker needs, the client's own loss
+             * recovery will retransmit it there directly. */
+            quic_ebpf_del_conn(my_scid);
+            close(newsock);
+            return;
+        }
+#endif /* HAVE_LIBBPF */
+    }
+    else {
+        /* Same idea as the eBPF branch, minus any real socket/kernel
+         * involvement: sv[0] is master's own handle on this connection
+         * (master/quic/quic_relay.h), sv[1] is what gets handed to the
+         * worker below in place of the eBPF branch's real
+         * per-connection UDP socket -- from the worker's point of
+         * view, it's just an fd to recv()/send() datagrams on either
+         * way. */
+        int sv[2];
+
+        if (socketpair(AF_UNIX, SOCK_DGRAM, 0, sv)) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.socketpair_failed");
+            return;
+        }
+
+        if (quic_relay_add_conn(my_scid, sv[0], s->socket, &peer, peerlen)) {
+            close(sv[0]);
+            close(sv[1]);
+            return;
+        }
+
+        /* Same "second physical packet for a connection attempt
+         * already being dispatched" collision this mirrors from the
+         * eBPF branch above -- see its comment for the full
+         * rationale. quic_relay_del_conn(my_scid) here closes sv[0]
+         * too (see master/quic/quic_relay.h), so only sv[1] needs its own
+         * close(). */
+        if (cids.dcidlen >= QUIC_EBPF_CIDLEN &&
+            quic_relay_add_alias(my_scid, cids.dcid)) {
+            quic_relay_del_conn(my_scid);
+            close(sv[1]);
+            return;
+        }
+
+        newsock = sv[1];
+    }
+
+    memset(&handoff, 0, sizeof(handoff));
+    memcpy(handoff.scid, my_scid, QUIC_EBPF_CIDLEN);
+    memcpy(&handoff.local_addr, &local, locallen);
+    handoff.local_addrlen = locallen;
+    memcpy(&handoff.peer_addr, &peer, peerlen);
+    handoff.peer_addrlen = peerlen;
+    handoff.pktlen = (size_t) n;
+    memcpy(handoff.pkt, pktbuf, (size_t) n);
+
+    /* Prefer an already-running idle worker over forking fresh --
+     * avoids paying fork+exec+TLS/SASL-init cost (measured at several
+     * seconds under a debug build wrapped in valgrind, non-trivial
+     * even without it) per connection. A send failure means that
+     * worker died between reporting idle and this dispatch -- try the
+     * next one (or fall through to forking below) rather than drop a
+     * connection master already set up steering for. */
+    for (;;) {
+        struct quic_idle_worker *w = quic_idle_pool_take(s);
+
+        if (!w) break;
+
+        if (quic_send_handoff(w->fd, newsock, &handoff) == 0) {
+            close(newsock);    /* worker has its own SCM_RIGHTS-dup'd copy */
+            free(w);
+            return;
+        }
+
+        xsyslog_ev(LOG_WARNING, "quic.dispatch.idle_worker_gone",
+                   lf_d("quic.worker_pid", (int) w->pid),
+                   lf_s("service.name", s->name));
+        close(w->fd);
+        free(w);
+    }
+
+    /* No idle worker was available, or all of them turned out to be
+     * already dead -- cold start, exactly as if reuse didn't exist. */
+    if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fd)) {
+        xsyslog_ev(LOG_ERR, "quic.dispatch.socketpair_failed");
+        quic_backend_del_conn(cids.dcidlen, cids.dcid, my_scid);
+        close(newsock);
+        return;
+    }
+
+    get_executable(path, sizeof(path), s->exec);
+
+    switch (p = fork()) {
+    case -1:
+        xsyslog_ev(LOG_ERR, "quic.dispatch.fork_failed");
+        close(fd[0]);
+        close(fd[1]);
+        quic_backend_del_conn(cids.dcidlen, cids.dcid, my_scid);
+        close(newsock);
+        return;
+
+    case 0:
+        xclose(pidfd);
+        child_sighandler_setup();
+
+        if (dup2(s->stat[1], STATUS_FD) < 0 ||
+            dup2(fd[1], QUIC_HANDOFF_FD) < 0) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.dup2_failed");
+            exit(1);
+        }
+        fcntl_unset(STATUS_FD, FD_CLOEXEC);
+        fcntl_unset(QUIC_HANDOFF_FD, FD_CLOEXEC);
+
+#ifdef HAVE_SETRLIMIT
+        if (s->maxfds) limit_fds(s->maxfds);
+#endif
+
+        for (int i = 0; i < nservices; i++) {
+            xclose(Services[i].socket);
+            xclose(Services[i].stat[0]);
+            xclose(Services[i].stat[1]);
+        }
+        for (int i = 0; i < nwaitdaemons; i++) {
+            xclose(WaitDaemons[i].socket);
+            xclose(WaitDaemons[i].stat[0]);
+            xclose(WaitDaemons[i].stat[1]);
+        }
+        /* This connection's own socket, and master's end of the
+         * handoff channel, both arrive later via a QUIC_HANDOFF_FD
+         * recvmsg() (service.c's quic_recv_handoff()) -- neither is
+         * needed here. */
+        close(fd[0]);
+        if (fd[1] != QUIC_HANDOFF_FD) close(fd[1]);
+        close(newsock);
+
+        snprintf(name_env, sizeof(name_env), "CYRUS_SERVICE=%s", s->name);
+        putenv(name_env);
+        snprintf(name_env2, sizeof(name_env2), "CYRUS_ID=%d", s->associate);
+        putenv(name_env2);
+        snprintf(name_env4, sizeof(name_env4), "CYRUS_SERVICE_PROTO=%s",
+                s->proto);
+        putenv(name_env4);
+
+        execv(path, s->exec->data);
+        xsyslog_ev(LOG_ERR, "quic.dispatch.exec_failed",
+                   lf_s("quic.exec_path", path));
+        exit(EX_OSERR);
+
+    default:                    /* parent */
+        /* Deliberately not s->ready_workers++ here, unlike
+         * spawn_service(): that increment models a prefork worker
+         * optimistically forked ahead of any connection, "ready"
+         * until its own MASTER_SERVICE_UNAVAILABLE -- a cycle this
+         * quic worker never enters (it's forked for one
+         * already-established connection and exits after it, never
+         * sending MASTER_SERVICE_AVAILABLE). Counting it here would
+         * inflate ready_workers with no matching decrement, stopping
+         * master from ever selecting on the rendezvous socket again
+         * (see the ready_workers == 0 checks in the main loop). */
+        s->interval_forks++;
+        s->nforks++;
+        s->nactive++;
+
+        close(fd[1]);     /* child's end */
+
+        if (quic_send_handoff(fd[0], newsock, &handoff)) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.handoff_failed");
+            /* The child is already exec'd and blocked reading
+             * QUIC_HANDOFF_FD -- closing our end here is what makes
+             * that read fail and the child exit, rather than hanging
+             * forever waiting for a handoff that's never coming. */
+            close(fd[0]);
+            quic_backend_del_conn(cids.dcidlen, cids.dcid, my_scid);
+            close(newsock);
+            return;
+        }
+        close(newsock);          /* child has its own SCM_RIGHTS-dup'd copy */
+
+        c = centry_alloc();
+        centry_set_name(c, "SERVICE", s->name, path);
+        c->si = si;
+        c->wdi = SERVICE_NONE;
+        /* Keep our end of the handoff channel open, unlike every
+         * other per-child fd here -- master keeps sending this worker
+         * fresh connections over it for as long as it stays alive
+         * (see MASTER_SERVICE_QUIC_IDLE in process_msg(),
+         * quic_idle_pool_take() above). reap_child() closes it when
+         * the worker dies. */
+        c->quic_fd = fd[0];
+        /* UNKNOWN, not READY like spawn_service(): READY pairs with
+         * that path's ready_workers++ above, canceled out later by its
+         * MASTER_SERVICE_UNAVAILABLE (READY->BUSY case below). This
+         * child skips that increment -- it's handling an
+         * already-established connection from the moment it's forked,
+         * never idle/ready -- so starting it at READY would let its
+         * first UNAVAILABLE decrement ready_workers with nothing to
+         * cancel, driving it negative. */
+        centry_set_state(c, SERVICE_STATE_UNKNOWN);
+        centry_add(c, p);
+        break;
+    }
+}
+
+/* Fork a new QUIC worker with no connection in hand yet --
+ * check_undermanned()'s equivalent of spawn_service() for quic,
+ * replenishing Services[si].quic_idle_workers up to desired_workers.
+ * Unlike quic_dispatch_connection()'s fork path, there's no
+ * newsock/handoff to send: the worker goes straight into
+ * quic_recv_handoff()'s wait loop and reports itself idle
+ * (MASTER_SERVICE_QUIC_IDLE), indistinguishable at that point from
+ * one that just finished a connection and looped back. Deliberately
+ * not factored together with quic_dispatch_connection()'s similar
+ * fork block: the two differ in exactly the parts (newsock, CID
+ * handling, the handoff) that would make a shared helper's parameter
+ * list longer than just writing both out. */
+static void quic_spawn_prefork_worker(struct service *s, int si)
+{
+    int fd[2];
+    char path[PATH_MAX];
+    static char name_env[100], name_env2[100], name_env4[100];
+    struct centry *c;
+    pid_t p;
+
+    if (service_is_fork_limited(s)) return;
+
+    if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fd)) {
+        xsyslog_ev(LOG_ERR, "quic.prefork.socketpair_failed");
+        return;
+    }
+
+    get_executable(path, sizeof(path), s->exec);
+
+    switch (p = fork()) {
+    case -1:
+        xsyslog_ev(LOG_ERR, "quic.prefork.fork_failed");
+        close(fd[0]);
+        close(fd[1]);
+        return;
+
+    case 0:
+        xclose(pidfd);
+        child_sighandler_setup();
+
+        if (dup2(s->stat[1], STATUS_FD) < 0 ||
+            dup2(fd[1], QUIC_HANDOFF_FD) < 0) {
+            xsyslog_ev(LOG_ERR, "quic.prefork.dup2_failed");
+            exit(1);
+        }
+        fcntl_unset(STATUS_FD, FD_CLOEXEC);
+        fcntl_unset(QUIC_HANDOFF_FD, FD_CLOEXEC);
+
+#ifdef HAVE_SETRLIMIT
+        if (s->maxfds) limit_fds(s->maxfds);
+#endif
+
+        for (int i = 0; i < nservices; i++) {
+            xclose(Services[i].socket);
+            xclose(Services[i].stat[0]);
+            xclose(Services[i].stat[1]);
+        }
+        for (int i = 0; i < nwaitdaemons; i++) {
+            xclose(WaitDaemons[i].socket);
+            xclose(WaitDaemons[i].stat[0]);
+            xclose(WaitDaemons[i].stat[1]);
+        }
+        close(fd[0]);
+        if (fd[1] != QUIC_HANDOFF_FD) close(fd[1]);
+
+        snprintf(name_env, sizeof(name_env), "CYRUS_SERVICE=%s", s->name);
+        putenv(name_env);
+        snprintf(name_env2, sizeof(name_env2), "CYRUS_ID=%d", s->associate);
+        putenv(name_env2);
+        snprintf(name_env4, sizeof(name_env4), "CYRUS_SERVICE_PROTO=%s",
+                s->proto);
+        putenv(name_env4);
+
+        execv(path, s->exec->data);
+        xsyslog_ev(LOG_ERR, "quic.prefork.exec_failed",
+                   lf_s("quic.exec_path", path));
+        exit(EX_OSERR);
+
+    default:                    /* parent */
+        /* Same accounting rationale as quic_dispatch_connection()'s
+         * parent branch: no ready_workers++ (tracked via
+         * quic_idle_workers instead once it reports
+         * MASTER_SERVICE_QUIC_IDLE), UNKNOWN not READY.
+         * quic_pending_prefork++ (master.h) is an immediate,
+         * optimistic count, unlike those -- check_undermanned() needs
+         * it to know this worker is already in flight before its
+         * first QUIC_IDLE arrives, or it would keep forking more on
+         * every intervening main-loop pass. */
+        s->interval_forks++;
+        s->nforks++;
+        s->nactive++;
+        s->quic_pending_prefork++;
+
+        close(fd[1]);     /* child's end */
+
+        c = centry_alloc();
+        centry_set_name(c, "SERVICE", s->name, path);
+        c->si = si;
+        c->wdi = SERVICE_NONE;
+        c->quic_fd = fd[0];
+        centry_set_state(c, SERVICE_STATE_UNKNOWN);
+        centry_add(c, p);
+        break;
+    }
+}
+
 static void spawn_service(struct service *s, int si, int wdi)
 {
     pid_t p;
     int i;
     char path[PATH_MAX], ignored;
-    static char name_env[100], name_env2[100], name_env3[100];
+    static char name_env[100], name_env2[100], name_env3[100], name_env4[100];
     struct centry *c;
     int wdpgid_pipe[2];
     int r;
@@ -1086,6 +1668,9 @@ static void spawn_service(struct service *s, int si, int wdi)
         putenv(name_env);
         snprintf(name_env2, sizeof(name_env2), "CYRUS_ID=%d", s->associate);
         putenv(name_env2);
+        snprintf(name_env4, sizeof(name_env4), "CYRUS_SERVICE_PROTO=%s",
+                s->proto);
+        putenv(name_env4);
 
         execv(path, s->exec->data);
         syslog(LOG_ERR, "couldn't exec %s: %m", path);
@@ -1329,14 +1914,47 @@ static void reap_child(void)
 
                 case SERVICE_STATE_UNKNOWN:
                     s->nactive--;
-                    syslog(LOG_WARNING,
-                           "service %s/%s pid %d in UNKNOWN state: exited",
-                           SERVICEPARAM(s->name),
-                           SERVICEPARAM(s->familyname), pid);
+                    /* Routine for quic: MASTER_SERVICE_QUIC_IDLE's
+                     * handler deliberately resets an idle worker back
+                     * to UNKNOWN (see its comment for why), so this
+                     * fires on every ordinary exit, not just
+                     * anomalies -- still worth logging for every
+                     * other service type, where UNKNOWN at exit
+                     * really is unexpected. */
+                    if (!s->is_quic) {
+                        syslog(LOG_WARNING,
+                               "service %s/%s pid %d in UNKNOWN state: exited",
+                               SERVICEPARAM(s->name),
+                               SERVICEPARAM(s->familyname), pid);
+                    }
                     break;
                 default:
                     /* Shouldn't get here */
                     break;
+                }
+
+                if (s->is_quic) {
+                    /* This worker might have been idle in the pool
+                     * (UNKNOWN, see MASTER_SERVICE_QUIC_IDLE) or busy
+                     * -- either way it's gone now: drop it from the
+                     * pool (safe no-op if it wasn't there), and close
+                     * master's end of its handoff channel, which
+                     * quic_dispatch_connection() kept open for the
+                     * worker's whole life specifically so it could be
+                     * reused -- now dead, leaving it open would just
+                     * leak the fd. */
+                    quic_idle_pool_remove(s, pid);
+                    if (c->quic_fd >= 0) {
+                        close(c->quic_fd);
+                        c->quic_fd = -1;
+                    }
+
+                    /* Also covers a prefork spawn that crashed before
+                     * ever reporting in (still UNKNOWN, never made it
+                     * to quic_idle_workers) -- same clamped-at-0,
+                     * don't-track-which-case-it-was reasoning as the
+                     * QUIC_IDLE handler's decrement. */
+                    if (s->quic_pending_prefork > 0) s->quic_pending_prefork--;
                 }
             } else if (wd) {
                 /* WaitDaemons are only ever in READY state, there's only one
@@ -1567,6 +2185,13 @@ static void sighandler_setup(void)
 {
     struct sigaction action;
     sigset_t siglist;
+
+    /* A QUIC child crashing/exiting can leave master writing to a
+     * pipe/socket with no reader on the other end (e.g. handing off a
+     * connection via the QUIC control fd); the default SIGPIPE action
+     * would kill master itself. Ignore it -- the write() that trips it
+     * still fails with EPIPE, which callers already need to handle. */
+    signal(SIGPIPE, SIG_IGN);
 
     memset(&siglist, 0, sizeof(siglist));
     sigemptyset(&siglist);
@@ -1888,6 +2513,40 @@ static void process_msg(int si, struct notify_message *msg)
 
         default:
             /* Shouldn't get here */
+            break;
+        }
+        break;
+
+    case MASTER_SERVICE_QUIC_IDLE:
+        switch (c->service_state) {
+        case SERVICE_STATE_DEAD:
+            /* echoes from the past... just ignore */
+            break;
+
+        default:
+            /* Reset to UNKNOWN, matching a freshly-forked worker's
+             * initial state -- this worker's next
+             * MASTER_SERVICE_UNAVAILABLE/MASTER_SERVICE_CONNECTION
+             * pair (service.c always sends both) then hits those
+             * messages' silent UNKNOWN-state handling instead of
+             * logging a spurious "already busy" warning. Deliberately
+             * no ready_workers touch -- see
+             * quic_dispatch_connection()'s comment for why quic
+             * doesn't fit that model; quic_idle_pool_add() is the
+             * sole source of truth for "available". */
+            centry_set_state(c, SERVICE_STATE_UNKNOWN);
+            quic_idle_pool_add(s, c->pid, c->quic_fd);
+
+            /* If this was a prefork worker's first check-in, it's now
+             * counted in quic_idle_workers above instead, so stop
+             * counting it here too (quic_pending_prefork, master.h).
+             * A worker reporting idle after a real connection has
+             * nothing to subtract -- clamp at 0 rather than track
+             * which case this is per-worker, since all that matters
+             * is quic_pending_prefork trending back to 0 as
+             * outstanding prefork spawns report in, not which report
+             * caused which decrement. */
+            if (s->quic_pending_prefork > 0) s->quic_pending_prefork--;
             break;
         }
         break;
@@ -2215,6 +2874,10 @@ static void add_service(const char *name, struct entry *e, void *rock)
     Services[i].proto = proto;
     proto = NULL; /* avoid freeing it */
 
+    if (!strcmp(Services[i].proto, "quic")) {
+        Services[i].is_quic = have_quic_service = true;
+    }
+
     strarray_free(Services[i].exec);
     Services[i].exec = strarray_split(cmd, NULL, 0);
 
@@ -2228,9 +2891,14 @@ static void add_service(const char *name, struct entry *e, void *rock)
     Services[i].maxforkrate = maxforkrate;
     Services[i].maxfds = maxfds;
 
-    if (!strcmp(Services[i].proto, "tcp") ||
+    if (Services[i].is_quic ||
+        !strcmp(Services[i].proto, "tcp") ||
         !strcmp(Services[i].proto, "tcp4") ||
         !strcmp(Services[i].proto, "tcp6")) {
+        /* quic belongs here, not in the "udp" branch below:
+         * quic_dispatch_connection() forks one process per connection,
+         * the same shape as tcp, not the single long-lived process
+         * reading a shared socket that "udp" means. */
         Services[i].desired_workers = prefork;
         Services[i].babysit = babysit;
         Services[i].max_workers = atoi(max);
@@ -2633,6 +3301,7 @@ static void send_sighup(struct service *s, int si, int wdi)
         }
         s->listen = NULL;
         s->proto = NULL;
+        s->is_quic = 0;
         s->desired_workers = 0;
 
         /* close all listeners */
@@ -2698,6 +3367,44 @@ static void reread_conf(struct timeval now)
 
 static void check_undermanned(struct service *s, int si, int wdi)
 {
+    if (s->is_quic) {
+        /* quic connections are dispatched individually by
+         * quic_dispatch_connection() (to an idle worker or a fresh
+         * fork), not accepted by workers blocking on a shared socket --
+         * nactive == 0 is quic's normal idle state, not a crash needing
+         * a babysitter (the babysit branch below spawns a plain worker
+         * via spawn_service(), which immediately fatal-errors for
+         * lacking the QUIC_HANDOFF_FD setup quic_dispatch_connection()/
+         * quic_spawn_prefork_worker() provide instead).
+         *
+         * "Ready and waiting" for quic means sitting in
+         * quic_idle_workers (master.h), not ready_workers (see
+         * quic_dispatch_connection()'s comment for why) -- replenish
+         * that count up to desired_workers the way the generic branch
+         * below does for ready_workers, via quic_spawn_prefork_worker()
+         * instead of spawn_service(). Counting quic_pending_prefork
+         * alongside nidle prevents runaway forking: this runs every
+         * main-loop pass, well before a just-forked worker's
+         * exec()+service_init() can report MASTER_SERVICE_QUIC_IDLE,
+         * so nidle alone would still look undermanned next pass. */
+        struct quic_idle_worker *w;
+        int nidle = 0;
+
+        for (w = s->quic_idle_workers; w; w = w->next) nidle++;
+
+        if (s->exec && s->nactive < s->max_workers &&
+            nidle + s->quic_pending_prefork < s->desired_workers) {
+            int j = s->desired_workers - nidle - s->quic_pending_prefork;
+
+            if (verbose) {
+                xsyslog_ev(LOG_DEBUG, "quic.prefork.needed",
+                           lf_s("service.name", s->name),
+                           lf_d("quic.workers_needed", j));
+            }
+            while (j-- > 0) quic_spawn_prefork_worker(s, si);
+        }
+        return;
+    }
     if (s->exec && s->babysit && s->nactive == 0) {
         if (s->nreadyfails >= MAX_READY_FAILS) {
             // if not yet timed out, just wait
@@ -3089,9 +3796,72 @@ int main(int argc, char **argv)
                    Services[i].stat[0], Services[i].stat[1]);
     }
 
-    if (become_cyrus() != 0) {
-        syslog(LOG_ERR, "can't change to the cyrus user: %m");
-        exit(1);
+#ifdef HAVE_LIBBPF
+    /* Only actually use eBPF if config also wants it -- quic_ebpf lets
+     * a deployment fall back to the userspace relay backend
+     * (master/quic/quic_relay.c) even on a build/kernel that could use
+     * eBPF, e.g. because the TC/BPF machinery isn't permitted here. */
+    quic_use_ebpf = have_quic_service && config_getswitch(IMAPOPT_QUIC_EBPF);
+#endif
+
+    if (quic_use_ebpf) {
+#ifdef HAVE_LIBBPF
+        /* Attach the connection-ID steering program while we're still
+         * fully root (TC attach needs CAP_NET_ADMIN) -- see
+         * master/quic/quic_ebpf.h. One program/interface serves every
+         * QUIC service configured, however many different
+         * ports they're on -- register each service's already-bound
+         * socket's port with it individually below. */
+        if (quic_ebpf_init(config_getstring(IMAPOPT_QUIC_EBPF_IFACE))) {
+            fatal("unable to attach QUIC eBPF steering program", EX_CONFIG);
+        }
+
+        for (i = 0; i < nservices; i++) {
+            struct sockaddr_storage sa;
+            socklen_t salen = sizeof(sa);
+            uint16_t port = 0;
+
+            if (!Services[i].is_quic || Services[i].socket < 0)
+                continue;
+
+            if (getsockname(Services[i].socket, (struct sockaddr *) &sa,
+                          &salen) == 0) {
+                if (sa.ss_family == AF_INET)
+                    port = ntohs(((struct sockaddr_in *) &sa)->sin_port);
+                else if (sa.ss_family == AF_INET6)
+                    port = ntohs(((struct sockaddr_in6 *) &sa)->sin6_port);
+            }
+
+            if (!port || quic_ebpf_add_port(port)) {
+                fatal("unable to register QUIC eBPF steering port", EX_CONFIG);
+            }
+        }
+
+        /* Master needs to keep creating new sockets bound to this
+         * same (likely privileged) port for the rest of its life, and
+         * to detach the eBPF program at shutdown -- see master/quic/quic_ebpf.h
+         * for exactly why, and why this doesn't weaken worker
+         * security. */
+        if (quic_drop_privs() != 0) {
+            xsyslog_ev(LOG_ERR, "quic.privs.drop_failed");
+            exit(1);
+        }
+        quic_rebind_rendezvous_sockets();
+#endif /* HAVE_LIBBPF */
+    }
+    else {
+        /* Either no quic services are configured, or the relay
+         * backend is handling the one that is -- either way, nothing
+         * here needs any capability beyond what every other Cyrus
+         * daemon drops to: the relay backend never binds a new
+         * privileged-port socket the way eBPF's per-connection
+         * sockets do, it just reuses the rendezvous socket already
+         * bound while still root, like any other listening socket. */
+        if (become_cyrus() != 0) {
+            syslog(LOG_ERR, "can't change to the cyrus user: %m");
+            exit(1);
+        }
+        if (have_quic_service) quic_relay_init();
     }
     if (daemon_mode) chdir_cores();
 
@@ -3204,6 +3974,7 @@ int main(int argc, char **argv)
                        Services[i].familyname, Services[i].ready_workers);
             }
         }
+        quic_relay_add_fds(&rfds, &maxfd);
         maxfd++;                /* need 1 greater than maxfd */
 
         int interrupted = 0;
@@ -3279,9 +4050,14 @@ int main(int argc, char **argv)
                     y >= 0 && FD_ISSET(y, &rfds))
                 {
                     /* huh, someone wants to talk to us */
+                    if (Services[i].is_quic) {
+                        quic_dispatch_connection(&Services[i], i);
+                        continue;
+                    }
                     spawn_service(&Services[i], i, SERVICE_NONE);
                 }
             }
+            quic_relay_process_ready(&rfds);
         }
 
         gettimeofday(&now, 0);
@@ -3361,6 +4137,22 @@ finished:
 
     schedule_clear();
     cronevent_clear();
+
+/* Close out whichever quic dispatch backend was in use, now that
+ * every quic worker (the last possible user of its state) is
+ * confirmed dead above. */
+    if (quic_use_ebpf) {
+#ifdef HAVE_LIBBPF
+        /* Detach cyr_quic_steer and destroy its qdisc, otherwise it
+         * and its now-meaningless map outlive this process, left
+         * attached to the interface for whichever master starts next
+         * to collide with. */
+        quic_ebpf_shutdown();
+#endif
+    }
+    else if (have_quic_service) {
+        quic_relay_shutdown();
+    }
 
     /* tell caller we're done */
     master_ready(ready_file, 0);

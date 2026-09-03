@@ -1,0 +1,36 @@
+Description:
+
+Adds HTTP/3 (RFC 9114) support to httpd via the "-3" command line option.
+Also includes support for WebSockets over HTTP/3 (RFC 9220).
+
+
+Documentation:
+
+docsrc/concepts/features/quic-dispatch.rst.
+
+
+Config changes:
+
+New imapoptions: quic_ebpf, quic_ebpf_iface, quic_idle_timeout,
+http_h3_altsvc.
+
+New cyrus.conf service type: proto="quic" for an "httpd -3" service.
+
+New configure options:
+
+  --without-nghttp3       disable HTTP/3 (QUIC) support
+  --without-quic-ebpf     disable eBPF-based per-connection QUIC
+                          dispatch in master (falls back to a
+                          userspace relay)
+
+
+Upgrade instructions:
+
+Opt-in: add a proto="quic" service to cyrus.conf to enable. Requires
+ngtcp2/nghttp3 (built against OpenSSL 3.5+ for native QUIC TLS) at
+build time; eBPF dispatch additionally needs libbpf/libcap and clang.
+
+
+GitHub issue:
+
+None.

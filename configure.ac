@@ -1505,6 +1505,110 @@ if test "x$with_nghttp2" = "xyes" -o "x$with_nghttp2" = "xcheck"; then
         ])
 fi
 
+dnl HTTP/3 (QUIC) support: nghttp3 (HTTP/3 framing) + ngtcp2 (transport) +
+dnl ngtcp2's OpenSSL-3.5+ native QUIC TLS backend ("ossl")
+AC_ARG_WITH(nghttp3,
+        [AS_HELP_STRING([--without-nghttp3],
+                        [disable HTTP/3 (QUIC) support (check)])],,
+        [with_nghttp3="check"])
+
+with_ngtcp2=$with_nghttp3
+if test "x$with_nghttp3" = "xyes" -o "x$with_nghttp3" = "xcheck"; then
+        PKG_CHECK_MODULES([NGHTTP3], [libnghttp3], [
+                PKG_CHECK_MODULES([NGTCP2], [libngtcp2], [
+                        PKG_CHECK_MODULES([NGTCP2_CRYPTO_OSSL],
+                                [libngtcp2_crypto_ossl], [
+                                AC_DEFINE(HAVE_NGHTTP3,[],
+                                        [Build HTTP/3 support into httpd?])
+                                AC_DEFINE(HAVE_NGTCP2,[],
+                                        [Build QUIC transport support?])
+                                with_nghttp3=yes
+                                with_ngtcp2=yes
+                        ], [
+                                if test "x$with_nghttp3" = "xyes"; then
+                                        AC_MSG_ERROR([HTTP/3 explicitly
+                                                requested, but
+                                                libngtcp2_crypto_ossl was not
+                                                found (requires ngtcp2's OpenSSL
+                                                3.5+ native QUIC backend)])
+                                fi
+                                AC_MSG_NOTICE([httpd will not have support for
+                                        HTTP/3. Consider installing
+                                        libngtcp2_crypto_ossl])
+                                with_nghttp3=no
+                                with_ngtcp2=no
+                        ])
+                ], [
+                        if test "x$with_nghttp3" = "xyes"; then
+                                AC_MSG_ERROR([HTTP/3 explicitly requested, but
+                                        libngtcp2 was not found])
+                        fi
+                        AC_MSG_NOTICE([httpd will not have support for HTTP/3.
+                                Consider installing libngtcp2])
+                        with_nghttp3=no
+                        with_ngtcp2=no
+                ])
+        ], [
+                if test "x$with_nghttp3" = "xyes"; then
+                        AC_MSG_ERROR([HTTP/3 explicitly requested, but
+                                libnghttp3 was not found])
+                fi
+                AC_MSG_NOTICE([httpd will not have support for HTTP/3. Consider
+                        installing libnghttp3])
+                with_nghttp3=no
+                with_ngtcp2=no
+        ])
+fi
+
+dnl eBPF-based per-connection QUIC dispatch (master): lets master hand
+dnl each QUIC connection its own worker process, the same way TCP's
+dnl accept() does.
+AC_ARG_WITH(quic-ebpf,
+        [AS_HELP_STRING([--without-quic-ebpf],
+                        [disable eBPF-based per-connection QUIC dispatch in
+                         master (check)])],,
+        [with_quic_ebpf="check"])
+
+if test "x$with_quic_ebpf" = "xyes" -o "x$with_quic_ebpf" = "xcheck"; then
+        PKG_CHECK_MODULES([LIBBPF], [libbpf], [
+                PKG_CHECK_MODULES([LIBCAP], [libcap], [
+                        AC_DEFINE(HAVE_LIBBPF,[],
+                                [Build eBPF-based per-connection QUIC dispatch
+                                        into master?])
+                        with_quic_ebpf=yes
+                ], [
+                        if test "x$with_quic_ebpf" = "xyes"; then
+                                AC_MSG_ERROR([QUIC eBPF dispatch explicitly
+                                        requested, but libcap was not found])
+                        fi
+                        AC_MSG_NOTICE([master will not have eBPF-based QUIC
+                                dispatch. Consider installing libcap-devel])
+                        with_quic_ebpf=no
+                ])
+        ], [
+                if test "x$with_quic_ebpf" = "xyes"; then
+                        AC_MSG_ERROR([QUIC eBPF dispatch explicitly requested,
+                                but libbpf was not found])
+                fi
+                AC_MSG_NOTICE([master will not have eBPF-based QUIC dispatch.
+                        Consider installing libbpf-devel])
+                with_quic_ebpf=no
+        ])
+fi
+AM_CONDITIONAL([HAVE_LIBBPF], [test "x$with_quic_ebpf" = "xyes"])
+
+if test "x$with_quic_ebpf" = "xyes"; then
+        AC_ARG_VAR([CLANG],
+                [Location of clang, used to compile
+                 master/quic/cyr_quic_steer.bpf.c])
+        AC_PATH_PROG([CLANG],[clang])
+        if test -z "$CLANG"; then
+                AC_MSG_ERROR([QUIC eBPF dispatch needs clang (to compile
+                        master/quic/cyr_quic_steer.bpf.c to BPF bytecode), but
+                        it was not found])
+        fi
+fi
+
 
 AC_ARG_WITH(wslay, [AS_HELP_STRING([--without-wslay], [disable WebSockets support (check)])],,[with_wslay="check"])
 if test "x$with_wslay" = "xyes" -o "x$with_wslay" = "xcheck"; then
@@ -1566,8 +1670,8 @@ PKG_CHECK_MODULES([SHAPELIB], [shapelib >= 1.3.0],[
         ],
         AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
-HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
-HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIBM}"
+HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${NGTCP2_CFLAGS} ${NGTCP2_CRYPTO_OSSL_CFLAGS} ${NGHTTP3_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
+HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${NGTCP2_LIBS} ${NGTCP2_CRYPTO_OSSL_LIBS} ${NGHTTP3_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIBM}"
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
 
@@ -2491,6 +2595,9 @@ External dependencies:
    clamav:             $with_clamav
    -----------------------
    nghttp2:            $with_nghttp2
+   nghttp3:            $with_nghttp3
+   ngtcp2:             $with_ngtcp2
+   ebpf:               $with_quic_ebpf
    wslay:              $with_wslay
    brotli:             $with_brotli
    zstd:               $with_zstd
