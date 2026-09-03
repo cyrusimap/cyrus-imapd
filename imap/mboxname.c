@@ -124,8 +124,14 @@ static struct mboxlocklist *create_lockitem(const char *name)
      * with a mailbox committed but its conversations DB not, or an LMTP message
      * delivered but never acknowledged.
      *
-     * This is only safe to leave unbounded because no transaction waits on the
-     * wire, so the delay is our own local work rather than a peer's. */
+     * The deferral is unbounded, which is fine while a transaction is only
+     * waiting on local work.  It is not always: in a murder, mboxlist_setacl()
+     * and friends hold a namespacelock across a mupdate round trip, and
+     * cyr_withlock_run() holds the global lock across an arbitrary command.  A
+     * process wedged on one of those now ignores SIGTERM until the peer
+     * answers or the prot layer times out.  The escape hatch is SA_RESETHAND:
+     * a second signal kills us outright, mid-transaction, which is what we
+     * were trying to avoid - so that is a last resort, not a plan. */
     if (!strcmp(name, GLOBAL_LOCKNAME))
         signals_defer_shutdown();
 

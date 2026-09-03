@@ -2551,12 +2551,22 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
     /* And the namelock.  Callers stream responses to a client after unlocking,
      * which blocks for as long as the client takes to read them; a namelock
      * held across that stalls repack, rename and delete on this mailbox.  The
-     * struct and its mappings stay usable, and mailbox_lock_index() re-takes
-     * both locks via mailbox_relock() if we come back for more.
+     * struct and its mappings stay usable, and mailbox_lock_index() gets us
+     * back in - via mailbox_relock(), which re-takes the namelock too, unless
+     * an outer user namespacelock means we never dropped our exclusion in the
+     * first place, in which case the namelock stays gone.  Note that
+     * open_mailboxes_namelocked() answers 0 for a mailbox in that state.
      *
-     * The cost is that a repack can now unlink message files we are still
-     * streaming from.  mailbox_map_record() then fails with ENOENT and the
-     * caller reports the message as gone - see IMAP_NO_MSGGONE in index.c. */
+     * The cost is that a repack can now move things under a mailbox we are
+     * still reading from.  Message files: mailbox_map_record() fails with
+     * ENOENT and the caller reports the message as gone (IMAP_NO_MSGGONE in
+     * index.c).  Cache files: we closed our mappings above, so the next read
+     * reopens by name and can get the repacked file, where our offsets mean
+     * nothing.  cache_getfile() doesn't check generation_no on the read path,
+     * so that is caught one layer down by the CRC in
+     * mailbox_cacherecord_internal() - no garbage reaches the client, but it
+     * surfaces as IMAP_MAILBOX_CHECKSUM and an "invalid cache record" IOERROR,
+     * which reads like corruption and isn't. */
     mboxname_release(&mailbox->namelock);
 }
 
