@@ -1,0 +1,24 @@
+Description:
+
+Zero-byte attachments are no longer sent to the attachment text extractor,
+which used to reject them and log an IOERROR for every such body part.
+
+
+Documentation:
+
+:cyrusman:`squatter(8)`
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+None

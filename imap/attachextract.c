@@ -306,6 +306,16 @@ done:
 }
 
 
+static int is_empty_content(const struct message_guid *guid)
+{
+    static struct message_guid empty_guid = MESSAGE_GUID_INITIALIZER;
+
+    if (empty_guid.status == GUID_UNKNOWN)
+        message_guid_generate(&empty_guid, "", 0);
+
+    return message_guid_equal(guid, &empty_guid);
+}
+
 static void generate_record_id(struct buf *id, const struct attachextract_record *rec)
 {
     // encode content guid
@@ -367,6 +377,17 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     if (message_guid_isnull(&axrec->guid)) {
         xsyslog(LOG_DEBUG, "ignoring null guid", "mime_type=<%s/%s>",
                axrec->type, axrec->subtype);
+        return 0;
+    }
+
+    if (is_empty_content(&axrec->guid)) {
+        /* there's no text to extract from a zero-byte attachment, and
+         * the extractor will just reject it anyway */
+        xsyslog_ev(LOG_DEBUG, "search.attachextract.empty",
+                   lf_s("msg.guid", guidstr),
+                   lf_s("part.type", axrec->type),
+                   lf_s("part.subtype", axrec->subtype));
+        buf_reset(text);
         return 0;
     }
 
