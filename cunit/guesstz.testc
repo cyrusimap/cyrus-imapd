@@ -6,6 +6,8 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <sys/mman.h>
+#include <stdbool.h>
 
 #include <jansson.h>
 
@@ -165,7 +167,8 @@ static int tear_down(void)
 }
 
 /* Guess the IANA name of a VTIMEZONE whose own TZID says nothing. */
-static char *guess_range(const char *body, const char *start, const char *end)
+static char *guess_range(const char *body, const char *start, const char *end,
+                         const char *err, size_t len)
 {
     char *ical = strconcat(VCAL_BEGIN,
                            "BEGIN:VTIMEZONE\r\nTZID:Custom\r\n",
@@ -186,7 +189,14 @@ static char *guess_range(const char *body, const char *start, const char *end)
     char *tzid = guesstz_guess(gtz, vtz,
                                icaltime_from_string(start),
                                icaltime_from_string(end));
-    CU_ASSERT_PTR_NULL((void *)guesstz_error(gtz));
+
+    const char *have = guesstz_error(gtz);
+    if (err) {
+        CU_ASSERT_PTR_NOT_NULL((void *)have);
+        CU_ASSERT_SUBSTR_EQUAL(have, err, len);
+    } else {
+        CU_ASSERT_PTR_NULL((void *)have);
+    }
 
     guesstz_close(&gtz);
     icalcomponent_free(comp);
@@ -196,7 +206,7 @@ static char *guess_range(const char *body, const char *start, const char *end)
 
 static char *guess(const char *body)
 {
-    return guess_range(body, GUESS_START, GUESS_END);
+    return guess_range(body, GUESS_START, GUESS_END, NULL, 0);
 }
 
 static void test_berlin(void)
@@ -288,7 +298,7 @@ static void test_proleptic_offset(void)
                              "DTSTART:19700101T000000\r\n"
                              "END:STANDARD\r\n"
                              NEWYORK_BODY,
-                             "20060101T000000Z", "20080101T000000Z");
+                             "20060101T000000Z", "20080101T000000Z", NULL, 0);
     CU_ASSERT_STRING_EQUAL(tzid, "America/New_York");
     free(tzid);
 }
@@ -317,7 +327,7 @@ static void test_empty_rrule(void)
                        "DTSTART:20210601T000000\r\n"
                        "RRULE:\r\n"
                        "END:STANDARD\r\n",
-                       GUESS_START, GUESS_END);
+                       GUESS_START, GUESS_END, NULL, 0);
     CU_ASSERT_PTR_NULL(tzid);
     free(tzid);
 }
@@ -500,5 +510,209 @@ static void test_encode(void)
     CU_ASSERT_PTR_NOT_NULL(strstr(json, "America/New_York"));
 
     free(json);
+    guesstz_close(&gtz);
+}
+
+typedef enum {
+    magic,
+    bom,
+    version,
+    tzoffsets_count,
+    preftzs_count,
+    timezone_index,
+    timezone_offset
+} vandalism;
+
+static void corrupt_test_database(const vandalism what)
+{
+    int fd = open(dbpath, O_RDWR);
+    CU_ASSERT_NOT_EQUAL(fd, -1);
+
+    struct stat sb;
+    CU_ASSERT_NOT_EQUAL(fstat(fd, &sb), -1);
+
+    uint8_t *blob
+        = mmap(NULL, sb.st_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+    CU_ASSERT_NOT_EQUAL((intptr_t)blob, (intptr_t)MAP_FAILED);
+    close(fd);
+
+    if (what == magic) {
+        strcpy((char *)blob, "garlic!");
+    }
+    if (what == bom) {
+        uint8_t temp = blob[9];
+        blob[10] = blob[9];
+        blob[9] = temp;
+    }
+
+    uint8_t *ianaversion = blob + 8 + 1 + 2 + 8 + 8 + 8;
+    size_t version_length = strlen((const char *)ianaversion);
+    CU_ASSERT_NOT_EQUAL(version_length, 0);
+
+    if (what == version) {
+        strcpy((char *)ianaversion, "pie");
+    }
+
+    uint8_t *p = ianaversion + version_length + 1;
+    uint32_t tzoffsets_cnt;
+    memcpy(&tzoffsets_cnt, p, sizeof(tzoffsets_cnt));
+    CU_ASSERT_EQUAL(tzoffsets_cnt, 9);
+    if (what == tzoffsets_count) {
+        uint32_t bogus = ~tzoffsets_cnt;
+        memcpy(p, &bogus, sizeof(bogus));
+    }
+    p += sizeof(tzoffsets_cnt);
+
+    bool toggle = false;
+    while (tzoffsets_cnt-- > 0) {
+        if (what == timezone_offset) {
+            int32_t tzoffset;
+            memcpy(&tzoffset, p, sizeof(tzoffset));
+            CU_ASSERT(tzoffset < 24 * 60 * 60);
+            CU_ASSERT(tzoffset > -24 * 60 * 60);
+            tzoffset = toggle ? INT32_MIN : 24 * 60 * 60;
+            toggle = !toggle;
+            memcpy(p, &tzoffset, sizeof(tzoffset));
+        } else if (what == timezone_index) {
+            uint64_t tzidx;
+            memcpy(&tzidx, p + sizeof(uint32_t), sizeof(tzidx));
+            CU_ASSERT(tzidx < (uint64_t) sb.st_size);
+            /* Mess with the byte index so that it's outside of the file. */
+            tzidx = ~tzidx;
+            memcpy(p + sizeof(uint32_t), &tzidx, sizeof(tzidx));
+        }
+
+        p += sizeof(int32_t) + sizeof(uint64_t);
+    }
+
+    if (what == timezone_offset || what == preftzs_count) {
+        uint16_t preftzs_cnt;
+        memcpy(&preftzs_cnt, p, sizeof(preftzs_cnt));
+        if (what == preftzs_count) {
+            uint16_t bogus = ~preftzs_cnt;
+            memcpy(p, &bogus, sizeof(bogus));
+        }
+
+        p += sizeof(preftzs_cnt) + preftzs_cnt * sizeof(uint64_t);
+
+        while (*p) {
+            size_t tzid_length = strlen((const char *)p);
+            CU_ASSERT_NOT_EQUAL(tzid_length, 0);
+            p += tzid_length + 1;
+
+            uint32_t observances_cnt;
+            memcpy(&observances_cnt, p, sizeof(observances_cnt));
+            p += sizeof(observances_cnt);
+
+            while (observances_cnt-- > 0) {
+                p += sizeof(uint64_t);
+                int32_t tzoffset;
+                memcpy(&tzoffset, p, sizeof(tzoffset));
+                CU_ASSERT(tzoffset < 24 * 60 * 60);
+                CU_ASSERT(tzoffset > -24 * 60 * 60);
+                tzoffset = toggle ? INT32_MIN : 24 * 60 * 60;
+                toggle = !toggle;
+                memcpy(p, &tzoffset, sizeof(tzoffset));
+                p += sizeof(int32_t);
+            }
+        }
+    }
+
+    CU_ASSERT_NOT_EQUAL(munmap(blob, sb.st_size), -1);
+}
+
+static void test_truncation(void)
+{
+    const size_t truncate_at[] = {
+        173, /* terminating NUL */
+        155, /* preftzs.count */
+        45,  /* tzoffsets.count */
+        38,  /* middle of ianaversion */
+        7,   /* magic number incomplete */
+        0    /* test an empty file */
+    };
+    const size_t *where = truncate_at;
+
+    do {
+        CU_ASSERT_NOT_EQUAL(truncate(dbpath, *where), -1);
+
+        guesstz_t *gtz = guesstz_open(dbpath);
+        const char *have = guesstz_error(gtz);
+        CU_ASSERT_PTR_NOT_NULL((void *)have);
+        CU_ASSERT_STRING_EQUAL(have, "database truncated");
+        guesstz_close(&gtz);
+    } while (*where++);
+}
+
+static void corrupt_and_open_fails(const vandalism what, const char *want)
+{
+    corrupt_test_database(what);
+    guesstz_t *gtz = guesstz_open(dbpath);
+    const char *have = guesstz_error(gtz);
+    CU_ASSERT_PTR_NOT_NULL((void *)have);
+    CU_ASSERT_STRING_EQUAL(have, want);
+    guesstz_close(&gtz);
+}
+
+static void test_magic(void)
+{
+    corrupt_and_open_fails(magic, "database magic string missing");
+}
+
+static void test_bom(void)
+{
+    corrupt_and_open_fails(bom, "database endianess differs");
+}
+
+static void test_version(void)
+{
+    corrupt_and_open_fails(version, "database ianaversion too short");
+}
+
+static void test_tzoffsets(void)
+{
+    corrupt_and_open_fails(tzoffsets_count, "database truncated");
+}
+
+static void test_tzpref(void)
+{
+    corrupt_and_open_fails(preftzs_count, "database truncated");
+}
+
+static void test_bad_timezone_index(void)
+{
+    corrupt_test_database(timezone_index);
+    const char error[] = "corrupt timezone index in guesstz db: idx=";
+    char *tzid = guess_range(BERLIN_BODY, GUESS_START, GUESS_END,
+                             error, strlen(error));
+    CU_ASSERT_PTR_NULL(tzid);
+    free(tzid);
+
+    guesstz_t *gtz = guesstz_open(dbpath);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+
+    char *json = guesstz_encode(gtz);
+    CU_ASSERT_PTR_NULL(json);
+    const char *have = guesstz_error(gtz);
+    CU_ASSERT_PTR_NOT_NULL((void *)have);
+    CU_ASSERT_SUBSTR_EQUAL(have, error, sizeof(error) - 1);
+    guesstz_close(&gtz);
+}
+
+static void test_bad_timezone_offset(void)
+{
+    corrupt_test_database(timezone_offset);
+    /* tzoffsets_cnt offset records, sorted ascending by offset
+     * hence we should always see this timezone faulted first: */
+    const char error[] = "corrupt timezone offset in guesstz db for 'America/New_York':";
+
+    guesstz_t *gtz = guesstz_open(dbpath);
+    CU_ASSERT_PTR_NULL_FATAL((void *)guesstz_error(gtz));
+
+    char *json = guesstz_encode(gtz);
+    CU_ASSERT_PTR_NULL(json);
+    const char *have = guesstz_error(gtz);
+    CU_ASSERT_PTR_NOT_NULL((void *)have);
+    CU_ASSERT_SUBSTR_EQUAL(have, error, sizeof(error) - 1);
     guesstz_close(&gtz);
 }
