@@ -22,7 +22,7 @@ subroutine per file under ``cassandane/tiny-tests/{Suite}/``, sharing the
 suite module's setup.
 
 If you just want to get productive fast, the :ref:`developer quickstart
-<developer-quickstart>` takes you from a fresh checkout to a first passing test
+<developer-hacking>` takes you from a fresh checkout to a first passing test
 and the conventions to write it with the grain.  This page is the fuller
 story: how a test is put together and what the framework gives you to work
 with.
@@ -33,7 +33,7 @@ Running the tests
 Almost all the time you run Cassandane through ``dar test`` (from the host) or
 ``cyd test`` (inside the container), which builds Cyrus, writes a
 ``cassandane.ini``, and runs the suite as the ``cyrus`` user for you.  See the
-:ref:`developer quickstart <developer-quickstart>` for that workflow.
+:ref:`developer quickstart <developer-hacking>` for that workflow.
 
 Whether you go through ``dar test`` or the runner directly, you choose what to
 run by naming suites and individual tests:

@@ -1,4 +1,4 @@
-.. _developer-quickstart:
+.. _developer-hacking:
 
 ====================
 How to hack on Cyrus

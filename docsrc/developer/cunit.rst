@@ -19,7 +19,7 @@ CUnit test suite.
 In day-to-day development you don't run the CUnit suite by hand: ``dar build``
 (or ``cyd build`` inside the container) compiles Cyrus with the tests enabled
 and runs them as part of the build.  See the :ref:`developer quickstart
-<developer-quickstart>` for that workflow.
+<developer-hacking>` for that workflow.
 
 The CUnit tests live in ``cyrus-imapd/cunit/``.  They're written in C, like the
 rest of Cyrus, and use the `CUnit library from SourceForge

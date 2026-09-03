@@ -18,7 +18,7 @@ Getting Started
     :maxdepth: 1
 
     process
-    quickstart
+    hacking
     overview
     The source tree <source-tree>
 

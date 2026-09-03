@@ -146,7 +146,7 @@ names every page in it by path.  Beyond the pages already cited above:
 
 **Getting oriented**
 
-- `docsrc/developer/quickstart.rst` -- the shortest path from a checkout to a
+- `docsrc/developer/hacking.rst` -- the shortest path from a checkout to a
   passing test, and the conventions for writing one
 - `docsrc/developer/source-tree.md` -- what's in each top-level directory, and
   what the four installed libraries are for
