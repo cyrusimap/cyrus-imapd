@@ -31,7 +31,6 @@ static void test_deferral_lifecycle(void)
     CU_ASSERT_EQUAL(shutdowns, 0);
 
     /* two nested transactions, then the signal arrives */
-    signals_add_handlers(0);
     signals_defer_shutdown();
     signals_defer_shutdown();
     raise(SIGTERM);
@@ -53,4 +52,8 @@ static void test_deferral_lifecycle(void)
     /* the outermost one lets it through */
     signals_resume_shutdown();
     CU_ASSERT_EQUAL(shutdowns, 1);
+
+    /* nothing clears a delivered signal for us, and every other test in this
+     * binary shares the array */
+    signals_clear(SIGTERM);
 }
