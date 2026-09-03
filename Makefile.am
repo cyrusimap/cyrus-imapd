@@ -149,7 +149,6 @@ DISTCLEANFILES = \
 
 MAINTAINERCLEANFILES = \
     doc/legacy/murder.png \
-    doc/legacy/netnews.png \
     imap/http_cal_abook_admin_js.h \
     man/imapd.conf.5 \
     man/sieveshell.1 \
@@ -349,7 +348,6 @@ EXTRA_DIST = \
     cunit/pcunit \
     cunit/vg.supp \
     doc/legacy/murder.png \
-    doc/legacy/netnews.png \
     doc \
     docsrc \
     imap/css3_color_array.gperf \
