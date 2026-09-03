@@ -40,7 +40,6 @@ install:
 - cpanm --notest Math::Int64
 - cpanm --notest Net::LDAP::Server
 - cpanm --notest Net::Server
-- cpanm --notest News::NNTPClient
 - cpanm --notest String::CRC32
 - cpanm --notest Test::Unit
 - cpanm --notest Text::LevenshteinXS
