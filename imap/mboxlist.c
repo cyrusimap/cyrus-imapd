@@ -6367,8 +6367,9 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     r = cyrusdb_open(DB, fname, 0, &old);
 
     if (r) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(r)));
         fatal("can't open mailboxes file", EX_TEMPFAIL);
     }
 
@@ -6382,8 +6383,9 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
 
     r2 = cyrusdb_close(old);
     if (r2) {
-        syslog(LOG_ERR, "DBERROR: error closing %s: %s", fname,
-               cyrusdb_strerror(r2));
+        xsyslog_ev(LOG_ERR, "mboxlist.close.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(r2)));
     }
 
     hash_enumerate(&ids, &_upgrade_cb, &urock);
@@ -6398,8 +6400,9 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
         }
 
         if (r2) {
-            syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_upgrade: %s",
-                   r ? "aborting" : "committing", cyrusdb_strerror(r2));
+            xsyslog_ev(LOG_ERR, r ? "mboxlist.txn.abort.failed"
+                                  : "mboxlist.txn.commit.failed",
+                       lf_s("error", cyrusdb_strerror(r2)));
         }
     }
 
@@ -6439,18 +6442,20 @@ static int subsdb_needs_upgrade(const char *userid,
         errno = 0;
         version = strtol(tmp, &endptr, 10);
         if (errno || !(*tmp && !*endptr)) {
-            xsyslog(LOG_ERR, "ERROR: bad subscriptions db version",
-                             "userid=<%s> subsfname=<%s> version=<%.*s>",
-                             userid, subsfname, (int) datalen, data);
+            xsyslog_ev(LOG_ERR, "mboxlist.subs.version.invalid",
+                       lf_s("u.username", userid),
+                       lf_s("sys.path", subsfname),
+                       lf_raw("mboxlist.subs.version", "%.*s",
+                              (int) datalen, data));
             fatal("bad subscriptions db version", EX_SOFTWARE);
         }
         free(tmp);
         break;
     default:
         /* XXX uh oh?? */
-        xsyslog(LOG_ERR, "ERROR: can't fetch subscriptions db version",
-                         "userid=<%s> subsfname=<%s>",
-                         userid, subsfname);
+        xsyslog_ev(LOG_ERR, "mboxlist.subs.version.unreadable",
+                   lf_s("u.username", userid),
+                   lf_s("sys.path", subsfname));
         fatal("can't fetch subscriptions db version", EX_SOFTWARE);
         break;
     }
@@ -6513,11 +6518,10 @@ static int _upgrade_subs_cb(void *rock, const char *key, size_t keylen,
             buf_appendcstr(namebuf, inbox);
             buf_appendmap(namebuf, key + 6, keylen - 6);
 
-            xsyslog(LOG_DEBUG, "fixing bad shared mailbox subscription",
-                               "userid=<%s> old_key=<%.*s> new_key=<%s>",
-                               urock->userid,
-                               (int) keylen, key,
-                               buf_cstring(namebuf));
+            xsyslog_ev(LOG_DEBUG, "mboxlist.subs.key.fixed",
+                       lf_s("u.username", urock->userid),
+                       lf_raw("old.mboxlist.key", "%.*s", (int) keylen, key),
+                       lf_buf("mboxlist.key", namebuf));
 
             mbname_free(&mbname);
             free(inbox);
@@ -6576,8 +6580,9 @@ static int mboxlist_upgrade_subs_work(const char *userid,
         db_r = cyrusdb_store(newsubs, key, keylen, data, datalen, &newtid);
     }
     if (db_r) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", newsubsfname,
-               cyrusdb_strerror(db_r));
+        xsyslog_ev(LOG_ERR, "mboxlist.open.failed",
+                   lf_s("sys.path", newsubsfname),
+                   lf_s("error", cyrusdb_strerror(db_r)));
         fatal("can't open new subscriptions file", EX_TEMPFAIL);
     }
 
@@ -6590,8 +6595,9 @@ static int mboxlist_upgrade_subs_work(const char *userid,
     r2 = cyrusdb_abort(oldsubs, oldtid);
     if (!r2) r2 = cyrusdb_close(oldsubs);
     if (r2) {
-        syslog(LOG_ERR, "DBERROR: error closing %s: %s", subsfname,
-               cyrusdb_strerror(r2));
+        xsyslog_ev(LOG_ERR, "mboxlist.close.failed",
+                   lf_s("sys.path", subsfname),
+                   lf_s("error", cyrusdb_strerror(r2)));
         if (!db_r) db_r = r2;
     }
     *subs = NULL;
@@ -6605,22 +6611,25 @@ static int mboxlist_upgrade_subs_work(const char *userid,
         }
 
         if (r2) {
-            syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_upgrade_subs: %s",
-                   db_r ? "aborting" : "committing", cyrusdb_strerror(r2));
+            xsyslog_ev(LOG_ERR, db_r ? "mboxlist.txn.abort.failed"
+                                     : "mboxlist.txn.commit.failed",
+                       lf_s("error", cyrusdb_strerror(r2)));
         }
     }
 
     r2 = cyrusdb_close(newsubs);
     if (r2) {
-        syslog(LOG_ERR, "DBERROR: error closing %s: %s", newsubsfname,
-               cyrusdb_strerror(r2));
+        xsyslog_ev(LOG_ERR, "mboxlist.close.failed",
+                   lf_s("sys.path", newsubsfname),
+                   lf_s("error", cyrusdb_strerror(r2)));
         if (!db_r) db_r = r2;
     }
 
     if (!db_r) {
         /* rename new db file */
         if (cyrus_rename(newsubsfname, subsfname) < 0) {
-            syslog(LOG_ERR, "DBERROR: renaming %s: %m", newsubsfname);
+            xsyslog_ev(LOG_ERR, "mboxlist.subs.rename.failed",
+                       lf_s("sys.path", newsubsfname));
             fatal("can't rename subscriptions file", EX_TEMPFAIL);
         }
         /* reopen upgraded db under regular name (not-create, we're sure it will
@@ -6649,11 +6658,11 @@ static int mboxlist_upgrade_subs(const char *userid,
     if (r) goto done;
 
     if (subsdb_needs_upgrade(userid, subsfname, *subs, &curr_version)) {
-        xsyslog(LOG_NOTICE, "upgrading user subscriptions",
-                            "userid=<%s> subsfname=<%s>"
-                            " from_version=<%d> to_version=<%d>",
-                            userid, subsfname,
-                            curr_version, SUBDB_VERSION_NUM);
+        xsyslog_ev(LOG_NOTICE, "mboxlist.subs.upgrading",
+                   lf_s("u.username", userid),
+                   lf_s("sys.path", subsfname),
+                   lf_d("old.mboxlist.subs.version", curr_version),
+                   lf_d("mboxlist.subs.version", SUBDB_VERSION_NUM));
         r = mboxlist_upgrade_subs_work(userid, subsfname, subs, curr_version);
     }
 

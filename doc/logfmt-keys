@@ -151,6 +151,7 @@ lmtp.rcpt.state         a recipient's delivery state in the proxy state machine
 lmtp.target             how the destination mailbox was chosen: default, plus-addr, ...
 mboxlist.key            a raw mailboxes.db key
 mboxlist.rewritten      how many mailboxes.db entries were rewritten
+mboxlist.subs.version   the version of a user's subscriptions db
 pop.subfolder           the subfolder a POP session was restricted to
 quota.root              the quota root a quota applies to
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
@@ -202,6 +203,8 @@ old.mbox.part           the partition before the move
 old.mbox.uidvalidity    the mailbox's uidvalidity before it changed
 old.mbox.uniqueid       the uniqueid of the mailbox a message moved out of
 old.mbox.value          the value of the field named by mbox.field, before the change
+old.mboxlist.key        a mailboxes.db key before it was rewritten
+old.mboxlist.subs.version  the subscriptions db version before an upgrade
 old.msg.imapuid         the message's IMAP uid before a move
 old.msg.sysflags        the message's system flags before the change
 old.search.createdmodseq  the createdmodseq the client last saw

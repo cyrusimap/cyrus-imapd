@@ -146,7 +146,7 @@ sub upgrade_from_2_common
 
     # check that we upgraded
     $self->assert_syslog_matches($self->{instance},
-                                 qr{upgrading user subscriptions});
+                                 qr{event=mboxlist\.subs\.upgrading});
     my (undef, $version) = $self->{instance}->run_dbcommand($subdb, $engine,
         [ 'GET', "\x1fVER\x1f" ]
     );
@@ -166,7 +166,7 @@ sub upgrade_from_2_common
 
     # better not have upgraded this time
     $self->assert_syslog_does_not_match($self->{instance},
-                                        qr{upgrading user subscriptions});
+                                        qr{event=mboxlist\.subs\.upgrading});
 }
 
 use Cassandane::Tiny::Loader;
