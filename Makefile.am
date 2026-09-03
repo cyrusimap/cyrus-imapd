@@ -373,7 +373,6 @@ EXTRA_DIST = \
     man/arbitronsort.pl.1 \
     man/masssievec.8 \
     man/mkimap.8 \
-    man/mknewsgroups.8 \
     man/rehash.8 \
     man/translatesieve.8 \
     master/README \
@@ -523,7 +522,6 @@ dist_noinst_SCRIPTS = \
     tools/imapoptions.pl \
     $(IMAPOPTIONS_LIBS) \
     tools/masssievec \
-    tools/mknewsgroups \
     tools/perl2rst \
     tools/pod-index \
     tools/translatesieve \
