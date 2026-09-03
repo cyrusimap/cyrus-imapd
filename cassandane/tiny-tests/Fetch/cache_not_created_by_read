@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+# A FETCH takes the index write lock, drops it, and only then streams the
+# bodies - so the cache file is opened with no lock held at all.  It must be
+# opened read-only: without the write lock we have no right to create one, and
+# a repack unlinks any cache file it did not rewrite.
+sub test_cache_not_created_by_read
+    :NoAltNameSpace
+    ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->make_message("cache test", body => "hello world\r\n");
+
+    my $mbpath = $self->{instance}->run_mbpath('user.cassandane');
+    my $cache = "$mbpath->{data}/cyrus.cache";
+    $self->assert(-f $cache, "$cache should exist to start with");
+
+    $imaptalk->select("INBOX");
+
+    # Not BODY.PEEK: asking to set \Seen is what makes a FETCH take the write
+    # lock, and the lock is what decides how the cache gets opened.  Do it
+    # once first so the message is already seen - then the second one takes
+    # the write lock but never touches the cache while it holds it, and the
+    # only cache access left is the unlocked one we care about.
+    $imaptalk->fetch('1', '(BODY[TEXT])');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    rename($cache, "$cache.saved") || die "rename $cache: $!";
+
+    my $res = $imaptalk->fetch('1', '(BODY[TEXT])');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr/hello world/, $res->{'1'}->{body});
+
+    my $created = -e $cache;
+
+    # put the spool back before anything else looks at it
+    unlink($cache) if $created;
+    rename("$cache.saved", $cache) || die "rename $cache.saved: $!";
+
+    # the missing file is logged, and that is fair enough - drain it so the
+    # instance teardown doesn't call it a failure
+    $self->{instance}->getsyslog();
+
+    $self->assert(!$created, "a read recreated $cache");
+}
