@@ -71,6 +71,9 @@ enum event_param {
     /*  5 */ EVENT_OLD_UIDSET,
     /*  6 */ EVENT_MAILBOX_ID,
              EVENT_MAILBOX_UNIQUEID,
+             EVENT_MAILBOX_JMAPID,
+             EVENT_OLD_MAILBOX_JMAPID,
+             EVENT_OLD_MAILBOX_UNIQUEID,
     /*  7 */ EVENT_URI,
     /*  8 */ EVENT_MODSEQ,
     /*  9 */ EVENT_QUOTA_STORAGE,
@@ -106,8 +109,11 @@ enum event_param {
     EVENT_COMPACT_CALIDS,
     EVENT_MESSAGE_EMAILID,
     EVENT_MESSAGE_THREADID,
+    EVENT_EMAILIDS,
     EVENT_JMAP_EMAIL,
     EVENT_JMAP_STATES,
+    EVENT_SPECIAL_USE,
+    EVENT_OLD_SPECIAL_USE,
     EVENT_CALENDAR_ALARM_TIME,
     EVENT_CALENDAR_ALARM_RECIPIENTS,
     EVENT_CALENDAR_ALERTID,
@@ -179,6 +185,7 @@ struct mboxevent {
     struct timeval timestamp;
     seqset_t *uidset;
     strarray_t midset;
+    strarray_t emailids;
     seqset_t *olduidset;
 
     struct mboxevent *prev;
@@ -308,7 +315,7 @@ void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *msgrec);
  * Called once per message and always before mboxevent_extract_mailbox
  */
 void mboxevent_extract_copied_record(struct mboxevent *event,
-                                     const struct mailbox *mailbox, struct index_record *record);
+                                     struct mailbox *mailbox, struct index_record *record);
 
 extern void mboxevent_extract_copied_msgrecord(struct mboxevent *event, msgrecord_t *msgrec);
 
@@ -357,7 +364,7 @@ void mboxevent_extract_mailbox(struct mboxevent *event, struct mailbox *mailbox)
  * Extract meta-data from the given mailbox to fill oldMailboxID event parameter
  */
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
-                                   const struct mailbox *mailbox);
+                                   struct mailbox *mailbox);
 
 /*
  * set the client tag used by vnd.fastmail.clientTagj

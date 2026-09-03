@@ -77,6 +77,9 @@ static struct mboxevent event_template =
     { EVENT_OLD_UIDSET, "vnd.cmu.oldUidset", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MAILBOX_ID, "mailboxID", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MAILBOX_UNIQUEID, "mailboxUniqueId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_MAILBOX_JMAPID, "vnd.fastmail.mailboxJMAPId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_OLD_MAILBOX_JMAPID, "vnd.fastmail.oldMailboxJMAPId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_OLD_MAILBOX_UNIQUEID, "oldMailboxUniqueId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_URI, "uri", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MODSEQ, "modseq", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_QUOTA_STORAGE, "diskQuota", EVENT_PARAM_INT, { 0 }, 0 },
@@ -112,8 +115,11 @@ static struct mboxevent event_template =
     { EVENT_COMPACT_CALIDS, "vnd.fastmail.compactCalendarIds", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_MESSAGE_EMAILID, "vnd.cmu.emailid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MESSAGE_THREADID, "vnd.cmu.threadid", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_EMAILIDS, "vnd.cmu.emailids", EVENT_PARAM_ARRAY, { 0 }, 0 },
     { EVENT_JMAP_EMAIL, "vnd.fastmail.jmapEmail", EVENT_PARAM_JSON, { 0 }, 0 },
     { EVENT_JMAP_STATES, "vnd.fastmail.jmapStates", EVENT_PARAM_JSON, { 0 }, 0 },
+    { EVENT_SPECIAL_USE, "vnd.fastmail.specialUse", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_OLD_SPECIAL_USE, "vnd.fastmail.oldSpecialUse", EVENT_PARAM_STRING, { 0 }, 0 },
 
     /* calendar params for calalarmd/notifyd */
     { EVENT_CALENDAR_ALARM_TIME, "alarmTime", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -161,7 +167,8 @@ static struct mboxevent event_template =
     /* always at end to let the parser to easily truncate this part */
     { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, { 0 }, 0 }
   },
-  STRARRAY_INITIALIZER, { 0, 0 }, NULL, STRARRAY_INITIALIZER, NULL, NULL, NULL
+  STRARRAY_INITIALIZER, { 0, 0 }, NULL, STRARRAY_INITIALIZER,
+  STRARRAY_INITIALIZER, NULL, NULL, NULL
 };
 
 static json_t *json_formatter(enum event_type type, struct event_parameter params[]);
@@ -258,14 +265,41 @@ EXPORTED void mboxevent_setnamespace(struct namespace *n)
     namespace.isalt = 0;
 }
 
-static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
+/* Return the space-separated value of the mailbox's /specialuse annotation
+ * (e.g. "\Trash"), or NULL if it has none */
+static char *mboxevent_mailbox_specialuse(const struct mailbox *mailbox)
 {
     struct buf attrib = BUF_INITIALIZER;
-    char *userid = NULL;
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+
+    annotatemore_lookup_mbox(mailbox, "/specialuse", userid, &attrib);
+    free(userid);
+
+    if (!buf_len(&attrib)) {
+        buf_free(&attrib);
+        return NULL;
+    }
+
+    return buf_release(&attrib);
+}
+
+/* Return the JMAP id of the mailbox: the short JMAP id when the user's
+ * conversations db uses compact ids, otherwise the mailbox's uniqueid */
+static const char *mboxevent_mailbox_jmapid(struct mailbox *mailbox)
+{
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    const char *jmapid = mailbox_jmapid(mailbox);
+
+    return jmapid && USER_COMPACT_EMAILIDS(cstate) ?
+        jmapid : mailbox_uniqueid(mailbox);
+}
+
+static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
+{
+    char *attrib = NULL;
     strarray_t *specialuse = NULL;
     int enabled = 1;
     int i = 0;
-    int r = 0;
 
     init_internal();
 
@@ -276,13 +310,8 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 
     /* test if the mailbox has a special-use attribute in the exclude list */
     if (strarray_size(excluded_specialuse) > 0) {
-        userid = mboxname_to_userid(mailbox_name(mailbox));
-
-        r = annotatemore_lookup_mbox(mailbox, "/specialuse", userid, &attrib);
-        if (r) goto done; /* XXX - return -1?  Failure? */
-
-        /* get info and set flags */
-        specialuse = strarray_split(buf_cstring(&attrib), NULL, 0);
+        attrib = mboxevent_mailbox_specialuse(mailbox);
+        specialuse = strarray_split(attrib, NULL, 0);
 
         for (i = 0; i < strarray_size(specialuse) ; i++) {
             const char *attribute = strarray_nth(specialuse, i);
@@ -295,8 +324,7 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
 
 done:
     strarray_free(specialuse);
-    buf_free(&attrib);
-    free(userid);
+    free(attrib);
     return enabled;
 }
 
@@ -388,6 +416,7 @@ EXPORTED void mboxevent_free(struct mboxevent **mboxevent)
     seqset_free(&event->uidset);
     seqset_free(&event->olduidset);
     strarray_fini(&event->midset);
+    strarray_fini(&event->emailids);
     strarray_fini(&event->flagnames);
 
     for (i = 0; i <= MAX_PARAM; i++) {
@@ -549,10 +578,16 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
                && trace_id() != NULL;
     case EVENT_MAILBOX_ID:
     case EVENT_MAILBOX_UNIQUEID:
-    case EVENT_MBTYPE:
-    case EVENT_MAILBOX_ACL:
-    case EVENT_VISIBLE_USERS:
         return (type & MAILBOX_EVENTS);
+    case EVENT_MBTYPE:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_MBTYPE) &&
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
+    case EVENT_MAILBOX_ACL:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_MAILBOXACL) &&
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
+    case EVENT_VISIBLE_USERS:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_VISIBLEUSERS) &&
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
 
     case EVENT_QUOTA_MESSAGES:
         return type & QUOTA_EVENTS;
@@ -577,11 +612,26 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_MESSAGE_THREADID:
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_THREADID) &&
                (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW));
+    case EVENT_EMAILIDS:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_EMAILIDS) &&
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS));
     case EVENT_JMAP_EMAIL:
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPEMAIL) &&
                (type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND));
     case EVENT_JMAP_STATES:
         return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPSTATES;
+    case EVENT_MAILBOX_JMAPID:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_MAILBOXJMAPID) &&
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
+    case EVENT_OLD_MAILBOX_JMAPID:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_MAILBOXJMAPID) &&
+               (type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE|EVENT_MAILBOX_RENAME));
+    case EVENT_SPECIAL_USE:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SPECIALUSE) &&
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
+    case EVENT_OLD_SPECIAL_USE:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SPECIALUSE) &&
+               (type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE|EVENT_MAILBOX_RENAME));
     case EVENT_MESSAGES:
         if (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN))
             return 1;
@@ -593,6 +643,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
             return 0;
         break;
     case EVENT_OLD_MAILBOX_ID:
+    case EVENT_OLD_MAILBOX_UNIQUEID:
         return type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE|EVENT_MAILBOX_RENAME);
     case EVENT_SERVER_ADDRESS:
         return type & (EVENT_LOGIN|EVENT_LOGOUT);
@@ -731,6 +782,9 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
         }
         if (strarray_size(&event->midset) > 0) {
             FILL_ARRAY_PARAM(event, EVENT_MIDSET, &event->midset);
+        }
+        if (strarray_size(&event->emailids) > 0) {
+            FILL_ARRAY_PARAM(event, EVENT_EMAILIDS, &event->emailids);
         }
         if (event->olduidset) {
             FILL_STRING_PARAM(event, EVENT_OLD_UIDSET, seqset_cstring(event->olduidset));
@@ -884,30 +938,25 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
 
     // Login and Logout events do not have a mailboxname, so avoid looking that up...
     if (mailboxname) {
-        mbentry_t *mbentry = NULL;
-        r = mboxlist_lookup(mailboxname, &mbentry, NULL);
-        if (!r && mbentry->uniqueid) {
-            struct conversations_state *cstate =
-                conversations_get_mbox(mailboxname);
-            const char *mboxid =
-                mbentry->jmapid && USER_COMPACT_EMAILIDS(cstate) ?
-                mbentry->jmapid : mbentry->uniqueid;
-
-            /* mboxevent_extract_mailbox may already have set EVENT_MAILBOX_ID,
-             * so make sure to deallocate its previous value */
-            if (event->params[EVENT_MAILBOX_ID].filled) {
-                free(event->params[EVENT_MAILBOX_ID].value.s);
-            }
-            FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mboxid));
-
-            /* mboxevent_extract_mailbox may already have set EVENT_MAILBOX_UNIQUEID,
-             * so make sure to deallocate its previous value */
-            if (event->params[EVENT_MAILBOX_UNIQUEID].filled) {
-                free(event->params[EVENT_MAILBOX_UNIQUEID].value.s);
-            }
-            FILL_STRING_PARAM(event, EVENT_MAILBOX_UNIQUEID, xstrdup(mbentry->uniqueid));
+        /* From RFC 5423: mailboxID is a URI describing the mailbox.
+         * mboxevent_extract_mailbox may already have set it to a URI
+         * that includes the UIDVALIDITY, which is unknown here, so
+         * don't overwrite it */
+        if (!event->params[EVENT_MAILBOX_ID].filled) {
+            struct buf url = BUF_INITIALIZER;
+            imapurl_toURL(&url, &imapurl);
+            FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, buf_release(&url));
         }
-        mboxlist_entry_free(&mbentry);
+
+        if (!event->params[EVENT_MAILBOX_UNIQUEID].filled) {
+            mbentry_t *mbentry = NULL;
+            r = mboxlist_lookup(mailboxname, &mbentry, NULL);
+            if (!r && mbentry->uniqueid) {
+                FILL_STRING_PARAM(event, EVENT_MAILBOX_UNIQUEID,
+                                  xstrdup(mbentry->uniqueid));
+            }
+            mboxlist_entry_free(&mbentry);
+        }
     }
 
     if (serveraddr && mboxevent_expected_param(event->type, EVENT_SERVER_ADDRESS)) {
@@ -1065,6 +1114,17 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
             jmap_set_emailid(cstate, &record->guid,
                              0, &record->internaldate, emailid);
             FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, emailid);
+        }
+    }
+
+    /* add message EMAILID to emailids */
+    if (mboxevent_expected_param(event->type, EVENT_EMAILIDS)) {
+        if (!cstate) cstate = mailbox_get_cstate(mailbox);
+        if (cstate) {
+            char emailid[JMAP_MAX_EMAILID_SIZE];
+            jmap_set_emailid(cstate, &record->guid,
+                             0, &record->internaldate, emailid);
+            strarray_add(&event->emailids, emailid);
         }
     }
 
@@ -1272,6 +1332,26 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         }
     }
 
+    /* add message EMAILID to emailids */
+    if (mboxevent_expected_param(event->type, EVENT_EMAILIDS)) {
+        struct message_guid guid;
+        struct timespec internaldate;
+        if ((r = msgrecord_get_guid(msgrec, &guid))) {
+            syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
+            return;
+        }
+        if ((r = msgrecord_get_internaldate(msgrec, &internaldate))) {
+            syslog(LOG_ERR, "mboxevent: can't extract internaldate: %s", error_message(r));
+            return;
+        }
+        if (!cstate) cstate = mailbox_get_cstate(mailbox);
+        if (cstate) {
+            char emailid[JMAP_MAX_EMAILID_SIZE];
+            jmap_set_emailid(cstate, &guid, 0, &internaldate, emailid);
+            strarray_add(&event->emailids, emailid);
+        }
+    }
+
     /* add message THREADID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_THREADID)) {
         bit64 cid;
@@ -1398,7 +1478,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
 }
 
 void mboxevent_extract_copied_record(struct mboxevent *event,
-                                     const struct mailbox *mailbox,
+                                     struct mailbox *mailbox,
                                      struct index_record *record)
 {
     int first = 0;
@@ -1718,6 +1798,15 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     char *extname = mboxname_to_external(mailbox_name(mailbox), &namespace, NULL);
     imapurl.mailbox = extname;
 
+    /* From RFC 5423: mailboxID is a URI describing the mailbox */
+    struct buf url = BUF_INITIALIZER;
+    imapurl_toURL(&url, &imapurl);
+    FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, buf_release(&url));
+
+    const char *uniqueid = mailbox_uniqueid(mailbox);
+    if (uniqueid)
+        FILL_STRING_PARAM(event, EVENT_MAILBOX_UNIQUEID, xstrdup(uniqueid));
+
     if (event->type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND) && event->uidset) {
         imapurl.uid = seqset_first(event->uidset);
         /* don't add uidset parameter to MessageNew and MessageAppend events */
@@ -1726,27 +1815,36 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     }
 
     /* all events need uri parameter */
-    struct buf url = BUF_INITIALIZER;
     imapurl_toURL(&url, &imapurl);
     FILL_STRING_PARAM(event, EVENT_URI, buf_release(&url));
 
     free(extname);
 
-    FILL_STRING_PARAM(event, EVENT_MBTYPE,
-        xstrdup(mboxlist_mbtype_to_string(mailbox_mbtype(mailbox))));
+    if (mboxevent_expected_param(event->type, EVENT_MBTYPE)) {
+        FILL_STRING_PARAM(event, EVENT_MBTYPE,
+            xstrdup(mboxlist_mbtype_to_string(mailbox_mbtype(mailbox))));
+    }
 
-    FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox_acl(mailbox)));
-    FILL_STRING_PARAM(event, EVENT_VISIBLE_USERS, mailbox_visible_users(mailbox));
+    if (mboxevent_expected_param(event->type, EVENT_MAILBOX_ACL)) {
+        FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox_acl(mailbox)));
+    }
 
-    /* mailbox related events also require mailboxID and mailboxUniqueId */
-    if (event->type & MAILBOX_EVENTS) {
-        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-        const char *uniqueid = mailbox_uniqueid(mailbox);
-        const char *jmapid = mailbox_jmapid(mailbox);
-        const char *mboxid =
-            jmapid && USER_COMPACT_EMAILIDS(cstate) ? jmapid : uniqueid;
-        FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mboxid));
-        FILL_STRING_PARAM(event, EVENT_MAILBOX_UNIQUEID, xstrdup(uniqueid));
+    if (mboxevent_expected_param(event->type, EVENT_VISIBLE_USERS)) {
+        FILL_STRING_PARAM(event, EVENT_VISIBLE_USERS, mailbox_visible_users(mailbox));
+    }
+
+    /* add the mailbox's special-use attributes if it has any */
+    if (mboxevent_expected_param(event->type, EVENT_SPECIAL_USE)) {
+        char *specialuse = mboxevent_mailbox_specialuse(mailbox);
+        if (specialuse)
+            FILL_STRING_PARAM(event, EVENT_SPECIAL_USE, specialuse);
+    }
+
+    /* add the mailbox's JMAP id */
+    if (mboxevent_expected_param(event->type, EVENT_MAILBOX_JMAPID)) {
+        const char *jmapid = mboxevent_mailbox_jmapid(mailbox);
+        if (jmapid)
+            FILL_STRING_PARAM(event, EVENT_MAILBOX_JMAPID, xstrdup(jmapid));
     }
 
     if (mboxevent_expected_param(event->type, EVENT_UIDNEXT)) {
@@ -1833,7 +1931,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 }
 
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
-                                   const struct mailbox *mailbox)
+                                   struct mailbox *mailbox)
 {
     struct imapurl imapurl;
 
@@ -1853,6 +1951,24 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_ID, buf_release(&url));
 
     free(extname);
+
+    const char *uniqueid = mailbox_uniqueid(mailbox);
+    if (uniqueid)
+        FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_UNIQUEID, xstrdup(uniqueid));
+
+    /* add the old mailbox's special-use attributes if it has any */
+    if (mboxevent_expected_param(event->type, EVENT_OLD_SPECIAL_USE)) {
+        char *specialuse = mboxevent_mailbox_specialuse(mailbox);
+        if (specialuse)
+            FILL_STRING_PARAM(event, EVENT_OLD_SPECIAL_USE, specialuse);
+    }
+
+    /* add the old mailbox's JMAP id */
+    if (mboxevent_expected_param(event->type, EVENT_OLD_MAILBOX_JMAPID)) {
+        const char *jmapid = mboxevent_mailbox_jmapid(mailbox);
+        if (jmapid)
+            FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_JMAPID, xstrdup(jmapid));
+    }
 }
 
 EXPORTED void mboxevent_set_client_id(const char *id)
@@ -2079,6 +2195,20 @@ static int filled_params(enum event_type type, struct mboxevent *event)
                  * messages */
                 if (!event->uidset || (seqset_first(event->uidset) == seqset_last(event->uidset)))
                     buf_appendcstr(&missing, " modseq");
+                break;
+            case EVENT_SPECIAL_USE:
+            case EVENT_OLD_SPECIAL_USE:
+                /* only included if the mailbox has a special-use attribute */
+                break;
+            case EVENT_MAILBOX_JMAPID:
+            case EVENT_OLD_MAILBOX_JMAPID:
+                /* only included if the mailbox has a JMAP id or uniqueid */
+                break;
+            case EVENT_OLD_MAILBOX_UNIQUEID:
+                /* only included if the old mailbox has a uniqueid */
+                break;
+            case EVENT_EMAILIDS:
+                /* only included when a conversations db is available */
                 break;
             default:
                 buf_appendcstr(&missing, " ");
