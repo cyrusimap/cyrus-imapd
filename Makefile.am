@@ -298,7 +298,6 @@ endif # SERVER
 
 if CMULOCAL
 dist_sysconf_DATA += depot/rc.local.imap depot/rc.local.ptclient
-sbin_PROGRAMS += netnews/remotepurge
 endif # CMULOCAL
 
 if SIEVE
@@ -378,7 +377,6 @@ EXTRA_DIST = \
     man/rehash.8 \
     man/translatesieve.8 \
     master/README \
-    netnews/inn.diffs \
     perl/annotator/Daemon.pm \
     perl/annotator/Makefile.PL \
     perl/annotator/MANIFEST \
@@ -1777,13 +1775,6 @@ master_master_SOURCES = \
     master/service.h
 master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM) $(SSL_LIBS)
 
-
-netnews_remotepurge_SOURCES = \
-    netnews/macros.h \
-    netnews/readconfig.c \
-    netnews/readconfig.h \
-    netnews/remotepurge.c
-netnews_remotepurge_LDADD = $(LD_BASIC_ADD)
 
 notifyd_notifyd_SOURCES = \
     imap/mutex_fake.c \

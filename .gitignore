@@ -176,7 +176,6 @@ makedepend.log
 man/
 master/master
 missing
-netnews/remotepurge
 notifyd/notifyd
 notifyd/notifytest
 perl/annotator/Cyrus-Annotator-Daemon-*/
