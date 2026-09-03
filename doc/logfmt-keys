@@ -34,12 +34,20 @@ u.username              the userid the event happened for or on behalf of
 
 mbox                    placeholder for "no mailbox"; value is always ~null~
 mbox.acl                the mailbox ACL, in its stored form
+mbox.cache.crc          the CRC recorded in a cache record
+mbox.cache.generation   the generation stamped on the cache file
+mbox.cache.item         which item within a cache record
+mbox.cache.length       the length of a cache entry, in bytes
+mbox.cache.offset       a byte offset into the cache file
+mbox.cache.size         the size of the mapped cache, in bytes
 mbox.crcs.annot         annotation sync CRC
 mbox.crcs.basic         basic sync CRC
 mbox.crcs.header        the CRC of the cyrus.header file as read
 mbox.deletedmodseq      highest modseq of a deletion in this mailbox
 mbox.foldermodseq       the mailbox's folder modseq
+mbox.generation         the generation the mailbox index expects of its cache
 mbox.highestmodseq      the mailbox's highest modseq
+mbox.limit              which exists limit was hit: addressbook, calendar or mailbox
 mbox.lock.duration      how long a mailbox index lock was held, in seconds
 mbox.mailboxid          the mailbox's JMAP id
 mbox.name               the mailbox name, in the admin namespace

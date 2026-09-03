@@ -478,22 +478,19 @@ static int cache_parserecord(struct mappedfile *cachefile, uint64_t cache_offset
 
         /* bounds checking */
         if (offset >= buf_size) {
-            xsyslog(LOG_ERR, "IOERROR: offset greater than cache size",
-                             "offset=<%zu> "
-                             "buf_size=<%zu> "
-                             "cache_ent=<%d>",
-                             offset, buf_size, cache_ent);
+            xsyslog_ev(LOG_ERR, "mailbox.cache.record.invalid",
+                       lf_zu("mbox.cache.offset", offset),
+                       lf_zu("mbox.cache.size", buf_size),
+                       lf_d("mbox.cache.item", cache_ent));
             return IMAP_IOERROR;
         }
 
         if (offset + CACHE_ITEM_SIZE_SKIP + CACHE_ITEM_LEN(cacheitem) > buf_size) {
-            xsyslog(LOG_ERR, "IOERROR: cache entry truncated",
-                             "offset=<%zu> "
-                             "length=<%u> "
-                             "buf_size=<%zu> "
-                             "cache_ent=<%d>",
-                             offset, CACHE_ITEM_LEN(cacheitem),
-                             buf_size, cache_ent);
+            xsyslog_ev(LOG_ERR, "mailbox.cache.record.invalid",
+                       lf_zu("mbox.cache.offset", offset),
+                       lf_u("mbox.cache.length", CACHE_ITEM_LEN(cacheitem)),
+                       lf_zu("mbox.cache.size", buf_size),
+                       lf_d("mbox.cache.item", cache_ent));
             return IMAP_IOERROR;
         }
 
@@ -504,7 +501,7 @@ static int cache_parserecord(struct mappedfile *cachefile, uint64_t cache_offset
         /* moving on */
         next = CACHE_ITEM_NEXT(cacheitem);
         if (next < cacheitem) {
-            xsyslog(LOG_ERR, "IOERROR: cache offset negative", NULL);
+            xsyslog_ev(LOG_ERR, "mailbox.cache.record.invalid");
             return IMAP_IOERROR;
         }
 
@@ -566,7 +563,8 @@ static int cache_append_record(struct mappedfile *mf, struct index_record *recor
 
     n = mappedfile_pwritebuf(mf, buf, offset);
     if (n < 0) {
-        syslog(LOG_ERR, "failed to append %zu bytes to cache", buf->len);
+        xsyslog_ev(LOG_ERR, "mailbox.cache.append.failed",
+                   lf_zu("mbox.cache.length", buf->len));
         return IMAP_IOERROR;
     }
 
@@ -593,9 +591,8 @@ static struct mappedfile *cache_getfile(ptrarray_t *list, const char *fname,
     /* guess we didn't find it - open a new one */
     cachefile = NULL;
     if (mappedfile_open(&cachefile, fname, openflags)) {
-        xsyslog(LOG_ERR, "IOERROR: failed to open cache file",
-                         "fname=<%s>",
-                         fname);
+        xsyslog_ev(LOG_ERR, "mailbox.cache.open.failed",
+                   lf_s("sys.path", fname));
         return NULL;
     }
 
@@ -675,9 +672,10 @@ static int mailbox_append_cache(struct mailbox *mailbox,
     if (!record->crec.len) {
         /* make one! */
         const char *fname = mailbox_record_fname(mailbox, record);
-        xsyslog(LOG_ERR, "IOERROR: no cache content, parsing and saving",
-                         "mailbox=<%s> record=<%u>",
-                         mailbox_name(mailbox), record->uid);
+        /* not fatal: we parse the message and rebuild the cache below */
+        xsyslog_ev(LOG_WARNING, "mailbox.cache.missing",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
         r = message_parse(fname, record);
         if (r) return r;
         mailbox_index_dirty(mailbox);
@@ -686,15 +684,17 @@ static int mailbox_append_cache(struct mailbox *mailbox,
 
     cachefile = mailbox_cachefile(mailbox, record);
     if (!cachefile) {
-        syslog(LOG_ERR, "Failed to open cache to %s for %u",
-                mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_ERR, "mailbox.cache.open.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
         return IMAP_IOERROR; /* unable to append */
     }
 
     r = cache_append_record(cachefile, record);
     if (r) {
-        syslog(LOG_ERR, "Failed to append cache to %s for %u",
-               mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_ERR, "mailbox.cache.append.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
         return r;
     }
 
@@ -761,25 +761,27 @@ static int mailbox_cacherecord_internal(struct mailbox *mailbox,
 
 err:
     if (!cachefile)
-        xsyslog(LOG_ERR, "IOERROR: missing cache file",
-                         "mailbox=<%s> uid=<%u>",
-                         mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_ERR, "mailbox.cache.missing",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
     else if (!record->cache_offset)
-        xsyslog(LOG_ERR, "IOERROR: missing cache offset",
-                         "mailbox=<%s> uid=<%u>",
-                         mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_ERR, "mailbox.cache.missing",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
     else if (r == IMAP_MAILBOX_REPACKED)
-        /* not an IOERROR: nothing is broken, we just lost the race */
-        xsyslog(LOG_NOTICE, "cache generation mismatch, reparsing",
-                            "mailbox=<%s> uid=<%u> ours=<%u> theirs=<%u>",
-                            mailbox_name(mailbox), record->uid,
-                            mailbox->i.generation_no,
-                            cache_generation(cachefile));
+        /* nothing is broken, we just lost the race */
+        xsyslog_ev(LOG_NOTICE, "mailbox.cache.generation.mismatch",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_u("mbox.generation", mailbox->i.generation_no),
+                   lf_u("mbox.cache.generation", cache_generation(cachefile)));
     else if (r)
-        xsyslog(LOG_ERR, "IOERROR invalid cache record",
-                         "mailbox=<%s> uid=<%u> error=<%s> crc=<%d> cache_offset=<%llu>",
-                         mailbox_name(mailbox), record->uid, error_message(r),
-                         crc, (unsigned long long) record->cache_offset);
+        xsyslog_ev(LOG_ERR, "mailbox.cache.record.invalid",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_err("error", r),
+                   lf_d("mbox.cache.crc", crc),
+                   lf_llu("mbox.cache.offset", record->cache_offset));
 
     if (rewrite == MBCACHE_NOPARSE)
         return r;
@@ -789,18 +791,18 @@ err:
     /* parse directly into the cache for this record */
     const char *fname = mailbox_record_fname(mailbox, record);
     if (!fname) {
-        xsyslog(LOG_ERR, "IOERROR: no spool file",
-                         "mailbox=<%s> uid=<%u>",
-                         mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_ERR, "mailbox.spool.missing",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
         return IMAP_IOERROR;
     }
 
     /* parse into the file and zero the cache offset */
     r = message_parse(fname, backdoor);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: failed to parse message",
-                         "mailbox=<%s> uid=<%u>",
-                         mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_ERR, "mailbox.record.unparseable",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
         return r;
     }
     backdoor->cache_offset = 0;
@@ -808,9 +810,9 @@ err:
     if (rewrite == MBCACHE_REWRITE) {
         r = mailbox_append_cache(mailbox, backdoor);
         if (r) {
-            xsyslog(LOG_ERR, "IOERROR: failed to append cache",
-                             "mailbox=<%s> uid=<%u>",
-                             mailbox_name(mailbox), record->uid);
+            xsyslog_ev(LOG_ERR, "mailbox.cache.append.failed",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", record->uid));
             return r;
         }
     }
@@ -877,9 +879,8 @@ static int _map_local_record(const struct mailbox *mailbox, const char *fname, s
     if (msgfd == -1) return errno;
 
     if (fstat(msgfd, &sbuf) == -1) {
-        xsyslog(LOG_ERR, "IOERROR: fstat failed",
-                         "fname=<%s>",
-                         fname);
+        xsyslog_ev(LOG_ERR, "mailbox.spool.stat.failed",
+                   lf_s("sys.path", fname));
         fatal("can't fstat message file", EX_OSFILE);
     }
 
@@ -2218,9 +2219,9 @@ EXPORTED int mailbox_reload_index_record_dirty(struct mailbox *mailbox,
     size_t offset = mailbox_record_offset(mailbox, recno);
 
     if (offset + mailbox->i.record_size > mailbox->index_size) {
-        xsyslog(LOG_ERR, "IOERROR: index record past end of file",
-                         "mailbox=<%s> record=<%u>",
-                         mailbox_name(mailbox), recno);
+        xsyslog_ev(LOG_ERR, "mailbox.index.record.missing",
+                   lf_mailbox(mailbox),
+                   lf_u("mbox.recno", recno));
         return IMAP_IOERROR;
     }
 
@@ -2249,9 +2250,9 @@ static int mailbox_read_index_record(struct mailbox *mailbox,
     size_t offset = mailbox_record_offset(mailbox, recno);
 
     if (offset + mailbox->i.record_size > mailbox->index_size) {
-        xsyslog(LOG_ERR, "IOERROR: index record past end of file",
-                         "mailbox=<%s> record=<%u>",
-                         mailbox_name(mailbox), recno);
+        xsyslog_ev(LOG_ERR, "mailbox.index.record.missing",
+                   lf_mailbox(mailbox),
+                   lf_u("mbox.recno", recno));
         return IMAP_IOERROR;
     }
 
@@ -4364,9 +4365,9 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
 
     r = mailbox_read_index_record(mailbox, record->recno, &oldrecord);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: re-reading record failed",
-                         "mailbox=<%s> record=<%u>",
-                         mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_ERR, "mailbox.index.read.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
         return r;
     }
     mailbox_read_basecid(mailbox, &oldrecord);
@@ -4409,9 +4410,9 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
             * the very odd case of a reconstruct.  So let's see about
             * that */
             if (!(record->internal_flags & FLAG_INTERNAL_ARCHIVED))
-                xsyslog(LOG_ERR, "IOERROR: bogus removal of archived flag",
-                                "mailbox=<%s> record=<%u>",
-                                mailbox_name(mailbox), record->uid);
+                xsyslog_ev(LOG_ERR, "mailbox.record.archived.unset",
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", record->uid));
         }
     }
     
@@ -4495,27 +4496,30 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_ADDRESSBOOK) {
             int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_ADDRESSBOOK);
             if (limit > 0 && limit <= (int)mailbox->i.exists) {
-                xsyslog(LOG_ERR, "IOERROR: client hit per-addressbook exists limit",
-                                 "mailbox=<%s>",
-                                 mailbox_name(mailbox));
+                /* the client hit a configured limit; nothing is broken */
+                xsyslog_ev(LOG_WARNING, "mailbox.exists.limit_reached",
+                           lf_mailbox(mailbox),
+                           lf_s("mbox.limit", "addressbook"));
                 return IMAP_QUOTA_EXCEEDED;
             }
         }
         else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_CALENDAR) {
             int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_CALENDAR);
             if (limit > 0 && limit <= (int)mailbox->i.exists) {
-                xsyslog(LOG_ERR, "IOERROR: client hit per-calendar exists limit",
-                                 "mailbox=<%s>",
-                                 mailbox_name(mailbox));
+                /* the client hit a configured limit; nothing is broken */
+                xsyslog_ev(LOG_WARNING, "mailbox.exists.limit_reached",
+                           lf_mailbox(mailbox),
+                           lf_s("mbox.limit", "calendar"));
                 return IMAP_QUOTA_EXCEEDED;
             }
         }
         else if (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_EMAIL) {
             int limit = config_getint(IMAPOPT_MAILBOX_MAXMESSAGES_EMAIL);
             if (limit > 0 && limit <= (int)mailbox->i.exists) {
-                xsyslog(LOG_ERR, "IOERROR: client hit per-mailbox exists limit",
-                                 "mailbox=<%s>",
-                                 mailbox_name(mailbox));
+                /* the client hit a configured limit; nothing is broken */
+                xsyslog_ev(LOG_WARNING, "mailbox.exists.limit_reached",
+                           lf_mailbox(mailbox),
+                           lf_s("mbox.limit", "mailbox"));
                 return IMAP_QUOTA_EXCEEDED;
             }
         }
@@ -4531,8 +4535,10 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         if (r) return r;
         if (imaply_strict) assert(prev.uid <= mailbox->i.last_uid);
         if (message_guid_equal(&prev.guid, &record->guid)) {
-            syslog(LOG_INFO, "%s: same message appears twice %u %u",
-                   mailbox_name(mailbox), prev.uid, record->uid);
+            xsyslog_ev(LOG_INFO, "mailbox.record.duplicate",
+                       lf_mailbox(mailbox),
+                       lf_u("old.msg.imapuid", prev.uid),
+                       lf_u("msg.imapuid", record->uid));
             /* but it's OK, we won't reject it */
         }
     }
@@ -4632,16 +4638,18 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
 
         int r = mailbox_get_annotate_state(mailbox, record->uid, NULL);
         if (r) {
-            xsyslog(LOG_ERR, "IOERROR: failed to open annotations",
-                             "mailbox=<%s> record=<%u> error=<%s>",
-                             mailbox_name(mailbox), record->uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "mailbox.annotations.cleanup.failed",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", record->uid),
+                       lf_err("error", r));
         }
 
         r = annotate_msg_cleanup(mailbox, record->uid);
         if (r) {
-            xsyslog(LOG_ERR, "IOERROR: failed to cleanup annotations",
-                             "mailbox=<%s> record=<%u> error=<%s>",
-                             mailbox_name(mailbox), record->uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "mailbox.annotations.cleanup.failed",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", record->uid),
+                       lf_err("error", r));
         }
 
         return;
@@ -4669,7 +4677,8 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
 /* need a mailbox exclusive lock, we're removing files */
 static int mailbox_index_unlink(struct mailbox *mailbox)
 {
-    syslog(LOG_INFO, "Unlinking files in mailbox %s", mailbox_name(mailbox));
+    xsyslog_ev(LOG_INFO, "mailbox.unlink.started",
+               lf_mailbox(mailbox));
 
     /* NOTE: this gets called for two different cases:
      * 1) file is actually ready for unlinking (immediate expunge or

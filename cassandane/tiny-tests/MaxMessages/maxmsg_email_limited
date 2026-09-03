@@ -27,7 +27,7 @@ sub test_maxmsg_email_limited
 
     # should have syslogged about it too
     $self->assert_syslog_matches($self->{instance},
-                                 qr{client hit per-mailbox exists limit});
+                                 qr{event=mailbox\.exists\.limit_reached.*mbox\.limit=mailbox});
 
     # should be able to upload lots of contacts
     my $carddav = $self->{carddav};
