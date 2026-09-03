@@ -46,7 +46,7 @@ sub test_emailsubmission_set_unopenable_submbox
     $self->assert_num_equals(1, rename("$dir/index.hidden", "$dir/cyrus.index"));
 
     $self->assert_syslog_matches($self->{instance},
-                                 qr/IOERROR: opening index failed/);
+                                 qr/event=mailbox\.index\.open\.failed/);
 
     xlog $self, "the failure is reported, rather than aborting httpd";
     $self->assert_str_equals('', "$error");

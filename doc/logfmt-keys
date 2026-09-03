@@ -46,7 +46,7 @@ mbox.crcs.basic         basic sync CRC
 mbox.crcs.header        the CRC of the cyrus.header file as read
 mbox.deletedmodseq      highest modseq of a deletion in this mailbox
 mbox.expunged           how many messages an expunge removed
-mbox.field              which header field reconstruct corrected
+mbox.field              which field or annotation reconstruct corrected
 mbox.foldermodseq       the mailbox's folder modseq
 mbox.generation         the generation the mailbox index expects of its cache
 mbox.highestmodseq      the mailbox's highest modseq
@@ -64,6 +64,7 @@ mbox.repack.recalc_nanosec  a repack that recalculates nanosecond internaldates
 mbox.type               the mailbox type, as a string
 mbox.uidvalidity        the mailbox's uidvalidity
 mbox.uniqueid           the mailbox's uniqueid
+mbox.userflag           the user flag slot number within the mailbox header
 mbox.value              the value of the field named by mbox.field, after the change
 mbox.version            the mailbox index format version
 

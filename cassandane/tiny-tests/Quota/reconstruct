@@ -120,5 +120,5 @@ sub test_reconstruct ($self)
 
     # We should have generated a SYNCERROR or two
     $self->assert_syslog_matches($self->{instance},
-                                 qr/IOERROR: opening index/);
+                                 qr/event=mailbox\.index\.open\.failed/);
 }
