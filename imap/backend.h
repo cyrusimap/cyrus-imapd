@@ -30,7 +30,7 @@ struct backend {
     /* service-specific context */
     void *context;
 
-    /* only used by imapd and nntpd */
+    /* only used by imapd */
     struct protstream *clientin; /* input stream from client to proxy */
     struct backend **current, **inbox; /* pointers to current/inbox be ptrs */
     struct prot_waitevent *timeout; /* event for idle timeout */
