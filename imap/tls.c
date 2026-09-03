@@ -654,6 +654,44 @@ done:
     return r;
 }
 
+/* Install (or, if alpn_map is empty/NULL, clear) the server-side ALPN
+ * selection callback on ctx. */
+EXPORTED void tls_set_alpn_map(SSL_CTX *ctx, const struct tls_alpn_t *alpn_map)
+{
+    if (alpn_map && alpn_map->id[0])
+        SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, (void *) alpn_map);
+    else
+        SSL_CTX_set_alpn_select_cb(ctx, NULL, NULL);
+}
+
+/* tls_init_serverengine*() helper function */
+static SSL_CTX *tls_new_serverctx(const char *tag)
+{
+    SSL_CTX *ctx;
+    const char *ec;
+    int openssl_nid;
+
+    SSL_library_init();
+    SSL_load_error_strings();
+    if (tls_rand_init() == -1) {
+        xsyslog_ev(LOG_ERR, "tls.server.prng_seed_failed",
+                   lf_s("tls.engine", tag));
+        return NULL;
+    }
+
+    ctx = SSL_CTX_new(TLS_server_method());
+    if (!ctx) return NULL;
+
+    SSL_CTX_set_info_callback(ctx, apps_ssl_info_callback);
+    SSL_CTX_set_tlsext_servername_callback(ctx, servername_callback);
+
+    ec = config_getstring(IMAPOPT_TLS_ECCURVE);
+    openssl_nid = OBJ_sn2nid(ec);
+    if (openssl_nid != 0) SSL_CTX_set1_curves(ctx, &openssl_nid, 1);
+
+    return ctx;
+}
+
  /*
   * This is the setup routine for the SSL server. As smtpd might be called
   * more than once, we only want to do the initialization one time.
@@ -665,10 +703,8 @@ done:
 
 /* must be called after cyrus_init */
 // I am the server
-EXPORTED int     tls_init_serverengine(const char *ident,
-                              int verifydepth,
-                              int askcert,
-                              SSL_CTX **ret)
+EXPORTED int tls_init_serverengine(const char *ident, int verifydepth,
+                                   int askcert, SSL_CTX **ret)
 {
     int     off = 0;
     int     verify_flags = SSL_VERIFY_NONE;
@@ -699,18 +735,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     if (var_imapd_tls_loglevel >= 2)
         syslog(LOG_DEBUG, "starting TLS server engine");
 
-    SSL_library_init();
-    SSL_load_error_strings();
-    if (tls_rand_init() == -1) {
-        syslog(LOG_ERR,"TLS server engine: cannot seed PRNG");
-        return -1;
-    }
-
-    s_ctx = SSL_CTX_new(TLS_server_method());
-
-    if (s_ctx == NULL) {
-        return (-1);
-    };
+    s_ctx = tls_new_serverctx("TLS server engine");
+    if (!s_ctx) return -1;
 
     off |= SSL_OP_ALL;            /* Work around all known bugs */
     off |= SSL_OP_NO_SSLv2;       /* Disable insecure SSLv2 */
@@ -744,7 +770,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         off |= SSL_OP_CIPHER_SERVER_PREFERENCE;
 
     SSL_CTX_set_options(s_ctx, off);
-    SSL_CTX_set_info_callback(s_ctx, apps_ssl_info_callback);
 
     cipher_list = config_getstring(IMAPOPT_TLS_CIPHERS);
     if (!SSL_CTX_set_cipher_list(s_ctx, cipher_list)) {
@@ -867,12 +892,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     SSL_CTX_set_dh_auto(s_ctx, 1);
 
-    const char *ec = config_getstring(IMAPOPT_TLS_ECCURVE);
-    int openssl_nid = OBJ_sn2nid(ec);
-    if (openssl_nid != 0) {
-        SSL_CTX_set1_curves(s_ctx, &openssl_nid, 1);
-    }
-
     verify_depth = verifydepth;
 
     if (!use_client_certs) {
@@ -931,8 +950,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     SSL_CTX_set_verify(s_ctx, verify_flags, verify_callback);
 
-    SSL_CTX_set_tlsext_servername_callback(s_ctx, servername_callback);
-
     /* Don't use an internal session cache */
     SSL_CTX_sess_set_cache_size(s_ctx, 1);  /* 0 is unlimited, so use 1 */
     SSL_CTX_set_session_cache_mode(s_ctx, SSL_SESS_CACHE_SERVER |
@@ -985,6 +1002,68 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     return (0);
 }
+
+
+/* QUIC-specific server engine */
+#ifdef HAVE_NGTCP2
+#include <ngtcp2/ngtcp2_crypto_ossl.h>
+
+EXPORTED int tls_init_serverengine_quic(SSL_CTX **ret)
+{
+    static SSL_CTX *s_ctx_quic = NULL;
+    const char *server_cert_file;
+    const char *server_key_file;
+
+    if (s_ctx_quic) {
+        if (ret) *ret = s_ctx_quic;
+        return 0;                              /* already running */
+    }
+
+    /* Self-contained: tls_new_serverctx() does its own OpenSSL
+     * library-wide init rather than requiring tls_init_serverengine()
+     * to have run first (a QUIC-only worker never calls that). Redoing
+     * it here if tls_init_serverengine() *did* also run is harmless --
+     * these calls are idempotent. */
+    s_ctx_quic = tls_new_serverctx("TLS QUIC server engine");
+    if (!s_ctx_quic) return -1;
+
+    /* Needs OpenSSL's library-wide init (just done above), but not
+     * tied to any particular SSL_CTX. */
+    if (ngtcp2_crypto_ossl_init()) {
+        xsyslog_ev(LOG_ERR, "tls.quic.ossl_init_failed");
+        SSL_CTX_free(s_ctx_quic);
+        s_ctx_quic = NULL;
+        return -1;
+    }
+
+    /* QUIC mandates TLS 1.3 */
+    SSL_CTX_set_min_proto_version(s_ctx_quic, TLS1_3_VERSION);
+    SSL_CTX_set_max_proto_version(s_ctx_quic, TLS1_3_VERSION);
+    SSL_CTX_set_options(s_ctx_quic, SSL_OP_ALL | SSL_OP_NO_COMPRESSION);
+
+    server_cert_file = config_getstring(IMAPOPT_TLS_SERVER_CERT);
+    server_key_file = config_getstring(IMAPOPT_TLS_SERVER_KEY);
+    if (!set_cert_stuff(s_ctx_quic, server_cert_file, server_key_file)) {
+        xsyslog_ev(LOG_ERR, "tls.quic.cert_load_failed");
+        SSL_CTX_free(s_ctx_quic);
+        s_ctx_quic = NULL;
+        return -1;
+    }
+
+    /* Not shared with the TCP session cache/ticket infrastructure --
+     * no 0-RTT support. */
+    SSL_CTX_set_session_cache_mode(s_ctx_quic, SSL_SESS_CACHE_OFF);
+
+    if (ret) *ret = s_ctx_quic;
+    return 0;
+}
+#else
+
+EXPORTED int tls_init_serverengine_quic(SSL_CTX **ret __attribute__((unused)))
+{
+    return -1;
+}
+#endif /* HAVE_NGTCP2 */
 
 
 /* taken from OpenSSL apps/s_cb.c */
@@ -1051,10 +1130,7 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
 
     saslprops_reset(saslprops);
 
-    if (alpn_map && alpn_map->id[0])
-        SSL_CTX_set_alpn_select_cb(s_ctx, alpn_select_cb, (void *) alpn_map);
-    else
-        SSL_CTX_set_alpn_select_cb(s_ctx, NULL, NULL);
+    tls_set_alpn_map(s_ctx, alpn_map);
 
     tls_conn = (SSL *) SSL_new(s_ctx);
     if (tls_conn == NULL) {

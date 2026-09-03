@@ -108,6 +108,15 @@ lmtp.rcpt.index         which recipient of the transaction, counting from zero
 lmtp.rcpt.state         a recipient's delivery state in the proxy state machine
 lmtp.target             how the destination mailbox was chosen: default, plus-addr, ...
 pop.subfolder           the subfolder a POP session was restricted to
+quic.bpf_obj            path to the compiled cyr_quic_steer eBPF object
+quic.exec_path          the executable path a QUIC worker failed to exec
+quic.family             an address family, as a string: ipv4, ipv6 or unix
+quic.group              the local group quic_drop_privs() switched to
+quic.iface              a network interface name
+quic.port               a UDP port number
+quic.user               the local user quic_drop_privs() switched to
+quic.worker_pid         the pid of a QUIC worker process (master)
+quic.workers_needed     how many more idle QUIC workers a service needs
 quota.root              the quota root a quota applies to
 sched.addresses         the scheduling addresses considered, one per indexed subkey
 sched.userid            the userid whose scheduling addresses were used
@@ -123,12 +132,14 @@ search.op               a search operator, e.g. OR
 search.restarts         how many times indexing restarted from the first message
 search.uncommitted      how many documents were pending when a commit failed
 search.updates          how many update passes indexed nothing
+service.name            a service's name, as configured in cyrus.conf
 sieve.lineno            the line of a Sieve script an error was found on
 sieve.result            a SIEVE_* result code
 sieve.script            the name of a Sieve script
 sieve.srs.domain        the domain SRS rewrites a return path into
 sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
+tls.engine              which TLS server engine this event is about
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
 

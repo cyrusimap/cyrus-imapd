@@ -48,6 +48,11 @@ static int verbose = 0;
 static int lockfd = -1;
 static int newfile = 0;
 
+/* proto="quic" only: see service.h. Populated by quic_recv_handoff()
+ * just before service_main() runs, for imap/quic.c to read from
+ * inside it. */
+struct quic_handoff quic_handoff;
+
 void notify_master(int fd, int msg)
 {
     struct notify_message notifymsg;
@@ -57,6 +62,53 @@ void notify_master(int fd, int msg)
     if (write(fd, &notifymsg, sizeof(notifymsg)) != sizeof(notifymsg)) {
         syslog(LOG_ERR, "unable to tell master %x: %m", msg);
     }
+}
+
+/* proto="quic" only: receive one handoff message from master on
+ * fd (see service.h's QUIC_HANDOFF_FD) -- the connection's own
+ * socket via SCM_RIGHTS ancillary data, and its struct quic_handoff
+ * payload into *out. Returns the received socket fd on success, or
+ * -1 (errno set; EBADMSG for a malformed message, i.e. one master
+ * itself would never actually send) on failure. */
+static int quic_recv_handoff(int fd, struct quic_handoff *out)
+{
+    struct msghdr msg;
+    struct iovec iov;
+    union {
+        struct cmsghdr align; /* for alignment only, never referenced */
+        char buf[CMSG_SPACE(sizeof(int))];
+    } cmsgbuf;
+    struct cmsghdr *cmsg;
+    ssize_t n;
+    int sock = -1;
+
+    memset(&msg, 0, sizeof(msg));
+    iov.iov_base = out;
+    iov.iov_len = sizeof(*out);
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+    msg.msg_control = cmsgbuf.buf;
+    msg.msg_controllen = sizeof(cmsgbuf.buf);
+
+    n = recvmsg(fd, &msg, 0);
+    if (n != (ssize_t) sizeof(*out)) {
+        if (n >= 0) errno = EBADMSG;
+        return -1;
+    }
+
+    for (cmsg = CMSG_FIRSTHDR(&msg); cmsg; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+            memcpy(&sock, CMSG_DATA(cmsg), sizeof(sock));
+            break;
+        }
+    }
+
+    if (sock < 0) {
+        errno = EBADMSG;
+        return -1;
+    }
+
+    return sock;
 }
 
 #ifdef HAVE_LIBWRAP
@@ -257,6 +309,7 @@ int main(int argc, char **argv, char **envp)
     int reuse_timeout = REUSE_TIMEOUT;
     int soctype = 0;
     socklen_t typelen = sizeof(soctype);
+    int is_quic = 0;
     struct sockaddr socname;
     socklen_t addrlen = sizeof(struct sockaddr);
     int id;
@@ -351,6 +404,13 @@ int main(int argc, char **argv, char **envp)
     }
     id = atoi(p);
 
+    /* proto="quic" services don't use LISTEN_FD at all -- master
+     * hands each one exactly one connection at a time via
+     * QUIC_HANDOFF_FD (see service.h) -- see the is_quic branches
+     * below. */
+    p = getenv("CYRUS_SERVICE_PROTO");
+    is_quic = (p != NULL && !strcmp(p, "quic"));
+
     /* if timeout is enabled, pick a random timeout between reuse_timeout
      * and 2*reuse_timeout to avoid massive IO overload if the network
      * connection goes away */
@@ -390,35 +450,56 @@ int main(int argc, char **argv, char **envp)
     }
     else {
         /* set close on exec */
-        fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
-        if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD,
-                                        fdflags | FD_CLOEXEC);
-        if (fdflags == -1) {
-            syslog(LOG_ERR, "unable to set close on exec: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
-                notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-            return 1;
+        if (is_quic) {
+            /* No raw listening socket for quic workers -- each
+             * connection arrives individually via QUIC_HANDOFF_FD
+             * (see service.h), not something to accept()/recvfrom()
+             * peek on the way LISTEN_FD is below. Treat it as
+             * UDP-shaped for the soctype-gated code further down
+             * (no libwrap/keepalive concept applies to it either). */
+            fdflags = fcntl(QUIC_HANDOFF_FD, F_GETFD, 0);
+            if (fdflags != -1) fdflags = fcntl(QUIC_HANDOFF_FD, F_SETFD,
+                                            fdflags | FD_CLOEXEC);
+            if (fdflags == -1) {
+                xsyslog_ev(LOG_ERR, "service.quic_handoff.cloexec_failed");
+                if (MESSAGE_MASTER_ON_EXIT)
+                    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                return 1;
+            }
+            soctype = SOCK_DGRAM;
         }
+        else {
+            fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
+            if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD,
+                                            fdflags | FD_CLOEXEC);
+            if (fdflags == -1) {
+                xsyslog_ev(LOG_ERR, "service.listen.cloexec_failed");
+                if (MESSAGE_MASTER_ON_EXIT)
+                    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                return 1;
+            }
+
+            /* figure out what sort of socket this is */
+            if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
+                        (char *) &soctype, &typelen) < 0) {
+                xsyslog_ev(LOG_ERR, "service.listen.socktype_failed");
+                if (MESSAGE_MASTER_ON_EXIT)
+                    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                return 1;
+            }
+            if (getsockname(LISTEN_FD, &socname, &addrlen) < 0) {
+                xsyslog_ev(LOG_ERR, "service.listen.sockname_failed");
+                if (MESSAGE_MASTER_ON_EXIT)
+                    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                return 1;
+            }
+        }
+
         fdflags = fcntl(STATUS_FD, F_GETFD, 0);
         if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD,
                                         fdflags | FD_CLOEXEC);
         if (fdflags == -1) {
             syslog(LOG_ERR, "unable to set close on exec: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
-                notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-            return 1;
-        }
-
-        /* figure out what sort of socket this is */
-        if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
-                    (char *) &soctype, &typelen) < 0) {
-            syslog(LOG_ERR, "getsockopt: SOL_SOCKET: failed to get type: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
-                notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-            return 1;
-        }
-        if (getsockname(LISTEN_FD, &socname, &addrlen) < 0) {
-            syslog(LOG_ERR, "getsockname: failed: %m");
             if (MESSAGE_MASTER_ON_EXIT)
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
             return 1;
@@ -461,8 +542,24 @@ int main(int argc, char **argv, char **envp)
             alarm(reuse_timeout);
         }
 
-        /* lock */
-        lockaccept();
+        if (is_quic) {
+            /* Every trip through this loop (fresh prefork, or just
+             * finished a connection) is about to block waiting on
+             * QUIC_HANDOFF_FD -- tell master so it can add us to the
+             * idle pool. Unlike TCP/UDP, quic workers get no
+             * optimistic ready_workers++ at fork time (see
+             * quic_dispatch_connection() for why), so without this a
+             * prefork'd worker would sit here forever, alive but
+             * invisible to dispatch. */
+            notify_master(STATUS_FD, MASTER_SERVICE_QUIC_IDLE);
+        }
+        else {
+            /* lock -- pointless for quic: QUIC_HANDOFF_FD is private
+             * to this one worker, so there's no shared accept() race
+             * with sibling workers to serialize against the way there
+             * is for a shared LISTEN_FD. */
+            lockaccept();
+        }
 
         fd = -1;
         while (fd < 0 && !signals_poll()) { /* loop until we succeed */
@@ -482,7 +579,31 @@ int main(int argc, char **argv, char **envp)
                 break;
             }
 
-            if (soctype == SOCK_STREAM) {
+            if (is_quic) {
+                /* Wait signal-safely, same rationale as the SOCK_STREAM
+                 * and udp cases below. */
+                if (safe_wait_readable(QUIC_HANDOFF_FD) < 0)
+                    continue;
+                fd = quic_recv_handoff(QUIC_HANDOFF_FD, &quic_handoff);
+                if (fd < 0) {
+                    switch (errno) {
+                    case EINTR:
+                        signals_poll();
+                        GCC_FALLTHROUGH
+                    case EAGAIN:
+                        break;
+
+                    default:
+                        xsyslog_ev(LOG_ERR,
+                                  "service.quic_handoff.recv_failed");
+                        if (MESSAGE_MASTER_ON_EXIT)
+                            notify_master(STATUS_FD,
+                                         MASTER_SERVICE_UNAVAILABLE);
+                        service_abort(EX_OSERR);
+                    }
+                }
+            }
+            else if (soctype == SOCK_STREAM) {
                 /* Wait for the file descriptor to be connected to, in a
                  * signal-safe manner.  This ensures the accept() does
                  * not block and we don't need to make it signal-safe.  */
@@ -544,7 +665,7 @@ int main(int argc, char **argv, char **envp)
         }
 
         /* unlock */
-        unlockaccept();
+        if (!is_quic) unlockaccept();
 
         if (fd < 0 && (signals_poll() || newfile)) {
             /* timed out (SIGALRM), SIGHUP, or new process file */
@@ -596,22 +717,35 @@ int main(int argc, char **argv, char **envp)
         }
 #endif
 
-        /* tcp only */
-        if(soctype == SOCK_STREAM) {
+        /* tcp only, plus quic (its received fd is a plain socket, not
+         * something aliased onto a well-known fd number the way
+         * LISTEN_FD is) -- closing our extra reference to it here
+         * matters more now that a worker may live to receive many
+         * connections, not just one. */
+        if (soctype == SOCK_STREAM || is_quic) {
             if (fd > STDERR_FILENO) close(fd);
         }
 
         notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);
         use_count++;
         service_main(service_argv.count, service_argv.data, envp);
-        /* if we returned, we can service another client with this process */
-
+        /* Returning here just means this one QUIC connection ended,
+         * not that the process is used up -- looping back to wait on
+         * QUIC_HANDOFF_FD again is the same shape as accept()ing again
+         * below for TCP, including reuse_timeout/max_use via the same
+         * signals_poll()/use_count check. */
         if (signals_poll() || use_count >= max_use) {
             /* caught SIGHUP or exceeded max use count */
             break;
         }
 
-        notify_master(STATUS_FD, MASTER_SERVICE_AVAILABLE);
+        /* quic's equivalent (MASTER_SERVICE_QUIC_IDLE) is sent at the
+         * top of the loop instead, right before we'd otherwise wait
+         * on QUIC_HANDOFF_FD -- see the comment there for why it
+         * can't wait until after service_main() the way this one
+         * does (a prefork'd worker's very first iteration never gets
+         * here at all until it's already served a connection). */
+        if (!is_quic) notify_master(STATUS_FD, MASTER_SERVICE_AVAILABLE);
     }
 
     service_abort(0);

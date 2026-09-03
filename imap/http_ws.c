@@ -708,7 +708,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
         resp_code = HTTP_SWITCH_PROT;
     }
     else {
-        /* HTTP/2 - Treat WS data as chunked response */
+        /* HTTP/2+ - Treat WS data as a chunked response */
         txn->flags.te = TE_CHUNKED;
 
         resp_code = HTTP_OK;

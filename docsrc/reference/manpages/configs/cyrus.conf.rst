@@ -151,7 +151,7 @@ on certain Internet/UNIX sockets.
 ..
 
     The protocol used for this service (*tcp*, *tcp4*, *tcp6*,
-    *udp*, *udp4*, *udp6*).  This string argument is optional.
+    *udp*, *udp4*, *udp6*, *quic*).  This string argument is optional.
 
     **tcp4**, **udp4**: These arguments are used to bind the
     service to IPv4 only.
@@ -161,6 +161,10 @@ on certain Internet/UNIX sockets.
 
     **tcp**, **udp**: These arguments are used to bind to both IPv4
     and IPv6 if possible.
+
+    **quic**: Like **udp**, but with special connection dispatch handling
+    so that workers serve one QUIC connection at a time.
+    This argument is used to bind to both IPv4 and IPv6 if possible.
 
 .. parsed-literal::
 

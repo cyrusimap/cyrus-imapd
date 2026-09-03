@@ -1,0 +1,25 @@
+Name: quic_ebpf_iface
+Type: STRING
+Default-Value: NULL
+Last-Modified: UNRELEASED
+
+Whitespace-separated list of network interfaces to attach the QUIC
+eBPF connection-ID steering program to (e.g. "eth0 wlan0"). Only
+consulted when a proto="quic" service is configured in cyrus.conf, and
+only when this build was compiled with eBPF support and
+:option:`quic_ebpf` hasn't disabled it; ignored otherwise.
+
+If unset (the default), the program is instead attached to every
+network interface this host currently has, discovered automatically
+at startup -- an interface that fails to attach (unusual/virtual,
+down, ...) is logged and skipped rather than treated as fatal. Set
+this explicitly to attach to only a specific subset of interfaces
+instead; in that case every named interface must attach successfully,
+or master fails to start, since a typo or a genuinely broken interface
+here should be loud immediately rather than silently leaving HTTP/3
+unreachable on just that one network.
+
+See master/quic/quic_ebpf.c for what this program does and why it's
+needed: it lets each QUIC connection be dispatched to its own worker
+process, the same way TCP's accept() does, despite QUIC having no
+equivalent of accept() at the socket layer.

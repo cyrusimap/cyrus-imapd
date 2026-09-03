@@ -272,7 +272,7 @@ struct resp_body_t {
 
 /* Transaction flags */
 struct txn_flags_t {
-    unsigned long ver      : 2;         /* HTTP version of request */
+    unsigned long ver      : 3;         /* HTTP version of request */
     unsigned long conn     : 3;         /* Connection opts on req/resp */
     unsigned long upgrade  : 3;         /* Upgrade protocols */
     unsigned long override : 1;         /* HTTP method override */
@@ -384,6 +384,7 @@ enum {
     VER_1_0 =           1,
     VER_1_1 =           2,
     VER_2 =             3,
+    VER_3 =             4,
 };
 
 /* Connection token flags */
@@ -521,6 +522,13 @@ extern ptrarray_t backend_cached;
 extern struct protstream *httpd_in;
 extern int https;
 extern sasl_conn_t *httpd_saslconn;
+extern struct saslprops_t saslprops;    /* see http_h3.c's handshake_completed
+                                           callback, which -- unlike HTTP/1.x's
+                                           starttls() and HTTP/2's ALPN
+                                           negotiation, both handled entirely
+                                           within httpd.c -- sets saslprops.ssf
+                                           itself once QUIC's TLS handshake
+                                           finishes, asynchronously */
 extern int httpd_timeout;
 extern int httpd_userisadmin;
 extern int httpd_userisproxyadmin;
