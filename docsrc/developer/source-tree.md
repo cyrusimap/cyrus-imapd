@@ -67,7 +67,6 @@ all — can link the least code that will do the job. Adding a dependency to
 - **`doc/`** — Documentation that isn't part of the Sphinx site: most of this
   stuff is cruft in need of refiling, but there's also sample `imapd.conf` and
   `cyrus.conf` files under `doc/examples/`. The built HTML and plain-text
-  output lands here too, and is generated rather than tracked.
 - **`changes/`** — Release-note entries. A change that anyone outside the
   repository could notice needs a file in `changes/next/`; see {ref}`the
   development process <devprocess>`.

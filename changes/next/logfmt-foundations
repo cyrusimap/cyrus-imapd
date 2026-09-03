@@ -28,7 +28,7 @@ renamed to conform to it.  These events changed name and field names:
 
 Documentation:
 
-doc/README.logfmt.md
+docsrc/developer/logfmt.md
 doc/logfmt-keys
 
 

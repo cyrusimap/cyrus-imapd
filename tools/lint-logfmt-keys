@@ -3,7 +3,7 @@
 # lint-logfmt-keys - check logfmt keys in the source against doc/logfmt-keys
 #
 # Every logfmt key used in the source must be registered in doc/logfmt-keys.
-# See doc/README.logfmt.md for why.
+# See docsrc/developer/logfmt.md for why.
 #
 # Usage: tools/lint-logfmt-keys [--list-unused] [srcdir]
 #
@@ -22,7 +22,7 @@ my $srcdir = shift // '.';
 
 my $registry = "$srcdir/doc/logfmt-keys";
 
-# A key is lowercase dotted segments.  This is the syntax doc/README.logfmt.md
+# A key is lowercase dotted segments.  This is the syntax docsrc/developer/logfmt.md
 # describes; keeping it mechanical stops "mbox.mailboxID" ever happening.
 my $key_re = qr/[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*/;
 
@@ -144,7 +144,7 @@ if (@problems) {
     print STDERR "$_\n" for @problems;
     print STDERR "\n";
     print STDERR "Every logfmt key must be registered in doc/logfmt-keys.\n";
-    print STDERR "See doc/README.logfmt.md for the naming rules.\n";
+    print STDERR "See docsrc/developer/logfmt.md for the naming rules.\n";
     exit 1;
 }
 

@@ -440,7 +440,7 @@ static inline int logfmt_want(int priority)
     return setlogmask(0) & LOG_MASK(LOG_PRI(priority));
 }
 
-/* Log a structured event.  See doc/README.logfmt.md.
+/* Log a structured event.  See docsrc/developer/logfmt.md.
  *
  * Arguments are built with the lf_*() macros below, e.g.
  *

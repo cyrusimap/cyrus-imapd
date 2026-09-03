@@ -755,7 +755,7 @@ check-discrete-%: cunit/run cunit/unit
 endif # CUNIT
 
 # Check that every logfmt key used in the source is registered in
-# doc/logfmt-keys.  See doc/README.logfmt.md.
+# doc/logfmt-keys.  See docsrc/developer/logfmt.md.
 #
 # n.b. neither the target nor the script is named check-something.  The
 # check-% pattern rule above matches after the directory part is stripped,

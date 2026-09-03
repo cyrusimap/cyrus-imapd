@@ -43,7 +43,8 @@ can skip straight over it.
   truncating.** Avoid `strncpy`: it's slower than `memcpy` and less safe than
   `strlcpy`, and its behaviour surprises people.
 - **Log with `xsyslog_ev()`**, not `syslog()`. Structured logging has its own
-  rulebook in `doc/README.logfmt.md`, and the key vocabulary is enforced by a
+  rulebook in {ref}`the logfmt page <developer-logfmt>`, and the key
+  vocabulary is enforced by a
   lint at build time.
 
 Two automated checks reject source on grounds of what it contains rather than

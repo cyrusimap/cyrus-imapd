@@ -29,6 +29,7 @@ Contributing
     :maxdepth: 1
 
     C style <c-style>
+    Structured logging <logfmt>
     Contributing to the documentation <documentation>
     The CUnit (C) test suite <cunit>
     The Cassandane (Perl) test suite <cassandane>

@@ -80,7 +80,7 @@ wrong:
   on the reference image.  C++ is C++17.
 - Declare a variable in the innermost scope that needs it, e.g. `for (size_t i
   = 0;`.
-- Log with `xsyslog_ev`, never `syslog`.  See doc/README.logfmt.md.
+- Log with `xsyslog_ev`, never `syslog`.  See docsrc/developer/logfmt.md.
 
 When you write Perl code in this project then the following general rules
 apply:
@@ -182,7 +182,8 @@ names every page in it by path.  Beyond the pages already cited above:
 - `lib/imapoptions/README.md` -- the format of an imapd.conf option definition
 - `changes/next/0000-TEMPLATE` -- the release-note entry a user-visible change
   needs, and the fields it has to fill in
-- `doc/README.logfmt.md` -- the rulebook for structured logging
+- `docsrc/developer/logfmt.md` -- the rulebook for structured logging, and
+  `doc/logfmt-keys`, the key vocabulary it enforces
 
 The pages in docsrc/developer/thoughts and the cyrusdb pages under
 docsrc/developer/API are often dated (bordering on abandoned).  Where they and
