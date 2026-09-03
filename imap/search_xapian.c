@@ -2447,7 +2447,9 @@ static int commit_transaction(xapian_update_receiver_t *tr)
 static int update_indexeddb(xapian_update_receiver_t *tr)
 {
     if (tr->commit_failed) {
-        xsyslog_ev(LOG_ERR, "search.index.state.skipped",
+        /* the commit itself already logged search.xapian.transaction.failed;
+         * this is that failure's consequence, not a second one */
+        xsyslog_ev(LOG_WARNING, "search.index.state.skipped",
                 lf_mailbox(tr->super.mailbox));
         return IMAP_IOERROR;
     }
