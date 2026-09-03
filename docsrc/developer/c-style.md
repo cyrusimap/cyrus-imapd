@@ -42,6 +42,11 @@ can skip straight over it.
 - **`strlcpy` when you know the buffer size, `memcpy` when you're deliberately
   truncating.** Avoid `strncpy`: it's slower than `memcpy` and less safe than
   `strlcpy`, and its behaviour surprises people.
+- **Map files with `map_refresh()` and `map_free()`** from `lib/map.h`, rather
+  than `read()` and `lseek()`: it's our portable wrapper around `mmap()`, and
+  reading a file this way is usually much faster. The maps are read-only, so
+  write through ordinary file i/o — but open the descriptor `O_RDWR` anyway,
+  because some platforms require that of anything they'll `mmap()`.
 - **Log with `xsyslog_ev()`**, not `syslog()`. Structured logging has its own
   rulebook in {ref}`the logfmt page <developer-logfmt>`, and the key
   vocabulary is enforced by a
