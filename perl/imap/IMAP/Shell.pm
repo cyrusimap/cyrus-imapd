@@ -93,7 +93,7 @@ my %builtins = (exit =>
                   [\&_sc_info, '[mailbox]',
                    'display mailbox/server annotations'],
                 mboxcfg =>
-                  [\&_sc_mboxcfg, '[--private] mailbox [comment|expire|news2mail|sieve|squat|/<explicit annotation>] value',
+                  [\&_sc_mboxcfg, '[--private] mailbox [comment|expire|sieve|squat|/<explicit annotation>] value',
                    'configure mailbox'],
                 mboxconfig => 'mboxcfg',
                 reconstruct =>
@@ -113,7 +113,7 @@ my %builtins = (exit =>
                   [\&_sc_setinfo, '[motd|comment|admin|shutdown|expire|squat] text',
                    'set server metadata'],
                 setmetadata =>
-                  [\&_sc_setmetadata, '[--private] mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit annotation>] value',
+                  [\&_sc_setmetadata, '[--private] mailbox [comment|expire|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit annotation>] value',
                    'set metadata to mailbox'],
                 setmd => 'setmetadata',
                 setquota =>
@@ -1434,8 +1434,6 @@ sub _sc_getmetadata {
        push(@nargv, '/private/comment');
     } elsif ($opt eq 'expire') {
        push(@nargv, '/shared/vendor/cmu/cyrus-imapd/expire');
-    } elsif ($opt eq 'news2mail') {
-       push(@nargv, '/shared/vendor/cmu/cyrus-imapd/news2mail');
     } elsif ($opt eq 'pop3showafter') {
        push(@nargv, '/shared/vendor/cmu/cyrus-imapd/pop3showafter');
     } elsif ($opt eq 'sharedseen') {
@@ -1492,7 +1490,7 @@ sub _sc_setmetadata {
     if ($opt ne '' && '-private' =~ /^\Q$opt/ || $opt eq '--private') {
       $private = 1;
     } elsif ($opt =~ /^-/) {
-      die "usage: setmetadata [--private] mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit metadata>] value\n";
+      die "usage: setmetadata [--private] mailbox [comment|expire|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit metadata>] value\n";
     }
     else {
       push(@nargv, $opt);
@@ -1501,7 +1499,7 @@ sub _sc_setmetadata {
   }
   push(@nargv, @argv);
   if (@nargv < 2) {
-    die "usage: setmetadata [--private] mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit metadata>] value\n";
+    die "usage: setmetadata [--private] mailbox [comment|expire|pop3showafter|sharedseen|sieve|specialuse|squat|/<explicit metadata>] value\n";
   }
   if (defined ($private)) {
     push(@nargv, $private);
@@ -1576,7 +1574,7 @@ sub _sc_mboxcfg {
     if ($opt ne '' && '-private' =~ /^\Q$opt/ || $opt eq '--private') {
       $private = 1;
     } elsif ($opt =~ /^-/) {
-      die "usage: mboxconfig [--private] mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|squat|/<explicit annotation>] value\n";
+      die "usage: mboxconfig [--private] mailbox [comment|expire|pop3showafter|sharedseen|sieve|squat|/<explicit annotation>] value\n";
     }
     else {
       push(@nargv, $opt);
@@ -1585,7 +1583,7 @@ sub _sc_mboxcfg {
   }
   push(@nargv, @argv);
   if (@nargv < 2) {
-    die "usage: mboxconfig [--private] mailbox [comment|expire|news2mail|pop3showafter|sharedseen|sieve|squat|/<explicit annotation>] value\n";
+    die "usage: mboxconfig [--private] mailbox [comment|expire|pop3showafter|sharedseen|sieve|squat|/<explicit annotation>] value\n";
   }
   if (defined ($private)) {
     push(@nargv, $private);
@@ -1973,11 +1971,6 @@ Sets a comment or description associated with the mailbox.
 
 Sets the number of days after which messages will be expired from the mailbox.
 
-=item C<news2mail> I<address>
-
-Sets an email address to which messages injected into the server via NNTP
-will be sent.
-
 =item C<pop3showafter> I<time>
 
 Sets a time (in RFC3501 format, for example "6-Jan-2011 11:45:32 +1100")
@@ -2156,7 +2149,7 @@ them (unless overridden by a mailbox annotation).
 B<setmetadata> [--private] mailbox [I<annotation>] I<value>
 
 Set metadata on mailbox, where I<annotation> is one of
-[comment|expire|news2mail|pop3showafter|sharedseen|sieve|specialuse|
+[comment|expire|pop3showafter|sharedseen|sieve|specialuse|
 squat|/<explicit annotation>].
 
 Note that I<value> with a leading backslash must be escaped with an

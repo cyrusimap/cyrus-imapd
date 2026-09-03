@@ -14,7 +14,6 @@ sub test_private ($self)
     my %specific_entries = (
             '/private/vendor/cmu/cyrus-imapd/squat' => undef,
             '/private/vendor/cmu/cyrus-imapd/sieve' => undef,
-            '/private/vendor/cmu/cyrus-imapd/news2mail' => undef,
             '/private/vendor/cmu/cyrus-imapd/expire' => undef,
             '/private/thread' => undef,
             '/private/sort' => undef,

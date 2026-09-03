@@ -792,7 +792,6 @@ sub mboxconfig {
 
   my %values = ( "comment" => "/comment",
                  "expire" => "/vendor/cmu/cyrus-imapd/expire",
-                 "news2mail" => "/vendor/cmu/cyrus-imapd/news2mail",
                  "sharedseen" => "/vendor/cmu/cyrus-imapd/sharedseen",
                  "sieve" => "/vendor/cmu/cyrus-imapd/sieve",
                  "squat" => "/vendor/cmu/cyrus-imapd/squat",
@@ -1052,7 +1051,6 @@ sub setmetadata {
 
   my %values = ( "comment" => "/private/comment",
                  "expire" => "/shared/vendor/cmu/cyrus-imapd/expire",
-                 "news2mail" => "/shared/vendor/cmu/cyrus-imapd/news2mail",
                  "sharedseen" => "/shared/vendor/cmu/cyrus-imapd/sharedseen",
                  "sieve" => "/shared/vendor/cmu/cyrus-imapd/sieve",
                  "specialuse" => "/private/specialuse",

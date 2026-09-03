@@ -2316,16 +2316,6 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         NULL,
         NULL
     },{
-        IMAP_ANNOT_NS "news2mail",
-        ATTRIB_TYPE_STRING,
-        BACKEND_ONLY,
-        ATTRIB_VALUE_SHARED,
-        ACL_ADMIN,
-        annotation_get_fromdb,
-        annotation_set_todb,
-        NULL,
-        NULL
-    },{
         IMAP_ANNOT_NS "noexpire_until",
         ATTRIB_TYPE_UINT,
         BACKEND_ONLY,

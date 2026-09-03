@@ -58,9 +58,6 @@ Cyrus annotations are based on :rfc:`5464`.
   was appended
   (:ref:`imap-developer-guidance-mailbox-format`)
 
-* **/vendor/cmu/cyrus-imapd/news2mail** - Sets an email address to which
-  messages injected into the server via NNTP will be sent. (cyradm(8))
-
 * **/vendor/cmu/cyrus-imapd/partition** - Undocumented.
 
 * **/vendor/cmu/cyrus-imapd/pop3newuidl** - Flag signalling that we're using
