@@ -12,7 +12,7 @@ package names (we assume you know how to drive its package manager).
 This page is about building Cyrus from source -- typically from a release
 tarball -- in order to *run* it.  If you want to *develop* Cyrus, don't build it
 by hand: use the container-based workflow in the :ref:`developer quickstart
-<developer-quickstart>`, which installs every dependency and builds and tests
+<developer-hacking>`, which installs every dependency and builds and tests
 Cyrus for you.
 
 First make sure you have a :ref:`copy of the source <getcyrus>`. You can either
@@ -92,7 +92,7 @@ matching features with the configure options noted below.
     the man pages, or rebuilding this documentation all need extra tooling
     (autotools in maintainer mode, Sphinx, and so on).  Rather than chase those
     by hand, use the container-based :ref:`developer workflow
-    <developer-quickstart>`, which has all of it pre-installed.
+    <developer-hacking>`, which has all of it pre-installed.
 
 SASL Authentication
 ###################

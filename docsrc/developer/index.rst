@@ -18,8 +18,9 @@ Getting Started
     :maxdepth: 1
 
     process
-    quickstart
+    hacking
     overview
+    The source tree <source-tree>
 
 Contributing
 ============
@@ -27,6 +28,8 @@ Contributing
 .. toctree::
     :maxdepth: 1
 
+    C style <c-style>
+    Structured logging <logfmt>
     Contributing to the documentation <documentation>
     The CUnit (C) test suite <cunit>
     The Cassandane (Perl) test suite <cassandane>

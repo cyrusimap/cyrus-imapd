@@ -8,13 +8,43 @@ Overview
 ========
 
 The best way to test changes to our documentation is to use the :ref:`dar
-makedocs <cyd-and-dar>` command from your local git clone.
+makedocs <cyd-and-dar>` command from your local git clone.  That build is
+nitpicky and treats warnings as errors, exactly as CI does, so a
+cross-reference to a target that doesn't exist fails the build instead of being
+quietly rendered as plain text.  If ``dar makedocs`` is clean, CI will be too.
 
 The best way to submit changes to our documentation is via a GitHub pull
 request.
 
-Our documentation source uses `Sphinx <https://sphinx-doc.org>`_ and
-`Restructured Text <https://docutils.sourceforge.net/rst.html>`_.
+Source formats
+--------------
+
+Our documentation is built with `Sphinx <https://sphinx-doc.org>`_.  Pages may
+be written either in `reStructuredText
+<https://docutils.sourceforge.net/rst.html>`_ or in Markdown, which is parsed
+by `MyST <https://myst-parser.readthedocs.io/>`_.  Most existing pages are
+reST, for historical reasons; for a *new* page, prefer Markdown.
+
+Of the MyST extensions, only ``substitution`` is enabled, so a Markdown page
+can use the replacement tags described below but not all the rest of MyST
+syntax.  The Cyrus-specific roles are reST roles: in Markdown you write them
+with MyST's role syntax rather than the reST backtick form.
+
+Generated pages
+---------------
+
+Some pages in ``docsrc`` don't exist until you build.  They're gitignored build
+artifacts.  When you're editing the docs, make sure you're editing a tracked
+file, or you might later realize that your work was pointless.
+
+Most notably:
+
+``developer/cassandane-api/``
+    One page per Cassandane module with embedded Pod, plus the listing that
+    :ref:`the Cassandane page <developer-cassandane>` includes.  The module
+    list is discovered at build time -- every module with an ``=head`` line is
+    published -- so adding Pod to a Cassandane module is all it takes to get
+    it onto the site.
 
 Special Tags
 ============

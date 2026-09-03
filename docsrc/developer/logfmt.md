@@ -1,3 +1,5 @@
+(developer-logfmt)=
+
 # Structured logging with logfmt
 
 Cyrus is converting its syslogging from prose to
@@ -7,7 +9,7 @@ logs can be parsed reliably instead of scraped with regular expressions.
 This document is the rulebook for that conversion.  It covers how to emit an
 event, how to name it, and how to name and format its fields.  The vocabulary
 itself — the list of every key you're allowed to use — lives in
-[`doc/logfmt-keys`](logfmt-keys) and is enforced by `tools/lint-logfmt-keys`.
+`doc/logfmt-keys` and is enforced by `tools/lint-logfmt-keys`.
 
 ## Why a rulebook
 
