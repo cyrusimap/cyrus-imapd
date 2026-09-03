@@ -119,7 +119,7 @@ sub check_syslog
 {
     my ($self, $instance) = @_;
 
-    my $remove_empty_pat = qr/Remove of supposedly empty directory/;
+    my $remove_empty_pat = qr/event=mailbox\.directory\.remove\.failed/;
 
     $self->assert_null($instance->_check_syslog($remove_empty_pat));
 }
