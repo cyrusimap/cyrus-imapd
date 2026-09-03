@@ -9,9 +9,6 @@
  * This API provides functions for writing logfmt log events to syslog. Each
  * function logs a specific kind of event with associated data (mailbox info,
  * message IDs, user info, etc.).
- *
- * All functions check the `auditlog` config option and return immediately
- * if auditing is disabled.
  */
 
 #ifndef INCLUDED_AUDITLOG_H

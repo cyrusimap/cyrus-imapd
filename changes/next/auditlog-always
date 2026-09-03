@@ -1,0 +1,30 @@
+
+Description:
+
+Audit logging is now always enabled; the auditlog configuration option is
+deprecated and has no effect.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+The auditlog option is deprecated and can be removed.  The audit log events
+it used to gate are now always emitted.
+
+
+Upgrade instructions:
+
+Sites that did not previously enable auditlog will start seeing
+"event=auditlog.*" entries in syslog, and should make sure their logging
+setup is ready for the extra volume.  Consider limiting which syslog priorities
+are logged.  Messages logged at "info" may be superfluous if you didn't want
+the auditlog before.
+
+
+GitHub issue:
+
+None.

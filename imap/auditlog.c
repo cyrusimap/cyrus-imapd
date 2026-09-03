@@ -42,11 +42,8 @@ EXPORTED void auditlog_acl(const char *mboxname,
                            const mbentry_t *mbentry)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
-    mbname_t *mbname = NULL;
+    mbname_t *mbname = mbname_from_intname(mboxname);
 
-    if (!config_auditlog) return;
-
-    mbname = mbname_from_intname(mboxname);
     auditlog_begin(&lf, "acl");
 
     logfmt_push_mbname(&lf, "mbox.name", mbname);
@@ -68,8 +65,6 @@ EXPORTED void auditlog_client(const char *action,
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
 
-    if (!config_auditlog) return;
-
     auditlog_begin(&lf, action);
 
     logfmt_push(&lf, "u.username", userid);
@@ -84,8 +79,6 @@ HIDDEN void auditlog_duplicate(const char *action,
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
     char myaction[32];
-
-    if (!config_auditlog) return;
 
     snprintf(myaction, sizeof(myaction), "duplicate.%s", action);
     auditlog_begin(&lf, myaction);
@@ -103,8 +96,6 @@ EXPORTED void auditlog_imip(const char *message_id,
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
 
-    if (!config_auditlog) return;
-
     auditlog_begin(&lf, "imip.processed");
 
     logfmt_push(&lf, "msg.id", message_id);
@@ -121,8 +112,6 @@ EXPORTED void auditlog_mailbox(const char *action,
                                const char *newpartition)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
-
-    if (!config_auditlog) return;
 
     auditlog_begin(&lf, action);
 
@@ -159,8 +148,6 @@ EXPORTED void auditlog_mboxname(const char *action,
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
 
-    if (!config_auditlog) return;
-
     auditlog_begin(&lf, action);
 
     if (userid) {
@@ -183,13 +170,10 @@ EXPORTED void auditlog_message(const char *action,
                                const char *message_id)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
-    struct conversations_state *cstate;
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
     char emailid[JMAP_MAX_EMAILID_SIZE] = {0};
     char threadid[JMAP_THREADID_SIZE] = {0};
 
-    if (!config_auditlog) return;
-
-    cstate = mailbox_get_cstate(mailbox);
     jmap_set_emailid(cstate, &record->guid, 0, &record->internaldate, emailid);
     jmap_set_threadid(cstate, record->cid, threadid);
 
@@ -220,8 +204,6 @@ EXPORTED void auditlog_message_uid(const char *action,
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
 
-    if (!config_auditlog) return;
-
     auditlog_begin(&lf, action);
 
     logfmt_push_mailbox(&lf, mailbox);
@@ -234,8 +216,6 @@ EXPORTED void auditlog_message_uid(const char *action,
 EXPORTED void auditlog_modseq(const struct mailbox *mailbox)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
-
-    if (!config_auditlog) return;
 
     auditlog_begin(&lf, "modseq");
 
@@ -253,8 +233,6 @@ EXPORTED void auditlog_proxy(const char *userid, const char *status)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
     char rsessionid[MAX_SESSIONID_SIZE];
-
-    if (!config_auditlog) return;
 
     parse_sessionid(status, rsessionid);
 
@@ -275,8 +253,6 @@ EXPORTED void auditlog_quota(const char *action,
     struct logfmt lf = LOGFMT_INITIALIZER;
     char name[32];
     int resource;
-
-    if (!config_auditlog) return;
 
     auditlog_begin(&lf, action);
     logfmt_push(&lf, "quota.root", root);
@@ -306,8 +282,6 @@ EXPORTED void auditlog_sieve(const char *action,
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
 
-    if (!config_auditlog) return;
-
     auditlog_begin(&lf, action);
 
     if (userid)
@@ -332,8 +306,6 @@ EXPORTED void auditlog_sieve(const char *action,
 EXPORTED void auditlog_send(const struct auditlog_send_event *s)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
-
-    if (!config_auditlog) return;
 
     auditlog_begin(&lf, s->action);
 
@@ -366,8 +338,6 @@ EXPORTED void auditlog_send(const struct auditlog_send_event *s)
 EXPORTED void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
-
-    if (!config_auditlog) return;
 
     auditlog_begin(&lf, "traffic");
     logfmt_pushf(&lf, "used.bytes.in", "%" PRIu64, bytes_in);

@@ -44,7 +44,6 @@ EXPORTED int config_hashimapspool;        /* f */
 EXPORTED enum enum_value config_virtdomains;              /* f */
 EXPORTED enum enum_value config_mupdate_config; /* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
 EXPORTED strarray_t config_cua_domains = STRARRAY_INITIALIZER;
-EXPORTED int config_auditlog;
 EXPORTED int config_iolog;
 EXPORTED unsigned config_maxword;
 EXPORTED unsigned config_maxquoted;
@@ -568,7 +567,6 @@ EXPORTED void config_reset(void)
     config_hashimapspool = 0;
     config_virtdomains = 0;
     config_defdomain = NULL;
-    config_auditlog = 0;
     config_serverinfo = 0;
     config_maxliteral = 0;
     config_maxquoted = 0;
@@ -810,9 +808,6 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     /* are we supporting virtual domains?  */
     config_virtdomains = config_getenum(IMAPOPT_VIRTDOMAINS);
     config_defdomain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
-
-    /* are we auditlogging */
-    config_auditlog = config_getswitch(IMAPOPT_AUDITLOG);
 
     /* are we doing I/O logging */
     config_iolog = config_getswitch(IMAPOPT_IOLOG);

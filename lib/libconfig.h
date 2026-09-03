@@ -60,7 +60,6 @@ extern int config_hashimapspool;
 extern int config_implicitrights;
 extern enum enum_value config_virtdomains;
 extern enum enum_value config_mupdate_config;
-extern int config_auditlog;
 extern int config_iolog;
 extern unsigned config_maxliteral;
 extern unsigned config_maxquoted;

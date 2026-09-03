@@ -9,8 +9,7 @@
 
 static int set_up(void)
 {
-    config_read_string(DBDIR"/conf",
-                       "auditlog: yes\n");
+    config_read_string(DBDIR"/conf", NULL);
     return 0;
 }
 
