@@ -104,11 +104,11 @@ Unlike releases, the git repository doesn't have a pre-built
 GNU Make is required.  If you're not on Linux, it might be called 'gmake'.
 
 If you need to build a local copy of the docs current to the version of the
-code, these need to be built: see doc/README.docs
+code, see docsrc/developer/documentation.rst.
 
-Read through doc/html/imap/developer.html for more detailed instructions on
-building and contributing. The latest version is online at
-https://www.cyrusimap.org/imap/developer.html
+For more detailed instructions on building and contributing, read the developer
+documentation, which is in this repository under docsrc/developer/ and online
+at https://www.cyrusimap.org/dev/developer/.
 
 How to install Cyrus libraries from git source
 ==============================================
