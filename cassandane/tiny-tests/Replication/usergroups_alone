@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+sub replica_usergroups
+{
+    my ($self, $userid) = @_;
+
+    # a fresh store each time: run_replication() disconnects everything
+    my $store = $self->{replica}->get_service('imap')
+                     ->create_store(username => 'admin');
+    return $self->imap_getusergroup($store->get_client(), $userid)->{$userid};
+}
+
+sub test_usergroups_alone
+    :Mboxgroups :ReverseACLs
+    ($self)
+{
+    # settle everything first, so that a group change is the only thing
+    # left for the next replication run to notice
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->_imap_cmd('SETUSERGROUP', 0, '', 'cassandane', 'group:shared');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->run_replication();
+    $self->assert_not_null(
+        $self->replica_usergroups('cassandane')->{'group:shared'});
+
+    $admintalk = $self->{adminstore}->get_client();
+    $admintalk->_imap_cmd('UNSETUSERGROUP', 0, '', 'cassandane',
+                          'group:shared');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->run_replication();
+    $self->assert_null(
+        $self->replica_usergroups('cassandane')->{'group:shared'});
+}

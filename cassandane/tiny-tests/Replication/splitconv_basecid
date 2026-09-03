@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub basecids
+{
+    my ($self, $store) = @_;
+
+    my $talk = $store->get_client();
+    $talk->select('INBOX');
+    my $res = $talk->fetch('1:*', '(uid basecid)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    return { map { $_ => $res->{$_}->{basecid} // '' } keys %$res };
+}
+
+sub test_splitconv_basecid
+    :Conversations :NoStartInstances
+    ($self)
+{
+    $_->{config}->set(conversations_max_thread => 5)
+        for ($self->{instance}, $self->{replica});
+    $self->_start_instances();
+
+    my $msg = $self->make_message("Message A");
+    $self->make_message("Re: Message A", references => [ $msg ]) for (1..6);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    my $master = $self->basecids($self->{store});
+    $self->assert(scalar grep { $_ } values %$master);
+    $self->assert_deep_equals($master, $self->basecids($self->{replica_store}));
+
+    # zeroing the cids drops basecid on the master.  the replica has to follow:
+    # it can only ever have got its own value from here
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb',
+                                   '-z', 'cassandane');
+
+    $master = $self->basecids($self->{store});
+    $self->assert_num_equals(0, scalar grep { $_ } values %$master);
+
+    $self->run_replication();
+    $self->assert_deep_equals($master, $self->basecids($self->{replica_store}));
+}

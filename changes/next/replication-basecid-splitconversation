@@ -1,0 +1,41 @@
+Description:
+
+A replica can now lose a basethrid (basecid) that the master no longer has.
+Previously it could only ever gain one, and a mailbox in that state failed
+replication with "Replication inconsistency detected" on every run.
+
+FLAG_INTERNAL_SPLITCONVERSATION guards basecid - below mailbox version 20 it
+is what makes the value readable back out of its annotation, and
+mailbox_rewrite_index_record() restores basecid from the old record whenever
+the flag is set but the value is zero.  The flag is not part of the sync
+protocol, and sync_mailbox_compare_update() keeps the replica's own internal
+flags for everything except EXPUNGED, so a record which took basecid == 0 from
+the master went into the rewrite with the flag still set and had the replica's
+own basecid put straight back.  For version 20 mailboxes basecid is part of the
+sync CRC, so the two ends never agreed again.  The flag now follows the basecid
+wherever one is taken from the peer.
+
+compare_one_record() also took the replica's cid without its basecid when the
+replica's copy was the more recent one, leaving the master with a base thread
+id belonging to a conversation it no longer referenced - and then pushing that
+back over the replica's.  It takes both now.
+
+
+Documentation:
+
+(none)
+
+
+Config changes:
+
+(none)
+
+
+Upgrade instructions:
+
+(none)
+
+
+GitHub issue:
+
+(none)

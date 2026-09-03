@@ -1,0 +1,46 @@
+Description:
+
+Replication now converges the quota modseq, usergroup memberships and the
+reverse-ACL modseq, none of which could previously come back into agreement
+once the two sides had drifted apart.
+
+The quota modseq moves on every usage change, so on a busy master it is almost
+always the only part of a quota root that differs.  Nothing carried it: the
+replica dropped the MODSEQ out of the QUOTA response it was already sending,
+update_quota_work() compared only the limits and so never sent a QUOTA for a
+modseq-only difference, mboxlist_setquotas() applied the replicated modseq only
+when a limit had also moved, and quota_write() then overwrote it with the
+replica's own highestmodseq.  All four are fixed, so the replica now stores the
+master's value verbatim.  This is what JMAP Quota/changes state is built from,
+so a replica which had drifted backwards would, once promoted, hand out states
+below ones its clients already held.
+
+is_unchanged(), which decides whether sync_client sends a mailbox at all, never
+compared USERGROUPS and ignored RACLMODSEQ whenever either side was zero.  A
+usergroup added on the master therefore sat there until something else about
+the mailbox changed, and a replica with no racl modseq never acquired one.
+Both are now compared.  USERGROUPS is also sent when the list is empty, so that
+removing a user's last group replicates, and the replica records RACLMODSEQ
+even with reverseacls off locally, so that it can converge either way.
+
+
+Documentation:
+
+(none)
+
+
+Config changes:
+
+(none)
+
+
+Upgrade instructions:
+
+The RACLMODSEQ comparison no longer tolerates a peer which doesn't report one.
+Replicas older than 3.1.7, which predates RACLMODSEQ in the sync protocol, will
+have their user INBOXes re-sent on every run.
+
+
+GitHub issue:
+
+(none)

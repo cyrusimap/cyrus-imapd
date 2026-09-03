@@ -674,6 +674,7 @@ void sync_folder_list_free(struct sync_folder_list **lp)
         free(current->name);
         free(current->partition);
         free(current->acl);
+        free(current->groups);
         sync_annot_list_free(&current->annots);
         free(current);
         current = next;
@@ -1807,6 +1808,18 @@ static int sync_getflags(struct dlist *kl,
     return 0;
 }
 
+/* basecid is only meaningful while SPLITCONVERSATION is set: below version 20
+ * it's read back from an annotation, and mailbox_rewrite_index_record()
+ * restores it from the old record while the flag is set.  The flag isn't on
+ * the wire, so anywhere we take a basecid from the peer we set it ourselves. */
+static void sync_set_splitconversation(struct index_record *record)
+{
+    if (record->basecid)
+        record->internal_flags |= FLAG_INTERNAL_SPLITCONVERSATION;
+    else
+        record->internal_flags &= ~FLAG_INTERNAL_SPLITCONVERSATION;
+}
+
 static int parse_upload(struct dlist *kr, struct mailbox *mailbox,
                         struct index_record *record,
                         struct sync_annot_list **salp)
@@ -1842,6 +1855,9 @@ static int parse_upload(struct dlist *kr, struct mailbox *mailbox,
     /* the ANNOTATIONS list is optional too */
     if (salp && dlist_getlist(kr, "ANNOTATIONS", &fl))
         r = decode_annotations(fl, salp, mailbox, record);
+
+    /* basecid arrives with the annotations */
+    sync_set_splitconversation(record);
 
     return r;
 }
@@ -2078,14 +2094,17 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         if (raclmodseq)
             dlist_setnum64(kl, "RACLMODSEQ", raclmodseq);
         char *userid = mboxname_to_userid(mailbox_name(mailbox));
-        strarray_t groups = STRARRAY_INITIALIZER;
-        int r = mboxlist_lookup_usergroups(userid, &groups);
-        if (!r && strarray_size(&groups)) {
-            char *groupstxt = strarray_join(&groups, "\t");
-            dlist_setatom(kl, "USERGROUPS", groupstxt);
-            free(groupstxt);
+        if (userid) {
+            strarray_t groups = STRARRAY_INITIALIZER;
+            if (!mboxlist_lookup_usergroups(userid, &groups)) {
+                /* always sent, even empty: otherwise removing a user's last
+                 * group never reaches the replica */
+                char *groupstxt = strarray_join(&groups, "\t");
+                dlist_setatom(kl, "USERGROUPS", groupstxt ? groupstxt : "");
+                free(groupstxt);
+            }
+            strarray_fini(&groups);
         }
-        strarray_fini(&groups);
         free(userid);
     }
     dlist_setnum32(kl, "VERSION", mailbox->i.minor_version);
@@ -3110,6 +3129,11 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
              * non-EXPUNGED, but master's internal_flags for EXPUNGED */
             copy.internal_flags = rrecord->internal_flags & ~FLAG_INTERNAL_EXPUNGED;
             copy.internal_flags |= mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED;
+            /* SPLITCONVERSATION guards basecid, which we just took from the
+             * master, so it has to come from there too - it isn't on the wire,
+             * and mailbox_rewrite_index_record() puts the replica's own
+             * basecid back while the flag is still set */
+            sync_set_splitconversation(&copy);
 
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
                 copy.user_flags[i] = mrecord.user_flags[i];
@@ -3715,7 +3739,9 @@ static int sync_apply_mailbox(struct dlist *kin,
         r = mailbox_update_xconvmodseq(mailbox, xconvmodseq, opt_force);
     }
 
-    if (config_getswitch(IMAPOPT_REVERSEACLS) && raclmodseq) {
+    /* record it even with reverseacls off here: it's just a counter, and the
+     * replica has to carry it or it can never converge with the master */
+    if (raclmodseq) {
         mboxname_setraclmodseq(mailbox_name(mailbox), raclmodseq);
     }
 
@@ -5677,6 +5703,7 @@ static int sync_kl_parse(struct dlist *kin,
             if (!dlist_getatom(kl, "ROOT", &root)) return IMAP_PROTOCOL_BAD_PARAMETERS;
             sq = sync_quota_list_add(quota_list, root);
             sync_decode_quota_limits(kl, sq->limits);
+            dlist_getnum64(kl, "MODSEQ", &sq->modseq);
         }
 
         else if (!strcmp(kl->name, "LSUB")) {
@@ -6089,6 +6116,10 @@ static int update_quota_work(struct sync_client_state *sync_cs,
             if (client->limits[res] != server->limits[res])
                 changed++;
         }
+        /* the modseq is the JMAP Quota state, so it has to converge in its own
+         * right - the master allocates a new one on every usage change */
+        if (client->modseq != server->modseq)
+            changed++;
         if (!changed)
             return 0;
     }
@@ -6513,6 +6544,9 @@ static int compare_one_record(struct sync_client_state *sync_cs,
             mp->internal_flags |= rp->internal_flags & FLAG_INTERNAL_EXPUNGED;
 
             mp->cid = rp->cid;
+            /* basecid is only meaningful against the cid we just took */
+            mp->basecid = rp->basecid;
+            sync_set_splitconversation(mp);
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
                 mp->user_flags[i] = rp->user_flags[i];
         }
@@ -6901,8 +6935,24 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 
     if (config_getswitch(IMAPOPT_REVERSEACLS)) {
         modseq_t raclmodseq = mboxname_readraclmodseq(mailbox_name(mailbox));
-        // don't bail if either are zero, that could be version skew
-        if (raclmodseq && remote->raclmodseq && remote->raclmodseq != raclmodseq) return 0;
+        if (remote->raclmodseq != raclmodseq) return 0;
+    }
+
+    /* usergroups are per-user, but they ride along with every mailbox.  the
+     * empty string is a real value here - it means "this user is in no
+     * groups" - so only NULL means the peer didn't tell us */
+    if (remote->groups) {
+        char *userid = mboxname_to_userid(mailbox_name(mailbox));
+        strarray_t groups = STRARRAY_INITIALIZER;
+        int same = 1;
+        if (!mboxlist_lookup_usergroups(userid, &groups)) {
+            char *groupstxt = strarray_join(&groups, "\t");
+            same = !strcmp(groupstxt ? groupstxt : "", remote->groups);
+            free(groupstxt);
+        }
+        strarray_fini(&groups);
+        free(userid);
+        if (!same) return 0;
     }
 
     if (mailbox_has_conversations(mailbox)) {
@@ -7042,8 +7092,10 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
         if (r) goto done;
     }
 
-    /* bump the raclmodseq if it's higher on the replica */
-    if (remote && is_repeat && remote->raclmodseq) {
+    /* bump the raclmodseq if it's higher on the replica.  setraclmodseq only
+     * raises, so without this the higher side would never come back down and
+     * is_unchanged would send this mailbox on every run forever */
+    if (remote && remote->raclmodseq) {
         mboxname_setraclmodseq(mailbox_name(mailbox), remote->raclmodseq);
     }
 

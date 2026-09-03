@@ -137,6 +137,7 @@ struct sync_quota {
     struct sync_quota *next;
     char *root;
     quota_t limits[QUOTA_NUMRESOURCES];
+    modseq_t modseq;
     int done;
 };
 

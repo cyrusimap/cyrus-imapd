@@ -428,8 +428,12 @@ EXPORTED int quota_write(struct quota *quota, int silent, struct txn **tid)
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
 
     if (quota->dirty && mboxname_isusermailbox(quota->root, /*isinbox*/0)) {
-        if (silent)
-            quota->modseq = mboxname_setquotamodseq(quota->root, quota->modseq);
+        if (silent) {
+            /* raise the counters, but store the caller's modseq verbatim.
+             * setquotamodseq returns the local highestmodseq, which would
+             * replace a replicated value with one the master never issued */
+            mboxname_setquotamodseq(quota->root, quota->modseq);
+        }
         else
             quota->modseq = mboxname_nextquotamodseq(quota->root, quota->modseq);
 

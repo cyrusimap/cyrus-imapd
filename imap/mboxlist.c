@@ -4902,20 +4902,29 @@ EXPORTED int mboxlist_setquotas(const char *root,
                     mboxevent_extract_quota(quotawithin_event, &q, res);
             }
         }
+        int limitschanged = q.dirty;
+
+        /* the modseq is replicated in its own right - it moves on every usage
+         * change, so it's usually the only thing that differs */
+        if (quotamodseq && q.modseq != quotamodseq) {
+            q.modseq = quotamodseq;
+            q.dirty = 1;
+        }
+
         if (q.dirty) {
-            if (quotamodseq)
-                q.modseq = quotamodseq;
             r = quota_write(&q, silent, &tid);
 
-            if (quotachange_event == NULL) {
-                quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE, &mboxevents);
-            }
+            if (limitschanged) {
+                if (quotachange_event == NULL) {
+                    quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE, &mboxevents);
+                }
 
-            for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-                mboxevent_extract_quota(quotachange_event, &q, res);
-            }
+                for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+                    mboxevent_extract_quota(quotachange_event, &q, res);
+                }
 
-            auditlog_quota("setquota", root, oldquotas, newquotas);
+                auditlog_quota("setquota", root, oldquotas, newquotas);
+            }
         }
 
         if (!r)
