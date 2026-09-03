@@ -1,0 +1,23 @@
+
+Description:
+
+The tooling and documentation left behind by the removal of NNTP support
+has been removed: the remotepurge utility, the mknewsgroups script, the
+INN patch, and the NNTP administrator guide.
+
+
+Documentation:
+
+The "Cyrus NNTP" page has been removed from the administrator guide, and
+the remaining references to NNTP throughout the documentation have been
+dropped.
+
+
+Config changes:
+
+The allownewnews option has been deprecated.
+
+
+Upgrade instructions:
+
+None beyond those for the removal of NNTP itself.
