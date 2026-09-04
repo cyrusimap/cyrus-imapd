@@ -348,7 +348,15 @@ EXTRA_DIST = \
     cunit/pcunit \
     cunit/vg.supp \
     doc/legacy/murder.png \
-    doc \
+    doc/README.autocreate \
+    doc/README.autosievefolder \
+    doc/README.cyrusdb.md \
+    doc/README.twom.md \
+    doc/README.xapian \
+    doc/README.zeroskip.md \
+    doc/examples \
+    doc/legacy \
+    doc/logfmt-keys \
     docsrc \
     imap/css3_color_array.gperf \
     imap/http_cal_abook_admin.js \
@@ -523,7 +531,8 @@ dist_noinst_SCRIPTS = \
     tools/perl2rst \
     tools/pod-index \
     tools/translatesieve \
-    tools/update-tzdata.sh
+    tools/update-tzdata.sh \
+    tools/with-lock
 noinst_MAN = \
     com_err/et/com_err.3 \
     com_err/et/compile_et.1
@@ -2010,10 +2019,38 @@ clean-sphinx-cache:
 
 if HAVE_SPHINX_BUILD
 
-docsrc/_doxygen: Doxyfile
+## What Doxygen reads: every header under these directories, per the Doxyfile's
+## INPUT, FILE_PATTERNS and RECURSIVE.  Keep this in step with the Doxyfile.
+## The list is discovered at make time, like the Cassandane module list, so
+## adding a header doesn't mean remembering to add it here.
+##
+## We look in the build tree because that is where Doxygen looks: it runs from
+## $(top_builddir) and the Doxyfile's INPUT is relative.  In a VPATH build that
+## means it only ever sees the generated headers, which is a wart older than
+## this rule.
+DOXYGEN_INPUT_DIRS = imap lib sieve
+DOXYGEN_INPUTS := $(shell find $(DOXYGEN_INPUT_DIRS) -name '*.h' 2>/dev/null)
+
+## The pages that read Doxygen's output, so we can tell Sphinx they changed.
+DOXYGEN_PAGES := $(shell grep -rl '^\.\. doxygen' docsrc --include='*.rst' 2>/dev/null)
+
+## breathe doesn't manage dependencies well enough to rebuild doxygen-centric
+## pages just because a *.h file changed.  Touching the pages gets through to
+## it.
+docsrc/_doxygen/.stamp: Doxyfile $(DOXYGEN_INPUTS)
 	$(AM_V_GEN)$(DOXYGEN) Doxyfile
+	@$(if $(DOXYGEN_PAGES),touch $(DOXYGEN_PAGES))
+	@$(MKDIR_P) $(@D)
+	@touch $@
 
 SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
+
+## The builders below share one doctree cache, which helps: later builds can
+## reuse the cached parse from earlier ones.  You can't run these at the same
+## time, though, because only one sphinx-build can own the cache for writing.
+## We'll lock.  Serializing the builders is still a win compared to using three
+## different cache dirs.
+SPHINX_LOCK = $(PERL) $(top_srcdir)/tools/with-lock $(SPHINX_CACHE)/.lock
 
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
@@ -2028,26 +2065,31 @@ clean-docsrc:
 		$(RM) -r $(top_builddir)/docsrc $(top_builddir)/doc/examples
 
 ## XXX doesn't detect if other rst sources are updated...
-man/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
-	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b man $(top_builddir)/docsrc $(top_builddir)/man
+man/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b man $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
 
 clean-man:
 	@$(RM) -r man
 
 ## XXX doesn't detect if other rst sources are updated...
-doc/html/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
-	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
+doc/html/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
 	@touch $@
 
 ## XXX doesn't detect if other rst sources are updated...
-doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
-	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
+doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
+
+## What dist-hook needs built before it can put the documentation in the
+## tarball.  Empty without Sphinx, so "make dist" still works there and just
+## ships no HTML or text.
+DIST_DOC_STAMPS = doc/html/.sphinx-build.stamp doc/text/.sphinx-build.stamp
 
 else # (! HAVE_SPHINX_BUILD)
 
-docsrc/_doxygen:
+docsrc/_doxygen/.stamp:
 	@echo "warning: missing documentation dependencies. can not run doxygen" 1>&2
 
 clean-docsrc:
@@ -2066,53 +2108,69 @@ doc/html/.sphinx-build.stamp:
 doc/text/.sphinx-build.stamp:
 	@echo "error: missing documentation dependencies. cannot build text documentation" 1>&2
 	@false
+
+DIST_DOC_STAMPS =
 endif
 
-.PHONY: man man-force clean-man
-man-force:
-	## trash the timestamps, so we always re-run sphinx-build.
-	## sphinx-build tracks source modifications itself, so forced
-	## rebuilds will still be a lot quicker once it has run once.
-	@$(RM) docsrc/.sphinx-build.stamp man/.sphinx-build.stamp
+SPHINX_MANS = $(dist_man1_MANS) $(dist_man3_MANS) $(dist_man5_MANS) $(dist_man8_MANS)
 
-man: man-force $(dist_man1_MANS) $(dist_man3_MANS) $(dist_man5_MANS) $(dist_man8_MANS)
+## Each of the doc entry points below trashes the timestamps and then recurses.
+##
+## Trashing them is what makes us always re-run sphinx-build.  sphinx-build
+## tracks source modifications itself, so forced rebuilds will still be a lot
+## quicker once it has run once -- and the stamps deliberately don't list the
+## reST sources (see the XXX comments above), so without this, editing a page
+## and asking for docs would build nothing.
+
+.PHONY: man clean-man
+man:
+	@$(RM) docsrc/.sphinx-build.stamp man/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) $(SPHINX_MANS)
 
 # clean-man is conditionally defined above. We do not want to remove
 # man pages if the user is unable to rebuild them.
 
-.PHONY: doc-html doc-html-force clean-doc-html clean-doc-doxygen
-doc-html-force:
+.PHONY: doc-html clean-doc-html clean-doc-doxygen
+doc-html:
 	@$(RM) docsrc/.sphinx-build.stamp doc/html/.sphinx-build.stamp
-
-doc-html: doc-html-force doc/html/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) doc/html/.sphinx-build.stamp
 
 clean-doc-html:
 	@$(RM) -r doc/html
 
-.PHONY: doc-text doc-text-force clean-doc-text
-doc-text-force:
+.PHONY: doc-text clean-doc-text
+doc-text:
 	@$(RM) docsrc/.sphinx-build.stamp doc/text/.sphinx-build.stamp
-
-doc-text: doc-text-force doc/text/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) doc/text/.sphinx-build.stamp
 
 clean-doc-text:
 	@$(RM) -r doc/text
 
 GENERATED_EXAMPLES = doc/examples/imapd_conf/imapd.conf.sample
 
-.PHONY: doc-examples doc-examples-force clean-doc-examples clean-doc-doxygen
-doc-examples-force:
-
-doc-examples: doc-examples-force $(GENERATED_EXAMPLES)
+## No forcing here: unlike the sphinx-build stamps, this one lists the sources
+## it is generated from, so make can tell when it's stale.
+.PHONY: doc-examples clean-doc-examples clean-doc-doxygen
+doc-examples: $(GENERATED_EXAMPLES)
 
 clean-doc-examples:
 	@$(RM) $(GENERATED_EXAMPLES)
 
 clean-doc-doxygen:
-	@$($RM) -r docsrc/_doxygen
+	@$(RM) -r docsrc/_doxygen
 
+## "doc" is man + doc-html + doc-text + doc-examples, but spelled out rather
+## than depending on those four, so that the whole doc build is one make
+## instance.  Depending on them would start three sub-makes, each trashing and
+## rebuilding docsrc/.sphinx-build.stamp on its own schedule.  In a VPATH
+## build, the stamp's recipe extracts a tar of docsrc into the build tree, so
+## two could extract it while a third sphinx-build reads the result.
 .PHONY: doc clean-doc
-doc: man doc-html doc-text doc-examples
+doc:
+	@$(RM) docsrc/.sphinx-build.stamp man/.sphinx-build.stamp \
+	    doc/html/.sphinx-build.stamp doc/text/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) $(SPHINX_MANS) doc/html/.sphinx-build.stamp \
+	    doc/text/.sphinx-build.stamp $(GENERATED_EXAMPLES)
 
 clean-doc: clean-man clean-doc-html clean-doc-text clean-doc-examples clean-doc-doxygen
 
@@ -2185,10 +2243,14 @@ distgit:
 	git archive --format=tar --prefix=$(PACKAGE_NAME)-$(PACKAGE_VERSION)/ $(PACKAGE_NAME)-$(PACKAGE_VERSION) | tar -C dist -x -f -
 	touch distgit
 
-dist-hook:
+dist-hook: $(DIST_DOC_STAMPS)
+	@$(MKDIR_P) $(top_distdir)/doc
+	test ! -d doc/html || cp -R doc/html $(top_distdir)/doc/
+	test ! -d doc/text || cp -R doc/text $(top_distdir)/doc/
 	find $(top_distdir) -type f -name .sphinx-build.stamp -delete
 	find $(top_distdir) -type f -name .gitignore -delete
 	rm -rf $(top_distdir)/$(SPHINX_CACHE)
+	rm -rf $(top_distdir)/docsrc/_doxygen
 
 VERSION: tools/git-version.sh
 	$(AM_V_GEN)$< > $@.NEW && mv $@.NEW $@
