@@ -196,8 +196,9 @@ static sqldb_t *caldav_alarm_open()
         tempname = strconcat(config_dir, "/caldav_alarm.sqlite3", NULL);
         dbfilename = tempname;
     }
-    my_alarmdb = sqldb_open(dbfilename, CMD_CREATE, DBVERSION, upgrade,
-                            config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
+    my_alarmdb = sqldb_open_full(dbfilename, CMD_CREATE, DBVERSION, upgrade,
+                                 config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000,
+                                 SQLDB_SCOPE_GLOBAL, NULL);
 
     if (!my_alarmdb) {
         syslog(LOG_ERR, "DBERROR: failed to open %s", dbfilename);

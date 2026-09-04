@@ -3081,3 +3081,198 @@ void caldav_get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
         get_schedule_addresses(mboxname, userid, addresses);
     }
 }
+
+/* delivering an iTIP message takes the recipient's namespace lock, which we
+   can't do while holding the organizer's; two users inviting each other then
+   deadlock.  Queue the work and run it once the caller has let go, as
+   dav_schedule_notification() does for sharing notifications.  Recipients are
+   locked one at a time, which is enough because sched_deliver_local() closes
+   everything it opened before returning */
+struct deferred_sched {
+    char *cal_ownerid;
+    char *sched_userid;
+    strarray_t schedule_addresses;
+    char *organizer;                    /* NULL for a reply */
+    icalcomponent *oldical;
+    icalcomponent *newical;
+    modseq_t createdmodseq;
+    enum sched_mechanism mech;
+    /* where to record SCHEDULE-STATUS, mboxname NULL for nowhere */
+    char *mboxname;
+    char *resource;
+    uint32_t imap_uid;
+    struct deferred_sched *next;
+};
+
+static struct deferred_sched *deferred_scheds = NULL;
+static struct deferred_sched **deferred_tail = &deferred_scheds;
+
+static void sched_defer(const char *cal_ownerid, const char *sched_userid,
+                        const strarray_t *schedule_addresses,
+                        const char *organizer,
+                        icalcomponent *oldical, icalcomponent *newical,
+                        modseq_t createdmodseq, enum sched_mechanism mech,
+                        const char *mboxname, const char *resource,
+                        uint32_t imap_uid)
+{
+    struct deferred_sched *new = xzmalloc(sizeof(struct deferred_sched));
+
+    new->cal_ownerid = xstrdupnull(cal_ownerid);
+    new->sched_userid = xstrdupnull(sched_userid);
+    if (schedule_addresses)
+        strarray_cat(&new->schedule_addresses, schedule_addresses);
+    new->organizer = xstrdupnull(organizer);
+    if (oldical) new->oldical = icalcomponent_clone(oldical);
+    if (newical) new->newical = icalcomponent_clone(newical);
+    new->createdmodseq = createdmodseq;
+    new->mech = mech;
+    new->mboxname = xstrdupnull(mboxname);
+    new->resource = xstrdupnull(resource);
+    new->imap_uid = imap_uid;
+
+    /* keep queue order, so several resources written in one request send
+       their invitations in that order too */
+    *deferred_tail = new;
+    deferred_tail = &new->next;
+}
+
+EXPORTED void sched_defer_request(const char *cal_ownerid,
+                                  const char *sched_userid,
+                                  const strarray_t *schedule_addresses,
+                                  const char *organizer,
+                                  icalcomponent *oldical,
+                                  icalcomponent *newical,
+                                  modseq_t createdmodseq,
+                                  enum sched_mechanism mech,
+                                  const char *mboxname, const char *resource,
+                                  uint32_t imap_uid)
+{
+    assert(organizer);
+    sched_defer(cal_ownerid, sched_userid, schedule_addresses, organizer,
+                oldical, newical, createdmodseq, mech,
+                mboxname, resource, imap_uid);
+}
+
+EXPORTED void sched_defer_reply(const char *cal_ownerid,
+                                const char *sched_userid,
+                                const strarray_t *schedule_addresses,
+                                icalcomponent *oldical,
+                                icalcomponent *newical,
+                                modseq_t createdmodseq,
+                                enum sched_mechanism mech,
+                                const char *mboxname, const char *resource,
+                                uint32_t imap_uid)
+{
+    sched_defer(cal_ownerid, sched_userid, schedule_addresses, NULL,
+                oldical, newical, createdmodseq, mech,
+                mboxname, resource, imap_uid);
+}
+
+/* sched_request()/sched_reply() stamp SCHEDULE-STATUS onto the ATTENDEE or
+   ORGANIZER properties as they go, and CalDAV wants that in the stored copy.
+   We only learn it once delivery is done, so store the resource again */
+static void sched_record_status(struct deferred_sched *item)
+{
+    struct transaction_t txn = { .userid = item->cal_ownerid };
+    struct mailbox *mailbox = NULL;
+    struct caldav_db *caldavdb = NULL;
+    struct caldav_data *cdata = NULL;
+    int r;
+
+    /* caldav_store_resource() writes the RFC 5322 wrapper through here */
+    txn.req_hdrs = spool_new_hdrcache();
+    if (!txn.req_hdrs) return;
+
+    /* a full open, not a relock: the calendar may have been renamed or
+       deleted while we were delivering, and this checks for that */
+    r = mailbox_open_iwl(item->mboxname, &mailbox);
+    if (r) {
+        xsyslog(LOG_NOTICE, "can not record scheduling status, "
+                            "calendar is gone",
+                            "mboxname=<%s> resource=<%s> err=<%s>",
+                            item->mboxname, item->resource, error_message(r));
+        goto done;
+    }
+
+    caldavdb = caldav_open_mailbox(mailbox);
+    if (!caldavdb) {
+        xsyslog(LOG_ERR, "can not open caldav db to record scheduling status",
+                         "mboxname=<%s>", item->mboxname);
+        goto done;
+    }
+
+    r = caldav_lookup_resource(caldavdb, mailbox->mbentry,
+                               item->resource, &cdata, 0);
+    if (r) {
+        xsyslog(LOG_NOTICE, "can not record scheduling status, "
+                            "resource is gone",
+                            "mboxname=<%s> resource=<%s> err=<%s>",
+                            item->mboxname, item->resource, error_message(r));
+        goto done;
+    }
+
+    if (cdata->dav.imap_uid != item->imap_uid) {
+        /* somebody else wrote the resource while we delivered, and theirs
+           is what the world has seen.  Don't overwrite it with our stale
+           copy just to add a status parameter */
+        xsyslog(LOG_NOTICE, "not recording scheduling status, "
+                            "resource changed while scheduling",
+                            "mboxname=<%s> resource=<%s>"
+                            " uid=<%u> newuid=<%u>",
+                            item->mboxname, item->resource,
+                            item->imap_uid, cdata->dav.imap_uid);
+        goto done;
+    }
+
+    r = caldav_store_resource(&txn, item->newical, mailbox, item->resource,
+                              cdata->dav.createdmodseq, caldavdb,
+                              NEW_STAG, item->cal_ownerid, NULL, NULL,
+                              &item->schedule_addresses);
+    if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
+        xsyslog(LOG_ERR, "can not store scheduling status",
+                         "mboxname=<%s> resource=<%s> err=<%s>",
+                         item->mboxname, item->resource, error_message(r));
+    }
+
+  done:
+    if (caldavdb) caldav_close(caldavdb);
+    mailbox_close(&mailbox);
+    spool_free_hdrcache(txn.req_hdrs);
+    buf_free(&txn.buf);
+}
+
+EXPORTED void sched_run_deferred(void)
+{
+    struct deferred_sched *item;
+
+    while ((item = deferred_scheds)) {
+        /* unhook first; delivering a reply can queue more work */
+        deferred_scheds = item->next;
+        if (!deferred_scheds) deferred_tail = &deferred_scheds;
+
+        if (item->organizer) {
+            sched_request(item->cal_ownerid, item->sched_userid,
+                          &item->schedule_addresses, item->organizer,
+                          item->oldical, item->newical,
+                          item->createdmodseq, item->mech);
+        }
+        else {
+            sched_reply(item->cal_ownerid, item->sched_userid,
+                        &item->schedule_addresses,
+                        item->oldical, item->newical,
+                        item->createdmodseq, item->mech);
+        }
+
+        if (item->mboxname && item->newical) sched_record_status(item);
+
+        free(item->cal_ownerid);
+        free(item->sched_userid);
+        strarray_fini(&item->schedule_addresses);
+        free(item->organizer);
+        if (item->oldical) icalcomponent_free(item->oldical);
+        if (item->newical) icalcomponent_free(item->newical);
+        free(item->mboxname);
+        free(item->resource);
+        free(item);
+    }
+}

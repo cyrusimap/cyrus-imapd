@@ -150,6 +150,22 @@ static struct mboxlocklist *find_lockitem(const char *name)
     return NULL;
 }
 
+/* find a held lock whose name starts with prefix, other than 'except'.  Lets
+   a caller tell whether it already holds one of a class of locks */
+EXPORTED const char *mboxname_findlocked(const char *prefix, const char *except)
+{
+    struct mboxlocklist *item;
+    size_t len = strlen(prefix);
+
+    for (item = open_mboxlocks; item; item = item->next) {
+        if (strncmp(item->l.name, prefix, len)) continue;
+        if (except && !strcmp(item->l.name, except)) continue;
+        return item->l.name;
+    }
+
+    return NULL;
+}
+
 static void remove_lockitem(struct mboxlocklist *remitem)
 {
     struct mboxlocklist *item;

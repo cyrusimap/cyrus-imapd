@@ -942,6 +942,9 @@ static int sync_sieve_deactivate(const char *userid)
 #ifdef USE_SIEVE
 static int sync_sieve_activate(const char *userid, const char *bcname)
 {
+    /* the Sieve DB is the user's DAV DB and needs the namespace lock, and we
+       open it before the mailbox which would otherwise take it for us */
+    user_nslock_t *user_nslock = user_nslock_lock_w(userid);
     struct sieve_db *db = sievedb_open_userid(userid);
     struct mailbox *mailbox = NULL;
     struct sieve_data *sdata = NULL;
@@ -949,6 +952,7 @@ static int sync_sieve_activate(const char *userid, const char *bcname)
 
     if (!db) {
         syslog(LOG_ERR, "Failed to open Sieve DB for %s", userid);
+        user_nslock_release(&user_nslock);
         return IMAP_INTERNAL;
     }
 
@@ -974,12 +978,14 @@ static int sync_sieve_activate(const char *userid, const char *bcname)
   done:
     mailbox_close(&mailbox);
     sievedb_close(db);
+    user_nslock_release(&user_nslock);
 
     return r;
 }
 
 static int sync_sieve_delete(const char *userid, const char *fname)
 {
+    user_nslock_t *user_nslock;
     struct sieve_db *db;
     struct mailbox *mailbox = NULL;
     struct sieve_data *sdata = NULL;
@@ -993,9 +999,11 @@ static int sync_sieve_delete(const char *userid, const char *fname)
         return 0;
     }
 
+    user_nslock = user_nslock_lock_w(userid);
     db = sievedb_open_userid(userid);
     if (!db) {
         syslog(LOG_ERR, "Failed to open Sieve DB for %s", userid);
+        user_nslock_release(&user_nslock);
         return IMAP_INTERNAL;
     }
 
@@ -1023,6 +1031,7 @@ static int sync_sieve_delete(const char *userid, const char *fname)
   done:
     mailbox_close(&mailbox);
     sievedb_close(db);
+    user_nslock_release(&user_nslock);
 
     return r;
 }
@@ -4053,12 +4062,16 @@ static int list_gen_cb(void *rock, struct sieve_data *sdata)
 static struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 {
     struct sync_sieve_list *list = sync_sieve_list_create();
+    /* read-only, so share the lock, but we still need it */
+    user_nslock_t *user_nslock = user_nslock_lock(userid, LOCK_SHARED);
     struct sieve_db *db = sievedb_open_userid(userid);
 
     if (db) {
         sievedb_foreach(db, &list_gen_cb, list);
         sievedb_close(db);
     }
+
+    user_nslock_release(&user_nslock);
 
     return list;
 }
@@ -4110,6 +4123,7 @@ static int sync_sieve_upload(const char *userid, const char *fname,
                       size_t len)
 {
     const char *sieve_path = user_sieve_path(userid);
+    user_nslock_t *user_nslock;
     char name[2048];
     char *ext;
     int r = 0;
@@ -4133,6 +4147,7 @@ static int sync_sieve_upload(const char *userid, const char *fname,
         }
     }
 
+    user_nslock = user_nslock_lock_w(userid);
     db = sievedb_open_userid(userid);
     if (!db) {
         syslog(LOG_ERR, "Failed to open Sieve DB for %s", userid);
@@ -4165,6 +4180,7 @@ static int sync_sieve_upload(const char *userid, const char *fname,
 
     mailbox_close(&mailbox);
     sievedb_close(db);
+    user_nslock_release(&user_nslock);
     buf_free(&buf);
 
     return r;
@@ -4317,7 +4333,9 @@ static int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     if (r) goto bail;
 
 #ifdef USE_SIEVE
-    /* Remove any cruft from sievedir */
+    /* only read the DB, but unlink from sievedir off the back of it, so
+       take the lock exclusively */
+    user_nslock_t *user_nslock = user_nslock_lock_w(userid);
     const char *sieve_path = user_sieve_path(userid);
     struct sieve_db *db = sievedb_open_userid(userid);
     strarray_t list = STRARRAY_INITIALIZER;
@@ -4330,6 +4348,7 @@ static int sync_get_user(struct dlist *kin, struct sync_state *sstate)
 
     sievedir_foreach(sieve_path, 0/*flags*/, &remove_cb, &list);
     strarray_fini(&list);
+    user_nslock_release(&user_nslock);
 #endif
 
 bail:

@@ -62,13 +62,29 @@ EXPORTED int carddav_done(void)
     return r;
 }
 
-EXPORTED struct carddav_db *carddav_open_userid(const char *userid)
+EXPORTED struct carddav_db *carddav_open_userid_full(const char *userid, const char *caller)
 {
     struct carddav_db *carddavdb = NULL;
 
     init_internal();
 
-    sqldb_t *db = dav_open_userid(userid);
+    sqldb_t *db = dav_open_userid_full(userid, caller);
+    if (!db) return NULL;
+
+    carddavdb = xzmalloc(sizeof(struct carddav_db));
+    carddavdb->userid = xstrdup(userid);
+    carddavdb->db = db;
+
+    return carddavdb;
+}
+
+EXPORTED struct carddav_db *carddav_open_userid_unlocked(const char *userid)
+{
+    struct carddav_db *carddavdb = NULL;
+
+    init_internal();
+
+    sqldb_t *db = dav_open_userid_unlocked(userid);
     if (!db) return NULL;
 
     carddavdb = xzmalloc(sizeof(struct carddav_db));

@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+# Filing into a mailbox another user owns is held over until the recipient's
+# lock is dropped, then delivered.  Every other otheruser/globalshared fileinto
+# test checks the INBOX fallback; this is the case where it works.
+sub test_deliver_fileinto_otheruser
+    :min_version_3_0 :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user('alice');
+    $admintalk->create("user.alice.shared") || die;
+    $admintalk->setacl("user.alice.shared", 'cassandane' => 'lrsip') || die;
+
+    my $target = "user.alice.shared";
+
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto"];
+fileinto "$target";
+EOF
+    , username => 'cassandane');
+
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1, users => [ 'cassandane' ]);
+
+    xlog $self, "the message went to the other user's mailbox";
+    $admintalk->select($target);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_num_equals(1, $admintalk->get_response_code('exists'));
+
+    xlog $self, "and not to our INBOX, because fileinto cancels keep";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({}, check_guid => 0);
+}

@@ -91,7 +91,8 @@ int caldav_done(void);
 
 /* get a database handle corresponding to mailbox */
 struct caldav_db *caldav_open_mailbox(struct mailbox *mailbox);
-struct caldav_db *caldav_open_userid(const char *userid);
+struct caldav_db *caldav_open_userid_full(const char *userid, const char *caller);
+#define caldav_open_userid(userid) caldav_open_userid_full((userid), __func__)
 
 /* close this handle */
 int caldav_close(struct caldav_db *caldavdb);

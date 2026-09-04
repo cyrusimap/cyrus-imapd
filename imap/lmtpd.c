@@ -924,6 +924,22 @@ int deliver(message_data_t *msgdata, char *authuser,
             strarray_fini(&flags);
             conversations_commit(&state);
 
+#ifdef USE_SIEVE
+            /* this user is unlocked now, so the fileintos which targeted
+               other users can go, an owner at a time.  On any failure put one
+               copy in this user's INBOX, where a failed fileinto has always
+               ended up */
+            if (sieve_run_deferred()) {
+                strarray_t fbflags = STRARRAY_INITIALIZER;
+                struct imap4flags fbimap4flags = { &fbflags, authstate };
+
+                if (userid) conversations_open_user(userid, 0/*shared*/, &state);
+                r = deliver_local(&mydata, &fbimap4flags, mbname);
+                strarray_fini(&fbflags);
+                conversations_commit(&state);
+            }
+#endif
+
            unregister:
             proc_register(&proc_handle, 0, config_ident, lmtpd_clienthost, NULL, NULL, NULL);
         }

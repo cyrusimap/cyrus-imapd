@@ -23,4 +23,9 @@ int run_sieve(const mbname_t *mbname,
 void sieve_srs_init(void);
 void sieve_srs_free(void);
 
+/* run the fileintos which targeted other users, once the recipient's lock has
+   been dropped.  Returns true if any failed, so the caller can fall back to
+   INBOX once, however many failed */
+int sieve_run_deferred(void);
+
 #endif /* LMTP_SIEVE_H */

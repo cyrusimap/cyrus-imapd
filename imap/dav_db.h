@@ -36,7 +36,14 @@ void dav_getpath(struct buf *fname, struct mailbox *mailbox);
 void dav_getpath_byuserid(struct buf *fname, const char *userid);
 
 /* get a database handle corresponding to mailbox */
-sqldb_t *dav_open_userid(const char *userid);
+sqldb_t *dav_open_userid_full(const char *userid, const char *caller);
+#define dav_open_userid(userid) dav_open_userid_full((userid), __func__)
+
+/* open another user's DAV DB without their namespace lock.  Only for a read
+   which cannot take it, such as sweeping the sharees of an account, where the
+   set isn't known until the sweep is done.  The files may be removed under
+   such a read, which then fails with SQLDB_ERR_DBMOVED */
+sqldb_t *dav_open_userid_unlocked(const char *userid);
 sqldb_t *dav_open_mailbox(struct mailbox *mailbox);
 int dav_close(sqldb_t **dbp);
 

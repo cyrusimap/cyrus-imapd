@@ -103,13 +103,13 @@ EXPORTED int caldav_done(void)
     return r;
 }
 
-EXPORTED struct caldav_db *caldav_open_userid(const char *userid)
+EXPORTED struct caldav_db *caldav_open_userid_full(const char *userid, const char *caller)
 {
     struct caldav_db *caldavdb = NULL;
 
     init_internal();
 
-    sqldb_t *db = dav_open_userid(userid);
+    sqldb_t *db = dav_open_userid_full(userid, caller);
     if (!db) return NULL;
 
     caldavdb = xzmalloc(sizeof(struct caldav_db));

@@ -191,7 +191,10 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         "CalendarEvent/participantReply",
         JMAP_CALENDARS_EXTENSION,
         &jmap_calendarevent_participantreply,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        /* only reads the account; everything written belongs to the
+           organizer and the participant.  Takes its own lock and drops it
+           before scheduling */
+        JMAP_READ_WRITE | JMAP_NO_USERLOCK
     },
     {
         "CalendarEventNotification/get",
@@ -275,7 +278,9 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         "Principal/getAvailability",
         JMAP_URN_PRINCIPALS,
         &jmap_principal_getavailability,
-        JMAP_NEED_CSTATE
+        /* reads the principal's calendars, not the account's, so it takes
+           the principal's lock rather than holding two at once */
+        JMAP_NO_USERLOCK
     },
     {
         "ShareNotification/get",
@@ -4574,11 +4579,14 @@ static int setcalendarevents_schedule(const struct mailbox *mailbox,
     if (organizer &&
             /* XXX Hack for Outlook */ icalcomponent_get_first_invitee(comp)) {
 
-        /* Send scheduling message. */
+        /* send the scheduling message.  Delivery takes each recipient's
+           lock, so it waits until jmap_api() drops the account's.  We never
+           stored SCHEDULE-STATUS here, so there's nothing to record */
         if (strarray_contains_case(schedule_addresses, organizer)) {
             /* Organizer scheduling object resource */
-            sched_request(sched_userid, sched_userid, schedule_addresses, organizer,
-                          oldical, newical, createdmodseq, SCHED_MECH_JMAP_SET);
+            sched_defer_request(sched_userid, sched_userid, schedule_addresses,
+                                organizer, oldical, newical, createdmodseq,
+                                SCHED_MECH_JMAP_SET, NULL, NULL, 0);
         } else {
             /* Attendee scheduling object resource */
             int omit_reply = 0;
@@ -4597,8 +4605,10 @@ static int setcalendarevents_schedule(const struct mailbox *mailbox,
                 }
             }
             if (!omit_reply && strarray_size(schedule_addresses))
-                sched_reply(sched_userid, sched_userid, schedule_addresses,
-                            oldical, newical, createdmodseq, SCHED_MECH_JMAP_SET);
+                sched_defer_reply(sched_userid, sched_userid,
+                                  schedule_addresses, oldical, newical,
+                                  createdmodseq, SCHED_MECH_JMAP_SET,
+                                  NULL, NULL, 0);
         }
     }
 
@@ -8563,7 +8573,12 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     json_t *res = json_object();
     char *part_id = NULL;
     json_t *err = NULL;
+    modseq_t createdmodseq = 0;
     int r = 0;
+
+    /* we only read this account, so share the lock, and drop it before
+       scheduling takes the organizer's and the participant's in turn */
+    user_nslock_t *nslock = user_nslock_lock(req->accountid, LOCK_SHARED);
 
     db = caldav_open_userid(req->accountid);
     if (!db) {
@@ -8825,10 +8840,18 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
         goto done;
     }
 
+    /* everything we need is in memory now, so drop this account before
+       reaching for anybody else's */
+    createdmodseq = cdata->dav.createdmodseq;
+    caldav_close(db);
+    db = NULL;
+    cdata = NULL;
+    user_nslock_release(&nslock);
+
     /* Create and send the reply */
     sched_reply(req->accountid, req->accountid, &reply_addr,
                 update.oldical, update.newical,
-                cdata->dav.createdmodseq, SCHED_MECH_JMAP_PARTREPLY);
+                createdmodseq, SCHED_MECH_JMAP_PARTREPLY);
 
     /* Get SCHEDULE-STATUS */
     const char *organizer = NULL;
@@ -8868,7 +8891,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     schedule_one_attendee(req->accountid, req->accountid, NULL, organizer,
                           part_email, caldav_get_historical_cutoff(),
                           update.oldical, update.newical,
-                          cdata->dav.createdmodseq,
+                          createdmodseq,
                           SCHED_MECH_JMAP_PARTREPLY);
 
 no_op:
@@ -8906,6 +8929,7 @@ done:
     jmap_caleventid_free(&update.eid);
     if (db) caldav_close(db);
     mailbox_close(&mbox);
+    user_nslock_release(&nslock);
     if (update.oldical) icalcomponent_free(update.oldical);
     if (update.newical) icalcomponent_free(update.newical);
     json_decref(res);
@@ -10159,10 +10183,14 @@ static void principal_getavailability(jmap_req_t *req,
                                       int show_details,
                                       hash_table *props)
 {
+    /* everything we read belongs to the principal, so lock only them */
+    user_nslock_t *user_nslock = user_nslock_lock(principalid, LOCK_SHARED);
+
     struct caldav_db *db = caldav_open_userid(principalid);
     if (!db) {
         jmap_error(req, json_pack("{s:s s:s}", "type", "serverFail",
                     "description", "cannot open caldav db"));
+        user_nslock_release(&user_nslock);
         return;
     }
 
@@ -10298,6 +10326,7 @@ static void principal_getavailability(jmap_req_t *req,
 done:
     buf_free(&buf);
     caldav_close(db);
+    user_nslock_release(&user_nslock);
     for (i = 0; i < dynarray_size(busyperiods); i++) {
         struct busyperiod *bp = dynarray_nth(busyperiods, i);
         json_decref(bp->jevent);

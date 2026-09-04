@@ -923,9 +923,11 @@ static int do_scheduling(jmap_req_t *req,
                                   req->userid, schedule_addresses);
 
     if (strarray_contains_case(schedule_addresses, organizer)) {
-        /* Organizer scheduling object resource */
-        sched_request(req->userid, req->userid, schedule_addresses, organizer,
-                      oldical, ical, 0, SCHED_MECH_JMAP_RESTORE);
+        /* Organizer scheduling object resource.  Queued because delivery
+           takes each recipient's lock, and we still hold the account's */
+        sched_defer_request(req->userid, req->userid, schedule_addresses,
+                            organizer, oldical, ical, 0,
+                            SCHED_MECH_JMAP_RESTORE, NULL, NULL, 0);
     } else {
         /* Attendee scheduling object resource */
         int omit_reply = 0;
@@ -955,8 +957,9 @@ static int do_scheduling(jmap_req_t *req,
         }
 
         if (!omit_reply && strarray_size(schedule_addresses))
-            sched_reply(req->userid, req->userid, schedule_addresses,
-                        oldical, ical, 0, SCHED_MECH_JMAP_RESTORE);
+            sched_defer_reply(req->userid, req->userid, schedule_addresses,
+                              oldical, ical, 0, SCHED_MECH_JMAP_RESTORE,
+                              NULL, NULL, 0);
     }
 
     return 0;

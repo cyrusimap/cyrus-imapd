@@ -41,7 +41,8 @@ int sievedb_init(void);
 int sievedb_done(void);
 
 /* get a database handle corresponding to userid */
-struct sieve_db *sievedb_open_userid(const char *userid);
+struct sieve_db *sievedb_open_userid_full(const char *userid, const char *caller);
+#define sievedb_open_userid(userid) sievedb_open_userid_full((userid), __func__)
 
 /* get a database handle corresponding to mailbox */
 struct sieve_db *sievedb_open_mailbox(struct mailbox *mailbox);

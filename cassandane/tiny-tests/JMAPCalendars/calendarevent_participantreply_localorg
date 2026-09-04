@@ -1,0 +1,97 @@
+#!perl
+use Cassandane::Tiny;
+
+# participantReply delivers a REPLY to the organizer, who may be another local
+# user, so it must drop the account before taking theirs.  Every other
+# participantReply test makes the parties external, so this is the only one
+# which reaches sched_deliver_local().
+sub test_calendarevent_participantreply_localorg
+    :min_version_3_7 :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.alice");
+
+    my $service = $self->{instance}->get_service("http");
+    my $alicetalk = Net::CalDAVTalk->new(
+        user => "alice",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "give the organizer an address we can schedule to";
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-user-address-set>
+        <D:href>mailto:alice\@example.com</D:href>
+      </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $alicetalk->Request('PROPPATCH', "/dav/principals/user/alice", $xml,
+                        'Content-Type' => 'text/xml');
+
+    my $alicecal = $alicetalk->NewCalendar({name => 'invites'});
+    $self->assert_not_null($alicecal);
+
+    my $uid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uid
+SUMMARY:An Event
+DTSTART:20260831T153000Z
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ORGANIZER;CN="Alice":MAILTO:alice\@example.com
+ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN="Cassandane":MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "the organizer invites us, which files the event in our calendar";
+    $alicetalk->Request('PUT', "$alicecal/$uid.ics", $card,
+                        'Content-Type' => 'text/calendar');
+
+    my $jmap = $self->{jmap};
+    my $res = $jmap->CallMethods([['CalendarEvent/get', {
+        ids => undef, properties => ['uid'],
+    }, "R0"]]);
+    my ($event) = grep { $_->{uid} eq $uid } @{$res->[0][1]{list}};
+    $self->assert_not_null($event);
+
+    xlog $self, "RSVP as the local attendee";
+    $res = $jmap->CallMethods([['CalendarEvent/participantReply', {
+        eventId => $event->{id},
+        participantEmail => "cassandane\@example.com",
+        updates => {
+            participationStatus => "accepted"
+        }
+    }, "R1"]]);
+
+    # 1.2 is "delivered", set only by sched_deliver_local(); a remote
+    # organizer would give 1.1 without taking another user's lock
+    $self->assert_str_equals("1.2", $res->[0][1]{scheduleStatus});
+
+    xlog $self, "the organizer's copy has our acceptance";
+    my $response = $alicetalk->Request('GET', "$alicecal/$uid.ics");
+    my $ical = $response->{content};
+    $ical =~ s/\r?\n[ \t]//g;
+    my ($attendee) = grep { m/^ATTENDEE.*cassandane\@example\.com/ }
+                          split /\r?\n/, $ical;
+    $self->assert_not_null($attendee);
+    $self->assert_matches(qr/PARTSTAT=ACCEPTED/, $attendee);
+}

@@ -118,6 +118,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in,
   struct buf sieve_data = BUF_INITIALIZER;
   unsigned long num;
   int ret = FALSE;
+  int needdb = 0;
 
   /* get one token from the lexer */
   while(token == EOL)
@@ -143,6 +144,26 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in,
       lex_setrecovering();
 
     goto error;
+  }
+
+  /* the Sieve DB isn't held across commands, so open it for the ones which
+     need it and close again below */
+  switch (token) {
+  case GETSCRIPT:
+  case PUTSCRIPT:
+  case SETACTIVE:
+  case LISTSCRIPTS:
+  case DELETESCRIPT:
+  case HAVESPACE:
+  case CHECKSCRIPT:
+  case RENAMESCRIPT:
+      needdb = authenticated && !verify_only;
+      break;
+  }
+
+  if (needdb && actions_open_user() != TIMSIEVE_OK) {
+      error_msg = "Failed to open Sieve database";
+      goto error;
   }
 
   switch (token)
@@ -544,6 +565,8 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in,
   }
 
  done:
+  if (needdb) actions_close_user();
+
   /* free memory */
   buf_free(&mechanism_name);
   buf_free(&initial_challenge);
@@ -558,6 +581,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in,
   return ret;
 
  error:
+  if (needdb) actions_close_user();
 
   /* free memory */
   buf_free(&mechanism_name);

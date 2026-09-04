@@ -103,6 +103,7 @@ int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
                   int locktype);
 void mboxname_release(struct mboxlock **mboxlockptr);
 int mboxname_islocked(const char *mboxname);
+const char *mboxname_findlocked(const char *prefix, const char *except);
 int mboxname_run_with_lock(int (*cb)(void *), void *rock);
 
 /* Create namespace based on config options. */
