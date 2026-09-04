@@ -11,6 +11,16 @@ sub test_bad_userids ($self)
         'user.anonymous',
         'user.%SHARED',
         #'user..foo', # silently fixed by namespace conversion
+
+        # a reserved userid stays reserved further down the tree
+        'user.anyone.Drafts',
+
+        # a userid has to be one auth_canonifyid() would accept, which
+        # rules out these and hence any name outside US-ASCII
+        'user.a*b',
+        'user.a?b',
+        'user.group:x',
+        'user.&AOQA9gD8-',
     );
 
     foreach my $u (@bad_userids) {

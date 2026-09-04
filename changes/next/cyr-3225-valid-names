@@ -6,6 +6,17 @@ invalidProperties for "name", and MKCOL/MKCALENDAR (and COPY/MOVE to such a
 destination) return 403.  Any mailboxes created this way previously still
 are reachable by the name they read back as.
 
+Mailbox names are now also checked a component at a time rather than as one
+string, which tightens three things.  A name may contain only one '!', and
+it must separate a non-empty domain from a non-empty mailbox name -- names
+like "a!b!c" and "!user.foo" were accepted before.  That domain must look
+like a hostname.  And the userid in a "user." name must be one the
+authentication layer could canonify, which means plain ASCII with no '&',
+'*', ':' or '?'.
+
+The domain and userid rules are not applied on the replication path, so a
+replica still accepts whatever names its master already has.
+
 
 Documentation:
 

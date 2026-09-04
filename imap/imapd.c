@@ -7713,7 +7713,8 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
                                text->partition, uidvalidity,
                                1, imapd_userid, imapd_authstate, NULL, 0, 0,
                                text->rename_user, /*keep_intermediaries*/1,
-                               0, /*silent*/text->rename_user);
+                               0, text->rename_user
+                                  ? MBOXLIST_RENAME_SILENT : 0);
 
     if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
         mboxlist_changesub(mbentry->name, imapd_userid, imapd_authstate,
@@ -8164,7 +8165,8 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
                                    0 /* uidvalidity */, imapd_userisadmin,
                                    imapd_userid, imapd_authstate, mboxevent,
                                    0, 0, rename_user, /*keep_intermediaries*/1,
-                                   0, /*silent*/rename_user);
+                                   0, rename_user
+                                      ? MBOXLIST_RENAME_SILENT : 0);
 
         if (!r) {
             /* Add sharees of this renamed mailbox to our hash */
