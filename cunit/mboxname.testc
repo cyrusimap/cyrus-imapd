@@ -1103,6 +1103,47 @@ static void test_policycheck_component(void)
     CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck_component(NULL));
 }
 
+/* config_virtdomains is ON for this suite, see set_up() */
+static void test_policycheck(void)
+{
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo.Drafts"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("shared.folder"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("example.com!user.foo"));
+
+    /* a '^' is a '.' in a component, and belongs in an internal name */
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo.a^b"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo.&AOQA9gD8-"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("user.foo.&AOQA9gD8"));
+
+    /* mailboxes.db reserves keys starting with '$', but only at the top */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("$RACL"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo.$bar"));
+
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.anyone"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("user.anonymous"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.%foo"));
+
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck(".leading"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("trailing."));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("a..b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("~tilde"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("a\tb"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("a/b"));
+
+    /* every '!' belongs to the domain, so there is only ever the one */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("a!b!c"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("example.com!user.foo!bar"));
+
+    /* the delayed delete namespace is exempt: it was checked on the way in */
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("DELETED.user.foo.a/b.A1B2C3D4"));
+}
+
 
 static enum enum_value old_config_virtdomains;
 static union config_value old_config_unixhierarchysep;

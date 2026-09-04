@@ -1809,13 +1809,19 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
  */
 #define GOODCHARS " #$'()*+,-.0123456789:=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz~"
 
-/* the character-by-character half of mboxname_policycheck(): the checks that
- * don't care where in the namespace the name sits */
-static int _policycheck_chars(const char *name, int hasdom)
+EXPORTED int mboxname_policycheck_component(const char *name)
 {
     int sawutf7 = 0;
     unsigned c1, c2, c3, c4, c5, c6, c7, c8;
     int ucs4;
+
+    if (!name || !*name)
+        return IMAP_MAILBOX_BADNAME;
+
+    /* '^' is in GOODCHARS only because it is how _append_intbuf() writes a
+     * '.': a component containing one would name a different mailbox */
+    if (strchr(name, '^'))
+        return IMAP_MAILBOX_BADNAME;
 
     while (*name) {
         if (*name == '&') {
@@ -1883,7 +1889,7 @@ static int _policycheck_chars(const char *name, int hasdom)
             name++;             /* Skip over terminating '-' */
         }
         else {
-            if (!(strchr(GOODCHARS, *name) || (hasdom && *name == '!')))
+            if (!strchr(GOODCHARS, *name))
                 return IMAP_MAILBOX_BADNAME;
             name++;
             sawutf7 = 0;
@@ -1892,30 +1898,17 @@ static int _policycheck_chars(const char *name, int hasdom)
     return 0;
 }
 
-EXPORTED int mboxname_policycheck_component(const char *name)
-{
-    if (!name || !*name)
-        return IMAP_MAILBOX_BADNAME;
-
-    /* '^' is in GOODCHARS only because it is how _append_intbuf() writes a
-     * '.': a component containing one would name a different mailbox */
-    if (strchr(name, '^'))
-        return IMAP_MAILBOX_BADNAME;
-
-    /* no '!' without a domain, and no UTF-7 sequence spans the '.' that
-     * separates two components, so the whole name adds nothing here */
-    return _policycheck_chars(name, 0);
-}
-
 /*
  * Apply site policy restrictions on mailbox names.
  * Restrictions are hardwired for now.
  */
 EXPORTED int mboxname_policycheck(const char *name)
 {
+    strarray_t *boxes;
     const char *p;
     int namelen = strlen(name);
-    int hasdom = 0;
+    int i;
+    int r = 0;
 
     /* We reserve mailboxes.db keys beginning with $ for internal use
      * (e.g. $RACL), so don't allow a real mailbox to sneak in there.
@@ -1941,17 +1934,15 @@ EXPORTED int mboxname_policycheck(const char *name)
     if (namelen > MAX_MAILBOX_CREATENAME)
         return IMAP_MAILBOX_BADNAME;
 
-    /* find the virtual domain, if any.  We don't sanity check domain
-       names yet - maybe we should */
+    /* split off the virtual domain: it is not part of the hierarchy, and
+       every '!' belongs to it, so there is only ever the one */
     p = strchr(name, '!');
     if (p) {
-        if (config_virtdomains) {
-            name = p + 1;
-            namelen = strlen(name);
-            hasdom = 1;
-        }
-        else
-            return IMAP_MAILBOX_BADNAME;
+        if (!config_virtdomains) return IMAP_MAILBOX_BADNAME;
+        if (p == name) return IMAP_MAILBOX_BADNAME;
+        name = p + 1;
+        namelen = strlen(name);
+        if (strchr(name, '!')) return IMAP_MAILBOX_BADNAME;
     }
 
     /* bad mbox patterns */
@@ -1978,7 +1969,14 @@ EXPORTED int mboxname_policycheck(const char *name)
     // (would conflict with backups of shared mailboxes)
     if (!strncmp(name, "user.%", 6)) return IMAP_MAILBOX_BADNAME;
 
-    return _policycheck_chars(name, hasdom);
+    /* now that no component can be empty, check each one on its own.  The
+     * escaping is undone first, so a '^' is seen as the '.' it stands for */
+    boxes = _array_from_intname(strarray_split(name, ".", 0));
+    for (i = 0; !r && i < strarray_size(boxes); i++)
+        r = mboxname_policycheck_component(strarray_nth(boxes, i));
+    strarray_free(boxes);
+
+    return r;
 }
 
 EXPORTED int mboxname_is_prefix(const char *longstr, const char *shortstr)
