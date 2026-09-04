@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_set_ifunchangedby
+    :min_version_3_13
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'urn:ietf:params:jmap:conditional';
+
+    # Create an addressbook
+    my $res = $jmap->CallMethods([
+        ['AddressBook/set', {
+            create => { "1" => {
+                name => "mybook",
+            }},
+        }, 'R1'],
+    ], \@using);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    # Precondition MATCHES current name -> update proceeds
+    $res = $jmap->CallMethods([
+        ['AddressBook/set', {
+            ifUnchangedBy => { $id => { name => 'mybook' } },
+            update => { $id => { name => 'newname' } },
+        }, 'R2'],
+    ], \@using);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    # Precondition MISMATCH (stale name) -> stateMismatch, no change
+    $res = $jmap->CallMethods([
+        ['AddressBook/set', {
+            ifUnchangedBy => { $id => { name => 'mybook' } },
+            update => { $id => { name => 'shouldnotchange' } },
+        }, 'R3'],
+    ], \@using);
+    $self->assert_null($res->[0][1]{updated}{$id});
+    $self->assert_str_equals('stateMismatch',
+                             $res->[0][1]{notUpdated}{$id}{type});
+
+    # Verify name is still 'newname' (unchanged by mismatch)
+    $res = $jmap->CallMethods([
+        ['AddressBook/get', { ids => [$id] }, 'R4'],
+    ], \@using);
+    $self->assert_str_equals('newname', $res->[0][1]{list}[0]{name});
+
+    # Create a second addressbook for destroy tests
+    $res = $jmap->CallMethods([
+        ['AddressBook/set', {
+            create => { "d1" => { name => "destroyme" } },
+        }, 'RD1'],
+    ], \@using);
+    my $did = $res->[0][1]{created}{d1}{id};
+    $self->assert_not_null($did);
+
+    # Destroy: precondition MISMATCH -> stateMismatch, not destroyed
+    $res = $jmap->CallMethods([
+        ['AddressBook/set', {
+            ifUnchangedBy => { $did => { name => 'wrongname' } },
+            destroy => [ $did ],
+        }, 'RD2'],
+    ], \@using);
+    $self->assert_null($res->[0][1]{destroyed});
+    $self->assert_str_equals('stateMismatch',
+                             $res->[0][1]{notDestroyed}{$did}{type});
+
+    # Destroy: precondition MATCHES -> destroyed
+    $res = $jmap->CallMethods([
+        ['AddressBook/set', {
+            ifUnchangedBy => { $did => { name => 'destroyme' } },
+            destroy => [ $did ],
+        }, 'RD3'],
+    ], \@using);
+    $self->assert_not_null($res->[0][1]{destroyed});
+    $self->assert_str_equals($did, $res->[0][1]{destroyed}[0]);
+}

@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_note_set_ifunchangedby
+    :min_version_3_13 :JMAPExtensions :NoAltNameSpace
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'urn:ietf:params:jmap:conditional';
+
+    # Create a note
+    my $res = $jmap->CallMethods([
+        ['Note/set', {
+            create => { "1" => {
+                title  => 'My Note',
+                body   => 'Hello World',
+                isHTML => JSON::false,
+            }},
+        }, 'R1'],
+    ], \@using);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    # Precondition MATCHES current value -> update proceeds
+    $res = $jmap->CallMethods([
+        ['Note/set', {
+            ifUnchangedBy => { $id => { title => 'My Note' } },
+            update => { $id => { title => 'Updated Note' } },
+        }, 'R2'],
+    ], \@using);
+    $self->assert(exists $res->[0][1]{updated}{$id},
+                  "update with matching precondition should succeed");
+
+    # Precondition MISMATCH (stale expected value) -> stateMismatch, no change
+    $res = $jmap->CallMethods([
+        ['Note/set', {
+            ifUnchangedBy => { $id => { title => 'My Note' } },
+            update => { $id => { title => 'Should Not Apply' } },
+        }, 'R3'],
+    ], \@using);
+    $self->assert_null($res->[0][1]{updated}{$id});
+    $self->assert_str_equals('stateMismatch',
+                             $res->[0][1]{notUpdated}{$id}{type});
+
+    # Verify note title is still 'Updated Note' (not overwritten by failed update)
+    $res = $jmap->CallMethods([
+        ['Note/get', { ids => [ $id ] }, 'R4'],
+    ], \@using);
+    $self->assert_str_equals('Updated Note', $res->[0][1]{list}[0]{title});
+}

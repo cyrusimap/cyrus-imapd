@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_vacation_set_ifunchangedby
+    :min_version_3_9 :needs_component_sieve
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'urn:ietf:params:jmap:conditional';
+
+    # Enable a vacation response
+    my $res = $jmap->CallMethods([
+        ['VacationResponse/set', {
+            update => {
+                singleton => {
+                    isEnabled => JSON::true,
+                    subject   => 'Out of office',
+                    textBody  => 'I am away.',
+                }
+            }
+        }, 'R1'],
+    ], \@using);
+    $self->assert(exists $res->[0][1]{updated}{singleton});
+
+    # Precondition MATCHES current subject -> update proceeds
+    $res = $jmap->CallMethods([
+        ['VacationResponse/set', {
+            ifUnchangedBy => { singleton => { 'subject' => 'Out of office' } },
+            update => {
+                singleton => {
+                    isEnabled => JSON::true,
+                    subject   => 'Back soon',
+                    textBody  => 'I am away.',
+                }
+            }
+        }, 'R2'],
+    ], \@using);
+    $self->assert(exists $res->[0][1]{updated}{singleton});
+    $self->assert_null($res->[0][1]{notUpdated}{singleton});
+
+    # Precondition MISMATCH (stale subject) -> notUpdated stateMismatch
+    $res = $jmap->CallMethods([
+        ['VacationResponse/set', {
+            ifUnchangedBy => { singleton => { 'subject' => 'Out of office' } },
+            update => {
+                singleton => {
+                    isEnabled => JSON::true,
+                    subject   => 'Nope',
+                    textBody  => 'I am away.',
+                }
+            }
+        }, 'R3'],
+    ], \@using);
+    $self->assert_null($res->[0][1]{updated}{singleton});
+    $self->assert_str_equals('stateMismatch',
+                             $res->[0][1]{notUpdated}{singleton}{type});
+}

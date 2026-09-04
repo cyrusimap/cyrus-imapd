@@ -1,0 +1,17 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_conditional_capability
+    :min_version_3_13
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my $session = $jmap->get_client_session->client_session;
+    my $accountCapabilities = $session->{accounts}{cassandane}{accountCapabilities};
+    $self->assert_not_null(
+        $accountCapabilities->{'urn:ietf:params:jmap:conditional'},
+        "conditional capability advertised");
+    $self->assert_deep_equals(
+        {},
+        $accountCapabilities->{'urn:ietf:params:jmap:conditional'});
+}
