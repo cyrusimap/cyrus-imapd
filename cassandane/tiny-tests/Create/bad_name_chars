@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+# With '.' as the hierarchy separator, '^' is how a '.' in a name is spelled
+# externally, and '/' has no special meaning at all.
+sub test_bad_name_chars ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my @bad = ('yes/no', '10% Happier');
+
+    $talk->create('owner');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    foreach my $m (@bad) {
+        $talk->create($m);
+        $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+        $talk->rename('owner', $m);
+        $self->assert_str_equals('no', $talk->get_last_completion_response());
+    }
+
+    $talk->create('a^b');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $list = $talk->list('', '%');
+    $self->assert_deep_equals(['INBOX', 'a^b', 'owner'],
+                              [sort map { $_->[2] } @$list]);
+}
+
+# With unixhierarchysep the two swap over: '/' is the separator, and '^' is
+# the character that can't appear at all.
+sub test_bad_name_chars_unixhs
+    :UnixHierarchySep
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my @bad = ('a^b', '10% Happier');
+
+    $talk->create('owner');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    foreach my $m (@bad) {
+        $talk->create($m);
+        $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+        $talk->rename('owner', $m);
+        $self->assert_str_equals('no', $talk->get_last_completion_response());
+    }
+
+    $talk->create('a.b');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $list = $talk->list('', '%');
+    $self->assert_deep_equals(['INBOX', 'a.b', 'owner'],
+                              [sort map { $_->[2] } @$list]);
+}

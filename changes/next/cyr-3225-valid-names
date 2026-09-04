@@ -1,0 +1,27 @@
+Description:
+
+JMAP and DAV now reject mailbox and collection names they cannot represent,
+rather than silently creating a mailbox by another name: JMAP returns
+invalidProperties for "name", and MKCOL/MKCALENDAR (and COPY/MOVE to such a
+destination) return 403.  Any mailboxes created this way previously still
+are reachable by the name they read back as.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
