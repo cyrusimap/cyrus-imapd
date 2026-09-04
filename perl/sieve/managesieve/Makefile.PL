@@ -20,8 +20,11 @@ WriteMakefile(
     'CCFLAGS'   => "$build->{GCOV_CFLAGS}",
     'DEFINE'    => '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING'
     'INC'       => join(q{ }, "-I$build->{top_srcdir}",
-                              "-I$build->{top_builddir}",
+                              "-I$build->{top_srcdir}/include",
                               "-I$build->{top_srcdir}/lib",
+                              "-I$build->{top_builddir}",
+                              "-I$build->{top_builddir}/include",
+                              "-I$build->{top_builddir}/lib",
                               "-I$build->{top_srcdir}/perl/sieve",
                               "-I$build->{top_srcdir}/perl/sieve/lib",
                               "-I$build->{top_srcdir}/com_err/et",

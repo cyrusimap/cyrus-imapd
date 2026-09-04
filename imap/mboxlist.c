@@ -5,6 +5,7 @@
 #include <config.h>
 
 #include <cyrus/assert.h>
+#include <cyrus/hash.h>
 #include <cyrus/xmalloc.h>
 #include <cyrus/xunlink.h>
 
@@ -32,7 +33,6 @@
 #include "glob.h"
 #include "global.h"
 #include "cyrusdb.h"
-#include "hash.h"
 #include "util.h"
 #include "mailbox.h"
 #include "mboxevent.h"

@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+
 #include <dirent.h>
 #include <errno.h>
 #include <limits.h>
@@ -15,7 +17,6 @@
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
 #include "util.h"
-#include "xmalloc.h"
 #include "zeroskip.h"
 
 /* Data files are named "zeroskip-<uuid>-<generation>[-<generation>]", plus the
