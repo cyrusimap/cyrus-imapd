@@ -1028,27 +1028,28 @@ EXPORTED void audit_collect_roots(const char *partition, int types,
  * removing a whole slice of the store. */
 #define AUDIT_MIN_UNIQUEID_LEN 3
 
-static int all_lowerhex(const char *s, size_t len)
+static bool all_lowerhex(const char *s, size_t len)
 {
     size_t i;
 
     for (i = 0; i < len; i++) {
-        if (!isxdigit((unsigned char)s[i])) return 0;
-        if (isupper((unsigned char)s[i])) return 0;
+        if (!isxdigit((unsigned char)s[i])) return false;
+        if (isupper((unsigned char)s[i])) return false;
     }
 
-    return 1;
+    return true;
 }
 
-EXPORTED int audit_valid_uniqueid(const char *id)
+EXPORTED bool audit_valid_uniqueid(const char *id)
 {
     size_t len, i;
-    int dashes = 0, lower = 0, upper = 0;
+    int dashes = 0;
+    bool lower = false, upper = false;
 
-    if (!id) return 0;
+    if (!id) return false;
 
     len = strlen(id);
-    if (len < AUDIT_MIN_UNIQUEID_LEN) return 0;
+    if (len < AUDIT_MIN_UNIQUEID_LEN) return false;
 
     /* really old format: namehash + uidvalidity */
     if (len == 16) return all_lowerhex(id, len);
@@ -1058,9 +1059,9 @@ EXPORTED int audit_valid_uniqueid(const char *id)
         for (i = 0; i < len; i++) {
             if (islower((unsigned char)id[i])) continue;
             if (isdigit((unsigned char)id[i])) continue;
-            return 0;
+            return false;
         }
-        return 1;
+        return true;
     }
 
     /* uuid format, either builtin (lowercase) or imported (uppercase),
@@ -1068,18 +1069,18 @@ EXPORTED int audit_valid_uniqueid(const char *id)
     if (len == 36) {
         for (i = 0; i < len; i++) {
             if (id[i] == '-') { dashes++; continue; }
-            if (!isxdigit((unsigned char)id[i])) return 0;
-            if (islower((unsigned char)id[i])) lower = 1;
-            if (isupper((unsigned char)id[i])) upper = 1;
+            if (!isxdigit((unsigned char)id[i])) return false;
+            if (islower((unsigned char)id[i])) lower = true;
+            if (isupper((unsigned char)id[i])) upper = true;
         }
-        if (lower && upper) return 0;
+        if (lower && upper) return false;
         return dashes == 4;
     }
 
-    return 0;
+    return false;
 }
 
-static int valid_hashchar(const char *name)
+static bool valid_hashchar(const char *name)
 {
     return name[0] && !name[1] && isalnum((unsigned char)name[0]);
 }
@@ -1224,12 +1225,12 @@ EXPORTED void audit_scan_uuid_root(const char *root, strarray_t *found,
 /* ------------------------------------------------------------------ */
 /* removal, and the guards on it                                      */
 
-EXPORTED int audit_path_is_young(const char *path)
+EXPORTED bool audit_path_is_young(const char *path)
 {
     struct stat sbuf;
 
     /* already gone: nothing to protect */
-    if (stat(path, &sbuf) < 0) return 0;
+    if (stat(path, &sbuf) < 0) return false;
 
     return time(NULL) < sbuf.st_mtime + AUDIT_MIN_AGE;
 }
@@ -1559,7 +1560,7 @@ static int scan_cb(void *rock, const char *rawkey, size_t rawkeylen,
         break;
 
     case MBOXLIST_KEY_RACL:
-        /* collected but not yet cross-checked; see the racl work */
+        /* derived state: ctl_cyrusdb -r rebuilds it from the ACLs */
         break;
 
     case MBOXLIST_KEY_JMAPID:
