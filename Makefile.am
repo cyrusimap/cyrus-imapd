@@ -1174,6 +1174,7 @@ endif # AUTOCREATE
 
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c \
+                      imap/dkim2_mi.c imap/dkim2_mi.h \
                       imap/zoneinfo_db.c
 imap_lmtpd_SOURCES += imap/jmap_util.c imap/caldav_util.c imap/defaultalarms.c imap/itip_support.c
 
