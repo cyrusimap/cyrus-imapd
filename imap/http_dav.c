@@ -736,6 +736,14 @@ HIDDEN int calcarddav_parse_path(const char *path,
     if (tgt->collen) {
         collection = freeme = xstrndup(tgt->collection, tgt->collen);
 
+        /* only a creation has to be representable: an existing collection
+         * may have been made before we checked */
+        if (tgt->mbentry && mboxname_policycheck_component(collection)) {
+            *resultstr = "Invalid characters in collection name";
+            ret = HTTP_FORBIDDEN;
+            goto done;
+        }
+
         p = strrchr(collection, SHARED_COLLECTION_DELIM);
         if (p) {
             if (tgt->mbentry) { /* MKCOL or COPY/MOVE destination */

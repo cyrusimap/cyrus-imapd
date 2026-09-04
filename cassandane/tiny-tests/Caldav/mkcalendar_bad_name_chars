@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mkcalendar_bad_name_chars ($self)
+{
+    my $caldav = $self->{caldav};
+
+    # '.' is not in this list: it already means a shared collection
+    foreach my $name ('a^b', '^') {
+        eval { $caldav->Request('MKCALENDAR',
+                                "/dav/calendars/user/cassandane/$name/") };
+        my $err = $@;
+        $self->assert_matches(qr/Invalid characters in collection name/, $err);
+    }
+
+    my $res = $caldav->Request('MKCALENDAR',
+                               "/dav/calendars/user/cassandane/goodname/");
+    $self->assert_not_null($res);
+}

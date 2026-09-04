@@ -465,6 +465,16 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
     while (len) {
         /* Get collection(s) */
         char *val = xstrndup(p, len);
+
+        /* only a creation has to be representable: an existing collection
+         * may have been made before we checked */
+        if (tgt->mbentry && mboxname_policycheck_component(val)) {
+            free(val);
+            mbname_free(&mbname);
+            *resultstr = "Invalid characters in collection name";
+            return HTTP_FORBIDDEN;
+        }
+
         mbname_push_boxes(mbname, val);
         free(val);
 
