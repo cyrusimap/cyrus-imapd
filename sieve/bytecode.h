@@ -109,8 +109,9 @@ typedef union
  * version 0x20 scripts implemented vnd.cyrus.implicit_keep_target
  * version 0x21 scripts implemented comparator-i;unicode-casemap (RFC 5051)
  * version 0x22 scripts implemented processcalendar per RFC 9671
+ * version 0x23 scripts implemented vnd.cyrus.addannotation
 */
-#define BYTECODE_VERSION 0x22
+#define BYTECODE_VERSION 0x23
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -415,6 +416,10 @@ enum bytecode {
                                    <calendar-id: string>
                                    <outcome-var: string>
                                    <reason-var: string>                        */
+
+    B_ADDANNOTATION,            /* require "vnd.cyrus.addannotation"
+
+                                   <scope: int> <entry: string> <value: string> */
 
     /*****  insert new actions above this line  *****/
     B_ILLEGAL_VALUE             /* any value >= this code is illegal */
