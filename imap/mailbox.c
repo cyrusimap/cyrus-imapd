@@ -946,9 +946,23 @@ static int mailbox_open_index(struct mailbox *mailbox, int index_locktype)
 }
 
 
-static int mailbox_relock(struct mailbox *mailbox, int locktype, int index_locktype)
+/* pass recheck when the mailbox should still be in mboxlist; mailbox_create()
+   and the delete cleanup in mailbox_close() both work on one which
+   deliberately isn't */
+static int mailbox_relock(struct mailbox *mailbox, int locktype,
+                          int index_locktype, int recheck)
 {
     int r = 0;
+
+    /* mailbox_unlock_index() does nothing while another holder has this
+       open, so we would drop their locks and then re-lock an index we never
+       released */
+    if (mailbox->refcount > 1) {
+        xsyslog(LOG_ERR, "refusing to relock a mailbox opened more than once",
+                         "mailbox=<%s> refcount=<%d>",
+                         mailbox_name(mailbox), mailbox->refcount);
+        return IMAP_MAILBOX_LOCKED;
+    }
 
     mailbox_unlock_index(mailbox, NULL);
     mailbox_release_resources(mailbox);
@@ -958,14 +972,42 @@ static int mailbox_relock(struct mailbox *mailbox, int locktype, int index_lockt
     int haslock = user_nslock_islocked(userid);
     if (haslock) {
         if ((haslock & LOCK_SHARED) && (index_locktype & LOCK_EXCLUSIVE))
-            return IMAP_MAILBOX_LOCKED;
+            r = IMAP_MAILBOX_LOCKED;
     }
     else {
         mailbox->user_nslock = user_nslock_lock(userid, index_locktype);
     }
     free(userid);
+    if (r) return r;
     r = mboxname_lock(mailbox->lockname, &mailbox->namelock, locktype);
     if (r) return r;
+
+    /* mailbox_open_advanced() refuses a mailbox which has been deleted or
+       replaced, but our callers already hold the struct and have nowhere to
+       put the error, so only complain */
+    if (recheck) {
+        mbentry_t *mbentry = NULL;
+        if (mboxlist_lookup_allow_all(mailbox_name(mailbox), &mbentry, NULL)) {
+            xsyslog(LOG_ERR, "mailbox vanished while unlocked for relock",
+                             "mailbox=<%s> uniqueid=<%s>",
+                             mailbox_name(mailbox), mailbox_uniqueid(mailbox));
+        }
+        else if (mbentry->mbtype &
+                 (MBTYPE_DELETED|MBTYPE_MOVING|MBTYPE_INTERMEDIATE)) {
+            xsyslog(LOG_ERR, "mailbox no longer usable after relock",
+                             "mailbox=<%s> uniqueid=<%s> mbtype=<%s>",
+                             mailbox_name(mailbox), mailbox_uniqueid(mailbox),
+                             mboxlist_mbtype_to_string(mbentry->mbtype));
+        }
+        else if (strcmpsafe(mbentry->uniqueid, mailbox_uniqueid(mailbox))) {
+            xsyslog(LOG_ERR, "mailbox replaced while unlocked for relock",
+                             "mailbox=<%s> uniqueid=<%s> newuniqueid=<%s>",
+                             mailbox_name(mailbox), mailbox_uniqueid(mailbox),
+                             mbentry->uniqueid);
+        }
+        mboxlist_entry_free(&mbentry);
+    }
+
     r = mailbox_open_index(mailbox, index_locktype);
     if (r) return r;
     r = mailbox_lock_index_internal(mailbox, index_locktype);
@@ -1318,7 +1360,8 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
     }
 
     if (mailbox->i.options & OPT_MAILBOX_DELETED) {
-        int r = mailbox_relock(mailbox, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE);
+        int r = mailbox_relock(mailbox, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE,
+                               0/*recheck*/);
         /* double check just in case a new mailbox with the same name got created
          * in a race condition and isn't deleted! */
         if (!r && (mailbox->i.options & OPT_MAILBOX_DELETED)) {
@@ -2488,7 +2531,8 @@ EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int index_locktype)
     }
 
     if (need_relock)
-        return mailbox_relock(mailbox, LOCK_SHARED, index_locktype);
+        return mailbox_relock(mailbox, LOCK_SHARED, index_locktype,
+                              1/*recheck*/);
 
     r = mailbox_lock_index_internal(mailbox, index_locktype);
     if (r) return r;
@@ -6647,8 +6691,10 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
                            NULL : mailbox_uniqueid(newmailbox));
     if (r) goto fail;
 
-    /* we have new files in place, so redo all the locks */
-    r = mailbox_relock(newmailbox, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE);
+    /* we have new files in place, so redo all the locks.  mailbox_create()
+       only built the mbentry in memory, so there's nothing to recheck yet */
+    r = mailbox_relock(newmailbox, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE,
+                       0/*recheck*/);
     if (r) goto fail;
 
     /* update mailbox annotations if necessary */
