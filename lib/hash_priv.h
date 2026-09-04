@@ -5,6 +5,8 @@
 
 #include <sysexits.h>
 
+#include "assert.h"
+
 /* Resize the hash when we hit this: */
 #define HASH_LOAD_FACTOR 1
 /* 8 entries: */
@@ -85,8 +87,8 @@ static uint64_t round_up_log_base2(uint64_t v) {
 
 /* realistically you don't want to go below 0.5, but coded like this so that
  * the logic just below is good enough to catch all overflow possiblities. */
-_Static_assert(1 < sizeof(void *) * HASH_LOAD_FACTOR,
-               "HASH_LOAD_FACTOR is too small");
+static_assert(1 < sizeof(void *) * HASH_LOAD_FACTOR,
+              "HASH_LOAD_FACTOR is too small");
 
 static uint8_t hash_base2_size_for_entries(uint64_t entries) {
   if (entries <= (1 << HASH_MIN_SIZE_BASE_2) / (1.0 / HASH_LOAD_FACTOR))

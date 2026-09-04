@@ -1,6 +1,7 @@
 #include "cunit/unit.h"
 #include "lib/sessionid.h"
 
+#include "lib/assert.h"
 #include "lib/libconfig.h"
 #include "lib/xmalloc.h"
 
@@ -11,8 +12,8 @@
 #define X64     X16 X16 X16 X16
 #define X255    X64 X64 X64 X16 X16 X16 X15
 #define X256    X64 X64 X64 X64
-_Static_assert(sizeof(X255) == 255 + 1, "X255 is wrong length");
-_Static_assert(sizeof(X256) == 256 + 1, "X266 is wrong length");
+static_assert(sizeof(X255) == 255 + 1, "X255 is wrong length");
+static_assert(sizeof(X256) == 256 + 1, "X266 is wrong length");
 
 static int set_up(void)
 {

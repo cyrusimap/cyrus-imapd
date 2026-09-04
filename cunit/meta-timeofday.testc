@@ -9,6 +9,7 @@
 #include "cunit/unit.h"
 #include "cunit/unit-timeofday.h"
 
+#include "lib/assert.h"
 #include "lib/util.h"
 
 #if HAVE_VALGRIND_VALGRIND_H
@@ -22,7 +23,7 @@
 #endif
 
 #define MAX_SLEEPS (3)
-_Static_assert(MAX_SLEEPS >= 2, "need to sleep at least twice");
+static_assert(MAX_SLEEPS >= 2, "need to sleep at least twice");
 
 static int tear_down(void)
 {
