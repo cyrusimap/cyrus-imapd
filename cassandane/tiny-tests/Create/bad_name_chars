@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 # With '.' as the hierarchy separator, '^' is how a '.' in a name is spelled
-# externally, and '/' has no special meaning at all.
+# externally, and '/' is not permitted.
 sub test_bad_name_chars ($self)
 {
     my $talk = $self->{store}->get_client();
