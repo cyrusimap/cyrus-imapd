@@ -48,6 +48,7 @@
 #include "carddav_db.h"
 #include "webdav_db.h"
 #include "ical_support.h"
+#include "idclass.h"
 #include "jmap_util.h"
 #include "vcard_support.h"
 #ifdef USE_SIEVE
@@ -1259,7 +1260,7 @@ EXPORTED modseq_t mailbox_modseq_dirty(struct mailbox *mailbox)
         mailbox_index_dirty(mailbox);
     }
 
-    mailbox->i.highestmodseq++;
+    mailbox->i.highestmodseq = modseq_next(mailbox->i.highestmodseq);
 
     return mailbox->i.highestmodseq;
 }
@@ -4526,8 +4527,16 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     else {
         mailbox_modseq_dirty(mailbox);
         record->modseq = mailbox->i.highestmodseq;
-        if (!record->createdmodseq || record->createdmodseq > record->modseq)
+        if (!record->createdmodseq) {
             record->createdmodseq = record->modseq;
+        }
+        else if (record->createdmodseq > record->modseq) {
+            /* a peer minted this createdmodseq in its own residue class and
+             * clients already hold it as a JMAP id - move our modseq above
+             * it rather than rewriting the identity */
+            mailbox->i.highestmodseq = modseq_next(record->createdmodseq);
+            record->modseq = mailbox->i.highestmodseq;
+        }
         record->last_updated.tv_sec = mailbox->last_updated;
         if (!record->savedate.tv_sec) {
             // store the time of actual append if requested
@@ -5831,8 +5840,16 @@ EXPORTED int mailbox_create(const char *name,
                            MBOXMODSEQ_ISFOLDER);
 
     /* and created modseq */
-    if (!createdmodseq || createdmodseq > highestmodseq)
+    if (!createdmodseq) {
         createdmodseq = highestmodseq;
+    }
+    else if (createdmodseq > highestmodseq) {
+        /* see mailbox_append_index_record: the jmapid below is derived from
+         * createdmodseq, so raise highestmodseq instead of lowering it */
+        highestmodseq = modseq_next(createdmodseq);
+        mboxname_setmodseq(mailbox_name(mailbox), highestmodseq, mbtype,
+                           MBOXMODSEQ_ISFOLDER);
+    }
 
     /* and jmapid */
     struct buf buf = BUF_INITIALIZER;

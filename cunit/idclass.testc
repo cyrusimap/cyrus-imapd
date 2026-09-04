@@ -1,0 +1,74 @@
+#if HAVE_CONFIG_H
+#include <config.h>
+#endif
+#include "cunit/unit.h"
+#include "lib/idclass.h"
+
+static void test_modseq_next_identity(void)
+{
+    /* modulus 1 is the historical behaviour: plain increment */
+    CU_ASSERT_EQUAL(idclass_modseq_next(0, 0, 1), 1);
+    CU_ASSERT_EQUAL(idclass_modseq_next(41, 0, 1), 42);
+}
+
+static void test_modseq_next_inclass(void)
+{
+    /* always strictly greater, always congruent */
+    CU_ASSERT_EQUAL(idclass_modseq_next(100, 3, 16), 115);
+    CU_ASSERT_EQUAL(idclass_modseq_next(115, 3, 16), 131);
+    CU_ASSERT_EQUAL(idclass_modseq_next(0, 3, 16), 3);
+
+    /* base 0 must still advance off zero */
+    CU_ASSERT_EQUAL(idclass_modseq_next(0, 0, 16), 16);
+    CU_ASSERT_EQUAL(idclass_modseq_next(16, 0, 16), 32);
+
+    /* adopting a foreign host's value lands us back in our own class */
+    modseq_t foreign = 1234567;  /* 1234567 % 16 == 7, not ours */
+    modseq_t mine = idclass_modseq_next(foreign, 3, 16);
+    CU_ASSERT(mine > foreign);
+    CU_ASSERT_EQUAL(mine % 16, 3);
+}
+
+static void test_uidvalidity_next(void)
+{
+    CU_ASSERT_EQUAL(idclass_uidvalidity_next(0, 0, 1), 1);
+    CU_ASSERT_EQUAL(idclass_uidvalidity_next(100, 3, 16), 115);
+
+    /* must never wrap backwards */
+    uint32_t near_max = UINT32_MAX - 2;
+    CU_ASSERT(idclass_uidvalidity_next(near_max, 3, 16) > near_max);
+}
+
+static void test_nsec_align(void)
+{
+    /* modulus 1 leaves the value alone */
+    CU_ASSERT_EQUAL(idclass_nsec_align(123456789, 0, 1), 123456789);
+
+    /* aligned onto the class, and idempotent once there */
+    CU_ASSERT_EQUAL(idclass_nsec_align(100, 3, 16), 99);
+    CU_ASSERT_EQUAL(idclass_nsec_align(99, 3, 16), 99);
+
+    /* zero is UTIME_OMIT and must never be produced */
+    CU_ASSERT_EQUAL(idclass_nsec_align(8, 0, 16), 16);
+    CU_ASSERT(idclass_nsec_align(0, 0, 16) >= 1);
+
+    /* the top of the range must stay legal */
+    CU_ASSERT(idclass_nsec_align(999999999, 15, 16) <= 999999999);
+    CU_ASSERT_EQUAL(idclass_nsec_align(999999999, 15, 16) % 16, 15);
+
+    /* a modulus that doesn't divide the range evenly */
+    CU_ASSERT(idclass_nsec_align(999999999, 6, 7) <= 999999999);
+    CU_ASSERT_EQUAL(idclass_nsec_align(999999999, 6, 7) % 7, 6);
+}
+
+static void test_nsec_next(void)
+{
+    CU_ASSERT_EQUAL(idclass_nsec_next(99, 3, 16), 115);
+
+    /* wraps to the bottom of the class rather than escaping the range */
+    long top = idclass_nsec_align(999999999, 3, 16);
+    long wrapped = idclass_nsec_next(top, 3, 16);
+    CU_ASSERT(wrapped >= 1);
+    CU_ASSERT(wrapped <= 999999999);
+    CU_ASSERT_EQUAL(wrapped % 16, 3);
+}

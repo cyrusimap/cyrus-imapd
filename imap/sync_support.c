@@ -24,6 +24,7 @@
 #include "assert.h"
 #include "bsearch.h"
 #include "global.h"
+#include "idclass.h"
 #include "imap_proxy.h"
 #include "mboxlist.h"
 #include "mailbox.h"
@@ -98,6 +99,7 @@ static struct protocol_t imap_csync_protocol =
           { "X-SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
           { "X-REPLICATION-ARCHIVE", CAPA_REPLICATION_ARCHIVE },
           { "X-UNMAILBOX-ID", CAPA_UNMAILBOX_ID },
+          { "X-IDCLASS", CAPA_IDCLASS },
           { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
       { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
@@ -119,6 +121,7 @@ static struct protocol_t csync_protocol =
           { "SIEVE-MAILBOX", CAPA_SIEVE_MAILBOX },
           { "REPLICATION-ARCHIVE", CAPA_REPLICATION_ARCHIVE },
           { "UNMAILBOX-ID", CAPA_UNMAILBOX_ID },
+          { "IDCLASS", CAPA_IDCLASS },
           { NULL, 0 } } },
       { "STARTTLS", "OK", "NO", 1 },
       { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
@@ -4994,8 +4997,49 @@ static int sync_apply_capabilities(struct dlist *kin, struct sync_state *sstate)
         if (!strcasecmp(capa, "UNMAILBOX-ID")) {
             dlist_setatom(kout, NULL, capa);
         }
+        if (!strcasecmp(capa, "IDCLASS")) {
+            sstate->flags |= SYNC_FLAG_IDCLASS;
+            dlist_setatom(kout, NULL, capa);
+        }
     }
 
+    sync_send_response(kout, sstate->pout);
+    dlist_free(&kout);
+
+    return 0;
+}
+
+/* Two hosts minting in the same class silently defeats the split-brain
+ * guard, and cloning a config onto a new host is the usual way to get there */
+static void idclass_check_peer(uint32_t base, uint32_t modulus,
+                               uint32_t peer_base, uint32_t peer_modulus)
+{
+    if (modulus <= 1 || peer_modulus <= 1) return;
+
+    if (modulus != peer_modulus || base == peer_base) {
+        xsyslog(LOG_ERR, "SYNCERROR: identifier class clash",
+                         "base=<%u> modulus=<%u>"
+                         " peer.base=<%u> peer.modulus=<%u>",
+                         base, modulus, peer_base, peer_modulus);
+    }
+}
+
+static int sync_apply_idclass(struct dlist *kin, struct sync_state *sstate)
+{
+    uint32_t peer_base = 0, peer_modulus = 1;
+    uint32_t base, modulus;
+    struct dlist *kout;
+
+    if (!dlist_getnum32(kin, "BASE", &peer_base) ||
+        !dlist_getnum32(kin, "MODULUS", &peer_modulus))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    idclass_config(&base, &modulus);
+    idclass_check_peer(base, modulus, peer_base, peer_modulus);
+
+    kout = dlist_newkvlist(NULL, "IDCLASS");
+    dlist_setnum32(kout, "BASE", base);
+    dlist_setnum32(kout, "MODULUS", modulus);
     sync_send_response(kout, sstate->pout);
     dlist_free(&kout);
 
@@ -6792,15 +6836,18 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
     }
 
     if (mailbox->i.highestmodseq < highestmodseq) {
-        /* highestmodseq on replica is dirty - we must copy and then dirty
-         * so we go one higher! */
-        xsyslog(LOG_NOTICE, "SYNCNOTICE: highestmodseq higher on replica, updating",
-                            "mailbox=<%s> oldhighestmodseq=<" MODSEQ_FMT ">"
-                                " newhighestmodseq=<" MODSEQ_FMT ">",
-                            mailbox_name(mailbox), mailbox->i.highestmodseq, highestmodseq+1);
+        /* highestmodseq on replica is dirty - we must copy and then dirty so
+         * we go higher.  With a residue class configured that lands us back
+         * in our own class, which is how a promoted replica self-heals. */
+        modseq_t oldhighestmodseq = mailbox->i.highestmodseq;
         mailbox->modseq_dirty = 0;
         mailbox->i.highestmodseq = highestmodseq;
         mailbox_modseq_dirty(mailbox);
+        xsyslog(LOG_NOTICE, "SYNCNOTICE: highestmodseq higher on replica, updating",
+                            "mailbox=<%s> oldhighestmodseq=<" MODSEQ_FMT ">"
+                                " newhighestmodseq=<" MODSEQ_FMT ">",
+                            mailbox_name(mailbox), oldhighestmodseq,
+                            mailbox->i.highestmodseq);
         remote_modseq_was_higher = 1;
     }
 
@@ -8371,6 +8418,9 @@ EXPORTED const char *sync_apply(struct dlist *kin, struct sync_reserve_list *res
     else if (!strcmp(kin->name, "CAPABILITIES"))
         r = sync_apply_capabilities(kin, state);
 
+    else if (!strcmp(kin->name, "IDCLASS"))
+        r = sync_apply_idclass(kin, state);
+
     else {
         xsyslog(LOG_ERR, "SYNCERROR: unknown command",
                          "command=<%s>",
@@ -9086,6 +9136,10 @@ connected:
         }
     }
 
+    if (CAPA(backend, CAPA_IDCLASS)) {
+        capabilities |= CAPA_IDCLASS;
+    }
+
     if (capabilities) {
         sync_do_enable(sync_cs, capabilities);
 
@@ -9095,6 +9149,10 @@ connected:
             syslog(LOG_NOTICE, "Replication to archive requested but destination didn't enable it");
             return IMAP_REMOTE_DENIED;
         }
+
+        /* both ends minting in the same class defeats the whole scheme -
+         * log it rather than refuse, so a config typo isn't an outage */
+        sync_do_idclass(sync_cs);
     }
 
     /* Set inactivity timer */
@@ -9214,6 +9272,9 @@ int sync_do_enable(struct sync_client_state *sync_cs, unsigned capabilities)
     if (capabilities & CAPA_UNMAILBOX_ID) {
         dlist_setatom(kl, NULL, "UNMAILBOX-ID");
     }
+    if (capabilities & CAPA_IDCLASS) {
+        dlist_setatom(kl, NULL, "IDCLASS");
+    }
 
     sync_send_apply(kl, sync_cs->backend->out);
     dlist_free(&kl);
@@ -9239,7 +9300,50 @@ int sync_do_enable(struct sync_client_state *sync_cs, unsigned capabilities)
                     sync_cs->flags |= SYNC_FLAG_ARCHIVE;
                 if (!strcasecmp(capa, "UNMAILBOX-ID"))
                     sync_cs->flags |= SYNC_FLAG_UNMAILBOX_ID;
+                if (!strcasecmp(capa, "IDCLASS"))
+                    sync_cs->flags |= SYNC_FLAG_IDCLASS;
             }
+        }
+    }
+
+    dlist_free(&kin);
+
+    return r;
+}
+
+EXPORTED int sync_do_idclass(struct sync_client_state *sync_cs)
+{
+    struct dlist *kl, *kin = NULL;
+    uint32_t base, modulus;
+    uint32_t peer_base = 0, peer_modulus = 1;
+    int r;
+
+    if (!(sync_cs->flags & SYNC_FLAG_IDCLASS)) return 0;
+
+    idclass_config(&base, &modulus);
+
+    kl = dlist_newkvlist(NULL, "IDCLASS");
+    dlist_setnum32(kl, "BASE", base);
+    dlist_setnum32(kl, "MODULUS", modulus);
+    sync_send_apply(kl, sync_cs->backend->out);
+    dlist_free(&kl);
+
+    r = sync_parse_response("IDCLASS", sync_cs->backend->in, &kin);
+    if (r) return r;
+
+    if (kin) {
+        /* sync_parse_response hands back a container: the named list is
+         * its head, same shape as the ENABLED response above */
+        struct dlist *ki = kin->head;
+        if (!ki || strcmp(ki->name, "IDCLASS")) {
+            xsyslog(LOG_ERR, "SYNCERROR: Illegal response to IDCLASS",
+                    "name=<%s>", ki ? ki->name : "(none)");
+            r = IMAP_PROTOCOL_BAD_PARAMETERS;
+        }
+        else {
+            dlist_getnum32(ki, "BASE", &peer_base);
+            dlist_getnum32(ki, "MODULUS", &peer_modulus);
+            idclass_check_peer(base, modulus, peer_base, peer_modulus);
         }
     }
 

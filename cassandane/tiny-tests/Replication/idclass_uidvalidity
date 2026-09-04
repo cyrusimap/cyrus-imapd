@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Every uidvalidity this host mints is congruent to its configured base.
+#
+sub test_idclass_uidvalidity
+    :min_version_3_13 :ResidueClass
+    ($self)
+{
+    my $base = 1;
+    my $modulus = 16;
+
+    my $talk = $self->{store}->get_client();
+
+    foreach my $name (qw(one two three)) {
+        $talk->create("INBOX.$name") || die "create failed: $@";
+        my $status = $talk->status("INBOX.$name", '(uidvalidity)');
+        $self->assert_num_equals($base, $status->{uidvalidity} % $modulus);
+    }
+}

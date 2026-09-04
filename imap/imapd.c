@@ -461,6 +461,7 @@ static struct capa_struct base_capabilities[] = {
     { "SORT=UID",              CAPA_POSTAUTH,           { 0 } }, /* NS */
     { "THREAD=REFS",           CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-morg-inthread */
     { "X-CREATEDMODSEQ",       CAPA_POSTAUTH,           { 0 } }, /* CY */
+    { "X-IDCLASS",             CAPA_POSTAUTH,           { 0 } }, /* CY */
     { "X-REPLICATION",         CAPA_POSTAUTH,           { 0 } }, /* CY */
     { "X-REPLICATION-ARCHIVE", CAPA_POSTAUTH,           { 0 } }, /* CY */
     { "X-SIEVE-MAILBOX",       CAPA_POSTAUTH,           { 0 } }, /* CY */

@@ -25,6 +25,7 @@
 #include "dlist.h"
 #include "hash.h"
 #include "global.h"
+#include "idclass.h"
 #include "imapd.h"
 #include "lsort.h"
 #include "mailbox.h"
@@ -3541,6 +3542,11 @@ EXPORTED void conversations_adjust_internaldate(struct conversations_state *csta
             if (!UTIME_SAFE_NSEC(internaldate->tv_nsec)) internaldate->tv_nsec = 1;
         }
 
+        // put it in this host's residue class, so a split-brained peer can't
+        // mint the same nanosecond for a different message.  idempotent, so
+        // re-aligning after a probe step is harmless
+        internaldate->tv_nsec = nsec_align(internaldate->tv_nsec);
+
         buf_reset(&jidrep);
         NANOSEC_TO_JMAPID(&jidrep, TIMESPEC_TO_NANOSEC(internaldate));
         int r = conversations_jmapid_guidrep_lookup(cstate,
@@ -3575,8 +3581,9 @@ EXPORTED void conversations_adjust_internaldate(struct conversations_state *csta
 
         mboxlist_entry_free(&lrock.mbentry);
 
-        // try the next nanosecond */
-        internaldate->tv_nsec++;
+        // try the next nanosecond in our class, wrapping rather than
+        // walking out of the UTIME_SAFE_NSEC range
+        internaldate->tv_nsec = nsec_next(internaldate->tv_nsec);
 
         // in the unlikely event that we reach the limit below, we're screwed
     } while (++count < 1000);
