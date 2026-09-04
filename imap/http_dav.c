@@ -6614,13 +6614,6 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
     /* Local Mailbox */
 
-    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
-    if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for proppatch",
-               txn->req_tgt.mbentry->name);
-        return HTTP_SERVER_ERROR;
-    }
-
     /* Parse the PROPPATCH body */
     ret = parse_xml_body(txn, &root, NULL);
     if (!ret && !root) {
@@ -6640,6 +6633,19 @@ int meth_proppatch(struct transaction_t *txn, void *params)
         goto done;
     }
     instr = root->children;
+
+    /* Only now take the write lock: parse_xml_body() above reads the request
+     * body from the client, which blocks for as long as the client takes to
+     * send it, and this lock is exclusive on the whole user namespace.  A
+     * malformed request no longer takes the lock at all. */
+    /* don't set r: the done: path aborts the mailbox when it is set, and we
+     * have no mailbox to abort if this failed */
+    if (mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox)) {
+        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for proppatch",
+               txn->req_tgt.mbentry->name);
+        ret = HTTP_SERVER_ERROR;
+        goto done;
+    }
 
     /* Start construction of our multistatus response */
     if (!(root = init_xml_response("multistatus", NS_DAV, root, ns))) {

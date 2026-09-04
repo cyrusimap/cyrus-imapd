@@ -36,7 +36,9 @@
 #include "prot.h"
 #include "times.h"
 #include "global.h"
+#include "mboxevent.h"
 #include "prometheus.h"
+#include "signals.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "version.h"
@@ -1137,14 +1139,32 @@ void lmtpmode(struct lmtp_func *func,
                 prometheus_apply_delta(CYRUS_LMTP_RECEIVED_BYTES_TOTAL, msg->size);
                 prometheus_apply_delta(CYRUS_LMTP_RECEIVED_RECIPIENTS_TOTAL, msg->rcpt_num);
 
+                /* The unit of work the MTA cares about is "delivered AND
+                 * acknowledged", not "committed".  Shutting down between
+                 * those two makes the MTA redeliver a message we already
+                 * have, so hold a shutdown off across the whole thing - the
+                 * per-transaction deferral in mboxname.c nests inside this
+                 * one, which also keeps us from exiting between two
+                 * recipients of the same DATA. */
+                signals_defer_shutdown();
+
                 /* do delivery, report status */
                 func->deliver(msg, msg->authuser, msg->authstate, msg->ns);
+
+                /* Delivery is over and its locks are gone, so send the
+                 * notifications it queued before we answer the client. */
+                mboxevent_flush_notifications();
 
                 for (j = 0; j < msg->rcpt_num; j++) {
                     if (!msg->rcpt[j]->status) delivered++;
                     send_lmtp_error(pout, msg->rcpt[j]->status,
                                     msg->rcpt[j]->resp);
                 }
+
+                /* on the wire, not just in the buffer, before we let go */
+                prot_flush(pout);
+
+                signals_resume_shutdown();
 
                 prometheus_increment(CYRUS_LMTP_TRANSMITTED_MESSAGES_TOTAL);
                 prometheus_apply_delta(CYRUS_LMTP_TRANSMITTED_BYTES_TOTAL, delivered * msg->size);

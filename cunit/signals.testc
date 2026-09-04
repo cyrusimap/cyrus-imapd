@@ -1,0 +1,59 @@
+/* Unit test for lib/signals.c shutdown deferral */
+#include <config.h>
+#include <signal.h>
+
+#include "cunit/unit.h"
+
+#include "lib/signals.h"
+
+static int shutdowns;
+
+/* The real shutdown callbacks exit.  Ours returns so the test can keep
+ * looking, which has one consequence worth knowing: signals_poll_mask() sets
+ * its in-shutdown flag before calling us and nothing ever clears it, so only
+ * the FIRST shutdown in this process can fire.  Hence a single test that walks
+ * the whole lifecycle, rather than one test per property. */
+static void count_shutdown(int code __attribute__((unused)))
+{
+    shutdowns++;
+}
+
+static void test_deferral_lifecycle(void)
+{
+    shutdowns = 0;
+    signals_add_handlers(0);
+    signals_clear(SIGTERM);
+    signals_set_shutdown(count_shutdown);
+
+    /* nothing pending: releasing a transaction shuts nothing down */
+    signals_defer_shutdown();
+    signals_resume_shutdown();
+    CU_ASSERT_EQUAL(shutdowns, 0);
+
+    /* two nested transactions, then the signal arrives */
+    signals_defer_shutdown();
+    signals_defer_shutdown();
+    raise(SIGTERM);
+
+    /* Held.  And reported as nothing: callers read a nonzero return as "stop
+     * what you are doing", and prot.c uses it to abandon a read, which would
+     * tear apart the transaction we are deferring for. */
+    CU_ASSERT_EQUAL(signals_poll(), 0);
+    CU_ASSERT_EQUAL(shutdowns, 0);
+
+    /* still held, and still quiet, on a second look */
+    CU_ASSERT_EQUAL(signals_poll(), 0);
+    CU_ASSERT_EQUAL(shutdowns, 0);
+
+    /* the inner transaction closing is not enough */
+    signals_resume_shutdown();
+    CU_ASSERT_EQUAL(shutdowns, 0);
+
+    /* the outermost one lets it through */
+    signals_resume_shutdown();
+    CU_ASSERT_EQUAL(shutdowns, 1);
+
+    /* nothing clears a delivered signal for us, and every other test in this
+     * binary shares the array */
+    signals_clear(SIGTERM);
+}

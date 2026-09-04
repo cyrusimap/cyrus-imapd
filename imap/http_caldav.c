@@ -2878,6 +2878,25 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     }
     else return HTTP_BAD_REQUEST;
 
+    /* Read the body before taking any lock.  This waits on the client for as
+     * long as it cares to take, and the calendar lock below is exclusive on
+     * the whole user namespace.  Only `op` decides whether there is a body to
+     * read, and we know that already. */
+    if (op != ATTACH_REMOVE) {
+        txn->req_body.flags |= BODY_DECODE;
+        r = http_read_req_body(txn);
+        if (r) {
+            txn->flags.conn = CONN_CLOSE;
+            return r;
+        }
+
+        /* Make sure we have a body */
+        if (!buf_len(&txn->req_body.payload)) {
+            txn->error.desc = "Missing request body";
+            return HTTP_BAD_REQUEST;
+        }
+    }
+
     /* Open calendar for writing */
     r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &calendar);
     if (r) {
@@ -2985,20 +3004,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         static char uid[2*MESSAGE_GUID_SIZE+1];
         struct message_guid guid;
 
-        /* Read body */
-        txn->req_body.flags |= BODY_DECODE;
-        r = http_read_req_body(txn);
-        if (r) {
-            txn->flags.conn = CONN_CLOSE;
-            return r;
-        }
-
-        /* Make sure we have a body */
-        if (!buf_len(&txn->req_body.payload)) {
-            txn->error.desc = "Missing request body";
-            ret = HTTP_BAD_REQUEST;
-            goto done;
-        }
+        /* body was read before we took the lock, above */
 
         /* Generate UID of body content */
         message_guid_generate(&guid, buf_base(&txn->req_body.payload),

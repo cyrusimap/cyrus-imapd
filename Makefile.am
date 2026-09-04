@@ -659,6 +659,7 @@ cunit_TESTS = \
     cunit/search_expr.testc \
     cunit/seqset.testc \
     cunit/sessionid.testc \
+    cunit/signals.testc \
     cunit/slowio.testc \
     cunit/smallarrayu64.testc \
     cunit/sqldb.testc \

@@ -21,6 +21,7 @@
 #include "mailbox.h"
 #include "map.h"
 #include "retry.h"
+#include "signals.h"
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -117,6 +118,23 @@ static struct mboxlocklist *create_lockitem(const char *name)
     item->l.lock_fd = -1;
     item->l.locktype = 0;
 
+    /* Every write takes the global lock for the duration of the transaction
+     * (see mboxname_lock() below), so this is exactly "a write starts here".
+     * Hold off any graceful shutdown until it is released, or we risk exiting
+     * with a mailbox committed but its conversations DB not, or an LMTP message
+     * delivered but never acknowledged.
+     *
+     * The deferral is unbounded, which is fine while a transaction is only
+     * waiting on local work.  It is not always: in a murder, mboxlist_setacl()
+     * and friends hold a namespacelock across a mupdate round trip, and
+     * cyr_withlock_run() holds the global lock across an arbitrary command.  A
+     * process wedged on one of those now ignores SIGTERM until the peer
+     * answers or the prot layer times out.  The escape hatch is SA_RESETHAND:
+     * a second signal kills us outright, mid-transaction, which is what we
+     * were trying to avoid - so that is a last resort, not a plan. */
+    if (!strcmp(name, GLOBAL_LOCKNAME))
+        signals_defer_shutdown();
+
     return item;
 }
 
@@ -143,6 +161,8 @@ static void remove_lockitem(struct mboxlocklist *remitem)
                 previtem->next = item->next;
             else
                 open_mboxlocks = item->next;
+            int wasglobal = !strcmp(item->l.name, GLOBAL_LOCKNAME);
+
             if (item->l.lock_fd != -1) {
                 if (item->l.locktype)
                     lock_unlock(item->l.lock_fd, item->l.name);
@@ -150,6 +170,13 @@ static void remove_lockitem(struct mboxlocklist *remitem)
             }
             free(item->l.name);
             free(item);
+
+            /* The write transaction is over and everything it touched is
+             * committed and unlocked, so this is the moment a shutdown we held
+             * off can safely happen - and it does, inside here, without
+             * returning. */
+            if (wasglobal) signals_resume_shutdown();
+
             return;
         }
         previtem = item;

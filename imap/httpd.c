@@ -2182,6 +2182,10 @@ static void cmdloop(struct http_connection *conn)
 
         sync_log_reset();
 
+        /* Locks from the last request are gone now, and the client has not
+         * been answered yet: send the notifications it queued. */
+        mboxevent_flush_notifications();
+
         /* Check for input from client */
         do {
             /* Flush any buffered output */

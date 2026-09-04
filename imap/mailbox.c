@@ -611,6 +611,19 @@ static struct mappedfile *cache_getfile(ptrarray_t *list, const char *fname,
     return cachefile;
 }
 
+/* The generation of the index this cache file was written for, stamped into
+ * the first four bytes by cache_getfile() above.  Records start after it, so
+ * offset 0 is never a real cache offset. */
+static uint32_t cache_generation(struct mappedfile *cachefile)
+{
+    const struct buf *buf = mappedfile_buf(cachefile);
+
+    if (mappedfile_size(cachefile) < 4)
+        return 0;
+
+    return ntohl(*(bit32 *)buf->s);
+}
+
 static struct mappedfile *mailbox_cachefile(struct mailbox *mailbox,
                                             const struct index_record *record)
 {
@@ -621,7 +634,14 @@ static struct mappedfile *mailbox_cachefile(struct mailbox *mailbox,
     else
         fname = mailbox_meta_fname(mailbox, META_CACHE);
 
-    int is_readonly = mailbox->is_readonly || mailbox->index_locktype == LOCK_SHARED;
+    /* Writing the cache needs the index write lock - mailbox_append_cache()
+     * asserts it.  Ask by the lock rather than by mailbox->is_readonly, which
+     * is set once at open time and says nothing about now: callers stream
+     * responses after mailbox_unlock_index(), and opening read-write there
+     * would create a fresh cyrus.cache stamped with our stale generation if a
+     * repack had unlinked the real one. */
+    int is_readonly = mailbox->is_readonly
+                   || !mailbox_index_islocked(mailbox, /*write*/1);
     return cache_getfile(&mailbox->caches, fname, is_readonly, mailbox->i.generation_no);
 }
 
@@ -712,6 +732,18 @@ static int mailbox_cacherecord_internal(struct mailbox *mailbox,
     if (!record->cache_offset)
         goto err;
 
+    /* A repack rewrites every offset and bumps the generation, and unlinks
+     * any cache file it didn't rewrite - so a file stamped differently from
+     * our index is simply not the one our offsets came from.  Reachable two
+     * ways: we read without the index lock (see mailbox_unlock_index), or a
+     * repack died between renaming the index and renaming the caches, which
+     * mailbox_repack_commit() explicitly leaves for us to notice.  Either
+     * way there is nothing here to parse. */
+    if (cache_generation(cachefile) != mailbox->i.generation_no) {
+        r = IMAP_MAILBOX_REPACKED;
+        goto err;
+    }
+
     /* try to parse the cache record */
     r = cache_parserecord(cachefile, record->cache_offset, &backdoor->crec);
     if (r) goto err;
@@ -736,6 +768,13 @@ err:
         xsyslog(LOG_ERR, "IOERROR: missing cache offset",
                          "mailbox=<%s> uid=<%u>",
                          mailbox_name(mailbox), record->uid);
+    else if (r == IMAP_MAILBOX_REPACKED)
+        /* not an IOERROR: nothing is broken, we just lost the race */
+        xsyslog(LOG_NOTICE, "cache generation mismatch, reparsing",
+                            "mailbox=<%s> uid=<%u> ours=<%u> theirs=<%u>",
+                            mailbox_name(mailbox), record->uid,
+                            mailbox->i.generation_no,
+                            cache_generation(cachefile));
     else if (r)
         xsyslog(LOG_ERR, "IOERROR invalid cache record",
                          "mailbox=<%s> uid=<%u> error=<%s> crc=<%d> cache_offset=<%llu>",
@@ -2547,6 +2586,24 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
 
     // release the namespacelock here
     user_nslock_release(&mailbox->user_nslock);
+
+    /* And the namelock.  Callers stream responses to a client after unlocking,
+     * which blocks for as long as the client takes to read them; a namelock
+     * held across that stalls repack, rename and delete on this mailbox.  The
+     * struct and its mappings stay usable, and mailbox_lock_index() gets us
+     * back in - via mailbox_relock(), which re-takes the namelock too, unless
+     * an outer user namespacelock means we never dropped our exclusion in the
+     * first place, in which case the namelock stays gone.  Note that
+     * open_mailboxes_namelocked() answers 0 for a mailbox in that state.
+     *
+     * The cost is that a repack can now move things under a mailbox we are
+     * still reading from.  Message files: mailbox_map_record() fails with
+     * ENOENT and the caller reports the message as gone (IMAP_NO_MSGGONE in
+     * index.c).  Cache files: we closed our mappings above, so the next read
+     * reopens by name and can get the repacked file, where our offsets mean
+     * nothing - mailbox_cacherecord_internal() sees the generation change and
+     * reparses from the spool file. */
+    mboxname_release(&mailbox->namelock);
 }
 
 static char *mailbox_header_data_cstring(struct mailbox *mailbox)
@@ -4125,8 +4182,12 @@ EXPORTED struct conversations_state *mailbox_get_cstate_full(struct mailbox *mai
         return cstate;
     }
 
-    /* open the conversations DB - abort if this fails */
-    int is_readonly = mailbox->is_readonly || mailbox->index_locktype == LOCK_SHARED;
+    /* open the conversations DB - abort if this fails.  Same rule as the
+     * cache: without the index write lock we have no business opening it
+     * read-write, and mailbox_unlock_index() drops our cstate, so a caller
+     * after the unlock lands right back in here with no lock at all. */
+    int is_readonly = mailbox->is_readonly
+                   || !mailbox_index_islocked(mailbox, /*write*/1);
     int r = conversations_open_mbox(mailbox_name(mailbox), is_readonly, &mailbox->cstate_value);
     if (r) {
         xsyslog(LOG_ERR, "DBERROR: failed to open conversations",

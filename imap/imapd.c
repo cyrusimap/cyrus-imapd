@@ -1493,6 +1493,10 @@ static void cmdloop(void)
 
         sync_log_reset();
 
+        /* Locks from the last command are gone now, and the client has not
+         * been answered yet: send the notifications it queued. */
+        mboxevent_flush_notifications();
+
         /* Flush any buffered output */
         prot_flush(imapd_out);
         if (backend_current) prot_flush(backend_current->out);
