@@ -292,6 +292,14 @@ char *mboxname_lockpath_suffix(const char *mboxname, const char *suffix);
  */
 int mboxname_policycheck(const char *name);
 
+/*
+ * Return 0 if 'name' consists of legal characters for a single component of
+ * a mailbox name.  Applies the same character rules as mboxname_policycheck(),
+ * which only ever sees an assembled internal name, plus a ban on '^' -- the
+ * internal spelling of a '.'.
+ */
+int mboxname_policycheck_component(const char *name);
+
 void mboxname_todeleted(const char *name, char *result, int withtime);
 
 /*

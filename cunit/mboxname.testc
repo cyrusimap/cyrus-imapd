@@ -8,6 +8,7 @@
 #include "imap/mboxname.h"
 #include "imap/mailbox.h"
 #include "imap/global.h"
+#include "imap/imap_err.h"
 
 #define DBDIR           "test-mboxname-dbdir"
 
@@ -1056,6 +1057,51 @@ static void test_isnondeliverymailbox(void)
     CU_ASSERT_EQUAL(1, mboxname_isdeletedmailbox("DELETED.user.foo.A", NULL));
 }
 
+static void test_policycheck_component(void)
+{
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_component("Drafts"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_component("a.b"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_component("."));
+
+    /* a component arrives already encoded, and no sequence spans the '.'
+     * that separates two of them */
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_component("&AOQA9gD8-"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_component("&-"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("&"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("&AOQA9gD8"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("&AAA-"));
+
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("a^b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("^"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("a/b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("/"));
+
+    /* the rest of what mboxname_policycheck() bans is banned here too */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("10% Happier"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("a;b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("c|d"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("e<f"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("\"g\""));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("h\\i"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("caf\xc3\xa9"));
+
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck_component(""));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck_component(NULL));
+}
 
 
 static enum enum_value old_config_virtdomains;
