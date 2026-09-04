@@ -724,9 +724,23 @@ static int is_sharee_subscribed(const char *mailbox, const char *userid,
     return mboxlist_issubscribed(mailbox, userid, NULL);
 }
 
+/* A subscription (real, or implied by ACL_AUTOSUB) can outlive the ACL
+ * grant that created it -- nothing revokes it when a share is withdrawn --
+ * so alarm delivery must not rely on subscription status alone.  Check
+ * that userid still holds DAV:read on the mailbox's *current* ACL. */
+static int sharee_can_read(const char *acl, const char *userid)
+{
+    struct auth_state *authstate = auth_newstate(userid);
+    int rights = cyrus_acl_myrights(authstate, acl);
+    auth_freestate(authstate);
+
+    return (rights & DACL_READ) == DACL_READ;
+}
+
 struct has_alarms_rock {
     uint32_t mbox_options;
     int mbox_autosub;   /* mailbox ACL grants '1' to somebody */
+    const char *acl;
     int *has_alarms;
 };
 
@@ -743,8 +757,10 @@ static int has_peruser_alarms_cb(const char *mailbox,
 
     if (!mboxname_userownsmailbox(userid, mailbox) &&
         ((hrock->mbox_options & OPT_IMAP_SHAREDSEEN) ||
-         !is_sharee_subscribed(mailbox, userid, hrock->mbox_autosub))) {
-        /* No per-user-data, or sharee has unsubscribed from this calendar */
+         !is_sharee_subscribed(mailbox, userid, hrock->mbox_autosub) ||
+         !sharee_can_read(hrock->acl, userid))) {
+        /* No per-user-data, sharee has unsubscribed from this calendar,
+         * or sharee's access has since been revoked */
         return 0;
     }
 
@@ -977,6 +993,7 @@ static int has_alarms(void *data, struct mailbox *mailbox,
     struct has_alarms_rock hrock = {
         mailbox->i.options,
         cyrus_acl_anygrants(mailbox_acl(mailbox), ACL_AUTOSUB),
+        mailbox_acl(mailbox),
         &has_alarms
     };
 
@@ -1263,6 +1280,7 @@ static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
 struct process_alarms_rock {
     uint32_t mbox_options;
     int mbox_autosub;   /* mailbox ACL grants '1' to somebody */
+    const char *acl;
     modseq_t createdmodseq; // for CalendarEvent ID
     icalcomponent *ical;
     struct lastalarm_data *alarm;
@@ -1285,8 +1303,10 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
 
     if (!mboxname_userownsmailbox(userid, mailbox) &&
         ((prock->mbox_options & OPT_IMAP_SHAREDSEEN) ||
-         !is_sharee_subscribed(mailbox, userid, prock->mbox_autosub))) {
-        /* No per-user-data, or sharee has unsubscribed from this calendar */
+         !is_sharee_subscribed(mailbox, userid, prock->mbox_autosub) ||
+         !sharee_can_read(prock->acl, userid))) {
+        /* No per-user-data, sharee has unsubscribed from this calendar,
+         * or sharee's access has since been revoked */
         return 0;
     }
 
@@ -1383,6 +1403,7 @@ static int process_valarms(struct mailbox *mailbox,
     struct process_alarms_rock prock = {
         mailbox->i.options,
         cyrus_acl_anygrants(mailbox_acl(mailbox), ACL_AUTOSUB),
+        mailbox_acl(mailbox),
         record->createdmodseq,
         ical, &data, runtime, dryrun
     };
