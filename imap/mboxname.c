@@ -1899,10 +1899,58 @@ EXPORTED int mboxname_policycheck_component(const char *name)
 }
 
 /*
+ * A domain is a hostname: dot separated labels of lowercase letters, digits
+ * and hyphens, with no empty label and no label starting or ending in '-'.
+ */
+static int _policycheck_domain(const char *domain, size_t len)
+{
+    size_t i;
+    size_t labellen = 0;
+
+    if (!len) return IMAP_MAILBOX_BADNAME;
+
+    for (i = 0; i < len; i++) {
+        char c = domain[i];
+
+        if (c == '.') {
+            if (!labellen || domain[i-1] == '-')
+                return IMAP_MAILBOX_BADNAME;
+            labellen = 0;
+            continue;
+        }
+
+        if (c == '-') {
+            if (!labellen) return IMAP_MAILBOX_BADNAME;
+        }
+        else if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))) {
+            return IMAP_MAILBOX_BADNAME;
+        }
+
+        labellen++;
+    }
+
+    if (!labellen || domain[len-1] == '-')
+        return IMAP_MAILBOX_BADNAME;
+
+    return 0;
+}
+
+/* the printable characters auth_canonifyid() will not accept which are
+ * otherwise legal in a mailbox component.  A userid that contains one could
+ * never be canonified, so no such user could own the mailbox: '&' rules out
+ * modified UTF-7 too, which is why a userid is always plain ASCII. */
+#define BADUSERCHARS "&*:?"
+
+/*
  * Apply site policy restrictions on mailbox names.
  * Restrictions are hardwired for now.
  */
 EXPORTED int mboxname_policycheck(const char *name)
+{
+    return mboxname_policycheck_flags(name, 0);
+}
+
+EXPORTED int mboxname_policycheck_flags(const char *name, int flags)
 {
     strarray_t *boxes;
     const char *p;
@@ -1940,6 +1988,9 @@ EXPORTED int mboxname_policycheck(const char *name)
     if (p) {
         if (!config_virtdomains) return IMAP_MAILBOX_BADNAME;
         if (p == name) return IMAP_MAILBOX_BADNAME;
+        if (!(flags & MBOXNAME_POLICY_SKIP_IDENTITY)
+            && _policycheck_domain(name, p - name))
+            return IMAP_MAILBOX_BADNAME;
         name = p + 1;
         namelen = strlen(name);
         if (strchr(name, '!')) return IMAP_MAILBOX_BADNAME;
@@ -1962,18 +2013,25 @@ EXPORTED int mboxname_policycheck(const char *name)
     if (strchr(name, '\t')) return IMAP_MAILBOX_BADNAME;
     // top level user
     if (!strcmp(name, "user")) return IMAP_MAILBOX_BADNAME;
-    // special users
-    if (!strcmp(name, "user.anyone")) return IMAP_MAILBOX_BADNAME;
-    if (!strcmp(name, "user.anonymous")) return IMAP_MAILBOX_BADNAME;
-    // redundant but explicit ban on userids starting with '%'
-    // (would conflict with backups of shared mailboxes)
-    if (!strncmp(name, "user.%", 6)) return IMAP_MAILBOX_BADNAME;
 
     /* now that no component can be empty, check each one on its own.  The
      * escaping is undone first, so a '^' is seen as the '.' it stands for */
     boxes = _array_from_intname(strarray_split(name, ".", 0));
+
+    if (strarray_size(boxes) > 1 && !strcmp(strarray_nth(boxes, 0), "user")) {
+        const char *userid = strarray_nth(boxes, 1);
+
+        /* ACL identifiers, so never the owner of a mailbox */
+        if (!strcmp(userid, "anyone") || !strcmp(userid, "anonymous"))
+            r = IMAP_MAILBOX_BADNAME;
+        else if (!(flags & MBOXNAME_POLICY_SKIP_IDENTITY)
+                 && userid[strcspn(userid, BADUSERCHARS)])
+            r = IMAP_MAILBOX_BADNAME;
+    }
+
     for (i = 0; !r && i < strarray_size(boxes); i++)
         r = mboxname_policycheck_component(strarray_nth(boxes, i));
+
     strarray_free(boxes);
 
     return r;

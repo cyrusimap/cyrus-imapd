@@ -292,6 +292,13 @@ char *mboxname_lockpath_suffix(const char *mboxname, const char *suffix);
  */
 int mboxname_policycheck(const char *name);
 
+/* Skip the rules about who the name identifies -- the domain and the userid.
+ * For a name created elsewhere and only replayed here, where refusing it now
+ * would strand a mailbox that already exists. */
+#define MBOXNAME_POLICY_SKIP_IDENTITY (1<<0)
+
+int mboxname_policycheck_flags(const char *name, int flags);
+
 /*
  * Return 0 if 'name' consists of legal characters for a single component of
  * a mailbox name.  Applies the same character rules as mboxname_policycheck(),

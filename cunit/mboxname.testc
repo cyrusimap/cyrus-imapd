@@ -1144,6 +1144,68 @@ static void test_policycheck(void)
     CU_ASSERT_EQUAL(0, mboxname_policycheck("DELETED.user.foo.a/b.A1B2C3D4"));
 }
 
+static void test_policycheck_domain(void)
+{
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("example.com!user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("a.b.c.example.com!user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("xn--80ak6aa92e.com!user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("host-name.com!user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("localhost!user.foo"));
+
+    /* a domain is a hostname: labels of letters, digits and hyphens */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("Example.COM!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("under_score.com!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("-lead.com!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("trail-.com!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("a..b!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck(".example.com!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("example.com.!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("spa ce.com!user.foo"));
+}
+
+static void test_policycheck_userid(void)
+{
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo^bar"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo+detail"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo-bar_baz"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.FooBar"));
+
+    /* a userid must be plain ASCII: auth_unix bans '&' outright, so a
+     * modified UTF-7 sequence could never canonify back to itself */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("user.&AOQA9gD8-"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("user.&AOQA9gD8-.Drafts"));
+
+    /* and none of the other characters auth_unix refuses to canonify */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.a*b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.a?b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.group:x"));
+
+    /* the reserved userids, which are ACL identifiers rather than owners */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.anyone"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("user.anonymous"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("user.anyone.Drafts"));
+
+    /* the rules apply to the userid, not to the folders underneath it */
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo.&AOQA9gD8-"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo.a*b"));
+
+    /* nor to a shared mailbox that merely starts with something similar */
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("users.a*b"));
+}
+
 
 static enum enum_value old_config_virtdomains;
 static union config_value old_config_unixhierarchysep;
