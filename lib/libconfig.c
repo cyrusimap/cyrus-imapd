@@ -1328,8 +1328,8 @@ static const unsigned char cmpstringp_path_lookup[] = {
     0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
     0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,
 };
-_Static_assert(256 == sizeof(cmpstringp_path_lookup),
-               "cmpstringp_path_lookup has wrong number of elems");
+static_assert(256 == sizeof(cmpstringp_path_lookup),
+              "cmpstringp_path_lookup has wrong number of elems");
 
 /* Treats '/' (0x2f) as lower than other printables so that
  * file paths sort pre-order, depth-first.

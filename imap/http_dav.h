@@ -41,7 +41,7 @@
  * http_dav.c -- callers stack-allocate xmlNsPtr ns[NUM_NAMESPACE] and the
  * dead-property PROPPATCH path then indexes that array by the matching
  * known_namespaces[] slot, so a short array means an out-of-bounds read
- * and a worker crash.  A _Static_assert in http_dav.c enforces this.
+ * and a worker crash.  A static_assert in http_dav.c enforces this.
  */
 enum {
     NS_REQ_ROOT = -1,   /* special case: ns of request root (not an index) */
