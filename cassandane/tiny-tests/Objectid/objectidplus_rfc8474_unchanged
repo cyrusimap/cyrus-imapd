@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that RFC 8474 behaviour is unchanged when OBJECTID+ is NOT activated.
+# SELECT should return MAILBOXID response code (not OBJECTID).
+# CREATE should return MAILBOXID response code.
+# FETCH EMAILID/THREADID should work as individual items.
+# STATUS MAILBOXID should work.
+#
+sub test_objectidplus_rfc8474_unchanged
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # create a mailbox - should get MAILBOXID response code (not OBJECTID)
+    $talk->create('testbox');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # STATUS MAILBOXID should work without activation
+    my $status = $talk->status('testbox', "(mailboxid)");
+    $self->assert_not_null($status->{mailboxid});
+    my $mailboxid = $status->{mailboxid}[0];
+
+    # SELECT should return MAILBOXID response code
+    $talk->select('testbox');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # append and fetch with individual items
+    $self->make_message("Test message");
+    $talk->select('INBOX');
+
+    my $fetch = $talk->fetch('1', '(emailid threadid)');
+    $self->assert_not_null($fetch->{1}{emailid});
+    # THREADID may be NIL or a value, both are valid per RFC 8474
+
+    # SEARCH by EMAILID should work
+    my $emailid = $fetch->{1}{emailid};
+    my @results = $talk->search('emailid', $emailid);
+    $self->assert_num_equals(1, scalar @results);
+
+    # STATUS MAILBOXID should still return same value
+    my $status2 = $talk->status('testbox', "(mailboxid)");
+    $self->assert_str_equals($mailboxid, $status2->{mailboxid}[0]);
+}

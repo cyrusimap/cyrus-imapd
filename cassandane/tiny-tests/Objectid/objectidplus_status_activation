@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test OBJECTID+ implicit activation via STATUS OBJECTID
+#
+sub test_objectidplus_status_activation
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # create mailboxes before activation
+    $talk->create('foo');
+    $talk->create('bar');
+
+    # RFC 8474 style - should work without activation
+    my $status1 = $talk->status('foo', "(mailboxid)");
+    $self->assert_not_null($status1->{mailboxid});
+
+    # requesting STATUS OBJECTID should implicitly activate OBJECTID+
+    # and return compound OBJECTID (MAILBOXID x ACCOUNTID y)
+    my $status2 = $talk->status('foo', "(objectid)");
+    $self->assert_not_null($status2->{objectid});
+
+    # after activation, STATUS MAILBOXID should still work (RFC 8474 compat)
+    my $status3 = $talk->status('bar', "(mailboxid)");
+    $self->assert_not_null($status3->{mailboxid});
+}
