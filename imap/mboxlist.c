@@ -2224,6 +2224,22 @@ done:
     return r;
 }
 
+/* A uniqueid names the mailbox's directory (see mboxname_id_hash()), so it
+ * must be an RFC 8474 objectid, and at least 2 characters for the hash. */
+static bool uniqueid_is_valid(const char *id)
+{
+    size_t len = strlen(id);
+
+    if (len < 2 || len > 255) return false;
+
+    for (const char *p = id; *p; p++) {
+        if (!Uisalnum(*p) && *p != '-' && *p != '_')
+            return false;
+    }
+
+    return true;
+}
+
 /*
  * Create a mailbox
  *
@@ -2328,6 +2344,30 @@ EXPORTED int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_
     else if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
     else if (config_getswitch(IMAPOPT_MAILBOX_LEGACY_DIRS))
         mbtype |= MBTYPE_LEGACY_DIRS;
+
+    if (uniqueid) {
+        /* a client-supplied uniqueid becomes the filesystem identity of the
+         * mailbox, so it must be well-formed, and it must not already belong
+         * to another mailbox */
+        if (!uniqueid_is_valid(uniqueid)) {
+            r = IMAP_INVALID_IDENTIFIER;
+            goto done;
+        }
+
+        mbentry_t *idmbentry = NULL;
+        int idr = mboxlist_lookup_by_uniqueid(uniqueid, &idmbentry, NULL);
+        if (!idr && strcmp(idmbentry->name, mboxname)) {
+            /* belongs to a different mailbox than the one we're creating */
+            mboxlist_entry_free(&idmbentry);
+            r = IMAP_MAILBOX_EXISTS;
+            goto done;
+        }
+        mboxlist_entry_free(&idmbentry);
+        if (idr && idr != IMAP_MAILBOX_NONEXISTENT && idr != IMAP_MAILBOX_RESERVED) {
+            r = idr;
+            goto done;
+        }
+    }
 
     newmbentry = mboxlist_entry_create();
     newmbentry->acl = xstrdupnull(acl);

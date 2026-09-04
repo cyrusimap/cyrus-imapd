@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Verify that CREATE (MAILBOXID ...) rejects a value that isn't an RFC 8474
+# objectid, e.g. a path traversal string, but accepts a pre-UUID legacy
+# uniqueid.
+#
+# :IMAPMurder bypasses imapd.c's non-admin MAILBOXID gate, so this
+# exercises the mboxlist-level check directly.
+#
+sub test_mailboxid_rejects_invalid
+    :OldJMAPIds :IMAPMurder :needs_component_murder
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "a MAILBOXID that isn't an objectid is rejected";
+    $talk->_imap_cmd('CREATE', 0, '', "INBOX.traversal",
+                      [ 'MAILBOXID', '../../../poc-traversal' ]);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    xlog $self, "no mailbox was created";
+    my $list = $talk->list('', 'INBOX.traversal');
+    $self->assert_equals(0, scalar @{$list // []});
+
+    xlog $self, "a legacy name-hash-and-uidvalidity uniqueid is accepted";
+    my $legacyid = '1a2b3c4d5f3e9a10';
+    $talk->_imap_cmd('CREATE', 0, '', "INBOX.legacy",
+                      [ 'MAILBOXID', $legacyid ]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $status = $talk->status("INBOX.legacy", ['mailboxid']);
+    $self->assert_str_equals($legacyid, $status->{mailboxid}[0]);
+}
