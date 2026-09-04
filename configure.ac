@@ -131,9 +131,6 @@ AC_PROG_INSTALL
 AC_USE_SYSTEM_EXTENSIONS
 AC_ISC_POSIX
 AC_PROG_AWK
-
-dnl Every build needs lex and yacc, not only Sieve-enabled ones: lib/cron-lex.l
-dnl and lib/cron-parse.y are part of libcyrus_min.
 AC_PROG_YACC
 AM_PROG_LEX
 
