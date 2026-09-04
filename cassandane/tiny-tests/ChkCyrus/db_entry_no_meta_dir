@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+# The converse of an orphan directory: a database entry whose directory
+# has gone.
+sub test_db_entry_no_meta_dir
+    :NoSanityCheck
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+
+    my $mbpath = $self->{instance}->run_mbpath('user.cassandane.INBOX.Archive');
+    remove_tree($mbpath->{meta}) or die "remove_tree failed";
+
+    my $findings = $self->audit_json('--level', '1');
+    $self->assert_has_code($findings, 'db-entry-no-meta-dir');
+
+    # and only for the mailbox we actually removed
+    my ($f) = grep { $_->{code} eq 'db-entry-no-meta-dir' } @{$findings};
+    $self->assert_str_equals('user.cassandane.INBOX.Archive', $f->{mboxname});
+
+    # the rest of the store is undisturbed
+    $self->assert_lacks_code($findings, 'meta-dir-no-db-entry');
+    $self->assert_lacks_code($findings, 'user-missing-inbox');
+}

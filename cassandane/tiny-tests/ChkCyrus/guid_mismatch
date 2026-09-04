@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+# Level 4 parses each message and compares its guid to the index record.
+sub test_guid_mismatch
+    :NoSanityCheck
+{
+    my ($self) = @_;
+
+    $self->make_message("test message") or die;
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+    my $file = "$mbpath->{data}/1.";
+    open my $fh, '>', $file or die "open $file: $!";
+    print $fh "From: someone\@example.com\r\n"
+            . "Subject: different\r\n\r\ndifferent content\r\n";
+    close $fh;
+
+    # level 2 only checks existence, so it sees nothing wrong
+    my $findings = $self->audit_json('--level', '2');
+    $self->assert_lacks_code($findings, 'message-guid-mismatch');
+
+    $findings = $self->audit_json('--level', '4');
+    $self->assert_has_code($findings, 'message-guid-mismatch');
+
+    my ($f) = grep { $_->{code} eq 'message-guid-mismatch' } @{$findings};
+    $self->assert_num_equals(1, $f->{uid});
+    $self->assert_not_null($f->{guid});
+}

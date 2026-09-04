@@ -1,0 +1,1406 @@
+/* audit.testc - unit tests for mailstore consistency auditing */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+#if HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+#include <string.h>
+#include <utime.h>
+
+#include "cunit/unit.h"
+
+#include "imap/audit.h"
+#include "imap/mboxlist.h"
+#include "lib/libconfig.h"
+#include "lib/util.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+
+#define DBDIR "test-audit-dbdir"
+
+/* The per-user checks parse mailbox names, and mbname consults the
+ * configuration (virtdomains among others), which asserts if unloaded. */
+static int set_up(void)
+{
+    config_read_string(DBDIR"/conf", "");
+    return 0;
+}
+
+static int tear_down(void)
+{
+    config_reset();
+    return 0;
+}
+
+/* Replace the loaded config wholesale.  set_up has already loaded a bare
+ * one, and config_read_string does not merge, so reset first. */
+static void load_config(const char *conf)
+{
+    config_reset();
+    config_read_string(DBDIR"/conf", conf);
+}
+
+/* mailboxes.db separators.  RS divides the fields of a key; HS divides
+ * the levels of a mailbox name within one field.  Spell them as their own
+ * string literals and rely on concatenation: written inline, "\x1ebob" is
+ * a single hex escape of 0x1eb -- out of range -- because 'b' is a hex
+ * digit.
+ */
+#define RS "\x1e"       /* record separator, between key fields */
+#define HS "\x1f"       /* unit separator, within a mailbox name */
+
+static void test_rawkey_name(void)
+{
+    struct mboxlist_rawkey key;
+    const char *raw = "Nuser" HS "bob";
+    int r = mboxlist_parse_rawkey(raw, strlen(raw), &key);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(key.type, MBOXLIST_KEY_NAME);
+    CU_ASSERT_STRING_EQUAL(key.dbname, "user" HS "bob");
+    mboxlist_rawkey_fini(&key);
+}
+
+static void test_rawkey_id(void)
+{
+    struct mboxlist_rawkey key;
+    const char *raw = "I1234abcd";
+    int r = mboxlist_parse_rawkey(raw, strlen(raw), &key);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(key.type, MBOXLIST_KEY_ID);
+    CU_ASSERT_STRING_EQUAL(key.uniqueid, "1234abcd");
+    mboxlist_rawkey_fini(&key);
+}
+
+static void test_rawkey_jmapid(void)
+{
+    struct mboxlist_rawkey key;
+    const char *raw = "Jbob" RS "P123";
+    int r = mboxlist_parse_rawkey(raw, strlen(raw), &key);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(key.type, MBOXLIST_KEY_JMAPID);
+    CU_ASSERT_STRING_EQUAL(key.userid, "bob");
+    CU_ASSERT_STRING_EQUAL(key.jmapid, "P123");
+    mboxlist_rawkey_fini(&key);
+}
+
+static void test_rawkey_racl_user(void)
+{
+    struct mboxlist_rawkey key;
+    /* the mailbox part contains a hierarchy separator, which must not be
+     * mistaken for a field boundary */
+    const char *raw = "AU" RS "alice" RS "user" HS "bob" HS "Archive";
+    int r = mboxlist_parse_rawkey(raw, strlen(raw), &key);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(key.type, MBOXLIST_KEY_RACL);
+    CU_ASSERT_EQUAL(key.isuser, 1);
+    CU_ASSERT_STRING_EQUAL(key.userid, "alice");
+    CU_ASSERT_STRING_EQUAL(key.aclmbox, "user" HS "bob" HS "Archive");
+    mboxlist_rawkey_fini(&key);
+}
+
+static void test_rawkey_racl_shared(void)
+{
+    struct mboxlist_rawkey key;
+    const char *raw = "AS" RS "alice" RS "shared";
+    int r = mboxlist_parse_rawkey(raw, strlen(raw), &key);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(key.type, MBOXLIST_KEY_RACL);
+    CU_ASSERT_EQUAL(key.isuser, 0);
+    mboxlist_rawkey_fini(&key);
+}
+
+/* An unrecognised prefix must be reported, not guessed at: the audit's
+ * whole job is to notice keys that should not be in the database. */
+static void test_rawkey_unknown(void)
+{
+    struct mboxlist_rawkey key;
+    const char *raw = "Zwhatever";
+    int r = mboxlist_parse_rawkey(raw, strlen(raw), &key);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(key.type, MBOXLIST_KEY_UNKNOWN);
+    mboxlist_rawkey_fini(&key);
+}
+
+/* A key with a valid prefix but no payload is malformed, not a valid key
+ * with an empty field. */
+static void test_rawkey_truncated(void)
+{
+    struct mboxlist_rawkey key;
+
+    CU_ASSERT_EQUAL(mboxlist_parse_rawkey("I", 1, &key), IMAP_MAILBOX_BADNAME);
+    CU_ASSERT_EQUAL(mboxlist_parse_rawkey("N", 1, &key), IMAP_MAILBOX_BADNAME);
+    CU_ASSERT_EQUAL(mboxlist_parse_rawkey("J", 1, &key), IMAP_MAILBOX_BADNAME);
+    CU_ASSERT_EQUAL(mboxlist_parse_rawkey("", 0, &key), IMAP_MAILBOX_BADNAME);
+
+    /* a J key needs both a userid and a jmapid */
+    CU_ASSERT_EQUAL(mboxlist_parse_rawkey("Jbob", 4, &key), IMAP_MAILBOX_BADNAME);
+}
+
+/* ------------------------------------------------------------------ */
+/* findings and emitters                                              */
+
+static int has_text(const struct buf *out, const char *needle)
+{
+    return strstr(buf_cstring((struct buf *)out), needle) != NULL;
+}
+
+/* Returns a state that appends to the given buffer.  Leaked deliberately:
+ * cunit processes are short-lived and this keeps the tests readable.
+ *
+ * check_jmapids is on, matching an install with conversations enabled;
+ * that is the only configuration in which the J keyspace is meaningful. */
+static struct audit_state *test_state(struct buf *out)
+{
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    config.out = out;
+    config.check_jmapids = 1;
+    return audit_begin(&config);
+}
+
+static struct audit_state *test_state_nojmap(struct buf *out)
+{
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    config.out = out;
+    config.check_jmapids = 0;
+    return audit_begin(&config);
+}
+
+static int find_code(const struct buf *out, const char *code)
+{
+    return has_text(out, code);
+}
+
+/* The JSON emitter must omit absent fields rather than emitting nulls,
+ * so a consumer can test for presence. */
+static void test_emit_json_omits_absent(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+    struct audit_state *state;
+
+    config.json = 1;
+    config.out = &out;
+    state = audit_begin(&config);
+
+    finding.code = "meta-dir-no-db-entry";
+    finding.uniqueid = "8d3fc1";
+    finding.path = "/meta/uuid/8/d/8d3fc1";
+    audit_report(state, &finding);
+    audit_done(&state);
+
+    CU_ASSERT(has_text(&out, "\"code\":\"meta-dir-no-db-entry\""));
+    CU_ASSERT(has_text(&out, "\"uniqueid\":\"8d3fc1\""));
+    CU_ASSERT(!has_text(&out, "mboxname"));
+    CU_ASSERT(!has_text(&out, "null"));
+    buf_free(&out);
+}
+
+/* Recovery-critical findings must carry the full tuple needed to fetch a
+ * replacement: without uid, guid and path a driver cannot act on them. */
+static void test_emit_json_recovery_tuple(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+    struct audit_state *state;
+
+    config.json = 1;
+    config.out = &out;
+    state = audit_begin(&config);
+
+    finding.code = "message-file-missing";
+    finding.userid = "bob";
+    finding.mboxname = "user.bob.Archive";
+    finding.uniqueid = "8d3fc1";
+    finding.path = "/spool/uuid/8/d/8d3fc1/42.";
+    finding.tier = "spool";
+    finding.guid = "0f8c1a";
+    finding.uid = 42;
+    finding.has_uid = 1;
+    audit_report(state, &finding);
+    audit_done(&state);
+
+    CU_ASSERT(has_text(&out, "\"uid\":42"));
+    CU_ASSERT(has_text(&out, "\"guid\":\"0f8c1a\""));
+    CU_ASSERT(has_text(&out, "\"tier\":\"spool\""));
+    CU_ASSERT(has_text(&out, "\"user\":\"bob\""));
+    CU_ASSERT(has_text(&out, "\"mboxname\":\"user.bob.Archive\""));
+    buf_free(&out);
+}
+
+/* One finding per line, so the output is streamable. */
+static void test_emit_json_one_per_line(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+    struct audit_state *state;
+    int i, newlines = 0;
+    const char *p;
+
+    config.json = 1;
+    config.out = &out;
+    state = audit_begin(&config);
+
+    finding.code = "db-unknown-key";
+    for (i = 0; i < 3; i++) audit_report(state, &finding);
+    audit_done(&state);
+
+    for (p = buf_cstring(&out); *p; p++) if (*p == '\n') newlines++;
+    CU_ASSERT_EQUAL(newlines, 3);
+    buf_free(&out);
+}
+
+static void test_emit_text(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+    struct audit_state *state;
+
+    config.out = &out;
+    state = audit_begin(&config);
+
+    finding.code = "meta-dir-no-db-entry";
+    finding.uniqueid = "8d3fc1";
+    finding.path = "/meta/uuid/8/d/8d3fc1";
+    audit_report(state, &finding);
+    audit_done(&state);
+
+    CU_ASSERT(has_text(&out, "meta-dir-no-db-entry"));
+    CU_ASSERT(has_text(&out, "8d3fc1"));
+    /* the human renderer must not emit JSON punctuation */
+    CU_ASSERT(!has_text(&out, "\"code\""));
+    buf_free(&out);
+}
+
+/* The count is what a caller uses to decide an exit status. */
+static void test_finding_count(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+    struct audit_state *state;
+
+    config.out = &out;
+    state = audit_begin(&config);
+    CU_ASSERT_EQUAL(audit_finding_count(state), 0);
+
+    finding.code = "db-unknown-key";
+    audit_report(state, &finding);
+    audit_report(state, &finding);
+    CU_ASSERT_EQUAL(audit_finding_count(state), 2);
+
+    audit_done(&state);
+    buf_free(&out);
+}
+
+/* A finding with no code is a programming error upstream; drop it rather
+ * than emitting an object a consumer cannot dispatch on. */
+static void test_finding_without_code_is_ignored(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    struct audit_finding finding = AUDIT_FINDING_INITIALIZER;
+    struct audit_state *state;
+
+    config.out = &out;
+    state = audit_begin(&config);
+
+    audit_report(state, &finding);
+
+    CU_ASSERT_EQUAL(audit_finding_count(state), 0);
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+    audit_done(&state);
+    buf_free(&out);
+}
+
+/* ------------------------------------------------------------------ */
+/* level 0: mailboxes.db keyspace cross-checks                        */
+
+/* Each of these builds a synthetic keyspace and asserts exactly which
+ * findings the cross-check produces.  The invariant under test is that a
+ * key is reported if and only if its counterpart is absent.
+ */
+
+static void test_keyspace_i_without_n(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, "P1");
+    audit_keyspace_add_jmapid(&ks, "bob", "P1", "abc123");
+    /* deliberately no N key */
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-missing-n-key"));
+    CU_ASSERT(!find_code(&out, "db-missing-i-key"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+static void test_keyspace_n_without_i(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, "P1");
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-missing-i-key"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+static void test_keyspace_matched_pair_is_clean(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, "P1");
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, "P1");
+    audit_keyspace_add_jmapid(&ks, "bob", "P1", "abc123");
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+static void test_keyspace_bogus_jmapid(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_jmapid(&ks, "bob", "P1", "nosuchid");
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-bogus-jmapid"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* A J key whose (user, id) disagrees with the entry it points at is worse
+ * than a missing one: a lookup by jmapid would return the wrong mailbox. */
+static void test_keyspace_bad_jmapid(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, "P1");
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, "P1");
+    audit_keyspace_add_jmapid(&ks, "bob", "P99", "abc123");
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-bad-jmapid"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+static void test_keyspace_missing_j_property(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, NULL);
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, NULL);
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-missing-j-property"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+static void test_keyspace_missing_j_key(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, "P1");
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, "P1");
+    /* entry claims jmapid P1 but no J key exists */
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-missing-j-key"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* With conversations disabled every mailbox is created with modseq 1 and
+ * so shares a jmapid, leaving the J keyspace degenerate.  There is nothing
+ * to audit there, and checking anyway would report every mailbox of every
+ * user on such an install. */
+static void test_keyspace_jmapid_checks_skipped_without_conversations(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, "P-F");
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, "P-F");
+    audit_keyspace_add_id(&ks, "def456", "user.bob.Archive", 0, "P-F");
+    audit_keyspace_add_name(&ks, "user.bob.Archive", "def456", 0, "P-F");
+    /* only one J key can exist for the shared pair */
+    audit_keyspace_add_jmapid(&ks, "bob", "P-F", "def456");
+
+    audit_keyspace_check(&ks, test_state_nojmap(&out));
+
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* An entry with no jmapid at all is likewise not worth reporting when the
+ * J keyspace is not in use. */
+static void test_keyspace_missing_j_property_skipped_without_conversations(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, NULL);
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, NULL);
+
+    audit_keyspace_check(&ks, test_state_nojmap(&out));
+
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* With conversations enabled jmapids are unique per user, so a J record
+ * naming a different mailbox leaves this one unreachable by jmapid. */
+static void test_keyspace_j_key_names_other_mailbox(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, "P1");
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, "P1");
+    audit_keyspace_add_jmapid(&ks, "bob", "P1", "someoneelse");
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-missing-j-key"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* A J key for a different user does not satisfy this user's entry. */
+static void test_keyspace_j_key_wrong_user(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, "P1");
+    audit_keyspace_add_name(&ks, "user.bob", "abc123", 0, "P1");
+    audit_keyspace_add_jmapid(&ks, "alice", "P1", "abc123");
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-missing-j-key"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* A legacy-layout entry must never be treated as an orphan: its data
+ * lives in a name-hashed directory that no UUID sweep will ever see, so
+ * reporting it as missing would invite deleting a healthy mailbox. */
+static void test_keyspace_legacy_reported_not_orphaned(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob",
+                          MBTYPE_LEGACY_DIRS, "P1");
+    audit_keyspace_add_name(&ks, "user.bob", "abc123",
+                            MBTYPE_LEGACY_DIRS, "P1");
+    audit_keyspace_add_jmapid(&ks, "bob", "P1", "abc123");
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-entry-legacy-layout"));
+    CU_ASSERT(!find_code(&out, "db-missing-n-key"));
+    CU_ASSERT(!find_code(&out, "db-missing-i-key"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* ------------------------------------------------------------------ */
+/* tombstones and name_history                                        */
+
+/* The invariant: every name_history item has a matching tombstone N
+ * record, and every tombstone N record matches either the I record's
+ * current name or one of its history items.
+ */
+
+/* Rename tombstones the old name and moves the I record to the new one,
+ * so the tombstone is explained by a history item. */
+static void test_tombstone_explained_by_history(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob.New", 0, "P1");
+    audit_keyspace_add_name(&ks, "user.bob.New", "abc123", 0, "P1");
+    audit_keyspace_add_jmapid(&ks, "bob", "P1", "abc123");
+    audit_keyspace_add_history(&ks, "abc123", "user.bob.Old", 1000);
+    audit_keyspace_add_tombstone(&ks, "user.bob.Old", "abc123", 1000);
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(!find_code(&out, "db-tombstone-no-history"));
+    CU_ASSERT(!find_code(&out, "db-history-no-tombstone"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* Delete tombstones the current name, so the tombstone is explained by
+ * the I record itself rather than by history. */
+static void test_tombstone_explained_by_current_name(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob.Gone", 0, "P1");
+    audit_keyspace_add_jmapid(&ks, "bob", "P1", "abc123");
+    audit_keyspace_add_tombstone(&ks, "user.bob.Gone", "abc123", 1000);
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(!find_code(&out, "db-tombstone-no-history"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+static void test_tombstone_without_referent(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob.New", 0, "P1");
+    audit_keyspace_add_name(&ks, "user.bob.New", "abc123", 0, "P1");
+    audit_keyspace_add_jmapid(&ks, "bob", "P1", "abc123");
+    /* a tombstone for a name the I record has never held */
+    audit_keyspace_add_tombstone(&ks, "user.bob.Stray", "abc123", 1000);
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-tombstone-no-history"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* Without its tombstone, a replica never learns the old name is gone. */
+static void test_history_without_tombstone(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob.New", 0, "P1");
+    audit_keyspace_add_name(&ks, "user.bob.New", "abc123", 0, "P1");
+    audit_keyspace_add_jmapid(&ks, "bob", "P1", "abc123");
+    audit_keyspace_add_history(&ks, "abc123", "user.bob.Old", 1000);
+    /* no tombstone for the former name */
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-history-no-tombstone"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* A tombstone whose uniqueid has no I record at all is an orphan: it is
+ * prunable, but it is not an inconsistency to report. */
+static void test_orphan_tombstone_is_not_reported(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_tombstone(&ks, "user.bob.Gone", "gone1", 1000);
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(!find_code(&out, "db-tombstone-no-history"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* A tombstone must not satisfy the live-mailbox checks: it is a record of
+ * a name that is gone, not a mailbox that exists. */
+static void test_tombstone_does_not_satisfy_missing_n_key(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob", 0, "P1");
+    audit_keyspace_add_jmapid(&ks, "bob", "P1", "abc123");
+    /* the only N record for this name is a tombstone */
+    audit_keyspace_add_tombstone(&ks, "user.bob", "abc123", 1000);
+
+    audit_keyspace_check(&ks, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "db-missing-n-key"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* ------------------------------------------------------------------ */
+/* per-user structure                                                 */
+
+static struct audit_state *user_state(struct buf *out, strarray_t *userlist,
+                                      strarray_t *skipusers)
+{
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    config.out = out;
+    config.userlist = userlist;
+    config.skipusers = skipusers;
+    return audit_begin(&config);
+}
+
+/* A user expected on this server whose INBOX is gone needs a human: the
+ * INBOX uniqueid cannot be recreated. */
+static void test_user_expected_missing_inbox(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+    strarray_t userlist = STRARRAY_INITIALIZER;
+
+    strarray_append(&userlist, "bob");
+
+    audit_keyspace_init(&ks);
+    /* a folder but no INBOX */
+    audit_keyspace_add_id(&ks, "abc123", "user.bob.Archive", 0, "P1");
+
+    audit_check_users(&ks, user_state(&out, &userlist, NULL));
+
+    CU_ASSERT(find_code(&out, "user-missing-inbox"));
+    CU_ASSERT(!find_code(&out, "user-stale-folders"));
+
+    audit_keyspace_fini(&ks);
+    strarray_fini(&userlist);
+    buf_free(&out);
+}
+
+/* The same shape for a user who is not expected here is routine cleanup,
+ * not an alert. */
+static void test_user_unexpected_stale_folders(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+    strarray_t userlist = STRARRAY_INITIALIZER;   /* empty: bob not expected */
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob.Archive", 0, "P1");
+
+    audit_check_users(&ks, user_state(&out, &userlist, NULL));
+
+    CU_ASSERT(find_code(&out, "user-stale-folders"));
+    CU_ASSERT(!find_code(&out, "user-missing-inbox"));
+
+    audit_keyspace_fini(&ks);
+    strarray_fini(&userlist);
+    buf_free(&out);
+}
+
+/* A user with an INBOX is healthy, whatever else they have. */
+static void test_user_with_inbox_is_clean(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+    strarray_t userlist = STRARRAY_INITIALIZER;
+
+    strarray_append(&userlist, "bob");
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "inbox1", "user.bob", 0, "P1");
+    audit_keyspace_add_id(&ks, "abc123", "user.bob.Archive", 0, "P2");
+
+    audit_check_users(&ks, user_state(&out, &userlist, NULL));
+
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    audit_keyspace_fini(&ks);
+    strarray_fini(&userlist);
+    buf_free(&out);
+}
+
+/* Folders lying entirely within the DELETED namespace are a deleted
+ * user's remains, not damage. */
+static void test_user_only_deleted_folders_is_clean(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+    strarray_t userlist = STRARRAY_INITIALIZER;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123",
+                          "DELETED.user.bob.Archive.ABCD1234", 0, "P1");
+
+    audit_check_users(&ks, user_state(&out, &userlist, NULL));
+
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    audit_keyspace_fini(&ks);
+    strarray_fini(&userlist);
+    buf_free(&out);
+}
+
+/* With no userlist every user in the database is treated as expected, so
+ * the tool reports damage but never proposes removing a user. */
+static void test_user_no_userlist_never_proposes_removal(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob.Archive", 0, "P1");
+
+    audit_check_users(&ks, user_state(&out, NULL, NULL));
+
+    CU_ASSERT(!find_code(&out, "user-stale-folders"));
+    CU_ASSERT(!find_code(&out, "user-not-expected"));
+    CU_ASSERT(find_code(&out, "user-missing-inbox"));
+
+    audit_keyspace_fini(&ks);
+    buf_free(&out);
+}
+
+/* A user in the database but absent from an explicit userlist does not
+ * belong here.  Reported only -- removing a whole user rests entirely on
+ * external truth, so that decision is the driver's. */
+static void test_user_not_expected(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+    strarray_t userlist = STRARRAY_INITIALIZER;
+
+    strarray_append(&userlist, "alice");
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "inbox1", "user.bob", 0, "P1");
+
+    audit_check_users(&ks, user_state(&out, &userlist, NULL));
+
+    CU_ASSERT(find_code(&out, "user-not-expected"));
+
+    audit_keyspace_fini(&ks);
+    strarray_fini(&userlist);
+    buf_free(&out);
+}
+
+static void test_user_skip_list_excludes(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+    strarray_t userlist = STRARRAY_INITIALIZER;
+    strarray_t skipusers = STRARRAY_INITIALIZER;
+
+    strarray_append(&skipusers, "bob");
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_id(&ks, "abc123", "user.bob.Archive", 0, "P1");
+
+    audit_check_users(&ks, user_state(&out, &userlist, &skipusers));
+
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    audit_keyspace_fini(&ks);
+    strarray_fini(&userlist);
+    strarray_fini(&skipusers);
+    buf_free(&out);
+}
+
+/* Tombstoned entries are records of names that are gone; they must not
+ * make a user look like they still have folders here. */
+static void test_user_tombstones_are_not_folders(void)
+{
+    struct buf out = BUF_INITIALIZER;
+    struct audit_keyspace ks;
+    strarray_t userlist = STRARRAY_INITIALIZER;
+
+    audit_keyspace_init(&ks);
+    audit_keyspace_add_tombstone(&ks, "user.bob.Archive", "abc123", 1000);
+
+    audit_check_users(&ks, user_state(&out, &userlist, NULL));
+
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    audit_keyspace_fini(&ks);
+    strarray_fini(&userlist);
+    buf_free(&out);
+}
+
+/* ------------------------------------------------------------------ */
+/* level 1: partition roots                                           */
+
+/* Several partition options commonly point at the same directory, and
+ * the meta and archive fallbacks add more.  Scanning one twice would
+ * report every mailbox on it as its own duplicate. */
+static void test_roots_deduplicated(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n"
+                "metapartition-default: /tmp/audit-data\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_ANY, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-data");
+
+    strarray_fini(&roots);
+}
+
+static void test_roots_distinct_paths_all_collected(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("archive_enabled: yes\n"
+                "partition-default: /tmp/audit-data\n"
+                "metapartition-default: /tmp/audit-meta\n"
+                "archivepartition-default: /tmp/audit-archive\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_ANY, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 3);
+    CU_ASSERT(strarray_contains(&roots, "/tmp/audit-data"));
+    CU_ASSERT(strarray_contains(&roots, "/tmp/audit-meta"));
+    CU_ASSERT(strarray_contains(&roots, "/tmp/audit-archive"));
+
+    strarray_fini(&roots);
+}
+
+/* With archiving disabled there is no separate archive location at all --
+ * config_archivepartitiondir() returns NULL regardless of what is
+ * configured, and mboxname_metapath() puts archive files on the data
+ * partition.  Sweeping the configured-but-unused directory would report
+ * anything left there as an orphan of a mailbox that never used it. */
+static void test_roots_archive_ignored_when_disabled(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n"
+                "archivepartition-default: /tmp/audit-archive\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_ARCHIVE, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-data");
+
+    strarray_fini(&roots);
+}
+
+/* Search tiers hold per-user xapian trees in the same UUID layout, so
+ * they belong in the sweep too. */
+static void test_roots_include_search_tiers(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n"
+                "defaultsearchtier: t1\n"
+                "searchpartition-t1: /tmp/audit-search\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_ANY, &roots);
+
+    CU_ASSERT(strarray_contains(&roots, "/tmp/audit-search"));
+
+    strarray_fini(&roots);
+}
+
+/* Restricting to a partition must restrict the sweep, or a
+ * partition-scoped run would report every mailbox living elsewhere as an
+ * orphan and, with --delete, remove it. */
+static void test_roots_partition_restricted(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n"
+                "metapartition-default: /tmp/audit-meta\n"
+                "partition-other: /tmp/audit-other\n");
+
+    audit_collect_roots("default", AUDIT_ROOT_ANY, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 2);
+    CU_ASSERT(strarray_contains(&roots, "/tmp/audit-data"));
+    CU_ASSERT(strarray_contains(&roots, "/tmp/audit-meta"));
+    CU_ASSERT(!strarray_contains(&roots, "/tmp/audit-other"));
+
+    strarray_fini(&roots);
+}
+
+/* A partition name that is a prefix of another must not drag it in. */
+static void test_roots_partition_name_is_exact(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-def: /tmp/audit-def\n"
+                "partition-default: /tmp/audit-default\n");
+
+    audit_collect_roots("def", AUDIT_ROOT_ANY, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-def");
+
+    strarray_fini(&roots);
+}
+
+/* Each finding differs by the kind of root it came from, so the caller
+ * must be able to sweep one kind at a time. */
+static void test_roots_type_filtered(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n"
+                "metapartition-default: /tmp/audit-meta\n"
+                "archivepartition-default: /tmp/audit-archive\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_META, &roots);
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-meta");
+    strarray_truncate(&roots, 0);
+
+    /* "partition-" is a suffix of "metapartition-" and the rest, so this
+     * is the case that over-matches if the prefix is matched loosely */
+    audit_collect_roots(NULL, AUDIT_ROOT_DATA, &roots);
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-data");
+
+    strarray_fini(&roots);
+}
+
+/* With no metapartition configured, meta files live on the data
+ * partition -- mboxname_metapath() falls back to it.  Sweeping the
+ * unconfigured location instead would find nothing and report every
+ * mailbox in the store as missing its directory. */
+static void test_roots_meta_falls_back_to_data(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_META, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-data");
+
+    strarray_fini(&roots);
+}
+
+/* Likewise for archive. */
+static void test_roots_archive_falls_back_to_data(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_ARCHIVE, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-data");
+
+    strarray_fini(&roots);
+}
+
+/* Options merely containing the word "partition" are not partition
+ * definitions and must not be swept. */
+static void test_roots_ignores_unrelated_options(void)
+{
+    strarray_t roots = STRARRAY_INITIALIZER;
+
+    load_config("partition-default: /tmp/audit-data\n"
+                "defaultpartition: default\n");
+
+    audit_collect_roots(NULL, AUDIT_ROOT_ANY, &roots);
+
+    CU_ASSERT_EQUAL(strarray_size(&roots), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&roots, 0), "/tmp/audit-data");
+
+    strarray_fini(&roots);
+}
+
+/* ------------------------------------------------------------------ */
+/* level 1: the UUID-layout scanner                                   */
+
+/* All four uniqueid formats in the wild must be accepted, or a valid
+ * mailbox directory would be reported as junk and, with --delete,
+ * removed. */
+static void test_valid_uniqueid_formats(void)
+{
+    /* really old: namehash + uidvalidity */
+    CU_ASSERT(audit_valid_uniqueid("0123456789abcdef"));
+    /* non-libuuid random */
+    CU_ASSERT(audit_valid_uniqueid("abcdefghij0123456789wxyz"));
+    /* uuid, builtin (lowercase) */
+    CU_ASSERT(audit_valid_uniqueid("01234567-89ab-cdef-0123-456789abcdef"));
+    /* uuid, imported (uppercase) */
+    CU_ASSERT(audit_valid_uniqueid("01234567-89AB-CDEF-0123-456789ABCDEF"));
+}
+
+static void test_invalid_uniqueid_formats(void)
+{
+    CU_ASSERT(!audit_valid_uniqueid(NULL));
+    CU_ASSERT(!audit_valid_uniqueid(""));
+    CU_ASSERT(!audit_valid_uniqueid("nope"));
+    CU_ASSERT(!audit_valid_uniqueid("0123456789abcdefg"));     /* 17 */
+    CU_ASSERT(!audit_valid_uniqueid("0123456789abcde"));       /* 15 */
+    CU_ASSERT(!audit_valid_uniqueid("0123456789abcdeZ"));      /* 16, not hex */
+    /* a uuid must have its dashes in the right count */
+    CU_ASSERT(!audit_valid_uniqueid("0123456789abcdef0123456789abcdef1234"));
+    /* and must not mix cases */
+    CU_ASSERT(!audit_valid_uniqueid("01234567-89ab-CDEF-0123-456789abcdef"));
+}
+
+/* A mailbox once genuinely had uniqueid "0".  The hashed path for it is a
+ * PARENT directory holding many other mailboxes, so accepting it would
+ * mean removing a whole slice of the store. */
+static void test_short_uniqueid_rejected(void)
+{
+    CU_ASSERT(!audit_valid_uniqueid("0"));
+    CU_ASSERT(!audit_valid_uniqueid("ab"));
+}
+
+/* mkdir -p for a printf-formatted path */
+static void test_mkpath(const char *fmt, ...)
+{
+    struct buf path = BUF_INITIALIZER;
+    va_list ap;
+    char *p;
+
+    va_start(ap, fmt);
+    buf_vprintf(&path, fmt, ap);
+    va_end(ap);
+
+    for (p = (char *)buf_cstring(&path) + 1; *p; p++) {
+        if (*p != '/') continue;
+        *p = '\0';
+        (void) mkdir(buf_cstring(&path), 0755);
+        *p = '/';
+    }
+    (void) mkdir(buf_cstring(&path), 0755);
+
+    buf_free(&path);
+}
+
+static void test_scan_finds_leaves(void)
+{
+    char root[] = "/tmp/audit-scan-XXXXXX";
+    strarray_t found = STRARRAY_INITIALIZER;
+    struct buf out = BUF_INITIALIZER;
+    const char *id = "0123456789abcdef";
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(root));
+    test_mkpath("%s/uuid/0/1/%s", root, id);
+
+    audit_scan_uuid_root(root, &found, test_state(&out));
+
+    CU_ASSERT_EQUAL(strarray_size(&found), 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&found, 0), id);
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    strarray_fini(&found);
+    buf_free(&out);
+}
+
+/* A missing root is not a finding: a site may simply not have an archive
+ * partition populated yet. */
+static void test_scan_missing_root_is_quiet(void)
+{
+    strarray_t found = STRARRAY_INITIALIZER;
+    struct buf out = BUF_INITIALIZER;
+
+    audit_scan_uuid_root("/tmp/audit-does-not-exist", &found,
+                         test_state(&out));
+
+    CU_ASSERT_EQUAL(strarray_size(&found), 0);
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    strarray_fini(&found);
+    buf_free(&out);
+}
+
+/* A directory whose name is not a single hash character does not belong
+ * in the layout at all. */
+static void test_scan_flags_bad_hash_dir(void)
+{
+    char root[] = "/tmp/audit-scan-XXXXXX";
+    strarray_t found = STRARRAY_INITIALIZER;
+    struct buf out = BUF_INITIALIZER;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(root));
+    test_mkpath("%s/uuid/zzz/1/0123456789abcdef", root);
+
+    audit_scan_uuid_root(root, &found, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "fs-bad-hash-dir"));
+    CU_ASSERT_EQUAL(strarray_size(&found), 0);
+
+    strarray_fini(&found);
+    buf_free(&out);
+}
+
+static void test_scan_flags_invalid_uniqueid(void)
+{
+    char root[] = "/tmp/audit-scan-XXXXXX";
+    strarray_t found = STRARRAY_INITIALIZER;
+    struct buf out = BUF_INITIALIZER;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(root));
+    test_mkpath("%s/uuid/n/o/nope", root);
+
+    audit_scan_uuid_root(root, &found, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "fs-invalid-uniqueid"));
+    CU_ASSERT_EQUAL(strarray_size(&found), 0);
+
+    strarray_fini(&found);
+    buf_free(&out);
+}
+
+/* An INBOX subdirectory inside a mailbox directory is a known bogus
+ * artifact; the mailbox itself is still valid and must still be found. */
+static void test_scan_flags_bogus_inbox(void)
+{
+    char root[] = "/tmp/audit-scan-XXXXXX";
+    strarray_t found = STRARRAY_INITIALIZER;
+    struct buf out = BUF_INITIALIZER;
+    const char *id = "0123456789abcdef";
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(root));
+    test_mkpath("%s/uuid/0/1/%s/INBOX", root, id);
+
+    audit_scan_uuid_root(root, &found, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "fs-bogus-inbox-dir"));
+    CU_ASSERT_EQUAL(strarray_size(&found), 1);
+
+    strarray_fini(&found);
+    buf_free(&out);
+}
+
+/* The hash directories must match the start of the uniqueid, or the
+ * mailbox is not where mboxname_id_hash() would look for it. */
+static void test_scan_flags_misfiled_uniqueid(void)
+{
+    char root[] = "/tmp/audit-scan-XXXXXX";
+    strarray_t found = STRARRAY_INITIALIZER;
+    struct buf out = BUF_INITIALIZER;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(root));
+    /* 0123456789abcdef belongs under 0/1, not 9/9 */
+    test_mkpath("%s/uuid/9/9/0123456789abcdef", root);
+
+    audit_scan_uuid_root(root, &found, test_state(&out));
+
+    CU_ASSERT(find_code(&out, "fs-misfiled-uniqueid"));
+
+    strarray_fini(&found);
+    buf_free(&out);
+}
+
+/* ------------------------------------------------------------------ */
+/* the young-guard and safe removal                                   */
+
+static struct audit_state *delete_state(struct buf *out, int really)
+{
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    config.out = out;
+    config.do_delete = 1;
+    config.really = really;
+    return audit_begin(&config);
+}
+
+static void backdate(const char *path)
+{
+    struct utimbuf times;
+
+    times.actime = times.modtime = time(NULL) - (AUDIT_MIN_AGE + 60);
+    CU_ASSERT_EQUAL(utime(path, &times), 0);
+}
+
+/* Anything younger than the guard may belong to an operation still in
+ * flight.  This is the guard's entire contract. */
+static void test_young_path_is_protected(void)
+{
+    char path[] = "/tmp/audit-young-XXXXXX";
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    CU_ASSERT(audit_path_is_young(path));
+
+    rmdir(path);
+}
+
+static void test_backdated_path_is_not_young(void)
+{
+    char path[] = "/tmp/audit-old-XXXXXX";
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    backdate(path);
+
+    CU_ASSERT(!audit_path_is_young(path));
+
+    rmdir(path);
+}
+
+/* A path that has already gone is not something to protect. */
+static void test_missing_path_is_not_young(void)
+{
+    CU_ASSERT(!audit_path_is_young("/tmp/audit-definitely-not-here"));
+}
+
+/* Without --really nothing may be touched, whatever else is set. */
+static void test_remove_respects_dry_run(void)
+{
+    char path[] = "/tmp/audit-dry-XXXXXX";
+    struct buf out = BUF_INITIALIZER;
+    struct stat sbuf;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    backdate(path);
+
+    audit_remove_path(delete_state(&out, 0), path);
+
+    CU_ASSERT_EQUAL(stat(path, &sbuf), 0);
+
+    rmdir(path);
+    buf_free(&out);
+}
+
+static void test_remove_deletes_when_really(void)
+{
+    char path[] = "/tmp/audit-real-XXXXXX";
+    struct buf out = BUF_INITIALIZER;
+    struct stat sbuf;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    backdate(path);
+
+    audit_remove_path(delete_state(&out, 1), path);
+
+    CU_ASSERT_EQUAL(stat(path, &sbuf), -1);
+
+    buf_free(&out);
+}
+
+/* A young path is reported but survives even with --really. */
+static void test_remove_spares_young_even_when_really(void)
+{
+    char path[] = "/tmp/audit-spare-XXXXXX";
+    struct buf out = BUF_INITIALIZER;
+    struct stat sbuf;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    /* deliberately not backdated */
+
+    audit_remove_path(delete_state(&out, 1), path);
+
+    CU_ASSERT_EQUAL(stat(path, &sbuf), 0);
+    CU_ASSERT(find_code(&out, "skipped-too-young"));
+
+    rmdir(path);
+    buf_free(&out);
+}
+
+/* Without --delete, removal is not even considered: a plain audit must
+ * never touch anything. */
+static void test_remove_does_nothing_without_delete(void)
+{
+    char path[] = "/tmp/audit-nodel-XXXXXX";
+    struct buf out = BUF_INITIALIZER;
+    struct audit_config config = AUDIT_CONFIG_INITIALIZER;
+    struct stat sbuf;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    backdate(path);
+
+    config.out = &out;
+    config.really = 1;      /* but do_delete is off */
+    audit_remove_path(audit_begin(&config), path);
+
+    CU_ASSERT_EQUAL(stat(path, &sbuf), 0);
+    CU_ASSERT_EQUAL(buf_len(&out), 0);
+
+    rmdir(path);
+    buf_free(&out);
+}
+
+/* A non-empty directory must go entirely: a mailbox directory always has
+ * files in it. */
+static void test_remove_deletes_recursively(void)
+{
+    char path[] = "/tmp/audit-tree-XXXXXX";
+    struct buf out = BUF_INITIALIZER;
+    struct buf file = BUF_INITIALIZER;
+    struct stat sbuf;
+    FILE *f;
+
+    CU_ASSERT_PTR_NOT_NULL(mkdtemp(path));
+    test_mkpath("%s/sub", path);
+
+    buf_printf(&file, "%s/sub/cyrus.index", path);
+    f = fopen(buf_cstring(&file), "w");
+    CU_ASSERT_PTR_NOT_NULL(f);
+    if (f) fclose(f);
+
+    backdate(path);
+
+    audit_remove_path(delete_state(&out, 1), path);
+
+    CU_ASSERT_EQUAL(stat(path, &sbuf), -1);
+
+    buf_free(&file);
+    buf_free(&out);
+}
+
+/* vim: set ft=c: */
