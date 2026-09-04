@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_alt_svc_header
+    ($self)
+{
+    my $service = $self->{instance}->get_service('http');
+
+    # Plaintext HTTP/1.1: Alt-Svc present, advertises h2, never h2c.
+    my $s = http1_connect($self);
+
+    print $s "GET /.well-known HTTP/1.1\r\n"
+           . "Host: " . $service->host . ":" . $service->port . "\r\n"
+           . "\r\n";
+
+    my $res = http1_read_response($s);
+    $self->assert_num_equals(200, $res->{status});
+    $self->assert_matches(qr/\bh2=/, $res->{headers}{'alt-svc'} // '');
+    $self->assert($res->{headers}{'alt-svc'} !~ /\bh2c\b/,
+                  "h2c must never be advertised in Alt-Svc");
+    close($s);
+
+    # TLS (https service): no Alt-Svc at all.
+    my $https_service = $self->{instance}->get_service('https');
+    $s = https1_connect($self);
+
+    print $s "GET /.well-known HTTP/1.1\r\n"
+           . "Host: " . $https_service->host . ":" . $https_service->port . "\r\n"
+           . "\r\n";
+
+    $res = http1_read_response($s);
+    $self->assert_num_equals(200, $res->{status});
+    $self->assert(!exists $res->{headers}{'alt-svc'});
+    close($s);
+}

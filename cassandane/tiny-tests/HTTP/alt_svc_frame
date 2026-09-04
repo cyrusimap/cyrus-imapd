@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_alt_svc_frame
+    # :NoCheckSyslog -- a successful h2c upgrade logs "...NO_ERROR" on
+    # teardown, which the syslog checker misflags on the "ERROR" substring.
+    :NoCheckSyslog
+    ($self)
+{
+    my $service = $self->{instance}->get_service('http');
+    my $s = http1_connect($self);
+
+    print $s "GET /.well-known HTTP/1.1\r\n"
+           . "Host: " . $service->host . ":" . $service->port . "\r\n"
+           . "Connection: Upgrade, HTTP2-Settings\r\n"
+           . "Upgrade: h2c\r\n"
+           . "HTTP2-Settings: AAMAAABkAAQAAQAAAAIAAAAA\r\n"
+           . "\r\n";
+
+    my $res = http1_read_response($s);
+    $self->assert_num_equals(101, $res->{status});
+
+    # SETTINGS and ALTSVC (RFC 7838 4, type 0xA) are both queued at
+    # session start, in that order; scan for ALTSVC rather than assume
+    # it's the very next frame.
+    my $altsvc;
+    for (1 .. 10) {
+        my $frame = h2_read_frame($s);
+        if ($frame->{type} == 0xA) {
+            $altsvc = $frame;
+            last;
+        }
+    }
+    $self->assert_not_null($altsvc, "no ALTSVC frame seen");
+
+    my ($origin_len) = unpack('n', substr($altsvc->{payload}, 0, 2));
+    my $origin = substr($altsvc->{payload}, 2, $origin_len);
+    my $field_value = substr($altsvc->{payload}, 2 + $origin_len);
+
+    $self->assert_matches(qr{^https://}, $origin);
+    $self->assert_matches(qr/\bh2=/, $field_value);
+    $self->assert($field_value !~ /\bh2c\b/,
+                  "h2c must never be advertised in the ALTSVC frame");
+
+    close($s);
+}

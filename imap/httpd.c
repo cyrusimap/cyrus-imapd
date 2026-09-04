@@ -988,11 +988,6 @@ int service_main(int argc __attribute__((unused)),
     if (r) fatal("unable to register process", EX_IOERR);
     proc_settitle(config_ident, http_conn.clienthost, NULL, NULL, NULL);
 
-    /* Construct Alt-Svc header value */
-    struct buf buf = BUF_INITIALIZER;
-    http2_altsvc(&buf);
-    httpd_altsvc = buf_releasenull(&buf);
-
     /* Set inactivity timer */
     httpd_timeout = config_getduration(IMAPOPT_HTTPTIMEOUT);
     if (httpd_timeout < 0) httpd_timeout = 0;
@@ -1013,26 +1008,35 @@ int service_main(int argc __attribute__((unused)),
     else {
         /* HTTP/2 client connection preface */
         do_h2 = http2_preface(&http_conn);
+
+        /* Construct Alt-Svc header value */
+        struct buf buf = BUF_INITIALIZER;
+        http2_altsvc(&buf);
+        httpd_altsvc = buf_releasenull(&buf);
     }
 
-    if (do_h2 && http2_start_session(NULL, &http_conn) != 0)
-        fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
+    if (do_h2) {
+        if (http2_start_session(NULL, &http_conn) != 0)
+            fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
+    }
+    else {
+        /* Setup the signal handler for keepalive heartbeat */
+        httpd_keepalive = config_getduration(IMAPOPT_HTTPKEEPALIVE);
+        if (httpd_keepalive < 0) httpd_keepalive = 0;
+        if (httpd_keepalive) {
+            struct sigaction action;
 
-    /* Setup the signal handler for keepalive heartbeat */
-    httpd_keepalive = config_getduration(IMAPOPT_HTTPKEEPALIVE);
-    if (httpd_keepalive < 0) httpd_keepalive = 0;
-    if (httpd_keepalive) {
-        struct sigaction action;
-
-        sigemptyset(&action.sa_mask);
-        action.sa_flags = 0;
+            sigemptyset(&action.sa_mask);
+            action.sa_flags = 0;
 #ifdef SA_RESTART
-        action.sa_flags |= SA_RESTART;
+            action.sa_flags |= SA_RESTART;
 #endif
-        action.sa_handler = sigalrm_handler;
-        if (sigaction(SIGALRM, &action, NULL) < 0) {
-            syslog(LOG_ERR, "unable to install signal handler for %d: %m", SIGALRM);
-            httpd_keepalive = 0;
+            action.sa_handler = sigalrm_handler;
+            if (sigaction(SIGALRM, &action, NULL) < 0) {
+                syslog(LOG_ERR,
+                       "unable to install signal handler for %d: %m", SIGALRM);
+                httpd_keepalive = 0;
+            }
         }
     }
 
@@ -4926,7 +4930,8 @@ static int meth_get(struct transaction_t *txn,
             return ws_start_channel(txn, NULL, &ws_echo);
         }
 
-        if (ws_enabled) {
+        /* Advertise WebSocket upgrade if not attempting some other upgrade */
+        if (ws_enabled && !spool_getheader(txn->req_hdrs, "Upgrade")) {
             txn->flags.upgrade |= UPGRADE_WS;
             txn->flags.conn |= CONN_UPGRADE;
         }

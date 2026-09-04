@@ -507,17 +507,12 @@ HIDDEN int http2_init(struct http_connection *conn, struct buf *serverinfo)
 
 HIDDEN void http2_altsvc(struct buf *altsvc)
 {
-    if (!https && http2_callbacks) {
+    if (http2_callbacks) {
         const char *sep = buf_len(altsvc) ? ", " : "";
         const char *config_altsvc = config_getstring(IMAPOPT_HTTP_H2_ALTSVC);
 
         if (config_altsvc) {
             buf_printf(altsvc, "%sh2=\"%s\"", sep, config_altsvc);
-            sep = ", ";
-        }
-        if (httpd_localip) {
-            const char *port = strchr(httpd_localip, ';');
-            buf_printf(altsvc, "%sh2c=\":%s\"", sep, port ? port+1 : "80");
         }
     }
 }
@@ -568,6 +563,9 @@ static void add_resp_header(struct transaction_t *txn,
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
 
     if (strm->num_resp_hdrs >= HTTP2_MAX_HEADERS) {
+        syslog(LOG_ERR, "add_resp_header(id=%d): dropping '%s' header,"
+                        " HTTP2_MAX_HEADERS (%d) reached",
+               strm->id, name, HTTP2_MAX_HEADERS);
         buf_free(value);
         return;
     }
@@ -664,6 +662,24 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     return r;
 }
 
+/* A response body chunk handed to nghttp2 via data_source_read_cb().
+ * This is a copy of the data rather than a reference into the caller's
+ * own buffer because nghttp2's read callback may defer reading a
+ * submitted DATA frame's source across any number of later
+ * nghttp2_session_mem_send2() calls when the stream's HTTP/2 flow-
+ * control window is exhausted.
+ */
+struct h2_body_chunk {
+    struct buf data;
+    size_t pos;
+};
+
+static void free_body_chunk(struct h2_body_chunk *chunk)
+{
+    buf_free(&chunk->data);
+    free(chunk);
+}
+
 static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((unused)),
                                          int32_t stream_id,
                                          uint8_t *buf, size_t length,
@@ -671,16 +687,20 @@ static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((un
                                          nghttp2_data_source *source,
                                          void *user_data __attribute__((unused)))
 {
-    struct protstream *s = source->ptr;
-    nghttp2_ssize n = prot_read(s, (char *) buf, length);
+    struct h2_body_chunk *chunk = source->ptr;
+    size_t remain = buf_len(&chunk->data) - chunk->pos;
+    size_t n = length < remain ? length : remain;
+
+    if (n) memcpy(buf, buf_base(&chunk->data) + chunk->pos, n);
+    chunk->pos += n;
 
     syslog(LOG_DEBUG,
            "http2_data_source_read_cb(id=%d, len=%zu): n=%zu, eof=%d",
-           stream_id, length, n, !s->cnt);
+           stream_id, length, n, chunk->pos == buf_len(&chunk->data));
 
-    if (!s->cnt) {
+    if (chunk->pos == buf_len(&chunk->data)) {
         *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-        prot_free(s);  /* Done with the protstream */
+        free_body_chunk(chunk);  /* Done with our copy */
     }
 
     return n;
@@ -716,11 +736,13 @@ static int resp_body_chunk(struct transaction_t *txn,
         retry_writev(txn->conn->logfd, iov, niov);
     }
 
-    /* NOTE: The protstream that we use as the data source MUST remain
-       available until the data source read callback has retrieved all data.
-    */
+    /* Own copy of this chunk -- see struct h2_body_chunk's comment for
+     * why we can't just alias 'data' instead of copying it. */
+    struct h2_body_chunk *chunk = xzmalloc(sizeof(struct h2_body_chunk));
+    if (datalen) buf_setmap(&chunk->data, data, datalen);
+
     nghttp2_data_provider2 prd = {
-        .source.ptr    = prot_readmap(data, datalen),
+        .source.ptr    = chunk,
         .read_callback = data_source_read_cb
     };
 
@@ -744,7 +766,7 @@ static int resp_body_chunk(struct transaction_t *txn,
     int r = nghttp2_submit_data2(ctx->session, flags, strm->id, &prd);
     if (r) {
         syslog(LOG_ERR, "nghttp2_submit_data2: %s", nghttp2_strerror(r));
-        prot_free(prd.source.ptr);
+        free_body_chunk(chunk);
         return HTTP_SERVER_ERROR;
     }
     else {
@@ -774,69 +796,65 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
     };
     size_t niv = (sizeof(iv) / sizeof(iv[0])) - !ws_enabled;
     struct http2_context *ctx;
+    const uint8_t *settings = NULL;
+    size_t settings_len = 0;
     int r;
 
     if (!conn) conn = txn->conn;
 
     if (conn->sess_ctx) return 0;
 
+    if (txn && (txn->flags.conn & CONN_UPGRADE)) {
+        /* RFC 7540 3.2 requires exactly one HTTP2-Settings header on an
+         * h2c Upgrade request. Validate and decode it *before* creating
+         * any HTTP/2 session state, so a bad or missing header falls
+         * through to HTTP/1.1 instead of leaving a half-wired session. */
+        const char **hdr = spool_getheader(txn->req_hdrs, "HTTP2-Settings");
+        if (!hdr || hdr[1]) return 0;
+
+        if (charset_decode(&txn->buf,
+                           hdr[0], strlen(hdr[0]), ENCODING_BASE64URL)) {
+            xsyslog(LOG_WARNING, "Cannot decode HTTP2-Settings", NULL);
+            return HTTP_BAD_REQUEST;
+        }
+
+        settings = (const uint8_t *) buf_cstring(&txn->buf);
+        settings_len = buf_len(&txn->buf);
+    }
+
     ctx = xzmalloc(sizeof(struct http2_context));
 
     r = nghttp2_option_new(&ctx->options);
+    if (!r) r = nghttp2_session_server_new2(&ctx->session,
+                                            http2_callbacks, conn, ctx->options);
     if (r) {
-        syslog(LOG_WARNING,
-               "nghttp2_option_new: %s", nghttp2_strerror(r));
-        free(ctx);
-        return HTTP_SERVER_ERROR;
-    }
+        const char *func = "nghttp2_option_new";
 
-    r = nghttp2_session_server_new2(&ctx->session,
-                                    http2_callbacks, conn, ctx->options);
-    if (r) {
-        syslog(LOG_WARNING,
-               "nghttp2_session_server_new2: %s", nghttp2_strerror(r));
+        if (ctx->options) {
+            func = "nghttp2_session_server_new2";
+            nghttp2_option_del(ctx->options);
+        }
         free(ctx);
+
+        syslog(LOG_WARNING, "%s: %s", func, nghttp2_strerror(r));
         return HTTP_SERVER_ERROR;
     }
 
     conn->sess_ctx = ctx;
     ptrarray_add(&conn->reset_callbacks, &session_free);
 
-    if (txn && (txn->flags.conn & CONN_UPGRADE)) {
+    if (settings) {
         struct http2_stream *strm;
-        struct buf *buf = &txn->buf;
-        unsigned outlen;
 
-        const char **hdr = spool_getheader(txn->req_hdrs, "HTTP2-Settings");
-        if (!hdr || hdr[1]) return 0;
-
-        /* base64url decode the settings.
-           Use the SASL base64 decoder after replacing the encoded values
-           for chars 62 and 63 and adding appropriate padding. */
-        buf_setcstr(buf, hdr[0]);
-        buf_replace_char(buf, '-', '+');
-        buf_replace_char(buf, '_', '/');
-        buf_appendmap(buf, "==", (4 - (buf_len(buf) % 4)) % 4);
-        r = sasl_decode64(buf_base(buf), buf_len(buf),
-                          (char *) buf_base(buf), buf_len(buf), &outlen);
-        if (r != SASL_OK) {
-            syslog(LOG_WARNING, "sasl_decode64 failed: %s",
-                   sasl_errstring(r, NULL, NULL));
-        }
-        else {
-            r = nghttp2_session_upgrade2(ctx->session,
-                                         (const uint8_t *) buf_base(buf),
-                                         outlen, txn->meth == METH_HEAD, NULL);
-            if (r) {
-                syslog(LOG_WARNING, "nghttp2_session_upgrade: %s",
-                       nghttp2_strerror(r));
-            }
+        r = nghttp2_session_upgrade2(ctx->session, settings, settings_len,
+                                     txn->meth == METH_HEAD, NULL);
+        if (r) {
+            syslog(LOG_WARNING, "nghttp2_session_upgrade: %s",
+                   nghttp2_strerror(r));
+            return HTTP_BAD_REQUEST;
         }
 
-        buf_reset(buf);
-        if (r) return HTTP_BAD_REQUEST;
-
-        /* tell client to start h2c upgrade (RFC 7540) */
+        /* Tell client to start h2c upgrade (RFC 7540) */
         response_header(HTTP_SWITCH_PROT, txn);
 
         strm = xzmalloc(sizeof(struct http2_stream));
@@ -846,7 +864,8 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         ptrarray_add(&txn->done_callbacks, &stream_free);
 
         /* Tell syslog our stream-id */
-        buf_printf(buf, "%d", strm->id);
+        buf_reset(&txn->buf);
+        buf_printf(&txn->buf, "%d", strm->id);
         spool_replace_header(xstrdup(":stream-id"),
                              buf_release(&txn->buf), txn->req_hdrs);
     }
@@ -869,29 +888,16 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
     }
 
     if (httpd_altsvc) {
-        /* Remove h2c from Alt-Svc value */
-        char *p = strstr(httpd_altsvc, "h2c=");
-        if (p == httpd_altsvc) {
-            free(httpd_altsvc);
-            httpd_altsvc = NULL;
-        }
-        else if (p) {
-            while (*--p == ' ');
-            *p  = '\0';
-        }
+        char *origin = strconcat("https://", config_servername, NULL);
 
-        if (httpd_altsvc) {
-            char *origin = strconcat("https://", config_servername, NULL);
+        r = nghttp2_submit_altsvc(ctx->session, NGHTTP2_FLAG_NONE, 0,
+                                  (uint8_t *) origin, strlen(origin),
+                                  (uint8_t *) httpd_altsvc, strlen(httpd_altsvc));
+        free(origin);
 
-            r = nghttp2_submit_altsvc(ctx->session, NGHTTP2_FLAG_NONE, 0,
-                                      (uint8_t *) origin, strlen(origin),
-                                      (uint8_t *) httpd_altsvc, strlen(httpd_altsvc));
-            free(origin);
-
-            if (r) {
-                syslog(LOG_ERR, "nghttp2_submit_altsvc: %s", nghttp2_strerror(r));
-                return HTTP_SERVER_ERROR;
-            }
+        if (r) {
+            syslog(LOG_ERR, "nghttp2_submit_altsvc: %s", nghttp2_strerror(r));
+            return HTTP_SERVER_ERROR;
         }
     }
 
