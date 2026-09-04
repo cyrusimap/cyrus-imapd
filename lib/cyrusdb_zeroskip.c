@@ -11,6 +11,7 @@
 #include <syslog.h>
 #include <sys/stat.h>
 
+#include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
