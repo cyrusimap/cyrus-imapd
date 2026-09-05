@@ -14984,12 +14984,18 @@ static int jmap_email_import(jmap_req_t *req)
     new_state = jmap_state_string(req, 0, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD);
 
     /* Reply */
+    /* RFC 8621, Section 4.8 types "created" as Id[Email]|null and
+     * "notCreated" as Id[SetError]|null, "or null if none", so an empty
+     * object is not a valid value for either. This mirrors what
+     * jmap_set_reply() already does for the standard /set methods. */
     jmap_ok(req, json_pack("{s:s s:s s:s s:O s:O}",
                 "accountId", req->accountid,
                 "oldState", old_state,
                 "newState", new_state,
-                "created", created,
-                "notCreated", not_created));
+                "created",
+                json_object_size(created) ? created : json_null(),
+                "notCreated",
+                json_object_size(not_created) ? not_created : json_null()));
 
 done:
     free(old_state);
