@@ -1,0 +1,20 @@
+Description:
+
+Fix a crash in the CalDAV free/busy handler when a scheduling query covers
+several recipients and one of them publishes a CALDAV:calendar-availability.
+
+Documentation:
+
+No documentation change: the fix restores the documented behaviour.
+
+Config changes:
+
+None.
+
+Upgrade instructions:
+
+None.
+
+GitHub issue:
+
+None filed; the crash and its reproduction are described in the pull request.

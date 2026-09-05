@@ -7418,6 +7418,19 @@ add_vavailability(struct vavailability_array *vavail, icalcomponent *ical)
     icalcomponent *vav;
     icalproperty *prop;
 
+    /* Callers hand us whatever came out of a parse: the CALDAV:calendar-availability
+       annotation is stored verbatim and only parsed here, so icalparser_parse_string()
+       may well have returned NULL, and a component that did parse may still hold
+       nothing we can take a period from.  Either way this array owns what it is
+       given, so anything refused has to be freed rather than leaked. */
+    if (!ical) return;
+
+    vav = icalcomponent_get_first_real_component(ical);
+    if (!vav) {
+        icalcomponent_free(ical);
+        return;
+    }
+
     /* Grow the array, if necessary */
     if (vavail->len == vavail->alloc) {
         vavail->alloc += 10;  /* XXX  arbitrary */
@@ -7428,8 +7441,6 @@ add_vavailability(struct vavailability_array *vavail, icalcomponent *ical)
     /* Add new vavailability */
     newav = &vavail->vav[vavail->len++];
     newav->ical = ical;
-
-    vav = icalcomponent_get_first_real_component(ical);
 
     /* Set period */
     newav->per.start = icalcomponent_get_dtstart(vav);
