@@ -1,0 +1,106 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_create_memo_after_splitconv
+  : ConversationsMaxThread10
+    ($self)
+{
+  my $jmap = $self->{jmap};
+
+  xlog $self, "Create conversation with maximum thread count";
+  my $convsMaxThread
+    = $self->{instance}->{config}->get('conversations_max_thread');
+  $self->make_message('Email A', messageid => "msg1\@example.com");
+  my $lastUid = 1;
+  foreach my $i (2 .. $convsMaxThread) {
+    my $nextUid = $lastUid + 1;
+    $self->make_message(
+      "Re: Email A",
+      messageid     => "msg$nextUid\@example.com",
+      extra_headers => [
+        [ "in-reply-to", "<msg$lastUid\@example.com>" ],
+      ],
+    );
+    $lastUid = $nextUid;
+  }
+
+  xlog $self, "Append one more reply, splitting the conversation";
+  my $splitUid = $lastUid + 1;
+  $self->make_message(
+    "Re: Email A",
+    messageid     => "msg$splitUid\@example.com",
+    extra_headers => [
+      [ "in-reply-to", "<msg$lastUid\@example.com>" ],
+    ],
+  );
+
+  my $res = $jmap->CallMethods([
+    [
+      'Email/query',
+      {
+        sort => [ { property => 'receivedAt', isAscending => JSON::true } ],
+      },
+      'R1'
+    ],
+    [
+      'Email/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'Email/query',
+          path     => '/ids'
+        },
+        properties => [ 'threadId', 'messageId' ],
+      },
+      'R2'
+    ],
+  ]);
+
+  my %threadIdByMsgId
+    = map { $_->{messageId}[0] => $_->{threadId} } @{ $res->[1][1]{list} };
+
+  my $baseThreadId  = $threadIdByMsgId{"msg1\@example.com"};
+  my $splitThreadId = $threadIdByMsgId{"msg$splitUid\@example.com"};
+  $self->assert_not_null($baseThreadId);
+  $self->assert_not_null($splitThreadId);
+  $self->assert_str_not_equals($baseThreadId, $splitThreadId);
+
+  xlog $self, "Create memo replying to the message in the split conversation";
+  my $memoUid = $splitUid + 1;
+  $res = $jmap->CallMethods([
+    [
+      'Email/set',
+      {
+        create => {
+          "$memoUid" => {
+            mailboxIds    => { '$inbox' => JSON::true },
+            from          => [ { email => 'from@local' } ],
+            to            => [ { email => 'to@local' } ],
+            subject       => "Re: Email A",
+            messageId     => ["msg$memoUid\@example.com"],
+            inReplyTo     => ["msg$splitUid\@example.com"],
+            bodyStructure => {
+              type   => 'text/plain',
+              partId => 'part1',
+            },
+            bodyValues => {
+              part1 => {
+                value => "body$memoUid XXX",
+              },
+            },
+            keywords => {
+              '$memo' => JSON::true,
+            },
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
+
+  xlog $self, "Memo joins the conversation of the message it replies to";
+  $self->assert_str_equals(
+    $splitThreadId,
+    $res->[0][1]{created}{$memoUid}{threadId}
+  );
+}

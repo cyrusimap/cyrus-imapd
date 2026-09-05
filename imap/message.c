@@ -4019,10 +4019,6 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
             record->cid = generate_conversation_id(record);
             if (record->cid) mustkeep = 1;
         }
-        if (!mustkeep) {
-            /* Do not split conversations for messages with '$memo' flag */
-            mustkeep = mailbox_record_hasflag(mailbox, record, "$memo");
-        }
         if (!mustkeep && !record->basecid) {
             /* try finding a CID in the match list, or if we came in with it */
             struct buf annotkey = BUF_INITIALIZER;
@@ -4054,8 +4050,14 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 
     if (!conv) conv = conversation_new();
 
+    /* A memo belongs with the message it annotates, so it never splits the
+     * conversation.  This is separate from mustkeep: a memo must still follow
+     * an already split conversation to its current cid. */
+    bool is_memo = mailbox_record_hasflag(mailbox, record, "$memo");
+
     uint32_t max_thread = config_getint(IMAPOPT_CONVERSATIONS_MAX_THREAD);
-    if (conv->exists >= max_thread && !mustkeep && !record->silentupdate) {
+    if (conv->exists >= max_thread && !mustkeep && !is_memo
+        && !record->silentupdate) {
         /* time to reset the conversation */
         conversation_id_t was = record->cid;
         record->cid = generate_conversation_id(record);
