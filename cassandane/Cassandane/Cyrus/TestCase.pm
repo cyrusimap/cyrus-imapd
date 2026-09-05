@@ -271,6 +271,12 @@ magic(DelayedExpunge => sub {
 magic(VirtDomains => sub {
     shift->config_set(virtdomains => 'userid');
 });
+magic(DefaultDomain => sub {
+    # Pairs with :VirtDomains.  Without a default domain the recipient of a
+    # local invitation is a foreign address, and is scheduled over iMIP rather
+    # than delivered - so the local delivery path is never entered at all.
+    shift->config_set(defaultdomain => q{example.com});
+});
 magic(NoVirtDomains => sub {
     shift->config_set(virtdomains => 'off');
 });
