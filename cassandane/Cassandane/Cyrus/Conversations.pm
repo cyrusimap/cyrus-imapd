@@ -59,6 +59,10 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
+
+    # there's no store yet if the test asked for :NoStartInstances
+    return if not $self->{store};
+
     my ($maj, $min) = Cassandane::Instance->get_version();
 
     # basecid was added after 3.0

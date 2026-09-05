@@ -162,8 +162,9 @@ Options
 
 .. option:: -b num, --batchsize=num
 
-    Process "num" messages per batch when expunging or expiring.  Default
-    is 4096.
+    Process "num" messages per batch when expunging or expiring, and "num"
+    records per batch when pruning conversations databases.  Default is
+    4096.  The conversations database is unlocked between batches.
 
 .. option:: -v, --verbose
 

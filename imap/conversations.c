@@ -2999,12 +2999,11 @@ EXPORTED void conversation_free(conversation_t *conv)
 }
 
 struct prune_rock {
-    struct conversations_state *state;
     arrayu64_t *cidfilter;
     arrayu64_t cids;
+    strarray_t *todelete;
     time_t thresh;
     unsigned int nseen;
-    unsigned int ndeleted;
 };
 
 static int prunecb(void *rock,
@@ -3013,39 +3012,32 @@ static int prunecb(void *rock,
 {
     struct prune_rock *prock = (struct prune_rock *)rock;
     time_t stamp;
-    int r;
 
     prock->nseen++;
-    r = check_msgid(key, keylen, NULL);
-    if (r) goto done;
+
+    /* not a msgid record: skip it, but keep scanning */
+    if (check_msgid(key, keylen, NULL)) return 0;
 
     arrayu64_truncate(&prock->cids, 0);
 
-    r = _conversations_parse(data, datalen, &prock->cids, &stamp);
-    if (r) goto done;
+    if (_conversations_parse(data, datalen, &prock->cids, &stamp)) return 0;
 
     if (prock->cidfilter) {
         size_t i;
         for (i = 0; i < arrayu64_size(&prock->cids); i++) {
             if (arrayu64_bsearch(prock->cidfilter, arrayu64_nth(&prock->cids, i)))
-                goto done; // found a match
+                return 0; // found a match
         }
     }
     else {
         /* keep records newer than the threshold */
         if (stamp >= prock->thresh)
-            goto done;
+            return 0;
     }
 
-    prock->ndeleted++;
+    strarray_appendm(prock->todelete, xstrndup(key, keylen));
 
-    r = cyrusdb_delete(prock->state->db,
-                       key, keylen,
-                       &prock->state->txn,
-                       /*force*/1);
-
-done:
-    return r;
+    return 0;
 }
 
 static int addknowncid(void *rock,
@@ -3064,20 +3056,163 @@ static int addknowncid(void *rock,
     return 0;
 }
 
-EXPORTED int conversations_prune(struct conversations_state *state,
-                                 time_t thresh, unsigned int *nseenp,
-                                 unsigned int *ndeletedp)
-{
-    struct prune_rock rock = { state, NULL, ARRAYU64_INITIALIZER, thresh, 0, 0 };
+/* private stop signal, distinct from every CYRUSDB_ error */
+#define PRUNE_BATCH_FULL (-1000)
 
-    if (config_getswitch(IMAPOPT_CONVERSATIONS_KEEP_EXISTING)) {
-        // these will be added in CID order, so we don't need to sort them
-        rock.cidfilter = arrayu64_new();
-        cyrusdb_foreach(state->db, "B", 1, NULL, addknowncid, rock.cidfilter, &state->txn);
+struct walk_rock {
+    foreach_cb *cb;
+    void *rock;
+    struct buf *resume;   /* last key handled; empty before the first batch */
+    int remaining;
+    bool resumed;
+};
+
+static int keycmp(const char *a, size_t alen, const char *b, size_t blen)
+{
+    size_t n = alen < blen ? alen : blen;
+    int r = n ? memcmp(a, b, n) : 0;
+    if (r) return r;
+    if (alen == blen) return 0;
+    return alen < blen ? -1 : 1;
+}
+
+static int walkcb(void *rock, const char *key, size_t keylen,
+                  const char *data, size_t datalen)
+{
+    struct walk_rock *wrock = (struct walk_rock *)rock;
+    int r;
+
+    if (!wrock->resumed) {
+        if (keycmp(key, keylen,
+                   buf_base(wrock->resume), buf_len(wrock->resume)) <= 0)
+            return 0;
+        wrock->resumed = true;
     }
 
-    cyrusdb_foreach(state->db, "<", 1, NULL, prunecb, &rock, &state->txn);
+    /* our own copy: key points into the mapped file, which goes away
+     * when we drop the lock */
+    buf_setmap(wrock->resume, key, keylen);
 
+    r = wrock->cb(wrock->rock, key, keylen, data, datalen);
+    if (r) return r;
+
+    return --wrock->remaining ? 0 : PRUNE_BATCH_FULL;
+}
+
+/* One batch, resuming after *resume and updating it.  Sets *done once the
+ * range runs out. */
+static int prune_batch(struct conversations_state *state, int batchsize,
+                       const char *prefix, size_t prefixlen,
+                       struct buf *resume, bool *done,
+                       foreach_cb *cb, void *rock)
+{
+    int r;
+
+    if (cyrusdb_canfetchnext(DB)) {
+        /* every key we want sorts at or after the bare prefix */
+        if (!buf_len(resume)) buf_setcstr(resume, prefix);
+
+        for (int n = 0; n < batchsize; n++) {
+            const char *found = NULL, *data = NULL;
+            size_t foundlen = 0, datalen = 0;
+
+            r = cyrusdb_fetchnext(state->db, buf_base(resume), buf_len(resume),
+                                  &found, &foundlen, &data, &datalen,
+                                  &state->txn);
+            if (r == CYRUSDB_NOTFOUND) break;
+            if (r) return r;
+
+            /* off the end of the range we care about */
+            if (foundlen < prefixlen || memcmp(found, prefix, prefixlen)) break;
+
+            buf_setmap(resume, found, foundlen);
+
+            r = cb(rock, found, foundlen, data, datalen);
+            if (r) return r;
+
+            if (n + 1 == batchsize) return 0;
+        }
+
+        *done = true;
+        return 0;
+    }
+
+    /* no fetchnext: start the walk over each time and skip what earlier
+     * batches already handled */
+    struct walk_rock wrock = { cb, rock, resume, batchsize, false };
+
+    r = cyrusdb_foreach(state->db, prefix, prefixlen, NULL,
+                        walkcb, &wrock, &state->txn);
+    if (r == PRUNE_BATCH_FULL) return 0;
+    if (r) return r;
+
+    *done = true;
+    return 0;
+}
+
+/* Walk every record under prefix, calling cb for each one.
+ *
+ * With a state, the caller holds the database and we just iterate it.
+ * Without one, we reopen it every batchsize records, so a scan of a big
+ * database doesn't hold the user namespace lock for its whole length.  That
+ * gives a torn view, which is fine for pruning: every candidate is
+ * re-checked under the write lock.
+ *
+ * Resuming costs one seek per batch on a backend with fetchnext, and a
+ * rescan of everything already walked on one without.
+ */
+static int prune_walk(struct conversations_state *state, const char *userid,
+                      int batchsize, const char *prefix,
+                      foreach_cb *cb, void *rock)
+{
+    size_t prefixlen = strlen(prefix);
+    struct buf resume = BUF_INITIALIZER;
+    bool done = false;
+    int r = 0;
+
+    if (state)
+        return cyrusdb_foreach(state->db, prefix, prefixlen, NULL,
+                               cb, rock, &state->txn);
+
+    while (!done) {
+        struct conversations_state *mystate = NULL;
+
+        r = conversations_open_user(userid, 1/*shared*/, &mystate);
+        if (r) break;
+
+        r = prune_batch(mystate, batchsize, prefix, prefixlen,
+                        &resume, &done, cb, rock);
+
+        conversations_abort(&mystate);
+        if (r) break;
+    }
+
+    buf_free(&resume);
+
+    return r;
+}
+
+/* read-only pass: collect the prunable msgid records, so the expensive
+ * scan never needs the write lock */
+static int prune_scan(struct conversations_state *state, const char *userid,
+                      int batchsize, time_t thresh,
+                      strarray_t *todelete, unsigned int *nseenp)
+{
+    struct prune_rock rock = { NULL, ARRAYU64_INITIALIZER, todelete, thresh, 0 };
+    int r = 0;
+
+    if (config_getswitch(IMAPOPT_CONVERSATIONS_KEEP_EXISTING)) {
+        // walked in key order, which is CID order, so the filter comes
+        // out sorted ready for bsearch
+        rock.cidfilter = arrayu64_new();
+        r = prune_walk(state, userid, batchsize, "B", addknowncid,
+                       rock.cidfilter);
+        if (r) goto done;
+    }
+
+    r = prune_walk(state, userid, batchsize, "<", prunecb, &rock);
+
+done:
     arrayu64_fini(&rock.cids);
     if (rock.cidfilter) {
         arrayu64_fini(rock.cidfilter);
@@ -3086,10 +3221,149 @@ EXPORTED int conversations_prune(struct conversations_state *state,
 
     if (nseenp)
         *nseenp = rock.nseen;
-    if (ndeletedp)
-        *ndeletedp = rock.ndeleted;
 
-    return 0;
+    return r;
+}
+
+/* the scan may have run without the write lock, so anything it turned up has
+ * to be re-checked against the database as it stands now */
+static int prune_still_stale(struct conversations_state *state,
+                             const char *key, time_t thresh,
+                             int keep_existing)
+{
+    const char *data = NULL;
+    size_t datalen = 0;
+    arrayu64_t cids = ARRAYU64_INITIALIZER;
+    time_t stamp;
+    int stale = 0;
+    size_t i;
+
+    if (cyrusdb_fetch(state->db, key, strlen(key),
+                      &data, &datalen, &state->txn))
+        goto done;  /* gone already */
+
+    if (_conversations_parse(data, datalen, &cids, &stamp))
+        goto done;
+
+    if (!keep_existing) {
+        stale = (stamp < thresh);
+        goto done;
+    }
+
+    for (i = 0; i < arrayu64_size(&cids); i++) {
+        char bkey[CONVERSATION_ID_STRMAX+2];
+        snprintf(bkey, sizeof(bkey), "B" CONV_FMT, arrayu64_nth(&cids, i));
+        data = NULL;
+        datalen = 0;
+        if (!cyrusdb_fetch(state->db, bkey, strlen(bkey),
+                           &data, &datalen, &state->txn))
+            goto done;  /* the conversation is still around */
+    }
+
+    stale = 1;
+
+done:
+    arrayu64_fini(&cids);
+    return stale;
+}
+
+EXPORTED int conversations_prune(struct conversations_state *state,
+                                 time_t thresh, unsigned int *nseenp,
+                                 unsigned int *ndeletedp)
+{
+    strarray_t todelete = STRARRAY_INITIALIZER;
+    unsigned int nseen = 0, ndeleted = 0;
+    int i;
+
+    int r = prune_scan(state, NULL, 0, thresh, &todelete, &nseen);
+
+    for (i = 0; !r && i < strarray_size(&todelete); i++) {
+        const char *key = strarray_nth(&todelete, i);
+        r = cyrusdb_delete(state->db, key, strlen(key),
+                           &state->txn, /*force*/1);
+        if (!r) ndeleted++;
+    }
+
+    strarray_fini(&todelete);
+
+    if (nseenp)
+        *nseenp = nseen;
+    if (ndeletedp)
+        *ndeletedp = ndeleted;
+
+    return r;
+}
+
+EXPORTED int conversations_prune_user(const char *userid, time_t thresh,
+                                      int batchsize, unsigned int *nseenp,
+                                      unsigned int *ndeletedp)
+{
+    struct conversations_state *state = NULL;
+    strarray_t todelete = STRARRAY_INITIALIZER;
+    unsigned int nseen = 0, ndeleted = 0;
+    int keep_existing;
+    int nkeys;
+    int i;
+    int r;
+
+    /* first pass is read-only, and takes the lock a batch at a time so
+     * writers get a look in */
+    if (batchsize > 0) {
+        r = prune_scan(NULL, userid, batchsize, thresh, &todelete, &nseen);
+    }
+    else {
+        r = conversations_open_user(userid, 1/*shared*/, &state);
+        if (r) goto done;
+
+        r = prune_scan(state, NULL, 0, thresh, &todelete, &nseen);
+        conversations_abort(&state);
+    }
+    if (r) goto done;
+
+    /* nothing to remove: never take the write lock at all */
+    nkeys = strarray_size(&todelete);
+    if (!nkeys) goto done;
+
+    keep_existing = config_getswitch(IMAPOPT_CONVERSATIONS_KEEP_EXISTING);
+
+    if (batchsize <= 0) batchsize = nkeys;
+
+    /* second pass takes the write lock, but only a batch at a time */
+    for (i = 0; i < nkeys; ) {
+        int end = i + batchsize;
+        unsigned int n = 0;
+
+        if (end > nkeys) end = nkeys;
+
+        r = conversations_open_user(userid, 0/*shared*/, &state);
+        if (r) goto done;
+
+        for (; i < end; i++) {
+            const char *key = strarray_nth(&todelete, i);
+            if (!prune_still_stale(state, key, thresh, keep_existing))
+                continue;
+            r = cyrusdb_delete(state->db, key, strlen(key),
+                               &state->txn, /*force*/1);
+            if (r) goto done;
+            n++;
+        }
+
+        r = conversations_commit(&state);
+        if (r) goto done;
+
+        ndeleted += n;
+    }
+
+done:
+    conversations_abort(&state);
+    strarray_fini(&todelete);
+
+    if (nseenp)
+        *nseenp = nseen;
+    if (ndeletedp)
+        *ndeletedp = ndeleted;
+
+    return r;
 }
 
 /* NOTE: this makes an "ATOM" return */

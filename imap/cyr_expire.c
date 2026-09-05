@@ -103,6 +103,7 @@ struct expire_rock {
 struct conversations_rock {
     struct hash_table seen;
     time_t expire_mark;
+    int batchsize;
     unsigned long databases_seen;
     unsigned long msgids_seen;
     unsigned long msgids_expired;
@@ -593,12 +594,44 @@ done:
     return 0;
 }
 
+static int expire_conversations_user(const char *userid, void *rock)
+{
+    struct conversations_rock *crock = (struct conversations_rock *)rock;
+    unsigned int nseen = 0, ndeleted = 0;
+    struct stat sbuf;
+    char *filename = NULL;
+
+    signals_poll();
+
+    filename = conversations_getuserpath(userid);
+    if (!filename)
+        goto done;
+
+    /* nothing to prune, and no reason to create one either */
+    if (stat(filename, &sbuf))
+        goto done;
+
+    verbosep("Pruning conversations from db %s", filename);
+
+    conversations_prune_user(userid, crock->expire_mark, crock->batchsize,
+                             &nseen, &ndeleted);
+    libcyrus_run_delayed();
+
+    crock->databases_seen++;
+    crock->msgids_seen += nseen;
+    crock->msgids_expired += ndeleted;
+
+done:
+    free(filename);
+    return 0;
+}
+
+/* only used when we've been given a mailbox prefix to filter on - otherwise
+ * we iterate the users directly rather than every mailbox they own */
 static int expire_conversations(const mbentry_t *mbentry, void *rock)
 {
     struct conversations_rock *crock = (struct conversations_rock *)rock;
-    struct conversations_state *state = NULL;
-    unsigned int nseen = 0, ndeleted = 0;
-    char *filename = NULL;
+    char *userid = NULL;
 
     signals_poll();
 
@@ -611,29 +644,19 @@ static int expire_conversations(const mbentry_t *mbentry, void *rock)
     if (mboxname_isdeletedmailbox(mbentry->name, NULL))
         goto done;
 
-    filename = conversations_getmboxpath(mbentry->name);
-    if (!filename)
+    userid = mboxname_to_userid(mbentry->name);
+    if (!userid)
         goto done;
 
-    if (hash_lookup(filename, &crock->seen))
+    if (hash_lookup(userid, &crock->seen))
         goto done;
 
-    verbosep("Pruning conversations from db %s", filename);
+    hash_insert(userid, (void *)1, &crock->seen);
 
-    if (!conversations_open_mbox(mbentry->name, 0/*shared*/, &state)) {
-        conversations_prune(state, crock->expire_mark, &nseen, &ndeleted);
-        conversations_commit(&state);
-        libcyrus_run_delayed();
-    }
-
-    hash_insert(filename, (void *)1, &crock->seen);
-
-    crock->databases_seen++;
-    crock->msgids_seen += nseen;
-    crock->msgids_expired += ndeleted;
+    expire_conversations_user(userid, crock);
 
 done:
-    free(filename);
+    free(userid);
     return 0;
 }
 
@@ -760,16 +783,18 @@ static int do_cid_expire(struct cyr_expire_ctx *ctx)
 
         cid_expire_seconds = config_getduration(IMAPOPT_CONVERSATIONS_EXPIRE_AFTER);
         ctx->crock.expire_mark = time(0) - cid_expire_seconds + 1;
+        ctx->crock.batchsize = ctx->args.batchsize;
 
         verbosep("Removing conversation entries older than %0.2f days",
                        (double)(cid_expire_seconds/SECS_IN_A_DAY));
 
         if (ctx->args.userid)
-            mboxlist_usermboxtree(ctx->args.userid, NULL, expire_conversations,
-                                  &ctx->crock, MBOXTREE_DELETED);
-        else
+            expire_conversations_user(ctx->args.userid, &ctx->crock);
+        else if (ctx->args.mbox_prefix && *ctx->args.mbox_prefix)
             mboxlist_allmbox(ctx->args.mbox_prefix, expire_conversations,
                              &ctx->crock, 0);
+        else
+            mboxlist_alluser(expire_conversations_user, &ctx->crock);
 
         syslog(LOG_NOTICE, "Expired %lu entries of %lu entries seen "
                             "in %lu conversation databases",
