@@ -671,5 +671,11 @@ Related configuration
     a ``SOCK_SEQPACKET`` socketpair.
 *   :imapdconf:`quic_use_ebpf` -- eBPF vs. userspace relay backend.
     Off by default; the relay needs no elevated privileges.
+*   :imapdconf:`httptimeout` and :imapdconf:`websocket_timeout` time
+    out an idle HTTP/3 connection, as they do HTTP/1.1 and HTTP/2.
+    QUIC's own idle timeout is set just past the longer of the two, so
+    the connection gets a CONNECTION_CLOSE rather than going quiet, or
+    to 5 minutes if both are 0, since QUIC has no keepalive to notice a
+    client that vanished.
 
 Back to :ref:`imap-features`
