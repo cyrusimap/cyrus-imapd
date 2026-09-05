@@ -879,16 +879,13 @@ EXPORTED int capa_is_disabled(const char *str)
 
 #define IPBUF_SIZE (NI_MAXHOST+NI_MAXSERV+2)
 
-/*
- * Get name of client host on address 'localsock'.
- * Also returns local IP port and remote IP port on inet connections.
- */
 EXPORTED const char *get_clienthost_from_addrs(struct sockaddr *localsock,
                                                socklen_t locallen,
                                                struct sockaddr *remotesock,
                                                socklen_t remotelen,
                                                const char **localip,
-                                               const char **remoteip)
+                                               const char **remoteip,
+                                               bool resolve_name)
 {
     static struct buf clientbuf = BUF_INITIALIZER;
     static char lipbuf[IPBUF_SIZE], ripbuf[IPBUF_SIZE];
@@ -900,7 +897,8 @@ EXPORTED const char *get_clienthost_from_addrs(struct sockaddr *localsock,
 
     if (remotesock->sa_family == AF_INET || remotesock->sa_family == AF_INET6) {
         /* connected to an internet socket */
-        if (getnameinfo(remotesock, remotelen,
+        if (resolve_name &&
+            getnameinfo(remotesock, remotelen,
                         hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
             buf_printf(&clientbuf, "%s ", hbuf);
         }
@@ -969,7 +967,7 @@ EXPORTED const char *get_clienthost(int s,
     }
 
     return get_clienthost_from_addrs(localsock, salen, remotesock, salen,
-                                     localip, remoteip);
+                                     localip, remoteip, true);
 }
 
 EXPORTED int cmd_cancelled(int insearch)

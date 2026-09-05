@@ -712,5 +712,11 @@ Related configuration
 *   :imapdconf:`quic_retry` -- when to validate a new connection's
     address with a Retry: ``never``, under ``load`` (the default), or
     ``always``.
+*   :imapdconf:`httptimeout` and :imapdconf:`websocket_timeout` time
+    out an idle HTTP/3 connection, as they do HTTP/1.1 and HTTP/2.
+    QUIC's own idle timeout is set just past the longer of the two, so
+    the connection gets a CONNECTION_CLOSE rather than going quiet, or
+    to 5 minutes if both are 0, since QUIC has no keepalive to notice a
+    client that vanished.
 
 Back to :ref:`imap-features`

@@ -30,6 +30,7 @@
 
 #include "httpd.h"
 #include "http_h2.h"
+#include "http_h3.h"
 #include "http_jwt.h"
 #include "http_proxy.h"
 #include "http_ws.h"
@@ -391,6 +392,7 @@ static struct http_connection http_conn;
 
 static sasl_ssf_t extprops_ssf = 0;
 static SSL_CTX *ssl_ctx = NULL;
+static bool http3 = false;
 bool https = false;
 static bool httpd_tls_required = false;
 static bool httpd_starttls_enabled = false;
@@ -444,7 +446,8 @@ ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
 /* end PROXY stuff */
 
-static int tls_init(int client_auth, struct buf *serverinfo);
+static void tls_init(struct http_connection *conn, SSL_CTX **ssl_ctx,
+                     struct buf *serverinfo);
 static void starttls(struct http_connection *conn, int timeout);
 void usage(void) __attribute__((noreturn));
 void shut_down(int code) __attribute__((noreturn));
@@ -465,7 +468,7 @@ static int http_auth(const char *creds, struct transaction_t *txn);
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_propfind_root(struct transaction_t *txn, void *params);
 
-static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
+EXPORTED struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, SASL_CB_PROC_PTR &mysasl_config, NULL },
@@ -676,8 +679,11 @@ static void httpd_reset(struct http_connection *conn)
     attachextract_destroy();
 
     if (httpd_in) {
-        prot_NONBLOCK(httpd_in);
-        prot_fill(httpd_in);
+        /* Only quic.c may read an HTTP/3 connection's socket */
+        if (!http3) {
+            prot_NONBLOCK(httpd_in);
+            prot_fill(httpd_in);
+        }
         bytes_in = prot_bytes_in(httpd_in);
         prot_free(httpd_in);
     }
@@ -687,6 +693,9 @@ static void httpd_reset(struct http_connection *conn)
         bytes_out = prot_bytes_out(httpd_out);
         prot_free(httpd_out);
     }
+
+    /* HTTP/3 traffic doesn't pass through httpd_in/httpd_out */
+    http3_traffic(conn, &bytes_in, &bytes_out);
 
     auditlog_traffic(bytes_in, bytes_out);
 
@@ -826,24 +835,16 @@ int service_init(int argc __attribute__((unused)),
                SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
                LIBXML_DOTTED_VERSION, JANSSON_VERSION);
 
-    r = tls_init(!https, &serverinfo);
-    if (https) {
-        switch (r) {
-        case HTTP_NOT_IMPLEMENTED:
-            fatal("https: no OpenSSL support", EX_CONFIG);
-        case HTTP_UNAVAILABLE:
-            fatal("https: required OpenSSL options not present", EX_CONFIG);
-        case HTTP_SERVER_ERROR:
-            fatal("https: TLS engine initialization failure", EX_SOFTWARE);
-        }
-
-        /* Only a connection that starts with TLS can carry early data */
-        if (config_getswitch(IMAPOPT_HTTP_ALLOW_0RTT))
-            tls_enable_early_data(ssl_ctx, TLS_MAX_EARLY_DATA);
+    /* Running over QUIC implies TLS and HTTP/3 */
+    if (service_is_quic()) {
+        http3 = https = true;
     }
-    r = 0;
+    else {
+        http2_enabled = http2_init(&http_conn, &serverinfo);
+    }
 
-    http2_enabled = http2_init(&http_conn, &serverinfo);
+    tls_init(&http_conn, &ssl_ctx, &serverinfo);
+
     ws_enabled = ws_init(&http_conn, &serverinfo);
 
     ws_params.ws.max_msgsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE);
@@ -910,7 +911,6 @@ int service_main(int argc __attribute__((unused)),
     int mechcount = 0;
     size_t mechlen;
     struct auth_scheme_t *scheme;
-    int r;
 
     /* fatal/shut_down will adjust these, so we need to set them early */
     prometheus_decrement(CYRUS_HTTP_READY_LISTENERS);
@@ -920,6 +920,9 @@ int service_main(int argc __attribute__((unused)),
 
     signals_poll();
 
+    /* For HTTP/3 these only give the event loop (prot_select() and the
+     * wait events hung on httpd_in) a handle on the connection socket:
+     * quic.c moves all of the connection's data itself */
     httpd_in = prot_new(0, 0);
     httpd_out = prot_new(1, 1);
 
@@ -937,8 +940,11 @@ int service_main(int argc __attribute__((unused)),
         fatal("Unable to create XML parser", EX_TEMPFAIL);
     }
 
-    /* Find out name of client host */
-    http_conn.clienthost = get_clienthost(0, &httpd_localip, &httpd_remoteip);
+    /* Find out name of client host.
+     * For HTTP/3, no reverse lookup yet: the handshake can't start until
+     * this function returns, and a client racing QUIC against TCP gives
+     * up on QUIC within a couple of round trips */
+    httpd_get_clienthost(false);
 
     if (httpd_localip && httpd_remoteip) {
         buf_setcstr(&saslprops.ipremoteport, httpd_remoteip);
@@ -992,62 +998,73 @@ int service_main(int argc __attribute__((unused)),
     if (http_jwt_is_enabled())
         avail_auth_schemes |= AUTH_BEARER;
 
-    httpd_tls_required =
-        config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
-
-    r = proc_register(&httpd_proc_handle, 0,
-                      config_ident, http_conn.clienthost, NULL, NULL, NULL);
-    if (r) fatal("unable to register process", EX_IOERR);
-    proc_settitle(config_ident, http_conn.clienthost, NULL, NULL, NULL);
-
-    /* Set inactivity timer */
+    /* Inactivity timeout, for every HTTP version */
     httpd_timeout = config_getduration(IMAPOPT_HTTPTIMEOUT);
     if (httpd_timeout < 0) httpd_timeout = 0;
-    prot_settimeout(httpd_in, httpd_timeout);
-    prot_setflushonread(httpd_in, httpd_out);
 
-    /* we were connected on https port so we should do
-       TLS negotiation immediately */
-    bool do_h2 = false;
-    if (https) {
-        starttls(&http_conn, 180 /* timeout */);
+    if (http3) {
+        /* HTTP/3 applies httpd_timeout itself (see http3_get_timeout()) */
+        if (http3_start_session(&http_conn, ssl_ctx) != 0)
+            fatal("Failed initializing HTTP/3 (QUIC) session", EX_TEMPFAIL);
 
-        /* Check negotiated protocol */
-        char *alpn = tls_get_alpn_protocol(http_conn.tls_ctx);
-        do_h2 = !strcmpsafe(alpn, "h2");
-        free(alpn);
+        avail_auth_schemes |= AUTH_BASIC;
+        httpd_tls_required = false;
     }
     else {
-        /* HTTP/2 client connection preface */
-        do_h2 = http2_preface(&http_conn);
-
         /* Construct Alt-Svc header value */
         struct buf buf = BUF_INITIALIZER;
-        http2_altsvc(&buf);
+        http3_altsvc(&buf);
+
+        httpd_tls_required =
+            config_getswitch(IMAPOPT_TLS_REQUIRED) || !avail_auth_schemes;
+
+        /* Set inactivity timer */
+        prot_settimeout(httpd_in, httpd_timeout);
+        prot_setflushonread(httpd_in, httpd_out);
+
+        /* we were connected on https port so we should do
+           TLS negotiation immediately */
+        bool do_h2 = false;
+        if (https) {
+            starttls(&http_conn, 180 /* timeout */);
+
+            /* Check negotiated protocol */
+            char *alpn = tls_get_alpn_protocol(http_conn.tls_ctx);
+            do_h2 = !strcmpsafe(alpn, "h2");
+            free(alpn);
+        }
+        else {
+            /* HTTP/2 client connection preface */
+            do_h2 = http2_preface(&http_conn);
+
+            /* Construct Alt-Svc header value */
+            http2_altsvc(&buf);
+        }
+
         httpd_altsvc = buf_releasenull(&buf);
-    }
 
-    if (do_h2) {
-        if (http2_start_session(NULL, &http_conn) != 0)
-            fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
-    }
-    else {
-        /* Setup the signal handler for keepalive heartbeat */
-        httpd_keepalive = config_getduration(IMAPOPT_HTTPKEEPALIVE);
-        if (httpd_keepalive < 0) httpd_keepalive = 0;
-        if (httpd_keepalive) {
-            struct sigaction action;
+        if (do_h2) {
+            if (http2_start_session(NULL, &http_conn) != 0)
+                fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
+        }
+        else {
+            /* Setup the signal handler for keepalive heartbeat */
+            httpd_keepalive = config_getduration(IMAPOPT_HTTPKEEPALIVE);
+            if (httpd_keepalive < 0) httpd_keepalive = 0;
+            if (httpd_keepalive) {
+                struct sigaction action;
 
-            sigemptyset(&action.sa_mask);
-            action.sa_flags = 0;
+                sigemptyset(&action.sa_mask);
+                action.sa_flags = 0;
 #ifdef SA_RESTART
-            action.sa_flags |= SA_RESTART;
+                action.sa_flags |= SA_RESTART;
 #endif
-            action.sa_handler = sigalrm_handler;
-            if (sigaction(SIGALRM, &action, NULL) < 0) {
-                syslog(LOG_ERR,
-                       "unable to install signal handler for %d: %m", SIGALRM);
-                httpd_keepalive = 0;
+                action.sa_handler = sigalrm_handler;
+                if (sigaction(SIGALRM, &action, NULL) < 0) {
+                    syslog(LOG_ERR,
+                      "unable to install signal handler for %d: %m", SIGALRM);
+                    httpd_keepalive = 0;
+                }
             }
         }
     }
@@ -1070,6 +1087,37 @@ int service_main(int argc __attribute__((unused)),
     prometheus_increment(CYRUS_HTTP_READY_LISTENERS);
 
     return 0;
+}
+
+HIDDEN void httpd_get_clienthost(bool http3_resolve)
+{
+    if (http3) {
+        /* HTTP/3's fd 0 doesn't yield the client address,
+         * but master sends it over QUIC_HANDOFF_FD (quic_handoff.h). */
+        const struct quic_handoff *h = service_quic_handoff();
+
+        if (!h) {
+            fatal("HTTP/3 worker started without a QUIC handoff", EX_SOFTWARE);
+        }
+
+        http_conn.clienthost =
+            get_clienthost_from_addrs((struct sockaddr *) &h->local_addr,
+                                      h->local_addrlen,
+                                      (struct sockaddr *) &h->peer_addr,
+                                      h->peer_addrlen,
+                                      &httpd_localip, &httpd_remoteip,
+                                      http3_resolve);
+    }
+    else {
+        http_conn.clienthost =
+            get_clienthost(0, &httpd_localip, &httpd_remoteip);
+    }
+
+    /* httpd_userid: a 0-RTT request may already have authenticated */
+    if (proc_register(&httpd_proc_handle, 0, config_ident,
+                      http_conn.clienthost, httpd_userid, NULL, NULL))
+        fatal("unable to register process", EX_IOERR);
+    proc_settitle(config_ident, http_conn.clienthost, httpd_userid, NULL, NULL);
 }
 
 
@@ -1097,6 +1145,8 @@ void shut_down(int code)
     int i;
     uint64_t bytes_in = 0;
     uint64_t bytes_out = 0;
+    uint64_t h3_bytes_in, h3_bytes_out;
+    bool h3_traffic;
 
     in_shutdown = 1;
 
@@ -1107,6 +1157,10 @@ void shut_down(int code)
     strarray_free(httpd_log_headers);
 
     if (http_conn.h1_txn) transaction_free(http_conn.h1_txn);
+
+    /* HTTP/3 traffic doesn't pass through httpd_in/httpd_out,
+     * and its session goes with the connection contexts below */
+    h3_traffic = http3_traffic(&http_conn, &h3_bytes_in, &h3_bytes_out);
 
     /* Cleanup auxiliary connection contexts */
     conn_shutdown_t shutdown;
@@ -1143,8 +1197,11 @@ void shut_down(int code)
     annotatemore_close();
 
     if (httpd_in) {
-        prot_NONBLOCK(httpd_in);
-        prot_fill(httpd_in);
+        /* Only quic.c may read an HTTP/3 connection's socket */
+        if (!http3) {
+            prot_NONBLOCK(httpd_in);
+            prot_fill(httpd_in);
+        }
         bytes_in = prot_bytes_in(httpd_in);
         prot_free(httpd_in);
     }
@@ -1165,6 +1222,10 @@ void shut_down(int code)
     prometheus_increment(code ? CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_ERROR
                               : CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_OK);
 
+    if (h3_traffic) {
+        bytes_in = h3_bytes_in;
+        bytes_out = h3_bytes_out;
+    }
     auditlog_traffic(bytes_in, bytes_out);
 
     saslprops_free(&saslprops);
@@ -1249,21 +1310,35 @@ static void _shutdown_tls(struct http_connection *conn __attribute__((unused)))
     tls_shutdown_serverengine();
 }
 
-static int tls_init(int client_auth, struct buf *serverinfo)
+static void tls_init(struct http_connection *conn, SSL_CTX **ssl_ctx,
+                     struct buf *serverinfo)
 {
     buf_printf(serverinfo, " OpenSSL/%s", OPENSSL_FULL_VERSION_STR);
 
-    if (!tls_enabled()) return HTTP_UNAVAILABLE;
-
-    if (tls_init_serverengine("http", 5 /* depth */,
-                              client_auth, &ssl_ctx) == -1) {
-        syslog(LOG_ERR, "error initializing TLS");
-        return HTTP_SERVER_ERROR;
+    if (!tls_enabled()) {
+        /* Fatal only for the implicit-TLS entry points (https/http3) --
+         * plain http with optional STARTTLS just runs without it */
+        if (https)
+            fatal("https: required OpenSSL options not present", EX_CONFIG);
+        return;
     }
 
-    httpd_starttls_enabled = config_getswitch(IMAPOPT_ALLOWSTARTTLS);
+    if (http3) {
+        http3_init(conn, ssl_ctx, serverinfo);
+        return;
+    }
 
-    return 0;
+    if (tls_init_serverengine("http", 5 /*depth*/, 1 /*askcert*/, ssl_ctx)) {
+        syslog(LOG_ERR, "https: error initializing TLS");
+        if (https)
+            fatal("https: TLS engine initialization failure", EX_SOFTWARE);
+    }
+
+    /* Only a connection that starts with TLS can carry early data */
+    if (https && config_getswitch(IMAPOPT_HTTP_ALLOW_0RTT))
+        tls_enable_early_data(*ssl_ctx, TLS_MAX_EARLY_DATA);
+
+    httpd_starttls_enabled = config_getswitch(IMAPOPT_ALLOWSTARTTLS);
 }
 
 static void starttls(struct http_connection *conn, int timeout)
@@ -1337,7 +1412,7 @@ static int reset_saslconn(sasl_conn_t **conn)
 
 
 static const char* const http_versions[] = {
-    "HTTP/0.9", "HTTP/1.0", HTTP_VERSION, HTTP2_VERSION
+    "HTTP/0.9", "HTTP/1.0", HTTP_VERSION, HTTP2_VERSION, HTTP3_VERSION
 };
 
 static const size_t n_http_versions =
@@ -1539,6 +1614,7 @@ static int preauth_check_hdrs(struct transaction_t *txn)
             return HTTP_BAD_REQUEST;
 
         case VER_2:
+        case VER_3:
             /* Check for :authority pseudo header */
             if (spool_getheader(txn->req_hdrs, ":authority")) break;
 
@@ -1560,7 +1636,7 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     }
 
     /* Check message framing */
-    if ((ret = http_parse_framing(txn->flags.ver == VER_2, txn->req_hdrs,
+    if ((ret = http_parse_framing(txn->flags.ver >= VER_2, txn->req_hdrs,
                                   &txn->req_body, &txn->error.desc))) return ret;
 
     /* Check for Expectations */
@@ -2251,6 +2327,7 @@ static void cmdloop(struct http_connection *conn)
         mboxevent_flush_notifications();
 
         /* Check for input from client */
+        unsigned long timeout_usec = 0;
         do {
             /* Flush any buffered output */
             prot_flush(httpd_out);
@@ -2271,10 +2348,22 @@ static void cmdloop(struct http_connection *conn)
 
             signals_poll();
 
+            if (http3) {
+                /* Unlike TCP, QUIC needs to act on its own timers
+                 * (loss detection, idle timeout, etc.),
+                 * even when the peer sends nothing, so:
+                 *   - service any that are due
+                 *   - ask how long until the next one,
+                 *     so http_proxy_check_input() doesn't block past it
+                 */
+                http3_idle(conn);
+                if (conn->close) break;
+                timeout_usec = http3_get_timeout(conn);
+            }
+
             syslog(LOG_DEBUG, "http_proxy_check_input()");
 
-        } while (!http_proxy_check_input(conn, &httpd_pipes,
-                                         0 /* timeout */));
+        } while (!http_proxy_check_input(conn, &httpd_pipes, timeout_usec));
 
         /* ensure group information is up to date */
         auth_refresh(httpd_authstate);
@@ -2282,7 +2371,12 @@ static void cmdloop(struct http_connection *conn)
         /* Start command timer */
         cmdtime_starttimer();
 
-        if (conn->sess_ctx) {
+        if (http3) {
+            /* HTTP/3 input -- the idle-timer check above
+               may have decided to close the connection */
+            if (!conn->close) http3_input(conn);
+        }
+        else if (conn->sess_ctx) {
             /* HTTP/2 input */
             http2_input(conn);
         }
@@ -2494,8 +2588,9 @@ static int parse_connection(struct transaction_t *txn)
 
     switch (txn->flags.ver) {
     case VER_2:
+    case VER_3:
         if (conn) {
-            txn->error.desc = "Connection not allowed in HTTP/2";
+            txn->error.desc = "Connection not allowed in HTTP/2+";
             r = HTTP_BAD_REQUEST;
         }
 
@@ -2930,6 +3025,7 @@ HIDDEN void connection_hdrs(struct transaction_t *txn)
         GCC_FALLTHROUGH
 
     case VER_2:
+    case VER_3:
         if (httpd_altsvc) {
             simple_hdr(txn, "Alt-Svc", "%s", httpd_altsvc);
         }
@@ -3113,10 +3209,15 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
 
     /* Add any auxiliary response data */
     sep = " (";
-    if (txn->req_hdrs &&
-        (hdr = spool_getheader(txn->req_hdrs, ":stream-id"))) {
-        buf_printf(logbuf, "%sstream-id=%s", sep, hdr[0]);
-        sep = "; ";
+    if (txn->req_hdrs) {
+        if ((hdr = spool_getheader(txn->req_hdrs, ":quic-version"))) {
+            buf_printf(logbuf, "%squic-version=%s", sep, hdr[0]);
+            sep = "; ";
+        }
+        if ((hdr = spool_getheader(txn->req_hdrs, ":stream-id"))) {
+            buf_printf(logbuf, "%sstream-id=%s", sep, hdr[0]);
+            sep = "; ";
+        }
     }
     if (txn->flags.early) {
         buf_printf(logbuf, "%searly-data", sep);
@@ -4948,7 +5049,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
     struct connect_params *cparams = (struct connect_params *) params;
     int ret;
 
-    /* Bootstrap WebSockets over HTTP/2, if requested */
+    /* Bootstrap WebSockets over HTTP/2+, if requested */
     if ((txn->flags.ver < VER_2) || !ws_enabled || !cparams) {
         return HTTP_NOT_IMPLEMENTED;
     }
@@ -4983,7 +5084,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
         ret = http_proxy_h2_connect(be, txn);
         if (!ret) {
             txn->be = be;
-            txn->flags.te = TE_CHUNKED;  /* Keep H2 stream open */
+            txn->flags.te = TE_CHUNKED;  /* Keep H2/H3 stream open */
 
             /* Add this backend to list of current pipes */
             ptrarray_append(&httpd_pipes, txn);
@@ -5174,8 +5275,8 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
                 txn->req_tgt.allow |= http_namespaces[i]->allow;
         }
 
-        if (ws_enabled && (txn->flags.ver == VER_2)) {
-            /* CONNECT allowed for bootstrapping WebSocket over HTTP/2 */
+        if (ws_enabled && (txn->flags.ver >= VER_2)) {
+            /* CONNECT allowed for bootstrapping WebSocket over HTTP/2+ */
             txn->req_tgt.allow |= ALLOW_CONNECT;
         }
     }
@@ -5186,7 +5287,7 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
             if (r) return r;
         }
         else if (!strcmp(txn->req_uri->path, "/") &&
-                 ws_enabled && (txn->flags.ver == VER_2)) {
+                 ws_enabled && (txn->flags.ver >= VER_2)) {
             /* WS 'echo' endpoint */
             txn->req_tgt.allow |= ALLOW_CONNECT;
         }
