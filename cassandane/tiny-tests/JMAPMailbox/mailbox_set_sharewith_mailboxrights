@@ -1,0 +1,99 @@
+#!perl
+use Cassandane::Tiny;
+
+# Under JMAP Mail Sharing, the values in shareWith are MailboxRights objects.
+# Every right maps to its own ACL rights -- unlike our own mayWrite, which is a
+# bundle -- and mayShare is the IMAP "a" right by itself.
+sub test_mailbox_set_sharewith_mailboxrights
+    :JMAPExtensions
+    ($self)
+{
+    my $owner = $self->default_user;
+    $self->{instance}->create_user('sharee');
+
+    my $mailbox = $owner->mailboxes->create({ name => 'A' });
+
+    my $admin = $self->{adminstore}->get_client();
+    my $jmap  = $owner->jmap;
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:mail:share',
+    ];
+
+    my @ALL_RIGHTS = qw(
+        mayReadItems mayAddItems mayRemoveItems mayCreateChild mayDelete
+        mayRename maySubmit maySetSeen maySetKeywords mayShare
+    );
+
+    # Share the mailbox with exactly $rights -- replacing whatever the sharee had
+    # before -- then check the ACL we ended up with, and that we report the same
+    # rights back.  Any right not named in $rights must come back false.
+    my $assert_share = sub ($rights, $want_acl) {
+        my $label = join q{+}, sort keys %$rights;
+
+        my $res = $jmap->request({
+            using       => $using,
+            methodCalls => [
+                [ 'Mailbox/set', {
+                    update => {
+                        $mailbox->id => { shareWith => { sharee => $rights } },
+                    },
+                }, 'R1' ],
+                [ 'Mailbox/get', {
+                    ids        => [ $mailbox->id ],
+                    properties => [ 'shareWith' ],
+                }, 'R2' ],
+            ],
+        });
+
+        my $set = $res->sentence_named('Mailbox/set')->arguments;
+        $self->assert(exists $set->{updated}{ $mailbox->id },
+            "$label: mailbox was updated");
+
+        my %acl = @{ $admin->getacl('user.cassandane.A') };
+        $self->assert_str_equals($want_acl, $acl{sharee}, "$label: acl");
+
+        my %want = ((map {; $_ => JSON::false } @ALL_RIGHTS), %$rights);
+
+        $self->assert_deep_equals(
+            \%want,
+            $res->sentence_named('Mailbox/get')
+                ->arguments->{list}[0]{shareWith}{sharee},
+            "$label: shareWith",
+        );
+    };
+
+    $assert_share->({ mayReadItems   => JSON::true }, 'lr');
+    $assert_share->({ mayAddItems    => JSON::true }, 'i');
+    $assert_share->({ mayRemoveItems => JSON::true }, 'ted');
+    $assert_share->({ mayCreateChild => JSON::true }, 'kc');
+    $assert_share->({ mayDelete      => JSON::true }, 'xc');
+    $assert_share->({ maySubmit      => JSON::true }, 'p');
+    $assert_share->({ maySetSeen     => JSON::true }, 's');
+    $assert_share->({ maySetKeywords => JSON::true }, 'wn');
+    $assert_share->({ mayShare       => JSON::true }, 'a');
+
+    xlog $self, 'the old vocabulary is not accepted under mail:share';
+
+    my $res = $jmap->request({
+        using       => $using,
+        methodCalls => [
+            [ 'Mailbox/set', {
+                update => {
+                    $mailbox->id => {
+                        shareWith => { sharee => { mayRead => JSON::true } },
+                    },
+                },
+            }, 'R1' ],
+        ],
+    });
+
+    my $not_updated = $res->sentence_named('Mailbox/set')
+                          ->arguments->{notUpdated}{ $mailbox->id };
+
+    $self->assert_str_equals('invalidProperties', $not_updated->{type});
+    $self->assert_deep_equals([ 'shareWith/sharee/mayRead' ],
+        $not_updated->{properties});
+}

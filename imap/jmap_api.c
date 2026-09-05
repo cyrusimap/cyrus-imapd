@@ -1590,7 +1590,7 @@ HIDDEN hash_table *jmap_get_validate_props(jmap_req_t *req,
         if (name) {
             propdef = jmap_property_find(name, valid_props);
             if (propdef && propdef->capability &&
-                !jmap_is_using(req, propdef->capability)) {
+                !jmap_is_using_any(req, propdef->capability)) {
                 propdef = NULL;
             }
         }
@@ -1729,7 +1729,7 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
             if (prop->flags & JMAP_PROP_SKIP_GET) {
                 continue;
             }
-            if (!prop->capability || jmap_is_using(req, prop->capability)) {
+            if (!prop->capability || jmap_is_using_any(req, prop->capability)) {
                 hash_insert(prop->name, (void*)1, get->props);
             }
         }
@@ -1795,7 +1795,7 @@ static bool jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
         if (!prop) {
             json_array_append_new(invalid, json_string(path));
         }
-        else if (prop->capability && !jmap_is_using(req, prop->capability)) {
+        else if (prop->capability && !jmap_is_using_any(req, prop->capability)) {
             json_array_append_new(invalid, json_string(path));
         }
         else if (prop->flags & JMAP_PROP_REJECT_SET) {
@@ -2892,12 +2892,13 @@ HIDDEN json_t *jmap_parse_reply(struct jmap_parse *parse)
 }
 
 
-HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights))
+HIDDEN void jmap_foreach_sharee(const mbentry_t *mbentry,
+                                void (*proc)(const char *sharee, int rights,
+                                             void *rock),
+                                void *rock)
 {
     char *aclstr = xstrdupnull(mbentry->acl);
     char *owner = mboxname_to_userid(mbentry->name);
-
-    json_t *sharewith = json_null();
 
     char *userid;
     char *nextid;
@@ -2919,20 +2920,39 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int
         if (is_system_user(userid)) continue;
         if (!strcmp(userid, owner)) continue;
 
-        json_t *jrights = tojmap(rights);
-        if (!jrights) continue;
-
-        // we've got one! Create the object if this is the first
-        if (!JNOTNULL(sharewith))
-            sharewith = json_object();
-
-        json_object_set_new(sharewith, userid, jrights);
+        proc(userid, rights, rock);
     }
 
     free(aclstr);
     free(owner);
+}
 
-    return sharewith;
+struct sharewith_rock {
+    json_t *(*tojmap)(int rights);
+    json_t *sharewith;
+};
+
+static void sharewith_cb(const char *sharee, int rights, void *vrock)
+{
+    struct sharewith_rock *rock = vrock;
+
+    json_t *jrights = rock->tojmap(rights);
+    if (!jrights) return;
+
+    // we've got one! Create the object if this is the first
+    if (!JNOTNULL(rock->sharewith))
+        rock->sharewith = json_object();
+
+    json_object_set_new(rock->sharewith, sharee, jrights);
+}
+
+HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights))
+{
+    struct sharewith_rock rock = { tojmap, json_null() };
+
+    jmap_foreach_sharee(mbentry, &sharewith_cb, &rock);
+
+    return rock.sharewith;
 }
 
 struct acl_change {
@@ -3333,6 +3353,29 @@ HIDDEN void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith)
 HIDDEN int jmap_is_using(jmap_req_t *req, const char *capa)
 {
     return strarray_contains(req->using_capabilities, capa);
+}
+
+/* Like jmap_is_using(), but capas may be a comma-separated list of
+ * capabilities, any one of which is enough.
+ */
+HIDDEN int jmap_is_using_any(jmap_req_t *req, const char *capas)
+{
+    if (!strchr(capas, ',')) return jmap_is_using(req, capas);
+
+    strarray_t *wanted = strarray_split(capas, ",", 0);
+    const char *capa;
+    int i, is_using = 0;
+
+    strarray_foreach(wanted, i, capa) {
+        if (jmap_is_using(req, capa)) {
+            is_using = 1;
+            break;
+        }
+    }
+
+    strarray_free(wanted);
+
+    return is_using;
 }
 
 /*

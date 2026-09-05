@@ -50,7 +50,7 @@ jmap_property_t;
 "purgeOlderThanDays", JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
 "onlyPurgeDeleted",   JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
 "suppressDuplicates", JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
-"shareWith",          JMAP_MAIL_EXTENSION, 0
+"shareWith",          JMAP_SHAREWITH_CAPS, 0
 "isSeenShared",       JMAP_MAIL_EXTENSION, 0
 "storageUsed",        JMAP_MAIL_EXTENSION, JMAP_PROP_SERVER_SET
 "color",              JMAP_MAIL_EXTENSION, 0

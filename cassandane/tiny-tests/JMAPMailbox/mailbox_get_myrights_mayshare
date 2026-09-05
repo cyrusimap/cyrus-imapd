@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+# mayShare is only visible to a client using JMAP Mail Sharing.  It is also not
+# our own mayAdmin under a new name: mayShare is the IMAP "a" right by itself,
+# while mayAdmin also demands "x" and "k".
+sub test_mailbox_get_myrights_mayshare
+    :JMAPExtensions
+    ($self)
+{
+    my $owner  = $self->default_user;
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    my $mailbox = $owner->mailboxes->create({ name => 'Shared' });
+    $mailbox->share_with($sharee => [ 'mayRead' ]);
+
+    my $base       = [ 'urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail' ];
+    my $with_share = [ @$base, 'urn:ietf:params:jmap:mail:share' ];
+
+    # Get myRights for our one mailbox as $user, sending exactly $using, then
+    # check the named rights.  A right whose wanted value is undef must be
+    # absent from myRights altogether.
+    my $assert_rights = sub ($label, $user, $using, $want) {
+        my $res = $user->jmap->request({
+            using       => $using,
+            methodCalls => [
+                [ 'Mailbox/get', {
+                    accountId  => $owner->username,
+                    ids        => [ $mailbox->id ],
+                    properties => [ 'myRights' ],
+                }, 'R1' ],
+            ],
+        });
+
+        my $rights = $res->sentence_named('Mailbox/get')
+                         ->arguments->{list}[0]{myRights};
+
+        for my $name (sort keys %$want) {
+            if (defined $want->{$name}) {
+                $self->assert_equals($want->{$name}, $rights->{$name},
+                    "$label: $name");
+            }
+            else {
+                $self->assert(! exists $rights->{$name}, "$label: no $name");
+            }
+        }
+    };
+
+    $assert_rights->('owner without mail:share', $owner, $base,
+        { mayAdmin => JSON::true, mayShare => undef });
+
+    $assert_rights->('owner with mail:share', $owner, $with_share,
+        { mayAdmin => JSON::true, mayShare => JSON::true });
+
+    $assert_rights->('read-only sharee without mail:share', $sharee, $base,
+        { mayAdmin => JSON::false, mayShare => undef });
+
+    $assert_rights->('read-only sharee with mail:share', $sharee, $with_share,
+        { mayAdmin => JSON::false, mayShare => JSON::false });
+
+    xlog $self, 'grant the sharee the IMAP "a" right, but not "x" or "k"';
+
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl('user.cassandane.Shared', sharee => 'lra')
+        or die "setacl failed: $@";
+
+    $assert_rights->('sharee with only "a" and mail:share', $sharee, $with_share,
+        { mayAdmin => JSON::false, mayShare => JSON::true });
+}
