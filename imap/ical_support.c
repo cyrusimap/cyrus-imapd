@@ -584,6 +584,28 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
         event_length = icalcomponent_get_duration(mastercomp);
 
         /*
+         * Per RFC 5545, Section 3.6.2, a "VTODO" may carry a "DUE"
+         * property and no "DTSTART": a task with a deadline but no moment
+         * at which it begins.  Such a component cannot recur - "RRULE"
+         * expands from "DTSTART" - but it does have one occurrence, at
+         * "DUE".  Anchor it there, which is already what
+         * icalcomponent_get_utc_timespan() does for the same shape.
+         *
+         * Without this, dtstart stays a null time, the loop below has
+         * nothing to walk, and that occurrence is never visited.  A
+         * "VALARM" on such a task therefore never fires - including one
+         * written with TRIGGER;RELATED=END, the natural spelling of
+         * "remind me before this is due", which caldav_alarm.c resolves
+         * against the occurrence's end correctly once it is given one.
+         */
+        if (icaltime_is_null_time(dtstart) &&
+            icalcomponent_isa(mastercomp) == ICAL_VTODO_COMPONENT) {
+            dtstart = icalcomponent_get_due(mastercomp);
+            if (!icaltime_is_null_time(dtstart))
+                event_length = icaldurationtype_null_duration();
+        }
+
+        /*
          * Per RFC 5545, Section 3.6.1:
          *
          * For cases where a "VEVENT" calendar component
