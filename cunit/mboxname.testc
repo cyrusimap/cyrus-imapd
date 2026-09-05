@@ -8,6 +8,7 @@
 #include "imap/mboxname.h"
 #include "imap/mailbox.h"
 #include "imap/global.h"
+#include "imap/imap_err.h"
 
 #define DBDIR           "test-mboxname-dbdir"
 
@@ -1056,6 +1057,154 @@ static void test_isnondeliverymailbox(void)
     CU_ASSERT_EQUAL(1, mboxname_isdeletedmailbox("DELETED.user.foo.A", NULL));
 }
 
+static void test_policycheck_component(void)
+{
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_component("Drafts"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_component("a.b"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_component("."));
+
+    /* a component arrives already encoded, and no sequence spans the '.'
+     * that separates two of them */
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_component("&AOQA9gD8-"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_component("&-"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("&"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("&AOQA9gD8"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("&AAA-"));
+
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("a^b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("^"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("a/b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("/"));
+
+    /* the rest of what mboxname_policycheck() bans is banned here too */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("10% Happier"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("a;b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("c|d"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("e<f"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("\"g\""));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("h\\i"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_component("caf\xc3\xa9"));
+
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck_component(""));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck_component(NULL));
+}
+
+/* config_virtdomains is ON for this suite, see set_up() */
+static void test_policycheck(void)
+{
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo.Drafts"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("shared.folder"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("example.com!user.foo"));
+
+    /* a '^' is a '.' in a component, and belongs in an internal name */
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo.a^b"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo.&AOQA9gD8-"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("user.foo.&AOQA9gD8"));
+
+    /* mailboxes.db reserves keys starting with '$', but only at the top */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("$RACL"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo.$bar"));
+
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.anyone"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("user.anonymous"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.%foo"));
+
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck(".leading"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("trailing."));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("a..b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("~tilde"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("a\tb"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("a/b"));
+
+    /* every '!' belongs to the domain, so there is only ever the one */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("a!b!c"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("example.com!user.foo!bar"));
+
+    /* the delayed delete namespace is exempt: it was checked on the way in */
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("DELETED.user.foo.a/b.A1B2C3D4"));
+}
+
+static void test_policycheck_domain(void)
+{
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("example.com!user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("a.b.c.example.com!user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("xn--80ak6aa92e.com!user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("host-name.com!user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("localhost!user.foo"));
+
+    /* a domain is a hostname: labels of letters, digits and hyphens */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("Example.COM!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("under_score.com!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("-lead.com!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("trail-.com!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("a..b!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck(".example.com!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("example.com.!user.foo"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("spa ce.com!user.foo"));
+}
+
+static void test_policycheck_userid(void)
+{
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo^bar"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo+detail"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo-bar_baz"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.FooBar"));
+
+    /* a userid must be plain ASCII: auth_unix bans '&' outright, so a
+     * modified UTF-7 sequence could never canonify back to itself */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("user.&AOQA9gD8-"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("user.&AOQA9gD8-.Drafts"));
+
+    /* and none of the other characters auth_unix refuses to canonify */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.a*b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.a?b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.group:x"));
+
+    /* the reserved userids, which are ACL identifiers rather than owners */
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.anyone"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("user.anonymous"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck("user.anyone.Drafts"));
+
+    /* the rules apply to the userid, not to the folders underneath it */
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo.&AOQA9gD8-"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo.a*b"));
+
+    /* nor to a shared mailbox that merely starts with something similar */
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("users.a*b"));
+}
 
 
 static enum enum_value old_config_virtdomains;

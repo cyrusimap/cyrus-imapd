@@ -1648,6 +1648,35 @@ done:
     return mboxname;
 }
 
+static int _mbox_name_roundtrips(const char *name)
+{
+    charset_t utf8 = charset_lookupname("utf-8");
+    charset_t utf7 = charset_lookupname("imap-utf-7");
+    char *encoded = NULL, *decoded = NULL;
+    int ok = 0;
+
+    if (utf8 == CHARSET_UNKNOWN_CHARSET || utf7 == CHARSET_UNKNOWN_CHARSET)
+        goto done;
+
+    encoded = charset_to_imaputf7(name, strlen(name), utf8, ENCODING_NONE);
+    if (!encoded) goto done;
+
+    /* the encoded form is what gets pushed into the mbname */
+    if (mboxname_policycheck_component(encoded)) goto done;
+
+    decoded = charset_to_utf8cstr(encoded, strlen(encoded), utf7, ENCODING_NONE);
+    if (!decoded) goto done;
+
+    ok = !strcmp(decoded, name);
+
+done:
+    free(encoded);
+    free(decoded);
+    charset_free(&utf8);
+    charset_free(&utf7);
+    return ok;
+}
+
 static char *_mbox_tmpname(const char *name, const char *parentname, int is_toplevel)
 {
     int retries = 0;
@@ -1749,6 +1778,13 @@ static void _mboxset_args_parse(json_t *jargs,
                 is_valid = 1;
             }
         }
+
+        /* mboxname_policycheck() only ever sees the assembled internal name,
+         * by which point an escaped '.' and a literal '^' look the same and
+         * the UTF-7 encoding has already happened. */
+        if (is_valid > 0 && !_mbox_name_roundtrips(name))
+            is_valid = 0;
+
         if (is_valid > 0) {
             args->name = name;
         }

@@ -1670,13 +1670,14 @@ err:
 static int mboxlist_create_namecheck(const char *mboxname,
                                      const char *userid,
                                      const struct auth_state *auth_state,
-                                     int isadmin, int force_subdirs)
+                                     int isadmin, int force_subdirs,
+                                     int policyflags)
 {
     mbentry_t *mbentry = NULL;
     int r = 0;
 
     /* policy first */
-    r = mboxname_policycheck(mboxname);
+    r = mboxname_policycheck_flags(mboxname, policyflags);
     if (r) goto done;
 
     /* is this the user's INBOX namespace? */
@@ -1850,7 +1851,7 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
     init_internal();
 
     r = mboxlist_create_namecheck(name, userid, auth_state,
-                                  isadmin, forceuser);
+                                  isadmin, forceuser, 0);
     if (r) goto done;
 
     if (newacl) {
@@ -2040,7 +2041,11 @@ EXPORTED int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_
     init_internal();
 
     r = mboxlist_create_namecheck(mboxname, userid, auth_state,
-                                  isadmin, (flags & MBOXLIST_CREATE_FORCEUSER));
+                                  isadmin, (flags & MBOXLIST_CREATE_FORCEUSER),
+                                  /* a replica has to accept whatever name the
+                                     master already has */
+                                  (flags & MBOXLIST_CREATE_SYNC)
+                                    ? MBOXNAME_POLICY_SKIP_IDENTITY : 0);
     if (r) goto done;
 
     assert_namespacelocked(mboxname);
@@ -2421,7 +2426,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                localonly /* local_only */,
                                force, 1,
                                keep_intermediaries,
-                               0 /* move_subscription */, 0 /* silent */);
+                               0 /* move_subscription */, /*flags*/0);
 
     if (r) goto done;
 
@@ -2763,7 +2768,7 @@ static int dorename(const mbentry_t *mbentry, void *rock)
                                /*mboxevent*/NULL,
                                text->local_only, /*forceuser*/1, text->ignorequota,
                                text->keep_intermediaries,
-                               text->move_subscription, /*silent*/0);
+                               text->move_subscription, /*flags*/0);
 
     return r;
 }
@@ -2810,7 +2815,8 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
                                auth_state,
                                mboxevent,
                                local_only, forceuser, ignorequota,
-                               keep_intermediaries, move_subscription, /*silent*/0);
+                               keep_intermediaries, move_subscription,
+                               /*flags*/0);
     mboxlist_entry_free(&mbentry);
 
     // special-case only children exist
@@ -2835,8 +2841,12 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                                     struct mboxevent *mboxevent,
                                     int local_only, int forceuser,
                                     int ignorequota, int keep_intermediaries,
-                                    int move_subscription, int silent)
+                                    int move_subscription, int flags)
 {
+    int silent = !!(flags & MBOXLIST_RENAME_SILENT);
+    /* a replica has to accept whatever name the master already has */
+    int policyflags = (flags & MBOXLIST_RENAME_SYNC)
+                    ? MBOXNAME_POLICY_SKIP_IDENTITY : 0;
     int r;
     const char *oldname = mbentry->name;
     int mupdatecommiterror = 0;
@@ -2873,7 +2883,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
     /* special-case: intermediate mailbox */
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
         r = mboxlist_create_namecheck(newname, userid, auth_state,
-                                      isadmin, forceuser);
+                                      isadmin, forceuser, policyflags);
         if (r) goto done;
         newmbentry = mboxlist_entry_copy(mbentry);
         free(newmbentry->name);
@@ -2980,7 +2990,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
     }
 
     r = mboxlist_create_namecheck(newname, userid, auth_state,
-                                  isadmin, forceuser);
+                                  isadmin, forceuser, policyflags);
     if (r) goto done;
 
     if ((mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS)) {

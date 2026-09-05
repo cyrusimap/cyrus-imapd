@@ -9,6 +9,8 @@ sub test_mailbox_set_name_badchars ($self)
     # untouched, but Cyrus forbids them in a mailbox name.
     my @badnames = ('10% Happier', 'yes/no', 'a;b', 'c|d', 'e<f', '"g"', 'h\\i');
 
+    push @badnames, 'a^b', '^';
+
     xlog $self, "create a mailbox to rename";
     my $res = $jmap->CallMethods([
         ['Mailbox/set', { create => {
@@ -46,4 +48,31 @@ sub test_mailbox_set_name_badchars ($self)
         }}, 'R2'],
     ]);
     $self->assert_not_null($res->[0][1]{created}{good}{id});
+
+    xlog $self, "names outside US-ASCII survive the IMAP UTF-7 round trip";
+
+    my @goodnames = (
+        'a.b',
+        "\x{e4}\x{f6}\x{fc}",                     # Latin-1 supplement
+        "\x{5317}\x{4eac}",                       # CJK
+        "\x{1f4e7} mail",                         # astral: surrogate pair in UTF-7
+        "tri\x{e8}s & \x{e0}",                    # '&' shifts in UTF-7
+    );
+
+    my %created = map {; "good$_" => {
+        name => $goodnames[$_], parentId => undef,
+    } } 0 .. $#goodnames;
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', { create => \%created }, 'R3'],
+        ['Mailbox/get', { properties => ['name'] }, 'R4'],
+    ]);
+
+    my %name_of = map {; $_->{id} => $_->{name} } @{ $res->[1][1]{list} };
+
+    for my $i (0 .. $#goodnames) {
+        my $id = $res->[0][1]{created}{"good$i"}{id};
+        $self->assert_not_null($id);
+        $self->assert_str_equals($goodnames[$i], $name_of{$id});
+    }
 }

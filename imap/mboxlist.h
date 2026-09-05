@@ -240,6 +240,11 @@ int mboxlist_renametree(const char *oldname, const char *newname,
                         struct mboxevent *mboxevent,
                         int local_only, int forceuser, int ignorequota,
                         int keep_intermediaries, int move_subscription);
+/* don't bump modseqs or send notifications for the change */
+#define MBOXLIST_RENAME_SILENT              (1<<0)
+/* rename mailbox from sync */
+#define MBOXLIST_RENAME_SYNC                (1<<1)
+
 /* Rename/move a mailbox (hierarchical) */
 /* prepare MailboxRename notification if mboxevent is not NULL */
 int mboxlist_renamemailbox(const mbentry_t *mbentry, const char *newname,
@@ -249,7 +254,7 @@ int mboxlist_renamemailbox(const mbentry_t *mbentry, const char *newname,
                            struct mboxevent *mboxevent,
                            int local_only, int forceuser, int ignorequota,
                            int keep_intermediaries, int move_subscription,
-                           int silent);
+                           int flags);
 
 /* change ACL */
 int mboxlist_setacl(const struct namespace *namespace, const char *name,

@@ -736,6 +736,14 @@ HIDDEN int calcarddav_parse_path(const char *path,
     if (tgt->collen) {
         collection = freeme = xstrndup(tgt->collection, tgt->collen);
 
+        /* only a creation has to be representable: an existing collection
+         * may have been made before we checked */
+        if (tgt->mbentry && mboxname_policycheck_component(collection)) {
+            *resultstr = "Invalid characters in collection name";
+            ret = HTTP_FORBIDDEN;
+            goto done;
+        }
+
         p = strrchr(collection, SHARED_COLLECTION_DELIM);
         if (p) {
             if (tgt->mbentry) { /* MKCOL or COPY/MOVE destination */
@@ -4245,7 +4253,8 @@ static int move_collection(const mbentry_t *mbentry, void *rock)
         r = mboxlist_renamemailbox(mbentry, buf_cstring(&mrock->newname),
                                    NULL /* partition */, 0 /* uidvalidity */,
                                    1 /* admin */, httpd_userid, httpd_authstate,
-                                   NULL, 0, 0, 1 /* ignorequota */, 0, 0, 0);
+                                   NULL, 0, 0, 1 /* ignorequota */, 0, 0,
+                                   /*flags*/0);
     }
 
     if (r) {
@@ -4460,7 +4469,8 @@ static int dav_move_collection(struct transaction_t *txn,
     r = mboxlist_renamemailbox(txn->req_tgt.mbentry, newmailboxname,
                                NULL /* partition */, 0 /* uidvalidity */,
                                httpd_userisadmin, httpd_userid, httpd_authstate,
-                               mboxevent, 0, 0, 1 /* ignorequota */, 0, 0, 0);
+                               mboxevent, 0, 0, 1 /* ignorequota */, 0, 0,
+                               /*flags*/0);
 
     if (!r) mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);

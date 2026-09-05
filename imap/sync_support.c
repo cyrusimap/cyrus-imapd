@@ -4461,7 +4461,7 @@ static int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
                                1/*ignorequota*/,
                                1/*keep_intermediaries*/,
                                0/*move_subscription*/,
-                               1/*silent*/);
+                               MBOXLIST_RENAME_SILENT|MBOXLIST_RENAME_SYNC);
 
 
 done:

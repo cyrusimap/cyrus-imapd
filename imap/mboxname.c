@@ -1802,83 +1802,26 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
 }
 
 /*
- * Apply site policy restrictions on mailbox names.
- * Restrictions are hardwired for now.
  * NOTE: '^' is '.' externally in unixhs, and invalid in unixhs
  *
  * The set of printable chars that are not in GOODCHARS are:
  *    !"%&/;<>\`{|}
  */
 #define GOODCHARS " #$'()*+,-.0123456789:=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz~"
-EXPORTED int mboxname_policycheck(const char *name)
+
+EXPORTED int mboxname_policycheck_component(const char *name)
 {
-    const char *p;
     int sawutf7 = 0;
     unsigned c1, c2, c3, c4, c5, c6, c7, c8;
     int ucs4;
-    int namelen = strlen(name);
-    int hasdom = 0;
 
-    /* We reserve mailboxes.db keys beginning with $ for internal use
-     * (e.g. $RACL), so don't allow a real mailbox to sneak in there.
-     *
-     * N.B This is only forbidden at the absolute top of the internal
-     * namespace: stuff like "user.foo.$bar", "domain!user.foo.$bar",
-     * "domain!$bar", and even "user.$bar" are all still valid here,
-     * because none of those names start with $, and won't conflict.
-     */
-    if (name[0] == '$')
+    if (!name || !*name)
         return IMAP_MAILBOX_BADNAME;
 
-    /* Skip policy check on mailbox created in delayed delete namespace
-     * assuming the mailbox existed before and was OK then.
-     * This should allow mailboxes that are extremely long to be
-     * deleted when delayed_delete is enabled.
-     * A thorough fix might remove the prefix and timestamp
-     * then continue with the check
-     */
-    if (mboxname_isdeletedmailbox(name, NULL))
-        return 0;
-
-    if (namelen > MAX_MAILBOX_CREATENAME)
+    /* '^' is in GOODCHARS only because it is how _append_intbuf() writes a
+     * '.': a component containing one would name a different mailbox */
+    if (strchr(name, '^'))
         return IMAP_MAILBOX_BADNAME;
-
-    /* find the virtual domain, if any.  We don't sanity check domain
-       names yet - maybe we should */
-    p = strchr(name, '!');
-    if (p) {
-        if (config_virtdomains) {
-            name = p + 1;
-            namelen = strlen(name);
-            hasdom = 1;
-        }
-        else
-            return IMAP_MAILBOX_BADNAME;
-    }
-
-    /* bad mbox patterns */
-    // empty name
-    if (!name[0]) return IMAP_MAILBOX_BADNAME;
-    // leading dot
-    if (name[0] == '.') return IMAP_MAILBOX_BADNAME;
-    // leading ~
-    if (name[0] == '~') return IMAP_MAILBOX_BADNAME;
-    // trailing dot
-    if (name[namelen-1] == '.') return IMAP_MAILBOX_BADNAME;
-    // double dot (zero length path item)
-    if (strstr(name, "..")) return IMAP_MAILBOX_BADNAME;
-    // non-" " whitespace
-    if (strchr(name, '\r')) return IMAP_MAILBOX_BADNAME;
-    if (strchr(name, '\n')) return IMAP_MAILBOX_BADNAME;
-    if (strchr(name, '\t')) return IMAP_MAILBOX_BADNAME;
-    // top level user
-    if (!strcmp(name, "user")) return IMAP_MAILBOX_BADNAME;
-    // special users
-    if (!strcmp(name, "user.anyone")) return IMAP_MAILBOX_BADNAME;
-    if (!strcmp(name, "user.anonymous")) return IMAP_MAILBOX_BADNAME;
-    // redundant but explicit ban on userids starting with '%'
-    // (would conflict with backups of shared mailboxes)
-    if (!strncmp(name, "user.%", 6)) return IMAP_MAILBOX_BADNAME;
 
     while (*name) {
         if (*name == '&') {
@@ -1946,13 +1889,152 @@ EXPORTED int mboxname_policycheck(const char *name)
             name++;             /* Skip over terminating '-' */
         }
         else {
-            if (!(strchr(GOODCHARS, *name) || (hasdom && *name == '!')))
+            if (!strchr(GOODCHARS, *name))
                 return IMAP_MAILBOX_BADNAME;
             name++;
             sawutf7 = 0;
         }
     }
     return 0;
+}
+
+/*
+ * A domain is a hostname: dot separated labels of lowercase letters, digits
+ * and hyphens, with no empty label and no label starting or ending in '-'.
+ */
+static int _policycheck_domain(const char *domain, size_t len)
+{
+    size_t i;
+    size_t labellen = 0;
+
+    if (!len) return IMAP_MAILBOX_BADNAME;
+
+    for (i = 0; i < len; i++) {
+        char c = domain[i];
+
+        if (c == '.') {
+            if (!labellen || domain[i-1] == '-')
+                return IMAP_MAILBOX_BADNAME;
+            labellen = 0;
+            continue;
+        }
+
+        if (c == '-') {
+            if (!labellen) return IMAP_MAILBOX_BADNAME;
+        }
+        else if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))) {
+            return IMAP_MAILBOX_BADNAME;
+        }
+
+        labellen++;
+    }
+
+    if (!labellen || domain[len-1] == '-')
+        return IMAP_MAILBOX_BADNAME;
+
+    return 0;
+}
+
+/* the printable characters auth_canonifyid() will not accept which are
+ * otherwise legal in a mailbox component.  A userid that contains one could
+ * never be canonified, so no such user could own the mailbox: '&' rules out
+ * modified UTF-7 too, which is why a userid is always plain ASCII. */
+#define BADUSERCHARS "&*:?"
+
+/*
+ * Apply site policy restrictions on mailbox names.
+ * Restrictions are hardwired for now.
+ */
+EXPORTED int mboxname_policycheck(const char *name)
+{
+    return mboxname_policycheck_flags(name, 0);
+}
+
+EXPORTED int mboxname_policycheck_flags(const char *name, int flags)
+{
+    strarray_t *boxes;
+    const char *p;
+    int namelen = strlen(name);
+    int i;
+    int r = 0;
+
+    /* We reserve mailboxes.db keys beginning with $ for internal use
+     * (e.g. $RACL), so don't allow a real mailbox to sneak in there.
+     *
+     * N.B This is only forbidden at the absolute top of the internal
+     * namespace: stuff like "user.foo.$bar", "domain!user.foo.$bar",
+     * "domain!$bar", and even "user.$bar" are all still valid here,
+     * because none of those names start with $, and won't conflict.
+     */
+    if (name[0] == '$')
+        return IMAP_MAILBOX_BADNAME;
+
+    /* Skip policy check on mailbox created in delayed delete namespace
+     * assuming the mailbox existed before and was OK then.
+     * This should allow mailboxes that are extremely long to be
+     * deleted when delayed_delete is enabled.
+     * A thorough fix might remove the prefix and timestamp
+     * then continue with the check
+     */
+    if (mboxname_isdeletedmailbox(name, NULL))
+        return 0;
+
+    if (namelen > MAX_MAILBOX_CREATENAME)
+        return IMAP_MAILBOX_BADNAME;
+
+    /* split off the virtual domain: it is not part of the hierarchy, and
+       every '!' belongs to it, so there is only ever the one */
+    p = strchr(name, '!');
+    if (p) {
+        if (!config_virtdomains) return IMAP_MAILBOX_BADNAME;
+        if (p == name) return IMAP_MAILBOX_BADNAME;
+        if (!(flags & MBOXNAME_POLICY_SKIP_IDENTITY)
+            && _policycheck_domain(name, p - name))
+            return IMAP_MAILBOX_BADNAME;
+        name = p + 1;
+        namelen = strlen(name);
+        if (strchr(name, '!')) return IMAP_MAILBOX_BADNAME;
+    }
+
+    /* bad mbox patterns */
+    // empty name
+    if (!name[0]) return IMAP_MAILBOX_BADNAME;
+    // leading dot
+    if (name[0] == '.') return IMAP_MAILBOX_BADNAME;
+    // leading ~
+    if (name[0] == '~') return IMAP_MAILBOX_BADNAME;
+    // trailing dot
+    if (name[namelen-1] == '.') return IMAP_MAILBOX_BADNAME;
+    // double dot (zero length path item)
+    if (strstr(name, "..")) return IMAP_MAILBOX_BADNAME;
+    // non-" " whitespace
+    if (strchr(name, '\r')) return IMAP_MAILBOX_BADNAME;
+    if (strchr(name, '\n')) return IMAP_MAILBOX_BADNAME;
+    if (strchr(name, '\t')) return IMAP_MAILBOX_BADNAME;
+    // top level user
+    if (!strcmp(name, "user")) return IMAP_MAILBOX_BADNAME;
+
+    /* now that no component can be empty, check each one on its own.  The
+     * escaping is undone first, so a '^' is seen as the '.' it stands for */
+    boxes = _array_from_intname(strarray_split(name, ".", 0));
+
+    if (strarray_size(boxes) > 1 && !strcmp(strarray_nth(boxes, 0), "user")) {
+        const char *userid = strarray_nth(boxes, 1);
+
+        /* ACL identifiers, so never the owner of a mailbox */
+        if (!strcmp(userid, "anyone") || !strcmp(userid, "anonymous"))
+            r = IMAP_MAILBOX_BADNAME;
+        else if (!(flags & MBOXNAME_POLICY_SKIP_IDENTITY)
+                 && userid[strcspn(userid, BADUSERCHARS)])
+            r = IMAP_MAILBOX_BADNAME;
+    }
+
+    for (i = 0; !r && i < strarray_size(boxes); i++)
+        r = mboxname_policycheck_component(strarray_nth(boxes, i));
+
+    strarray_free(boxes);
+
+    return r;
 }
 
 EXPORTED int mboxname_is_prefix(const char *longstr, const char *shortstr)
