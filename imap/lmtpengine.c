@@ -485,7 +485,7 @@ static void clean_retpath(char *rpath)
         /* use strlen(rpath) so we move the NUL too */
         memmove(rpath, rpath+1, sl);
         sl--; /* string is one shorter now */
-        if (rpath[sl-1] == '>') {
+        if (sl && rpath[sl-1] == '>') {
             rpath[sl-1] = '\0';
         }
     }
