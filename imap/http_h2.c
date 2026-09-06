@@ -44,6 +44,20 @@ struct http2_stream {
     int32_t id;                         /* Stream ID */
     size_t num_resp_hdrs;               /* Number of response headers */
     nghttp2_nv resp_hdrs[HTTP2_MAX_HEADERS]; /* Array of response headers */
+
+    /* Response body awaiting transmission.
+     *
+     * nghttp2 accepts only ONE outstanding DATA submission per stream, so we
+     * submit a single data provider and append every chunk here.  While the
+     * flow control window is open the provider is drained by the http2_output()
+     * below, and this stays near empty; once the window closes it grows until
+     * the peer sends WINDOW_UPDATE.
+     */
+    struct buf body;                    /* Pending response body */
+    size_t body_off;                    /* How much has been read out */
+    unsigned body_submitted : 1;        /* Data provider already submitted? */
+    unsigned body_complete  : 1;        /* No further chunks are coming */
+    unsigned body_deferred  : 1;        /* Provider parked, needs resuming */
 };
 
 static nghttp2_session_callbacks *http2_callbacks = NULL;
@@ -55,6 +69,8 @@ static void stream_free(struct transaction_t *txn)
 
         if (strm) {
             int i;
+
+            buf_free(&strm->body);
 
             for (i = 0; i < HTTP2_MAX_HEADERS; i++) {
                 free(strm->resp_hdrs[i].value);
@@ -669,16 +685,9 @@ static int end_resp_headers(struct transaction_t *txn, long code)
  * nghttp2_session_mem_send2() calls when the stream's HTTP/2 flow-
  * control window is exhausted.
  */
-struct h2_body_chunk {
-    struct buf data;
-    size_t pos;
-};
-
-static void free_body_chunk(struct h2_body_chunk *chunk)
-{
-    buf_free(&chunk->data);
-    free(chunk);
-}
+/* Drop the consumed prefix of a response body once it reaches this size,
+   rather than waiting for the whole buffer to drain. */
+#define HTTP2_BODY_COMPACT_AT (64 * 1024)
 
 static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((unused)),
                                          int32_t stream_id,
@@ -687,20 +696,44 @@ static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((un
                                          nghttp2_data_source *source,
                                          void *user_data __attribute__((unused)))
 {
-    struct h2_body_chunk *chunk = source->ptr;
-    size_t remain = buf_len(&chunk->data) - chunk->pos;
+    struct http2_stream *strm = source->ptr;
+    size_t remain = buf_len(&strm->body) - strm->body_off;
     size_t n = length < remain ? length : remain;
 
-    if (n) memcpy(buf, buf_base(&chunk->data) + chunk->pos, n);
-    chunk->pos += n;
-
     syslog(LOG_DEBUG,
-           "http2_data_source_read_cb(id=%d, len=%zu): n=%zu, eof=%d",
-           stream_id, length, n, chunk->pos == buf_len(&chunk->data));
+           "http2_data_source_read_cb(id=%d, len=%zu): remain=%zu, n=%zu, complete=%d",
+           stream_id, length, remain, n, strm->body_complete);
 
-    if (chunk->pos == buf_len(&chunk->data)) {
+    if (!n) {
+        if (!strm->body_complete) {
+            /* The response is still being generated.  Park the provider;
+               resp_body_chunk() resumes it when the next chunk arrives.
+               Signalling EOF here instead would truncate the response. */
+            strm->body_deferred = 1;
+            return NGHTTP2_ERR_DEFERRED;
+        }
+
         *data_flags |= NGHTTP2_DATA_FLAG_EOF;
-        free_body_chunk(chunk);  /* Done with our copy */
+        return 0;
+    }
+
+    memcpy(buf, buf_base(&strm->body) + strm->body_off, n);
+    strm->body_off += n;
+
+    if (strm->body_complete && strm->body_off == buf_len(&strm->body)) {
+        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+    }
+
+    /* Reclaim what has already been handed to nghttp2, so that a large
+       response to a slow reader does not also retain everything already
+       sent. */
+    if (strm->body_off == buf_len(&strm->body)) {
+        buf_reset(&strm->body);
+        strm->body_off = 0;
+    }
+    else if (strm->body_off >= HTTP2_BODY_COMPACT_AT) {
+        buf_remove(&strm->body, 0, strm->body_off);
+        strm->body_off = 0;
     }
 
     return n;
@@ -736,40 +769,61 @@ static int resp_body_chunk(struct transaction_t *txn,
         retry_writev(txn->conn->logfd, iov, niov);
     }
 
-    /* Own copy of this chunk -- see struct h2_body_chunk's comment for
-     * why we can't just alias 'data' instead of copying it. */
-    struct h2_body_chunk *chunk = xzmalloc(sizeof(struct h2_body_chunk));
-    if (datalen) buf_setmap(&chunk->data, data, datalen);
-
-    nghttp2_data_provider2 prd = {
-        .source.ptr    = chunk,
-        .read_callback = data_source_read_cb
-    };
-
-    uint8_t flags = NGHTTP2_FLAG_END_STREAM;
-    if (txn->flags.te) {
+    if (txn->flags.te && (txn->flags.trailer & TRAILER_CMD5)) {
         if (!last_chunk) {
-            flags = NGHTTP2_FLAG_NONE;
-            if (datalen && (txn->flags.trailer & TRAILER_CMD5)) {
-                MD5Update(md5ctx, data, datalen);
-            }
+            if (datalen) MD5Update(md5ctx, data, datalen);
         }
-        else if (txn->flags.trailer) {
-            flags = NGHTTP2_FLAG_NONE;
-            if (txn->flags.trailer & TRAILER_CMD5) MD5Final(md5, md5ctx);
+        else {
+            MD5Final(md5, md5ctx);
         }
     }
 
-    syslog(LOG_DEBUG, "nghttp2_submit_data2(id=%d, datalen=%d, flags=%#x)",
-           strm->id, datalen, flags);
+    /* Our own copy -- see struct http2_stream's body comment for why we
+     * can't just alias 'data' instead of copying it. */
+    if (datalen) buf_appendmap(&strm->body, data, datalen);
+    if (last_chunk) strm->body_complete = 1;
 
-    int r = nghttp2_submit_data2(ctx->session, flags, strm->id, &prd);
-    if (r) {
-        syslog(LOG_ERR, "nghttp2_submit_data2: %s", nghttp2_strerror(r));
-        free_body_chunk(chunk);
-        return HTTP_SERVER_ERROR;
+    int r = 0;
+    if (!strm->body_submitted) {
+        /* nghttp2 accepts only one DATA submission per stream, so this runs
+           exactly once; every later chunk is appended above.
+
+           END_STREAM is decided here, on the first chunk, from flags that are
+           already final at this point: whether the response is chunked, and
+           whether trailers will follow (in which case the trailing HEADERS
+           closes the stream instead). */
+        uint8_t flags = NGHTTP2_FLAG_END_STREAM;
+        if (txn->flags.te && (txn->flags.trailer & ~TRAILER_PROXY)) {
+            flags = NGHTTP2_FLAG_NONE;
+        }
+
+        nghttp2_data_provider2 prd = {
+            .source.ptr    = strm,
+            .read_callback = data_source_read_cb
+        };
+
+        syslog(LOG_DEBUG, "nghttp2_submit_data2(id=%d, flags=%#x)",
+               strm->id, flags);
+
+        r = nghttp2_submit_data2(ctx->session, flags, strm->id, &prd);
+        if (r) {
+            syslog(LOG_ERR, "nghttp2_submit_data2: %s", nghttp2_strerror(r));
+            return HTTP_SERVER_ERROR;
+        }
+        strm->body_submitted = 1;
     }
-    else {
+    else if (strm->body_deferred) {
+        /* The provider ran dry while the response was still being generated.
+           Wake it now that there is more to send. */
+        strm->body_deferred = 0;
+        r = nghttp2_session_resume_data(ctx->session, strm->id);
+        if (r) {
+            syslog(LOG_ERR, "nghttp2_session_resume_data: %s",
+                   nghttp2_strerror(r));
+        }
+    }
+
+    {
         /* Write frame(s) */
         http2_output(txn->conn);
 
