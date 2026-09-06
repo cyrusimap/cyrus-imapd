@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_compactids_always_new_user
+    :min_version_3_13 :CompactIdsAlways
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Create a user without asking for compactids";
+    $admintalk->create('user.other');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "The setting is recorded in the new conversations db anyway";
+    $self->assert_num_equals(1, $self->compact_ids_key_is_set('other'));
+}

@@ -1,0 +1,33 @@
+Description:
+
+New :imapdconf:`compact_ids` option, which can enable compact JMAP object ids
+for every user regardless of their per-user conversations database setting.
+
+
+Documentation:
+
+:imapdconf:`compact_ids`, :cyrusman:`ctl_conversationsdb(8)` (which also gains
+documentation for its previously undocumented **-I** and **-U** options)
+
+
+Config changes:
+
+compact_ids (new)
+
+
+Upgrade instructions:
+
+None to upgrade; the default, "per-user", is the existing behaviour.
+
+To enable the new "always" setting, first migrate every user: reconstruct all
+mailboxes to index version 20 or later, upgrade every conversations database
+with "ctl_conversationsdb -U", and enable compact ids per user with
+"ctl_conversationsdb -I on".  Only then set compact_ids to "always", which will
+prevent the setting from being turned off again for any user.  Set it
+identically on all servers that replicate to one another or that participate in
+the same murder.
+
+
+GitHub issue:
+
+None
