@@ -1577,11 +1577,17 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
         if (mbrec->mbtype & MBTYPE_DELETED) {
             if (mbrec->foldermodseq > sincemodseq) {
                 hash_insert(mbrec->id, (void*)1, &removed);
+                if (highestmodseq < mbrec->foldermodseq) {
+                    highestmodseq = mbrec->foldermodseq;
+                }
             }
         }
         else if (!jmap_hasrights(req, mbrec->mboxname, JACL_LOOKUP)) {
             if (mbrec->createdmodseq <= sincemodseq) {
                 hash_insert(mbrec->id, (void*)1, &removed);
+                if (highestmodseq < mbrec->foldermodseq) {
+                    highestmodseq = mbrec->foldermodseq;
+                }
             }
         }
         else if (mbrec->foldermodseq > sincemodseq && mbrec->shared_mbtype != _SHAREDMBOX_HIDDEN) {
