@@ -1,0 +1,25 @@
+
+Description:
+
+MDN/parse (RFC 9007) is implemented.  It was a stub that answered
+notParsable for every blob.
+
+
+Documentation:
+
+None.  The behaviour follows the cited specification as written.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

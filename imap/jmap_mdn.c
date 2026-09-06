@@ -17,7 +17,10 @@
 #include "jmap_api.h"
 #include "jmap_mail.h"
 #include "json_support.h"
+#include "message.h"
 #include "parseaddr.h"
+#include "prot.h"
+#include "spool.h"
 #include "times.h"
 #include "util.h"
 
@@ -561,6 +564,188 @@ done:
     return r;
 }
 
+/* Depth-first search for the first part matching type/subtype. */
+static const struct body *_mdn_find_part(const struct body *body,
+                                         const char *type,
+                                         const char *subtype)
+{
+    if (!body) return NULL;
+
+    if (!strcasecmpsafe(body->type, type) &&
+        !strcasecmpsafe(body->subtype, subtype)) {
+        return body;
+    }
+
+    if (!strcasecmpsafe(body->type, "MULTIPART")) {
+        int i;
+        for (i = 0; i < body->numparts; i++) {
+            const struct body *found =
+                _mdn_find_part(&body->subpart[i], type, subtype);
+            if (found) return found;
+        }
+    }
+    else if (!strcasecmpsafe(body->type, "MESSAGE") && body->subpart) {
+        return _mdn_find_part(body->subpart, type, subtype);
+    }
+
+    return NULL;
+}
+
+/* Strip the "address-type;" prefix from an RFC 8098 recipient field. */
+static const char *_mdn_recipient_addr(const char *val)
+{
+    const char *sep = strchr(val, ';');
+    if (!sep) return val;
+    for (sep++; *sep == ' ' || *sep == '\t'; sep++);
+    return sep;
+}
+
+/* Build an MDN object (RFC 9007, Section 2) from the fields of a
+ * message/disposition-notification part (RFC 8098, Section 3.1). */
+static json_t *_mdn_from_dn_fields(const char *base, size_t len)
+{
+    /* spool_fill_hdrcache wants a header block terminated by a blank line,
+     * which the part's content is not guaranteed to have. */
+    struct buf buf = BUF_INITIALIZER;
+    buf_appendmap(&buf, base, len);
+    buf_appendcstr(&buf, "\r\n\r\n");
+
+    struct protstream *pin = prot_readmap(buf_base(&buf), buf_len(&buf));
+    hdrcache_t hdrs = spool_new_hdrcache();
+    json_t *mdn = NULL;
+
+    if (spool_fill_hdrcache(pin, NULL, hdrs, NULL)) goto done;
+
+    /* "Disposition" is the only mandatory field, and the one that makes this
+     * a disposition notification rather than an arbitrary header block. */
+    const char **val = spool_getheader(hdrs, "Disposition");
+    if (!val || !val[0]) goto done;
+
+    /* action-mode "/" sending-mode ";" disposition-type [ "/" modifiers ] */
+    const char *slash = strchr(val[0], '/');
+    const char *semi = slash ? strchr(slash, ';') : NULL;
+    if (!slash || !semi) goto done;
+
+    const char *type = semi + 1;
+
+    /* A disposition-type may carry "/modifier" suffixes; JMAP wants the type */
+    struct buf action = BUF_INITIALIZER, sending = BUF_INITIALIZER;
+    struct buf dtype = BUF_INITIALIZER;
+    buf_setmap(&action, val[0], slash - val[0]);
+    buf_setmap(&sending, slash + 1, semi - slash - 1);
+    buf_setmap(&dtype, type, strcspn(type, "/"));
+    buf_trim(&action);
+    buf_trim(&sending);
+    buf_trim(&dtype);
+
+    if (buf_len(&action) && buf_len(&sending) && buf_len(&dtype)) {
+        mdn = json_object();
+        json_object_set_new(mdn, "disposition",
+                            json_pack("{s:s s:s s:s}",
+                                      "actionMode", buf_cstring(&action),
+                                      "sendingMode", buf_cstring(&sending),
+                                      "type", buf_cstring(&dtype)));
+    }
+    buf_free(&action);
+    buf_free(&sending);
+    buf_free(&dtype);
+    if (!mdn) goto done;
+
+    /* forEmailId is allowed to be absent for MDN/parse: RFC 9007, Section 2.2
+     * lets it be null when the original message cannot be resolved, and this
+     * blob need not correspond to anything in the account. */
+    json_object_set_new(mdn, "forEmailId", json_null());
+
+    static const struct { const char *hdr; const char *prop; } simple[] = {
+        { "Reporting-UA",        "reportingUA"       },
+        { "MDN-Gateway",         "mdnGateway"        },
+        { "Original-Message-ID", "originalMessageId" },
+        { NULL, NULL }
+    };
+    int i;
+    for (i = 0; simple[i].hdr; i++) {
+        val = spool_getheader(hdrs, simple[i].hdr);
+        json_object_set_new(mdn, simple[i].prop,
+                            val && val[0] ? json_string(val[0]) : json_null());
+    }
+
+    static const struct { const char *hdr; const char *prop; } rcpt[] = {
+        { "Original-Recipient", "originalRecipient" },
+        { "Final-Recipient",    "finalRecipient"    },
+        { NULL, NULL }
+    };
+    for (i = 0; rcpt[i].hdr; i++) {
+        val = spool_getheader(hdrs, rcpt[i].hdr);
+        json_object_set_new(mdn, rcpt[i].prop,
+                            val && val[0] ?
+                            json_string(_mdn_recipient_addr(val[0])) :
+                            json_null());
+    }
+
+    /* "Error" may appear more than once */
+    val = spool_getheader(hdrs, "Error");
+    if (val && val[0]) {
+        json_t *errors = json_array();
+        for (i = 0; val[i]; i++) {
+            json_array_append_new(errors, json_string(val[i]));
+        }
+        json_object_set_new(mdn, "error", errors);
+    }
+    else json_object_set_new(mdn, "error", json_null());
+
+done:
+    spool_free_hdrcache(hdrs);
+    prot_free(pin);
+    buf_free(&buf);
+    return mdn;
+}
+
+/* Convert an RFC 5322 message that is expected to be an MDN into an MDN
+ * object, or NULL if it is not one. */
+static json_t *_mdn_from_buf(const struct buf *raw)
+{
+    struct body *body = xzmalloc(sizeof(struct body));
+    json_t *mdn = NULL;
+
+    if (message_parse_mapped(buf_base(raw), buf_len(raw), body, NULL)) {
+        goto done;
+    }
+
+    const struct body *dn =
+        _mdn_find_part(body, "MESSAGE", "DISPOSITION-NOTIFICATION");
+    if (!dn) goto done;
+
+    mdn = _mdn_from_dn_fields(buf_base(raw) + dn->content_offset,
+                              dn->content_size);
+    if (!mdn) goto done;
+
+    json_object_set_new(mdn, "subject",
+                        body->subject ? json_string(body->subject) : json_null());
+
+    /* The human-readable part, if the sender included one */
+    const struct body *text = _mdn_find_part(body, "TEXT", "PLAIN");
+    if (text) {
+        struct buf tmp = BUF_INITIALIZER;
+        buf_setmap(&tmp, buf_base(raw) + text->content_offset,
+                   text->content_size);
+        buf_trim(&tmp);
+        json_object_set_new(mdn, "textBody", json_string(buf_cstring(&tmp)));
+        buf_free(&tmp);
+    }
+    else json_object_set_new(mdn, "textBody", json_null());
+
+    /* RFC 8098 permits either the message or just its headers as the third
+     * part; both mean the original message was included. */
+    int included = _mdn_find_part(body, "MESSAGE", "RFC822") ||
+                   _mdn_find_part(body, "TEXT", "RFC822-HEADERS");
+    json_object_set_new(mdn, "includeOriginalMessage", json_boolean(included));
+
+done:
+    message_free_body(body);
+    free(body);
+    return mdn;
+}
+
 static int jmap_mdn_parse(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -593,9 +778,7 @@ static int jmap_mdn_parse(jmap_req_t *req)
         }
 
         /* parse blob */
-        json_t *mdn = NULL;
-
-        // XXX -> convert `buf` into an mdn
+        json_t *mdn = _mdn_from_buf(&buf);
 
         if (mdn) {
             json_object_set_new(parse.parsed, blobid, mdn);
