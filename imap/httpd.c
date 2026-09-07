@@ -1486,7 +1486,11 @@ static int check_method(struct transaction_t *txn)
              strcmp(http_methods[txn->meth].name, req_line->meth);
          txn->meth++);
 
-    if (txn->meth == METH_UNKNOWN) return HTTP_NOT_IMPLEMENTED;
+    if (txn->meth == METH_UNKNOWN) {
+        txn->conn->close = 1;
+        txn->conn->close_str = "Unknown method";
+        return HTTP_NOT_IMPLEMENTED;
+    }
 
     return 0;
 }
