@@ -66,6 +66,7 @@ static int jmap_calendar_set(struct jmap_req *req);
 static int jmap_calendarevent_get(struct jmap_req *req);
 static int jmap_calendarevent_changes(struct jmap_req *req);
 static int jmap_calendarevent_query(struct jmap_req *req);
+static int jmap_calendarevent_querychanges(struct jmap_req *req);
 static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
 static int jmap_calendarevent_parse(jmap_req_t *req);
@@ -167,6 +168,12 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         "CalendarEvent/query",
         JMAP_URN_CALENDARS,
         &jmap_calendarevent_query,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "CalendarEvent/queryChanges",
+        JMAP_URN_CALENDARS,
+        &jmap_calendarevent_querychanges,
         JMAP_NEED_CSTATE
     },
     {
@@ -9725,6 +9732,31 @@ static int jmap_principal_changes(struct jmap_req *req)
 
   done:
     jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
+    return 0;
+}
+
+/* RFC 8620 Section 5.6 makes /queryChanges part of every type's method set.
+ * We cannot calculate CalendarEvent query changes, so validate the arguments
+ * and say so, rather than answer unknownMethod. */
+static int jmap_calendarevent_querychanges(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_querychanges query = JMAP_QUERYCHANGES_INITIALIZER;
+
+    json_t *err = NULL;
+    jmap_querychanges_parse(req, &parser, NULL, NULL,
+                            calendarevent_validatefilter, NULL,
+                            calendarevent_validatecomparator, NULL,
+                            &query, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+    jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+
+done:
+    jmap_querychanges_fini(&query);
     jmap_parser_fini(&parser);
     return 0;
 }

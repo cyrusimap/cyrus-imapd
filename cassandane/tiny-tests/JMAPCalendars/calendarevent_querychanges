@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+# RFC 8620 Section 5.6 makes /queryChanges part of every type's method set.
+# Cyrus cannot calculate CalendarEvent query changes, so the method must exist
+# and say so with cannotCalculateChanges -- not vanish as unknownMethod.
+
+sub test_calendarevent_querychanges
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "get current query state";
+    my $res = $jmap->CallMethods([['CalendarEvent/query', {}, 'R1']]);
+    my $state = $res->[0][1]{queryState};
+    $self->assert_not_null($state);
+
+    xlog $self, "queryChanges is refused, not unknown";
+    $res = $jmap->CallMethods([['CalendarEvent/queryChanges', {
+        sinceQueryState => $state,
+    }, 'R2']]);
+    $self->assert_cmp_deeply(
+        [['error', superhashof({ type => 'cannotCalculateChanges' }), 'R2']],
+        $res,
+    );
+
+    xlog $self, "arguments are still validated";
+    $res = $jmap->CallMethods([['CalendarEvent/queryChanges', {
+        sinceQueryState => $state,
+        filter          => { nosuchproperty => 1 },
+    }, 'R3']]);
+    $self->assert_cmp_deeply(
+        [['error', superhashof({ type => 'invalidArguments' }), 'R3']],
+        $res,
+    );
+}
