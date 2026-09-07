@@ -355,6 +355,7 @@ EXTRA_DIST = \
     doc/README.xapian \
     doc/README.zeroskip.md \
     doc/examples \
+    doc/examples/imapd_conf/imapd.conf.sample \
     doc/legacy \
     doc/logfmt-keys \
     docsrc \
