@@ -21,7 +21,7 @@ use JMAP::Tester::Abort ();
 }
 
 has fallback_account_id => (
-    is       => 'ro',
+    is       => 'rw',
     required => 1,
 );
 
@@ -34,6 +34,34 @@ sub default_diagnostic_dumper {
         return Data::Printer::np($value, colored => 1);
     };
 }
+
+# JMAP::Tester adds default_arguments to every method call, but Core/echo is
+# not account-scoped and must echo back exactly what it was given. Leave the
+# default accountId out of a Core/echo unless the test named one itself.
+around request => sub {
+    my ($orig, $self, $input) = @_;
+
+    my $default = $self->default_arguments;
+    if (exists $default->{accountId}) {
+        my $calls = ref $input eq 'ARRAY' ? $input
+                  : ref $input eq 'HASH'  ? $input->{methodCalls}
+                  : undef;
+        if ($calls) {
+            my @copy;
+            for my $call (@$calls) {
+                my ($name, $args, @rest) = @$call;
+                if ($name eq 'Core/echo' && ref $args eq 'HASH'
+                    && !exists $args->{accountId} && !exists $args->{'#accountId'}) {
+                    $args = { %$args, accountId => \undef };
+                }
+                push @copy, [ $name, $args, @rest ];
+            }
+            $input = ref $input eq 'ARRAY' ? \@copy : { %$input, methodCalls => \@copy };
+        }
+    }
+
+    return $self->$orig($input);
+};
 
 # This emulates JMAPTalk's DefaultUsing
 sub DefaultUsing {
@@ -194,6 +222,16 @@ sub set_username_and_password ($self, $username, $password) {
             q{},
         )
     );
+
+    # The tester's own account is the one it logs in as. A test that logs
+    # in as another user (the FastMail rename tests log in as the renamed
+    # self) means that account from now on: for the accountId every call
+    # carries by default, and for Upload's fallback.
+    $self->fallback_account_id($username);
+    my $default = $self->default_arguments;
+    if (exists $default->{accountId}) {
+        $self->default_arguments({ %$default, accountId => $username });
+    }
 }
 
 no Moo;

@@ -1,0 +1,11 @@
+Name: jmap_require_accountid
+Type: SWITCH
+Default-Value: 0
+Last-Modified: UNRELEASED
+
+If enabled, a JMAP method call that omits the "accountId" argument (or
+gives a null or non-string value) is rejected with an "invalidArguments"
+error, as RFC 8620 requires of every method other than Core/echo.  If not
+enabled (the default), a missing or null "accountId" is taken to mean the
+authenticated user's own account, which is what Cyrus has always done and
+what some deployed clients rely on.

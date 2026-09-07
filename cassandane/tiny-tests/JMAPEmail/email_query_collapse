@@ -14,8 +14,12 @@ sub test_email_query_collapse
     $admintalk->setacl("user.test", "cassandane", "lrwkx") or die;
 
     # run tests for both the main and "test" account
+    # undef selects the main account's own store and mailbox names; the
+    # JMAP calls still have to name it, since a call without accountId is
+    # rejected.
     foreach (undef, "test") {
         my $account = $_;
+        my $accountId = $account // 'cassandane';
         my $store = defined $account ? $self->{adminstore} : $self->{store};
         my $mboxprefix = defined $account ? "user.$account" : "INBOX";
         my $talk = $store->get_client();
@@ -40,10 +44,10 @@ sub test_email_query_collapse
         $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
 
         xlog $self, "list uncollapsed threads";
-        $res = $jmap->CallMethods([['Email/query', { accountId => $account }, "R1"]]);
+        $res = $jmap->CallMethods([['Email/query', { accountId => $accountId }, "R1"]]);
         $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
 
-        $res = $jmap->CallMethods([['Email/query', { accountId => $account, collapseThreads => JSON::true }, "R1"]]);
+        $res = $jmap->CallMethods([['Email/query', { accountId => $accountId, collapseThreads => JSON::true }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     }
 }

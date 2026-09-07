@@ -94,7 +94,6 @@ sub test_calendarevent_copy
             ids => [$copiedEventId],
         }, 'R1'],
         ['CalendarEvent/get', {
-            accountId => undef,
             ids => [$eventId],
         }, 'R2'],
     ]);
