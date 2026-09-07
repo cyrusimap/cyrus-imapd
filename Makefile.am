@@ -2045,13 +2045,6 @@ docsrc/_doxygen/.stamp: Doxyfile $(DOXYGEN_INPUTS)
 
 SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 
-## The builders below share one doctree cache, which helps: later builds can
-## reuse the cached parse from earlier ones.  You can't run these at the same
-## time, though, because only one sphinx-build can own the cache for writing.
-## So, every caller (doc, dist-hook) will build them with another make, in
-## series. Serializing the builders is still a win compared to using three
-## different cache dirs.
-
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
 ## that we have a single "source directory" for sphinx-build to use.
@@ -2154,6 +2147,10 @@ clean-doc-examples:
 clean-doc-doxygen:
 	@$(RM) -r docsrc/_doxygen
 
+## We can't run the various doc building rules in parallel, because they
+## unsafely share their cache.  That means they can't just be prereqs for the
+## doc target.  They *could* be given distinct caches, but this turns out to be
+## significantly slower than running them in series with a shared cache.
 .PHONY: doc clean-doc
 doc:
 	$(MAKE) $(AM_MAKEFLAGS) man
