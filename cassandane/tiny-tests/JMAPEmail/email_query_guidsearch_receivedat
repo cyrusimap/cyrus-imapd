@@ -1,0 +1,145 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_guidsearch_receivedat
+    :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing(
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/performance',
+    );
+
+    # The instant that the filters of the test cases are relative to.
+    my $received_at = '2020-06-01T00:00:00Z';
+
+    # One email per receivedAt of interest, plus one email at the boundary that
+    # the body search does not match, so that a case can not pass by returning
+    # every email in the date range.
+    my %fixture = (
+        before_received_at => {
+            receivedAt => '2020-01-01T00:00:00Z',
+            body       => 'hello',
+        },
+        at_received_at => {
+            receivedAt => $received_at,
+            body       => 'hello',
+        },
+        after_received_at => {
+            receivedAt => '2021-01-01T00:00:00Z',
+            body       => 'hello',
+        },
+        no_match => {
+            receivedAt => $received_at,
+            body       => 'goodbye',
+        },
+    );
+
+    my $inbox = $user->mailboxes->inbox;
+
+    my %id_by_subject;
+    for my $subject (sort keys %fixture) {
+        my $email = $user->emails->create({
+            mailboxIds    => { $inbox->id => JSON::true },
+            subject       => $subject,
+            receivedAt    => $fixture{$subject}{receivedAt},
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => $fixture{$subject}{body} } },
+        });
+        $id_by_subject{$subject} = q{} . $email->id;
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    # The filter of a case is ANDed with a body search. A case names the emails
+    # it expects, in the order that sorting on receivedAt ascending puts them
+    # in. The emails that the body search matches have distinct receivedAt
+    # values, so that order is a total order.
+    my @testcases = (
+        # before is inclusive, so the email at the boundary matches.
+        {
+            desc     => 'before',
+            cond     => { before => $received_at },
+            subjects => [ qw(before_received_at at_received_at) ],
+        },
+        # after is inclusive, too.
+        {
+            desc     => 'after',
+            cond     => { after => $received_at },
+            subjects => [ qw(at_received_at after_received_at) ],
+        },
+        # Both bounds at the same instant only leave the email at the boundary.
+        {
+            desc     => 'before_and_after_received_at',
+            cond     => { after => $received_at, before => $received_at },
+            subjects => [ qw(at_received_at) ],
+        },
+        {
+            desc     => 'between',
+            cond     => {
+                after  => '2020-03-01T00:00:00Z',
+                before => '2020-09-01T00:00:00Z',
+            },
+            subjects => [ qw(at_received_at) ],
+        },
+        # No email is in this range, but the body search still has candidates.
+        {
+            desc     => 'after_all_emails',
+            cond     => { after => '2022-01-01T00:00:00Z' },
+            subjects => [],
+        },
+        # Negation. Guidsearch keeps the range criteria in a NOT node.
+        {
+            desc     => 'not_before',
+            cond     => {
+                operator   => 'NOT',
+                conditions => [ { before => $received_at } ],
+            },
+            subjects => [ qw(after_received_at) ],
+        },
+    );
+
+    # Query each case twice, once answered by guidsearch and once by uidsearch.
+    my @methods;
+    for my $case (@testcases) {
+        for my $impl (qw(guidsearch uidsearch)) {
+            push @methods, [ 'Email/query', {
+                filter => {
+                    operator   => 'AND',
+                    conditions => [ { body => 'hello' }, $case->{cond} ],
+                },
+                sort => [{
+                    property    => 'receivedAt',
+                    isAscending => JSON::true,
+                }],
+                disableGuidSearch => $impl eq 'uidsearch'
+                                      ? JSON::true : JSON::false,
+            }, "$case->{desc}_$impl" ];
+        }
+    }
+
+    my $res = $jmap->request(\@methods);
+    $res->assert_successful;
+
+    for my $case (@testcases) {
+        my @want_ids = map { $id_by_subject{$_} } $case->{subjects}->@*;
+
+        for my $impl (qw(guidsearch uidsearch)) {
+            my $client_id = "$case->{desc}_$impl";
+            my $args = $res->paragraph_by_client_id($client_id)
+                           ->single('Email/query')->arguments;
+
+            $self->assert_cmp_deeply(
+                $impl eq 'guidsearch' ? jtrue() : jfalse(),
+                $args->{performance}{details}{isGuidSearch},
+                "isGuidSearch for $client_id",
+            );
+
+            $self->assert_cmp_deeply(\@want_ids, $args->{ids},
+                "ids for $client_id");
+        }
+    }
+}

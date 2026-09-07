@@ -1,0 +1,135 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_keyword_multimbox
+    :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing(
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/performance',
+    );
+
+    my $mboxa = $user->mailboxes->create({ name => 'A' });
+    my $mboxb = $user->mailboxes->create({ name => 'B' });
+
+    # Two emails, each with a copy in both mailboxes. The one created first
+    # gets sequence number 1 in each mailbox.
+    my %id_by_subject;
+    my %receivedat = (
+        flagged   => '2020-01-01T00:00:00Z',
+        unflagged => '2021-01-01T00:00:00Z',
+    );
+    for my $subject (qw(flagged unflagged)) {
+        my $email = $user->emails->create({
+            mailboxIds    => {
+                $mboxa->id => JSON::true,
+                $mboxb->id => JSON::true,
+            },
+            subject       => $subject,
+            receivedAt    => $receivedat{$subject},
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+        });
+        $id_by_subject{$subject} = q{} . $email->id;
+    }
+
+    xlog $self, 'set \\Flagged on the copy in mailbox A only';
+    my $imap = $self->{store}->get_client();
+    $imap->select('A');
+    $imap->store('1', '+flags', '(\\Flagged)');
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    # A keyword is a property of the Email, so flagging one copy flags the
+    # email. This is what Email/query must agree with.
+    my $res = $jmap->request([
+        [ 'Email/get', {
+            ids        => [ map { $id_by_subject{$_} } qw(flagged unflagged) ],
+            properties => [ 'keywords' ],
+        }, 'R1' ],
+    ]);
+    $res->assert_successful;
+    my $list = $res->single_sentence('Email/get')->arguments->{list};
+    $self->assert_cmp_deeply(jtrue(), $list->[0]{keywords}{'$flagged'},
+        'email with a flagged copy has $flagged');
+    $self->assert_cmp_deeply(undef, $list->[1]{keywords}{'$flagged'},
+        'email with no flagged copy has no $flagged');
+
+    # A case names the emails it expects, in the order that sorting on
+    # receivedAt ascending puts them in.
+    my @testcases = (
+        {
+            desc     => 'has_keyword',
+            cond     => { hasKeyword => '$flagged' },
+            subjects => [ qw(flagged) ],
+        },
+        {
+            desc     => 'not_keyword',
+            cond     => { notKeyword => '$flagged' },
+            subjects => [ qw(unflagged) ],
+        },
+        # The flagged copy is in mailbox A, but the email is flagged, so it
+        # matches a filter that restricts to mailbox B.
+        {
+            desc     => 'in_mailbox_has_keyword',
+            cond     => {
+                inMailbox  => q{} . $mboxb->id,
+                hasKeyword => '$flagged',
+            },
+            subjects => [ qw(flagged) ],
+        },
+        {
+            desc     => 'in_mailbox_not_keyword',
+            cond     => {
+                inMailbox  => q{} . $mboxb->id,
+                notKeyword => '$flagged',
+            },
+            subjects => [ qw(unflagged) ],
+        },
+    );
+
+    # Query each case twice, once answered by guidsearch and once by uidsearch.
+    my @methods;
+    for my $case (@testcases) {
+        for my $impl (qw(guidsearch uidsearch)) {
+            push @methods, [ 'Email/query', {
+                filter => {
+                    operator   => 'AND',
+                    conditions => [ { body => 'hello' }, $case->{cond} ],
+                },
+                sort => [{
+                    property    => 'receivedAt',
+                    isAscending => JSON::true,
+                }],
+                disableGuidSearch => $impl eq 'uidsearch'
+                                       ? JSON::true : JSON::false,
+            }, "$case->{desc}_$impl" ];
+        }
+    }
+
+    $res = $jmap->request(\@methods);
+    $res->assert_successful;
+
+    for my $case (@testcases) {
+        my @want_ids = map { $id_by_subject{$_} } $case->{subjects}->@*;
+
+        for my $impl (qw(guidsearch uidsearch)) {
+            my $client_id = "$case->{desc}_$impl";
+            my $args = $res->paragraph_by_client_id($client_id)
+                           ->single('Email/query')->arguments;
+
+            $self->assert_cmp_deeply(
+                $impl eq 'guidsearch' ? jtrue() : jfalse(),
+                $args->{performance}{details}{isGuidSearch},
+                "isGuidSearch for $client_id",
+            );
+
+            $self->assert_cmp_deeply(\@want_ids, $args->{ids},
+                "ids for $client_id");
+        }
+    }
+}
