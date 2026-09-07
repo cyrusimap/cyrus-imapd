@@ -531,8 +531,7 @@ dist_noinst_SCRIPTS = \
     tools/perl2rst \
     tools/pod-index \
     tools/translatesieve \
-    tools/update-tzdata.sh \
-    tools/with-lock
+    tools/update-tzdata.sh
 noinst_MAN = \
     com_err/et/com_err.3 \
     com_err/et/compile_et.1
@@ -2048,9 +2047,9 @@ SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 ## The builders below share one doctree cache, which helps: later builds can
 ## reuse the cached parse from earlier ones.  You can't run these at the same
 ## time, though, because only one sphinx-build can own the cache for writing.
-## We'll lock.  Serializing the builders is still a win compared to using three
+## So, every caller (doc, dist-hook) will build them with another make, in
+## series. Serializing the builders is still a win compared to using three
 ## different cache dirs.
-SPHINX_LOCK = $(PERL) $(top_srcdir)/tools/with-lock $(SPHINX_CACHE)/.lock
 
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
@@ -2066,7 +2065,7 @@ clean-docsrc:
 
 ## XXX doesn't detect if other rst sources are updated...
 man/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
-	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b man $(top_builddir)/docsrc $(top_builddir)/man
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b man $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
 
 clean-man:
@@ -2074,18 +2073,13 @@ clean-man:
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/html/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
-	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
 	@touch $@
 
 ## XXX doesn't detect if other rst sources are updated...
 doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
-	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_LOCK) $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
+	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
-
-## What dist-hook needs built before it can put the documentation in the
-## tarball.  Empty without Sphinx, so "make dist" still works there and just
-## ships no HTML or text.
-DIST_DOC_STAMPS = doc/html/.sphinx-build.stamp doc/text/.sphinx-build.stamp
 
 else # (! HAVE_SPHINX_BUILD)
 
@@ -2109,12 +2103,12 @@ doc/text/.sphinx-build.stamp:
 	@echo "error: missing documentation dependencies. cannot build text documentation" 1>&2
 	@false
 
-DIST_DOC_STAMPS =
 endif
 
 SPHINX_MANS = $(dist_man1_MANS) $(dist_man3_MANS) $(dist_man5_MANS) $(dist_man8_MANS)
 
-## Each of the doc entry points below trashes the timestamps and then recurses.
+## Each of the doc entry points below trashes the timestamps and then runs a
+## subprocess make.
 ##
 ## Trashing them is what makes us always re-run sphinx-build.  sphinx-build
 ## tracks source modifications itself, so forced rebuilds will still be a lot
@@ -2159,18 +2153,12 @@ clean-doc-examples:
 clean-doc-doxygen:
 	@$(RM) -r docsrc/_doxygen
 
-## "doc" is man + doc-html + doc-text + doc-examples, but spelled out rather
-## than depending on those four, so that the whole doc build is one make
-## instance.  Depending on them would start three sub-makes, each trashing and
-## rebuilding docsrc/.sphinx-build.stamp on its own schedule.  In a VPATH
-## build, the stamp's recipe extracts a tar of docsrc into the build tree, so
-## two could extract it while a third sphinx-build reads the result.
 .PHONY: doc clean-doc
 doc:
-	@$(RM) docsrc/.sphinx-build.stamp man/.sphinx-build.stamp \
-	    doc/html/.sphinx-build.stamp doc/text/.sphinx-build.stamp
-	$(MAKE) $(AM_MAKEFLAGS) $(SPHINX_MANS) doc/html/.sphinx-build.stamp \
-	    doc/text/.sphinx-build.stamp $(GENERATED_EXAMPLES)
+	$(MAKE) $(AM_MAKEFLAGS) man
+	$(MAKE) $(AM_MAKEFLAGS) doc-html
+	$(MAKE) $(AM_MAKEFLAGS) doc-text
+	$(MAKE) $(AM_MAKEFLAGS) doc-examples
 
 clean-doc: clean-man clean-doc-html clean-doc-text clean-doc-examples clean-doc-doxygen
 
@@ -2243,7 +2231,15 @@ distgit:
 	git archive --format=tar --prefix=$(PACKAGE_NAME)-$(PACKAGE_VERSION)/ $(PACKAGE_NAME)-$(PACKAGE_VERSION) | tar -C dist -x -f -
 	touch distgit
 
-dist-hook: $(DIST_DOC_STAMPS)
+## The HTML and text docs aren't in DISTFILES: they're built here and copied
+## in, after distdir has finished.  One subprocess make each, because they
+## can't be built at the same time -- and as separate targets rather than the
+## forcing doc-html and doc-text, so that a tree that has already built them
+## doesn't build them again.
+dist-hook:
+	$(MAKE) $(AM_MAKEFLAGS) doc/html/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) doc/text/.sphinx-build.stamp
+
 	@$(MKDIR_P) $(top_distdir)/doc
 	test ! -d doc/html || cp -R doc/html $(top_distdir)/doc/
 	test ! -d doc/text || cp -R doc/text $(top_distdir)/doc/
