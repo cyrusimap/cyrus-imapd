@@ -8019,6 +8019,7 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
                                   icalparser_parse_string(buf_cstring(&attrib)));
             }
         }
+        buf_free(&attrib);
         free(mboxname);
         free(userid);
     }
