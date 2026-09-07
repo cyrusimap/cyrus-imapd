@@ -23,6 +23,7 @@ static int jmap_legacy_quota_get(jmap_req_t *req);
 static int jmap_quota_get(jmap_req_t *req);
 static int jmap_quota_changes(jmap_req_t *req);
 static int jmap_quota_query(jmap_req_t *req);
+static int jmap_quota_querychanges(jmap_req_t *req);
 
 // clang-format off
 static jmap_method_t jmap_quota_methods_standard[] = {
@@ -42,6 +43,12 @@ static jmap_method_t jmap_quota_methods_standard[] = {
         "Quota/query",
         JMAP_URN_QUOTA,
         &jmap_quota_query,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "Quota/queryChanges",
+        JMAP_URN_QUOTA,
+        &jmap_quota_querychanges,
         JMAP_NEED_CSTATE
     },
     { NULL, NULL, NULL, 0}
@@ -841,5 +848,29 @@ done:
     free_hash_table(&qrock.quotas, &free);
     free(qrock.inboxname);
 
+    return 0;
+}
+
+/* RFC 9425 Section 4.5: a standard /queryChanges (RFC 8620 Section 5.6). We
+ * cannot calculate Quota query changes, so validate the arguments and say
+ * so, rather than answer unknownMethod. */
+static int jmap_quota_querychanges(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_querychanges query = JMAP_QUERYCHANGES_INITIALIZER;
+
+    json_t *err = NULL;
+    jmap_querychanges_parse(req, &parser, NULL, NULL,
+                            filter_parse, NULL, comparator_parse, NULL,
+                            &query, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+    jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+
+done:
+    jmap_querychanges_fini(&query);
+    jmap_parser_fini(&parser);
     return 0;
 }
