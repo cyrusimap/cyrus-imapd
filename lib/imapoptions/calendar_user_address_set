@@ -6,3 +6,26 @@ Last-Modified: 2.5.0
 Space-separated list of domains corresponding to calendar user addresses
 for which the server is responsible.  If not set (the default), the value
 of the :imapdconf:`defaultdomain` option will be used.
+
+This option does more than declare which domains are ours, and both of its
+effects matter when more than one domain is listed:
+
+* every user is given **one calendar user address per listed domain**.  A
+  user ``jsmith`` with three domains listed owns ``jsmith@example.com``,
+  ``jsmith@example.net`` and ``jsmith@example.org`` as far as scheduling is
+  concerned, whether or not those mailboxes exist.
+
+* conversely, an ATTENDEE or ORGANIZER in any listed domain is treated as
+  local.  When :imapdconf:`virtdomains` is disabled the domain is then
+  **stripped**, so ``jsmith@example.com`` and ``jsmith@example.net`` resolve
+  to the same account.
+
+.. WARNING::
+
+   List several domains only where the local part identifies the same person
+   in all of them, or enable :imapdconf:`virtdomains`.  In a multi-tenant
+   deployment where each tenant has its own domain and local parts are not
+   unique across tenants, listing every tenant domain here makes unrelated
+   accounts share an identity: an invitation addressed to one tenant's
+   ``info@`` is delivered to another tenant's ``info``, and either user can
+   reply to the other's invitations.
