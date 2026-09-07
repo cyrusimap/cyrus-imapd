@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+# An X-ME-Memo-For that names no known message is ignored, and the memo
+# threads by In-Reply-To as it did before the header existed.
+sub test_email_set_create_memo_for_unknown ($self)
+{
+  my $jmap = $self->{jmap};
+
+  $self->make_message('Email A', messageid => "msg1\@example.com");
+
+  my $res = $jmap->CallMethods([
+    [ 'Email/query', {}, 'R1' ],
+    [
+      'Email/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'Email/query',
+          path     => '/ids'
+        },
+        properties => [ 'threadId', 'messageId' ],
+      },
+      'R2'
+    ],
+  ]);
+  my $parent = $res->[1][1]{list}[0];
+  $self->assert_not_null($parent->{threadId});
+
+  xlog $self, "Create memo whose X-ME-Memo-For names no message";
+  $res = $jmap->CallMethods([
+    [
+      'Email/set',
+      {
+        create => {
+          memo1 => {
+            mailboxIds             => { '$inbox' => JSON::true },
+            from                   => [ { email => 'from@local' } ],
+            subject                => 'unrelated subject',
+            messageId              => ["memo1\@example.com"],
+            inReplyTo              => $parent->{messageId},
+            'header:X-ME-Memo-For' => 'G' . ('0' x 40),
+            bodyStructure          => {
+              type   => 'text/plain',
+              partId => 'part1',
+            },
+            bodyValues => { part1 => { value => "memo" } },
+            keywords   => { '$memo' => JSON::true },
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
+
+  $self->assert_str_equals(
+    $parent->{threadId},
+    $res->[0][1]{created}{memo1}{threadId}
+  );
+}

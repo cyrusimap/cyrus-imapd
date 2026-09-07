@@ -1,0 +1,28 @@
+Description:
+
+A memo (a message with the `$memo` keyword) can name the message it
+annotates by JMAP blobId in a new X-ME-Memo-For header.  Cyrus then puts
+the memo in that message's conversation directly, which is the only way a
+memo can land on the right side of a split conversation.
+
+
+Documentation:
+
+docsrc/reference/extensions/memo-threading.md
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.  Memos without the header thread as before.  Clients should start
+sending X-ME-Memo-For when creating memos.
+
+
+GitHub issue:
+
+None; see https://github.com/cyrusimap/cyrus-imapd/pull/6345 for the
+approach this replaces.

@@ -3981,6 +3981,49 @@ out:
 }
 
 /*
+ * A memo names the message it annotates by blobId in X-ME-Memo-For.  That
+ * message's G record carries the cid and basecid a split has moved it to,
+ * which the message-id index cannot tell us.  Returns true and fills in
+ * record->cid and record->basecid when the parent is known.
+ */
+static bool memo_parent_cid_lookup(struct conversations_state *state,
+                                   message_t *msg,
+                                   struct mailbox *mailbox,
+                                   struct index_record *record)
+{
+    struct buf buf = BUF_INITIALIZER;
+    struct message_guid guid;
+    bool found = false;
+
+    int r = message_get_field(msg,
+                              "X-ME-Memo-For",
+                              MESSAGE_RAW | MESSAGE_TRIM,
+                              &buf);
+    if (r || !buf_len(&buf)) {
+        goto done;
+    }
+
+    const char *blobid = buf_cstring(&buf);
+    if (blobid[0] != 'G' || !message_guid_decode(&guid, blobid + 1)) {
+        goto done;
+    }
+
+    found = conversations_guid_cid_lookup(state,
+                                          message_guid_encode(&guid),
+                                          record);
+    if (!found) {
+        xsyslog_ev(LOG_DEBUG, "conversations.memo.noparent",
+                   lf_mailbox(mailbox),
+                   lf_msgrecord(record),
+                   lf_s("msg.memofor", blobid));
+    }
+
+done:
+    buf_free(&buf);
+    return found;
+}
+
+/*
  * Update the conversations database for the given
  * mailbox, to account for the given message.
  * @body may be NULL, in which case we get everything
@@ -4014,6 +4057,12 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         if (conversations_guid_cid_lookup(state, message_guid_encode(&record->guid), record)) {
             mustkeep = 1;
         }
+        bool is_memo = mailbox_record_hasflag(mailbox, record, "$memo");
+        if (!record->cid && is_memo
+            && memo_parent_cid_lookup(state, msg, mailbox, record))
+        {
+            mustkeep = 1;
+        }
         if (!record->cid) record->cid = arrayu64_max(&matchlist);
         if (!record->cid) {
             record->cid = generate_conversation_id(record);
@@ -4021,7 +4070,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         }
         if (!mustkeep) {
             /* Do not split conversations for messages with '$memo' flag */
-            mustkeep = mailbox_record_hasflag(mailbox, record, "$memo");
+            mustkeep = is_memo;
         }
         if (!mustkeep && !record->basecid) {
             /* try finding a CID in the match list, or if we came in with it */
