@@ -30,7 +30,7 @@ static jmap_method_t jmap_core_methods_standard[] = {
         "Core/echo",
         JMAP_URN_CORE,
         &jmap_core_echo,
-        0/*flags*/
+        JMAP_NO_ACCOUNTID
     },
     { NULL, NULL, NULL, 0}
 };

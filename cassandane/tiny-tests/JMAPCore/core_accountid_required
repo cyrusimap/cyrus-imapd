@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+# RFC 8620 Section 3.6.2: "invalidArguments: One of the arguments is of the
+# wrong type or otherwise invalid, or a required argument is missing." Every
+# standard method except Core/echo requires accountId. With
+# jmap_require_accountid on -- which the JMAP suites set -- Cyrus enforces
+# that instead of filling in the login's own account, a default that hid
+# client bugs and made a request ambiguous the moment a login could see
+# several accounts. core_accountid_lenient covers the shipped default.
+#
+# Cassandane's tester adds accountId to every call by default; a reference to
+# undef tells JMAP::Tester to leave the argument out altogether.
+
+sub test_core_accountid_required
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $missing = superhashof({
+        type      => 'invalidArguments',
+        arguments => ['accountId'],
+    });
+    my $mine = superhashof({ accountId => 'cassandane' });
+
+    xlog $self, "a call with no accountId at all";
+    my $res = $jmap->CallMethods([['Mailbox/get', { accountId => \undef }, 'R1']]);
+    $self->assert_cmp_deeply([['error', $missing, 'R1']], $res);
+
+    xlog $self, "a null accountId is not an account either";
+    $res = $jmap->CallMethods([['Mailbox/get', { accountId => undef }, 'R2']]);
+    $self->assert_cmp_deeply([['error', $missing, 'R2']], $res);
+
+    xlog $self, "nor is a non-string";
+    $res = $jmap->CallMethods([['Mailbox/get', { accountId => 42 }, 'R3']]);
+    $self->assert_cmp_deeply([['error', $missing, 'R3']], $res);
+
+    xlog $self, "the explicit account still works";
+    $res = $jmap->CallMethods([['Mailbox/get', { accountId => 'cassandane' }, 'R4']]);
+    $self->assert_cmp_deeply([['Mailbox/get', $mine, 'R4']], $res);
+
+    xlog $self, "and so does the tester's default";
+    $res = $jmap->CallMethods([['Mailbox/get', {}, 'R5']]);
+    $self->assert_cmp_deeply([['Mailbox/get', $mine, 'R5']], $res);
+
+    xlog $self, "Core/echo is not account-scoped and echoes exactly what it got";
+    $res = $jmap->CallMethods([['Core/echo', { accountId => \undef, hello => 'world' }, 'R6']]);
+    $self->assert_cmp_deeply([['Core/echo', { hello => 'world' }, 'R6']], $res);
+
+    xlog $self, "an accountId supplied by result reference is honoured";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => [] }, 'R7'],
+        ['Mailbox/get', {
+            accountId => \undef,
+            '#accountId' => { resultOf => 'R7', name => 'Mailbox/get', path => '/accountId' },
+            ids => [],
+        }, 'R8'],
+    ]);
+    $self->assert_cmp_deeply(['Mailbox/get', $mine, 'R8'], $res->[1]);
+}

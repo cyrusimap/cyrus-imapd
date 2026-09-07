@@ -12,13 +12,17 @@ sub test_email_query_shared
     $admintalk->setacl("user.test", "cassandane", "lrwkx") or die;
 
     # run tests for both the main and "test" account
+    # undef selects the main account's own store and mailbox names; the
+    # JMAP calls still have to name it, since a call without accountId is
+    # rejected.
     foreach (undef, "test") {
         my $account = $_;
+        my $accountId = $account // 'cassandane';
         my $store = defined $account ? $self->{adminstore} : $self->{store};
         my $mboxprefix = defined $account ? "user.$account" : "INBOX";
         my $talk = $store->get_client();
 
-        my $res = $jmap->CallMethods([['Mailbox/get', { accountId => $account }, "R1"]]);
+        my $res = $jmap->CallMethods([['Mailbox/get', { accountId => $accountId }, "R1"]]);
         my $inboxid = $res->[0][1]{list}[0]{id};
 
         xlog $self, "create mailboxes";
@@ -26,7 +30,7 @@ sub test_email_query_shared
         $talk->create("$mboxprefix.B") || die;
         $talk->create("$mboxprefix.C") || die;
 
-        $res = $jmap->CallMethods([['Mailbox/get', { accountId => $account }, "R1"]]);
+        $res = $jmap->CallMethods([['Mailbox/get', { accountId => $accountId }, "R1"]]);
         my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
         my $mboxa = $m{"A"}->{id};
         my $mboxb = $m{"B"}->{id};
@@ -97,9 +101,9 @@ sub test_email_query_shared
 
         xlog $self, "fetch emails without filter";
         $res = $jmap->CallMethods([
-                ['Email/query', { accountId => $account }, 'R1'],
+                ['Email/query', { accountId => $accountId }, 'R1'],
                 ['Email/get', {
-                        accountId => $account,
+                        accountId => $accountId,
                         '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' }
                     }, 'R2'],
             ]);
@@ -114,7 +118,7 @@ sub test_email_query_shared
 
         xlog $self, "filter text";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             text => "foo",
                         },
@@ -124,7 +128,7 @@ sub test_email_query_shared
 
         xlog $self, "filter NOT text";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             operator => "NOT",
                             conditions => [ {text => "foo"} ],
@@ -135,7 +139,7 @@ sub test_email_query_shared
 
         xlog $self, "filter mailbox A";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             inMailbox => $mboxa,
                         },
@@ -145,7 +149,7 @@ sub test_email_query_shared
 
         xlog $self, "filter mailboxes";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             operator => 'OR',
                             conditions => [
@@ -163,7 +167,7 @@ sub test_email_query_shared
 
         xlog $self, "filter mailboxes with not in";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             inMailboxOtherThan => [$mboxb],
                         },
@@ -173,7 +177,7 @@ sub test_email_query_shared
 
         xlog $self, "filter mailboxes with not in";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             inMailboxOtherThan => [$mboxa],
                         },
@@ -182,7 +186,7 @@ sub test_email_query_shared
 
         xlog $self, "filter mailboxes with not in";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             inMailboxOtherThan => [$mboxa, $mboxc],
                         },
@@ -192,7 +196,7 @@ sub test_email_query_shared
 
         xlog $self, "filter mailboxes";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             operator => 'AND',
                             conditions => [
@@ -212,7 +216,7 @@ sub test_email_query_shared
 
         xlog $self, "filter not in mailbox A";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             operator => 'NOT',
                             conditions => [
@@ -228,7 +232,7 @@ sub test_email_query_shared
         xlog $self, "filter by before";
         my $dtbefore = $dtfoo->clone()->subtract(seconds => 1);
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             before => $dtbefore->strftime('%Y-%m-%dT%TZ'),
                         },
@@ -239,7 +243,7 @@ sub test_email_query_shared
         xlog $self, "filter by after",
         my $dtafter = $dtbar->clone()->add(seconds => 1);
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             after => $dtafter->strftime('%Y-%m-%dT%TZ'),
                         },
@@ -249,7 +253,7 @@ sub test_email_query_shared
 
         xlog $self, "filter by after and before",
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             after => $dtafter->strftime('%Y-%m-%dT%TZ'),
                             before => $dtbefore->strftime('%Y-%m-%dT%TZ'),
@@ -259,7 +263,7 @@ sub test_email_query_shared
 
         xlog $self, "filter by minSize";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             minSize => length($bodybar),
                         },
@@ -269,7 +273,7 @@ sub test_email_query_shared
 
         xlog $self, "filter by maxSize";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             maxSize => length($bodybar),
                         },
@@ -279,7 +283,7 @@ sub test_email_query_shared
 
         xlog $self, "filter by header";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             header => [ "x-tra" ],
                         },
@@ -289,7 +293,7 @@ sub test_email_query_shared
 
         xlog $self, "filter by header and value";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         filter => {
                             header => [ "x-tra", "bam" ],
                         },
@@ -298,7 +302,7 @@ sub test_email_query_shared
 
         xlog $self, "sort by ascending receivedAt";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         sort => [{ property => "receivedAt" }],
                     }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -307,7 +311,7 @@ sub test_email_query_shared
 
         xlog $self, "sort by descending receivedAt";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         sort => [{ property => "receivedAt", isAscending => JSON::false, }],
                     }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -316,7 +320,7 @@ sub test_email_query_shared
 
         xlog $self, "sort by ascending size";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         sort => [{ property => "size" }],
                     }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -325,7 +329,7 @@ sub test_email_query_shared
 
         xlog $self, "sort by descending size";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         sort => [{ property => "size", isAscending => JSON::false }],
                     }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -334,7 +338,7 @@ sub test_email_query_shared
 
         xlog $self, "sort by ascending id";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         sort => [{ property => "id" }],
                     }, "R1"]]);
         my @ids = sort ($foo, $bar);
@@ -342,7 +346,7 @@ sub test_email_query_shared
 
         xlog $self, "sort by descending id";
         $res = $jmap->CallMethods([['Email/query', {
-                        accountId => $account,
+                        accountId => $accountId,
                         sort => [{ property => "id", isAscending => JSON::false }],
                     }, "R1"]]);
         @ids = reverse sort ($foo, $bar);
