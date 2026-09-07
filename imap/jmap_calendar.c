@@ -10318,6 +10318,9 @@ static int jmap_principal_getavailability(struct jmap_req *req)
     /* Parse arguments */
     const char *s;
     json_t *myargs = json_copy(req->args); // shallow copy
+    /* accountId was validated by the request loop; it is an argument of this
+     * method (draft-ietf-jmap-calendars), not an unknown one to reject */
+    json_object_del(myargs, "accountId");
     if ((s = json_string_value(json_object_get(myargs, "id")))) {
         principalid = xstrdup(s);
         json_object_del(myargs, "id");
