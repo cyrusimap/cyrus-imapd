@@ -88,6 +88,13 @@ sub new
             if defined $params->{$p};
     }
 
+    # JMAP suites test against a server that insists on accountId, as RFC
+    # 8620 does; the tester supplies it on every call (see Instance.pm).
+    # The shipped default is lenient. :JMAPLenientAccountId gets that back.
+    if ($want->{jmap} && $instance_params->{config}) {
+        $instance_params->{config}->set(jmap_require_accountid => 'yes');
+    }
+
     # should have consumed all of the $params hash; if
     # not something is awry.
     my $leftovers = join(' ', keys %$params);
@@ -354,6 +361,9 @@ magic(JMAPNoHasAttachment => sub {
 });
 magic(JMAPExtensions => sub {
     shift->config_set('jmap_nonstandard_extensions' => 'yes');
+});
+magic(JMAPLenientAccountId => sub {
+    shift->config_set('jmap_require_accountid' => 'no');
 });
 magic(SearchIndexHeaders => sub {
     shift->config_set(search_index_headers => 'yes');

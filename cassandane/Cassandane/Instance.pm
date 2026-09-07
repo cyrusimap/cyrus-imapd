@@ -3384,6 +3384,16 @@ sub _new_jmaptester_for_user($self, $tester_class, $tester_arg, $user, $new_arg 
         %overrides,
     });
 
+    # RFC 8620 requires accountId on every method but Core/echo, and the JMAP
+    # suites run with jmap_require_accountid on, so the server rejects a call
+    # without one. Tests name another account when they mean one; everything
+    # else means this user's own. A test that wants to send no accountId at
+    # all passes accountId => \undef.
+    $jtest->default_arguments({
+        accountId => $jtest->fallback_account_id,
+        %{ $jtest->default_arguments },
+    });
+
     $jtest->set_scheme_and_host_and_port($scheme, $host, $port);
 
     $jtest->set_username_and_password($user->username, $user->password);
