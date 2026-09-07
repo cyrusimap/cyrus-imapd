@@ -69,7 +69,7 @@ user_nslock_t *user_nslock_bymboxname(const char *mboxname1, const char *mboxnam
 #define user_nslock_lockmb_w(m) user_nslock_bymboxname(m, NULL, LOCK_EXCLUSIVE)
 void user_nslock_release(user_nslock_t **ptr);
 int user_nslock_islocked(const char *userid);
-int user_nslock_islockedmboxname(const char *mboxname);
+int user_nslock_islockedmb(const char *mboxname);
 
 /* default to exclusive lock! */
 /* NULL is a legit value for lock_full, so use a flag value instead */
