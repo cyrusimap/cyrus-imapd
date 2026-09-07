@@ -19,8 +19,8 @@ Cyrus resolves the blobId through the conversations database to the annotated
 message's current conversation, including the base conversation id when that
 message is in a split conversation.  This is the only reliable way to place a
 memo on a message in a split conversation: the message-id index records only
-base conversation ids, so `In-Reply-To` alone always resolves to the original
-conversation, not the split one.
+base conversation ids, so `In-Reply-To` alone cannot tell which side of a
+split the annotated message is on.
 
 The header is honoured only on messages carrying `$memo`.  If the blobId is
 malformed or names no message in the account, Cyrus logs
@@ -28,6 +28,7 @@ malformed or names no message in the account, Cyrus logs
 
 ## Fallbacks
 
-Without `X-ME-Memo-For`, a memo joins the first conversation of the message
-named in its `In-Reply-To` header.  Failing that, it threads like ordinary
-mail via `References` and `X-ME-Message-ID`, still without the Subject check.
+Without `X-ME-Memo-For`, a memo joins the conversation of the message named
+in its `In-Reply-To` header, following any split to the current conversation
+as an ordinary reply would.  Failing that, it threads like ordinary mail via
+`References` and `X-ME-Message-ID`, still without the Subject check.

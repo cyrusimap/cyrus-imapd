@@ -4043,6 +4043,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     int r = 0;
     struct mailbox *local_mailbox = NULL;
     message_t *msg = message_new_from_record(mailbox, record);
+    bool is_memo = mailbox_record_hasflag(mailbox, record, "$memo");
 
     /* extract existing conversations for this message */
     r = extract_convdata(state, msg, &msgidlist, &matchlist, &msubj);
@@ -4057,7 +4058,6 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         if (conversations_guid_cid_lookup(state, message_guid_encode(&record->guid), record)) {
             mustkeep = 1;
         }
-        bool is_memo = mailbox_record_hasflag(mailbox, record, "$memo");
         if (!record->cid && is_memo
             && memo_parent_cid_lookup(state, msg, mailbox, record))
         {
@@ -4067,10 +4067,6 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         if (!record->cid) {
             record->cid = generate_conversation_id(record);
             if (record->cid) mustkeep = 1;
-        }
-        if (!mustkeep) {
-            /* Do not split conversations for messages with '$memo' flag */
-            mustkeep = is_memo;
         }
         if (!mustkeep && !record->basecid) {
             /* try finding a CID in the match list, or if we came in with it */
@@ -4103,8 +4099,11 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 
     if (!conv) conv = conversation_new();
 
+    /* A memo belongs with the message it annotates, so it never splits */
     uint32_t max_thread = config_getint(IMAPOPT_CONVERSATIONS_MAX_THREAD);
-    if (conv->exists >= max_thread && !mustkeep && !record->silentupdate) {
+    if (conv->exists >= max_thread && !mustkeep && !is_memo
+        && !record->silentupdate)
+    {
         /* time to reset the conversation */
         conversation_id_t was = record->cid;
         record->cid = generate_conversation_id(record);
