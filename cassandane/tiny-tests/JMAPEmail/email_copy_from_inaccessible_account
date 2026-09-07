@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+
+# RFC 8620 Section 3.6.2: an accountId that does not correspond to a valid
+# account is accountNotFound. A /copy has two account ids, and fromAccountId
+# was only checked once there was something to copy -- so an empty copy from
+# an account the caller cannot see, or from no account at all, succeeded and
+# leaked that the account exists. Both ids must be checked before the method
+# runs, whatever the payload.
+
+sub test_email_copy_from_inaccessible_account
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create user foo but do not share anything";
+    $self->{instance}->create_user("foo");
+
+    for my $from (qw(foo nosuchuser)) {
+        xlog $self, "Email/copy with nothing to copy from $from";
+        my $res = $jmap->CallMethods([['Email/copy', {
+            fromAccountId => $from,
+            accountId     => 'cassandane',
+            create        => {},
+        }, 'R1']]);
+        $self->assert_cmp_deeply(
+            [['error', superhashof({ type => 'accountNotFound' }), 'R1']],
+            $res,
+        );
+
+        xlog $self, "Blob/copy with nothing to copy from $from";
+        $res = $jmap->CallMethods([['Blob/copy', {
+            fromAccountId => $from,
+            accountId     => 'cassandane',
+            blobIds       => [],
+        }, 'R2']]);
+        $self->assert_cmp_deeply(
+            [['error', superhashof({ type => 'accountNotFound' }), 'R2']],
+            $res,
+        );
+    }
+
+    xlog $self, "a non-string fromAccountId is invalidArguments";
+    my $res = $jmap->CallMethods([['Email/copy', {
+        fromAccountId => ['foo'],
+        accountId     => 'cassandane',
+        create        => {},
+    }, 'R3']]);
+    $self->assert_cmp_deeply(
+        [['error', superhashof({
+            type      => 'invalidArguments',
+            arguments => ['fromAccountId'],
+        }), 'R3']],
+        $res,
+    );
+}
