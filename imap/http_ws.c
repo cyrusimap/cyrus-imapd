@@ -241,8 +241,22 @@ static void ws_zlib_init(struct transaction_t *txn, tok_t *params)
     }
 }
 
-static void ws_zlib_done(struct ws_context *ctx)
+static void ws_zlib_done(struct transaction_t *txn)
 {
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+
+    /* txn->zstrm is normally freed by zlib_done(), registered as a
+     * done_callback by zlib_init() -- but that only runs when generic
+     * HTTP compression was negotiated for this transaction.  Free it
+     * here too (and NULL it out) so it isn't leaked when WebSocket PMCE
+     * is the only reason it was ever allocated; zlib_done() is a no-op
+     * on a NULL txn->zstrm if it also runs. */
+    if (txn->zstrm) {
+        deflateEnd(txn->zstrm);
+        free(txn->zstrm);
+        txn->zstrm = NULL;
+    }
+
     if (ctx->pmce.deflate.zstrm) {
         inflateEnd(ctx->pmce.deflate.zstrm);
         free(ctx->pmce.deflate.zstrm);
@@ -294,7 +308,7 @@ static int zlib_decompress(struct transaction_t *txn,
 static void ws_zlib_init(struct transaction_t *txn __attribute__((unused)),
                          tok_t *params __attribute__((unused))) { }
 
-static void ws_zlib_done(struct ws_context *ctx __attribute__((unused))) { }
+static void ws_zlib_done(struct transaction_t *txn __attribute__((unused))) { }
 
 static int zlib_decompress(struct transaction_t *txn __attribute__((unused)),
                            const char *buf __attribute__((unused)),
@@ -607,7 +621,7 @@ static void _end_channel(struct transaction_t *txn)
     wslay_event_context_free(ev);
     buf_free(&ctx->log);
 
-    ws_zlib_done(ctx);
+    ws_zlib_done(txn);
 
     free(ctx);
 
