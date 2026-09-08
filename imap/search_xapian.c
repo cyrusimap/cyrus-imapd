@@ -1486,7 +1486,7 @@ struct xapian_builder {
     struct opnode *root;
     ptrarray_t stack;       /* points to opnode* */
     int (*proc)(const char *, uint32_t, uint32_t, const char *, void *);
-    int (*proc_guidsearch)(const conv_guidrec_t*,size_t,void*);
+    search_hitguidset_cb_t proc_guidsearch;
     void *rock;
 };
 
@@ -1877,11 +1877,6 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *vrock)
 }
 
 
-static int memcmp40(const void *a, const void *b)
-{
-    return memcmp(a, b, 40);
-}
-
 static int xapian_run_cb(void *data, size_t nmemb, void *rock)
 {
     xapian_builder_t *bb = rock;
@@ -1896,7 +1891,7 @@ static int xapian_run_cb(void *data, size_t nmemb, void *rock)
         return IMAP_NOTFOUND;
     }
 
-    qsort(data, nmemb, 41, memcmp40); // byte 41 is always zero
+    qsort(data, nmemb, SEARCH_GUIDREP_SIZE, search_guidrep_cmp);
 
     struct xapian_run_guid_rock guid_rock = { bb, STRARRAY_INITIALIZER };
     strarray_truncate(&guid_rock.mboxname_by_foldernum,
@@ -1908,18 +1903,6 @@ static int xapian_run_cb(void *data, size_t nmemb, void *rock)
     return r;
 }
 
-struct xapian_run_guidsearch_rock {
-    xapian_builder_t *bb;
-    size_t total;
-};
-
-static int xapian_run_guidsearch_guid_cb(const conv_guidrec_t *rec, void *rock)
-{
-    struct xapian_run_guidsearch_rock *xrock = rock;
-    xapian_builder_t *bb = xrock->bb;
-    return bb->proc_guidsearch(rec, xrock->total, bb->rock);
-}
-
 static int xapian_run_guidsearch_cb(void *data, size_t nmemb, void *rock)
 {
     xapian_builder_t *bb = rock;
@@ -1927,14 +1910,9 @@ static int xapian_run_guidsearch_cb(void *data, size_t nmemb, void *rock)
     int r = cmd_cancelled(/*insearch*/1);
     if (r) return r;
 
-    struct conversations_state *cstate = mailbox_get_cstate(bb->session->mailbox);
-    if (!cstate) return IMAP_NOTFOUND;
+    qsort(data, nmemb, SEARCH_GUIDREP_SIZE, search_guidrep_cmp);
 
-    qsort(data, nmemb, 41, memcmp40); // byte 41 is always zero
-
-    struct xapian_run_guidsearch_rock xrock = { bb, nmemb };
-    return conversations_iterate_searchset(cstate, data, nmemb,
-                                    xapian_run_guidsearch_guid_cb, &xrock);
+    return bb->proc_guidsearch(data, nmemb, bb->rock);
 }
 
 static int validate_query(xapian_db_t *db, struct opnode *on)
@@ -1961,6 +1939,7 @@ static int run_query(xapian_builder_t *bb)
 
     if (bb->proc_guidsearch) {
         xq = opnode_to_query(bb->session->lock.db, bb->root, bb->session->opts);
+        /* A query without any terms matches nothing */
         if (!xq) goto out;
 
         r = xapian_query_run(bb->session->lock.db, xq, xapian_run_guidsearch_cb, bb);
@@ -2082,7 +2061,8 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     return run_internal(bb);
 }
 
-static int run_guidsearch(search_builder_t *bx, search_hitguid_cb_t proc, void *rock)
+static int run_guidsearch(search_builder_t *bx,
+                          search_hitguidset_cb_t proc, void *rock)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     bb->proc_guidsearch = proc;
