@@ -72,6 +72,8 @@ sub jmap_default_using
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:sieve',
         'https://cyrusimap.org/ns/jmap/sieve',  # for SieveScript/test
+        'https://cyrusimap.org/ns/jmap/mail',
+        'urn:ietf:params:jmap:contacts',
         'urn:ietf:params:jmap:blob',
     ];
 }
