@@ -4368,11 +4368,8 @@ static int guidsearch_add_guidrec(const conv_guidrec_t *rec,
     return 1;
 }
 
-static int guidsearch_run_xapian_cb(const conv_guidrec_t *rec,
-                                    size_t nguids, void *rock)
+static int guidsearch_run_xapian_cb(const conv_guidrec_t *rec, void *rock)
 {
-    if (!nguids) return 0; // not a single match!
-
     if (rec->version < 1) {
         /* Legacy conversations.db. Guid search was just a waste of time. */
         syslog(LOG_ERR, "jmap: %s: G record for %s:%d has legacy version 0. "
@@ -4381,11 +4378,6 @@ static int guidsearch_run_xapian_cb(const conv_guidrec_t *rec,
     }
 
     struct guidsearch_query *gsq = rock;
-
-    if (gsq->matches == NULL) {
-        /* First time we see any match candidate */
-        gsq->matches = xmalloc(nguids * sizeof(struct guidsearch_match));
-    }
 
     struct guidsearch_match *prevmatch = gsq->total ?
         &gsq->matches[gsq->total-1] : NULL;
@@ -4396,14 +4388,30 @@ static int guidsearch_run_xapian_cb(const conv_guidrec_t *rec,
     return 0;
 }
 
+static int guidsearch_run_xapian_guidset_cb(const char *guidreps,
+                                            size_t nguids, void *rock)
+{
+    struct guidsearch_query *gsq = rock;
+
+    gsq->matches = xmalloc(nguids * sizeof(struct guidsearch_match));
+
+    return conversations_iterate_searchset(gsq->req->cstate, guidreps, nguids,
+                                           guidsearch_run_xapian_cb, gsq);
+}
+
 static int guidsearch_run_xapian(search_builder_t *bx,
                                  struct conversations_state *cstate,
                                  search_expr_t *expr,
                                  struct guidsearch_query *gsq)
 {
+    if (!bx->run_guidsearch) {
+        bv_fini(&gsq->readable_folders);
+        return IMAP_SEARCH_NOT_SUPPORTED;
+    }
 
     search_build_query(bx, expr);
-    int r = bx->run_guidsearch(bx, guidsearch_run_xapian_cb, gsq);
+    int r = bx->run_guidsearch(bx, SEARCH_GUIDSEARCH_ALLDOCS,
+                               guidsearch_run_xapian_guidset_cb, gsq);
     bv_fini(&gsq->readable_folders);
     if (r && r != IMAP_OK_COMPLETED) return r;
     r = 0;
