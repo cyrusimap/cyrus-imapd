@@ -423,7 +423,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
     switch (arg->opcode) {
     case WSLAY_CONNECTION_CLOSE:
         buf_printf(&ctx->log, "; status=%d; msg='%s'", arg->status_code,
-                   buf_len(&inbuf) ? buf_cstring(&inbuf)+2 : "");
+                   /* First 2 bytes are the status code already captured
+                    * above; only the rest (if any) is the close reason. */
+                   buf_len(&inbuf) > 2 ? buf_cstring(&inbuf)+2 : "");
         txn->flags.conn = CONN_CLOSE;
         break;
 
