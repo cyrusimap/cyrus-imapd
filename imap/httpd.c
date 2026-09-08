@@ -2100,6 +2100,9 @@ static void transaction_reset(struct transaction_t *txn)
     txn->req_hdrs = NULL;
 
     txn->req_body.flags = 0;
+    txn->req_body.framing = FRAMING_UNKNOWN;
+    txn->req_body.te = TE_NONE;
+    txn->req_body.len = 0;
     buf_reset(&txn->req_body.payload);
 
     txn->auth_chal.param = NULL;
