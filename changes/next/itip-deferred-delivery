@@ -1,0 +1,28 @@
+Description:
+
+iTIP scheduling messages are delivered after the request which caused them has
+finished with the organizer's calendar, so an organizer and a local attendee
+acting on each other's calendars at once no longer deadlock.  For CalDAV, each
+attendee's SCHEDULE-STATUS is written to the stored resource in a second store
+afterwards, so a scheduling PUT no longer returns an ETag - clients must re-read
+the resource, as they already must when default alarms rewrite it.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
