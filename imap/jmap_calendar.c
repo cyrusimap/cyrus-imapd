@@ -4574,11 +4574,14 @@ static int setcalendarevents_schedule(const struct mailbox *mailbox,
     if (organizer &&
             /* XXX Hack for Outlook */ icalcomponent_get_first_invitee(comp)) {
 
-        /* Send scheduling message. */
+        /* send the scheduling message.  Delivery takes each recipient's
+           lock, so it waits until jmap_api() drops the account's.  We never
+           stored SCHEDULE-STATUS here, so there's nothing to record */
         if (strarray_contains_case(schedule_addresses, organizer)) {
             /* Organizer scheduling object resource */
-            sched_request(sched_userid, sched_userid, schedule_addresses, organizer,
-                          oldical, newical, createdmodseq, SCHED_MECH_JMAP_SET);
+            sched_defer(sched_userid, sched_userid, schedule_addresses,
+                        organizer, oldical, newical, createdmodseq,
+                        SCHED_MECH_JMAP_SET, NULL, NULL, 0);
         } else {
             /* Attendee scheduling object resource */
             int omit_reply = 0;
@@ -4597,8 +4600,9 @@ static int setcalendarevents_schedule(const struct mailbox *mailbox,
                 }
             }
             if (!omit_reply && strarray_size(schedule_addresses))
-                sched_reply(sched_userid, sched_userid, schedule_addresses,
-                            oldical, newical, createdmodseq, SCHED_MECH_JMAP_SET);
+                sched_defer(sched_userid, sched_userid, schedule_addresses,
+                            NULL, oldical, newical, createdmodseq,
+                            SCHED_MECH_JMAP_SET, NULL, NULL, 0);
         }
     }
 

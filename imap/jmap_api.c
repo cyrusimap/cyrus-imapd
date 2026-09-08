@@ -14,6 +14,7 @@
 #include "cyrusdb.h"
 #include "hash.h"
 #include "httpd.h"
+#include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_dav_sharing.h"
 #include "http_jmap.h"
@@ -832,6 +833,9 @@ HIDDEN int jmap_api(struct transaction_t *txn,
 
         // run any notification updates after conversations are released
         dav_run_notifications();
+
+        // and the iTIP deliveries, which want the recipients' user locks
+        sched_run_deferred();
 
         json_decref(args);
     }
