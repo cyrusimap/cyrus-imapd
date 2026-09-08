@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+# Reordering instances keeps the same set, so copy steps can only reach the
+# one that stayed reachable - §5.1 forbids a later "c" step from starting
+# before an earlier one ended.  The rest come back as literal "d" values,
+# which is why a header field's previous state is never unrecreatable.
+
+sub test_message_instance_reordered
+    :want_smtpdaemon :DKIM2MessageInstanceVerify
+    ($self)
+{
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $msg->add_header('Comments', 'first');
+    $msg->add_header('Comments', 'second');
+    $msg->add_header('Comments', 'third');
+
+    my ($hdrs, $body) = dkim2_split($msg->as_string());
+    $msg->add_header('Message-Instance', dkim2_mi_header($hdrs, $body));
+
+    # Put them back in the opposite order: :last appends, so the message
+    # goes out as third, second, first
+    my $out = $self->sieve_redirect_message(<<'EOF', $msg);
+require ["editheader"];
+deleteheader "Comments";
+addheader :last "Comments" "third";
+addheader :last "Comments" "second";
+addheader :last "Comments" "first";
+redirect "redirect@example.com";
+EOF
+
+    my @mis = dkim2_mi_values($out);
+    $self->assert_num_equals(2, scalar @mis);
+
+    # Numbered bottom up, the outgoing instances are first=1, second=2,
+    # third=3 and the original order to rebuild is third, second, first
+    $self->assert_deep_equals({
+        h => {
+            'comments' => [
+                { c => [ 3, 3 ] },
+                { d => [ 'second', 'first' ] },
+            ],
+        },
+    }, dkim2_mi_recipes($mis[0]));
+
+    my ($outhdrs, $outbody) = dkim2_split($out);
+    my ($hh, $bh) = $mis[0] =~ m/h\s*=\s*sha256:([^:;]+):([^;]+)/;
+    $self->assert_str_equals(dkim2_header_hash($outhdrs), $hh);
+    $self->assert_str_equals(dkim2_body_hash($outbody), $bh);
+}

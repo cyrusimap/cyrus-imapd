@@ -1,0 +1,37 @@
+#!perl
+use Cassandane::Tiny;
+
+# A redirect that changes signed header fields declares both changes in a
+# new Message-Instance, whose hashes describe the message that goes out.
+
+sub test_message_instance_verify
+    :want_smtpdaemon :DKIM2MessageInstanceVerify
+    ($self)
+{
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    my ($hdrs, $body) = dkim2_split($msg->as_string());
+    $msg->add_header('Message-Instance', dkim2_mi_header($hdrs, $body));
+
+    my $out = $self->sieve_redirect_message(<<'EOF', $msg);
+require ["editheader"];
+addheader "List-Id" "<l.example.com>";
+deleteheader "Subject";
+redirect "redirect@example.com";
+EOF
+
+    my @mis = dkim2_mi_values($out);
+    $self->assert_num_equals(2, scalar @mis);
+    $self->assert_matches(qr/^m\s*=\s*2\s*;/, $mis[0]);
+
+    $self->assert_deep_equals({
+        h => {
+            'list-id' => [],
+            'subject' => [ { d => [ 'Message 1' ] } ],
+        },
+    }, dkim2_mi_recipes($mis[0]));
+
+    my ($outhdrs, $outbody) = dkim2_split($out);
+    my ($hh, $bh) = $mis[0] =~ m/h\s*=\s*sha256:([^:;]+):([^;]+)/;
+    $self->assert_str_equals(dkim2_header_hash($outhdrs), $hh);
+    $self->assert_str_equals(dkim2_body_hash($outbody), $bh);
+}

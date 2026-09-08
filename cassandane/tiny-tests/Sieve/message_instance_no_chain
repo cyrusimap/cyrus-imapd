@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+# A message with no Message-Instance is outside the chain of custody, so
+# whatever Sieve does to it happens before it enters one - the hop that
+# signs it later hashes what we emit.  Cyrus adds nothing.
+
+sub test_message_instance_no_chain
+    :want_smtpdaemon :DKIM2MessageInstanceTrust
+    ($self)
+{
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+
+    my $out = $self->sieve_redirect_message(<<'EOF', $msg);
+require ["editheader"];
+addheader "List-Id" "<l.example.com>";
+deleteheader "Subject";
+redirect "redirect@example.com";
+EOF
+
+    $self->assert_num_equals(0, scalar dkim2_mi_values($out));
+}

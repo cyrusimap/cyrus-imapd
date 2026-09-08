@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+# Removing one instance of a repeated header field needs copy steps around
+# the gap.  §5.1 numbers instances bottom up, so deleting the second of
+# three from the top leaves the third as 1 and the first as 2.  The folded
+# instance is the deleted one, so its "d" value has to come back unfolded.
+
+sub test_message_instance_indexed_delete
+    :want_smtpdaemon :DKIM2MessageInstanceVerify
+    ($self)
+{
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $msg->add_header('Comments', 'first');
+    $msg->add_header('Comments', "second line\r\n and its continuation");
+    $msg->add_header('Comments', 'third');
+
+    my ($hdrs, $body) = dkim2_split($msg->as_string());
+    $msg->add_header('Message-Instance', dkim2_mi_header($hdrs, $body));
+
+    my $out = $self->sieve_redirect_message(<<'EOF', $msg);
+require ["editheader", "index"];
+deleteheader :index 2 "Comments";
+redirect "redirect@example.com";
+EOF
+
+    my @mis = dkim2_mi_values($out);
+    $self->assert_num_equals(2, scalar @mis);
+    $self->assert_matches(qr/^m\s*=\s*2\s*;/, $mis[0]);
+
+    $self->assert_deep_equals({
+        h => {
+            'comments' => [
+                { c => [ 1, 1 ] },
+                { d => [ 'second line and its continuation' ] },
+                { c => [ 2, 2 ] },
+            ],
+        },
+    }, dkim2_mi_recipes($mis[0]));
+
+    my ($outhdrs, $outbody) = dkim2_split($out);
+    my ($hh, $bh) = $mis[0] =~ m/h\s*=\s*sha256:([^:;]+):([^;]+)/;
+    $self->assert_str_equals(dkim2_header_hash($outhdrs), $hh);
+    $self->assert_str_equals(dkim2_body_hash($outbody), $bh);
+}

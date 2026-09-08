@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+# If the message doesn't hash to the Message-Instance it carries then some
+# earlier hop changed it silently.  Documenting our own change on top would
+# blame us for theirs, so we forward it undeclared instead.
+
+sub test_message_instance_chain_mismatch
+    :want_smtpdaemon :DKIM2MessageInstanceVerify
+    ($self)
+{
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    my $mi = 'm=1; h=sha256:' . ('A' x 43) . '=:' . ('B' x 43) . '=;';
+    $msg->add_header('Message-Instance', $mi);
+
+    my $out = $self->sieve_redirect_message(<<'EOF', $msg);
+require ["editheader"];
+addheader "List-Id" "<l.example.com>";
+deleteheader "Subject";
+redirect "redirect@example.com";
+EOF
+
+    my @mis = dkim2_mi_values($out);
+    $self->assert_num_equals(1, scalar @mis);
+    $self->assert_str_equals($mi, $mis[0]);
+}
