@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sched_busytime_query_bad_availability
+    :NoVirtDomains :MagicPlus
+    ($self)
+{
+    my $CalDAV = $self->{caldav};
+
+    # Create a second calendar user
+    my $user = $self->{instance}->create_user("friend");
+    $user->caldav;
+
+    # Create a +DAV IMAP connection for the second user
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(username => 'friend+dav');
+    my $imaptalk = $plusstore->get_client();
+
+    # CALDAV:calendar-availability is stored verbatim and only parsed when a
+    # free/busy query needs it, so a value that does not parse leaves
+    # icalparser_parse_string() returning NULL.  add_vavailability() used to
+    # walk that pointer, taking httpd down with it - the client sees the
+    # connection close mid-response rather than an answer.
+    $imaptalk->setmetadata("#calendars.Inbox",
+        "/shared/vendor/cmu/cyrus-httpd/<urn:ietf:params:xml:ns:caldav>calendar-availability",
+        "this is not an iCalendar object");
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    my $query = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VFREEBUSY
+UID:5D3E1B26-8CF2-4C9C-9F4E-3D0F5C0A7A11
+DTSTAMP:20210802T131858Z
+DTEND:20210903T000000Z
+DTSTART:20210902T210000Z
+ATTENDEE:MAILTO:cassandane\@example.com
+ATTENDEE:MAILTO:friend\@example.com
+ORGANIZER:MAILTO:cassandane\@example.com
+END:VFREEBUSY
+END:VCALENDAR
+EOF
+
+    xlog $self, "freebusy query covering a user whose availability does not parse";
+    my $res = $CalDAV->Request('POST', 'Outbox',
+                               $query, 'Content-Type' => 'text/calendar');
+    my $text = Dumper($res);
+    $self->assert_matches(qr/schedule-response/, $text);
+}
