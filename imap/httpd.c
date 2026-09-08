@@ -1477,6 +1477,13 @@ static int check_method(struct transaction_t *txn)
     /* Check for HTTP method override */
     if (!strcmp(req_line->meth, "POST") &&
         (hdr = spool_getheader(txn->req_hdrs, "X-HTTP-Method-Override"))) {
+        if (hdr[1]) {
+            /* If the header is repeated, the request makes no sense, and we
+             * suspect shenanigans. */
+            txn->conn->close = 1;
+            txn->conn->close_str = "Duplicate method override header";
+            return HTTP_BAD_REQUEST;
+        }
         txn->flags.override = 1;
         req_line->meth = (char *) hdr[0];
     }
