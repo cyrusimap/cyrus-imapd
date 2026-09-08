@@ -226,8 +226,10 @@ static void ws_zlib_init(struct transaction_t *txn, tok_t *params)
     }
 
     if (txn->zstrm) {
-        /* Configure decompression context for raw deflate */
-        ctx->pmce.deflate.zstrm = xzmalloc(sizeof(z_stream));
+        /* (Re)configure decompression context for raw deflate */
+        if (ctx->pmce.deflate.zstrm) inflateEnd(ctx->pmce.deflate.zstrm);
+        else ctx->pmce.deflate.zstrm = xzmalloc(sizeof(z_stream));
+
         if (inflateInit2(ctx->pmce.deflate.zstrm, -client_max_wbits) != Z_OK) {
             free(ctx->pmce.deflate.zstrm);
             ctx->pmce.deflate.zstrm = NULL;
