@@ -23,6 +23,12 @@ sub unknown_method($self, $s, $desc) {
     $self->assert(!defined $res->{headers}{allow}, "no Allow header for $desc");
 }
 
+sub bad_request($self, $s, $desc) {
+    my $res = http1_read_response($s);
+    $self->assert_num_equals(400, $res->{status}, "status 400 for $desc");
+    $self->assert(!defined $res->{headers}{allow}, "no Allow header for $desc");
+}
+
 sub server_closed_connection($self, $s, $desc) {
     print $s "OPTIONS * HTTP/1.1\r\n" . $host_line . "\r\n";
 
@@ -71,10 +77,18 @@ sub test_unknown_method
            . "X-HTTP-Method-Override: OPTIONS\r\n"
            . "X-HTTP-Method-Override: OPTIONS\r\n"
            . "\r\n";
-    my $res = http1_read_response($s);
-    $self->assert_num_equals(400, $res->{status},
-                             "status 400 for repeated Method Override");
-    $self->assert(!defined $res->{headers}{allow},
-                  "no Allow header for repeated Method Override");
+    bad_request($self, $s, "repeated Method Override");
     server_closed_connection($self, $s, "repeated Method Override");
+
+    $s = http1_connect($self);
+    print $s "OPTIONS * HTTP/1.1\r\n"
+           . $host_line
+           . $host_line
+           . "\r\n";
+    bad_request($self, $s, "repeated Host header");
+
+    $s = http1_connect($self);
+    print $s "OPTIONS * HTTP/1.1\r\n"
+           . "\r\n";
+    bad_request($self, $s, "missing Host header");
 }
