@@ -64,4 +64,17 @@ sub test_unknown_method
            . "\r\n";
     unknown_method($self, $s, "plain BREW");
     server_closed_connection($self, $s, "plain BREW");
+
+    $s = http1_connect($self);
+    print $s "POST * HTTP/1.1\r\n"
+           . $host_line
+           . "X-HTTP-Method-Override: OPTIONS\r\n"
+           . "X-HTTP-Method-Override: OPTIONS\r\n"
+           . "\r\n";
+    my $res = http1_read_response($s);
+    $self->assert_num_equals(400, $res->{status},
+                             "status 400 for repeated Method Override");
+    $self->assert(!defined $res->{headers}{allow},
+                  "no Allow header for repeated Method Override");
+    server_closed_connection($self, $s, "repeated Method Override");
 }
