@@ -11,7 +11,6 @@ sub test_calendarevent_set_updated_scheduled_not_source
     my $t = DateTime->now();
     $t->set_time_zone('Etc/UTC');
     my $start = $t->strftime('%Y-%m-%dT%H:%M:%S');
-    my $now= $t->strftime('%Y-%m-%dT%H:%M:%SZ');
     $t->add(DateTime::Duration->new(days => -2));
     my $past = $t->strftime('%Y-%m-%dT%H:%M:%SZ');
 
@@ -46,8 +45,11 @@ sub test_calendarevent_set_updated_scheduled_not_source
             properties => ['updated'],
         }, 'R2'],
     ]);
-    $self->assert_str_equals($past, $res->[1][1]{list}[0]{updated});
+    my $updated = $res->[1][1]{list}[0]{updated};
+    $self->assert($past lt $updated);
     my $eventId = $res->[1][1]{list}[0]{id};
+
+    sleep(1);
 
     xlog "Change partstat of cassandane";
     $res = $jmap->CallMethods([
@@ -64,14 +66,15 @@ sub test_calendarevent_set_updated_scheduled_not_source
         }, 'R2'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
-    $self->assert_str_equals($past, $res->[1][1]{list}[0]{updated});
+    $self->assert($updated lt $res->[1][1]{list}[0]{updated});
+    $updated = $res->[1][1]{list}[0]{updated};
 
     xlog "Client updates updated property themselves";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
                 $eventId => {
-                    updated => $now,
+                    updated => $past,
                 },
             },
         }, 'R1'],
@@ -81,5 +84,5 @@ sub test_calendarevent_set_updated_scheduled_not_source
         }, 'R2'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
-    $self->assert_str_equals($now, $res->[1][1]{list}[0]{updated});
+    $self->assert_date_matches($updated, $res->[1][1]{list}[0]{updated}, 2);
 }
