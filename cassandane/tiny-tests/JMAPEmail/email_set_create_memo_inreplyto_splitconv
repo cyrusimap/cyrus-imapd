@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+# Without X-ME-Memo-For, a memo follows In-Reply-To through the split
+# redirect to the current conversation, like any other reply.
+sub test_email_set_create_memo_inreplyto_splitconv
+  : ConversationsMaxThread10
+    ($self)
+{
+  my $jmap = $self->{jmap};
+
+  xlog $self, "Create conversation with maximum thread count";
+  my $convsMaxThread
+    = $self->{instance}->{config}->get('conversations_max_thread');
+  $self->make_message('Email A', messageid => "msg1\@example.com");
+  my $lastUid = 1;
+  foreach my $i (2 .. $convsMaxThread) {
+    my $nextUid = $lastUid + 1;
+    $self->make_message(
+      "Re: Email A",
+      messageid     => "msg$nextUid\@example.com",
+      extra_headers => [ [ "in-reply-to", "<msg$lastUid\@example.com>" ], ],
+    );
+    $lastUid = $nextUid;
+  }
+
+  xlog $self, "Append one more reply, splitting the conversation";
+  my $splitUid = $lastUid + 1;
+  $self->make_message(
+    "Re: Email A",
+    messageid     => "msg$splitUid\@example.com",
+    extra_headers => [ [ "in-reply-to", "<msg$lastUid\@example.com>" ], ],
+  );
+
+  my $res = $jmap->CallMethods([
+    [ 'Email/query', {}, 'R1' ],
+    [
+      'Email/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'Email/query',
+          path     => '/ids'
+        },
+        properties => [ 'threadId', 'messageId' ],
+      },
+      'R2'
+    ],
+  ]);
+
+  my %byMsgId = map { $_->{messageId}[0] => $_ } @{ $res->[1][1]{list} };
+  my $base    = $byMsgId{"msg1\@example.com"};
+  my $split   = $byMsgId{"msg$splitUid\@example.com"};
+  $self->assert_str_not_equals($base->{threadId}, $split->{threadId});
+
+  xlog $self, "Create memo replying to the message in the split half";
+  $res = $jmap->CallMethods([
+    [
+      'Email/set',
+      {
+        create => {
+          memo1 => {
+            mailboxIds    => { '$inbox' => JSON::true },
+            from          => [ { email => 'from@local' } ],
+            subject       => "Re: Email A",
+            messageId     => ["memo1\@example.com"],
+            inReplyTo     => $split->{messageId},
+            bodyStructure => {
+              type   => 'text/plain',
+              partId => 'part1',
+            },
+            bodyValues => { part1 => { value => "memo" } },
+            keywords   => { '$memo' => JSON::true },
+          },
+        },
+      },
+      'R1'
+    ],
+  ]);
+
+  $self->assert_str_equals(
+    $split->{threadId},
+    $res->[0][1]{created}{memo1}{threadId}
+  );
+}

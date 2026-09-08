@@ -56,6 +56,7 @@ msg.from                the message's envelope sender
 msg.guid                the message's guid
 msg.id                  the message's RFC 5322 Message-ID
 msg.imapuid             the message's IMAP uid within its mailbox
+msg.memofor             the blobId a memo names in its X-ME-Memo-For header
 msg.modseq              the message's modseq
 msg.size                the message's size in bytes
 msg.subject             the message's subject, as UTF-8
