@@ -344,7 +344,7 @@ static int queue_msg(struct transaction_t *txn, struct buf *outbuf,
                               ctx->pmce.deflate.no_context ? COMPRESS_START : 0,
                               buf_base(outbuf), buf_len(outbuf));
         if (r) {
-            syslog(LOG_ERR, "queue_response(): zlib_compress() failed");
+            xsyslog(LOG_ERR, "WS: zlib_compress() failed", NULL);
 
             if (err_msg) *err_msg = COMP_FAILED_ERR;
             return WSLAY_CODE_INTERNAL_SERVER_ERROR;
@@ -444,7 +444,8 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&inbuf), buf_len(&inbuf));
             if (writev(logfd, iov, niov) < 0) {
-                syslog(LOG_NOTICE, "IONOTICE: failed to write telemetry for %s", httpd_userid);
+                xsyslog(LOG_NOTICE, "failed to write telemetry",
+                        "userid=<%s>", httpd_userid);
             }
         }
 
@@ -481,7 +482,8 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&outbuf), buf_len(&outbuf));
             if (writev(logfd, iov, niov) < 0) {
-                syslog(LOG_NOTICE, "IONOTICE: failed to write telemetry for %s", httpd_userid);
+                xsyslog(LOG_NOTICE, "failed to write telemetry",
+                        "userid=<%s>", httpd_userid);
             }
         }
 
@@ -526,7 +528,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
     buf_printf(&ctx->log, ") [timing: cmd=%f net=%f total=%f]",
                cmdtime, nettime, cmdtime + nettime);
 
-    syslog(LOG_INFO, "%s", buf_cstring(&ctx->log));
+    xsyslog(LOG_INFO, buf_cstring(&ctx->log), NULL);
 
     buf_free(&inbuf);
     buf_free(&outbuf);
@@ -604,7 +606,6 @@ static void _end_channel(struct transaction_t *txn)
 
         xsyslog(LOG_DEBUG, "WS close", "msg=<%s>", msg);
 
-        syslog(LOG_DEBUG, "wslay_event_queue_close(%s)", msg);
         r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
                                     (uint8_t *) msg, strlen(msg));
         if (r) {
@@ -894,7 +895,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
         if (prot_IS_EOF(pin)) {
             /* Client closed connection */
-            syslog(LOG_DEBUG, "client closed connection");
+            xsyslog(LOG_DEBUG, "client closed connection", NULL);
             wslay_event_shutdown_write(ev);
             txn->flags.conn = CONN_CLOSE;
         }
