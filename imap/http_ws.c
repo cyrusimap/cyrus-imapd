@@ -934,12 +934,20 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
 HIDDEN void ws_send(struct transaction_t *txn, struct buf *outbuf)
 {
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
     struct wslay_event_msg msgarg = { WSLAY_TEXT_FRAME, NULL, 0 };
     uint8_t rsv = WSLAY_RSV_NONE;
+    const char *err_msg = NULL;
+    int err_code = queue_msg(txn, outbuf, &msgarg, &rsv, NULL, &err_msg);
 
-    if (!queue_msg(txn, outbuf, &msgarg, &rsv, NULL, NULL)) {
-        ws_output(txn);
+    if (err_code) {
+        xsyslog(LOG_ERR, "WS: failed to queue outgoing message",
+                "err=<%s>", err_msg);
+        wslay_event_queue_close(ctx->event, err_code,
+                                (uint8_t *) err_msg, strlen(err_msg));
     }
+
+    ws_output(txn);
 }
 
 #else /* !HAVE_WSLAY */
