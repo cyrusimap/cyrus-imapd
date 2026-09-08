@@ -105,6 +105,8 @@ static int _get_sharedaddressbooks_cb(struct findall_data *data, void *rock)
     if (strcmp(userid, set->userid)) {
         set = xzmalloc(sizeof(struct abook_set));
         set->userid = userid;
+        /* the sharee set isn't known until the sweep is done, so this
+           reads without their lock and the files may go away under it */
         set->carddavdb = carddav_open_userid(userid);
         ptrarray_append(abook_sets, set);
     }

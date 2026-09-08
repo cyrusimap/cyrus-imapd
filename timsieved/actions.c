@@ -40,6 +40,7 @@ static char *sieve_dir_config = NULL;
 static char *sieved_userid = NULL;
 
 static struct mailbox *sieve_mailbox = NULL;
+static user_nslock_t *sieved_nslock = NULL;
 static struct sieve_db *sievedb = NULL;
 
 int actions_init(void)
@@ -100,26 +101,51 @@ int actions_setuser(const char *userid)
 
     if (result) return TIMSIEVE_FAIL;
 
-    sievedb = sievedb_open_userid(sieved_userid);
-    if (!sievedb) return TIMSIEVE_FAIL;
+    return TIMSIEVE_OK;
+}
 
-    result = sieve_ensure_folder(sieved_userid, &sieve_mailbox, /*silent*/0);
-    if (result) return TIMSIEVE_FAIL;
+/* the Sieve DB is the user's DAV DB and needs their namespace lock.  Open it
+   per command rather than for the connection, so we aren't holding a handle
+   onto files which get removed when the user is deleted */
+int actions_open_user(void)
+{
+    if (!sieved_userid) return TIMSIEVE_FAIL;
+
+    assert(!sieved_nslock);
+    sieved_nslock = user_nslock_lock_w(sieved_userid);
+
+    sievedb = sievedb_open_userid(sieved_userid);
+    if (!sievedb) goto fail;
+
+    if (sieve_ensure_folder(sieved_userid, &sieve_mailbox, /*silent*/0))
+        goto fail;
 
     mailbox_unlock_index(sieve_mailbox, NULL);
 
     return TIMSIEVE_OK;
+
+ fail:
+    actions_close_user();
+    return TIMSIEVE_FAIL;
+}
+
+void actions_close_user(void)
+{
+    mailbox_close(&sieve_mailbox);
+    sieve_mailbox = NULL;
+
+    sievedb_close(sievedb);
+    sievedb = NULL;
+
+    user_nslock_release(&sieved_nslock);
 }
 
 void actions_unsetuser(void)
 {
     xzfree(sieved_userid);
 
-    mailbox_close(&sieve_mailbox);
-    sieve_mailbox = NULL;
-
-    sievedb_close(sievedb);
-    sievedb = NULL;
+    /* each command closes its own; belt and braces */
+    actions_close_user();
 }
 
 int capabilities(struct protstream *conn, sasl_conn_t *saslconn,

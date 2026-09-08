@@ -329,15 +329,23 @@ EXPORTED void dav_getpath_byuserid(struct buf *fname, const char *userid)
     free(path);
 }
 
+/* tagged with the namespace whose lock protects the files, so deleting
+   a user can report a handle still open on them */
+static sqldb_t *_dav_open(const struct buf *fname, int scope, const char *owner)
+{
+    return sqldb_open_full(buf_cstring(fname), CMD_CREATE, DB_VERSION,
+                           davdb_upgrade,
+                           config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000,
+                           scope, owner);
+}
+
 EXPORTED sqldb_t *dav_open_userid(const char *userid)
 {
     if (reconstruct_db) return reconstruct_db;
 
-    sqldb_t *db = NULL;
     struct buf fname = BUF_INITIALIZER;
     dav_getpath_byuserid(&fname, userid);
-    db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade,
-                    config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
+    sqldb_t *db = _dav_open(&fname, SQLDB_SCOPE_USER, userid);
     buf_free(&fname);
     return db;
 }
@@ -346,12 +354,16 @@ EXPORTED sqldb_t *dav_open_mailbox(struct mailbox *mailbox)
 {
     if (reconstruct_db) return reconstruct_db;
 
-    sqldb_t *db = NULL;
+    /* a shared mailbox keeps its DAV DB in its own metadata */
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+
     struct buf fname = BUF_INITIALIZER;
     dav_getpath(&fname, mailbox);
-    db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade,
-                    config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
+    sqldb_t *db = userid
+                ? _dav_open(&fname, SQLDB_SCOPE_USER, userid)
+                : _dav_open(&fname, SQLDB_SCOPE_MAILBOX, mailbox_name(mailbox));
     buf_free(&fname);
+    free(userid);
     return db;
 }
 
