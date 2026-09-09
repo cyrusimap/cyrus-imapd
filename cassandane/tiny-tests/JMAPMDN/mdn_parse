@@ -1,0 +1,179 @@
+#!perl
+use Cassandane::Tiny;
+
+sub assert_mdn_parse ($self, $raw, $expect)
+{
+    my $jmap = $self->{jmap};
+
+    my $blobId = $self->upload_message(to_crlf($raw));
+
+    my $res = $jmap->request([
+        ['MDN/parse', { blobIds => [$blobId] }],
+    ]);
+
+    $self->assert_cmp_deeply(
+        {
+            accountId => 'cassandane',
+            parsed => { $blobId => $expect },
+            notParsable => undef,
+            notFound => undef,
+        },
+        $res->single_sentence('MDN/parse')->arguments,
+    );
+}
+
+# The example MDN from RFC 8098, Section 7
+sub test_mdn_parse__rfc8098_example ($self)
+{
+    $self->assert_mdn_parse(<<'EOF',
+Date: Wed, 20 Sep 1995 00:19:00 (EDT) -0400
+From: Joe Recipient <Joe_Recipient@example.com>
+Message-Id: <199509200019.12345@example.com>
+Subject: Disposition notification
+To: Jane Sender <Jane_Sender@example.org>
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=disposition-notification;
+      boundary="RAA14128.773615765/example.com"
+
+--RAA14128.773615765/example.com
+
+The message sent on 1995 Sep 19 at 13:30:00 (EDT) -0400 to Joe
+Recipient <Joe_Recipient@example.com> with subject "First draft of
+report" has been displayed.  This is no guarantee that the message
+has been read or understood.
+
+--RAA14128.773615765/example.com
+Content-Type: message/disposition-notification
+
+Reporting-UA: joes-pc.cs.example.com; Foomail 97.1
+Original-Recipient: rfc822;Joe_Recipient@example.com
+Final-Recipient: rfc822;Joe_Recipient@example.com
+Original-Message-ID: <199509192301.23456@example.org>
+Disposition: manual-action/MDN-sent-manually; displayed
+
+--RAA14128.773615765/example.com
+Content-Type: message/rfc822
+
+[original message optionally goes here]
+
+--RAA14128.773615765/example.com--
+EOF
+    {
+        forEmailId => undef,
+        subject => 'Disposition notification',
+        textBody => re(qr/^The message sent on 1995 Sep 19 .* understood\.$/s),
+        includeOriginalMessage => JSON::true,
+        reportingUA => 'joes-pc.cs.example.com; Foomail 97.1',
+        mdnGateway => undef,
+        originalRecipient => 'rfc822;Joe_Recipient@example.com',
+        finalRecipient => 'rfc822;Joe_Recipient@example.com',
+        originalMessageId => '<199509192301.23456@example.org>',
+        disposition => {
+            actionMode => 'manual-action',
+            sendingMode => 'mdn-sent-manually',
+            type => 'displayed',
+        },
+        error => undef,
+    });
+}
+
+# Disposition values are lowercased and modifiers dropped, folded fields
+# are unfolded, Error may repeat, and a gateway MDN has no human-readable
+# part.
+sub test_mdn_parse__gateway_with_errors ($self)
+{
+    $self->assert_mdn_parse(<<'EOF',
+From: <postmaster@gateway.example>
+To: <sender@example.org>
+Subject: Delivery report
+Message-Id: <gw1@gateway.example>
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=disposition-notification;
+ boundary=gw
+
+--gw
+Content-Type: message/disposition-notification
+
+MDN-Gateway: smtp; gateway.example
+Final-Recipient: rfc822;
+ final@example.com
+Original-Message-ID: <orig@example.org>
+Disposition: Automatic-Action/MDN-Sent-Automatically;
+ Deleted/error
+Error: The message could not be converted
+Error: Second error line
+
+--gw--
+EOF
+    {
+        forEmailId => undef,
+        subject => 'Delivery report',
+        textBody => undef,
+        includeOriginalMessage => JSON::false,
+        reportingUA => undef,
+        mdnGateway => 'smtp; gateway.example',
+        originalRecipient => undef,
+        finalRecipient => 'rfc822; final@example.com',
+        originalMessageId => '<orig@example.org>',
+        disposition => {
+            actionMode => 'automatic-action',
+            sendingMode => 'mdn-sent-automatically',
+            type => 'deleted',
+        },
+        error => [
+            'The message could not be converted',
+            'Second error line',
+        ],
+    });
+}
+
+# text/rfc822-headers also counts as including the original message
+sub test_mdn_parse__original_headers_only ($self)
+{
+    $self->assert_mdn_parse(<<'EOF',
+From: <joe@example.com>
+To: <jane@example.org>
+Subject: Return Receipt (displayed)
+Message-Id: <rr1@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=disposition-notification;
+ boundary=rr
+
+--rr
+Content-Type: text/plain; charset=utf-8
+
+Your message was displayed.
+
+--rr
+Content-Type: message/disposition-notification
+
+Final-Recipient: rfc822; joe@example.com
+Disposition: manual-action/MDN-sent-manually; displayed
+
+--rr
+Content-Type: text/rfc822-headers
+
+From: <jane@example.org>
+To: <joe@example.com>
+Subject: Please read me
+
+--rr--
+EOF
+    {
+        forEmailId => undef,
+        subject => 'Return Receipt (displayed)',
+        textBody => 'Your message was displayed.',
+        includeOriginalMessage => JSON::true,
+        reportingUA => undef,
+        mdnGateway => undef,
+        originalRecipient => undef,
+        finalRecipient => 'rfc822; joe@example.com',
+        originalMessageId => undef,
+        disposition => {
+            actionMode => 'manual-action',
+            sendingMode => 'mdn-sent-manually',
+            type => 'displayed',
+        },
+        error => undef,
+    });
+}

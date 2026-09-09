@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mdn_parse_not_parsable ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "a message with no disposition-notification part";
+    my $plain = $self->upload_message(to_crlf(<<'EOF'));
+From: <joe@example.com>
+To: <jane@example.org>
+Subject: not an MDN
+Message-Id: <plain@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain
+
+Just a regular message.
+EOF
+
+    xlog $self, "a disposition-notification part without a Disposition field";
+    my $nodispo = $self->upload_message(to_crlf(<<'EOF'));
+From: <joe@example.com>
+To: <jane@example.org>
+Subject: broken MDN
+Message-Id: <broken@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=disposition-notification;
+ boundary=b
+
+--b
+Content-Type: message/disposition-notification
+
+Final-Recipient: rfc822; joe@example.com
+
+--b--
+EOF
+
+    xlog $self, "not a message at all";
+    my $garbage = $self->upload_message("this is not an email");
+
+    my $res = $jmap->request([
+        ['MDN/parse', {
+            blobIds => [$plain, $nodispo, $garbage, 'Gnonexistent'],
+        }],
+    ]);
+
+    $self->assert_cmp_deeply(
+        {
+            accountId => 'cassandane',
+            parsed => undef,
+            notParsable => bag($plain, $nodispo, $garbage),
+            notFound => ['Gnonexistent'],
+        },
+        $res->single_sentence('MDN/parse')->arguments,
+    );
+}

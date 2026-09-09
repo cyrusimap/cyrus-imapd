@@ -1,0 +1,105 @@
+#!perl
+use Cassandane::Tiny;
+
+# What MDN/send puts on the wire, MDN/parse reads back.
+sub test_mdn_send_parse_roundtrip ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "deliver a message that asks for a receipt";
+    my $msg = $self->make_message("Please read me",
+        extra_headers => [
+            ['Disposition-Notification-To', 'sender@example.org'],
+            ['Original-Recipient', 'rfc822;test@vmtom.com'],
+        ],
+        body => 'read me',
+    ) || die;
+
+    my $res = $jmap->request([
+        ['Email/query', {}],
+    ]);
+    my $emailId = $res->single_sentence('Email/query')->arguments->{ids}[0];
+    $self->assert_not_null($emailId);
+
+    my $disposition = {
+        actionMode => 'manual-action',
+        sendingMode => 'mdn-sent-manually',
+        type => 'displayed',
+    };
+
+    xlog $self, "send the MDN";
+    $res = $jmap->request([
+        ['MDN/send', {
+            send => {
+                k1 => {
+                    forEmailId => $emailId,
+                    subject => 'Read receipt',
+                    textBody => 'I read your message.',
+                    reportingUA => 'cassandane; Cassandane 1.0',
+                    includeOriginalMessage => JSON::true,
+                    disposition => $disposition,
+                },
+            },
+        }],
+        ['Email/get', {
+            ids => [$emailId],
+            properties => ['keywords'],
+        }],
+    ]);
+
+    my $sent = $res->sentence_named('MDN/send')->arguments;
+    $self->assert_cmp_deeply(
+        {
+            accountId => 'cassandane',
+            sent => {
+                k1 => {
+                    finalRecipient => re(qr/^rfc822; cassandane\@\S+$/),
+                    originalRecipient => 'rfc822;test@vmtom.com',
+                    originalMessageId => $msg->get_header('Message-ID'),
+                },
+            },
+            notSent => undef,
+        },
+        $sent,
+    );
+    my $finalRecipient = $sent->{sent}{k1}{finalRecipient};
+
+    xlog $self, "the original is now marked \$MDNSent";
+    $self->assert_cmp_deeply(
+        superhashof({ '$mdnsent' => JSON::true }),
+        $res->sentence_named('Email/get')->arguments->{list}[0]{keywords},
+    );
+
+    xlog $self, "upload what went out and parse it";
+    my @sent = $self->sent_messages();
+    $self->assert_num_equals(1, scalar @sent);
+    my $blobId = $self->upload_message($sent[0]);
+
+    $res = $jmap->request([
+        ['MDN/parse', { blobIds => [$blobId] }],
+    ]);
+
+    $self->assert_cmp_deeply(
+        {
+            accountId => 'cassandane',
+            parsed => {
+                $blobId => {
+                    forEmailId => undef,
+                    subject => 'Read receipt',
+                    textBody => 'I read your message.',
+                    includeOriginalMessage => JSON::true,
+                    reportingUA => 'cassandane; Cassandane 1.0',
+                    mdnGateway => undef,
+                    originalRecipient => 'rfc822;test@vmtom.com',
+                    finalRecipient => $finalRecipient,
+                    originalMessageId => $msg->get_header('Message-ID'),
+                    disposition => $disposition,
+                    error => undef,
+                },
+            },
+            notParsable => undef,
+            notFound => undef,
+        },
+        $res->single_sentence('MDN/parse')->arguments,
+    );
+}
