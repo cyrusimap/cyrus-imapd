@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_put_conflicting_dtstart_dtend
+    ($self)
+{
+    my $caldav = $self->{caldav};
+    my $ical = to_crlf(<<~EOF);
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+    CALSCALE:GREGORIAN
+    BEGIN:VEVENT
+    TRANSP:TRANSPARENT
+    DTSTART:20190310T111500
+    DTEND;TZID=Europe/Amsterdam:20190310T130000
+    UID:2a358cee-6489-4f14-a57f-c104db4dc357
+    DTSTAMP:20150928T132434Z
+    CREATED:20150928T125212Z
+    SEQUENCE:9
+    SUMMARY:floatingtzid
+    LAST-MODIFIED:20150928T132434Z
+    END:VEVENT
+    END:VCALENDAR
+    EOF
+
+    # As seen in the wild: A floating DTSTART and a DTEND with TZID.
+    # We accepted this for a while but now reject it in libical.
+    my $res = $caldav->SafeRequest('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+    $self->assert_num_equals(403, $res->{http_response}{status});
+}
