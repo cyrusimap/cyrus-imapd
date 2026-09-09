@@ -591,15 +591,6 @@ static const struct body *_mdn_find_part(const struct body *body,
     return NULL;
 }
 
-/* Strip the "address-type;" prefix from an RFC 8098 recipient field. */
-static const char *_mdn_recipient_addr(const char *val)
-{
-    const char *sep = strchr(val, ';');
-    if (!sep) return val;
-    for (sep++; *sep == ' ' || *sep == '\t'; sep++);
-    return sep;
-}
-
 /* Build an MDN object (RFC 9007, Section 2) from the fields of a
  * message/disposition-notification part (RFC 8098, Section 3.1). */
 static json_t *_mdn_from_dn_fields(const char *base, size_t len)
@@ -628,7 +619,8 @@ static json_t *_mdn_from_dn_fields(const char *base, size_t len)
 
     const char *type = semi + 1;
 
-    /* A disposition-type may carry "/modifier" suffixes; JMAP wants the type */
+    /* A disposition-type may carry "/modifier" suffixes; JMAP wants the type.
+     * RFC 8098 values are case-insensitive, RFC 9007 wants them lowercase. */
     struct buf action = BUF_INITIALIZER, sending = BUF_INITIALIZER;
     struct buf dtype = BUF_INITIALIZER;
     buf_setmap(&action, val[0], slash - val[0]);
@@ -637,6 +629,9 @@ static json_t *_mdn_from_dn_fields(const char *base, size_t len)
     buf_trim(&action);
     buf_trim(&sending);
     buf_trim(&dtype);
+    buf_lcase(&action);
+    buf_lcase(&sending);
+    buf_lcase(&dtype);
 
     if (buf_len(&action) && buf_len(&sending) && buf_len(&dtype)) {
         mdn = json_object();
@@ -656,9 +651,13 @@ static json_t *_mdn_from_dn_fields(const char *base, size_t len)
      * blob need not correspond to anything in the account. */
     json_object_set_new(mdn, "forEmailId", json_null());
 
+    /* Recipient fields keep their "address-type;" prefix: RFC 9007's own
+     * examples give finalRecipient as "rfc822; john@example.com". */
     static const struct { const char *hdr; const char *prop; } simple[] = {
         { "Reporting-UA",        "reportingUA"       },
         { "MDN-Gateway",         "mdnGateway"        },
+        { "Original-Recipient",  "originalRecipient" },
+        { "Final-Recipient",     "finalRecipient"    },
         { "Original-Message-ID", "originalMessageId" },
         { NULL, NULL }
     };
@@ -667,19 +666,6 @@ static json_t *_mdn_from_dn_fields(const char *base, size_t len)
         val = spool_getheader(hdrs, simple[i].hdr);
         json_object_set_new(mdn, simple[i].prop,
                             val && val[0] ? json_string(val[0]) : json_null());
-    }
-
-    static const struct { const char *hdr; const char *prop; } rcpt[] = {
-        { "Original-Recipient", "originalRecipient" },
-        { "Final-Recipient",    "finalRecipient"    },
-        { NULL, NULL }
-    };
-    for (i = 0; rcpt[i].hdr; i++) {
-        val = spool_getheader(hdrs, rcpt[i].hdr);
-        json_object_set_new(mdn, rcpt[i].prop,
-                            val && val[0] ?
-                            json_string(_mdn_recipient_addr(val[0])) :
-                            json_null());
     }
 
     /* "Error" may appear more than once */
