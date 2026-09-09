@@ -58,6 +58,7 @@ struct http2_stream {
     unsigned body_submitted : 1;        /* Data provider already submitted? */
     unsigned body_complete  : 1;        /* No further chunks are coming */
     unsigned body_deferred  : 1;        /* Provider parked, needs resuming */
+    unsigned body_failed    : 1;        /* nghttp2 submit/resume failed */
 };
 
 static nghttp2_session_callbacks *http2_callbacks = NULL;
@@ -750,6 +751,12 @@ static int resp_body_chunk(struct transaction_t *txn,
     syslog(LOG_DEBUG, "http2_resp_data_chunk(datalen=%u, last=%d)",
            datalen, last_chunk);
 
+    if (strm->body_failed) {
+        /* A previous nghttp2 submission/resume already failed for this
+           stream; don't keep buffering chunks that can never be sent. */
+        return HTTP_SERVER_ERROR;
+    }
+
     if (!(datalen || last_chunk)) {
         /* Nothing to send */
         return 0;
@@ -783,7 +790,6 @@ static int resp_body_chunk(struct transaction_t *txn,
     if (datalen) buf_appendmap(&strm->body, data, datalen);
     if (last_chunk) strm->body_complete = 1;
 
-    int r = 0;
     if (!strm->body_submitted) {
         /* nghttp2 accepts only one DATA submission per stream, so this runs
            exactly once; every later chunk is appended above.
@@ -805,9 +811,10 @@ static int resp_body_chunk(struct transaction_t *txn,
         syslog(LOG_DEBUG, "nghttp2_submit_data2(id=%d, flags=%#x)",
                strm->id, flags);
 
-        r = nghttp2_submit_data2(ctx->session, flags, strm->id, &prd);
+        int r = nghttp2_submit_data2(ctx->session, flags, strm->id, &prd);
         if (r) {
             syslog(LOG_ERR, "nghttp2_submit_data2: %s", nghttp2_strerror(r));
+            strm->body_failed = 1;
             return HTTP_SERVER_ERROR;
         }
         strm->body_submitted = 1;
@@ -815,26 +822,26 @@ static int resp_body_chunk(struct transaction_t *txn,
     else if (strm->body_deferred) {
         /* The provider ran dry while the response was still being generated.
            Wake it now that there is more to send. */
-        strm->body_deferred = 0;
-        r = nghttp2_session_resume_data(ctx->session, strm->id);
+        int r = nghttp2_session_resume_data(ctx->session, strm->id);
         if (r) {
             syslog(LOG_ERR, "nghttp2_session_resume_data: %s",
                    nghttp2_strerror(r));
+            strm->body_failed = 1;
+            return HTTP_SERVER_ERROR;
         }
+        strm->body_deferred = 0;
     }
 
-    {
-        /* Write frame(s) */
-        http2_output(txn->conn);
+    /* Write frame(s) */
+    http2_output(txn->conn);
 
-        if (last_chunk && (txn->flags.trailer & ~TRAILER_PROXY)) {
-            begin_resp_headers(txn, 0);
-            if (txn->flags.trailer & TRAILER_CMD5) content_md5_hdr(txn, md5);
-            if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
-                simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
-            }
-            end_resp_headers(txn, 0);
+    if (last_chunk && (txn->flags.trailer & ~TRAILER_PROXY)) {
+        begin_resp_headers(txn, 0);
+        if (txn->flags.trailer & TRAILER_CMD5) content_md5_hdr(txn, md5);
+        if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
+            simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
         }
+        end_resp_headers(txn, 0);
     }
 
     return 0;
