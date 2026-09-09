@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+# Regression test for https://github.com/cyrusimap/cyrus-imapd/issues/4027
+# (see copyuid_cross_backend_move for the full explanation)
+
+sub test_copyuid_cross_backend_copy_msn
+    :NoAltNamespace
+    ($self)
+{
+    my $shared = 'shared';
+
+    my $admintalk = $self->{backend2_adminstore}->get_client();
+    $admintalk->create($shared);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl($shared, 'anyone', 'lrswi');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # three messages in INBOX (on backend1)
+    $self->make_message("Message A", store => $self->{frontend_store});
+    $self->make_message("Message B", store => $self->{frontend_store});
+    $self->make_message("Message C", store => $self->{frontend_store});
+
+    my $frontend = $self->{frontend_store}->get_client();
+    $frontend->select('INBOX');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # expunge Message A (uid 1) so that seqno 1 != uid 1 from here on:
+    # seqno 1 is now Message B, whose real uid is 2
+    $frontend->store('1', '+flags', '(\\Deleted)');
+    $frontend->expunge();
+
+    # capture the destination's real UIDVALIDITY
+    $frontend->select($shared);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    my $dest_uidvalidity = $frontend->get_response_code('uidvalidity');
+
+    # plain (non-UID) COPY by sequence number, cross-backend: exercises
+    # the seqno->uid translation path (crock.uidset/freeme) in
+    # proxy_copy(), as opposed to the trivial usinguid case where
+    # 'sequence' is already a uid-set. Cassandane's IMAPTalk
+    # connections default to Uid => 1 (see IMAPMessageStore.pm), so
+    # switch to sequence-number mode explicitly -- otherwise this
+    # would send "UID COPY 1", which targets the now-expunged UID 1
+    # and matches nothing.
+    $frontend->select('INBOX');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $frontend->uid(0);
+    $frontend->copy('1', $shared);
+    $frontend->uid(1);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    my $copyuid = $frontend->get_response_code('copyuid');
+    $self->assert_num_equals(3, scalar @$copyuid);
+    $self->assert_num_equals($dest_uidvalidity, $copyuid->[0]);
+    # must report the *real* source uid (2), not the sequence number
+    # that was actually sent on the wire (1)
+    $self->assert_str_equals('2', $copyuid->[1]);
+    $self->assert_matches(qr{\A\d+\z}, $copyuid->[2]);
+}

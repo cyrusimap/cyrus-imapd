@@ -1017,10 +1017,15 @@ int proxy_copy(const char *tag, char *sequence, char *name, int myrights,
         if (res == PROXY_OK) {
             /* expseq is freeme when set (UID set fetched from the source via FETCH
              * callbacks), otherwise the original sequence argument.  Either way it
-             * refers to messages on backend_current, the source backend. */
+             * refers to messages on backend_current, the source backend.
+             *
+             * We need it below too (outside the ismove case) to build a
+             * spec-compliant COPYUID response (RFC 4315 section 3), so it's
+             * computed unconditionally rather than only when ismove is set. */
+            const char *expseq = freeme ? freeme : sequence;
+
             if (ismove) {
                 char movetag[128];
-                const char *expseq = freeme ? freeme : sequence;
 
                 /* mark \Deleted on source backend */
                 proxy_gentag(movetag, sizeof(movetag));
@@ -1051,11 +1056,34 @@ int proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                 appenduid = strchr(s->last_result.s, '[');
                 /* skip over APPENDUID */
                 if (appenduid) {
+                    char *destuid;
+
                     appenduid += strlen("[appenduid ");
                     b = strchr(appenduid, ']');
                     if (b) *b = '\0';
-                    prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
-                                appenduid, error_message(IMAP_OK_COMPLETED));
+
+                    /* appenduid is now "<uidvalidity> <destuid-set>", the
+                     * 2-field APPENDUID response (RFC 4315 section 3) from
+                     * the destination server. Splice in the source UID set
+                     * (expseq) to build a proper 3-field COPYUID response:
+                     * "<uidvalidity> <srcuid-set> <destuid-set>". Without
+                     * this, clients that strictly parse COPYUID (e.g.
+                     * Horde) reject the response outright -- see
+                     * https://github.com/cyrusimap/cyrus-imapd/issues/4027 */
+                    destuid = strchr(appenduid, ' ');
+                    if (destuid) {
+                        *destuid++ = '\0';
+                        prot_printf(imapd_out,
+                                    "%s OK [COPYUID %s %s %s] %s\r\n", tag,
+                                    appenduid, expseq, destuid,
+                                    error_message(IMAP_OK_COMPLETED));
+                    }
+                    else {
+                        /* unexpected APPENDUID format; fall back rather
+                         * than emit something worse */
+                        prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
+                                    appenduid, error_message(IMAP_OK_COMPLETED));
+                    }
                 }
                 else
                     prot_printf(imapd_out, "%s OK %s\r\n", tag, s->last_result.s);
