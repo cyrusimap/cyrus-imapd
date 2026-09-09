@@ -1,0 +1,51 @@
+Description:
+
+Mailbox sharing over JMAP can now be done the way JMAP Mail Sharing
+(draft-ietf-jmap-mail-sharing) says to, with the
+urn:ietf:params:jmap:mail:share capability.  It lives with the other
+non-standard extensions for now, because the draft hasn't been published yet.
+
+Under that capability, the values in shareWith are MailboxRights objects, the
+same shape as myRights, so each right can be granted on its own instead of in
+one of the three bundles our own extension offers.  MailboxRights also gains
+mayShare, the right to modify shareWith, which is the IMAP "a" right by itself.
+That's not the same as our mayAdmin, which also requires "x" and "k", so the
+two can disagree: a sharee given only "a" has mayShare but not mayAdmin.  A
+client that doesn't use mail:share doesn't see mayShare at all.
+
+mayRename can be read but not written.  It isn't a right we store anywhere --
+it's derived from mayDelete on the mailbox and mayCreateChild on the parent --
+so a client may send back the value we gave it, which is what a
+read-modify-write of shareWith does, but asking us to change it is forbidden.
+
+Our own https://cyrusimap.org/ns/jmap/mail spelling of shareWith still works,
+and will until clients have moved over.  Each request gets exactly the
+vocabulary it asked for, and the two can't be mixed: mayRead, mayWrite and
+mayAdmin are rejected as unknown rights under mail:share, and the MailboxRights
+rights are rejected as unknown without it.
+
+While both vocabularies are in use, be aware that the old one can't express
+everything the new one can, and that the view through it is lossy.  A sharee
+granted, say, only maySetSeen appears to have none of mayRead, mayWrite or
+mayAdmin, so an old client doing a read-modify-write of shareWith will take
+that grant away.  This will stop being a concern once the old spelling is gone.
+
+
+Documentation:
+
+docsrc/rfc-support.rst lists the draft.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None
