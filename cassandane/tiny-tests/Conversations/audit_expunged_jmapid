@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+# An expunged record keeps its J key until it is unlinked, so a rebuild
+# over the same records must produce the same J keys as the live db.
+sub test_audit_expunged_jmapid
+    :Conversations
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "generating messages";
+    $self->make_message("Message $_") for (1..3);
+
+    xlog $self, "expunging one of them without unlinking";
+    $talk->select('INBOX');
+    $talk->store('2', '+flags', '(\\Deleted)');
+    $talk->expunge();
+
+    xlog $self, "auditing the conversations db";
+    my $outfile = $self->{instance}->{basedir} . "/conv-audit.txt";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        'ctl_conversationsdb', '-A', '-v', 'cassandane',
+    );
+    my $data = slurp_file($outfile);
+
+    $self->assert_does_not_match(qr/^REALONLY: "J/m, $data);
+    $self->assert_does_not_match(qr/^TEMPONLY: "J/m, $data);
+    $self->assert_matches(qr/^cassandane is OK$/m, $data);
+}

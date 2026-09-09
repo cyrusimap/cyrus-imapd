@@ -2425,8 +2425,9 @@ static int conversations_set_guid(struct conversations_state *state,
             r = cyrusdb_delete(state->db, buf_base(&key), buf_len(&key),
                                &state->txn, /*force*/1);
         }
-        else if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-            /* Add J record */
+        else {
+            /* Add J record, kept for as long as any G record exists so
+             * the JMAPID stays unique among indexed but expunged messages */
             r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key),
                               guidrep, strlen(guidrep), &state->txn);
         }
