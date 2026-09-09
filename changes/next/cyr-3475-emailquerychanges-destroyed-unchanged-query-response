@@ -1,0 +1,21 @@
+Description:
+
+Fixes a bug in JMAP Email/queryChanges where the snoozedUntil and addedDates
+sort properties were erroneously handled as immutable. Now they are mutable
+sorts, and resnoozed emails get their new result location reported correctly.
+
+Documentation:
+
+None
+
+Config changes:
+
+None
+
+Upgrade instructions:
+
+None
+
+GitHub issue:
+
+None

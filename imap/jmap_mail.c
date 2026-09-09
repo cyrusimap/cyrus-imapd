@@ -5921,12 +5921,10 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
 
         // for this phase, we only care that it has a change
         if (md->modseq <= since_modseq && !is_newly_indexed) {
-            if (search.is_mutable) {
-                modseq_t modseq = md->convmodseq;
-                if (!modseq) conversation_get_modseq(req->cstate, md->cid, &modseq);
-                if (modseq > since_modseq)
-                    hashu64_insert(md->cid, (void*)1, &touched_cids);
-            }
+            /* Only a conversation-scoped sort key can change the order
+             * without the message's own modseq advancing. */
+            if (search.is_mutable && md->convmodseq > since_modseq)
+                hashu64_insert(md->cid, (void*)1, &touched_cids);
             continue;
         }
 
