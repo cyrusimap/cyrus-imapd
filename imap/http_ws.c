@@ -226,8 +226,10 @@ static void ws_zlib_init(struct transaction_t *txn, tok_t *params)
     }
 
     if (txn->zstrm) {
-        /* Configure decompression context for raw deflate */
-        ctx->pmce.deflate.zstrm = xzmalloc(sizeof(z_stream));
+        /* (Re)configure decompression context for raw deflate */
+        if (ctx->pmce.deflate.zstrm) inflateEnd(ctx->pmce.deflate.zstrm);
+        else ctx->pmce.deflate.zstrm = xzmalloc(sizeof(z_stream));
+
         if (inflateInit2(ctx->pmce.deflate.zstrm, -client_max_wbits) != Z_OK) {
             free(ctx->pmce.deflate.zstrm);
             ctx->pmce.deflate.zstrm = NULL;
@@ -239,8 +241,22 @@ static void ws_zlib_init(struct transaction_t *txn, tok_t *params)
     }
 }
 
-static void ws_zlib_done(struct ws_context *ctx)
+static void ws_zlib_done(struct transaction_t *txn)
 {
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
+
+    /* txn->zstrm is normally freed by zlib_done(), registered as a
+     * done_callback by zlib_init() -- but that only runs when generic
+     * HTTP compression was negotiated for this transaction.  Free it
+     * here too (and NULL it out) so it isn't leaked when WebSocket PMCE
+     * is the only reason it was ever allocated; zlib_done() is a no-op
+     * on a NULL txn->zstrm if it also runs. */
+    if (txn->zstrm) {
+        deflateEnd(txn->zstrm);
+        free(txn->zstrm);
+        txn->zstrm = NULL;
+    }
+
     if (ctx->pmce.deflate.zstrm) {
         inflateEnd(ctx->pmce.deflate.zstrm);
         free(ctx->pmce.deflate.zstrm);
@@ -292,7 +308,7 @@ static int zlib_decompress(struct transaction_t *txn,
 static void ws_zlib_init(struct transaction_t *txn __attribute__((unused)),
                          tok_t *params __attribute__((unused))) { }
 
-static void ws_zlib_done(struct ws_context *ctx __attribute__((unused))) { }
+static void ws_zlib_done(struct transaction_t *txn __attribute__((unused))) { }
 
 static int zlib_decompress(struct transaction_t *txn __attribute__((unused)),
                            const char *buf __attribute__((unused)),
@@ -328,7 +344,7 @@ static int queue_msg(struct transaction_t *txn, struct buf *outbuf,
                               ctx->pmce.deflate.no_context ? COMPRESS_START : 0,
                               buf_base(outbuf), buf_len(outbuf));
         if (r) {
-            syslog(LOG_ERR, "queue_response(): zlib_compress() failed");
+            xsyslog(LOG_ERR, "WS: zlib_compress() failed", NULL);
 
             if (err_msg) *err_msg = COMP_FAILED_ERR;
             return WSLAY_CODE_INTERNAL_SERVER_ERROR;
@@ -407,7 +423,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
     switch (arg->opcode) {
     case WSLAY_CONNECTION_CLOSE:
         buf_printf(&ctx->log, "; status=%d; msg='%s'", arg->status_code,
-                   buf_len(&inbuf) ? buf_cstring(&inbuf)+2 : "");
+                   /* First 2 bytes are the status code already captured
+                    * above; only the rest (if any) is the close reason. */
+                   buf_len(&inbuf) > 2 ? buf_cstring(&inbuf)+2 : "");
         txn->flags.conn = CONN_CLOSE;
         break;
 
@@ -426,7 +444,8 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&inbuf), buf_len(&inbuf));
             if (writev(logfd, iov, niov) < 0) {
-                syslog(LOG_NOTICE, "IONOTICE: failed to write telemetry for %s", httpd_userid);
+                xsyslog(LOG_NOTICE, "failed to write telemetry",
+                        "userid=<%s>", httpd_userid);
             }
         }
 
@@ -463,7 +482,8 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&outbuf), buf_len(&outbuf));
             if (writev(logfd, iov, niov) < 0) {
-                syslog(LOG_NOTICE, "IONOTICE: failed to write telemetry for %s", httpd_userid);
+                xsyslog(LOG_NOTICE, "failed to write telemetry",
+                        "userid=<%s>", httpd_userid);
             }
         }
 
@@ -508,7 +528,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
     buf_printf(&ctx->log, ") [timing: cmd=%f net=%f total=%f]",
                cmdtime, nettime, cmdtime + nettime);
 
-    syslog(LOG_INFO, "%s", buf_cstring(&ctx->log));
+    xsyslog(LOG_INFO, buf_cstring(&ctx->log), NULL);
 
     buf_free(&inbuf);
     buf_free(&outbuf);
@@ -586,7 +606,6 @@ static void _end_channel(struct transaction_t *txn)
 
         xsyslog(LOG_DEBUG, "WS close", "msg=<%s>", msg);
 
-        syslog(LOG_DEBUG, "wslay_event_queue_close(%s)", msg);
         r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
                                     (uint8_t *) msg, strlen(msg));
         if (r) {
@@ -605,7 +624,7 @@ static void _end_channel(struct transaction_t *txn)
     wslay_event_context_free(ev);
     buf_free(&ctx->log);
 
-    ws_zlib_done(ctx);
+    ws_zlib_done(txn);
 
     free(ctx);
 
@@ -876,7 +895,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
         if (prot_IS_EOF(pin)) {
             /* Client closed connection */
-            syslog(LOG_DEBUG, "client closed connection");
+            xsyslog(LOG_DEBUG, "client closed connection", NULL);
             wslay_event_shutdown_write(ev);
             txn->flags.conn = CONN_CLOSE;
         }
@@ -916,12 +935,20 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
 HIDDEN void ws_send(struct transaction_t *txn, struct buf *outbuf)
 {
+    struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
     struct wslay_event_msg msgarg = { WSLAY_TEXT_FRAME, NULL, 0 };
     uint8_t rsv = WSLAY_RSV_NONE;
+    const char *err_msg = NULL;
+    int err_code = queue_msg(txn, outbuf, &msgarg, &rsv, NULL, &err_msg);
 
-    if (!queue_msg(txn, outbuf, &msgarg, &rsv, NULL, NULL)) {
-        ws_output(txn);
+    if (err_code) {
+        xsyslog(LOG_ERR, "WS: failed to queue outgoing message",
+                "err=<%s>", err_msg);
+        wslay_event_queue_close(ctx->event, err_code,
+                                (uint8_t *) err_msg, strlen(err_msg));
     }
+
+    ws_output(txn);
 }
 
 #else /* !HAVE_WSLAY */
