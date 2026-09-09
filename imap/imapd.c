@@ -6772,11 +6772,33 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
                     appenduid = strchr(s->last_result.s, '[');
                     /* skip over APPENDUID */
                     if (appenduid) {
+                        char *destuid;
+
                         appenduid += strlen("[appenduid ");
                         b = strchr(appenduid, ']');
                         if (b) *b = '\0';
-                        prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
-                                    appenduid, error_message(IMAP_OK_COMPLETED));
+
+                        /* appenduid is now "<uidvalidity>
+                           <destuid-set>", the 2-field APPENDUID
+                           response (RFC 4315 section 3). Build a
+                           proper 3-field COPYUID response by
+                           splicing in the source UID set. When the
+                           client used UID COPY, 'sequence' is
+                           already a valid UID set we can reuse
+                           directly. See
+                           https://github.com/cyrusimap/cyrus-imapd/issues/4027 */
+                        destuid = strchr(appenduid, ' ');
+                        if (destuid && usinguid) {
+                            *destuid++ = '\0';
+                            prot_printf(imapd_out,
+                                        "%s OK [COPYUID %s %s %s] %s\r\n", tag,
+                                        appenduid, sequence, destuid,
+                                        error_message(IMAP_OK_COMPLETED));
+                        }
+                        else
+                            prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n",
+                                        tag, appenduid,
+                                        error_message(IMAP_OK_COMPLETED));
                     } else
                         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                                     error_message(IMAP_OK_COMPLETED));
