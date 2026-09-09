@@ -664,7 +664,47 @@ extern int mailbox_rename_cleanup(struct mailbox **mailboxptr);
 
 extern int mailbox_copyfile_fdptr(const char *from, const char *to, int nolink, int *dirfdp);
 
+/* Optional structured reporting from reconstruct, for the consistency
+ * audit.  Only the sites representing recoverable data damage report
+ * through this; everything else reconstruct repairs itself and needs no
+ * external help.
+ *
+ * A finding carries whatever a caller needs to fetch a replacement from a
+ * replica or from backup: the mailbox, the uid, and the guid the index
+ * says the file should have.
+ */
+struct reconstruct_finding {
+    const char *code;       /* stable slug */
+    const char *mboxname;
+    const char *userid;
+    const char *uniqueid;
+    const char *path;
+    const char *tier;       /* "spool" | "archive" */
+    const char *metaname;   /* "index" | "header" */
+    const char *guid;
+    uint32_t uid;
+    uint64_t size;
+    int has_uid;
+    int has_size;
+};
+
+#define RECONSTRUCT_FINDING_INITIALIZER \
+    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, 0 }
+
+typedef void reconstruct_reportproc_t(void *rock,
+                                      const struct reconstruct_finding *f);
+
+struct reconstruct_report {
+    reconstruct_reportproc_t *proc;
+    void *rock;
+};
+
 extern int mailbox_reconstruct(const char *name, int flags, struct mailbox **mailboxp);
+/* as mailbox_reconstruct(), but also reporting recoverable damage
+ * structurally.  report may be NULL. */
+extern int mailbox_reconstruct_report(const char *name, int flags,
+                                      struct mailbox **mailboxp,
+                                      struct reconstruct_report *report);
 
 /*
  * Create the unique identifier for a mailbox named 'name' with
@@ -675,6 +715,7 @@ extern int mailbox_reconstruct(const char *name, int flags, struct mailbox **mai
 
 extern void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid);
 extern void mailbox_set_jmapid(struct mailbox *mailbox, const char *jmapid);
+
 extern void mailbox_set_mbtype(struct mailbox *mailbox, uint32_t mbtype);
 
 extern int mailbox_setversion(struct mailbox *mailbox,

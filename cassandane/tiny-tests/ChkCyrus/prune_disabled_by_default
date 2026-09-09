@@ -1,0 +1,24 @@
+#!perl
+use Cassandane::Tiny;
+
+# A tombstone pruned before a replica has synced past it means that
+# replica never learns the name is gone, and the safe threshold is a
+# property of the deployment.  So there is no default and nothing prunes
+# without an explicit --prune-tombstones.
+sub test_prune_disabled_by_default
+    :NoSanityCheck
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Old") or die "create: $@";
+    $imaptalk->rename("INBOX.Old", "INBOX.New") or die "rename: $@";
+
+    my $before = $self->count_tombstones();
+    $self->assert($before > 0, "expected a tombstone after a rename");
+
+    $self->backdate_tombstones();
+    $self->audit_json('--level', '0', '--delete', '--really');
+
+    $self->assert_num_equals($before, $self->count_tombstones());
+}

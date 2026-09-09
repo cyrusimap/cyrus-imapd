@@ -140,6 +140,77 @@ int mboxlist_lookup_by_uniqueid(const char *uniqueid,
 int mboxlist_lookup_by_jmapid(const char *userid, const char *jmapid,
                               mbentry_t **entryptr, struct txn **tid);
 
+/* Raw access to the mailboxes.db keyspace, for consistency auditing.
+ *
+ * Unlike the mboxlist_lookup* API, this reports every key in the database
+ * including ones that fail to parse, so that a damaged database can be
+ * examined and repaired rather than merely erroring out.
+ */
+enum mboxlist_keytype {
+    MBOXLIST_KEY_UNKNOWN = 0,
+    MBOXLIST_KEY_NAME,          /* N<dbname> */
+    MBOXLIST_KEY_ID,            /* I<uniqueid> */
+    MBOXLIST_KEY_JMAPID,        /* J<userid>\x1e<jmapid> */
+    MBOXLIST_KEY_RACL,          /* AU\x1e<userid>\x1e<dbname>, or AS\x1e... */
+};
+
+struct mboxlist_rawkey {
+    enum mboxlist_keytype type;
+    char *dbname;       /* NAME */
+    char *uniqueid;     /* ID */
+    char *userid;       /* JMAPID: the owner.  RACL: user granted access */
+    char *jmapid;       /* JMAPID */
+    char *aclmbox;      /* RACL: dbname of the mailbox granted */
+    int isuser;         /* RACL: 1 for AU, 0 for AS */
+};
+
+#define MBOXLIST_RAWKEY_INITIALIZER \
+    { MBOXLIST_KEY_UNKNOWN, NULL, NULL, NULL, NULL, NULL, 0 }
+
+/* key/keylen are the stored bytes, so that a caller can remove exactly
+ * what it saw.  parsed is the interpretation of those bytes; mbentry is
+ * NULL if the value could not be parsed. */
+typedef int mboxlist_rawproc_t(void *rock,
+                               const char *key, size_t keylen,
+                               const struct mboxlist_rawkey *parsed,
+                               const mbentry_t *mbentry,
+                               const char *data, size_t datalen);
+
+int mboxlist_parse_rawkey(const char *key, size_t keylen,
+                          struct mboxlist_rawkey *rawkey);
+void mboxlist_rawkey_fini(struct mboxlist_rawkey *rawkey);
+int mboxlist_foreach_raw(mboxlist_rawproc_t *proc, void *rock,
+                         struct txn **tid);
+
+/* Ensure a mailbox is reachable by jmapid: assign one if it has none, and
+ * write the J record.  Not database-only -- with no jmapid present this
+ * opens the mailbox, dirties the modseq and writes the header, because
+ * the jmapid is derived from the folder's modseq.
+ *
+ * Shared by ctl_mboxlist -k and the consistency audit. */
+int mboxlist_fix_jmapid(const mbentry_t *mbentry);
+
+/* Build the key for a record.  The inverse of mboxlist_parse_rawkey(),
+ * kept here so that key format knowledge stays in one file. */
+void mboxlist_key_for_name(const char *mboxname, struct buf *key);
+void mboxlist_key_for_id(const char *uniqueid, struct buf *key);
+void mboxlist_key_for_jmapid(const char *userid, const char *jmapid,
+                             struct buf *key);
+
+/* Rewrite the I record for an mbentry, serialised exactly as
+ * mboxlist_update_entry_full() would.  For repairs that alter an existing
+ * record -- pruning a name_history item, say -- without the surrounding
+ * bookkeeping of a real update. */
+int mboxlist_rewrite_id_record(const mbentry_t *mbentry, struct txn **tid);
+
+/* Raw key writes, for repairing a damaged keyspace.  The caller owns the
+ * transaction, so that a repair touching several keys either lands whole
+ * or not at all. */
+int mboxlist_rawkey_delete(const char *key, size_t keylen, struct txn **tid);
+int mboxlist_rawkey_store(const char *key, size_t keylen,
+                          const char *data, size_t datalen,
+                          struct txn **tid);
+
 char *mboxlist_find_specialuse(const char *use, const char *userid);
 char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
                              const struct auth_state *auth_state);

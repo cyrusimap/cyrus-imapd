@@ -6873,7 +6873,7 @@ EXPORTED int mailbox_parse_datafilename(const char *name, uint32_t *uidp)
 }
 
 static int find_files(struct mailbox *mailbox, struct found_uids *files,
-                      int flags)
+                      int flags, struct reconstruct_report *report)
 {
     strarray_t paths = STRARRAY_INITIALIZER;
     DIR *dirp;
@@ -6910,12 +6910,12 @@ static int find_files(struct mailbox *mailbox, struct found_uids *files,
                 if (stat(buf, &sbuf) == -1) continue; /* ignore ephemeral */
                 if (!S_ISDIR(sbuf.st_mode)) {
                     if (!(flags & RECONSTRUCT_IGNORE_ODDFILES)) {
-                        printf("%s odd file %s\n", mailbox_name(mailbox), buf);
+                        if (!report) printf("%s odd file %s\n", mailbox_name(mailbox), buf);
                         syslog(LOG_ERR, "%s odd file %s", mailbox_name(mailbox), buf);
                         if (flags & RECONSTRUCT_REMOVE_ODDFILES)
                             xunlink(buf);
                         else {
-                            printf("run reconstruct with -O to remove odd files\n");
+                            if (!report) printf("run reconstruct with -O to remove odd files\n");
                             syslog(LOG_ERR, "run reconstruct with -O to "
                                             "remove odd files");
                         }
@@ -7008,7 +7008,20 @@ done:
 
 /* this is kind of like mailbox_create, but we try to rescue
  * what we can from the filesystem! */
-static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
+/* Report recoverable data damage to an optional observer.  Damage that
+ * reconstruct repairs on its own is not reported here: only the cases
+ * where the data is gone or wrong and a replacement has to come from
+ * somewhere else. */
+static void reconstruct_report(struct reconstruct_report *report,
+                               const struct reconstruct_finding *f)
+{
+    if (!report || !report->proc) return;
+
+    report->proc(report->rock, f);
+}
+
+static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr,
+                                      struct reconstruct_report *report)
 {
     struct mailbox *mailbox = NULL;
     int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
@@ -7060,7 +7073,15 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     if (!r) r = mailbox_lock_index_internal(mailbox, LOCK_EXCLUSIVE);
     if (!r) r = mailbox_read_index_header(mailbox);
     if (r) {
-        printf("%s: failed to read index header\n", mailbox_name(mailbox));
+        if (!report) printf("%s: failed to read index header\n", mailbox_name(mailbox));
+        {
+            struct reconstruct_finding f = RECONSTRUCT_FINDING_INITIALIZER;
+            f.code = "meta-file-unreadable";
+            f.mboxname = mailbox_name(mailbox);
+            f.metaname = "index";
+            f.path = mailbox_meta_fname(mailbox, META_INDEX);
+            reconstruct_report(report, &f);
+        }
         syslog(LOG_ERR, "failed to read index header for %s", mailbox_name(mailbox));
         /* no cyrus.index file at all - well, we're in a pickle!
          * no point trying to rescue anything else... */
@@ -7078,7 +7099,15 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     r = mailbox_read_header(mailbox, NULL);
     if (r) {
         /* Header failed to read - recreate it */
-        printf("%s: failed to read header file\n", mailbox_name(mailbox));
+        if (!report) printf("%s: failed to read header file\n", mailbox_name(mailbox));
+        {
+            struct reconstruct_finding f = RECONSTRUCT_FINDING_INITIALIZER;
+            f.code = "meta-file-unreadable";
+            f.mboxname = mailbox_name(mailbox);
+            f.metaname = "header";
+            f.path = mailbox_meta_fname(mailbox, META_HEADER);
+            reconstruct_report(report, &f);
+        }
         syslog(LOG_ERR, "failed to read header file for %s", mailbox_name(mailbox));
 
         mailbox_make_uniqueid(mailbox);
@@ -7102,7 +7131,8 @@ done:
     return r;
 }
 
-static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
+static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags,
+                                   struct reconstruct_report *report)
 {
     int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
     int r;
@@ -7111,10 +7141,12 @@ static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
     if (r) return r;
 
     if (strcmp(mailbox_acl(mailbox), mailbox->h.acl)) {
-        printf("%s: update acl from header %s => %s\n", mailbox_name(mailbox),
-               mailbox_acl(mailbox), mailbox->h.acl);
-        if (make_changes)
-            printf("XXX - this is a noop right now - needs to update mailboxes.db\n");
+        if (!report) {
+            printf("%s: update acl from header %s => %s\n", mailbox_name(mailbox),
+                   mailbox_acl(mailbox), mailbox->h.acl);
+            if (make_changes)
+                printf("XXX - this is a noop right now - needs to update mailboxes.db\n");
+        }
     }
 
     return r;
@@ -7122,7 +7154,8 @@ static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
 
 static int records_match(const char *mboxname,
                          struct index_record *old,
-                         struct index_record *new)
+                         struct index_record *new,
+                         struct reconstruct_report *report)
 {
     int i;
     int match = 1;
@@ -7130,47 +7163,58 @@ static int records_match(const char *mboxname,
 
     if (old->internaldate.tv_sec != new->internaldate.tv_sec ||
         old->internaldate.tv_nsec != new->internaldate.tv_nsec) {
-        printf("%s uid %u mismatch: internaldate\n",
+        if (!report) printf("%s uid %u mismatch: internaldate\n",
                mboxname, new->uid);
         match = 0;
     }
     if (old->sentdate.tv_sec != new->sentdate.tv_sec) {
-        printf("%s uid %u mismatch: sentdate\n",
+        if (!report) printf("%s uid %u mismatch: sentdate\n",
                mboxname, new->uid);
         match = 0;
     }
     if (old->size != new->size) {
-        printf("%s uid %u mismatch: size\n",
+        if (!report) printf("%s uid %u mismatch: size\n",
                mboxname, new->uid);
+        {
+            struct reconstruct_finding f = RECONSTRUCT_FINDING_INITIALIZER;
+            f.code = "message-size-mismatch";
+            f.mboxname = mboxname;
+            f.uid = new->uid;
+            f.has_uid = 1;
+            f.size = old->size;
+            f.has_size = 1;
+            f.guid = message_guid_encode(&old->guid);
+            reconstruct_report(report, &f);
+        }
         match = 0;
     }
     if (old->header_size != new->header_size) {
-        printf("%s uid %u mismatch: header_size\n",
+        if (!report) printf("%s uid %u mismatch: header_size\n",
                mboxname, new->uid);
         match = 0;
     }
     if (old->gmtime.tv_sec != new->gmtime.tv_sec) {
-        printf("%s uid %u mismatch: gmtime\n",
+        if (!report) printf("%s uid %u mismatch: gmtime\n",
                mboxname, new->uid);
         match = 0;
     }
     if (old->savedate.tv_sec != new->savedate.tv_sec) {
-        printf("%s uid %u mismatch: savedate\n",
+        if (!report) printf("%s uid %u mismatch: savedate\n",
                mboxname, new->uid);
         match = 0;
     }
     if (old->createdmodseq != new->createdmodseq) {
-        printf("%s uid %u mismatch: createdmodseq\n",
+        if (!report) printf("%s uid %u mismatch: createdmodseq\n",
                mboxname, new->uid);
         match = 0;
     }
     if (old->system_flags != new->system_flags) {
-        printf("%s uid %u mismatch: systemflags\n",
+        if (!report) printf("%s uid %u mismatch: systemflags\n",
                mboxname, new->uid);
         match = 0;
     }
     if (old->internal_flags != new->internal_flags) {
-        printf("%s uid %u mismatch: internalflags\n",
+        if (!report) printf("%s uid %u mismatch: internalflags\n",
                mboxname, new->uid);
         match = 0;
     }
@@ -7179,13 +7223,22 @@ static int records_match(const char *mboxname,
             userflags_dirty = 1;
     }
     if (userflags_dirty) {
-        printf("%s uid %u mismatch: userflags\n",
+        if (!report) printf("%s uid %u mismatch: userflags\n",
                mboxname, new->uid);
         match = 0;
     }
     if (!message_guid_equal(&old->guid, &new->guid)) {
-        printf("%s uid %u mismatch: guid\n",
+        if (!report) printf("%s uid %u mismatch: guid\n",
                mboxname, new->uid);
+        {
+            struct reconstruct_finding f = RECONSTRUCT_FINDING_INITIALIZER;
+            f.code = "message-guid-mismatch";
+            f.mboxname = mboxname;
+            f.uid = new->uid;
+            f.has_uid = 1;
+            f.guid = message_guid_encode(&old->guid);
+            reconstruct_report(report, &f);
+        }
         match = 0;
     }
 
@@ -7218,7 +7271,8 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
                                               bit32 *valid_user_flags,
                                               int flags, int have_file,
                                               int has_snoozedannot,
-                                              struct found_uids *discovered)
+                                              struct found_uids *discovered,
+                                              struct reconstruct_report *report)
 {
     const char *fname = mailbox_record_fname(mailbox, record);
     int r = 0;
@@ -7251,7 +7305,24 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
             goto out;
         }
 
-        printf("%s uid %u not found\n", mailbox_name(mailbox), record->uid);
+        if (!report) printf("%s uid %u not found\n", mailbox_name(mailbox), record->uid);
+        {
+            struct reconstruct_finding f = RECONSTRUCT_FINDING_INITIALIZER;
+            f.code = "message-file-missing";
+            f.mboxname = mailbox_name(mailbox);
+            f.uniqueid = mailbox_uniqueid(mailbox);
+            f.uid = record->uid;
+            f.has_uid = 1;
+            f.size = record->size;
+            f.has_size = 1;
+            f.guid = message_guid_encode(&record->guid);
+            f.tier = (record->internal_flags & FLAG_INTERNAL_ARCHIVED)
+                     ? "archive" : "spool";
+            f.path = (record->internal_flags & FLAG_INTERNAL_ARCHIVED)
+                     ? mailbox_archive_fname(mailbox, record->uid)
+                     : mailbox_spool_fname(mailbox, record->uid);
+            reconstruct_report(report, &f);
+        }
         syslog(LOG_ERR, "%s uid %u not found", mailbox_name(mailbox), record->uid);
 
         if (!make_changes) {
@@ -7297,8 +7368,18 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         if (!message_guid_equal(&record->guid, &copy.guid)) {
             int do_unlink = 0;
 
-            printf("%s uid %u guid mismatch\n",
+            if (!report) printf("%s uid %u guid mismatch\n",
                    mailbox_name(mailbox), record->uid);
+            {
+                struct reconstruct_finding f = RECONSTRUCT_FINDING_INITIALIZER;
+                f.code = "message-guid-mismatch";
+                f.mboxname = mailbox_name(mailbox);
+                f.uniqueid = mailbox_uniqueid(mailbox);
+                f.uid = record->uid;
+                f.has_uid = 1;
+                f.guid = message_guid_encode(&record->guid);
+                reconstruct_report(report, &f);
+            }
             syslog(LOG_ERR, "%s uid %u guid mismatch",
                    mailbox_name(mailbox), record->uid);
 
@@ -7354,7 +7435,17 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     if (!record->size) {
         /* dang, guess it failed to parse */
 
-        printf("%s uid %u failed to parse\n", mailbox_name(mailbox), record->uid);
+        if (!report) printf("%s uid %u failed to parse\n", mailbox_name(mailbox), record->uid);
+        {
+            struct reconstruct_finding f = RECONSTRUCT_FINDING_INITIALIZER;
+            f.code = "message-unparseable";
+            f.mboxname = mailbox_name(mailbox);
+            f.uniqueid = mailbox_uniqueid(mailbox);
+            f.uid = record->uid;
+            f.has_uid = 1;
+            f.guid = message_guid_encode(&record->guid);
+            reconstruct_report(report, &f);
+        }
         syslog(LOG_ERR, "%s uid %u failed to parse", mailbox_name(mailbox), record->uid);
 
         if (!make_changes) {
@@ -7405,7 +7496,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
     /* XXX - conditions under which modseq or uid or internaldate could be bogus? */
     if (record->modseq > mailbox->i.highestmodseq) {
-        printf("%s uid %u future modseq " MODSEQ_FMT " found\n",
+        if (!report) printf("%s uid %u future modseq " MODSEQ_FMT " found\n",
                    mailbox_name(mailbox), record->uid, record->modseq);
         syslog(LOG_ERR, "%s uid %u future modseq " MODSEQ_FMT " found",
                    mailbox_name(mailbox), record->uid, record->modseq);
@@ -7416,7 +7507,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     }
 
     if (record->uid > mailbox->i.last_uid) {
-        printf("%s future uid %u found\n",
+        if (!report) printf("%s future uid %u found\n",
                mailbox_name(mailbox), record->uid);
         syslog(LOG_ERR, "%s future uid %u found",
                mailbox_name(mailbox), record->uid);
@@ -7432,7 +7523,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     /* check if the snoozed status matches (unless expunged, which shouldn't be snoozed) */
     if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)
       && !!(record->internal_flags & FLAG_INTERNAL_SNOOZED) != !!has_snoozedannot) {
-        printf("%s uid %u snoozed mismatch\n", mailbox_name(mailbox), record->uid);
+        if (!report) printf("%s uid %u snoozed mismatch\n", mailbox_name(mailbox), record->uid);
         syslog(LOG_ERR, "%s uid %u snoozed mismatch", mailbox_name(mailbox), record->uid);
         if (has_snoozedannot) record->internal_flags |= FLAG_INTERNAL_SNOOZED;
         else record->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
@@ -7441,7 +7532,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
     /* after all this - if it still matches in every respect, we don't need
      * to rewrite the record - just return */
-    if (records_match(mailbox_name(mailbox), &copy, record)) {
+    if (records_match(mailbox_name(mailbox), &copy, record, report)) {
         r = 0 ;
         goto out;
     }
@@ -7481,7 +7572,8 @@ out:
 
 
 static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int isarchive,
-                                      int has_snoozedannot, int flags)
+                                      int has_snoozedannot, int flags,
+                                      struct reconstruct_report *report)
 {
     /* XXX - support archived */
     const char *fname;
@@ -7517,7 +7609,17 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
     /* no file, nothing to do! */
     if (r) {
         syslog(LOG_ERR, "%s uid %u not found", mailbox_name(mailbox), uid);
-        printf("%s uid %u not found", mailbox_name(mailbox), uid);
+        if (!report) printf("%s uid %u not found", mailbox_name(mailbox), uid);
+        {
+            struct reconstruct_finding f = RECONSTRUCT_FINDING_INITIALIZER;
+            f.code = "message-file-missing";
+            f.mboxname = mailbox_name(mailbox);
+            f.uniqueid = mailbox_uniqueid(mailbox);
+            f.uid = uid;
+            f.has_uid = 1;
+            f.tier = isarchive ? "archive" : "spool";
+            reconstruct_report(report, &f);
+        }
         r = 0;
 
         if (make_changes)
@@ -7548,7 +7650,7 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
     }
 
     if (uid > mailbox->i.last_uid) {
-        printf("%s uid %u found - adding\n", mailbox_name(mailbox), uid);
+        if (!report) printf("%s uid %u found - adding\n", mailbox_name(mailbox), uid);
         syslog(LOG_ERR, "%s uid %u found - adding", mailbox_name(mailbox), uid);
         record.uid = uid;
     }
@@ -7556,7 +7658,7 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
         char *oldfname;
         char *newfname;
 
-        printf("%s uid %u rediscovered - appending\n", mailbox_name(mailbox), uid);
+        if (!report) printf("%s uid %u rediscovered - appending\n", mailbox_name(mailbox), uid);
         syslog(LOG_ERR, "%s uid %u rediscovered - appending", mailbox_name(mailbox), uid);
         /* XXX - check firstexpunged? */
         record.uid = mailbox->i.last_uid + 1;
@@ -7599,10 +7701,11 @@ out:
 
 static void reconstruct_compare_headers(struct mailbox *mailbox,
                                         struct index_header *old,
-                                        struct index_header *new)
+                                        struct index_header *new,
+                                        struct reconstruct_report *report)
 {
     if (old->quota_mailbox_used != new->quota_mailbox_used) {
-        printf("%s updating quota_mailbox_used: "
+        if (!report) printf("%s updating quota_mailbox_used: "
                QUOTA_T_FMT " => " QUOTA_T_FMT "\n", mailbox_name(mailbox),
                old->quota_mailbox_used, new->quota_mailbox_used);
         syslog(LOG_ERR, "%s updating quota_mailbox_used: "
@@ -7611,7 +7714,7 @@ static void reconstruct_compare_headers(struct mailbox *mailbox,
     }
 
     if (old->quota_annot_used != new->quota_annot_used) {
-        printf("%s updating quota_annot_used: "
+        if (!report) printf("%s updating quota_annot_used: "
                QUOTA_T_FMT " => " QUOTA_T_FMT "\n", mailbox_name(mailbox),
                old->quota_annot_used, new->quota_annot_used);
         syslog(LOG_ERR, "%s updating quota_annot_used: "
@@ -7620,7 +7723,7 @@ static void reconstruct_compare_headers(struct mailbox *mailbox,
     }
 
     if (old->quota_deleted_used != new->quota_deleted_used) {
-        printf("%s updating quota_deleted_used: "
+        if (!report) printf("%s updating quota_deleted_used: "
                QUOTA_T_FMT " => " QUOTA_T_FMT "\n", mailbox_name(mailbox),
                old->quota_deleted_used, new->quota_deleted_used);
         syslog(LOG_ERR, "%s updating quota_deleted_used: "
@@ -7629,7 +7732,7 @@ static void reconstruct_compare_headers(struct mailbox *mailbox,
     }
 
     if (old->quota_expunged_used != new->quota_expunged_used) {
-        printf("%s updating quota_expunged_used: "
+        if (!report) printf("%s updating quota_expunged_used: "
                QUOTA_T_FMT " => " QUOTA_T_FMT "\n", mailbox_name(mailbox),
                old->quota_expunged_used, new->quota_expunged_used);
         syslog(LOG_ERR, "%s updating quota_expunged_used: "
@@ -7640,42 +7743,42 @@ static void reconstruct_compare_headers(struct mailbox *mailbox,
     if (old->answered != new->answered) {
         syslog(LOG_ERR, "%s: updating answered %u => %u",
                mailbox_name(mailbox), old->answered, new->answered);
-        printf("%s: updating answered %u => %u\n",
+        if (!report) printf("%s: updating answered %u => %u\n",
                mailbox_name(mailbox), old->answered, new->answered);
     }
 
     if (old->flagged != new->flagged) {
         syslog(LOG_ERR, "%s: updating flagged %u => %u",
                mailbox_name(mailbox), old->flagged, new->flagged);
-        printf("%s: updating flagged %u => %u\n",
+        if (!report) printf("%s: updating flagged %u => %u\n",
                mailbox_name(mailbox), old->flagged, new->flagged);
     }
 
     if (old->deleted != new->deleted) {
         syslog(LOG_ERR, "%s: updating deleted %u => %u",
                mailbox_name(mailbox), old->deleted, new->deleted);
-        printf("%s: updating deleted %u => %u\n",
+        if (!report) printf("%s: updating deleted %u => %u\n",
                mailbox_name(mailbox), old->deleted, new->deleted);
     }
 
     if (old->exists != new->exists) {
         syslog(LOG_ERR, "%s: updating exists %u => %u",
                mailbox_name(mailbox), old->exists, new->exists);
-        printf("%s: updating exists %u => %u\n",
+        if (!report) printf("%s: updating exists %u => %u\n",
                mailbox_name(mailbox), old->exists, new->exists);
     }
 
     if (old->synccrcs.basic != new->synccrcs.basic) {
         syslog(LOG_ERR, "%s: updating sync_crc %u => %u",
                mailbox_name(mailbox), old->synccrcs.basic, new->synccrcs.basic);
-        printf("%s: updating sync_crc %u => %u\n",
+        if (!report) printf("%s: updating sync_crc %u => %u\n",
                mailbox_name(mailbox), old->synccrcs.basic, new->synccrcs.basic);
     }
 
     if (old->synccrcs.annot != new->synccrcs.annot) {
         syslog(LOG_ERR, "%s: updating sync_crc_annot %u => %u",
                mailbox_name(mailbox), old->synccrcs.annot, new->synccrcs.annot);
-        printf("%s: updating sync_crc_annot %u => %u\n",
+        if (!report) printf("%s: updating sync_crc_annot %u => %u\n",
                mailbox_name(mailbox), old->synccrcs.annot, new->synccrcs.annot);
     }
 
@@ -7766,7 +7869,8 @@ static int find_annots(struct mailbox *mailbox, struct found_uids *annots)
 
 static int reconstruct_delannots(struct mailbox *mailbox,
                                  struct found_uids *delannots,
-                                 int flags)
+                                 int flags,
+                                 struct reconstruct_report *report)
 {
     int make_changes = (flags & RECONSTRUCT_MAKE_CHANGES);
     int r = 0;
@@ -7781,7 +7885,7 @@ static int reconstruct_delannots(struct mailbox *mailbox,
     while (delannots->pos < delannots->nused) {
         uint32_t uid = delannots->found[delannots->pos].uid;
         syslog(LOG_NOTICE, "removing stale annotations for %u", uid);
-        printf("removing stale annotations for %u\n", uid);
+        if (!report) printf("removing stale annotations for %u\n", uid);
         if (make_changes) {
             r = annotate_msg_cleanup(mailbox, uid);
             if (r) goto out;
@@ -7797,7 +7901,15 @@ out:
 /*
  * Reconstruct the single mailbox named 'name'
  */
-EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **mboxptr)
+EXPORTED int mailbox_reconstruct(const char *name, int flags,
+                                 struct mailbox **mboxptr)
+{
+    return mailbox_reconstruct_report(name, flags, mboxptr, NULL);
+}
+
+EXPORTED int mailbox_reconstruct_report(const char *name, int flags,
+                                        struct mailbox **mboxptr,
+                                        struct reconstruct_report *report)
 {
     /* settings */
     int make_changes = (flags & RECONSTRUCT_MAKE_CHANGES);
@@ -7823,12 +7935,12 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
     if (r) {
         if (!make_changes) return r;
         /* returns a locktype == LOCK_EXCLUSIVE mailbox */
-        r = mailbox_reconstruct_create(name, &mailbox);
+        r = mailbox_reconstruct_create(name, &mailbox, report);
     }
     if (r) return r;
 
     /* NOTE: we have to do this first, because it reads the header */
-    r = mailbox_reconstruct_acl(mailbox, flags);
+    r = mailbox_reconstruct_acl(mailbox, flags, report);
     if (r) goto close;
 
     /* open and lock the annotation state */
@@ -7846,7 +7958,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
         if (!mailbox->h.flagname[flag]) continue;
         if (!imparse_isatom(mailbox->h.flagname[flag])) {
-            printf("%s: bogus flag name %d:%s",
+            if (!report) printf("%s: bogus flag name %d:%s",
                    mailbox_name(mailbox), flag, mailbox->h.flagname[flag]);
             syslog(LOG_ERR, "%s: bogus flag name %d:%s",
                    mailbox_name(mailbox), flag, mailbox->h.flagname[flag]);
@@ -7860,7 +7972,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
     /* find cyrus.expunge file if present */
     cleanup_stale_expunged(mailbox);
 
-    r = find_files(mailbox, &files, flags);
+    r = find_files(mailbox, &files, flags, report);
     if (r) goto close;
 
     r = find_annots(mailbox, &annots);
@@ -7908,7 +8020,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
             if (have_file) {
                 /* we can just unlink this one, already processed one copy */
                 const char *fname = mailbox_archive_fname(mailbox, record.uid);
-                printf("Removing duplicate archive file %s\n", fname);
+                if (!report) printf("Removing duplicate archive file %s\n", fname);
                 xunlink(fname);
             }
             else {
@@ -7916,7 +8028,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
                     if (!(record.internal_flags & FLAG_INTERNAL_ARCHIVED)) {
                         /* oops, it's really archived - let's fix that right now */
                         record.internal_flags |= FLAG_INTERNAL_ARCHIVED;
-                        printf("Marking file as archived %s %u\n", mailbox_name(mailbox), record.uid);
+                        if (!report) printf("Marking file as archived %s %u\n", mailbox_name(mailbox), record.uid);
                         mailbox_rewrite_index_record(mailbox, &record);
                     }
                 }
@@ -7924,7 +8036,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
                     if (record.internal_flags & FLAG_INTERNAL_ARCHIVED) {
                         /* oops, non-archived copy exists, let's use that */
                         record.internal_flags &= ~FLAG_INTERNAL_ARCHIVED;
-                        printf("Marking file as not archived %s %u\n", mailbox_name(mailbox), record.uid);
+                        if (!report) printf("Marking file as not archived %s %u\n", mailbox_name(mailbox), record.uid);
                         mailbox_rewrite_index_record(mailbox, &record);
                     }
                 }
@@ -7937,7 +8049,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
                                                valid_user_flags,
                                                flags, have_file,
                                                has_snoozedannot,
-                                               &discovered);
+                                               &discovered, report);
         if (r) goto close;
 
         if (mailbox->i.minor_version >= 13) {
@@ -7946,7 +8058,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
             if (!buf.len) mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "thrid", NULL, &buf);
             if (buf.len) {
                 syslog(LOG_NOTICE, "removing stale thrid for %u", record.uid);
-                printf("removing stale thrid for %u\n", record.uid);
+                if (!report) printf("removing stale thrid for %u\n", record.uid);
                 buf_reset(&buf);
                 r = mailbox_annotation_write(mailbox, record.uid, IMAP_ANNOT_NS "thrid", "", &buf);
                 if (r) goto close;
@@ -7959,7 +8071,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
             if (!buf.len) mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "savedate", NULL, &buf);
             if (buf.len) {
                 syslog(LOG_NOTICE, "removing stale savedate for %u", record.uid);
-                printf("removing stale savedate for %u\n", record.uid);
+                if (!report) printf("removing stale savedate for %u\n", record.uid);
                 buf_reset(&buf);
                 r = mailbox_annotation_write(mailbox, record.uid, IMAP_ANNOT_NS "savedate", "", &buf);
                 if (r) goto close;
@@ -7972,7 +8084,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
             if (!buf.len) mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "createdmodseq", NULL, &buf);
             if (buf.len) {
                 syslog(LOG_NOTICE, "removing stale createdmodseq for %u", record.uid);
-                printf("removing stale createdmodseq for %u\n", record.uid);
+                if (!report) printf("removing stale createdmodseq for %u\n", record.uid);
                 buf_reset(&buf);
                 r = mailbox_annotation_write(mailbox, record.uid, IMAP_ANNOT_NS "createdmodseq", "", &buf);
                 if (r) goto close;
@@ -7985,7 +8097,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
             if (!buf.len) mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "basethrid", NULL, &buf);
             if (buf.len) {
                 syslog(LOG_NOTICE, "removing stale basethrid for %u", record.uid);
-                printf("removing stale basethrid for %u\n", record.uid);
+                if (!report) printf("removing stale basethrid for %u\n", record.uid);
                 buf_reset(&buf);
                 r = mailbox_annotation_write(mailbox, record.uid, IMAP_ANNOT_NS "basethrid", "", &buf);
                 if (r) goto close;
@@ -8029,7 +8141,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
 
         r = mailbox_reconstruct_append(mailbox, files.found[files.pos].uid,
                                        files.found[files.pos].isarchive,
-                                       has_snoozedannot, flags);
+                                       has_snoozedannot, flags, report);
         if (r) goto close;
         files.pos++;
 
@@ -8045,13 +8157,13 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
     while (discovered.pos < discovered.nused) {
         r = mailbox_reconstruct_append(mailbox, discovered.found[discovered.pos].uid,
                                        discovered.found[discovered.pos].isarchive,
-                                       /*has_snoozedannot*/0, flags);
+                                       /*has_snoozedannot*/0, flags, report);
         if (r) goto close;
         discovered.pos++;
     }
 
     if (delannots.nused) {
-        r = reconstruct_delannots(mailbox, &delannots, flags);
+        r = reconstruct_delannots(mailbox, &delannots, flags, report);
         if (r) goto close;
     }
 
@@ -8065,7 +8177,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
     if (r) goto close;
 
     /* inform users of any changed header fields */
-    reconstruct_compare_headers(mailbox, &old_header, &mailbox->i);
+    reconstruct_compare_headers(mailbox, &old_header, &mailbox->i, report);
 
     // make the mailbox dirty regardless
     if (flags & RECONSTRUCT_ALWAYS_DIRTY)

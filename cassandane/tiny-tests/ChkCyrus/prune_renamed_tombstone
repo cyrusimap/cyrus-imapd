@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+# Rename leaves a tombstone at the old name and the I record under the
+# new one.  Pruning must drop the tombstone and its history item and leave
+# the I record: the mailbox still exists.
+sub test_prune_renamed_tombstone
+    :NoSanityCheck
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Old") or die "create: $@";
+    $imaptalk->rename("INBOX.Old", "INBOX.New") or die "rename: $@";
+
+    $self->assert($self->count_tombstones() > 0);
+    $self->backdate_tombstones();
+
+    $self->audit_json('--level', '0', '--delete', '--really',
+                      '--prune-tombstones', '1');
+
+    $self->assert_num_equals(0, $self->count_tombstones());
+
+    # the mailbox itself survives, and nothing is left dangling
+    my $findings = $self->audit_json('--level', '0');
+    $self->assert_lacks_code($findings, 'db-history-no-tombstone');
+    $self->assert_lacks_code($findings, 'db-missing-i-key');
+    $self->assert_lacks_code($findings, 'db-missing-n-key');
+
+    my $res = $imaptalk->select("INBOX.New");
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+}

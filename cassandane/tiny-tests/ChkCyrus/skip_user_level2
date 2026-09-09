@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+# --skip-user excludes the user everywhere, not just from the per-user
+# structural checks: their mailboxes must not be opened by the levels
+# 2-4 sweep either.
+sub test_skip_user_level2
+    :NoSanityCheck
+{
+    my ($self) = @_;
+
+    $self->{instance}->create_user("otheruser");
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'otheruser');
+    unlink("$mbpath->{meta}/cyrus.index") or die "unlink: $!";
+
+    my $findings = $self->audit_json('--level', '2',
+                                     '--skip-user', 'otheruser');
+    $self->assert_lacks_code($findings, 'mailbox-unreadable');
+
+    $findings = $self->audit_json('--level', '2');
+    $self->assert_has_code($findings, 'mailbox-unreadable');
+
+    # the failed open logs an IOERROR, which is the point of the test
+    $self->{instance}->getsyslog();
+}

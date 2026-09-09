@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+# Levels 2-4 are report-only.  If reconstruct were allowed to make
+# changes it would expunge the record for a missing file, destroying the
+# guid a driver needs to fetch it back.
+sub test_level2_never_modifies
+    :NoSanityCheck
+{
+    my ($self) = @_;
+
+    $self->make_message("test message") or die;
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+    unlink("$mbpath->{data}/1.") or die "unlink: $!";
+
+    my $index = "$mbpath->{meta}/cyrus.index";
+    my @before = stat($index);
+
+    $self->audit_json('--level', '4');
+
+    my @after = stat($index);
+    $self->assert_num_equals($before[7], $after[7], "cyrus.index size changed");
+    $self->assert_num_equals($before[9], $after[9], "cyrus.index mtime changed");
+
+    # the record, and therefore the guid, survives for a second run
+    my $findings = $self->audit_json('--level', '2');
+    my ($f) = grep { $_->{code} eq 'message-file-missing' } @{$findings};
+    $self->assert_not_null($f);
+    $self->assert_not_null($f->{guid});
+}
