@@ -29,6 +29,7 @@
 #include "annotate.h"
 #include "acl.h"
 #include "append.h"
+#include "assert.h"
 #include "dlist.h"
 #include "global.h"
 #include "http_dav.h"
@@ -82,8 +83,8 @@ static const struct dav_namespace_t {
  * known_namespaces[] slots, so the two must match.  See comment on the
  * NS_* enum in http_dav.h.
  */
-_Static_assert(NUM_NAMESPACE == NUM_KNOWN_NAMESPACES,
-               "NUM_NAMESPACE must match known_namespaces[]");
+static_assert(NUM_NAMESPACE == NUM_KNOWN_NAMESPACES,
+              "NUM_NAMESPACE must match known_namespaces[]");
 
 static const struct match_type_t {
     const char *name;
