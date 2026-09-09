@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+# With jmap_require_accountid off (the shipped default), a call with no
+# accountId runs against the login's own account, as it always has. The
+# JMAP suites turn the option on; this test turns it back off.
+
+sub test_core_accountid_lenient
+    :min_version_3_1 :JMAPLenientAccountId
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "no accountId means my own account";
+    my $res = $jmap->CallMethods([['Mailbox/get', { accountId => \undef }, 'R1']]);
+    $self->assert_str_equals('Mailbox/get', $res->[0][0]);
+    $self->assert_str_equals('cassandane', $res->[0][1]{accountId});
+
+    xlog $self, "so does a null one";
+    $res = $jmap->CallMethods([['Mailbox/get', { accountId => undef }, 'R2']]);
+    $self->assert_str_equals('Mailbox/get', $res->[0][0]);
+    $self->assert_str_equals('cassandane', $res->[0][1]{accountId});
+
+    xlog $self, "but a non-string is still invalid";
+    $res = $jmap->CallMethods([['Mailbox/get', { accountId => 42 }, 'R3']]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+    $self->assert_deep_equals(['accountId'], $res->[0][1]{arguments});
+}
