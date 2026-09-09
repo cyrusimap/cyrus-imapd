@@ -16,9 +16,12 @@ sub test_mdn_send_parse_roundtrip ($self)
     ) || die;
 
     my $res = $jmap->request([
+        ['Identity/get', {}],
         ['Email/query', {}],
     ]);
-    my $emailId = $res->single_sentence('Email/query')->arguments->{ids}[0];
+    my $identityId = $res->sentence_named('Identity/get')->arguments->{list}[0]{id};
+    my $emailId = $res->sentence_named('Email/query')->arguments->{ids}[0];
+    $self->assert_not_null($identityId);
     $self->assert_not_null($emailId);
 
     my $disposition = {
@@ -26,10 +29,14 @@ sub test_mdn_send_parse_roundtrip ($self)
         sendingMode => 'mdn-sent-manually',
         type => 'displayed',
     };
+    my $extensionFields = {
+        'X-Cassandane-Test' => 'roundtrip',
+    };
 
     xlog $self, "send the MDN";
     $res = $jmap->request([
         ['MDN/send', {
+            identityId => $identityId,
             send => {
                 k1 => {
                     forEmailId => $emailId,
@@ -38,7 +45,11 @@ sub test_mdn_send_parse_roundtrip ($self)
                     reportingUA => 'cassandane; Cassandane 1.0',
                     includeOriginalMessage => JSON::true,
                     disposition => $disposition,
+                    extensionFields => $extensionFields,
                 },
+            },
+            onSuccessUpdateEmail => {
+                '#k1' => { 'keywords/$mdnsent' => JSON::true },
             },
         }],
         ['Email/get', {
@@ -47,7 +58,12 @@ sub test_mdn_send_parse_roundtrip ($self)
         }],
     ]);
 
-    my $sent = $res->sentence_named('MDN/send')->arguments;
+    my ($send, $set, $get) = $res->sentences;
+    $self->assert_str_equals('MDN/send', $send->name);
+    $self->assert_str_equals('Email/set', $set->name);
+    $self->assert_str_equals('Email/get', $get->name);
+
+    my $sent = $send->arguments;
     $self->assert_cmp_deeply(
         {
             accountId => 'cassandane',
@@ -64,16 +80,20 @@ sub test_mdn_send_parse_roundtrip ($self)
     );
     my $finalRecipient = $sent->{sent}{k1}{finalRecipient};
 
-    xlog $self, "the original is now marked \$MDNSent";
+    xlog $self, "the implicit Email/set applied the onSuccessUpdateEmail patch";
+    $self->assert_cmp_deeply(
+        superhashof({ updated => { $emailId => ignore() } }),
+        $set->arguments,
+    );
     $self->assert_cmp_deeply(
         superhashof({ '$mdnsent' => JSON::true }),
-        $res->sentence_named('Email/get')->arguments->{list}[0]{keywords},
+        $get->arguments->{list}[0]{keywords},
     );
 
     xlog $self, "upload what went out and parse it";
-    my @sent = $self->sent_messages();
-    $self->assert_num_equals(1, scalar @sent);
-    my $blobId = $self->upload_message($sent[0]);
+    my @out = $self->smtpd_messages();
+    $self->assert_num_equals(1, scalar @out);
+    my $blobId = $self->upload_message($out[0]);
 
     $res = $jmap->request([
         ['MDN/parse', { blobIds => [$blobId] }],
@@ -95,6 +115,7 @@ sub test_mdn_send_parse_roundtrip ($self)
                     originalMessageId => $msg->get_header('Message-ID'),
                     disposition => $disposition,
                     error => undef,
+                    extensionFields => $extensionFields,
                 },
             },
             notParsable => undef,

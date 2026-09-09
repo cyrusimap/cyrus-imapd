@@ -74,6 +74,7 @@ EOF
             type => 'displayed',
         },
         error => undef,
+        extensionFields => undef,
     });
 }
 
@@ -124,6 +125,7 @@ EOF
             'The message could not be converted',
             'Second error line',
         ],
+        extensionFields => undef,
     });
 }
 
@@ -175,5 +177,58 @@ EOF
             type => 'displayed',
         },
         error => undef,
+        extensionFields => undef,
+    });
+}
+
+# RFC 2047 in the subject and a transfer-encoded body are decoded, and
+# fields RFC 8098 doesn't define come back as extensionFields.
+sub test_mdn_parse__encoded_text ($self)
+{
+    $self->assert_mdn_parse(<<'EOF',
+From: <joe@example.com>
+To: <jane@example.org>
+Subject: =?UTF-8?Q?Gelesen:_Gr=C3=BC=C3=9Fe?=
+Message-Id: <enc1@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/report; report-type=disposition-notification;
+ boundary=enc
+
+--enc
+Content-Type: text/plain; charset=iso-8859-1
+Content-Transfer-Encoding: quoted-printable
+
+Ihre Nachricht wurde gelesen. Gr=FC=DFe!
+
+--enc
+Content-Type: message/disposition-notification
+
+Final-Recipient: rfc822; joe@example.com
+Disposition: manual-action/mdn-sent-manually; displayed
+X-Custom-Field: hello
+X-Other-Field: world
+
+--enc--
+EOF
+    {
+        forEmailId => undef,
+        subject => "Gelesen: Gr\N{LATIN SMALL LETTER U WITH DIAERESIS}\N{LATIN SMALL LETTER SHARP S}e",
+        textBody => "Ihre Nachricht wurde gelesen. Gr\N{LATIN SMALL LETTER U WITH DIAERESIS}\N{LATIN SMALL LETTER SHARP S}e!",
+        includeOriginalMessage => JSON::false,
+        reportingUA => undef,
+        mdnGateway => undef,
+        originalRecipient => undef,
+        finalRecipient => 'rfc822; joe@example.com',
+        originalMessageId => undef,
+        disposition => {
+            actionMode => 'manual-action',
+            sendingMode => 'mdn-sent-manually',
+            type => 'displayed',
+        },
+        error => undef,
+        extensionFields => {
+            'X-Custom-Field' => 'hello',
+            'X-Other-Field' => 'world',
+        },
     });
 }

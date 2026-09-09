@@ -9,7 +9,8 @@ use JSON;
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::CRLF;
-use Cassandane::Util::Slurp;
+
+use charnames ':full';
 
 sub new
 {
@@ -37,6 +38,7 @@ sub jmap_default_using
     [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
         'urn:ietf:params:jmap:mdn',
     ];
 }
@@ -53,16 +55,6 @@ sub upload_message
     });
     $self->assert($res->is_success);
     return $res->blobId;
-}
-
-# Messages that fakesmtpd accepted, oldest first, as CRLF text.
-sub sent_messages
-{
-    my ($self) = @_;
-
-    my $dir = $self->{instance}{basedir} . '/smtpd';
-    my @files = sort { -M $b <=> -M $a } glob("$dir/message_*.smtp");
-    return map { to_crlf(slurp_file($_)) } @files;
 }
 
 use Cassandane::Tiny::Loader;

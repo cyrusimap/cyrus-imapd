@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+# The MDN that "reject" sends copies the original recipient out of the
+# header named by sieve_mdn_original_recipient_header.  That header may
+# already carry an RFC 8098 address-type (Original-Recipient does) or be a
+# bare address (X-Delivered-To is); either way the MDN field must be
+# "address-type; address" exactly once.
+sub assert_reject_mdn_original_recipient ($self, $header, $value, $expect)
+{
+    $self->{instance}->{config}->set(
+        sieve_mdn_original_recipient_header => lc $header,
+        sieve_use_lmtp_reject => 'no',
+    );
+    $self->_start_instances();
+
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["reject"];
+reject "Go away!";
+EOF
+    );
+
+    my $msg = $self->{gen}->generate(
+        subject => "Rejected",
+        extra_headers => [ [ $header, $value ] ],
+    );
+    $self->{instance}->deliver($msg);
+
+    my @out = $self->smtpd_messages();
+    $self->assert_num_equals(1, scalar @out);
+
+    # only the disposition-notification field block, not the copy of the
+    # original message that follows it
+    my ($block) = $out[0]
+        =~ m{message/disposition-notification\r\n\r\n(.*?)\r\n\r\n}s;
+    $self->assert_not_null($block);
+    my @fields = $block =~ /^(Original-Recipient: .*?)\r?$/mg;
+    $self->assert_deep_equals([ "Original-Recipient: $expect" ], \@fields);
+}
+
+sub test_reject_mdn_original_recipient__typed
+    :want_smtpdaemon :NoStartInstances
+    ($self)
+{
+    $self->assert_reject_mdn_original_recipient(
+        'Original-Recipient', 'rfc822;orig@example.com',
+        'rfc822;orig@example.com');
+}
+
+sub test_reject_mdn_original_recipient__bare
+    :want_smtpdaemon :NoStartInstances
+    ($self)
+{
+    $self->assert_reject_mdn_original_recipient(
+        'X-Delivered-To', 'orig@example.com',
+        'rfc822; orig@example.com');
+}
