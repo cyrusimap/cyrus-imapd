@@ -716,6 +716,41 @@ HIDDEN int jmap_api(struct transaction_t *txn,
             continue;
         }
 
+        /* Validate fromAccountId the same way, if the call has one. A /copy
+         * used to check it only once there was something to copy, so an
+         * empty copy from an account this user cannot see (or from no account
+         * at all) succeeded, and told the caller the account exists.
+         * RFC 8620 Section 3.6.2. */
+        arg = json_object_get(args, "fromAccountId");
+        if (arg && arg != json_null()) {
+            const char *from_accountid = json_string_value(arg);
+            if (!from_accountid) {
+                err = json_pack("{s:s, s:[s]}", "type", "invalidArguments",
+                                "arguments", "fromAccountId");
+            }
+            else {
+                json_t *from_capas =
+                    hash_lookup(from_accountid, &capabilities_by_accountid);
+                if (!from_capas) {
+                    from_capas = lookup_capabilities(from_accountid, httpd_userid,
+                                                     httpd_authstate, &mbstates);
+                    hash_insert(from_accountid, from_capas,
+                                &capabilities_by_accountid);
+                }
+                if (json_is_null(from_capas)) {
+                    err = json_pack("{s:s}", "type", "accountNotFound");
+                }
+                else if (!json_object_get(from_capas, mp->capability)) {
+                    err = json_pack("{s:s}", "type", "accountNotSupportedByMethod");
+                }
+            }
+            if (err) {
+                json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
+                json_decref(args);
+                continue;
+            }
+        }
+
         /* Pre-process result references */
         if (process_resultrefs(args, resp, &err)) {
             if (!err) err = json_pack("{s:s}", "type", "invalidResultReference");
