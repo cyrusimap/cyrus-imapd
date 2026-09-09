@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+# An admin user rename writes a DELETED tombstone at the new name before it
+# checks the submailboxes, so a failure there has to clean that up again.
+sub test_rename_user_fails_after_tombstone
+    :AllowMoves :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    # fits under the old user name, not under a longer one
+    my $sub = 'a' x 470;
+    $talk->create("INBOX.$sub") || die "create: $@";
+
+    my $newuser = 'x' x 40;
+    xlog $self, "rename fails because a submailbox name would be too long";
+    $admintalk->rename('user.cassandane', "user.$newuser");
+    $self->assert_str_equals('no',
+                             $admintalk->get_last_completion_response());
+
+    xlog $self, "imapd survived";
+    $admintalk->noop();
+    $self->assert_str_equals('ok',
+                             $admintalk->get_last_completion_response());
+
+    xlog $self, "the tombstone at the new name is gone";
+    my $mailboxesdb = $self->{instance}->read_mailboxes_db();
+    my @newnames = grep { m/^user\.$newuser/ } keys %$mailboxesdb;
+    $self->assert_cmp_deeply([], \@newnames);
+
+    xlog $self, "and the old user is intact enough to rename properly";
+    $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert_str_equals('ok',
+                             $admintalk->get_last_completion_response());
+    $admintalk->select("user.newuser.$sub");
+    $self->assert_str_equals('ok',
+                             $admintalk->get_last_completion_response());
+}

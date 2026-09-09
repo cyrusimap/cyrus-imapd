@@ -8291,10 +8291,7 @@ submboxes:
 
 respond:
 
-    imapd_check(NULL, 0);
-
     if (r) {
-        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
         xsyslog(LOG_NOTICE, "rename failed",
                 "oldmboxname=<%s> newmboxname=<%s> error=<%s>",
                 oldmailboxname, newmailboxname, error_message(r));
@@ -8310,6 +8307,16 @@ respond:
                 xsyslog(LOG_ERR, "IOERROR: removing temporary uniqueid tombstone after rename error",
                         "mboxname=<%s> error=<%s>", newdestmbentry->name, error_message(r2));
         }
+    }
+
+    /* imapd_check() relocks the selected mailbox, which takes its owner's
+       lock, so the rename's own locks have to be gone first */
+    user_nslock_release(&user_nslock);
+
+    imapd_check(NULL, 0);
+
+    if (r) {
+        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
         if (config_mupdate_server)
             kick_mupdate();
