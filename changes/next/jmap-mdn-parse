@@ -4,6 +4,9 @@ Description:
 MDN/parse (RFC 9007) is implemented.  It was a stub that answered
 notParsable for every blob.
 
+MDN/send now issues a well-formed null envelope sender.  It used to send
+"MAIL FROM:<<>>", which SMTP servers reject.
+
 
 Documentation:
 

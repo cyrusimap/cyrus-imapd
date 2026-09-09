@@ -406,7 +406,7 @@ static json_t *send_mdn(struct jmap_req *req, struct mdn_t *mdn,
 
     /* Prepare envelope */
     smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
-    smtp_envelope_set_from(&smtpenv, "<>");
+    smtp_envelope_set_from(&smtpenv, "");
 
     int i;
     for (i = 0; i < strarray_size(&mdn->notify_to); i++) {
