@@ -85,6 +85,11 @@ int actions_init(void);
 
 int actions_setuser(const char *userid);
 
+/* open and close the user's Sieve DB and mailbox around a single command,
+   under their namespace lock */
+int actions_open_user(void);
+void actions_close_user(void);
+
 /*
  * Unset user after unauthentication/logout
  *

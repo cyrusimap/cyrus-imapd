@@ -25,11 +25,8 @@
 #define DAVNOTIFICATION_CONTENT_TYPE \
     "application/davnotification+xml; charset=utf-8"
 
-static struct webdav_db *auth_webdavdb = NULL;
-
 static void my_dav_init(struct buf *serverinfo);
 static int my_dav_auth(const char *userid);
-static void my_dav_reset(void);
 static void my_dav_shutdown(void);
 
 static unsigned long notify_allow_cb(struct request_target_t *tgt);
@@ -245,7 +242,7 @@ struct namespace_t namespace_notify = {
     MBTYPE_COLLECTION,
     (ALLOW_READ | ALLOW_POST | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_ACL),
-    &my_dav_init, &my_dav_auth, &my_dav_reset, &my_dav_shutdown,
+    &my_dav_init, &my_dav_auth, NULL, &my_dav_shutdown,
     &dav_premethod,
     {
         { &meth_acl,            &notify_params },      /* ACL          */
@@ -400,15 +397,6 @@ static int my_dav_auth(const char *userid)
         /* proxy-only server - won't have DAV databases */
         return 0;
     }
-    else {
-        /* Open WebDAV DB for 'userid' */
-        my_dav_reset();
-        auth_webdavdb = webdav_open_userid(userid);
-        if (!auth_webdavdb) {
-            syslog(LOG_ERR, "Unable to open WebDAV DB for userid: %s", userid);
-            return HTTP_UNAVAILABLE;
-        }
-    }
 
     /* Auto-provision a notifications collection for 'userid' */
     create_notify_collection(userid, NULL);
@@ -417,16 +405,8 @@ static int my_dav_auth(const char *userid)
 }
 
 
-static void my_dav_reset(void)
-{
-    if (auth_webdavdb) webdav_close(auth_webdavdb);
-    auth_webdavdb = NULL;
-}
-
-
 static void my_dav_shutdown(void)
 {
-    my_dav_reset();
     webdav_done();
 }
 
@@ -969,6 +949,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
     int rights, ret, r, legacy = 0, add = 0;
     struct mailbox *shared = NULL;
     struct webdav_db *webdavdb = NULL;
+    user_nslock_t *user_nslock = NULL;
     struct webdav_data *wdata;
     struct dlist *dl = NULL, *data;
     const char *type_str, *mboxname, *url_prefix;
@@ -1067,6 +1048,11 @@ HIDDEN int notify_post(struct transaction_t *txn)
         }
     }
 
+    /* everything down to the [un]subscribe is the sharee's own data.  Hold
+       only their lock, and drop it before touching the sharer's mailbox;
+       holding both deadlocks against a share accepted the other way */
+    user_nslock = user_nslock_lock_w(txn->req_tgt.userid);
+
     /* Open the WebDAV DB corresponding to the mailbox */
     webdavdb = webdav_open_userid(txn->req_tgt.userid);
 
@@ -1099,6 +1085,10 @@ HIDDEN int notify_post(struct transaction_t *txn)
         ret = HTTP_SERVER_ERROR;
         goto done;
     }
+
+    webdav_close(webdavdb);
+    webdavdb = NULL;
+    user_nslock_release(&user_nslock);
 
     /* Set invite status */
     r = mailbox_open_iwl(mboxname, &shared);
@@ -1211,6 +1201,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
     if (root) xmlFreeDoc(root->doc);
     if (notify) xmlFreeDoc(notify->doc);
     webdav_close(webdavdb);
+    user_nslock_release(&user_nslock);
     mbname_free(&mbname);
     dlist_free(&dl);
 

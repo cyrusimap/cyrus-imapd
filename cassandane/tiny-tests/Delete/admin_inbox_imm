@@ -74,6 +74,11 @@ EOF
     xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
+    # nothing else here uses DAV, and dav.db isn't created until something does
+    xlog $self, "Give the user a dav.db";
+    $self->{instance}->run_command({cyrus => 1},
+                                   'dav_reconstruct', 'cassandane');
+
     xlog $self, "Verify user data files/directories exist";
     my $data = $self->{instance}->run_mbpath('-u', 'cassandane');
     $self->assert_file_test($data->{user}{'sub'}, '-f');
