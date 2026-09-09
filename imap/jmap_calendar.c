@@ -1936,7 +1936,7 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
     if (!destroy_events) {
         r = caldav_foreach(db, mbentry, _calendar_hasevents_cb, NULL);
         if (r == CYRUSDB_DONE) {
-            *err = json_pack("{s:s}", "type", "calendarHasEvents");
+            *err = json_pack("{s:s}", "type", "calendarHasEvent");
             goto done;
         }
         else if (r) {
