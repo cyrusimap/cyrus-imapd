@@ -16,8 +16,14 @@ sub assert_simple_multiuser ($self, %opt)
     $AdminTalk->setacl("user.cassandane.#calendars.$CalendarId",
                        foo => $opt{acl});
 
-    $foo->imap->subscribe("user.cassandane.#calendars.$CalendarId")
-        if $opt{subscribe};
+    if ($opt{subscribe}) {
+        # Subscribing to a shared DAV mailbox needs the magic "+dav"
+        # userid suffix.
+        my $foostore = $self->{instance}->get_service('imap')->create_store(
+                            username => "foo+dav");
+        $foostore->get_client->subscribe(
+            "user.cassandane.#calendars.$CalendarId");
+    }
 
     my $FooDAV = $foo->caldav;
 
@@ -147,7 +153,7 @@ EOF
 }
 
 sub test_simple_multiuser
-    :NoAltNameSpace
+    :MagicPlus :NoAltNameSpace
     ($self)
 {
     $self->assert_simple_multiuser(acl => 'lrswipkxtecdn789', subscribe => 1);

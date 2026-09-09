@@ -1,0 +1,24 @@
+Description:
+
+Prohibit non-admin users from seeing or operating on non-IMAP
+mailboxes (calendars, address books, etc.) unless authenticated with
+the magic "+dav" userid suffix.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+

@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_imap_dav_admin_bypass
+    :MagicPlus :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "Admin can CREATE a DAV mailbox without +dav";
+    $admintalk->create("user.cassandane.#calendars.AdminAccess",
+                       ['TYPE', 'CALENDAR']) || die $@;
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "Admin can STATUS/GETACL/MYRIGHTS/GETQUOTAROOT it without +dav";
+    $admintalk->status("user.cassandane.#calendars.AdminAccess", ['MESSAGES']);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->getacl("user.cassandane.#calendars.AdminAccess");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->myrights("user.cassandane.#calendars.AdminAccess");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->getquotaroot("user.cassandane.#calendars.AdminAccess");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "Admin can SETACL it without +dav";
+    $admintalk->setacl("user.cassandane.#calendars.AdminAccess",
+                       "otheruser" => 'lrs');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "Admin can SUBSCRIBE/UNSUBSCRIBE it without +dav";
+    $admintalk->subscribe("user.cassandane.#calendars.AdminAccess");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->unsubscribe("user.cassandane.#calendars.AdminAccess");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "A plain (non-admin, non-+dav) session is still refused";
+    $imaptalk->status("INBOX.#calendars.AdminAccess", ['MESSAGES']);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->getacl("INBOX.#calendars.AdminAccess");
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->myrights("INBOX.#calendars.AdminAccess");
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->getquotaroot("INBOX.#calendars.AdminAccess");
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->create("INBOX.#calendars.PlainAccess",
+                      ['TYPE', 'CALENDAR']);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->subscribe("INBOX.#calendars.AdminAccess");
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    xlog $self, "...but the same session using +dav can subscribe to it";
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(
+                        username => "cassandane+dav");
+    my $plustalk = $plusstore->get_client();
+    $plustalk->subscribe("INBOX.#calendars.AdminAccess");
+    $self->assert_str_equals('ok', $plustalk->get_last_completion_response());
+    $plustalk->unsubscribe("INBOX.#calendars.AdminAccess");
+    $self->assert_str_equals('ok', $plustalk->get_last_completion_response());
+
+    xlog $self, "Admin can DELETE the DAV mailbox without +dav";
+    $admintalk->delete("user.cassandane.#calendars.AdminAccess");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}
