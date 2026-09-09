@@ -1,0 +1,122 @@
+#!perl
+use Cassandane::Tiny;
+use POSIX qw(_exit);
+use Fcntl qw(:flock);
+use File::Temp qw(tempfile);
+
+# Two local users each organize an event the other attends, then RSVP on
+# the other's behalf at the same time.  Each call holds its own account's
+# lock while sched_deliver_local() writes into the other user's calendar,
+# so this is the shape in which a lock taken in the wrong order deadlocks.
+sub test_calendarevent_participantreply_crossuser_concurrent
+    :NoAltNameSpace
+    ($self)
+{
+    my $cassandane = $self->default_user;
+    my $alice = $self->{instance}->create_user('alice');
+
+    my %eventid;
+    for my $pair ([$cassandane, $alice], [$alice, $cassandane]) {
+        my ($organizer, $attendee) = @$pair;
+        my $caldav = $organizer->caldav;
+        my $calid = $caldav->NewCalendar({name => 'invites'});
+        $self->assert_not_null($calid);
+
+        my $uid = "crossuser-" . $organizer->username;
+        my $orgaddr = $organizer->username . '@example.com';
+        my $attaddr = $attendee->username . '@example.com';
+        my $card = <<EOF2;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uid
+SUMMARY:An Event
+DTSTART:20260831T153000Z
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ORGANIZER:MAILTO:$orgaddr
+ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:$attaddr
+END:VEVENT
+END:VCALENDAR
+EOF2
+        $caldav->Request('PUT', "$calid/$uid.ics", $card,
+                         'Content-Type' => 'text/calendar');
+
+        my $res = $organizer->jmap->request([['CalendarEvent/get', {
+            ids => undef, properties => ['uid'],
+        }, "R0"]]);
+        my ($event) = grep { $_->{uid} eq $uid }
+                           @{$res->single_sentence->arguments->{list}};
+        $self->assert_not_null($event);
+        $eventid{$organizer->username} = $event->{id};
+    }
+
+    my $rounds = 10;
+    my $rsvp_loop = sub ($barrier, $organizer, $attendee) {
+        open(my $fh, '>', $barrier) or die "open $barrier: $!";
+        flock($fh, LOCK_SH);
+        my $jmap = $organizer->new_jmaptester;
+        for my $round (1..$rounds) {
+            my $res = $jmap->request([['CalendarEvent/participantReply', {
+                eventId => $eventid{$organizer->username},
+                participantEmail => $attendee->username . '@example.com',
+                updates => {
+                    participationStatus => $round % 2 ? 'accepted' : 'declined',
+                },
+            }, "R1"]]);
+            _exit(1) if $res->sentence(0)->name ne 'CalendarEvent/participantReply';
+        }
+        _exit(0);
+    };
+
+    my (undef, $barrier) = tempfile();
+    open(my $fh, '>', $barrier) or die "open $barrier: $!";
+    flock($fh, LOCK_EX) or die "flock: $!";
+
+    my @pids;
+    for my $pair ([$cassandane, $alice], [$alice, $cassandane]) {
+        my $pid = fork();
+        die "fork: $!" unless defined $pid;
+        if (!$pid) {
+            close($fh);
+            $rsvp_loop->($barrier, @$pair);
+        }
+        push @pids, $pid;
+    }
+
+    # release both at once
+    undef $fh;
+
+    my $deadline = time() + 120;
+    for my $pid (@pids) {
+        while (waitpid($pid, POSIX::WNOHANG()) == 0) {
+            if (time() > $deadline) {
+                kill 'KILL', @pids;
+                $self->fail("participantReply never finished");
+            }
+            select(undef, undef, undef, 0.05);
+        }
+        $self->assert_num_equals(0, $? >> 8, "child $pid replied cleanly");
+    }
+    unlink $barrier;
+
+    xlog $self, "both organizers' copies carry the final RSVP";
+    for my $pair ([$cassandane, $alice], [$alice, $cassandane]) {
+        my ($organizer, $attendee) = @$pair;
+        my $res = $organizer->jmap->request([['CalendarEvent/get', {
+            ids => [$eventid{$organizer->username}],
+            properties => ['participants'],
+        }, "R0"]]);
+        my $event = $res->single_sentence->arguments->{list}[0];
+        my $attaddr = 'mailto:' . $attendee->username . '@example.com';
+        my ($part) = grep { lc($_->{calendarAddress} // '') eq $attaddr }
+                          values %{$event->{participants}};
+        $self->assert_not_null($part);
+        $self->assert_str_equals($rounds % 2 ? 'accepted' : 'declined',
+                                 $part->{participationStatus});
+    }
+}
