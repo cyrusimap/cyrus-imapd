@@ -80,7 +80,10 @@ sub mail_from {
     $Self->mylog("SMTP: MAIL FROM $From @FromExtra");
     $Self->{_rcpt_to_count} = 0;
     return if $Self->override('from');
-    # don't just quietly accept garbage!
+    # don't just quietly accept garbage!  Note this is stricter than
+    # RFC 5321 Mailbox: a quoted-string local-part may legally contain
+    # '<' and '>', and a Mailbox may use an address-literal form like
+    # foo@[10.0.0.1].  If a test ever needs those, loosen this check.
     if ($From =~ m/[<>]/ || grep { m/[<>]/ } @FromExtra) {
         $Self->send_client_resp(501, "Junk in parameters");
     }
@@ -96,6 +99,9 @@ sub rcpt_to {
     if ($Self->{_rcpt_to_count} > 10) {
         $Self->send_client_resp(550, "5.5.3 Too many recipients");
     } elsif ($To =~ /[<>]/ || $To =~ /\@fail\.to\.deliver$/i) {
+        # As in mail_from above, the [<>] check is stricter than RFC 5321
+        # Mailbox -- a quoted-string local-part may legally contain those.
+        # We're just being a little lazy because we won't do this in tests.
         $Self->send_client_resp(553, "5.1.1 Bad destination mailbox address");
         $Self->mylog("SMTP: 553 5.1.1");
     } else {

@@ -154,6 +154,72 @@ HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)
     json_object_set(account_capabilities, JMAP_URN_SUBMISSION, submit_capabilities);
 }
 
+/* True iff s is a valid RFC 5321 Dot-string -- 1*atext *("." 1*atext) -- so
+ * we can safely emit it bare inside the wrapping "<...>" on the wire.  Bytes
+ * >= 0x80 are tolerated to preserve internationalised addresses.
+ */
+static int _is_smtp_dot_atom(const char *s)
+{
+    if (!s || !*s) return 0;
+    int just_saw_dot = 1;  /* leading dot is invalid; pretend we saw one */
+    for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
+        unsigned char c = *p;
+        if (c == '.') {
+            if (just_saw_dot) return 0;
+            just_saw_dot = 1;
+            continue;
+        }
+        just_saw_dot = 0;
+        if (c >= 0x80) continue;
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9')) continue;
+        switch (c) {
+        case '!': case '#': case '$': case '%': case '&': case '\'':
+        case '*': case '+': case '-': case '/': case '=': case '?':
+        case '^': case '_': case '`': case '{': case '|': case '}':
+        case '~':
+            continue;
+        }
+        return 0;
+    }
+    return !just_saw_dot;  /* trailing dot forbidden, too */
+}
+
+/* parseaddr_list strips the DQUOTEs from a quoted-string local-part and
+ * resolves backslash escapes in-place, so both of these:
+ *   "foo bar"@x.com
+ *   foo bar@x.com
+ * leave us with mailbox = "foo bar".  We need to tell them apart so we can
+ * accept the former but reject the latter; peek at the raw value past optional
+ * surrounding whitespace and one angle bracket.
+ *
+ * (No, there really shouldn't be leading whitespace or < but we are using
+ * parseaddr_phrase, which is meant for headers.)
+ *
+ *  -- rjbs, 2026-05-14 */
+static int _smtp_localpart_was_quoted(const char *s)
+{
+    if (!s) return 0;
+    while (*s == ' ' || *s == '\t') s++;
+    if (*s == '<') {
+        s++;
+        while (*s == ' ' || *s == '\t') s++;
+    }
+    return *s == '"';
+}
+
+/* Append s to buf as an RFC 5321 quoted-string, backslash-escaping the
+ * two bytes that qcontent forbids inside the DQUOTEs. */
+static void _smtp_append_quoted_localpart(struct buf *buf, const char *s)
+{
+    buf_putc(buf, '"');
+    for (const unsigned char *p = (const unsigned char *)s; *p; p++) {
+        if (*p == '"' || *p == '\\') buf_putc(buf, '\\');
+        buf_putc(buf, *p);
+    }
+    buf_putc(buf, '"');
+}
+
 static int _emailsubmission_address_parse(json_t *addr,
                                           struct jmap_parser *parser,
                                           const char **identity,
@@ -165,13 +231,65 @@ static int _emailsubmission_address_parse(json_t *addr,
     if (holduntil) *holduntil = 0;
 
     json_t *email = json_object_get(addr, "email");
-    if (email && json_string_value(email)) {
-        struct address *a = NULL;
-        parseaddr_list(json_string_value(email), &a);
-        if (a && !a->invalid && a->mailbox && a->domain && !a->next) {
-            is_valid = 1;
+    const char *email_val = email ? json_string_value(email) : NULL;
+    if (email_val) {
+        /* Reject control bytes outright.  */
+        int has_ctrl = 0;
+        for (const unsigned char *p = (const unsigned char *) email_val;
+             *p; p++) {
+            if (*p < 0x20 || *p == 0x7f) {
+                has_ctrl = 1;
+                break;
+            }
         }
-        parseaddr_free(a);
+
+        if (has_ctrl) {
+            jmap_parser_invalid(parser, "email");
+        }
+        else {
+            struct address *a = NULL;
+            parseaddr_list(email_val, &a);
+
+            /* parseaddr's a->invalid only fires for an '@' inside the domain
+             * part.  It's not really a check for total validity.  parseaddr
+             * silently conflates (well-formed) quoted-string local-parts with
+             * (badly-formed) unquoted strings of the same equivalent bytes.
+             * We have to (a) refuse the unspecified-domain sentinel parseaddr
+             * produces when there was no '@', and (b) demand the local-part
+             * either fit dot-string or have been DQUOTE-wrapped in the raw
+             * input.  I'm relying on only checking the opening quote because
+             * parseaddr *will* bail on unbalanced quotes.  Woof.
+             * -- rjbs, 2026-05-14 */
+            int ok = a && !a->invalid && !a->next &&
+                     a->mailbox && *a->mailbox &&
+                     a->domain &&
+                     strcmp(a->domain, "unspecified-domain") != 0 &&
+                     (_is_smtp_dot_atom(a->mailbox) ||
+                      _smtp_localpart_was_quoted(email_val));
+
+            if (ok) {
+                /* Hand smtpclient a canonicalized address built from
+                 * parseaddr's parse.  If it was quoted on the way in, it gets
+                 * quoted on the way out, too. */
+                struct buf canon = BUF_INITIALIZER;
+                if (_is_smtp_dot_atom(a->mailbox)) {
+                    buf_printf(&canon, "%s@%s", a->mailbox, a->domain);
+                }
+                else {
+                    _smtp_append_quoted_localpart(&canon, a->mailbox);
+                    buf_putc(&canon, '@');
+                    buf_appendcstr(&canon, a->domain);
+                }
+                json_object_set_new(addr, "email",
+                                    json_string(buf_cstring(&canon)));
+                buf_free(&canon);
+                is_valid = 1;
+            }
+            else {
+                jmap_parser_invalid(parser, "email");
+            }
+            parseaddr_free(a);
+        }
     }
     else {
         jmap_parser_invalid(parser, "email");
@@ -218,6 +336,49 @@ static int _emailsubmission_address_parse(json_t *addr,
     jmap_parser_pop(parser);
 
     return is_valid;
+}
+
+/* Walk mailFrom and each rcptTo of envelope, running each address through
+ * _emailsubmission_address_parse so canonicalisation and validity checks
+ * happen no matter which path built the envelope.
+ *
+ * A rejected rcptTo is reported as invalidRecipients rather than
+ * invalidProperties, so its email value is collected into *invalid_rcpts
+ * (allocated on first use) for the caller to build the SetError from.  Pass
+ * NULL if you don't care to distinguish. */
+static void _emailsubmission_envelope_parse(json_t *envelope,
+                                            struct jmap_parser *parser,
+                                            const char **identity,
+                                            time_t *holduntil,
+                                            json_t **invalid_rcpts)
+{
+    json_t *from = json_object_get(envelope, "mailFrom");
+    if (json_object_size(from)) {
+        jmap_parser_push(parser, "mailFrom");
+        _emailsubmission_address_parse(from, parser, identity, holduntil);
+        jmap_parser_pop(parser);
+    }
+    else {
+        jmap_parser_invalid(parser, "mailFrom");
+    }
+    json_t *rcpt = json_object_get(envelope, "rcptTo");
+    if (json_array_size(rcpt)) {
+        size_t i;
+        json_t *addr;
+        json_array_foreach(rcpt, i, addr) {
+            jmap_parser_push_index(parser, "rcptTo", i, NULL);
+            if (!_emailsubmission_address_parse(addr, parser, NULL, NULL)
+                && invalid_rcpts) {
+                if (!*invalid_rcpts) *invalid_rcpts = json_array();
+                json_array_append(*invalid_rcpts,
+                                  json_object_get(addr, "email"));
+            }
+            jmap_parser_pop(parser);
+        }
+    }
+    else {
+        jmap_parser_invalid(parser, "rcptTo");
+    }
 }
 
 static int lookup_submission_collection(const char *accountid,
@@ -535,39 +696,15 @@ static void _emailsubmission_create(jmap_req_t *req,
     if (JNOTNULL(envelope)) {
         const char *id_param = NULL;
         jmap_parser_push(&parser, "envelope");
-        json_t *from = json_object_get(envelope, "mailFrom");
-        if (json_object_size(from)) {
-            jmap_parser_push(&parser, "mailFrom");
-            _emailsubmission_address_parse(from, &parser, &id_param, &holduntil);
-            jmap_parser_pop(&parser);
+        json_t *invalid_rcpts = NULL;
+        _emailsubmission_envelope_parse(envelope, &parser,
+                                        &id_param, &holduntil, &invalid_rcpts);
+        if (invalid_rcpts) {
+            *set_err = json_pack("{s:s s:o}", "type", "invalidRecipients",
+                                 "invalidRecipients", invalid_rcpts);
+            jmap_parser_fini(&parser);
+            goto done;
         }
-        else {
-            jmap_parser_invalid(&parser, "mailFrom");
-        }
-        json_t *rcpt = json_object_get(envelope, "rcptTo");
-        if (json_array_size(rcpt)) {
-            size_t i;
-            json_t *addr;
-            json_t *invalid = NULL;
-            json_array_foreach(rcpt, i, addr) {
-                jmap_parser_push_index(&parser, "rcptTo", i, NULL);
-                if (!_emailsubmission_address_parse(addr, &parser, NULL, NULL)) {
-                    if (!invalid) invalid = json_array();
-                    json_array_append(invalid, json_object_get(addr, "email"));
-                }
-                jmap_parser_pop(&parser);
-            }
-            if (invalid) {
-                *set_err = json_pack("{s:s s:o}", "type", "invalidRecipients",
-                                     "invalidRecipients", invalid);
-                jmap_parser_fini(&parser);
-                goto done;
-            }
-        }
-        else {
-            jmap_parser_invalid(&parser, "rcptTo");
-        }
-
         /* Don't allow mailFrom IDENTITY param to be different than identityId */
         if (id_param && strcmpnull(identityid, id_param)) {
             jmap_parser_invalid(&parser, "identity");
@@ -730,6 +867,32 @@ static void _emailsubmission_create(jmap_req_t *req,
         }
         json_decref(rcpts);
         json_object_set_new(myenvelope, "rcptTo", rcptTo);
+
+        /* Run the reconstructed envelope through the same
+         * checker/canonicalizer the client-supplied envelope path uses, lest
+         * IMAP be a way to smuggle things past the validator. */
+        struct jmap_parser env_parser = JMAP_PARSER_INITIALIZER;
+        json_t *bad_rcpts = NULL;
+        _emailsubmission_envelope_parse(envelope, &env_parser, NULL, NULL,
+                                        &bad_rcpts);
+        if (bad_rcpts) {
+            *set_err = json_pack("{s:s s:o}", "type", "invalidRecipients",
+                                 "invalidRecipients", bad_rcpts);
+            jmap_parser_fini(&env_parser);
+            goto done;
+        }
+        if (json_array_size(env_parser.invalid)) {
+            *set_err = json_pack("{s:s}", "type", "invalidProperties");
+            json_object_set(*set_err, "properties", env_parser.invalid);
+            jmap_parser_fini(&env_parser);
+            goto done;
+        }
+        jmap_parser_fini(&env_parser);
+
+        /* Persist the reconstructed envelope back into the emailsubmission
+         * JSON so we'll write it to disk and EmailSubmission/get can provide
+         * it. */
+        json_object_set(emailsubmission, "envelope", envelope);
     }
     else if (holduntil) {
         hash_table props = HASH_TABLE_INITIALIZER;

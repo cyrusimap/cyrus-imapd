@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+# When EmailSubmission/set is called without an `envelope`, the server
+# builds one from the message headers and uses it.  EmailSubmission/get
+# should let the client read the envelope back -- otherwise there's no
+# way to tell what mailFrom/rcptTo Cyrus actually used.
+sub test_emailsubmission_set_persists_reconstructed_envelope ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->request([[ 'Identity/get' ]]);
+    my $identityid = $res->sentence_named('Identity/get')->arguments->{list}[0]{id};
+    $self->assert_not_null($identityid);
+
+    xlog $self, "stage a message with known From and To";
+    $self->make_message(
+        'persisted-envelope',
+        from => Cassandane::Address->new(
+            localpart => 'sender', domain => 'localhost',
+        ),
+        to => Cassandane::Address->new(
+            localpart => 'rcpt', domain => 'localhost',
+        ),
+    ) or die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->request([[
+        'Email/query', { filter => { subject => 'persisted-envelope' } },
+    ]]);
+    my $emailid = $res->sentence_named('Email/query')->arguments->{ids}[0];
+    $self->assert_not_null($emailid);
+
+    xlog $self, "submit without supplying an envelope";
+    $res = $jmap->request([[
+        'EmailSubmission/set', {
+            create => {
+                sub => {
+                    identityId => $identityid,
+                    emailId    => $emailid,
+                },
+            },
+        },
+    ]]);
+    my $subid = $res->sentence_named('EmailSubmission/set')->arguments
+                    ->{created}{sub}{id};
+    $self->assert_not_null($subid);
+
+    xlog $self, "EmailSubmission/get should expose the reconstructed envelope";
+    $res = $jmap->request([[
+        'EmailSubmission/get',
+        { ids => [ $subid ], properties => [ 'envelope' ] },
+    ]]);
+
+    my $sub = $res->sentence_named('EmailSubmission/get')->arguments->{list}[0];
+    $self->assert_cmp_deeply(
+      superhashof({
+          envelope => {
+              mailFrom =>   { email => 'sender@localhost' },
+              rcptTo   => [ { email => 'rcpt@localhost' } ],
+          }
+      }),
+      $sub,
+    );
+}

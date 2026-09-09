@@ -2103,7 +2103,10 @@ static void apply_property_updates(struct patch_data_t *patch,
                                         icalproperty_get_value_as_string(prop));
                 }
                 else if (action == ICAL_PATCHACTION_BYPARAM) {
-                    /* Check param-match */
+                    /* Check param-match.  byparam.prop.{param,value}
+                     * are owned by the outer iteration and reused
+                     * for each property; free them after the inner
+                     * loop, not inside it. */
                     match = apply_param_match(prop, &byparam);
                 }
                 if (!match) continue;
@@ -2111,11 +2114,11 @@ static void apply_property_updates(struct patch_data_t *patch,
                 icalcomponent_remove_property(parent, prop);
                 icalproperty_free(prop);
             }
+        }
 
-            if (action == ICAL_PATCHACTION_BYPARAM) {
-                free(byparam.prop.param);
-                free(byparam.prop.value);
-            }
+        if (action == ICAL_PATCHACTION_BYPARAM) {
+            free(byparam.prop.param);
+            free(byparam.prop.value);
         }
 
         *num_changes += 1;

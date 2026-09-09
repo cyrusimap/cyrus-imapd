@@ -1,0 +1,108 @@
+#!perl
+use Cassandane::Tiny;
+
+# When EmailSubmission/set is called with no `envelope`, the server
+# constructs one from the stored message's From/To/Cc/Bcc.  If the constructed
+# envelope wouldn't have been accepted as literal JMAP input, we shouldn't
+# accept it from the header-extraction process, either.
+sub test_emailsubmission_set_envelope_reconstruction_injection ($self)
+{
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $res = $jmap->request([[ 'Identity/get' ]]);
+    my $identityid =
+        $res->sentence_named('Identity/get')->arguments->{list}[0]{id};
+    $self->assert_not_null($identityid);
+
+    my sub append_with_headers ($subject, $headers) {
+        my $mime = "$headers\r\n"
+                 . "Subject: $subject\r\n"
+                 . "Date: Mon, 01 Jan 2024 00:00:00 +0000\r\n"
+                 . "Message-ID: <$subject\@local>\r\n"
+                 . "MIME-Version: 1.0\r\n"
+                 . "Content-Type: text/plain\r\n"
+                 . "\r\n"
+                 . "body\r\n";
+
+        $imap->append('INBOX', $mime) || die "append failed: $@";
+
+        # Sigh, I wish I didn't need this. -- rjbs, 2026-05-14
+        $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+        my $res = $jmap->request([[
+            'Email/query', { filter => { subject => $subject } },
+        ]]);
+        my $ids = $res->sentence_named('Email/query')->arguments->{ids};
+        $self->assert_num_equals(1, scalar @$ids);
+        return $ids->[0];
+    }
+
+    # $errtype is invalidRecipients when it's an rcptTo (that is, a To/Cc/Bcc)
+    # address that's bogus, and invalidProperties for a bad mailFrom.
+    my sub expect_jmap_rejection ($emailid, $errtype) {
+        my $res = $jmap->request([[
+            'EmailSubmission/set', {
+                create => {
+                    sub => {
+                        identityId => $identityid,
+                        emailId    => $emailid,
+                        # No envelope -- forces the reconstruct-from-
+                        # headers path that V2 exploits.
+                    },
+                },
+            },
+        ]]);
+        my $args = $res->sentence_named('EmailSubmission/set')->arguments;
+
+        if ($args->{created}{sub}) {
+            # Boo, it was created.  Let's log what's in the envelope.
+            my $sub_id = $args->{created}{sub}{id};
+            my $sub = $jmap->request([[ 'EmailSubmission/get', { ids => [ $sub_id ] } ]])
+                           ->single_sentence('EmailSubmission/get')
+                           ->arguments->{list}[0];
+
+            warn "Created this but should not have: " . Dumper($sub);
+            $self->assert(0, "EmailSubmission/set should have failed");
+        } else {
+            # Good, it was not created.  Now, assert it was notCreated.
+            $self->assert_not_null($args->{notCreated}{sub});
+            $self->assert_str_equals($errtype, $args->{notCreated}{sub}{type});
+        }
+    }
+
+    # An unquoted local-part with a literal space parses to mailbox = "foo
+    # bar", and the reconstructed envelope emits
+    #
+    #   MAIL FROM:<foo bar@example.com>
+    #
+    # ...which is bogus.
+    my $eid = append_with_headers(
+        'bug-space-in-from',
+        qq{From: foo bar\@example.com\r\nTo: rcpt\@example.com},
+    );
+    xlog $self, "bare space in From's local-part must be rejected";
+    expect_jmap_rejection($eid, 'invalidProperties');
+
+    # A quoted-string local-part containing '>' has its DQUOTEs stripped by
+    # parseaddr; the inner '>' is preserved verbatim in the parsed mailbox.
+    # Reconstructed-envelope email is concatenated as:
+    #
+    #   victim@example.com> AUTH=victim@example.com@evil.test
+    #
+    # That '>' will appear to end the SMTP MAIL FROM downstream.
+    $eid = append_with_headers(
+        'bug-angle-in-from',
+        qq{From: "victim\@example.com> AUTH=victim\@example.com"\@evil.test\r\nTo: rcpt\@example.com},
+    );
+    xlog $self, "smuggled '>' via quoted From local-part must be rejected";
+    expect_jmap_rejection($eid, 'invalidProperties');
+
+    # Same thing, but the malicious header is To.
+    $eid = append_with_headers(
+        'bug-space-in-to',
+        qq{From: from\@example.com\r\nTo: foo bar\@example.com},
+    );
+    xlog $self, "bare space in To's local-part must be rejected";
+    expect_jmap_rejection($eid, 'invalidRecipients');
+}

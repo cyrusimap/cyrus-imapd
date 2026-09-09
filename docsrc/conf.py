@@ -479,9 +479,9 @@ epub_exclude_files = ["search.html"]
 # When this is updated, you may also need to update the version and release
 # definitions listed above to stay up to date.
 rst_prolog = """
-.. |imap_last_stable_version| replace:: 3.10.3
+.. |imap_last_stable_version| replace:: 3.10.4
 .. |imap_last_stable_branch| replace:: `cyrus-imapd-3.10`
-.. |imap_current_stable_version| replace:: 3.12.3
+.. |imap_current_stable_version| replace:: 3.12.4
 .. |imap_current_stable_branch| replace:: `cyrus-imapd-3.12`
 .. |imap_latest_development_version| replace:: 3.13.7
 .. |imap_latest_development_branch| replace:: master
@@ -496,7 +496,7 @@ rst_prolog = """
 .. |sasl_current_stable_version| replace:: 2.1.28
 .. |imap_stable_release_notes| raw:: html
 
-    <a href="3.12/x/3.12.3.html">3.12.3</a>
+    <a href="3.12/x/3.12.4.html">3.12.4</a>
 
 .. |imap_development_release_notes| raw:: html
 

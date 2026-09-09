@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_multiget_acl_bypass
+    :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $default_user = $self->default_user;
+
+    xlog $self, "Create victim user with their own private calendar";
+    $admintalk->create("user.victim");
+    $admintalk->setacl("user.victim", "victim" => "lrswipkxtean");
+
+    my $service = $self->{instance}->get_service("http");
+    my $victimtalk = Net::CalDAVTalk->new(
+        user        => "victim",
+        password    => 'pass',
+        host        => $service->host(),
+        port        => $service->port(),
+        scheme      => 'http',
+        url         => '/',
+        expandurl   => 1,
+    );
+
+    # NewEvent returns a path like "Default/<uid>.ics" relative to
+    # victim's calendar home.
+    my $victim_rel = $victimtalk->NewEvent('Default', {
+        timeZone => 'Etc/UTC',
+        start    => '2025-01-01T12:00:00',
+        duration => 'PT1H',
+        title    => 'victim-secret-meeting',
+    });
+
+    my $victim_shared_rel = "victim.$victim_rel";
+
+    my $victim_shared_abs = "/dav/calendars/user/cassandane/$victim_shared_rel";
+
+    xlog $self, "Cassandane has their own event in their own calendar";
+    my $caldav = $default_user->caldav;
+    my $cass_rel = $caldav->NewEvent('Default', {
+        timeZone => 'Etc/UTC',
+        start    => '2025-01-01T12:00:00',
+        duration => 'PT1H',
+        title    => 'cass-public-meeting',
+    });
+    my $cass_abs = "/dav/calendars/user/cassandane/$cass_rel";
+
+    # No sharing: cassandane has zero rights on user.victim.#calendars.Default
+
+    xlog $self, "Cassandane sends calendar-multiget naming victim's event";
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<C:calendar-multiget xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+    <D:prop>
+        <C:calendar-data/>
+    </D:prop>
+    <D:href>$cass_abs</D:href>
+    <D:href>$victim_shared_abs</D:href>
+</C:calendar-multiget>
+EOF
+
+    my $res = $caldav->Request('REPORT',
+        "/dav/calendars/user/cassandane/Default",
+        $xml,
+        'Content-Type' => 'application/xml',
+    );
+
+    my @responses = ($res->{'{DAV:}response'} // [])->@*;
+    $self->assert_num_equals(2, scalar @responses);
+
+    # First href: cassandane's own event -- returned successfully.
+    $self->assert_str_equals($cass_abs,
+        $responses[0]{'{DAV:}href'}{content});
+    my $r0_data = $responses[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}
+                 {'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content};
+    $self->assert_matches(qr/cass-public-meeting/, $r0_data);
+
+    # Second href: victim's event.
+    $self->assert_str_equals($victim_shared_abs,
+        $responses[1]{'{DAV:}href'}{content});
+    my $r1_data = $responses[1]{'{DAV:}propstat'}[0]{'{DAV:}prop'}
+                 {'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content}
+                 // '';
+    $self->assert_does_not_match(qr/victim-secret-meeting/, $r1_data);
+
+    $self->assert_str_equals(
+      'HTTP/1.1 403 Forbidden',
+      $responses[1]{'{DAV:}status'}{content},
+    );
+}
