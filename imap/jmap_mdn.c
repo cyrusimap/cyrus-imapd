@@ -166,22 +166,22 @@ static json_t *parse_mdn_props(json_t *jmdn, struct mdn_t *mdn)
         }
 
         const char *s = mdn->dispo.action;
-        if (!s || (strcmp(s, "manual-action") &&
-                   strcmp(s, "automatic-action"))) {
+        if (!s || (strcasecmp(s, "manual-action") &&
+                   strcasecmp(s, "automatic-action"))) {
             jmap_parser_invalid(&parser, "actionMode");
         }
 
         s = mdn->dispo.sending;
-        if (!s || (strcmp(s, "MDN-sent-manually") &&
-                   strcmp(s, "MDN-sent-automatically"))) {
+        if (!s || (strcasecmp(s, "mdn-sent-manually") &&
+                   strcasecmp(s, "mdn-sent-automatically"))) {
             jmap_parser_invalid(&parser, "sendingMode");
         }
 
         s = mdn->dispo.type;
-        if (!s || (strcmp(s, "deleted") &&
-                   strcmp(s, "dispatched") &&
-                   strcmp(s, "displayed") &&
-                   strcmp(s, "processed"))) {
+        if (!s || (strcasecmp(s, "deleted") &&
+                   strcasecmp(s, "dispatched") &&
+                   strcasecmp(s, "displayed") &&
+                   strcasecmp(s, "processed"))) {
             jmap_parser_invalid(&parser, "type");
         }
 
@@ -351,10 +351,12 @@ static json_t *generate_mdn(struct jmap_req *req,
                    "Content-Type: message/disposition-notification\r\n\r\n");
     if (mdn->mua) buf_printf(msgbuf, "Reporting-UA: %s\r\n", mdn->mua);
 
-    r = message_get_field(msg, "original-recipient", MESSAGE_RAW, &buf);
+    /* The header and the MDN field share the "address-type; address" syntax */
+    r = message_get_field(msg, "original-recipient",
+                          MESSAGE_DECODED | MESSAGE_TRIM | MESSAGE_FIRST, &buf);
     if (!r && buf_len(&buf)) {
         mdn->orig_rcpt = xstrdup(buf_cstring(&buf));
-        buf_printf(msgbuf, "Original-Recipient: rfc822; %s\r\n", mdn->orig_rcpt);
+        buf_printf(msgbuf, "Original-Recipient: %s\r\n", mdn->orig_rcpt);
     }
     buf_printf(msgbuf, "Final-Recipient: %s\r\n", mdn->final_rcpt);
 
