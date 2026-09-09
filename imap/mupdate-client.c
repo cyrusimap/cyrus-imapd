@@ -42,6 +42,7 @@ static struct protocol_t mupdate_protocol =
         { { "AUTH", CAPA_AUTH },
           { "STARTTLS", CAPA_STARTTLS },
           { "COMPRESS=DEFLATE", CAPA_COMPRESS },
+          { "MAILBOX-EXTENDED", CAPA_MAILBOXEXT },
           { NULL, 0 } } },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 1 },
       { "A01 AUTHENTICATE", USHRT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL, 0 },
@@ -50,6 +51,17 @@ static struct protocol_t mupdate_protocol =
       { "Q01 LOGOUT", NULL, "Q01 " } } },
   NULL
 };
+
+/* We're really only looking for an OK or NO or BAD here -- and the callback
+ * is never called in those cases.  So if the callback is called, we have
+ * an error! */
+static int mupdate_scarf_one(struct mupdate_mailboxdata *mdata __attribute__((unused)),
+                             const char *cmd,
+                             void *context __attribute__((unused)))
+{
+    syslog(LOG_ERR, "mupdate_scarf_one was called, but shouldn't be.  Command received was %s", cmd);
+    return -1;
+}
 
 EXPORTED int mupdate_connect(const char *server,
                     const char *port __attribute__((unused)),
@@ -96,6 +108,21 @@ EXPORTED int mupdate_connect(const char *server,
 
     h->saslcompleted = 1;
 
+    if (h->conn->capability & CAPA_MAILBOXEXT) {
+        enum mupdate_cmd_response response;
+        int ret;
+
+        prot_printf(h->conn->out,
+                    "X%u ENABLE MAILBOX-EXTENDED\r\n", h->tagn++);
+
+        ret = mupdate_scarf(h, mupdate_scarf_one, NULL, 1, &response);
+        if (ret) {
+            return ret;
+        } else if (response != MUPDATE_OK) {
+            return MUPDATE_FAIL;
+        }
+    }
+
     /* SUCCESS */
     return 0;
 }
@@ -125,20 +152,9 @@ EXPORTED void mupdate_disconnect(mupdate_handle **hp)
     *hp = NULL;
 }
 
-/* We're really only looking for an OK or NO or BAD here -- and the callback
- * is never called in those cases.  So if the callback is called, we have
- * an error! */
-static int mupdate_scarf_one(struct mupdate_mailboxdata *mdata __attribute__((unused)),
-                             const char *cmd,
-                             void *context __attribute__((unused)))
-{
-    syslog(LOG_ERR, "mupdate_scarf_one was called, but shouldn't be.  Command received was %s", cmd);
-    return -1;
-}
-
 EXPORTED int mupdate_activate(mupdate_handle *handle,
                      const char *mailbox, const char *location,
-                     const char *acl)
+                     const char *acl, const char *jmapid)
 {
     int ret;
     enum mupdate_cmd_response response;
@@ -182,12 +198,16 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
                 "X%u ACTIVATE "
                 "{" SIZE_T_FMT "+}\r\n%s "
                 "{" SIZE_T_FMT "+}\r\n%s "
-                "{" SIZE_T_FMT "+}\r\n%s\r\n",
+                "{" SIZE_T_FMT "+}\r\n%s",
                 handle->tagn++,
                 strlen(mailbox), mailbox,
                 strlen(location), location,
                 (acl ? strlen(acl): 0), (acl ? acl : "")
         );
+    if (jmapid && (handle->conn->capability & CAPA_MAILBOXEXT)) {
+        prot_printf(handle->conn->out, " (JMAPID %s)", jmapid);
+    }
+    prot_puts(handle->conn->out, "\r\n");
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
     if (ret) {
@@ -620,8 +640,22 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
             }
             goto badcmd;
 
+        case 'E':
+            if (!strncmp(handle->cmd.s, "ENABLED", 7)) {
+                do {
+                    /* Parse but ignore tokens */
+                    ch = getword(handle->conn->in, &(handle->arg1));
+                } while (ch == ' ');
+                CHECKNEWLINE(handle, ch);
+
+                break;
+            }
+            goto badcmd;
+
         case 'M':
             if (!strncmp(handle->cmd.s, "MAILBOX", 7)) {
+                struct dlist *extargs = NULL;
+
                 /* Mailbox Name */
                 ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
                 if (ch != ' ') {
@@ -638,6 +672,14 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 
                 /* ACL */
                 ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg3));
+                if (ch == ' ' && (handle->conn->capability & CAPA_MAILBOXEXT)) {
+                    ch = mupdate_parse_mailbox_extargs(handle->conn->in, &extargs);
+                    if (ch == EOF) {
+                        dlist_free(&extargs);
+                        r = MUPDATE_PROTOCOL_ERROR;
+                        goto done;
+                    }
+                }
                 CHECKNEWLINE(handle, ch);
 
                 /* Handle mailbox command */
@@ -645,7 +687,10 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
                 box.mailbox = handle->arg1.s;
                 box.location = handle->arg2.s;
                 box.acl = handle->arg3.s;
+                dlist_getatom(extargs, "JMAPID", &box.jmapid);
+
                 r = callback(&box, handle->cmd.s, context);
+                dlist_free(&extargs);
                 if (r) { /* callback error ? */
                     syslog(LOG_ERR,
                            "error activating mailbox: callback returned %d", r);
@@ -777,4 +822,54 @@ EXPORTED void kick_mupdate(void)
     buf_free(&addrbuf);
     close(s);
     return;
+}
+
+EXPORTED int mupdate_parse_mailbox_extargs(struct protstream *pin,
+                                           struct dlist **extargs)
+{
+    int c;
+    static struct buf arg, val;
+    struct dlist *res;
+    struct dlist *sub;
+    const char *name;
+
+    c = prot_getc(pin);
+    if (c == '(') {
+        /* RFC 4466 style arguments */
+        res = dlist_newkvlist(NULL, "MAILBOX");
+
+        do {
+            c = getword(pin, &arg);
+            if (c != ' ') goto fail;
+
+            name = ucase(arg.s);
+
+            c = prot_getc(pin);
+            if (c == '(') {
+                /* fun - more lists! */
+                sub = dlist_newlist(res, name);
+                do {
+                    c = getword(pin, &val);
+                    dlist_setatom(sub, name, val.s);
+                } while (c == ' ');
+                if (c != ')') goto fail;
+                c = prot_getc(pin);
+            }
+            else {
+                prot_ungetc(c, pin);
+                c = getword(pin, &val);
+                dlist_setatom(res, name, val.s);
+            }
+        } while (c == ' ');
+        if (c != ')') goto fail;
+        c = prot_getc(pin);
+
+        *extargs = res;
+        return c;
+    }
+
+ fail:
+    dlist_free(&res);
+    if (c != EOF) prot_ungetc(c, pin);
+    return EOF;
 }

@@ -75,6 +75,7 @@ struct mb_node
 {
     char mailbox[MAX_MAILBOX_BUFFER];
     char location[MAX_MAILBOX_BUFFER];
+    char jmapid[JMAP_MAX_MAILBOXID_SIZE];
     char *acl;
     struct mb_node *next;
 };
@@ -126,8 +127,11 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
         next = xzmalloc(sizeof(struct mb_node));
         strlcpy(next->mailbox, mdata->mailbox, sizeof(next->mailbox));
         strlcpy(next->location, mdata->location, sizeof(next->location));
-        if (!strncmp(cmd, "MAILBOX", 7))
+        if (!strncmp(cmd, "MAILBOX", 7)) {
             next->acl = xstrdup(mdata->acl);
+            if (mdata->jmapid)
+                strlcpy(next->jmapid, mdata->jmapid, sizeof(next->jmapid));
+        }
 
         *act_tail = next;
         act_tail = &(next->next);
@@ -181,7 +185,7 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
             /* No need to update mupdate NOW, we'll get it when we
              * untag the mailbox */
             skip_flag = 1;
-        } else if (act_head->acl) {
+        } else if (act_head->acl && mbentry->jmapid) {
             if (
                     !strcmp(realpart, act_head->location) &&
                     !strcmp(mbentry->acl, act_head->acl)
@@ -292,7 +296,8 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
         return 0;
     }
 
-    r = mupdate_activate(rock->h, mbentry->name, realpart, mbentry->acl);
+    r = mupdate_activate(rock->h, mbentry->name, realpart,
+                         mbentry->acl, mbentry->jmapid);
 
     if (r == MUPDATE_NOCONN) {
         fprintf(stderr, "permanent failure storing '%s'\n", mbentry->name);
@@ -425,7 +430,8 @@ static void do_pop_mupdate(void)
 
         /* force a push to mupdate */
         snprintf(buf, sizeof(buf), "%s!%s", config_servername, mbentry->partition);
-        ret = mupdate_activate(popmupdaterock.h, me->mailbox, buf, mbentry->acl);
+        ret = mupdate_activate(popmupdaterock.h, me->mailbox, buf,
+                               mbentry->acl, mbentry->jmapid);
         if (ret) {
             fprintf(stderr,
                     "couldn't perform mupdatepush to un-remote-flag %s\n",
