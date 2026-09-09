@@ -8,7 +8,9 @@
 #include <unistd.h>
 #endif
 
+#include <ctype.h>
 #include <pwd.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sysexits.h>
@@ -387,6 +389,17 @@ static int getinclude(void *sc, const char *script, int isglobal,
 
 static int global_outgoing_count = 0;
 
+/* True if s has the shape "address-type ; ..." of an RFC 8098 recipient
+ * field. */
+static bool has_address_type(const char *s)
+{
+    const char *p = s;
+    while (isalnum((unsigned char) *p) || *p == '-') p++;
+    if (p == s) return false;
+    while (*p == ' ' || *p == '\t') p++;
+    return *p == ';';
+}
+
 static int send_rejection(const char *userid,
                           const char *origid,
                           const char *rejto,
@@ -456,8 +469,12 @@ static int send_rejection(const char *userid,
             (int) p, config_servername);
     buf_printf(&msgbuf, "Reporting-UA: %s; Cyrus %s/%s\r\n",
             config_servername, CYRUS_VERSION, SIEVE_VERSION);
-    if (origreceip)
-        buf_printf(&msgbuf, "Original-Recipient: rfc822; %s\r\n", origreceip);
+    if (origreceip) {
+        /* The configured header may already carry an RFC 8098 address-type
+         * (Original-Recipient does), or be a bare address (X-Delivered-To) */
+        buf_printf(&msgbuf, "Original-Recipient: %s%s\r\n",
+                   has_address_type(origreceip) ? "" : "rfc822; ", origreceip);
+    }
 
     if (config_getswitch(IMAPOPT_SIEVE_MDN_PRIVATE))
         buf_printf(&msgbuf, "Final-Recipient: rfc822; %s\r\n", session_id());
