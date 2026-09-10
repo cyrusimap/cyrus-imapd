@@ -49,25 +49,14 @@
  * gcc, which already defines it. */
 #define XXH3_STREAM_USE_STACK 1
 
-/* XXH_NO_INLINE_HINTS is deliberately NOT set here, and must not be: it turns
- * every internal xxhash function into a plain `static`, and on modern compilers
- * that costs about 3x on ALL hashing -- one-shot as well as streaming, so every
- * span checksum, conversion, repack and consistency check pays it.  Measured at
- * 21MB, aarch64: gcc 14 goes 59.0 -> 19.4 GB/s and clang 19 goes 62.5 -> 24.3.
- * End to end that is 8% of a bulk load (zsbench 400k at 1000-per-txn, best of
- * nine: gcc 1107k -> 1202k/s, clang 1122k -> 1205k/s).
- *
- * It IS still required below -O2 on gcc, which refuses always_inline for the
- * NEON helpers at -Og ("function not considered for inlining") and hits an
- * internal compiler error at -O1 on aarch64.  So the low-optimisation targets
- * in the Makefile pass -DXXH_NO_INLINE_HINTS=1 themselves; see XXH_LOWOPT_DEF
- * there.  A hand-rolled -Og build without it fails loudly at compile time,
- * which is the right way round -- the alternative was every optimised build
- * silently paying 3x.  (Downstream twom sets this flag too and does NOT need
- * it: it only ever calls one-shot XXH3_64bits, so the streaming helpers that
- * fail to inline are never instantiated.) */
-
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC push_options
+#pragma GCC optimize("O2")
+#endif
 #include "xxhash.h"
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC pop_options
+#endif
 
 /* Syscall interposition for crash and sync-failure injection (T-8, T-8a).
  *
