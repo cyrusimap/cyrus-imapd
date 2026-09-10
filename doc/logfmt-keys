@@ -120,6 +120,8 @@ search.createdmodseq    highest createdmodseq the search index covers
 search.duration         how long a search index operation took, in seconds
 search.expr             a search expression, serialised
 search.generation       the search index generation
+search.index_version    the format version of the search index
+search.min_index_version  the lowest search index version an operation needs
 search.op               a search operator, e.g. OR
 search.restarts         how many times indexing restarted from the first message
 search.uncommitted      how many documents were pending when a commit failed

@@ -1,0 +1,271 @@
+#!perl
+use Cassandane::Tiny;
+
+# The emails of this test, in ascending order of receivedAt.
+my @EMAILS = (
+    { subject    => 'alpha',
+      from       => 'ann@example.com',
+      listid     => 'news.example.com',
+      keywords   => {},
+      receivedAt => '2020-01-01T00:00:00Z' },
+    { subject    => 'bravo',
+      from       => 'bob@example.com',
+      keywords   => {},
+      receivedAt => '2021-01-01T00:00:00Z' },
+    { subject    => 'charlie',
+      from       => 'ann@example.com',
+      listid     => 'chat.example.com',
+      keywords   => {},
+      receivedAt => '2022-01-01T00:00:00Z' },
+    { subject    => 'delta',
+      from       => 'bob@example.com',
+      listid     => 'news.example.com',
+      keywords   => { '$flagged' => JSON::true },
+      receivedAt => '2023-01-01T00:00:00Z' },
+    { subject    => 'echo',
+      from       => 'bob@example.com',
+      keywords   => { '$flagged' => JSON::true },
+      receivedAt => '2024-01-01T00:00:00Z' },
+);
+
+# The two groupBy filters that most of the tests below group by, bucketing the
+# emails of one mailing list first and those of the other one second.
+my @GROUP_BY_LISTID = (
+    { listId => 'news.example.com' },
+    { listId => 'chat.example.com' },
+);
+
+# Creates the emails above in a new mailbox and indexes them. Returns the id
+# of the mailbox and a map of email subject to email id.
+my sub create_fixtures ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing(
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/performance',
+    );
+
+    my $mbox = $user->mailboxes->create({ name => 'A' });
+
+    my %id_by_subject;
+    for my $spec (@EMAILS) {
+        my $email = $user->emails->create({
+            mailboxIds    => { $mbox->id => JSON::true },
+            keywords      => $spec->{keywords},
+            subject       => $spec->{subject},
+            from          => [ { email => $spec->{from} } ],
+            receivedAt    => $spec->{receivedAt},
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+            ($spec->{listid}
+                ? ('header:List-Id' => "<$spec->{listid}>") : ()),
+        });
+        $id_by_subject{$spec->{subject}} = q{} . $email->id;
+    }
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    return (q{} . $mbox->id, \%id_by_subject);
+}
+
+# Groups the emails above by filter conditions that only Xapian can answer,
+# then asserts the order of the result and its groupByCounts.
+sub assert_email_query_sort_category_headers ($self, %params)
+{
+    my ($mbox_id, $id_by_subject) = create_fixtures($self);
+
+    # A filter with a Xapian condition is eligible for guidsearch, one with
+    # just an inMailbox condition is not.
+    my $filter = $params{want_guidsearch}
+               ? { body => 'hello' }
+               : { inMailbox => $mbox_id };
+
+    my $res = $self->default_user->jmap->request([[ 'Email/query', {
+        filter => $filter,
+        sort   => [
+            { property => 'category', groupBy => $params{group_by} },
+            { property => 'receivedAt', isAscending => JSON::true },
+        ],
+    }, 'R1' ]]);
+    $res->assert_successful;
+
+    my $args = $res->single_sentence('Email/query')->arguments;
+
+    $self->assert_cmp_deeply(
+        $params{want_guidsearch} ? jtrue() : jfalse(),
+        $args->{performance}{details}{isGuidSearch},
+        'isGuidSearch',
+    );
+
+    my @want_ids = map { $id_by_subject->{$_} } $params{subjects}->@*;
+    $self->assert_cmp_deeply(\@want_ids, $args->{ids}, 'ids');
+
+    $self->assert_cmp_deeply($params{counts}, $args->{groupByCounts},
+        'groupByCounts');
+}
+
+sub test_email_query_sort_category_headers__guidsearch
+    :JMAPExtensions
+    ($self)
+{
+    # Both the filter and the groupBy conditions come from Xapian
+    $self->assert_email_query_sort_category_headers(
+        want_guidsearch => 1,
+        group_by        => [ @GROUP_BY_LISTID ],
+        subjects        => [ qw(alpha delta charlie bravo echo) ],
+        counts          => [ 2, 1 ],
+    );
+}
+
+sub test_email_query_sort_category_headers__uidsearch
+    :JMAPExtensions
+    ($self)
+{
+    # The filter alone does not need Xapian, but the groupBy conditions do
+    $self->assert_email_query_sort_category_headers(
+        want_guidsearch => 0,
+        group_by        => [ @GROUP_BY_LISTID ],
+        subjects        => [ qw(alpha delta charlie bravo echo) ],
+        counts          => [ 2, 1 ],
+    );
+}
+
+sub test_email_query_sort_category_headers__from
+    :JMAPExtensions
+    ($self)
+{
+    # Group by a sender rather than a mailing list
+    $self->assert_email_query_sort_category_headers(
+        want_guidsearch => 1,
+        group_by        => [ { from => 'ann@example.com' } ],
+        subjects        => [ qw(alpha charlie bravo delta echo) ],
+        counts          => [ 2 ],
+    );
+}
+
+sub test_email_query_sort_category_headers__negated
+    :JMAPExtensions
+    ($self)
+{
+    $self->assert_email_query_sort_category_headers(
+        want_guidsearch => 1,
+        group_by        => [ {
+            operator   => 'NOT',
+            conditions => [ { listId => 'news.example.com' } ],
+        } ],
+        subjects        => [ qw(bravo charlie echo alpha delta) ],
+        counts          => [ 3 ],
+    );
+}
+
+sub test_email_query_sort_category_headers__mixed
+    :JMAPExtensions
+    ($self)
+{
+    # One groupBy filter that ORs a Xapian-backed condition with a
+    # non-Xapian condition
+    $self->assert_email_query_sort_category_headers(
+        want_guidsearch => 1,
+        group_by        => [ {
+            operator   => 'OR',
+            conditions => [ { listId => 'news.example.com' },
+                            { hasKeyword => '$flagged' } ],
+        } ],
+        subjects        => [ qw(alpha delta echo bravo charlie) ],
+        counts          => [ 3 ],
+    );
+}
+
+sub test_email_query_sort_category_headers__shared
+    :JMAPExtensions
+    ($self)
+{
+    # Two groupBy filters share a condition, which runs one query
+    $self->assert_email_query_sort_category_headers(
+        want_guidsearch => 1,
+        group_by        => [
+            { listId => 'news.example.com', notKeyword => '$flagged' },
+            { listId => 'news.example.com' },
+        ],
+        subjects        => [ qw(alpha delta bravo charlie echo) ],
+        counts          => [ 1, 1 ],
+    );
+}
+
+sub test_email_query_sort_category_headers__unindexed
+    :JMAPExtensions
+    ($self)
+{
+    # An Email that squatter has not seen can not be assigned to a group,
+    # so the query must not return it at all
+    my $user = $self->default_user;
+    my ($mbox_id, $id_by_subject) = create_fixtures($self);
+
+    $user->emails->create({
+        mailboxIds       => { $mbox_id => JSON::true },
+        subject          => 'foxtrot',
+        from             => [ { email => 'ann@example.com' } ],
+        receivedAt       => '2025-01-01T00:00:00Z',
+        bodyStructure    => { type => 'text/plain', partId => 'part1' },
+        bodyValues       => { part1 => { value => 'hello' } },
+        'header:List-Id' => '<news.example.com>',
+    });
+
+    my $res = $user->jmap->request([[ 'Email/query', {
+        filter => { inMailbox => $mbox_id },
+        sort   => [
+            { property => 'category', groupBy => [ @GROUP_BY_LISTID ] },
+            { property => 'receivedAt', isAscending => JSON::true },
+        ],
+    }, 'R1' ]]);
+    $res->assert_successful;
+
+    my $args = $res->single_sentence('Email/query')->arguments;
+
+    my @want_ids = map { $id_by_subject->{$_} }
+                   qw(alpha delta charlie bravo echo);
+    $self->assert_cmp_deeply(\@want_ids, $args->{ids}, 'ids');
+    $self->assert_cmp_deeply([ 2, 1 ], $args->{groupByCounts},
+        'groupByCounts');
+}
+
+sub test_email_query_sort_category_headers__querycache
+    :JMAPExtensions
+    ($self)
+{
+    # Two queries that differ only in their groupBy filters must not share a
+    # cached result
+    my ($mbox_id, $id_by_subject) = create_fixtures($self);
+
+    my sub query_for ($group_by, $client_id) {
+        return [ 'Email/query', {
+            filter => { body => 'hello' },
+            sort   => [
+                { property => 'category', groupBy => $group_by },
+                { property => 'receivedAt', isAscending => JSON::true },
+            ],
+        }, $client_id ];
+    }
+
+    my $res = $self->default_user->jmap->request([
+        query_for([ @GROUP_BY_LISTID ], 'first'),
+        query_for([ reverse @GROUP_BY_LISTID ], 'swapped'),
+    ]);
+    $res->assert_successful;
+
+    my %want_ids = (
+        first   => [ qw(alpha delta charlie bravo echo) ],
+        swapped => [ qw(charlie alpha delta bravo echo) ],
+    );
+
+    for my $client_id (qw(first swapped)) {
+        my $args = $res->paragraph_by_client_id($client_id)
+                       ->single('Email/query')->arguments;
+
+        $self->assert_cmp_deeply(
+            [ map { $id_by_subject->{$_} } $want_ids{$client_id}->@* ],
+            $args->{ids}, "ids for $client_id");
+    }
+}

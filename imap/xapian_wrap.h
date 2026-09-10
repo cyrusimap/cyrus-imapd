@@ -51,6 +51,14 @@ extern xapian_query_t *xapian_query_new_match(const xapian_db_t *, enum search_p
 extern xapian_query_t *xapian_query_new_compound(const xapian_db_t *, int is_or, xapian_query_t **children, int n);
 extern xapian_query_t *xapian_query_new_matchall(const xapian_db_t *);
 extern xapian_query_t *xapian_query_new_not(const xapian_db_t *, xapian_query_t *);
+/**
+ * Restricts a query to the documents of one doctype.
+ *
+ * The returned query owns the child query. On error the child query is
+ * untouched and stays owned by the caller.
+ *
+ * @return the new query, or NULL on error.
+ */
 extern xapian_query_t *xapian_query_new_has_doctype(const xapian_db_t *, char doctype, xapian_query_t *);
 extern void xapian_query_serialize(xapian_query_t *, struct buf*);
 extern void xapian_query_free(xapian_query_t *);
