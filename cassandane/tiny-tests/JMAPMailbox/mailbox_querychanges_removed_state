@@ -1,0 +1,114 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_querychanges_removed_state
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $sort = [{ property => 'name' }];
+
+    xlog $self, "Create a mailbox without a role, and one with a role";
+    my $mbox_plain = $user->mailboxes->create({ name => 'A' });
+    my $mbox_role = $user->mailboxes->create({
+        name => 'B',
+        role => 'xspecialuse',
+    });
+
+    xlog $self, "Query mailboxes without a filter";
+    my $res = $jmap->request([[ 'Mailbox/query', { sort => $sort } ]]);
+    my $query = $res->single_sentence('Mailbox/query')->arguments;
+    $self->assert($query->{canCalculateChanges}, "can calculate changes");
+    my $state = $query->{queryState};
+    $self->assert_not_null($state);
+
+    xlog $self, "Destroy the mailbox without a role";
+    $mbox_plain->destroy;
+
+    xlog $self, "Assert the removal advances the query state";
+    $res = $jmap->request([[ 'Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        sort            => $sort,
+    } ]]);
+    my $changes = $res->single_sentence('Mailbox/queryChanges')->arguments;
+    $self->assert_cmp_deeply(
+        superhashof({
+            oldQueryState => $state,
+            added         => [],
+            removed       => [ $mbox_plain->id ],
+        }),
+        $changes,
+    );
+    $self->assert_str_not_equals($state, $changes->{newQueryState});
+
+    xlog $self, "Assert there are no changes at the new query state";
+    $state = $changes->{newQueryState};
+    $res = $jmap->request([[ 'Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        sort            => $sort,
+    } ]]);
+    $changes = $res->single_sentence('Mailbox/queryChanges')->arguments;
+    $self->assert_cmp_deeply(
+        superhashof({
+            oldQueryState => $state,
+            newQueryState => $state,
+            added         => [],
+            removed       => [],
+        }),
+        $changes,
+    );
+
+    my $filter = { role => 'xspecialuse' };
+
+    xlog $self, "Query mailboxes filtered by role";
+    $res = $jmap->request([[ 'Mailbox/query', {
+        filter => $filter,
+        sort   => $sort,
+    } ]]);
+    $query = $res->single_sentence('Mailbox/query')->arguments;
+    $self->assert_cmp_deeply([ $mbox_role->id ], $query->{ids});
+    $state = $query->{queryState};
+    $self->assert_not_null($state);
+
+    xlog $self, "Destroy the mailbox with the role";
+    $mbox_role->destroy;
+
+    # A filter on role makes queryChanges overreport in removed, because
+    # annotation history isn't tracked. The reported state still must
+    # account for the removals it reports.
+    xlog $self, "Assert the removal advances the role query state";
+    $res = $jmap->request([[ 'Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        filter          => $filter,
+        sort            => $sort,
+    } ]]);
+    $changes = $res->single_sentence('Mailbox/queryChanges')->arguments;
+    $self->assert_cmp_deeply(
+        superhashof({
+            oldQueryState => $state,
+            added         => [],
+            removed       => supersetof($mbox_role->id),
+        }),
+        $changes,
+    );
+    $self->assert_str_not_equals($state, $changes->{newQueryState});
+
+    xlog $self, "Assert there are no changes at the new role query state";
+    $state = $changes->{newQueryState};
+    $res = $jmap->request([[ 'Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        filter          => $filter,
+        sort            => $sort,
+    } ]]);
+    $changes = $res->single_sentence('Mailbox/queryChanges')->arguments;
+    $self->assert_cmp_deeply(
+        superhashof({
+            oldQueryState => $state,
+            newQueryState => $state,
+            added         => [],
+            removed       => [],
+        }),
+        $changes,
+    );
+}

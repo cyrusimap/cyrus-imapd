@@ -1491,6 +1491,7 @@ done:
 struct mboxquerychanges_rock {
     hash_table *removed;
     modseq_t sincemodseq;
+    modseq_t highestmodseq;
 
     struct conversations_state *cstate;  // to generate proper MAILBOXIDs
 };
@@ -1502,6 +1503,9 @@ static int _mboxquerychanges_cb(const mbentry_t *mbentry, void *vrock)
         char mboxid[JMAP_MAX_MAILBOXID_SIZE];
         jmap_set_mailboxid(rock->cstate, mbentry, mboxid);
         hash_insert(mboxid, (void*)1, rock->removed);
+        if (rock->highestmodseq < mbentry->foldermodseq) {
+            rock->highestmodseq = mbentry->foldermodseq;
+        }
     }
     return 0;
 }
@@ -1550,6 +1554,7 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
     r = _mboxquery_run(mbquery, &args);
     if (r) goto done;
 
+    modseq_t highestmodseq = sincemodseq;
     hash_table removed = HASH_TABLE_INITIALIZER;
     construct_hash_table(&removed, mbquery->result.count + 1, 0);
     if (mbquery->need_role) {
@@ -1560,28 +1565,34 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
          * until we have a sane way of tracking annotation changes */
 
         struct mboxquerychanges_rock rock = {
-            &removed, sincemodseq, req->cstate
+            &removed, sincemodseq, sincemodseq, req->cstate
         };
-        int r = mboxlist_usermboxtree(req->accountid, req->authstate,
-                                      _mboxquerychanges_cb, &rock,
-                                      MBOXTREE_TOMBSTONES|
-                                      MBOXTREE_DELETED|
-                                      MBOXTREE_INTERMEDIATES);
+        r = mboxlist_usermboxtree(req->accountid, req->authstate,
+                                  _mboxquerychanges_cb, &rock,
+                                  MBOXTREE_TOMBSTONES|
+                                  MBOXTREE_DELETED|
+                                  MBOXTREE_INTERMEDIATES);
         if (r) goto done;
+        highestmodseq = rock.highestmodseq;
     }
 
-    modseq_t highestmodseq = sincemodseq;
     ssize_t i;
     for (i = 0; i < mbquery->result.count; i++) {
         mboxquery_record_t *mbrec = ptrarray_nth(&mbquery->result, i);
         if (mbrec->mbtype & MBTYPE_DELETED) {
             if (mbrec->foldermodseq > sincemodseq) {
                 hash_insert(mbrec->id, (void*)1, &removed);
+                if (highestmodseq < mbrec->foldermodseq) {
+                    highestmodseq = mbrec->foldermodseq;
+                }
             }
         }
         else if (!jmap_hasrights(req, mbrec->mboxname, JACL_LOOKUP)) {
             if (mbrec->createdmodseq <= sincemodseq) {
                 hash_insert(mbrec->id, (void*)1, &removed);
+                if (highestmodseq < mbrec->foldermodseq) {
+                    highestmodseq = mbrec->foldermodseq;
+                }
             }
         }
         else if (mbrec->foldermodseq > sincemodseq && mbrec->shared_mbtype != _SHAREDMBOX_HIDDEN) {
