@@ -3627,6 +3627,29 @@ static void guidsearch_match_fini(struct guidsearch_match *match)
     bv_fini(&match->folders);
 }
 
+/* The message guids that one Xapian-backed condition of a groupBy filter
+ * matches. A category sort reads these from Xapian before the query runs, so
+ * that it can then evaluate the condition for each Email of the result by
+ * looking its guid up here. */
+struct emailquery_category_guidset {
+    search_expr_t *condition;  // not owned
+    char *guidreps;            // n entries, sorted ascending, deduplicated
+    size_t n;
+};
+
+static void
+emailquery_category_guidset_free(struct emailquery_category_guidset **gsp)
+{
+    if (!gsp || !*gsp) return;
+    free((*gsp)->guidreps);
+    xzfree(*gsp);
+}
+
+static int memcmp_guidrep(const void *va, const void *vb)
+{
+    return memcmp(va, vb, MESSAGE_GUID_SIZE*2);
+}
+
 enum guidsearch_expr_op {
     GSEOP_NONE = 0,
     GSEOP_TRUE,
@@ -3638,6 +3661,7 @@ enum guidsearch_expr_op {
     GSEOP_CONVFLAGS,
     GSEOP_ALLCONVFLAGS,
     GSEOP_INTERNALDATE,
+    GSEOP_GUIDSET,
     GSEOP_AND,
     GSEOP_OR,
     GSEOP_NOT
@@ -3684,7 +3708,111 @@ struct guidsearch_build_context {
     hash_table *foldernum_by_mboxname;
     bool need_folders;
     bool need_seen;
+    struct {
+        ptrarray_t *as_list;       // struct emailquery_category_guidset *
+        hash_table *by_condition;  // keyed by the serialised condition
+    } guidsets;
+    bool failed;
 };
+
+static enum search_part
+emailquery_category_search_part(const search_expr_t *e)
+{
+    enum search_part part;
+
+    if (!e->attr) return SEARCH_PART_NONE;
+
+    if (e->op == SEOP_FUZZYMATCH) {
+        part = e->attr->part;
+    }
+    else if (e->op == SEOP_MATCH) {
+        /* The message-id conditions match on cache-backed attributes that
+         * have no search part. guidsearch_swap_messageid_attrs() swaps in
+         * the Xapian-backed attributes for these parts. */
+        if (e->attr == search_attr_find("message-id")) {
+            part = SEARCH_PART_MESSAGEID;
+        }
+        else if (e->attr == search_attr_find_field("references")) {
+            part = SEARCH_PART_REFERENCES;
+        }
+        else if (e->attr == search_attr_find_field("in-reply-to")) {
+            part = SEARCH_PART_INREPLYTO;
+        }
+        else return SEARCH_PART_NONE;
+    }
+    else return SEARCH_PART_NONE;
+
+    if (part <= SEARCH_PART_NONE || part >= SEARCH_NUM_PARTS) {
+        return SEARCH_PART_NONE;
+    }
+
+    /* Do not support conditions that filter by body contents. We might
+     * decide to support them later, but for now only support header filter
+     * conditions for sort categories. */
+    if (part == SEARCH_PART_ANY || search_part_is_body(part)) {
+        return SEARCH_PART_NONE;
+    }
+
+    return search_can_match(e->op, part) ? part : SEARCH_PART_NONE;
+}
+
+static bool emailquery_category_is_all_xapian(const search_expr_t *e)
+{
+    /* Xapian can evaluate a whole subtree of conditions in one query, as
+     * long as every leaf of it is backed by the index. A negated query is
+     * evaluated outside Xapian. */
+    if (e->op == SEOP_AND || e->op == SEOP_OR) {
+        if (!e->children) return false;
+
+        for (const search_expr_t *c = e->children; c; c = c->next) {
+            if (!emailquery_category_is_all_xapian(c)) return false;
+        }
+
+        return true;
+    }
+
+    return emailquery_category_search_part(e) != SEARCH_PART_NONE;
+}
+
+static bool emailquery_category_is_serialisable(const search_expr_t *e)
+{
+    /* A serialised condition only is a stable hash key if every leaf of it
+     * serialises its value */
+    if (e->attr && !e->attr->serialise) return false;
+
+    for (const search_expr_t *c = e->children; c; c = c->next) {
+        if (!emailquery_category_is_serialisable(c)) return false;
+    }
+
+    return true;
+}
+
+static struct guidsearch_expr *
+guidsearch_build_guidset_expr(struct guidsearch_build_context *build_ctx,
+                              search_expr_t *e)
+{
+    struct emailquery_category_guidset *gs = NULL;
+    char *key = NULL;
+
+    if (emailquery_category_is_serialisable(e)) {
+        key = search_expr_serialise(e);
+        gs = hash_lookup(key, build_ctx->guidsets.by_condition);
+    }
+
+    if (!gs) {
+        gs = xzmalloc(sizeof(struct emailquery_category_guidset));
+        gs->condition = e;
+        ptrarray_append(build_ctx->guidsets.as_list, gs);
+        if (key) hash_insert(key, gs, build_ctx->guidsets.by_condition);
+    }
+
+    free(key);
+
+    struct guidsearch_expr *ge = xzmalloc(sizeof(struct guidsearch_expr));
+    ge->op = GSEOP_GUIDSET;
+    ge->v.v = gs;
+    return ge;
+}
 
 static struct guidsearch_expr *
 guidsearch_expr_build(struct guidsearch_build_context *build_ctx,
@@ -3692,6 +3820,10 @@ guidsearch_expr_build(struct guidsearch_build_context *build_ctx,
                       search_expr_t *e)
 {
     if (!e) return NULL;
+
+    if (build_ctx->guidsets.as_list && emailquery_category_is_all_xapian(e)) {
+        return guidsearch_build_guidset_expr(build_ctx, e);
+    }
 
     struct guidsearch_expr *ge = NULL;
 
@@ -3898,6 +4030,22 @@ guidsearch_expr_build(struct guidsearch_build_context *build_ctx,
             ;
     }
 
+    if (!ge && build_ctx->guidsets.as_list) {
+        /* We can't build a guidsearch expression and this is a builder for
+         * sort categories backed by Xapian. Mark the whole sort filter as
+         * failed. */
+        switch (e->op) {
+            case SEOP_AND:
+            case SEOP_OR:
+            case SEOP_NOT:
+            case SEOP_TRUE:
+            case SEOP_FALSE:
+                break;
+            default:
+                build_ctx->failed = true;
+        }
+    }
+
     return ge;
 }
 
@@ -3936,6 +4084,9 @@ static void guidsearch_expr_serialise(struct buf *buf, struct guidsearch_expr *e
             break;
         case GSEOP_INTERNALDATE:
             buf_appendcstr(buf, "INTERNALDATE");
+            break;
+        case GSEOP_GUIDSET:
+            buf_appendcstr(buf, "GUIDSET");
             break;
         case GSEOP_AND:
             buf_appendcstr(buf, "AND");
@@ -4060,6 +4211,13 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
                 }
                 conversation_fini(&conv);
                 return ret;
+            }
+        case GSEOP_GUIDSET:
+            {
+                const struct emailquery_category_guidset *gs = e->v.v;
+                if (!gs->n) return 0;
+                return bsearch(match->guidrep, gs->guidreps, gs->n,
+                               SEARCH_GUIDREP_SIZE, memcmp_guidrep) != NULL;
             }
         case GSEOP_INTERNALDATE:
             {
@@ -4314,6 +4472,20 @@ struct guidsearch_query {
     uint64_t index_generation;
 };
 
+static void guidsearch_query_fini(struct guidsearch_query *gsq)
+{
+    bv_fini(&gsq->readable_folders);
+    if (gsq->matches) {
+        for (size_t i = 0; i < gsq->total; i++) {
+            guidsearch_match_fini(&gsq->matches[i]);
+        }
+        free(gsq->matches);
+        gsq->matches = NULL;
+    }
+    guidsearch_expr_free(gsq->matchexpr);
+    gsq->matchexpr = NULL;
+}
+
 static void guidsearch_match_add_guidrec(struct guidsearch_match *match,
                                          const conv_guidrec_t *rec,
                                          uint32_t numfolders,
@@ -4393,7 +4565,9 @@ static int guidsearch_run_xapian_guidset_cb(const char *guidreps,
 {
     struct guidsearch_query *gsq = rock;
 
-    gsq->matches = xmalloc(nguids * sizeof(struct guidsearch_match));
+    if (gsq->matches == NULL) {
+        gsq->matches = xmalloc(nguids * sizeof(struct guidsearch_match));
+    }
 
     return conversations_iterate_searchset(gsq->req->cstate, guidreps, nguids,
                                            guidsearch_run_xapian_cb, gsq);
@@ -4404,6 +4578,7 @@ static int guidsearch_run_xapian(search_builder_t *bx,
                                  search_expr_t *expr,
                                  struct guidsearch_query *gsq)
 {
+
     if (!bx->run_guidsearch) {
         bv_fini(&gsq->readable_folders);
         return IMAP_SEARCH_NOT_SUPPORTED;
@@ -4447,6 +4622,95 @@ static void free_search_value_string(union search_value *v,
     v->s = NULL;
 }
 
+/* Xapian-backed replacements for the cache-backed message-id attributes,
+ * which have no search part of their own. We swap these into an expression
+ * tree when we know that we'll query Xapian, for uidsearch we continue using
+ * the original attributes. */
+
+static search_attr_t xapian_messageid_attr = {
+    "xapian-messageid",
+    SEA_FUZZABLE,
+    SEARCH_PART_MESSAGEID,
+    SEARCH_COST_BODY,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    free_search_value_string,
+    NULL,
+    NULL,
+    NULL
+};
+
+static search_attr_t xapian_references_attr = {
+    "xapian-references",
+    SEA_FUZZABLE,
+    SEARCH_PART_REFERENCES,
+    SEARCH_COST_BODY,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    free_search_value_string,
+    NULL,
+    NULL,
+    NULL
+};
+
+static search_attr_t xapian_inreplyto_attr = {
+    "xapian-inreplyto",
+    SEA_FUZZABLE,
+    SEARCH_PART_INREPLYTO,
+    SEARCH_COST_BODY,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    free_search_value_string,
+    NULL,
+    NULL,
+    NULL
+};
+
+/* The message-id conditions match on cache-backed attributes that have no
+ * search part, so swap in the Xapian-backed ones declared above. This
+ * mutates the expression in place. */
+static void guidsearch_swap_messageid_attrs(search_expr_t *root)
+{
+    const search_attr_t *messageid = search_attr_find("message-id");
+    const search_attr_t *references = search_attr_find_field("references");
+    const search_attr_t *inreplyto = search_attr_find_field("in-reply-to");
+
+    ptrarray_t exprs = PTRARRAY_INITIALIZER;
+    ptrarray_push(&exprs, root);
+
+    search_expr_t *e;
+    while ((e = ptrarray_pop(&exprs))) {
+        if (e->attr == messageid) {
+            e->attr = &xapian_messageid_attr;
+        }
+        else if (e->attr == references) {
+            e->attr = &xapian_references_attr;
+        }
+        else if (e->attr == inreplyto) {
+            e->attr = &xapian_inreplyto_attr;
+        }
+
+        for (search_expr_t *c = e->children; c; c = c->next)
+            ptrarray_push(&exprs, c);
+    }
+    ptrarray_fini(&exprs);
+}
+
 static void guidsearch_foldernum_by_mboxname(struct conversations_state *cstate,
                                              hash_table *foldernum_by_mboxname)
 {
@@ -4488,6 +4752,12 @@ struct emailquery_category {
     bitvector_t readable_folders;
     uint32_t numfolders;  // zero unless a groupBy filter reads mailboxes
     struct jmapseen_attrdata *seendata;  // not owned, set if $seen is read
+    ptrarray_t guidsets;  // struct emailquery_category_guidset *
+    /* Minimum search index version that the groupBy filters require */
+    unsigned need_xapian_index_version;
+    /* Index bound that the guidsets were read at, zero if none were read */
+    modseq_t highest_createdmodseq;
+    uint64_t index_generation;
 };
 
 static void emailquery_category_free(struct emailquery_category **catp)
@@ -4506,6 +4776,12 @@ static void emailquery_category_free(struct emailquery_category **catp)
         if (attr->freeattr) attr->freeattr(&attr);
     }
     ptrarray_fini(&cat->attrs);
+
+    struct emailquery_category_guidset *gs;
+    while ((gs = ptrarray_pop(&cat->guidsets))) {
+        emailquery_category_guidset_free(&gs);
+    }
+    ptrarray_fini(&cat->guidsets);
 
     bv_fini(&cat->readable_folders);
 
@@ -4528,9 +4804,16 @@ static int emailquery_category_init(jmap_req_t *req,
     hash_table foldernum_by_mboxname = HASH_TABLE_INITIALIZER;
     guidsearch_foldernum_by_mboxname(req->cstate, &foldernum_by_mboxname);
 
+    hash_table guidset_by_condition = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&guidset_by_condition, cat->ngroups + 1, 0);
+
     struct guidsearch_build_context build_ctx = {
         .cstate = req->cstate,
-        .foldernum_by_mboxname = &foldernum_by_mboxname
+        .foldernum_by_mboxname = &foldernum_by_mboxname,
+        .guidsets = {
+            .as_list = &cat->guidsets,
+            .by_condition = &guidset_by_condition
+        }
     };
 
     int r = 0;
@@ -4546,20 +4829,21 @@ static int emailquery_category_init(jmap_req_t *req,
         cat->searchexprs[i] = e;
 
         int use_dnf = 0;
-        unsigned need_xapian_index_version = 0;
-        int rank = guidsearch_rank_clause(req->cstate, e, NULL, &use_dnf,
-                &need_xapian_index_version);
-        if (rank < 0 || (rank & 0x2)) {
-            /* Only conditions that guidsearch answers from conversations.db
-             * can be evaluated for each Email of a result */
+        if (guidsearch_rank_clause(req->cstate, e, NULL, &use_dnf,
+                                   &cat->need_xapian_index_version) < 0) {
             r = IMAP_SEARCH_NOT_SUPPORTED;
             break;
         }
 
         cat->exprs[i] = guidsearch_expr_build(&build_ctx, NULL, e);
+        if (build_ctx.failed) {
+            r = IMAP_SEARCH_NOT_SUPPORTED;
+            break;
+        }
     }
 
     free_hash_table(&foldernum_by_mboxname, NULL);
+    free_hash_table(&guidset_by_condition, NULL);
 
     if (r) {
         emailquery_category_free(&cat);
@@ -4575,6 +4859,88 @@ static int emailquery_category_init(jmap_req_t *req,
     }
 
     *catp = cat;
+    return 0;
+}
+
+static int emailquery_category_load_guidset_cb(const char *guidreps,
+                                               size_t nguids, void *rock)
+{
+    struct emailquery_category_guidset *gs = rock;
+
+    if (gs->guidreps == NULL) {
+        gs->guidreps = xmalloc(nguids * SEARCH_GUIDREP_SIZE);
+    }
+
+    for (size_t i = 0; i < nguids; i++) {
+        const char *guidrep = guidreps + i * SEARCH_GUIDREP_SIZE;
+        /* Deduplicate guids in the result. We might get the same guid for
+         * each of the Xapian tiers, but the result will contain all of them
+         * sequentially in the sorted result set. */
+        if (gs->n && !memcmp(gs->guidreps + (gs->n - 1) * SEARCH_GUIDREP_SIZE,
+                             guidrep, MESSAGE_GUID_SIZE*2)) {
+            continue;
+        }
+        memcpy(gs->guidreps + gs->n * SEARCH_GUIDREP_SIZE, guidrep,
+               SEARCH_GUIDREP_SIZE);
+        gs->n++;
+    }
+
+    return 0;
+}
+
+static int emailquery_category_load_guidsets(struct emailquery_category *cat,
+                                             search_session_t *session)
+{
+    /* The guidsets are a snapshot of the index. Remember how far that
+     * snapshot reaches, so that the query can exclude any Email the index
+     * has not seen yet: its condition can not be evaluated. Without a bound
+     * we can not tell such an Email apart from one that matches nothing. */
+    cat->highest_createdmodseq =
+        search_session_get_highest_createdmodseq(session,
+                                                 &cat->index_generation);
+    if (!cat->highest_createdmodseq) return IMAP_SEARCH_NOT_SUPPORTED;
+
+    for (int i = 0; i < ptrarray_size(&cat->guidsets); i++) {
+        struct emailquery_category_guidset *gs = ptrarray_nth(&cat->guidsets, i);
+
+        search_builder_t *bx = search_begin_search(session);
+        if (!bx) return IMAP_INTERNAL;
+
+        int r = 0;
+
+        if (!bx->run_guidsearch) {
+            r = IMAP_SEARCH_NOT_SUPPORTED;
+        }
+        else if (cat->need_xapian_index_version) {
+            unsigned index_version =
+                bx->min_index_version ? bx->min_index_version(bx) : 0;
+            if (index_version < cat->need_xapian_index_version) {
+                /* Unlike a filter, a sort has no fallback that reads the
+                 * message-id headers from the message cache. */
+                xsyslog_ev(LOG_WARNING, "jmap.email.query.index_too_old",
+                           lf_u("search.index_version", index_version),
+                           lf_u("search.min_index_version",
+                                cat->need_xapian_index_version));
+                r = IMAP_SEARCH_NOT_SUPPORTED;
+            }
+        }
+
+        if (!r) {
+            guidsearch_swap_messageid_attrs(gs->condition);
+
+            search_build_query(bx, gs->condition);
+            r = bx->run_guidsearch(bx, SEARCH_GUIDSEARCH_MSGDOCS_ONLY,
+                                   emailquery_category_load_guidset_cb, gs);
+            if (r == IMAP_OK_COMPLETED) r = 0;
+        }
+
+        search_end_search(bx);
+        if (r) return r;
+
+        r = cmd_cancelled(/*insearch*/1);
+        if (r) return r;
+    }
+
     return 0;
 }
 
@@ -4626,9 +4992,11 @@ static uint8_t emailquery_category_of_guid(struct emailquery_category *cat,
     guidsearch_match_init(&match, cat->numfolders);
     match.cid = cid;
     match.nano_internaldate = nano_internaldate;
+    /* A groupBy condition backed by Xapian looks up this guid */
+    memcpy(match.guidrep, message_guid_encode(guid), MESSAGE_GUID_SIZE*2);
 
     struct emailquery_category_guidrock rock = { cat, &match };
-    conversations_guid_foreach(cat->cstate, message_guid_encode(guid),
+    conversations_guid_foreach(cat->cstate, match.guidrep,
                                emailquery_category_guid_cb, &rock);
 
     uint8_t category = emailquery_category_eval(cat, &match);
@@ -4638,7 +5006,49 @@ static uint8_t emailquery_category_of_guid(struct emailquery_category *cat,
     return category;
 }
 
+/* The search session that all Xapian lookups of one Email/query share.
+ * This takes a read lock on the search index, so all subqueries have a
+ * consistent view of the index. */
+struct emailquery_searchsession {
+    mbname_t *mbname;
+    struct mailbox *mbox;
+    search_session_t *session;
+};
+
+#define EMAILQUERY_SEARCHSESSION_INITIALIZER { NULL, NULL, NULL }
+
+static int emailquery_searchsession_open(jmap_req_t *req,
+                                         struct emailquery_searchsession *ss)
+{
+    /* A search index belongs to a whole account, so any mailbox of the
+     * account opens it. Use the upload folder, or the account root if that
+     * folder does not exist. */
+    ss->mbname = mbname_from_userid(req->accountid);
+    mbname_push_boxes(ss->mbname, config_getstring(IMAPOPT_JMAPUPLOADFOLDER));
+
+    int r = mailbox_open_irl(mbname_intname(ss->mbname), &ss->mbox);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        free(mbname_pop_boxes(ss->mbname));
+        r = mailbox_open_irl(mbname_intname(ss->mbname), &ss->mbox);
+    }
+    if (r) return r;
+
+    ss->session = search_begin_session(ss->mbox, 0);
+    if (!ss->session) return IMAP_INTERNAL;
+
+    return 0;
+}
+
+static void emailquery_searchsession_close(struct emailquery_searchsession *ss)
+{
+    search_end_session(ss->session);
+    ss->session = NULL;
+    mailbox_close(&ss->mbox);
+    mbname_free(&ss->mbname);
+}
+
 static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
+                          struct emailquery_searchsession *ss,
                           struct guidsearch_query *gsq)
 {
     int use_dnf = 0;
@@ -4650,17 +5060,12 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
     }
 
     search_builder_t *bx = NULL;
-    search_session_t *session = NULL;
-    struct mailbox *mbox = NULL;
-    mbname_t *mbname = mbname_from_userid(req->accountid);
+    int r = 0;
 
-    mbname_push_boxes(mbname, config_getstring(IMAPOPT_JMAPUPLOADFOLDER));
-    int r = mailbox_open_irl(mbname_intname(mbname), &mbox);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        free(mbname_pop_boxes(mbname));
-        r = mailbox_open_irl(mbname_intname(mbname), &mbox);
+    if (!ss->session) {
+        r = emailquery_searchsession_open(req, ss);
+        if (r) goto done;
     }
-    if (r) goto done;
 
     /* Determine readable folders for userid */
     uint32_t numfolders = conversations_num_folders(req->cstate);
@@ -4685,74 +5090,16 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
      * not, so decide what to collect only after compiling both. */
     gsq->numfolders = gsq->need_folders ? numfolders : 0;
 
-    // Xapian-backed message-id attributes, swapped into the expression
-    // tree below once we are committed to running guidsearch
-    static search_attr_t xapian_messageid_attr = {
-        "xapian-messageid",
-        SEA_FUZZABLE,
-        SEARCH_PART_MESSAGEID,
-        SEARCH_COST_BODY,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        free_search_value_string,
-        NULL,
-        NULL,
-        NULL
-    };
-
-    static search_attr_t xapian_references_attr = {
-        "xapian-references",
-        SEA_FUZZABLE,
-        SEARCH_PART_REFERENCES,
-        SEARCH_COST_BODY,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        free_search_value_string,
-        NULL,
-        NULL,
-        NULL
-    };
-
-    static search_attr_t xapian_inreplyto_attr = {
-        "xapian-inreplyto",
-        SEA_FUZZABLE,
-        SEARCH_PART_INREPLYTO,
-        SEARCH_COST_BODY,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        free_search_value_string,
-        NULL,
-        NULL,
-        NULL
-    };
-
-    /* Open search session - this takes a read-lock on the index */
-    session = search_begin_session(mbox, 0);
-
     /* Read highest createdmodseq and index generation from session */
     gsq->highest_createdmodseq =
-        search_session_get_highest_createdmodseq(session, &gsq->index_generation);
+        search_session_get_highest_createdmodseq(ss->session,
+                                                 &gsq->index_generation);
 
     /* Prepare query */
-    bx = search_begin_search(session);
+    bx = search_begin_search(ss->session);
     if (!bx) {
         syslog(LOG_ERR, "jmap: %s: can't begin search for %s",
-                __func__,  mailbox_name(mbox));
+                __func__,  mailbox_name(ss->mbox));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -4771,41 +5118,16 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         }
     }
 
-    /* Replace the cache-backed message-id attributes in the expression
-     * tree with the Xapian-backed ones declared above. This mutates the
+    /* Swap in the Xapian-backed message-id attributes. This mutates the
      * expression in place, so it must only happen once we are sure not
      * to fall back to uidsearch, which expects the original attributes. */
-    ptrarray_t exprs = PTRARRAY_INITIALIZER;
-    ptrarray_push(&exprs, search->expr_orig);
-    search_expr_t *e;
-
-    const search_attr_t *search_messageid_attr = search_attr_find("message-id");
-    const search_attr_t *search_references_attr = search_attr_find_field("references");
-    const search_attr_t *search_inreplyto_attr = search_attr_find_field("in-reply-to");
-
-    while ((e = ptrarray_pop(&exprs))) {
-        if (e->attr == search_messageid_attr) {
-            e->attr = &xapian_messageid_attr;
-        }
-        else if (e->attr == search_references_attr) {
-            e->attr = &xapian_references_attr;
-        }
-        else if (e->attr == search_inreplyto_attr) {
-            e->attr = &xapian_inreplyto_attr;
-        }
-        for (search_expr_t *c = e->children; c; c = c->next)
-            ptrarray_push(&exprs, c);
-    }
-    ptrarray_fini(&exprs);
+    guidsearch_swap_messageid_attrs(search->expr_orig);
 
     /* Run query */
     r = guidsearch_run_xapian(bx, req->cstate, search->expr_orig, gsq);
 
 done:
-    mailbox_close(&mbox);
-    mbname_free(&mbname);
     if (bx) search_end_search(bx);
-    search_end_session(session);
     return r;
 }
 
@@ -4865,6 +5187,7 @@ static void emailquery_guidsearch_result_free(void *rock)
 static int emailquery_guidsearch(jmap_req_t *req,
                                  struct emailquery *q,
                                  struct emailsearch *search,
+                                 struct emailquery_searchsession *ss,
                                  struct emailquery_result *qr,
                                  json_t **err __attribute__((unused)))
 {
@@ -4884,8 +5207,11 @@ static int emailquery_guidsearch(jmap_req_t *req,
         if (!gsq.seendata) gsq.seendata = q->category->seendata;
     }
 
-    int r = guidsearch_run(req, search, &gsq);
-    if (r) return r;
+    int r = guidsearch_run(req, search, ss, &gsq);
+    if (r) {
+        guidsearch_query_fini(&gsq);
+        return r;
+    }
 
     qr->highest_createdmodseq = gsq.highest_createdmodseq;
     qr->index_generation = gsq.index_generation;
@@ -4909,7 +5235,7 @@ static int emailquery_guidsearch(jmap_req_t *req,
         xsyslog(LOG_ERR, "guidsearch does not support partid search", NULL);
     }
 
-    guidsearch_expr_free(gsq.matchexpr);
+    guidsearch_query_fini(&gsq);
 
     return 0;
 }
@@ -5081,6 +5407,16 @@ static int emailquery_uidsearch(jmap_req_t *req,
     // Read highest created modseq and index generation for Xapian queries.
     qr->highest_createdmodseq = search->query->highest_createdmodseq;
     qr->index_generation = search->query->index_generation;
+
+    /* A category sort reads its groupBy conditions from Xapian, so the
+     * result must not reach past the index snapshot they were read at,
+     * even if the filter itself did not use Xapian. */
+    if (q->category && q->category->highest_createdmodseq &&
+        (!qr->highest_createdmodseq ||
+         q->category->highest_createdmodseq < qr->highest_createdmodseq)) {
+        qr->highest_createdmodseq = q->category->highest_createdmodseq;
+        qr->index_generation = q->category->index_generation;
+    }
     if (!search->query->merged_msgdata.count) return 0;
 
     struct emailquery_uidsearch_result_rock *rrock =
@@ -5118,6 +5454,7 @@ static int emailquery_search(jmap_req_t *req,
                              json_t **errp)
 {
     int r = 0;
+    struct emailquery_searchsession ss = EMAILQUERY_SEARCHSESSION_INITIALIZER;
 
     struct emailsearch search;
     emailsearch_init(&search, req, q->super.filter, q->super.sort,
@@ -5125,30 +5462,48 @@ static int emailquery_search(jmap_req_t *req,
     if (*errp) goto done;
 
     /* Compile the groupBy filters of a category sort */
+    bool category_too_slow = false;
     json_t *jcategory = emailquery_category_comparator(q->super.sort);
     if (jcategory) {
         r = emailquery_category_init(req, jcategory, contactgroups, &q->category);
-        if (r == IMAP_SEARCH_NOT_SUPPORTED) {
-            /* Same path as jmap_query_parse() reports for a comparator that
-             * _email_parse_comparator() rejects */
-            *errp = json_pack("{s:s s:[s]}", "type", "unsupportedSort",
-                    "sort", "sort[0]");
-            goto done;
+        if (!r && ptrarray_size(&q->category->guidsets)) {
+            r = emailquery_searchsession_open(req, &ss);
+            if (!r) {
+                r = emailquery_category_load_guidsets(q->category, ss.session);
+                category_too_slow = r == IMAP_SEARCH_SLOW;
+            }
         }
-        else if (r) goto done;
     }
 
     /* Try to fetch matching guids directly from Xapian */
     int is_guidsearch = 0;
-    if (!q->disable_guidsearch && !q->want_partids) {
-        r = emailquery_guidsearch(req, q, &search, qr, errp);
+    if (!r && !q->disable_guidsearch && !q->want_partids) {
+        r = emailquery_guidsearch(req, q, &search, &ss, qr, errp);
         if (r == IMAP_SEARCH_NOT_SUPPORTED) {
             /* Fallback to UID search */
             r = 0;
         }
-        else if (r) goto done;
-        else is_guidsearch = 1;
+        else if (!r) is_guidsearch = 1;
     }
+
+    /* Release the read lock on the search index. Uidsearch takes its own. */
+    emailquery_searchsession_close(&ss);
+
+    if (r == IMAP_SEARCH_NOT_SUPPORTED) {
+        /* The groupBy filters of the category sort are what is unsupported
+         * here. Same path as jmap_query_parse() reports for a comparator
+         * that _email_parse_comparator() rejects. */
+        *errp = json_pack("{s:s s:[s]}", "type", "unsupportedSort",
+                "sort", "sort[0]");
+        goto done;
+    }
+    else if (category_too_slow) {
+        *errp = json_pack("{s:s s:[s] s:s}", "type", "unsupportedSort",
+                "sort", "sort[0]", "description", "search too slow");
+        goto done;
+    }
+    else if (r) goto done;
+
     if (!is_guidsearch) {
         r = emailquery_uidsearch(req, q, &search, qr, errp);
     }
