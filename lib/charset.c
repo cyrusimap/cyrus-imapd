@@ -3614,21 +3614,8 @@ EXPORTED char *charset_parse_mimexvalue(const char *s, struct buf *lang)
     }
 
     /* Decode octects */
-    buf_reset(&buf);
-    p = q + 1;
-    while (*p) {
-        if (*p == '%') {
-            char c;
-            if (*(p+1) == 0 || *(p+2) == 0)
-                goto done;
-            if (hex_to_bin(p+1, 2, &c) == -1)
-                goto done;
-            buf_appendmap(&buf, &c, 1);
-            p += 3;
-        } else {
-            buf_appendmap(&buf, p++, 1);
-        }
-    }
+    if (charset_decode_percent(&buf, q + 1) == -1) goto done;
+
     ret = charset_to_utf8cstr(buf_base(&buf), buf_len(&buf), cs, 0);
 
 done:
