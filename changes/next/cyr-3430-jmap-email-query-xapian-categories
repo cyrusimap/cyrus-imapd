@@ -1,0 +1,27 @@
+Description:
+
+The "category" comparator of Email/query now also supports filter conditions
+that are indexed in Xapian, as long as they do not match message bodies.
+The "text", "body" and "attachmentBody" conditions stay unsupported.
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+The "messageId", "references" and "inReplyTo" conditions require a Xapian
+index of version 17 or higher. A category sort that groups by one of them
+is rejected on an older index. Reindexing with squatter fixes this.
+
+
+GitHub issue:
+
+None
