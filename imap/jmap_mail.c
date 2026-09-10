@@ -4918,6 +4918,28 @@ struct emailquery_uidsearch_result_rock {
     uint64_t partnum_seq;
 };
 
+/* Return the guids of the messages in this search result that have a
+ * non-zero savedate.  A copy of such a message with a zero savedate is
+ * not part of a savedate-sorted query result: the copy with the non-zero
+ * savedate represents the message. */
+static struct hashset *emailquery_savedates(const ptrarray_t *msgdata)
+{
+    struct hashset *savedates = hashset_new(MESSAGE_GUID_SIZE);
+
+    for (int i = 0; i < msgdata->count; i++) {
+        MsgData *md = ptrarray_nth(msgdata, i);
+
+        /* Skip expunged or hidden messages */
+        if (md->system_flags & FLAG_DELETED ||
+            md->internal_flags & FLAG_INTERNAL_EXPUNGED)
+            continue;
+
+        if (md->savedate) hashset_add(savedates, &md->guid.value);
+    }
+
+    return savedates;
+}
+
 static void emailquery_uidsearch_result_ensure(struct emailquery *q, struct emailquery_cache *qc, size_t n)
 {
     struct emailquery_uidsearch_result_rock *rrock = qc->qr.rock;
@@ -5069,22 +5091,8 @@ static int emailquery_uidsearch(jmap_req_t *req,
 
     ptrarray_t *msgdata = &rrock->query->merged_msgdata;
 
-    if (search->sort_savedate) {
-        /* Build hashset of messages with savedates */
-        rrock->savedates = hashset_new(MESSAGE_GUID_SIZE);
-
-        int j;
-        for (j = 0; j < msgdata->count; j++) {
-            MsgData *md = ptrarray_nth(msgdata, j);
-
-            /* Skip expunged or hidden messages */
-            if (md->system_flags & FLAG_DELETED ||
-                md->internal_flags & FLAG_INTERNAL_EXPUNGED)
-                continue;
-
-            if (md->savedate) hashset_add(rrock->savedates, &md->guid.value);
-        }
-    }
+    if (search->sort_savedate)
+        rrock->savedates = emailquery_savedates(msgdata);
 
     qr->rock = rrock;
     qr->total_ceiling = msgdata->count;
@@ -5817,6 +5825,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     modseq_t addrbook_modseq = 0;
     modseq_t since_highest_createdmodseq = 0;
     uint64_t since_index_generation = 0;
+    struct hashset *savedates = NULL;
     int r = 0;
 
     if (!_email_read_querystate(req, query->since_querystate,
@@ -5882,6 +5891,8 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     int found_up_to = 0;
     size_t mdcount = msgdata->count;
 
+    if (search.sort_savedate) savedates = emailquery_savedates(msgdata);
+
     hash_table touched_ids = HASH_TABLE_INITIALIZER;
     memset(&touched_ids, 0, sizeof(hash_table));
     construct_hash_table(&touched_ids, mdcount + 1, 0);
@@ -5921,12 +5932,10 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
 
         // for this phase, we only care that it has a change
         if (md->modseq <= since_modseq && !is_newly_indexed) {
-            if (search.is_mutable) {
-                modseq_t modseq = md->convmodseq;
-                if (!modseq) conversation_get_modseq(req->cstate, md->cid, &modseq);
-                if (modseq > since_modseq)
-                    hashu64_insert(md->cid, (void*)1, &touched_cids);
-            }
+            /* Only a conversation-scoped sort key can change the order
+             * without the message's own modseq advancing. */
+            if (search.is_mutable && md->convmodseq > since_modseq)
+                hashu64_insert(md->cid, (void*)1, &touched_cids);
             continue;
         }
 
@@ -5951,6 +5960,11 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
 
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
                 (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
+
+        /* Skip the copies that the query result does not contain */
+        if (savedates && !is_expunged && !md->savedate &&
+            hashset_exists(savedates, &md->guid.value))
+            continue;
 
         size_t touched_id = (size_t)hash_lookup(email_id, &touched_ids);
         size_t new_touched_id = touched_id;
@@ -6064,6 +6078,7 @@ done:
         }
         else *err = jmap_server_error(r);
     }
+    if (savedates) hashset_free(&savedates);
     emailsearch_fini(&search);
 }
 
@@ -6078,6 +6093,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     modseq_t addrbook_modseq = 0;
     modseq_t since_highest_createdmodseq = 0;
     uint64_t since_index_generation = 0;
+    struct hashset *savedates = NULL;
     int r = 0;
 
     if (!_email_read_querystate(req, query->since_querystate,
@@ -6142,6 +6158,8 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     int found_up_to = 0;
     size_t mdcount = msgdata->count;
 
+    if (search.sort_savedate) savedates = emailquery_savedates(msgdata);
+
     hash_table touched_ids = HASH_TABLE_INITIALIZER;
     memset(&touched_ids, 0, sizeof(hash_table));
     construct_hash_table(&touched_ids, mdcount + 1, 0);
@@ -6196,6 +6214,11 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
 
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
                 (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
+
+        /* Skip the copies that the query result does not contain */
+        if (savedates && !is_expunged && !md->savedate &&
+            hashset_exists(savedates, &md->guid.value))
+            continue;
 
         size_t touched_id = (size_t)hash_lookup(email_id, &touched_ids);
         size_t new_touched_id = touched_id;
@@ -6278,6 +6301,7 @@ done:
         }
         else *err = jmap_server_error(r);
     }
+    if (savedates) hashset_free(&savedates);
     emailsearch_fini(&search);
 }
 

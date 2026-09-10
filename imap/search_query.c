@@ -1211,6 +1211,9 @@ static int is_mutable_sort(struct sortcrit *sortcrit)
             case SORT_CONVEXISTS:
             case SORT_CONVSIZE:
             case SORT_HASCONVFLAG:
+            /* savedate is rewritten in place when an email is (re-)snoozed */
+            case SORT_SAVEDATE:
+            case SORT_SNOOZEDUNTIL:
                 return 1;
             default:
                 break;

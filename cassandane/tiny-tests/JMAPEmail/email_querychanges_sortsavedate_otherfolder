@@ -1,0 +1,108 @@
+#!perl
+use Cassandane::Tiny;
+
+sub assert_querychanges_sortsavedate_otherfolder ($self, $sort_property,
+                                                  $collapse_threads)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    my $inbox = $user->mailboxes->inbox;
+    my $snoozed = $user->mailboxes->create({
+        name => 'snoozed',
+        role => 'snoozed',
+    });
+
+    # The snoozed#until of each email, in ascending order.  For a snoozed
+    # email that is also its savedate, so both sorts see this order.
+    my @snoozed_until = map {; sprintf '2042-01-%02dT00:00:00Z', $_ } 1..3;
+
+    xlog $self, "Create three snoozed emails, the second one also in Inbox";
+    my (@emails, @ids);
+    for my $i (0 .. $#snoozed_until) {
+        my %mailbox_ids = ($snoozed->id => JSON::true);
+        $mailbox_ids{$inbox->id} = JSON::true if $i == 1;
+
+        my $email = $user->emails->create({
+            mailboxIds    => \%mailbox_ids,
+            subject       => "snoozed email $i",
+            snoozed       => { 'until' => $snoozed_until[$i] },
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => "email $i" } },
+        });
+        push @emails, $email;
+        push @ids, q{} . $email->id;
+    }
+
+    my %query = (
+        collapseThreads => $collapse_threads ? JSON::true : JSON::false,
+        sort   => [ {
+            isAscending => JSON::true,
+            mailboxId   => $snoozed->id,
+            property    => $sort_property,
+        } ],
+        calculateTotal => JSON::true,
+    );
+
+    xlog $self, "The Inbox copy does not sort by its own receivedAt";
+    my $res = $jmap->request([[ 'Email/query' => { %query } ]]);
+    my $qres = $res->sentence_named('Email/query')->arguments;
+    $self->assert_cmp_deeply(
+        superhashof({
+            ids        => \@ids,
+            queryState => jstr,
+            total      => 3,
+        }),
+        $qres,
+    );
+
+    my $qstate = $qres->{queryState};
+
+    xlog $self, "Flag the email that has a copy in Inbox";
+    $emails[1]->update({ 'keywords/$flagged' => JSON::true });
+
+    xlog $self, "Ask for changes";
+    $res = $jmap->request([[ 'Email/queryChanges' => {
+        %query,
+        sinceQueryState => $qstate,
+    } ]]);
+
+    xlog $self, "It is re-added at its position in the query result";
+    $self->assert_cmp_deeply(
+        superhashof({
+            added   => [ { id => $ids[1], index => 1 } ],
+            removed => [ $ids[1] ],
+            total   => 3,
+        }),
+        $res->sentence_named('Email/queryChanges')->arguments,
+    );
+}
+
+sub test_email_querychanges_sortsavedate_otherfolder__snoozeduntil
+    :needs_component_sieve :JMAPExtensions
+    ($self)
+{
+    $self->assert_querychanges_sortsavedate_otherfolder('snoozedUntil', 0);
+}
+
+sub test_email_querychanges_sortsavedate_otherfolder__snoozeduntil_collapsed
+    :needs_component_sieve :JMAPExtensions
+    ($self)
+{
+    $self->assert_querychanges_sortsavedate_otherfolder('snoozedUntil', 1);
+}
+
+sub test_email_querychanges_sortsavedate_otherfolder__addeddates
+    :needs_component_sieve :JMAPExtensions
+    ($self)
+{
+    $self->assert_querychanges_sortsavedate_otherfolder('addedDates', 0);
+}
+
+sub test_email_querychanges_sortsavedate_otherfolder__addeddates_collapsed
+    :needs_component_sieve :JMAPExtensions
+    ($self)
+{
+    $self->assert_querychanges_sortsavedate_otherfolder('addedDates', 1);
+}
