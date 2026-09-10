@@ -42,13 +42,20 @@ sub test_email_query_sort_category_unsupported
                 groupBy  => [ { noSuchCondition => JSON::true } ],
             } ],
         },
-        # Only conditions that are answered from conversations.db can be
-        # evaluated for each Email of a result
+        # A body condition is indexed, but we only support sorting by
+        # header content
         {
-            desc => 'condition_needs_search_index',
+            desc => 'condition_matches_body_part',
             sort => [ {
                 property => 'category',
-                groupBy  => [ { subject => 'hello' } ],
+                groupBy  => [ { body => 'hello' } ],
+            } ],
+        },
+        {
+            desc => 'condition_matches_any_part',
+            sort => [ {
+                property => 'category',
+                groupBy  => [ { text => 'hello' } ],
             } ],
         },
         {
@@ -75,7 +82,7 @@ sub test_email_query_sort_category_unsupported
                 groupBy  => [ {
                     operator   => 'OR',
                     conditions => [ { hasKeyword => '$flagged' },
-                                    { subject => 'hello' } ],
+                                    { body => 'hello' } ],
                 } ],
             } ],
         },
@@ -84,7 +91,7 @@ sub test_email_query_sort_category_unsupported
             desc => 'second_filter_unsupported',
             sort => [ {
                 property => 'category',
-                groupBy  => [ $unread, { subject => 'hello' } ],
+                groupBy  => [ $unread, { body => 'hello' } ],
             } ],
         },
         {
