@@ -17,8 +17,9 @@ static void test_parsenum(void)
     const char NUMTOOBIG[] = "18446744073709551616";
     bit64 val = CANARY;
     int r;
+    const char *end;
 
-    r = parsenum(NUM0, NULL, strlen(NUM0), &val);
+    r = parsenum(NUM0, &end, strlen(NUM0), &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(val, 0);
 
@@ -26,11 +27,13 @@ static void test_parsenum(void)
     r = parsenum(NUM1, NULL, strlen(NUM1), &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(val, 1);
+    CU_ASSERT_PTR_EQUAL(end, NUM0 + 1);
 
     val = CANARY;
-    r = parsenum(NUMBIG, NULL, strlen(NUMBIG), &val);
+    r = parsenum(NUMBIG, &end, strlen(NUMBIG), &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(val, 18446744073709551615ULL);
+    CU_ASSERT_PTR_EQUAL(end, NUMBIG + 20);
 
     val = CANARY;
     r = parsenum(NUMTOOBIG, NULL, strlen(NUMTOOBIG), &val);
@@ -45,20 +48,23 @@ static void test_parsehex(void)
     const char NUMTOOBIG[] = "10000000000000000";
     bit64 val = CANARY;
     int r;
+    const char *end;
 
     r = parsehex(NUM0, NULL, strlen(NUM0), &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(val, 0);
 
     val = CANARY;
-    r = parsehex(NUM1, NULL, strlen(NUM1), &val);
+    r = parsehex(NUM1, &end, strlen(NUM1), &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(val, 1);
+    CU_ASSERT_PTR_EQUAL(end, NUM1 + 1);
 
     val = CANARY;
-    r = parsehex(NUMBIG, NULL, strlen(NUMBIG), &val);
+    r = parsehex(NUMBIG, &end, strlen(NUMBIG), &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(val, 18446744073709551615ULL);
+    CU_ASSERT_PTR_EQUAL(end, NUMBIG + strlen(NUMBIG));
 
     val = CANARY;
     r = parsehex(NUMTOOBIG, NULL, strlen(NUMTOOBIG), &val);
