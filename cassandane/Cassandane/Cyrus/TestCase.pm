@@ -20,6 +20,7 @@ use base qw(Cassandane::Unit::TestCase);
 use Cassandane::TestUser;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
+use Cassandane::Util::CRLF;
 use Cassandane::Util::Words;
 use Cassandane::Generator;
 use Cassandane::GenericListener;
@@ -1187,6 +1188,17 @@ sub _save_message
     $store->write_begin();
     $store->write_message($msg);
     $store->write_end();
+}
+
+# Messages that fakesmtpd accepted, oldest first, as CRLF text.  Needs a
+# suite or test that asked for the smtpdaemon.
+sub smtpd_messages
+{
+    my ($self) = @_;
+
+    my $dir = $self->{instance}{basedir} . '/smtpd';
+    my @files = sort { -M $b <=> -M $a } glob("$dir/message_*.smtp");
+    return map { to_crlf(slurp_file($_)) } @files;
 }
 
 sub make_message

@@ -1,0 +1,252 @@
+#!perl
+use Cassandane::Tiny;
+
+# The Email id of a message make_message delivered.
+sub email_id_for ($self, $msg)
+{
+    my $res = $self->{jmap}->request([
+        ['Email/query', {}, 'q'],
+        ['Email/get', {
+            '#ids' => { resultOf => 'q', name => 'Email/query', path => '/ids' },
+            properties => ['messageId'],
+        }, 'g'],
+    ]);
+    my $want = $msg->get_header('Message-ID');
+    $want =~ s/^<(.*)>$/$1/;
+    my ($email) = grep { $_->{messageId}[0] eq $want }
+        @{ $res->sentence_named('Email/get')->arguments->{list} };
+    $self->assert_not_null($email);
+    return $email->{id};
+}
+
+# Deliver a message that asks for a receipt; returns (identityId, emailId).
+sub receipt_request ($self)
+{
+    my $msg = $self->make_message("Please read me",
+        extra_headers => [
+            ['Disposition-Notification-To', 'sender@example.org'],
+        ],
+        body => 'read me',
+    ) || die;
+
+    my $res = $self->{jmap}->request([ ['Identity/get', {}] ]);
+    return (
+        $res->single_sentence('Identity/get')->arguments->{list}[0]{id},
+        $self->email_id_for($msg),
+    );
+}
+
+sub mdn_for ($emailId)
+{
+    return {
+        forEmailId => $emailId,
+        disposition => {
+            actionMode => 'manual-action',
+            sendingMode => 'mdn-sent-manually',
+            type => 'displayed',
+        },
+    };
+}
+
+sub sets_mdnsent { { 'keywords/$mdnsent' => JSON::true } }
+
+sub assert_invalid_arguments ($self, $args, $expect)
+{
+    my $res = $self->{jmap}->request([ ['MDN/send', $args] ]);
+    $self->assert_cmp_deeply(
+        { type => 'invalidArguments', arguments => bag(@$expect) },
+        $res->single_sentence('error')->arguments,
+    );
+}
+
+# RFC 9007, Section 2.1: identityId names the sending identity, and the
+# request must arrange for $mdnsent to be set via onSuccessUpdateEmail.
+sub test_mdn_send_arguments ($self)
+{
+    my ($identityId, $emailId) = $self->receipt_request;
+    my $send = { k1 => mdn_for($emailId) };
+
+    xlog $self, "identityId is required";
+    $self->assert_invalid_arguments({
+        send => $send,
+        onSuccessUpdateEmail => { '#k1' => sets_mdnsent() },
+    }, ['identityId']);
+
+    xlog $self, "identityId must exist";
+    $self->assert_invalid_arguments({
+        identityId => 'nosuchidentity',
+        send => $send,
+        onSuccessUpdateEmail => { '#k1' => sets_mdnsent() },
+    }, ['identityId']);
+
+    xlog $self, "onSuccessUpdateEmail is required";
+    $self->assert_invalid_arguments({
+        identityId => $identityId,
+        send => $send,
+    }, ['onSuccessUpdateEmail']);
+
+    xlog $self, "every MDN must get the \$mdnsent keyword";
+    $self->assert_invalid_arguments({
+        identityId => $identityId,
+        send => $send,
+        onSuccessUpdateEmail => { '#k1' => { 'keywords/$seen' => JSON::true } },
+    }, ['onSuccessUpdateEmail/#k1']);
+    $self->assert_invalid_arguments({
+        identityId => $identityId,
+        send => { k1 => mdn_for($emailId), k2 => mdn_for($emailId) },
+        onSuccessUpdateEmail => { '#k1' => sets_mdnsent() },
+    }, ['onSuccessUpdateEmail/#k2']);
+
+    xlog $self, "onSuccessUpdateEmail may only reference creation ids";
+    $self->assert_invalid_arguments({
+        identityId => $identityId,
+        send => $send,
+        onSuccessUpdateEmail => {
+            '#k1' => sets_mdnsent(),
+            '#k9' => sets_mdnsent(),
+        },
+    }, ['onSuccessUpdateEmail/#k9']);
+
+    xlog $self, "the keyword may also be set through a keywords object";
+    my $res = $self->{jmap}->request([
+        ['MDN/send', {
+            identityId => $identityId,
+            send => $send,
+            onSuccessUpdateEmail => {
+                '#k1' => { keywords => { '$seen' => JSON::true,
+                                         '$mdnsent' => JSON::true } },
+            },
+        }],
+    ]);
+    my ($mdn, $set) = $res->sentences;
+    $self->assert_cmp_deeply(
+        superhashof({ sent => { k1 => ignore() }, notSent => undef }),
+        $mdn->arguments,
+    );
+    $self->assert_str_equals('Email/set', $set->name);
+    $self->assert_cmp_deeply(
+        superhashof({ updated => { $emailId => ignore() } }),
+        $set->arguments,
+    );
+}
+
+sub test_mdn_send_not_sent ($self)
+{
+    my ($identityId, $emailId) = $self->receipt_request;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "no receipt was requested";
+    my $quiet = $self->make_message("No receipt please", body => 'nothing')
+        || die;
+    my $quietId = $self->email_id_for($quiet);
+
+    my $ua = 'X-Reporting-Not-A-Property';
+    my $res = $jmap->request([
+        ['MDN/send', {
+            identityId => $identityId,
+            send => {
+                unknown => { %{ mdn_for($emailId) }, $ua => 1 },
+                serverset => { %{ mdn_for($emailId) },
+                               originalMessageId => '<x@example.com>' },
+                baddispo => { %{ mdn_for($emailId) },
+                              disposition => { actionMode => 'manual-action',
+                                               sendingMode => 'mdn-sent-manually',
+                                               type => 'read' } },
+                missing => mdn_for('Mnonexistent'),
+                quiet => mdn_for($quietId),
+                good => mdn_for($emailId),
+            },
+            onSuccessUpdateEmail => {
+                map { ("#$_" => sets_mdnsent()) }
+                    qw(unknown serverset baddispo missing quiet good),
+            },
+        }],
+    ]);
+
+    $self->assert_cmp_deeply(
+        {
+            accountId => 'cassandane',
+            sent => { good => ignore() },
+            notSent => {
+                unknown => { type => 'invalidProperties',
+                             properties => [$ua] },
+                serverset => { type => 'invalidProperties',
+                               properties => ['originalMessageId'] },
+                baddispo => { type => 'invalidProperties',
+                              properties => ['disposition/type'] },
+                missing => superhashof({ type => 'notFound' }),
+                quiet => superhashof({ type => 'notFound' }),
+            },
+        },
+        $res->sentence_named('MDN/send')->arguments,
+    );
+
+    xlog $self, "a second receipt for the same message is refused";
+    $res = $jmap->request([
+        ['MDN/send', {
+            identityId => $identityId,
+            send => { again => mdn_for($emailId) },
+            onSuccessUpdateEmail => { '#again' => sets_mdnsent() },
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            sent => undef,
+            notSent => { again => superhashof({ type => 'mdnAlreadySent' }) },
+        }),
+        $res->sentence_named('MDN/send')->arguments,
+    );
+}
+
+# The client may name the finalRecipient, but only as one of its own
+# addresses.
+sub test_mdn_send_final_recipient ($self)
+{
+    my ($identityId, $firstId) = $self->receipt_request;
+    my (undef, $mineId) = $self->receipt_request;
+    my (undef, $theirsId) = $self->receipt_request;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "learn the server's idea of the final recipient";
+    my $res = $jmap->request([
+        ['MDN/send', {
+            identityId => $identityId,
+            send => { first => mdn_for($firstId) },
+            onSuccessUpdateEmail => { '#first' => sets_mdnsent() },
+        }],
+    ]);
+    my $final = $res->sentence_named('MDN/send')
+        ->arguments->{sent}{first}{finalRecipient};
+    my ($me) = $final =~ /^rfc822; (cassandane\@\S+)$/;
+    $self->assert_not_null($me);
+
+    $res = $jmap->request([
+        ['MDN/send', {
+            identityId => $identityId,
+            send => {
+                mine => { %{ mdn_for($mineId) },
+                          finalRecipient => "rfc822; $me" },
+                theirs => { %{ mdn_for($theirsId) },
+                            finalRecipient => 'rfc822; someone@example.com' },
+            },
+            onSuccessUpdateEmail => {
+                '#mine' => sets_mdnsent(),
+                '#theirs' => sets_mdnsent(),
+            },
+        }],
+    ]);
+
+    xlog $self, "a client-set finalRecipient is not echoed as server-set";
+    $self->assert_cmp_deeply(
+        {
+            accountId => 'cassandane',
+            sent => { mine => { originalMessageId => ignore() } },
+            notSent => { theirs => superhashof({ type => 'forbiddenFrom' }) },
+        },
+        $res->sentence_named('MDN/send')->arguments,
+    );
+
+    my @out = $self->smtpd_messages();
+    $self->assert_num_equals(2, scalar @out);
+    $self->assert_matches(qr/^Final-Recipient: rfc822; \Q$me\E\r$/m, $out[1]);
+}

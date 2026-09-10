@@ -1,0 +1,51 @@
+
+Description:
+
+MDN/parse (RFC 9007) is implemented.  It was a stub that answered
+notParsable for every blob.
+
+MDN/send now issues a well-formed null envelope sender.  It used to send
+"MAIL FROM:<<>>", which SMTP servers reject.
+
+MDN/send follows RFC 9007, Section 2.1: it takes the identityId and
+onSuccessUpdateEmail arguments, and requires the latter to set the
+$mdnsent keyword on each message, rather than setting the keyword
+itself.  A client may name its own address as finalRecipient, and may add
+extensionFields.  Properties RFC 9007 does not define, or defines as
+server-set, are rejected.  A missing message or one without a
+Disposition-Notification-To header is reported as notFound, the error
+RFC 9007 assigns, instead of emailNotFound or noRecipients.
+
+MDN/send accepts the lowercase Disposition values of RFC 9007, such as
+"mdn-sent-manually", as well as the RFC 8098 capitalisation it used to
+require.  The Original-Recipient field it writes is now well-formed.
+
+MDN/parse decodes the subject and text body, lowercases the Disposition
+values, keeps the address-type on recipient fields, and reports
+extensionFields.
+
+The MDN that the Sieve "reject" action sends had a doubled address-type
+in Original-Recipient when sieve_mdn_original_recipient_header named a
+header that already carries one, which its default does.
+
+
+Documentation:
+
+None.  The behaviour follows the cited specification as written.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Clients written against the earlier MDN/send must now pass identityId
+(the value Identity/get reports) and an onSuccessUpdateEmail argument
+that sets the $mdnsent keyword, as RFC 9007 requires.
+
+
+GitHub issue:
+
+None.
