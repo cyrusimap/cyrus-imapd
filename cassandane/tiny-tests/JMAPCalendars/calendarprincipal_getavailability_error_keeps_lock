@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+# A failed getAvailability must release the principal's lock: httpd is
+# long-lived, and a leaked shared lock makes the next exclusive lock on the
+# same user in this process abort.
+sub test_calendarprincipal_getavailability_error_keeps_lock
+    :NoCheckSyslog
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    my $calendar_id = $user->calendars->default->id;
+
+    xlog $self, "create an event inside the availability time range";
+    my $res = $jmap->request([[
+        'CalendarEvent/set' => {
+            create => {
+                event1 => {
+                    version => '2.0',
+                    calendarIds => {
+                        $calendar_id => JSON::true,
+                    },
+                    title => 'event1',
+                    start => '2020-08-15T09:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                },
+            },
+        },
+    ]])->single_sentence('CalendarEvent/set')->arguments;
+    $self->assert_not_null($res->{created}{event1});
+
+    xlog $self, "break the calendar so opening it fails";
+    my $header = $self->{instance}->folder_to_directory(
+        'INBOX.#calendars.Default') . '/cyrus.header';
+    $self->assert(-f $header, "couldn't find cyrus.header file");
+    rename $header, "$header.hidden" or die "rename $header: $!";
+
+    xlog $self, "getAvailability fails, then a write in the same process";
+    $res = $jmap->request([
+        [ 'Principal/getAvailability' => {
+            id => 'cassandane',
+            utcStart => '2020-08-01T00:00:00Z',
+            utcEnd => '2020-09-01T00:00:00Z',
+        } ],
+        [ 'Calendar/set' => {} ],
+    ]);
+    $self->assert_str_equals('error', $res->sentence(0)->name);
+    $self->assert_str_equals('serverFail',
+                             $res->sentence(0)->arguments->{type});
+    $self->assert_str_equals('Calendar/set', $res->sentence(1)->name);
+
+    rename "$header.hidden", $header or die "rename $header: $!";
+}

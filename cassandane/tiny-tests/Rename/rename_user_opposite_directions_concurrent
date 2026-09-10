@@ -1,0 +1,79 @@
+#!perl
+use Cassandane::Tiny;
+use POSIX qw(_exit);
+use Fcntl qw(:flock);
+use File::Temp qw(tempfile);
+
+# Renaming user.alpha to user.beta and user.beta to user.alpha at the same
+# time takes the same two user locks from both sides.  lockdouble() orders
+# them by userid, so this must never deadlock, whichever rename wins.
+sub test_rename_user_opposite_directions_concurrent
+    :AllowMoves :NoAltNameSpace
+    ($self)
+{
+    my $svc = $self->{instance}->get_service('imap');
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user('alpha', subdirs => ['sub']);
+
+    my $rename_as_admin = sub ($barrier, $old, $new) {
+        open(my $fh, '>', $barrier) or die "open $barrier: $!";
+        flock($fh, LOCK_SH);
+        my $client = $svc->create_store(username => 'admin')->get_client();
+        $client->rename($old, $new);
+        _exit($client->get_last_completion_response() eq 'ok' ? 0 : 1);
+    };
+
+    for my $round (1..10) {
+        my (undef, $barrier) = tempfile();
+        open(my $fh, '>', $barrier) or die "open $barrier: $!";
+        flock($fh, LOCK_EX) or die "flock: $!";
+
+        my @pids;
+        for my $dir (['user.alpha', 'user.beta'], ['user.beta', 'user.alpha']) {
+            my $pid = fork();
+            die "fork: $!" unless defined $pid;
+            if (!$pid) {
+                close($fh);
+                $rename_as_admin->($barrier, @$dir);
+            }
+            push @pids, $pid;
+        }
+
+        # release both at once
+        undef $fh;
+
+        my $deadline = time() + 60;
+        for my $pid (@pids) {
+            while (waitpid($pid, POSIX::WNOHANG()) == 0) {
+                if (time() > $deadline) {
+                    kill 'KILL', @pids;
+                    $self->fail("round $round: rename never finished");
+                }
+                select(undef, undef, undef, 0.05);
+            }
+        }
+        unlink $barrier;
+
+        xlog $self, "round $round: exactly one of the two users exists";
+        my $list = $admintalk->list('', 'user.*');
+        my %seen = map { $_->[2] => 1 } @$list;
+        my $alpha = exists $seen{'user.alpha'} ? 1 : 0;
+        my $beta = exists $seen{'user.beta'} ? 1 : 0;
+        $self->assert_num_equals(1, $alpha + $beta);
+
+        if ($beta) {
+            $admintalk->rename('user.beta', 'user.alpha');
+            $self->assert_str_equals('ok',
+                    $admintalk->get_last_completion_response(),
+                    "rename back: " . ($admintalk->get_last_error() // ""));
+        }
+    }
+
+    my $final = $admintalk->list('', 'user.*');
+    $admintalk->select('user.alpha.sub');
+    $self->assert_str_equals('ok',
+                             $admintalk->get_last_completion_response(),
+                             "select: " . ($admintalk->get_last_error() // "") .
+                             " final: " . join(" ", map { $_->[2] } @$final));
+}
