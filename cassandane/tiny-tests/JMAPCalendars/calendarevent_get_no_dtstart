@@ -22,5 +22,7 @@ EOF
     my $event = $self->putandget_vevent($uid, $ical);
     $self->assert_not_null($event);
     $self->assert_str_equals('0000-00-00T00:00:00', $event->{start});
-    $self->assert_null($event->{updated});
+    # Cyrus adds a DTSTAMP on any component missing one,
+    # so "updated" is never absent.
+    $self->assert_not_null($event->{updated});
 }

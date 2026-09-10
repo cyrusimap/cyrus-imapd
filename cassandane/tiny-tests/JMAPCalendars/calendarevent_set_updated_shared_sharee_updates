@@ -1,0 +1,95 @@
+#!perl
+use Cassandane::Tiny;
+
+use Text::VCardFast qw(vcard2hash);
+
+sub test_calendarevent_set_updated_shared_sharee_updates
+    ($self)
+{
+    my $ownerJmap = $self->{jmap};
+    my $ownerCaldav = $self->{caldav};
+    my $default_cal = $self->default_user->calendars->default;
+    my $default_cal_id = $default_cal->id;
+
+    xlog $self, "create sharee and share calendar";
+    my $sharee_user = $self->{instance}->create_user('sharee');
+    my $shareeJmap = $sharee_user->jmap;
+    $default_cal->share_with($sharee_user => [qw(mayReadItems mayWriteAll)]);
+
+    xlog $self, "owner creates event where they and sharee are invitees";
+    my $res = $ownerJmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    version => '2.0',
+                    calendarIds => {
+                        $default_cal_id => JSON::true,
+                    },
+                    start => '2026-01-02T03:04:05',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    organizerCalendarAddress => 'mailto:someone@example.com',
+                    participants => {
+                        cassandane => {
+                            calendarAddress => 'mailto:cassandane@example.com',
+                            expectReply => JSON::true,
+                            participationStatus => 'accepted',
+                        },
+                        sharee => {
+                            calendarAddress => 'mailto:sharee@example.com',
+                            expectReply => JSON::true,
+                            participationStatus => 'needs-action',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [ '#event' ],
+            properties => ['updated', 'x-href'],
+        }, 'R2'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event}{id};
+    $self->assert_not_null($eventId);
+    my $updated = $res->[1][1]{list}[0]{updated};
+    my $href = $res->[1][1]{list}[0]{'x-href'};
+
+    $res = $ownerCaldav->Request('GET', "" . $href);
+    my $dtstamp = vcard2hash($res->{content})->{objects}[0]{objects}[0]
+        {properties}{dtstamp}[0]{value};
+    $self->assert_not_null($dtstamp);
+
+    sleep(1);
+
+    xlog $self, "sharee (an invitee, not the organizer) updates the event";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => {
+                    'participants/sharee/participationStatus' => 'accepted',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [ $eventId ],
+            properties => ['isOrigin', 'updated'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    my $event = $res->[1][1]{list}[0];
+    $self->assert_cmp_deeply(superhashof({
+        isOrigin => jfalse(),
+        updated  => ignore(),
+    }), $event);
+    $self->assert($updated lt $event->{updated});
+
+    xlog $self, "assert DTSTAMP was bumped in the stored iCalendar too";
+    $res = $ownerCaldav->Request('GET', "" . $href);
+    my $newDtstamp = vcard2hash($res->{content})->{objects}[0]{objects}[0]
+        {properties}{dtstamp}[0]{value};
+    $self->assert_not_null($newDtstamp);
+    $self->assert_str_not_equals($dtstamp, $newDtstamp);
+}

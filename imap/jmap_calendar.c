@@ -129,8 +129,8 @@ static char *_imip_calendar_address(const strarray_t *schedule_addresses)
     return strconcat("mailto:", addr, NULL);
 }
 
-/* v29 is just v28, bumped to ensure all entries are JSCalendar 2.0 */
-#define JMAPCACHE_CALVERSION 29
+/* v30 is just v29, bumped so that we evict events missing "update" property */
+#define JMAPCACHE_CALVERSION 30
 
 // clang-format off
 static jmap_method_t jmap_calendar_methods_standard[] = {
@@ -4910,8 +4910,8 @@ static int createevent_toical(jmap_req_t *req,
     }
 
 
-    if (jsevent_is_origin(create->jsevent, &create->schedule_addresses) && !create->is_copy) {
-        // Set updated and created.
+    if (!create->is_copy) {
+        // Set updated.
         time_t t_now = time(NULL);
         char s[RFC3339_DATETIME_MAX+1] = { 0 };
         time_to_rfc3339(t_now, s, RFC3339_DATETIME_MAX+1);
@@ -4920,46 +4920,53 @@ static int createevent_toical(jmap_req_t *req,
         json_object_set(create->jsevent, "updated", jupdated);
         json_object_set(create->serverset, "updated", jupdated);
 
-        json_t *jcreated = json_object_get(create->jsevent, "created");
-        const char *created = json_string_value(jcreated);
-        time_t t_created = t_now;
-        if (created && time_from_iso8601(created, &t_created) == -1) {
-            t_created = t_now;
-        }
-        if (JNULL(jcreated) || t_created > t_now) {
-            json_object_set(create->jsevent, "created", jupdated);
-            json_object_set(create->serverset, "created", jupdated);
-        }
-        json_decref(jupdated);
+        if (jsevent_is_origin(create->jsevent, &create->schedule_addresses)) {
+            // Set created.
+            json_t *jcreated = json_object_get(create->jsevent, "created");
+            const char *created = json_string_value(jcreated);
+            time_t t_created = t_now;
+            if (created && time_from_iso8601(created, &t_created) == -1) {
+                t_created = t_now;
+            }
+            if (JNULL(jcreated) || t_created > t_now) {
+                json_object_set(create->jsevent, "created", jupdated);
+                json_object_set(create->serverset, "created", jupdated);
+            }
 
-        // Set sequence if not already set.
-        if (!json_object_get(create->jsevent, "sequence")) {
-            json_object_set_new(create->jsevent, "sequence", json_integer(0));
-        }
+            // Set sequence if not already set.
+            if (!json_object_get(create->jsevent, "sequence")) {
+                json_object_set_new(create->jsevent,
+                                    "sequence", json_integer(0));
+            }
 
-        // XXX quirk: former implementation set organizer address
-        if (JNULL(json_object_get(create->jsevent, "organizerCalendarAddress"))) {
-            json_t *jparts = json_object_get(create->jsevent, "participants");
-            json_t *jpart;
-            const char *key;
-            json_object_foreach(jparts, key, jpart) {
-                if (JNOTNULL(json_object_get(jpart, "calendarAddress"))) {
-                    // At least one scheduled Participant is set.
-                    char *orga =
-                        _imip_calendar_address(&create->schedule_addresses);
-                    if (orga) {
-                        json_t *jorga = json_string(orga);
-                        json_object_set(create->jsevent,
-                                "organizerCalendarAddress", jorga);
-                        json_object_set(create->serverset,
-                                "organizerCalendarAddress", jorga);
-                        json_decref(jorga);
-                        free(orga);
+            // XXX quirk: former implementation set organizer address
+            if (JNULL(json_object_get(create->jsevent,
+                                      "organizerCalendarAddress"))) {
+                json_t *jparts = json_object_get(create->jsevent,
+                                                 "participants");
+                json_t *jpart;
+                const char *key;
+                json_object_foreach(jparts, key, jpart) {
+                    if (JNOTNULL(json_object_get(jpart, "calendarAddress"))) {
+                        // At least one scheduled Participant is set.
+                        char *orga =
+                            _imip_calendar_address(&create->schedule_addresses);
+                        if (orga) {
+                            json_t *jorga = json_string(orga);
+                            json_object_set(create->jsevent,
+                                            "organizerCalendarAddress", jorga);
+                            json_object_set(create->serverset,
+                                            "organizerCalendarAddress", jorga);
+                            json_decref(jorga);
+                            free(orga);
+                        }
                     }
+                    break;
                 }
-                break;
             }
         }
+
+        json_decref(jupdated);
     }
 
     jscal_cfg_t cfg = { .emailalert_default_uri = emailalert_recipient,
@@ -5741,24 +5748,10 @@ done:
     *new_eventp = new_event;
 }
 
-static void updateevent_bump_sequence(json_t *old_event,
-                                      json_t *new_event,
-                                      json_t *update,
-                                      strarray_t *schedule_addresses)
+/* Return true if any shared property is getting updated */
+static bool updateevent_patch_updates_shared_prop(json_t *old_event,
+                                                   json_t *new_event)
 {
-    /* Bump sequence iff... */
-
-    /* ... server is the source of the event */
-    json_t *jorga = json_object_get(new_event, "organizerCalendarAddress");
-    if (JNOTNULL(jorga)) {
-        const char *addr = json_string_value(jorga);
-        if (addr && !strncasecmp(addr, "mailto:", 7) &&
-                !strarray_contains(schedule_addresses, addr + 7)) {
-            return;
-        }
-    }
-
-    /* ... a non per-user property got updated */
     int updates_shared_prop = 0;
     json_t *jpatch = jmap_patchobject_create(old_event, new_event, 0/*no_remove*/);
     const char *path;
@@ -5785,6 +5778,28 @@ static void updateevent_bump_sequence(json_t *old_event,
         }
     }
     json_decref(jpatch);
+    return updates_shared_prop;
+}
+
+static void updateevent_bump_sequence(json_t *old_event,
+                                      json_t *new_event,
+                                      json_t *update,
+                                      strarray_t *schedule_addresses,
+                                      bool updates_shared_prop)
+{
+    /* Bump sequence iff... */
+
+    /* ... server is the source of the event */
+    json_t *jorga = json_object_get(new_event, "organizerCalendarAddress");
+    if (JNOTNULL(jorga)) {
+        const char *addr = json_string_value(jorga);
+        if (addr && !strncasecmp(addr, "mailto:", 7) &&
+                !strarray_contains(schedule_addresses, addr + 7)) {
+            return;
+        }
+    }
+
+    /* ... a non per-user property got updated */
     if (!updates_shared_prop)
         return;
 
@@ -5915,8 +5930,12 @@ static int updateevent_apply_patch(jmap_req_t *req,
 
     updateevent_validate_ids(update->old_event, new_event, invalid);
 
+    bool updates_shared_prop =
+        updateevent_patch_updates_shared_prop(update->old_event, new_event);
+
     updateevent_bump_sequence(update->old_event, new_event,
-            update->serverset, update->schedule_addresses);
+            update->serverset, update->schedule_addresses,
+            updates_shared_prop);
 
     // Do not allow to set method - but ignore keeping it.
     const char *new_method =
@@ -5929,14 +5948,18 @@ static int updateevent_apply_patch(jmap_req_t *req,
         }
     }
 
-    // Set updated.
-    if (jsevent_is_origin(new_event, update->schedule_addresses)) {
+    if (updates_shared_prop) {
+        // Set updated.
         char s[RFC3339_DATETIME_MAX+1] = { 0 };
         time_to_rfc3339(time(NULL), s, RFC3339_DATETIME_MAX+1);
         json_t *jupdated = json_string(s);
         json_object_set(new_event, "updated", jupdated);
         json_object_set(update->serverset, "updated", jupdated);
         json_decref(jupdated);
+    }
+    else {
+        json_object_set(new_event, "updated",
+                json_object_get(update->old_event, "updated"));
     }
 
     /* Convert to iCalendar */

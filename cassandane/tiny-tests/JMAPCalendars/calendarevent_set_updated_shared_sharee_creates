@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+use Text::VCardFast qw(vcard2hash);
+
+sub test_calendarevent_set_updated_shared_sharee_creates
+    ($self)
+{
+    my $ownerCaldav = $self->{caldav};
+    my $default_cal = $self->default_user->calendars->default;
+    my $default_cal_id = $default_cal->id;
+
+    xlog $self, "create sharee and share calendar";
+    my $sharee_user = $self->{instance}->create_user('sharee');
+    my $shareeJmap = $sharee_user->jmap;
+    $default_cal->share_with($sharee_user => [qw(mayReadItems mayWriteAll)]);
+
+    xlog $self, "sharee creates event where owner is an invitee, not organizer";
+    my $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            create => {
+                event => {
+                    version => '2.0',
+                    calendarIds => {
+                        $default_cal_id => JSON::true,
+                    },
+                    start => '2026-01-02T03:04:05',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    organizerCalendarAddress => 'mailto:someone@example.com',
+                    participants => {
+                        cassandane => {
+                            calendarAddress => 'mailto:cassandane@example.com',
+                            expectReply => JSON::true,
+                            participationStatus => 'accepted',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [ '#event' ],
+            properties => ['isOrigin', 'updated', 'x-href'],
+        }, 'R2'],
+    ]);
+    my $event = $res->[1][1]{list}[0];
+    $self->assert_not_null($event);
+    $self->assert_cmp_deeply(superhashof({
+        isOrigin => jfalse(),
+        updated  => ignore(),
+    }), $event);
+
+    xlog $self, "assert DTSTAMP is present in the stored iCalendar";
+    $res = $ownerCaldav->Request('GET', "" . $event->{'x-href'});
+    my $vevent = vcard2hash($res->{content})->{objects}[0]{objects}[0];
+    $self->assert_not_null($vevent->{properties}{dtstamp}[0]{value});
+}

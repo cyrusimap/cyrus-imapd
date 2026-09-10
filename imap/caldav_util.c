@@ -217,6 +217,28 @@ EXPORTED int caldav_is_personalized(struct mailbox *mailbox,
     return 0;
 }
 
+/* RFC 5545 requires DTSTAMP on every VEVENT/VTODO/VJOURNAL/VFREEBUSY,
+ * and JSCalendar's "updated" is also mandatory.
+ * Make sure we never have a component without one. */
+static void add_missing_dtstamp(icalcomponent *ical, icalcomponent_kind kind,
+                                time_t t)
+{
+    icalcomponent *comp;
+
+    if (!utc_zone) utc_zone = icaltimezone_get_utc_timezone();
+
+    icaltimetype tt = icaltime_from_timet_with_zone(t, 0, utc_zone);
+
+    for (comp = icalcomponent_get_first_component(ical, kind);
+         comp;
+         comp = icalcomponent_get_next_component(ical, kind)) {
+
+        if (!icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY)) {
+            icalcomponent_add_property(comp, icalproperty_new_dtstamp(tt));
+        }
+    }
+}
+
 EXPORTED icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
                                               const struct caldav_data *cdata,
                                               const char *userid,
@@ -231,6 +253,11 @@ EXPORTED icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
     }
 
     ical = record_to_ical(mailbox, &record, schedule_addresses);
+    if (ical) {
+        icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+        add_missing_dtstamp(ical,
+                            icalcomponent_isa(comp), record.internaldate.tv_sec);
+    }
 
     if (userid && (namespace_calendar.allow & ALLOW_USERDATA)) {
         struct buf userdata = BUF_INITIALIZER;
@@ -1024,6 +1051,8 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
         txn->error.precond = CALDAV_SUPP_COMP;
         return HTTP_FORBIDDEN;
     }
+
+    add_missing_dtstamp(ical, kind, time(0) /*now*/);
 
     if (!annotatemore_lookupmask_mbox(mailbox, prop_annot, txn->userid, &attrib)
         && attrib.len) {
