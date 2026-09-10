@@ -24,9 +24,15 @@
 
 #define XXH_STATIC_LINKING_ONLY /* access advanced declarations */
 #define XXH_INLINE_ALL          /* maximum optimise */
-#define XXH_NO_INLINE_HINTS   1 /* allow compiling with -Og on modern compilers */
 #define XXH_IMPLEMENTATION      /* access definitions */
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC push_options
+#pragma GCC optimize("O2")
+#endif
 #include "xxhash.h"
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC pop_options
+#endif
 
 /* Self-contained UUID (RFC 4122 version 4) support.  We generate and format
  * UUIDs ourselves rather than depending on util-linux's libuuid, which is not
