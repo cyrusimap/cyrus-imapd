@@ -1321,16 +1321,28 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                 break;
             }
 
-            /* Don't allow ORGANIZER to be changed */
-            if (!reject && cdata->organizer) {
-                prop =
-                    icalcomponent_get_first_property(comp,
-                                                     ICAL_ORGANIZER_PROPERTY);
-                if (prop) {
-                    const char *organizer = icalproperty_get_decoded_calendaraddress(prop);
-                    if (organizer) {
-                        if (strcasecmp(cdata->organizer, organizer)) reject = 1;
+            if (!reject) {
+                if (cdata->organizer) {
+                    /* Don't allow ORGANIZER to be changed */
+                    prop =
+                        icalcomponent_get_first_property(comp,
+                                                         ICAL_ORGANIZER_PROPERTY);
+                    if (prop) {
+                        const char *organizer =
+                            icalproperty_get_decoded_calendaraddress(prop);
+                        if (organizer) {
+                            if (strcasecmp(cdata->organizer, organizer))
+                                reject = 1;
+                        }
                     }
+                }
+                else if (method != ICAL_METHOD_PUBLISH ||
+                         icalcomponent_get_first_property(
+                             comp, ICAL_ORGANIZER_PROPERTY)) {
+                    /* With no stored ORGANIZER, no sender can prove the
+                       right to schedule this event; only public data may
+                       update it */
+                    reject = 1;
                 }
             }
 
