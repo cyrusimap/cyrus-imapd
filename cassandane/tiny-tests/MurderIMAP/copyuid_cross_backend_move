@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+# Regression test for https://github.com/cyrusimap/cyrus-imapd/issues/4027
+#
+# When a COPY/MOVE is proxied cross-backend (the "hard case" in
+# proxy_copy()), the destination server only ever gives us an
+# APPENDUID response ("<uidvalidity> <destuid-set>", 2 fields). Before
+# the fix, that was reported back to the client verbatim, mislabelled
+# as a COPYUID response code -- but RFC 4315 section 3 requires
+# COPYUID to carry three fields: "<uidvalidity> <srcuid-set>
+# <destuid-set>". Clients that strictly parse COPYUID (e.g. Horde's
+# Horde_Imap_Client_Socket::_responseCode(), which maps a fixed set of
+# keys onto the parsed values with array_combine()) choke on the
+# malformed 2-field response.
+#
+# Mail::IMAPTalk always calls _next_atom() three times when parsing
+# 'copyuid', so the returned array is always length 3 regardless --
+# the malformed response instead shows up as a *content* mismatch:
+# the source uid-set field ends up holding the destination uid-set,
+# and the third field picks up whatever followed (typically the
+# closing ']' or empty). So we assert on the actual values, not just
+# on array length.
+
+sub test_copyuid_cross_backend_move
+    :NoAltNamespace :IMAPMurder :needs_component_murder
+    ($self)
+{
+    my $shared = 'shared';
+
+    # create a shared folder on backend2
+    my $admintalk = $self->{backend2_adminstore}->get_client();
+    $admintalk->create($shared);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    # grant full rights including expunge
+    $admintalk->setacl($shared, 'anyone', 'lrswipkxtecd');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # inject a message into the shared folder with a known UID
+    my $frontend = $self->{frontend_store}->get_client();
+    $self->{frontend_store}->set_folder($shared);
+    $self->{frontend_store}->_select();
+    $self->{gen}->set_next_uid(1);
+    $self->make_message("Message A", store => $self->{frontend_store});
+
+    $frontend->select($shared);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $self->assert_num_equals(1, $frontend->get_response_code('exists'));
+
+    # capture the destination's real UIDVALIDITY, so we can check
+    # COPYUID reports *that* value and not something bogus
+    $frontend->select('INBOX');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    my $dest_uidvalidity = $frontend->get_response_code('uidvalidity');
+
+    # UID MOVE cross-backend (source: shared on backend2, dest: INBOX
+    # on backend1 -- the "hard case" in proxy_copy()). Cassandane's
+    # IMAPTalk connections already default to Uid => 1 (see
+    # IMAPMessageStore.pm), so this is UID mode already, but we set it
+    # explicitly to document intent and stay correct if that default
+    # ever changes: exercises the trivial usinguid=1 path (sequence is
+    # already a real uid-set).
+    $frontend->select($shared);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $frontend->uid(1);
+    $frontend->move('1', 'INBOX');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    my $copyuid = $frontend->get_response_code('copyuid');
+    $self->assert_num_equals(3, scalar @$copyuid);
+    $self->assert_num_equals($dest_uidvalidity, $copyuid->[0]);
+    $self->assert_str_equals('1', $copyuid->[1]);
+    $self->assert_matches(qr{\A\d+\z}, $copyuid->[2]);
+
+    # sanity: the message really did land in INBOX
+    $frontend->select('INBOX');
+    $self->assert_num_equals(1, $frontend->get_response_code('exists'));
+}
