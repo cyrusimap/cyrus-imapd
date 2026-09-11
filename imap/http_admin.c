@@ -8,6 +8,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/proc.h>
 #include <cyrus/tok.h>
@@ -32,10 +36,7 @@
 #include "proxy.h"
 #include "ptrarray.h"
 #include "time.h"
-#include "util.h"
 #include "version.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 
 /* config.c stuff */
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;

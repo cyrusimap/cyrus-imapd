@@ -3,6 +3,9 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "seqset.h"
+
+#include "libcyrus_min/util.h"
 
 #include <cyrus/xmalloc.h>
 
@@ -10,9 +13,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
-#include "seqset.h"
 #include "string.h"
-#include "util.h"
 
 #define SETGROWSIZE 30
 

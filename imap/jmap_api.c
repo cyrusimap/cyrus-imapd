@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/hash.h>
 #include <cyrus/strhash.h>
 #include <cyrus/xmalloc.h>
@@ -27,7 +29,6 @@
 #include "syslog.h"
 #include "times.h"
 #include "user.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

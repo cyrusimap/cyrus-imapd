@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/xmalloc.h>
 
 #include <errno.h>
@@ -18,7 +20,6 @@
 #include "global.h"
 #include "mupdate-client.h"
 #include "proxy.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

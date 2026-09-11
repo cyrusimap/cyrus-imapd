@@ -7,12 +7,13 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <stdlib.h>
 #include <string.h>
 
 #include "sieve/script.h"
 #include "sieve/addr.h"
-#include "xstrlcpy.h"
 
 #define ADDRERR_SIZE 500
 

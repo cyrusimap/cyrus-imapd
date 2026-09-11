@@ -4,13 +4,13 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include "notify_log.h"
 
 #include <syslog.h>
 #include <string.h>
 #include <stdio.h>
-
-#include "lib/util.h"
 
 char* notify_log(const char *class, const char *priority,
                  const char *user, const char *mailbox,

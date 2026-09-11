@@ -3,6 +3,9 @@
 /* See COPYING file at the root of the distribution for more details. */
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
 #include <cyrus/strhash.h>
@@ -11,7 +14,6 @@
 #include <sysexits.h>
 #include <syslog.h>
 #include "ptloader.h"
-#include "util.h"
 
 #ifdef HAVE_LDAP
 
@@ -39,7 +41,6 @@
 
 /* libcyrus */
 #include "auth_pts.h"
-#include "xstrlcat.h"
 
 typedef struct _ptsm {
     const char      *uri;

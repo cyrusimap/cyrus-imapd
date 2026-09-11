@@ -1,16 +1,15 @@
 /* json_support.h - Helper functions for jansson and JSON */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
-
 #ifndef JSON_SUPPORT_H
 #define JSON_SUPPORT_H
-
 #include <config.h>
-#include <jansson.h>
-#include <stdbool.h>
 
-#include "util.h"
+#include "libcyrus_min/util.h"
+
+#include <jansson.h>
+
+#include <stdbool.h>
 
 #define JNOTNULL(item)          ((item) ? (json_is_null(item) == 0) : 0)
 #define JNULL(item)             ((item) ? (json_is_null(item)) : 1)

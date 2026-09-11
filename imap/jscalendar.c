@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/strarray.h>
 
 #include <string.h>
@@ -20,8 +23,6 @@
 #include "jscalendar.h"
 #include "json_support.h"
 #include "ptrarray.h"
-#include "util.h"
-#include "xstrlcpy.h"
 
 // ---------------
 

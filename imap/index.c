@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
 #include <cyrus/hashu64.h>
@@ -50,9 +53,7 @@
 #include "statuscache.h"
 #include "attachextract.h"
 #include "user.h"
-#include "util.h"
 #include "ptrarray.h"
-#include "xstrlcpy.h"
 
 #include "index.h"
 #include "sync_log.h"

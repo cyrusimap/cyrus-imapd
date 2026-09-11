@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
 #include <cyrus/xmalloc.h>
 
 #ifdef HAVE_UNISTD_H
@@ -27,8 +30,6 @@
 #include "message_guid.h"
 #include "mboxname.h"
 #include "mboxlist.h"
-#include "util.h"
-#include "xstrlcat.h"
 #include "zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */

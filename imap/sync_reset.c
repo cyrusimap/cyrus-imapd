@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
 #include <cyrus/proc.h>
 #include <cyrus/xmalloc.h>
 
@@ -28,8 +31,6 @@
 #include "seen.h"
 #include "mboxname.h"
 #include "map.h"
-#include "util.h"
-#include "xstrlcat.h"
 #include "imapd.h"
 #include "user.h"
 #include "sync_support.h"

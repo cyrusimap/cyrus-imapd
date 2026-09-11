@@ -3,9 +3,9 @@
 
 #include <cyrus/hash.h>
 
-#include <cyrus/strarray.h>
+#include "libcyrus_min/util.h"
 
-#include "util.h"
+#include <cyrus/strarray.h>
 
 static void count_cb(const char *key __attribute__((unused)),
                      void *data __attribute__((unused)),

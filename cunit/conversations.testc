@@ -5,6 +5,8 @@
 
 #include "imap/conversations.h"
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/retry.h>
 #include <cyrus/strarray.h>
 #include <cyrus/xmalloc.h>
@@ -12,7 +14,6 @@
 
 #include "imap/global.h"
 #include "cyrusdb.h"
-#include "lib/util.h"       /* for VECTOR_SIZE */
 //#include "message.h"      /* for VECTOR_SIZE */
 
 #define DBDIR   "test-conversations-dbdir"

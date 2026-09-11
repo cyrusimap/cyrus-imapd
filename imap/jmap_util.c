@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
 
@@ -26,7 +28,6 @@
 #include "times.h"
 #include "user.h"
 #include "xapian_wrap.h"
-#include "xstrlcpy.h"
 
 #ifdef HAVE_LIBCHARDET
 #include <chardet/chardet.h>

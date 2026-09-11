@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/mpool.h>
 #include <cyrus/strarray.h>
@@ -48,9 +51,7 @@
 #include "nonblock.h"
 #include "prot.h"
 #include "tls.h"
-#include "util.h"
 #include "version.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
