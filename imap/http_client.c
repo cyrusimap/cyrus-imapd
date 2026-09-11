@@ -249,17 +249,22 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
 
         /* Read chunks until last-chunk (zero chunk-size) */
         do {
-            unsigned chunk;
+            unsigned long chunk;
+            char *endptr;
 
             /* Read chunk-size */
+            errno = 0;
             if (!prot_fgets(buf, PROT_BUFSIZE, pin) ||
-                sscanf(buf, "%x", &chunk) != 1) {
+                !isxdigit(*buf) ||    // no leading junk
+                ((chunk = strtoul(buf, &endptr, 16)) == ULONG_MAX &&
+                 errno == ERANGE) ||  // didn't overflow
+                *endptr != '\r') {    // no trailing junk
                 *errstr = "Unable to read chunk size";
                 goto read_failure;
 
                 /* XXX  Do we need to parse chunk-ext? */
             }
-            else if (chunk > body->max - body->len) {
+            if (chunk > body->max - body->len) {
                 return HTTP_CONTENT_TOO_LARGE;
             }
 
@@ -374,7 +379,7 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
     return 0;
 
   read_failure:
-    if (strcmpsafe(prot_error(pin), PROT_EOF_STRING)) {
+    if (!strcmpsafe(prot_error(pin), PROT_IDLE_STRING)) {
         /* client timed out */
         *errstr = prot_error(pin);
         syslog(LOG_WARNING, "%s, closing connection", *errstr);

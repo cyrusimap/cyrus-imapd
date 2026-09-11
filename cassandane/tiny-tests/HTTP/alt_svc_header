@@ -2,6 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_alt_svc_header
+    :needs_dependency_nghttp2
     ($self)
 {
     my $service = $self->{instance}->get_service('http');

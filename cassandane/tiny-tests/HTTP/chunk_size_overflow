@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+# A chunked request whose chunk-size overflows a 32-bit unsigned int must be
+# rejected, not silently truncated.  "100000000" is 0x1_0000_0000 = 2**32,
+# which the old sscanf("%x", &unsigned) read as 0 -- a last-chunk marker -- so
+# the server finished the body early and parsed the bytes that followed (here a
+# smuggled GET) as the next request on the connection.
+#
+# We PUT a calendar resource with such a chunked body.  The oversized chunk
+# exceeds maxmessagesize (the default is INT_MAX, and 2**32 is larger), so with
+# the fix the PUT is answered with a single 413 and nothing further is read.
+# Without the fix the chunk size truncates to 0, the PUT gets an empty body,
+# and the smuggled request is answered too -- so the connection carries a
+# response that is not a 413, and possibly a second response as well.
+sub test_chunk_size_overflow ($self)
+{
+    # Provision the calendar home so the PUT targets a real collection.
+    $self->{caldav}->GetCalendars();
+
+    my $smuggled =
+        "GET /dav/calendars/user/cassandane/Default HTTP/1.0\r\n\r\n";
+
+    # chunk-size 0x100000000, then chunk data (the smuggled request).
+    my $raw_body = "100000000\r\n\r\n" . $smuggled;
+
+    my $res = $self->http1_request(
+        method   => 'PUT',
+        path     => '/dav/calendars/user/cassandane/Default/smuggle.ics',
+        headers  => [
+            'transfer-encoding' => 'chunked',
+            'content-type'      => 'text/calendar',
+        ],
+        raw_body => $raw_body,
+    );
+
+    xlog $self, "server responses: @{ $res->{statuses} }";
+
+    # Exactly one response, and it rejected the oversized chunk.  Without the
+    # fix the first response is not a 413 (the truncated body was accepted),
+    # and a smuggled second response may follow.
+    $self->assert_num_equals(1, scalar @{ $res->{statuses} });
+    $self->assert_num_equals(413, $res->{statuses}[0]);
+}
