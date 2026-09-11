@@ -1,9 +1,9 @@
 #include "cunit/unit.h"
 #include "master/event.h"
 
-#include <cyrus/strarray.h>
+#include "libcyrus_min/util.h"
 
-#include "lib/util.h"
+#include <cyrus/strarray.h>
 
 #include <stdbool.h>
 #include <sysexits.h>

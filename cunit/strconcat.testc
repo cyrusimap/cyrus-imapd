@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include "cunit/unit.h"
-#include "util.h"
+
+#include "libcyrus_min/util.h"
 
 static void test_null(void)
 {

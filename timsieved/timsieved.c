@@ -6,6 +6,8 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/slowio.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
 #include <cyrus/xmalloc.h>
@@ -28,7 +30,6 @@
 #include <unistd.h>
 
 #include "auth.h"
-#include "slowio.h"
 #include "imap/backend.h"
 #include "imap/global.h"
 #include "imap/mboxlist.h"

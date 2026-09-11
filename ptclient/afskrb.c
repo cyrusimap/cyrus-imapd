@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/libconfig.h>
 #include <cyrus/strhash.h>
 #include <cyrus/xmalloc.h>
@@ -12,7 +14,6 @@
 #include <sysexits.h>
 #include <syslog.h>
 #include "ptloader.h"
-#include "util.h"
 
 #ifdef HAVE_AFSKRB
 #include <string.h>

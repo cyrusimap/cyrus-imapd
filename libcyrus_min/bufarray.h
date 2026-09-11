@@ -5,9 +5,10 @@
 #ifndef __CYRUS_BUF_H__
 #define __CYRUS_BUF_H__
 
+#include "libcyrus_min/util.h"
+
 #include <string.h>
 #include <sys/types.h>
-#include "util.h"
 
 typedef struct {
     size_t alloc;

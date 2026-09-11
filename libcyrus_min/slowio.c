@@ -2,14 +2,15 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
+#include "libcyrus_min/slowio.h"
+
+#include "libcyrus_min/util.h"
+
 #include <cyrus/libconfig.h>
 
 #include <errno.h>
 #include <math.h>
 #include <syslog.h>
-
-#include "slowio.h"
-#include "util.h"
 
 static struct slowio slowio_read = { 0 };
 static struct slowio slowio_write = { 0 };

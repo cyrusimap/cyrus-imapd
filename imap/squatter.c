@@ -11,6 +11,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/tok.h>
 #include <cyrus/xmalloc.h>
@@ -38,15 +42,12 @@
 #include "search_engines.h"
 #include "sync_log.h"
 #include "mailbox.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "ptrarray.h"
 #include "acl.h"
 #include "seen.h"
 #include "mboxname.h"
 #include "index.h"
 #include "message.h"
-#include "util.h"
 #include "itip_support.h"
 #include "attachextract.h"
 

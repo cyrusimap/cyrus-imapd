@@ -7,6 +7,10 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
 #include <cyrus/libconfig.h>
@@ -34,9 +38,6 @@
 #include "imap/mboxname.h"
 #include "imap/message.h"
 #include "imap/spool.h"
-#include "util.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 #include "times.h"
 
 static char vacation_answer;

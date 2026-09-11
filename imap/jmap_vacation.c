@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
 
@@ -20,7 +22,6 @@
 #include "map.h"
 #include "sync_support.h"
 #include "user.h"
-#include "util.h"
 
 #ifdef USE_SIEVE
 #include "sieve/sieve_interface.h"

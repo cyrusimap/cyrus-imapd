@@ -5,6 +5,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/dynarray.h>
 #include <cyrus/strhash.h>
 #include <cyrus/xmalloc.h>
@@ -35,8 +38,6 @@
 #include "smtpclient.h"
 #include "times.h"
 #include "webdav_db.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

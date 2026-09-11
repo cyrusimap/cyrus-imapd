@@ -5,14 +5,14 @@
 
 #include <cyrus/proc.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/hash.h>
 #include <cyrus/libconfig.h>
 
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
-
-#include "lib/util.h"
 
 /* this is not re-entrant, but nor is cunit, so it can't hurt. */
 static char *myconfigdir = NULL;

@@ -3,6 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "masterconf.h"
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
 
 #include <cyrus/libconfig.h>
 #include <cyrus/xmalloc.h>
@@ -15,15 +20,9 @@
 #include <sys/stat.h>
 #include <sysexits.h>
 
-#include "util.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
-
 #if HAVE_UNISTD_H
 # include <unistd.h>
 #endif
-
-#include "masterconf.h"
 
 extern const char *MASTER_CONFIG_FILENAME;
 

@@ -7,6 +7,8 @@
 #include <cyrus/strarray.h>
 #include <cyrus/xmalloc.h>
 
+#include "libcyrus_min/util.h"
+
 #include <ctype.h>
 #include <stdbool.h>
 #include <string.h>
@@ -18,7 +20,6 @@
 #include "bsearch.h"
 #include "charset.h"
 #include "dkim2_mi.h"
-#include "util.h"
 
 /* Section numbers below are draft-ietf-dkim-dkim2-spec-06. */
 

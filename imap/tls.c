@@ -57,6 +57,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
 #include <cyrus/xmalloc.h>
@@ -81,7 +83,6 @@
 /* Application-specific. */
 #include "nonblock.h"
 #include "prot.h"
-#include "util.h"
 #include "tls.h"
 
 /* Session caching/reuse stuff */

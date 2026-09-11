@@ -1,7 +1,8 @@
 #include "cunit/unit.h"
 #include "cunit/unit-timeofday.h"
-#include "lib/slowio.h"
-#include "lib/util.h"
+#include "libcyrus_min/slowio.h"
+
+#include "libcyrus_min/util.h"
 
 #include <inttypes.h>
 #include <stdint.h>

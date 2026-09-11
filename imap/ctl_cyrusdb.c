@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/xmalloc.h>
 #include <cyrus/xunlink.h>
 
@@ -47,8 +50,6 @@
 #include "seen.h"
 #include "statuscache.h"
 #include "tls.h"
-#include "util.h"
-#include "xstrlcpy.h"
 
 #define N(a) (sizeof(a) / sizeof(a[0]))
 

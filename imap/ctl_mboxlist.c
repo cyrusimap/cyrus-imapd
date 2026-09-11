@@ -3,8 +3,10 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 /* currently doesn't catch signals; probably SHOULD */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
@@ -47,8 +49,6 @@
 #include "mboxlist.h"
 #include "mupdate.h"
 #include "user.h"
-#include "util.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

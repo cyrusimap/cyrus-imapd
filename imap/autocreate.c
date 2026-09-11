@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/xmalloc.h>
 #include <cyrus/xunlink.h>
 
@@ -26,7 +28,6 @@
 #include "global.h"
 #include "acl.h"
 #include "annotate.h"
-#include "util.h"
 #include "user.h"
 #include "mailbox.h"
 #include "mboxlist.h"

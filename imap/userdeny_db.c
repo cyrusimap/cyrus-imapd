@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/tok.h>
 
 #ifdef HAVE_UNISTD_H
@@ -19,7 +21,6 @@
 #include "global.h"
 #include "userdeny.h"
 #include "wildmat.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

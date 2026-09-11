@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
 #include <cyrus/hash.h>
 #include <cyrus/xmalloc.h>
 #include <cyrus/xunlink.h>
@@ -36,14 +39,12 @@
 #include "map.h"
 #include "imapd.h"
 #include "imap_proxy.h"
-#include "util.h"
 #include "prot.h"
 #include "message_guid.h"
 #include "sync_log.h"
 #include "sync_support.h"
 #include "cyr_lock.h"
 #include "backend.h"
-#include "xstrlcat.h"
 #include "signals.h"
 #include "cyrusdb.h"
 

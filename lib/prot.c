@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 
@@ -30,7 +32,6 @@
 #include "nonblock.h"
 #include "prot.h"
 #include "signals.h"
-#include "util.h"
 
 /* Transparent protgroup structure */
 struct protgroup

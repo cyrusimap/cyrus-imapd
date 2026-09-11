@@ -3,6 +3,8 @@
 /* See COPYING file at the root of the distribution for more details. */
 #include <config.h>
 
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/strhash.h>
 
 #include <sysexits.h>
@@ -16,7 +18,6 @@
 #include "times.h"
 #include "user.h"
 #include "webdav_db.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

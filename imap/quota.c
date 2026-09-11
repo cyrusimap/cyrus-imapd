@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/xmalloc.h>
 #include <cyrus/xunlink.h>
 
@@ -42,12 +45,10 @@
 #include "bsearch.h"
 #include "global.h"
 #include "mailbox.h"
-#include "xstrlcpy.h"
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "quota.h"
 #include "convert_code.h"
-#include "util.h"
 #include <jansson.h>
 
 /* generated headers are not necessarily in current directory */

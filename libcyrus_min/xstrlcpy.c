@@ -2,7 +2,7 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
-#include "xstrlcpy.h"
+#include "libcyrus_min/xstrlcpy.h"
 
 #ifndef HAVE_STRLCPY
 /* strlcpy -- copy string smartly.

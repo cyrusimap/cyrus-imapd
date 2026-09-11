@@ -3,14 +3,15 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "glob.h"
+
+#include "libcyrus_min/util.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 
 #include <stdio.h>
 #include <string.h>
-#include "util.h"
-#include "glob.h"
 
 /* "compiled" glob structure: may change
  */

@@ -3,7 +3,7 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
-#include "byteorder.h"
+#include "libcyrus_min/byteorder.h"
 
 #ifdef CYRUS_BYTESWAP
 

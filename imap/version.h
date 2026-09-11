@@ -5,8 +5,9 @@
 #ifndef _CYRUS_VERSION_H
 #define _CYRUS_VERSION_H
 
+#include "libcyrus_min/util.h"
+
 #include "prot.h"
-#include "util.h"
 
 /* Values for ID processing */
 enum {

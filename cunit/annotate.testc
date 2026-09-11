@@ -5,12 +5,13 @@
 
 #include "imap/annotate.h"
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/retry.h>
 #include <cyrus/xmalloc.h>
 #include <cyrus/xunlink.h>
 
-#include "util.h"
 #include "imap/global.h"
 #include "imap/append.h"
 #include "imap/mboxlist.h"

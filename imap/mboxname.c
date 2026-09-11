@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/byteorder.h"
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/retry.h>
 #include <cyrus/xmalloc.h>
@@ -17,7 +20,6 @@
 #include <unistd.h>
 #endif
 
-#include "byteorder.h"
 #include "crc32.h"
 #include "glob.h"
 #include "global.h"
@@ -25,7 +27,6 @@
 #include "map.h"
 #include "signals.h"
 #include "user.h"
-#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

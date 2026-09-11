@@ -3,6 +3,10 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "service.h"
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
 
 #include <cyrus/libconfig.h>
 #include <cyrus/strarray.h>
@@ -31,10 +35,7 @@
 #include <string.h>
 #include <limits.h>
 
-#include "service.h"
-#include "xstrlcpy.h"
 #include "signals.h"
-#include "util.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096

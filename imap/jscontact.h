@@ -9,12 +9,13 @@
 extern "C" {
 #endif
 
+#include "libcyrus_min/util.h"
+
 #include <jansson.h>
 #include <libical/vcard.h>
 
 #include "jmap_util.h"
 #include "mailbox.h"
-#include "util.h"
 
 #define JSCONTACT_MAJOR_VERSION 1 /**< The current JSContact major version. */
 #define JSCONTACT_MINOR_VERSION 0 /**< The current JSContact minor version. */

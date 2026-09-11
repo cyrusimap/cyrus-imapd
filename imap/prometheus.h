@@ -1,16 +1,16 @@
 /* prometheus.h - Aggregate statistics for prometheus */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #ifndef INCLUDE_IMAP_PROMETHEUS_H
 #define INCLUDE_IMAP_PROMETHEUS_H
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
 #include "lib/mappedfile.h"
-#include "lib/util.h"
 
 #include "imap/promdata.h"
 

@@ -1,11 +1,11 @@
 #include <config.h>
 #include "cunit/unit.h"
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/hashset.h>
 
 #include <cyrus/strarray.h>
-
-#include "util.h"
 
 #define CU_ASSERT_MEMEQUAL(actual, expected, sz) \
     CU_ASSERT_EQUAL(memcmp(actual, expected, sz), 0)

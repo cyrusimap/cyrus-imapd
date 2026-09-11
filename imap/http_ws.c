@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/proc.h>
 #include <cyrus/retry.h>
 #include <cyrus/tok.h>
@@ -13,7 +15,6 @@
 
 #include "httpd.h"
 #include "http_ws.h"
-#include "util.h"
 
 #ifdef HAVE_WSLAY
 

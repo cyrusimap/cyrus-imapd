@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/strarray.h>
 #include <cyrus/strhash.h>
 
@@ -23,7 +25,6 @@
 #include "syslog.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
 #include "zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */

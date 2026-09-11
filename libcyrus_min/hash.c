@@ -1,9 +1,11 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
+#include <cyrus/hash.h>
+
+#include "libcyrus_min/util.h"
 
 #include <cyrus/assert.h>
-#include <cyrus/hash.h>
 #include <cyrus/mpool.h>
 #include <cyrus/strhash.h>
 #include <cyrus/xmalloc.h>
@@ -12,8 +14,6 @@
 #include <stdlib.h>
 #include <syslog.h>
 #include <stdbool.h>
-
-#include "util.h"
 
 /* Ideally having this declaration with EXPORTED would be sufficient, and we
  * could remove it from the definition in the header. gcc is fine with this,

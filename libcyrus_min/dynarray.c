@@ -3,12 +3,12 @@
 /* See COPYING file at the root of the distribution for more details. */
 #include <cyrus/dynarray.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 
 #include <memory.h>
-
-#include "util.h"
 
 EXPORTED void dynarray_init(struct dynarray *da, size_t membsize)
 {

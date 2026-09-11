@@ -6,6 +6,8 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 
@@ -16,7 +18,6 @@
 #include "sieve_interface.h"
 #include "interp.h"
 #include "message.h"
-#include "util.h"
 
 /* [e]reject message m with message msg
  *

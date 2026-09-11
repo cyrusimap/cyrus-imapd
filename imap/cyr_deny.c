@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/proc.h>
 #include <cyrus/xmalloc.h>
 
@@ -23,7 +25,6 @@
 #include "global.h"
 #include "libcyr_cfg.h"
 #include "userdeny.h"
-#include "util.h"
 #include "ptrarray.h"
 
 /* generated headers are not necessarily in current directory */

@@ -6,6 +6,10 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
@@ -21,10 +25,7 @@
 #include "append.h"
 #include "global.h"
 #include "notify.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "mailbox.h"
-#include "util.h"
 #include "times.h"
 
 /* generated headers are not necessarily in current directory */

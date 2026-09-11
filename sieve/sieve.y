@@ -11,6 +11,8 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
 #include <cyrus/tok.h>
@@ -28,7 +30,6 @@
 #include "sieve/sieve_err.h"
 #include "sieve/sieve_interface.h"
 
-#include "util.h"
 #include "imparse.h"
 #include "times.h"
 

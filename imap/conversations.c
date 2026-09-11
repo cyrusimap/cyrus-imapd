@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
 #include <cyrus/strhash.h>
@@ -41,9 +45,6 @@
 #include "sync_log.h"
 #include "syslog.h"
 #include "user.h"
-#include "util.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "times.h"
 #include "vcard_support.h"
 

@@ -5,8 +5,9 @@
 #ifndef DAV_UTIL_H
 #define DAV_UTIL_H
 
+#include "libcyrus_min/util.h"
+
 #include "mailbox.h"
-#include "util.h"
 
 #define FNAME_DAVSUFFIX "dav" /* per-user DAV DB extension */
 

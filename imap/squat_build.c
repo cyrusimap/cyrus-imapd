@@ -53,6 +53,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 #include <cyrus/xunlink.h>
@@ -66,7 +68,6 @@
 #include "mailbox.h"
 #include "message.h"
 
-#include "util.h"
 #include "index.h"
 
 /* A simple write-buffering module which avoids copying of the output data. */

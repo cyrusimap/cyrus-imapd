@@ -1,6 +1,9 @@
 /* imapurl.c */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
+#include "imapurl.h"
+
+#include "libcyrus_min/util.h"
 
 #include <cyrus/xmalloc.h>
 
@@ -11,9 +14,7 @@
 #include <limits.h>
 #include <time.h>
 
-#include "imapurl.h"
 #include "times.h"
-#include "util.h"
 
 /* URL unsafe printable characters */
 static const char urlunsafe[] = " \"#%&+:;<=>?@[\\]^`{|}";

@@ -5,9 +5,9 @@
 #ifndef DKIM2_MI_H
 #define DKIM2_MI_H
 
-#include <stdbool.h>
+#include <cyrus/buf.h>
 
-#include "util.h"
+#include <stdbool.h>
 
 /**
  * @file dkim2_mi.h

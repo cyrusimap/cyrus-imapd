@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
 #include <cyrus/xmalloc.h>
@@ -27,7 +29,6 @@
 #include "map.h"
 #include "times.h"
 #include "user.h"
-#include "xstrlcpy.h"
 
 #include "jmap_util.h"
 #include "mboxevent.h"

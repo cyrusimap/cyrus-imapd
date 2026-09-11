@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/hash.h>
 #include <cyrus/xmalloc.h>
 
@@ -27,7 +29,6 @@
 #include "annotate.h" /* for strlist functionality */
 #include "global.h"
 #include "map.h"
-#include "util.h"
 #include "xml_support.h"
 #include "zoneinfo_db.h"
 

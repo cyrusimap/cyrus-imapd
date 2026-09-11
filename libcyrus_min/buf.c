@@ -6,12 +6,13 @@
 
 #include <cyrus/buf.h>
 
+#include "libcyrus_min/byteorder.h"
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 
-#include "lib/byteorder.h"
 #include "lib/map.h"
-#include "lib/util.h"
 
 #include <string.h>
 

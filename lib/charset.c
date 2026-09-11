@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/dynarray.h>
 #include <cyrus/hash.h>
@@ -20,7 +22,6 @@
 #include "charset.h"
 #include "chartable.h"
 #include "htmlchar.h"
-#include "util.h"
 
 #include <unicode/ubrk.h>
 #include <unicode/ucasemap.h>

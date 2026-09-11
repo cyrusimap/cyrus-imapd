@@ -3,6 +3,8 @@
 
 #include <cyrus/strhash.h>
 
+#include "libcyrus_min/util.h"
+
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -11,8 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#include "lib/util.h"
 
 extern int verbose;
 

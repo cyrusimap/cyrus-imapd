@@ -6,13 +6,13 @@
 
 #include "bitvector.h"
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/xmalloc.h>
 
 #include <sys/types.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "util.h"
 
 #ifndef MAX
 #define MAX(a,b)    ((a)>(b)?(a):(b))

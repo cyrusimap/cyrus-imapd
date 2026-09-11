@@ -6,6 +6,8 @@
 
 #include <cyrus/retry.h>
 
+#include "libcyrus_min/slowio.h"
+
 #include <cyrus/xmalloc.h>
 
 #include <errno.h>
@@ -15,8 +17,6 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-
-#include "slowio.h"
 
 /*
  * Keep calling the read() system call with 'fd', 'buf', and 'nbyte'

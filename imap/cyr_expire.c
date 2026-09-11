@@ -12,6 +12,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/hash.h>
 #include <cyrus/strarray.h>
 #include <cyrus/xmalloc.h>
@@ -41,7 +43,6 @@
 #include "mboxlist.h"
 #include "conversations.h"
 #include "user.h"
-#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
