@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+# Another user who knows the UID of a guest-free event must not be able to
+# replace or cancel it by scheduling their own event with that UID and the
+# owner as an attendee.  This is CYR-3544.
+sub test_calendarevent_set_same_uid_no_organizer
+    ($self)
+{
+    my $owner_jmap = $self->default_user->jmap;
+    my $uid = '0f1c3a44-5d1e-4c2b-9a3e-5c7e2d1b3544';
+
+    xlog $self, "owner creates a guest-free event";
+    $self->default_user->calendars->default->create_event({
+        uid => $uid,
+        title => 'Dentist',
+        description => 'owner private note',
+        start => '2026-10-01T09:00:00',
+        duration => 'PT1H',
+        timeZone => 'America/New_York',
+        sequence => 7,
+    });
+
+    my $attacker = $self->{instance}->create_user('attacker');
+    my $attacker_cal_id = $attacker->calendars->default->id;
+
+    my sub owner_event () {
+        my $res = $owner_jmap->request([
+            ['CalendarEvent/get', {
+                properties => [qw(uid title description start sequence
+                                  status organizerCalendarAddress)],
+            }],
+        ]);
+        my ($ev) = grep { $_->{uid} eq $uid }
+                   $res->single_sentence('CalendarEvent/get')
+                       ->arguments->{list}->@*;
+        return $ev;
+    }
+
+    my sub assert_unchanged () {
+        my $ev = owner_event();
+        $self->assert_cmp_deeply(
+            superhashof({
+                title => 'Dentist',
+                description => 'owner private note',
+                start => '2026-10-01T09:00:00',
+                sequence => 7,
+            }),
+            $ev,
+        );
+        $self->assert_null($ev->{organizerCalendarAddress});
+        $self->assert_str_not_equals('cancelled', $ev->{status} // '');
+    }
+
+    xlog $self, "attacker schedules their own event with the same UID";
+    my $res = $attacker->jmap->request([
+        ['CalendarEvent/set', {
+            sendSchedulingMessages => JSON::true,
+            create => {
+                evil => {
+                    calendarIds => { $attacker_cal_id => JSON::true },
+                    version => '2.0',
+                    uid => $uid,
+                    title => 'Replaced',
+                    description => 'attacker text',
+                    start => '2026-10-02T13:00:00',
+                    duration => 'PT2H',
+                    timeZone => 'Etc/UTC',
+                    organizerCalendarAddress => 'mailto:attacker@example.com',
+                    participants => {
+                        attacker => {
+                            roles => { owner => JSON::true,
+                                       attendee => JSON::true },
+                            calendarAddress => 'mailto:attacker@example.com',
+                            participationStatus => 'accepted',
+                        },
+                        cassandane => {
+                            roles => { attendee => JSON::true },
+                            calendarAddress => 'mailto:cassandane@example.com',
+                            participationStatus => 'needs-action',
+                            expectReply => JSON::true,
+                        },
+                    },
+                },
+            },
+        }],
+    ]);
+    my $evil_id = $res->single_sentence('CalendarEvent/set')
+                      ->arguments->{created}{evil}{id};
+    $self->assert_not_null($evil_id);
+
+    assert_unchanged();
+
+    xlog $self, "attacker destroys their event, sending a CANCEL";
+    $attacker->jmap->request([
+        ['CalendarEvent/set', {
+            sendSchedulingMessages => JSON::true,
+            destroy => [ $evil_id ],
+        }],
+    ]);
+
+    assert_unchanged();
+}
