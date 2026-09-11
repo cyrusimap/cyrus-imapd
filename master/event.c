@@ -3,12 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
-
 #include "master/event.h"
 
-#include <cyrus/assert.h>
+#include "libcyrus/util.h"
 
-#include "lib/util.h"
+#include <cyrus/assert.h>
 
 #include <sysexits.h>
 #include <syslog.h>

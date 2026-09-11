@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/libconfig.h>
 #include <cyrus/xmalloc.h>
 #include <cyrus/xunlink.h>
@@ -22,7 +24,6 @@
 #include "sievedir.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
 
 #include "sieve/bytecode.h"
 #include "sieve/bc_parse.h"

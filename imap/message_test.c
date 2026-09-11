@@ -1,8 +1,9 @@
 /* message_test.c */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
@@ -25,7 +26,6 @@
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "message.h"
-#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

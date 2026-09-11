@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/slowio.h"
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/proc.h>
 #include <cyrus/xmalloc.h>
@@ -53,16 +58,12 @@
 #include "prometheus.h"
 #include "prot.h"
 #include "proxy.h"
-#include "slowio.h"
 #include "sync_support.h"
 #include "telemetry.h"
 #include "times.h"
 #include "tls.h"
 #include "userdeny.h"
-#include "util.h"
 #include "version.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "imap/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */

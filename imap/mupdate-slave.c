@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcpy.h"
+#include "libcyrus_min/xstrlcat.h"
+
 #include <cyrus/mpool.h>
 #include <cyrus/xmalloc.h>
 #include <cyrus/xunlink.h>
@@ -29,8 +32,6 @@
 #endif
 
 #include "prot.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "global.h"
 #include "mupdate.h"
 

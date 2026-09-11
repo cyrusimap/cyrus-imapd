@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/lib/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
 #include <cyrus/xunlink.h>
@@ -21,7 +23,6 @@
 #include "lib/cyr_lock.h"
 #include "lib/map.h"
 #include "lib/ptrarray.h"
-#include "lib/util.h"
 
 #include "imap/global.h"
 #include "imap/imap_err.h"

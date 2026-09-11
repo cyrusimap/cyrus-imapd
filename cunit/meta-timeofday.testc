@@ -7,9 +7,9 @@
 #include "cunit/unit.h"
 #include "cunit/unit-timeofday.h"
 
-#include <cyrus/assert.h>
+#include "libcyrus_min/util.h"
 
-#include "lib/util.h"
+#include <cyrus/assert.h>
 
 #include <unistd.h>
 

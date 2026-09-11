@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/sessionid.h"
+
 #include "imap/auditlog.h"
 
 #include <cyrus/assert.h>
@@ -13,7 +15,6 @@
 #include "imap/jmap_util.h"
 
 #include "lib/logfmt.h"
-#include "lib/sessionid.h"
 
 #include <syslog.h>
 

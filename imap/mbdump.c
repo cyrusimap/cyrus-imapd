@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/retry.h>
 #include <cyrus/xmalloc.h>
 #include <cyrus/xunlink.h>
@@ -35,9 +38,7 @@
 #include "quota.h"
 #include "seen.h"
 #include "seqset.h"
-#include "xstrlcpy.h"
 #include "user.h"
-#include "util.h"
 #include "index.h"
 
 /* generated headers are not necessarily in current directory */

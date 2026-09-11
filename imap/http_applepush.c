@@ -4,10 +4,11 @@
 
 #include "config.h"
 
+#include "libcyrus_min/util.h"
+
 #include "acl.h"
 #include "httpd.h"
 #include "http_dav.h"
-#include "util.h"
 #include <syslog.h>
 
 /* generated headers are not necessarily in current directory */

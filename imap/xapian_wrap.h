@@ -5,10 +5,11 @@
 #ifndef __CYRUS_IMAP_XAPIAN_WRAP__
 #define __CYRUS_IMAP_XAPIAN_WRAP__
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/strarray.h>
 
 #include "message_guid.h"
-#include "util.h"
 #include "search_part.h"
 #include "ptrarray.h"
 

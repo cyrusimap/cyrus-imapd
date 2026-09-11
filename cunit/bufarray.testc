@@ -1,6 +1,6 @@
 #include "cunit/unit.h"
 
-#include "bufarray.h"
+#include "libcyrus_min/bufarray.h"
 
 #include <cyrus/xmalloc.h>
 

@@ -6,6 +6,8 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/xmalloc.h>
 
 #include <netdb.h>
@@ -18,7 +20,6 @@
 #include <unistd.h>
 
 #include "iptostring.h"
-#include "util.h"
 #include "perl/sieve/lib/isieve.h"
 #include "perl/sieve/lib/lex.h"
 #include "perl/sieve/lib/request.h"

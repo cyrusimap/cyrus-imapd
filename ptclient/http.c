@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/libconfig.h>
 #include <cyrus/strhash.h>
 #include <cyrus/xmalloc.h>
@@ -14,8 +17,6 @@
 
 #include "auth_pts.h"
 #include "ptloader.h"
-#include "util.h"
-#include "xstrlcpy.h"
 
 #include "imap/backend.h"
 #include "imap/http_client.h"

@@ -5,13 +5,14 @@
 #ifndef __CYRUS_SEARCH_RESULT_H__
 #define __CYRUS_SEARCH_RESULT_H__
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/dynarray.h>
 
 #include "index.h"
 #include "mailbox.h"
 #include "message.h"
 #include "conversations.h"
-#include "util.h"
 #include "bitvector.h"
 #include "ptrarray.h"
 #include "search_engines.h"

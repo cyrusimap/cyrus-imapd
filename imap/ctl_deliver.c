@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/xmalloc.h>
 
 #ifdef HAVE_UNISTD_H
@@ -21,7 +23,6 @@
 #include "duplicate.h"
 #include "global.h"
 #include "libcyr_cfg.h"
-#include "util.h"
 
 static void usage(void)
 {

@@ -24,6 +24,10 @@
  *
  */
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/strhash.h>
 #include <cyrus/tok.h>
 #include <cyrus/xmalloc.h>
@@ -45,11 +49,8 @@
 #include "syslog.h"
 #include "sync_support.h"
 #include "user.h"
-#include "util.h"
 #include "version.h"
 #include "xml_support.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

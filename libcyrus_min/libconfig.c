@@ -3,10 +3,14 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include <cyrus/libconfig.h>
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
-#include <cyrus/libconfig.h>
 #include <cyrus/tok.h>
 #include <cyrus/xmalloc.h>
 
@@ -20,10 +24,6 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
-
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
-#include "util.h"
 
 #define CONFIGHASHSIZE 30 /* relatively small,
                            * because it is for overflow only */

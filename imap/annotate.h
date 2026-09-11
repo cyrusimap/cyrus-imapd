@@ -5,6 +5,8 @@
 #ifndef ANNOTATE_H
 #define ANNOTATE_H
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/strarray.h>
 
 #include "auth.h"
@@ -12,7 +14,6 @@
 #include "imapd.h"
 #include "mailbox.h"
 #include "mboxlist.h"
-#include "util.h"
 
 #define FNAME_GLOBALANNOTATIONS "/annotations.db"
 

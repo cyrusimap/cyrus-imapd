@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 
@@ -24,7 +26,6 @@
 #include "search_expr.h"
 #include "search_query.h"
 #include "message.h"
-#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

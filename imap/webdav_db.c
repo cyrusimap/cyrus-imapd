@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
 #include <cyrus/libconfig.h>
 #include <cyrus/xmalloc.h>
 
@@ -14,8 +17,6 @@
 #include "cyrusdb.h"
 #include "httpd.h"
 #include "http_dav.h"
-#include "util.h"
-#include "xstrlcat.h"
 
 enum {
     STMT_SELRSRC,

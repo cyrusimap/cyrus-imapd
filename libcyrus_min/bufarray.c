@@ -1,13 +1,14 @@
-/* buf.c -- buffer library */
+/* bufarray.c -- buffer library */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
-#include "bufarray.h"
+#include "libcyrus_min/bufarray.h"
+
+#include "libcyrus_min/util.h"
 
 #include <cyrus/xmalloc.h>
 
 #include <memory.h>
-#include "util.h"
 
 EXPORTED bufarray_t *bufarray_new(void)
 {

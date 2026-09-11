@@ -5,7 +5,8 @@
 #ifndef INCLUDED_DLIST_H
 #define INCLUDED_DLIST_H
 
-#include "util.h"
+#include "libcyrus_min/util.h"
+
 #include "prot.h"
 #include "mailbox.h"
 #include "message_guid.h"

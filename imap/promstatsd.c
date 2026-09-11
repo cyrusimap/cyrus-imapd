@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/hash.h>
 #include <cyrus/retry.h>
 #include <cyrus/strarray.h>
@@ -24,7 +26,6 @@
 
 #include "lib/bsearch.h"
 #include "lib/cyr_lock.h"
-#include "lib/util.h"
 
 #include "imap/global.h"
 #include "imap/mboxlist.h"

@@ -3,10 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 #include "ptrarray.h"
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/xmalloc.h>
 
 #include <memory.h>
-#include "util.h"
 
 EXPORTED ptrarray_t *ptrarray_new(void)
 {

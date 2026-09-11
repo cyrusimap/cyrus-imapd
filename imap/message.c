@@ -1,8 +1,10 @@
 /* message.c - Message manipulation/parsing */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
 
 #include <cyrus/arrayu64.h>
 #include <cyrus/assert.h>
@@ -40,8 +42,6 @@
 #include "charset.h"
 #include "stristr.h"
 #include "user.h"
-#include "util.h"
-#include "xstrlcpy.h"
 #include "ptrarray.h"
 #include "global.h"
 #include "rfc822tok.h"

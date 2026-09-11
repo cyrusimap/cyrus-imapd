@@ -12,6 +12,11 @@
  */
 
 #include <config.h>
+#include "cyrusdb.h"
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
@@ -52,13 +57,9 @@
 #endif
 
 #include "bsearch.h"
-#include "cyrusdb.h"
 #include "map.h"
 #include "libcyr_cfg.h"
 #include "cyr_lock.h"
-#include "util.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 #define FNAME_QUOTADIR "/quota/"
 #define MAX_QUOTA_PATH 4096

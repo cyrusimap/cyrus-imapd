@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/strhash.h>
 #include <cyrus/tok.h>
@@ -22,7 +24,6 @@
 #include "icu_wrap.h"
 #include "message.h"
 #include "stristr.h"
-#include "util.h"
 
 #ifdef WITH_JMAP
 #endif

@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 
@@ -36,7 +38,6 @@
 
 #include "auditlog.h"
 #include "global.h"
-#include "util.h"
 #include "cyrusdb.h"
 
 /* generated headers are not necessarily in current directory */

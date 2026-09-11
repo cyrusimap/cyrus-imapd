@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/byteorder.h"
+#include "libcyrus_min/sessionid.h"
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
 #include <cyrus/retry.h>
@@ -37,11 +41,8 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
-#include "byteorder.h"
 #include "logfmt.h"
 #include "map.h"
-#include "sessionid.h"
-#include "util.h"
 #ifdef HAVE_ZLIB
 #include "zlib.h"
 #endif

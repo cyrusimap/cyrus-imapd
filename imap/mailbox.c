@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/proc.h>
 #include <cyrus/retry.h>
@@ -76,12 +80,9 @@
 #include "parseaddr.h"
 #include "seen.h"
 #include "user.h"
-#include "util.h"
 #include "seqset.h"
 #include "statuscache.h"
 #include "sync_log.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

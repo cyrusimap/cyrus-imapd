@@ -6,6 +6,9 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
 #include <cyrus/xmalloc.h>
@@ -20,9 +23,6 @@
 #include <string.h>
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
-
-#include "util.h"
-#include "xstrlcpy.h"
 
 #include "imap/backend.h"
 #include "imap/global.h"

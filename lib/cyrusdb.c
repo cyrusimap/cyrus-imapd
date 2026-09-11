@@ -3,6 +3,10 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "cyrusdb.h"
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
@@ -26,11 +30,8 @@
 #include <errno.h>
 
 #include "bsearch.h"
-#include "cyrusdb.h"
 #include "cyr_lock.h"
-#include "util.h"
 #include "libcyr_cfg.h"
-#include "xstrlcpy.h"
 
 //#define DEBUGDB 1
 

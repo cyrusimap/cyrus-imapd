@@ -2,9 +2,10 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
+#include "libcyrus_min/util.h"
+
 /* for size_t */
 #include <sys/types.h>
-#include "util.h"
 
 /* case insensitive string compare
  */

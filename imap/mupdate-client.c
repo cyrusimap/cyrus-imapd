@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+#include "libcyrus_min/xstrlcat.h"
+
 #include <cyrus/xmalloc.h>
 
 #include <stdio.h>
@@ -32,9 +36,6 @@
 #include "mupdate.h"
 #include "prot.h"
 #include "protocol.h"
-#include "util.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 static struct protocol_t mupdate_protocol =
 { "mupdate", "mupdate", NULL, TYPE_STD,

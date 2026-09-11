@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/proc.h>
 #include <cyrus/xmalloc.h>
@@ -48,9 +52,6 @@
 #include "sqldb.h"
 #include "sync_log.h"
 #include "user.h"
-#include "util.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

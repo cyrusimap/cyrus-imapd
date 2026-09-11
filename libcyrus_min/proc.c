@@ -3,8 +3,9 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
-
 #include <cyrus/proc.h>
+
+#include "libcyrus_min/util.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
@@ -22,8 +23,6 @@
 #include <syslog.h>
 #include <string.h>
 #include <sys/stat.h>
-
-#include "util.h"
 
 #ifdef HAVE_DIRENT_H
 # include <dirent.h>

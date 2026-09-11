@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/proc.h>
 #include <cyrus/tok.h>
@@ -38,7 +42,6 @@
 #include "http_ws.h"
 
 #include "acl.h"
-#include "util.h"
 #include "iptostring.h"
 #include "global.h"
 #include "slowio.h"
@@ -50,8 +53,6 @@
 #include "loginlog.h"
 #include "version.h"
 #include "stristr.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "telemetry.h"
 #include "backend.h"
 #include "prometheus.h"

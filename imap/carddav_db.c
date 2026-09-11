@@ -1,8 +1,10 @@
 /* carddav_db.c - implementation of per-user CardDAV database */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
 
 #include <cyrus/libconfig.h>
 #include <cyrus/xmalloc.h>
@@ -18,9 +20,7 @@
 #include "jmap_util.h"
 #include "mboxevent.h"
 #include "times.h"
-#include "util.h"
 #include "vcard_support.h"
-#include "xstrlcat.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

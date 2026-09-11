@@ -5,6 +5,8 @@
 #ifndef INCLUDED_MAILBOX_H
 #define INCLUDED_MAILBOX_H
 
+#include "libcyrus_min/util.h"
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <limits.h>
@@ -18,7 +20,6 @@
 #include "ptrarray.h"
 #include "quota.h"
 #include "seqset.h"
-#include "util.h"
 
 #define MAX_MAILBOX_CREATENAME 490
 /* enough space for all possible rewrites and DELETED.* and stuff */

@@ -2,12 +2,12 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
+#include "libcyrus_min/util.h"
+
 #include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/css3_color_array.h"

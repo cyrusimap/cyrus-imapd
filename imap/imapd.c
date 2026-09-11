@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include "libcyrus_min/bufarray.h"
+#include "libcyrus_min/slowio.h"
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/proc.h>
 #include <cyrus/xmalloc.h>
@@ -46,7 +52,6 @@
 #endif // USE_AUTOCREATE
 #include "backend.h"
 #include "bsearch.h"
-#include "bufarray.h"
 #include "charset.h"
 #include "dlist.h"
 #include "idle.h"
@@ -73,7 +78,6 @@
 #include "quota.h"
 #include "seen.h"
 #include "sieve_db.h"
-#include "slowio.h"
 #include "statuscache.h"
 #include "sync_log.h"
 #include "sync_support.h"
@@ -82,10 +86,7 @@
 #include "tls.h"
 #include "user.h"
 #include "userdeny.h"
-#include "util.h"
 #include "version.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 #include "ptrarray.h"
 
 /* generated headers are not necessarily in current directory */

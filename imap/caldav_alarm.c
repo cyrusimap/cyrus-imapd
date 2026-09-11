@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
 #include <cyrus/hashset.h>
 #include <cyrus/libconfig.h>
 #include <cyrus/xmalloc.h>
@@ -34,8 +37,6 @@
 #include "msgrecord.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
-#include "xstrlcat.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

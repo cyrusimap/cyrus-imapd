@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hashset.h>
 #include <cyrus/smallarrayu64.h>
@@ -54,7 +56,6 @@
 #include "sync_log.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
 #include "xapian_wrap.h"
 
 /* generated headers are not necessarily in current directory */

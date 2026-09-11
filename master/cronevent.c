@@ -3,16 +3,15 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
-
 #include "master/cronevent.h"
+
+#include "libcyrus_min/cron.h"
+#include "libcyrus_min/util.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/dynarray.h>
 #include <cyrus/strarray.h>
 #include <cyrus/xmalloc.h>
-
-#include "lib/cron.h"
-#include "lib/util.h"
 
 #include <stdint.h>
 #include <stdlib.h>

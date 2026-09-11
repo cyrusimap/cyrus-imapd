@@ -5,9 +5,9 @@
 #ifndef _ACTIONS_H_
 #define _ACTIONS_H_
 
+#include "libcyrus_min/util.h"
 
 #include "prot.h"
-#include "util.h"
 
 extern int sieved_tls_required;
 

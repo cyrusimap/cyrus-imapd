@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 #include <cyrus/xunlink.h>
@@ -22,7 +24,6 @@
 #include <sys/uio.h>
 #include "cyrusdb.h"
 #include "map.h"
-#include "util.h"
 
 #include "global.h"
 #include "mailbox.h"

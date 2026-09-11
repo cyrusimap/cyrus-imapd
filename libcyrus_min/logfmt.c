@@ -3,11 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include <cyrus/logfmt.h>
+
+#include "libcyrus_min/sessionid.h"
 
 #include <cyrus/assert.h>
-
-#include "lib/logfmt.h"
-#include "lib/sessionid.h"
 
 #include "unicode/uchar.h"
 #include "unicode/utext.h"

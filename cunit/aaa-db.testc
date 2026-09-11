@@ -3,12 +3,13 @@
 
 #include "cyrusdb.h"
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/hash.h>
 #include <cyrus/retry.h>
 #include <cyrus/xmalloc.h>
 
 #include "imap/global.h"
-#include "util.h"
 
 struct binary_result
 {

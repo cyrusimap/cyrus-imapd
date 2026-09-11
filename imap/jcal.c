@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "util.h"
+#include "xstrlcat.h"
+
 #include <cyrus/tok.h>
 
 #include <stdio.h>  /* for snprintf() */
@@ -14,9 +17,7 @@
 #include "ical_support.h"
 #include "json_support.h"
 #include "jcal.h"
-#include "util.h"
 #include "version.h"
-#include "xstrlcat.h"
 
 
 /*

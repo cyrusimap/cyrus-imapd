@@ -6,6 +6,8 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/strarray.h>
 #include <cyrus/xmalloc.h>
@@ -24,7 +26,6 @@
 #include <unistd.h>
 
 #include "cyrusdb.h"
-#include "util.h"
 
 /* Globals */
 static char *DBNAME;

@@ -3,11 +3,13 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "lib/acl.h"
+
+#include "libcyrus_min/util.h"
+
 #include <stdio.h>
 #include <syslog.h>
-#include "lib/acl.h"
 #include "lib/libcyr_cfg.h"
-#include "lib/util.h"
 #include "imap/imap_err.h"
 
 /* check a string, with meaningful description of error */

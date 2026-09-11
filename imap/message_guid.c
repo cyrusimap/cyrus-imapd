@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xsha1.h>
 
@@ -11,7 +13,6 @@
 
 #include "global.h"
 #include "message_guid.h"
-#include "util.h"
 
 /* Four possible forms of Message GUID:
  *

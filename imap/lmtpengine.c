@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 
@@ -33,7 +36,6 @@
 
 #include "auditlog.h"
 #include "loginlog.h"
-#include "util.h"
 #include "auth.h"
 #include "prot.h"
 #include "times.h"
@@ -41,7 +43,6 @@
 #include "mboxevent.h"
 #include "prometheus.h"
 #include "signals.h"
-#include "xstrlcpy.h"
 #include "version.h"
 
 /* generated headers are not necessarily in current directory */

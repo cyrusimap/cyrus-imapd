@@ -9,6 +9,8 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/arrayu64.h>
 #include <cyrus/hash.h>
 #include <cyrus/hashu64.h>
@@ -19,7 +21,6 @@
 
 #include "bitvector.h"
 #include "message_guid.h"
-#include "util.h"
 
 #define FNAME_CONVERSATIONS_SUFFIX "conversations"
 

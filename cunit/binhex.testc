@@ -1,5 +1,6 @@
 #include "cunit/unit.h"
-#include "util.h"
+
+#include "libcyrus_min/util.h"
 
 #define ASSERT_TO_HEX(BIN, HEX, hex, flags) \
 { \

@@ -1,8 +1,9 @@
 /* dlist.c - list protocol for dump and sync */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
@@ -32,7 +33,6 @@
 #include "map.h"
 #include "imapd.h"
 #include "message.h"
-#include "util.h"
 #include "prot.h"
 
 /* generated headers are not necessarily in current directory */

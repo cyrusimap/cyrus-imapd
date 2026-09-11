@@ -1,12 +1,13 @@
 #include "cunit/unit.h"
 #include <cyrus/buf.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/retry.h>
 #include <cyrus/xmalloc.h>
 
 #include "map.h"
 #include "prot.h"
-#include "util.h"
 
 #include <sys/mman.h>
 

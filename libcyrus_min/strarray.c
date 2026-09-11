@@ -3,11 +3,13 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <cyrus/strarray.h>
+
+#include "libcyrus_min/util.h"
+
 #include <cyrus/xmalloc.h>
 
 #include <memory.h>
 #include "logfmt.h"
-#include "util.h"
 
 EXPORTED strarray_t *strarray_new(void)
 {

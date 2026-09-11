@@ -5,6 +5,8 @@
 #ifndef INCLUDED_GLOBAL_H
 #define INCLUDED_GLOBAL_H
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/libconfig.h>
 
 #include <sasl/sasl.h>
@@ -15,7 +17,6 @@
 #include "signals.h"
 #include "imapparse.h"
 #include "libcyr_cfg.h"
-#include "util.h"
 
 #include <openssl/evp.h>
 #define MAX_FINISHED_LEN EVP_MAX_MD_SIZE

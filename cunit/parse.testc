@@ -1,7 +1,7 @@
 #include "config.h"
 #include "cunit/unit.h"
 
-#include "util.h"
+#include "libcyrus_min/util.h"
 
 #include <cyrus/xmalloc.h>
 

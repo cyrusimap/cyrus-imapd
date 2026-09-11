@@ -12,11 +12,12 @@
 #include <pwd.h>
 #include <unistd.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/xmalloc.h>
 
 #include "lib/imclient.h"
 #include "lib/imapurl.h"
-#include "lib/util.h"
 
 #include "cyrperl.h"
 

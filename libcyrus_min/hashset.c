@@ -5,16 +5,15 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
 #include <cyrus/hashset.h>
+
+#include "libcyrus_min/util.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 
 #include <stdlib.h>
 #include <string.h>
-
-#include "util.h"
 
 EXPORTED struct hashset *hashset_new(size_t bytesize)
 {

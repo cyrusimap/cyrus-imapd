@@ -1,8 +1,9 @@
 /* cyr_ls.c - list the contents of a mailbox */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
 
 #include <cyrus/xmalloc.h>
 
@@ -39,7 +40,6 @@
 #include <inttypes.h>
 
 #include "bsearch.h"
-#include "util.h"
 #include "global.h"
 #include "mailbox.h"
 #include "mboxlist.h"

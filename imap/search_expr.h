@@ -1,14 +1,14 @@
 /* search_expr.h - search query tree handling for SEARCH */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #ifndef __CYRUS_SEARCH_EXPR_H__
 #define __CYRUS_SEARCH_EXPR_H__
+
+#include "libcyrus_min/util.h"
 
 #include "mailbox.h"
 #include "message.h"
 #include "search_part.h"
-#include "util.h"
 
 struct protstream;
 struct index_state;

@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/tok.h>
 
 #include <string.h>
@@ -17,9 +20,7 @@
 #include "proxy.h"
 #include "spool.h"
 #include "user.h"
-#include "util.h"
 #include "webdav_db.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

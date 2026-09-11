@@ -3,6 +3,10 @@
 #endif
 #include "cunit/unit.h"
 
+#include "imap/guesstz.h"
+
+#include "libcyrus_min/util.h"
+
 #include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -10,10 +14,6 @@
 #include <stdbool.h>
 
 #include <jansson.h>
-
-#include "util.h"
-
-#include "imap/guesstz.h"
 
 /* The database time range.  Wide enough that the fixture RRULEs below expand
  * to the same observances the real IANA data would. */
@@ -716,3 +716,5 @@ static void test_bad_timezone_offset(void)
     CU_ASSERT_SUBSTR_EQUAL(have, error, sizeof(error) - 1);
     guesstz_close(&gtz);
 }
+
+/* vim: set ft=c :*/
