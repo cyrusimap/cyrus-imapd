@@ -156,10 +156,10 @@ imtest/imtest
 include/cyrus/imapopts.h
 install-sh
 lib/chartable.c
-lib/cron-lex.c
-lib/cron-parse.c
-lib/cron-parse.h
-lib/imapopts.c
+libcyrus_min/cron-lex.c
+libcyrus_min/cron-parse.c
+libcyrus_min/cron-parse.h
+libcyrus_min/imapopts.c
 lib/htmlchar.h
 lib/mkchartable
 libcyrus.pc

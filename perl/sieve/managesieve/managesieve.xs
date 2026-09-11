@@ -11,6 +11,8 @@ extern "C" {
 }
 #endif
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/xmalloc.h>
 
 #include <netdb.h>
@@ -24,7 +26,6 @@ typedef struct xscyrus *Sieveobj;
 static char *globalerr = NULL;
 
 #include "isieve.h"
-#include "util.h"
 
 void fatal(const char *s, int t)
 {

@@ -21,6 +21,9 @@
  */
 
 #include "config.h"
+
+#include "libcyrus_min/util.h"
+
 #ifndef macintosh
 #include <sys/param.h>
 #include <arpa/inet.h>
@@ -28,8 +31,6 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "util.h"
 
 static struct addrinfo *
 malloc_ai(int port, u_long addr, int socktype, int proto)

@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+#include "libcyrus_min/xstrlcat.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/strhash.h>
 #include <cyrus/tok.h>
@@ -42,10 +46,7 @@
 #include "sievedir.h"
 #include "smtpclient.h"
 #include "user.h"
-#include "util.h"
 #include "version.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "imap/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */

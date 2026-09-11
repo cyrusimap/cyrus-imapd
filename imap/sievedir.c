@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xunlink.h>
 
@@ -21,8 +24,6 @@
 
 #include "map.h"
 #include "sievedir.h"
-#include "util.h"
-#include "xstrlcpy.h"
 
 #ifdef USE_SIEVE
 #include "sieve/bc_parse.h"

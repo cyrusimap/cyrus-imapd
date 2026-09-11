@@ -5,13 +5,14 @@
 #ifndef SQLDB_H
 #define SQLDB_H
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/strarray.h>
 
 #include <sys/types.h>
 
 #include <sqlite3.h>
 #include "ptrarray.h"
-#include "util.h"
 
 struct sqldb_bindval {
     const char *name;

@@ -4,6 +4,9 @@
 
 #ifndef INCLUDED_QUOTA_H
 #define INCLUDED_QUOTA_H
+#include <config.h>
+
+#include "libcyrus_min/util.h"
 
 #ifdef HAVE_INTTYPES_H
 # include <inttypes.h>
@@ -12,8 +15,6 @@
 #endif
 
 #include "cyrusdb.h"
-#include "util.h"
-#include <config.h>
 
 #define FNAME_QUOTADB "/quotas.db"
 

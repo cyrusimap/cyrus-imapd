@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include "lib/sessionid.h"
+#include "libcyrus_min/sessionid.h"
 
 #include <cyrus/libconfig.h>
 

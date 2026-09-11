@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 #include <cyrus/xunlink.h>
@@ -27,8 +30,6 @@
 #include "global.h"
 #include "ptrarray.h"
 #include "user.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "mappedfile.h"
 #include "mboxlist.h"
 #include "mboxname.h"

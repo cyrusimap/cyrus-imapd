@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/retry.h>
 #include <cyrus/strarray.h>
@@ -34,12 +38,9 @@
 #include "global.h"
 #include "prot.h"
 #include "sync_log.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "mboxlist.h"
 #include "seen.h"
 #include "quota.h"
-#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

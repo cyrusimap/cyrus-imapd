@@ -3,9 +3,9 @@
 
 #include "seqset.h"
 
-#include <cyrus/xmalloc.h>
+#include "libcyrus_min/util.h"
 
-#include "util.h"
+#include <cyrus/xmalloc.h>
 
 static void test_empty(void)
 {

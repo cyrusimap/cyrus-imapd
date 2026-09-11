@@ -112,7 +112,7 @@ AM_DISTCHECK_CONFIGURE_FLAGS = \
 
 BUILT_SOURCES = \
     cassandane/Cassandane/Config/Bitfields.pm \
-    lib/imapopts.c \
+    libcyrus_min/imapopts.c \
     include/cyrus/imapopts.h
 
 CLEANFILES = \
@@ -120,7 +120,7 @@ CLEANFILES = \
     tools/rehash \
     lib/chartable.c \
     lib/htmlchar.h \
-    lib/imapopts.c \
+    libcyrus_min/imapopts.c \
     include/cyrus/imapopts.h \
     imap/css3_color_array.h \
     imap/jmap_data_types.h \
@@ -1585,66 +1585,69 @@ libcrc32_la_SOURCES = lib/crc32.c
 libcrc32_la_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 nodist_lib_libcyrus_min_la_SOURCES = \
-    lib/imapopts.c
+    libcyrus_min/imapopts.c
 
-BUILT_SOURCES += lib/cron-lex.c lib/cron-parse.c lib/cron-parse.h
+BUILT_SOURCES += \
+    libcyrus_min/cron-lex.c \
+    libcyrus_min/cron-parse.c \
+    libcyrus_min/cron-parse.h
 
 lib_libcyrus_min_la_SOURCES = \
-    lib/arrayu64.c \
-    lib/assert.c \
-    lib/buf.c \
-    lib/bufarray.c \
-    lib/bufarray.h \
-    lib/byteorder.c \
-    lib/byteorder.h \
-    lib/cron.c \
-    lib/cron-lex.l \
-    lib/cron-parse.y \
-    lib/dynarray.c \
-    lib/hash.c \
-    lib/hashset.c \
-    lib/hashu64.c \
-    lib/hash_priv.h \
-    lib/libconfig.c \
-    lib/logfmt.c \
-    lib/mpool.c \
-    lib/proc.c \
-    lib/retry.c \
-    lib/sessionid.c \
-    lib/sessionid.h \
-    lib/setproctitle.c \
-    lib/slowio.c \
-    lib/slowio.h \
-    lib/smallarrayu64.c \
-    lib/strarray.c \
-    lib/strhash.c \
-    lib/tok.c \
-    lib/util.c \
-    lib/util.h \
-    lib/xmalloc.c \
-    lib/xstrlcat.c \
-    lib/xstrlcat.h \
-    lib/xstrlcpy.c \
-    lib/xstrlcpy.h \
-    lib/xunlink.c
+    libcyrus_min/arrayu64.c \
+    libcyrus_min/assert.c \
+    libcyrus_min/buf.c \
+    libcyrus_min/bufarray.c \
+    libcyrus_min/bufarray.h \
+    libcyrus_min/byteorder.c \
+    libcyrus_min/byteorder.h \
+    libcyrus_min/cron.c \
+    libcyrus_min/cron-lex.l \
+    libcyrus_min/cron-parse.y \
+    libcyrus_min/dynarray.c \
+    libcyrus_min/hash.c \
+    libcyrus_min/hashset.c \
+    libcyrus_min/hashu64.c \
+    libcyrus_min/hash_priv.h \
+    libcyrus_min/libconfig.c \
+    libcyrus_min/logfmt.c \
+    libcyrus_min/mpool.c \
+    libcyrus_min/proc.c \
+    libcyrus_min/retry.c \
+    libcyrus_min/sessionid.c \
+    libcyrus_min/sessionid.h \
+    libcyrus_min/setproctitle.c \
+    libcyrus_min/slowio.c \
+    libcyrus_min/slowio.h \
+    libcyrus_min/smallarrayu64.c \
+    libcyrus_min/strarray.c \
+    libcyrus_min/strhash.c \
+    libcyrus_min/tok.c \
+    libcyrus_min/util.c \
+    libcyrus_min/util.h \
+    libcyrus_min/xmalloc.c \
+    libcyrus_min/xstrlcat.c \
+    libcyrus_min/xstrlcat.h \
+    libcyrus_min/xstrlcpy.c \
+    libcyrus_min/xstrlcpy.h \
+    libcyrus_min/xunlink.c
 if IPV6_noGETADDRINFO
-lib_libcyrus_min_la_SOURCES += lib/getaddrinfo.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/getaddrinfo.c
 endif
 if IPV6_noGETNAMEINFO
-lib_libcyrus_min_la_SOURCES += lib/getnameinfo.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/getnameinfo.c
 endif
 if LOCK_FCNTL
-lib_libcyrus_min_la_SOURCES += lib/lock_fcntl.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/lock_fcntl.c
 else
-lib_libcyrus_min_la_SOURCES += lib/lock_flock.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/lock_flock.c
 endif
 if MAP_SHARED
-lib_libcyrus_min_la_SOURCES += lib/map_shared.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/map_shared.c
 else
 if MAP_STUPIDSHARED
-lib_libcyrus_min_la_SOURCES += lib/map_stupidshared.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/map_stupidshared.c
 else
-lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/map_nommap.c
 endif
 endif
 lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS) $(LIB_UUID) $(SSL_LIBS) \
@@ -1666,7 +1669,8 @@ include/cyrus/imapopts.h: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIB
 	    --cc="$(CC)" $(CFG2HDR_FORBID_UNRELEASED) \
 	    $< > $@.NEW && mv $@.NEW $@
 
-lib/imapopts.c: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
+libcyrus_min/imapopts.c: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
+	$(AM_V_at)$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/imapoptions.pl csource \
 	    --cc="$(CC)" $(CFG2HDR_FORBID_UNRELEASED) \
 	    $< > $@.NEW && mv $@.NEW $@

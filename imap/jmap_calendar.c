@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/dynarray.h>
 #include <cyrus/hash.h>
@@ -46,9 +49,7 @@
 #include "sync_log.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
 #include "xapian_wrap.h"
-#include "xstrlcpy.h"
 #include "zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */

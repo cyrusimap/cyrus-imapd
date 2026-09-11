@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
 #include <cyrus/retry.h>
@@ -39,11 +42,9 @@
 #include "map.h"
 #include "imapd.h"
 #include "message.h"
-#include "util.h"
 #include "user.h"
 #include "prot.h"
 #include "dlist.h"
-#include "xstrlcat.h"
 #include "ptrarray.h"
 #include "sievedir.h"
 #include "conversations.h"

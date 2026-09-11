@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 
 #include <sys/stat.h>
@@ -16,7 +18,6 @@
 #include <sasl/saslutil.h>
 
 #include "global.h"
-#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

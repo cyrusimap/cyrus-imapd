@@ -36,6 +36,11 @@
  */
 #include <config.h>
 
+#include "libcyrus_min/slowio.h"
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/proc.h>
 #include <cyrus/xmalloc.h>
 
@@ -55,11 +60,7 @@
 #include "mboxlist.h"
 #include "mupdate-client.h"
 #include "quota.h"
-#include "slowio.h"
 #include "userdeny.h"
-#include "util.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

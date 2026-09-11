@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/proc.h>
 #include <cyrus/xmalloc.h>
 
@@ -20,7 +22,6 @@
 #include <sys/stat.h>
 
 #include "global.h"
-#include "util.h"
 #include "../master/masterconf.h"
 
 /* config.c stuff */

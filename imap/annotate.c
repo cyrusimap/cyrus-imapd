@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
 #include <cyrus/tok.h>
@@ -38,10 +42,7 @@
 #include "times.h"
 #include "mboxlist.h"
 #include "partlist.h"
-#include "util.h"
 #include "ptrarray.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "quota.h"
 
 #include "caldav_alarm.h"

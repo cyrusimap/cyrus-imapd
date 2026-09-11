@@ -2,6 +2,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/libconfig.h>
 #include <cyrus/xmalloc.h>
 
@@ -14,7 +16,6 @@
 #include <sys/types.h>
 
 #include "partlist.h"
-#include "util.h"
 
 #define FREE(var) if (var) { free(var); (var) = NULL; }
 
