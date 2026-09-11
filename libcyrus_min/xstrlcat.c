@@ -2,7 +2,7 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
-#include "xstrlcat.h"
+#include "libcyrus_min/xstrlcat.h"
 
 #ifndef HAVE_STRLCAT
 EXPORTED size_t strlcat(char *dst, const char *src, size_t len)

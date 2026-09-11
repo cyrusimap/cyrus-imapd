@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/slowio.h"
+
 #include <cyrus/xmalloc.h>
 
 #include <stdio.h>
@@ -14,7 +16,6 @@
 #include <syslog.h>
 
 #include "map.h"
-#include "slowio.h"
 
 #define SLOP (8*1024)
 

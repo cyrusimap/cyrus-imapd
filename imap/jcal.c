@@ -4,8 +4,8 @@
 
 #include <config.h>
 
-#include "util.h"
-#include "xstrlcat.h"
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
 
 #include <cyrus/tok.h>
 

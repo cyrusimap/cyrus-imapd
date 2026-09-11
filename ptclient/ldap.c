@@ -4,6 +4,7 @@
 #include <config.h>
 
 #include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
@@ -40,7 +41,6 @@
 
 /* libcyrus */
 #include "auth_pts.h"
-#include "xstrlcat.h"
 
 typedef struct _ptsm {
     const char      *uri;

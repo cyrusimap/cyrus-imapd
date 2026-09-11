@@ -8,7 +8,6 @@
 #include <config.h>
 #endif
 
-#include "libcyrus_min/bytecode.h"
 #include "libcyrus_min/util.h"
 #include "libcyrus_min/xstrlcat.h"
 #include "libcyrus_min/xstrlcpy.h"
@@ -30,6 +29,7 @@
 #include <stdlib.h>
 #include <sysexits.h>
 
+#include "bytecode.h"
 #include "sieve_interface.h"
 #include "comparator.h"
 #include "tree.h"

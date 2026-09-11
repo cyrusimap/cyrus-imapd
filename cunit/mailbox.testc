@@ -4,7 +4,7 @@
 #include "cunit/unit.h"
 #include "imap/mailbox.h"
 
-#include "lib/util.h"
+#include "libcyrus_min/util.h"
 
 #include <cyrus/libconfig.h>
 #include <cyrus/xmalloc.h>

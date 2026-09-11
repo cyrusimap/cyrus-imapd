@@ -4,6 +4,7 @@
 
 #include <config.h>
 
+#include "libcyrus_min/slowio.h"
 #include "libcyrus_min/util.h"
 #include "libcyrus_min/xstrlcat.h"
 #include "libcyrus_min/xstrlcpy.h"
@@ -44,7 +45,6 @@
 #include "acl.h"
 #include "iptostring.h"
 #include "global.h"
-#include "slowio.h"
 #include "tls.h"
 #include "map.h"
 

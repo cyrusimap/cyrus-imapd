@@ -1,5 +1,5 @@
 #include "cunit/unit.h"
-#include "byteorder.h"
+#include "libcyrus_min/byteorder.h"
 
 static void test_byteorder(void)
 {
@@ -31,3 +31,4 @@ static void test_byteorder(void)
     CU_ASSERT_EQUAL(memcmp(&res32, &src32, 4), 0);
 }
 
+/* vim: set ft=c :*/
