@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+# With fastmailsharing, a sharee may address a shared event by the owner's
+# URL.  Deciding whether the sharee organizes the event must still go by the
+# authenticated user's addresses, not those of the user named in the URL.
+sub test_calendarevent_set_writeown_caldav_delete_owner_url
+    :FastMailSharing
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $cal = $self->default_user->calendars->default;
+
+    xlog "Create sharee user";
+    $self->{instance}->create_user("sharee");
+    my $service = $self->{instance}->get_service("http");
+    my $shareeCaldav = Net::CalDAVTalk->new(
+        user => "sharee",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "Share calendar with mayWriteOwn only";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $cal->id => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                            mayWriteOwn => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$cal->id});
+
+    xlog "Create event organized by the owner";
+    my $event = $cal->create_event({
+        title => 'cassowner',
+        participants => {
+            owner => {
+                roles => { owner => JSON::true, attendee => JSON::true },
+                calendarAddress => 'mailto:cassandane@example.com',
+            },
+            attendee => {
+                roles => { attendee => JSON::true },
+                calendarAddress => 'mailto:attendee@example.com',
+            },
+        },
+    });
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$event->id],
+            properties => ['x-href'],
+        }, 'R1'],
+    ]);
+    my $ownerHref = $res->[0][1]{list}[0]{'x-href'};
+    $self->assert_matches(qr{/user/cassandane/Default/}, $ownerHref);
+
+    xlog "Delete as sharee via the owner's URL is forbidden";
+    $res = $shareeCaldav->SafeRequest('DELETE', $ownerHref, '');
+    $self->assert_num_equals(403, $res->{http_response}{status});
+
+    xlog "The owner's event must still exist";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$event->id],
+            properties => ['title'],
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('cassowner', $res->[0][1]{list}[0]{title});
+}
