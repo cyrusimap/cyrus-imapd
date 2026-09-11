@@ -804,6 +804,8 @@ static void test_parse_mimexvalue(void)
     CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("iso-8859-1''%f", NULL));
     CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("iso-8859-1''%g", NULL));
     CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("iso-8859-1''%eg", NULL));
+    CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("iso-8859-1''%2\xC1", NULL));
+    CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("iso-8859-1''%\xE1" "2", NULL));
 }
 
 static void test_encode_mimexvalue(void)
