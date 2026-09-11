@@ -200,6 +200,14 @@ static int data_chunk_recv_cb(nghttp2_session *session,
     if (txn->req_body.flags & BODY_DISCARD) return 0;
 
     if (len) {
+        /* nghttp2's flow control does not bound the accumulated request body,
+         * so without this a client can stream unbounded DATA frames and
+         * exhaust memory. */
+        if (txn->req_body.max && len > txn->req_body.max - txn->req_body.len) {
+            error_response(HTTP_CONTENT_TOO_LARGE, txn);
+            return NGHTTP2_ERR_CANCEL;
+        }
+
         txn->req_body.framing = FRAMING_HTTP2;
         txn->req_body.len += len;
         buf_appendmap(&txn->req_body.payload, (const char *) data, len);
@@ -987,12 +995,14 @@ HIDDEN void http2_input(struct http_connection *conn)
 
             if (r < 0) {
                 /* Failure */
-                syslog(LOG_ERR,
-                       "nghttp2_session_mem_recv2: %s", nghttp2_strerror(r));
                 goaway = 1;
-                conn->close_str = nghttp2_strerror(r);
 
                 switch (r) {
+                case NGHTTP2_ERR_CALLBACK_FAILURE:
+                    /* We responded with 413 Content Too Large */
+                    r = NGHTTP2_ERR_CANCEL;
+                    err = NGHTTP2_CANCEL;
+                    break;
                 case NGHTTP2_ERR_BAD_CLIENT_MAGIC:
                     err = NGHTTP2_PROTOCOL_ERROR;
                     break;
@@ -1004,6 +1014,9 @@ HIDDEN void http2_input(struct http_connection *conn)
                     break;
                 }
 
+                conn->close_str = nghttp2_strerror(r);
+                syslog(LOG_ERR,
+                       "nghttp2_session_mem_recv2: %s", conn->close_str);
                 break;
             }
             else {

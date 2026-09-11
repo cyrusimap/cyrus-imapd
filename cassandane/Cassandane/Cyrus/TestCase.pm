@@ -461,6 +461,15 @@ magic(NoCheckSyslog => sub {
     my $self = shift;
     $self->{no_check_syslog} = 1;
 });
+# Named with a leading verb, not "MaxMessageSize": magic names are also matched
+# against underscore-delimited words in a test's name, and several existing
+# tests are named "maxmessagesize_...". -- claude, 2026-08-20
+magic(SetMaxMessageSize => sub {
+    my ($self, $bytes) = @_;
+    die ":SetMaxMessageSize requires a size argument, e.g. :SetMaxMessageSize(8k)"
+        unless defined $bytes && length $bytes;
+    $self->config_set(maxmessagesize => $bytes);
+});
 magic(SuppressLSAN => sub {
     my ($self, $patterns) = @_;
 
