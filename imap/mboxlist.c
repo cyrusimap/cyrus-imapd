@@ -6,6 +6,7 @@
 
 #include "libcyrus_min/util.h"
 #include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
@@ -38,7 +39,6 @@
 #include "cyrusdb.h"
 #include "mailbox.h"
 #include "mboxevent.h"
-#include "xstrlcpy.h"
 #include "partlist.h"
 #include "user.h"
 

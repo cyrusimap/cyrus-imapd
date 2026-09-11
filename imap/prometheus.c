@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include "libcyrus_min/lib/util.h"
+#include "libcyrus_min/util.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>

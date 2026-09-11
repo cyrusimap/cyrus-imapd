@@ -7,7 +7,6 @@
 #endif
 
 #include "libcyrus_min/util.h"
-#include "libcyrus_min/bytecode.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
@@ -23,6 +22,7 @@
 
 #include "charset.h"
 
+#include "bytecode.h"
 #include "sieve_interface.h"
 #include "interp.h"
 #include "script.h"

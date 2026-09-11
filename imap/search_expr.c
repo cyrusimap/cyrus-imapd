@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 
@@ -23,7 +25,6 @@
 #include "global.h"
 #include "lsort.h"
 #include "seen.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

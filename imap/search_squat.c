@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcpy.h"
+#include "libcyrus_min/xstrlcat.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
 
@@ -20,8 +23,6 @@
 
 #include "index.h"
 #include "global.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "bitvector.h"
 
 /* generated headers are not necessarily in current directory */

@@ -5,7 +5,7 @@
 #include <config.h>
 #include "master/event.h"
 
-#include "libcyrus/util.h"
+#include "libcyrus_min/util.h"
 
 #include <cyrus/assert.h>
 
