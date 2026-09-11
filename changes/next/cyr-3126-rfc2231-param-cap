@@ -1,0 +1,30 @@
+Description:
+
+The number of parameters accepted from a single MIME header is now capped at
+128.  Parsing folded RFC 2231 continuation parameters costs time quadratic in
+the number of parameters, which was previously bounded only by the size of the
+header, so one message could consume a great deal of CPU on delivery and on
+IMAP APPEND.  The cap is well above any legitimate use, and a single long
+RFC 2231 value still folds correctly.
+
+Tracked as GitHub security advisory GHSA-jmmc-8859-q3fx.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
