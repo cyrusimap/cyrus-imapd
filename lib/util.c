@@ -954,11 +954,11 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
      * then we will overflow
      */
     for (n = 0; !maxlen || n < maxlen; n++) {
+        cval = unxdigit[(int)p[n]];
+        if (cval == 0xff) break;
         if (result >= 1152921504606846976ULL) {
             return -1;
         }
-        cval = unxdigit[(int)p[n]];
-        if (cval == 0xff) break;
         result = result * 16 + cval;
     }
 
