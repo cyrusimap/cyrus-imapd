@@ -789,7 +789,7 @@ include_HEADERS = \
     lib/charset.h \
     lib/command.h \
     lib/crc32.h \
-    lib/cron.h \
+    include/cyrus/cron.h \
     lib/cyr_lock.h \
     lib/cyr_qsort_r.h \
     lib/cyrusdb.h \
@@ -806,7 +806,7 @@ include_HEADERS = \
     lib/iptostring.h \
     include/cyrus/libconfig.h \
     lib/libcyr_cfg.h \
-    lib/logfmt.h \
+    include/cyrus/logfmt.h \
     lib/lsort.h \
     lib/map.h \
     lib/mappedfile.h \
