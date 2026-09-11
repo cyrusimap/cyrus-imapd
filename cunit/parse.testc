@@ -46,6 +46,7 @@ static void test_parsehex(void)
     const char NUM1[] = "1somestuff";
     const char NUMBIG[] = "ffffffffffffffff";
     const char NUMTOOBIG[] = "10000000000000000";
+    const char NUMLONG[] = "fEdCbA9876543210!";
     bit64 val = CANARY;
     int r;
     const char *end;
@@ -69,6 +70,12 @@ static void test_parsehex(void)
     val = CANARY;
     r = parsehex(NUMTOOBIG, NULL, strlen(NUMTOOBIG), &val);
     CU_ASSERT_EQUAL(r, -1);
+
+    val = CANARY;
+    r = parsehex(NUMLONG, &end, strlen(NUMLONG), &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(val, 18364758544493064720ULL);
+    CU_ASSERT_PTR_EQUAL(end, NUMLONG + strlen(NUMLONG) - 1);
 }
 
 #define wrap_int_parser_nofree(prot, b, func, type, s, outp, valp, inp) do  \
