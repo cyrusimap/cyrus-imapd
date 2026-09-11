@@ -5,6 +5,7 @@
 #ifndef INCLUDED_GLOBAL_H
 #define INCLUDED_GLOBAL_H
 
+#include "libcyrus_min/sessionid.h" /* XXX remove from here once it's auto-logged */
 #include "libcyrus_min/util.h"
 
 #include <cyrus/libconfig.h>
@@ -13,7 +14,6 @@
 #include "auth.h"
 #include "prot.h"
 #include "mboxname.h"
-#include "sessionid.h" /* XXX remove from here once it's auto-logged */
 #include "signals.h"
 #include "imapparse.h"
 #include "libcyr_cfg.h"
