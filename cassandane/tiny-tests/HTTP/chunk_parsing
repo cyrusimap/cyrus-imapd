@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_chunk_parsing ($self)
+{
+    my $caldav = $self->{caldav};
+    # Provision the calendar home so the PUT targets a real collection.
+    $caldav->GetCalendars();
+
+    my $count = 0;
+    for my $testcase (
+        [201, 'correct hex', '%x'],
+        [201, 'leading zeroes', '%08x'],
+        [201, '0x prefix', '%#x'], # FIXME
+        [400, 'unary plus', '+%x'],
+        # If you're using stroul to parse hex, then "it's a trap":
+        #   If the minus sign was part of the input sequence, the numeric value
+        #   calculated from the sequence of digits is negated as if by unary
+        #   minus in the result type, which applies unsigned integer wraparound
+        #   rules.
+        [400, 'unary minus', sub($line) {
+             my $len = length $line;
+             sprintf "-%x\r\n%s\r\n", 0xFFFFFFFF - $len + 1, $line;
+         }],
+        [400, 'leading whitespace', ' %x'],
+        [400, 'trailing whitespace', '%x '],
+        [400, 'wrap!', '1%16x'],
+        [400, 'trailing garbage', '%xg'],
+        [400, 'trailing semicolon', '%x;'],
+        [400, 'semicolon whitespace', '%x ; '],
+        [400, 'semicolon twice', '%x;;'],
+        [400, 'not a token', '%x;='],
+        [400, 'valid chunk-ext name', '%x;!'], # FIXME
+        [400, 'BWS chunk-ext name', "%x\t;!"], # FIXME
+        [400, 'chunk-ext name BWS', "%x;\t!"], # FIXME
+        [400, 'chunk-ext name BWS+', "%x;\t ~"], # FIXME
+    ) {
+        my ($want, $desc, $format) = @$testcase;
+
+        my $leaf = "3485-$count";
+        my $uid = $leaf . '@example.com';
+        my $rpath = "/dav/calendars/user/cassandane/Default/$leaf.ics";
+        ++$count;
+
+        my $ical = <<"EOF";
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//HTTP//EN
+BEGIN:VEVENT
+UID:$uid
+DTSTAMP:20260101T000000Z
+DTSTART:20260101T100000Z
+DURATION:PT1H
+SUMMARY:HTTP/1.1 chunk shenanigans $count
+END:VEVENT
+END:VCALENDAR
+EOF
+        $ical =~ s/\r?\n/\r\n/g;
+
+        my $raw_body;
+        if (ref $format) {
+            $raw_body = $format->($ical);
+            my ($chunk_line) = split "\n", $raw_body;
+            xlog $self, "sending $chunk_line";
+        } else {
+            my $chunk_line = sprintf $format, length $ical;
+            $raw_body = "$chunk_line\r\n$ical\r\n";
+            xlog $self, "sending $chunk_line";
+        }
+        $raw_body .= "0\r\n\r\n";
+
+
+        my $res = $self->http1_request(
+            method   => 'PUT',
+            path     => $rpath,
+            headers  => [
+                'transfer-encoding' => 'chunked',
+                'content-type'      => 'text/calendar',
+                'connection'        => 'close',
+            ],
+            raw_body => $raw_body,
+            timeout => 5,
+        );
+
+        xlog $self, "server responses for $desc: @{ $res->{statuses} }";
+
+        $self->assert_num_equals(1, scalar @{ $res->{statuses} });
+        $self->assert_num_equals($want, $res->{statuses}[0], "$want for $desc");
+
+        $res = $caldav->ua->request('GET', $caldav->request_url($rpath), {
+            headers => {
+                'Authorization' => $caldav->auth_header()
+            }
+        });
+        if ($want =~ /^2/) {
+            $self->assert_str_equals(200, $res->{status}, "200 for $desc");
+            $self->assert_matches(qr/\r\nUID:$uid\r\n/, $res->{content},
+                                  "body matches $uid for $desc");
+        } else {
+            $self->assert_str_equals(404, $res->{status}, "404 for $desc");
+        }
+    }
+}
