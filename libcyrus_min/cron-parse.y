@@ -1,7 +1,7 @@
 %{
 #include <config.h>
 
-#include "lib/cron.h"
+#include <cyrus/cron.h>
 
 #include <stdbool.h>
 #include <string.h>

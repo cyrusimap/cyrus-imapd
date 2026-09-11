@@ -10,6 +10,7 @@
 
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
+#include <cyrus/logfmt.h>
 #include <cyrus/retry.h>
 #include <cyrus/xmalloc.h>
 #include <cyrus/xsha1.h>
@@ -41,7 +42,6 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
-#include "logfmt.h"
 #include "map.h"
 #ifdef HAVE_ZLIB
 #include "zlib.h"

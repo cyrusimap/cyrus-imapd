@@ -2,8 +2,7 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 #include <config.h>
-
-#include "lib/cron.h"
+#include <cyrus/cron.h>
 
 #include <cyrus/xmalloc.h>
 

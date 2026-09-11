@@ -8,10 +8,10 @@
 #include "libcyrus_min/util.h"
 
 #include <cyrus/libconfig.h>
+#include <cyrus/logfmt.h>
 #include <cyrus/strarray.h>
 
 #include "auth.h"
-#include "logfmt.h"
 
 #define MAX_NAMESPACE_PREFIX 40
 

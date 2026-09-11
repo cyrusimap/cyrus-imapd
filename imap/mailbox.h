@@ -5,16 +5,17 @@
 #ifndef INCLUDED_MAILBOX_H
 #define INCLUDED_MAILBOX_H
 
+#include "libcyrus_min/byteorder.h"
 #include "libcyrus_min/util.h"
+
+#include <cyrus/logfmt.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <limits.h>
 #include <config.h>
 
-#include "byteorder.h"
 #include "conversations.h"
-#include "logfmt.h"
 #include "message_guid.h"
 #include "message.h"
 #include "ptrarray.h"

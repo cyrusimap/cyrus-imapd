@@ -1,5 +1,5 @@
 #include "cunit/unit.h"
-#include "lib/logfmt.h"
+#include <cyrus/logfmt.h>
 
 #include <cyrus/libconfig.h>
 

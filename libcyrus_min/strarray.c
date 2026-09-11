@@ -6,10 +6,10 @@
 
 #include "libcyrus_min/util.h"
 
+#include <cyrus/logfmt.h>
 #include <cyrus/xmalloc.h>
 
 #include <memory.h>
-#include "logfmt.h"
 
 EXPORTED strarray_t *strarray_new(void)
 {

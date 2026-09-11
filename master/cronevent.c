@@ -5,11 +5,11 @@
 #include <config.h>
 #include "master/cronevent.h"
 
-#include "libcyrus_min/cron.h"
 #include "libcyrus_min/util.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/dynarray.h>
+#include <cyrus/cron.h>
 #include <cyrus/strarray.h>
 #include <cyrus/xmalloc.h>
 
