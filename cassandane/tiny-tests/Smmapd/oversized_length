@@ -1,0 +1,23 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::NetString;
+
+# The maximum request size is 1024.  Larger requests should be refused.  This
+# is a regression test for an earlier crasher.
+sub test_oversized_length ($self)
+{
+    my $len = 8192;
+    my $payload = 'A' x $len;
+
+
+    my $service = $self->{instance}->get_service('smmap');
+    my $sock = $service->get_socket();
+
+    $sock->autoflush(1);
+
+    $sock->print("${len}:${payload},");
+
+    my $res = get_netstring($sock);
+    $self->assert_not_null($res, "smmapd should reply, not crash");
+    $self->assert_matches(qr/^PERM\b.*too large/i, $res);
+}

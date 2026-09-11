@@ -368,6 +368,13 @@ static int begin_handling(void)
             errstring = "missing length";
             r = IMAP_PROTOCOL_ERROR;
         }
+        if (!r && (len < 0 || len > MAXREQUEST)) {
+            /* len comes from the wire and is only bounded by INT32_MAX in
+             * getint32(); reject anything larger than our buffer before
+             * prot_read() can overflow */
+            errstring = "request too large";
+            r = IMAP_PROTOCOL_ERROR;
+        }
         if (!r && prot_read(map_in, request, len) != len) {
             errstring = "request size doesn't match length";
             r = IMAP_PROTOCOL_ERROR;
