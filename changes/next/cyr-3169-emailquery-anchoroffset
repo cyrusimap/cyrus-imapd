@@ -1,0 +1,30 @@
+Description:
+
+A JMAP Email/query that anchors its result window past the end of the
+matching messages now returns an empty slice.  Previously a positive
+anchorOffset was not clamped to the number of results, so the count of
+remaining results was computed by subtracting a position beyond the end of
+the set, wrapping around to a very large count and reading past the end of
+the results.  The negative-offset side was already clamped.
+
+Tracked as GitHub security advisory GHSA-q4gg-4fxq-mwg8.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

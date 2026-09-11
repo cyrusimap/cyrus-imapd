@@ -1,0 +1,36 @@
+Description:
+
+The IMAP THREAD command now returns NO rather than corrupting memory when the
+messages to be threaded would overflow the thread node count.  Previously, a
+message with an excessive number of References could cause an out of bounds
+write during threading.
+
+Threading now also reads at most 20 references from any one message.  When a
+message carries more than that, threading uses the root id, the parent id, and
+the ids of the 18 most-recent predecessors of the parent -- following the same
+advice given to clients about paring down References.  This cap also bounds
+how much memory a single THREAD command can allocate; previously a mailbox of
+messages carrying long References headers could drive that into the hundreds
+of megabytes without any integer overflow occurring.
+
+Tracked as GitHub security advisory GHSA-rhx5-p47p-5h9q.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

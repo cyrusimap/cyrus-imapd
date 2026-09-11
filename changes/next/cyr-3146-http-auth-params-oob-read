@@ -1,0 +1,29 @@
+Description:
+
+Malformed credentials in an HTTP Authorization header are now rejected before
+their parameters are read.  Previously a parameter list that ended in a
+separator -- a bare trailing comma, for instance -- or that named a parameter
+with an empty value caused the parser to walk past the end of the string
+holding the credentials and read whatever heap memory followed it.
+
+Tracked as GitHub security advisory GHSA-387x-mcqp-xrw8.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

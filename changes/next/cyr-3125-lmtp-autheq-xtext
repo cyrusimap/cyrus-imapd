@@ -1,0 +1,33 @@
+Description:
+
+The xtext escapes in an LMTP "MAIL FROM ... AUTH=" parameter now decode
+correctly.  Previously each escape decoded to a NUL byte, truncating the
+identity at the first one.  That identity is used for ACL checks and is
+recorded in the Received: header, so a truncated identity could both
+misattribute a delivery and change the authorization applied to it.
+
+Cyrus listens for LMTP on a Unix domain socket by default, so only deployments
+that have configured lmtpd to listen on a network socket were reachable by
+anything other than a local process.
+
+Tracked as GitHub security advisory GHSA-6php-j5qr-hf4r.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

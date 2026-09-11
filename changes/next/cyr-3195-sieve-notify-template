@@ -1,0 +1,32 @@
+Description:
+
+A Sieve notify :message template that references "$text[" is now rejected
+when the script is compiled, and is emitted literally rather than expanded if
+it is encountered at run time.  The reference must give a non-zero decimal
+length and close with "]$", and using it at all now requires the "body"
+extension.  Previously the length was read by scanning forward without
+checking that a closing bracket was present, so a truncated reference read
+past the end of the message body and could place unrelated server memory into
+the notification that was sent.
+
+Tracked as GitHub security advisory GHSA-gq3h-f75f-hrj9.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

@@ -1,0 +1,28 @@
+Description:
+
+An Authorization header consisting of an authentication scheme and trailing
+whitespace, with no credentials at all, no longer reads past the end of its
+buffer.  Previously the whitespace-skipping loop ran off the end of the string
+and the adjacent heap was then treated as the client's credentials.
+
+Tracked as GitHub security advisory GHSA-9hvv-75vm-ffrj.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

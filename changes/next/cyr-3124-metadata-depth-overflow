@@ -1,0 +1,27 @@
+Description:
+
+Appending the DEPTH suffix to a metadata entry name is now bounded by the
+space left in the buffer rather than by the buffer's total size.  Previously a
+long enough entry name could be written past the end of its allocation.
+
+Tracked as GitHub security advisory GHSA-64v2-6mm8-jq9f.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

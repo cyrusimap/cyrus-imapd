@@ -1,0 +1,28 @@
+Description:
+
+A malformed If: header on a DAV request no longer crashes the httpd worker.
+Two unparseable forms -- a tagged-list token with no closing ">", and an If
+header with no condition list at all -- led to a NULL dereference that any
+authenticated DAV client could trigger.
+
+Tracked as GitHub security advisory GHSA-mhq5-r6qx-pwvg.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
