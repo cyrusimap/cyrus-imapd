@@ -1,8 +1,21 @@
 /* unit.c */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "cunit/unit.h"
+#include "cunit/unit-registry.h"
+#include "cunit/unit-timeout.h"
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/buf.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <setjmp.h>
@@ -17,18 +30,7 @@
 #include <valgrind/valgrind.h>
 #endif
 
-#include "cunit/unit.h"
-#include "cunit/unit-registry.h"
-#include "cunit/unit-timeout.h"
-
-#include "lib/assert.h"
-#include "lib/buf.h"
-#include "lib/libconfig.h"
 #include "lib/libcyr_cfg.h"
-#include "lib/retry.h"
-#include "lib/util.h"
-#include "lib/xmalloc.h"
-#include "lib/xunlink.h"
 
 int verbose = 0;
 int num_testspecs = 0;

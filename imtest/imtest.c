@@ -4,6 +4,16 @@
 
 #include "config.h"
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/hash.h>
+#include <cyrus/retry.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include <fcntl.h>
 #include <getopt.h>
 #include <limits.h>
@@ -29,19 +39,11 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "hash.h"
 #include "imparse.h"
 #include "iptostring.h"
 #include "md5.h"
 #include "prot.h"
-#include "retry.h"
-#include "strarray.h"
 #include "stristr.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
-#include "xunlink.h"
 
 #include <openssl/ssl.h>
 

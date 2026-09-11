@@ -4,6 +4,13 @@
 
 #include <config.h>
 
+#include "libcyrus_min/slowio.h"
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/proc.h>
+#include <cyrus/xmalloc.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -25,15 +32,12 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "assert.h"
 #include "acl.h"
 #ifdef USE_AUTOCREATE
 #include "autocreate.h"
 #endif
-#include "util.h"
 #include "auth.h"
 #include "global.h"
-#include "slowio.h"
 #include "tls.h"
 
 #include "auditlog.h"
@@ -42,13 +46,10 @@
 #include "mailbox.h"
 #include "mboxevent.h"
 #include "version.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
 #include "mboxlist.h"
 #include "idle.h"
 #include "telemetry.h"
 #include "backend.h"
-#include "proc.h"
 #include "proxy.h"
 #include "sync_support.h"
 #include "seen.h"

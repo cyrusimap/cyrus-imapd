@@ -1,13 +1,19 @@
 /* ldap.c - LDAP Backend to ptloader */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
+#include <config.h>
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
 
 #include <sysexits.h>
 #include <syslog.h>
-#include <config.h>
 #include "ptloader.h"
-#include "util.h"
-#include "assert.h"
 
 #ifdef HAVE_LDAP
 
@@ -33,14 +39,8 @@
 /* libimap */
 #include "imap/global.h"
 
-/* libconfig */
-#include "libconfig.h"
-
 /* libcyrus */
 #include "auth_pts.h"
-#include "strhash.h"
-#include "xmalloc.h"
-#include "xstrlcat.h"
 
 typedef struct _ptsm {
     const char      *uri;

@@ -4,9 +4,17 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/dynarray.h>
+#include <cyrus/hash.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xsha1.h>
+
 #include <ctype.h>
 #include <errno.h>
-#include <assert.h>
 #include <string.h>
 #include <syslog.h>
 #ifdef HAVE_UNISTD_H
@@ -22,9 +30,7 @@
 #include "caldav_util.h"
 #include "cyr_qsort_r.h"
 #include "defaultalarms.h"
-#include "dynarray.h"
 #include "global.h"
-#include "hash.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
@@ -43,11 +49,7 @@
 #include "sync_log.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
 #include "xapian_wrap.h"
-#include "xmalloc.h"
-#include "xsha1.h"
-#include "xstrlcpy.h"
 #include "zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */

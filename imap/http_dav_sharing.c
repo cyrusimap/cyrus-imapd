@@ -1,6 +1,11 @@
 /* http_dav.c -- Routines for dealing with DAV properties in httpd */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
+#include <config.h>
+
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/strhash.h>
 
 #include <sysexits.h>
 
@@ -9,12 +14,10 @@
 #include "http_dav_sharing.h"
 #include "http_proxy.h"
 #include "proxy.h"
-#include "strhash.h"
 #include "syslog.h"
 #include "times.h"
 #include "user.h"
 #include "webdav_db.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

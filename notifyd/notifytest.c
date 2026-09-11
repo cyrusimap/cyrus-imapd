@@ -6,6 +6,8 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -17,7 +19,6 @@
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
 #endif
-#include "util.h"
 
 #define MAX_OPT 10
 #define MAXSIZE 8192

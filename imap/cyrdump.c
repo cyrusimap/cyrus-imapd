@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -15,15 +21,11 @@
 #include <string.h>
 
 /* cyrus includes */
-#include "assert.h"
 #include "global.h"
 #include "index.h"
 #include "imapurl.h"
 #include "mailbox.h"
 #include "mboxlist.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

@@ -1,8 +1,17 @@
 /* message.c - Message manipulation/parsing */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/arrayu64.h>
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+#include <cyrus/retry.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -21,12 +30,9 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 
-#include "arrayu64.h"
-#include "assert.h"
 #include "crc32.h"
 #include "dlist.h"
 #include "prot.h"
-#include "hash.h"
 #include "map.h"
 #include "mailbox.h"
 #include "message.h"
@@ -36,13 +42,8 @@
 #include "charset.h"
 #include "stristr.h"
 #include "user.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "strarray.h"
 #include "ptrarray.h"
 #include "global.h"
-#include "retry.h"
 #include "rfc822tok.h"
 #include "times.h"
 

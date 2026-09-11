@@ -4,6 +4,15 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,19 +35,12 @@
 #include "auditlog.h"
 #include "bsearch.h"
 #include "glob.h"
-#include "assert.h"
 #include "global.h"
 #include "cyrusdb.h"
-#include "hash.h"
-#include "util.h"
 #include "mailbox.h"
 #include "mboxevent.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
 #include "partlist.h"
-#include "xstrlcat.h"
 #include "user.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

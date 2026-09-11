@@ -4,13 +4,16 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 
 #include "acl.h"
@@ -24,7 +27,6 @@
 #include "sync_support.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

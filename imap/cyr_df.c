@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -16,8 +20,6 @@
 #include <sys/types.h>
 
 #include "global.h"
-#include "util.h"
-#include "xmalloc.h"
 
 /* forward declarations */
 static void usage(void);

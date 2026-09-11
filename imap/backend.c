@@ -4,6 +4,13 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
@@ -32,11 +39,6 @@
 #include "global.h"
 #include "iptostring.h"
 #include "nonblock.h"
-#include "tok.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 
 #ifndef AI_V4MAPPED
 #define AI_V4MAPPED     0

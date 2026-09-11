@@ -10,17 +10,19 @@
 #include <memory>
 
 extern "C" {
-#include <assert.h>
-#include "libconfig.h"
-#include "util.h"
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+
 #include "search_engines.h"
 #include "search_part.h"
-#include "xmalloc.h"
 #include "xapian_wrap.h"
 #include "charset.h"
 #include "ptrarray.h"
 #include "parseaddr.h"
-
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

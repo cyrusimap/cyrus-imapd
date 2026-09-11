@@ -7,6 +7,14 @@
 /* XXX all offsets should be uint32_ts i think */
 
 #include <config.h>
+#include "cyrusdb.h"
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -21,16 +29,10 @@
 #endif
 #include <netinet/in.h>
 
-#include "assert.h"
 #include "bsearch.h"
-#include "cyrusdb.h"
 #include "libcyr_cfg.h"
 #include "cyr_lock.h"
 #include "map.h"
-#include "retry.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xunlink.h"
 
 #define PROB (0.5)
 

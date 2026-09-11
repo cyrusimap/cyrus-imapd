@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include <stdlib.h>
 #include <syslog.h>
 #include <string.h>
@@ -18,16 +24,12 @@
 #include <sys/uio.h>
 #include "cyrusdb.h"
 #include "map.h"
-#include "util.h"
 
-#include "assert.h"
 #include "global.h"
-#include "xmalloc.h"
 #include "mailbox.h"
 #include "seen.h"
 #include "sync_log.h"
 #include "imparse.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

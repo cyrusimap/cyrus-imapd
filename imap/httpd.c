@@ -4,6 +4,14 @@
 
 #include <config.h>
 
+#include "libcyrus_min/slowio.h"
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/proc.h>
+#include <cyrus/tok.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -35,22 +43,16 @@
 #include "http_ws.h"
 
 #include "acl.h"
-#include "assert.h"
-#include "util.h"
 #include "iptostring.h"
 #include "global.h"
-#include "slowio.h"
 #include "tls.h"
 #include "map.h"
 
 #include "auditlog.h"
 #include "imapd.h"
 #include "loginlog.h"
-#include "proc.h"
 #include "version.h"
 #include "stristr.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "telemetry.h"
 #include "backend.h"
 #include "prometheus.h"
@@ -60,7 +62,6 @@
 #include "message.h"
 #include "idle.h"
 #include "times.h"
-#include "tok.h"
 #include "wildmat.h"
 #include "md5.h"
 #include "attachextract.h"

@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -26,9 +31,6 @@
 #include <sys/un.h>
 
 #include "global.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "lmtpengine.h"
 #include "prot.h"
 #include "proxy.h"

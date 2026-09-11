@@ -4,6 +4,14 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
+#include <cyrus/dynarray.h>
+#include <cyrus/hashset.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+
 #include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
@@ -14,16 +22,10 @@
 #include "caldav_db.h"
 #include "cyrusdb.h"
 #include "defaultalarms.h"
-#include "dynarray.h"
-#include "hashset.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "ical_support.h"
-#include "libconfig.h"
 #include "mboxname.h"
-#include "util.h"
-#include "xstrlcat.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

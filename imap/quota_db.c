@@ -1,8 +1,13 @@
 /* quota_db.c - quota manipulation routines */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -20,10 +25,6 @@
 #include "mboxname.h"
 #include "mboxevent.h"
 #include "quota.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "strarray.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

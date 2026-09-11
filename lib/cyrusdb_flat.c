@@ -3,6 +3,16 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "cyrusdb.h"
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+#include "libcyrus_min/xstrlcat.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -17,17 +27,9 @@
 #include <sys/uio.h>
 #include <fcntl.h>
 
-#include "assert.h"
-#include "cyrusdb.h"
 #include "map.h"
 #include "bsearch.h"
 #include "cyr_lock.h"
-#include "retry.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
-#include "xunlink.h"
 
 /* we have the file locked iff we have an outstanding transaction */
 

@@ -7,8 +7,9 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+
 #include <strings.h>
-#include "util.h"
 
 #include "sieve/tree.h"
 #include "sieve/sieve_interface.h"

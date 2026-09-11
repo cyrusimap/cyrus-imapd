@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/xmalloc.h>
+
 #include <getopt.h>
 #include <stdio.h>
 #include <sysexits.h>
@@ -11,8 +15,6 @@
 
 #include "global.h"
 #include "tls.h"
-#include "util.h"
-#include "xmalloc.h"
 
 static void usage(void)
 {

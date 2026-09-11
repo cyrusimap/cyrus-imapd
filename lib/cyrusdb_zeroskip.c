@@ -3,6 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "cyrusdb.h"
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/xmalloc.h>
 
 #include <dirent.h>
 #include <errno.h>
@@ -12,10 +17,7 @@
 #include <sys/stat.h>
 
 #include "bsearch.h"
-#include "cyrusdb.h"
 #include "libcyr_cfg.h"
-#include "util.h"
-#include "xmalloc.h"
 #include "zeroskip.h"
 
 /* Data files are named "zeroskip-<uuid>-<generation>[-<generation>]", plus the

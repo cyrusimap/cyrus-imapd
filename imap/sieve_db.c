@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include <syslog.h>
 #include <string.h>
 
@@ -13,15 +19,11 @@
 #include <errno.h>
 #include "global.h"
 #include "jmap_api.h"
-#include "libconfig.h"
 #include "mboxlist.h"
 #include "sieve_db.h"
 #include "sievedir.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xunlink.h"
 
 #include "sieve/bytecode.h"
 #include "sieve/bc_parse.h"

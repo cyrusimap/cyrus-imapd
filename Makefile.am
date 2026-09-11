@@ -49,9 +49,9 @@ AM_CXXFLAGS = $(WARN_CFLAGS) $(GCOV_CXXFLAGS)
 
 AM_CPPFLAGS = \
     $(COM_ERR_CPPFLAGS) \
-    -I${top_builddir} \
+    -I${top_builddir}/include \
     -I${top_builddir}/lib \
-    -I${top_srcdir} \
+    -I${top_srcdir}/include \
     -I${top_srcdir}/lib \
     -DLIBEXEC_DIR=\"$(libexecdir)\" \
     -DSBIN_DIR=\"$(sbindir)\" \
@@ -112,16 +112,16 @@ AM_DISTCHECK_CONFIGURE_FLAGS = \
 
 BUILT_SOURCES = \
     cassandane/Cassandane/Config/Bitfields.pm \
-    lib/imapopts.c \
-    lib/imapopts.h
+    libcyrus_min/imapopts.c \
+    include/cyrus/imapopts.h
 
 CLEANFILES = \
     tools/mkimap \
     tools/rehash \
     lib/chartable.c \
     lib/htmlchar.h \
-    lib/imapopts.c \
-    lib/imapopts.h \
+    libcyrus_min/imapopts.c \
+    include/cyrus/imapopts.h \
     imap/css3_color_array.h \
     imap/jmap_data_types.h \
     imap/rfc822_header.h \
@@ -768,68 +768,75 @@ lint-logfmt-keys:
 
 .PHONY: lint-logfmt-keys
 
+# We use the cyrus namespace for public headers, and we use a matching
+# path within the cyrus-imapd source tree.  The include directory (but not the
+# cyrus subdirectory thereof) is added to -I, whether by this Makefile.am,
+# or by pkg-config.
+# Public headers are then always included like `#include <cyrus/foo.h>`,
+# regardless of whether you're building cyrus-imapd itself or just linking
+# against its libraries.
 includedir=@includedir@/cyrus
 
 include_HEADERS = \
     lib/acl.h \
-    lib/arrayu64.h \
-    lib/assert.h \
+    include/cyrus/arrayu64.h \
+    include/cyrus/assert.h \
     lib/auth.h \
     lib/bitvector.h \
     lib/bloom.h \
     lib/bsearch.h \
-    lib/buf.h \
+    include/cyrus/buf.h \
     lib/charset.h \
     lib/command.h \
     lib/crc32.h \
-    lib/cron.h \
+    include/cyrus/cron.h \
     lib/cyr_lock.h \
     lib/cyr_qsort_r.h \
     lib/cyrusdb.h \
-    lib/dynarray.h \
+    include/cyrus/dynarray.h \
     lib/glob.h \
     lib/gmtoff.h \
-    lib/hash.h \
-    lib/hashset.h \
-    lib/hashu64.h \
+    include/cyrus/hash.h \
+    include/cyrus/hashset.h \
+    include/cyrus/hashu64.h \
     lib/imapurl.h \
     lib/imclient.h \
     lib/imparse.h \
     lib/iostat.h \
     lib/iptostring.h \
-    lib/libconfig.h \
+    include/cyrus/libconfig.h \
     lib/libcyr_cfg.h \
-    lib/logfmt.h \
+    include/cyrus/logfmt.h \
     lib/lsort.h \
     lib/map.h \
     lib/mappedfile.h \
     lib/mkgmtime.h \
-    lib/mpool.h \
+    include/cyrus/mpool.h \
     lib/murmurhash2.h \
     lib/nonblock.h \
     lib/parseaddr.h \
-    lib/proc.h \
+    include/cyrus/proc.h \
     lib/procinfo.h \
-    lib/retry.h \
+    include/cyrus/retry.h \
     lib/rfc822tok.h \
     lib/seqset.h \
     lib/signals.h \
-    lib/smallarrayu64.h \
+    include/cyrus/smallarrayu64.h \
     lib/sqldb.h \
-    lib/strarray.h \
-    lib/strhash.h \
+    include/cyrus/strarray.h \
+    include/cyrus/strhash.h \
     lib/stristr.h \
     lib/times.h \
-    lib/tok.h \
+    include/cyrus/tok.h \
     lib/twom.h \
     lib/wildmat.h \
-    lib/xmalloc.h \
-    lib/xsha1.h \
-    lib/xunlink.h \
+    include/cyrus/xmalloc.h \
+    include/cyrus/xsha1.h \
+    include/cyrus/xunlink.h \
     lib/zeroskip.h
 
 nodist_include_HEADERS = \
-    lib/imapopts.h
+    include/cyrus/imapopts.h
 
 nobase_include_HEADERS = \
     imap/message_guid.h \
@@ -837,18 +844,10 @@ nobase_include_HEADERS = \
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
 noinst_HEADERS += \
-    lib/bufarray.h \
-    lib/byteorder.h \
     lib/gai.h \
-    lib/hash_priv.h \
     lib/md5.h \
     lib/prot.h \
-    lib/ptrarray.h \
-    lib/sessionid.h \
-    lib/slowio.h \
-    lib/util.h \
-    lib/xstrlcat.h \
-    lib/xstrlcpy.h
+    lib/ptrarray.h
 
 imap_arbitron_SOURCES = imap/arbitron.c imap/cli_fatal.c imap/mutex_fake.c
 imap_arbitron_LDADD = $(LD_UTILITY_ADD)
@@ -1586,58 +1585,69 @@ libcrc32_la_SOURCES = lib/crc32.c
 libcrc32_la_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 nodist_lib_libcyrus_min_la_SOURCES = \
-    lib/imapopts.c
+    libcyrus_min/imapopts.c
 
-BUILT_SOURCES += lib/cron-lex.c lib/cron-parse.c lib/cron-parse.h
+BUILT_SOURCES += \
+    libcyrus_min/cron-lex.c \
+    libcyrus_min/cron-parse.c \
+    libcyrus_min/cron-parse.h
 
 lib_libcyrus_min_la_SOURCES = \
-    lib/arrayu64.c \
-    lib/assert.c \
-    lib/buf.c \
-    lib/bufarray.c \
-    lib/byteorder.c \
-    lib/cron.c \
-    lib/cron-lex.l \
-    lib/cron-parse.y \
-    lib/dynarray.c \
-    lib/hash.c \
-    lib/hashset.c \
-    lib/hashu64.c \
-    lib/libconfig.c \
-    lib/logfmt.c \
-    lib/mpool.c \
-    lib/proc.c \
-    lib/retry.c \
-    lib/sessionid.c \
-    lib/setproctitle.c \
-    lib/slowio.c \
-    lib/smallarrayu64.c \
-    lib/strarray.c \
-    lib/strhash.c \
-    lib/tok.c \
-    lib/util.c \
-    lib/xmalloc.c \
-    lib/xstrlcat.c \
-    lib/xstrlcpy.c \
-    lib/xunlink.c
+    libcyrus_min/arrayu64.c \
+    libcyrus_min/assert.c \
+    libcyrus_min/buf.c \
+    libcyrus_min/bufarray.c \
+    libcyrus_min/bufarray.h \
+    libcyrus_min/byteorder.c \
+    libcyrus_min/byteorder.h \
+    libcyrus_min/cron.c \
+    libcyrus_min/cron-lex.l \
+    libcyrus_min/cron-parse.y \
+    libcyrus_min/dynarray.c \
+    libcyrus_min/hash.c \
+    libcyrus_min/hashset.c \
+    libcyrus_min/hashu64.c \
+    libcyrus_min/hash_priv.h \
+    libcyrus_min/libconfig.c \
+    libcyrus_min/logfmt.c \
+    libcyrus_min/mpool.c \
+    libcyrus_min/proc.c \
+    libcyrus_min/retry.c \
+    libcyrus_min/sessionid.c \
+    libcyrus_min/sessionid.h \
+    libcyrus_min/setproctitle.c \
+    libcyrus_min/slowio.c \
+    libcyrus_min/slowio.h \
+    libcyrus_min/smallarrayu64.c \
+    libcyrus_min/strarray.c \
+    libcyrus_min/strhash.c \
+    libcyrus_min/tok.c \
+    libcyrus_min/util.c \
+    libcyrus_min/util.h \
+    libcyrus_min/xmalloc.c \
+    libcyrus_min/xstrlcat.c \
+    libcyrus_min/xstrlcat.h \
+    libcyrus_min/xstrlcpy.c \
+    libcyrus_min/xstrlcpy.h \
+    libcyrus_min/xunlink.c
 if IPV6_noGETADDRINFO
-lib_libcyrus_min_la_SOURCES += lib/getaddrinfo.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/getaddrinfo.c
 endif
 if IPV6_noGETNAMEINFO
-lib_libcyrus_min_la_SOURCES += lib/getnameinfo.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/getnameinfo.c
 endif
 if LOCK_FCNTL
-lib_libcyrus_min_la_SOURCES += lib/lock_fcntl.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/lock_fcntl.c
 else
-lib_libcyrus_min_la_SOURCES += lib/lock_flock.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/lock_flock.c
 endif
 if MAP_SHARED
-lib_libcyrus_min_la_SOURCES += lib/map_shared.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/map_shared.c
 else
 if MAP_STUPIDSHARED
-lib_libcyrus_min_la_SOURCES += lib/map_stupidshared.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/map_stupidshared.c
 else
-lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
+lib_libcyrus_min_la_SOURCES += libcyrus_min/map_nommap.c
 endif
 endif
 lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS) $(LIB_UUID) $(SSL_LIBS) \
@@ -1653,12 +1663,14 @@ lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	$(AM_V_GEN)$(PERL) $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t || (rm -f $@ && exit 1)
 	@echo "### Done building chartables."
 
-lib/imapopts.h: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
+include/cyrus/imapopts.h: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
+	$(AM_V_at)$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/imapoptions.pl cheader \
 	    --cc="$(CC)" $(CFG2HDR_FORBID_UNRELEASED) \
 	    $< > $@.NEW && mv $@.NEW $@
 
-lib/imapopts.c: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
+libcyrus_min/imapopts.c: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
+	$(AM_V_at)$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/imapoptions.pl csource \
 	    --cc="$(CC)" $(CFG2HDR_FORBID_UNRELEASED) \
 	    $< > $@.NEW && mv $@.NEW $@

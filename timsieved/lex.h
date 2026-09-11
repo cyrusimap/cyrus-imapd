@@ -5,8 +5,9 @@
 #ifndef _LEX_H_
 #define _LEX_H_
 
+#include "libcyrus_min/util.h"
+
 #include "prot.h"
-#include "util.h"
 
 #define LEXER_STATE_RECOVER     61
 #define LEXER_STATE_RECOVER_CR  62

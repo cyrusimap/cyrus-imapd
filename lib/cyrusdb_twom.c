@@ -3,6 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "cyrusdb.h"
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/xmalloc.h>
 
 #include <errno.h>
 #include <libgen.h>
@@ -10,11 +15,8 @@
 #include <sys/mman.h>
 
 #include "bsearch.h"
-#include "cyrusdb.h"
 #include "libcyr_cfg.h"
 #include "twom.h"
-#include "util.h"
-#include "xmalloc.h"
 
 /* type aliases */
 #define LLU long long unsigned int

@@ -3,8 +3,13 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 /* currently doesn't catch signals; probably SHOULD */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
 
 #if HAVE_DIRENT_H
 # include <dirent.h>
@@ -35,7 +40,6 @@
 #include <string.h>
 #include <sasl/sasl.h>
 
-#include "assert.h"
 #include "annotate.h"
 #include "dlist.h"
 #include "global.h"
@@ -45,9 +49,6 @@
 #include "mboxlist.h"
 #include "mupdate.h"
 #include "user.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

@@ -4,6 +4,13 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
+#include <cyrus/hash.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -27,24 +34,19 @@
 #include "mboxlist.h"
 #include "mailbox.h"
 #include "quota.h"
-#include "xmalloc.h"
 #include "seen.h"
 #include "mboxname.h"
 #include "map.h"
 #include "imapd.h"
 #include "imap_proxy.h"
-#include "util.h"
 #include "prot.h"
 #include "message_guid.h"
 #include "sync_log.h"
 #include "sync_support.h"
 #include "cyr_lock.h"
 #include "backend.h"
-#include "xstrlcat.h"
 #include "signals.h"
 #include "cyrusdb.h"
-#include "hash.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

@@ -1,8 +1,13 @@
 /* imap_proxy.c - IMAP proxy support functions */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/hashu64.h>
+#include <cyrus/xmalloc.h>
 
 #include <ctype.h>
 #include <stdio.h>
@@ -11,20 +16,16 @@
 #include <syslog.h>
 #include <sys/un.h>
 
-#include "assert.h"
 #include "acl.h"
 #include "annotate.h"
 #include "backend.h"
 #include "global.h"
-#include "hashu64.h"
 #include "imap_proxy.h"
 #include "proxy.h"
 #include "mboxname.h"
 #include "mupdate-client.h"
 #include "partlist.h"
 #include "prot.h"
-#include "util.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

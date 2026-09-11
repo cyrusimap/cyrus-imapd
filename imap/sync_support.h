@@ -5,9 +5,10 @@
 #ifndef INCLUDED_SYNC_SUPPORT_H
 #define INCLUDED_SYNC_SUPPORT_H
 
+#include <cyrus/libconfig.h>
+
 #include "backend.h"
 #include "dlist.h"
-#include "libconfig.h"
 #include "mailbox.h"
 #include "prot.h"
 #include "seen.h"

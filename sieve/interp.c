@@ -6,17 +6,18 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
 #include <string.h>
 
-#include "xmalloc.h"
-#include "xstrlcat.h"
-
 #include "sieve_interface.h"
 #include "interp.h"
-#include "libconfig.h"
 #include "times.h"
-#include "util.h"
 
 /* build a sieve interpreter */
 EXPORTED sieve_interp_t *sieve_interp_alloc(void *interp_context)

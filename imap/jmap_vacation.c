@@ -4,22 +4,24 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 
-#include "hash.h"
 #include "http_jmap.h"
 #include "json_support.h"
 #include "map.h"
 #include "sync_support.h"
 #include "user.h"
-#include "util.h"
 
 #ifdef USE_SIEVE
 #include "sieve/sieve_interface.h"

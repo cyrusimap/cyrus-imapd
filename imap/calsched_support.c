@@ -4,14 +4,16 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/strarray.h>
+
 #include <errno.h>
 #include <string.h>
 
 #include "calsched_support.h"
 #include "http_dav.h"
 #include "mailbox.h"
-#include "strarray.h"
-#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

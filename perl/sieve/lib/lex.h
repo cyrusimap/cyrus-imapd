@@ -5,7 +5,7 @@
 #ifndef _LEX_H_
 #define _LEX_H_
 
-#include "util.h"
+#include "libcyrus_min/util.h"
 
 typedef struct lexstate_s {
   char *str;

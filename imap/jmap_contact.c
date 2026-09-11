@@ -4,19 +4,24 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 
 #include "annotate.h"
 #include "carddav_db.h"
 #include "cyr_qsort_r.h"
 #include "global.h"
-#include "hash.h"
 #include "http_carddav.h"
 #include "http_dav.h"
 #include "http_dav_sharing.h"
@@ -28,11 +33,8 @@
 #include "stristr.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
 #include "vcard_support.h"
 #include "xapian_wrap.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

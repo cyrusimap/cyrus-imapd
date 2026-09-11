@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+
 #include <errno.h>
 #include <fcntl.h>
 #include <fts.h>
@@ -22,7 +24,6 @@
 
 #include "guesstz.h"
 #include "ical_support.h"
-#include "xmalloc.h"
 
 /*
  *  A guesstz database file is formatted as follows:

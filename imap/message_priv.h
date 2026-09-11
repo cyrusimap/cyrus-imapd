@@ -1,16 +1,16 @@
 /* message_priv.h - private details of the message_t object */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #ifndef __CYRUS_MESSAGE_PRIV_H__
 #define __CYRUS_MESSAGE_PRIV_H__
+
+#include "libcyrus_min/util.h"
 
 #include <stdio.h>
 
 #include "message.h"
 #include "mailbox.h"
 #include "charset.h"
-#include "util.h"
 
 /*
  * Flags for the 'have' and 'given' bitmask fields.  'Given' is the

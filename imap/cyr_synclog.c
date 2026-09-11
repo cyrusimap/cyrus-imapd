@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,11 +17,8 @@
 #include <unistd.h>
 #endif
 
-#include "assert.h"
 #include "global.h"
 #include "sync_log.h"
-#include "util.h"
-#include "xmalloc.h"
 
 __attribute__((noreturn))
 void usage(const char *name) {

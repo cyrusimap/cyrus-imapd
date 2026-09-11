@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xunlink.h>
+
 #include <sys/types.h>
 
 #include <dirent.h>
@@ -14,13 +20,9 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "lib/assert.h"
 #include "lib/cyr_lock.h"
-#include "lib/libconfig.h"
 #include "lib/map.h"
 #include "lib/ptrarray.h"
-#include "lib/util.h"
-#include "lib/xunlink.h"
 
 #include "imap/global.h"
 #include "imap/imap_err.h"

@@ -3,6 +3,12 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -20,15 +26,12 @@
 #include <sys/select.h>
 #endif
 
-#include "assert.h"
 #include "imparse.h"
 #include "libcyr_cfg.h"
 #include "map.h"
 #include "nonblock.h"
 #include "prot.h"
 #include "signals.h"
-#include "util.h"
-#include "xmalloc.h"
 
 /* Transparent protgroup structure */
 struct protgroup

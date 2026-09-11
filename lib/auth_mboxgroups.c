@@ -3,14 +3,17 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
 #include <string.h>
 
 #include "auth.h"
 #include "libcyr_cfg.h"
-#include "xmalloc.h"
-#include "strarray.h"
-#include "util.h"
 
 static int (*our_mboxlookup)(const char *userid, strarray_t *sa);
 

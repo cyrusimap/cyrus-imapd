@@ -5,11 +5,12 @@
 #ifndef TREE_H
 #define TREE_H
 
+#include <cyrus/arrayu64.h>
+#include <cyrus/strarray.h>
+
 #include <jansson.h>
 
 #include "comparator.h"
-#include "strarray.h"
-#include "arrayu64.h"
 
 #define MAX_CMD_ARGS 12  /* bump if required (currently vacation needs 11) */
 

@@ -7,11 +7,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #ifdef HAVE_NGHTTP2
 #include <nghttp2/nghttp2.h>
 #endif
-
-#include "util.h"
 
 #define HTTP2_CLEARTEXT_ID  "h2c"
 

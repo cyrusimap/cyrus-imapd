@@ -5,10 +5,12 @@
 #ifndef INCLUDED_SMTPCLIENT_H
 #define INCLUDED_SMTPCLIENT_H
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/strarray.h>
+
 #include "prot.h"
 #include "ptrarray.h"
-#include "strarray.h"
-#include "util.h"
 
 /* A parameter for SMTP envelope address, identified by key.
  * The value val may be NULL. */
