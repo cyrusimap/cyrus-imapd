@@ -1054,7 +1054,7 @@ EXPORTED int buf_bin_to_hex(struct buf *hex, const void *bin, size_t binlen, int
 EXPORTED int hex_to_bin(const char *hex, size_t hexlen, void *bin)
 {
     unsigned char *v = bin, msn, lsn;
-    const char *p = hex;
+    const uint8_t *p = (const uint8_t *) hex;
     size_t i;
 
     if (hex == NULL)
@@ -1066,10 +1066,10 @@ EXPORTED int hex_to_bin(const char *hex, size_t hexlen, void *bin)
     hexlen /= 2;
 
     for (i = 0 ; i < hexlen ; i++) {
-        msn = unxdigit[(*p++) & 0x7f];
+        msn = unxdigit[(*p++)];
         if (msn == 0xff)
             return -1;
-        lsn = unxdigit[(*p++) & 0x7f];
+        lsn = unxdigit[(*p++)];
         if (lsn == 0xff)
             return -1;
         *v++ = (msn << 4) | lsn;
