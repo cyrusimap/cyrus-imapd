@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/hash.h>
 #include <cyrus/tok.h>
 #include <cyrus/xmalloc.h>
@@ -20,7 +22,6 @@
 #include "mailbox.h"
 #include "mkgmtime.h"
 #include "times.h"
-#include "util.h"
 #include "vcard_support.h"
 
 /* generated headers are not necessarily in current directory */

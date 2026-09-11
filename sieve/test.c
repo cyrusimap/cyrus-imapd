@@ -8,6 +8,10 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
 #include <cyrus/libconfig.h>
@@ -25,8 +29,8 @@
 #include <stdlib.h>
 #include <sysexits.h>
 
-#include "sieve_interface.h"
 #include "bytecode.h"
+#include "sieve_interface.h"
 #include "comparator.h"
 #include "tree.h"
 #include "sieve/sieve.h"
@@ -35,9 +39,6 @@
 #include "imap/mboxname.h"
 #include "imap/message.h"
 #include "imap/spool.h"
-#include "util.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 #include "times.h"
 
 #ifdef WITH_JMAP

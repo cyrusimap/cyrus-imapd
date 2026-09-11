@@ -6,6 +6,8 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
 #include <cyrus/xmalloc.h>
@@ -15,7 +17,6 @@
 #include <sysexits.h>
 
 #include "script.h"
-#include "util.h"
 #include <getopt.h>
 #include <string.h>
 #include <stdlib.h>

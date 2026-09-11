@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
 #include <cyrus/xmalloc.h>
@@ -30,10 +33,8 @@
 #include "stristr.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
 #include "vcard_support.h"
 #include "xapian_wrap.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

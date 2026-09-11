@@ -4,6 +4,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
 #include <cyrus/dynarray.h>
 #include <cyrus/hashset.h>
 #include <cyrus/libconfig.h>
@@ -23,8 +26,6 @@
 #include "http_dav.h"
 #include "ical_support.h"
 #include "mboxname.h"
-#include "util.h"
-#include "xstrlcat.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

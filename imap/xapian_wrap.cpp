@@ -11,11 +11,12 @@
 
 extern "C" {
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/libconfig.h>
 #include <cyrus/xmalloc.h>
 
-#include "util.h"
 #include "search_engines.h"
 #include "search_part.h"
 #include "xapian_wrap.h"

@@ -3,6 +3,12 @@
 /* See COPYING file at the root of the distribution for more details. */
 #include <config.h>
 
+#include "cunit/unit.h"
+#include "cunit/unit-registry.h"
+#include "cunit/unit-timeout.h"
+
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/buf.h>
 #include <cyrus/libconfig.h>
@@ -24,12 +30,7 @@
 #include <valgrind/valgrind.h>
 #endif
 
-#include "cunit/unit.h"
-#include "cunit/unit-registry.h"
-#include "cunit/unit-timeout.h"
-
 #include "lib/libcyr_cfg.h"
-#include "lib/util.h"
 
 int verbose = 0;
 int num_testspecs = 0;

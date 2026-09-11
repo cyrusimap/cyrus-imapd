@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/proc.h>
 #include <cyrus/xmalloc.h>
 
@@ -16,8 +18,6 @@
 #include <string.h>
 #include <sysexits.h>
 #include <jansson.h>
-
-#include "lib/util.h"
 
 #include "imap/conversations.h"
 #include "imap/global.h"

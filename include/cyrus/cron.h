@@ -6,7 +6,7 @@
 #define INCLUDED_CRON_H
 #include <config.h>
 
-#include "lib/util.h"
+#include "libcyrus_min/util.h"
 
 #include <stdbool.h>
 #include <stdint.h>

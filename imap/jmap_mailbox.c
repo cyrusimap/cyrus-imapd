@@ -1,8 +1,9 @@
 /* jmap_mailbox.c - Routines for handling JMAP Mailboxes messages */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
@@ -33,7 +34,6 @@
 #include "stristr.h"
 #include "sync_log.h"
 #include "user.h"
-#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

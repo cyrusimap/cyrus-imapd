@@ -6,11 +6,11 @@
 
 #include <cyrus/arrayu64.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/xmalloc.h>
 
 #include <string.h>
-
-#include "util.h"
 
 EXPORTED arrayu64_t *arrayu64_new(void)
 {

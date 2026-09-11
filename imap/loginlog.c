@@ -4,11 +4,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/sessionid.h"
+
 #include <cyrus/logfmt.h>
 
 #include "imap/loginlog.h"
-
-#include "lib/sessionid.h"
 
 #include <syslog.h>
 

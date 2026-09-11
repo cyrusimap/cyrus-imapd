@@ -4,6 +4,14 @@
 
 #include <config.h>
 
+#include "master/master.h"
+#include "master/cronevent.h"
+#include "master/event.h"
+#include "master/masterconf.h"
+#include "master/service.h"
+
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/proc.h>
 #include <cyrus/retry.h>
@@ -57,15 +65,7 @@
 #define IPV6_V6ONLY     IPV6_BINDV6ONLY
 #endif
 
-#include "master/master.h"
-
-#include "master/cronevent.h"
-#include "master/event.h"
-#include "master/masterconf.h"
-#include "master/service.h"
-
 #include "lib/cyr_lock.h"
-#include "lib/util.h"
 
 enum {
     child_table_size = 10000,

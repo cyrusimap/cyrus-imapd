@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
 #include <cyrus/xmalloc.h>
@@ -15,7 +17,6 @@
 #include <string.h>
 
 #include "spool.h"
-#include "util.h"
 #include "global.h"
 #include "ptrarray.h"
 

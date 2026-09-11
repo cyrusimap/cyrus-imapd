@@ -4,6 +4,10 @@
 
 #include "config.h"
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/hash.h>
 #include <cyrus/retry.h>
 #include <cyrus/strarray.h>
@@ -40,9 +44,6 @@
 #include "md5.h"
 #include "prot.h"
 #include "stristr.h"
-#include "util.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 
 #include <openssl/ssl.h>
 

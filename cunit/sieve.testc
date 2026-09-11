@@ -13,6 +13,10 @@
 #include "sieve/sieve_interface.h"
 #include "sieve/variables.h"
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/hash.h>
 #include <cyrus/libconfig.h>
 #include <cyrus/retry.h>
@@ -24,11 +28,8 @@
 #include "prot.h"
 #include "imap/spool.h"
 #include "map.h"
-#include "util.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 
 #define DBDIR       "test-sieve-dbdir"
 #define PARTITION   "default"

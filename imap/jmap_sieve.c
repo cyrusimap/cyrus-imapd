@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/arrayu64.h>
 #include <cyrus/hash.h>
@@ -33,9 +37,6 @@
 #include "sieve/bc_parse.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

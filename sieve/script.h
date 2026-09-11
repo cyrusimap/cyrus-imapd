@@ -5,12 +5,13 @@
 #ifndef SIEVE_SCRIPT_H
 #define SIEVE_SCRIPT_H
 
+#include "libcyrus_min/util.h"
+
 #include <sys/types.h>
 
 #include "sieve_interface.h"
 #include "interp.h"
 #include "tree.h"
-#include "util.h"
 
 struct sieve_script {
     sieve_interp_t interp;

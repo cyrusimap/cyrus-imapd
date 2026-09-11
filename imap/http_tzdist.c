@@ -9,6 +9,9 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/hash.h>
 #include <cyrus/strhash.h>
@@ -31,9 +34,7 @@
 #include "jcal.h"
 #include "map.h"
 #include "times.h"
-#include "util.h"
 #include "version.h"
-#include "xstrlcpy.h"
 #include "zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */

@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <cyrus/assert.h>
 #include <cyrus/smallarrayu64.h>
 #include <cyrus/xmalloc.h>
@@ -25,7 +27,6 @@
 #include "annotate.h"
 #include "global.h"
 #include "bsearch.h"
-#include "xstrlcpy.h"
 #include "statuscache.h"
 
 /* generated headers are not necessarily in current directory */

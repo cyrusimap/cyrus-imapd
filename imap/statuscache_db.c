@@ -1,8 +1,10 @@
 /* statuscache_db.c - Status caching routines */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
 
 #include <cyrus/assert.h>
 #include <cyrus/xmalloc.h>
@@ -27,8 +29,6 @@
 #include "mailbox.h"
 #include "seen.h"
 #include "user.h"
-#include "util.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

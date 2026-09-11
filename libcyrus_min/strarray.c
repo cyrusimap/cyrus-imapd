@@ -4,11 +4,12 @@
 
 #include <cyrus/strarray.h>
 
+#include "libcyrus_min/util.h"
+
 #include <cyrus/logfmt.h>
 #include <cyrus/xmalloc.h>
 
 #include <memory.h>
-#include "util.h"
 
 EXPORTED strarray_t *strarray_new(void)
 {
