@@ -51,28 +51,6 @@ Documentation at :cyrus-3.12:`/`.
     3.12/index
     3.11/index
 
-Series 3.10
-~~~~~~~~~~~
-
-Documentation at :cyrus-3.10:`/`.
-
-.. toctree::
-    :maxdepth: 1
-
-    3.10/index
-    3.9/index
-
-Series 3.8
-~~~~~~~~~~
-
-Documentation at :cyrus-3.8:`/`.
-
-.. toctree::
-    :maxdepth: 1
-
-    3.8/index
-    3.7/index
-
 
 Older Versions
 --------------
@@ -83,6 +61,10 @@ Series 3.x
 .. toctree::
     :maxdepth: 1
 
+    3.10/index
+    3.9/index
+    3.8/index
+    3.7/index
     3.6/index
     3.5/index
     3.4/index
