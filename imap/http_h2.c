@@ -204,6 +204,7 @@ static int data_chunk_recv_cb(nghttp2_session *session,
          * so without this a client can stream unbounded DATA frames and
          * exhaust memory. */
         if (txn->req_body.max && len > txn->req_body.max - txn->req_body.len) {
+            txn->req_body.flags |= BODY_DISCARD;
             error_response(HTTP_CONTENT_TOO_LARGE, txn);
             return NGHTTP2_ERR_CANCEL;
         }
