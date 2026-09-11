@@ -537,7 +537,6 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
 {
     int gmtnegative = 0;
     size_t rlen;
-    const char *datefmt = withsep ? "%Y-%m-%dT%H:%M:%S" : "%Y%m%dT%H%M%S";
 
     /*assert(date > 0); - it turns out these can happen, annoyingly enough */
     /*assert(tm->tm_year >= 69);*/
@@ -548,7 +547,9 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
     }
     gmtoff /= 60;
 
-    rlen = strftime(buf, len, datefmt, tm);
+    rlen = strftime(buf, len,
+                    withsep ? "%Y-%m-%dT%H:%M:%S" : "%Y%m%dT%H%M%S",
+                    tm);
     if (rlen > 0) {
         switch(tv_precision) {
         case timeval_ms:
