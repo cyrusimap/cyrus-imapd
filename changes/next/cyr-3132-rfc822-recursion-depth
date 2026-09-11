@@ -1,0 +1,42 @@
+Description:
+
+MIME parsing now stops descending into a nested message/rfc822 part once
+:imapdconf:`boundary_limit` is reached, treating deeper parts as opaque.
+Previously that limit was enforced only through the boundary stack, onto which
+the message/rfc822 path pushes nothing, so a deep chain of nested messages
+recursed without bound.
+
+
+CVE number:
+
+(not yet assigned)
+Tracked as GitHub security advisory GHSA-mq8g-hj53-jr9j.
+
+
+CVE description:
+
+Deeply nested message/rfc822 parts crash the MIME parser
+
+A message that was a deep chain of nested message/rfc822 parts recursed
+without bound and overflowed the stack.  Delivered over LMTP, this crashed the
+delivery daemon, and required no authentication.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
