@@ -743,8 +743,8 @@ static int pipe_resp_body(struct protstream *pin, struct transaction_t *txn,
         break;
 
     case FRAMING_CHUNKED: {
-        unsigned long chunk;
-        char *c, *endptr;
+        bit64 chunk;
+        char *c;
 
         txn->flags.te = TE_CHUNKED;
 
@@ -757,10 +757,7 @@ static int pipe_resp_body(struct protstream *pin, struct transaction_t *txn,
             if (!c) c = prot_fgets(buf, PROT_BUFSIZE, pin);
             errno = 0;
             if (!c ||                 // not EOF
-                !isxdigit(*buf) ||    // no leading junk
-                ((chunk = strtoul(buf, &endptr, 16)) == ULONG_MAX &&
-                 errno == ERANGE) ||  // didn't overflow
-                *endptr != '\r') {    // no trailing junk
+                !http_parse_chunk_size(buf, &chunk)) {
                 *errstr = "Unable to read chunk size";
                 return HTTP_BAD_GATEWAY;
 
