@@ -46,6 +46,32 @@ EXPORTED int is_mediatype(const char *pat, const char *type)
             (!alltypes && (tlen == plen) && !strncasecmp(pat, type, tlen)));
 }
 
+// clang-format: off
+static const char is_http_token_char[256] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0,
+/*     !     #  $  %  &  '        *  +     -  .     */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+/*  0  1  2  3  4  5  6  7  8  9                    */
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+/*     A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1,
+/*  P  Q  R  S  T  U  V  W  X  Y  Z           ^  _  */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+/*  `  a  b  c  d  e  f  g  h  i  j  k  l  m  n  o  */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0,
+/*  p  q  r  s  t  u  v  w  x  y  z     |     ~     */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+// clang-format: on
 
 /*
  * Parse the framing of a request or response message.
@@ -156,6 +182,39 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
     return 0;
 }
 
+EXPORTED bool http_parse_chunk_size(const char *buf, unsigned long *chunk)
+{
+    int len = strlen(buf);
+    const char *ext;
+    uint64_t value;
+
+    if (parsehex(buf, &ext, len, &value) == -1) return false;
+    if (value > ULONG_MAX) return false;
+    *chunk = value;
+    if (*ext == '\r') return true;
+
+    /* What follows should be a syntactically valid chunk-ext
+     *
+     *  chunk-ext      = *( BWS ";" BWS chunk-ext-name
+     *                      [ BWS "=" BWS chunk-ext-val ] )
+     *
+     *  chunk-ext-name = token
+     *  chunk-ext-val  = token / quoted-string
+     *
+     * we're not going to attempt to parse it all, but enough to spot most
+     * attempted shenanigans. */
+
+    /* BWS isn't allowed after the chunk size unless there's a chunk-ext */
+    while (*ext == ' ' || *ext == '\t') ++ext;
+    if (*ext != ';') return false;
+    ++ext;
+
+    /* There must be at least a chunk-ext-name
+     * So there must be at least one token char after any BWS */
+    while (*ext == ' ' || *ext == '\t') ++ext;
+    return is_http_token_char[(uint8_t)*ext] ? true : false;
+}
+
 
 EXPORTED int http_read_headers(struct protstream *pin, int read_sep,
                                hdrcache_t *hdrs, const char **errstr)
@@ -196,7 +255,6 @@ EXPORTED int http_read_headers(struct protstream *pin, int read_sep,
 
     return 0;
 }
-
 
 /*
  * Read the body of a request or response.
@@ -250,19 +308,12 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
         /* Read chunks until last-chunk (zero chunk-size) */
         do {
             unsigned long chunk;
-            char *endptr;
 
             /* Read chunk-size */
-            errno = 0;
             if (!prot_fgets(buf, PROT_BUFSIZE, pin) ||
-                !isxdigit(*buf) ||    // no leading junk
-                ((chunk = strtoul(buf, &endptr, 16)) == ULONG_MAX &&
-                 errno == ERANGE) ||  // didn't overflow
-                *endptr != '\r') {    // no trailing junk
+                !http_parse_chunk_size(buf, &chunk)) {
                 *errstr = "Unable to read chunk size";
                 goto read_failure;
-
-                /* XXX  Do we need to parse chunk-ext? */
             }
             if (chunk > body->max - body->len) {
                 return HTTP_CONTENT_TOO_LARGE;

@@ -1,0 +1,61 @@
+#!/usr/bin/perl
+
+use v5.40.0;
+
+# I suspect that we can make more use of lookup tables for parsing user input
+#
+# I've structured this on the guess that we'll want more tables of this "shape".
+#
+# But it might be more performant to merge (up to) 8 true/false tables into one
+# and then use a macro to read 1 bit, in which case, I got the shape wrong.
+
+sub print_table($name,$set) {
+    print <<"EOH";
+// clang-format: off
+static const char ${name}[256] = {
+EOH
+
+    for my $high (0 .. 15) {
+        my $line = '   ';
+        my $comment;
+        for my $low (0 .. 15) {
+            my $code_point = $high * 16 + $low;
+            if ($set->{$code_point}) {
+                $line .= ' 1,';
+                if ($code_point >= 32 && $code_point <= 126) {
+                    $comment .= '  ' . chr $code_point;
+                } else {
+                    $comment .= '   ';
+                }
+            } else {
+                $line .= ' 0,';
+                $comment .= '   ';
+            }
+        }
+        chop $line if $high == 15;
+        print "$line\n";
+        print "/*$comment  */\n" if $comment =~ /[^ ]/;
+    }
+
+    print <<"EOT";
+};
+// clang-format: on
+EOT
+}
+
+# https://www.rfc-editor.org/info/rfc9110/#section-5.6.2
+#
+# Tokens are short textual identifiers that do not include whitespace or delimiters.
+#
+#  token          = 1*tchar
+#
+#  tchar          = "!" / "#" / "$" / "%" / "&" / "'" / "*"
+#                 / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~"
+#                 / DIGIT / ALPHA
+#                 ; any VCHAR, except delimiters
+
+my %token;
+++$token{ord $_} for 'A' .. 'Z', 'a' .. 'z', 0 .. 9;
+++$token{ord $_} for split //, q{!#$%&'*+-.^_`|~};
+
+print_table ('is_http_token_char', \%token);

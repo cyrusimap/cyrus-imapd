@@ -11,7 +11,7 @@ sub test_chunk_parsing ($self)
     for my $testcase (
         [201, 'correct hex', '%x'],
         [201, 'leading zeroes', '%08x'],
-        [201, '0x prefix', '%#x'], # FIXME
+        [400, '0x prefix', '%#x'],
         [400, 'unary plus', '+%x'],
         # If you're using stroul to parse hex, then "it's a trap":
         #   If the minus sign was part of the input sequence, the numeric value
@@ -30,10 +30,10 @@ sub test_chunk_parsing ($self)
         [400, 'semicolon whitespace', '%x ; '],
         [400, 'semicolon twice', '%x;;'],
         [400, 'not a token', '%x;='],
-        [400, 'valid chunk-ext name', '%x;!'], # FIXME
-        [400, 'BWS chunk-ext name', "%x\t;!"], # FIXME
-        [400, 'chunk-ext name BWS', "%x;\t!"], # FIXME
-        [400, 'chunk-ext name BWS+', "%x;\t ~"], # FIXME
+        [201, 'valid chunk-ext name', '%x;a'],
+        [201, 'BWS chunk-ext name', "%x\t;!"],
+        [201, 'chunk-ext name BWS', "%x;\t!"],
+        [201, 'chunk-ext name BWS+', "%x;\t ~"],
     ) {
         my ($want, $desc, $format) = @$testcase;
 
