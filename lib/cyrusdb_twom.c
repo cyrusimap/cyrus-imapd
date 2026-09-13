@@ -9,6 +9,7 @@
 #include <syslog.h>
 #include <sys/mman.h>
 
+#include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
