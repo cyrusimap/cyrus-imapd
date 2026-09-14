@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+# An immediate delete tombstones the mailbox's own name, so pruning it
+# must take the I record with it: nothing refers to the mailbox any more.
+sub test_prune_deleted_tombstone
+    :ImmediateDelete :NoSanityCheck
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Doomed") or die "create: $@";
+
+    # find the uniqueid before it goes
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my $res = $imaptalk->getmetadata("INBOX.Doomed", $entry);
+    my $uniqueid = $res->{'INBOX.Doomed'}{$entry};
+    $self->assert_not_null($uniqueid);
+
+    $imaptalk->delete("INBOX.Doomed") or die "delete: $@";
+
+    $self->assert($self->count_tombstones() > 0);
+    $self->assert_num_equals(1, $self->has_i_record($uniqueid));
+
+    $self->backdate_tombstones();
+
+    $self->audit_json('--level', '0', '--delete', '--really',
+                      '--prune-tombstones', '1');
+
+    $self->assert_num_equals(0, $self->count_tombstones());
+    $self->assert_num_equals(0, $self->has_i_record($uniqueid));
+}

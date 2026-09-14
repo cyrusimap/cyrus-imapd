@@ -1,0 +1,24 @@
+#!perl
+use Cassandane::Tiny;
+
+# With --json, every line of output must be a JSON object: reconstruct's
+# prose about oddities it meets along the way belongs to syslog, not to
+# the machine-readable stream.  An odd file in the spool is such an
+# oddity -- worth a remark, but not a finding.
+sub test_json_output_pure
+    :NoSanityCheck
+{
+    my ($self) = @_;
+
+    $self->make_message("test message") or die;
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+    open my $fh, '>', "$mbpath->{data}/oddball" or die "open: $!";
+    print $fh "not a message\n";
+    close $fh;
+
+    # audit_json() decodes every line, so any prose fails the decode
+    my $findings = $self->audit_json('--level', '4');
+    my @codes = sort { $a cmp $b } codes($findings);
+    $self->assert_str_equals('', join(q{,}, @codes));
+}

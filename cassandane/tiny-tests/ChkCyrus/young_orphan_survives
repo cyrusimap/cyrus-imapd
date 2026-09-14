@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+# An orphan newer than the guard is reported but never removed: it may
+# belong to an operation still in flight.  This is the guard's whole
+# contract, and the thing a future refactor is most likely to break.
+sub test_young_orphan_survives
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+    my $meta = $mbpath->{meta};
+    $meta =~ s{/uuid/.*$}{};
+    my $id = '0123456789abcdef';
+    my $dir = "$meta/uuid/0/1/$id";
+    make_path($dir) or die "make_path failed";
+    # deliberately NOT backdated
+
+    my $findings = $self->audit_json('--level', '1', '--delete', '--really');
+    $self->assert_has_code($findings, 'meta-dir-no-db-entry');
+    $self->assert_has_code($findings, 'skipped-too-young');
+
+    $self->assert(-d $dir, "a young orphan must survive --delete --really");
+}

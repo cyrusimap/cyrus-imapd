@@ -1,0 +1,24 @@
+#!perl
+use Cassandane::Tiny;
+
+# --partition scopes every level the same way.  Damage on another
+# partition is out of scope for the levels 2-4 sweep, exactly as its
+# database entries are out of scope for the keyspace scan.
+sub test_partition_scopes_level2
+    :Partition2 :NoSanityCheck
+{
+    my ($self) = @_;
+
+    $self->make_message("test message") or die;
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+    unlink("$mbpath->{data}/1.") or die "unlink: $!";
+
+    # the damage is on the default partition, so a p2-scoped run must
+    # not see it
+    my $findings = $self->audit_json('--level', '2', '-P', 'p2');
+    $self->assert_lacks_code($findings, 'message-file-missing');
+
+    $findings = $self->audit_json('--level', '2');
+    $self->assert_has_code($findings, 'message-file-missing');
+}

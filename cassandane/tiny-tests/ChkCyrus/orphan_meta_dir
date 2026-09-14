@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+# A mailbox directory with no database entry.  Nothing else in Cyrus looks
+# inward from the filesystem, so this direction is the audit's alone.
+sub test_orphan_meta_dir
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+
+    # a mailbox directory that no database entry points at
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+    my $meta = $mbpath->{meta};
+    $meta =~ s{/uuid/.*$}{};
+    my $id = '0123456789abcdef';
+    my $dir = "$meta/uuid/0/1/$id";
+    make_path($dir) or die "make_path $dir failed";
+
+    my $findings = $self->audit_json('--level', '1');
+    $self->assert_has_code($findings, 'meta-dir-no-db-entry');
+
+    my ($f) = grep { $_->{code} eq 'meta-dir-no-db-entry' } @{$findings};
+    $self->assert_str_equals($id, $f->{uniqueid});
+}

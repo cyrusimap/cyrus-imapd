@@ -1,0 +1,18 @@
+#!perl
+use Cassandane::Tiny;
+
+# A healthy store must be clean at level 1 too.  If this starts failing,
+# the filesystem sweep has grown a false positive -- which matters more
+# than at level 0, because --delete acts on these findings.
+sub test_audit_level1_clean
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+    $self->make_message("msg") or die;
+
+    my $findings = $self->audit_json('--level', '1');
+    my @codes = sort { $a cmp $b } codes($findings);
+    $self->assert_str_equals('', join(q{,}, @codes));
+}

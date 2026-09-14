@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+# An I record whose mailbox has no N record cannot be reached by name.
+sub test_delete_orphaned_i_key
+    :NoSanityCheck
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+
+    my $db = $self->mailboxes_db();
+    my $fmt = $self->mailboxes_db_format();
+
+    # drop the N record, leaving its I record stranded
+    my $N = "Nuser\x1fcassandane\x1fINBOX\x1fArchive";
+    $self->{instance}->run_dbcommand($db, $fmt, ['DELETE', $N]);
+
+    my $findings = $self->audit_json('--level', '0');
+    $self->assert_has_code($findings, 'db-missing-n-key');
+
+    $self->audit_json('--level', '0', '--delete', '--really');
+
+    $findings = $self->audit_json('--level', '0');
+    $self->assert_lacks_code($findings, 'db-missing-n-key');
+
+    # the INBOX is untouched
+    $self->assert_lacks_code($findings, 'user-missing-inbox');
+}

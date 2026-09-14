@@ -1222,74 +1222,7 @@ static void do_verify(void)
 
 static int fix_cb(const mbentry_t *mbentry, void *rockp __attribute__((unused)))
 {
-    mbentry_t *byunqid = NULL;
-
-    int r = mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &byunqid, NULL);
-    if (r) {
-        xsyslog(LOG_NOTICE, "missing uniqueid record, skipping",
-               "mboxname=<%s> uniqueid=<%s>",
-               mbentry->name, mbentry->uniqueid);
-        return 0;
-    }
-
-    // we are not the current record?  We don't need to process this.
-    if (strcmp(mbentry->name, byunqid->name))
-        goto done;
-
-    if (mbentry->jmapid) {
-        mbname_t *mbname = mbname_from_intname(mbentry->name);
-        const char *userid = mbname_userid(mbname);
-
-        if (!userid) userid = "";
-
-        // already got a record, we're good!
-        int res = mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, NULL, NULL);
-        mbname_free(&mbname);
-        if (!res) return 0;
-
-        xsyslog(LOG_NOTICE, "adding missing J record to mboxlist",
-                "mboxname=<%s> jmapid=<%s>",
-                mbentry->name, mbentry->jmapid);
-    }
-    else {
-        struct mailbox *mailbox = NULL;
-        r = mailbox_open_from_mbe(byunqid, &mailbox);
-        if (r) goto done;
-        struct buf jmapid = BUF_INITIALIZER;
-
-        byunqid->foldermodseq = mailbox_modseq_dirty(mailbox);
-
-        buf_putc(&jmapid, JMAP_MAILBOXID_PREFIX);
-        MODSEQ_TO_JMAPID(&jmapid, byunqid->foldermodseq);
-        mailbox_set_jmapid(mailbox, buf_cstring(&jmapid));
-
-        free(byunqid->jmapid);
-        byunqid->jmapid = buf_release(&jmapid);
-        buf_free(&jmapid);
-
-        xsyslog(LOG_NOTICE, "adding new J record to mboxlist",
-                "mboxname=<%s> jmapid=<%s>",
-                byunqid->name, byunqid->jmapid);
-
-        r = mailbox_commit(mailbox);
-        if (r) {
-            xsyslog(LOG_ERR, "DBERROR: error committing transaction",
-                    "error=<%s>", cyrusdb_strerror(r));
-            goto done;
-        }
-    }
-
-    r = mboxlist_updatelock(byunqid, /*localonly*/1);
-    if (r) {
-        xsyslog(LOG_ERR, "failed to update mboxlist",
-                "mboxname=<%s> error=<%s>",
-                mbentry->name, error_message(r));
-    }
-
-done:
-    mboxlist_entry_free(&byunqid);
-
-    return r;
+    return mboxlist_fix_jmapid(mbentry);
 }
 
 static void do_fix_keys(int intermediary)

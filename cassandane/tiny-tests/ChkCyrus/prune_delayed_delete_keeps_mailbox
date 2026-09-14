@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+# A delayed delete is a rename into the DELETED namespace, so the mailbox
+# still exists and its I record must survive the prune -- only the
+# tombstone at the old name and its history item go.
+sub test_prune_delayed_delete_keeps_mailbox
+    :DelayedDelete :NoSanityCheck
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Doomed") or die "create: $@";
+
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my $res = $imaptalk->getmetadata("INBOX.Doomed", $entry);
+    my $uniqueid = $res->{'INBOX.Doomed'}{$entry};
+    $self->assert_not_null($uniqueid);
+
+    $imaptalk->delete("INBOX.Doomed") or die "delete: $@";
+
+    $self->backdate_tombstones();
+
+    $self->audit_json('--level', '0', '--delete', '--really',
+                      '--prune-tombstones', '1');
+
+    $self->assert_num_equals(0, $self->count_tombstones());
+
+    # the mailbox lives on in the DELETED namespace
+    $self->assert_num_equals(1, $self->has_i_record($uniqueid));
+
+    my $findings = $self->audit_json('--level', '0');
+    $self->assert_lacks_code($findings, 'db-history-no-tombstone');
+    $self->assert_lacks_code($findings, 'db-missing-n-key');
+}

@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+# A mailbox that cannot be opened at all is the worst damage levels 2-4
+# can meet, and reconstruct cannot report it through the observer: with
+# no changes allowed it stops at the failed open.  The audit must report
+# it rather than move silently to the next mailbox.
+sub test_mailbox_unreadable
+    :NoSanityCheck
+{
+    my ($self) = @_;
+
+    $self->make_message("test message") or die;
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', 'cassandane');
+    unlink("$mbpath->{meta}/cyrus.index") or die "unlink: $!";
+
+    my $findings = $self->audit_json('--level', '2');
+    my ($f) = grep { $_->{code} eq 'mailbox-unreadable' } @{$findings};
+
+    $self->assert_not_null($f);
+    $self->assert_str_equals('user.cassandane', $f->{mboxname});
+    $self->assert_str_equals('cassandane', $f->{user});
+    $self->assert_not_null($f->{detail});
+
+    # the failed open logs an IOERROR, which is the point of the test
+    $self->{instance}->getsyslog();
+}
