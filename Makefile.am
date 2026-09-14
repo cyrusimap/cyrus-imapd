@@ -932,8 +932,7 @@ imap_deliver_SOURCES = \
     imap/deliver.c \
     imap/lmtpengine.c \
     imap/mutex_fake.c \
-    imap/proxy.c \
-    imap/spool.c
+    imap/proxy.c
 
 nodist_imap_deliver_SOURCES = imap/lmtp_err.c
 
@@ -1166,7 +1165,6 @@ imap_lmtpd_SOURCES = \
     imap/lmtpengine.h \
     imap/mutex_fake.c \
     imap/proxy.c \
-    imap/spool.c \
     imap/sync_support.c \
     imap/sync_support.h \
     master/service.c
@@ -1182,15 +1180,13 @@ imap_lmtpd_SOURCES += \
 endif # AUTOCREATE
 
 if SIEVE
-imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c \
-                      imap/zoneinfo_db.c
-imap_lmtpd_SOURCES += imap/jmap_util.c imap/caldav_util.c imap/defaultalarms.c imap/itip_support.c
+imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/zoneinfo_db.c
+imap_lmtpd_SOURCES += imap/jmap_util.c imap/caldav_util.c imap/itip_support.c
 
 if JMAP
 imap_lmtpd_SOURCES += \
     imap/jmap_mail_query.c imap/jmap_mail_query_parse.c \
-    imap/dav_util.c imap/jmap_notif.c imap/jcal.c \
-    imap/jscalendar.c
+    imap/jmap_notif.c imap/jcal.c imap/jscalendar.c
 endif # JMAP
 
 endif # SIEVE
@@ -1259,8 +1255,6 @@ imap_httpd_SOURCES = \
     imap/jcal.h \
     imap/mutex_fake.c \
     imap/proxy.c \
-    imap/smtpclient.c \
-    imap/spool.c \
     imap/sync_support.c \
     imap/sync_support.h \
     imap/xml_support.c \
@@ -1326,8 +1320,6 @@ BUILT_SOURCES += $(JMAP_PROPS_BUILT_SOURCES)
 CLEANFILES += $(JMAP_PROPS_BUILT_SOURCES)
 
 imap_httpd_SOURCES += \
-    imap/defaultalarms.c \
-    imap/defaultalarms.h \
     imap/http_jmap.c \
     imap/http_jmap.h \
     imap/jmap_api.c \
@@ -1888,6 +1880,9 @@ sieve_libcyrus_sieve_la_SOURCES = \
     sieve/varlist.h
 
 if JMAP
+# XXX json_support is in libcyrus_imap and shouldn't need to be listed here,
+# XXX but libcyrus_sieve doesn't link against libcyrus_imap, and I guess that's
+# XXX deliberate
 sieve_libcyrus_sieve_la_SOURCES += \
     imap/jmap_mail_query_parse.c \
     imap/jmap_mail_query_parse.h \
@@ -1907,8 +1902,7 @@ sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
 sieve_test_SOURCES = \
     sieve/test.c \
-    imap/mutex_fake.c \
-    sieve/sieve_interface.h
+    imap/mutex_fake.c
 if JMAP
 sieve_test_SOURCES += \
     imap/jmap_util.c imap/jmap_mail_query.c imap/jmap_mail_query_parse.c
@@ -1917,8 +1911,7 @@ sieve_test_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 sieve_test_mailbox_SOURCES = \
     sieve/test_mailbox.c \
-    imap/mutex_fake.c \
-    sieve/sieve_interface.h
+    imap/mutex_fake.c
 sieve_test_mailbox_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 timsieved_timsieved_SOURCES = \
