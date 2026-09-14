@@ -1,0 +1,151 @@
+#!perl
+use Cassandane::Tiny;
+
+# Regression test: avoid corruption of memory when Backup/restoreCalendars
+# acts on a VPOLL object and hideAddrendees is in effect.
+
+sub test_restore_calendars_vpoll_hideattendees ($self)
+{
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    # x-href on created events
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/debug');
+
+    xlog "create a calendar that accepts both VEVENT and VPOLL";
+    $caldav->Request('MKCALENDAR',
+        '/dav/calendars/user/cassandane/restore-vpoll',
+        <<~'EOF', 'Content-Type' => 'application/xml; charset=utf-8');
+          <?xml version="1.0" encoding="utf-8"?>
+          <C:mkcalendar xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+            <D:set>
+              <D:prop>
+                <D:displayname>restore-vpoll</D:displayname>
+                <C:supported-calendar-component-set>
+                  <C:comp name="VEVENT"/>
+                  <C:comp name="VPOLL"/>
+                </C:supported-calendar-component-set>
+              </D:prop>
+            </D:set>
+          </C:mkcalendar>
+          EOF
+
+    my $res = $jmap->request([
+        ['Calendar/get', { properties => ['id', 'name'] }],
+    ]);
+    my ($calendar) = grep { $_->{name} eq 'restore-vpoll' }
+        @{ $res->single_sentence('Calendar/get')->arguments->{list} };
+    $self->assert_not_null($calendar);
+    my $calid = $calendar->{id};
+
+    xlog "clean notification cache";
+    $self->{instance}->getnotify();
+
+    xlog "create a hide-attendees VEVENT via JMAP (writes X-JMAP-HIDE-ATTENDEES)";
+    $res = $jmap->request([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    '@type' => 'Event',
+                    version => '2.0',
+                    uid => 'restore-vpoll-hideattendees',
+                    calendarIds => { $calid => JSON::true },
+                    title => 'carrier',
+                    start => '2026-09-01T09:00:00',
+                    timeZone => 'UTC',
+                    duration => 'PT1H',
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
+                    hideAttendees => JSON::true,
+                    participants => {
+                        org => {
+                            '@type' => 'Participant',
+                            calendarAddress => 'mailto:cassandane@example.com',
+                            roles => { owner => JSON::true },
+                            participationStatus => 'accepted',
+                        },
+                        att1 => {
+                            '@type' => 'Participant',
+                            calendarAddress => 'mailto:attendee1@example.com',
+                            roles => { attendee => JSON::true },
+                            expectReply => JSON::true,
+                            participationStatus => 'needs-action',
+                        },
+                        att2 => {
+                            '@type' => 'Participant',
+                            calendarAddress => 'mailto:attendee2@example.com',
+                            roles => { attendee => JSON::true },
+                            expectReply => JSON::true,
+                            participationStatus => 'needs-action',
+                        },
+                    },
+                },
+            },
+            sendSchedulingMessages => JSON::false,
+         }],
+    ]);
+    my $created = $res->single_sentence('CalendarEvent/set')
+                      ->arguments->{created}{event};
+    my $eventId = $created->{id};
+    $self->assert_not_null($eventId);
+    my $href = $created->{'x-href'} . "";
+    $self->assert_not_null($href);
+
+    xlog "confirm the stored VEVENT kept X-JMAP-HIDE-ATTENDEES";
+    my $stored = $caldav->Request('GET', $href)->{content};
+    $self->assert_matches(qr/X-JMAP-HIDE-ATTENDEES/, $stored);
+
+    my $mark = time();
+    sleep 2;
+
+    xlog "overwrite the same resource with a VPOLL (invitees on PARTICIPANTs)";
+    my $vpoll = join("\r\n",
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Cassandane//CYR-3465//EN',
+        'BEGIN:VPOLL',
+        'UID:restore-vpoll-hideattendees',
+        'DTSTAMP:20260901T120000Z',
+        'ORGANIZER:mailto:cassandane@example.com',
+        'POLLMODE:BASIC',
+        'SUMMARY:live vpoll',
+        'BEGIN:PARTICIPANT',
+        'UID:part-1',
+        'PARTICIPANT-TYPE:VOTER',
+        'CALENDAR-ADDRESS:mailto:attendee1@example.com',
+        'END:PARTICIPANT',
+        'BEGIN:PARTICIPANT',
+        'UID:part-2',
+        'PARTICIPANT-TYPE:VOTER',
+        'CALENDAR-ADDRESS:mailto:attendee2@example.com',
+        'END:PARTICIPANT',
+        'END:VPOLL',
+        'END:VCALENDAR',
+    ) . "\r\n";
+    $caldav->Request('PUT', $href, $vpoll,
+        'Content-Type' => 'text/calendar; charset=utf-8');
+
+    xlog "confirm the live record is now a VPOLL with PARTICIPANT invitees";
+    $stored = $caldav->Request('GET', $href)->{content};
+    $self->assert_matches(qr/BEGIN:VPOLL/, $stored);
+    $self->assert_matches(qr/CALENDAR-ADDRESS/, $stored);
+
+    sleep 2;
+    my $period = "PT" . (time() - $mark) . "S";
+
+    xlog "restore across the event/poll pair; this used to double-free and crash";
+    $res = $jmap->request([
+        ['Backup/restoreCalendars', {
+            undoPeriod => $period,
+            undoAll => JSON::true,
+         }],
+    ]);
+    $self->assert_num_equals(1,
+        $res->single_sentence('Backup/restoreCalendars')
+            ->arguments->{numUpdatesUndone});
+
+    xlog "server survived: a follow-up request still works";
+    $res = $jmap->request([
+        ['Calendar/get', { properties => ['id'] }],
+    ]);
+    $self->assert_str_equals('Calendar/get', $res->single_sentence->name);
+}

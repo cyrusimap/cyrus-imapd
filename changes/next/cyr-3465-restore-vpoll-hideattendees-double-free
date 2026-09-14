@@ -1,0 +1,27 @@
+Description:
+
+Cyrus no longer corrupts memory when restoring a calendar through the JMAP
+Backup extension in which one stored version of a resource is a scheduling
+poll (VPOLL) while another version carries the JMAP "hide attendees" flag.
+Restoring such a resource now schedules correctly; previously it could free
+the same iCalendar property twice and crash the HTTP service.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

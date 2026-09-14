@@ -1544,6 +1544,7 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
 }
 
 struct comp_attendee {
+    /* comp must be is the component that *actually owns* prop */
     icalcomponent *comp;
     icalproperty *prop;
 };
@@ -1596,11 +1597,12 @@ static void add_attendees(icalcomponent *ical,
                 bycomp = dynarray_new(sizeof(struct comp_attendee));
                 hash_insert(attendee, bycomp, attendees);
             }
-            struct comp_attendee ca = { comp, prop };
+            icalcomponent *invitee_comp = icalproperty_get_parent(prop);
+            struct comp_attendee ca = { invitee_comp, prop };
             dynarray_append(bycomp, &ca);
 
             if (hide_attendees)
-                icalcomponent_remove_property(comp, prop);
+                icalcomponent_remove_property(invitee_comp, prop);
         }
     }
 }
