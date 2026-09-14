@@ -6187,7 +6187,12 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
                 md->createdmodseq > since_highest_createdmodseq;
 
         // for this phase, we only care that it has a change
-        if (md->modseq <= since_modseq && !is_newly_indexed) continue;
+        if (md->modseq <= since_modseq && !is_newly_indexed) {
+            /* Only a conversation-scoped sort key can change the order
+             * without the message's own modseq advancing. */
+            if (!search.is_mutable || md->convmodseq <= since_modseq)
+                continue;
+        }
 
         jmap_set_emailid(req->cstate, &md->guid,
                          0, &md->internaldate, email_id);
