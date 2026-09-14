@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+
+# Require both +t and +e to perform DELETE or MOVE.
+
+sub test_remove_resource_needs_full_acl ($self)
+{
+    my $sharee = $self->{instance}->create_user('sharee');
+    $self->{sharee_caldav} = $sharee->caldav;
+
+    $self->{shared_cal_id} = $self->{caldav}->NewCalendar({ name => 'Team' });
+    $self->assert_not_null($self->{shared_cal_id});
+
+    # MOVE needs somewhere the sharee may write to.
+    $self->{sharee_dest_id} = $self->{sharee_caldav}->NewCalendar({ name => 'Landing' });
+    $self->assert_not_null($self->{sharee_dest_id});
+
+    # (sharee ACL, DELETE status, owner's GET status afterwards)
+    $self->_assert_sharee_delete('lrt',  403, 200);
+    $self->_assert_sharee_delete('lre',  403, 200);
+    $self->_assert_sharee_delete('lrte', 204, 404);
+
+    # (sharee ACL, MOVE status, owner's GET of source, sharee's GET of dest)
+    $self->_assert_sharee_move('lrt',  403, 200, 404);
+    $self->_assert_sharee_move('lre',  403, 200, 404);
+    $self->_assert_sharee_move('lrte', 201, 404, 200);
+}
+
+# Creates an event as the owner, grants the sharee $acl on the calendar, and
+# returns (owner href, sharee href) for that event.
+sub _make_shared_event ($self, $acl)
+{
+    my $cal_id = $self->{shared_cal_id};
+    my $uuid   = $self->{caldav}->genuuid;
+
+    $self->_put_event($cal_id, uuid => $uuid, summary => "acl $acl");
+
+    $self->{adminstore}->get_client->setacl(
+        "user.cassandane.#calendars.$cal_id",
+        sharee => $acl,
+    );
+
+    return (
+        "/dav/calendars/user/cassandane/$cal_id/$uuid.ics",
+        "/dav/calendars/user/sharee/cassandane.$cal_id/$uuid.ics",
+    );
+}
+
+sub _status_of ($self, $caldav, $method, $href, %extra_headers)
+{
+    my $res = $caldav->ua->request($method, $caldav->request_url($href), {
+        headers => {
+            Authorization => $caldav->auth_header,
+            %extra_headers,
+        },
+    });
+
+    return $res->{status};
+}
+
+sub _assert_sharee_delete ($self, $acl, $want_delete, $want_owner_get)
+{
+    my ($owner_href, $sharee_href) = $self->_make_shared_event($acl);
+
+    xlog $self, "sharee with '$acl' tries DELETE";
+    $self->assert_num_equals($want_delete,
+        $self->_status_of($self->{sharee_caldav}, DELETE => $sharee_href));
+
+    $self->assert_num_equals($want_owner_get,
+        $self->_status_of($self->{caldav}, GET => $owner_href));
+}
+
+sub _assert_sharee_move ($self, $acl, $want_move, $want_owner_get, $want_dest_get)
+{
+    my ($owner_href, $sharee_href) = $self->_make_shared_event($acl);
+    my $sharee_caldav = $self->{sharee_caldav};
+
+    my $dest_href = "/dav/calendars/user/sharee/$self->{sharee_dest_id}/"
+                  . "moved-$acl.ics";
+
+    xlog $self, "sharee with '$acl' tries MOVE";
+    $self->assert_num_equals($want_move,
+        $self->_status_of($sharee_caldav, MOVE => $sharee_href,
+            Destination => $sharee_caldav->request_url($dest_href)));
+
+    $self->assert_num_equals($want_owner_get,
+        $self->_status_of($self->{caldav}, GET => $owner_href));
+
+    $self->assert_num_equals($want_dest_get,
+        $self->_status_of($sharee_caldav, GET => $dest_href));
+}

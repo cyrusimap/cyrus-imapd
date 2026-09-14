@@ -1,0 +1,25 @@
+Description:
+
+CalDAV and CardDAV DELETE and MOVE now require the whole CY:remove-resource
+privilege, which is the IMAP rights "t" and "e" together, before they will
+remove a resource from a collection, rather than either one.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
