@@ -61,4 +61,26 @@ sub test_blob_copy
     xlog $self, "download Email blob from shared account";
     $res = $self->download('foo', $msgblobId);
     $self->assert_str_equals('200', $res->{status});
+
+    my $assert_rejected = sub ($args, @invalid) {
+        my $res = $jmap->CallMethods([['Blob/copy', {
+            blobIds => [ $msgblobId ],
+            %$args,
+        }, 'R3']]);
+
+        $self->assert_cmp_deeply(
+            [ 'error',
+              { type => 'invalidArguments', arguments => \@invalid },
+              'R3' ],
+            $res->[0]
+        );
+    };
+
+    xlog $self, "malformed accountId must not fall through to the caller's own account";
+    $assert_rejected->({ accountId => '/cassandane', fromAccountId => 'foo' },
+                       'accountId');
+
+    xlog $self, "malformed fromAccountId is rejected";
+    $assert_rejected->({ accountId => 'foo', fromAccountId => '../../../foo' },
+                       'fromAccountId');
 }
