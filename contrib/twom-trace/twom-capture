@@ -1,0 +1,77 @@
+#!/bin/bash
+# twom-capture [seconds] [outfile]
+# Capture twom access-pattern census from every running cyrus process.
+set -u
+SECS=${1:-60}
+OUT=${2:-/var/tmp/twom-shape.$(hostname -s).$(date +%Y%m%dT%H%M%S).txt}
+HERE=$(dirname "$(readlink -f "$0")")
+
+# Ask the running processes where libcyrus is rather than assuming an install
+# layout. LIB= overrides, which is also how the benchmark's private libtwom.so
+# gets traced with the same tooling.
+. "$HERE/libcyrus.sh"
+LIB=$(find_libcyrus) || exit 1
+check_twom_symbols "$LIB" || exit 1
+
+echo "lib:  $LIB"
+echo "secs: $SECS"
+echo "out:  $OUT"
+
+"$HERE/twom-offsets" "$LIB" || exit 1
+
+sed -e "s|@LIB@|$LIB|g" -e "s|@SECS@|$SECS|g" \
+    "$HERE/twom-shape.bt.in" > /tmp/twom-shape.bt
+
+# Emit the flag table straight from this build's DWARF so the decoder cannot
+# drift when twom gains a flag (20260730 added TWOM_ONELOCK, for instance).
+# gdb omits implicitly-numbered enumerators, so pass the raw line through and
+# let twom-report resolve them.
+: > "$OUT"
+if command -v gdb >/dev/null 2>&1; then
+  gdb -q -batch -ex 'ptype enum twom_flagspec' "$LIB" 2>/dev/null \
+    | sed -n 's/^type = enum twom_flagspec /#enum /p' >> "$OUT"
+fi
+echo "#lib $LIB" >> "$OUT"
+
+# The db name is the LAST component of the path, so a short STRLEN silently
+# truncates away the exact field the report groups by. Size it from the real
+# paths on this box plus headroom; twom-report also flags any key that comes
+# back at the truncation length. Keep it a multiple of 8 - the [string, int]
+# map key has to stay 8-byte aligned or the verifier rejects the program.
+# 160 comfortably covers the deep per-user paths cyrus builds; the report
+# flags any key that still came back at the limit, so a wrong guess is loud
+# rather than silent. Lower it if you want smaller map keys.
+STRLEN=${STRLEN:-160}
+echo "strlen: $STRLEN"
+
+# MAP_KEYS_MAX applies to every map and BPF hash maps are PREALLOCATED, with
+# per-CPU values for count()/hist(), allocated for num_possible_cpus:
+#   ~6 x max_keys x (key + 8 x ncpus + 64)
+# On a 96-core server that is ~5GB at 1M keys - 0.5% of a terabyte, and cheap
+# next to silently truncating a busy database out of the report. Spend the
+# memory. On a small box (a testbed, a VM) drop it to 65536, ~0.05GB.
+export BPFTRACE_STRLEN=$STRLEN
+export BPFTRACE_MAP_KEYS_MAX=${MAP_KEYS_MAX:-1048576}
+echo "#strlen $STRLEN" >> "$OUT"
+# The preflight detaches its own uprobes from this same inode moments ago.
+# Attaching again while that teardown is still in flight intermittently yields
+# probes that register but never fire in already-running processes, i.e. a
+# silently empty capture. Let it settle, and retry once if it happens anyway.
+sleep 3
+
+HDR=$(cat "$OUT")
+for attempt in 1 2 3 4; do
+  printf '%s\n' "$HDR" > "$OUT"
+  bpftrace /tmp/twom-shape.bt >> "$OUT" 2>"$OUT.err"
+  rc=$?
+  grep -q '^@ops\[' "$OUT" && break
+  echo "attempt $attempt came back empty (uprobe attach race) - retrying" >&2
+  sleep $((attempt * 5))
+done
+if [ $rc -ne 0 ] || ! grep -q '^@ops\[' "$OUT"; then
+  echo "capture failed (rc=$rc):" >&2; head -20 "$OUT.err" >&2; exit 1
+fi
+
+echo "raw: $OUT"
+echo
+"$HERE/twom-report" "$OUT"

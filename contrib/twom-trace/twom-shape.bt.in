@@ -1,0 +1,127 @@
+#!/usr/bin/env bpftrace
+/*
+ * twom-shape.bt - census of twom access patterns inside Cyrus.
+ *
+ * Entry-only uprobes, aggregated in-kernel; nothing is emitted per-event, so
+ * cost is one trap plus one string copy per twom call. Attaches to
+ * libcyrus.so.0 itself, so it covers every cyrus process on the box (all
+ * slots, all daemons) including ones that start mid-capture.
+ *
+ * Struct offsets used (verified against DWARF in libcyrus.so.0):
+ *   twom_db.fname     @ 0x0    -> fname = *(char **)db
+ *   twom_txn.db       @ 0x0    -> db    = *(void **)txn
+ *   twom_cursor.txn   @ 0x130  -> txn   = *(void **)(cur + 0x130)
+ *
+ * MEMORY: bpftrace sizes EVERY map at BPFTRACE_MAP_KEYS_MAX and count()/hist()
+ * are per-CPU, so cost is (maps x max_keys x ncpus). That is why everything is
+ * folded into six maps keyed by an opid rather than one map per operation -
+ * the earlier per-operation layout cost ~200MB on 4 cores and would scale with
+ * core count on a real mail server. Keep the map count low.
+ *
+ * A composite [string, int] key is fine, but [string, string] hits a stack
+ * alignment bug in bpftrace 0.16 and the program is rejected. Don't go back.
+ *
+ * opid: 1 db_fetch      2 txn_fetch     3 db_foreach   4 txn_foreach
+ *       5 cursor_next   6 db_store      7 txn_store    8 db_begin_cursor
+ *       9 txn_begin_cursor            10 begin_txn    11 txn_commit
+ *      12 txn_abort    13 db_open      14 db_yield    15 db_repack
+ */
+
+BEGIN { printf("twom-shape: capturing for @SECS@s...\n"); }
+
+/* ---- non-transactional reads ---- */
+uprobe:@LIB@:twom_db_fetch
+{
+  @ops[str(*(uint64 *)arg0), 1] = count();
+  @flags[1, *(uint32 *)(reg("sp") + 16)] = count();
+  @keylen[1] = hist(arg2);
+}
+
+/* ---- transactional reads ---- */
+uprobe:@LIB@:twom_txn_fetch
+{
+  @ops[str(*(uint64 *)(*(uint64 *)arg0)), 2] = count();
+  @flags[2, *(uint32 *)(reg("sp") + 16)] = count();
+  @keylen[2] = hist(arg2);
+}
+
+/* ---- range scans: prefix length is the interesting shape ---- */
+uprobe:@LIB@:twom_db_foreach
+{
+  @ops[str(*(uint64 *)arg0), 3] = count();
+  @flags[3, *(uint32 *)(reg("sp") + 8)] = count();
+  @preflen[3] = hist(arg2);
+}
+
+uprobe:@LIB@:twom_txn_foreach
+{
+  @ops[str(*(uint64 *)(*(uint64 *)arg0)), 4] = count();
+  @flags[4, *(uint32 *)(reg("sp") + 8)] = count();
+  @preflen[4] = hist(arg2);
+}
+
+/* cursor_next is the hottest probe: count only, no extra work */
+uprobe:@LIB@:twom_cursor_next
+{
+  @ops[str(*(uint64 *)(*(uint64 *)(*(uint64 *)(arg0 + 0x130)))), 5] = count();
+}
+
+/* ---- writes: flags carry IFEXIST/IFNOTEXIST, vallen 0 means delete ---- */
+uprobe:@LIB@:twom_db_store
+{
+  @ops[str(*(uint64 *)arg0), 6] = count();
+  @flags[6, arg5] = count();
+  @keylen[6] = hist(arg2);
+  @vallen[6] = hist(arg4);
+}
+
+uprobe:@LIB@:twom_txn_store
+{
+  @ops[str(*(uint64 *)(*(uint64 *)arg0)), 7] = count();
+  @flags[7, arg5] = count();
+  @keylen[7] = hist(arg2);
+  @vallen[7] = hist(arg4);
+}
+
+/* ---- cursors ---- */
+uprobe:@LIB@:twom_db_begin_cursor
+{
+  @ops[str(*(uint64 *)arg0), 8] = count();
+  @flags[8, arg4] = count();
+}
+
+uprobe:@LIB@:twom_txn_begin_cursor
+{
+  @ops[str(*(uint64 *)(*(uint64 *)arg0)), 9] = count();
+  @flags[9, arg4] = count();
+}
+
+/* ---- transaction lifecycle: shared vs exclusive is the contention story ---- */
+uprobe:@LIB@:twom_db_begin_txn
+{
+  @ops[str(*(uint64 *)arg0), 10] = count();
+  @txnmode[arg1] = count();
+}
+
+uprobe:@LIB@:twom_txn_commit
+{ @ops[str(*(uint64 *)(*(uint64 *)(*(uint64 *)arg0))), 11] = count(); }
+
+uprobe:@LIB@:twom_txn_abort
+{ @ops[str(*(uint64 *)(*(uint64 *)(*(uint64 *)arg0))), 12] = count(); }
+
+/* ---- open / yield / repack: rare but expensive, worth per-db counts ---- */
+uprobe:@LIB@:twom_db_open
+{
+  @ops[str(arg0), 13] = count();
+  @flags[13, *(uint32 *)arg1] = count();
+}
+
+uprobe:@LIB@:twom_db_yield
+{ @ops[str(*(uint64 *)arg0), 14] = count(); }
+
+uprobe:@LIB@:twom_db_repack
+{ @ops[str(*(uint64 *)arg0), 15] = count(); }
+
+interval:s:@SECS@ { exit(); }
+
+END { printf("twom-shape: done\n"); }
