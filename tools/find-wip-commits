@@ -1,0 +1,47 @@
+#!/usr/bin/perl
+use v5.28.0;
+use warnings;
+use utf8;
+
+binmode *STDOUT, ':encoding(utf-8)';
+binmode *STDERR, ':encoding(utf-8)';
+
+my ($base_ref, $head_ref) = @ARGV;
+
+$base_ref //= 'master';
+$head_ref //= 'HEAD';
+
+if (!$base_ref or !$head_ref) {
+    die "usage: find-wip-commits BASE_REF HEAD_REF";
+}
+
+say "XXX base_ref ($base_ref): " . qx(git log -n1 $base_ref --);
+say "XXX head_ref ($head_ref): " . qx(git log -n1 $head_ref --);
+
+# words we wish to reject in initial position
+my $reject = qr{ ^( wip
+                    | junk
+                    | no\s?merge
+                    | te?mp
+                  )\b }ix;
+
+my @log_opts = qw(--no-decorate --oneline --no-color);
+my $ref = "$base_ref..$head_ref";
+my @commits = qx(git log @log_opts $ref --);
+die "git log failed" if $?;
+
+my $rejected = 0;
+for (@commits) {
+    chomp;
+
+    say "XXX $_";
+
+    my ($sha1, $msg) = split " ", $_, 2;
+
+    if ($msg =~ m/$reject/) {
+        say "❌ Commit message for $sha1 starts with $1";
+        $rejected++;
+    }
+}
+
+exit $rejected;
