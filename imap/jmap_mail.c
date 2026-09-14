@@ -6186,11 +6186,16 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         bool is_newly_indexed = since_highest_createdmodseq &&
                 md->createdmodseq > since_highest_createdmodseq;
 
+        bool is_expunged = (md->system_flags & FLAG_DELETED) ||
+                (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
+
         // for this phase, we only care that it has a change
         if (md->modseq <= since_modseq && !is_newly_indexed) {
             /* Only a conversation-scoped sort key can change the order
-             * without the message's own modseq advancing. */
-            if (!search.is_mutable || md->convmodseq <= since_modseq)
+             * without the message's own modseq advancing. A record that
+             * got expunged before the last query never was in its result. */
+            if (!search.is_mutable || is_expunged ||
+                    md->convmodseq <= since_modseq)
                 continue;
         }
 

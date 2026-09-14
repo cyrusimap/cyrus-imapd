@@ -1,0 +1,86 @@
+#!perl
+use Cassandane::Tiny;
+
+# A someInThreadHaveKeyword sort must not report an Email that already was
+# expunged at the time of the last query, even if one of its thread siblings
+# got flagged since then.
+sub test_email_querychanges_threadkeyword_expunged
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $mbox = $user->mailboxes->create({ name => 'A' });
+
+    my (%email, %id);
+    for my $spec ([ qw( thread1msg1 thread1 2020-01-01T00:00:00Z ) ],
+                  [ qw( thread2msg1 thread2 2021-01-01T00:00:00Z ) ],
+                  [ qw( thread2msg2 thread2 2022-01-01T00:00:00Z ) ],
+                  [ qw( thread2msg3 thread2 2023-01-01T00:00:00Z ) ]) {
+        my ($name, $thread, $received_at) = $spec->@*;
+
+        $email{$name} = $user->emails->create({
+            mailboxIds    => { $mbox->id => JSON::true },
+            messageId     => [ "$name\@local" ],
+            references    => [ "$thread\@local" ],
+            subject       => "Re: $thread",
+            receivedAt    => $received_at,
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+        });
+        $id{$name} = q{} . $email{$name}->id;
+    }
+
+    xlog $self, 'destroy the third email of thread 2';
+    $email{thread2msg3}->destroy;
+
+    my $sort = [
+        {
+            property    => 'someInThreadHaveKeyword',
+            keyword     => '$flagged',
+            isAscending => JSON::false,
+        },
+        {
+            property    => 'receivedAt',
+            isAscending => JSON::true,
+        },
+    ];
+
+    my $res = $jmap->request([
+        [ 'Email/query', {
+            filter          => { inMailbox => $mbox->id },
+            sort            => $sort,
+            collapseThreads => JSON::false,
+        }, 'R1' ],
+    ]);
+    $res->assert_successful;
+
+    my $args = $res->single_sentence('Email/query')->arguments;
+    $self->assert_cmp_deeply(
+        [ @id{qw(thread1msg1 thread2msg1 thread2msg2)} ], $args->{ids}, 'ids');
+
+    my $since_state = $args->{queryState};
+
+    xlog $self, 'flag the second email of thread 2';
+    $email{thread2msg2}->update({ keywords => { '$flagged' => JSON::true } });
+
+    $res = $jmap->request([
+        [ 'Email/queryChanges', {
+            filter          => { inMailbox => $mbox->id },
+            sort            => $sort,
+            collapseThreads => JSON::false,
+            sinceQueryState => $since_state,
+        }, 'R1' ],
+    ]);
+    $res->assert_successful;
+
+    # The expunged email of thread 2 was not in the last result, so it must
+    # not be reported, even though the modseq of its thread advanced
+    $args = $res->single_sentence('Email/queryChanges')->arguments;
+    $self->assert_cmp_deeply([ @id{qw(thread2msg1 thread2msg2)} ],
+        $args->{removed}, 'removed');
+    $self->assert_cmp_deeply([
+        { id => $id{thread2msg1}, index => 0 },
+        { id => $id{thread2msg2}, index => 1 },
+    ], $args->{added}, 'added');
+}
