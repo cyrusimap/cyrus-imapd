@@ -178,18 +178,27 @@ HIDDEN void jmap_contact_capabilities(json_t *account_capabilities,
                                       const char *authuserid,
                                       const char *accountid)
 {
-    char *cardhomename = carddav_mboxname(accountid, NULL);
+    char *cardhomename = NULL;
     mbentry_t *mbentry = NULL;
-    int r = mboxlist_lookup(cardhomename, &mbentry, NULL);
-    if (r) {
-        xsyslog(LOG_ERR, "can't lookup addressbook home",
-                "cardhomename=%s error=%s",
-                cardhomename, error_message(r));
-        goto done;
-    }
+    int rights;
+    bool is_main_account;
 
-    int rights = httpd_myrights(authstate, mbentry);
-    int is_main_account = !strcmpsafe(authuserid, accountid);
+    if (httpd_userisadmin) {
+        rights = ACL_ALL;
+        is_main_account = true;
+    }
+    else {
+        cardhomename = carddav_mboxname(accountid, NULL);
+        int r = mboxlist_lookup(cardhomename, &mbentry, NULL);
+        if (r) {
+            xsyslog(LOG_ERR, "can't lookup addressbook home",
+                    "cardhomename=%s error=%s",
+                    cardhomename, error_message(r));
+            goto done;
+        }
+        rights = httpd_myrights(authstate, mbentry);
+        is_main_account = !strcmpsafe(authuserid, accountid);
+    }
 
     json_object_set_new(account_capabilities, JMAP_URN_CONTACTS,
                         json_pack("{s:i s:b}",
