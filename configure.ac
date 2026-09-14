@@ -2444,7 +2444,7 @@ fi
 dnl make sure that Makefile is the last thing output
 AC_CONFIG_FILES([
     libcyrus_imap.pc
-    libcyrus_min.pc
+    libcyrus_min/libcyrus_min.pc
     libcyrus.pc
     libcyrus_sieve.pc
     Makefile
