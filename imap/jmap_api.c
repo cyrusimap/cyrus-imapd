@@ -720,8 +720,11 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         const char *accountid = httpd_userid;
         json_t *err = NULL;
         json_t *arg = json_object_get(args, "accountId");
-        if (arg && arg != json_null()) {
+        if (arg && json_is_cyrus_accountid(arg)) {
             accountid = json_string_value(arg);
+        }
+        else if (JNOTNULL(arg)) {
+            accountid = NULL;
         }
         if (!accountid) {
             err = json_pack("{s:s, s:[s]}",
@@ -745,6 +748,15 @@ HIDDEN int jmap_api(struct transaction_t *txn,
             err = json_pack("{s:s}", "type", "accountNotSupportedByMethod");
         }
         if (err) {
+            json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
+            json_decref(args);
+            continue;
+        }
+
+        arg = json_object_get(args, "fromAccountId");
+        if (arg && arg != json_null() && !json_is_cyrus_accountid(arg)) {
+            err = json_pack("{s:s, s:[s]}", "type", "invalidArguments",
+                            "arguments", "fromAccountId");
             json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
             json_decref(args);
             continue;
@@ -2013,7 +2025,7 @@ HIDDEN void jmap_copy_parse(jmap_req_t *req, struct jmap_parser *parser,
     json_object_foreach(jargs, key, arg) {
         /* fromAccountId */
         if (!strcmp(key, "fromAccountId")) {
-            if (json_is_string(arg)) {
+            if (json_is_cyrus_accountid(arg)) {
                 copy->from_account_id = json_string_value(arg);
             }
             else if (JNOTNULL(arg)) {
