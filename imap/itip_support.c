@@ -639,7 +639,7 @@ static int deliver_merge_request(const char *attendee,
         tzid = icalproperty_get_tzid(prop);
         if (!tzid) continue;
 
-        tz = hash_lookup(tzid, tz_table);
+        tz = hash_del(tzid, tz_table);
         if (tz) {
             /* Remove tz from current object */
             icalcomponent_remove_component(ical, tz);
