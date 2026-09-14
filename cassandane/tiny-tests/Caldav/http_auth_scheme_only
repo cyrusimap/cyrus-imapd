@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+# http_auth() skipped the whitespace between the auth scheme and the
+# credentials with "while (strchr(" ", *++clientin));".  strchr(" ", '\0')
+# points at the literal's own terminator and so is true, which means an
+# Authorization header ending in whitespace walked the pointer off the end of
+# the header value and treated whatever followed as the client's credentials.
+sub test_http_auth_scheme_only
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $service = $self->{instance}->get_service('http');
+
+    for my $creds ('Basic ', 'Basic   ', 'Digest ') {
+        xlog $self, "request with Authorization: '$creds'";
+
+        my $sock = $service->get_socket();
+        $sock->autoflush(1);
+
+        $sock->print(join("\r\n",
+            'GET /dav/principals/user/cassandane/ HTTP/1.1',
+            'Host: localhost',
+            "Authorization: $creds",
+            'Connection: close',
+            '', ''));
+
+        my $resp = '';
+        while (defined(my $line = $sock->getline())) {
+            $resp .= $line;
+        }
+        $sock->close();
+
+        # Any status is defensible for credentials this broken; what matters
+        # is that we get a status line back rather than a dead worker, and
+        # that we are not somehow let in.
+        $self->assert_matches(qr{^HTTP/1\.1 [0-9]{3} }, $resp);
+        $self->assert_does_not_match(qr{^HTTP/1\.1 2}, $resp);
+    }
+}
