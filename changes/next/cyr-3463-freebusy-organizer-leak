@@ -1,0 +1,27 @@
+Description:
+
+A free/busy scheduling request posted to a CalDAV schedule Outbox now reports
+the correct organizer address in every reply, no matter how many attendees
+the request carries.  Previously a request with several thousand attendees
+could cause the organizer address in the reply for each local attendee to be
+replaced by unrelated bytes from the server process's memory.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
