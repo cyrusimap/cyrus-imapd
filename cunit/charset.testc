@@ -765,6 +765,7 @@ static void test_parse_mimexvalue(void)
 
     s = charset_parse_mimexvalue("foo", NULL);
     CU_ASSERT_PTR_NULL(s);
+    CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("utf-8'foo", NULL));
 
     s = charset_parse_mimexvalue(SIMPLE, &lang);
     CU_ASSERT_PTR_NOT_NULL(s);
@@ -778,6 +779,14 @@ static void test_parse_mimexvalue(void)
     CU_ASSERT_STRING_EQUAL(s, "\xf0\x9f\x98\x80");
     free(s);
 
+    buf_setcstr(&lang, "wrong!");
+    s = charset_parse_mimexvalue(OCTETS, &lang);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "\xf0\x9f\x98\x80");
+    CU_ASSERT_EQUAL(0, buf_len(&lang));
+    buf_reset(&lang);
+    free(s);
+
     s = charset_parse_mimexvalue(LATIN1, &lang);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, "Rätsel");
@@ -786,6 +795,17 @@ static void test_parse_mimexvalue(void)
     free(s);
 
     buf_free(&lang);
+
+    /* unknown charset (let's keep it that way) */
+    CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("utf-ebcdic''he comes!", NULL));
+
+    /* error cases in percent encoding */
+    CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("iso-8859-1''%", NULL));
+    CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("iso-8859-1''%f", NULL));
+    CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("iso-8859-1''%g", NULL));
+    CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("iso-8859-1''%eg", NULL));
+    CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("iso-8859-1''%2\xC1", NULL));
+    CU_ASSERT_PTR_NULL(charset_parse_mimexvalue("iso-8859-1''%\xE1" "2", NULL));
 }
 
 static void test_encode_mimexvalue(void)
@@ -1741,6 +1761,32 @@ static void test_decode_percent(void)
     r = charset_decode_percent(&buf, "a%21b%2xc%24d");
     CU_ASSERT_EQUAL(-1, r);
     CU_ASSERT_STRING_EQUAL("a!b%2xc$d", buf_cstring(&buf));
+
+    /* corner cases for truncated hex encoding
+     * plus test non-ASCII, and case insensitivity */
+    r = charset_decode_percent(&buf, "%21%");
+    CU_ASSERT_EQUAL(-1, r);
+    CU_ASSERT_STRING_EQUAL("!%", buf_cstring(&buf));
+
+    r = charset_decode_percent(&buf, "%2f%2");
+    CU_ASSERT_EQUAL(-1, r);
+    CU_ASSERT_STRING_EQUAL("/%2", buf_cstring(&buf));
+
+    r = charset_decode_percent(&buf, "%2F%g");
+    CU_ASSERT_EQUAL(-1, r);
+    CU_ASSERT_STRING_EQUAL("/%g", buf_cstring(&buf));
+
+    r = charset_decode_percent(&buf, "%7e%2g");
+    CU_ASSERT_EQUAL(-1, r);
+    CU_ASSERT_STRING_EQUAL("~%2g", buf_cstring(&buf));
+
+    r = charset_decode_percent(&buf, "%fF%2" "\xB2");
+    CU_ASSERT_EQUAL(-1, r);
+    CU_ASSERT_STRING_EQUAL("\xFF%2\xB2", buf_cstring(&buf));
+
+    r = charset_decode_percent(&buf, "%Ff%" "\xB2" "2");
+    CU_ASSERT_EQUAL(-1, r);
+    CU_ASSERT_STRING_EQUAL("\xFF%" "\xB2" "2", buf_cstring(&buf));
 
     buf_free(&buf);
 }
