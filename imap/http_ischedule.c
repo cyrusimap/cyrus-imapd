@@ -408,7 +408,7 @@ static int meth_post_isched(struct transaction_t *txn,
     icalcomponent_kind kind = 0;
     icalproperty_method meth = 0;
     icalproperty *prop = NULL;
-    const char *uid = NULL;
+    const char *uid = NULL, *originator = NULL;
 
     /* Fill in iSchedule-Capabilities */
     isched_capa_hdr(txn, NULL, NULL);
@@ -444,6 +444,7 @@ static int meth_post_isched(struct transaction_t *txn,
         txn->error.precond = ISCHED_MULTIPLE_ORIG;
         return HTTP_BAD_REQUEST;
     }
+    originator = hdr[0];
 
     /* Check Recipients */
     if (!(recipients = spool_getheader(txn->req_hdrs, "Recipient"))) {
@@ -568,11 +569,11 @@ static int meth_post_isched(struct transaction_t *txn,
 
                     /* Don't allow scheduling with remote users via iSchedule */
                     if (sparam.flags & SCHEDTYPE_REMOTE) r = HTTP_FORBIDDEN;
-                    sched_param_fini(&sparam);
 
                     if (r) sched_data.status = REQSTAT_NOUSER;
-                    else sched_deliver(httpd_userid, httpd_userid, httpd_userid,
+                    else sched_deliver(sparam.userid, sparam.userid, originator,
                                        recipient, &sched_data, authstate);
+                    sched_param_fini(&sparam);
 
                     xml_add_schedresponse(root, NULL, BAD_CAST recipient,
                                           BAD_CAST sched_data.status);
