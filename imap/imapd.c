@@ -6629,6 +6629,13 @@ static void cmd_thread(char *tag, int usinguid)
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("THREAD MODSEQ");
 
+    if (n < 0) {
+        prot_printf(imapd_out,
+                    "%s NO Too many messages and/or references to Thread\r\n",
+                    tag);
+        goto done;
+    }
+
     snprintf(mytime, sizeof(mytime), "%2.3f",
              (clock() - start) / (double) CLOCKS_PER_SEC);
     prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,

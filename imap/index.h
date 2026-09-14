@@ -48,6 +48,7 @@
 
 #include <config.h>
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -212,7 +213,7 @@ struct rootset {
 
 struct thread_algorithm {
     const char *alg_name;
-    void (*threader)(struct index_state *state, unsigned *msgno_list,
+    bool (*threader)(struct index_state *state, unsigned *msgno_list,
                      unsigned int nmsg, int usinguid);
 };
 
