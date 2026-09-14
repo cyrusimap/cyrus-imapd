@@ -1980,7 +1980,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
 
         if (uniqueid &&
             jmap_encode_rawdata_blobid('V', uniqueid, record.uid,
-                                       NULL, NULL, NULL, NULL, &blobid)) {
+                                       NULL, NULL, "G", &record.guid, &blobid)) {
             jblobid = json_string(buf_cstring(&blobid));
         }
         buf_free(&blobid);
@@ -4287,7 +4287,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
     mailbox_find_index_record(*mailbox, (*mailbox)->i.last_uid, &record);
 
     jmap_encode_rawdata_blobid('V', mailbox_uniqueid(*mailbox), record.uid,
-                               NULL, NULL, NULL, NULL, &buf);
+                               NULL, NULL, "G", &record.guid, &buf);
     json_object_set_new(item, "blobId", json_string(buf_cstring(&buf)));
 
     json_object_set_new(item, "size",
@@ -4525,7 +4525,8 @@ static int _contact_set_update(jmap_req_t *req, unsigned kind,
                                       this_mailbox->i.last_uid, &record);
 
             jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox),
-                                       record.uid, NULL, NULL, NULL, NULL, &buf);
+                                       record.uid, NULL, NULL, "G",
+                                       &record.guid, &buf);
             json_object_set_new(*item, "blobId",
                                 json_string(buf_cstring(&buf)));
 
@@ -7720,7 +7721,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 
         if (uniqueid &&
             jmap_encode_rawdata_blobid('V', uniqueid, record.uid,
-                                       NULL, NULL, NULL, NULL, &blobid)) {
+                                       NULL, NULL, "G", &record.guid, &blobid)) {
             jblobid = json_string(buf_cstring(&blobid));
         }
         buf_free(&blobid);
@@ -11431,7 +11432,7 @@ static int _card_set_create(jmap_req_t *req,
 
     if (jmap_is_using(req, JMAP_CONTACTS_EXTENSION)) {
         jmap_encode_rawdata_blobid('V', mailbox_uniqueid(*mailbox), record.uid,
-                                   NULL, NULL, NULL, NULL, &buf);
+                                   NULL, NULL, "G", &record.guid, &buf);
         json_object_set_new(item, "cyrusimap.org:blobId",
                             json_string(buf_cstring(&buf)));
 
@@ -11658,7 +11659,8 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
                                       this_mailbox->i.last_uid, &record);
 
             jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox),
-                                       record.uid, NULL, NULL, NULL, NULL, &buf);
+                                       record.uid, NULL, NULL, "G",
+                                       &record.guid, &buf);
             json_object_set_new(*item, "cyrusimap.org:blobId",
                                 json_string(buf_cstring(&buf)));
 
@@ -11941,6 +11943,11 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
         goto done;
     }
 
+    if (!strcmpsafe(propname, "G")) {
+        // G subpart encodes the guid of the whole vCard blob
+        xzfree(propname);
+    }
+
     if (!propname && ctx->accept_mime) {
         /* Make sure client can handle blob type. */
         if (strcmp(ctx->accept_mime, "application/octet-stream") &&
@@ -12025,6 +12032,12 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
     else {
         /* Load message containing the resource */
         struct buf buf = BUF_INITIALIZER;
+
+        /* The blobId encodes the guid of the whole vCard resource */
+        if (!message_guid_equal(&guid, &record.guid)) {
+            res = HTTP_NOT_FOUND;
+            goto done;
+        }
 
         if (mailbox_map_record(mailbox, &record, &buf)) {
             ctx->errstr = "failed to load vCard";
