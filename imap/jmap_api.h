@@ -36,6 +36,7 @@
 #define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
 #define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
 #define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
+#define JMAP_URN_CONDITIONAL "urn:ietf:params:jmap:conditional"
 
 #define JMAP_CORE_EXTENSION          "https://cyrusimap.org/ns/jmap/core"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
@@ -435,6 +436,7 @@ struct jmap_set {
     /* Request arguments */
     const char *if_in_state;
     bool apply_empty_updates;
+    json_t *if_unchanged_by;   /* Id[PatchObject], NULL when cap not in use */
     json_t *create;
     json_t *update;
     json_t *destroy;
@@ -459,6 +461,8 @@ extern void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            const jmap_property_set_t *valid_props,
                            jmap_args_parse_cb args_parse, void *args_rock,
                            struct jmap_set *set, json_t **err);
+extern json_t *jmap_set_precondition(struct jmap_set *set,
+                                     const char *id, json_t *current);
 extern void jmap_set_fini(struct jmap_set *set);
 extern json_t *jmap_set_reply(struct jmap_set *set);
 

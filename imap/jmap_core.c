@@ -112,6 +112,9 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
             json_pack("{s:i}",
                 "maxCreatedIdsInRequest", limits[MAX_CREATEDIDS_IN_REQUEST]));
 
+    json_object_set_new(settings->server_capabilities,
+            JMAP_URN_CONDITIONAL, json_object());
+
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
         struct utsname buf;
 
@@ -148,6 +151,9 @@ HIDDEN void jmap_core_capabilities(json_t *account_capabilities)
 {
     json_object_set_new(account_capabilities,
             JMAP_URN_CORE, json_object());
+
+    json_object_set_new(account_capabilities,
+            JMAP_URN_CONDITIONAL, json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(account_capabilities,
