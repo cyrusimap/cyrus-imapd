@@ -109,6 +109,32 @@ sub getinbox
     return $m{"Inbox"};
 }
 
+# Same helpers JMAPEmail.pm carries, so that a submission test can tighten
+# the submitting user's quota without reaching into IMAPTalk itself.
+sub _set_quotaroot
+{
+    my ($self, $quotaroot) = @_;
+    $self->{quotaroot} = $quotaroot;
+}
+
+sub _set_quotalimits
+{
+    my ($self, %resources) = @_;
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $quotaroot = delete $resources{quotaroot} || $self->{quotaroot};
+    my @quotalist;
+    foreach my $resource (keys %resources)
+    {
+        my $limit = $resources{$resource}
+            or die "No limit specified for $resource";
+        push(@quotalist, uc($resource), $limit);
+    }
+    $self->{limits}->{$quotaroot} = { @quotalist };
+    $admintalk->setquota($quotaroot, \@quotalist);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}
+
 use Cassandane::Tiny::Loader 'tiny-tests/JMAPEmailSubmission';
 
 1;
