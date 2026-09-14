@@ -1,0 +1,86 @@
+#!perl
+use Cassandane::Tiny;
+
+# Sorting by someInThreadHaveKeyword makes the position of an Email depend on
+# the keywords of its thread siblings, so flagging one Email of a thread moves
+# every other Email of that thread without advancing their own modseq.
+sub test_email_querychanges_threadkeyword
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $mbox = $user->mailboxes->create({ name => 'A' });
+
+    # One email in the first thread, two in the second. They are created in
+    # the order that sorting by receivedAt ascending puts them in.
+    my (%email, %id);
+    for my $spec ([ qw( thread1msg1 thread1 2020-01-01T00:00:00Z ) ],
+                  [ qw( thread2msg1 thread2 2021-01-01T00:00:00Z ) ],
+                  [ qw( thread2msg2 thread2 2022-01-01T00:00:00Z ) ]) {
+        my ($name, $thread, $received_at) = $spec->@*;
+
+        $email{$name} = $user->emails->create({
+            mailboxIds    => { $mbox->id => JSON::true },
+            messageId     => [ "$name\@local" ],
+            references    => [ "$thread\@local" ],
+            subject       => "Re: $thread",
+            receivedAt    => $received_at,
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+        });
+        $id{$name} = q{} . $email{$name}->id;
+    }
+
+    my $sort = [
+        {
+            property    => 'someInThreadHaveKeyword',
+            keyword     => '$flagged',
+            isAscending => JSON::false,
+        },
+        {
+            property    => 'receivedAt',
+            isAscending => JSON::true,
+        },
+    ];
+
+    my $res = $jmap->request([
+        [ 'Email/query', {
+            filter          => { inMailbox => $mbox->id },
+            sort            => $sort,
+            collapseThreads => JSON::false,
+        }, 'R1' ],
+    ]);
+    $res->assert_successful;
+
+    my $args = $res->single_sentence('Email/query')->arguments;
+    $self->assert_cmp_deeply(
+        [ @id{qw(thread1msg1 thread2msg1 thread2msg2)} ], $args->{ids}, 'ids');
+    $self->assert_cmp_deeply(jtrue(), $args->{canCalculateChanges},
+        'canCalculateChanges');
+
+    my $since_state = $args->{queryState};
+
+    xlog $self, 'flag the second email of thread 2';
+    $email{thread2msg2}->update({ keywords => { '$flagged' => JSON::true } });
+
+    $res = $jmap->request([
+        [ 'Email/queryChanges', {
+            filter          => { inMailbox => $mbox->id },
+            sort            => $sort,
+            collapseThreads => JSON::false,
+            sinceQueryState => $since_state,
+        }, 'R1' ],
+    ]);
+    $res->assert_successful;
+
+    # Both emails of thread 2 sort before thread 1 now, so both must be
+    # reported, even though only one of them changed
+    $args = $res->single_sentence('Email/queryChanges')->arguments;
+    $self->assert_cmp_deeply([ @id{qw(thread2msg1 thread2msg2)} ],
+        $args->{removed}, 'removed');
+    $self->assert_cmp_deeply([
+        { id => $id{thread2msg1}, index => 0 },
+        { id => $id{thread2msg2}, index => 1 },
+    ], $args->{added}, 'added');
+}
