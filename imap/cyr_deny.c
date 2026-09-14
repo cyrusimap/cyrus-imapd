@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/proc.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -19,11 +24,8 @@
 
 #include "global.h"
 #include "libcyr_cfg.h"
-#include "proc.h"
 #include "userdeny.h"
-#include "util.h"
 #include "ptrarray.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

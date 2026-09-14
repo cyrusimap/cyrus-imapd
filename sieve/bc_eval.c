@@ -6,6 +6,12 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/xstrlcpy.h"
+#include "libcyrus_min/util.h"
+
+#include <cyrus/dynarray.h>
+#include <cyrus/xmalloc.h>
+
 #include "sieve_interface.h"
 #include "grammar.h"
 #include "interp.h"
@@ -21,10 +27,6 @@
 
 #include "gmtoff.h"
 #include "charset.h"
-#include "dynarray.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "util.h"
 #include "times.h"
 
 #include <string.h>

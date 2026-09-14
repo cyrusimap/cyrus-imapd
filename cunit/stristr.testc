@@ -1,9 +1,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include "cunit/unit.h"
-#include "util.h"
 
 #include "stristr.h"
+
+#include "libcyrus_min/util.h"
 
 static void test_strstr(void)
 {

@@ -1,8 +1,13 @@
 /* zoneinfo_db.c - zoneinfo DB routines */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -15,12 +20,8 @@
 #include <sysexits.h>
 #include <syslog.h>
 
-#include "assert.h"
 #include "cyrusdb.h"
 #include "global.h"
-#include "tok.h"
-#include "util.h"
-#include "xmalloc.h"
 
 #include "zoneinfo_db.h"
 

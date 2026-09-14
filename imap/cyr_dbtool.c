@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
+
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,13 +26,9 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 
-#include "assert.h"
 #include "cyrusdb.h"
 #include "global.h"
 #include "mailbox.h"
-#include "util.h"
-#include "retry.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

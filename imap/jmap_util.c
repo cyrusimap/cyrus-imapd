@@ -4,10 +4,13 @@
 
 #include <config.h>
 
-#include <assert.h>
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 
 #include <sasl/saslutil.h>
@@ -17,7 +20,6 @@
 #include "caldav_util.h"
 #include "carddav_db.h"
 #include "global.h"
-#include "hash.h"
 #include "ical_support.h"
 #include "index.h"
 #include "jmap_util.h"
@@ -26,7 +28,6 @@
 #include "times.h"
 #include "user.h"
 #include "xapian_wrap.h"
-#include "xstrlcpy.h"
 
 #ifdef HAVE_LIBCHARDET
 #include <chardet/chardet.h>

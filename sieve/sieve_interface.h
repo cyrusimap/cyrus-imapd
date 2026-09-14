@@ -4,19 +4,20 @@
 
 #ifndef SIEVE_H
 #define SIEVE_H
+#include <config.h>
+
+#include <cyrus/arrayu64.h>
+#include <cyrus/buf.h>
+#include <cyrus/hash.h>
+#include <cyrus/strarray.h>
 
 #include <stdio.h>
-#include <config.h>
 
 #define SIEVE_VERSION "CMU Sieve 3.0"
 
 /* error codes */
 #define SIEVE_OK (0)
 
-#include "arrayu64.h"
-#include "buf.h"
-#include "hash.h"
-#include "strarray.h"
 #include "sieve/sieve_err.h"
 
 /* external sieve types */

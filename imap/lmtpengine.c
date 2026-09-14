@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -28,10 +34,8 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "assert.h"
 #include "auditlog.h"
 #include "loginlog.h"
-#include "util.h"
 #include "auth.h"
 #include "prot.h"
 #include "times.h"
@@ -39,8 +43,6 @@
 #include "mboxevent.h"
 #include "prometheus.h"
 #include "signals.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
 #include "version.h"
 
 /* generated headers are not necessarily in current directory */

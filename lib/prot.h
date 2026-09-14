@@ -4,21 +4,21 @@
 
 #ifndef INCLUDED_PROT_H
 #define INCLUDED_PROT_H
+#include <config.h>
+
+#include "libcyrus_min/util.h"
 
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <sasl/sasl.h>
-#include <config.h>
 
 #include <openssl/ssl.h>
 
 #ifdef HAVE_ZLIB
 #include <zlib.h>
 #endif /* HAVE_ZLIB */
-
-#include "util.h"
 
 #define PROT_BUFSIZE 4096
 /* #define PROT_BUFSIZE 8192 */

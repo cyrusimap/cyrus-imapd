@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -24,8 +28,6 @@
 #include "map.h"
 #include "mailbox.h"
 #include "mboxlist.h"
-#include "util.h"
-#include "xmalloc.h"
 #include "sync_log.h"
 
 /* generated headers are not necessarily in current directory */

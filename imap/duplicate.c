@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,11 +36,8 @@
 # endif
 #endif
 
-#include "assert.h"
 #include "auditlog.h"
-#include "xmalloc.h"
 #include "global.h"
-#include "util.h"
 #include "cyrusdb.h"
 
 /* generated headers are not necessarily in current directory */

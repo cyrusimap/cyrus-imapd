@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/strarray.h>
+#include <cyrus/strhash.h>
+
 #include <errno.h>
 #include <string.h>
 
@@ -17,12 +22,9 @@
 #include "itip_support.h"
 #include "mailbox.h"
 #include "proxy.h"
-#include "strarray.h"
-#include "strhash.h"
 #include "syslog.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
 #include "zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */

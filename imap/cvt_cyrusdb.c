@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/xmalloc.h>
+
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,8 +27,6 @@
 #include "cyrusdb.h"
 #include "global.h"
 #include "mailbox.h"
-#include "util.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

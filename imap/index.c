@@ -4,6 +4,15 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+#include <cyrus/hashu64.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -23,13 +32,10 @@
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
-#include "assert.h"
 #include "backend.h"
 #include "charset.h"
 #include "conversations.h"
 #include "dlist.h"
-#include "hash.h"
-#include "hashu64.h"
 #include "http_client.h"
 #include "jmap_util.h"
 #include "global.h"
@@ -45,13 +51,9 @@
 #include "search_query.h"
 #include "seen.h"
 #include "statuscache.h"
-#include "strhash.h"
 #include "attachextract.h"
 #include "user.h"
-#include "util.h"
 #include "ptrarray.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
 
 #include "index.h"
 #include "sync_log.h"

@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,12 +16,9 @@
 #include <syslog.h>
 #include <unistd.h>
 
-#include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
-#include "xmalloc.h"
-#include "util.h"
 
 extern void fatal(const char *, int);
 

@@ -4,6 +4,14 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/hash.h>
+#include <cyrus/retry.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #include <sys/types.h>
 
 #include <dirent.h>
@@ -18,12 +26,6 @@
 
 #include "lib/bsearch.h"
 #include "lib/cyr_lock.h"
-#include "lib/hash.h"
-#include "lib/retry.h"
-#include "lib/strarray.h"
-#include "lib/util.h"
-#include "lib/xmalloc.h"
-#include "lib/xunlink.h"
 
 #include "imap/global.h"
 #include "imap/mboxlist.h"

@@ -9,6 +9,14 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+#include <cyrus/strhash.h>
+#include <cyrus/tok.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -16,23 +24,17 @@
 #include <math.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 
 #include "global.h"
-#include "hash.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "ical_support.h"
 #include "jcal.h"
 #include "map.h"
-#include "strhash.h"
 #include "times.h"
-#include "tok.h"
-#include "util.h"
 #include "version.h"
-#include "xstrlcpy.h"
 #include "zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */

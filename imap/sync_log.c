@@ -6,6 +6,14 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -17,17 +25,11 @@
 #include <syslog.h>
 #include <errno.h>
 
-#include "assert.h"
 #include "command.h"
 #include "sync_log.h"
 #include "global.h"
 #include "cyr_lock.h"
 #include "mailbox.h"
-#include "retry.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

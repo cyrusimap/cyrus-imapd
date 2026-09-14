@@ -1,8 +1,9 @@
 /* relocate_by_id.c - program to relocate a mailbox trees */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -27,7 +28,6 @@
 #include "mboxname.h"
 #include "seen.h"
 #include "sqldb.h"
-#include "util.h"
 #include "user.h"
 
 /* generated headers are not necessarily in current directory */

@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/proc.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -17,10 +22,7 @@
 #include <sys/stat.h>
 
 #include "global.h"
-#include "proc.h"
-#include "util.h"
 #include "../master/masterconf.h"
-#include "xmalloc.h"
 
 /* config.c stuff */
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;

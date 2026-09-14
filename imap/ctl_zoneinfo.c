@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/hash.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -23,10 +28,7 @@
 
 #include "annotate.h" /* for strlist functionality */
 #include "global.h"
-#include "hash.h"
 #include "map.h"
-#include "util.h"
-#include "xmalloc.h"
 #include "xml_support.h"
 #include "zoneinfo_db.h"
 

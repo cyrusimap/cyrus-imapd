@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
+#include <cyrus/tok.h>
+
 #include <stdio.h>  /* for snprintf() */
 #include <stddef.h> /* for offsetof() macro */
 #include <syslog.h>
@@ -12,10 +17,7 @@
 #include "ical_support.h"
 #include "json_support.h"
 #include "jcal.h"
-#include "tok.h"
-#include "util.h"
 #include "version.h"
-#include "xstrlcat.h"
 
 
 /*

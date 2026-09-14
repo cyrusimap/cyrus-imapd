@@ -7,12 +7,14 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/strarray.h>
+
 #include <libical/ical.h>
 
 #include "acl.h"
 #include "parseaddr.h"
-#include "strarray.h"
-#include "util.h"
 
 
 #define SCHED_INBOX     "Inbox/"

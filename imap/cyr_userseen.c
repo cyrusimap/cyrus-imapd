@@ -1,8 +1,11 @@
 /* ctl_userseen.c - tool to remove seen records for owners. */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/xmalloc.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -20,8 +23,6 @@
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "seen.h"
-#include "util.h"
-#include "xmalloc.h"
 
 /* config.c stuff */
 static int do_remove = 0;
