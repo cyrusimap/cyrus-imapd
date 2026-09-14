@@ -160,11 +160,11 @@ libcyrus_min/cron-lex.c
 libcyrus_min/cron-parse.c
 libcyrus_min/cron-parse.h
 libcyrus_min/imapopts.c
+libcyrus_min/libcyrus_min.pc
 lib/htmlchar.h
 lib/mkchartable
 libcyrus.pc
 libcyrus_imap.pc
-libcyrus_min.pc
 libcyrus_sieve.pc
 libtool
 ltmain.sh
