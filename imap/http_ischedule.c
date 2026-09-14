@@ -397,6 +397,39 @@ static int meth_options_isched(struct transaction_t *txn, void *params)
 }
 
 
+static int caladdress_equal(const char *a, const char *b)
+{
+    if (!a || !b) return 0;
+    if (!strncasecmp(a, "mailto:", 7)) a += 7;
+    if (!strncasecmp(b, "mailto:", 7)) b += 7;
+
+    return !strcasecmp(a, b);
+}
+
+
+/* Is the Originator the ORGANIZER of the scheduling message, or for a
+ * REPLY one of its ATTENDEEs? */
+static int originator_matches(const char *originator, icalcomponent *comp,
+                              icalproperty_method meth)
+{
+    icalproperty *prop;
+
+    if (meth == ICAL_METHOD_REPLY) {
+        for (prop = icalcomponent_get_first_invitee(comp); prop;
+             prop = icalcomponent_get_next_invitee(comp)) {
+            if (caladdress_equal(originator,
+                                 icalproperty_get_decoded_calendaraddress(prop)))
+                return 1;
+        }
+        return 0;
+    }
+
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    return caladdress_equal(originator,
+                            icalproperty_get_decoded_calendaraddress(prop));
+}
+
+
 /* iSchedule Receiver */
 static int meth_post_isched(struct transaction_t *txn,
                             void *params __attribute__((unused)))
@@ -514,6 +547,13 @@ static int meth_post_isched(struct transaction_t *txn,
     if (!meth || !comp || !uid || !prop) {
         txn->error.precond = ISCHED_INVALID_SCHED;
         ret = HTTP_BAD_REQUEST;
+        goto done;
+    }
+
+    if (!originator_matches(originator, comp, meth)) {
+        txn->error.desc = "Originator is not the ORGANIZER or a replying ATTENDEE";
+        txn->error.precond = ISCHED_ORIG_DENIED;
+        ret = HTTP_FORBIDDEN;
         goto done;
     }
 
