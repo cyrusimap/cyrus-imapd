@@ -1,0 +1,27 @@
+Description:
+
+The iSchedule receiver now requires the Originator request header to match the
+ORGANIZER of the scheduling message, or one of its ATTENDEEs for a REPLY, as
+the (draft) spec requires.  A mismatch is refused with an originator-denied
+error.  Delivered objects are now stored as the local recipient, with the
+Originator recorded as the sender.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
