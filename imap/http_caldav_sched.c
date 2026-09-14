@@ -877,7 +877,8 @@ int sched_busytime_query(struct transaction_t *txn,
     static const char *calendarprefix = NULL;
     icalcomponent *comp;
     icalproperty *prop = NULL, *next;
-    const char *uid = NULL, *organizer = NULL;
+    const char *uid = NULL;
+    char *organizer = NULL;
     struct caldav_sched_param sparam;
     struct auth_state *org_authstate = NULL;
     xmlNodePtr root = NULL;
@@ -895,7 +896,8 @@ int sched_busytime_query(struct transaction_t *txn,
     uid = icalcomponent_get_uid(comp);
 
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    organizer = icalproperty_get_decoded_calendaraddress(prop);
+
+    organizer = xstrdupnull(icalproperty_get_decoded_calendaraddress(prop));
 
     /* XXX  Do we need to do more checks here? */
     if (caladdress_lookup(organizer, &sparam, NULL) ||
@@ -1094,6 +1096,7 @@ int sched_busytime_query(struct transaction_t *txn,
     if (!ret) xml_response(HTTP_OK, txn, root->doc);
 
   done:
+    free(organizer);
     if (org_authstate) auth_freestate(org_authstate);
     if (calfilter.freebusy.fb) free(calfilter.freebusy.fb);
     if (root) xmlFreeDoc(root->doc);
