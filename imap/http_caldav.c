@@ -7774,6 +7774,8 @@ static void combine_vavailability(struct freebusy_filter *fbfilter)
 
     /* Cleanup the vavailability array */
     free(vavail->vav);
+    vavail->vav = NULL;
+    vavail->len = vavail->alloc = 0;
 
     /* Cleanup the availability array */
     if (availfilter.freebusy.fb) free(availfilter.freebusy.fb);
