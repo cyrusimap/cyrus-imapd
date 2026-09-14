@@ -1,0 +1,33 @@
+Description:
+
+Hosts can be given a modseq_base and modseq_modulus so that modseqs,
+uidvalidities and nanosecond timestamps minted on different hosts can never
+collide, making split-brain recovery clash-free.
+
+
+Documentation:
+
+lib/imapoptions/modseq_base and lib/imapoptions/modseq_modulus
+
+
+Config changes:
+
+modseq_base (new, INT, default 0)
+modseq_modulus (new, INT, default 1)
+
+The defaults reproduce the previous behaviour exactly.
+
+
+Upgrade instructions:
+
+Nothing is required.  To enable the guard, give every host that may ever
+allocate for a user - a master and each of its replicas, since any may be
+promoted - a distinct modseq_base, and give every host in the replication
+group the same modseq_modulus.  Values already on disk keep their existing
+residues; only newly minted identifiers are protected.  Replication logs
+"SYNCERROR: identifier class clash" at both ends if two hosts share a base.
+
+
+GitHub issue:
+
+n/a

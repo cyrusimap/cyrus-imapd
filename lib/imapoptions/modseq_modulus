@@ -1,0 +1,20 @@
+Name: modseq_modulus
+Type: INT
+Default-Value: 1
+Last-Modified: UNRELEASED
+
+How many residue classes the identifier space is divided into - that is, the
+maximum number of hosts that can ever mint identifiers for a given user.  See
+:imapdconf:`modseq_base`.
+
+This value MUST be identical on every host in a replication group, and should
+be chosen with retired hosts in mind: a base should never be reused, so allow
+headroom beyond the current fleet size.
+
+Identifiers advance in steps of this value, so it consumes log2(modulus) bits
+of the 64-bit modseq space.  JMAP mailbox and calendar-event ids are a base64
+encoding of createdmodseq, so a large modulus makes those ids longer sooner.
+For nanosecond timestamps the modulus divides the 999999999 available values,
+which bounds how many messages can share one second in one mailbox.
+
+The default of 1 means a single class, i.e. the historical behaviour.
