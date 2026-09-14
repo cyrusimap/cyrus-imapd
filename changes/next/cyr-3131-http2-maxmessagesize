@@ -1,0 +1,29 @@
+Description:
+
+Request bodies received over HTTP/2 are now bounded by
+:imapdconf:`maxmessagesize`, as bodies received over HTTP/1.x already were.
+A request whose body exceeds the limit is answered with 413 (Content Too
+Large).  Previously the DATA frame handler appended every payload to the body
+with no size check at all.
+
+Tracked as GitHub security advisory GHSA-8hmh-f4jx-29pm.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
