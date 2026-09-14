@@ -1,0 +1,29 @@
+Description:
+
+An incoming iTIP scheduling message (delivered by iMIP email through the Sieve
+processcalendar/processimip action, or through the CalDAV scheduling inbox) is
+now merged safely when it carries more than one VTIMEZONE that shares a single
+TZID.  Previously the merge freed the stored timezone component the first time
+a TZID matched but left it in its lookup table, so a second VTIMEZONE with the
+same TZID freed the same component again, corrupting the heap and crashing the
+delivery worker.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
