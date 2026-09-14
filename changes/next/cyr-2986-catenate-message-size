@@ -1,0 +1,33 @@
+Description:
+
+The IMAP APPEND command's CATENATE extension now counts the size of TEXT and
+UTF8 parts toward the running total for the message being assembled.
+Previously that total was never advanced for those parts, so each TEXT or
+UTF8 part was measured against the entire :imapdconf:`maxmessagesize` budget
+rather than against whatever remained of it.  An authenticated user with
+permission to append to a mailbox could therefore use CATENATE to assemble a
+message of any size out of individually acceptable pieces, exceeding both the
+configured limit and the APPENDLIMIT value the server advertises.  URL parts
+were always counted correctly and were not affected.
+
+Tracked as GitHub security advisory GHSA-prx2-vhpq-ph9j.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
