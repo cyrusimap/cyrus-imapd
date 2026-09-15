@@ -1,0 +1,29 @@
+Description:
+
+Numeric Sieve match variable references are now required to be non-negative,
+as RFC 5229 specifies, and are checked against the number of match variables
+actually captured.  Previously a reference carrying a minus sign was accepted
+as a number and then used as an index into the list of match variables,
+reading memory from before the start of that list.
+
+Tracked as GitHub security advisory GHSA-98j8-cw4p-2fv5.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
