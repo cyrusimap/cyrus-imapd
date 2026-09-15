@@ -209,3 +209,7 @@ the code disagree, the code is right.
 - Do not anthropomorphize inanimate or abstract entities. Verbs like "speak",
   "answer", "scrutinize" almost always are wrong, unless they actually refer
   to human activity.
+- Try to avoid using words like "attacker" and "victim" when writing security-
+  sensitive code and tests. Often, neutral terms like "sharee", "sharer" and
+  "owner" are more specific. This applies to code comments, for commit messages
+  it typically makes sense to describe the actual attack that's been fixed.
