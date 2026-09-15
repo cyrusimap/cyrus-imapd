@@ -112,21 +112,31 @@ sub test_email_query_sort_category_unsupported
         },
     );
 
-    my @methods = map {
-        [ 'Email/query', { sort => $_->{sort} }, $_->{desc} ]
-    } @testcases;
-
-    my $res = $jmap->request(\@methods);
+    # Get the queryState for a supported sort. We need to pass this to
+    # queryChanges to assert unsupported sorts, as otherwise the request
+    # would already be rejected due to the invalid query state.
+    my $query_state = $jmap->request([
+        [ 'Email/query', { sort => [ { property => 'receivedAt' } ] }, 'R1' ],
+    ])->single_sentence('Email/query')->arguments->{queryState};
 
     for my $case (@testcases) {
-        my $args = $res->paragraph_by_client_id($case->{desc})
-                       ->single('error')->arguments;
+        my $res = $jmap->request([
+            [ 'Email/query', { sort => $case->{sort} }, 'query' ],
+            [ 'Email/queryChanges', { sort            => $case->{sort},
+                                      sinceQueryState => $query_state },
+              'querychanges' ],
+        ]);
 
-        $self->assert_str_equals('unsupportedSort', $args->{type},
-            "error type for $case->{desc}");
+        for my $method (qw( query querychanges )) {
+            my $args = $res->paragraph_by_client_id($method)
+                           ->single('error')->arguments;
 
-        # The error names the comparator that is not supported
-        $self->assert_cmp_deeply([ sprintf('sort[%d]', $case->{pos} // 0) ],
-            $args->{sort}, "unsupported sort for $case->{desc}");
+            $self->assert_str_equals('unsupportedSort', $args->{type},
+                "error type for $method $case->{desc}");
+
+            # The error names the comparator that is not supported
+            $self->assert_cmp_deeply([ sprintf('sort[%d]', $case->{pos} // 0) ],
+                $args->{sort}, "unsupported sort for $method $case->{desc}");
+        }
     }
 }
