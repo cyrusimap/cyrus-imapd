@@ -1537,9 +1537,10 @@ static int caldav_delete_cal(struct transaction_t *txn,
                     .createdmodseq = cdata->dav.createdmodseq,
                     .ical_uid = cdata->ical_uid
                 };
-                int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
+                int r2 = jmap_create_caldaveventnotif(httpd_userid,
                     httpd_authstate, mailbox_name(mailbox),
-                    &eid, &schedule_addresses, is_draft, ical, NULL);
+                    &eid, &schedule_addresses, is_draft, ical, NULL,
+                    NULL, NULL);
                 if (r2) {
                     xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
                             "error=%s", error_message(r2));
@@ -4306,9 +4307,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 .createdmodseq = cmodseq,
                 .ical_uid = uid
             };
-            int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
+            int r2 = jmap_create_caldaveventnotif(httpd_userid,
                     httpd_authstate, mailbox_name(mailbox), &eid,
-                    &schedule_addresses, is_draft, oldical, ical);
+                    &schedule_addresses, is_draft, oldical, ical,
+                    NULL, NULL);
             if (r2) {
                 xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
                         "error=%s", error_message(r2));

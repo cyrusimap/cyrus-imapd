@@ -28,17 +28,16 @@ extern int jmap_create_caleventnotif(struct mailbox *notifmbox,
                                      json_t *jevent,
                                      json_t *jpatch);
 
-typedef struct transaction_t txn_t; // defined in httpd.h
-
-extern int jmap_create_caldaveventnotif(struct transaction_t *txn,
-                                        const char *userid,
+extern int jmap_create_caldaveventnotif(const char *userid,
                                         const struct auth_state *authstate,
                                         const char *calmboxname,
                                         struct jmap_caleventid *eid,
                                         const strarray_t *schedule_addresses,
                                         int is_draft,
                                         icalcomponent *oldical,
-                                        icalcomponent *newical);
+                                        icalcomponent *newical,
+                                        const char *sender_address,
+                                        const char *sender_name);
 
 extern int calendar_has_sharees(const mbentry_t *mbentry);
 

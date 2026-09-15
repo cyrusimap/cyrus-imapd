@@ -344,15 +344,19 @@ HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
     return r;
 }
 
-HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
-                                        const char *userid,
+/* Record a CalendarEventNotification for a change to the event eid in
+ * calmboxname.  The change is attributed to userid unless sender_address is
+ * given, in which case it came from that address (and display name). */
+HIDDEN int jmap_create_caldaveventnotif(const char *userid,
                                         const struct auth_state *authstate,
                                         const char *calmboxname,
                                         struct jmap_caleventid *eid,
                                         const strarray_t *schedule_addresses,
                                         int is_draft,
                                         icalcomponent *oldical,
-                                        icalcomponent *newical)
+                                        icalcomponent *newical,
+                                        const char *sender_address,
+                                        const char *sender_name)
 {
     mbname_t *mbname = mbname_from_intname(calmboxname);
     const char *accountid = mbname_userid(mbname);
@@ -411,17 +415,17 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
     struct buf byname = BUF_INITIALIZER;
     const char *byemail = NULL;
     const char *byprincipal = NULL;
-    const char **hdr;
     char *from = NULL;
 
-    if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-Address"))) {
-        byemail = *hdr;
+    if (sender_address) {
+        /* Delivered by the scheduling engine on behalf of an iTIP sender */
+        byemail = sender_address;
         if (!strncasecmp(byemail, "mailto:", 7)) {
             byemail += 7;
         }
         from = strconcat("<", byemail, ">", NULL);
-        if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-name"))) {
-            char *val = charset_decode_mimeheader(*hdr, CHARSET_KEEPCASE);
+        if (sender_name) {
+            char *val = charset_decode_mimeheader(sender_name, CHARSET_KEEPCASE);
             if (val) buf_initmcstr(&byname, val);
         }
     }

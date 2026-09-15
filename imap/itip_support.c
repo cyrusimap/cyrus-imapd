@@ -1089,6 +1089,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     icalproperty *prop;
     enum sched_deliver_outcome result = SCHED_DELIVER_ERROR;
     strarray_t recipient_addresses = STRARRAY_INITIALIZER;
+    char *sender_address = NULL, *sender_name = NULL;
 
     /* Start with an empty (clean) transaction */
     struct transaction_t txn = { .userid = userid };
@@ -1111,18 +1112,13 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     txn.req_hdrs = spool_new_hdrcache();
     if (!txn.req_hdrs) goto done;
 
-    /* Set scheduling headers for JMAP CalendarEventNotification */
-    char *sched_sender_address = NULL;
+    /* Who any JMAP CalendarEventNotification is attributed to */
     if (mailfrom && mailfrom->mailbox)
-        sched_sender_address = address_get_all(mailfrom, 0);
-    if (!sched_sender_address)
-        sched_sender_address = xstrdupnull(sender);
-    if (sched_sender_address)
-        spool_append_header(xstrdup("Schedule-Sender-Address"),
-                sched_sender_address, txn.req_hdrs);
+        sender_address = address_get_all(mailfrom, 0);
+    if (!sender_address)
+        sender_address = xstrdupnull(sender);
     if (mailfrom && mailfrom->name)
-        spool_append_header(xstrdup("Schedule-Sender-Name"),
-                xstrdup(mailfrom->name), txn.req_hdrs);
+        sender_name = xstrdup(mailfrom->name);
 
     /* Check ACL of sender on recipient's Scheduling Inbox */
     mailboxname = caldav_mboxname(sparam->userid, SCHED_INBOX);
@@ -1391,9 +1387,10 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                             .createdmodseq = record.createdmodseq,
                             .ical_uid = uid
                         };
-                        int r2 = jmap_create_caldaveventnotif(&txn, userid, authstate,
+                        int r2 = jmap_create_caldaveventnotif(userid, authstate,
                                 mailbox_name(mailbox), &eid,
-                                &recipient_addresses, 0, oldical, NULL);
+                                &recipient_addresses, 0, oldical, NULL,
+                                sender_address, sender_name);
                         if (r2) {
                             xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
                                     "error=%s", error_message(r2));
@@ -1524,9 +1521,10 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                 mailbox_find_index_record(mailbox, mailbox->i.last_uid, &record);
                 eid.createdmodseq = record.createdmodseq;
             }
-            int r2 = jmap_create_caldaveventnotif(&txn, userid, authstate,
+            int r2 = jmap_create_caldaveventnotif(userid, authstate,
                     mailbox_name(mailbox), &eid,
-                    &recipient_addresses, 0, oldical, ical);
+                    &recipient_addresses, 0, oldical, ical,
+                    sender_address, sender_name);
             if (r2) {
                 xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
                         "error=%s", error_message(r2));
@@ -1570,6 +1568,8 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     mailbox_close(&mailbox);
     if (caldavdb) caldav_close(caldavdb);
     spool_free_hdrcache(txn.req_hdrs);
+    free(sender_address);
+    free(sender_name);
     buf_free(&txn.buf);
     free(mailboxname);
     mbname_free(&mbname);
