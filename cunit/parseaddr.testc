@@ -765,4 +765,21 @@ static void test_quoted_crlf(void)
     parseaddr_free(head);
 }
 
+static void test_typed_address(void)
+{
+    CU_ASSERT_TRUE(address_has_type("rfc822; user@example.com"));
+    CU_ASSERT_TRUE(address_has_type("rfc822;user@example.com"));
+    CU_ASSERT_TRUE(address_has_type("x-local ; user"));
+    CU_ASSERT_FALSE(address_has_type("user@example.com"));
+    CU_ASSERT_FALSE(address_has_type("; user@example.com"));
+    CU_ASSERT_FALSE(address_has_type(""));
+
+    CU_ASSERT_STRING_EQUAL(address_skip_type("rfc822; user@example.com"),
+                           "user@example.com");
+    CU_ASSERT_STRING_EQUAL(address_skip_type("rfc822;user@example.com"),
+                           "user@example.com");
+    CU_ASSERT_STRING_EQUAL(address_skip_type("user@example.com"),
+                           "user@example.com");
+}
+
 /* vim: set ft=c: */
