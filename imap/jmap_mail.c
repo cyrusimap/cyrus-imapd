@@ -3704,6 +3704,7 @@ struct guidsearch_build_context {
     bool need_folders;
     bool need_seen;
     bool need_systemflags;
+    bool need_convflags;
     struct {
         ptrarray_t *as_list;       // struct emailquery_category_guidset *
         hash_table *by_condition;  // keyed by the serialised condition
@@ -4020,6 +4021,7 @@ guidsearch_expr_build(struct guidsearch_build_context *build_ctx,
                             ge = NULL;
                         }
                     }
+                    if (ge) build_ctx->need_convflags = true;
                 }
             }
             break;
@@ -4749,6 +4751,7 @@ struct emailquery_category {
     uint32_t numfolders;  // zero unless a groupBy filter reads mailboxes
     struct jmapseen_attrdata *seendata;  // not owned, set if $seen is read
     bool need_guidrecs;  // true if a groupBy filter reads the G records
+    bool need_convflags;  // true if a groupBy filter reads thread state
     ptrarray_t guidsets;  // struct emailquery_category_guidset *
     /* Minimum search index version that the groupBy filters require */
     unsigned need_xapian_index_version;
@@ -4849,6 +4852,7 @@ static int emailquery_category_init(jmap_req_t *req,
 
     cat->need_guidrecs = build_ctx.need_folders || build_ctx.need_seen ||
                          build_ctx.need_systemflags;
+    cat->need_convflags = build_ctx.need_convflags;
     if (cat->need_guidrecs) {
         emailsearch_readable_folders(req, &cat->readable_folders);
     }
@@ -5009,6 +5013,23 @@ static uint8_t emailquery_category_of_guid(struct emailquery_category *cat,
     guidsearch_match_fini(&match);
 
     return category;
+}
+
+/* Calculates the start offset for each category in the sorted result. Emails
+ * that match no category sort at the end for ascending sort, or at the start
+ * for descending sort. */
+static void emailquery_category_offsets(const struct emailquery_category *cat,
+                                        size_t *offsets)
+{
+    size_t nbuckets = cat->ngroups + 1;
+    size_t pos = 0;
+
+    for (size_t i = 0; i < nbuckets; i++) {
+        size_t bucket = cat->is_ascending ? i : nbuckets - 1 - i;
+        size_t count = offsets[bucket];
+        offsets[bucket] = pos;
+        pos += count;
+    }
 }
 
 /* The search session that all Xapian lookups of one Email/query share.
@@ -5520,9 +5541,7 @@ static int emailquery_search(jmap_req_t *req,
     }
     if (r) goto done;
 
-    /* A category sort orders by mutable keyword state that queryChanges
-     * can not track */
-    qr->is_mutable = emailsearch_is_mutable(&search) && !q->category;
+    qr->is_mutable = emailsearch_is_mutable(&search);
     qr->is_imapfoldersearch = search.is_imapfolder;
     qr->is_guidsearch = is_guidsearch;
     qr->never_matches = search.never_matches;
@@ -5592,17 +5611,7 @@ static void emailquery_sort_by_category(struct emailquery *q,
     for (size_t i = 0; i < qc->uncollapsed_len; i++) {
         offsets[qc->uncollapsed_matches[i].category]++;
     }
-
-    /* Turn the counts into the start offset of each category. Emails that
-     * match no groupBy filter sort after all categories when ascending,
-     * and before them when descending. */
-    size_t pos = 0;
-    for (size_t i = 0; i < nbuckets; i++) {
-        size_t bucket = q->category->is_ascending ? i : nbuckets - 1 - i;
-        size_t count = offsets[bucket];
-        offsets[bucket] = pos;
-        pos += count;
-    }
+    emailquery_category_offsets(q->category, offsets);
 
     struct emailquery_match *sorted =
         xmalloc(sizeof(struct emailquery_match) * qc->uncollapsed_len);
@@ -5780,6 +5789,17 @@ static void emailquery_cache_slice(struct emailquery *q,
     *np = n;
 }
 
+static json_t *emailquery_counts_to_json(const size_t *counts, size_t ngroups)
+{
+    json_t *jcounts = json_array();
+
+    for (size_t i = 0; i < ngroups; i++) {
+        json_array_append_new(jcounts, json_integer(counts[i]));
+    }
+
+    return jcounts;
+}
+
 static json_t *emailquery_groupby_counts(struct emailquery *q,
                                          struct emailquery_cache *qc,
                                          size_t ngroups)
@@ -5799,10 +5819,7 @@ static json_t *emailquery_groupby_counts(struct emailquery *q,
         if (matches[i].category < ngroups) counts[matches[i].category]++;
     }
 
-    json_t *jcounts = json_array();
-    for (size_t i = 0; i < ngroups; i++) {
-        json_array_append_new(jcounts, json_integer(counts[i]));
-    }
+    json_t *jcounts = emailquery_counts_to_json(counts, ngroups);
     free(counts);
 
     return jcounts;
@@ -6188,7 +6205,116 @@ done:
     return 0;
 }
 
+static int emailquery_changes_category_init(jmap_req_t *req,
+                                            struct emailquery *q,
+                                            json_t *jsort,
+                                            hash_table *contactgroups,
+                                            json_t **err)
+{
+    json_t *jcategory = emailquery_category_comparator(jsort);
+    if (!jcategory) {
+        return 0;
+    }
+
+    struct emailquery_searchsession ss = EMAILQUERY_SEARCHSESSION_INITIALIZER;
+    bool too_slow = false;
+
+    int r =
+        emailquery_category_init(req, jcategory, contactgroups, &q->category);
+    if (!r && ptrarray_size(&q->category->guidsets)) {
+        r = emailquery_searchsession_open(req, &ss);
+        if (!r) {
+            r = emailquery_category_load_guidsets(q->category, ss.session);
+            too_slow = r == IMAP_SEARCH_SLOW;
+        }
+    }
+    emailquery_searchsession_close(&ss);
+
+    if (r == IMAP_SEARCH_NOT_SUPPORTED) {
+        *err = json_pack("{s:s s:[s]}",
+                         "type",
+                         "unsupportedSort",
+                         "sort",
+                         "sort[0]");
+    }
+    else if (too_slow) {
+        *err = json_pack("{s:s s:[s] s:s}",
+                         "type",
+                         "unsupportedSort",
+                         "sort",
+                         "sort[0]",
+                         "description",
+                         "search too slow");
+    }
+    else if (r) {
+        *err = jmap_server_error(r);
+    }
+
+    return r;
+}
+
+static void emailquery_changes_load_convmodseq(
+    struct conversations_state *cstate,
+    const ptrarray_t *msgdata)
+{
+    for (int i = 0; i < ptrarray_size(msgdata); i++) {
+        MsgData *md = ptrarray_nth(msgdata, i);
+        if (md->convmodseq || !md->cid) {
+            continue;
+        }
+
+        modseq_t convmodseq = 0;
+        if (!conversation_get_modseq(cstate, md->cid, &convmodseq)) {
+            md->convmodseq = convmodseq;
+        }
+    }
+}
+
+static uint8_t *emailquery_changes_sort_by_category(
+    struct emailquery_category *cat,
+    ptrarray_t *msgdata)
+{
+    size_t len = ptrarray_size(msgdata);
+    uint8_t *categories = xmalloc(len + 1);
+
+    for (size_t i = 0; i < len; i++) {
+        MsgData *md = ptrarray_nth(msgdata, i);
+        categories[i] =
+            emailquery_category_of_guid(cat,
+                                        &md->guid,
+                                        md->cid,
+                                        TIMESPEC_TO_NANOSEC(&md->internaldate));
+    }
+
+    /* The search sorted its matches by the other comparators, and the
+     * category comparator is the primary sort, so this amounts to a stable
+     * partition of the matches by category. */
+    size_t *offsets = xzmalloc((cat->ngroups + 1) * sizeof(size_t));
+    for (size_t i = 0; i < len; i++) {
+        offsets[categories[i]]++;
+    }
+    emailquery_category_offsets(cat, offsets);
+
+    void **sorted = xmalloc((len + 1) * sizeof(void *));
+    uint8_t *sorted_categories = xmalloc(len + 1);
+    for (size_t i = 0; i < len; i++) {
+        size_t pos = offsets[categories[i]]++;
+        sorted[pos] = ptrarray_nth(msgdata, i);
+        sorted_categories[pos] = categories[i];
+    }
+    for (size_t i = 0; i < len; i++) {
+        ptrarray_set(msgdata, i, sorted[i]);
+    }
+
+    free(sorted);
+    free(offsets);
+    free(categories);
+
+    return sorted_categories;
+}
+
 static void _email_querychanges_collapsed(jmap_req_t *req,
+                                          struct emailquery *q,
                                           struct jmap_querychanges *query,
                                           struct email_contactfilter *contactfilter,
                                           json_t **err)
@@ -6200,6 +6326,9 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     modseq_t since_highest_createdmodseq = 0;
     uint64_t since_index_generation = 0;
     struct hashset *savedates = NULL;
+    uint8_t *categories = NULL;
+    size_t *counts = NULL;
+    size_t ngroups = 0;
     int r = 0;
 
     if (!_email_read_querystate(req, query->since_querystate,
@@ -6226,6 +6355,18 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
                       /*ignore_timer*/0, err);
     if (*err) goto done;
 
+    /* Compile the groupBy filters of a category sort */
+    if (emailquery_changes_category_init(req, q, query->sort,
+                                         &contactfilter->contactgroups, err)) {
+        goto done;
+    }
+    if (q->category) {
+        /* A category sort groups by mutable message and thread state */
+        search.is_mutable |= 1;
+        ngroups = q->category->ngroups;
+        counts = xzmalloc(ngroups * sizeof(size_t));
+    }
+
     if (!emailsearch_is_mutable(&search)) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
                                       "description", "mutable search");
@@ -6242,6 +6383,15 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
             search.never_matches ? 0 : search.query->highest_createdmodseq;
     uint64_t index_generation =
             search.never_matches ? 0 : search.query->index_generation;
+    /* A category sort reads its groupBy conditions from Xapian, so the
+     * result must not reach past the index snapshot they were read at,
+     * even if the filter itself did not use Xapian. */
+    if (q->category && q->category->highest_createdmodseq &&
+        (!highest_createdmodseq ||
+         q->category->highest_createdmodseq < highest_createdmodseq)) {
+        highest_createdmodseq = q->category->highest_createdmodseq;
+        index_generation = q->category->index_generation;
+    }
     if (since_highest_createdmodseq || highest_createdmodseq) {
         if (!since_highest_createdmodseq || !highest_createdmodseq ||
                 since_index_generation != index_generation ||
@@ -6260,10 +6410,17 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     }
 
     /* Prepare result loop */
-    const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
+    ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
     char email_id[JMAP_MAX_EMAILID_SIZE];
     int found_up_to = 0;
     size_t mdcount = msgdata->count;
+
+    if (q->category) {
+        if (q->category->need_convflags) {
+            emailquery_changes_load_convmodseq(req->cstate, msgdata);
+        }
+        categories = emailquery_changes_sort_by_category(q->category, msgdata);
+    }
 
     if (search.sort_savedate) savedates = emailquery_savedates(msgdata);
 
@@ -6370,6 +6527,8 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
         if (!(touched_cid & 2)) {
             query->total++;
             new_touched_cid |= 2;
+            /* Emails matching no groupBy filter are in no group */
+            if (categories && categories[i] < ngroups) counts[categories[i]]++;
         }
 
         if (found_up_to) goto doneloop;
@@ -6440,6 +6599,10 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     free_hash_table(&touched_ids, NULL);
     free_hashu64_table(&touched_cids, NULL);
 
+    if (q->category) {
+        q->groupby_counts = emailquery_counts_to_json(counts, ngroups);
+    }
+
     modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     query->new_querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq,
             highest_createdmodseq, index_generation);
@@ -6453,10 +6616,13 @@ done:
         else *err = jmap_server_error(r);
     }
     if (savedates) hashset_free(&savedates);
+    free(categories);
+    free(counts);
     emailsearch_fini(&search);
 }
 
 static void _email_querychanges_uncollapsed(jmap_req_t *req,
+                                            struct emailquery *q,
                                             struct jmap_querychanges *query,
                                             struct email_contactfilter *contactfilter,
                                             json_t **err)
@@ -6468,6 +6634,9 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     modseq_t since_highest_createdmodseq = 0;
     uint64_t since_index_generation = 0;
     struct hashset *savedates = NULL;
+    uint8_t *categories = NULL;
+    size_t *counts = NULL;
+    size_t ngroups = 0;
     int r = 0;
 
     if (!_email_read_querystate(req, query->since_querystate,
@@ -6493,6 +6662,18 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
                       /*ignore_timer*/0, err);
     if (*err) goto done;
 
+    /* Compile the groupBy filters of a category sort */
+    if (emailquery_changes_category_init(req, q, query->sort,
+                                         &contactfilter->contactgroups, err)) {
+        goto done;
+    }
+    if (q->category) {
+        /* A category sort groups by mutable message and thread state */
+        search.is_mutable |= 1;
+        ngroups = q->category->ngroups;
+        counts = xzmalloc(ngroups * sizeof(size_t));
+    }
+
     if (!emailsearch_is_mutable(&search)) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
                                       "description", "mutable search");
@@ -6509,6 +6690,15 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
             search.never_matches ? 0 : search.query->highest_createdmodseq;
     uint64_t index_generation =
             search.never_matches ? 0 : search.query->index_generation;
+    /* A category sort reads its groupBy conditions from Xapian, so the
+     * result must not reach past the index snapshot they were read at,
+     * even if the filter itself did not use Xapian. */
+    if (q->category && q->category->highest_createdmodseq &&
+        (!highest_createdmodseq ||
+         q->category->highest_createdmodseq < highest_createdmodseq)) {
+        highest_createdmodseq = q->category->highest_createdmodseq;
+        index_generation = q->category->index_generation;
+    }
     if (since_highest_createdmodseq || highest_createdmodseq) {
         if (!since_highest_createdmodseq || !highest_createdmodseq ||
                 since_index_generation != index_generation ||
@@ -6527,10 +6717,17 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     }
 
     /* Prepare result loop */
-    const ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
+    ptrarray_t *msgdata = search.never_matches ? &empty_ptrarray : &search.query->merged_msgdata;
     char email_id[JMAP_MAX_EMAILID_SIZE];
     int found_up_to = 0;
     size_t mdcount = msgdata->count;
+
+    if (q->category) {
+        if (q->category->need_convflags) {
+            emailquery_changes_load_convmodseq(req->cstate, msgdata);
+        }
+        categories = emailquery_changes_sort_by_category(q->category, msgdata);
+    }
 
     if (search.sort_savedate) savedates = emailquery_savedates(msgdata);
 
@@ -6627,6 +6824,8 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         if (!(touched_id & 2)) {
             query->total++;
             new_touched_id |= 2;
+            /* Emails matching no groupBy filter are in no group */
+            if (categories && categories[i] < ngroups) counts[categories[i]]++;
         }
 
         if (found_up_to) goto doneloop;
@@ -6673,6 +6872,10 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
 
     free_hash_table(&touched_ids, NULL);
 
+    if (q->category) {
+        q->groupby_counts = emailquery_counts_to_json(counts, ngroups);
+    }
+
     modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     query->new_querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq,
             highest_createdmodseq, index_generation);
@@ -6686,6 +6889,8 @@ done:
         else *err = jmap_server_error(r);
     }
     if (savedates) hashset_free(&savedates);
+    free(categories);
+    free(counts);
     emailsearch_fini(&search);
 }
 
@@ -6720,19 +6925,13 @@ static int jmap_email_querychanges(jmap_req_t *req)
         goto done;
     }
 
-    /* A category sort makes the sort order depend on mutable state that
-     * queryChanges does not track */
-    if (emailquery_category_comparator(query.sort)) {
-        jmap_error(req, json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
-                    "description", "sort by category"));
-        goto done;
-    }
-
     /* Query changes */
     if (emailquery.collapse_threads)
-        _email_querychanges_collapsed(req, &query, &contactfilter, &err);
+        _email_querychanges_collapsed(req, &emailquery, &query,
+                                      &contactfilter, &err);
     else
-        _email_querychanges_uncollapsed(req, &query, &contactfilter, &err);
+        _email_querychanges_uncollapsed(req, &emailquery, &query,
+                                        &contactfilter, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -6742,6 +6941,9 @@ static int jmap_email_querychanges(jmap_req_t *req)
     json_t *res = jmap_querychanges_reply(&query);
     json_object_set(res, "collapseThreads",
             json_boolean(emailquery.collapse_threads));
+    if (emailquery.groupby_counts) {
+        json_object_set(res, "groupByCounts", emailquery.groupby_counts);
+    }
     jmap_ok(req, res);
 
 done:
