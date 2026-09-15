@@ -1076,6 +1076,22 @@ HIDDEN void itip_strip_personal_data(icalcomponent *comp)
     }
 }
 
+HIDDEN void itip_strip_managedid(icalcomponent *comp)
+{
+    icalproperty *prop;
+
+    /* A MANAGED-ID identifies an attachment only within the scope of the
+     * server that issued it (RFC 8607, Section 4.3), so one arriving from
+     * elsewhere names nothing here and must not be taken as a reference to
+     * a local managed attachment.
+     */
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)) {
+        icalproperty_remove_parameter_by_kind(prop, ICAL_MANAGEDID_PARAMETER);
+    }
+}
+
 
 /* Deliver scheduling object to local recipient */
 HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
@@ -1179,9 +1195,10 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     comp = icalcomponent_get_first_real_component(itip);
     kind = icalcomponent_isa(comp);
 
-    /* Strip VALARMs, TRANSP, COLOR, and CATEGORIES (if color) */
+    /* Strip VALARMs, TRANSP, COLOR, CATEGORIES (if color), and MANAGED-ID */
     for (; comp; comp = icalcomponent_get_next_component(itip, kind)) {
         itip_strip_personal_data(comp);
+        itip_strip_managedid(comp);
     }
 
     /* Search for iCal UID in recipient's calendars */
