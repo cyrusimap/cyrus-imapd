@@ -1,0 +1,120 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A MANAGED-ID names a managed attachment only within the server that
+# issued it, so one arriving over iMIP refers to nothing here.  Honouring
+# it would let an external sender plant a reference to the recipient's own
+# attachment; removing the planted event would then drop a reference count
+# that was never taken, and expunge the attachment out from under the
+# event that really owns it.
+#
+sub test_imip_strips_managedid
+    :needs_component_httpd :want_service_http :needs_component_jmap
+    ($self)
+{
+    my $caldav = $self->{caldav};
+
+    xlog $self, "Create an event with a managed attachment";
+    my $rawIcal = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:owned-event
+TRANSP:OPAQUE
+SUMMARY:owned
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DURATION:PT1H
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/owned.ics', $rawIcal,
+        'Content-Type' => 'text/calendar');
+
+    my $url = $caldav->request_url('/dav/calendars/user/cassandane/Default/owned.ics')
+            . '?action=attachment-add';
+    my $res = $caldav->ua->post($url, {
+        headers => {
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => 'attachment;filename=test',
+            'Prefer' => 'return=representation',
+            'Authorization' => $caldav->auth_header(),
+        },
+        content => 'davattach',
+    });
+    $self->assert_str_equals('201', $res->{status});
+
+    my $hash = Text::VCardFast::vcard2hash($res->{content});
+    my $attach = $hash->{objects}[0]{objects}[0]{properties}{attach}[0];
+    my $managedid = $attach->{params}{'managed-id'}[0];
+    my $attachHref = $attach->{value};
+    $self->assert_not_null($managedid);
+
+    $res = $caldav->ua->request('GET', $attachHref,
+        { headers => { 'Authorization' => $caldav->auth_header() } });
+    $self->assert_str_equals('200', $res->{status});
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "processcalendar"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processcalendar :outcome "outcome";
+}
+EOF
+    );
+
+    my $uuid = "planted-event-uid";
+    my $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Sender <sender\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid\@example.net>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: $uuid
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+METHOD:REQUEST
+BEGIN:VEVENT
+CREATED:20210923T034327Z
+UID:$uuid
+DTSTART:20260901T183000Z
+DURATION:PT1H
+SUMMARY:planted
+ATTACH;MANAGED-ID=$managedid:https://example.com/x
+ORGANIZER:MAILTO:sender\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "Deliver an iMIP invite naming our own managed attachment";
+    my $msg = Cassandane::Message->new(raw => $imip);
+    $self->{instance}->deliver($msg);
+
+    my $plantedHref = "/dav/calendars/user/cassandane/Default/$uuid.ics";
+    $res = $caldav->ua->request('GET', $caldav->request_url($plantedHref),
+        { headers => { 'Authorization' => $caldav->auth_header() } });
+    $self->assert_str_equals('200', $res->{status});
+
+    xlog $self, "The delivered event kept ATTACH but lost the MANAGED-ID";
+    $self->assert_matches(qr/^ATTACH/m, $res->{content});
+    $self->assert_does_not_match(qr/MANAGED-ID/, $res->{content});
+
+    xlog $self, "Removing the delivered event leaves the attachment alone";
+    $res = $caldav->ua->request('DELETE', $caldav->request_url($plantedHref),
+        { headers => { 'Authorization' => $caldav->auth_header() } });
+    $self->assert_str_equals('204', $res->{status});
+
+    $res = $caldav->ua->request('GET', $attachHref,
+        { headers => { 'Authorization' => $caldav->auth_header() } });
+    $self->assert_str_equals('200', $res->{status});
+}
