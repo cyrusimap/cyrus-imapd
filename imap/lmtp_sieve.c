@@ -31,6 +31,7 @@
 #include "lmtpengine.h"
 #include "map.h"
 #include "notify.h"
+#include "parseaddr.h"
 #include "prometheus.h"
 #include "prot.h"
 #include "times.h"
@@ -477,8 +478,12 @@ static int send_rejection(const char *userid,
             (int) p, config_servername);
     buf_printf(&msgbuf, "Reporting-UA: %s; Cyrus %s/%s\r\n",
             config_servername, CYRUS_VERSION, SIEVE_VERSION);
-    if (origreceip)
-        buf_printf(&msgbuf, "Original-Recipient: rfc822; %s\r\n", origreceip);
+    if (origreceip) {
+        /* The configured header may already carry an RFC 8098 address-type
+         * (Original-Recipient does), or be a bare address (X-Delivered-To) */
+        buf_printf(&msgbuf, "Original-Recipient: %s%s\r\n",
+                   address_has_type(origreceip) ? "" : "rfc822; ", origreceip);
+    }
 
     if (config_getswitch(IMAPOPT_SIEVE_MDN_PRIVATE))
         buf_printf(&msgbuf, "Final-Recipient: rfc822; %s\r\n", session_id());
