@@ -27,6 +27,12 @@ ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(S
 # the i18n builder cannot share the environment and doctrees with the others
 I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(SOURCEDIR)
 
+# Every builder here shares one doctree cache, which is safe as long as only
+# one runs at once.  Otherwise, they clobber each other's pickles.  So: no
+# parallel make here.  Nothing in this file wants it much anyway, and
+# sphinx-build does its own parallelism.
+.NOTPARALLEL:
+
 .PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext doxygen cassandane-api
 
 help:
