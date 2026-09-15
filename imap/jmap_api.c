@@ -682,15 +682,32 @@ HIDDEN int jmap_api(struct transaction_t *txn,
             continue;
         }
 
-        /* Validate accountId argument */
-        const char *accountid = httpd_userid;
+        /* Pre-process result references first, so that an accountId supplied
+         * by reference is in place before it is validated */
         json_t *err = NULL;
+        if (process_resultrefs(args, resp, &err)) {
+            if (!err) err = json_pack("{s:s}", "type", "invalidResultReference");
+
+            json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
+            json_decref(args);
+            continue;
+        }
+
+        /* RFC 8620 Section 3.6.2: every method but Core/echo requires
+         * accountId, and a missing or non-string one is invalidArguments.
+         * Without jmap_require_accountid, missing or null means the
+         * login's own account. */
+        const char *accountid = NULL;
         json_t *arg = json_object_get(args, "accountId");
-        if (arg && json_is_cyrus_accountid(arg)) {
+        if (mp->flags & JMAP_NO_ACCOUNTID) {
+            accountid = httpd_userid;
+        }
+        else if (json_is_cyrus_accountid(arg)) {
             accountid = json_string_value(arg);
         }
-        else if (JNOTNULL(arg)) {
-            accountid = NULL;
+        else if (!JNOTNULL(arg) &&
+                 !config_getswitch(IMAPOPT_JMAP_REQUIRE_ACCOUNTID)) {
+            accountid = httpd_userid;
         }
         if (!accountid) {
             err = json_pack("{s:s, s:[s]}",
@@ -752,15 +769,6 @@ HIDDEN int jmap_api(struct transaction_t *txn,
                 json_decref(args);
                 continue;
             }
-        }
-
-        /* Pre-process result references */
-        if (process_resultrefs(args, resp, &err)) {
-            if (!err) err = json_pack("{s:s}", "type", "invalidResultReference");
-
-            json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
-            json_decref(args);
-            continue;
         }
 
         if (config_getswitch(IMAPOPT_READONLY) && (mp->flags & JMAP_READ_WRITE)) {
@@ -1054,6 +1062,12 @@ HIDDEN void jmap_add_subreq(jmap_req_t *req, const char *method,
                             json_t *args, const char *client_id)
 {
     if (!client_id) client_id = req->tag;
+    /* A sub-request runs against the requesting method's account unless it
+     * says otherwise. It goes through the same argument validation as a
+     * client's call, which requires accountId. */
+    if (!json_object_get(args, "accountId")) {
+        json_object_set_new(args, "accountId", json_string(req->accountid));
+    }
     ptrarray_push(req->method_calls, json_pack("[s,o,s]", method, args, client_id));
 }
 
