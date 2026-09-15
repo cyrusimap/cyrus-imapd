@@ -7,7 +7,7 @@ sub test_email_query_inmailbox_before
 {
     my $jmap = $self->{jmap};
 
-    my $account = undef;
+    my $account = 'cassandane';
     my $store = $self->{store};
     my $mboxprefix = "INBOX";
     my $talk = $store->get_client();
