@@ -117,6 +117,7 @@ struct prot_waitevent {
 int prot_flush_internal(struct protstream *s, int force);
 
 #define PROT_EOF_STRING "end of file reached"
+#define PROT_IDLE_STRING "idle for too long"
 #define PROTGROUP_SIZE_DEFAULT 32
 struct protgroup; /* Opaque protgroup structure */
 

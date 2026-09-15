@@ -82,6 +82,7 @@ enum {
 extern int is_mediatype(const char *pat, const char *type);
 extern int http_parse_framing(int http2, hdrcache_t hdrs, struct body_t *body,
                               const char **errstr);
+extern bool http_parse_chunk_size(const char *buf, unsigned long *chunk);
 extern int http_read_headers(struct protstream *pin, int read_sep,
                              hdrcache_t *hdrs, const char **errstr);
 extern int http_read_body(struct protstream *pin, hdrcache_t hdrs,
