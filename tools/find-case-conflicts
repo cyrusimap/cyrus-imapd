@@ -1,0 +1,62 @@
+#!/usr/bin/perl
+use v5.28.0;
+use warnings;
+use utf8;
+
+binmode *STDOUT, ':encoding(utf-8)';
+binmode *STDERR, ':encoding(utf-8)';
+
+use Getopt::Long;
+
+# Some filesystems (macOS's default HFS+/APFS configuration, Windows) are
+# case-insensitive.  If the repository contains two paths that differ only in
+# case, those systems can't check out both of them, and the working copy is
+# broken for anybody using one.  This tool rejects such pairs.
+
+my $ok = GetOptions(
+  'help|h' => \my $help,
+);
+
+unless ($ok && !$help) {
+  die "usage: find-case-conflicts [PATHS]\n";
+}
+
+my @conflicts = scan([@ARGV]);
+
+if (@conflicts) {
+  say "❌ Paths differing only in case:";
+  say "  " . join(q{, }, @$_) for @conflicts;
+  exit 1;
+}
+
+say "✅ No case conflicts.";
+exit;
+
+sub scan {
+  my ($paths) = @_;
+
+  my @lines = `git ls-files -- @$paths`;
+
+  die "problem running git ls-files\n" if $?;
+
+  chomp @lines;
+
+  my %spelling_of;
+  for my $filename (@lines) {
+    my @parts = split m{/}, $filename;
+
+    my $prefix = q{};
+    for my $part (@parts) {
+      $prefix = length $prefix ? "$prefix/$part" : $part;
+      $spelling_of{ lc $prefix }{ $prefix } = 1;
+    }
+  }
+
+  my @found;
+  for my $folded (sort keys %spelling_of) {
+    my @spellings = sort keys %{ $spelling_of{$folded} };
+    push @found, \@spellings if @spellings > 1;
+  }
+
+  return @found;
+}
