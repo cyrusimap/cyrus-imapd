@@ -15,10 +15,13 @@ static void test_parsenum(void)
     const char NUM1[] = "1somestuff";
     const char NUMBIG[] = "18446744073709551615ULL"; // non-digits parse OK
     const char NUMTOOBIG[] = "18446744073709551616";
+    const char BOGUS0[] = "4\xB2";
+    const char BOGUS1[] = "\xB3" "1";
     bit64 val = CANARY;
     int r;
+    const char *end;
 
-    r = parsenum(NUM0, NULL, strlen(NUM0), &val);
+    r = parsenum(NUM0, &end, strlen(NUM0), &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(val, 0);
 
@@ -26,14 +29,26 @@ static void test_parsenum(void)
     r = parsenum(NUM1, NULL, strlen(NUM1), &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(val, 1);
+    CU_ASSERT_PTR_EQUAL(end, NUM0 + 1);
 
     val = CANARY;
-    r = parsenum(NUMBIG, NULL, strlen(NUMBIG), &val);
+    r = parsenum(NUMBIG, &end, strlen(NUMBIG), &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(val, 18446744073709551615ULL);
+    CU_ASSERT_PTR_EQUAL(end, NUMBIG + 20);
 
     val = CANARY;
     r = parsenum(NUMTOOBIG, NULL, strlen(NUMTOOBIG), &val);
+    CU_ASSERT_EQUAL(r, -1);
+
+    val = CANARY;
+    r = parsehex(BOGUS0, &end, strlen(BOGUS0), &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(val, 4);
+    CU_ASSERT_PTR_EQUAL(end, BOGUS0 + 1);
+
+    val = CANARY;
+    r = parsehex(BOGUS1, &end, strlen(BOGUS1), &val);
     CU_ASSERT_EQUAL(r, -1);
 }
 
@@ -43,26 +58,55 @@ static void test_parsehex(void)
     const char NUM1[] = "1somestuff";
     const char NUMBIG[] = "ffffffffffffffff";
     const char NUMTOOBIG[] = "10000000000000000";
+    const char NUMLONG[] = "fEdCbA9876543210!";
+    const char BOGUS0[] = "2\xAF";
+    const char BOGUS1[] = "\xA3" "1";
+    const char BOGUS2[] = "0xD"; /* for this, stroull() would return 13 */
     bit64 val = CANARY;
     int r;
+    const char *end;
 
     r = parsehex(NUM0, NULL, strlen(NUM0), &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(val, 0);
 
     val = CANARY;
-    r = parsehex(NUM1, NULL, strlen(NUM1), &val);
+    r = parsehex(NUM1, &end, strlen(NUM1), &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(val, 1);
+    CU_ASSERT_PTR_EQUAL(end, NUM1 + 1);
 
     val = CANARY;
-    r = parsehex(NUMBIG, NULL, strlen(NUMBIG), &val);
+    r = parsehex(NUMBIG, &end, strlen(NUMBIG), &val);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL(val, 18446744073709551615ULL);
+    CU_ASSERT_PTR_EQUAL(end, NUMBIG + strlen(NUMBIG));
 
     val = CANARY;
     r = parsehex(NUMTOOBIG, NULL, strlen(NUMTOOBIG), &val);
     CU_ASSERT_EQUAL(r, -1);
+
+    val = CANARY;
+    r = parsehex(NUMLONG, &end, strlen(NUMLONG), &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(val, 18364758544493064720ULL);
+    CU_ASSERT_PTR_EQUAL(end, NUMLONG + strlen(NUMLONG) - 1);
+
+    val = CANARY;
+    r = parsehex(BOGUS0, &end, strlen(BOGUS0), &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(val, 2);
+    CU_ASSERT_PTR_EQUAL(end, BOGUS0 + 1);
+
+    val = CANARY;
+    r = parsehex(BOGUS1, &end, strlen(BOGUS1), &val);
+    CU_ASSERT_EQUAL(r, -1);
+
+    val = CANARY;
+    r = parsehex(BOGUS2, &end, strlen(BOGUS2), &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(val, 0);
+    CU_ASSERT_PTR_EQUAL(end, BOGUS2 + 1);
 }
 
 #define wrap_int_parser_nofree(prot, b, func, type, s, outp, valp, inp) do  \
