@@ -1,0 +1,31 @@
+
+Description:
+
+MDN/parse (RFC 9007) is implemented; it was a stub that reported every
+blob as notParsable.  MDN/send follows RFC 9007, Section 2.1: it takes
+identityId and onSuccessUpdateEmail, accepts a client-set finalRecipient
+and extensionFields, reports a missing message as notFound, and sends a
+well-formed null envelope sender.  The MDN that the Sieve "reject" action
+sends no longer doubles the address-type in Original-Recipient.
+
+
+Documentation:
+
+docsrc/rfc-support.rst lists RFC 9007.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Clients of the earlier MDN/send must now pass identityId (the value
+Identity/get reports) and an onSuccessUpdateEmail argument that sets the
+$mdnsent keyword, as RFC 9007 requires.
+
+
+GitHub issue:
+
+None.

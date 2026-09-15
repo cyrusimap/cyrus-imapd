@@ -818,6 +818,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP4 Extension: Message Preview Generation
 
+:rfc:`9007`
+
+    Handling Message Disposition Notification with the JSON Meta
+    Application Protocol (JMAP)
+
 :rfc:`9042`
 
     Sieve Email Filtering: Delivery by MAILBOXID
