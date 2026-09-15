@@ -1,43 +1,141 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_querychanges_sort_category
-    :JMAPExtensions
-    ($self)
+sub assert_email_querychanges_sort_category ($self, %params)
 {
     my $user = $self->default_user;
     my $jmap = $user->jmap;
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
 
-    my $sort = [
-        {
-            property => 'category',
-            groupBy  => [ {
-                operator   => 'NOT',
-                conditions => [ { allInThreadHaveKeyword => '$seen' } ],
-            } ],
-        },
-    ];
+    my $mbox = $user->mailboxes->create({ name => 'A' });
 
-    my $res = $jmap->request([
-        [ 'Email/query', { sort => $sort }, 'R1' ],
-    ]);
+    # Three threads. A thread counts as unread unless every one of its
+    # emails is seen, so thread1 and thread3 are unread. The emails are
+    # created in the order below, which is also ascending receivedAt order.
+    my @emails = (
+        { messageId => 'email1', thread => 'thread1', keywords => {} },
+        { messageId => 'email2', thread => 'thread1',
+          keywords => { '$seen' => JSON::true } },
+        { messageId => 'email3', thread => 'thread2',
+          keywords => { '$seen' => JSON::true } },
+        { messageId => 'email4', thread => 'thread2',
+          keywords => { '$seen' => JSON::true } },
+        { messageId => 'email5', thread => 'thread3', keywords => {} },
+    );
+
+    my (%email, %id);
+    my $year = 2020;
+    for my $spec (@emails) {
+        $email{$spec->{messageId}} = $user->emails->create({
+            mailboxIds    => { $mbox->id => JSON::true },
+            keywords      => $spec->{keywords},
+            messageId     => [ "$spec->{messageId}\@local" ],
+            references    => [ "$spec->{thread}\@local" ],
+            subject       => "Re: $spec->{thread}",
+            receivedAt    => sprintf('%d-01-01T00:00:00Z', $year++),
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+        });
+        $id{$spec->{messageId}} = q{} . $email{$spec->{messageId}}->id;
+    }
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    # Sorts the unread threads first, and within each category by
+    # receivedAt descending.
+    my %query_args = (
+        filter          => { inMailbox => $mbox->id },
+        sort            => [
+            {
+                property    => 'category',
+                isAscending => JSON::true,
+                groupBy     => [ {
+                    operator   => 'NOT',
+                    conditions => [ { allInThreadHaveKeyword => '$seen' } ],
+                } ],
+            },
+            {
+                property    => 'receivedAt',
+                isAscending => JSON::false,
+            },
+        ],
+        collapseThreads => $params{collapse_threads},
+    );
+
+    my $res = $jmap->request([ [ 'Email/query', \%query_args, 'R1' ] ]);
     $res->assert_successful;
 
     my $args = $res->single_sentence('Email/query')->arguments;
-
-    # A category groups by keyword state, which makes the sort order change
-    # without any Email being added to or removed from the result
-    $self->assert_cmp_deeply(jfalse(), $args->{canCalculateChanges},
+    $self->assert_cmp_deeply([ @id{ $params{before}->@* } ], $args->{ids},
+        'ids before');
+    $self->assert_cmp_deeply($params{counts_before}, $args->{groupByCounts},
+        'groupByCounts before');
+    $self->assert_cmp_deeply(jtrue(), $args->{canCalculateChanges},
         'canCalculateChanges');
+
+    my $since_query_state = $args->{queryState};
+
+    # Marking the last unseen email of thread1 seen moves both of its emails
+    # from the unread category into the category of emails that match no
+    # groupBy filter. Only one of them changed itself.
+    xlog $self, 'mark the unseen email of thread1 seen';
+    $email{email1}->update({ keywords => { '$seen' => JSON::true } });
 
     $res = $jmap->request([
         [ 'Email/queryChanges', {
-            sinceQueryState => $args->{queryState},
-            sort            => $sort,
+            %query_args,
+            sinceQueryState => $since_query_state,
         }, 'R1' ],
+        [ 'Email/query', \%query_args, 'R2' ],
     ]);
+    $res->assert_successful;
 
-    $self->assert_str_equals('cannotCalculateChanges',
-        $res->single_sentence('error')->arguments->{type});
+    my @want_after = map { $id{$_} } $params{after}->@*;
+
+    my $changes = $res->sentence_named('Email/queryChanges')->arguments;
+
+    my %is_removed = map { $_ => 1 } $changes->{removed}->@*;
+    my @ids_after = grep { !$is_removed{$_} } $args->{ids}->@*;
+    for my $item (sort { $a->{index} <=> $b->{index} } $changes->{added}->@*) {
+        splice @ids_after, $item->{index}, 0, $item->{id};
+    }
+
+    $self->assert_cmp_deeply(\@want_after, \@ids_after, 'ids after changes');
+    $self->assert_num_equals(scalar @want_after, $changes->{total});
+    $self->assert_cmp_deeply($params{counts_after}, $changes->{groupByCounts},
+        'groupByCounts after');
+
+    # Assert that the changes applied to the original query produce the same
+    # result as a new Email/query.
+    my $after = $res->sentence_named('Email/query')->arguments;
+    $self->assert_cmp_deeply(\@want_after, $after->{ids}, 'ids after');
+    $self->assert_cmp_deeply($params{counts_after}, $after->{groupByCounts},
+        'groupByCounts of fresh query');
+}
+
+sub test_email_querychanges_sort_category__uncollapsed
+    :JMAPExtensions
+    ($self)
+{
+    $self->assert_email_querychanges_sort_category(
+        collapse_threads => JSON::false,
+        before           => [ qw(email5 email2 email1 email4 email3) ],
+        counts_before    => [ 3 ],
+        after            => [ qw(email5 email4 email3 email2 email1) ],
+        counts_after     => [ 1 ],
+    );
+}
+
+sub test_email_querychanges_sort_category__collapsed
+    :JMAPExtensions
+    ($self)
+{
+    $self->assert_email_querychanges_sort_category(
+        collapse_threads => JSON::true,
+        before           => [ qw(email5 email2 email4) ],
+        counts_before    => [ 2 ],
+        after            => [ qw(email5 email4 email2) ],
+        counts_after     => [ 1 ],
+    );
 }

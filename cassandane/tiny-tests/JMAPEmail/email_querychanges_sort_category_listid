@@ -1,0 +1,84 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_querychanges_sort_category_listid
+    :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    my $mbox = $user->mailboxes->create({ name => 'A' });
+
+    my (%email, %id);
+    my $year = 2020;
+    my sub create_email ($name, $listid) {
+        $email{$name} = $user->emails->create({
+            mailboxIds    => { $mbox->id => JSON::true },
+            subject       => 'hello',
+            receivedAt    => sprintf('%d-01-01T00:00:00Z', $year++),
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+            ($listid ? ('header:List-Id' => "<$listid.example.com>") : ()),
+        });
+        $id{$name} = q{} . $email{$name}->id;
+    }
+
+    create_email('email1', 'news');
+    create_email('email2', undef);
+    create_email('email3', 'chat');
+    create_email('email4', 'news');
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my %query_args = (
+        filter => { inMailbox => $mbox->id },
+        sort   => [
+            {
+                property    => 'category',
+                isAscending => JSON::true,
+                groupBy     => [
+                    { listId => 'news.example.com' },
+                    { listId => 'chat.example.com' },
+                ],
+            },
+            {
+                property    => 'receivedAt',
+                isAscending => JSON::false,
+            },
+        ],
+    );
+
+    my $res = $jmap->request([ [ 'Email/query', \%query_args, 'R1' ] ]);
+    $res->assert_successful;
+
+    my $args = $res->single_sentence('Email/query')->arguments;
+    $self->assert_cmp_deeply([ @id{qw(email4 email1 email3 email2)} ],
+        $args->{ids}, 'ids before');
+    $self->assert_cmp_deeply([ 2, 1 ], $args->{groupByCounts},
+        'groupByCounts before');
+
+    my $since_query_state = $args->{queryState};
+
+    # Not re-running squatter: a new index generation invalidates the query
+    # state, so the change must be one that needs no reindexing
+    xlog $self, 'destroy the email of the second list';
+    $email{email3}->destroy;
+
+    $res = $jmap->request([
+        [ 'Email/queryChanges', {
+            %query_args,
+            sinceQueryState => $since_query_state,
+        }, 'R1' ],
+    ]);
+    $res->assert_successful;
+
+    $args = $res->single_sentence('Email/queryChanges')->arguments;
+    $self->assert_cmp_deeply([ $id{email3} ], $args->{removed}, 'removed');
+    $self->assert_cmp_deeply([], $args->{added}, 'added');
+    $self->assert_num_equals(3, $args->{total});
+    $self->assert_cmp_deeply([ 2, 0 ], $args->{groupByCounts},
+        'groupByCounts after');
+}

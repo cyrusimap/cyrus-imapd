@@ -1,0 +1,87 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_sort_category_threadkeyword
+    :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing(
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/performance',
+    );
+
+    my $mbox = $user->mailboxes->create({ name => 'A' });
+
+    # Two threads, of which thread1 has a flagged email. The emails are
+    # created in ascending order of receivedAt.
+    my @emails = (
+        { messageId => 'email1', thread => 'thread1', keywords => {} },
+        { messageId => 'email2', thread => 'thread1',
+          keywords => { '$flagged' => JSON::true } },
+        { messageId => 'email3', thread => 'thread2', keywords => {} },
+    );
+
+    my %id;
+    my $year = 2020;
+    for my $spec (@emails) {
+        my $email = $user->emails->create({
+            mailboxIds    => { $mbox->id => JSON::true },
+            keywords      => $spec->{keywords},
+            messageId     => [ "$spec->{messageId}\@local" ],
+            references    => [ "$spec->{thread}\@local" ],
+            subject       => "Re: $spec->{thread}",
+            receivedAt    => sprintf('%d-01-01T00:00:00Z', $year++),
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+        });
+        $id{$spec->{messageId}} = q{} . $email->id;
+    }
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $sort = [
+        {
+            property    => 'category',
+            isAscending => JSON::true,
+            groupBy     => [ { someInThreadHaveKeyword => '$flagged' } ],
+        },
+        {
+            property    => 'receivedAt',
+            isAscending => JSON::true,
+        },
+    ];
+
+    # Assert both uidsearch and guidsearch. The filter matches every email,
+    # and its body condition makes the query eligible for guidsearch.
+    my @methods;
+    for my $impl (qw(guidsearch uidsearch)) {
+        push @methods, [ 'Email/query', {
+            filter            => { body => 'hello' },
+            sort              => $sort,
+            disableGuidSearch => $impl eq 'uidsearch'
+                                    ? JSON::true : JSON::false,
+        }, $impl ];
+    }
+
+    my $res = $jmap->request(\@methods);
+    $res->assert_successful;
+
+    for my $impl (qw(guidsearch uidsearch)) {
+        my $args = $res->paragraph_by_client_id($impl)
+                       ->single('Email/query')->arguments;
+
+        $self->assert_cmp_deeply(
+            $impl eq 'guidsearch' ? jtrue() : jfalse(),
+            $args->{performance}{details}{isGuidSearch},
+            "isGuidSearch for $impl",
+        );
+
+        $self->assert_cmp_deeply([ @id{qw(email1 email2 email3)} ],
+            $args->{ids}, "ids for $impl");
+        $self->assert_cmp_deeply([ 2 ], $args->{groupByCounts},
+            "groupByCounts for $impl");
+    }
+}
