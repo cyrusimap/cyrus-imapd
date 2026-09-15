@@ -33,8 +33,9 @@ sub test_resultref_wildcard_fail_mem_cleanup
     # and valgrind should report no leaks
     my $res = $jmap->request({
         methodCalls =>  [
-            ['Core/echo', { x => $tree }, 'R1'],
+            ['Core/echo', { accountId => 'cassandane', x => $tree }, 'R1'],
             ['Core/echo', {
+                accountId => 'cassandane',
                 '#x' => {
                     resultOf => 'R1',
                     name => 'Core/echo',
@@ -47,7 +48,7 @@ sub test_resultref_wildcard_fail_mem_cleanup
 
     $self->assert_cmp_deeply(
         [
-            [ 'Core/echo', { x => $tree }, 'R1' ],
+            [ 'Core/echo', { accountId => 'cassandane', x => $tree }, 'R1' ],
             [ 'error', superhashof({ type => 'invalidResultReference' }), 'R2' ],
         ],
         $res->as_stripped_triples,

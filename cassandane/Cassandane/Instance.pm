@@ -3389,6 +3389,12 @@ sub _new_jmaptester_for_user($self, $tester_class, $tester_arg, $user, $new_arg 
         %overrides,
     });
 
+    # accountId => \undef sends none
+    $jtest->default_arguments({
+        accountId => $jtest->fallback_account_id,
+        %{ $jtest->default_arguments },
+    });
+
     $jtest->set_scheme_and_host_and_port($scheme, $host, $port);
 
     $jtest->set_username_and_password($user->username, $user->password);
