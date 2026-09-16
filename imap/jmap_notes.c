@@ -840,6 +840,8 @@ static int jmap_note_set(jmap_req_t *req)
     if (r) {
         xsyslog_ev(LOG_ERR, "jmap.note.collection.setup.failed",
                    lf_jmapreq(req), lf_err("error", r));
+        mboxlist_entry_free(&mbentry);
+        jmap_error(req, jmap_server_error(r));
         goto done;
     }
 
