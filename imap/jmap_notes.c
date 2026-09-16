@@ -818,6 +818,8 @@ static int jmap_note_set(jmap_req_t *req)
         syslog(LOG_ERR,
                "jmap_note_set: ensure_notes_collection(%s): %s",
                req->accountid, error_message(r));
+        mboxlist_entry_free(&mbentry);
+        jmap_error(req, jmap_server_error(r));
         goto done;
     }
 
