@@ -457,6 +457,12 @@ struct jmap_set {
 
 #define JMAP_SET_INITIALIZER {0}
 
+/* Report that an onSuccessSetIsDefault could not be honored.
+ * An id this same call already reported as created or updated must not
+ * also appear in notUpdated, so that case is only logged. */
+extern void jmap_set_default_failed(struct jmap_set *set, const char *id,
+                                    const char *type, const char *desc);
+
 extern void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            const jmap_property_set_t *valid_props,
                            jmap_args_parse_cb args_parse, void *args_rock,

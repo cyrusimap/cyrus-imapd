@@ -2481,7 +2481,15 @@ static int jmap_calendar_set(struct jmap_req *req)
             buf_free(&buf);
             mbname_free(&mbname);
 
-            if (!r) {
+            if (r) {
+                /* The calendars are already written: report an error
+                 * for changing the default calendar, not for the whole
+                 * batch. */
+                jmap_set_default_failed(&set, newid, "serverFail",
+                                        error_message(r));
+                r = 0;
+            }
+            else {
                 /* report that isDefault has been moved to new calendar */
                 jmap_report_isdefault(&set, mbentry->name,
                                       setargs.on_success_set_is_default, true);

@@ -1905,6 +1905,44 @@ static bool jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
     return update_external;
 }
 
+HIDDEN void jmap_set_default_failed(struct jmap_set *set, const char *id,
+                                    const char *type, const char *desc)
+{
+    if (id && !json_object_get(set->updated, id)) {
+        const char *creation_id;
+        json_t *jobj;
+
+        json_object_foreach(set->created, creation_id, jobj) {
+            const char *created_id =
+                json_string_value(json_object_get(jobj, "id"));
+            if (created_id && !strcmp(created_id, id)) {
+                id = NULL;
+                break;
+            }
+        }
+    }
+    else id = NULL;
+
+    if (!id) {
+        /* Nothing to hang the error on without contradicting what this
+         * call already reported. */
+        xsyslog_ev(LOG_NOTICE, "jmap.set.default.unreported",
+                   lf_s("error.type", type),
+                   lf_s("error.description", desc ? desc : ""));
+        return;
+    }
+
+    if (desc) {
+        json_object_set_new(set->not_updated, id,
+                            json_pack("{s:s s:s}", "type", type,
+                                      "description", desc));
+    }
+    else {
+        json_object_set_new(set->not_updated, id,
+                            json_pack("{s:s}", "type", type));
+    }
+}
+
 HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            const jmap_property_set_t *valid_props,
                            jmap_args_parse_cb args_parse, void *args_rock,
