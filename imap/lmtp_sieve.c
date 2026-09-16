@@ -23,6 +23,7 @@
 #include "assert.h"
 #include "auditlog.h"
 #include "auth.h"
+#include "dkim2_mi.h"
 #include "duplicate.h"
 #include "global.h"
 #include "imapurl.h"
@@ -741,10 +742,88 @@ static int list_addresses(void *rock, struct carddav_data *cdata)
     return 0;
 }
 
+/* The message's header block as it was spooled, blank line included */
+static void read_header_block(message_data_t *m, struct buf *hdrs)
+{
+    long pos = ftell(m->f);
+    char *base;
+    size_t n;
+
+    if (m->body_offset <= 0 || fseek(m->f, 0, SEEK_SET)) return;
+
+    base = xmalloc(m->body_offset);
+    n = fread(base, 1, m->body_offset, m->f);
+    buf_setmap(hdrs, base, n);
+    free(base);
+
+    fseek(m->f, pos, SEEK_SET);
+}
+
+/* Offset of the blank line ending the header block, or the whole length if
+ * there isn't one.
+ */
+static size_t header_block_len(const struct buf *msg)
+{
+    const char *base = buf_base(msg);
+    size_t len = buf_len(msg);
+
+    for (size_t i = 0; i + 3 < len; i++)
+        if (!memcmp(base + i, "\r\n\r\n", 4)) return i + 2;
+
+    return len;
+}
+
+/* §9.1: declare the header fields "editheader" changed, for whichever hop
+ * signs this message next - Cyrus itself never signs.
+ */
+static void add_message_instance(struct buf *msgbuf,
+                                 const struct buf *orig_hdrs,
+                                 const char *msgid)
+{
+    struct buf mi = BUF_INITIALIZER;
+    int mode = config_getenum(IMAPOPT_DKIM2_MESSAGE_INSTANCE);
+    size_t hdrlen = header_block_len(msgbuf);
+    size_t bodyoff = MIN(hdrlen + 2, buf_len(msgbuf));
+    const char *why = NULL;
+
+    switch (dkim2_mi_calculate(buf_base(orig_hdrs), buf_len(orig_hdrs),
+                               buf_base(msgbuf), hdrlen,
+                               buf_base(msgbuf) + bodyoff,
+                               buf_len(msgbuf) - bodyoff,
+                               mode == IMAP_ENUM_DKIM2_MESSAGE_INSTANCE_VERIFY,
+                               &mi)) {
+    case DKIM2_MI_ADDED: {
+        struct buf hdr = BUF_INITIALIZER;
+
+        buf_printf(&hdr, "Message-Instance: %s\r\n", buf_cstring(&mi));
+        buf_insert(msgbuf, 0, &hdr);
+        buf_free(&hdr);
+        break;
+    }
+
+    case DKIM2_MI_CHAIN_MISMATCH:
+        why = "message does not match the Message-Instance it carries";
+        break;
+
+    case DKIM2_MI_NONE:
+        break;
+    }
+
+    if (why) {
+        xsyslog(LOG_NOTICE, "DKIM2 no Message-Instance added",
+                            "msg.id=<%s> dkim2.declined=<%s>",
+                            msgid ? msgid : "~null~", why);
+    }
+
+    buf_free(&mi);
+}
+
 static int send_forward(sieve_redirect_context_t *rc,
                         struct sieve_interp_ctx *ctx,
                         char *return_path,
-                        struct protstream *file)
+                        struct protstream *file,
+                        const struct buf *orig_hdrs,
+                        const char *msgid)
 {
     int r = 0;
     char buf[1024];
@@ -834,6 +913,8 @@ static int send_forward(sieve_redirect_context_t *rc,
                  prot_fgets(buf, sizeof(buf), file));
     }
 
+    if (orig_hdrs) add_message_instance(&msgbuf, orig_hdrs, msgid);
+
     r = smtpclient_open(&sm);
     if (r) goto done;
 
@@ -853,7 +934,8 @@ done:
 
 static void defer_redirect(sieve_redirect_context_t *rc, const char *userid,
                            const char *return_path, deliver_data_t *mdata,
-                           int mdata_is_special, const duplicate_key_t *dkey);
+                           int mdata_is_special, const duplicate_key_t *dkey,
+                           struct buf *orig_hdrs);
 
 static int sieve_redirect(void *ac, void *ic, void *sc, void *mc,
                           const char **errmsg __attribute__((unused)))
@@ -865,6 +947,7 @@ static int sieve_redirect(void *ac, void *ic, void *sc, void *mc,
     message_data_t *m = mdata->m;
     char buf[8192], *sievedb = NULL;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
+    struct buf orig_hdrs = BUF_INITIALIZER;
 
     /* if we have a msgid, we can track our redirects */
     if (m->id) {
@@ -882,8 +965,20 @@ static int sieve_redirect(void *ac, void *ic, void *sc, void *mc,
     }
 
     if (rc->headers) {
+        /* The script edited header fields, so DKIM2 may have something to
+         * declare.  Take the incoming header block off the spool file: the
+         * cache those edits went through no longer holds it.
+         */
+        if (config_getenum(IMAPOPT_DKIM2_MESSAGE_INSTANCE) !=
+            IMAP_ENUM_DKIM2_MESSAGE_INSTANCE_OFF) {
+            read_header_block(m, &orig_hdrs);
+        }
+
         mdata = setup_special_delivery(mdata, rc->headers);
-        if (!mdata) return SIEVE_FAIL;
+        if (!mdata) {
+            buf_free(&orig_hdrs);
+            return SIEVE_FAIL;
+        }
         else m = mdata->m;
     }
 
@@ -893,7 +988,7 @@ static int sieve_redirect(void *ac, void *ic, void *sc, void *mc,
        claim success now, before we know - a later failure puts one copy in the
        recipient's INBOX, where a failed redirect has always ended up. */
     defer_redirect(rc, ctx->userid, m->return_path, mdata,
-                   rc->headers ? 1 : 0, sievedb ? &dkey : NULL);
+                   rc->headers ? 1 : 0, sievedb ? &dkey : NULL, &orig_hdrs);
 
     return SIEVE_OK;
 }
@@ -1187,13 +1282,15 @@ struct deferred_redirect {
     char *dkey_id;                      /* marked once the send worked */
     char *dkey_to;
     char *dkey_date;
+    struct buf orig_hdrs;               /* as spooled, if editheader ran */
 };
 
 static ptrarray_t deferred_redirects = PTRARRAY_INITIALIZER;
 
 static void defer_redirect(sieve_redirect_context_t *rc, const char *userid,
                            const char *return_path, deliver_data_t *mdata,
-                           int mdata_is_special, const duplicate_key_t *dkey)
+                           int mdata_is_special, const duplicate_key_t *dkey,
+                           struct buf *orig_hdrs)
 {
     struct deferred_redirect *item = xzmalloc(sizeof(struct deferred_redirect));
 
@@ -1221,6 +1318,8 @@ static void defer_redirect(sieve_redirect_context_t *rc, const char *userid,
         item->dkey_date = xstrdupnull(dkey->date);
     }
 
+    buf_move(&item->orig_hdrs, orig_hdrs);
+
     ptrarray_append(&deferred_redirects, item);
 }
 
@@ -1236,6 +1335,7 @@ static void free_deferred_redirect(struct deferred_redirect *item)
     free(item->dkey_id);
     free(item->dkey_to);
     free(item->dkey_date);
+    buf_free(&item->orig_hdrs);
     free(item);
 }
 
@@ -1250,7 +1350,10 @@ static int run_deferred_redirects(void)
         struct sieve_interp_ctx ctx = { item->userid, NULL, NULL };
 
         int r = send_forward(&item->rc, &ctx, item->return_path,
-                             item->mdata->m->data);
+                             item->mdata->m->data,
+                             buf_len(&item->orig_hdrs) ? &item->orig_hdrs
+                                                       : NULL,
+                             item->mdata->m->id);
 
         if (ctx.carddavdb) carddav_close(ctx.carddavdb);
 
