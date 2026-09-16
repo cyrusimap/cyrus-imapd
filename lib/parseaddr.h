@@ -5,6 +5,8 @@
 #ifndef INCLUDED_PARSEADDR_H
 #define INCLUDED_PARSEADDR_H
 
+#include <stdbool.h>
+
 struct address {
     const char *name;
     const char *route;
@@ -36,5 +38,18 @@ extern const struct address *address_itr_next(struct address_itr *ai);
 extern void address_itr_fini(struct address_itr *ai);
 
 extern char *address_canonicalise(const char *str);
+
+/**
+ * @brief Test for the "address-type ;" prefix of a typed address such as
+ *        "rfc822; user@example.com" (RFC 3464, RFC 8098).
+ * @return true if @p s begins with an address-type token and a semicolon.
+ */
+extern bool address_has_type(const char *s);
+
+/**
+ * @brief Skip the address-type of a typed address.
+ * @return the address part of @p s, or @p s itself if it has no address-type.
+ */
+extern const char *address_skip_type(const char *s);
 
 #endif /* INCLUDED_PARSEADDR_H */
