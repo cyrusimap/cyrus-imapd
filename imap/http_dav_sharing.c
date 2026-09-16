@@ -767,6 +767,7 @@ static int dav_store_notification(struct transaction_t *txn,
     struct webdav_data *wdata;
     struct index_record *oldrecord = NULL, record;
     struct buf *xmlbuf = NULL;
+    struct dlist *dl = NULL;
     int r;
 
     mbentry_t *mbentry = NULL;
@@ -782,7 +783,7 @@ static int dav_store_notification(struct transaction_t *txn,
         mailbox_find_index_record(mailbox, wdata->dav.imap_uid, oldrecord);
     }
 
-    struct dlist *dl = notify_extract_dl(doc);
+    dl = notify_extract_dl(doc);
     if (!dl) {
         r = HTTP_FORBIDDEN;
         goto done;
@@ -790,7 +791,8 @@ static int dav_store_notification(struct transaction_t *txn,
 
     if (extradata) {
         struct dlist *md = dlist_newkvlist(dl, "X");
-        dlist_stitch(md, extradata); // XXX takes ownership
+        dlist_stitch(md, extradata); // takes ownership
+        extradata = NULL;
     }
 
     const char *type;
@@ -800,7 +802,6 @@ static int dav_store_notification(struct transaction_t *txn,
 
         struct buf buf = BUF_INITIALIZER;
         dlist_printbuf(dl, 1, &buf);
-        dlist_free(&dl);
         spool_replace_header(xstrdup("Content-Description"),
                 buf_release(&buf), txn->req_hdrs);
     }
@@ -826,6 +827,8 @@ static int dav_store_notification(struct transaction_t *txn,
     }
 
 done:
+    dlist_free(&dl);
+    dlist_free(&extradata);
     buf_destroy(xmlbuf);
     mboxlist_entry_free(&mbentry);
     return r;
@@ -848,13 +851,14 @@ static int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
     if (r == IMAP_INVALID_USER) {
         syslog(LOG_NOTICE,
                "dav_send_notification(%s) failed: %s", userid, error_message(r));
-        return 0;
+        r = 0;
+        goto done;
     }
     else if (r) {
         syslog(LOG_ERR,
                "dav_send_notification: create_notify_collection(%s) failed: %s",
                userid, error_message(r));
-        return r;
+        goto done;
     }
 
     /* Open the WebDAV DB corresponding to collection */
@@ -888,6 +892,7 @@ static int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
 
     r = dav_store_notification(&txn, doc, extradata,
                                mailbox, resource, webdavdb);
+    extradata = NULL;  // eaten by dav_store_notification
     if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         xsyslog(LOG_ERR, "can not store notification",
                 "mboxname=<%s> resource=<%s> err=<%s>",
@@ -895,6 +900,7 @@ static int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
     }
 
   done:
+    dlist_free(&extradata);
     spool_free_hdrcache(txn.req_hdrs);
     buf_free(&txn.buf);
     webdav_close(webdavdb);
