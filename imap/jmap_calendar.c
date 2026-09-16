@@ -5245,7 +5245,7 @@ static int createevent_store(jmap_req_t *req,
         .ical_recurid = create->ical_recurid,
     };
 
-    // Handle scheduling
+    /* The event is already stored, so a failure here can't fail the item. */
     if (send_itip && !is_draft) {
         icalcomponent *sched_ical = create->ical_standalone ?
             create->ical_standalone : create->ical;
@@ -5254,8 +5254,9 @@ static int createevent_store(jmap_req_t *req,
                                         sched_ical, eid.createdmodseq,
                                         JMAP_CREATE);
         if (r2) {
-            xsyslog(LOG_WARNING, "could not send scheduling messages",
-                    "uid=%s error=%s", create->ical_uid, error_message(r2));
+            xsyslog_ev(LOG_WARNING, "jmap.calendarevent.schedule.failed",
+                    lf_s("cal.uid", create->ical_uid),
+                    lf_err("error", r2));
         }
     }
 
@@ -6448,9 +6449,14 @@ static void setcalendarevents_update(jmap_req_t *req,
 
     /* Handle scheduling. */
     if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
-        r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
-                update.oldical, update.newical, eid->createdmodseq, JMAP_UPDATE);
-        if (r) goto done;
+        int r2 = setcalendarevents_schedule(mbox, sched_userid,
+                &schedule_addresses, update.oldical, update.newical,
+                eid->createdmodseq, JMAP_UPDATE);
+        if (r2) {
+            xsyslog_ev(LOG_WARNING, "jmap.calendarevent.schedule.failed",
+                    lf_s("cal.uid", eid->ical_uid),
+                    lf_err("error", r2));
+        }
     }
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
@@ -6736,9 +6742,14 @@ static int setcalendarevents_destroy(jmap_req_t *req,
 
     /* Handle scheduling. */
     if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
-        r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
-                oldical, newical, eid->createdmodseq, JMAP_DESTROY);
-        if (r) goto done;
+        int r2 = setcalendarevents_schedule(mbox, sched_userid,
+                &schedule_addresses, oldical, newical,
+                eid->createdmodseq, JMAP_DESTROY);
+        if (r2) {
+            xsyslog_ev(LOG_WARNING, "jmap.calendarevent.schedule.failed",
+                    lf_s("cal.uid", eid->ical_uid),
+                    lf_err("error", r2));
+        }
     }
 
     if (calendar_has_sharees(mbox->mbentry)) {
