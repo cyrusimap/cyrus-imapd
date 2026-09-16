@@ -9368,7 +9368,7 @@ struct principalfilter {
     struct xapian_db *db;
     struct principalfilter_expr *root;
     /* Principal-scoped context */
-    char guidrep[MESSAGE_GUID_SIZE*2];
+    char guidrep[MESSAGE_GUIDREP_SIZE];
     int xqmatches;
 };
 
@@ -9477,7 +9477,7 @@ static int principalfilter_matchexpr_cb(void *base, size_t n, void *rock)
     struct principalfilter *filter = rock;
     size_t i;
     for (i = 0; i < n; i++) {
-        if (!memcmp(base + i, filter->guidrep, MESSAGE_GUID_SIZE*2)) {
+        if (!memcmp(base + i, filter->guidrep, MESSAGE_GUIDREP_SIZE)) {
             filter->xqmatches = 1;
             return CYRUSDB_DONE;
         }
@@ -9566,7 +9566,7 @@ static int principalfilter_match(json_t *jp, struct principalfilter *filter)
     /* Set principal-scoped context */
     struct message_guid guid;
     message_guid_generate(&guid, id, strlen(id));
-    memcpy(filter->guidrep, message_guid_encode(&guid), MESSAGE_GUID_SIZE*2);
+    memcpy(filter->guidrep, message_guid_encode(&guid), MESSAGE_GUIDREP_SIZE);
 
     struct buf buf = BUF_INITIALIZER;
     const char *s;

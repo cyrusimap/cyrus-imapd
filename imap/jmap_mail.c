@@ -1031,7 +1031,7 @@ static const char *_guid_from_id(struct conversations_state *cstate,
                                  const char *emailid)
 {
     if (emailid[0] == JMAP_EMAILID_PREFIX) {
-        static char guidrep[2*MESSAGE_GUID_SIZE+1];
+        static char guidrep[MESSAGE_GUIDREP_SIZE+1];
 
         if (strlen(emailid) == JMAP_EMAILID_SIZE - 1 &&
             !conversations_jmapid_guidrep_lookup(cstate, emailid + 1, guidrep))
@@ -3560,7 +3560,7 @@ static int emailsearch_is_mutable(struct emailsearch *search)
 // GUID search
 
 struct guidsearch_match {
-    char guidrep[MESSAGE_GUID_SIZE*2+1];
+    char guidrep[MESSAGE_GUIDREP_SIZE+1];
     uint32_t system_flags;
     uint32_t num_unseen;    // only counted if the query needs $seen
     uint64_t nano_internaldate;  // nanoseconds since epoch
@@ -3598,7 +3598,7 @@ static int guidsearch_match_cmp QSORT_R_COMPAR_ARGS(const void *va,
                 break;
             }
             case SORT_GUID:
-                ret = memcmp(a->guidrep, b->guidrep, MESSAGE_GUID_SIZE*2);
+                ret = memcmp(a->guidrep, b->guidrep, MESSAGE_GUIDREP_SIZE);
                 break;
             case SORT_EMAILID: {
                 // EMAILIDs are an ASCII-order encoding of
@@ -4349,7 +4349,7 @@ static int guidsearch_add_guidrec(const conv_guidrec_t *rec,
             return 0;
     }
 
-    if (prev && !memcmp(rec->guidrep, prev->guidrep, MESSAGE_GUID_SIZE*2)) {
+    if (prev && !memcmp(rec->guidrep, prev->guidrep, MESSAGE_GUIDREP_SIZE)) {
         /* Update match for same guid. All copies of a guid carry the same
          * internaldate, so only folders and flags need merging. */
         guidsearch_match_add_guidrec(prev, rec, gsq->numfolders,
@@ -4359,8 +4359,8 @@ static int guidsearch_add_guidrec(const conv_guidrec_t *rec,
 
     /* Initialize match for new guid */
     guidsearch_match_init(next, gsq->numfolders);
-    memcpy(next->guidrep, rec->guidrep, MESSAGE_GUID_SIZE*2);
-    next->guidrep[MESSAGE_GUID_SIZE*2] = '\0';
+    memcpy(next->guidrep, rec->guidrep, MESSAGE_GUIDREP_SIZE);
+    next->guidrep[MESSAGE_GUIDREP_SIZE] = '\0';
     next->nano_internaldate = rec->nano_internaldate;
     next->cid = rec->cid;
     guidsearch_match_add_guidrec(next, rec, gsq->numfolders,

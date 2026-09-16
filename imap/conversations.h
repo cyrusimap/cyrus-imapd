@@ -113,7 +113,7 @@ struct conv_folder {
 
 struct conv_guidrec {
     const struct conversations_state *cstate;  // this conversationsdb!
-    const char      *guidrep; // [MESSAGE_GUID_SIZE*2], hex-encoded
+    const char      *guidrep; // [MESSAGE_GUIDREP_SIZE], hex-encoded
     int             foldernum;
     uint32_t        uid;
     const char      *part;
@@ -273,7 +273,7 @@ extern int conversations_guid_cid_lookup(struct conversations_state *state,
 #define CONV_JMAPID_SIZE 11  // 64-bits base64-encoded w/o padding
 extern int conversations_jmapid_guidrep_lookup(struct conversations_state *state,
                                                const char *jidrep,
-                                               char guidrep[2*MESSAGE_GUID_SIZE+1]);
+                                               char guidrep[MESSAGE_GUIDREP_SIZE+1]);
 extern void conversations_adjust_internaldate(struct conversations_state *cstate,
                                               const char *mboxname,
                                               struct message_guid *guid,

@@ -193,15 +193,15 @@ EXPORTED const char *message_guid_import(struct message_guid *guid,
 
 EXPORTED const char *message_guid_encode(const struct message_guid *guid)
 {
-    static char text[2*MESSAGE_GUID_SIZE+1];
+    static char text[MESSAGE_GUIDREP_SIZE+1];
     int r = bin_to_hex(&guid->value, MESSAGE_GUID_SIZE, text, BH_LOWER);
-    assert(r == 2*MESSAGE_GUID_SIZE);
+    assert(r == MESSAGE_GUIDREP_SIZE);
     return text;
 }
 
 EXPORTED const char *message_guid_encode_short(const struct message_guid *guid, size_t len)
 {
-    assert(len > 0 && len < MESSAGE_GUID_SIZE*2);
+    assert(len > 0 && len < MESSAGE_GUIDREP_SIZE);
     char *backdoor = (char *)message_guid_encode(guid);
     backdoor[len] = '\0';
     return backdoor;

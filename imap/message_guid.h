@@ -12,6 +12,12 @@
 
 #define MESSAGE_GUID_SIZE         (20)    /* Size of GUID byte sequence */
 
+/**
+ * Length of a "guidrep", the hex-encoded text form of a GUID.
+ * Excludes the terminating NUL byte.
+ */
+#define MESSAGE_GUIDREP_SIZE      (MESSAGE_GUID_SIZE*2)
+
 enum guid_status {
     GUID_UNKNOWN = -1, /* Unknown if GUID is [non-]NULL (not yet tested) */
     GUID_NULL =     0, /* GUID is NULL */

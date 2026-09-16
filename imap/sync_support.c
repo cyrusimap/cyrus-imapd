@@ -2732,7 +2732,7 @@ static int reserve_collect_cb(const conv_guidrec_t *rec, void *rock)
 
 struct reserve_guid_ref {
     struct sync_msgid *item;
-    char rep[2*MESSAGE_GUID_SIZE+1];
+    char rep[MESSAGE_GUIDREP_SIZE+1];
 };
 
 static int reserve_cmp_guidrep(const void *a, const void *b)

@@ -3001,7 +3001,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     if (op == ATTACH_REMOVE) aprop = NULL;
     else {
         /* SHA1 of content used as resource UID, resource name, & managed-id */
-        static char uid[2*MESSAGE_GUID_SIZE+1];
+        static char uid[MESSAGE_GUIDREP_SIZE+1];
         struct message_guid guid;
 
         /* body was read before we took the lock, above */

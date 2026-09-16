@@ -1639,7 +1639,7 @@ static int find_scheduled_email(const char *emailid,
     }
 
     if (emailid[0] == JMAP_EMAILID_PREFIX) {
-        static char guidrep[2*MESSAGE_GUID_SIZE+1];
+        static char guidrep[MESSAGE_GUIDREP_SIZE+1];
         r = conversations_jmapid_guidrep_lookup(cstate, emailid + 1, guidrep);
         if (!r) guid = guidrep;
     }

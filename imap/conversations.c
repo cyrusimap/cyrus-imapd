@@ -2402,9 +2402,9 @@ static int conversations_set_guid(struct conversations_state *state,
     buf_printf(&item, "%d:%u", folder, record->uid);
     const char *base = buf_cstring(&item);
 
-    char guidrep[MESSAGE_GUID_SIZE*2+1];
-    guidrep[MESSAGE_GUID_SIZE*2] = '\0';
-    memcpy(guidrep, message_guid_encode(&record->guid), MESSAGE_GUID_SIZE*2);
+    char guidrep[MESSAGE_GUIDREP_SIZE+1];
+    guidrep[MESSAGE_GUIDREP_SIZE] = '\0';
+    memcpy(guidrep, message_guid_encode(&record->guid), MESSAGE_GUIDREP_SIZE);
     uint64_t nano_internaldate = TIMESPEC_TO_NANOSEC(&record->internaldate);
     r = conversations_guid_setitem(state, guidrep,
                                    base, record->cid, record->basecid,
@@ -3703,7 +3703,7 @@ EXPORTED int conversations_zero_modseq(struct conversations_state *state)
 
 EXPORTED int conversations_jmapid_guidrep_lookup(struct conversations_state *state,
                                                  const char *jidrep,
-                                                 char guidrep[2*MESSAGE_GUID_SIZE+1])
+                                                 char guidrep[MESSAGE_GUIDREP_SIZE+1])
 {
     static const char jmapid_alphabet[] =
         "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
@@ -3728,13 +3728,13 @@ EXPORTED int conversations_jmapid_guidrep_lookup(struct conversations_state *sta
                       &data, &datalen, &state->txn);
     if (r) return r;
 
-    if (datalen < 2*MESSAGE_GUID_SIZE) {
+    if (datalen < MESSAGE_GUIDREP_SIZE) {
         xsyslog(LOG_NOTICE, "IOERROR: malformed data value in J record",
                 "key=<%s>", key);
         return CYRUSDB_NOTFOUND;
     }
 
-    strncpy(guidrep, data, 2*MESSAGE_GUID_SIZE);
+    strncpy(guidrep, data, MESSAGE_GUIDREP_SIZE);
     guidrep[datalen] = '\0';
 
     return 0;
@@ -3791,7 +3791,7 @@ EXPORTED void conversations_adjust_internaldate(struct conversations_state *csta
 
     if (!cstate) return;  // can't look up anything
 
-    char my_guid[2*MESSAGE_GUID_SIZE+1];
+    char my_guid[MESSAGE_GUIDREP_SIZE+1];
     strcpy(my_guid, message_guid_encode(guid));
     // is there an existing timestamp for this GUID?
     struct timespec existing = { 0, 0 };
@@ -3803,7 +3803,7 @@ EXPORTED void conversations_adjust_internaldate(struct conversations_state *csta
 
     struct buf jidrep = BUF_INITIALIZER;
     uint64_t count = 0;
-    char existing_guid[2*MESSAGE_GUID_SIZE+1];
+    char existing_guid[MESSAGE_GUIDREP_SIZE+1];
 
     // check for a JMAPID (internaldate) clash, and adjust nanosec as needed
     do {
