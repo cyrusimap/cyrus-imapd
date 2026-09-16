@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Two hosts sharing a base defeats the whole scheme, and the usual way to
+# get there is cloning a config onto a new host.  Replication must say so.
+#
+sub test_idclass_mismatch_is_loud
+    :min_version_3_13 :ResidueClassClash
+    ($self)
+{
+    $self->make_message("anything", store => $self->{master_store});
+    $self->run_replication();
+
+    # both ends complain, and both must be consumed here or tear_down
+    # reports the expected error as a test failure
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/SYNCERROR: identifier class clash/);
+    $self->assert_syslog_matches($self->{replica},
+                                 qr/SYNCERROR: identifier class clash/);
+}

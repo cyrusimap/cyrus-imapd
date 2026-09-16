@@ -27,6 +27,7 @@
 #include "cyr_lock.h"
 #include "gmtoff.h"
 #include "haproxy.h"
+#include "idclass.h"
 #include "iptostring.h"
 #include "global.h"
 #include "ical_support.h"
@@ -255,6 +256,13 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
           fatal("defaultpartition option contains non-alphanumeric character",
                 EX_CONFIG);
         if (Uisupper(*p)) *p = tolower((unsigned char) *p);
+    }
+
+    /* a bad residue class silently disables the split-brain guard, so
+     * refuse to start rather than pretend it is configured */
+    {
+        const char *idclass_err = idclass_config_error();
+        if (idclass_err) fatal(idclass_err, EX_CONFIG);
     }
 
     /* Look up umask */
