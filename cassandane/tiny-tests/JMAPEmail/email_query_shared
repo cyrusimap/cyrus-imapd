@@ -12,10 +12,10 @@ sub test_email_query_shared
     $admintalk->setacl("user.test", "cassandane", "lrwkx") or die;
 
     # run tests for both the main and "test" account
-    foreach (undef, "test") {
-        my $account = $_;
-        my $store = defined $account ? $self->{adminstore} : $self->{store};
-        my $mboxprefix = defined $account ? "user.$account" : "INBOX";
+    foreach my $account ("cassandane", "test") {
+        my $own = $account eq "cassandane";
+        my $store = $own ? $self->{store} : $self->{adminstore};
+        my $mboxprefix = $own ? "INBOX" : "user.$account";
         my $talk = $store->get_client();
 
         my $res = $jmap->CallMethods([['Mailbox/get', { accountId => $account }, "R1"]]);

@@ -89,6 +89,10 @@ sub new
             if defined $params->{$p};
     }
 
+    if ($want->{jmap} && $instance_params->{config}) {
+        $instance_params->{config}->set(jmap_require_accountid => 'yes');
+    }
+
     # should have consumed all of the $params hash; if
     # not something is awry.
     my $leftovers = join(' ', keys %$params);
@@ -355,6 +359,9 @@ magic(JMAPNoHasAttachment => sub {
 });
 magic(JMAPExtensions => sub {
     shift->config_set('jmap_nonstandard_extensions' => 'yes');
+});
+magic(JMAPLenientAccountId => sub {
+    shift->config_set('jmap_require_accountid' => 'no');
 });
 magic(SearchIndexHeaders => sub {
     shift->config_set(search_index_headers => 'yes');

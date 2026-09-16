@@ -107,7 +107,6 @@ sub test_card_copy
             ids => [$copiedCardId],
         }, 'R1'],
         ['ContactCard/get', {
-            accountId => undef,
             ids => [$cardId],
         }, 'R2'],
     ]);
@@ -150,7 +149,6 @@ sub test_card_copy
             ids => [$copiedCardId],
         }, 'R1'],
         ['ContactCard/get', {
-            accountId => undef,
             ids => [$cardId],
         }, 'R2'],
     ]);
@@ -207,7 +205,6 @@ sub test_card_copy
             ids => [$copiedCardId],
         }, 'R1'],
         ['ContactCard/get', {
-            accountId => undef,
             ids => [$cardId],
         }, 'R2'],
     ]);

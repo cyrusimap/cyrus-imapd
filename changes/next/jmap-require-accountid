@@ -1,0 +1,32 @@
+
+Description:
+
+New jmap_require_accountid option.  When enabled, JMAP method calls
+without an accountId are rejected with invalidArguments, instead of
+running against the authenticated user's own account.
+
+Core/echo is the sole exception, and continues to not require an accountId.
+
+Documentation:
+
+lib/imapoptions/jmap_require_accountid.  The behaviour follows RFC 8620
+Section 3.6.2 as written.
+
+
+Config changes:
+
+jmap_require_accountid (switch, default off): reject JMAP method calls
+that omit accountId rather than defaulting to the authenticated user's
+account.
+
+
+Upgrade instructions:
+
+At some future time, jmap_require_accountid will be the default.
+
+Explicitly set jmap_require_accountid to 'no' if your clients
+are not sending accountId on every method call, or fix the clients.
+
+GitHub issue:
+
+None.
