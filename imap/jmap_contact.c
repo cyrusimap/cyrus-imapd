@@ -2460,10 +2460,9 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
     mboxlist_changesub(mbentry->name, req->userid, req->authstate, 0, 1, 0, 1);
 
   done:
-    if (db) {
-        int rr = carddav_close(db);
-        if (!r) r = rr;
-    }
+    /* The mailbox is already gone by here: a close failure must not turn a
+     * completed destroy into notDestroyed. */
+    if (db) carddav_close(db);
     if (r && *err == NULL) {
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             *err = json_pack("{s:s}", "type", "notFound");

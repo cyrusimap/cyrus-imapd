@@ -1989,13 +1989,17 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
     /* Remove from subscriptions db */
     mboxlist_changesub(mboxname, req->userid, req->authstate, 0, 1, 0, 1);
 
-    r = caldav_update_shareacls(req->accountid);
+    /* The mailbox is already gone by here: neither this nor a close failure
+     * may turn a completed destroy into notDestroyed. */
+    int r2 = caldav_update_shareacls(req->accountid);
+    if (r2) {
+        xsyslog_ev(LOG_WARNING, "jmap.calendar.shareacls.failed",
+                   lf_s("mbox.name", mboxname),
+                   lf_err("error", r2));
+    }
 
 done:
-    if (db) {
-        int rr = caldav_close(db);
-        if (!r) r = rr;
-    }
+    if (db) caldav_close(db);
     if (r && *err == NULL) {
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             *err = json_pack("{s:s}", "type", "notFound");
