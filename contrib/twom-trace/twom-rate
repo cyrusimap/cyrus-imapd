@@ -1,0 +1,56 @@
+#!/bin/bash
+# twom-rate [seconds]
+# Cheap pre-flight: how many twom calls/sec does this box actually make, and
+# what would instrumenting them cost? Two probes only, counters only, so it is
+# far lighter than a full capture. Run this first on a busy server.
+set -u
+SECS=${1:-10}
+HERE=$(dirname "$(readlink -f "$0")")
+
+ . "$HERE/libcyrus.sh"
+LIB=$(find_libcyrus) || exit 1
+
+NCPU=$(nproc)
+echo "lib:   $LIB"
+echo "cores: $NCPU online, $(cat /sys/devices/system/cpu/possible) possible"
+echo "sampling ${SECS}s..."
+
+# Split cursor_next out: it is the hot one, and it is the probe most likely to
+# make a full capture expensive on a busy box.
+OUT=$(timeout $((SECS + 20)) bpftrace -e "
+uprobe:$LIB:twom_cursor_next { @cursor_next = count(); }
+uprobe:$LIB:twom_db_fetch,
+uprobe:$LIB:twom_txn_fetch,
+uprobe:$LIB:twom_db_foreach,
+uprobe:$LIB:twom_txn_foreach,
+uprobe:$LIB:twom_db_store,
+uprobe:$LIB:twom_txn_store,
+uprobe:$LIB:twom_db_begin_cursor,
+uprobe:$LIB:twom_txn_begin_cursor,
+uprobe:$LIB:twom_db_begin_txn,
+uprobe:$LIB:twom_txn_commit,
+uprobe:$LIB:twom_txn_abort,
+uprobe:$LIB:twom_db_open,
+uprobe:$LIB:twom_db_yield,
+uprobe:$LIB:twom_db_repack { @other = count(); }
+interval:s:$SECS { exit(); }" 2>/dev/null)
+
+cn=$(echo "$OUT" | sed -n 's/^@cursor_next: *//p'); cn=${cn:-0}
+ot=$(echo "$OUT" | sed -n 's/^@other: *//p');       ot=${ot:-0}
+
+awk -v cn="$cn" -v ot="$ot" -v s="$SECS" -v ncpu="$NCPU" 'BEGIN {
+  tot = cn + ot; rate = tot / s;
+  printf "\n  cursor_next   %12d  (%.0f/s)\n", cn, cn/s;
+  printf "  all others    %12d  (%.0f/s)\n", ot, ot/s;
+  printf "  TOTAL         %12d  (%.0f/s)\n\n", tot, rate;
+  # ~1us per uprobe hit measured on this hardware class (entry-only, one trap
+  # plus one string copy). Treat as an order-of-magnitude estimate.
+  for (i = 1; i <= 2; i++) {
+    us = i;  cores = rate * us / 1e6;
+    printf "  at %dus/call: %.2f cores (%.2f%% of %d)\n", us, cores, 100*cores/ncpu, ncpu;
+  }
+  print "";
+  if (rate > 2000000) print "  VERY HOT - sample a subset of slots, or shorten the window.";
+  else if (rate > 500000) print "  hot, but a 30-60s window should be fine.";
+  else print "  comfortable for a full 60s capture.";
+}'

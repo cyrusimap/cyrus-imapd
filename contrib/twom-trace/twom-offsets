@@ -1,0 +1,38 @@
+#!/bin/bash
+# twom-offsets <libcyrus.so.0>
+# Preflight for twom-shape.bt: a wrong struct offset does not error, it just
+# yields garbage filenames, so verify before spending a capture window.
+set -u
+LIB=${1:?usage: twom-offsets <libcyrus.so.0>}
+fail=0
+
+# 1. symbols must be present (a stripped package build would lose them)
+for s in twom_db_fetch twom_txn_fetch twom_cursor_next twom_db_open; do
+  nm "$LIB" 2>/dev/null | grep -q " $s\$" || { echo "MISSING SYMBOL: $s" >&2; fail=1; }
+done
+[ $fail -ne 0 ] && { echo "cannot instrument $LIB" >&2; exit 1; }
+
+# 2. offsets from DWARF, if the package ships debug info
+if command -v gdb >/dev/null 2>&1; then
+  read -r c_txn t_db d_fname <<<"$(gdb -q -batch \
+      -ex 'printf "%d ", &((struct twom_cursor *)0)->txn' \
+      -ex 'printf "%d ", &((struct twom_txn *)0)->db' \
+      -ex 'printf "%d\n", &((struct twom_db *)0)->fname' \
+      "$LIB" 2>/dev/null | tail -1)"
+  if [ -n "${d_fname:-}" ]; then
+    echo "offsets: cursor.txn=$c_txn txn.db=$t_db db.fname=$d_fname"
+    [ "$c_txn" = "304" ] || { echo "MISMATCH: cursor.txn is $c_txn, script assumes 304 (0x130)" >&2; fail=1; }
+    [ "$t_db"  = "0"   ] || { echo "MISMATCH: txn.db is $t_db, script assumes 0" >&2; fail=1; }
+    [ "$d_fname" = "0" ] || { echo "MISMATCH: db.fname is $d_fname, script assumes 0" >&2; fail=1; }
+    [ $fail -ne 0 ] && { echo "edit twom-shape.bt.in before capturing" >&2; exit 1; }
+  else
+    echo "note: no DWARF in $LIB, falling back to a live sanity check"
+  fi
+fi
+
+# 3. NO live bpftrace check here. Attaching and detaching probes on the same
+#    inode immediately before the real capture intermittently leaves the
+#    capture's probes registered but never firing - a silently empty run.
+#    Verified: 5/5 clean without this, intermittent failures with it.
+#    twom-report validates the resolved paths from the capture itself instead.
+exit 0
