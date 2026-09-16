@@ -2867,7 +2867,15 @@ static int jmap_addressbook_set(struct jmap_req *req)
                                        req->accountid, &buf);
             buf_free(&buf);
 
-            if (!r) {
+            if (r) {
+                /* The addressbooks are already written: report an
+                 * error for changing the default addressbook, not for
+                 * the whole batch. */
+                jmap_set_default_failed(&set, newid, "serverFail",
+                                        error_message(r));
+                r = 0;
+            }
+            else {
                 /* report that isDefault has been moved to new addressbook */
                 jmap_report_isdefault(&set, mbentry->name,
                                       setargs.on_success_set_is_default, true);

@@ -159,6 +159,8 @@ used.bytes.out          bytes written to the client this session
 ### failure detail
 
 error                   why the operation failed, as human-readable text
+error.description       the human-readable detail paired with error.type
+error.type              a machine-readable error type, e.g. a JMAP SetError type
 sys.error               strerror() of errno at the point of logging
 
 ### caller. - where in the C source the event was logged
