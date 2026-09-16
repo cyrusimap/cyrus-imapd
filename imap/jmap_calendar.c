@@ -2448,8 +2448,14 @@ static int jmap_calendar_set(struct jmap_req *req)
         /* The default calendar is per-account state, so changing it requires
          * admin rights on the calendar home set. */
         char *calhome_mboxname = caldav_mboxname(req->accountid, NULL);
-        if (mbentry &&
-            jmap_hasrights(req, calhome_mboxname, JACL_ADMIN_CALENDAR)) {
+        if (!mbentry ||
+            !jmap_hasrights(req, calhome_mboxname, JACL_ADMIN_CALENDAR)) {
+            /* Say so rather than silently leaving the default alone. */
+            json_object_set_new(set.not_updated, newid,
+                                json_pack("{s:s}", "type",
+                                          mbentry ? "forbidden" : "notFound"));
+        }
+        else {
             /* set CALDAV:schedule-default-calendar annotation */
             static const char annot[] =
                 DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
@@ -9860,8 +9866,14 @@ static int jmap_principal_set(struct jmap_req *req)
             continue;
         }
         json_decref(invalid);
-        /* Update princpial */
-        const char *tzid = json_string_value(json_object_get(jarg, "timeZone"));
+        /* Update principal */
+        json_t *jtz = json_object_get(jarg, "timeZone");
+        if (!jtz) {
+            /* Nothing to change, but the id still has to be reported. */
+            json_object_set_new(set.updated, id, json_null());
+            continue;
+        }
+        const char *tzid = json_string_value(jtz);
         if (tzid) {
             icaltimezone *tz;
             if ((tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid))) {
@@ -9888,6 +9900,8 @@ static int jmap_principal_set(struct jmap_req *req)
                         }
                         buf_free(&val);
                     }
+                    /* Both annotations or neither. */
+                    if (r) mailbox_abort(mbox);
                 }
                 mailbox_close(&mbox);
                 free(calhomename);
@@ -9897,6 +9911,11 @@ static int jmap_principal_set(struct jmap_req *req)
                 else json_object_set_new(set.not_updated, id, jmap_server_error(r));
             }
             else json_object_set_new(set.not_updated, id, json_pack("{s:s s:[s]}",
+                        "type", "invalidProperties", "properties", "timeZone"));
+        }
+        else {
+            /* Present but not a string: we have no way to clear it. */
+            json_object_set_new(set.not_updated, id, json_pack("{s:s s:[s]}",
                         "type", "invalidProperties", "properties", "timeZone"));
         }
     }

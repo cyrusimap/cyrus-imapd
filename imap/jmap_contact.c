@@ -2855,8 +2855,14 @@ static int jmap_addressbook_set(struct jmap_req *req)
          * state, per-addressbook rights aren't enough. */
         mbentry_t *mbentry = NULL;
         abookid_to_mbentry(req, newid, &mbentry);
-        if (mbentry &&
-            jmap_hasrights(req, cardhomename, JACL_ADMIN_ADDRBOOK)) {
+        if (!mbentry ||
+            !jmap_hasrights(req, cardhomename, JACL_ADMIN_ADDRBOOK)) {
+            /* Say so rather than silently leaving the default alone. */
+            json_object_set_new(set.not_updated, newid,
+                                json_pack("{s:s}", "type",
+                                          mbentry ? "forbidden" : "notFound"));
+        }
+        else {
             /* set jmap-default-addressbook annotation */
             struct buf buf = BUF_INITIALIZER;
             buf_init_ro_cstr(&buf, mbentry->name);

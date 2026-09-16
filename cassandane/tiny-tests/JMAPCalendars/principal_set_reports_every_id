@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_principal_set_reports_every_id ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    xlog $self, "update with nothing to change";
+    my $res = $jmap->CallMethods([
+        ['Principal/set', {
+            update => { cassandane => {} },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{cassandane});
+
+    xlog $self, "update with a timeZone we can't apply";
+    $res = $jmap->CallMethods([
+        ['Principal/set', {
+            update => { cassandane => { timeZone => undef } },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{cassandane}{type});
+    $self->assert_deep_equals(['timeZone'],
+        $res->[0][1]{notUpdated}{cassandane}{properties});
+}

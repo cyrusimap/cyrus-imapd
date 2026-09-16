@@ -447,24 +447,23 @@ static const char *set_create(struct jmap_req *req,
     memset(&sdata, 0, sizeof(sdata));
     sdata.id = id;
     sdata.name = name;
-    r = putscript(mailbox, content, &sdata, &err);
+    /* putscript() always returns 0 and reports failure through err */
+    putscript(mailbox, content, &sdata, &err);
     if (err) goto done;
 
-    if (!r) {
-        /* Report script as created, with server-set properties */
-        buf_reset(&buf);
-        buf_printf(&buf, "G%s", sdata.contentid);
+    /* Report script as created, with server-set properties */
+    buf_reset(&buf);
+    buf_printf(&buf, "G%s", sdata.contentid);
 
-        json_t *new_sieve = json_pack("{s:s s:b s:s}",
-                                      "id", id, "isActive", 0,
-                                      "blobId", buf_cstring(&buf));
+    json_t *new_sieve = json_pack("{s:s s:b s:s}",
+                                  "id", id, "isActive", 0,
+                                  "blobId", buf_cstring(&buf));
 
-        if (name == id) {
-            json_object_set_new(new_sieve, "name", json_string(name));
-        }
-
-        json_object_set_new(set->created, creation_id, new_sieve);
+    if (name == id) {
+        json_object_set_new(new_sieve, "name", json_string(name));
     }
+
+    json_object_set_new(set->created, creation_id, new_sieve);
 
   done:
     if (err) {

@@ -517,9 +517,10 @@ static void vacation_update(struct jmap_req *req,
 
     if (r) err = "Failed to update vacation response";
     else if (status == STATUS_ENABLE) {
-        /* Activate vacation script */
+        /* Activate vacation script.  The new script is already stored, so
+         * say so: this isn't the same as nothing having changed. */
         r = sieve_script_activate(mailbox, sdata);
-        if (r) err = "Failed to enable vacation response";
+        if (r) err = "Vacation response was updated, but could not be enabled";
     }
 
     if (r) {
@@ -618,7 +619,12 @@ static int jmap_vacation_set(struct jmap_req *req)
                             json_pack("{s:s}", "type", "singleton"));
     }
 
-    sievedb_lookup_id(db, JMAP_URN_VACATION, &sdata, 0);
+    r = sievedb_lookup_id(db, JMAP_URN_VACATION, &sdata, 0);
+    if (r && r != CYRUSDB_NOTFOUND) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    r = 0;
     buf_printf(&buf, MODSEQ_FMT, sdata->modseq);
     set.new_state = buf_release(&buf);
     jmap_ok(req, jmap_set_reply(&set));
