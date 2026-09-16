@@ -348,7 +348,16 @@ EXTRA_DIST = \
     cunit/pcunit \
     cunit/vg.supp \
     doc/legacy/murder.png \
-    doc \
+    doc/README.autocreate \
+    doc/README.autosievefolder \
+    doc/README.cyrusdb.md \
+    doc/README.twom.md \
+    doc/README.xapian \
+    doc/README.zeroskip.md \
+    doc/examples \
+    doc/examples/imapd_conf/imapd.conf.sample \
+    doc/legacy \
+    doc/logfmt-keys \
     docsrc \
     imap/css3_color_array.gperf \
     imap/http_cal_abook_admin.js \
@@ -2010,8 +2019,29 @@ clean-sphinx-cache:
 
 if HAVE_SPHINX_BUILD
 
-docsrc/_doxygen: Doxyfile
+## What Doxygen reads: every header under these directories, per the Doxyfile's
+## INPUT, FILE_PATTERNS and RECURSIVE.  Keep this in step with the Doxyfile.
+## The list is discovered at make time, like the Cassandane module list, so
+## adding a header doesn't mean remembering to add it here.
+##
+## We look in the build tree because that is where Doxygen looks: it runs from
+## $(top_builddir) and the Doxyfile's INPUT is relative.  In a VPATH build that
+## means it only ever sees the generated headers, which is a wart older than
+## this rule.
+DOXYGEN_INPUT_DIRS = imap lib sieve
+DOXYGEN_INPUTS := $(shell find $(DOXYGEN_INPUT_DIRS) -name '*.h' 2>/dev/null)
+
+## The pages that read Doxygen's output, so we can tell Sphinx they changed.
+DOXYGEN_PAGES := $(shell grep -rl '^\.\. doxygen' docsrc --include='*.rst' 2>/dev/null)
+
+## breathe doesn't manage dependencies well enough to rebuild doxygen-centric
+## pages just because a *.h file changed.  Touching the pages gets through to
+## it.
+docsrc/_doxygen/.stamp: Doxyfile $(DOXYGEN_INPUTS)
 	$(AM_V_GEN)$(DOXYGEN) Doxyfile
+	@$(if $(DOXYGEN_PAGES),touch $(DOXYGEN_PAGES))
+	@$(MKDIR_P) $(@D)
+	@touch $@
 
 SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 
@@ -2028,7 +2058,7 @@ clean-docsrc:
 		$(RM) -r $(top_builddir)/docsrc $(top_builddir)/doc/examples
 
 ## XXX doesn't detect if other rst sources are updated...
-man/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
+man/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b man $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
 
@@ -2036,18 +2066,18 @@ clean-man:
 	@$(RM) -r man
 
 ## XXX doesn't detect if other rst sources are updated...
-doc/html/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
+doc/html/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
 	@touch $@
 
 ## XXX doesn't detect if other rst sources are updated...
-doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
+doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen/.stamp
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
 
 else # (! HAVE_SPHINX_BUILD)
 
-docsrc/_doxygen:
+docsrc/_doxygen/.stamp:
 	@echo "warning: missing documentation dependencies. can not run doxygen" 1>&2
 
 clean-docsrc:
@@ -2066,53 +2096,67 @@ doc/html/.sphinx-build.stamp:
 doc/text/.sphinx-build.stamp:
 	@echo "error: missing documentation dependencies. cannot build text documentation" 1>&2
 	@false
+
 endif
 
-.PHONY: man man-force clean-man
-man-force:
-	## trash the timestamps, so we always re-run sphinx-build.
-	## sphinx-build tracks source modifications itself, so forced
-	## rebuilds will still be a lot quicker once it has run once.
-	@$(RM) docsrc/.sphinx-build.stamp man/.sphinx-build.stamp
+SPHINX_MANS = $(dist_man1_MANS) $(dist_man3_MANS) $(dist_man5_MANS) $(dist_man8_MANS)
 
-man: man-force $(dist_man1_MANS) $(dist_man3_MANS) $(dist_man5_MANS) $(dist_man8_MANS)
+## Each of the doc entry points below trashes the timestamps and then runs a
+## subprocess make.
+##
+## Trashing them is what makes us always re-run sphinx-build.  sphinx-build
+## tracks source modifications itself, so forced rebuilds will still be a lot
+## quicker once it has run once -- and the stamps deliberately don't list the
+## reST sources (see the XXX comments above), so without this, editing a page
+## and asking for docs would build nothing.
+
+.PHONY: man clean-man
+man:
+	@$(RM) docsrc/.sphinx-build.stamp man/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) $(SPHINX_MANS)
 
 # clean-man is conditionally defined above. We do not want to remove
 # man pages if the user is unable to rebuild them.
 
-.PHONY: doc-html doc-html-force clean-doc-html clean-doc-doxygen
-doc-html-force:
+.PHONY: doc-html clean-doc-html clean-doc-doxygen
+doc-html:
 	@$(RM) docsrc/.sphinx-build.stamp doc/html/.sphinx-build.stamp
-
-doc-html: doc-html-force doc/html/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) doc/html/.sphinx-build.stamp
 
 clean-doc-html:
 	@$(RM) -r doc/html
 
-.PHONY: doc-text doc-text-force clean-doc-text
-doc-text-force:
+.PHONY: doc-text clean-doc-text
+doc-text:
 	@$(RM) docsrc/.sphinx-build.stamp doc/text/.sphinx-build.stamp
-
-doc-text: doc-text-force doc/text/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) doc/text/.sphinx-build.stamp
 
 clean-doc-text:
 	@$(RM) -r doc/text
 
 GENERATED_EXAMPLES = doc/examples/imapd_conf/imapd.conf.sample
 
-.PHONY: doc-examples doc-examples-force clean-doc-examples clean-doc-doxygen
-doc-examples-force:
-
-doc-examples: doc-examples-force $(GENERATED_EXAMPLES)
+## No forcing here: unlike the sphinx-build stamps, this one lists the sources
+## it is generated from, so make can tell when it's stale.
+.PHONY: doc-examples clean-doc-examples clean-doc-doxygen
+doc-examples: $(GENERATED_EXAMPLES)
 
 clean-doc-examples:
 	@$(RM) $(GENERATED_EXAMPLES)
 
 clean-doc-doxygen:
-	@$($RM) -r docsrc/_doxygen
+	@$(RM) -r docsrc/_doxygen
 
+## We can't run the various doc building rules in parallel, because they
+## unsafely share their cache.  That means they can't just be prereqs for the
+## doc target.  They *could* be given distinct caches, but this turns out to be
+## significantly slower than running them in series with a shared cache.
 .PHONY: doc clean-doc
-doc: man doc-html doc-text doc-examples
+doc:
+	$(MAKE) $(AM_MAKEFLAGS) man
+	$(MAKE) $(AM_MAKEFLAGS) doc-html
+	$(MAKE) $(AM_MAKEFLAGS) doc-text
+	$(MAKE) $(AM_MAKEFLAGS) doc-examples
 
 clean-doc: clean-man clean-doc-html clean-doc-text clean-doc-examples clean-doc-doxygen
 
@@ -2185,10 +2229,22 @@ distgit:
 	git archive --format=tar --prefix=$(PACKAGE_NAME)-$(PACKAGE_VERSION)/ $(PACKAGE_NAME)-$(PACKAGE_VERSION) | tar -C dist -x -f -
 	touch distgit
 
+## The HTML and text docs aren't in DISTFILES: they're built here and copied
+## in, after distdir has finished.  One subprocess make each, because they
+## can't be built at the same time -- and as separate targets rather than the
+## forcing doc-html and doc-text, so that a tree that has already built them
+## doesn't build them again.
 dist-hook:
+	$(MAKE) $(AM_MAKEFLAGS) doc/html/.sphinx-build.stamp
+	$(MAKE) $(AM_MAKEFLAGS) doc/text/.sphinx-build.stamp
+
+	@$(MKDIR_P) $(top_distdir)/doc
+	test ! -d doc/html || cp -R doc/html $(top_distdir)/doc/
+	test ! -d doc/text || cp -R doc/text $(top_distdir)/doc/
 	find $(top_distdir) -type f -name .sphinx-build.stamp -delete
 	find $(top_distdir) -type f -name .gitignore -delete
 	rm -rf $(top_distdir)/$(SPHINX_CACHE)
+	rm -rf $(top_distdir)/docsrc/_doxygen
 
 VERSION: tools/git-version.sh
 	$(AM_V_GEN)$< > $@.NEW && mv $@.NEW $@

@@ -35,8 +35,8 @@ def generate_sitemap(app, exception):
             url = {}
             url["loc"] = "{}{}.html".format(site, page)
 
-            # If we can deduce last modified time from gitstamp,
-            # then we can publish this here.
+            # If we ever learn each page's last modified time, we can
+            # publish it here.
             # url["lastmod"] = ...
 
             urls.append(url)
@@ -70,7 +70,6 @@ def setup(app):
     app.add_config_value("sitemap_website", None, '')
     app.connect('builder-inited', what_build_am_i)
     return {
-        # XXX Are we parallel r/w safe? Dunno! Say we're not, just in case.
-        'parallel_read_safe': False,
-        'parallel_write_safe': False,
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
     }
