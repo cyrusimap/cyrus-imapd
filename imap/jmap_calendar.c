@@ -5201,6 +5201,9 @@ static int createevent_store(jmap_req_t *req,
         xsyslog(LOG_ERR, "caldav_store_resource failed",
                 "accountid=<%s> err=<%s>",
                 req->accountid, error_message(r));
+        /* Release the attachment refs we took above: notCreated mustn't
+         * leave them held for an event that was never stored. */
+        caldav_manage_attachments(req->accountid, NULL, create->ical);
         goto done;
     }
     r = 0;

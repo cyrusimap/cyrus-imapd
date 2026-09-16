@@ -4601,7 +4601,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
         if (!r) {
             struct index_record record;
 
-            mailbox_find_index_record(this_mailbox,
+            int have_record = !mailbox_find_index_record(this_mailbox,
                                       this_mailbox->i.last_uid, &record);
 
             jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox),
@@ -4650,6 +4650,18 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
             r = carddav_remove(*mailbox, olduid,
                                /*isreplace*/!newmailbox, req->userid);
+            if (r && newmailbox && have_record) {
+                /* A move: drop the copy we just wrote, so notUpdated
+                 * doesn't leave the card in both address books. */
+                int rr = carddav_remove(newmailbox, record.uid,
+                                        /*isreplace*/0, req->userid);
+                if (rr) {
+                    xsyslog(LOG_ERR, "can't undo card move",
+                            "mboxname=<%s> uid=<%u> err=<%s>",
+                            mailbox_name(newmailbox), record.uid,
+                            error_message(rr));
+                }
+            }
         }
     }
 

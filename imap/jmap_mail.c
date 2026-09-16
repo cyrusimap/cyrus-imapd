@@ -9815,6 +9815,7 @@ static void _email_append(jmap_req_t *req,
     json_t *val, *mailboxes = NULL;
     size_t len;
     int r = 0;
+    int committed = 0;
     time_t savedate = 0;
     struct timespec now;
     char exist_id[JMAP_MAX_EMAILID_SIZE];
@@ -10049,6 +10050,7 @@ static void _email_append(jmap_req_t *req,
 
     r = append_commit(&as);
     if (r) goto done;
+    committed = 1;
 
     /* Load message record */
     r = msgrecord_find(mbox, mbox->i.last_uid, &mr);
@@ -10098,7 +10100,14 @@ done:
     mailbox_close(&mbox);
     free(mboxname);
     json_decref(mailboxes);
-    if (r && *err == NULL) {
+    if (r && *err == NULL && committed) {
+        /* The message is already in at least one mailbox.  Say so, or a
+         * client reading this as "not created" retries and duplicates it. */
+        *err = json_pack("{s:s s:s}", "type", "serverFail", "description",
+                         "email was created, but not in every requested "
+                         "mailbox");
+    }
+    else if (r && *err == NULL) {
         switch (r) {
             case IMAP_PERMISSION_DENIED:
                 *err = json_pack("{s:s}", "type", "forbidden");
