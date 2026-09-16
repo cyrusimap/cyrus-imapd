@@ -10441,7 +10441,11 @@ static void _email_append(jmap_req_t *req,
     struct timespec now;
     char exist_id[JMAP_MAX_EMAILID_SIZE];
 
-    if (json_object_size(mailboxids) > JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL) {
+    /* Past conversations_max_guidexists, copying the email to another
+     * mailbox would fail part way through */
+    if (json_object_size(mailboxids) >
+        (size_t) MIN(JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL,
+                     config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDEXISTS))) {
         *err = json_pack("{s:s}", "type", "tooManyMailboxes");
         goto done;
     }
@@ -13209,6 +13213,7 @@ struct email_bulkupdate {
     ptrarray_t *new_mboxrecs;       /* New mbox and UID records allocated by planner */
     struct conversations_state *from_cstate; /* Email/copy fromAccountId cstate.
                                                 NULL for Email/set{update} */
+    json_t *committed;              /* Email ids with a change already made */
 };
 
 #define _EMAIL_BULKUPDATE_INITIALIZER {\
@@ -13221,6 +13226,7 @@ struct email_bulkupdate {
     NULL, \
     ptrarray_new(), \
     NULL, \
+    json_object(), \
 }
 
 static void _email_update_parse(jmap_req_t *req,
@@ -13460,6 +13466,7 @@ void _email_bulkupdate_close(struct email_bulkupdate *bulk)
     _email_mboxrecs_free(&bulk->cur_mboxrecs);
     _email_mboxrecs_free(&bulk->new_mboxrecs);
     json_decref(bulk->set_errors);
+    json_decref(bulk->committed);
 }
 
 static struct email_updateplan *_email_bulkupdate_addplan(struct email_bulkupdate *bulk,
@@ -13751,7 +13758,12 @@ static void _email_bulkupdate_checklimits(struct email_bulkupdate *bulk)
         }
     }
     hash_iter_free(&iter);
-    /* Apply plans to mailbox counts */
+    /* Apply copies to mailbox counts, noting which emails get copied.
+     * All copies are made before any deletes, so this is the most
+     * mailboxes each email will be in. */
+    hash_table emails_with_copies = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&emails_with_copies,
+                         hash_count(&bulk->uidrecs_by_email_id)+1, 0);
     iter = hash_table_iter(&bulk->plans_by_mbox_id);
     while (hash_iter_next(iter)) {
         struct email_updateplan *plan = hash_iter_val(iter);
@@ -13767,8 +13779,34 @@ static void _email_bulkupdate_checklimits(struct email_bulkupdate *bulk)
                     hash_insert(uidrec->email_id, mbox_ids, &mbox_ids_by_email_id);
                 }
                 strarray_add(mbox_ids, plan->mbox_id);
+                hash_insert(uidrec->email_id, (void *) 1, &emails_with_copies);
             }
         }
+    }
+    hash_iter_free(&iter);
+    /* An email being copied past conversations_max_guidexists would fail
+     * the copy phase part way through: refuse it now instead.  An email
+     * that is only being updated or removed makes no new copies, so it
+     * stays modifiable even when it is already over the limit. */
+    int max_exists = config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDEXISTS);
+    iter = hash_table_iter(&mbox_ids_by_email_id);
+    while (hash_iter_next(iter)) {
+        const char *email_id = hash_iter_key(iter);
+        strarray_t *mbox_ids = hash_iter_val(iter);
+        if (mbox_ids && strarray_size(mbox_ids) > max_exists &&
+            hash_lookup(email_id, &emails_with_copies) &&
+            json_object_get(bulk->set_errors, email_id) == NULL) {
+            json_object_set_new(bulk->set_errors, email_id,
+                    json_pack("{s:s}", "type", "tooManyMailboxes"));
+        }
+    }
+    hash_iter_free(&iter);
+    free_hash_table(&emails_with_copies, NULL);
+    /* Apply deletes to mailbox counts */
+    iter = hash_table_iter(&bulk->plans_by_mbox_id);
+    while (hash_iter_next(iter)) {
+        struct email_updateplan *plan = hash_iter_val(iter);
+        int i;
         for (i = 0; i < ptrarray_size(&plan->delete); i++) {
             struct email_uidrec *uidrec = ptrarray_nth(&plan->delete, i);
             strarray_t *mbox_ids = hash_lookup(uidrec->email_id, &mbox_ids_by_email_id);
@@ -14725,6 +14763,9 @@ static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
                     continue;
                 }
 
+                json_object_set_new(bulk->committed, src_uidrec->email_id,
+                                    json_true());
+
                 /* Create new uid record */
                 struct email_uidrec *new_uidrec = xzmalloc(sizeof(struct email_uidrec));
                 new_uidrec->email_id = xstrdup(src_uidrec->email_id);
@@ -14804,6 +14845,7 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
             if (!r) r = _email_setflags(keywords, patch_keywords, mrw,
                                         add_seenseq, del_seenseq, &modflags);
             if (!r) {
+                json_object_set_new(bulk->committed, email_id, json_true());
                 if (modflags.added_flags) {
                     mboxevent_add_flags(flagsset, plan->mbox->h.flagname,
                                         modflags.added_system_flags,
@@ -14852,6 +14894,13 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
                 if (r) {
                     for (j = 0; j < ptrarray_size(&plan->setflags); j++) {
                         struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, j);
+                        /* Only the messages whose seen state we tried to
+                         * change are affected: the rest have their keywords
+                         * written and may have been copied already. */
+                        if (!seqset_ismember(add_seenseq, uidrec->uid) &&
+                            !seqset_ismember(del_seenseq, uidrec->uid)) {
+                            continue;
+                        }
                         if (json_object_get(bulk->set_errors, uidrec->email_id) == NULL) {
                             json_object_set_new(bulk->set_errors, uidrec->email_id,
                                                 jmap_server_error(r));
@@ -14961,7 +15010,8 @@ static void _email_bulkupdate_exec_snooze(struct email_bulkupdate *bulk)
 static void _email_bulkupdate_exec(struct email_bulkupdate *bulk,
                                    json_t *updated,
                                    json_t *not_updated,
-                                   json_t *debug)
+                                   json_t *debug,
+                                   bool *partial)
 {
     /*  Execute plans */
     _email_bulkupdate_exec_copy(bulk);
@@ -14976,6 +15026,8 @@ static void _email_bulkupdate_exec(struct email_bulkupdate *bulk,
         json_t *err = json_object_get(bulk->set_errors, email_id);
         if (err) {
             json_object_set(not_updated, email_id, err);
+            /* It failed after part of its change was made */
+            if (json_object_get(bulk->committed, email_id)) *partial = true;
         }
         else {
             json_object_set_new(updated, email_id, json_null());
@@ -14992,7 +15044,8 @@ static void _email_update_bulk(jmap_req_t *req,
                                json_t *update,
                                json_t *updated,
                                json_t *not_updated,
-                               json_t *debug)
+                               json_t *debug,
+                               bool *partial)
 {
     struct email_bulkupdate bulkupdate = _EMAIL_BULKUPDATE_INITIALIZER;
     ptrarray_t updates = PTRARRAY_INITIALIZER;
@@ -15087,7 +15140,8 @@ static void _email_update_bulk(jmap_req_t *req,
         /* Build and execute bulk update */
         int r = _email_bulkupdate_open(req, &bulkupdate, &updates);
         if (!r) {
-            _email_bulkupdate_exec(&bulkupdate, updated, not_updated, debug);
+            _email_bulkupdate_exec(&bulkupdate, updated, not_updated, debug,
+                                   partial);
         }
         else {
             for (i = 0; i < ptrarray_size(&updates); i++) {
@@ -15104,6 +15158,7 @@ static void _email_update_bulk(jmap_req_t *req,
         /* just clean up the memory we allocated above */
         _email_mboxrecs_free(&bulkupdate.new_mboxrecs);
         json_decref(bulkupdate.set_errors);
+        json_decref(bulkupdate.committed);
     }
 
     for (i = 0; i < ptrarray_size(&updates); i++) {
@@ -15249,7 +15304,8 @@ static int jmap_email_set(jmap_req_t *req)
     if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
         debug_bulkupdate = json_object();
     }
-    _email_update_bulk(req, set.update, set.updated, set.not_updated, debug_bulkupdate);
+    _email_update_bulk(req, set.update, set.updated, set.not_updated,
+                       debug_bulkupdate, &partial);
 
     if (partial) {
         json_decref(debug_bulkupdate);
@@ -15977,6 +16033,7 @@ static void _email_copy_bulk(jmap_req_t *req,
         /* just clean up the memory we allocated above */
         _email_mboxrecs_free(&bulkupdate.new_mboxrecs);
         json_decref(bulkupdate.set_errors);
+        json_decref(bulkupdate.committed);
     }
 
     for (i = 0; i < ptrarray_size(&updates); i++) {
