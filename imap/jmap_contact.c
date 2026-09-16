@@ -2438,21 +2438,8 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
         }
     }
 
-    /* Delete addressbook */
-    r = carddav_delmbox(db, mbentry);
-    if (r) {
-        xsyslog(LOG_ERR, "failed to delete mailbox from carddav_db",
-                "mboxname=<%s> mboxid=<%s> err=<%s>",
-                mbentry->name, mbentry->uniqueid, error_message(r));
-        goto done;
-    }
-    if (r) goto done;
-
-    jmap_myrights_delete(req, mbentry->name);
-
-    /* Remove from subscriptions db */
-    mboxlist_changesub(mbentry->name, req->userid, req->authstate, 0, 1, 0, 1);
-
+    /* The carddav_db rows go with the mailbox: both delete paths reach
+     * mailbox_delete_dav() themselves. */
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
     if (mboxlist_delayed_delete_isenabled()) {
         r = mboxlist_delayed_deletemailbox(mbentry->name,
@@ -2466,6 +2453,12 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
                 MBOXLIST_DELETE_CHECKACL|MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
     }
     mboxevent_free(&mboxevent);
+    if (r) goto done;
+
+    jmap_myrights_delete(req, mbentry->name);
+
+    /* Remove from subscriptions db */
+    mboxlist_changesub(mbentry->name, req->userid, req->authstate, 0, 1, 0, 1);
 
   done:
     if (db) {
