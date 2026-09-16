@@ -2106,6 +2106,7 @@ struct mboxset {
     strarray_t *destroy;
     int on_destroy_remove_msgs;
     const char *on_destroy_move_to_mailboxid;
+    int partial_fail;           /* a change was left half-done */
 };
 
 static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
@@ -3315,6 +3316,11 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
             syslog(LOG_ERR, "jmap: mailbox rename failed half-way: old=%s tmp=%s new=%s: %s",
                     tmp->old_imapname ? tmp->old_imapname : "null",
                     tmp->tmp_imapname, tmp->new_imapname, error_message(r));
+
+            /* The mailbox is stuck under its temporary name, which is
+             * neither what was asked for nor what it was, and later ops
+             * may already depend on it: no per-item report would be true. */
+            set->partial_fail = 1;
         }
         /* invalidate ACL cache */
         if (tmp->old_imapname) jmap_myrights_delete(req, tmp->old_imapname);
@@ -4124,7 +4130,10 @@ static int jmap_mailbox_set(jmap_req_t *req)
     set.super.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
 
     _mboxset(req, &set);
-    jmap_ok(req, jmap_set_reply(&set.super));
+    if (set.partial_fail) {
+        jmap_error(req, json_pack("{s:s}", "type", "serverPartialFail"));
+    }
+    else jmap_ok(req, jmap_set_reply(&set.super));
 
 done:
     jmap_parser_fini(&parser);
