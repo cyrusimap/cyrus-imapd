@@ -5393,9 +5393,13 @@ static int expand_cb(icalcomponent *comp,
 
 /* Expand recurrences of ical in range.
    NOTE: expand_cb() is destructive of ical as it builds expanded_ical */
-static icalcomponent *expand_caldata(icalcomponent **ical,
+static icalcomponent *expand_caldata(icalcomponent *ical,
                                      struct icalperiodtype range)
 {
+    int limit = config_getint(IMAPOPT_CALENDAR_MAX_EXPANDED_INSTANCES);
+
+    if (!icalcomponent_expand_allowed(ical, range, limit)) return NULL;
+
     icalcomponent *expanded_ical =
         icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
                             icalproperty_new_version("2.0"),
@@ -5404,15 +5408,13 @@ static icalcomponent *expand_caldata(icalcomponent **ical,
 
     /* Copy over any CALSCALE property */
     icalproperty *prop =
-        icalcomponent_get_first_property(*ical, ICAL_CALSCALE_PROPERTY);
+        icalcomponent_get_first_property(ical, ICAL_CALSCALE_PROPERTY);
     if (prop)
         icalcomponent_add_property(expanded_ical, icalproperty_clone(prop));
 
-    icalcomponent_myforeach(*ical, range, NULL, expand_cb, expanded_ical);
-    icalcomponent_free(*ical);
-    *ical = expanded_ical;
-    
-    return *ical;
+    icalcomponent_myforeach(ical, range, NULL, expand_cb, expanded_ical);
+
+    return expanded_ical;
 }
 
 static void limit_caldata(icalcomponent *ical, struct icalperiodtype *limit)
@@ -5691,7 +5693,10 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
             }
 
             if (partial->expand) {
-                fctx->obj = expand_caldata(&ical, partial->range);
+                icalcomponent *expanded = expand_caldata(ical, partial->range);
+                if (!expanded) return HTTP_UNPROCESSABLE;
+                icalcomponent_free(ical);
+                ical = fctx->obj = expanded;
             }
             else limit_caldata(ical, &partial->range);
         }

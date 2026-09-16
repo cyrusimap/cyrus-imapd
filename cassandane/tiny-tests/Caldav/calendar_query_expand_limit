@@ -1,0 +1,259 @@
+#!perl
+use Cassandane::Tiny;
+
+my sub uuid
+{
+    require Data::GUID;
+    Data::GUID->new->as_string;
+}
+
+my sub range
+{
+    my (%duration_args) = @_;
+    my $start = DateTime->new(
+      time_zone => 'UTC',
+      year  => 2025,
+      month => 1,
+      day   => 1,
+    );
+
+    my sub icalfmt {
+      my $utc = $_[0]->clone->set_time_zone('UTC');
+      return $utc->ymd('') . 'T' . $utc->hms('') . 'Z';
+    }
+
+    my $end = $start->clone->add( DateTime::Duration->new(%duration_args) );
+
+    return [ icalfmt($start), icalfmt($end) ];
+}
+
+# An event spec is a single RRULE string or, for a component carrying more
+# than one RRULE, an arrayref of them.
+my sub event
+{
+    my ($rrules) = @_;
+
+    my $rrule = join "\n", map {; "RRULE:$_" } (ref $rrules ? @$rrules : $rrules);
+    my $uuid = uuid();
+
+    my $event = <<~"EOF";
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//YourApp//NONSGML v1.0//EN
+    BEGIN:VEVENT
+    UID:$uuid
+    DTSTAMP:20250903T123446Z
+    DTSTART;TZID=UTC:20250101T000000
+    DTEND;TZID=UTC:20250101T000500
+    SUMMARY:Quick Repeat Event ($uuid)
+    $rrule
+    END:VEVENT
+    END:VCALENDAR
+    EOF
+
+    return {
+        uid => $uuid,
+        ical => $event,
+    };
+}
+
+sub _new_calendar
+{
+    my ($self, $name, $event_specs) = @_;
+
+    my $caldav = $self->{caldav};
+
+    my $calendar_id = $caldav->NewCalendar({ name => $name});
+    $self->assert_not_null($calendar_id);
+
+    my @events;
+    for my $event_spec (@$event_specs) {
+        my $event = event($event_spec);
+
+        my $uid = $event->{uid};
+        my $href = "$calendar_id/$uid.ics";
+
+        $caldav->Request('PUT', $href, $event->{ical}, 'Content-Type' => 'text/calendar');
+
+        push @events, $event;
+    }
+
+    return {
+        id     => $calendar_id,
+        events => \@events,
+    };
+}
+
+sub _report_for
+{
+    my ($self, $calendar_id, $range) = @_;
+
+    my $xml = <<~"EOF";
+    <c:calendar-query xmlns:d="DAV:"
+                      xmlns:c="urn:ietf:params:xml:ns:caldav">
+      <d:prop>
+        <c:calendar-data>
+          <c:expand start="$range->[0]" end="$range->[1]"/>
+        </c:calendar-data>
+      </d:prop>
+      <c:filter>
+        <c:comp-filter name="VCALENDAR">
+          <c:comp-filter name="VEVENT">
+            <c:time-range start="$range->[0]" end="$range->[1]"/>
+          </c:comp-filter>
+        </c:comp-filter>
+      </c:filter>
+    </c:calendar-query>
+    EOF
+
+    my $caldav = $self->{caldav};
+    my $res = $caldav->Request('REPORT',
+                               "/dav/calendars/user/cassandane/$calendar_id",
+                               $xml, Depth => 1, 'Content-Type' => 'text/xml');
+}
+
+sub _assert_report_failure
+{
+    my ($self, $calendar, $range) = @_;
+
+    my $res = $self->_report_for($calendar->{id}, $range);
+
+    my $responses = $res->{'{DAV:}response'};
+    $self->assert_equals(1, scalar @$responses);
+
+    my $propstat = $responses->[0]{'{DAV:}propstat'};
+    $self->assert_equals(1, scalar @$propstat);
+
+    $self->assert(exists $propstat->[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'});
+    $self->assert_str_equals('HTTP/1.1 422 Unprocessable Content',
+                             $propstat->[0]{'{DAV:}status'}{content});
+}
+
+sub _assert_report_count
+{
+    my ($self, $calendar, $range, $want_count) = @_;
+
+    my $res = $self->_report_for($calendar->{id}, $range);
+
+    use Data::Printer;
+    p $res;
+
+    my $responses = $res->{'{DAV:}response'};
+    $self->assert_equals(1, scalar @$responses);
+
+    my $propstat = $responses->[0]{'{DAV:}propstat'};
+    $self->assert_equals(1, scalar @$propstat);
+
+    my $CAL_DATA_KEY = q<{urn:ietf:params:xml:ns:caldav}calendar-data>;
+    $self->assert(exists $propstat->[0]{'{DAV:}prop'}{$CAL_DATA_KEY});
+
+    my $data = $propstat->[0]{'{DAV:}prop'}{$CAL_DATA_KEY}{content};
+
+    # Stupid Perl, sorry. -- rjbs, 2025-10-08
+    my $have_count = () = $data =~ /BEGIN:VEVENT/gm;
+    $self->assert_num_equals($want_count, $have_count);
+}
+
+sub test_calendar_query_expand_limit
+{
+    my ($self) = @_;
+
+    my $all_hours   = join(',', 0..23);
+    my $all_minutes = join(',', 0..59);
+
+    my @test_specs = (
+      # description    rrule            range                  count/undef
+      [ 'hourly/year', 'FREQ=HOURLY'   => range(years => 1),   undef ],
+      [ 'secly/5s',    'FREQ=SECONDLY' => range(seconds => 5),     5 ],
+      [ 'secly/hour',  'FREQ=SECONDLY' => range(hours => 1),   undef ],
+      [ 'daily/year',  'FREQ=DAILY'    => range(years => 1),     365 ],
+      [ 'daily/week',  'FREQ=DAILY'    => range(weeks => 1),       7 ],
+      [ 'daily/10yr',  'FREQ=DAILY'    => range(years => 10),  undef ],
+
+      # "First and weekday of month", equates to 2/mo
+      [ '2dpm/1yr',    'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=1,-1',
+                                          range(years => 1),      24 ],
+      [ '2dpm/50yr',   'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=1,-1',
+                                          range(years => 50),  undef ],
+
+      # Minutely: density tests at different range lengths
+      [ 'minutely/1hr',  'FREQ=MINUTELY' => range(hours => 1),    60 ],
+      [ 'minutely/day',  'FREQ=MINUTELY' => range(days => 1),   undef ],
+      [ 'minutely/year', 'FREQ=MINUTELY' => range(years => 1),  undef ],
+
+      # Large INTERVAL values reduce output but a naive implementation may
+      # still iterate over every underlying unit rather than stepping by the
+      # interval, making these deceptively expensive.
+      [ 'secly/int=3600/1yr', 'FREQ=SECONDLY;INTERVAL=3600' => range(years => 1), undef ],
+      [ 'minly/int=60/1yr',   'FREQ=MINUTELY;INTERVAL=60'   => range(years => 1), undef ],
+
+      # Weekday-only daily; looks like daily but BYDAY filters ~5/7 of days
+      [ 'wkdays/1yr',  'FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR' => range(years => 1),   261 ],
+      [ 'wkdays/10yr', 'FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR' => range(years => 10), undef ],
+
+      # Four events per day via BYHOUR; a year of them exceeds the limit
+      [ '4xday/3mo', 'FREQ=DAILY;BYHOUR=0,6,12,18' => range(months => 3),  360 ],
+      [ '4xday/1yr', 'FREQ=DAILY;BYHOUR=0,6,12,18' => range(years => 1),  undef ],
+
+      # The limit is meant to bound the cost of expansion, not the size of
+      # the output, and libical walks every candidate in a period (twice, in
+      # fact) to apply BYSETPOS.  The server estimates without regard to
+      # BYSETPOS and rejects on the *candidate* count.  That means some rules
+      # with few results are rejected, like the two below whose result counts
+      # are noted.  We'll fix this harder if/when we replace libical.
+
+      # Last Sunday of each month: 4-5 Sunday candidates/month -> 1 result
+      [ 'lastsun/mo/5yr',  'FREQ=MONTHLY;BYDAY=SU;BYSETPOS=-1' => range(years => 5),    60 ],
+      [ 'lastsun/mo/50yr', 'FREQ=MONTHLY;BYDAY=SU;BYSETPOS=-1' => range(years => 50), undef ],
+
+      # Last Sunday of each year: ~52 Sunday candidates/year -> 1 result
+      [ 'lastsun/yr/10yr', 'FREQ=YEARLY;BYDAY=SU;BYSETPOS=-1' => range(years => 10),   10 ],
+      [ 'lastsun/yr/50yr', 'FREQ=YEARLY;BYDAY=SU;BYSETPOS=-1' => range(years => 50), undef ],
+
+      # Last weekday of each year: ~261 weekday candidates/year -> 1 result
+      [ 'lastwkday/yr/10yr', 'FREQ=YEARLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1' => range(years => 10),   undef ], # 10 results
+      [ 'lastwkday/yr/50yr', 'FREQ=YEARLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1' => range(years => 50), undef ],
+
+      # Last hour of each day: lists all 24 hours as candidates, BYSETPOS=-1
+      # picks hour 23.  Output count matches plain FREQ=DAILY but 24 candidate
+      # instants must be evaluated for every day.
+      [ 'lasthr/day/1yr',  "FREQ=DAILY;BYHOUR=$all_hours;BYSETPOS=-1" => range(years => 1),    undef ], # 365 results
+      [ 'lasthr/day/10yr', "FREQ=DAILY;BYHOUR=$all_hours;BYSETPOS=-1" => range(years => 10), undef ],
+
+      # Last minute of each hour: lists all 60 minutes as candidates,
+      # BYSETPOS=-1 picks minute 59.  Output matches plain FREQ=HOURLY (already
+      # rejected for a year), but 60 candidates must be evaluated per hour.
+      [ 'lastmin/hr/1yr', "FREQ=HOURLY;BYMINUTE=$all_minutes;BYSETPOS=-1" => range(years => 1), undef ],
+
+      # COUNT-bounded recurrences: the total is fixed but may be very large
+      [ 'secly/cnt=60',    'FREQ=SECONDLY;COUNT=60'    => range(years => 1),    60 ],
+      [ 'secly/cnt=3600',  'FREQ=SECONDLY;COUNT=3600'  => range(years => 1),  undef ],
+      [ 'secly/cnt=86400', 'FREQ=SECONDLY;COUNT=86400' => range(years => 1),  undef ],
+
+      # Several RRULEs on one component are all expanded, so their estimates
+      # are summed: two rules that each fit under the limit can still be
+      # rejected together.
+      [ '2xday/1yr',       'FREQ=DAILY;BYHOUR=3,9' => range(years => 1),   730 ],
+      [ '2rrule/2xday/1wk', [ [ 'FREQ=DAILY;BYHOUR=3,9', 'FREQ=DAILY;BYHOUR=15,21' ] ],
+                                                   range(weeks => 1),    28 ],
+      [ '2rrule/2xday/1yr', [ [ 'FREQ=DAILY;BYHOUR=3,9', 'FREQ=DAILY;BYHOUR=15,21' ] ],
+                                                   range(years => 1),  undef ],
+    );
+
+    for my $test_spec (@test_specs) {
+        my ($desc, $ev_specs, $range, $count) = @$test_spec;
+        $ev_specs = [ $ev_specs ] unless ref $ev_specs;
+
+        xlog $self, "begin subtest $desc";
+
+        my $calendar = $self->_new_calendar($desc, $ev_specs);
+
+        if (defined $count) {
+            $self->_assert_report_count($calendar, $range, $count);
+        } else {
+            $self->_assert_report_failure($calendar, $range);
+        }
+
+        xlog $self, "end subtest $desc";
+    }
+}
