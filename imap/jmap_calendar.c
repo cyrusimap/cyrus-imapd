@@ -2341,6 +2341,8 @@ static int jmap_calendar_set(struct jmap_req *req)
         goto done;
     }
     if (r) {
+        jmap_error(req, jmap_server_error(r));
+        r = 0;
         goto done;
     }
 
@@ -6834,16 +6836,20 @@ static int jmap_calendarevent_set(struct jmap_req *req)
                                        &httpd_namespace, req->authstate, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
-        json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
-        json_array_append_new(req->response, json_pack("[s,o,s]",
-                    "error", err, req->tag));
-        return 0;
-    } else if (r) return r;
+        jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
+        r = 0;
+        goto done;
+    }
+    else if (r) {
+        jmap_error(req, jmap_server_error(r));
+        r = 0;
+        goto done;
+    }
 
     db = caldav_open_userid(req->accountid);
     if (!db) {
         syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
-        r = IMAP_INTERNAL;
+        jmap_error(req, jmap_server_error(IMAP_INTERNAL));
         goto done;
     }
 
@@ -6898,7 +6904,12 @@ static int jmap_calendarevent_set(struct jmap_req *req)
             r = 0;
             continue;
         } else if (r) {
-            goto done;
+            /* Earlier events in this loop are already destroyed, and their
+             * CANCELs already sent.  Report this one and keep going. */
+            json_object_set_new(set.not_destroyed, eid->raw,
+                                jmap_server_error(r));
+            r = 0;
+            continue;
         }
 
         /* Report calendar event as destroyed. */
