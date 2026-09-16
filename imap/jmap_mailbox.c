@@ -3003,7 +3003,8 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
             "mboxid=<%s> uniqueid=<%s> msgcount=<%zu>",
             mboxid, mbentry->uniqueid, msgcount);
 
-    /* Remove subscription */
+    /* Remove subscription.  Logged, not reported: the mailbox really is
+     * destroyed, so all a failure here leaves is a stale subscription. */
     int r2 = mboxlist_changesub(mbentry->name, req->userid, httpd_authstate, 0, 1, 0, 1);
     if (r2) {
         syslog(LOG_ERR, "jmap: mbox_destroy: can't unsubscribe %s:%s",
