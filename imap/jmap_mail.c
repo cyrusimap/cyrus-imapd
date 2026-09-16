@@ -10330,9 +10330,28 @@ struct email_uidrec {
     int is_snoozed;                /* Used by Email/set{update} */
 };
 
-static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
+/* An email that failed in one mailbox isn't destroyed, even if it was
+ * already expunged from another.  Returns true if it had been, leaving
+ * the email partly destroyed. */
+static bool _email_destroy_failed(json_t *errors, json_t *success,
+                                  const char *email_id, json_t *err)
+{
+    json_object_set_new(errors, email_id, err);
+    if (success) {
+        int i = json_array_find(success, email_id);
+        if (i >= 0) {
+            json_array_remove(success, i);
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Returns true if an email was left partly destroyed */
+static bool _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
                                 ptrarray_t *uidrecs, json_t *errors, json_t *success)
 {
+    bool partial = false;
     int r;
     struct mboxevent *mboxevent = NULL;
     msgrecord_t *mrw = NULL;
@@ -10353,7 +10372,7 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
         r = msgrecord_find(mbox, uidrec->uid, &mrw);
         if (!r) r = msgrecord_get_systemflags(mrw, &system_flags);
         if (!r) r = msgrecord_get_internalflags(mrw, &internal_flags);
-        // already expunged, skip (aka: will be reported as success)
+        // already expunged: the sweep in _email_destroy_bulk reports notFound
         if (internal_flags & FLAG_INTERNAL_EXPUNGED) continue;
         // update the flags
         if (!r) r = msgrecord_add_systemflags(mrw, FLAG_DELETED);
@@ -10364,7 +10383,9 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
             didsome++;
         }
         // if errors, record the issue
-        if (r) json_object_set_new(errors, uidrec->email_id, jmap_server_error(r));
+        if (r) partial |= _email_destroy_failed(errors, success,
+                                                uidrec->email_id,
+                                                jmap_server_error(r));
         // otherwise, record the success
         else if (success && json_array_find(success, uidrec->email_id) < 0)
             json_array_append_new(success, json_string(uidrec->email_id));
@@ -10379,6 +10400,8 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
         mboxevent_notify(&mboxevent);
     }
     mboxevent_free(&mboxevent);
+
+    return partial;
 }
 
 struct email_append_detail {
@@ -15084,7 +15107,8 @@ static void _email_update_bulk(jmap_req_t *req,
 static void _email_destroy_bulk(jmap_req_t *req,
                                 json_t *destroy,
                                 json_t *destroyed,
-                                json_t *not_destroyed)
+                                json_t *not_destroyed,
+                                bool *partial)
 {
     ptrarray_t *mboxrecs = NULL;
     strarray_t email_ids = STRARRAY_INITIALIZER;
@@ -15138,15 +15162,17 @@ static void _email_destroy_bulk(jmap_req_t *req,
         int r = mailbox_open_iwl(mboxrec->mboxname, &mbox);
         if (!r) {
             /* Expunge messages one by one, marking any failed/expunged message */
-            _email_multiexpunge(req, mbox, &mboxrec->uidrecs, not_destroyed, destroyed);
+            *partial |= _email_multiexpunge(req, mbox, &mboxrec->uidrecs,
+                                            not_destroyed, destroyed);
         }
         else {
             /* Mark all messages of this mailbox as failed */
             for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
                 struct email_uidrec *uidrec = ptrarray_nth(&mboxrec->uidrecs, j);
                 if (!json_object_get(not_destroyed, uidrec->email_id)) {
-                    json_object_set_new(not_destroyed, uidrec->email_id,
-                            jmap_server_error(r));
+                    *partial |= _email_destroy_failed(not_destroyed, destroyed,
+                                                      uidrec->email_id,
+                                                      jmap_server_error(r));
                 }
             }
         }
@@ -15188,7 +15214,11 @@ static int jmap_email_set(jmap_req_t *req)
 
     set.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
 
-    _email_destroy_bulk(req, set.destroy, set.destroyed, set.not_destroyed);
+    /* Set if an email is left half-changed, so no response would be true */
+    bool partial = false;
+
+    _email_destroy_bulk(req, set.destroy, set.destroyed, set.not_destroyed,
+                        &partial);
 
     json_t *email;
     const char *creation_id;
@@ -15212,6 +15242,12 @@ static int jmap_email_set(jmap_req_t *req)
         debug_bulkupdate = json_object();
     }
     _email_update_bulk(req, set.update, set.updated, set.not_updated, debug_bulkupdate);
+
+    if (partial) {
+        json_decref(debug_bulkupdate);
+        jmap_error(req, json_pack("{s:s}", "type", "serverPartialFail"));
+        goto done;
+    }
 
     set.new_state = jmap_state_string(req, 0, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD);
 
