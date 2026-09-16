@@ -43,6 +43,14 @@ sub new
 
     # setup sieve
     my ($maj, $min) = Cassandane::Instance->get_version();
+
+    # mailboxID is a URI per RFC 5423; tests wanting a JMAP mailbox id
+    # need the vnd.fastmail.mailboxJMAPId extra param (3.13 onwards)
+    if ($maj > 3 || ($maj == 3 && $min >= 13)) {
+        $config->set(event_extra_params =>
+            'timestamp vnd.fastmail.mailboxJMAPId');
+    }
+
     if ($maj == 3 && $min == 0) {
         # need to explicitly add 'body' to sieve_extensions for 3.0
         $config->set(sieve_extensions =>
