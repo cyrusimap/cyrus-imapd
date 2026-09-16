@@ -6358,6 +6358,17 @@ static void setcalendarevents_update(jmap_req_t *req,
     }
     else if (r) goto done;
 
+    /* Manage attachments before anything is committed, as create and
+     * destroy do: a failure after the store would fail an item that was
+     * in fact updated */
+    int ret = caldav_manage_attachments(req->accountid,
+            update.newical, update.oldical);
+    if (ret && ret != HTTP_NOT_FOUND) {
+        syslog(LOG_ERR, "caldav_manage_attachments: %s", error_message(ret));
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
     if (dstmbox) {
         /* Expunge the resource from mailbox. */
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
@@ -6440,15 +6451,6 @@ static void setcalendarevents_update(jmap_req_t *req,
         r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
                 update.oldical, update.newical, eid->createdmodseq, JMAP_UPDATE);
         if (r) goto done;
-    }
-
-    /* Manage attachments */
-    int ret = caldav_manage_attachments(req->accountid,
-            update.newical, update.oldical);
-    if (ret && ret != HTTP_NOT_FOUND) {
-        syslog(LOG_ERR, "caldav_manage_attachments: %s", error_message(ret));
-        r = IMAP_INTERNAL;
-        goto done;
     }
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
@@ -6693,13 +6695,6 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         newical = NULL;
     }
 
-    /* Handle scheduling. */
-    if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
-        r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
-                oldical, newical, eid->createdmodseq, JMAP_DESTROY);
-        if (r) goto done;
-    }
-
     /* Manage attachments */
     int ret = caldav_manage_attachments(req->accountid, newical, oldical);
     if (ret && ret != HTTP_NOT_FOUND) {
@@ -6737,6 +6732,13 @@ static int setcalendarevents_destroy(jmap_req_t *req,
             goto done;
         }
         r = 0;
+    }
+
+    /* Handle scheduling. */
+    if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
+        r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
+                oldical, newical, eid->createdmodseq, JMAP_DESTROY);
+        if (r) goto done;
     }
 
     if (calendar_has_sharees(mbox->mbentry)) {
