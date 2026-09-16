@@ -1977,10 +1977,9 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
     r = caldav_update_shareacls(req->accountid);
 
 done:
-    if (db) {
-        int rr = caldav_close(db);
-        if (!r) r = rr;
-    }
+    /* The mailbox is already gone by here: a close failure mustn't turn a
+     * completed destroy into notDestroyed. */
+    if (db) caldav_close(db);
     if (r && *err == NULL) {
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             *err = json_pack("{s:s}", "type", "notFound");
