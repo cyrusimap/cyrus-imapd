@@ -1,0 +1,21 @@
+Description:
+
+Fixes a bug in JMAP Email/queryChanges for uncollapsed queries sorted by
+someInThreadHaveKeyword, where flagging one email of a thread did not report
+the new result location of all emails of that thread.
+
+Documentation:
+
+None
+
+Config changes:
+
+None
+
+Upgrade instructions:
+
+None
+
+GitHub issue:
+
+None

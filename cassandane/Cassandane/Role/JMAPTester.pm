@@ -21,7 +21,7 @@ use JMAP::Tester::Abort ();
 }
 
 has fallback_account_id => (
-    is       => 'ro',
+    is       => 'rw',
     required => 1,
 );
 
@@ -194,6 +194,13 @@ sub set_username_and_password ($self, $username, $password) {
             q{},
         )
     );
+
+    # the default account follows the login
+    $self->fallback_account_id($username);
+    my $default = $self->default_arguments;
+    if (exists $default->{accountId}) {
+        $self->default_arguments({ %$default, accountId => $username });
+    }
 }
 
 no Moo;

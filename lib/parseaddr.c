@@ -3,6 +3,7 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -472,3 +473,29 @@ EXPORTED char *address_canonicalise(const char *str)
     return s;
 }
 
+EXPORTED bool address_has_type(const char *s)
+{
+    const char *p = s;
+    while (isalnum((unsigned char) *p) || *p == '-') {
+        p++;
+    }
+    if (p == s) {
+        return false;
+    }
+    while (*p == ' ' || *p == '\t') {
+        p++;
+    }
+    return *p == ';';
+}
+
+EXPORTED const char *address_skip_type(const char *s)
+{
+    if (!address_has_type(s)) {
+        return s;
+    }
+    s = strchr(s, ';') + 1;
+    while (*s == ' ' || *s == '\t') {
+        s++;
+    }
+    return s;
+}

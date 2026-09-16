@@ -27,3 +27,5 @@ jobs:
       run: ./tools/hard-tab-tool
     - name: Assert no FIXME
       run: ./tools/find-fixme-markers
+    - name: Assert no case conflicts
+      run: ./tools/find-case-conflicts

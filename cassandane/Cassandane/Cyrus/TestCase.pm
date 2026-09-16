@@ -20,6 +20,7 @@ use base qw(Cassandane::Unit::TestCase);
 use Cassandane::TestUser;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
+use Cassandane::Util::CRLF;
 use Cassandane::Util::Words;
 use Cassandane::Generator;
 use Cassandane::GenericListener;
@@ -86,6 +87,10 @@ sub new
     {
         $instance_params->{$p} = delete $params->{$p}
             if defined $params->{$p};
+    }
+
+    if ($want->{jmap} && $instance_params->{config}) {
+        $instance_params->{config}->set(jmap_require_accountid => 'yes');
     }
 
     # should have consumed all of the $params hash; if
@@ -354,6 +359,9 @@ magic(JMAPNoHasAttachment => sub {
 });
 magic(JMAPExtensions => sub {
     shift->config_set('jmap_nonstandard_extensions' => 'yes');
+});
+magic(JMAPLenientAccountId => sub {
+    shift->config_set('jmap_require_accountid' => 'no');
 });
 magic(SearchIndexHeaders => sub {
     shift->config_set(search_index_headers => 'yes');
@@ -1196,6 +1204,17 @@ sub _save_message
     $store->write_begin();
     $store->write_message($msg);
     $store->write_end();
+}
+
+# Messages that fakesmtpd accepted, oldest first, as CRLF text.  Needs a
+# suite or test that asked for the smtpdaemon.
+sub smtpd_messages
+{
+    my ($self) = @_;
+
+    my $dir = $self->{instance}{basedir} . '/smtpd';
+    my @files = sort { -M $b <=> -M $a } glob("$dir/message_*.smtp");
+    return map { to_crlf(slurp_file($_)) } @files;
 }
 
 sub make_message

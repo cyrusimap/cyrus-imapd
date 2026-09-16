@@ -1,0 +1,29 @@
+Description:
+
+The length of a base64-encoded message body is now computed in a width wide
+enough to hold it.  Previously that length was computed in a signed 32-bit
+integer while the encoder went on to write output sized from the original
+body, so a body whose encoded form exceeded the range of that integer was
+given a buffer smaller than the data written into it.  Sites that set
+:imapdconf:`maxmessagesize` to a value below roughly 1.5GB were not affected;
+the option defaults to no limit at all.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

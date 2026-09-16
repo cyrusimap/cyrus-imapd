@@ -1,0 +1,31 @@
+Description:
+
+JMAP vCard blobIds now encode the content identifier of the card they name.
+Previously a blobId encoded only the containing mailbox and the record number
+within it, so a blobId could be constructed rather than obtained from the
+server, and one continued to resolve after the record it named had been
+replaced by different content.  This is a breaking change: blobIds issued by
+earlier versions are rejected, and a client holding one must ask for a
+current blobId.
+
+Tracked as GitHub security advisory GHSA-gvph-c6cq-j8xc.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

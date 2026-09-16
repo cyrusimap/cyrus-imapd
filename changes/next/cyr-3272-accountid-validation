@@ -1,0 +1,29 @@
+Description:
+
+The accountId and fromAccountId arguments of a JMAP request are now required
+to hold only the characters Cyrus permits in an account identifier, and to be
+of bounded length.  Previously either was accepted as any string at all,
+including one holding path separators, and the value was then used to build
+paths on the server.
+
+Tracked as GitHub security advisory GHSA-32q2-7mp9-4vrh.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
