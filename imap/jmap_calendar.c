@@ -132,6 +132,10 @@ static char *_imip_calendar_address(const strarray_t *schedule_addresses)
 /* v30 is just v29, bumped so that we evict events missing "update" property */
 #define JMAPCACHE_CALVERSION 30
 
+/* Longest window a CalendarEvent/query may expand recurrences over:
+   two years, leap day included.  Advertised as maxExpandedQueryDuration. */
+#define JMAP_MAX_EXPANDED_QUERY_DAYS 731
+
 // clang-format off
 static jmap_method_t jmap_calendar_methods_standard[] = {
     {
@@ -385,8 +389,10 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
     timebuf[RFC3339_DATETIME_MAX] = '\0';
     json_object_set_new(calcapa, "maxDateTime", json_string(timebuf));
 
-    /* maxExpandedQueryDuration - we don't really care */
-    json_object_set_new(calcapa, "maxExpandedQueryDuration", json_string("P365D"));
+    /* maxExpandedQueryDuration */
+    char durbuf[16];
+    snprintf(durbuf, sizeof(durbuf), "P%dD", JMAP_MAX_EXPANDED_QUERY_DAYS);
+    json_object_set_new(calcapa, "maxExpandedQueryDuration", json_string(durbuf));
 
     /* maxParticipantsPerEvent */
     json_object_set_new(calcapa, "maxParticipantsPerEvent", json_null());
@@ -7885,12 +7891,20 @@ static int eventquery_run(jmap_req_t *req,
 
     /* Sanity check arguments */
     eventquery_read_timerange(query->filter, args, &before, &after);
-    if (args.expandrecur && before == caldav_eternity) {
+    if (args.expandrecur) {
         /* Reject unbounded time-ranges for recurrence expansion */
-        *err = json_pack("{s:s s:[s] s:s}", "type", "invalidArguments",
-                "arguments", "expandRecurrences",
-                "description","upper time-range filter MUST be set");
-        return 0;
+        if (before == caldav_eternity || after == caldav_epoch) {
+            *err = json_pack("{s:s s:[s] s:s}", "type", "invalidArguments",
+                    "arguments", "expandRecurrences",
+                    "description",
+                    "before and after time-range filters MUST be set");
+            return 0;
+        }
+
+        if (before - after > JMAP_MAX_EXPANDED_QUERY_DAYS * (time_t) 86400) {
+            *err = json_pack("{s:s}", "type", "expandDurationTooLarge");
+            return 0;
+        }
     }
 
     ptrarray_t matches = PTRARRAY_INITIALIZER;

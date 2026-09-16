@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_query_expandrecurrences
-    :min_version_3_1
     ($self)
 {
     my $jmap = $self->default_user->jmap;
@@ -66,6 +65,7 @@ sub test_calendarevent_query_expandrecurrences
     $res = $jmap->CallMethods([
         ['CalendarEvent/query', {
             filter => {
+                after => '2019-01-01T00:00:00',
                 before => '2019-02-01T00:00:00',
             },
             sort => [{

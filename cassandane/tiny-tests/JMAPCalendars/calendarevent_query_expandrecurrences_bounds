@@ -1,0 +1,76 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_query_expandrecurrences_bounds
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $calid = $self->default_user->calendars->default->id;
+
+    my $res = $jmap->request([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    version => '2.0',
+                    calendarIds => { $calid => JSON::true },
+                    uid => 'event1uid',
+                    title => "event1",
+                    start => "2026-01-01T09:00:00",
+                    timeZone => "Etc/UTC",
+                    duration => "PT1H",
+                    recurrenceRule => { frequency => 'daily', count => 5 },
+                },
+            },
+        }],
+    ]);
+    $self->assert_not_null(
+        $res->single_sentence('CalendarEvent/set')->arguments->{created}{1}{id});
+
+    # An expanding query must give both ends of the window, and the window
+    # must fit inside the advertised maxExpandedQueryDuration.  $want is
+    # either 'ok' or the expected error type.
+    my sub check_query ($desc, $filter, $want) {
+        xlog $self, "expandRecurrences query $desc";
+
+        my $res = $jmap->request([
+            ['CalendarEvent/query', {
+                filter => $filter,
+                expandRecurrences => JSON::true,
+            }],
+        ]);
+        my $sentence = $res->single_sentence;
+
+        if ($want eq 'ok') {
+            $self->assert_str_equals('CalendarEvent/query', $sentence->name);
+            $self->assert_num_equals(5, $sentence->arguments->{total});
+        } else {
+            $self->assert_str_equals('error', $sentence->name);
+            $self->assert_str_equals($want, $sentence->arguments->{type});
+        }
+    }
+
+    my $session = $jmap->get_client_session->client_session;
+    my $capa = $session->{accounts}{cassandane}{accountCapabilities}
+                       {'urn:ietf:params:jmap:calendars'};
+    $self->assert_str_equals('P731D', $capa->{maxExpandedQueryDuration});
+
+    check_query('with both bounds',
+        { after => '2026-01-01T00:00:00', before => '2026-02-01T00:00:00' },
+        'ok');
+
+    check_query('with no after',
+        { before => '2026-02-01T00:00:00' },
+        'invalidArguments');
+
+    check_query('with no before',
+        { after => '2026-01-01T00:00:00' },
+        'invalidArguments');
+
+    check_query('spanning exactly 731 days',
+        { after => '2026-01-01T00:00:00', before => '2028-01-02T00:00:00' },
+        'ok');
+
+    check_query('spanning one second past 731 days',
+        { after => '2026-01-01T00:00:00', before => '2028-01-02T00:00:01' },
+        'expandDurationTooLarge');
+}
