@@ -1,0 +1,27 @@
+Description:
+
+The RSS module now escapes message data before writing it into the HTML
+pages and Atom feeds it serves.  Previously the display name, local part and
+domain of From, To and Cc addresses, the type and subtype of MIME parts, and
+the filename parameter of an attachment were copied verbatim into HTML
+attributes and element text and into Atom XML.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
