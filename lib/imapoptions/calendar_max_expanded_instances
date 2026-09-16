@@ -11,3 +11,8 @@ from many candidates (BYSETPOS, for example) is measured by the candidates.
 
 In a CalDAV calendar-query report, a component over the limit has its
 calendar-data property returned with a status of 422 Unprocessable Content.
+
+In JMAP CalendarEvent/query with expandRecurrences, a matching event over
+the limit fails the whole query with a cannotCalculateOccurrences error, as
+does a query whose matching events together expand to a count scaled from this
+limit.
