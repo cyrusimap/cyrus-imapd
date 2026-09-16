@@ -10876,7 +10876,7 @@ static void notif_set(struct jmap_req *req,
     set->old_state = buf_release(&buf);
 
     if (set->if_in_state && strcmp(set->old_state, set->if_in_state)) {
-        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        *err = json_pack("{s:s}", "type", "stateMismatch");
         goto done;
     }
 
