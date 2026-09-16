@@ -5481,6 +5481,10 @@ static int createevent_store(jmap_req_t *req,
         xsyslog_ev(calendarevent_store_refused(r) ? LOG_WARNING : LOG_ERR,
                    "jmap.calendarevent.store.failed",
                    lf_jmapreq(req), lf_err("error", r));
+        /* Release the attachment refs we took above: notCreated must not
+         * leave them held for an event that was never stored. */
+        caldav_manage_attachments(req->accountid, NULL, create->ical,
+                                  CALDAV_MATTACH_REMOVED);
         goto done;
     }
     r = 0;
