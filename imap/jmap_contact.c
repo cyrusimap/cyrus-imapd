@@ -2460,9 +2460,15 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
     mboxlist_changesub(mbentry->name, req->userid, req->authstate, 0, 1, 0, 1);
 
   done:
+    /* The mailbox is already gone by here: a close failure must not turn a
+     * completed destroy into notDestroyed. */
     if (db) {
-        int rr = carddav_close(db);
-        if (!r) r = rr;
+        int rc = carddav_close(db);
+        if (rc) {
+            xsyslog_ev(LOG_WARNING, "jmap.addressbook.dbclose.failed",
+                       lf_s("jmap.accountid", req->accountid),
+                       lf_err("error", rc));
+        }
     }
     if (r && *err == NULL) {
         if (r == IMAP_MAILBOX_NONEXISTENT) {
