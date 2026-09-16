@@ -14233,6 +14233,13 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
                 if (r) {
                     for (j = 0; j < ptrarray_size(&plan->setflags); j++) {
                         struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, j);
+                        /* Only the messages whose seen state we tried to
+                         * change are affected: the rest have their keywords
+                         * written and may have been copied already. */
+                        if (!seqset_ismember(add_seenseq, uidrec->uid) &&
+                            !seqset_ismember(del_seenseq, uidrec->uid)) {
+                            continue;
+                        }
                         if (json_object_get(bulk->set_errors, uidrec->email_id) == NULL) {
                             json_object_set_new(bulk->set_errors, uidrec->email_id,
                                                 jmap_server_error(r));
