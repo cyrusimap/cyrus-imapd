@@ -2115,6 +2115,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
 {
     char *mboxname = NULL;
     int r = 0;
+    bool created = false;
     mbentry_t *mbinbox = NULL, *mbentry = NULL;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct mailbox *mailbox = NULL;
@@ -2239,6 +2240,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
                 mboxname, error_message(r));
         goto done;
     }
+    created = true;
     strarray_add(update_intermediaries, mboxname);
 
      /* invalidate ACL cache */
@@ -2292,6 +2294,15 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     }
 
 done:
+    if (r && created) {
+        /* Undo the create, so notCreated doesn't leave a mailbox behind. */
+        int rr = mboxlist_deletemailbox(mboxname, 1, "", NULL, NULL, 0);
+        if (rr) {
+            xsyslog_ev(LOG_ERR, "jmap.mailbox.create.rollback.failed",
+                       lf_s("mbox.name", mboxname),
+                       lf_err("error", rr));
+        }
+    }
     if (result->err) {
         /* already set above (e.g. alreadyExists) */
     }
