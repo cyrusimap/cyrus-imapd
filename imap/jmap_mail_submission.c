@@ -653,12 +653,15 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     return r;
 }
 
+/* *was_sent is set if the message was handed to the MTA, even if the
+ * submission then failed */
 static void _emailsubmission_create(jmap_req_t *req,
                                     struct mailbox *submbox,
                                     json_t *emailsubmission,
                                     json_t **new_submission,
                                     json_t **set_err,
-                                    smtpclient_t **sm, char **emailid)
+                                    smtpclient_t **sm, char **emailid,
+                                    bool *was_sent)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
@@ -984,6 +987,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     else {
         /* Send message */
         r = smtpclient_send(*sm, &smtpenv, &buf);
+        *was_sent = !r;
     }
     if (r) {
         int i, max = 0;
@@ -1714,12 +1718,23 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
     /* create */
     smtpclient_t *sm = NULL;
+    json_t *partial_err = NULL;     /* a message sent but not recorded */
     json_object_foreach(set.create, creation_id, jsubmission) {
         json_t *set_err = NULL;
         json_t *new_submission = NULL;
         char *emailid = NULL;
-        _emailsubmission_create(req, submbox, jsubmission,
-                                &new_submission, &set_err, &sm, &emailid);
+        bool was_sent = false;
+        _emailsubmission_create(req, submbox, jsubmission, &new_submission,
+                                &set_err, &sm, &emailid, &was_sent);
+        if (set_err && was_sent && !partial_err) {
+            /* Sent, but not recorded: no per-item report would be true */
+            struct buf desc = BUF_INITIALIZER;
+            buf_printf(&desc, "the message for %s was sent, "
+                       "but its submission could not be stored", creation_id);
+            partial_err = json_pack("{s:s s:s}", "type", "serverPartialFail",
+                                    "description", buf_cstring(&desc));
+            buf_free(&desc);
+        }
         if (set_err) {
             json_object_set_new(set.not_created, creation_id, set_err);
             free(emailid);
@@ -1753,6 +1768,12 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
     /* force modseq to stable */
     if (submbox) mailbox_unlock_index(submbox, NULL);
+
+    if (partial_err) {
+        /* A method error, so no onSuccess Email/set either (RFC 8621 7.5) */
+        jmap_error(req, partial_err);
+        goto done;
+    }
 
     set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT, JMAP_MODSEQ_RELOAD));
 
