@@ -3911,8 +3911,11 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
         const char *old_imapname = strarray_nth(&update_intermediaries, i);
         /* XXX - we know these are mailboxes, so mbtype 0 is OK, but it's not an
          * ideal interface */
-        mboxlist_update_intermediaries(old_imapname, 0);
-        /* XXX error handling? */
+        int r = mboxlist_update_intermediaries(old_imapname, 0);
+        if (r) {
+            syslog(LOG_ERR, "jmap: can't update intermediaries for %s: %s",
+                    old_imapname, error_message(r));
+        }
     }
 
     assert(ptrarray_size(ops->put) == 0);

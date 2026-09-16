@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_set_isdefault_reports_id_once ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    xlog $self, "create sharer with an addressbook shared to cassandane";
+    my $sharer = $self->{instance}->create_user('sharer');
+
+    my $shared_ab = $sharer->addressbooks->create({ name => 'Shared' });
+    $shared_ab->share_with(cassandane => [ qw( mayRead mayWrite ) ]);
+
+    # Cassandane may write this addressbook, but has no admin on the
+    # addressbook home, so the onSuccessSetIsDefault is refused while the
+    # update succeeds.
+    xlog $self, "update the addressbook and ask for it to become the default";
+    my $res = $jmap->request([
+        [ 'AddressBook/set' => {
+            accountId => 'sharer',
+            update => { $shared_ab->id => { sortOrder => 5 } },
+            onSuccessSetIsDefault => $shared_ab->id,
+        } ],
+    ]);
+
+    my $set = $res->single_sentence('AddressBook/set')->as_set;
+
+    xlog $self, "the update itself succeeded";
+    $self->assert_cmp_deeply([ $shared_ab->id . "" ], [ $set->updated_ids ]);
+
+    xlog $self, "no id may be reported in both updated and notUpdated";
+    my @both = grep { exists $set->update_errors->{$_} } $set->updated_ids;
+    $self->assert_cmp_deeply([], \@both);
+}
