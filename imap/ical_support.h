@@ -139,6 +139,15 @@ extern int icalcomponent_myforeach(icalcomponent *comp,
                                                     void *data),
                                    void *callback_data);
 
+/* Estimate how many instances icalcomponent_myforeach() would produce for
+   the first real component of ical within range, and return true only if
+   that estimate is within limit.  The estimate counts the candidates a
+   recurrence rule makes libical visit, not just the instances it keeps, so
+   it is a bound on the cost of expanding, not on the size of the result. */
+extern int icalcomponent_expand_allowed(icalcomponent *ical,
+                                        struct icalperiodtype range,
+                                        int limit);
+
 
 extern icalcomponent *icalcomponent_new_stream(struct mailbox *mailbox,
                                                const char *prodid,
