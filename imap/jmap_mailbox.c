@@ -3194,7 +3194,8 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
     ptrarray_t skipped_put = PTRARRAY_INITIALIZER;
     ptrarray_t tmp_renames = PTRARRAY_INITIALIZER;
     struct tmp_rename {
-        char *old_imapname;
+        char *id;               /* creation id, or mailbox id when updating */
+        char *old_imapname;     /* NULL when this was a create */
         char *new_imapname;
         char *tmp_imapname;
     };
@@ -3220,6 +3221,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
                         json_string_value(json_object_get(mbox, "id")));
                 if (result.tmp_imapname) {
                     struct tmp_rename *tmp = xzmalloc(sizeof(struct tmp_rename));
+                    tmp->id = xstrdup(args->creation_id);
                     tmp->old_imapname = xstrdupnull(result.old_imapname);
                     tmp->new_imapname = xstrdup(result.new_imapname);
                     tmp->tmp_imapname = xstrdup(result.tmp_imapname);
@@ -3250,6 +3252,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
                 }
                 if (result.tmp_imapname) {
                     struct tmp_rename *tmp = xzmalloc(sizeof(struct tmp_rename));
+                    tmp->id = xstrdup(args->mbox_id);
                     tmp->old_imapname = xstrdupnull(result.old_imapname);
                     tmp->new_imapname = xstrdup(result.new_imapname);
                     tmp->tmp_imapname = xstrdup(result.tmp_imapname);
@@ -3300,12 +3303,34 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
             syslog(LOG_ERR, "jmap: mailbox rename failed half-way: old=%s tmp=%s new=%s: %s",
                     tmp->old_imapname ? tmp->old_imapname : "null",
                     tmp->tmp_imapname, tmp->new_imapname, error_message(r));
+
+            if (tmp->old_imapname) {
+                /* Leave it under the temporary name: the old name may have
+                 * been taken by another op in this same request. */
+                json_object_del(set->super.updated, tmp->id);
+                json_object_set_new(set->super.not_updated, tmp->id,
+                                    jmap_server_error(r));
+            }
+            else {
+                /* A create: the temporary mailbox is new and empty, so
+                 * dropping it is safe. */
+                int rr = mboxlist_deletemailbox(tmp->tmp_imapname, 1, "",
+                                                NULL, NULL, 0);
+                if (rr) {
+                    syslog(LOG_ERR, "jmap: can't remove %s: %s",
+                            tmp->tmp_imapname, error_message(rr));
+                }
+                json_object_del(set->super.created, tmp->id);
+                json_object_set_new(set->super.not_created, tmp->id,
+                                    jmap_server_error(r));
+            }
         }
         /* invalidate ACL cache */
         if (tmp->old_imapname) jmap_myrights_delete(req, tmp->old_imapname);
         jmap_mbentry_cache_free(req);
         jmap_myrights_delete(req, tmp->tmp_imapname);
         jmap_myrights_delete(req, tmp->new_imapname);
+        free(tmp->id);
         free(tmp->old_imapname);
         free(tmp->new_imapname);
         free(tmp->tmp_imapname);
