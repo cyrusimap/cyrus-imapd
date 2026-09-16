@@ -1774,8 +1774,13 @@ static int setcalendar_writeprops(jmap_req_t *req,
     /* isSubscribed */
     if (!r && props->isSubscribed >= 0) {
         /* Update subscription database */
-        r = mboxlist_changesub(mailbox_name(mbox), req->userid, req->authstate,
-                               props->isSubscribed, 0, /*notify*/1, /*silent*/0);
+        int r2 = mboxlist_changesub(mailbox_name(mbox), req->userid, req->authstate,
+                                    props->isSubscribed, 0, /*notify*/1,
+                                    /*silent*/0);
+        if (r2) {
+            syslog(LOG_ERR, "failed to change subscription for %s: %s",
+                    mailbox_name(mbox), error_message(r2));
+        }
 
         /* Set invite status for CalDAV */
         buf_setcstr(&val, props->isSubscribed ? "invite-accepted" : "invite-declined");
