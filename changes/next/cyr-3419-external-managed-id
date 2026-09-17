@@ -1,0 +1,30 @@
+Description:
+
+The MANAGED-ID parameter is now stripped from ATTACH properties of iTIP
+messages that arrive over iMIP.  A MANAGED-ID is meaningful only on the
+server that issued it (RFC 8607, Section 4.3).  Previously a sender who knew
+the content of a recipient's managed attachment could send an invitation
+carrying that attachment's MANAGED-ID; when the recipient deleted the
+unwanted event, the attachment's reference count was decremented and the
+attachment could be expunged from the legitimate event that owned it.
+Servers with :imapdconf:`caldav_allowattach` disabled were not affected.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
