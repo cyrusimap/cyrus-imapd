@@ -1040,7 +1040,8 @@ static int caldav_check_precond(struct transaction_t *txn,
         }
         else {
             int rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-            if (!(rights & DACL_RMRSRC) && (rights & DACL_WRITEOWNRSRC)) {
+            if ((rights & DACL_RMRSRC) != DACL_RMRSRC &&
+                (rights & DACL_WRITEOWNRSRC)) {
                 /* User may delete events with no organizer or where
                  * they are organizer. */
                 if (cdata->organizer) {
