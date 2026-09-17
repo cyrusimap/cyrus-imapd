@@ -13,6 +13,7 @@
 #include "lib/xmalloc.h"
 
 #include <string.h>
+#include <stdbool.h>
 
 /* predeclarations to avoid including util.h */
 extern char *lcase(char* str);
@@ -135,16 +136,10 @@ EXPORTED void buf_getmap(struct buf *buf, const char **base, size_t *len)
     *len = buf->len;
 }
 
-/* fetch a single line a file - terminated with \n ONLY.
- * buf does not contain the \n.
- * NOTE: if the final line does not contain a \n we still
- * return true so that the caller will process the line,
- * so a file A\nB will return two true responses with bufs
- * containing "A" and "B" respectively before returning a
- * false to the third call */
-EXPORTED int buf_getline(struct buf *b, FILE *fp)
+static int buf_getline_internal(struct buf *b, FILE *fp, bool fold_backslash)
 {
     buf_reset(b);
+    int raw_lines = 0;
     while (1) {
         size_t len = b->len;
         buf_ensure(b, len + 81);
@@ -164,7 +159,9 @@ EXPORTED int buf_getline(struct buf *b, FILE *fp)
             }
 
             assert(b->s[b->len] == '\0');
-            return 1;
+            /* We're at EOF without a final newline. Hence we have one extra
+             * "raw line" to report: */
+            return 1 + raw_lines;
         }
 
         size_t got = strlen(here);
@@ -175,19 +172,50 @@ EXPORTED int buf_getline(struct buf *b, FILE *fp)
          * after, but then we don't work on non-seekable streams. I figure if we
          * *really* need to we memset() the buffer to non-NUL, then memrchr() to
          * find the NUL that fgets() wrote *after* the bytes that it read.) */
-        if (!got) break;
+        if (!got) {
+            ++raw_lines;
+            break;
+        }
 
         b->len += got;
-        if (here[got - 1] == '\n') {
-            /* Read a trailing newline. So chomp it, and then terminate. */
-            here[got - 1] = '\0';
+        if (b->s[b->len - 1] == '\n') {
+            ++raw_lines;
+            /* We read a trailing newline, so chomp it. */
             --b->len;
+            if (fold_backslash && b->len > 0 && b->s[b->len - 1] == '\\') {
+                /* Trailing newline preceded by a backslash.
+                 * chomp both, and carry on reading */
+                --b->len;
+                b->s[b->len] = '\0';
+                continue;
+            }
+            /* chomp it, and correctly terminate the buffer ... */
+            b->s[b->len] = '\0';
             break;
         }
     }
 
     assert(b->s[b->len] == '\0');
-    return 1;
+    return raw_lines;
+}
+
+/* fetch a single line a file - terminated with \n ONLY.
+ * buf does not contain the \n.
+ * NOTE: if the final line does not contain a \n we still
+ * return true so that the caller will process the line,
+ * so a file A\nB will return two true responses with bufs
+ * containing "A" and "B" respectively before returning a
+ * false to the third call */
+EXPORTED int buf_getline(struct buf *b, FILE *fp)
+{
+    return buf_getline_internal(b, fp, false);
+}
+
+/* As buf_getline, but backslash-newline pairs are folded to nothing.
+ * Returns the count of raw file lines folded into the returned line. */
+EXPORTED int buf_getline_continuation(struct buf *b, FILE *fp)
+{
+    return buf_getline_internal(b, fp, true);
 }
 
 #ifdef HAVE_DECLARE_OPTIMIZE

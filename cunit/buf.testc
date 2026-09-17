@@ -1746,8 +1746,11 @@ static void test_tocrlf(void)
  * fmemopen() is "r", but automatic linting tools aren't going to know that) */
 
 static void getline_raw_testcase(struct buf *b, char *input, size_t input_len,
-                                 const char **want) {
+                                 const char **want,
+                                 const char **want_c, int *want_l) {
     FILE *fp = cunit_fmemopen(input, input_len, "r");
+    if (!want_c) want_c = want;
+
     while (*want) {
         CU_ASSERT_EQUAL(1, buf_getline(b, fp));
         CU_ASSERT_STRING_EQUAL(*want, buf_cstring(b));
@@ -1755,11 +1758,27 @@ static void getline_raw_testcase(struct buf *b, char *input, size_t input_len,
     }
     CU_ASSERT_EQUAL(0, buf_getline(b, fp));
     CU_ASSERT_EQUAL(0, buf_len(b));
+
+    if (fseek(fp, 0, SEEK_SET) != 0) fatal("getline_raw_testcase lseek", errno);
+
+    while (*want_c) {
+        /* The expected raw line count is usually 1, but if we fold it will be
+         * 2 or 3. So optimise for the common case. */
+        int want = want_l ? *want_l++ : 1;
+        CU_ASSERT_EQUAL(want, buf_getline_continuation(b, fp));
+        CU_ASSERT_STRING_EQUAL(*want_c, buf_cstring(b));
+        ++want_c;
+    }
+    CU_ASSERT_EQUAL(0, buf_getline_continuation(b, fp));
+    CU_ASSERT_EQUAL(0, buf_len(b));
+
     fclose(fp);
 }
 
-static void getline_testcase(struct buf *b, char *input, const char **want) {
-    getline_raw_testcase(b, input, strlen(input), want);
+static void getline_testcase(struct buf *b, char *input,
+                             const char **want,
+                             const char **want_c, int *want_l) {
+    getline_raw_testcase(b, input, strlen(input), want, want_c, want_l);
 }
 
 static void test_getline(void)
@@ -1768,36 +1787,36 @@ static void test_getline(void)
     buf_setcstr(&b, "decaf");
 
     getline_testcase(&b, (char []) {""},
-                     (const char *[]) { NULL });
+                     (const char *[]) { NULL }, NULL, NULL);
     getline_testcase(&b, (char []) {"\n"},
-                     (const char *[]) { "", NULL });
+                     (const char *[]) { "", NULL }, NULL, NULL);
     getline_testcase(&b, (char []) {"\n\n"},
-                     (const char *[]) { "", "", NULL });
+                     (const char *[]) { "", "", NULL }, NULL, NULL);
     getline_testcase(&b, (char []) {"line\n"},
-                     (const char *[]) { "line", NULL });
+                     (const char *[]) { "line", NULL }, NULL, NULL);
     getline_testcase(&b, (char []) {"two\nlines\n"},
-                     (const char *[]) { "two", "lines", NULL });
+                     (const char *[]) { "two", "lines", NULL }, NULL, NULL);
     getline_testcase(&b, (char []) {"blank\n\nline\n"},
-                     (const char *[]) { "blank", "", "line", NULL });
+                     (const char *[]) { "blank", "", "line", NULL }, NULL, NULL);
     getline_testcase(&b, (char []) {"\npause\n"},
-                     (const char *[]) { "", "pause", NULL });
+                     (const char *[]) { "", "pause", NULL }, NULL, NULL);
     getline_testcase(&b, (char []) {"\200\n\212"},
-                     (const char *[]) { "\x80", "\x8a", NULL });
+                     (const char *[]) { "\x80", "\x8a", NULL }, NULL, NULL);
     getline_testcase(&b, (char []) {"chomped"},
-                     (const char *[]) { "chomped", NULL });
+                     (const char *[]) { "chomped", NULL }, NULL, NULL);
     getline_testcase(&b, (char []) {"no\nnewline"},
-                     (const char *[]) { "no", "newline", NULL });
+                     (const char *[]) { "no", "newline", NULL }, NULL, NULL);
     getline_testcase(&b, (char []) {"left\nright\ngripping"},
-                     (const char *[]) { "left", "right", "gripping", NULL });
+                     (const char *[]) { "left", "right", "gripping", NULL }, NULL, NULL);
 
     {
         /* This should trigger buffer resize during the loop */
         const size_t count = 2038;
         char dots[count + 1];
         memset(dots, '.', count);
-        char *input = strconcat(dots, "\n!\n", NULL);
+        char *input = strconcat(dots, "\n!\n", NULL, NULL);
         getline_testcase(&b, input,
-                         (const char *[]) { dots, "!", NULL });
+                         (const char *[]) { dots, "!", NULL }, NULL, NULL);
         free(input);
     }
 
@@ -1811,7 +1830,7 @@ static void test_getline(void)
         memset(dashes, '-', max_read);
         dashes[max_read] = '\0';
         getline_testcase(&b, dashes,
-                         (const char *[]) { dashes, NULL });
+                         (const char *[]) { dashes, NULL }, NULL, NULL);
 
         buf_free(&b);
         char dashes_bs[max_read + 1];
@@ -1819,7 +1838,7 @@ static void test_getline(void)
         dashes_bs[max_read - 1] = '\\';
         dashes_bs[max_read] = '\0';
         getline_testcase(&b, dashes_bs,
-                         (const char *[]) { dashes_bs, NULL });
+                         (const char *[]) { dashes_bs, NULL }, NULL, NULL);
 
         /* This should trigger reallocation and then the read of the newline.
          * We're assuming the current behaviour of roundup() */
@@ -1830,33 +1849,51 @@ static void test_getline(void)
         dashes_bs_nl[max_read] = '\n';
         dashes_bs_nl[max_read + 1] = '\0';
         getline_testcase(&b, dashes_bs_nl,
-                         (const char *[]) { dashes_bs, NULL });
+                         (const char *[]) { dashes_bs, NULL },
+                         (const char *[]) { dashes + 1, NULL },
+                         (int []) { 2 });
+;
     }
 
     /* We want to create a file with a single NUL byte.
      * This is to test consistent behaviour for a corner case in the upcoming
      * refactored buf_getline() */
     getline_raw_testcase(&b, (char []) {""}, 1,
-                         (const char *[]) { "", NULL });
+                         (const char *[]) { "", NULL }, NULL, NULL);
 
     getline_testcase(&b, (char []) {"A\\\nB\nC\\\nD\n"},
-                     (const char *[]) { "A\\", "B", "C\\", "D", NULL });
+                     (const char *[]) { "A\\", "B", "C\\", "D", NULL },
+                     (const char *[]) { "AB", "CD", NULL },
+                     (int []) { 2, 2 });
     getline_testcase(&b, (char []) {"cont\\\ninuation"},
-                     (const char *[]) { "cont\\", "inuation", NULL });
+                     (const char *[]) { "cont\\", "inuation", NULL },
+                     (const char *[]) { "continuation", NULL },
+                     (int []) { 2 });
     getline_testcase(&b, (char []) {"cont \\\ntrived"},
-                     (const char *[]) { "cont \\", "trived", NULL });
+                     (const char *[]) { "cont \\", "trived", NULL },
+                     (const char *[]) { "cont trived", NULL },
+                     (int []) { 2 });
     getline_testcase(&b, (char []) {"con\\\n fusing"},
-                     (const char *[]) { "con\\", " fusing", NULL });
+                     (const char *[]) { "con\\", " fusing", NULL },
+                     (const char *[]) { "con fusing", NULL },
+                     (int []) { 2 });
     getline_testcase(&b, (char []) {"sync;\\\nsync;\\\noops;\n"},
-                     (const char *[]) { "sync;\\", "sync;\\", "oops;", NULL });
+                     (const char *[]) { "sync;\\", "sync;\\", "oops;", NULL },
+                     (const char *[]) { "sync;sync;oops;", NULL },
+                     (int []) { 3 });
     getline_testcase(&b, (char []) {"EOF\\\n"},
-                     (const char *[]) { "EOF\\", NULL });
+                     (const char *[]) { "EOF\\", NULL },
+                     (const char *[]) { "EOF", NULL },
+                     (int []) { 2 });
     getline_testcase(&b, (char []) {"whoops!\\"},
-                     (const char *[]) { "whoops!\\", NULL });
+                     (const char *[]) { "whoops!\\", NULL }, NULL, NULL);
     getline_testcase(&b, (char []) {"\\"},
-                     (const char *[]) { "\\", NULL });
+                     (const char *[]) { "\\", NULL }, NULL, NULL);
+    /* When folding backslash-newline to nothing, then logically this should
+     * behave like a zero-byte file (tested above, first test) */
     getline_testcase(&b, (char []) {"\\\n"},
-                     (const char *[]) { "\\", NULL });
+                     (const char *[]) { "\\", NULL },
+                     (const char *[]) { NULL }, NULL);
 
     buf_free(&b);
 }
