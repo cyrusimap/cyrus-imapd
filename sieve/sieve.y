@@ -398,13 +398,14 @@ control:  IF thenelse            { $$ = $2; }
         ;
 
 
-thenelse: test block elsif       { 
+thenelse: test block             {
                                      if ($1->ignore_err) {
-                                         /* end of block - decrement counter */
+                                         /* end of then-block - decrement counter */
                                          sscript->ignore_err--;
                                      }
-
-                                     $$ = new_if($1, $2, $3);
+                                 }
+          elsif                  {
+                                     $$ = new_if($1, $2, $4);
                                  }
         ;
 
@@ -2400,10 +2401,6 @@ static int check_reqs(sieve_script_t *sscript, strarray_t *sa)
     strarray_free(sa);
 
     if (ret == 0) yyerror(sscript, buf_cstring(&sscript->sieveerr));
-    else if (supported(SIEVE_CAPA_IHAVE)) {
-        /* mark all allowed extensions as supported */
-        sscript->support |= (SIEVE_CAPA_ALL & ~SIEVE_CAPA_IHAVE_INCOMPAT);
-    }
 
     encoded_char = supported(SIEVE_CAPA_ENCODED_CHAR);
 
@@ -2982,7 +2979,7 @@ static test_t *build_anyof(sieve_script_t *sscript, testlist_t *tl)
         t->u.tl = tl;
 
         /* find first test that did/didn't set ignore_err */
-        for ( ; tl && !fail && !maybe; tl = tl->next) {
+        for ( ; tl && !(fail && maybe); tl = tl->next) {
             if (tl->t->ignore_err) {
                 if (!fail) fail = tl->t;
             }
@@ -3266,30 +3263,47 @@ static test_t *build_date(sieve_script_t *sscript,
 
 static test_t *build_ihave(sieve_script_t *sscript, strarray_t *sa)
 {
+    unsigned long long capas = 0;
     test_t *t;
     int i;
 
-    t = new_test(BC_IHAVE, sscript);
-    t->u.sl = sa;
+    /* we're going to replace successful IHAVE with TRUE */
+    t = new_test(BC_TRUE, sscript);
 
     /* check if we support all listed extensions */
     for (i = 0; i < strarray_size(sa); i++) {
-        unsigned long long capa = lookup_capability(strarray_nth(sa, i));
+        const char *name = strarray_nth(sa, i);
+        unsigned long long capa = lookup_capability(name);
 
-        if (!capa) {
+        if (!extension_isactive(&sscript->interp, name)) {
             /* need to start ignoring errors immediately in case this ihave
                is part of a testlist with an unknown test later in the list */
             if (!t->ignore_err) t->ignore_err = ++sscript->ignore_err;
+            break;
         }
         else if (capa & SIEVE_CAPA_IHAVE_INCOMPAT) {
             /* incompatible extension used in ihave - parse error */
             sscript->ignore_err = 0;
-            sieveerror_c(sscript, SIEVE_IHAVE_INCOMPAT, strarray_nth(sa, i));
+            sieveerror_c(sscript, SIEVE_IHAVE_INCOMPAT, name);
             break;
         }
+
+
+        capas |= capa;
     }
 
-    t->nargs = bc_precompile(t->args, "S", t->u.sl);
+    if (i < strarray_size(sa)) {
+        /* replace unsuccessful IHAVE with FALSE */
+        t->type = BC_FALSE;
+    }
+    else {
+        /* successful "ihave" test - per RFC 5463, the listed extensions
+           are now available for the remainder of the script, just as if
+           they had been specified in the "require" clause */
+        sscript->support |= capas;
+    }
+
+    strarray_free(sa);
 
     return t;
 }

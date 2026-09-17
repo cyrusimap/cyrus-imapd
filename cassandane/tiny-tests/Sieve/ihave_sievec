@@ -1,0 +1,9 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_ihave_sievec ($self)
+{
+    xlog $self, "Testing sieve ihave (RFC 5463) compile behaviour, via sievec";
+    $self->{compile_method} = 'sievec';
+    $self->ihave_common();
+}

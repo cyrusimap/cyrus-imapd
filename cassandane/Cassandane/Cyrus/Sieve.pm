@@ -55,6 +55,7 @@ sub new
     $config->set(virtdomains => 'no');
     $config->set(jmap_nonstandard_extensions => 'yes');
     $config->set(conversations => 'yes');
+    $config->set(sieve_maxscripts => 10);
 
     my $self = $class->SUPER::new({
             config => $config,
@@ -336,6 +337,242 @@ EOF
     $self->assert_matches(qr/invalid :message value/, $errs);
 
     # TODO: test UTF-8 verification of the string parameter
+}
+
+sub ihave_common
+{
+    my ($self) = @_;
+
+    my $res;
+    my $errs;
+
+    # ihave test on a supported capability succeeds, and the guarded
+    # block is compiled normally.
+    ($res, $errs) = $self->compile_sieve_script('ihave_true',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if ihave \"fileinto\" {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "}\n");
+    $self->assert_str_equals('success', $res);
+
+    # ihave test on an unknown/unsupported capability: the test is
+    # false, so syntax errors inside the guarded block MUST be
+    # ignored (RFC 5463).
+    ($res, $errs) = $self->compile_sieve_script('ihave_false_block_suppressed',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if ihave \"vnd.nonexistent.bogus\" {\n" .
+        "  thiscommanddoesnotexist \"foo\";\n" .
+        "} else {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "}\n");
+    $self->assert_str_equals('success', $res);
+
+    # ...but syntax errors outside that block MUST still be reported
+    # as usual.
+    ($res, $errs) = $self->compile_sieve_script(
+        'ihave_false_after_block_reported',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if ihave \"vnd.nonexistent.bogus\" {\n" .
+        "  thiscommanddoesnotexist \"foo\";\n" .
+        "} else {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "}\n" .
+        "thisisnotacommand \"oops\";\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/syntax error/, $errs);
+
+    # A "not ihave" on an unsupported capability is true, so its
+    # guarded block WILL execute -- syntax errors in that block must
+    # still be reported.
+    ($res, $errs) = $self->compile_sieve_script(
+        'ihave_not_false_block_reported',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if not ihave \"vnd.nonexistent.bogus\" {\n" .
+        "  thiscommanddoesnotexist \"foo\";\n" .
+        "} else {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "}\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/syntax error/, $errs);
+
+    # Regression test: an unsupported ihave test makes its "then"
+    # block unreachable, but the "else" block IS reachable and must
+    # still be checked for syntax errors as usual.
+    ($res, $errs) = $self->compile_sieve_script(
+        'ihave_false_else_block_reported',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if ihave \"vnd.nonexistent.bogus\" {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "} else {\n" .
+        "  thiscommanddoesnotexist \"x\";\n" .
+        "}\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/syntax error/, $errs);
+
+    # Same, but with a reachable "elsif" block instead of "else".
+    ($res, $errs) = $self->compile_sieve_script(
+        'ihave_false_elsif_block_reported',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if ihave \"vnd.nonexistent.bogus\" {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "} elsif true {\n" .
+        "  thiscommanddoesnotexist \"x\";\n" .
+        "}\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/syntax error/, $errs);
+
+    # Chained elsif, each guarded by its own unsupported ihave: both
+    # "then" blocks are unreachable and must be suppressed, but the
+    # final "else" is reachable (guaranteed, since neither capability
+    # is available) and must still be checked.
+    ($res, $errs) = $self->compile_sieve_script(
+        'ihave_false_chained_elsif_else_reported',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if ihave \"vnd.bogus.one\" {\n" .
+        "  thiscommanddoesnotexist \"x\";\n" .
+        "} elsif ihave \"vnd.bogus.two\" {\n" .
+        "  thisisalsobogus \"y\";\n" .
+        "} else {\n" .
+        "  thisonetoo \"z\";\n" .
+        "}\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/syntax error/, $errs);
+
+    # Sanity check: the "then" block is still correctly suppressed
+    # even when the if-statement has trailing elsif/else clauses.
+    ($res, $errs) = $self->compile_sieve_script(
+        'ihave_false_then_still_suppressed_with_elsif',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if ihave \"vnd.nonexistent.bogus\" {\n" .
+        "  thiscommanddoesnotexist \"x\";\n" .
+        "} elsif true {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "} else {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "}\n");
+    $self->assert_str_equals('success', $res);
+
+    # Combined regression: anyof(exists, ihave-unsupported) as the
+    # if-condition, with a reachable else block containing an error.
+    ($res, $errs) = $self->compile_sieve_script(
+        'ihave_anyof_false_else_block_reported',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if anyof (exists \"Subject\", ihave \"vnd.nonexistent.bogus\") {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "} else {\n" .
+        "  thiscommanddoesnotexist \"y\";\n" .
+        "}\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/syntax error/, $errs);
+
+    # Specifying an extension that's incompatible with ihave (e.g.
+    # "variables", which changes how script content is interpreted)
+    # is a compile error.
+    ($res, $errs) = $self->compile_sieve_script('ihave_incompatible',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if ihave \"variables\" {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "}\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/"variables".*MUST NOT be used in "ihave"/, $errs);
+
+    # Regression test: requiring "ihave" must NOT act as a blanket
+    # unlock for every other extension.  Using an extension's syntax
+    # without requiring it (and without a preceding successful ihave
+    # test on it) is still a compile error.
+    ($res, $errs) = $self->compile_sieve_script('ihave_no_blanket_unlock',
+        "require [\"ihave\"];\n" .
+        "fileinto \"INBOX\";\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/fileinto.*MUST be enabled/, $errs);
+
+    # A successful ihave test on a capability enables that capability
+    # for the remainder of the script, even outside the guarded block
+    # (RFC 5463 section 4, point 1).
+    ($res, $errs) = $self->compile_sieve_script('ihave_success_enables_after',
+        "require [\"ihave\"];\n" .
+        "if ihave \"fileinto\" {\n" .
+        "  stop;\n" .
+        "}\n" .
+        "fileinto \"INBOX\";\n");
+    $self->assert_str_equals('success', $res);
+
+    # ...but not before that ihave test has been evaluated.
+    ($res, $errs) = $self->compile_sieve_script('ihave_success_not_before',
+        "require [\"ihave\"];\n" .
+        "fileinto \"INBOX\";\n" .
+        "if ihave \"fileinto\" {\n" .
+        "  stop;\n" .
+        "}\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/fileinto.*MUST be enabled/, $errs);
+
+    # A successful ihave test only enables the capabilities it
+    # actually names, not every extension.
+    ($res, $errs) = $self->compile_sieve_script('ihave_success_only_named',
+        "require [\"ihave\"];\n" .
+        "if ihave \"envelope\" {\n" .
+        "  stop;\n" .
+        "}\n" .
+        "fileinto \"INBOX\";\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/fileinto.*MUST be enabled/, $errs);
+
+    # Regression test: an unsupported ihave test combined with
+    # another test in an anyof() must not leak parse-error
+    # suppression into the rest of the script, regardless of the
+    # order the tests appear in.
+    ($res, $errs) = $self->compile_sieve_script(
+        'ihave_anyof_exists_then_ihave',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if anyof (exists \"Subject\", ihave \"vnd.nonexistent.bogus\") {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "}\n" .
+        "thisisnotacommand \"oops\";\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/syntax error/, $errs);
+
+    ($res, $errs) = $self->compile_sieve_script(
+        'ihave_anyof_ihave_then_exists',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if anyof (ihave \"vnd.nonexistent.bogus\", exists \"Subject\") {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "}\n" .
+        "thisisnotacommand \"oops\";\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/syntax error/, $errs);
+
+    # A single-item anyof() wrapping an unsupported ihave test still
+    # suppresses errors in its own guarded block.
+    ($res, $errs) = $self->compile_sieve_script(
+        'ihave_anyof_single_item_suppressed',
+        "require [\"ihave\", \"fileinto\"];\n" .
+        "if anyof (ihave \"vnd.nonexistent.bogus\") {\n" .
+        "  thiscommanddoesnotexist \"foo\";\n" .
+        "} else {\n" .
+        "  fileinto \"INBOX\";\n" .
+        "}\n");
+    $self->assert_str_equals('success', $res);
+
+    # Full regression test matching the originally reported failure:
+    # an unrelated, genuinely invalid currentdate date-part appearing
+    # after an anyof(exists, ihave-unsupported) block must still be
+    # caught.
+    my $currentdate_leak = << 'EOF';
+require ["ihave", "date", "variables", "editheader"];
+
+if anyof (exists "Subject", ihave "some-missing-extension") {
+  set "armed" "1";
+}
+
+if currentdate :matches "notadatepart" "*" {
+  addheader "X-Stack-Leak" "${1}";
+}
+EOF
+    ($res, $errs) = $self->compile_sieve_script('ihave_currentdate_leak',
+        $currentdate_leak);
+    $self->assert_str_equals('failure', $res);
+    $self->assert_matches(qr/invalid date-part 'notadatepart'/, $errs);
 }
 
 # Disabled for now - addflag does not work

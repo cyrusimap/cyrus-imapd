@@ -1,0 +1,30 @@
+Description:
+
+Sieve scripts that use the "ihave" extension (RFC 5463) are now compiled
+more strictly.  An extension becomes usable only once it is named in
+"require" or after a successful "ihave" test on it, and then only for the
+remainder of the script.  Syntax errors are suppressed only inside the block
+guarded by a failed "ihave" test.  Previously any "ihave" test made every
+extension usable, and a failed test suppressed syntax errors elsewhere in
+the script too, which let an otherwise-rejected script run and read
+uninitialized stack memory into its variables.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
