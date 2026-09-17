@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+# Restoring a destroyed event puts its resource back without looking at where
+# the UID lives now, so it resurrects a second resource for a UID that has
+# since been created in another calendar.
+
+my sub uid_resources ($user, $uid)
+{
+    my $res = $user->jmap->request([
+        ['CalendarEvent/get', {
+            ids        => undef,
+            properties => ['uid', 'x-href'],
+        }, 'R1'],
+    ]);
+
+    my %resource;
+    for my $event ($res->single_sentence('CalendarEvent/get')
+                        ->arguments->{list}->@*) {
+        next if $event->{uid} ne $uid;
+        $resource{$event->{'x-href'}} = 1;
+    }
+
+    return [sort keys %resource];
+}
+
+sub test_restore_calendars_uid_other_calendar ($self)
+{
+    my $user = $self->default_user;
+    my $uid = 'event1uid';
+
+    my $calendarA = $user->calendars->default;
+    my $calendarB = $user->calendars->create({ name => 'calendarB' });
+
+    xlog $self, "create an event";
+    my $event = $calendarA->create_event({ uid => $uid, title => 'first' });
+
+    sleep 2;
+    my $mark = time();
+    sleep 2;
+
+    xlog $self, "destroy the event and create it again in another calendar";
+    $event->destroy;
+    $calendarB->create_event({ uid => $uid, title => 'second' });
+
+    my $period = 'PT' . (time() - $mark) . 'S';
+
+    xlog $self, "restore calendars to before the destroy";
+    $user->jmap->request([
+        ['Backup/restoreCalendars', {
+            undoPeriod     => $period,
+            undoAll        => JSON::false,
+            verboseLogging => JSON::true,
+        }, 'R1'],
+    ]);
+
+    xlog $self, "assert the uid is in exactly one resource";
+    my $resources = uid_resources($user, $uid);
+    $self->assert_num_equals(1, scalar $resources->@*,
+        "uid $uid is in resources " . join(' ', $resources->@*));
+}

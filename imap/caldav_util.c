@@ -1083,6 +1083,33 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
         }
     }
 
+    /* Check that no other resource holds this iCalendar UID.  Every write to a
+     * calendar comes through here, so this is where the rule is kept:
+     * components sharing a UID live in one resource, and so in one calendar.
+     * The Scheduling Inbox is exempt -- it holds the iTIP messages about an
+     * event beside the event itself -- and so is a MOVE within one account,
+     * which stores at its destination before expunging its source. */
+    if (!(flags & NO_DUP_CHECK) && !caldav_is_sched_inbox(caldavdb, mailbox)) {
+        struct caldav_data *dup = NULL;
+        const char *mbox = cdata->dav.mailbox_byname ?
+            mailbox_name(mailbox) : mailbox_uniqueid(mailbox);
+
+        caldav_lookup_uid(caldavdb, uid, &dup);
+
+        if (dup->dav.imap_uid && (strcmpsafe(dup->dav.mailbox, mbox) ||
+                                  strcmpsafe(dup->dav.resource, resource))) {
+            /* CALDAV:unique-scheduling-object-resource */
+            xsyslog_ev(LOG_NOTICE, "dav.caldav.store.uid_conflict",
+                       lf_mailbox(mailbox),
+                       lf_s("dav.resource", resource),
+                       lf_s("cal.uid", uid),
+                       lf_s("dav.conflict.mbox", dup->dav.mailbox),
+                       lf_s("dav.conflict.resource", dup->dav.resource));
+            txn->error.precond = CALDAV_UNIQUE_OBJECT;
+            return HTTP_FORBIDDEN;
+        }
+    }
+
     if (cdata->dav.imap_uid && (flags & PERMS_NOKEEP) == 0) {
         preserve_jmap_permissions(ical, kind, cdata);
     }

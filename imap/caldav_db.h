@@ -162,6 +162,16 @@ int caldav_abort(struct caldav_db *caldavdb);
 
 char *caldav_mboxname(const char *userid, const char *name);
 
+/**
+ * Is this mailbox the scheduling Inbox of the database's owner?
+ *
+ * @param caldavdb  the database
+ * @param mailbox   the mailbox to test
+ * @return true if @a mailbox is the owner's scheduling Inbox
+ */
+bool caldav_is_sched_inbox(struct caldav_db *caldavdb,
+                           const struct mailbox *mailbox);
+
 /* Process each entry for 'caldavdb' with a modseq higher than oldmodseq,
  * in ascending order of modseq.
  * If mailbox is not NULL, only process entries of this mailbox.

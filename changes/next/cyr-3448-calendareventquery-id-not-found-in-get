@@ -1,8 +1,10 @@
 Description:
 
-dav_reconstruct can now repair iCalendar UIDs that are spread over several
-CalDAV resources, with the new --repair, --repair-uid-conflicts and --really
-options.
+Attempts to create calendar events having the same UID in different calendar
+resources now are rejected. Before, this already was enforced in CalDAV PUT,
+but other APIs including JMAP Calendars did not enforce this rule. Existing
+dav.db databases might contain entries that violate this rule. The
+dav_reconstruct command now allows to repair such database.
 
 Documentation:
 
@@ -14,11 +16,9 @@ None.
 
 Upgrade instructions:
 
-Nothing is required on upgrade.  A user whose CalendarEvent/query returns the
-same id twice, or whose CalendarEvent/get reports an id as notFound that it
-also returns, has an iCalendar UID in more than one resource.  Run
-`dav_reconstruct --repair-uid-conflicts <userid>` to see what the repair would
-do, and again with --really to do it.
+Check existing dav.db database by running dav_reconstruct with the new
+"--repair" argument, which reports data integrity errors but does not rewrite
+the data. Use the additional "--really" argument to repair the data on disk.
 
 Two limitations are worth knowing before running it:
 

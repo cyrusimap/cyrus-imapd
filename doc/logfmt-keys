@@ -169,6 +169,8 @@ conv.guid.exists        how many non-expunged records share this guid
 conv.guid.folderexists  how many of those are in this folder
 conv.guid.numrecords    how many records of any kind share this guid
 dav.collection          the DAV collection a request named
+dav.conflict.mbox       uniqueid of the mailbox holding a conflicting resource
+dav.conflict.resource   resource name of a conflicting resource in its collection
 dav.mailbox             the mailbox a DAV row names, as a name or a uniqueid
 dav.mailbox.byname      1 if dav.mailbox is a name rather than a uniqueid
 dav.owner               the user whose collection a request was for

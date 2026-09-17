@@ -1240,6 +1240,16 @@ static int caldav_copy(struct transaction_t *txn, void *obj,
         if (organizer) flags |= NEW_STAG;
     }
 
+    /* A move within an account stores at the destination before expunging the
+     * source, so the same UID can exist in two resources temporarily.  Across
+     * accounts it is a conflict like any other, and a COPY within one account
+     * is refused before we get here. */
+    if (txn->meth == METH_MOVE &&
+        mboxname_same_userid(mailbox_name(dest_mbox),
+                             txn->req_tgt.mbentry->name)) {
+        flags |= NO_DUP_CHECK;
+    }
+
     /* Store source resource at destination */
     /* XXX - set calendar-user-address based on original message? */
     /* XXX - get createdmodseq from source */

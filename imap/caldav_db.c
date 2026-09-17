@@ -433,6 +433,18 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 }
 
 
+EXPORTED bool caldav_is_sched_inbox(struct caldav_db *caldavdb,
+                                    const struct mailbox *mailbox)
+{
+    if (!caldavdb->sched_inbox) return false;
+
+    const char *mbox = (caldavdb->db->version >= DB_MBOXID_VERSION) ?
+        mailbox_uniqueid(mailbox) : mailbox_name(mailbox);
+
+    return !strcmpsafe(mbox, caldavdb->sched_inbox);
+}
+
+
 #define CMD_SELCMODSEQ CMD_READFIELDS \
     " WHERE createdmodseq = :cmodseq AND mailbox != :inbox AND alive = 1;"
 

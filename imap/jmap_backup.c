@@ -1016,6 +1016,49 @@ static int do_scheduling(jmap_req_t *req,
     return 0;
 }
 
+/* Restoring a resource does not go through caldav_store_resource(), so the
+ * rule that one iCalendar UID lives in one resource is kept here instead: if
+ * the UID has been recreated somewhere else in the meantime, the event the
+ * owner wants back already exists and this copy stays destroyed.
+ *
+ * Both lookups return the same per-database buffers, so the first result has
+ * to be copied out before the second overwrites it. */
+static bool check_uid_already_exists(struct caldav_db *caldavdb,
+                                     const mbentry_t *mbentry,
+                                     uint32_t imap_uid,
+                                     struct buf *mboxid, struct buf *resource)
+{
+    struct caldav_data *cdata = NULL;
+    char *ical_uid = NULL;
+    bool found = false;
+
+    if (caldav_lookup_imapuid(caldavdb, mbentry, imap_uid, &cdata,
+                              /*tombstones*/ 1))
+        return false;
+
+    if (!cdata->ical_uid) return false;
+
+    ical_uid = xstrdup(cdata->ical_uid);
+    buf_setcstr(mboxid, cdata->dav.mailbox);
+    buf_setcstr(resource, cdata->dav.resource);
+
+    if (!caldav_lookup_uid(caldavdb, ical_uid, &cdata) &&
+        cdata->dav.imap_uid &&
+        (strcmpsafe(cdata->dav.mailbox, buf_cstring(mboxid)) ||
+         strcmpsafe(cdata->dav.resource, buf_cstring(resource)))) {
+
+        xsyslog_ev(LOG_NOTICE, "jmap.backup.restore.uid_conflict",
+                   lf_s("cal.uid", ical_uid),
+                   lf_s("dav.conflict.mbox", cdata->dav.mailbox),
+                   lf_s("dav.conflict.resource", cdata->dav.resource));
+        found = true;
+    }
+
+    free(ical_uid);
+
+    return found;
+}
+
 static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
                          jmap_req_t *req, struct caldav_db *caldavdb, int log_level)
 {
@@ -1027,6 +1070,15 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
                                 .uniqueid = (char *)mailbox_uniqueid(mailbox) };
     struct caldav_data *cdata = NULL;
     int r;
+
+    struct buf mboxid = BUF_INITIALIZER, resource = BUF_INITIALIZER;
+    bool exists = check_uid_already_exists(caldavdb, &mbentry,
+                                           oldrecord ? oldrecord->uid
+                                                     : record->uid,
+                                           &mboxid, &resource);
+    buf_free(&mboxid);
+    buf_free(&resource);
+    if (exists) return 0;
 
     r = caldav_lookup_imapuid(caldavdb, &mbentry,
                               oldrecord ? oldrecord->uid : record->uid,
