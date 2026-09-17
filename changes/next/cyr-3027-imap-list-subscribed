@@ -1,0 +1,30 @@
+Description:
+
+LIST with RETURN (STATUS ...) now returns STATUS data only for mailboxes on
+which the user holds the "r" right.  A mailbox the user cannot read is
+reported with the \NoSelect attribute and no STATUS response, as RFC 5819
+requires.  A subscribed mailbox on which the user has lost the "l" right is
+now listed by LIST (SUBSCRIBED) as \NonExistent, the same as a subscribed
+mailbox that has been deleted.  Previously a user who had subscribed to a
+mailbox they could not read, as :imapdconf:`allowallsubscribe` permits,
+could learn its message count and other status through LIST.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
