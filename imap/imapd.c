@@ -13347,6 +13347,8 @@ static void printmetadata(const mbentry_t *mbentry,
 
 done:
     annotate_state_abort(&astate);
+    strarray_fini(&newa);
+    strarray_fini(&newe);
 }
 
 /* Print LIST or LSUB untagged response */
@@ -13419,6 +13421,18 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
         if (!keep) return;
     }
 
+    /* can we read the status data ? */
+    else if ((listargs->ret & LIST_RET_STATUS) && mbentry) {
+        int myrights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
+        r = !(myrights & ACL_READ) ? IMAP_PERMISSION_DENIED :
+            imapd_statusdata(mbentry, listargs->statusitems, &sdata);
+        if (r) {
+            /* RFC 5819: the STATUS response MUST NOT be returned and the
+             * LIST response MUST include the \NoSelect attribute. */
+            attributes |= MBOX_ATTRIBUTE_NOSELECT;
+        }
+    }
+
     if (listargs->cmd == LIST_CMD_LSUB) {
         /* \Noselect has a special second meaning with (R)LSUB */
         if ( !(attributes & MBOX_ATTRIBUTE_SUBSCRIBED)
@@ -13463,16 +13477,6 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
         if (!buf_len(&specialuse)) return;
     }
 
-    /* can we read the status data ? */
-    if ((listargs->ret & LIST_RET_STATUS) && mbentry) {
-        r = imapd_statusdata(mbentry, listargs->statusitems, &sdata);
-        if (r) {
-            /* RFC 5819: the STATUS response MUST NOT be returned and the
-             * LIST response MUST include the \NoSelect attribute. */
-            attributes |= MBOX_ATTRIBUTE_NOSELECT;
-        }
-    }
-
     /* Do we need to add the OLDNAME extended data item? */
     char *oldname = NULL;
     if (listargs->denormalized) {
@@ -13497,19 +13501,19 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     buf_free(&specialuse);
     free(oldname);
 
-    if ((listargs->ret & LIST_RET_STATUS) &&
-        !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
+    if (attributes & (MBOX_ATTRIBUTE_NONEXISTENT | MBOX_ATTRIBUTE_NOSELECT))
+        return;
+
+    if (listargs->ret & LIST_RET_STATUS) {
         /* output the status line now, per RFC 5819 */
         if (mbentry) print_statusline(extname, listargs->statusitems, &sdata);
     }
 
-    if ((listargs->ret & LIST_RET_MYRIGHTS) &&
-        !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
+    if (listargs->ret & LIST_RET_MYRIGHTS) {
         if (mbentry) printmyrights(extname, mbentry);
     }
 
-    if ((listargs->ret & LIST_RET_METADATA) &&
-        !(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
+    if (listargs->ret & LIST_RET_METADATA) {
         if (mbentry)
             printmetadata(mbentry, &listargs->metaitems, &listargs->metaopts);
     }
@@ -13784,12 +13788,22 @@ static int subscribed_cb(struct findall_data *data, void *rockp)
 
     if (data->is_exactmatch) {
         mbentry_t *mbentry = NULL;
+        bool exists = false;
+        int myrights = 0;
+
         mboxlist_lookup(mbname_intname(data->mbname), &mbentry, NULL);
+        if (mbentry) {
+            exists = true;
+            myrights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
+            if (imapd_userisadmin) myrights |= ACL_LOOKUP;
+        }
         perform_output(extname, mbentry, rock);
         mboxlist_entry_free(&mbentry);
 
         rock->last_attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
-        if (mboxlist_lookup(mbname_intname(data->mbname), NULL, NULL))
+        if (!exists ||
+            /* LSUB still needs to surface unLISTable mailboxes */
+            (!(myrights & ACL_LOOKUP) && rock->listargs->cmd != LIST_CMD_LSUB))
             rock->last_attributes |= MBOX_ATTRIBUTE_NONEXISTENT;
         if (is_noinferiors(data, rock))
             rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
