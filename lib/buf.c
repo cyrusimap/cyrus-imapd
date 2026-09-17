@@ -142,21 +142,52 @@ EXPORTED void buf_getmap(struct buf *buf, const char **base, size_t *len)
  * so a file A\nB will return two true responses with bufs
  * containing "A" and "B" respectively before returning a
  * false to the third call */
-EXPORTED int buf_getline(struct buf *buf, FILE *fp)
+EXPORTED int buf_getline(struct buf *b, FILE *fp)
 {
-    int c;
+    buf_reset(b);
+    while (1) {
+        size_t len = b->len;
+        buf_ensure(b, len + 81);
+        char *end = b->s + b->alloc;
+        char *here = b->s + len;
 
-    buf_reset(buf);
-    while ((c = fgetc(fp)) != EOF) {
-        if (c == '\n')
+        char *result = fgets(here, end - here, fp);
+        if (!result) {
+            /* EOF or error, but buf_getline()'s API never had a way to
+             * communicate the difference to its caller */
+
+            if (!len) {
+                /* If EOF and no content, then we're done.
+                 * Also, fgets() won't have touched the buffer, so we must: */
+                b->s[0] = '\0';
+                return 0;
+            }
+
+            assert(b->s[b->len] == '\0');
+            return 1;
+        }
+
+        size_t got = strlen(here);
+        /* There is a corner case of file that ends with a NUL byte (or a single
+         * byte file that is just NUL) where fgets() will return non-NULL, but
+         * strlen() will be zero. There might be bytes read beyond the NUL, but
+         * we have no cheap way of telling. (We could try ftell() before and
+         * after, but then we don't work on non-seekable streams. I figure if we
+         * *really* need to we memset() the buffer to non-NUL, then memrchr() to
+         * find the NUL that fgets() wrote *after* the bytes that it read.) */
+        if (!got) break;
+
+        b->len += got;
+        if (here[got - 1] == '\n') {
+            /* Read a trailing newline. So chomp it, and then terminate. */
+            here[got - 1] = '\0';
+            --b->len;
             break;
-        buf_putc(buf, c);
+        }
     }
-    /* ensure trailing NULL */
-    buf_cstring(buf);
 
-    /* EOF and no content, we're done */
-    return (!(buf->len == 0 && c == EOF));
+    assert(b->s[b->len] == '\0');
+    return 1;
 }
 
 #ifdef HAVE_DECLARE_OPTIMIZE
