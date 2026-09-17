@@ -52,6 +52,7 @@ BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
 CALSCALE:GREGORIAN
+METHOD:REQUEST
 BEGIN:VEVENT
 CREATED:20150806T234327Z
 ORGANIZER:cassandane@example.com
@@ -68,7 +69,6 @@ END:VEVENT
 END:VCALENDAR
 EOF
     $caldav->Request('PUT', 'Default/test.ics', $rawIcal,
-        'Schedule-Sender-Address' => 'attendee@local',
         'Content-Type' => 'text/calendar');
 
     my $caldavResponse = $caldav->Request('GET', $eventHref);

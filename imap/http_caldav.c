@@ -1537,9 +1537,10 @@ static int caldav_delete_cal(struct transaction_t *txn,
                     .createdmodseq = cdata->dav.createdmodseq,
                     .ical_uid = cdata->ical_uid
                 };
-                int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
+                int r2 = jmap_create_caldaveventnotif(httpd_userid,
                     httpd_authstate, mailbox_name(mailbox),
-                    &eid, &schedule_addresses, is_draft, ical, NULL);
+                    &eid, &schedule_addresses, is_draft, ical, NULL,
+                    NULL, NULL);
                 if (r2) {
                     xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
                             "error=%s", error_message(r2));
@@ -4073,8 +4074,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     }
 
     // Rewrite managed attachments in iTIP message
-    if ((icalcomponent_get_method(ical) != ICAL_METHOD_NONE) ||
-            spool_getheader(txn->req_hdrs, "Schedule-Sender-Address")) {
+    if (icalcomponent_get_method(ical) != ICAL_METHOD_NONE) {
         caldav_rewrite_attachments(txn->req_tgt.userid,
                 caldav_attachments_to_url, oldical, ical, &myoldical, &myical);
         if (myoldical) {
@@ -4195,35 +4195,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    /* Set SENT-BY parameter */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-Address"))) {
-        const char *sentby = *hdr;
-        if (!strncasecmp(sentby, "mailto:", 7)) {
-            sentby += 7;
-        }
-
-        for (comp = icalcomponent_get_first_real_component(ical);
-             comp;
-             comp = icalcomponent_get_next_component(ical,
-                 icalcomponent_isa(comp))) {
-
-            // Use SENT-BY parameter as defined in RFC5545
-            icalproperty *orga =
-                icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-            if (orga) {
-                icalproperty_remove_parameter_by_kind(orga, ICAL_SENTBY_PARAMETER);
-                icalproperty_add_parameter(orga, icalparameter_new_sentby(sentby));
-            }
-
-            // XXX also set the legacy X-property, superseded by the
-            // SENT-BY parameter above.
-            prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, JMAPICAL_XPROP_SENTBY);
-            icalproperty_set_value(prop, icalvalue_new_text(sentby));
-            icalcomponent_add_property(comp, prop);
-        }
-    }
-
     if (kind == ICAL_VEVENT_COMPONENT) {
         int use_defaultalerts = icalcomponent_get_usedefaultalerts(ical);
 
@@ -4306,9 +4277,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 .createdmodseq = cmodseq,
                 .ical_uid = uid
             };
-            int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
+            int r2 = jmap_create_caldaveventnotif(httpd_userid,
                     httpd_authstate, mailbox_name(mailbox), &eid,
-                    &schedule_addresses, is_draft, oldical, ical);
+                    &schedule_addresses, is_draft, oldical, ical,
+                    NULL, NULL);
             if (r2) {
                 xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
                         "error=%s", error_message(r2));
