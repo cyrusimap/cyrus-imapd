@@ -1,0 +1,118 @@
+#!perl
+use Cassandane::Tiny;
+
+use Data::GUID qw(guid_string);
+use HTTP::Tiny;
+
+# draft-desruisseaux-ischedule §6.1 and §7.4: the Originator request header
+# MUST match the ORGANIZER for REQUEST/CANCEL and an ATTENDEE for REPLY.  The
+# receiver must refuse a message whose Originator does not match, or the
+# transport identity DKIM vouches for is never bound to the scheduling identity
+# carried in the iCalendar body.
+sub test_ischedule_originator_mismatch
+    :NoStartInstances
+    ($self)
+{
+    # No DKIM library is compiled into Cyrus, so the receiver can only be
+    # exercised with the signature requirement switched off.
+    $self->{instance}->{config}->set_bits('httpmodules', 'ischedule');
+    $self->{instance}->{config}->set(ischedule_dkim_required => 'no');
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $CalDAV = $self->{caldav};
+
+    xlog $self, "ensure the recipient's calendar home and Inbox exist";
+    $CalDAV->GetCalendars();
+
+    my $forged_uid = guid_string();
+    my $honest_uid = guid_string();
+
+    $self->_isched_post(
+        originator => 'mailto:imposter@example.com',
+        body       => _request_for($forged_uid),
+        status     => 403,
+        content    => qr/originator-denied/,
+    );
+
+    $self->_isched_post(
+        originator => 'mailto:imposter@example.com',
+        body       => _reply_for($forged_uid),
+        status     => 403,
+        content    => qr/originator-denied/,
+    );
+
+    $self->_isched_post(
+        originator => 'mailto:organizer@example.com',
+        body       => _request_for($honest_uid),
+        status     => 200,
+        content    => qr/2\.0;/,
+    );
+
+    xlog $self, "only the honest invitation reached the calendar";
+    my $events = $CalDAV->GetEvents('Default');
+    $self->assert_deep_equals([ $honest_uid ], [ map { $_->{uid} } @$events ]);
+}
+
+sub _isched_post ($self, %arg)
+{
+    my $service = $self->{instance}->get_service("http");
+    my $url = sprintf('http://%s:%s/ischedule',
+                      $service->host(), $service->port());
+
+    my $res = HTTP::Tiny->new(max_redirect => 0)->request('POST', $url, {
+        headers => {
+            'iSchedule-Version' => '1.0',
+            'Content-Type'      => 'text/calendar; charset=utf-8',
+            'Originator'        => $arg{originator},
+            'Recipient'         => 'mailto:cassandane@example.com',
+        },
+        content => $arg{body},
+    });
+
+    xlog $self, "iSchedule POST from $arg{originator} => $res->{status}";
+    $self->assert_num_equals($arg{status}, $res->{status});
+    $self->assert_matches($arg{content}, $res->{content});
+}
+
+sub _request_for ($uid)
+{
+    return <<~"EOF";
+      BEGIN:VCALENDAR
+      VERSION:2.0
+      PRODID:-//Example Corp.//CalDAV Client//EN
+      METHOD:REQUEST
+      BEGIN:VEVENT
+      UID:$uid
+      SEQUENCE:0
+      DTSTAMP:20260901T120000Z
+      DTSTART:20260915T090000Z
+      DTEND:20260915T100000Z
+      SUMMARY:Budget review
+      ORGANIZER:mailto:organizer\@example.com
+      ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:cassandane\@example.com
+      END:VEVENT
+      END:VCALENDAR
+      EOF
+}
+
+sub _reply_for ($uid)
+{
+    return <<~"EOF";
+      BEGIN:VCALENDAR
+      VERSION:2.0
+      PRODID:-//Example Corp.//CalDAV Client//EN
+      METHOD:REPLY
+      BEGIN:VEVENT
+      UID:$uid
+      SEQUENCE:0
+      DTSTAMP:20260901T120000Z
+      DTSTART:20260915T090000Z
+      DTEND:20260915T100000Z
+      SUMMARY:Budget review
+      ORGANIZER:mailto:cassandane\@example.com
+      ATTENDEE;PARTSTAT=ACCEPTED:mailto:attendee\@example.com
+      END:VEVENT
+      END:VCALENDAR
+      EOF
+}
