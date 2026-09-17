@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_query_expandrecurrences_too_many
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $calid = $self->default_user->calendars->default->id;
+
+    # Creates $n minutely events named after $prefix, each with $count
+    # instances, all starting at 09:00 on 2026-01-01.
+    my sub create_events ($prefix, $n, $count) {
+        my %create = map {;
+            "$prefix$_" => {
+                version => '2.0',
+                calendarIds => { $calid => JSON::true },
+                uid => "$prefix$_-uid",
+                title => "$prefix$_",
+                start => "2026-01-01T09:00:00",
+                timeZone => "Etc/UTC",
+                duration => "PT30S",
+                recurrenceRule => { frequency => 'minutely', count => $count },
+            }
+        } 1 .. $n;
+
+        my $res = $jmap->request([ ['CalendarEvent/set', { create => \%create }] ]);
+        my $created = $res->single_sentence('CalendarEvent/set')->arguments->{created};
+        $self->assert_num_equals($n, scalar keys %$created);
+
+        return map {; $created->{$_}{id} } sort keys %$created;
+    }
+
+    my sub destroy_events (@ids) {
+        my $res = $jmap->request([ ['CalendarEvent/set', { destroy => \@ids }] ]);
+        my $destroyed = $res->single_sentence('CalendarEvent/set')->arguments->{destroyed};
+        $self->assert_num_equals(scalar @ids, scalar @$destroyed);
+    }
+
+    # Queries with expandRecurrences over [$after, $before) and asserts
+    # either the total instance count or the error type.
+    my sub check_query ($desc, $after, $before, $want) {
+        xlog $self, "expandRecurrences query $desc";
+
+        my $res = $jmap->request([
+            ['CalendarEvent/query', {
+                filter => { after => $after, before => $before },
+                expandRecurrences => JSON::true,
+                limit => 1,
+            }],
+        ]);
+        my $sentence = $res->single_sentence;
+
+        if ($want =~ /\A[0-9]+\z/) {
+            $self->assert_str_equals('CalendarEvent/query', $sentence->name);
+            $self->assert_num_equals($want, $sentence->arguments->{total});
+            $self->assert_num_equals(1, scalar @{ $sentence->arguments->{ids} });
+        } else {
+            $self->assert_str_equals('error', $sentence->name);
+            $self->assert_str_equals($want, $sentence->arguments->{type});
+        }
+    }
+
+    xlog $self, "one event with more instances than the per-event limit";
+    my @big = create_events('big', 1, 20000);
+
+    check_query('over a window holding 60 instances',
+        '2026-01-01T08:59:00', '2026-01-01T09:59:45', 60);
+
+    check_query('over a window holding 20000 instances, even with limit 1',
+        '2026-01-01T00:00:00', '2026-02-01T00:00:00', 'cannotCalculateOccurrences');
+
+    destroy_events(@big);
+
+    xlog $self, "ten events that each fit under the per-event limit";
+    my @small = create_events('small', 10, 950);
+
+    check_query('totalling 9500 instances',
+        '2026-01-01T00:00:00', '2026-02-01T00:00:00', 9500);
+
+    xlog $self, "an eleventh pushes the query past ten times the limit";
+    create_events('extra', 1, 950);
+
+    check_query('totalling 10450 instances',
+        '2026-01-01T00:00:00', '2026-02-01T00:00:00', 'cannotCalculateOccurrences');
+}

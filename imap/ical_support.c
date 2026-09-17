@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <float.h>
+
 #include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
@@ -3562,4 +3564,293 @@ EXPORTED void icalrecurrencetype_add_as_xxx(struct icalrecurrencetype *recur,
     tok_fini(&rparts);
 
     free(rrule);
+}
+
+#define AVE_DAYS_PER_YEAR  365.2425
+#define AVE_DAYS_PER_MONTH  30.4377
+#define AVE_WEEKS_PER_YEAR  52.1775
+#define AVE_WEEKS_PER_MONTH  4.3482
+#define DAYS_PER_WEEK        7.
+#define HOURS_PER_DAY       24.
+#define MINUTES_PER_HOUR    60.
+#define SECONDS_PER_MINUTE  60.
+#define SECONDS_PER_HOUR    (SECONDS_PER_MINUTE * MINUTES_PER_HOUR)
+#define MINUTES_PER_DAY     (MINUTES_PER_HOUR * HOURS_PER_DAY)
+#define SECONDS_PER_DAY     (SECONDS_PER_HOUR * HOURS_PER_DAY)
+
+/* Estimate the number of recurrences of rrule, anchored at dtstart, that
+   fall within range.  Rules with a COUNT no larger than limit are taken
+   at face value.  Rules the estimator cannot model at all are reported
+   as FLT_MAX so that the caller refuses them. */
+static float estimate_recurrences(struct icalrecurrencetype *rrule,
+                                  struct icaltimetype dtstart,
+                                  struct icalperiodtype range, int limit)
+{
+    struct icaltimetype start = range.start;
+    struct icaltimetype end   = range.end;
+    struct icaldurationtype dur;
+    int count = rrule->count;
+
+    if (count) {
+        if (count <= limit) return (float) count;
+
+        /* Calculate number of recurrences between DTSTART and end of range */
+        start = dtstart;
+    }
+    else {
+        /* Calculate number of recurrences between
+           MAX(DTSTART, start of_range) and MIN(UNTIL, end of range) */
+        if (icaltime_compare(dtstart, range.start) > 0) start = dtstart;
+        if (!icaltime_is_null_time(rrule->until) &&
+            icaltime_compare(rrule->until, range.end) < 0)
+            end = rrule->until;
+    }
+
+    dur = icalduration_from_times(end, start);
+
+    if (dur.is_neg) return 0;
+
+    float nrecur = 1, period = 0;
+    short interval   = rrule->interval;
+    short byweekno   = rrule->by[ICAL_BY_WEEK_NO].size;
+    short bymonth    = rrule->by[ICAL_BY_MONTH].size;
+    short bymonthday = rrule->by[ICAL_BY_MONTH_DAY].size;
+    short byyearday  = rrule->by[ICAL_BY_YEAR_DAY].size;
+    short byday      = rrule->by[ICAL_BY_DAY].size;
+    short byhour     = rrule->by[ICAL_BY_HOUR].size;
+    short byminute   = rrule->by[ICAL_BY_MINUTE].size;
+    short bysecond   = rrule->by[ICAL_BY_SECOND].size;
+
+    /* Estimate the total number of recurrences in the range */
+    switch (rrule->freq) {
+    case ICAL_YEARLY_RECURRENCE:
+    case ICAL_MONTHLY_RECURRENCE:
+    case ICAL_WEEKLY_RECURRENCE:
+    case ICAL_DAILY_RECURRENCE:
+        switch (rrule->freq) {
+        case ICAL_YEARLY_RECURRENCE:
+            period = interval * AVE_DAYS_PER_YEAR;
+
+            if (byyearday) nrecur = byyearday;
+            else if (byweekno) {
+                nrecur = byweekno;
+
+                if (byday) nrecur *= byday;
+            }
+            else if (bymonth) {
+                nrecur = bymonth;
+
+                if (bymonthday) nrecur *= bymonthday;
+                else if (byday) nrecur *= byday * AVE_WEEKS_PER_MONTH;
+            }
+            else if (byday) nrecur = byday * AVE_WEEKS_PER_YEAR;
+            break;
+
+        case ICAL_MONTHLY_RECURRENCE:
+            period = interval * AVE_DAYS_PER_MONTH;
+
+            if (bymonth) {
+                nrecur = bymonth;
+                period = AVE_DAYS_PER_YEAR;
+            }
+
+            if (bymonthday) nrecur *= bymonthday;
+            else if (byday)      nrecur *= byday * AVE_WEEKS_PER_MONTH;
+            break;
+
+        case ICAL_WEEKLY_RECURRENCE:
+            period = interval * DAYS_PER_WEEK;
+
+            if (bymonth) {
+                nrecur = (AVE_DAYS_PER_MONTH / period) * bymonth;
+                period = AVE_DAYS_PER_YEAR;
+            }
+
+            if (byday) nrecur *= byday;
+            break;
+
+        case ICAL_DAILY_RECURRENCE:
+            period = interval;
+
+            if (bymonth) {
+                if (bymonthday) nrecur = bymonthday * bymonth;
+                else {
+                    nrecur = (AVE_DAYS_PER_MONTH / period) * bymonth;
+
+                    if (byday) nrecur *= byday / DAYS_PER_WEEK;
+                }
+                period = AVE_DAYS_PER_YEAR;
+            }
+            else if (bymonthday) {
+                nrecur = bymonthday;
+                period = AVE_DAYS_PER_MONTH;
+            }
+            else if (byday) {
+                nrecur = byday;
+                period = DAYS_PER_WEEK;
+            }
+
+            break;
+
+        default:
+            /* should never get here */
+            return FLT_MAX;
+        }
+
+        if (!icaltime_is_date(dtstart)) {
+            if (byhour)   nrecur *= byhour;
+            if (byminute) nrecur *= byminute;
+            if (bysecond) nrecur *= bysecond;
+        }
+        break;
+
+    case ICAL_HOURLY_RECURRENCE:
+    case ICAL_MINUTELY_RECURRENCE:
+    case ICAL_SECONDLY_RECURRENCE:
+        if (byyearday) {
+            nrecur = byyearday;
+            period = AVE_DAYS_PER_YEAR;
+        }
+        else if (bymonth) {
+            if (bymonthday) nrecur = bymonthday;
+            else {
+                nrecur = AVE_DAYS_PER_MONTH * bymonth;
+
+                if (byday) nrecur *= byday / DAYS_PER_WEEK;
+            }
+            period = AVE_DAYS_PER_YEAR;
+        }
+        else if (bymonthday) {
+            nrecur = bymonthday;
+            period = AVE_DAYS_PER_MONTH;
+        }
+        else if (byday) {
+            nrecur = byday;
+            period = DAYS_PER_WEEK;
+        }
+
+        switch (rrule->freq) {
+        case ICAL_HOURLY_RECURRENCE:
+            if (byhour) {
+                nrecur *= byhour;
+                if (!period) period = 1;
+            }
+            else if (!period)
+                period = interval / HOURS_PER_DAY;
+            else
+                nrecur *= HOURS_PER_DAY;
+
+            if (byminute) nrecur *= byminute;
+            if (bysecond) nrecur *= bysecond;
+            break;
+
+        case ICAL_MINUTELY_RECURRENCE:
+            if (byhour || byminute) {
+                short nrecur_per_hour;
+
+                if (byhour) {
+                    nrecur_per_hour = MINUTES_PER_HOUR;
+                    nrecur *= byhour;
+                    if (!period) period = 1;
+                }
+                if (byminute) {
+                    nrecur_per_hour = byminute;
+                    if (!period) period = 1 / HOURS_PER_DAY;
+                }
+
+                nrecur *= nrecur_per_hour;
+            }
+            else if (!period)
+                period = interval / MINUTES_PER_DAY;
+            else
+                nrecur *= MINUTES_PER_DAY;
+
+            if (bysecond) nrecur *= bysecond;
+            break;
+
+        case ICAL_SECONDLY_RECURRENCE:
+            if (byhour || byminute || bysecond) {
+                short nrecur_per_hour;
+
+                if (byhour) {
+                    nrecur_per_hour = SECONDS_PER_HOUR;
+                    nrecur *= byhour;
+                    if (!period) period = 1;
+                }
+                if (byminute) {
+                    nrecur_per_hour = SECONDS_PER_MINUTE;
+                    nrecur *= byminute;
+                    if (!period) period = 1 / HOURS_PER_DAY;
+                }
+                if (bysecond) {
+                    nrecur_per_hour = 1;
+                    nrecur *= bysecond;
+                    if (!period) period = 1 / MINUTES_PER_DAY;
+                }
+
+                nrecur *= nrecur_per_hour;
+            }
+            else if (!period)
+                period = interval / SECONDS_PER_DAY;
+            else
+                nrecur *= SECONDS_PER_DAY;
+            break;
+
+        default:
+            /* should never get here */
+            return FLT_MAX;
+        }
+
+        break;
+
+    default:
+        /* should never get here */
+        return FLT_MAX;
+    }
+
+    float days = dur.days + (dur.hours +
+                             (dur.minutes + (dur.seconds / SECONDS_PER_MINUTE) /
+                              MINUTES_PER_HOUR)) / HOURS_PER_DAY;
+    float total = nrecur * (days / period);
+
+    if (count) {
+        /* Calculate the number of COUNT recurrences occurring
+           between DTSTART and start of range
+           (assume even distribution of the recurrences */
+        time_t dtstart_t = icaltime_as_timet(dtstart);
+        time_t start_t = icaltime_as_timet(range.start);
+        time_t end_t = icaltime_as_timet(range.end);
+        float past = total *
+            (MAX(start_t, dtstart_t) - dtstart_t) / (float) (end_t - dtstart_t);
+
+        /* Calculate the total number of recurrences remaining */
+        total = MIN(total, (float) count) - past;
+    }
+
+    return total;
+}
+
+/* Determine if the number of recurrences to expand is less than the max limit.
+ * Sum the estimate for each RRULE, when there's more than one RRULE. */
+EXPORTED int icalcomponent_expand_allowed(icalcomponent *ical,
+                                          struct icalperiodtype range,
+                                          int limit)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    struct icaltimetype dtstart = icalcomponent_get_dtstart(comp);
+    icalproperty *prop;
+    float total = 0;
+
+    if (icaltime_compare(range.end, dtstart) <= 0) return 1;
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_RRULE_PROPERTY)) {
+        total += estimate_recurrences(icalproperty_get_rrule(prop),
+                                      dtstart, range, limit);
+
+        if (total > (float) limit) return 0;
+    }
+
+    return 1;
 }

@@ -1,0 +1,18 @@
+Name: calendar_max_expanded_instances
+Type: INT
+Default-Value: 1000
+Last-Modified: UNRELEASED
+
+The maximum number of individual instances that the server will expand
+for one recurring calendar component.  The number is estimated from the
+recurrence rules before expanding, and the estimate counts every candidate
+the rule makes the server consider, so a rule that keeps few instances
+from many candidates (BYSETPOS, for example) is measured by the candidates.
+
+In a CalDAV calendar-query report, a component over the limit has its
+calendar-data property returned with a status of 422 Unprocessable Content.
+
+In JMAP CalendarEvent/query with expandRecurrences, a matching event over
+the limit fails the whole query with a cannotCalculateOccurrences error, as
+does a query whose matching events together expand to a count scaled from this
+limit.

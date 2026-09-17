@@ -132,6 +132,15 @@ static char *_imip_calendar_address(const strarray_t *schedule_addresses)
 /* v30 is just v29, bumped so that we evict events missing "update" property */
 #define JMAPCACHE_CALVERSION 30
 
+/* Longest window a CalendarEvent/query may expand recurrences over:
+   two years, leap day included.  Advertised as maxExpandedQueryDuration. */
+#define JMAP_MAX_EXPANDED_QUERY_DAYS 731
+
+/* Across all the events one CalendarEvent/query expands, allow this many
+   times calendar_max_expanded_instances before failing the query with
+   cannotCalculateOccurrences.  Chosen as unlikely, not by profiling. */
+#define JMAP_EXPANDED_INSTANCES_QUERY_FACTOR 10
+
 // clang-format off
 static jmap_method_t jmap_calendar_methods_standard[] = {
     {
@@ -385,8 +394,10 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
     timebuf[RFC3339_DATETIME_MAX] = '\0';
     json_object_set_new(calcapa, "maxDateTime", json_string(timebuf));
 
-    /* maxExpandedQueryDuration - we don't really care */
-    json_object_set_new(calcapa, "maxExpandedQueryDuration", json_string("P365D"));
+    /* maxExpandedQueryDuration */
+    char durbuf[16];
+    snprintf(durbuf, sizeof(durbuf), "P%dD", JMAP_MAX_EXPANDED_QUERY_DAYS);
+    json_object_set_new(calcapa, "maxExpandedQueryDuration", json_string(durbuf));
 
     /* maxParticipantsPerEvent */
     json_object_set_new(calcapa, "maxParticipantsPerEvent", json_null());
@@ -7710,6 +7721,9 @@ struct eventquery_recur_rock {
     icaltimetype lastseen;
     icaltimezone *utc;
     modseq_t createdmodseq;
+    size_t max_instances;
+    size_t ninstances;
+    int too_many;
 };
 
 static int eventquery_recur_cb(icalcomponent *comp,
@@ -7722,6 +7736,12 @@ static int eventquery_recur_cb(icalcomponent *comp,
     struct eventquery_recur_rock *rock = vrock;
 
     if (icaltime_compare(rock->lastseen, start)) {
+        if (rock->ninstances >= rock->max_instances) {
+            rock->too_many = 1;
+            return 0;
+        }
+        rock->ninstances++;
+
         icaltimetype utcstart = icaltime_convert_to_zone(start, rock->utc);
 
         icalproperty *prop =
@@ -7885,12 +7905,20 @@ static int eventquery_run(jmap_req_t *req,
 
     /* Sanity check arguments */
     eventquery_read_timerange(query->filter, args, &before, &after);
-    if (args.expandrecur && before == caldav_eternity) {
+    if (args.expandrecur) {
         /* Reject unbounded time-ranges for recurrence expansion */
-        *err = json_pack("{s:s s:[s] s:s}", "type", "invalidArguments",
-                "arguments", "expandRecurrences",
-                "description","upper time-range filter MUST be set");
-        return 0;
+        if (before == caldav_eternity || after == caldav_epoch) {
+            *err = json_pack("{s:s s:[s] s:s}", "type", "invalidArguments",
+                    "arguments", "expandRecurrences",
+                    "description",
+                    "before and after time-range filters MUST be set");
+            return 0;
+        }
+
+        if (before - after > JMAP_MAX_EXPANDED_QUERY_DAYS * (time_t) 86400) {
+            *err = json_pack("{s:s}", "type", "expandDurationTooLarge");
+            return 0;
+        }
     }
 
     ptrarray_t matches = PTRARRAY_INITIALIZER;
@@ -7972,6 +8000,16 @@ static int eventquery_run(jmap_req_t *req,
         ptrarray_t mymatches = PTRARRAY_INITIALIZER;
         struct buf buf = BUF_INITIALIZER;
         struct eventquery_match *match;
+        int limit = config_getint(IMAPOPT_CALENDAR_MAX_EXPANDED_INSTANCES);
+        int too_many = 0;
+
+        /* The instance count is per query, not per event, so the rock
+           outlives the loop and only the per-event fields are reset. */
+        struct eventquery_recur_rock rock = {
+            &mymatches, &buf, icaltime_null_time(), utc, 0,
+            (size_t) limit * JMAP_EXPANDED_INSTANCES_QUERY_FACTOR, 0, 0
+        };
+
         while ((match = ptrarray_pop(&matches))) {
             icalcomponent *comp = icalcomponent_get_first_real_component(match->ical);
             icalcomponent_kind kind = icalcomponent_isa(comp);
@@ -7987,26 +8025,45 @@ static int eventquery_run(jmap_req_t *req,
 
             if (is_recurring) {
                 /* Expand all instances, we need them for totals */
-                /* XXX - need tooManyRecurrenceInstances error ? */
-                struct eventquery_recur_rock rock = {
-                    &mymatches, &buf, icaltime_null_time(),
-                    icaltimezone_get_utc_timezone(), match->createdmodseq
-                };
+                if (!icalcomponent_expand_allowed(match->ical, timerange, limit)) {
+                    eventquery_match_free(&match);
+                    too_many = 1;
+                    break;
+                }
+
+                rock.lastseen = icaltime_null_time();
+                rock.createdmodseq = match->createdmodseq;
                 icalcomponent_myforeach(match->ical, timerange, utc,
                                         eventquery_recur_cb, &rock);
                 eventquery_match_free(&match);
+
+                if (rock.too_many) {
+                    too_many = 1;
+                    break;
+                }
             }
             else ptrarray_append(&mymatches, match);
         }
         buf_free(&buf);
 
+        if (too_many) {
+            /* Whatever is still unexpanded in matches is freed at done. */
+            while ((match = ptrarray_pop(&mymatches))) {
+                eventquery_match_free(&match);
+            }
+            ptrarray_fini(&mymatches);
+            *err = json_pack("{s:s s:s}", "type", "cannotCalculateOccurrences",
+                    "description", "too many recurrence instances to expand");
+            goto done;
+        }
+
         ptrarray_fini(&matches);
         matches = mymatches;
 
-        struct eventquery_cmp_rock rock = { sort, nsort };
+        struct eventquery_cmp_rock cmprock = { sort, nsort };
         if (matches.count) {
             cyr_qsort_r(matches.data, matches.count, sizeof(void*),
-                        eventquery_cmp, &rock);
+                        eventquery_cmp, &cmprock);
         }
     }
 
