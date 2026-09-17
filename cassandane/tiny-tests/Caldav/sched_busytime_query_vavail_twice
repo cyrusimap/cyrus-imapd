@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+# Regression test: querying the same user twice should not crash the worker.
+
+sub test_sched_busytime_query_vavail_twice
+    ($self)
+{
+    my $caldav = $self->default_user->caldav;
+
+    my $avail = <<~'EOF';
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//CYR-3437//EN
+    BEGIN:VAVAILABILITY
+    UID:vavail-1
+    DTSTAMP:20300101T000000Z
+    DTSTART:20300101T000000Z
+    DTEND:20310101T000000Z
+    BEGIN:AVAILABLE
+    UID:available-1
+    DTSTART:20300101T090000Z
+    DTEND:20300101T170000Z
+    SUMMARY:office hours
+    END:AVAILABLE
+    END:VAVAILABILITY
+    END:VCALENDAR
+    EOF
+
+    $caldav->Request('PUT',
+                     '/dav/calendars/user/cassandane/Default/vavail.ics',
+                     $avail, 'Content-Type' => 'text/calendar');
+
+    my $query = <<~'EOF';
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+    METHOD:REQUEST
+    BEGIN:VFREEBUSY
+    UID:5D3E1B26-8CF2-4C9C-9F4E-3D0F5C0A7A11
+    DTSTAMP:20300101T000000Z
+    DTEND:20310101T000000Z
+    DTSTART:20300101T000000Z
+    ATTENDEE:MAILTO:cassandane@example.com
+    ATTENDEE:MAILTO:cassandane@example.com
+    ORGANIZER:MAILTO:cassandane@example.com
+    END:VFREEBUSY
+    END:VCALENDAR
+    EOF
+
+    xlog $self, "freebusy query listing the same local attendee twice";
+    my $res = $caldav->Request('POST', 'Outbox',
+                               $query, 'Content-Type' => 'text/calendar');
+
+    my $text = $res->{content};
+    $self->assert_matches(qr/schedule-response/, $text);
+}

@@ -1,0 +1,28 @@
+Description:
+
+A schedule-outbox free/busy POST that names more than one local attendee, or
+names the same local attendee more than once, now evaluates each attendee
+against a freshly emptied availability set.  Previously the per-request
+free/busy filter's VAVAILABILITY array was freed after the first attendee but
+its length and pointer were left in place, crashing the CalDAV worker on a
+double free.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
