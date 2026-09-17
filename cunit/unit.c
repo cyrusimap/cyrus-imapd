@@ -383,6 +383,24 @@ EXPORTED char *cunit_tmpdir(char *buf, size_t len, const char *pattern)
     return buf;
 }
 
+EXPORTED FILE *cunit_fmemopen(void *buf, size_t len, const char *mode)
+{
+#ifdef HAVE_FMEMOPEN
+    return fmemopen(buf, len, mode);
+#else
+    /* Seems the only portable approach is a temporary file */
+    char fname[PATH_MAX] = {0};
+    int fd = cunit_tmpfile(fname, sizeof(fname), "cunit_fmemopen-XXXXXX");
+    if (!fd) fatal("cunit_tmpfile", errno);
+    xunlink(fname);
+
+    retry_write(fd, buf, len);
+    if (lseek(fd, 0, SEEK_SET) != 0) fatal("cunit_memopen lseek", errno);
+
+    return fdopen(fd, mode);
+#endif
+}
+
 static void run_tests(void)
 {
     int i;
