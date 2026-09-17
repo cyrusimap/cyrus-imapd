@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+# Under no-copyback, a folder that only a full update could reconcile must
+# fail the run at once.  Here deletedmodseq on the master is past the
+# replica's HIGHESTMODSEQ.
+sub test_nocopyback_replica_ahead
+    :NoAltNameSpace :DelayedExpunge
+    ($self)
+{
+    my $master_store = $self->{master_store};
+    $master_store->set_fetch_attributes('uid');
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{B} = $self->make_message("Message B", store => $master_store);
+    $self->run_replication();
+
+    xlog $self, "Expunge and unlink a message the replica has not seen";
+    my $mtalk = $master_store->get_client();
+    $mtalk->select("INBOX");
+    my $gone = $self->make_message("Message C", store => $master_store);
+    $mtalk->store($gone->{attrs}->{uid}, '+flags', '(\\Deleted)');
+    $mtalk->expunge();
+    $self->run_delayed_expunge();
+
+    xlog $self, "no-copyback sync must fail rather than loop";
+    eval { $self->run_replication(nosyncback => 1); };
+    my $e = $@;
+    $self->assert_not_null($e);
+    $self->assert_matches(qr/sync_client pid \d+\) exited with code/,
+                          $e->to_string());
+    my @syslog = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/event=sync\.mailbox\.replica_ahead/, "@syslog");
+    $self->assert_not_contains(qr/failed to settle renames/, \@syslog);
+
+    xlog $self, "a copyback sync still reconciles it";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+}
