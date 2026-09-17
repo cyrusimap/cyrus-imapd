@@ -114,6 +114,20 @@ extern void sched_reply(const char *cal_ownerid, const char *sched_userid,
 extern void sched_deliver(const char *cal_ownerid, const char *sched_userid,
                           const char *sender, const char *recipient,
                           void *data, void *rock);
+
+/* queue a sched_request(), or with a NULL organizer a sched_reply(), to run
+   once the organizer's namespace lock is dropped, since delivery takes each
+   recipient's.  Pass mboxname and resource to store SCHEDULE-STATUS back
+   afterwards, with the imap_uid we wrote so we can tell if somebody else
+   wrote the resource meanwhile */
+extern void sched_defer(const char *cal_ownerid, const char *sched_userid,
+                        const strarray_t *schedule_addresses,
+                        const char *organizer,
+                        icalcomponent *oldical, icalcomponent *newical,
+                        modseq_t createdmodseq, enum sched_mechanism mech,
+                        const char *mboxname, const char *resource,
+                        uint32_t imap_uid);
+extern void sched_run_deferred(void);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
                                         xmlChar *recipient, xmlChar *status);
 extern int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
