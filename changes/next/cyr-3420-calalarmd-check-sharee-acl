@@ -1,0 +1,27 @@
+Description:
+
+Calendar alarm notifications are no longer sent to a sharee whose access to
+the calendar has been revoked.  A subscription to a shared calendar can
+outlive the ACL grant that led to it, and alarm delivery previously checked
+only the subscription, so a former sharee kept receiving alarm notifications
+carrying current event data after their access was removed.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
