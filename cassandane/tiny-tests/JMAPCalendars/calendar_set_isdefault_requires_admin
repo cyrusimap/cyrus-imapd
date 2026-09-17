@@ -23,12 +23,16 @@ sub test_calendar_set_isdefault_requires_admin
     $shared_cal->share_with(cassandane => [ qw( mayReadItems mayWriteAll mayShare ) ]);
 
     xlog $self, "as cassandane, attempt to flip sharer's default via onSuccessSetIsDefault";
-    $jmap->CallMethods([
+    my $set = $jmap->CallMethods([
         [ 'Calendar/set' => {
             accountId => 'sharer',
             onSuccessSetIsDefault => $shared_cal->id,
         }, "R1" ],
     ]);
+
+    xlog $self, "the refusal must be reported, not silently dropped";
+    $self->assert_str_equals('forbidden',
+        $set->[0][1]{notUpdated}{$shared_cal->id}{type});
 
     xlog $self, "re-read the default; it must not have changed";
     my $res = $sharer->jmap->CallMethods([

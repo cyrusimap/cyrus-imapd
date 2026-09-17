@@ -1779,8 +1779,13 @@ static int setcalendar_writeprops(jmap_req_t *req,
     /* isSubscribed */
     if (!r && props->isSubscribed >= 0) {
         /* Update subscription database */
-        r = mboxlist_changesub(mailbox_name(mbox), req->userid, req->authstate,
-                               props->isSubscribed, 0, /*notify*/1, /*silent*/0);
+        int r2 = mboxlist_changesub(mailbox_name(mbox), req->userid, req->authstate,
+                                    props->isSubscribed, 0, /*notify*/1,
+                                    /*silent*/0);
+        if (r2) {
+            syslog(LOG_ERR, "failed to change subscription for %s: %s",
+                    mailbox_name(mbox), error_message(r2));
+        }
 
         /* Set invite status for CalDAV */
         buf_setcstr(&val, props->isSubscribed ? "invite-accepted" : "invite-declined");
@@ -1957,21 +1962,8 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
         }
     }
 
-    /* Delete calendar */
-    r = caldav_delmbox(db, mbentry);
-    if (r) {
-        xsyslog(LOG_ERR, "failed to delete mailbox from caldav_db",
-                "mboxname=<%s> mboxid=<%s> err=<%s>",
-                mbentry->name, mbentry->uniqueid, error_message(r));
-        goto done;
-    }
-    if (r) goto done;
-
-    jmap_myrights_delete(req, mboxname);
-
-    /* Remove from subscriptions db */
-    mboxlist_changesub(mboxname, req->userid, req->authstate, 0, 1, 0, 1);
-
+    /* The caldav_db rows go with the mailbox: both delete paths reach
+     * mailbox_delete_dav() themselves. */
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
     if (mboxlist_delayed_delete_isenabled()) {
         r = mboxlist_delayed_deletemailbox(mboxname,
@@ -1985,14 +1977,19 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
                 MBOXLIST_DELETE_CHECKACL|MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
     }
     mboxevent_free(&mboxevent);
+    if (r) goto done;
 
-    if (!r) r = caldav_update_shareacls(req->accountid);
+    jmap_myrights_delete(req, mboxname);
+
+    /* Remove from subscriptions db */
+    mboxlist_changesub(mboxname, req->userid, req->authstate, 0, 1, 0, 1);
+
+    r = caldav_update_shareacls(req->accountid);
 
 done:
-    if (db) {
-        int rr = caldav_close(db);
-        if (!r) r = rr;
-    }
+    /* The mailbox is already gone by here: a close failure mustn't turn a
+     * completed destroy into notDestroyed. */
+    if (db) caldav_close(db);
     if (r && *err == NULL) {
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             *err = json_pack("{s:s}", "type", "notFound");
@@ -2349,6 +2346,8 @@ static int jmap_calendar_set(struct jmap_req *req)
         goto done;
     }
     if (r) {
+        jmap_error(req, jmap_server_error(r));
+        r = 0;
         goto done;
     }
 
@@ -2456,8 +2455,14 @@ static int jmap_calendar_set(struct jmap_req *req)
         /* The default calendar is per-account state, so changing it requires
          * admin rights on the calendar home set. */
         char *calhome_mboxname = caldav_mboxname(req->accountid, NULL);
-        if (mbentry &&
-            jmap_hasrights(req, calhome_mboxname, JACL_ADMIN_CALENDAR)) {
+        if (!mbentry ||
+            !jmap_hasrights(req, calhome_mboxname, JACL_ADMIN_CALENDAR)) {
+            /* Say so rather than silently leaving the default alone. */
+            json_object_set_new(set.not_updated, newid,
+                                json_pack("{s:s}", "type",
+                                          mbentry ? "forbidden" : "notFound"));
+        }
+        else {
             /* set CALDAV:schedule-default-calendar annotation */
             static const char annot[] =
                 DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
@@ -2470,7 +2475,17 @@ static int jmap_calendar_set(struct jmap_req *req)
             buf_free(&buf);
             mbname_free(&mbname);
 
-            if (!r) {
+            if (r) {
+                /* The calendars are already written: fail just the
+                 * default change, not the whole batch. */
+                json_object_set_new(set.not_updated, newid,
+                                    json_pack("{s:s s:s}",
+                                              "type", "serverFail",
+                                              "description",
+                                              error_message(r)));
+                r = 0;
+            }
+            else {
                 /* report that isDefault has been moved to new calendar */
                 jmap_report_isdefault(&set, mbentry->name,
                                       setargs.on_success_set_is_default, true);
@@ -5206,6 +5221,9 @@ static int createevent_store(jmap_req_t *req,
         xsyslog(LOG_ERR, "caldav_store_resource failed",
                 "accountid=<%s> err=<%s>",
                 req->accountid, error_message(r));
+        /* Release the attachment refs we took above: notCreated mustn't
+         * leave them held for an event that was never stored. */
+        caldav_manage_attachments(req->accountid, NULL, create->ical);
         goto done;
     }
     r = 0;
@@ -5230,7 +5248,7 @@ static int createevent_store(jmap_req_t *req,
         .ical_recurid = create->ical_recurid,
     };
 
-    // Handle scheduling
+    /* The event is already stored, so a failure here can't fail the item. */
     if (send_itip && !is_draft) {
         icalcomponent *sched_ical = create->ical_standalone ?
             create->ical_standalone : create->ical;
@@ -5239,8 +5257,9 @@ static int createevent_store(jmap_req_t *req,
                                         sched_ical, eid.createdmodseq,
                                         JMAP_CREATE);
         if (r2) {
-            xsyslog(LOG_WARNING, "could not send scheduling messages",
-                    "uid=%s error=%s", create->ical_uid, error_message(r2));
+            xsyslog_ev(LOG_WARNING, "jmap.calendarevent.schedule.failed",
+                    lf_s("cal.uid", create->ical_uid),
+                    lf_err("error", r2));
         }
     }
 
@@ -6415,13 +6434,6 @@ static void setcalendarevents_update(jmap_req_t *req,
     remove_itip_messages(db, schedinbox, eid->ical_uid,
                          update.is_standalone ? eid->ical_recurid : NULL);
 
-    /* Handle scheduling. */
-    if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
-        r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
-                update.oldical, update.newical, eid->createdmodseq, JMAP_UPDATE);
-        if (r) goto done;
-    }
-
     /* Manage attachments */
     int ret = caldav_manage_attachments(req->accountid,
             update.newical, update.oldical);
@@ -6429,6 +6441,19 @@ static void setcalendarevents_update(jmap_req_t *req,
         syslog(LOG_ERR, "caldav_manage_attachments: %s", error_message(ret));
         r = IMAP_INTERNAL;
         goto done;
+    }
+
+    /* Scheduling goes last: an iTIP message can't be recalled, and the
+     * event is already stored, so a failure here can't fail the item. */
+    if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
+        int r2 = setcalendarevents_schedule(mbox, sched_userid,
+                &schedule_addresses, update.oldical, update.newical,
+                eid->createdmodseq, JMAP_UPDATE);
+        if (r2) {
+            xsyslog_ev(LOG_WARNING, "jmap.calendarevent.schedule.failed",
+                    lf_s("cal.uid", eid->ical_uid),
+                    lf_err("error", r2));
+        }
     }
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
@@ -6673,13 +6698,6 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         newical = NULL;
     }
 
-    /* Handle scheduling. */
-    if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
-        r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
-                oldical, newical, eid->createdmodseq, JMAP_DESTROY);
-        if (r) goto done;
-    }
-
     /* Manage attachments */
     int ret = caldav_manage_attachments(req->accountid, newical, oldical);
     if (ret && ret != HTTP_NOT_FOUND) {
@@ -6717,6 +6735,19 @@ static int setcalendarevents_destroy(jmap_req_t *req,
             goto done;
         }
         r = 0;
+    }
+
+    /* Scheduling goes last: an iTIP message can't be recalled, and the
+     * event is already gone, so a failure here can't fail the item. */
+    if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
+        int r2 = setcalendarevents_schedule(mbox, sched_userid,
+                &schedule_addresses, oldical, newical,
+                eid->createdmodseq, JMAP_DESTROY);
+        if (r2) {
+            xsyslog_ev(LOG_WARNING, "jmap.calendarevent.schedule.failed",
+                    lf_s("cal.uid", eid->ical_uid),
+                    lf_err("error", r2));
+        }
     }
 
     if (calendar_has_sharees(mbox->mbentry)) {
@@ -6833,16 +6864,20 @@ static int jmap_calendarevent_set(struct jmap_req *req)
                                        &httpd_namespace, req->authstate, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
-        json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
-        json_array_append_new(req->response, json_pack("[s,o,s]",
-                    "error", err, req->tag));
-        return 0;
-    } else if (r) return r;
+        jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
+        r = 0;
+        goto done;
+    }
+    else if (r) {
+        jmap_error(req, jmap_server_error(r));
+        r = 0;
+        goto done;
+    }
 
     db = caldav_open_userid(req->accountid);
     if (!db) {
         syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
-        r = IMAP_INTERNAL;
+        jmap_error(req, jmap_server_error(IMAP_INTERNAL));
         goto done;
     }
 
@@ -6897,7 +6932,12 @@ static int jmap_calendarevent_set(struct jmap_req *req)
             r = 0;
             continue;
         } else if (r) {
-            goto done;
+            /* Earlier events in this loop are already destroyed, and their
+             * CANCELs already sent.  Report this one and keep going. */
+            json_object_set_new(set.not_destroyed, eid->raw,
+                                jmap_server_error(r));
+            r = 0;
+            continue;
         }
 
         /* Report calendar event as destroyed. */
@@ -9879,8 +9919,14 @@ static int jmap_principal_set(struct jmap_req *req)
             continue;
         }
         json_decref(invalid);
-        /* Update princpial */
-        const char *tzid = json_string_value(json_object_get(jarg, "timeZone"));
+        /* Update principal */
+        json_t *jtz = json_object_get(jarg, "timeZone");
+        if (!jtz) {
+            /* Nothing to change, but the id still has to be reported. */
+            json_object_set_new(set.updated, id, json_null());
+            continue;
+        }
+        const char *tzid = json_string_value(jtz);
         if (tzid) {
             icaltimezone *tz;
             if ((tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid))) {
@@ -9907,6 +9953,8 @@ static int jmap_principal_set(struct jmap_req *req)
                         }
                         buf_free(&val);
                     }
+                    /* Both annotations or neither. */
+                    if (r) mailbox_abort(mbox);
                 }
                 mailbox_close(&mbox);
                 free(calhomename);
@@ -9916,6 +9964,11 @@ static int jmap_principal_set(struct jmap_req *req)
                 else json_object_set_new(set.not_updated, id, jmap_server_error(r));
             }
             else json_object_set_new(set.not_updated, id, json_pack("{s:s s:[s]}",
+                        "type", "invalidProperties", "properties", "timeZone"));
+        }
+        else {
+            /* Present but not a string: we have no way to clear it. */
+            json_object_set_new(set.not_updated, id, json_pack("{s:s s:[s]}",
                         "type", "invalidProperties", "properties", "timeZone"));
         }
     }
@@ -10810,7 +10863,7 @@ static void notif_set(struct jmap_req *req,
     set->old_state = buf_release(&buf);
 
     if (set->if_in_state && strcmp(set->old_state, set->if_in_state)) {
-        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        *err = json_pack("{s:s}", "type", "stateMismatch");
         goto done;
     }
 

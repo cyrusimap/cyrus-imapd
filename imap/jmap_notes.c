@@ -736,6 +736,19 @@ static void _notes_update_cb(const char *id, message_t *msg,
 
                 r = mailbox_rewrite_index_record(mailbox, &newrecord);
             }
+            if (r) {
+                /* An update is a create plus this expunge.  Drop the new
+                 * note, or notUpdated leaves two notes with one id. */
+                struct index_record tmp;
+
+                if (!mailbox_find_index_record(mailbox, mailbox->i.last_uid,
+                                               &tmp)) {
+                    tmp.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+                    if (mailbox_rewrite_index_record(mailbox, &tmp)) {
+                        syslog(LOG_ERR, "jmap: can't undo note update %s", id);
+                    }
+                }
+            }
         }
 
         if (r) {
@@ -818,6 +831,8 @@ static int jmap_note_set(jmap_req_t *req)
         syslog(LOG_ERR,
                "jmap_note_set: ensure_notes_collection(%s): %s",
                req->accountid, error_message(r));
+        mboxlist_entry_free(&mbentry);
+        jmap_error(req, jmap_server_error(r));
         goto done;
     }
 

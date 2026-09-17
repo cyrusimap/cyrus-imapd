@@ -1072,6 +1072,13 @@ static void _emailsubmission_create(jmap_req_t *req,
 
     r = store_submission(req, submbox, &buf, holduntil,
                          emailsubmission, new_submission);
+    if (r && !holduntil) {
+        /* Already handed to the MTA, so say so: a client that reads this as
+         * "not sent" and retries would send it twice. */
+        *set_err = json_pack("{s:s s:s}", "type", "serverFail", "description",
+                             "message was sent, but the submission could not "
+                             "be stored");
+    }
 
 done:
     if (r && *set_err == NULL) {
@@ -1665,6 +1672,8 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         syslog(LOG_ERR,
                "jmap_emailsubmission_set: ensure_submission_collection(%s): %s",
                req->accountid, error_message(r));
+        mboxlist_entry_free(&mbentry);
+        jmap_error(req, jmap_server_error(r));
         goto done;
     }
 

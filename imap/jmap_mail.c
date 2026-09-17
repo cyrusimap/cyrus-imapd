@@ -10330,6 +10330,18 @@ struct email_uidrec {
     int is_snoozed;                /* Used by Email/set{update} */
 };
 
+/* An email that failed in one mailbox isn't destroyed, even if it was
+ * already expunged from another. */
+static void _email_destroy_failed(json_t *errors, json_t *success,
+                                  const char *email_id, json_t *err)
+{
+    json_object_set_new(errors, email_id, err);
+    if (success) {
+        int i = json_array_find(success, email_id);
+        if (i >= 0) json_array_remove(success, i);
+    }
+}
+
 static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
                                 ptrarray_t *uidrecs, json_t *errors, json_t *success)
 {
@@ -10353,7 +10365,7 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
         r = msgrecord_find(mbox, uidrec->uid, &mrw);
         if (!r) r = msgrecord_get_systemflags(mrw, &system_flags);
         if (!r) r = msgrecord_get_internalflags(mrw, &internal_flags);
-        // already expunged, skip (aka: will be reported as success)
+        // already expunged: the sweep in _email_destroy_bulk reports notFound
         if (internal_flags & FLAG_INTERNAL_EXPUNGED) continue;
         // update the flags
         if (!r) r = msgrecord_add_systemflags(mrw, FLAG_DELETED);
@@ -10364,7 +10376,8 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
             didsome++;
         }
         // if errors, record the issue
-        if (r) json_object_set_new(errors, uidrec->email_id, jmap_server_error(r));
+        if (r) _email_destroy_failed(errors, success, uidrec->email_id,
+                                     jmap_server_error(r));
         // otherwise, record the success
         else if (success && json_array_find(success, uidrec->email_id) < 0)
             json_array_append_new(success, json_string(uidrec->email_id));
@@ -10412,6 +10425,7 @@ static void _email_append(jmap_req_t *req,
     json_t *val, *mailboxes = NULL;
     size_t len;
     int r = 0;
+    int committed = 0;
     time_t savedate = 0;
     struct timespec now;
     char exist_id[JMAP_MAX_EMAILID_SIZE];
@@ -10646,6 +10660,7 @@ static void _email_append(jmap_req_t *req,
 
     r = append_commit(&as);
     if (r) goto done;
+    committed = 1;
 
     /* Load message record */
     r = msgrecord_find(mbox, mbox->i.last_uid, &mr);
@@ -10695,7 +10710,14 @@ done:
     mailbox_close(&mbox);
     free(mboxname);
     json_decref(mailboxes);
-    if (r && *err == NULL) {
+    if (r && *err == NULL && committed) {
+        /* The message is already in at least one mailbox.  Say so, or a
+         * client reading this as "not created" retries and duplicates it. */
+        *err = json_pack("{s:s s:s}", "type", "serverFail", "description",
+                         "email was created, but not in every requested "
+                         "mailbox");
+    }
+    else if (r && *err == NULL) {
         switch (r) {
             case IMAP_PERMISSION_DENIED:
                 *err = json_pack("{s:s}", "type", "forbidden");
@@ -14821,6 +14843,13 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
                 if (r) {
                     for (j = 0; j < ptrarray_size(&plan->setflags); j++) {
                         struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, j);
+                        /* Only the messages whose seen state we tried to
+                         * change are affected: the rest have their keywords
+                         * written and may have been copied already. */
+                        if (!seqset_ismember(add_seenseq, uidrec->uid) &&
+                            !seqset_ismember(del_seenseq, uidrec->uid)) {
+                            continue;
+                        }
                         if (json_object_get(bulk->set_errors, uidrec->email_id) == NULL) {
                             json_object_set_new(bulk->set_errors, uidrec->email_id,
                                                 jmap_server_error(r));
@@ -15145,8 +15174,9 @@ static void _email_destroy_bulk(jmap_req_t *req,
             for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
                 struct email_uidrec *uidrec = ptrarray_nth(&mboxrec->uidrecs, j);
                 if (!json_object_get(not_destroyed, uidrec->email_id)) {
-                    json_object_set_new(not_destroyed, uidrec->email_id,
-                            jmap_server_error(r));
+                    _email_destroy_failed(not_destroyed, destroyed,
+                                          uidrec->email_id,
+                                          jmap_server_error(r));
                 }
             }
         }

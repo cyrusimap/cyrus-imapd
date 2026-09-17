@@ -797,7 +797,11 @@ static int jmap_card_set(struct jmap_req *req)
             r = mailbox_open_iwl(mbentry->name, &mailbox);
         }
         mboxlist_entry_free(&mbentry);
-        if (r) goto done;
+        if (r) {
+            json_object_set_new(set.not_destroyed, id, jmap_server_error(r));
+            r = 0;
+            continue;
+        }
 
         syslog(LOG_NOTICE,
                "jmap: remove %s %s/%s",
@@ -809,7 +813,9 @@ static int jmap_card_set(struct jmap_req *req)
                              "kind=<%s> mailbox=<%s> olduid=<%u>",
                              cdata->kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                              mailbox_name(mailbox), olduid);
-            goto done;
+            json_object_set_new(set.not_destroyed, id, jmap_server_error(r));
+            r = 0;
+            continue;
         }
 
         json_array_append_new(set.destroyed, json_string(id));
@@ -2355,8 +2361,13 @@ static int setaddressbook_writeprops(jmap_req_t *req,
     /* isSubscribed */
     if (!r && props->isSubscribed >= 0) {
         /* Update subscription database */
-        r = mboxlist_changesub(mboxname, req->userid, req->authstate,
-                               props->isSubscribed, 0, /*notify*/1, /*silent*/0);
+        int r2 = mboxlist_changesub(mboxname, req->userid, req->authstate,
+                                    props->isSubscribed, 0, /*notify*/1,
+                                    /*silent*/0);
+        if (r2) {
+            syslog(LOG_ERR, "failed to change subscription for %s: %s",
+                    mboxname, error_message(r2));
+        }
 
         /* Set invite status for CalDAV */
         buf_setcstr(&val, props->isSubscribed ? "invite-accepted" : "invite-declined");
@@ -2438,21 +2449,8 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
         }
     }
 
-    /* Delete addressbook */
-    r = carddav_delmbox(db, mbentry);
-    if (r) {
-        xsyslog(LOG_ERR, "failed to delete mailbox from carddav_db",
-                "mboxname=<%s> mboxid=<%s> err=<%s>",
-                mbentry->name, mbentry->uniqueid, error_message(r));
-        goto done;
-    }
-    if (r) goto done;
-
-    jmap_myrights_delete(req, mbentry->name);
-
-    /* Remove from subscriptions db */
-    mboxlist_changesub(mbentry->name, req->userid, req->authstate, 0, 1, 0, 1);
-
+    /* The carddav_db rows go with the mailbox: both delete paths reach
+     * mailbox_delete_dav() themselves. */
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
     if (mboxlist_delayed_delete_isenabled()) {
         r = mboxlist_delayed_deletemailbox(mbentry->name,
@@ -2466,12 +2464,17 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
                 MBOXLIST_DELETE_CHECKACL|MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
     }
     mboxevent_free(&mboxevent);
+    if (r) goto done;
+
+    jmap_myrights_delete(req, mbentry->name);
+
+    /* Remove from subscriptions db */
+    mboxlist_changesub(mbentry->name, req->userid, req->authstate, 0, 1, 0, 1);
 
   done:
-    if (db) {
-        int rr = carddav_close(db);
-        if (!r) r = rr;
-    }
+    /* The mailbox is already gone by here: a close failure mustn't turn a
+     * completed destroy into notDestroyed. */
+    if (db) carddav_close(db);
     if (r && *err == NULL) {
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             *err = json_pack("{s:s}", "type", "notFound");
@@ -2858,8 +2861,14 @@ static int jmap_addressbook_set(struct jmap_req *req)
          * state, per-addressbook rights aren't enough. */
         mbentry_t *mbentry = NULL;
         abookid_to_mbentry(req, newid, &mbentry);
-        if (mbentry &&
-            jmap_hasrights(req, cardhomename, JACL_ADMIN_ADDRBOOK)) {
+        if (!mbentry ||
+            !jmap_hasrights(req, cardhomename, JACL_ADMIN_ADDRBOOK)) {
+            /* Say so rather than silently leaving the default alone. */
+            json_object_set_new(set.not_updated, newid,
+                                json_pack("{s:s}", "type",
+                                          mbentry ? "forbidden" : "notFound"));
+        }
+        else {
             /* set jmap-default-addressbook annotation */
             struct buf buf = BUF_INITIALIZER;
             buf_init_ro_cstr(&buf, mbentry->name);
@@ -2867,7 +2876,17 @@ static int jmap_addressbook_set(struct jmap_req *req)
                                        req->accountid, &buf);
             buf_free(&buf);
 
-            if (!r) {
+            if (r) {
+                /* The addressbooks are already written: fail just the
+                 * default change, not the whole batch. */
+                json_object_set_new(set.not_updated, newid,
+                                    json_pack("{s:s s:s}",
+                                              "type", "serverFail",
+                                              "description",
+                                              error_message(r)));
+                r = 0;
+            }
+            else {
                 /* report that isDefault has been moved to new addressbook */
                 jmap_report_isdefault(&set, mbentry->name,
                                       setargs.on_success_set_is_default, true);
@@ -4594,7 +4613,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
         if (!r) {
             struct index_record record;
 
-            mailbox_find_index_record(this_mailbox,
+            int have_record = !mailbox_find_index_record(this_mailbox,
                                       this_mailbox->i.last_uid, &record);
 
             jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox),
@@ -4643,6 +4662,18 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
             r = carddav_remove(*mailbox, olduid,
                                /*isreplace*/!newmailbox, req->userid);
+            if (r && newmailbox && have_record) {
+                /* A move: drop the copy we just wrote, so notUpdated
+                 * doesn't leave the card in both address books. */
+                int rr = carddav_remove(newmailbox, record.uid,
+                                        /*isreplace*/0, req->userid);
+                if (rr) {
+                    xsyslog(LOG_ERR, "can't undo card move",
+                            "mboxname=<%s> uid=<%u> err=<%s>",
+                            mailbox_name(newmailbox), record.uid,
+                            error_message(rr));
+                }
+            }
         }
     }
 
