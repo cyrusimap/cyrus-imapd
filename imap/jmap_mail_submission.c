@@ -1157,7 +1157,7 @@ static json_t *fetch_submission(jmap_req_t *req, message_t *msg)
         }
         else if (*id == JMAP_EMAILID_PREFIX) {
             /* Rewrite to use GUID-based emailId */
-            char guidrep[2*MESSAGE_GUID_SIZE+2] =
+            char guidrep[MESSAGE_GUIDREP_SIZE+2] =
                 { JMAP_LEGACY_EMAILID_PREFIX, 0 };
 
             r = conversations_jmapid_guidrep_lookup(req->cstate,

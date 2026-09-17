@@ -949,7 +949,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         struct findstage_cb_rock rock = { mailbox_partition(mailbox), guid, NULL };
 
         // ignore errors, it's OK for this to fail
-        char guidrep[2*MESSAGE_GUID_SIZE+1];
+        char guidrep[MESSAGE_GUIDREP_SIZE+1];
         strcpy(guidrep, message_guid_encode(guid));
         conversations_guid_foreach(cstate, guidrep, findstage_cb, &rock);
 

@@ -26,8 +26,27 @@ extern int xapian_basedir(const char *tier, const char *mboxname,
 typedef int (*search_hit_cb_t)(const char *mboxname, uint32_t uidvalidity,
                                uint32_t uid, const char *partid, void *rock);
 
-typedef int (*search_hitguid_cb_t)(const conv_guidrec_t *rec, size_t nguids,
-                                   void *rock);
+/** Size of a guidrep string: a hex-encoded guid, followed by the NUL byte. */
+#define SEARCH_GUIDREP_SIZE (MESSAGE_GUIDREP_SIZE + 1)
+
+/** @brief Compares two guidreps, e.g. for sorting and binary search.
+ *
+ *  @return negative, zero or positive as @p a sorts before, equal to,
+ *          or after @p b
+ */
+extern int search_guidrep_cmp(const void *a, const void *b);
+
+/** @brief Callback for search_builder_t.run_guidsearch().
+ *
+ *  @param guidreps the matching guidreps, sorted ascending. The buffer is
+ *         owned by the search engine and is invalid once the callback returns.
+ *  @param nguids the count of entries in @p guidreps, each of them
+ *         SEARCH_GUIDREP_SIZE bytes
+ *  @param rock the context that the caller passed to run_guidsearch()
+ *  @return zero on success, or an IMAP error code
+ */
+typedef int (*search_hitguidset_cb_t)(const char *guidreps, size_t nguids,
+                                      void *rock);
 
 typedef int (*search_snippet_cb_t)(struct mailbox *, uint32_t uid,
                                    enum search_part part,
@@ -58,8 +77,24 @@ struct search_builder {
     void (*matchlist)(search_builder_t *, enum search_part, const strarray_t *items);
     void *(*get_internalised)(search_builder_t *);
     int (*run)(search_builder_t *, search_hit_cb_t proc, void *rock);
-    /* XXX - guidsearch is a hack for speeding up JMAP email queries */
-    int (*run_guidsearch)(search_builder_t *, search_hitguid_cb_t proc, void *rock);
+    /** @brief Runs the query and hands the guids of its hits to @p proc.
+     *
+     *  Calls @p proc exactly once, and not at all if nothing matched - a
+     *  zero return without a call means "no matches", not an error.
+     *
+     *  A hit is either a message or a body part document. A body part hit
+     *  is keyed by its content guid, not the guid of its message.
+     *
+     *  Guids are free of duplicates within one search index database, but a
+     *  guid indexed in more than one tier arrives once per tier. Collapsing
+     *  such adjacent duplicates is up to the caller.
+     *
+     *  This hook is optional: a search engine may leave it NULL.
+     *
+     *  @return zero on success, or an IMAP error code
+     */
+    int (*run_guidsearch)(search_builder_t *,
+                          search_hitguidset_cb_t proc, void *rock);
     unsigned (*min_index_version)(search_builder_t*);
 };
 

@@ -71,6 +71,11 @@ EXPORTED const struct search_engine *search_engine(void)
     }
 }
 
+EXPORTED int search_guidrep_cmp(const void *a, const void *b)
+{
+    return memcmp(a, b, MESSAGE_GUIDREP_SIZE);
+}
+
 EXPORTED struct search_snippet_markup default_snippet_markup = {
     "<b>", "</b>", "..."
 };
