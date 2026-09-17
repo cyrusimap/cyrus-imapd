@@ -3369,6 +3369,14 @@ static int sync_apply_mailbox(struct dlist *kin,
 
     options = sync_parse_options(options_str);
 
+    /* the folder is committed on create, then again after records are applied.
+     * If we stored highestmodseq on create, then an interrupted sync would cause
+     * sync to fail (no-copyback) or bounce the modseq of every source record
+     * (full-sync).  We have to use createdmodseq if present, because otherwise the
+     * mailbox create would lower the createdmodseq, causing the wrong compact-ids
+     * mailboxId to be generated */
+    modseq_t create_modseq = createdmodseq ? createdmodseq : 1;
+
     user_nslock_t *user_nslock = user_nslock_lockmb_w(mboxname);
 
     r = mailbox_open_iwl(mboxname, &mailbox);
@@ -3401,7 +3409,7 @@ static int sync_apply_mailbox(struct dlist *kin,
                 flags |= MBOXLIST_CREATE_LOCALONLY;
 
             r = mboxlist_createmailbox_version(&mbentry, version,
-                                               options, highestmodseq,
+                                               options, create_modseq,
                                                1/*isadmin*/,
                                                sstate->userid, sstate->authstate,
                                                flags, &mailbox);
@@ -3465,7 +3473,7 @@ static int sync_apply_mailbox(struct dlist *kin,
                 flags |= MBOXLIST_CREATE_LOCALONLY;
 
             r = mboxlist_createmailbox_version(&mbentry, version,
-                                               options, highestmodseq,
+                                               options, create_modseq,
                                                1/*isadmin*/,
                                                sstate->userid, sstate->authstate,
                                                flags, &mailbox);
