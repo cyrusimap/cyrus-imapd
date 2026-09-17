@@ -55,6 +55,7 @@ struct ws_context {
     const char *accept_key;
     const char *protocol;
     ws_data_callback *data_cb;
+    int64_t max_msgsize;             /* Max size of a (decompressed) message */
     struct buf log;
     int log_tail;
     unsigned ext;                    /* Bitmask of negotiated extension(s) */
@@ -271,7 +272,7 @@ static int zlib_decompress(struct transaction_t *txn,
 
     if (!zstrm) {
         xsyslog(LOG_ERR, "WS: no z_stream", NULL);
-        return -1;
+        return WSLAY_CODE_INTERNAL_SERVER_ERROR;
     }
 
     zstrm->next_in = (Bytef *) buf;
@@ -281,6 +282,16 @@ static int zlib_decompress(struct transaction_t *txn,
 
     do {
         int zr;
+
+        /* Guard against a "decompression bomb" -- a small, highly
+         * compressed message that expands to an enormous amount of
+         * memory as we keep growing txn->zbuf to hold the inflated
+         * output */
+        if ((int64_t) txn->zbuf.len >= ctx->max_msgsize) {
+            xsyslog(LOG_ERR, "WS: inflated message too large",
+                    "maxsize=<%lld>", (long long) ctx->max_msgsize);
+            return WSLAY_CODE_MESSAGE_TOO_BIG;
+        }
 
         buf_ensure(&txn->zbuf, 4096);
 
@@ -292,7 +303,7 @@ static int zlib_decompress(struct transaction_t *txn,
             /* something went wrong */
             xsyslog(LOG_ERR, "WS inflate error",
                     "zr=<%d>, msg=<%s>", zr, zstrm->msg);
-            return -1;
+            return WSLAY_CODE_PROTOCOL_ERROR;
         }
 
         txn->zbuf.len = txn->zbuf.alloc - zstrm->avail_out;
@@ -331,6 +342,7 @@ static void on_frame_recv_start_cb(wslay_event_context_ptr ev __attribute__((unu
 
 #define COMP_FAILED_ERR    "Compressing message failed"
 #define DECOMP_FAILED_ERR  "Decompressing message failed"
+#define TOO_BIG_ERR        "Inflated message too big"
 
 static int queue_msg(struct transaction_t *txn, struct buf *outbuf,
                      struct wslay_event_msg *msgarg, uint8_t *rsv,
@@ -392,17 +404,16 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             /* Add trailing 4 bytes */
             buf_appendmap(&inbuf, "\x00\x00\xff\xff", 4);
 
-            r = zlib_decompress(txn, buf_base(&inbuf), buf_len(&inbuf));
-            if (r) {
+            err_code = zlib_decompress(txn, buf_base(&inbuf), buf_len(&inbuf));
+            if (err_code) {
                 xsyslog(LOG_ERR, "WS: zlib_decompress() failed", NULL);
+                err_msg = (err_code == WSLAY_CODE_MESSAGE_TOO_BIG) ?
+                    TOO_BIG_ERR : DECOMP_FAILED_ERR;
+                goto err;
             }
         }
         else {
             xsyslog(LOG_ERR, "WS: unknown PMCE", NULL);
-            r = -1;
-        }
-
-        if (r) {
             err_code = WSLAY_CODE_PROTOCOL_ERROR;
             err_msg = DECOMP_FAILED_ERR;
             goto err;
@@ -633,7 +644,8 @@ static void _end_channel(struct transaction_t *txn)
 }
 
 HIDDEN int ws_start_channel(struct transaction_t *txn,
-                            const char *protocol, ws_data_callback *data_cb)
+                            const char *protocol, ws_data_callback *data_cb,
+                            int64_t max_msgsize)
 {
     int r, resp_code;
     const char **hdr, *accept_key = NULL;
@@ -744,12 +756,18 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
         return HTTP_SERVER_ERROR;
     }
 
+    /* Bound the size of a (possibly fragmented) incoming message, so that
+     * a compressed message can't be used to trigger unbounded memory use
+     * on inflation (see zlib_decompress()) */
+    wslay_event_config_set_max_recv_msg_length(ev, max_msgsize);
+
     /* Create channel context */
     ctx = xzmalloc(sizeof(struct ws_context));
     ctx->event = ev;
     ctx->accept_key = accept_key;
     ctx->protocol = protocol;
     ctx->data_cb = data_cb;
+    ctx->max_msgsize = max_msgsize;
     txn->ws_ctx = ctx;
     ptrarray_add(&txn->done_callbacks, &_end_channel);
 
@@ -961,7 +979,8 @@ HIDDEN int ws_init(struct http_connection *conn __attribute__((unused)),
 
 HIDDEN int ws_start_channel(struct transaction_t *txn __attribute__((unused)),
                             const char *protocol __attribute__((unused)),
-                            ws_data_callback *data_cb __attribute__((unused)))
+                            ws_data_callback *data_cb __attribute__((unused)),
+                            int64_t max_msgsize __attribute__((unused)))
 {
     fatal("ws_start() called, but no Wslay", EX_SOFTWARE);
 }
