@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+use IO::Socket::INET;
+
+sub assert_host_header_xss
+    ($self, $method, $path)
+{
+    my $payload = 'evil"><script>alert(1)</script>';
+
+    my $svc = $self->{instance}->get_service('http');
+    my $sock = IO::Socket::INET->new(
+        PeerAddr => $svc->host(),
+        PeerPort => $svc->port(),
+        Proto => 'tcp',
+    ) or die "connect to http service failed: $!";
+
+    print $sock "$method $path HTTP/1.1\r\n";
+    print $sock "Host: $payload\r\n";
+    print $sock "Content-Length: 0\r\n";
+    print $sock "Connection: close\r\n";
+    print $sock "\r\n";
+
+    local $/;
+    my $response = <$sock>;
+    close $sock;
+
+    xlog $self, "response:\n$response";
+
+    # only the HTML body matters for XSS -- headers (e.g. Location:) are
+    # not rendered as HTML by a client, so they're out of scope here
+    my (undef, $body) = split(/\r\n\r\n/, $response, 2);
+    $body //= '';
+
+    $self->assert($body !~ qr/<script>alert\(1\)<\/script>/,
+                  "response body must not contain an unescaped script tag");
+    $self->assert($body =~ qr/&lt;script&gt;alert\(1\)&lt;\/script&gt;/,
+                  "response body must contain the HTML-escaped payload");
+
+    return $response;
+}
+
+sub test_host_header_xss__error_page
+    ($self)
+{
+    # error_response() reflects the client's Host header into the
+    # <address> footer of any HTML error page (e.g. this 404)
+    $self->assert_host_header_xss('GET', '/nonexistent-path-for-404-test');
+}
+
+sub test_host_header_xss__tls_required_redirect
+    :NoStartInstances
+    ($self)
+{
+    # client_need_auth() reflects the client's Host header into the
+    # body of the TLS-required redirect page
+    $self->config_set(tls_required => 1);
+    $self->{instance}->{setup_mailbox} = 0;
+    $self->_start_instances();
+
+    my $response = $self->assert_host_header_xss('PROPFIND', '/dav/calendars/');
+    $self->assert_matches(qr{^HTTP/1\.1 301}, $response);
+}

@@ -1,0 +1,27 @@
+Description:
+
+The HTTP server now escapes the client-supplied Host header before placing
+it in an HTML response body.  Two responses carried it: the page that sends
+a cleartext request to HTTPS when :imapdconf:`tls_required` is set, and the
+footer of the generic error page.  Previously the value was reflected
+verbatim, permitting reflected cross-site scripting.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
