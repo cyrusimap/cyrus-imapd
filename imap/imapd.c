@@ -13160,6 +13160,8 @@ static void printmetadata(const mbentry_t *mbentry,
 
 done:
     annotate_state_abort(&astate);
+    strarray_fini(&newa);
+    strarray_fini(&newe);
 }
 
 /* Print LIST or LSUB untagged response */
