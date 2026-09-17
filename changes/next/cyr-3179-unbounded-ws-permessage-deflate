@@ -1,0 +1,28 @@
+Description:
+
+Incoming WebSocket messages are now bounded in size, both as received and
+after permessage-deflate inflation.  For JMAP over WebSocket the bound is
+:imapdconf:`jmap_max_size_request`; for other WebSocket channels it is
+:imapdconf:`maxmessagesize`.  A message over the bound closes the connection
+with a Message Too Big status.  Previously a small, highly compressed message
+could be inflated without limit, exhausting the memory of the httpd process.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
