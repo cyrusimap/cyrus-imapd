@@ -153,6 +153,7 @@ int main(int argc,char **argv)
     /* always report if not fixing, otherwise we do nothing */
     if (!fflag)
         do_report = 1;
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
     cyrus_init(alt_config, "quota", 0, CONFIG_NEED_PARTITION_DATA);
 
