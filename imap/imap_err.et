@@ -65,6 +65,9 @@ ec IMAP_SYNC_CHANGED,
 ec IMAP_SYNC_BADSIEVE,
    "Sieve script compilation failure"
 
+ec IMAP_SYNC_NOCOPYBACK,
+   "Replica has state that only copyback could reconcile"
+
 ec IMAP_MAILBOX_CHECKSUM,
    "Mailbox format corruption detected"
 

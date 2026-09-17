@@ -7237,7 +7237,15 @@ int sync_do_update_mailbox(struct sync_client_state *sync_cs,
     }
 
     /* never retry - other end should always sync cleanly */
-    if (flags & SYNC_FLAG_NO_COPYBACK) return r;
+    if (flags & SYNC_FLAG_NO_COPYBACK) {
+        if (r == IMAP_AGAIN) {
+            xsyslog_ev(LOG_ERR, "sync.mailbox.replica_ahead",
+                       lf_s("mbox.name", local->name));
+            /* This will fail every future try, so IMAP_AGAIN is not appropriate */
+            r = IMAP_SYNC_NOCOPYBACK;
+        }
+        return r;
+    }
 
     if (r == IMAP_AGAIN) {
         local->ispartial = 0; /* don't batch the re-update, means sync to 2.4 will still work after fullsync */
