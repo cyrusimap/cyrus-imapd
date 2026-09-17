@@ -1735,6 +1735,132 @@ static void test_tocrlf(void)
     buf_free(&buf);
 }
 
+/* Implemented as helper functions because we need to create a series of
+ * non-const char pointers to pass to fmemopen(), and the type of string
+ * constants is `const char *`, hence not going to fly. We could cast away
+ * const, but that's somewhat cheating, and hard to audit. Whereas by
+ * constructing temporary arrays in the caller, the compiler gives us writable
+ * memory.
+ *
+ * (It's not going to get written, but that's only because the mode passed to
+ * fmemopen() is "r", but automatic linting tools aren't going to know that) */
+
+static void getline_raw_testcase(struct buf *b, char *input, size_t input_len,
+                                 const char **want) {
+    FILE *fp = cunit_fmemopen(input, input_len, "r");
+    while (*want) {
+        CU_ASSERT_EQUAL(1, buf_getline(b, fp));
+        CU_ASSERT_STRING_EQUAL(*want, buf_cstring(b));
+        ++want;
+    }
+    CU_ASSERT_EQUAL(0, buf_getline(b, fp));
+    CU_ASSERT_EQUAL(0, buf_len(b));
+    fclose(fp);
+}
+
+static void getline_testcase(struct buf *b, char *input, const char **want) {
+    getline_raw_testcase(b, input, strlen(input), want);
+}
+
+static void test_getline(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    buf_setcstr(&b, "decaf");
+
+    getline_testcase(&b, (char []) {""},
+                     (const char *[]) { NULL });
+    getline_testcase(&b, (char []) {"\n"},
+                     (const char *[]) { "", NULL });
+    getline_testcase(&b, (char []) {"\n\n"},
+                     (const char *[]) { "", "", NULL });
+    getline_testcase(&b, (char []) {"line\n"},
+                     (const char *[]) { "line", NULL });
+    getline_testcase(&b, (char []) {"two\nlines\n"},
+                     (const char *[]) { "two", "lines", NULL });
+    getline_testcase(&b, (char []) {"blank\n\nline\n"},
+                     (const char *[]) { "blank", "", "line", NULL });
+    getline_testcase(&b, (char []) {"\npause\n"},
+                     (const char *[]) { "", "pause", NULL });
+    getline_testcase(&b, (char []) {"\200\n\212"},
+                     (const char *[]) { "\x80", "\x8a", NULL });
+    getline_testcase(&b, (char []) {"chomped"},
+                     (const char *[]) { "chomped", NULL });
+    getline_testcase(&b, (char []) {"no\nnewline"},
+                     (const char *[]) { "no", "newline", NULL });
+    getline_testcase(&b, (char []) {"left\nright\ngripping"},
+                     (const char *[]) { "left", "right", "gripping", NULL });
+
+    {
+        /* This should trigger buffer resize during the loop */
+        const size_t count = 2038;
+        char dots[count + 1];
+        memset(dots, '.', count);
+        char *input = strconcat(dots, "\n!\n", NULL);
+        getline_testcase(&b, input,
+                         (const char *[]) { dots, "!", NULL });
+        free(input);
+    }
+
+    {
+        /* These should trigger reallocation and then a zero-byte read.
+         * We're assuming the current behaviour of roundup() */
+        const size_t max_read = 127;
+
+        buf_free(&b);
+        char dashes[max_read + 1];
+        memset(dashes, '-', max_read);
+        dashes[max_read] = '\0';
+        getline_testcase(&b, dashes,
+                         (const char *[]) { dashes, NULL });
+
+        buf_free(&b);
+        char dashes_bs[max_read + 1];
+        memset(dashes_bs, '-', max_read - 1);
+        dashes_bs[max_read - 1] = '\\';
+        dashes_bs[max_read] = '\0';
+        getline_testcase(&b, dashes_bs,
+                         (const char *[]) { dashes_bs, NULL });
+
+        /* This should trigger reallocation and then the read of the newline.
+         * We're assuming the current behaviour of roundup() */
+        buf_free(&b);
+        char dashes_bs_nl[max_read + 2];
+        memset(dashes_bs_nl, '-', max_read - 1);
+        dashes_bs_nl[max_read - 1] = '\\';
+        dashes_bs_nl[max_read] = '\n';
+        dashes_bs_nl[max_read + 1] = '\0';
+        getline_testcase(&b, dashes_bs_nl,
+                         (const char *[]) { dashes_bs, NULL });
+    }
+
+    /* We want to create a file with a single NUL byte.
+     * This is to test consistent behaviour for a corner case in the upcoming
+     * refactored buf_getline() */
+    getline_raw_testcase(&b, (char []) {""}, 1,
+                         (const char *[]) { "", NULL });
+
+    getline_testcase(&b, (char []) {"A\\\nB\nC\\\nD\n"},
+                     (const char *[]) { "A\\", "B", "C\\", "D", NULL });
+    getline_testcase(&b, (char []) {"cont\\\ninuation"},
+                     (const char *[]) { "cont\\", "inuation", NULL });
+    getline_testcase(&b, (char []) {"cont \\\ntrived"},
+                     (const char *[]) { "cont \\", "trived", NULL });
+    getline_testcase(&b, (char []) {"con\\\n fusing"},
+                     (const char *[]) { "con\\", " fusing", NULL });
+    getline_testcase(&b, (char []) {"sync;\\\nsync;\\\noops;\n"},
+                     (const char *[]) { "sync;\\", "sync;\\", "oops;", NULL });
+    getline_testcase(&b, (char []) {"EOF\\\n"},
+                     (const char *[]) { "EOF\\", NULL });
+    getline_testcase(&b, (char []) {"whoops!\\"},
+                     (const char *[]) { "whoops!\\", NULL });
+    getline_testcase(&b, (char []) {"\\"},
+                     (const char *[]) { "\\", NULL });
+    getline_testcase(&b, (char []) {"\\\n"},
+                     (const char *[]) { "\\", NULL });
+
+    buf_free(&b);
+}
+
 /* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
  * actually uses it */
 /* vim: set ft=c: */
