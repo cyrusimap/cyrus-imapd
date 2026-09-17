@@ -17,6 +17,7 @@
 
 #include "assert.h"
 #include "caldav_alarm.h"
+#include "caldav_repair.h"
 #include "cyrusdb.h"
 #include "dav_db.h"
 #include "global.h"
@@ -498,8 +499,11 @@ static void run_audit_tool(const char *tool, const char *userid, const char *src
     while (waitpid(pid, &status, 0) < 0);
 }
 
-EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
+EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool,
+                                  int flags)
 {
+    struct caldav_repair_stats repair_stats = { 0 };
+
     // check that the user exists
     char *inboxname = mboxname_user_mbox(userid, NULL);
     int r = mboxlist_lookup(inboxname, NULL, NULL);
@@ -540,6 +544,9 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
 
             free_hashu64_table(&rrock.cmodseqs, NULL);
         }
+        // repair content the rebuilt database now shows to be broken
+        if (!r && (flags & DAV_REPAIR_UID_CONFLICTS))
+            r = caldav_repair_uid_conflicts(userid, flags, &repair_stats);
         // make sure all the alarms are resolved
         if (!r) r = caldav_alarm_process(0, NULL, /*dryrun*/1);
         // commit events over to ther alarm database if we're keeping them
@@ -577,7 +584,7 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
     buf_free(&newfname);
     buf_free(&fname);
 
-    return 0;
+    return repair_stats.failed ? IMAP_INTERNAL : 0;
 }
 
 

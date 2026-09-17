@@ -1,0 +1,1356 @@
+/* Unit test for imap/caldav_repair.c
+ *
+ * Each test builds a user with real calendar mailboxes and index records,
+ * runs caldav_repair_uid_conflicts() over them, and then reads the DAV
+ * database and the stored resources back.
+ */
+
+#if HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include "cunit/unit.h"
+
+#include "imap/annotate.h"
+#include "imap/append.h"
+#include "imap/caldav_db.h"
+#include "imap/caldav_repair.h"
+#include "imap/global.h"
+#include "imap/ical_support.h"
+#include "imap/imap_err.h"
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
+#include "imap/mboxname.h"
+#include "imap/quota.h"
+#include "imap/user.h"
+#include "lib/auth.h"
+#include "lib/cyrusdb.h"
+#include "lib/libconfig.h"
+#include "lib/util.h"
+#include "lib/xmalloc.h"
+#include "lib/xunlink.h"
+
+#define DBDIR       "test-caldav-repair-dbdir"
+#define PARTITION   "default"
+#define ACL         "cassandane\tlrswipkxtecdan\t"
+#define USERID      "cassandane"
+
+/* Fixed uniqueids, because the tie-break of last resort is the mailbox id and
+ * a test that asserts which resource was kept needs to know the order. */
+#define CAL_A       "Default"
+#define CAL_A_ID    "11111111-1111-1111-1111-111111111111"
+#define CAL_B       "Other"
+#define CAL_B_ID    "22222222-2222-2222-2222-222222222222"
+#define CAL_INBOX   "Inbox"
+#define INBOX_ID    "33333333-3333-3333-3333-333333333333"
+
+#define EVENT_UID   "event1uid"
+
+static struct auth_state *auth_state;
+
+/*
+ * Fixtures
+ */
+
+/* A main VEVENT. */
+#define MAIN_EVENT(summary)                     \
+    "BEGIN:VCALENDAR\r\n"                       \
+    "VERSION:2.0\r\n"                           \
+    "PRODID:-//Cyrus//EN\r\n"                   \
+    "BEGIN:VEVENT\r\n"                          \
+    "UID:" EVENT_UID "\r\n"                     \
+    "DTSTAMP:20260101T000000Z\r\n"              \
+    "DTSTART:20260101T010101Z\r\n"              \
+    "DURATION:PT1H\r\n"                         \
+    "RRULE:FREQ=DAILY;COUNT=3\r\n"              \
+    "SUMMARY:" summary "\r\n"                   \
+    "END:VEVENT\r\n"                            \
+    "END:VCALENDAR\r\n"
+
+/* A standalone instance at 2026-01-02. */
+#define INSTANCE_EVENT(summary)                 \
+    "BEGIN:VCALENDAR\r\n"                       \
+    "VERSION:2.0\r\n"                           \
+    "PRODID:-//Cyrus//EN\r\n"                   \
+    "BEGIN:VEVENT\r\n"                          \
+    "UID:" EVENT_UID "\r\n"                     \
+    "RECURRENCE-ID:20260102T010101Z\r\n"        \
+    "DTSTAMP:20260101T000000Z\r\n"              \
+    "DTSTART:20260102T010101Z\r\n"              \
+    "DURATION:PT1H\r\n"                         \
+    "SUMMARY:" summary "\r\n"                   \
+    "END:VEVENT\r\n"                            \
+    "END:VCALENDAR\r\n"
+
+#define MAIN_TODO(summary)                      \
+    "BEGIN:VCALENDAR\r\n"                       \
+    "VERSION:2.0\r\n"                           \
+    "PRODID:-//Cyrus//EN\r\n"                   \
+    "BEGIN:VTODO\r\n"                           \
+    "UID:" EVENT_UID "\r\n"                     \
+    "DTSTAMP:20260101T000000Z\r\n"              \
+    "DUE:20260101T010101Z\r\n"                  \
+    "SUMMARY:" summary "\r\n"                   \
+    "END:VTODO\r\n"                             \
+    "END:VCALENDAR\r\n"
+
+/* Both the main event and the instance in one resource: what the JMAP create
+ * path leaves behind, because it copies the whole event into the calendar the
+ * client named. */
+#define WHOLE_COPY                              \
+    "BEGIN:VCALENDAR\r\n"                       \
+    "VERSION:2.0\r\n"                           \
+    "PRODID:-//Cyrus//EN\r\n"                   \
+    "BEGIN:VEVENT\r\n"                          \
+    "UID:" EVENT_UID "\r\n"                     \
+    "DTSTAMP:20260101T000000Z\r\n"              \
+    "DTSTART:20260101T010101Z\r\n"              \
+    "DURATION:PT1H\r\n"                         \
+    "RRULE:FREQ=DAILY;COUNT=3\r\n"              \
+    "SUMMARY:main\r\n"                          \
+    "END:VEVENT\r\n"                            \
+    "BEGIN:VEVENT\r\n"                          \
+    "UID:" EVENT_UID "\r\n"                     \
+    "RECURRENCE-ID:20260102T010101Z\r\n"        \
+    "DTSTAMP:20260101T000000Z\r\n"              \
+    "DTSTART:20260102T010101Z\r\n"              \
+    "DURATION:PT1H\r\n"                         \
+    "SUMMARY:instance\r\n"                      \
+    "END:VEVENT\r\n"                            \
+    "END:VCALENDAR\r\n"
+
+/* An instance in Europe/Berlin, carrying its VTIMEZONE. */
+#define BERLIN_INSTANCE                                         \
+    "BEGIN:VCALENDAR\r\n"                                       \
+    "VERSION:2.0\r\n"                                           \
+    "PRODID:-//Cyrus//EN\r\n"                                   \
+    "BEGIN:VTIMEZONE\r\n"                                       \
+    "TZID:Europe/Berlin\r\n"                                    \
+    "BEGIN:STANDARD\r\n"                                        \
+    "DTSTART:19701025T030000\r\n"                               \
+    "RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\n"               \
+    "TZNAME:CET\r\n"                                            \
+    "TZOFFSETFROM:+0200\r\n"                                    \
+    "TZOFFSETTO:+0100\r\n"                                      \
+    "END:STANDARD\r\n"                                          \
+    "BEGIN:DAYLIGHT\r\n"                                        \
+    "DTSTART:19700329T020000\r\n"                               \
+    "RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\n"                \
+    "TZNAME:CEST\r\n"                                           \
+    "TZOFFSETFROM:+0100\r\n"                                    \
+    "TZOFFSETTO:+0200\r\n"                                      \
+    "END:DAYLIGHT\r\n"                                          \
+    "END:VTIMEZONE\r\n"                                         \
+    "BEGIN:VEVENT\r\n"                                          \
+    "UID:" EVENT_UID "\r\n"                                     \
+    "RECURRENCE-ID;TZID=Europe/Berlin:20260103T010101\r\n"      \
+    "DTSTAMP:20260101T000000Z\r\n"                              \
+    "DTSTART;TZID=Europe/Berlin:20260103T010101\r\n"            \
+    "DURATION:PT1H\r\n"                                         \
+    "SUMMARY:berlin\r\n"                                        \
+    "END:VEVENT\r\n"                                            \
+    "END:VCALENDAR\r\n"
+
+/* An iMIP REQUEST, as it is filed into the scheduling Inbox. */
+#define IMIP_REQUEST                            \
+    "BEGIN:VCALENDAR\r\n"                       \
+    "VERSION:2.0\r\n"                           \
+    "PRODID:-//Cyrus//EN\r\n"                   \
+    "METHOD:REQUEST\r\n"                        \
+    "BEGIN:VEVENT\r\n"                          \
+    "UID:" EVENT_UID "\r\n"                     \
+    "DTSTAMP:20260101T000000Z\r\n"              \
+    "DTSTART:20260101T010101Z\r\n"              \
+    "DURATION:PT1H\r\n"                         \
+    "SUMMARY:invitation\r\n"                    \
+    "ORGANIZER:mailto:sender@example.net\r\n"   \
+    "ATTENDEE:mailto:cassandane@example.com\r\n" \
+    "END:VEVENT\r\n"                            \
+    "END:VCALENDAR\r\n"
+
+/*
+ * Building the fixture
+ */
+
+static char *cal_mboxname(const char *calname)
+{
+    return caldav_mboxname(USERID, calname);
+}
+
+static int create_calendar(const char *calname, const char *uniqueid)
+{
+    char *name = cal_mboxname(calname);
+    user_nslock_t *user_nslock = user_nslock_lockmb_w(name);
+    struct mailbox *mailbox = NULL;
+
+    int r = mailbox_create(name, MBTYPE_CALENDAR, /*version*/0,
+                           PARTITION, ACL, uniqueid, /*jmapid*/0,
+                           /*options*/0, /*uidvalidity*/0,
+                           /*createdmodseq*/0, /*highestmodseq*/0, &mailbox);
+    if (!r) {
+        mbentry_t mbentry = MBENTRY_INITIALIZER;
+        mbentry.name = name;
+        mbentry.uniqueid = (char *) uniqueid;
+        mbentry.mbtype = MBTYPE_CALENDAR;
+        mbentry.partition = (char *) PARTITION;
+        mbentry.acl = (char *) ACL;
+        r = mboxlist_updatelock(&mbentry, /*localonly*/1);
+        mailbox_close(&mailbox);
+    }
+
+    user_nslock_release(&user_nslock);
+    free(name);
+
+    return r;
+}
+
+/* What a stored resource ended up as.  Pass createdmodseq 0 to let the append
+ * derive one, or a value to say where this row sits in creation order; the
+ * lowest is the one the repair keeps. */
+struct stored {
+    uint32_t imap_uid;
+    modseq_t createdmodseq;
+};
+
+/* The Content-Disposition filename parameter is where mailbox_update_caldav()
+ * reads the resource name from, so a calendar message without one is not
+ * indexed at all. */
+static void store_resource(const char *calname, const char *resource,
+                           modseq_t createdmodseq, const char *sched_tag,
+                           const char *ical, struct stored *out)
+{
+    char *name = cal_mboxname(calname);
+    struct mailbox *mailbox = NULL;
+    struct stagemsg *stage = NULL;
+    struct appendstate as;
+    struct body *body = NULL;
+    struct buf msg = BUF_INITIALIZER;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+    struct timespec internaldate;
+    FILE *f;
+    int r;
+
+    r = mailbox_open_iwl(name, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    cyrus_gettime(CLOCK_REALTIME, &internaldate);
+
+    f = append_newstage(name, internaldate.tv_sec, 0, &stage);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(f);
+
+    buf_printf(&msg,
+               "From: <" USERID "@example.com>\r\n"
+               "Subject: %s\r\n"
+               "Date: Thu, 01 Jan 2026 00:00:00 +0000\r\n"
+               "Message-ID: <%s@example.com>\r\n"
+               "Content-Type: text/calendar; charset=utf-8\r\n"
+               "Content-Transfer-Encoding: 8bit\r\n"
+               "Content-Disposition: attachment; filename=\"%s\"",
+               resource, resource, resource);
+    if (sched_tag) buf_printf(&msg, ";\r\n\tschedule-tag=%s", sched_tag);
+    buf_printf(&msg, "\r\nMIME-Version: 1.0\r\n\r\n%s", ical);
+
+    fwrite(buf_base(&msg), 1, buf_len(&msg), f);
+    CU_ASSERT_EQUAL_FATAL(fclose(f), 0);
+
+    qdiffs[QUOTA_MESSAGE] = 1;
+    r = append_setup_mbox(&as, mailbox, USERID, auth_state,
+                          0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    r = append_fromstage(&as, &body, stage, &internaldate, createdmodseq,
+                         NULL, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    message_free_body(body);
+    free(body);
+    append_removestage(stage);
+
+    r = append_commit(&as);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    struct index_record record;
+    r = mailbox_find_index_record(mailbox, mailbox->i.last_uid, &record);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    if (createdmodseq && record.createdmodseq != createdmodseq) {
+        record.createdmodseq = createdmodseq;
+        record.silentupdate = 1;
+        r = mailbox_rewrite_index_record(mailbox, &record);
+        CU_ASSERT_EQUAL_FATAL(r, 0);
+    }
+
+    if (out) {
+        out->imap_uid = record.uid;
+        out->createdmodseq = record.createdmodseq;
+    }
+
+    mailbox_close(&mailbox);
+    buf_free(&msg);
+    free(name);
+}
+
+static void expunge_resource(const char *calname, uint32_t imap_uid)
+{
+    char *name = cal_mboxname(calname);
+    struct mailbox *mailbox = NULL;
+    struct index_record record;
+    int r;
+
+    r = mailbox_open_iwl(name, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    r = mailbox_find_index_record(mailbox, imap_uid, &record);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+    r = mailbox_rewrite_index_record(mailbox, &record);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    mailbox_close(&mailbox);
+    free(name);
+}
+
+/* Personal alarms live in a per-message annotation, outside the shared
+ * iCalendar, so nothing in the resource itself says they are there. */
+static void set_userdata(const char *calname, uint32_t imap_uid,
+                         const char *trigger, modseq_t modseq)
+{
+    char *name = cal_mboxname(calname);
+    struct mailbox *mailbox = NULL;
+    struct buf vpatch = BUF_INITIALIZER;
+    struct buf value = BUF_INITIALIZER;
+    int r;
+
+    buf_printf(&vpatch,
+               "BEGIN:VPATCH\r\n"
+               "VERSION:1\r\n"
+               "DTSTAMP:20260101T000000Z\r\n"
+               "UID:per-user-data\r\n"
+               "BEGIN:PATCH\r\n"
+               "PATCH-TARGET:/VCALENDAR/ANY\r\n"
+               "BEGIN:VALARM\r\n"
+               "UID:alarm1\r\n"
+               "ACTION:DISPLAY\r\n"
+               "DESCRIPTION:alarm\r\n"
+               "TRIGGER:%s\r\n"
+               "END:VALARM\r\n"
+               "END:PATCH\r\n"
+               "END:VPATCH\r\n", trigger);
+
+    struct icalsupport_personal_data data = {
+        .lastmod = 1767225600,
+        .modseq = modseq,
+        .vpatch = icalparser_parse_string(buf_cstring(&vpatch)),
+    };
+    CU_ASSERT_PTR_NOT_NULL_FATAL(data.vpatch);
+
+    icalsupport_encode_personal_data(&value, &data);
+
+    r = mailbox_open_iwl(name, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = mailbox_annotation_write(mailbox, imap_uid, PER_USER_CAL_DATA,
+                                 USERID, &value);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    mailbox_close(&mailbox);
+
+    icalsupport_personal_data_fini(&data);
+    buf_free(&vpatch);
+    buf_free(&value);
+    free(name);
+}
+
+/*
+ * Running the repair
+ */
+
+/* The repair writes its plan to stdout, so take that away from the test
+ * runner and hand it back as a string. */
+static char *run_repair(int flags)
+{
+    struct caldav_repair_stats stats = { 0 };
+    struct buf report = BUF_INITIALIZER;
+    char outfile[] = DBDIR "/report.XXXXXX";
+    int fd, saved;
+
+    fd = mkstemp(outfile);
+    CU_ASSERT_NOT_EQUAL_FATAL(fd, -1);
+
+    fflush(stdout);
+    saved = dup(STDOUT_FILENO);
+    CU_ASSERT_NOT_EQUAL_FATAL(saved, -1);
+    CU_ASSERT_NOT_EQUAL_FATAL(dup2(fd, STDOUT_FILENO), -1);
+
+    int r = caldav_repair_uid_conflicts(USERID,
+                                        DAV_REPAIR_UID_CONFLICTS | flags,
+                                        &stats);
+
+    fflush(stdout);
+    CU_ASSERT_NOT_EQUAL_FATAL(dup2(saved, STDOUT_FILENO), -1);
+    close(saved);
+    close(fd);
+
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(stats.failed, 0);
+
+    FILE *in = fopen(outfile, "r");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(in);
+    char chunk[4096];
+    size_t n;
+    while ((n = fread(chunk, 1, sizeof(chunk), in)) > 0)
+        buf_appendmap(&report, chunk, n);
+    fclose(in);
+    xunlink(outfile);
+
+    return buf_release(&report);
+}
+
+/* How many groups did the repair report?  One line per group starts "UID ". */
+static int count_groups(const char *report)
+{
+    int count = 0;
+
+    for (const char *p = report; p && *p; p = strchr(p, '\n')) {
+        if (*p == '\n') p++;
+        if (!strncmp(p, "UID ", 4)) count++;
+    }
+
+    return count;
+}
+
+/*
+ * Reading the result back
+ */
+
+struct row {
+    char *mboxid;
+    char *resource;
+    char *ical_uid;
+    uint32_t imap_uid;
+    modseq_t createdmodseq;
+    unsigned comp_type;
+};
+
+static int collect_row(void *rock, struct caldav_data *cdata)
+{
+    ptrarray_t *rows = rock;
+    struct row *row = xzmalloc(sizeof(struct row));
+
+    row->mboxid = xstrdup(cdata->dav.mailbox);
+    row->resource = xstrdup(cdata->dav.resource);
+    row->ical_uid = xstrdup(cdata->ical_uid);
+    row->imap_uid = cdata->dav.imap_uid;
+    row->createdmodseq = cdata->dav.createdmodseq;
+    row->comp_type = cdata->comp_type;
+    ptrarray_append(rows, row);
+
+    return 0;
+}
+
+static int cmp_rows(const void **ap, const void **bp)
+{
+    const struct row *a = *ap;
+    const struct row *b = *bp;
+    int c = strcmp(a->mboxid, b->mboxid);
+
+    return c ? c : strcmp(a->resource, b->resource);
+}
+
+/* Every live row in the user's DAV database, in a stable order. */
+static void live_rows(ptrarray_t *rows)
+{
+    struct caldav_db *db = caldav_open_userid(USERID);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
+
+    int r = caldav_foreach(db, NULL, &collect_row, rows);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    caldav_close(db);
+    ptrarray_sort(rows, &cmp_rows);
+}
+
+static void free_rows(ptrarray_t *rows)
+{
+    struct row *row;
+
+    while ((row = ptrarray_pop(rows))) {
+        free(row->mboxid);
+        free(row->resource);
+        free(row->ical_uid);
+        free(row);
+    }
+    ptrarray_fini(rows);
+}
+
+/* The rows holding this iCalendar UID, in the order live_rows() gives. */
+static void rows_with_uid(ptrarray_t *rows, ptrarray_t *out, const char *uid)
+{
+    for (int i = 0; i < ptrarray_size(rows); i++) {
+        struct row *row = ptrarray_nth(rows, i);
+        if (!strcmp(row->ical_uid, uid)) ptrarray_append(out, row);
+    }
+}
+
+static struct row *sole_row_with_uid(ptrarray_t *rows, const char *uid)
+{
+    ptrarray_t matches = PTRARRAY_INITIALIZER;
+
+    rows_with_uid(rows, &matches, uid);
+    int n = ptrarray_size(&matches);
+    struct row *row = ptrarray_head(&matches);
+    ptrarray_fini(&matches);
+
+    CU_ASSERT_EQUAL_FATAL(n, 1);
+
+    return row;
+}
+
+/* The one live row whose iCalendar UID is not the one we started with: the
+ * copy the repair split off. */
+static struct row *split_row(ptrarray_t *rows)
+{
+    struct row *found = NULL;
+    int n = 0;
+
+    for (int i = 0; i < ptrarray_size(rows); i++) {
+        struct row *row = ptrarray_nth(rows, i);
+        if (strcmp(row->ical_uid, EVENT_UID)) {
+            found = row;
+            n++;
+        }
+    }
+
+    CU_ASSERT_EQUAL_FATAL(n, 1);
+
+    return found;
+}
+
+static const char *calname_of(const struct row *row)
+{
+    if (!strcmp(row->mboxid, CAL_A_ID)) return CAL_A;
+    if (!strcmp(row->mboxid, CAL_B_ID)) return CAL_B;
+
+    return row->mboxid;
+}
+
+/* The iCalendar a row points at, as the mailbox holds it. */
+static icalcomponent *row_ical(const struct row *row)
+{
+    char *name = cal_mboxname(calname_of(row));
+    struct mailbox *mailbox = NULL;
+    struct index_record record;
+    icalcomponent *ical = NULL;
+
+    int r = mailbox_open_irl(name, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    r = mailbox_find_index_record(mailbox, row->imap_uid, &record);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    ical = record_to_ical(mailbox, &record, NULL);
+
+    mailbox_close(&mailbox);
+    free(name);
+
+    CU_ASSERT_PTR_NOT_NULL_FATAL(ical);
+
+    return ical;
+}
+
+static int count_summary(icalcomponent *ical, const char *summary)
+{
+    icalcomponent *comp;
+    int count = 0;
+
+    for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
+         comp;
+         comp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT)) {
+
+        const char *s = icalcomponent_get_summary(comp);
+        if (s && !strcmp(s, summary)) count++;
+    }
+
+    return count;
+}
+
+static int count_components(icalcomponent *ical, icalcomponent_kind kind)
+{
+    icalcomponent *comp;
+    int count = 0;
+
+    for (comp = icalcomponent_get_first_component(ical, kind);
+         comp;
+         comp = icalcomponent_get_next_component(ical, kind)) {
+        count++;
+    }
+
+    return count;
+}
+
+/* Does the row's resource still carry a per-user alarm for this user? */
+static int has_userdata(const struct row *row)
+{
+    char *name = cal_mboxname(calname_of(row));
+    struct mailbox *mailbox = NULL;
+    struct buf value = BUF_INITIALIZER;
+
+    int r = mailbox_open_irl(name, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    r = mailbox_annotation_lookup(mailbox, row->imap_uid, PER_USER_CAL_DATA,
+                                  USERID, &value);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    int found = !!buf_len(&value);
+
+    mailbox_close(&mailbox);
+    buf_free(&value);
+    free(name);
+
+    return found;
+}
+
+/*
+ * Two live resources in the SAME calendar, necessarily under different
+ * resource names.  CalDAV PUT cannot produce this; a JMAP create can, when a
+ * tombstone sorts ahead of the live row and hides it.
+ */
+static void test_same_calendar(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    struct stored second, third;
+
+    store_resource(CAL_A, "second.ics", 0, NULL, MAIN_EVENT("second"), &second);
+    store_resource(CAL_A, "third.ics", 0, NULL, MAIN_EVENT("third"), &third);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    /* The row created first keeps the UID, and so the JMAP id clients hold. */
+    struct row *kept = sole_row_with_uid(&rows, EVENT_UID);
+    CU_ASSERT_STRING_EQUAL(kept->resource, "second.ics");
+    CU_ASSERT_EQUAL(kept->createdmodseq, second.createdmodseq);
+
+    /* The other says something else about the same occurrence, so it cannot
+     * merge.  It survives under a UID and a createdmodseq of its own, so the
+     * two no longer encode one JMAP id. */
+    struct row *split = split_row(&rows);
+    CU_ASSERT_NOT_EQUAL(split->createdmodseq, second.createdmodseq);
+    CU_ASSERT_NOT_EQUAL(split->createdmodseq, third.createdmodseq);
+
+    icalcomponent *ical = row_ical(split);
+    CU_ASSERT_EQUAL(count_summary(ical, "third"), 1);
+    icalcomponent_free(ical);
+
+    free_rows(&rows);
+}
+
+/*
+ * Two calendars, the SAME resource name.  A JMAP create into another calendar
+ * reuses the resource name of the row it found elsewhere, and inherits its
+ * createdmodseq, so nothing but the mailbox separates the rows.
+ */
+static void test_same_resource_name(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    struct stored first;
+
+    store_resource(CAL_A, EVENT_UID ".ics", 0, NULL, WHOLE_COPY, &first);
+    store_resource(CAL_B, EVENT_UID ".ics", first.createdmodseq, NULL,
+                   WHOLE_COPY, NULL);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+
+    struct row *kept = sole_row_with_uid(&rows, EVENT_UID);
+    CU_ASSERT_STRING_EQUAL(calname_of(kept), CAL_A);
+
+    free_rows(&rows);
+}
+
+/*
+ * Two calendars, different resource names.  Cross-user COPY and MOVE and
+ * Backup/restoreCalendars produce this.
+ */
+static void test_different_resource_names(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    struct stored original;
+
+    store_resource(CAL_A, EVENT_UID ".ics", 1, NULL, MAIN_EVENT("main"),
+                   &original);
+    store_resource(CAL_B, "copied.ics", 2, NULL, MAIN_EVENT("main"), NULL);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+
+    struct row *kept = sole_row_with_uid(&rows, EVENT_UID);
+    CU_ASSERT_STRING_EQUAL(kept->resource, EVENT_UID ".ics");
+    CU_ASSERT_EQUAL(kept->createdmodseq, original.createdmodseq);
+
+    free_rows(&rows);
+}
+
+/*
+ * More than two rows.  Conflict is not decidable pairwise against the kept
+ * resource: the third copy below agrees with it and disagrees with the second,
+ * so only the accumulated merge catches it.
+ */
+static void test_three_resources(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), NULL);
+    store_resource(CAL_A, "first.ics", 2, NULL, INSTANCE_EVENT("first"), NULL);
+    store_resource(CAL_B, "second.ics", 3, NULL, INSTANCE_EVENT("second"),
+                   NULL);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 2);
+
+    /* The first instance took the empty occurrence; the second wanted the
+     * same one. */
+    struct row *kept = sole_row_with_uid(&rows, EVENT_UID);
+    CU_ASSERT_STRING_EQUAL(kept->resource, "main.ics");
+
+    icalcomponent *ical = row_ical(kept);
+    CU_ASSERT_EQUAL(count_summary(ical, "main"), 1);
+    CU_ASSERT_EQUAL(count_summary(ical, "first"), 1);
+    CU_ASSERT_EQUAL(count_summary(ical, "second"), 0);
+    icalcomponent_free(ical);
+
+    ical = row_ical(split_row(&rows));
+    CU_ASSERT_EQUAL(count_summary(ical, "second"), 1);
+    icalcomponent_free(ical);
+
+    free_rows(&rows);
+}
+
+/*
+ * The rows share a createdmodseq, and so encode the same JMAP id.  That is the
+ * reported symptom -- query returns the id twice, and get answers with the
+ * object and lists the id in notFound -- so the resource that survives has to
+ * keep that createdmodseq.
+ */
+static void test_shared_createdmodseq(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+    struct stored first, second;
+
+    store_resource(CAL_A, EVENT_UID ".ics", 0, NULL, WHOLE_COPY, &first);
+    store_resource(CAL_B, EVENT_UID ".ics", first.createdmodseq, NULL,
+                   WHOLE_COPY, &second);
+    CU_ASSERT_EQUAL_FATAL(second.createdmodseq, first.createdmodseq);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+
+    /* The surviving resource still encodes the id the client was given. */
+    struct row *kept = sole_row_with_uid(&rows, EVENT_UID);
+    CU_ASSERT_EQUAL(kept->createdmodseq, first.createdmodseq);
+    CU_ASSERT_STRING_EQUAL(calname_of(kept), CAL_A);
+
+    free_rows(&rows);
+}
+
+/*
+ * The createdmodseqs differ, so a merge necessarily destroys one JMAP id.
+ * Backup/restoreCalendars gives the resurrected OLDER content the HIGHER
+ * createdmodseq -- which is why the rule is lowest-wins: newest-wins would
+ * keep the stale copy and hand the client a new id for it.
+ */
+static void test_distinct_createdmodseq(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    struct stored current, restored;
+
+    store_resource(CAL_A, EVENT_UID ".ics", 1, NULL, MAIN_EVENT("current"),
+                   &current);
+    store_resource(CAL_B, "restored.ics", 2, NULL, MAIN_EVENT("stale"),
+                   &restored);
+    CU_ASSERT(restored.createdmodseq > current.createdmodseq);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    struct row *kept = sole_row_with_uid(&rows, EVENT_UID);
+    CU_ASSERT_EQUAL(kept->createdmodseq, current.createdmodseq);
+
+    icalcomponent *ical = row_ical(kept);
+    CU_ASSERT_EQUAL(count_summary(ical, "current"), 1);
+    icalcomponent_free(ical);
+
+    /* The stale copy is kept too, under its own UID: the owner deletes it. */
+    ical = row_ical(split_row(&rows));
+    CU_ASSERT_EQUAL(count_summary(ical, "stale"), 1);
+    icalcomponent_free(ical);
+
+    free_rows(&rows);
+}
+
+/*
+ * A VEVENT and a VTODO under one UID, which a cross-user write can produce.
+ * One resource cannot hold both kinds.
+ */
+static void test_mismatched_comp_type(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, "event.ics", 1, NULL, MAIN_EVENT("main"), NULL);
+    store_resource(CAL_B, "todo.ics", 2, NULL, MAIN_TODO("main"), NULL);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 2);
+
+    struct row *kept = sole_row_with_uid(&rows, EVENT_UID);
+    CU_ASSERT_EQUAL(kept->comp_type, CAL_COMP_VEVENT);
+
+    struct row *split = split_row(&rows);
+    CU_ASSERT_EQUAL(split->comp_type, CAL_COMP_VTODO);
+
+    free_rows(&rows);
+}
+
+/*
+ * Disjoint recurrence sets -- the main event in one resource, a standalone
+ * instance in the other.  A union is enough, and nothing is lost.
+ */
+static void test_disjoint_recurrence_sets(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), NULL);
+    store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
+                   NULL);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+
+    icalcomponent *ical = row_ical(sole_row_with_uid(&rows, EVENT_UID));
+    CU_ASSERT_EQUAL(count_summary(ical, "main"), 1);
+    CU_ASSERT_EQUAL(count_summary(ical, "instance"), 1);
+    icalcomponent_free(ical);
+
+    free_rows(&rows);
+}
+
+/*
+ * Both resources hold a main component and they disagree about it.  The
+ * duplicate is moved whole rather than half-merged, so the owner sees the
+ * event they had and not a fragment of it.
+ */
+static void test_overlapping_main(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, "a.ics", 1, NULL, MAIN_EVENT("in calendarA"), NULL);
+    store_resource(CAL_B, "b.ics", 2, NULL, MAIN_EVENT("in calendarB"), NULL);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 2);
+
+    icalcomponent *ical = row_ical(sole_row_with_uid(&rows, EVENT_UID));
+    CU_ASSERT_EQUAL(count_summary(ical, "in calendarA"), 1);
+    CU_ASSERT_EQUAL(count_summary(ical, "in calendarB"), 0);
+    icalcomponent_free(ical);
+
+    struct row *split = split_row(&rows);
+    CU_ASSERT_STRING_EQUAL(calname_of(split), CAL_B);
+
+    ical = row_ical(split);
+    CU_ASSERT_EQUAL(count_summary(ical, "in calendarB"), 1);
+    icalcomponent_free(ical);
+
+    free_rows(&rows);
+}
+
+/* The same, one occurrence down: both carry a component at the same
+ * RECURRENCE-ID, and the two disagree. */
+static void test_overlapping_instance(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, "a.ics", 1, NULL, INSTANCE_EVENT("in calendarA"),
+                   NULL);
+    store_resource(CAL_B, "b.ics", 2, NULL, INSTANCE_EVENT("in calendarB"),
+                   NULL);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 2);
+
+    icalcomponent *ical = row_ical(split_row(&rows));
+    CU_ASSERT_EQUAL(count_summary(ical, "in calendarB"), 1);
+    icalcomponent_free(ical);
+
+    free_rows(&rows);
+}
+
+/*
+ * Whole-copy duplication.  A standalone-instance create does not just add an
+ * instance -- it copies the other calendar's entire event into the new
+ * resource -- so the duplicate holds nothing the primary lacks.
+ */
+static void test_whole_copy_duplication(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    struct stored first;
+
+    store_resource(CAL_A, "a.ics", 0, NULL, WHOLE_COPY, &first);
+    store_resource(CAL_B, "b.ics", first.createdmodseq, NULL, WHOLE_COPY,
+                   NULL);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+
+    icalcomponent *ical = row_ical(sole_row_with_uid(&rows, EVENT_UID));
+    CU_ASSERT_EQUAL(count_summary(ical, "main"), 1);
+    CU_ASSERT_EQUAL(count_summary(ical, "instance"), 1);
+    icalcomponent_free(ical);
+
+    free_rows(&rows);
+}
+
+/*
+ * Differing scheduling identity.  A Schedule-Tag is only ever set by a
+ * scheduling write, so the copy carrying one is the copy CalDAV clients hold
+ * an etag for.  It keeps its identity even though it was created later.
+ */
+static void test_scheduling_identity(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, "unscheduled.ics", 1, NULL, MAIN_EVENT("main"),
+                   NULL);
+    store_resource(CAL_B, "scheduled.ics", 2, "\"123456789-000000001\"",
+                   MAIN_EVENT("main"), NULL);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+
+    struct row *kept = sole_row_with_uid(&rows, EVENT_UID);
+    CU_ASSERT_STRING_EQUAL(kept->resource, "scheduled.ics");
+
+    free_rows(&rows);
+}
+
+/*
+ * Per-user data -- personal alarms and useDefaultAlerts -- lives outside the
+ * shared iCalendar, so no component says when a merge would drop it.  Here
+ * only one copy has any, and the merge carries it over.
+ */
+static void test_per_user_data_carried_over(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+    struct stored dup;
+
+    store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), NULL);
+    store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
+                   &dup);
+    set_userdata(CAL_B, dup.imap_uid, "-PT5M", dup.createdmodseq);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+
+    struct row *kept = sole_row_with_uid(&rows, EVENT_UID);
+    CU_ASSERT(has_userdata(kept));
+
+    free_rows(&rows);
+}
+
+/* Both copies have alarms and they disagree: a conflict, even though every
+ * component of the shared iCalendar merges cleanly. */
+static void test_per_user_data_conflict(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+    struct stored primary, dup;
+
+    store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), &primary);
+    store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
+                   &dup);
+    set_userdata(CAL_A, primary.imap_uid, "-PT5M", primary.createdmodseq);
+    set_userdata(CAL_B, dup.imap_uid, "-PT30M", dup.createdmodseq);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 2);
+
+    /* Both sets of alarms are still somewhere. */
+    CU_ASSERT(has_userdata(sole_row_with_uid(&rows, EVENT_UID)));
+    CU_ASSERT(has_userdata(split_row(&rows)));
+
+    free_rows(&rows);
+}
+
+/* The same alarms written at different times.  LASTMOD and MODSEQ are
+ * bookkeeping, so these two copies agree. */
+static void test_per_user_data_equal(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+    struct stored primary, dup;
+
+    store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), &primary);
+    store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
+                   &dup);
+
+    /* The same alarms, written at different times. */
+    set_userdata(CAL_A, primary.imap_uid, "-PT5M", primary.createdmodseq);
+    set_userdata(CAL_B, dup.imap_uid, "-PT5M", dup.createdmodseq + 99);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+    CU_ASSERT(has_userdata(sole_row_with_uid(&rows, EVENT_UID)));
+
+    free_rows(&rows);
+}
+
+/*
+ * Two copies of one event routinely differ in their bookkeeping properties
+ * alone.  Those must not block a merge, and the surviving component takes the
+ * higher SEQUENCE so a CalDAV client does not see it go backwards.
+ */
+static void test_bookkeeping_properties_ignored(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, "a.ics", 1, NULL,
+                   "BEGIN:VCALENDAR\r\n"
+                   "VERSION:2.0\r\n"
+                   "BEGIN:VEVENT\r\n"
+                   "UID:" EVENT_UID "\r\n"
+                   "DTSTAMP:20260101T000000Z\r\n"
+                   "LAST-MODIFIED:20260101T000000Z\r\n"
+                   "SEQUENCE:1\r\n"
+                   "DTSTART:20260101T010101Z\r\n"
+                   "DURATION:PT1H\r\n"
+                   "SUMMARY:main\r\n"
+                   "END:VEVENT\r\n"
+                   "END:VCALENDAR\r\n", NULL);
+
+    store_resource(CAL_B, "b.ics", 2, NULL,
+                   "BEGIN:VCALENDAR\r\n"
+                   "VERSION:2.0\r\n"
+                   "BEGIN:VEVENT\r\n"
+                   "UID:" EVENT_UID "\r\n"
+                   "DTSTAMP:20260202T020202Z\r\n"
+                   "LAST-MODIFIED:20260202T020202Z\r\n"
+                   "SEQUENCE:4\r\n"
+                   "DTSTART:20260101T010101Z\r\n"
+                   "DURATION:PT1H\r\n"
+                   "SUMMARY:main\r\n"
+                   "END:VEVENT\r\n"
+                   "END:VCALENDAR\r\n", NULL);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+
+    icalcomponent *ical = row_ical(sole_row_with_uid(&rows, EVENT_UID));
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(comp);
+    CU_ASSERT_EQUAL(icalcomponent_get_sequence(comp), 4);
+    icalcomponent_free(ical);
+
+    free_rows(&rows);
+}
+
+/* A folded-in component brings its time zone with it, or the merged resource
+ * would reference a TZID it does not define.  And only once. */
+static void test_merge_unions_timezones(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), NULL);
+    store_resource(CAL_B, "berlin.ics", 2, NULL, BERLIN_INSTANCE, NULL);
+    store_resource(CAL_B, "berlin2.ics", 3, NULL, BERLIN_INSTANCE, NULL);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+
+    icalcomponent *ical = row_ical(sole_row_with_uid(&rows, EVENT_UID));
+    CU_ASSERT_PTR_NOT_NULL(icalcomponent_get_timezone(ical, "Europe/Berlin"));
+    CU_ASSERT_EQUAL(count_components(ical, ICAL_VTIMEZONE_COMPONENT), 1);
+    icalcomponent_free(ical);
+
+    free_rows(&rows);
+}
+
+/* The occurrence a component keys on is its kind and its RECURRENCE-ID with
+ * the TZID, so the same wall-clock time in two zones is two occurrences. */
+static void test_recurrence_id_tzid_distinguishes_occurrences(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, "utc.ics", 1, NULL, INSTANCE_EVENT("utc"), NULL);
+    store_resource(CAL_B, "berlin.ics", 2, NULL, BERLIN_INSTANCE, NULL);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+
+    icalcomponent *ical = row_ical(sole_row_with_uid(&rows, EVENT_UID));
+    CU_ASSERT_EQUAL(count_summary(ical, "utc"), 1);
+    CU_ASSERT_EQUAL(count_summary(ical, "berlin"), 1);
+    icalcomponent_free(ical);
+
+    free_rows(&rows);
+}
+
+/*
+ * Without --really the repair says what it would do and changes nothing, and
+ * it says the same thing either way so that the two runs are diffable.
+ */
+static void test_report_only_changes_nothing(void)
+{
+    ptrarray_t before = PTRARRAY_INITIALIZER;
+    ptrarray_t after = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), NULL);
+    store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
+                   NULL);
+
+    char *report = run_repair(0);
+    CU_ASSERT_EQUAL(count_groups(report), 1);
+
+    live_rows(&before);
+    CU_ASSERT_EQUAL(ptrarray_size(&before), 2);
+
+    char *repaired = run_repair(DAV_REPAIR_REALLY);
+    CU_ASSERT_STRING_EQUAL(repaired, report);
+
+    live_rows(&after);
+    CU_ASSERT_EQUAL(ptrarray_size(&after), 1);
+
+    free(report);
+    free(repaired);
+    free_rows(&before);
+    free_rows(&after);
+}
+
+/*
+ * A live calendar row beside several scheduling Inbox rows for the same UID,
+ * each iMIP message under its own resource name.  This is what an unanswered
+ * invitation looks like, and it is why a unique index on ical_uid cannot work.
+ */
+static void test_scheduling_inbox(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, EVENT_UID ".ics", 0, NULL, MAIN_EVENT("main"), NULL);
+    store_resource(CAL_INBOX, "imip1.ics", 0, NULL, IMIP_REQUEST, NULL);
+    store_resource(CAL_INBOX, "imip2.ics", 0, NULL, IMIP_REQUEST, NULL);
+
+    char *report = run_repair(DAV_REPAIR_REALLY);
+    CU_ASSERT_EQUAL(count_groups(report), 0);
+
+    live_rows(&rows);
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 3);
+
+    free(report);
+    free_rows(&rows);
+}
+
+/*
+ * An expunged row beside a live one.  Reusing the UID of a destroyed event is
+ * allowed, and the tombstone lingers until it is unlinked.
+ */
+static void test_tombstone(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+    struct stored dead;
+
+    store_resource(CAL_A, "first.ics", 0, NULL, MAIN_EVENT("first"), &dead);
+    expunge_resource(CAL_A, dead.imap_uid);
+    store_resource(CAL_A, "second.ics", 0, NULL, MAIN_EVENT("second"), NULL);
+
+    char *report = run_repair(DAV_REPAIR_REALLY);
+    CU_ASSERT_EQUAL(count_groups(report), 0);
+
+    live_rows(&rows);
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+
+    free(report);
+    free_rows(&rows);
+}
+
+/*
+ * One resource holding several standalone instances.  That is a single row, so
+ * it is never a group, however many components it has.
+ */
+static void test_standalone_instances(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, EVENT_UID ".ics", 0, NULL,
+                   "BEGIN:VCALENDAR\r\n"
+                   "VERSION:2.0\r\n"
+                   "BEGIN:VEVENT\r\n"
+                   "UID:" EVENT_UID "\r\n"
+                   "RECURRENCE-ID:20260101T010101Z\r\n"
+                   "DTSTAMP:20260101T000000Z\r\n"
+                   "DTSTART:20260101T010101Z\r\n"
+                   "DURATION:PT1H\r\n"
+                   "SUMMARY:instance1\r\n"
+                   "END:VEVENT\r\n"
+                   "BEGIN:VEVENT\r\n"
+                   "UID:" EVENT_UID "\r\n"
+                   "RECURRENCE-ID:20260102T010101Z\r\n"
+                   "DTSTAMP:20260101T000000Z\r\n"
+                   "DTSTART:20260102T010101Z\r\n"
+                   "DURATION:PT1H\r\n"
+                   "SUMMARY:instance2\r\n"
+                   "END:VEVENT\r\n"
+                   "END:VCALENDAR\r\n", NULL);
+
+    char *report = run_repair(DAV_REPAIR_REALLY);
+    CU_ASSERT_EQUAL(count_groups(report), 0);
+
+    live_rows(&rows);
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+
+    free(report);
+    free_rows(&rows);
+}
+
+/* Two UIDs, each in one resource: the ordinary case, which must not be
+ * mistaken for a group. */
+static void test_distinct_uids_untouched(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+
+    store_resource(CAL_A, "a.ics", 0, NULL, MAIN_EVENT("main"), NULL);
+    store_resource(CAL_B, "b.ics", 2, NULL,
+                   "BEGIN:VCALENDAR\r\n"
+                   "VERSION:2.0\r\n"
+                   "BEGIN:VEVENT\r\n"
+                   "UID:otheruid\r\n"
+                   "DTSTAMP:20260101T000000Z\r\n"
+                   "DTSTART:20260101T010101Z\r\n"
+                   "DURATION:PT1H\r\n"
+                   "SUMMARY:other\r\n"
+                   "END:VEVENT\r\n"
+                   "END:VCALENDAR\r\n", NULL);
+
+    char *report = run_repair(DAV_REPAIR_REALLY);
+    CU_ASSERT_EQUAL(count_groups(report), 0);
+
+    live_rows(&rows);
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 2);
+
+    free(report);
+    free_rows(&rows);
+}
+
+/*
+ * Fixture setup
+ */
+
+static int set_up(void)
+{
+    static const char * const dirs[] = {
+        DBDIR, DBDIR"/db", DBDIR"/conf", DBDIR"/data", NULL
+    };
+
+    int r = system("rm -rf " DBDIR);
+    if (r) return r;
+
+    for (const char * const *d = dirs; *d; d++) {
+        if (mkdir(*d, 0777) < 0) {
+            int e = errno;
+            perror(*d);
+            return e;
+        }
+    }
+
+    r = config_read_string(DBDIR"/conf", NULL,
+        "defaultpartition: "PARTITION"\n"
+        "partition-"PARTITION": "DBDIR"/data\n"
+        "expunge_mode: delayed\n"
+    );
+    if (r) return r;
+
+    cyrusdb_init();
+    config_mboxlist_db = "skiplist";
+    config_annotation_db = "skiplist";
+    config_quota_db = "skiplist";
+
+    quotadb_init();
+    quotadb_open(NULL);
+    mboxlist_init();
+    mboxlist_open(NULL);
+    annotate_init(NULL, NULL);
+    annotatemore_open();
+    caldav_init();
+
+    auth_state = auth_newstate(USERID);
+
+    r = create_calendar(CAL_A, CAL_A_ID);
+    if (!r) r = create_calendar(CAL_B, CAL_B_ID);
+    if (!r) r = create_calendar(CAL_INBOX, INBOX_ID);
+
+    return r;
+}
+
+static int tear_down(void)
+{
+    auth_freestate(auth_state);
+    auth_state = NULL;
+
+    caldav_done();
+    annotatemore_close();
+    annotate_done();
+    mboxlist_close();
+    mboxlist_done();
+    quotadb_close();
+    quotadb_done();
+    cyrusdb_done();
+    config_reset();
+    config_mboxlist_db = NULL;
+    config_annotation_db = NULL;
+    config_quota_db = NULL;
+
+    int r = system("rm -rf " DBDIR);
+
+    return r ? -1 : 0;
+}
+
+/* vim: set ft=c: */
