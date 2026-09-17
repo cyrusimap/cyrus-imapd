@@ -1,0 +1,137 @@
+#!perl
+use Cassandane::Tiny;
+
+# A sharee holding only mayReadItems and mayRSVP may RSVP on the account's
+# behalf, but SEQUENCE is an organizer revision counter and must stay out of
+# their reach.  This is CYR-3444.
+sub test_calendarevent_set_mayrsvp_sequence
+    ($self)
+{
+    my $owner_jmap = $self->default_user->jmap;
+    my $default_cal = $self->default_user->calendars->default;
+    my $default_cal_id = $default_cal->id;
+
+    xlog $self, "create sharee with mayReadItems and mayRSVP only";
+    my $sharee_user = $self->{instance}->create_user('sharee');
+    my $sharee_jmap = $sharee_user->jmap;
+    $default_cal->share_with($sharee_user => [qw(mayReadItems mayRSVP)]);
+
+    my sub sharee_update ($event_id, $patch) {
+        my $res = $sharee_jmap->request([
+            ['CalendarEvent/set', {
+                accountId => 'cassandane',
+                sendSchedulingMessages => JSON::false,
+                update => { $event_id => $patch },
+            }],
+        ]);
+        return $res->single_sentence('CalendarEvent/set')->arguments;
+    }
+
+    my sub owner_get ($event_id, @properties) {
+        my $res = $owner_jmap->request([
+            ['CalendarEvent/get', {
+                ids => [$event_id],
+                properties => \@properties,
+            }],
+        ]);
+        return $res->single_sentence('CalendarEvent/get')->arguments->{list}[0];
+    }
+
+    xlog $self, "owner creates events: one they attend, one they organize";
+
+    my $event_1 = $self->default_user->calendars->default->create_event({
+          sequence => 1,
+          organizerCalendarAddress => 'mailto:other@example.com',
+          participants => {
+              other => {
+                  roles => { owner => JSON::true },
+                  calendarAddress => 'mailto:other@example.com',
+              },
+              cassandane => {
+                  roles => { attendee => JSON::true },
+                  calendarAddress => 'mailto:cassandane@example.com',
+                  participationStatus => 'needs-action',
+              },
+          },
+    });
+
+    my $event_2 = $self->default_user->calendars->default->create_event({
+          sequence => 1,
+          mayInviteOthers => JSON::true,
+          organizerCalendarAddress => 'mailto:cassandane@example.com',
+          participants => {
+              cassandane => {
+                  roles => { owner => JSON::true, attendee => JSON::true },
+                  calendarAddress => 'mailto:cassandane@example.com',
+                  participationStatus => 'accepted',
+              },
+              other => {
+                  roles => { attendee => JSON::true },
+                  calendarAddress => 'mailto:other@example.com',
+                  participationStatus => 'needs-action',
+              },
+          },
+    });
+
+    my $invited_id = $event_1->id;
+    my $organized_id = $event_2->id;
+    $self->assert_not_null($invited_id);
+    $self->assert_not_null($organized_id);
+
+    xlog $self, "sharee may not set sequence on the event the owner attends";
+    my $res = sharee_update($invited_id, { sequence => 1000000 });
+    $self->assert_str_equals('forbidden', $res->{notUpdated}{$invited_id}{type});
+    $self->assert_num_equals(1, owner_get($invited_id, 'sequence')->{sequence});
+
+    xlog $self, "sharee may not set sequence on the event the owner organizes";
+    $res = sharee_update($organized_id, { sequence => 1000000 });
+    $self->assert_str_equals('forbidden', $res->{notUpdated}{$organized_id}{type});
+    $self->assert_num_equals(1, owner_get($organized_id, 'sequence')->{sequence});
+
+    xlog $self, "sharee may not smuggle sequence alongside a permitted RSVP";
+    $res = sharee_update($invited_id, {
+        'participants/cassandane/participationStatus' => 'tentative',
+        sequence => 1000000,
+    });
+    $self->assert_str_equals('forbidden', $res->{notUpdated}{$invited_id}{type});
+    my $event = owner_get($invited_id, 'sequence', 'participants');
+    $self->assert_num_equals(1, $event->{sequence});
+    $self->assert_str_equals('needs-action',
+        $event->{participants}{cassandane}{participationStatus});
+
+    xlog $self, "sharee may not change shared properties";
+    $res = sharee_update($invited_id, { title => 'unauthorized' });
+    $self->assert_str_equals('forbidden', $res->{notUpdated}{$invited_id}{type});
+
+    xlog $self, "sharee may still RSVP on the owner's behalf";
+    $res = sharee_update($invited_id, {
+        'participants/cassandane/participationStatus' => 'accepted',
+    });
+    $self->assert(exists $res->{updated}{$invited_id});
+    $event = owner_get($invited_id, 'sequence', 'participants');
+    $self->assert_num_equals(1, $event->{sequence});
+    $self->assert_str_equals('accepted',
+        $event->{participants}{cassandane}{participationStatus});
+
+    xlog $self, "sharee may still invite others where the event allows it";
+    $res = sharee_update($organized_id, {
+        'participants/third' => {
+            roles => { attendee => JSON::true },
+            calendarAddress => 'mailto:third@example.com',
+            participationStatus => 'needs-action',
+        },
+    });
+    $self->assert(exists $res->{updated}{$organized_id});
+    $event = owner_get($organized_id, 'sequence', 'participants');
+    $self->assert_not_null($event->{participants}{third});
+    # The sharee's invitation is not an organizer revision, so the server
+    # no longer bumps SEQUENCE on their behalf.
+    $self->assert_num_equals(1, $event->{sequence});
+
+    xlog $self, "a mayWriteAll sharee may still set sequence";
+    $default_cal->share_with($sharee_user => [qw(mayReadItems mayWriteAll)]);
+    $res = sharee_update($organized_id, { sequence => 900000 });
+    $self->assert(exists $res->{updated}{$organized_id});
+    $self->assert_num_equals(900000,
+        owner_get($organized_id, 'sequence')->{sequence});
+}

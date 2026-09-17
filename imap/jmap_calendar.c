@@ -5944,9 +5944,14 @@ static int updateevent_apply_patch(jmap_req_t *req,
     bool updates_shared_prop =
         updateevent_patch_updates_shared_prop(update->old_event, new_event);
 
-    updateevent_bump_sequence(update->old_event, new_event,
-            update->serverset, update->schedule_addresses,
-            updates_shared_prop);
+    /* SEQUENCE is the organizer's revision counter.  A caller who may only
+     * RSVP or invite is not revising the event on the organizer's behalf. */
+    if (jmap_hasrights_mbentry(req, update->mbentry, JACL_WRITEALL) ||
+        jmap_hasrights_mbentry(req, update->mbentry, JACL_WRITEOWN)) {
+        updateevent_bump_sequence(update->old_event, new_event,
+                update->serverset, update->schedule_addresses,
+                updates_shared_prop);
+    }
 
     // Do not allow to set method - but ignore keeping it.
     const char *new_method =

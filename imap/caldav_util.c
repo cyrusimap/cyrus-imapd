@@ -445,12 +445,6 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
                     break;
                 }
 
-            case ICAL_SEQUENCE_PROPERTY:
-                if (!(allow_propupdates & ~propupdate_private))
-                    return HTTP_FORBIDDEN;
-                if (num_changes) (*num_changes)++;
-                break;
-
             case ICAL_X_PROPERTY:
                 if (!strcmpsafe(xname, "X-MOZ-GENERATION")) {
                     /* Ok to modify these - ignore */
@@ -521,12 +515,6 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
                 r = validate_mayinvite(prop, allow_propupdates, sched_addrs);
                 if (r) return r;
 
-                if (num_changes) (*num_changes)++;
-                break;
-
-            case ICAL_SEQUENCE_PROPERTY:
-                if (!(allow_propupdates & ~propupdate_private))
-                    return HTTP_FORBIDDEN;
                 if (num_changes) (*num_changes)++;
                 break;
 
