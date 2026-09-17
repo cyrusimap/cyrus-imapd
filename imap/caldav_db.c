@@ -457,6 +457,26 @@ EXPORTED int caldav_lookup_by_cmodseq(struct caldav_db *caldavdb,
 }
 
 
+#define CMD_SELUIDCONFLICT CMD_READFIELDS \
+    " WHERE alive = 1 AND mailbox != :inbox AND ical_uid IN"           \
+    " (SELECT ical_uid FROM ical_objs"                                 \
+    "   WHERE alive = 1 AND mailbox != :inbox"                         \
+    "   GROUP BY ical_uid HAVING COUNT(*) > 1)"                        \
+    " ORDER BY ical_uid;"
+
+EXPORTED int caldav_foreach_uid_conflict(struct caldav_db *caldavdb,
+                                         caldav_cb_t *cb, void *rock)
+{
+    struct sqldb_bindval bval[] = {
+        { ":inbox", SQLITE_TEXT, { .s = caldavdb->sched_inbox } },
+        { NULL,     SQLITE_NULL, { .s = NULL                  } } };
+    struct caldav_data cdata;
+    struct read_rock rrock = { caldavdb, &cdata, 0, cb, rock };
+
+    return sqldb_exec(caldavdb->db, CMD_SELUIDCONFLICT, bval, &read_cb, &rrock);
+}
+
+
 #define CMD_SELMBOX CMD_READFIELDS \
     " WHERE mailbox = :mailbox AND alive = 1;"
 

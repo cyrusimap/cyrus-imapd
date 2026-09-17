@@ -304,7 +304,7 @@ int main(int argc, char **argv)
                     }
                     else if (userid) {
                         /* Rewrite dav.db */
-                        r = dav_reconstruct_user(userid, NULL);
+                        r = dav_reconstruct_user(userid, NULL, 0);
                         if (r) {
                             fprintf(stderr,
                                     "Failed to rewrite dav.db for %s: %s\n",
