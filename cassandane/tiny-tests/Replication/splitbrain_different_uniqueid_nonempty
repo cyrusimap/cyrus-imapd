@@ -45,7 +45,7 @@ sub test_splitbrain_different_uniqueid_nonempty
     if ($self->{instance}->{have_syslog_replacement}) {
         my @mlines = $self->{instance}->getsyslog();
         $self->assert_matches(qr/IOERROR: user replication failed/, "@mlines");
-        $self->assert_matches(qr/MAILBOX received NO response: IMAP_MAILBOX_MOVED/, "@mlines");
+        $self->assert_matches(qr/MAILBOX received NO response: IMAP_SYNC_WRONG_MAILBOX/, "@mlines");
 
     }
 
