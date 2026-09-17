@@ -1501,7 +1501,7 @@ S: S3 OK Success
 
 The replica deletes the mailbox only if the one holding that name is
 the one named by UNIQUEID and UIDVALIDITY; otherwise it returns
-`IMAP_MAILBOX_MOVED` and leaves it alone.  A name can be reused, so
+`IMAP_SYNC_WRONG_MAILBOX` and leaves it alone.  A name can be reused, so
 without the identity check a delete of the master's mailbox could take
 out a completely different mailbox which had since taken over the name.
 A UIDVALIDITY of 0 means "unknown" and is not compared.
