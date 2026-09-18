@@ -295,8 +295,8 @@ struct http_connection {
     struct protstream *pout;            /* Output protstream */
     struct protgroup *pgin;             /* Streams to watch for input */
     const char *clienthost;             /* Name of client host */
-    int logfd;                          /* Telemetry log file */
     struct buf logbuf;                  /* Telemetry log buffer */
+    int logfd;                          /* Telemetry log file */
     unsigned close : 1;                 /* Close connection flag */
     const char *close_str;              /* Reason for closing connection */
 
