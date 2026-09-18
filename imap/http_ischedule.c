@@ -25,9 +25,9 @@
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
-#include "jcal.h"
+#include "common/jcal.h"
 #include "map.h"
-#include "proxy.h"
+#include "common/proxy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

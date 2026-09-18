@@ -33,7 +33,7 @@
 #include "http_proxy.h"
 #include "../master/masterconf.h"
 #include "procinfo.h"
-#include "proxy.h"
+#include "common/proxy.h"
 #include "ptrarray.h"
 #include "time.h"
 #include "version.h"

@@ -20,7 +20,7 @@
 #include "http_jmap.h"
 #include "json_support.h"
 #include "map.h"
-#include "sync_support.h"
+#include "common/sync_support.h"
 #include "user.h"
 
 #ifdef USE_SIEVE

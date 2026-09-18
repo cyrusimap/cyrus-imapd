@@ -30,7 +30,7 @@
 #include "message_guid.h"
 #include "mboxname.h"
 #include "mboxlist.h"
-#include "zoneinfo_db.h"
+#include "common/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

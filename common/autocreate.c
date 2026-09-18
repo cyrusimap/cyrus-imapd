@@ -25,12 +25,12 @@
 #include <time.h>
 #include <syslog.h>
 
-#include "global.h"
-#include "acl.h"
-#include "annotate.h"
-#include "user.h"
-#include "mailbox.h"
-#include "mboxlist.h"
+#include "imap/global.h"
+#include "lib/acl.h"
+#include "imap/annotate.h"
+#include "imap/user.h"
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

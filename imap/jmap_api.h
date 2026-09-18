@@ -12,7 +12,7 @@
 #include "auth.h"
 #include "conversations.h"
 #include "dav_db.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mboxname.h"

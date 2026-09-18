@@ -13,7 +13,7 @@
 
 #include "global.h"
 #include "httpd.h"
-#include "jscalendar.h"
+#include "common/jscalendar.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

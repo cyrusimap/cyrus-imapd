@@ -30,7 +30,7 @@
 #include "times.h"
 #include "user.h"
 
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "mboxevent.h"
 #include "mboxname.h"
 #include "msgrecord.h"

@@ -16,9 +16,9 @@
 #include "http_ws.h"
 #include "jmap_push.h"
 #include "mboxname.h"
-#include "proxy.h"
+#include "common/proxy.h"
 #include "times.h"
-#include "sync_support.h"
+#include "common/sync_support.h"
 #include "syslog.h"
 #include "user.h"
 

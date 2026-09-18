@@ -19,7 +19,7 @@
 #include "acl.h"
 #include "append.h"
 #include "caldav_db.h"
-#include "caldav_util.h"
+#include "common/caldav_util.h"
 #include "carddav_db.h"
 #include "http_caldav_sched.h"
 #include "http_jmap.h"

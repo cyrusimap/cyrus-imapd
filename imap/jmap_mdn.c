@@ -21,7 +21,7 @@
 #include "jmap_api.h"
 #include "jmap_mail.h"
 #include "json_support.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "message.h"
 #include "parseaddr.h"
 #include "prot.h"

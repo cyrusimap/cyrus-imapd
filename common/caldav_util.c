@@ -1,8 +1,8 @@
 /* caldav_util.c - utility functions for dealing with CALDAV database */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+#include "common/caldav_util.h"
 
 #include "libcyrus_min/util.h"
 
@@ -11,21 +11,20 @@
 
 #include <errno.h>
 #include <string.h>
+#include <syslog.h>
 
-#include "acl.h"
-#include "caldav_alarm.h"
-#include "caldav_db.h"
-#include "caldav_util.h"
-#include "defaultalarms.h"
-#include "http_dav.h"
-#include "ical_support.h"
-#include "itip_support.h"
-#include "mailbox.h"
-#include "proxy.h"
-#include "syslog.h"
-#include "times.h"
-#include "user.h"
-#include "zoneinfo_db.h"
+#include "lib/acl.h"
+#include "imap/caldav_alarm.h"
+#include "imap/caldav_db.h"
+#include "imap/defaultalarms.h"
+#include "imap/http_dav.h"
+#include "imap/ical_support.h"
+#include "common/itip_support.h"
+#include "imap/mailbox.h"
+#include "common/proxy.h"
+#include "lib/times.h"
+#include "imap/user.h"
+#include "common/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

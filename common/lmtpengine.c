@@ -34,25 +34,25 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "auditlog.h"
-#include "loginlog.h"
-#include "auth.h"
-#include "prot.h"
-#include "times.h"
-#include "global.h"
-#include "mboxevent.h"
-#include "prometheus.h"
-#include "signals.h"
-#include "version.h"
+#include "imap/auditlog.h"
+#include "imap/loginlog.h"
+#include "lib/auth.h"
+#include "lib/prot.h"
+#include "lib/times.h"
+#include "imap/global.h"
+#include "imap/mboxevent.h"
+#include "imap/prometheus.h"
+#include "lib/signals.h"
+#include "imap/version.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-#include "imap/lmtp_err.h"
+#include "common/lmtp_err.h"
 #include "imap/mupdate_err.h"
 
-#include "lmtpengine.h"
-#include "tls.h"
-#include "telemetry.h"
+#include "common/lmtpengine.h"
+#include "imap/tls.h"
+#include "imap/telemetry.h"
 
 #define RCPT_GROW 30
 

@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <sysexits.h>
 
-#include "global.h"
+#include "imap/global.h"
 
 /* generic fatal() routine for command line utilities */
 EXPORTED void fatal(const char *message, int code)

@@ -23,7 +23,7 @@
 #include "imap/global.h"
 #include "imap/mailbox.h"
 #include "imap/statuscache.h"
-#include "imap/zoneinfo_db.h"
+#include "common/zoneinfo_db.h"
 
 #include "master/masterconf.h"
 

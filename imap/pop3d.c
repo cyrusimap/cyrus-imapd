@@ -34,7 +34,7 @@
 
 #include "acl.h"
 #ifdef USE_AUTOCREATE
-#include "autocreate.h"
+#include "common/autocreate.h"
 #endif
 #include "auth.h"
 #include "global.h"
@@ -50,8 +50,8 @@
 #include "idle.h"
 #include "telemetry.h"
 #include "backend.h"
-#include "proxy.h"
-#include "sync_support.h"
+#include "common/proxy.h"
+#include "common/sync_support.h"
 #include "seen.h"
 #include "userdeny.h"
 #include "prometheus.h"

@@ -3397,7 +3397,7 @@ static test_t *build_duplicate(sieve_script_t *sscript, test_t *t)
 
 #ifdef WITH_JMAP
 #include "imap/jmap_api.h"
-#include "imap/jmap_mail_query_parse.h"
+#include "common/jmap_mail_query_parse.h"
 
 struct filter_rock {
     strarray_t *path;

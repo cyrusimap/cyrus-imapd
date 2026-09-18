@@ -1,7 +1,7 @@
 #include "config.h"
 #include "cunit/unit.h"
 
-#include "imap/jmap_util.h"
+#include "common/jmap_util.h"
 
 #include "libcyrus_min/util.h"
 

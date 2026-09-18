@@ -44,7 +44,7 @@
 #include "dlist.h"
 #include "global.h"
 #include "json_support.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "mupdate.h"

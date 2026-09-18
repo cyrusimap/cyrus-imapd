@@ -5,9 +5,9 @@
 #ifndef _PROXY_H
 #define _PROXY_H
 
-#include "backend.h"
-#include "protocol.h"
-#include "prot.h"
+#include "imap/backend.h"
+#include "imap/protocol.h"
+#include "lib/prot.h"
 
 #define IDLE_TIMEOUT (5 * 60)
 

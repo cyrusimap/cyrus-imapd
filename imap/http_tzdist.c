@@ -31,11 +31,11 @@
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "ical_support.h"
-#include "jcal.h"
+#include "common/jcal.h"
 #include "map.h"
 #include "times.h"
 #include "version.h"
-#include "zoneinfo_db.h"
+#include "common/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

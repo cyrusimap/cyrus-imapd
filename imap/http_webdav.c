@@ -17,7 +17,7 @@
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "mailbox.h"
-#include "proxy.h"
+#include "common/proxy.h"
 #include "spool.h"
 #include "user.h"
 #include "webdav_db.h"

@@ -27,7 +27,7 @@
 #include "cyr_qsort_r.h"
 #include "http_jmap.h"
 #include "jmap_mail.h"
-#include "jmap_mail_query.h"
+#include "common/jmap_mail_query.h"
 #include "json_support.h"
 #include "map.h"
 #include "parseaddr.h"

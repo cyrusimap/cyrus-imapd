@@ -20,10 +20,10 @@
 #include <sysexits.h>
 #include <syslog.h>
 
-#include "cyrusdb.h"
-#include "global.h"
+#include "lib/cyrusdb.h"
+#include "imap/global.h"
 
-#include "zoneinfo_db.h"
+#include "common/zoneinfo_db.h"
 
 #define DB config_zoneinfo_db
 

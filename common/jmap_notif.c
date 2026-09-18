@@ -1,23 +1,22 @@
 /* jmap_notif.c */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+#include "common/jmap_notif.h"
 
 #include <cyrus/strhash.h>
 
 #include <syslog.h>
 
-#include "append.h"
-#include "dav_util.h"
-#include "caldav_util.h"
-#include "httpd.h"
-#include "jmap_notif.h"
-#include "jmap_util.h"
-#include "jscalendar.h"
-#include "spool.h"
-#include "times.h"
-#include "user.h"
+#include "imap/append.h"
+#include "imap/dav_util.h"
+#include "common/caldav_util.h"
+#include "imap/httpd.h"
+#include "common/jmap_util.h"
+#include "common/jscalendar.h"
+#include "imap/spool.h"
+#include "lib/times.h"
+#include "imap/user.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

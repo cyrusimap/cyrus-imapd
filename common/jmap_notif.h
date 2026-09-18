@@ -7,9 +7,9 @@
 
 #include <jansson.h>
 
-#include "ical_support.h"
-#include "jmap_util.h"
-#include "mboxlist.h"
+#include "imap/ical_support.h"
+#include "common/jmap_util.h"
+#include "imap/mboxlist.h"
 
 #define JMAP_NOTIF_CALENDAREVENT "jmap-notif-calendarevent"
 

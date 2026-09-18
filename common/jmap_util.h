@@ -9,13 +9,13 @@
 
 #include <jansson.h>
 
-#include "caldav_db.h"
-#include "carddav_db.h"
-#include "ical_support.h"
-#include "message.h"
-#include "mboxlist.h"
-#include "parseaddr.h"
-#include "smtpclient.h"
+#include "imap/caldav_db.h"
+#include "imap/carddav_db.h"
+#include "imap/ical_support.h"
+#include "imap/message.h"
+#include "imap/mboxlist.h"
+#include "lib/parseaddr.h"
+#include "imap/smtpclient.h"
 
 #define JMAP_SUBMISSION_HDR "Content-Description"
 

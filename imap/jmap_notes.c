@@ -21,10 +21,10 @@
 #include "http_jmap.h"
 #include "http_proxy.h"
 #include "jmap_mail.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "json_support.h"
-#include "proxy.h"
-#include "sync_support.h"
+#include "common/proxy.h"
+#include "common/sync_support.h"
 #include "times.h"
 #include "user.h"
 

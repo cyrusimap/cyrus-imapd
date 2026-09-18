@@ -58,7 +58,7 @@
 #include "carddav_db.h"
 #include "webdav_db.h"
 #include "ical_support.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "vcard_support.h"
 #ifdef USE_SIEVE
 #include "sieve_db.h"
@@ -69,7 +69,6 @@
 #include "global.h"
 #include "imparse.h"
 #include "index_file.h"
-#include "jmap_util.h"
 #include "cyr_lock.h"
 #include "mailbox.h"
 #include "mappedfile.h"
@@ -3864,7 +3863,6 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
 
 
 #ifdef WITH_JMAP
-#include "jmap_util.h"
 
 static int mailbox_update_email_alarms(struct mailbox *mailbox,
                                        const struct index_record *old,

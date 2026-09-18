@@ -24,14 +24,14 @@
 
 #include <sasl/saslutil.h>
 
-#include "caldav_util.h"
+#include "common/caldav_util.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "ical_support.h"
-#include "jmap_util.h"
-#include "jscalendar.h"
+#include "common/jmap_util.h"
+#include "common/jscalendar.h"
 #include "msgrecord.h"
 #include "notify.h"
 #include "crc32.h"

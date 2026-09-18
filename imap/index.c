@@ -37,7 +37,7 @@
 #include "conversations.h"
 #include "dlist.h"
 #include "http_client.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "global.h"
 #include "times.h"
 #include "imapd.h"

@@ -68,7 +68,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 
 /* current namespace */
 static struct namespace recon_namespace;

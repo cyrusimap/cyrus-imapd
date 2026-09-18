@@ -28,7 +28,7 @@
 #include "iptostring.h"
 #include "mupdate-client.h"
 #include "prot.h"
-#include "proxy.h"
+#include "common/proxy.h"
 #include "spool.h"
 #include "tls.h"
 #include "version.h"

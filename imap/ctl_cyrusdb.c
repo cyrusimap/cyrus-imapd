@@ -44,7 +44,7 @@
 #include "cyrusdb.h"
 #include "duplicate.h"
 #include "global.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "seen.h"

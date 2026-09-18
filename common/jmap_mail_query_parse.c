@@ -8,9 +8,9 @@
 
 #include <string.h>
 
-#include "jmap_api.h"
-#include "jmap_mail_query_parse.h"
-#include "json_support.h"
+#include "imap/jmap_api.h"
+#include "common/jmap_mail_query_parse.h"
+#include "imap/json_support.h"
 
 HIDDEN int jmap_email_threadkeyword_is_valid(const char *keyword)
 {

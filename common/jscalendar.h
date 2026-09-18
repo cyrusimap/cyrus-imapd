@@ -12,7 +12,7 @@ extern "C" {
 #include <jansson.h>
 #include <libical/ical.h>
 
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 
 #define JSCAL_MAJOR_VERSION 2 /**< The current JSCalendar major version. */
 #define JSCAL_MINOR_VERSION 0 /**< The current JSCalendar minor version. */
