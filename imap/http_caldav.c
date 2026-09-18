@@ -965,7 +965,7 @@ static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
             if (cal) {
                 char *mboxname = caldav_mboxname(httpd_userid, cal);
                 if (mboxname_iscalendarmailbox(mboxname, 0) &&
-                     mboxname_policycheck(mboxname) == 0) {
+                     mboxname_policycheck(mboxname, 0) == 0) {
                     mbname = mbname_from_intname(mboxname);
                 }
                 free(mboxname);

@@ -739,7 +739,9 @@ HIDDEN int calcarddav_parse_path(const char *path,
 
         /* only a creation has to be representable: an existing collection
          * may have been made before we checked */
-        if (tgt->mbentry && mboxname_policycheck_component(collection)) {
+        if (tgt->mbentry
+            && mboxname_policycheck_component(collection,
+                                              MBOXNAME_POLICY_UNDER_DOMAIN)) {
             *resultstr = "Invalid characters in collection name";
             ret = HTTP_FORBIDDEN;
             goto done;

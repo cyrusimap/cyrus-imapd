@@ -1809,7 +1809,7 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
  */
 #define GOODCHARS " #$'()*+,-.0123456789:=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz~"
 
-EXPORTED int mboxname_policycheck_component(const char *name)
+EXPORTED int mboxname_policycheck_component(const char *name, int flags)
 {
     int sawutf7 = 0;
     unsigned c1, c2, c3, c4, c5, c6, c7, c8;
@@ -1889,7 +1889,8 @@ EXPORTED int mboxname_policycheck_component(const char *name)
             name++;             /* Skip over terminating '-' */
         }
         else {
-            if (!strchr(GOODCHARS, *name))
+            if (!strchr(GOODCHARS, *name)
+                && !(*name == '!' && (flags & MBOXNAME_POLICY_UNDER_DOMAIN)))
                 return IMAP_MAILBOX_BADNAME;
             name++;
             sawutf7 = 0;
@@ -1945,12 +1946,7 @@ static int _policycheck_domain(const char *domain, size_t len)
  * Apply site policy restrictions on mailbox names.
  * Restrictions are hardwired for now.
  */
-EXPORTED int mboxname_policycheck(const char *name)
-{
-    return mboxname_policycheck_flags(name, 0);
-}
-
-EXPORTED int mboxname_policycheck_flags(const char *name, int flags)
+EXPORTED int mboxname_policycheck(const char *name, int flags)
 {
     strarray_t *boxes;
     const char *p;
@@ -1983,7 +1979,7 @@ EXPORTED int mboxname_policycheck_flags(const char *name, int flags)
         return IMAP_MAILBOX_BADNAME;
 
     /* split off the virtual domain: it is not part of the hierarchy, and
-       every '!' belongs to it, so there is only ever the one */
+       it claims the first '!', so a later one is just a character */
     p = strchr(name, '!');
     if (p) {
         if (!config_virtdomains) return IMAP_MAILBOX_BADNAME;
@@ -1993,7 +1989,7 @@ EXPORTED int mboxname_policycheck_flags(const char *name, int flags)
             return IMAP_MAILBOX_BADNAME;
         name = p + 1;
         namelen = strlen(name);
-        if (strchr(name, '!')) return IMAP_MAILBOX_BADNAME;
+        flags |= MBOXNAME_POLICY_UNDER_DOMAIN;
     }
 
     /* bad mbox patterns */
@@ -2024,13 +2020,17 @@ EXPORTED int mboxname_policycheck_flags(const char *name, int flags)
         /* ACL identifiers, so never the owner of a mailbox */
         if (!strcmp(userid, "anyone") || !strcmp(userid, "anonymous"))
             r = IMAP_MAILBOX_BADNAME;
+        /* structural: without a domain prefix this would be the separator */
+        else if (strchr(userid, '!'))
+            r = IMAP_MAILBOX_BADNAME;
         else if (!(flags & MBOXNAME_POLICY_SKIP_IDENTITY)
                  && userid[strcspn(userid, BADUSERCHARS)])
             r = IMAP_MAILBOX_BADNAME;
     }
 
     for (i = 0; !r && i < strarray_size(boxes); i++)
-        r = mboxname_policycheck_component(strarray_nth(boxes, i));
+        r = mboxname_policycheck_component(strarray_nth(boxes, i),
+                                                 flags);
 
     strarray_free(boxes);
 

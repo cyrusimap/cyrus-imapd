@@ -1659,7 +1659,7 @@ done:
     return mboxname;
 }
 
-static int _mbox_name_roundtrips(const char *name)
+static int _mbox_name_roundtrips(const char *name, const char *accountid)
 {
     charset_t utf8 = charset_lookupname("utf-8");
     charset_t utf7 = charset_lookupname("imap-utf-7");
@@ -1672,8 +1672,12 @@ static int _mbox_name_roundtrips(const char *name)
     encoded = charset_to_imaputf7(name, strlen(name), utf8, ENCODING_NONE);
     if (!encoded) goto done;
 
-    /* the encoded form is what gets pushed into the mbname */
-    if (mboxname_policycheck_component(encoded)) goto done;
+    /* the encoded form is what gets pushed into the mbname, under the
+     * account's domain prefix if it has one */
+    mbname_t *owner = mbname_from_userid(accountid);
+    int policyflags = mbname_domain(owner) ? MBOXNAME_POLICY_UNDER_DOMAIN : 0;
+    mbname_free(&owner);
+    if (mboxname_policycheck_component(encoded, policyflags)) goto done;
 
     decoded = charset_to_utf8cstr(encoded, strlen(encoded), utf7, ENCODING_NONE);
     if (!decoded) goto done;
@@ -1793,7 +1797,7 @@ static void _mboxset_args_parse(json_t *jargs,
         /* mboxname_policycheck() only ever sees the assembled internal name,
          * by which point an escaped '.' and a literal '^' look the same and
          * the UTF-7 encoding has already happened. */
-        if (is_valid > 0 && !_mbox_name_roundtrips(name))
+        if (is_valid > 0 && !_mbox_name_roundtrips(name, req->accountid))
             is_valid = 0;
 
         if (is_valid > 0) {
@@ -2160,7 +2164,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
         goto done;
     }
 
-    if (mboxname_policycheck(mboxname)) {
+    if (mboxname_policycheck(mboxname, 0)) {
         jmap_parser_invalid(&parser, "name");
         goto done;
     }
@@ -2581,7 +2585,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             /* If the JMAP name didn't change then it can't be at fault -- the
              * old mailbox exists, so its name already passed policy -- and we
              * must be moving it somewhere we can't. */
-            if (mboxname_policycheck(newmboxname)) {
+            if (mboxname_policycheck(newmboxname, 0)) {
                 jmap_parser_invalid(&parser,
                                     name == oldname ? "parentId" : "name");
                 goto done;
