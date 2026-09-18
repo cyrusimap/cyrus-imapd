@@ -2620,7 +2620,8 @@ static void add_privs(int rights, unsigned flags,
 
             /* DAV:unbind */
             if ((rights & DACL_UNBIND) == DACL_UNBIND ||
-                ((flags & PRIV_NOSUBCOL) && (rights & DACL_RMRSRC))) {
+                ((flags & PRIV_NOSUBCOL) &&
+                 (rights & DACL_RMRSRC) == DACL_RMRSRC)) {
                 priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
                 xmlNewChild(priv, NULL, BAD_CAST "unbind", NULL);
 
@@ -4630,7 +4631,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     /* Check ACL for current user on source mailbox */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     if (((rights & DACL_READ) != DACL_READ) ||
-        (meth_move && !(rights & DACL_RMRSRC))) {
+        (meth_move && (rights & DACL_RMRSRC) != DACL_RMRSRC)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
@@ -5121,7 +5122,7 @@ static int meth_delete_collection(struct transaction_t *txn,
 static int meth_delete_resource(struct transaction_t *txn,
                                 struct meth_params *dparams)
 {
-    int ret = HTTP_NO_CONTENT, r = 0, precond, rights, needrights;
+    int ret = HTTP_NO_CONTENT, r = 0, precond, rights, needrights, may_remove;
     struct mboxevent *mboxevent = NULL;
     struct mailbox *mailbox = NULL;
     struct dav_data *ddata;
@@ -5133,14 +5134,16 @@ static int meth_delete_resource(struct transaction_t *txn,
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
     needrights = DACL_RMRSRC;
+    may_remove = (rights & DACL_RMRSRC) == DACL_RMRSRC;
     if (txn->req_tgt.namespace == &namespace_calendar) {
         /* JMAP introduced the right to remove an event
          * only if it is organized by the user (or there
          * is no organizer at all). The CalDAV namespace
          * needs to to assert this right later. */
         needrights |= DACL_WRITEOWNRSRC;
+        may_remove = may_remove || (rights & DACL_WRITEOWNRSRC);
     }
-    if (!(rights & needrights)) {
+    if (!may_remove) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
