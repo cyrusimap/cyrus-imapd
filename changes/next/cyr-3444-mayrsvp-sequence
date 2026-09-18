@@ -1,0 +1,32 @@
+Description:
+
+A calendar sharee without the mayWriteAll or mayWriteOwn right can no longer
+change an event's sequence number, whether through JMAP CalendarEvent/set or
+a CalDAV PUT.  Previously the per-property permission check let any sharee
+who held mayRSVP (or the per-event mayInviteSelf/mayInviteOthers grants) set
+SEQUENCE to any value, even though every other organizer-controlled property
+was refused.
+
+CalendarEvent/set no longer bumps SEQUENCE on behalf of such a sharee when they
+RSVP or add an invitee: the organizer's revision counter is left to the
+organizer and other writers with full rights.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

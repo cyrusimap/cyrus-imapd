@@ -5366,8 +5366,13 @@ static int updateevent_apply_patch(jmap_req_t *req,
 
     updateevent_validate_ids(update->old_event, new_event, invalid);
 
-    updateevent_bump_sequence(update->old_event, new_event,
-            update->serverset, update->schedule_addresses);
+    /* SEQUENCE is the organizer's revision counter.  A caller who may only
+     * RSVP or invite is not revising the event on the organizer's behalf. */
+    if (jmap_hasrights_mbentry(req, update->mbentry, JACL_WRITEALL) ||
+        jmap_hasrights_mbentry(req, update->mbentry, JACL_WRITEOWN)) {
+        updateevent_bump_sequence(update->old_event, new_event,
+                update->serverset, update->schedule_addresses);
+    }
 
     /* Convert to iCalendar */
     icalcomponent *newical = jmapical_toical(new_event, myoldical,

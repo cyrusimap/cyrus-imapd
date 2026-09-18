@@ -1,0 +1,174 @@
+#!perl
+use Cassandane::Tiny;
+
+# A sharee holding only mayReadItems and mayRSVP may RSVP on the account's
+# behalf, but SEQUENCE is an organizer revision counter and must stay out of
+# their reach.  This is CYR-3444.
+sub test_calendarevent_set_mayrsvp_sequence
+    :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create sharee with mayReadItems and mayRSVP only";
+    my ($shareeJmap) = $self->create_user('sharee');
+
+    my $sharee_update = sub {
+        my ($event_id, $patch) = @_;
+        my $res = $shareeJmap->CallMethods([
+            ['CalendarEvent/set', {
+                accountId => 'cassandane',
+                sendSchedulingMessages => JSON::false,
+                update => { $event_id => $patch },
+            }, 'R1'],
+        ]);
+        return $res->[0][1];
+    };
+
+    my $owner_get = sub {
+        my ($event_id, @properties) = @_;
+        my $res = $jmap->CallMethods([
+            ['CalendarEvent/get', {
+                ids => [$event_id],
+                properties => \@properties,
+            }, 'R1'],
+        ]);
+        return $res->[0][1]{list}[0];
+    };
+
+    xlog $self, "owner creates a plain event and one they organize";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                plain => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'plainuid',
+                    title => 'plain',
+                    start => '2021-01-01T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    sequence => 1,
+                },
+                organized => {
+                    calendarIds => {
+                        'Default' => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    uid => 'organizeduid',
+                    title => 'organized',
+                    start => '2021-01-02T11:11:11',
+                    timeZone => 'Europe/Berlin',
+                    duration => 'PT1H',
+                    sequence => 1,
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                'owner' => JSON::true,
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:cassandane@example.com',
+                            },
+                            participationStatus => 'accepted',
+                        },
+                        other => {
+                            roles => {
+                                'attendee' => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:other@example.com',
+                            },
+                            expectReply => JSON::true,
+                            participationStatus => 'needs-action',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        'sharee' => {
+                            mayReadItems => JSON::true,
+                            mayRSVP => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R2'],
+    ]);
+    my $plainId = $res->[0][1]{created}{plain}{id};
+    my $organizedId = $res->[0][1]{created}{organized}{id};
+    $self->assert_not_null($plainId);
+    $self->assert_not_null($organizedId);
+    $self->assert(exists $res->[1][1]{updated}{Default});
+
+    xlog $self, "sharee may not set sequence on an event without attendees";
+    $res = $sharee_update->($plainId, { sequence => 1000000 });
+    $self->assert_str_equals('forbidden', $res->{notUpdated}{$plainId}{type});
+    $self->assert_num_equals(1, $owner_get->($plainId, 'sequence')->{sequence});
+
+    xlog $self, "sharee may not set sequence on the event the owner organizes";
+    $res = $sharee_update->($organizedId, { sequence => 1000000 });
+    $self->assert_str_equals('forbidden',
+        $res->{notUpdated}{$organizedId}{type});
+    $self->assert_num_equals(1,
+        $owner_get->($organizedId, 'sequence')->{sequence});
+
+    xlog $self, "sharee may not smuggle sequence alongside a permitted RSVP";
+    $res = $sharee_update->($organizedId, {
+        'participants/cassandane/participationStatus' => 'declined',
+        sequence => 1000000,
+    });
+    $self->assert_str_equals('forbidden',
+        $res->{notUpdated}{$organizedId}{type});
+    my $event = $owner_get->($organizedId, 'sequence', 'participants');
+    $self->assert_num_equals(1, $event->{sequence});
+    $self->assert_str_equals('accepted',
+        $event->{participants}{cassandane}{participationStatus});
+
+    xlog $self, "sharee may not change shared properties";
+    $res = $sharee_update->($plainId, { title => 'unauthorized' });
+    $self->assert_str_equals('forbidden', $res->{notUpdated}{$plainId}{type});
+
+    xlog $self, "sharee may still RSVP on the owner's behalf";
+    $res = $sharee_update->($organizedId, {
+        'participants/cassandane/participationStatus' => 'tentative',
+    });
+    $self->assert(exists $res->{updated}{$organizedId});
+    $event = $owner_get->($organizedId, 'sequence', 'participants');
+    $self->assert_str_equals('tentative',
+        $event->{participants}{cassandane}{participationStatus});
+    # The sharee's RSVP is not an organizer revision, so the server no longer
+    # bumps SEQUENCE on their behalf.
+    $self->assert_num_equals(1, $event->{sequence});
+
+    xlog $self, "a mayWriteAll sharee may still set sequence";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        'sharee' => {
+                            mayReadItems => JSON::true,
+                            mayWriteAll => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    $res = $sharee_update->($organizedId, { sequence => 900000 });
+    $self->assert(exists $res->{updated}{$organizedId});
+    $self->assert_num_equals(900000,
+        $owner_get->($organizedId, 'sequence')->{sequence});
+}
