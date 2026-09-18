@@ -339,6 +339,10 @@ my ($opt, $usage) = describe_options(
     [],
     [ 'verbose|v+',    "make Cassandane and Cyrus much noisier; repeat (-vvv)"
                      . " for more (default: 0)", { default => 0 } ],
+    [ 'live-output|O', "don't capture STDOUT/STDERR. Send it all to the"
+                     . " terminal as it happens. Useful to see where things"
+                     . " pause or break down, or hold things up so you can"
+                     . " get gdb ready" ],
     [ 'no-fatal-plan', "test plan sanity check failures are not fatal" ],
     [ 'no-ok',         "report only failures and errors, omitting passing tests" ],
     [ 'log-directory|L=s', "collect per-test logs under this directory" ],
@@ -379,6 +383,8 @@ if ($opt->help) {
     print $usage->text, $testname_help;
     exit 0;
 }
+
+local $ENV{CASSANDANE_LIVE_OUTPUT} = 1 if $opt->live_output;
 
 my $cassini_filename = $opt->config;
 my @cassini_overrides;
