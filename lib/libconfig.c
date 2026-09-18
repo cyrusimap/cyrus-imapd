@@ -63,7 +63,7 @@ extern void fatal(const char *fatal_message, int fatal_code)
    __attribute__ ((noreturn));
 
 /* prototype to allow for sane function ordering */
-static void config_read_file(const char *filename);
+static void config_read_file(const char *filename, struct buf *line);
 
 static void assert_not_deprecated(enum imapopt opt)
 {
@@ -643,7 +643,9 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         fatal("could not construct include file  hash table", EX_CONFIG);
     }
 
-    config_read_file(config_filename);
+    struct buf line = BUF_INITIALIZER;
+    config_read_file(config_filename, &line);
+    buf_free(&line);
 
     free_hash_table(&includehash, NULL);
 
@@ -877,7 +879,8 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
                                    NULL, STRARRAY_TRIM);
 }
 
-static void config_add_overflowstring(const char *key, const char *value, int lineno, struct buf *line)
+static void config_add_overflowstring(const char *key, const char *value,
+                                      int lineno, struct buf *line)
 {
     char *newval = xstrdup(value);
     char *oldval = hash_insert(key, newval, &confighash);
@@ -906,7 +909,7 @@ EXPORTED int config_parse_switch(const char *p)
     return -1;
 }
 
-static void config_read_file(const char *filename)
+static void config_read_file(const char *filename, struct buf *line)
 {
     FILE *infile = NULL;
     enum imapopt opt = IMAPOPT_ZERO;
@@ -916,9 +919,6 @@ static void config_read_file(const char *filename)
     char *p, *q, *key, *fullkey, *srvkey;
     int service_specific;
     int idlen = (config_ident ? strlen(config_ident) : 0);
-    /* This variable moves in the next commit. */
-    struct buf temp = BUF_INITIALIZER;
-    struct buf *line = &temp;
     int lines_read;
 
     /* read in config file
@@ -1001,7 +1001,7 @@ static void config_read_file(const char *filename)
         /* Look for directives */
         if (key[0] == '@') {
             if (!strcasecmp(key, "@include")) {
-                config_read_file(p);
+                config_read_file(p, line);
                 continue;
             }
             else {
@@ -1266,7 +1266,6 @@ static void config_read_file(const char *filename)
     }
 
     fclose(infile);
-    buf_free(&temp);
 }
 
 EXPORTED void config_toggle_debug(void)
