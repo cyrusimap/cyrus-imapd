@@ -4710,7 +4710,7 @@ static int parse_select_params(char *tag, char *cmd, int allowdeleted,
 
     int c = prot_getc(imapd_in);
     if (c == ' ') {
-        static struct buf arg, parm1, parm2;
+        static struct buf arg, uidseq, parm1, parm2;
 
         c = prot_getc(imapd_in);
         if (c != '(') goto badlist;
@@ -4742,9 +4742,9 @@ static int parse_select_params(char *tag, char *cmd, int allowdeleted,
                     if (c != '(') {
                         /* optional UID sequence */
                         prot_ungetc(c, imapd_in);
-                        c = getword(imapd_in, &arg);
-                        if (!imparse_issequence(arg.s)) goto badqresync;
-                        v->sequence = arg.s;
+                        c = getword(imapd_in, &uidseq);
+                        if (!imparse_issequence(uidseq.s)) goto badqresync;
+                        v->sequence = uidseq.s;
                         if (c == ' ') {
                             c = prot_getc(imapd_in);
                             if (c != '(') goto badqresync;

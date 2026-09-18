@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_qresync_select_modifier_order ($self)
+{
+    xlog $self, "Make some messages";
+    for my $uid (1..50) {
+        $self->make_message("Message $uid");
+    }
+
+    my $talk = $self->{store}->get_client();
+    $talk->uid(1);
+    $talk->select("INBOX");
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+
+    xlog $self, "Expunge some messages";
+    $talk->enable("qresync");
+    $talk->store('5:10,25:45', '+flags', '(\\Deleted)');
+    $talk->expunge();
+
+    # The QRESYNC uid sequence has to survive whatever follows it in the
+    # parameter list.
+    my sub assert_resync ($params, $expect_vanished) {
+        xlog $self, "QResync with ($params)";
+        $talk->unselect();
+        $talk->select("INBOX", "($params)" => 1);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        my @vanished = $talk->get_response_code('vanished');
+        $self->assert_equals($expect_vanished, $vanished[0][1]);
+    }
+
+    assert_resync("QRESYNC ($uidvalidity 0 1:50)", "5:10,25:45");
+    assert_resync("QRESYNC ($uidvalidity 0 1:50) ANNOTATE", "5:10,25:45");
+    assert_resync("QRESYNC ($uidvalidity 0 1:50) CONDSTORE", "5:10,25:45");
+    assert_resync("CONDSTORE QRESYNC ($uidvalidity 0 1:50)", "5:10,25:45");
+}
