@@ -24,9 +24,9 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 
-#include "cyrusdb.h"
-#include "global.h"
-#include "mailbox.h"
+#include "lib/cyrusdb.h"
+#include "imap/global.h"
+#include "imap/mailbox.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

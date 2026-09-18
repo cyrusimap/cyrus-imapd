@@ -21,11 +21,11 @@
 #include <string.h>
 
 /* cyrus includes */
-#include "global.h"
-#include "index.h"
-#include "imapurl.h"
-#include "mailbox.h"
-#include "mboxlist.h"
+#include "imap/global.h"
+#include "imap/index.h"
+#include "lib/imapurl.h"
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

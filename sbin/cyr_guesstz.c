@@ -14,7 +14,7 @@
 
 #include <libical/ical.h>
 
-#include "guesstz.h"
+#include "imap/guesstz.h"
 
 static const char *default_trstart = "20000101T000000Z";
 static const char *default_trend = "20640101T000000Z";

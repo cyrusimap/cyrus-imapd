@@ -19,7 +19,7 @@
 #include <sys/statvfs.h>
 #include <sys/types.h>
 
-#include "global.h"
+#include "imap/global.h"
 
 /* forward declarations */
 static void usage(void);

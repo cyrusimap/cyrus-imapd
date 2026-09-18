@@ -22,10 +22,10 @@
 #include <syslog.h>
 #include <signal.h>
 
-#include "global.h"
-#include "libcyr_cfg.h"
-#include "userdeny.h"
-#include "ptrarray.h"
+#include "imap/global.h"
+#include "lib/libcyr_cfg.h"
+#include "imap/userdeny.h"
+#include "lib/ptrarray.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

@@ -15,10 +15,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "global.h"
-#include "mboxname.h"
-#include "command.h"
-#include "user.h"
+#include "imap/global.h"
+#include "imap/mboxname.h"
+#include "lib/command.h"
+#include "imap/user.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

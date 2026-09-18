@@ -213,15 +213,15 @@ sbin_PROGRAMS += \
     sbin/ctl_cyrusdb \
     sbin/ctl_deliver \
     sbin/ctl_mboxlist \
-    imap/cvt_cyrusdb \
-    imap/cyr_df \
-    imap/cyr_ls \
-    imap/cyr_pwd \
-    imap/cyr_withlock_run \
-    imap/cyrdump \
-    imap/cyr_dbtool \
-    imap/cyr_deny \
-    imap/cyr_expire \
+    sbin/cvt_cyrusdb \
+    sbin/cyr_df \
+    sbin/cyr_ls \
+    sbin/cyr_pwd \
+    sbin/cyr_withlock_run \
+    sbin/cyrdump \
+    sbin/cyr_dbtool \
+    sbin/cyr_deny \
+    sbin/cyr_expire \
     imap/cyr_info \
     imap/cyr_buildinfo \
     imap/cyr_synclog \
@@ -279,7 +279,7 @@ sbin_PROGRAMS += \
     imap/dav_reconstruct
 
 if HAVE_GUESSTZ
-sbin_PROGRAMS += imap/cyr_guesstz
+sbin_PROGRAMS += sbin/cyr_guesstz
 endif # HAVE_GUESSTZ
 
 if REPLICATION
@@ -883,36 +883,36 @@ sbin_ctl_mboxlist_LDADD = $(LD_UTILITY_ADD)
 sbin_ctl_zoneinfo_SOURCES = sbin/ctl_zoneinfo.c common/cli_fatal.c common/mutex_fake.c common/zoneinfo_db.c imap/xml_support.c
 sbin_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
 
-imap_cvt_cyrusdb_SOURCES = common/cli_fatal.c imap/cvt_cyrusdb.c common/mutex_fake.c
-imap_cvt_cyrusdb_LDADD = $(LD_UTILITY_ADD)
+sbin_cvt_cyrusdb_SOURCES = sbin/cvt_cyrusdb.c common/cli_fatal.c common/mutex_fake.c
+sbin_cvt_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyrdump_SOURCES = common/cli_fatal.c imap/cyrdump.c common/mutex_fake.c
-imap_cyrdump_LDADD = $(LD_UTILITY_ADD)
+sbin_cyrdump_SOURCES = sbin/cyrdump.c common/cli_fatal.c common/mutex_fake.c
+sbin_cyrdump_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_dbtool_SOURCES = common/cli_fatal.c imap/cyr_dbtool.c common/mutex_fake.c
-imap_cyr_dbtool_LDADD = $(LD_UTILITY_ADD)
+sbin_cyr_dbtool_SOURCES = sbin/cyr_dbtool.c common/cli_fatal.c common/mutex_fake.c
+sbin_cyr_dbtool_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_deny_SOURCES = common/cli_fatal.c imap/cyr_deny.c common/mutex_fake.c
-imap_cyr_deny_LDADD = $(LD_UTILITY_ADD)
+sbin_cyr_deny_SOURCES = sbin/cyr_deny.c common/cli_fatal.c common/mutex_fake.c
+sbin_cyr_deny_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_df_SOURCES = common/cli_fatal.c imap/cyr_df.c common/mutex_fake.c
-imap_cyr_df_LDADD = $(LD_UTILITY_ADD)
+sbin_cyr_df_SOURCES = sbin/cyr_df.c common/cli_fatal.c common/mutex_fake.c
+sbin_cyr_df_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_ls_SOURCES = common/cli_fatal.c imap/cyr_ls.c common/mutex_fake.c
-imap_cyr_ls_LDADD = $(LD_UTILITY_ADD)
+sbin_cyr_ls_SOURCES = sbin/cyr_ls.c common/cli_fatal.c common/mutex_fake.c
+sbin_cyr_ls_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_pwd_SOURCES = common/cli_fatal.c imap/cyr_pwd.c common/mutex_fake.c
-imap_cyr_pwd_LDADD = $(LD_UTILITY_ADD)
+sbin_cyr_pwd_SOURCES = sbin/cyr_pwd.c common/cli_fatal.c common/mutex_fake.c
+sbin_cyr_pwd_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_withlock_run_SOURCES = common/cli_fatal.c imap/cyr_withlock_run.c common/mutex_fake.c
-imap_cyr_withlock_run_LDADD = $(LD_UTILITY_ADD)
+sbin_cyr_withlock_run_SOURCES = sbin/cyr_withlock_run.c common/cli_fatal.c common/mutex_fake.c
+sbin_cyr_withlock_run_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_expire_SOURCES = common/cli_fatal.c imap/cyr_expire.c common/mutex_fake.c
-imap_cyr_expire_LDADD = $(LD_UTILITY_ADD)
+sbin_cyr_expire_SOURCES = sbin/cyr_expire.c common/cli_fatal.c common/mutex_fake.c
+sbin_cyr_expire_LDADD = $(LD_UTILITY_ADD)
 
 if HAVE_GUESSTZ
-imap_cyr_guesstz_SOURCES = common/cli_fatal.c imap/cyr_guesstz.c common/mutex_fake.c
-imap_cyr_guesstz_LDADD = $(LD_UTILITY_ADD)
+sbin_cyr_guesstz_SOURCES = sbin/cyr_guesstz.c common/cli_fatal.c common/mutex_fake.c
+sbin_cyr_guesstz_LDADD = $(LD_UTILITY_ADD)
 endif # HAVE_GUESSTZ
 
 imap_cyr_info_SOURCES = common/cli_fatal.c imap/cyr_info.c common/mutex_fake.c master/masterconf.c
@@ -2186,7 +2186,7 @@ ZONEINFO_FIXUP = $(top_srcdir)/tools/fixup-zoneinfo.pl
 ZONEINFO_DEPS = $(top_srcdir)/tzdata/version $(ZONEINFO_FIXUP)
 
 if HAVE_GUESSTZ
-ZONEINFO_DEPS += imap/cyr_guesstz
+ZONEINFO_DEPS += sbin/cyr_guesstz
 endif # HAVE_GUESSTZ
 
 if BUILD_ZONEINFO
@@ -2205,7 +2205,7 @@ if HAVE_GUESSTZ
 ## next to the libtool-wrapped binary, where there is none.  The cunit suite
 ## and the Valgrind build check guesstz for leaks.
 	$(AM_V_at)ASAN_OPTIONS="$$ASAN_OPTIONS:detect_leaks=0" \
-	    ./imap/cyr_guesstz -z zoneinfo zoneinfo/guesstz.db
+	    ./sbin/cyr_guesstz -z zoneinfo zoneinfo/guesstz.db
 endif # HAVE_GUESSTZ
 	$(AM_V_at)touch $@
 

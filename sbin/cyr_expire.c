@@ -35,14 +35,14 @@
 
 #include <sasl/sasl.h>
 
-#include "annotate.h"
-#include "duplicate.h"
-#include "global.h"
-#include "libcyr_cfg.h"
-#include "mboxevent.h"
-#include "mboxlist.h"
-#include "conversations.h"
-#include "user.h"
+#include "imap/annotate.h"
+#include "imap/duplicate.h"
+#include "imap/global.h"
+#include "lib/libcyr_cfg.h"
+#include "imap/mboxevent.h"
+#include "imap/mboxlist.h"
+#include "imap/conversations.h"
+#include "imap/user.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
