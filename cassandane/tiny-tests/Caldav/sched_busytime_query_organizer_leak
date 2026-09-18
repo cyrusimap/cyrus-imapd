@@ -1,0 +1,99 @@
+#!perl
+use Cassandane::Tiny;
+
+# Regression test: If we blow out the size of the libical ring with a whole
+# mess of attendees, we don't want to end up with a dangling pointer.
+
+sub test_sched_busytime_query_organizer_leak
+{
+    my ($self) = @_;
+
+    my $caldav = $self->{caldav};
+
+    my $organizer = 'cassandane@example.com';
+
+    # libical's temporary buffer ring is 2500 slots; overshoot it so the
+    # organizer's slot is certainly overwritten before the local replies.
+    my $remote_count = 2510;
+    my $self_count = 12;
+
+    my @lines = (
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Cyrus//CYR-3463//EN',
+        'METHOD:REQUEST',
+        'BEGIN:VFREEBUSY',
+        'UID:cyr-3463-organizer-leak',
+        'DTSTAMP:20300101T000000Z',
+        'DTSTART:20300101T000000Z',
+        'DTEND:20310101T000000Z',
+        "ORGANIZER:mailto:$organizer",
+    );
+
+    # Long addresses at a foreign domain: each decode advances the ring but
+    # lands in a different allocator size class than the small organizer
+    # chunk, so it will not re-occupy that chunk before the local replies
+    # read it.
+    my $remote = ('R' x 280) . '@elsewhere.test';
+    push @lines, "ATTENDEE:mailto:$remote" for (1 .. $remote_count);
+    push @lines, "ATTENDEE:mailto:$organizer" for (1 .. $self_count);
+
+    push @lines, 'END:VFREEBUSY', 'END:VCALENDAR';
+
+    my $query = join('', map { fold_ical_line($_) . "\r\n" } @lines);
+
+    my %headers = (
+        'Content-Type'  => 'text/calendar; charset=utf-8',
+        'Authorization' => $caldav->auth_header(),
+    );
+
+    xlog $self, "freebusy query with $remote_count remote + $self_count self attendees";
+    my $res = $caldav->{ua}->request('POST', $caldav->request_url('Outbox'),
+                                     { content => $query, headers => \%headers });
+
+    $self->assert_num_equals(200, $res->{status});
+
+    my @organizers = organizer_values($res->{content});
+
+    $self->assert_num_equals($self_count, scalar @organizers);
+
+    # The reply echoes the decoded organizer address (libical strips the
+    # "mailto:" scheme on decode).  A leaked freed chunk will be something
+    # else.
+    for my $got (@organizers) {
+        $self->assert_str_equals($organizer, $got);
+    }
+}
+
+# Pull the ORGANIZER value out of every calendar-data block of a
+# schedule-response body.  The value is compared verbatim, so a leaked chunk
+# (which is not "mailto:cassandane@example.com") makes the caller's assertion
+# fail.
+sub organizer_values
+{
+    my ($body) = @_;
+
+    my @values;
+    while ($body =~ m{<(?:\w+:)?calendar-data[^>]*><!\[CDATA\[(.*?)\]\]></(?:\w+:)?calendar-data>}sg) {
+        my $block = $1;
+        $block =~ s/\r\n //g;
+        if ($block =~ /^ORGANIZER:([^\r\n]*)/m) {
+            push @values, $1;
+        }
+    }
+    return @values;
+}
+
+sub fold_ical_line
+{
+    my ($line, $limit) = @_;
+    $limit //= 72;
+
+    my @out;
+    while (length $line > $limit) {
+        push @out, substr($line, 0, $limit, '');
+        $line = ' ' . $line;
+    }
+    push @out, $line;
+    return join("\r\n", @out);
+}
