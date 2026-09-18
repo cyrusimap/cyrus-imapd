@@ -31,7 +31,7 @@ sub test_splitbrain_mailbox
     $self->assert_matches(qr/exited with code 1/, "$@");
 
     my $master_pattern = qr{
-        \bMAILBOX\sreceived\sNO\sresponse:\sIMAP_MAILBOX_MOVED\b
+        \bMAILBOX\sreceived\sNO\sresponse:\sIMAP_SYNC_WRONG_MAILBOX\b
     }x;
     $self->assert_syslog_matches($self->{instance}, $master_pattern);
 

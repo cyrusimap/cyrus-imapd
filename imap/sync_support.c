@@ -2297,6 +2297,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_MOVED ",
                           strlen("IMAP_MAILBOX_MOVED ")))
             return IMAP_MAILBOX_MOVED;
+        else if (!strncmp(errmsg.s, "IMAP_SYNC_WRONG_MAILBOX ",
+                          strlen("IMAP_SYNC_WRONG_MAILBOX ")))
+            return IMAP_SYNC_WRONG_MAILBOX;
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_NOTSUPPORTED ",
                           strlen("IMAP_MAILBOX_NOTSUPPORTED ")))
             return IMAP_MAILBOX_NOTSUPPORTED;
@@ -3369,6 +3372,14 @@ static int sync_apply_mailbox(struct dlist *kin,
 
     options = sync_parse_options(options_str);
 
+    /* the folder is committed on create, then again after records are applied.
+     * If we stored highestmodseq on create, then an interrupted sync would cause
+     * sync to fail (no-copyback) or bounce the modseq of every source record
+     * (full-sync).  We have to use createdmodseq if present, because otherwise the
+     * mailbox create would lower the createdmodseq, causing the wrong compact-ids
+     * mailboxId to be generated */
+    modseq_t create_modseq = createdmodseq ? createdmodseq : 1;
+
     user_nslock_t *user_nslock = user_nslock_lockmb_w(mboxname);
 
     r = mailbox_open_iwl(mboxname, &mailbox);
@@ -3382,7 +3393,7 @@ static int sync_apply_mailbox(struct dlist *kin,
                              "mailbox=<%s> uniqueid=<%s> usedby=<%s>",
                              mboxname, uniqueid, oldname);
             free(oldname);
-            r = IMAP_MAILBOX_MOVED;
+            r = IMAP_SYNC_WRONG_MAILBOX;
         }
         else {
             mbentry_t mbentry = MBENTRY_INITIALIZER;
@@ -3401,7 +3412,7 @@ static int sync_apply_mailbox(struct dlist *kin,
                 flags |= MBOXLIST_CREATE_LOCALONLY;
 
             r = mboxlist_createmailbox_version(&mbentry, version,
-                                               options, highestmodseq,
+                                               options, create_modseq,
                                                1/*isadmin*/,
                                                sstate->userid, sstate->authstate,
                                                flags, &mailbox);
@@ -3465,7 +3476,7 @@ static int sync_apply_mailbox(struct dlist *kin,
                 flags |= MBOXLIST_CREATE_LOCALONLY;
 
             r = mboxlist_createmailbox_version(&mbentry, version,
-                                               options, highestmodseq,
+                                               options, create_modseq,
                                                1/*isadmin*/,
                                                sstate->userid, sstate->authstate,
                                                flags, &mailbox);
@@ -3477,7 +3488,7 @@ static int sync_apply_mailbox(struct dlist *kin,
             xsyslog(LOG_ERR, "SYNCERROR: mailbox uniqueid changed - retry",
                              "mailbox=<%s> origuniqueid=<%s> newuniqueid=<%s>",
                              mboxname, mailbox_uniqueid(mailbox), uniqueid);
-            r = IMAP_MAILBOX_MOVED;
+            r = IMAP_SYNC_WRONG_MAILBOX;
             goto done;
         }
     }
@@ -4396,7 +4407,7 @@ static int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
                              " wanted_uniqueid=<%s> wanted_uidvalidity=<%u>",
                              mboxname, mbentry->uniqueid, mbentry->uidvalidity,
                              uniqueid, uidvalidity);
-            r = IMAP_MAILBOX_MOVED;
+            r = IMAP_SYNC_WRONG_MAILBOX;
             goto done;
         }
     }
@@ -4934,7 +4945,7 @@ static int sync_apply_expunge(struct dlist *kin,
 
     /* don't want to expunge the wrong mailbox! */
     if (strcmpsafe(mailbox_uniqueid(mailbox), uniqueid)) {
-        r = IMAP_MAILBOX_MOVED;
+        r = IMAP_SYNC_WRONG_MAILBOX;
         goto done;
     }
 
@@ -5279,7 +5290,10 @@ static const char *sync_response(int r)
         resp = "NO IMAP_MAILBOX_LOCKED Mailbox locked";
         break;
     case IMAP_MAILBOX_MOVED:
-        resp = "NO IMAP_MAILBOX_MOVED Mailbox exists with another name or uniqueid";
+        resp = "NO IMAP_MAILBOX_MOVED Mailbox has been moved to another server";
+        break;
+    case IMAP_SYNC_WRONG_MAILBOX:
+        resp = "NO IMAP_SYNC_WRONG_MAILBOX Mailbox exists with another name or uniqueid";
         break;
     case IMAP_MAILBOX_NOTSUPPORTED:
         resp = "NO IMAP_MAILBOX_NOTSUPPORTED Operation is not supported on mailbox";
@@ -7075,7 +7089,7 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     /* definitely bad if these don't match! */
     if (strcmpsafe(mailbox_uniqueid(mailbox), local->uniqueid) ||
         strcmpsafe(mailbox_partition(mailbox), local->partition)) {
-        r = IMAP_MAILBOX_MOVED;
+        r = IMAP_SYNC_WRONG_MAILBOX;
         goto done;
     }
 
@@ -7229,7 +7243,15 @@ int sync_do_update_mailbox(struct sync_client_state *sync_cs,
     }
 
     /* never retry - other end should always sync cleanly */
-    if (flags & SYNC_FLAG_NO_COPYBACK) return r;
+    if (flags & SYNC_FLAG_NO_COPYBACK) {
+        if (r == IMAP_AGAIN) {
+            xsyslog_ev(LOG_ERR, "sync.mailbox.replica_ahead",
+                       lf_s("mbox.name", local->name));
+            /* This will fail every future try, so IMAP_AGAIN is not appropriate */
+            r = IMAP_SYNC_NOCOPYBACK;
+        }
+        return r;
+    }
 
     if (r == IMAP_AGAIN) {
         local->ispartial = 0; /* don't batch the re-update, means sync to 2.4 will still work after fullsync */
