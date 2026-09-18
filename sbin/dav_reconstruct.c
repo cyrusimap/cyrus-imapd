@@ -1,0 +1,151 @@
+/* dav_reconstruct.c - (re)build DAV DB for a user */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+#include <config.h>
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
+#include <cyrus/xmalloc.h>
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <getopt.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sysexits.h>
+#include <syslog.h>
+#include <time.h>
+
+#include <libical/ical.h>
+
+#include "imap/annotate.h"
+#include "imap/global.h"
+#include "imap/http_dav.h"
+#include "imap/mailbox.h"
+#include "imap/message.h"
+#include "imap/message_guid.h"
+#include "imap/mboxname.h"
+#include "imap/mboxlist.h"
+#include "common/zoneinfo_db.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+
+/* current namespace */
+static struct namespace recon_namespace;
+
+/* config.c stuff */
+const int config_need_data = 0;
+
+/* forward declarations */
+void usage(void) __attribute__((noreturn));
+void shut_down(int code) __attribute__((noreturn));
+
+static int code = 0;
+
+static int do_user(const char *userid, void *rock)
+{
+    printf("Reconstructing DAV DB for %s...\n", userid);
+
+    return dav_reconstruct_user(userid, (const char *)rock);
+}
+
+int main(int argc, char **argv)
+{
+    int opt, r;
+    char *alt_config = NULL;
+    int allusers = 0;
+    const char *audit_tool = NULL;
+
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:A:a";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "all", no_argument, NULL, 'a' },
+        { "audit-tool", required_argument, NULL, 'A' },
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
+
+        case 'a':
+            allusers = 1;
+            break;
+
+        case 'A':
+            audit_tool = optarg;
+            break;
+
+        default:
+            usage();
+        }
+    }
+
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+
+    cyrus_init(alt_config, "dav_reconstruct", 0, 0);
+    global_sasl_init(1,0,NULL);
+
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&recon_namespace, NAMESPACE_OPTION_ADMIN))) {
+        syslog(LOG_ERR, "%s", error_message(r));
+        fatal(error_message(r), EX_CONFIG);
+    }
+
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers(0);
+    sqldb_init();
+
+    if (allusers) {
+        mboxlist_alluser(do_user, (void *)audit_tool);
+    }
+    else if (optind == argc) {
+         usage();
+    }
+    else {
+        int i;
+        for (i = optind; i < argc; i++)
+            do_user(argv[i], (void *)audit_tool);
+    }
+
+    libcyrus_run_delayed();
+    sqldb_done();
+    cyrus_done();
+
+    exit(code);
+}
+
+
+void usage(void)
+{
+    fprintf(stderr,
+            "usage: dav_reconstruct [-C <alt_config>] userid\n");
+    exit(EX_USAGE);
+}
+
+/*
+ * Cleanly shut down and exit
+ */
+void shut_down(int code) __attribute__((noreturn));
+void shut_down(int code)
+{
+    in_shutdown = 1;
+
+    libcyrus_run_delayed();
+
+    mboxlist_close();
+    mboxlist_done();
+    sqldb_done();
+    exit(code);
+}
