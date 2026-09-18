@@ -79,7 +79,6 @@ docsrc/reference/manpages/usercommands/sieveshell.rst
 imap/backupcyrusd
 imap/calalarmd
 imap/css3_color_array.h
-imap/cvt_xlist_specialuse
 imap/cyr_charset
 imap/cyr_sequence
 imap/cyr_sphinxmgr
@@ -113,15 +112,10 @@ imap/quota
 imap/rfc822_header.h
 imap/search_test
 imap/smmapd
-imap/squatter
 imap/squat_dump
-imap/sync_client
-imap/sync_reset
 imap/sync_server
-imap/tls_prune
 imap/tz_err.c
 imap/tz_err.h
-imap/unexpunge
 imtest/imtest
 include/cyrus/imapopts.h
 install-sh
@@ -186,6 +180,7 @@ sbin/ctl_deliver
 sbin/ctl_mboxlist
 sbin/ctl_zoneinfo
 sbin/cvt_cyrusdb
+sbin/cvt_xlist_specialuse
 sbin/cyrdump
 sbin/cyr_buildinfo
 sbin/cyr_dbtool
@@ -208,6 +203,11 @@ sbin/mbpath
 sbin/mbtool
 sbin/reconstruct
 sbin/relocate_by_id
+sbin/squatter
+sbin/sync_client
+sbin/sync_reset
+sbin/tls_prune
+sbin/unexpunge
 sieve/addr-lex.c
 sieve/addr.c
 sieve/addr.h

@@ -25,16 +25,15 @@
 #include <sys/wait.h>
 #include <sys/resource.h>
 
-#include "global.h"
-#include "mboxlist.h"
-#include "mailbox.h"
-#include "seen.h"
-#include "mboxname.h"
-#include "map.h"
-#include "imapd.h"
-#include "user.h"
+#include "imap/global.h"
+#include "imap/mboxlist.h"
+#include "imap/mailbox.h"
+#include "imap/seen.h"
+#include "imap/mboxname.h"
+#include "lib/map.h"
+#include "imap/imapd.h"
+#include "imap/user.h"
 #include "common/sync_support.h"
-/*#include "cdb.h"*/
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

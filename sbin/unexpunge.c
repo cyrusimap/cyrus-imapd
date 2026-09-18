@@ -21,14 +21,14 @@
 #include <syslog.h>
 #include <signal.h>
 
-#include "annotate.h"
-#include "global.h"
-#include "index.h"
-#include "libcyr_cfg.h"
-#include "map.h"
-#include "mailbox.h"
-#include "mboxlist.h"
-#include "sync_log.h"
+#include "imap/annotate.h"
+#include "imap/global.h"
+#include "imap/index.h"
+#include "lib/libcyr_cfg.h"
+#include "lib/map.h"
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
+#include "imap/sync_log.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

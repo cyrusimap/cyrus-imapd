@@ -34,22 +34,22 @@
 #include <string.h>
 #include <getopt.h>
 
-#include "annotate.h"
-#include "bitvector.h"
-#include "bsearch.h"
-#include "mboxlist.h"
-#include "global.h"
-#include "search_engines.h"
-#include "sync_log.h"
-#include "mailbox.h"
-#include "ptrarray.h"
-#include "acl.h"
-#include "seen.h"
-#include "mboxname.h"
-#include "index.h"
-#include "message.h"
+#include "imap/annotate.h"
+#include "lib/bitvector.h"
+#include "lib/bsearch.h"
+#include "imap/mboxlist.h"
+#include "imap/global.h"
+#include "imap/search_engines.h"
+#include "imap/sync_log.h"
+#include "imap/mailbox.h"
+#include "lib/ptrarray.h"
+#include "lib/acl.h"
+#include "imap/seen.h"
+#include "imap/mboxname.h"
+#include "imap/index.h"
+#include "imap/message.h"
 #include "common/itip_support.h"
-#include "attachextract.h"
+#include "imap/attachextract.h"
 
 #include "master/service.h" /* for STATUS_FD only */
 

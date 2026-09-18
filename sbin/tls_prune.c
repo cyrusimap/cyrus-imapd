@@ -13,8 +13,8 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-#include "global.h"
-#include "tls.h"
+#include "imap/global.h"
+#include "imap/tls.h"
 
 static void usage(void)
 {

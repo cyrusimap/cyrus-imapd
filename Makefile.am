@@ -235,8 +235,8 @@ sbin_PROGRAMS += \
     imap/quota \
     sbin/reconstruct \
     sbin/relocate_by_id \
-    imap/tls_prune \
-    imap/cvt_xlist_specialuse \
+    sbin/tls_prune \
+    sbin/cvt_xlist_specialuse \
     ptclient/ptdump \
     ptclient/ptexpire
 
@@ -252,7 +252,7 @@ noinst_PROGRAMS += imap/squat_dump
 endif
 if SQUATTER
 # Despite the name, the squatter program handles any search engine
-sbin_PROGRAMS += imap/squatter
+sbin_PROGRAMS += sbin/squatter
 endif
 
 if IDLED
@@ -284,10 +284,10 @@ endif # HAVE_GUESSTZ
 
 if REPLICATION
 libexec_PROGRAMS += imap/sync_server
-sbin_PROGRAMS += imap/sync_client imap/sync_reset
+sbin_PROGRAMS += sbin/sync_client sbin/sync_reset
 endif # REPLICATION
 
-sbin_PROGRAMS += imap/unexpunge
+sbin_PROGRAMS += sbin/unexpunge
 
 if SIEVE
 noinst_PROGRAMS += notifyd/notifytest
@@ -1460,26 +1460,26 @@ imap_search_test_LDADD = $(LD_UTILITY_ADD)
 imap_smmapd_SOURCES = common/mutex_fake.c common/proxy.c imap/smmapd.c master/service.c
 imap_smmapd_LDADD = $(LD_SERVER_ADD)
 
-imap_squatter_SOURCES = common/cli_fatal.c common/mutex_fake.c imap/squatter.c
-imap_squatter_LDADD = $(LD_UTILITY_ADD)
+sbin_squatter_SOURCES = sbin/squatter.c common/cli_fatal.c common/mutex_fake.c
+sbin_squatter_LDADD = $(LD_UTILITY_ADD)
 
 imap_squat_dump_SOURCES = common/cli_fatal.c common/mutex_fake.c imap/squat_dump.c
 imap_squat_dump_LDADD = $(LD_UTILITY_ADD)
 
-imap_sync_client_SOURCES = common/mutex_fake.c imap/sync_client.c common/imap_proxy.h common/sync_support.c common/sync_support.h
-imap_sync_client_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
+sbin_sync_client_SOURCES = sbin/sync_client.c common/mutex_fake.c common/imap_proxy.h common/sync_support.c common/sync_support.h
+sbin_sync_client_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
-imap_sync_reset_SOURCES = common/mutex_fake.c imap/sync_reset.c common/sync_support.c common/sync_support.h
-imap_sync_reset_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
+sbin_sync_reset_SOURCES = sbin/sync_reset.c common/mutex_fake.c common/sync_support.c common/sync_support.h
+sbin_sync_reset_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 imap_sync_server_SOURCES = common/mutex_fake.c imap/sync_server.c common/imap_proxy.h common/sync_support.c common/sync_support.h master/service.c
 imap_sync_server_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
-imap_tls_prune_SOURCES = common/cli_fatal.c common/mutex_fake.c imap/tls_prune.c
-imap_tls_prune_LDADD = $(LD_UTILITY_ADD)
+sbin_tls_prune_SOURCES = sbin/tls_prune.c common/cli_fatal.c common/mutex_fake.c
+sbin_tls_prune_LDADD = $(LD_UTILITY_ADD)
 
-imap_unexpunge_SOURCES = common/cli_fatal.c common/mutex_fake.c imap/unexpunge.c
-imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
+sbin_unexpunge_SOURCES = sbin/unexpunge.c common/cli_fatal.c common/mutex_fake.c
+sbin_unexpunge_LDADD = $(LD_UTILITY_ADD)
 
 # $(COMPILE_ET) creates its output files in the directory it's run from,
 # so do a tricky directory change
@@ -1683,8 +1683,8 @@ cassandane/Cassandane/Config/Bitfields.pm: lib/imapoptions tools/imapoptions.pl 
 	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/imapoptions.pl bitfields \
 	    $< > $@.NEW && mv $@.NEW $@
 
-imap_cvt_xlist_specialuse_SOURCES = common/mutex_fake.c imap/cvt_xlist_specialuse.c
-imap_cvt_xlist_specialuse_LDADD = $(LD_UTILITY_ADD)
+sbin_cvt_xlist_specialuse_SOURCES = sbin/cvt_xlist_specialuse.c common/mutex_fake.c
+sbin_cvt_xlist_specialuse_LDADD = $(LD_UTILITY_ADD)
 
 @SET_MAKE@
 
@@ -1911,7 +1911,10 @@ sieve_libcyrus_sieve_la_LIBADD = \
     lib/libcyrus.la
 sieve_libcyrus_sieve_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
+sieve_sievec_SOURCES = sieve/sievec.c
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
+
+sieve_sieved_SOURCES = sieve/sieved.c
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
 sieve_test_SOURCES = \
