@@ -1,0 +1,26 @@
+Description:
+
+The CalDAV server no longer honours the Schedule-Sender-Address and
+Schedule-Sender-Name request headers.  These let a front end that had already
+authenticated a message say on whose behalf a PUT or DELETE was made.  This was
+an experimental feature, and that experiment has come to an end.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

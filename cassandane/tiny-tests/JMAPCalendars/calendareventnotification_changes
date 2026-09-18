@@ -2,11 +2,10 @@
 use Cassandane::Tiny;
 
 sub test_calendareventnotification_changes
-    :min_version_3_3
+    :min_version_3_3 :needs_component_sieve
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
-    my $caldav = $self->{caldav};
 
     # Need to share calendar, otherwise no notification is created
 
@@ -78,29 +77,43 @@ sub test_calendareventnotification_changes
 
     xlog "create notification that cassandane will see";
 
-    my $ical = <<EOF;
+    xlog $self, "install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "vnd.cyrus.imip"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processimip :deletecanceled :outcome "outcome";
+}
+EOF
+    );
+
+    my $imip = <<'EOF';
+Date: Wed, 28 Sep 2016 12:00:00 +0000
+From: iTIP Sender <itipsender@local>
+To: Cassandane <cassandane@example.com>
+Message-ID: <40d6fe3c-6a51-489e-823e-3ea22f427a3e@local>
+Content-Type: text/calendar; method=REQUEST; component=VEVENT
+X-Cassandane-Unique: 40d6fe3c-6a51-489e-823e-3ea22f427a3e
+
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
 CALSCALE:GREGORIAN
+METHOD:REQUEST
 BEGIN:VEVENT
 DTSTART:20160928T160000Z
 DURATION:PT1H
 UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
 DTSTAMP:20150928T132434Z
 CREATED:20150928T125212Z
-DESCRIPTION:
 SUMMARY:testitip
 LAST-MODIFIED:20150928T132434Z
+SEQUENCE:0
+ORGANIZER;CN=iTIP Sender:MAILTO:itipsender@local
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane@example.com
 END:VEVENT
 END:VCALENDAR
 EOF
-    $caldav->Request('PUT',
-        '/dav/calendars/user/cassandane/Default/testitip.ics',
-        $ical, 'Content-Type' => 'text/calendar',
-               'Schedule-Sender-Address' => 'itipsender@local',
-               'Schedule-Sender-Name' => 'iTIP Sender',
-    );
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
 
     $res = $jmap->CallMethods([
         ['CalendarEventNotification/changes', {
