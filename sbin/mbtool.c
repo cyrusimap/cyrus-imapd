@@ -1,0 +1,261 @@
+/* mbtool.c - tool to fiddle mailboxes */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+#include <config.h>
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#include <getopt.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sysexits.h>
+#include <syslog.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <sys/stat.h>
+
+#if HAVE_DIRENT_H
+# include <dirent.h>
+# define NAMLEN(dirent) strlen((dirent)->d_name)
+#else
+# define dirent direct
+# define NAMLEN(dirent) (dirent)->d_namlen
+# if HAVE_SYS_NDIR_H
+#  include <sys/ndir.h>
+# endif
+# if HAVE_SYS_DIR_H
+#  include <sys/dir.h>
+# endif
+# if HAVE_NDIR_H
+#  include <ndir.h>
+# endif
+#endif
+
+#include "imap/index.h"
+#include "imap/global.h"
+#include "imap/mailbox.h"
+#include "imap/message.h"
+#include "imap/message_guid.h"
+#include "imap/mboxname.h"
+#include "imap/mboxlist.h"
+#include "imap/seen.h"
+#include "lib/times.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
+
+/* current namespace */
+static struct namespace mbtool_namespace;
+
+/* forward declarations */
+static int do_cmd(struct findall_data *data, void *rock);
+
+static void usage(void);
+void shut_down(int code);
+
+enum {
+    CMD_TIME = 1,
+    CMD_REID = 2,
+};
+
+int main(int argc, char **argv)
+{
+    int opt, i, r;
+    int cmd = 0;
+    char *alt_config = NULL;
+
+    /* keep this in alphabetical order */
+    static const char short_options[] = "C:rt";
+
+    static const struct option long_options[] = {
+        /* n.b. no long option for -C */
+        { "new-uniqueid", no_argument, NULL, 'r' },
+        { "normalize-internaldate", no_argument, NULL, 't' },
+
+        { 0, 0, 0, 0 },
+    };
+
+    while (-1 != (opt = getopt_long(argc, argv,
+                                    short_options, long_options, NULL)))
+    {
+        switch (opt) {
+        case 'C': /* alt config file */
+            alt_config = optarg;
+            break;
+
+        case 'r':
+            if (cmd == 0) cmd = CMD_REID;
+            else usage();
+            break;
+        case 't':
+            if (cmd == 0) cmd = CMD_TIME;
+            else usage();
+            break;
+
+        default:
+            usage();
+        }
+    }
+
+    /* must provide a command */
+    if (!cmd) usage();
+
+    /* must provide some mailboxes */
+    if (optind == argc) usage();
+
+    cyrus_init(alt_config, "mbtool", 0, 0);
+
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&mbtool_namespace, NAMESPACE_OPTION_ADMIN))) {
+        syslog(LOG_ERR, "%s", error_message(r));
+        fatal(error_message(r), EX_CONFIG);
+    }
+
+    signals_set_shutdown(&shut_down);
+    signals_add_handlers(0);
+
+    for (i = optind; i < argc; i++) {
+        mboxlist_findall(&mbtool_namespace, argv[i], 1, 0, 0, do_cmd, &cmd);
+    }
+
+    exit(0);
+}
+
+static void usage(void)
+{
+    fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "    mbtool [options] {-r|-t} mailbox...\n");
+    fprintf(stderr, "\nCommands:\n");
+    fprintf(stderr, "    -r    create new unique IDs for specified mailboxes\n");
+    fprintf(stderr, "    -t    normalise internaldates in specified mailboxes\n");
+    fprintf(stderr, "\nOptions:\n");
+    fprintf(stderr, "    -C alt_config  use alternate imapd.conf file\n");
+    exit(EX_USAGE);
+}
+
+/*
+ * mboxlist_findall() callback function to examine a mailbox
+ */
+static int do_timestamp(const mbname_t *mbname)
+{
+    int r = 0;
+    struct mailbox *mailbox = NULL;
+    char olddate[RFC5322_DATETIME_MAX+1];
+    char newdate[RFC5322_DATETIME_MAX+1];
+
+    signals_poll();
+
+    /* Convert internal name to external */
+    const char *extname = mbname_extname(mbname, &mbtool_namespace, "cyrus");
+    printf("Working on %s...\n", extname);
+
+    const char *name = mbname_intname(mbname);
+
+    /* Open/lock header */
+    r = mailbox_open_iwl(name, &mailbox);
+    if (r) return r;
+
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        /* 1 day is close enough */
+        if (llabs(record->internaldate.tv_sec - record->gmtime.tv_sec) < 86400)
+            continue;
+
+        struct index_record copyrecord = *record;
+
+        time_to_rfc5322(copyrecord.internaldate.tv_sec, olddate, sizeof(olddate));
+        time_to_rfc5322(copyrecord.gmtime.tv_sec, newdate, sizeof(newdate));
+        printf("  %u: %s => %s\n", copyrecord.uid, olddate, newdate);
+
+        /* switch internaldate */
+        copyrecord.internaldate.tv_sec = copyrecord.gmtime.tv_sec;
+
+        r = mailbox_rewrite_index_record(mailbox, &copyrecord);
+        if (r) goto done;
+    }
+
+ done:
+    mailbox_iter_done(&iter);
+    mailbox_close(&mailbox);
+
+    return r;
+}
+
+static int do_reid(const mbname_t *mbname)
+{
+    int r = 0;
+    struct mailbox *mailbox = NULL;
+    mbentry_t *mbentry = NULL;
+
+    /* Convert internal name to external */
+    const char *extname = mbname_extname(mbname, &mbtool_namespace, "cyrus");
+    printf("Working on %s...\n", extname);
+
+    const char *name = mbname_intname(mbname);
+
+    r = mailbox_open_iwl(name, &mailbox);
+    if (r) return r;
+
+    if (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS) {
+        mailbox_make_uniqueid(mailbox);
+    }
+    else {
+        printf("Non-legacy mailbox, cannot reid: %s", extname);
+        goto done;
+    }
+
+    r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r) goto done;
+
+    free(mbentry->uniqueid);
+    mbentry->uniqueid = xstrdup(mailbox_uniqueid(mailbox));
+
+    mboxlist_update(mbentry, 0);
+
+done:
+    mailbox_close(&mailbox);
+
+    /* printf("did reid %s\n", mboxname); */
+    return r;
+}
+
+
+int do_cmd(struct findall_data *data, void *rock)
+{
+    if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
+
+    int *valp = (int *)rock;
+
+    if (*valp == CMD_TIME)
+        return do_timestamp(data->mbname);
+
+    if (*valp == CMD_REID)
+        return do_reid(data->mbname);
+
+    return 0;
+}
+
+/*
+ * Cleanly shut down and exit
+ */
+void shut_down(int code) __attribute__((noreturn));
+void shut_down(int code)
+{
+    in_shutdown = 1;
+
+    mboxlist_close();
+    mboxlist_done();
+    exit(code);
+}
