@@ -207,12 +207,12 @@ libexec_PROGRAMS += \
     ptclient/ptloader
 
 sbin_PROGRAMS += \
-    imap/arbitron \
-    imap/chk_cyrus \
-    imap/ctl_conversationsdb \
-    imap/ctl_cyrusdb \
-    imap/ctl_deliver \
-    imap/ctl_mboxlist \
+    sbin/arbitron \
+    sbin/chk_cyrus \
+    sbin/ctl_conversationsdb \
+    sbin/ctl_cyrusdb \
+    sbin/ctl_deliver \
+    sbin/ctl_mboxlist \
     imap/cvt_cyrusdb \
     imap/cyr_df \
     imap/cyr_ls \
@@ -275,7 +275,7 @@ BUILT_SOURCES += \
 libexec_PROGRAMS += imap/httpd
 noinst_PROGRAMS += imap/ical_apply_patch
 sbin_PROGRAMS += \
-    imap/ctl_zoneinfo \
+    sbin/ctl_zoneinfo \
     imap/dav_reconstruct
 
 if HAVE_GUESSTZ
@@ -862,26 +862,26 @@ noinst_HEADERS += \
     lib/prot.h \
     lib/ptrarray.h
 
-imap_arbitron_SOURCES = imap/arbitron.c common/cli_fatal.c common/mutex_fake.c
-imap_arbitron_LDADD = $(LD_UTILITY_ADD)
+sbin_arbitron_SOURCES = sbin/arbitron.c common/cli_fatal.c common/mutex_fake.c
+sbin_arbitron_LDADD = $(LD_UTILITY_ADD)
 
-imap_chk_cyrus_SOURCES = imap/chk_cyrus.c common/cli_fatal.c common/mutex_fake.c
-imap_chk_cyrus_LDADD = $(LD_UTILITY_ADD)
+sbin_chk_cyrus_SOURCES = sbin/chk_cyrus.c common/cli_fatal.c common/mutex_fake.c
+sbin_chk_cyrus_LDADD = $(LD_UTILITY_ADD)
 
-imap_ctl_conversationsdb_SOURCES = imap/ctl_conversationsdb.c common/mutex_fake.c
-imap_ctl_conversationsdb_LDADD = $(LD_UTILITY_ADD)
+sbin_ctl_conversationsdb_SOURCES = sbin/ctl_conversationsdb.c common/mutex_fake.c
+sbin_ctl_conversationsdb_LDADD = $(LD_UTILITY_ADD)
 
-imap_ctl_cyrusdb_SOURCES = common/cli_fatal.c imap/ctl_cyrusdb.c common/mutex_fake.c
-imap_ctl_cyrusdb_LDADD = $(LD_UTILITY_ADD)
+sbin_ctl_cyrusdb_SOURCES = sbin/ctl_cyrusdb.c common/cli_fatal.c common/mutex_fake.c
+sbin_ctl_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 
-imap_ctl_deliver_SOURCES = common/cli_fatal.c imap/ctl_deliver.c common/mutex_fake.c
-imap_ctl_deliver_LDADD = $(LD_UTILITY_ADD)
+sbin_ctl_deliver_SOURCES = sbin/ctl_deliver.c common/cli_fatal.c common/mutex_fake.c
+sbin_ctl_deliver_LDADD = $(LD_UTILITY_ADD)
 
-imap_ctl_mboxlist_SOURCES = common/cli_fatal.c imap/ctl_mboxlist.c common/mutex_fake.c
-imap_ctl_mboxlist_LDADD = $(LD_UTILITY_ADD)
+sbin_ctl_mboxlist_SOURCES = sbin/ctl_mboxlist.c common/cli_fatal.c common/mutex_fake.c
+sbin_ctl_mboxlist_LDADD = $(LD_UTILITY_ADD)
 
-imap_ctl_zoneinfo_SOURCES = common/cli_fatal.c imap/ctl_zoneinfo.c common/mutex_fake.c common/zoneinfo_db.c imap/xml_support.c
-imap_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
+sbin_ctl_zoneinfo_SOURCES = sbin/ctl_zoneinfo.c common/cli_fatal.c common/mutex_fake.c common/zoneinfo_db.c imap/xml_support.c
+sbin_ctl_zoneinfo_LDADD = $(LD_UTILITY_ADD)
 
 imap_cvt_cyrusdb_SOURCES = common/cli_fatal.c imap/cvt_cyrusdb.c common/mutex_fake.c
 imap_cvt_cyrusdb_LDADD = $(LD_UTILITY_ADD)

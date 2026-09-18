@@ -26,10 +26,10 @@
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
-#include "annotate.h" /* for strlist functionality */
-#include "global.h"
-#include "map.h"
-#include "xml_support.h"
+#include "imap/annotate.h" /* for strlist functionality */
+#include "imap/global.h"
+#include "lib/map.h"
+#include "imap/xml_support.h"
 #include "common/zoneinfo_db.h"
 
 /* config.c stuff */

@@ -40,16 +40,16 @@
 # endif
 #endif
 
-#include "annotate.h"
-#include "cyrusdb.h"
-#include "duplicate.h"
-#include "global.h"
+#include "imap/annotate.h"
+#include "lib/cyrusdb.h"
+#include "imap/duplicate.h"
+#include "imap/global.h"
 #include "common/jmap_util.h"
-#include "libcyr_cfg.h"
-#include "mboxlist.h"
-#include "seen.h"
-#include "statuscache.h"
-#include "tls.h"
+#include "lib/libcyr_cfg.h"
+#include "imap/mboxlist.h"
+#include "imap/seen.h"
+#include "imap/statuscache.h"
+#include "imap/tls.h"
 
 #define N(a) (sizeof(a) / sizeof(a[0]))
 

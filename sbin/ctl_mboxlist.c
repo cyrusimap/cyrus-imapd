@@ -40,15 +40,15 @@
 #include <string.h>
 #include <sasl/sasl.h>
 
-#include "annotate.h"
-#include "dlist.h"
-#include "global.h"
-#include "json_support.h"
+#include "imap/annotate.h"
+#include "imap/dlist.h"
+#include "imap/global.h"
+#include "imap/json_support.h"
 #include "common/jmap_util.h"
-#include "libcyr_cfg.h"
-#include "mboxlist.h"
-#include "mupdate.h"
-#include "user.h"
+#include "lib/libcyr_cfg.h"
+#include "imap/mboxlist.h"
+#include "imap/mupdate.h"
+#include "imap/user.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

@@ -20,9 +20,9 @@
 #include <sys/stat.h>
 #include <signal.h>
 
-#include "duplicate.h"
-#include "global.h"
-#include "libcyr_cfg.h"
+#include "imap/duplicate.h"
+#include "imap/global.h"
+#include "lib/libcyr_cfg.h"
 
 static void usage(void)
 {

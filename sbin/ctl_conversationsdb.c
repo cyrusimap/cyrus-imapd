@@ -21,13 +21,13 @@
 #include <sys/stat.h>
 
 /* cyrus includes */
-#include "bsearch.h"
-#include "global.h"
-#include "index.h"
-#include "conversations.h"
-#include "mailbox.h"
-#include "mboxlist.h"
-#include "message.h"
+#include "lib/bsearch.h"
+#include "imap/global.h"
+#include "imap/index.h"
+#include "imap/conversations.h"
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
+#include "imap/message.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

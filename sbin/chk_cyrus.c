@@ -21,11 +21,11 @@
 #include <unistd.h>
 #endif
 
-#include "index.h"
-#include "global.h"
-#include "mboxlist.h"
-#include "mailbox.h"
-#include "map.h"
+#include "imap/index.h"
+#include "imap/global.h"
+#include "imap/mboxlist.h"
+#include "imap/mailbox.h"
+#include "lib/map.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

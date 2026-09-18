@@ -25,10 +25,10 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 
-#include "global.h"
-#include "mailbox.h"
-#include "mboxlist.h"
-#include "seen.h"
+#include "imap/global.h"
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
+#include "imap/seen.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
