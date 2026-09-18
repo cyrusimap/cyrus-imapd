@@ -232,7 +232,7 @@ sbin_PROGRAMS += \
     sbin/mbexamine \
     sbin/mbpath \
     sbin/mbtool \
-    imap/quota \
+    sbin/quota \
     sbin/reconstruct \
     sbin/relocate_by_id \
     sbin/tls_prune \
@@ -1075,6 +1075,7 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/prometheus.c \
     imap/prometheus.h \
     imap/protocol.h \
+    imap/quota.h \
     imap/quota_db.c \
     imap/rfc822_header.h \
     imap/saslclient.c \
@@ -1439,8 +1440,8 @@ imap/promdata.h: imap/promdata.p $(PROMDATAGEN)
 imap_promstatsd_SOURCES = imap/promstatsd.c common/mutex_fake.c
 imap_promstatsd_LDADD = $(LD_UTILITY_ADD)
 
-imap_quota_SOURCES = common/cli_fatal.c common/mutex_fake.c imap/quota.c imap/quota.h
-imap_quota_LDADD = $(LD_UTILITY_ADD)
+sbin_quota_SOURCES = sbin/quota.c common/cli_fatal.c common/mutex_fake.c
+sbin_quota_LDADD = $(LD_UTILITY_ADD)
 
 sbin_reconstruct_SOURCES = sbin/reconstruct.c common/cli_fatal.c common/mutex_fake.c
 sbin_reconstruct_LDADD = $(LD_UTILITY_ADD)

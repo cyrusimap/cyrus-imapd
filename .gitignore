@@ -108,7 +108,6 @@ imap/pop3d
 imap/promdata.c
 imap/promdata.h
 imap/promstatsd
-imap/quota
 imap/rfc822_header.h
 imap/search_test
 imap/smmapd
@@ -201,6 +200,7 @@ sbin/ipurge
 sbin/mbexamine
 sbin/mbpath
 sbin/mbtool
+sbin/quota
 sbin/reconstruct
 sbin/relocate_by_id
 sbin/squatter

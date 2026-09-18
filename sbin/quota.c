@@ -42,13 +42,13 @@
 # endif
 #endif
 
-#include "bsearch.h"
-#include "global.h"
-#include "mailbox.h"
-#include "mboxlist.h"
-#include "mboxname.h"
-#include "quota.h"
-#include "convert_code.h"
+#include "lib/bsearch.h"
+#include "imap/global.h"
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
+#include "imap/mboxname.h"
+#include "imap/quota.h"
+#include "imap/convert_code.h"
 #include <jansson.h>
 
 /* generated headers are not necessarily in current directory */
