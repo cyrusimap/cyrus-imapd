@@ -25,7 +25,7 @@
 #include "imparse.h"
 #include "mboxname.h"
 #include "msgrecord.h"
-#include "proxy.h"
+#include "common/proxy.h"
 #include "syslog.h"
 #include "times.h"
 #include "user.h"

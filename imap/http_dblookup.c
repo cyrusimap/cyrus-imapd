@@ -7,7 +7,7 @@
 
 #include "carddav_db.h"
 #include "http_dav.h"
-#include "jmap_mail_query.h"
+#include "common/jmap_mail_query.h"
 #include "json_support.h"
 #include "spool.h"
 #include "mboxlist.h"

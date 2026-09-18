@@ -5,14 +5,15 @@
 #ifndef LMTPENGINE_H
 #define LMTPENGINE_H
 
-/***************** server-side LMTP *******************/
-
 #include <cyrus/xmalloc.h>
 
-#include "spool.h"
-#include "mboxname.h"
-#include "quota.h"
-#include "jmap_mail_query.h"
+#include "imap/backend.h"
+#include "imap/spool.h"
+#include "imap/mboxname.h"
+#include "imap/quota.h"
+#include "common/jmap_mail_query.h"
+
+/***************** server-side LMTP *******************/
 
 typedef struct message_data message_data_t;
 typedef struct address_data address_data_t;
@@ -100,8 +101,6 @@ void lmtpmode(struct lmtp_func *func,
               int fd);
 
 /************** client-side LMTP ****************/
-
-#include "backend.h"
 
 enum {
     /* LMTP capabilities */

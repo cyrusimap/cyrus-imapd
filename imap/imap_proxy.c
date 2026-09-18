@@ -21,7 +21,7 @@
 #include "backend.h"
 #include "global.h"
 #include "imap_proxy.h"
-#include "proxy.h"
+#include "common/proxy.h"
 #include "mboxname.h"
 #include "mupdate-client.h"
 #include "partlist.h"

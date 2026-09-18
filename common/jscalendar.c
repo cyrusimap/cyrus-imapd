@@ -1,8 +1,8 @@
 /* jscalendar.c -- Routines for converting JSCalendar and iCalendar */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+#include "common/jscalendar.h"
 
 #include "libcyrus_min/util.h"
 #include "libcyrus_min/xstrlcpy.h"
@@ -13,16 +13,15 @@
 #include <syslog.h>
 
 #ifdef HAVE_GUESSTZ
-#include "guesstz.h"
+#include "imap/guesstz.h"
 #endif
 
-#include "bsearch.h"
-#include "ical_support.h"
-#include "jcal.h"
-#include "jmap_util.h"
-#include "jscalendar.h"
-#include "json_support.h"
-#include "ptrarray.h"
+#include "lib/bsearch.h"
+#include "imap/ical_support.h"
+#include "common/jcal.h"
+#include "common/jmap_util.h"
+#include "imap/json_support.h"
+#include "lib/ptrarray.h"
 
 // ---------------
 

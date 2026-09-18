@@ -68,7 +68,7 @@
 #include "master/service.h"
 
 #include "message_guid.h"
-#include "sync_support.h"
+#include "common/sync_support.h"
 /*#include "cdb.h"*/
 
 extern int optind;

@@ -14,7 +14,7 @@ extern "C" {
 #include <jansson.h>
 #include <libical/vcard.h>
 
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "mailbox.h"
 
 #define JSCONTACT_MAJOR_VERSION 1 /**< The current JSContact major version. */

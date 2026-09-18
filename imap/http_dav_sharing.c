@@ -13,7 +13,7 @@
 #include "http_dav.h"
 #include "http_dav_sharing.h"
 #include "http_proxy.h"
-#include "proxy.h"
+#include "common/proxy.h"
 #include "syslog.h"
 #include "times.h"
 #include "user.h"

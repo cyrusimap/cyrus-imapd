@@ -23,7 +23,7 @@
 
 #include "cyrusdb.h"
 #include "imapd.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "global.h"
 #include "mboxlist.h"
 #include "mailbox.h"

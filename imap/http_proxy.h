@@ -5,7 +5,7 @@
 #ifndef _HTTP_PROXY_H
 #define _HTTP_PROXY_H
 
-#include "proxy.h"
+#include "common/proxy.h"
 #include "http_h2.h"
 
 

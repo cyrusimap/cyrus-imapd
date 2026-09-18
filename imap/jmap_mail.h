@@ -10,7 +10,7 @@
 #include <cyrus/hash.h>
 
 #include "http_jmap.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "json_support.h"
 #include "msgrecord.h"
 

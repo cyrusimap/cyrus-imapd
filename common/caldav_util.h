@@ -10,8 +10,8 @@
 
 #include <libical/ical.h>
 
-#include "caldav_db.h"
-#include "mailbox.h"
+#include "imap/caldav_db.h"
+#include "imap/mailbox.h"
 
 #define NEW_STAG (1<<8)           /* Make sure we skip over PREFER bits */
 #define TZ_STRIP (1<<9)

@@ -7,7 +7,7 @@
 
 #include <time.h>
 
-#include "annotate.h" /* for strlist functionality */
+#include "imap/annotate.h" /* for strlist functionality */
 
 /* name of the NIST leap seconds file (provided with IANA tzdata) */
 #define FNAME_LEAPSECFILE "/leap-seconds.list"

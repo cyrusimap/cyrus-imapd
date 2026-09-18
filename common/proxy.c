@@ -16,10 +16,10 @@
 #include <syslog.h>
 #include <sys/un.h>
 
-#include "backend.h"
-#include "global.h"
-#include "mupdate-client.h"
-#include "proxy.h"
+#include "imap/backend.h"
+#include "imap/global.h"
+#include "imap/mupdate-client.h"
+#include "common/proxy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

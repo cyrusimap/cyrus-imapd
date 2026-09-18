@@ -36,7 +36,7 @@
 #include "imapurl.h"
 #include "lmtpd.h"
 #include "lmtp_sieve.h"
-#include "lmtpengine.h"
+#include "common/lmtpengine.h"
 #include "map.h"
 #include "notify.h"
 #include "parseaddr.h"
@@ -48,11 +48,11 @@
 #include "smtpclient.h"
 #include "user.h"
 #include "version.h"
-#include "imap/zoneinfo_db.h"
+#include "common/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-#include "imap/lmtp_err.h"
+#include "common/lmtp_err.h"
 
 static int sieve_usehomedir = 0;
 
@@ -1675,7 +1675,7 @@ done:
     return ret;
 }
 
-#include "caldav_util.h"
+#include "common/caldav_util.h"
 #include "http_caldav_sched.h"
 
 char *httpd_userid = NULL;  // due to caldav_util.h including httpd.h
@@ -2458,7 +2458,7 @@ static sieve_duplicate_t duplicate = {
 };
 
 #ifdef WITH_JMAP
-#include "jmap_mail_query.h"
+#include "common/jmap_mail_query.h"
 
 static int jmapquery(void *ic, void *sc, void *mc, const char *json)
 {

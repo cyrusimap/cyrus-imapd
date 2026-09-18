@@ -15,19 +15,19 @@
 
 #include <sasl/saslutil.h>
 
-#include "annotate.h"
-#include "append.h"
-#include "caldav_util.h"
-#include "carddav_db.h"
-#include "global.h"
-#include "ical_support.h"
-#include "index.h"
-#include "jmap_util.h"
-#include "json_support.h"
-#include "search_query.h"
-#include "times.h"
-#include "user.h"
-#include "xapian_wrap.h"
+#include "imap/annotate.h"
+#include "imap/append.h"
+#include "common/caldav_util.h"
+#include "imap/carddav_db.h"
+#include "imap/global.h"
+#include "imap/ical_support.h"
+#include "imap/index.h"
+#include "common/jmap_util.h"
+#include "imap/json_support.h"
+#include "imap/search_query.h"
+#include "lib/times.h"
+#include "imap/user.h"
+#include "imap/xapian_wrap.h"
 
 #ifdef HAVE_LIBCHARDET
 #include <chardet/chardet.h>

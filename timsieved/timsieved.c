@@ -33,7 +33,7 @@
 #include "imap/backend.h"
 #include "imap/global.h"
 #include "imap/mboxlist.h"
-#include "imap/proxy.h"
+#include "common/proxy.h"
 #include "imap/sync_log.h"
 #include "master/service.h"
 #include "sieve/sieve_interface.h"

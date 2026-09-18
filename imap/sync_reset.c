@@ -33,7 +33,7 @@
 #include "map.h"
 #include "imapd.h"
 #include "user.h"
-#include "sync_support.h"
+#include "common/sync_support.h"
 /*#include "cdb.h"*/
 
 /* generated headers are not necessarily in current directory */

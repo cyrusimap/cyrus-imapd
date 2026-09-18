@@ -42,7 +42,7 @@
 #include "prot.h"
 #include "message_guid.h"
 #include "sync_log.h"
-#include "sync_support.h"
+#include "common/sync_support.h"
 #include "cyr_lock.h"
 #include "backend.h"
 #include "signals.h"

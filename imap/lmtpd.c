@@ -40,7 +40,7 @@
 #include "attachextract.h"
 #include "auth.h"
 #ifdef USE_AUTOCREATE
-#include "autocreate.h"
+#include "common/autocreate.h"
 #endif
 #include "backend.h"
 #include "carddav_db.h"
@@ -57,23 +57,23 @@
 #include "notify.h"
 #include "prometheus.h"
 #include "prot.h"
-#include "proxy.h"
-#include "sync_support.h"
+#include "common/proxy.h"
+#include "common/sync_support.h"
 #include "telemetry.h"
 #include "times.h"
 #include "tls.h"
 #include "userdeny.h"
 #include "version.h"
-#include "imap/zoneinfo_db.h"
+#include "common/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-#include "imap/lmtp_err.h"
+#include "common/lmtp_err.h"
 
 #include "master/service.h"
 
 #include "lmtpd.h"
-#include "lmtpengine.h"
+#include "common/lmtpengine.h"
 #ifdef USE_SIEVE
 #include "lmtp_sieve.h"
 #endif
