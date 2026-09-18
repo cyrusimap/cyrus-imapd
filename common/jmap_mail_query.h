@@ -10,17 +10,16 @@
 #include <cyrus/hash.h>
 #include <cyrus/strarray.h>
 
-#include "jmap_mail_query_parse.h"
-#include "jmap_util.h"
-
+#include "common/jmap_mail_query_parse.h"
+#include "common/jmap_util.h"
 
 #include <time.h>
 
-#include "auth.h"
-#include "ptrarray.h"
+#include "lib/auth.h"
+#include "lib/ptrarray.h"
 
-#include "carddav_db.h"
-#include "message.h"
+#include "imap/carddav_db.h"
+#include "imap/message.h"
 
 struct email_contactfilter {
     const char *accountid;

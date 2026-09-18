@@ -30,7 +30,7 @@
 #include "global.h"
 #include "map.h"
 #include "xml_support.h"
-#include "zoneinfo_db.h"
+#include "common/zoneinfo_db.h"
 
 /* config.c stuff */
 const int config_need_data = 0;

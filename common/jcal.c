@@ -1,8 +1,8 @@
 /* jcal.c - Routines for converting iCalendar to/from jCal */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+#include "common/jcal.h"
 
 #include "libcyrus_min/util.h"
 #include "libcyrus_min/xstrlcat.h"
@@ -13,12 +13,10 @@
 #include <stddef.h> /* for offsetof() macro */
 #include <syslog.h>
 
-#include "global.h"
-#include "ical_support.h"
-#include "json_support.h"
-#include "jcal.h"
-#include "version.h"
-
+#include "imap/global.h"
+#include "imap/ical_support.h"
+#include "imap/json_support.h"
+#include "imap/version.h"
 
 /*
  * Construct a JSON string for an iCalendar Period.

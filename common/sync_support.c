@@ -3,6 +3,7 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "common/sync_support.h"
 
 #include "libcyrus_min/util.h"
 #include "libcyrus_min/xstrlcat.h"
@@ -31,39 +32,38 @@
 #include <dirent.h>
 #include <limits.h>
 
-#include "bsearch.h"
-#include "global.h"
-#include "imap_proxy.h"
-#include "mboxlist.h"
-#include "mailbox.h"
-#include "quota.h"
-#include "seen.h"
-#include "mboxname.h"
-#include "map.h"
-#include "imapd.h"
-#include "message.h"
-#include "user.h"
-#include "prot.h"
-#include "dlist.h"
-#include "ptrarray.h"
-#include "sievedir.h"
-#include "conversations.h"
-#include "msgrecord.h"
-#include "charset.h"
+#include "lib/bsearch.h"
+#include "imap/global.h"
+#include "common/imap_proxy.h"
+#include "imap/mboxlist.h"
+#include "imap/mailbox.h"
+#include "imap/quota.h"
+#include "imap/seen.h"
+#include "imap/mboxname.h"
+#include "lib/map.h"
+#include "imap/imapd.h"
+#include "imap/message.h"
+#include "imap/user.h"
+#include "lib/prot.h"
+#include "imap/dlist.h"
+#include "lib/ptrarray.h"
+#include "imap/sievedir.h"
+#include "imap/conversations.h"
+#include "imap/msgrecord.h"
+#include "lib/charset.h"
 
-#include "caldav_alarm.h"
+#include "imap/caldav_alarm.h"
 
 #ifdef USE_SIEVE
-#include "sieve_db.h"
+#include "imap/sieve_db.h"
 #include "sieve/sieve_interface.h"
 #endif
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-#include "message_guid.h"
-#include "sync_support.h"
-#include "sync_log.h"
+#include "imap/message_guid.h"
+#include "imap/sync_log.h"
 
 static int opt_force = 0; // XXX
 

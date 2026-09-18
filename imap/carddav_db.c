@@ -17,7 +17,7 @@
 #include "cyrusdb.h"
 #include "httpd.h"
 #include "http_dav.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "mboxevent.h"
 #include "times.h"
 #include "vcard_support.h"

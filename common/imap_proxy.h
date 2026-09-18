@@ -7,9 +7,9 @@
 
 #include <cyrus/strarray.h>
 
-#include "annotate.h"
-#include "backend.h"
-#include "imapurl.h"
+#include "imap/annotate.h"
+#include "imap/backend.h"
+#include "lib/imapurl.h"
 
 enum {
     PROXY_NOCONNECTION = -1,

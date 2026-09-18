@@ -13,7 +13,7 @@
 
 #include "imap/mailbox.h"
 #include "imap/mboxname.h"
-#include "imap/jmap_util.h"
+#include "common/jmap_util.h"
 
 #include <syslog.h>
 

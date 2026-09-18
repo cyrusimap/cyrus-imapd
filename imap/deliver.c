@@ -31,9 +31,9 @@
 #include <sys/un.h>
 
 #include "global.h"
-#include "lmtpengine.h"
+#include "common/lmtpengine.h"
 #include "prot.h"
-#include "proxy.h"
+#include "common/proxy.h"
 #include "version.h"
 
 /* generated headers are not necessarily in current directory */

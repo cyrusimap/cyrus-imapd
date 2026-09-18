@@ -1,20 +1,18 @@
 /* itip_support.c - Routines for dealing with iTIP */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
-
 #include <config.h>
+#include "common/itip_support.h"
 
 #include <syslog.h>
 
-#include "itip_support.h"
-#include "caldav_db.h"
-#include "caldav_util.h"
-#include "defaultalarms.h"
-#include "http_dav.h"
-#include "httpd.h"
-#include "ical_support.h"
-#include "jmap_notif.h"
+#include "imap/caldav_db.h"
+#include "common/caldav_util.h"
+#include "imap/defaultalarms.h"
+#include "imap/http_dav.h"
+#include "imap/httpd.h"
+#include "imap/ical_support.h"
+#include "common/jmap_notif.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

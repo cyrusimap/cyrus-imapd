@@ -13,8 +13,8 @@
 
 #include <libical/ical.h>
 
-#include "acl.h"
-#include "parseaddr.h"
+#include "lib/acl.h"
+#include "lib/parseaddr.h"
 
 
 #define SCHED_INBOX     "Inbox/"

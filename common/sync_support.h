@@ -7,12 +7,12 @@
 
 #include <cyrus/libconfig.h>
 
-#include "backend.h"
-#include "dlist.h"
-#include "mailbox.h"
-#include "prot.h"
-#include "seen.h"
-#include "sync_log.h"
+#include "imap/backend.h"
+#include "imap/dlist.h"
+#include "imap/mailbox.h"
+#include "lib/prot.h"
+#include "imap/seen.h"
+#include "imap/sync_log.h"
 
 #define SYNC_MSGID_LIST_HASH_SIZE        (65536)
 #define SYNC_MESSAGE_LIST_HASH_SIZE      (65536)

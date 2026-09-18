@@ -42,7 +42,7 @@
 #include "times.h"
 
 #ifdef WITH_JMAP
-#include "imap/jmap_mail_query.h"
+#include "common/jmap_mail_query.h"
 #endif
 
 static char vacation_answer;

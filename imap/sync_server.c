@@ -47,7 +47,7 @@
 #include "dlist.h"
 #include "global.h"
 #include "imparse.h"
-#include "imap_proxy.h"
+#include "common/imap_proxy.h"
 #include "loginlog.h"
 #include "mailbox.h"
 #include "map.h"
@@ -68,7 +68,7 @@
 #include "master/service.h"
 
 #include "message_guid.h"
-#include "sync_support.h"
+#include "common/sync_support.h"
 /*#include "cdb.h"*/
 
 extern int optind;

@@ -12,13 +12,20 @@
 #include <syslog.h>
 #include <errno.h>
 
-#include "jmap_mail_query.h"
-#include "jmap_util.h"
-#include "json_support.h"
-#include "search_engines.h"
-#include "xapian_wrap.h"
+#include "common/jmap_mail_query.h"
+#include "common/jmap_util.h"
+#include "imap/json_support.h"
+#include "imap/search_engines.h"
+#include "imap/xapian_wrap.h"
 
 #include "imap/imap_err.h"
+
+#include "imap/annotate.h"
+#include "imap/carddav_db.h"
+#include "imap/global.h"
+#include "imap/index.h"
+#include "imap/search_query.h"
+#include "lib/times.h"
 
 #ifndef JMAP_URN_MAIL
 #define JMAP_URN_MAIL                "urn:ietf:params:jmap:mail"
@@ -64,14 +71,6 @@ static int _email_threadkeyword_is_valid(const char *keyword)
     return is_supported;
 }
 
-
-
-#include "annotate.h"
-#include "carddav_db.h"
-#include "global.h"
-#include "index.h"
-#include "search_query.h"
-#include "times.h"
 
 HIDDEN void jmap_email_contactfilter_init(const char *accountid,
                                           const struct auth_state *authstate,

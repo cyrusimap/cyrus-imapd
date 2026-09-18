@@ -35,6 +35,8 @@ cmulocal/ltoptions.m4
 cmulocal/ltsugar.m4
 cmulocal/ltversion.m4
 cmulocal/lt~obsolete.m4
+common/lmtp_err.c
+common/lmtp_err.h
 compile
 compile_commands.json
 confdefs.h
@@ -122,8 +124,6 @@ imap/jmap_props/*.h
 imap/jmap_data_types.h
 imap/jmap_err.c
 imap/jmap_err.h
-imap/lmtp_err.c
-imap/lmtp_err.h
 imap/lmtpd
 imap/mailbox_header_cache.h
 imap/mbexamine

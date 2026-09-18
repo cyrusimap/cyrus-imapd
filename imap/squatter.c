@@ -48,7 +48,7 @@
 #include "mboxname.h"
 #include "index.h"
 #include "message.h"
-#include "itip_support.h"
+#include "common/itip_support.h"
 #include "attachextract.h"
 
 #include "master/service.h" /* for STATUS_FD only */

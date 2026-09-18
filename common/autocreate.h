@@ -6,7 +6,7 @@
 #define INCLUDED_AUTOCREATE_H
 
 #include "config.h"
-#include "mboxname.h"
+#include "imap/mboxname.h"
 
 extern int autocreate_user(struct namespace *namespace, const char *userid);
 

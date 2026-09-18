@@ -33,7 +33,7 @@
 
 #include "acl.h"
 #ifdef USE_AUTOCREATE
-#include "autocreate.h"
+#include "common/autocreate.h"
 #endif
 #include "auth.h"
 #include "global.h"
