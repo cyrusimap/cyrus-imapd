@@ -106,7 +106,6 @@ imap/cyr_virusscan
 imap/cyr_withlock_run
 imap/cyrdump
 imap/dav_reconstruct
-imap/deliver
 imap/fetchnews
 imap/fud
 imap/http_cal_abook_admin_js.h
@@ -208,6 +207,7 @@ perl/sieve/scripts/sieveshell
 ptclient/ptexpire
 ptclient/ptdump
 ptclient/ptloader
+sbin/deliver
 sieve/addr-lex.c
 sieve/addr.c
 sieve/addr.h

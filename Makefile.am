@@ -227,7 +227,7 @@ sbin_PROGRAMS += \
     imap/cyr_synclog \
     imap/cyr_userseen \
     imap/cyr_virusscan \
-    imap/deliver \
+    sbin/deliver \
     imap/ipurge \
     imap/mbexamine \
     imap/mbpath \
@@ -931,13 +931,13 @@ imap_cyr_virusscan_SOURCES = common/cli_fatal.c imap/cyr_virusscan.c common/mute
 imap_cyr_virusscan_CFLAGS = $(AM_CFLAGS) $(CLAMAV_CFLAGS) $(CFLAG_VISIBILITY)
 imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) $(CLAMAV_LIBS)
 
-imap_deliver_SOURCES = \
-    imap/deliver.c \
+sbin_deliver_SOURCES = \
+    sbin/deliver.c \
     common/lmtpengine.c \
     common/mutex_fake.c \
     common/proxy.c
-nodist_imap_deliver_SOURCES = common/lmtp_err.c
-imap_deliver_LDADD = $(LD_UTILITY_ADD)
+nodist_sbin_deliver_SOURCES = common/lmtp_err.c
+sbin_deliver_LDADD = $(LD_UTILITY_ADD)
 
 imap_idled_SOURCES = imap/idled.c common/mutex_fake.c
 imap_idled_LDADD = $(LD_UTILITY_ADD)

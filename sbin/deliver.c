@@ -30,11 +30,11 @@
 #include <arpa/inet.h>
 #include <sys/un.h>
 
-#include "global.h"
+#include "imap/global.h"
 #include "common/lmtpengine.h"
-#include "prot.h"
+#include "lib/prot.h"
 #include "common/proxy.h"
-#include "version.h"
+#include "imap/version.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
