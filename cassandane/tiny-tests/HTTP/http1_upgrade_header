@@ -12,9 +12,10 @@ sub test_http1_upgrade_header
     # No upgrade attempted: 404, websocket advertised.
     my $s = http1_connect($self);
 
-    print $s "GET / HTTP/1.1\r\n"
-           . "Host: " . $service->host . ":" . $service->port . "\r\n"
-           . "\r\n";
+    http1_send($s,
+        "GET / HTTP/1.1\r\n",
+        "Host: " . $service->host . ":" . $service->port . "\r\n",
+        "\r\n");
 
     my $res = http1_read_response($s);
     xlog $self, "response (no upgrade attempted): $res->{status}";
@@ -26,11 +27,12 @@ sub test_http1_upgrade_header
     # Upgrade header at all.
     $s = http1_connect($self);
 
-    print $s "GET / HTTP/1.1\r\n"
-           . "Host: " . $service->host . ":" . $service->port . "\r\n"
-           . "Connection: Upgrade\r\n"
-           . "Upgrade: h2c\r\n"
-           . "\r\n";
+    http1_send($s,
+        "GET / HTTP/1.1\r\n",
+        "Host: " . $service->host . ":" . $service->port . "\r\n",
+        "Connection: Upgrade\r\n",
+        "Upgrade: h2c\r\n",
+        "\r\n");
 
     $res = http1_read_response($s);
     xlog $self, "response (h2c declined): $res->{status}";
@@ -41,12 +43,13 @@ sub test_http1_upgrade_header
     # h2c attempted and succeeds: 101 advertising h2c, not websocket.
     $s = http1_connect($self);
 
-    print $s "GET / HTTP/1.1\r\n"
-           . "Host: " . $service->host . ":" . $service->port . "\r\n"
-           . "Connection: Upgrade, HTTP2-Settings\r\n"
-           . "Upgrade: h2c\r\n"
-           . "HTTP2-Settings: AAMAAABkAAQAAQAAAAIAAAAA\r\n"
-           . "\r\n";
+    http1_send($s,
+        "GET / HTTP/1.1\r\n",
+        "Host: " . $service->host . ":" . $service->port . "\r\n",
+        "Connection: Upgrade, HTTP2-Settings\r\n",
+        "Upgrade: h2c\r\n",
+        "HTTP2-Settings: AAMAAABkAAQAAQAAAAIAAAAA\r\n",
+        "\r\n");
 
     $res = http1_read_response($s);
     xlog $self, "response (h2c upgrade attempted): $res->{status}";
