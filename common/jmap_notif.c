@@ -1,0 +1,484 @@
+/* jmap_notif.c */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+#include <config.h>
+#include "common/jmap_notif.h"
+
+#include <cyrus/strhash.h>
+
+#include <syslog.h>
+
+#include "imap/append.h"
+#include "imap/dav_util.h"
+#include "common/caldav_util.h"
+#include "imap/httpd.h"
+#include "common/jmap_util.h"
+#include "common/jscalendar.h"
+#include "imap/spool.h"
+#include "lib/times.h"
+#include "imap/user.h"
+
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/imap_err.h"
+
+HIDDEN char *jmap_notifmboxname(const char *userid)
+{
+    /* Create notification mailbox name from the parsed path */
+    mbname_t *mbname = mbname_from_userid(userid);
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_JMAPNOTIFICATIONFOLDER));
+    char *mboxname = xstrdup(mbname_intname(mbname));
+    mbname_free(&mbname);
+    return mboxname;
+}
+
+HIDDEN int jmap_create_notify_collection(const char *userid, mbentry_t **mbentryptr)
+{
+    /* notifications collection */
+    char *notifmboxname = jmap_notifmboxname(userid);
+
+    int r = mboxlist_lookup(notifmboxname, mbentryptr, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* lock the namespace lock and try again */
+        user_nslock_t *user_nslock = user_nslock_lock_w(userid);
+
+        mbentry_t mbentry = MBENTRY_INITIALIZER;
+        mbentry.name = notifmboxname;
+        mbentry.mbtype = MBTYPE_JMAPNOTIFY;
+        r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                                   1/*isadmin*/, userid, NULL/*authstate*/,
+                                   0/*flags*/, NULL/*mboxptr*/);
+
+        /* we lost the race, that's OK */
+        if (r == IMAP_MAILBOX_LOCKED) r = 0;
+        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                      notifmboxname, error_message(r));
+
+        r = mboxlist_lookup(notifmboxname, mbentryptr, NULL);
+        user_nslock_release(&user_nslock);
+    }
+
+    free(notifmboxname);
+    return r;
+}
+
+HIDDEN char *jmap_caleventnotif_format_fromheader(const char *userid)
+{
+    struct buf buf = BUF_INITIALIZER;
+    if (strchr(userid, '@')) {
+        buf_printf(&buf, "<%s>", userid);
+    }
+    else {
+        buf_printf(&buf, "<%s@%s>", userid, config_servername);
+    }
+    char *notfrom = charset_encode_addrheader(buf_cstring(&buf), buf_len(&buf), 0);
+    buf_free(&buf);
+    return notfrom;
+}
+
+static void prune_notifications(struct mailbox *notifmbox,
+                                size_t notifications_max)
+{
+    struct mailbox_iter *iter = mailbox_iter_init(notifmbox, 0,
+            ITER_STEP_BACKWARD|ITER_SKIP_UNLINKED|
+            ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
+
+    // Remove all but the last notifications_max messages.
+    size_t n_notifications = 0;
+    message_t *msg;
+    while ((msg = (message_t *) mailbox_iter_step(iter))) {
+        if (++n_notifications >= notifications_max) {
+            struct index_record record = *msg_record(msg);
+            record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+            mailbox_rewrite_index_record(notifmbox, &record);
+        }
+    }
+
+    mailbox_iter_done(&iter);
+}
+
+static int append_eventnotif(const char *from,
+                             const char *authuserid,
+                             const struct auth_state *authstate,
+                             struct mailbox *notifmbox,
+                             const char *calmboxname,
+                             struct timespec *created,
+                             json_t *jnotif)
+{
+    struct stagemsg *stage = NULL;
+    int r = 0;
+    char *notifstr = json_dumps(jnotif, 0);
+    struct buf buf = BUF_INITIALIZER;
+    const char *type = json_string_value(json_object_get(jnotif, "type"));
+    const char *ical_uid = json_string_value(json_object_get(jnotif, "calendarEventId"));
+    int notifications_max = config_getint(IMAPOPT_JMAP_MAX_CALENDAREVENTNOTIFS);
+    if (notifications_max < 0) notifications_max = 0;
+
+    // Prune notifications each time we create a new one.
+    if (notifications_max) {
+        prune_notifications(notifmbox, (size_t) notifications_max);
+    }
+
+    // Expunge all former notifications for destroyed events.
+    if (!strcmp(type, "destroyed")) {
+        struct mailbox_iter *iter = mailbox_iter_init(notifmbox, 0,
+                ITER_STEP_BACKWARD|ITER_SKIP_UNLINKED|
+                ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
+        size_t n_notifications = 0;
+
+        message_t *msg;
+        while ((msg = (message_t *) mailbox_iter_step(iter))) {
+
+            // Notifications exceeding notifications_max must
+            // have been pruned already, no need to check.
+            if (notifications_max &&
+                    (++n_notifications >= (size_t) notifications_max)) {
+                break;
+            }
+
+            buf_reset(&buf);
+            if (message_get_subject(msg, &buf) ||
+                    strcmp(JMAP_NOTIF_CALENDAREVENT, buf_cstring(&buf))) {
+                continue;
+            }
+            const struct body *body;
+            if (message_get_cachebody(msg, &body)) {
+                continue;
+            }
+            int matches_uid = 0;
+            struct dlist *dl = NULL;
+            if (!dlist_parsemap(&dl, 1, body->description,
+                        strlen(body->description))) {
+                const char *val;
+                matches_uid = dlist_getatom(dl, "ID", &val) &&
+                              !strcmp(val, ical_uid);
+            }
+            dlist_free(&dl);
+            if (!matches_uid) continue;
+
+            struct index_record record = *msg_record(msg);
+            if (!(record.system_flags & FLAG_DELETED) &&
+                !(record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+                record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+                 mailbox_rewrite_index_record(notifmbox, &record);
+            }
+        }
+        mailbox_iter_done(&iter);
+    }
+    buf_reset(&buf);
+
+    // Append new notification.
+    FILE *fp = append_newstage(mailbox_name(notifmbox), created->tv_sec,
+            strhash(ical_uid), &stage);
+    if (!fp) {
+        xsyslog(LOG_ERR, "append_newstage failed", "name=%s", mailbox_name(notifmbox));
+        r = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    fputs("From: ", fp);
+    fputs(from, fp);
+    fputs("\r\n", fp);
+
+    fputs("Subject: " JMAP_NOTIF_CALENDAREVENT "\r\n", fp);
+
+    char date5322[RFC5322_DATETIME_MAX+1];
+    time_to_rfc5322(created->tv_sec, date5322, RFC5322_DATETIME_MAX);
+    fputs("Date: ", fp);
+    fputs(date5322, fp);
+    fputs("\r\n", fp);
+
+    fprintf(fp, "Message-ID: <%s-" TIME_T_FMT "@%s>\r\n",
+                makeuuid(), created->tv_sec, config_servername);
+    fputs("Content-Type: application/json; charset=utf-8\r\n", fp);
+    fputs("Content-Transfer-Encoding: 8bit\r\n", fp);
+
+    struct dlist *dl = dlist_newkvlist(NULL, "N");
+    dlist_setdate(dl, "S", created->tv_sec);
+    dlist_setatom(dl, "T", JMAP_NOTIF_CALENDAREVENT);
+    dlist_setatom(dl, "ID", ical_uid);
+    dlist_setatom(dl, "NT", type);
+    dlist_setatom(dl, "M", calmboxname);
+    dlist_printbuf(dl, 1, &buf);
+    fputs("Content-Description: ", fp);
+    fputs(buf_cstring(&buf), fp);
+    fputs("\r\n", fp);
+    buf_reset(&buf);
+    dlist_free(&dl);
+
+    fprintf(fp, "Content-Length: %zu\r\n", strlen(notifstr));
+    fputs("MIME-Version: 1.0\r\n", fp);
+
+    fputs("\r\n", fp);
+    fputs(notifstr, fp);
+
+    if (fflush(fp) || ferror(fp) || fdatasync(fileno(fp))) {
+        r = IMAP_IOERROR;
+        fclose(fp);
+        goto done;
+    }
+
+    fclose(fp);
+
+    struct appendstate as;
+    r = append_setup_mbox(&as, notifmbox, authuserid, authstate,
+            0, NULL, 0, 0, EVENT_MESSAGE_NEW);
+    if (r) goto done;
+
+    struct body *body = NULL;
+    r = append_fromstage(&as, &body, stage, created, 0, NULL, 0, NULL);
+    message_free_body(body);
+    free(body);
+    if (!r) {
+        append_commit(&as);
+    }
+    else {
+        append_abort(&as);
+    }
+
+done:
+    append_removestage(stage);
+    buf_free(&buf);
+    free(notifstr);
+    return r;
+}
+
+static json_t *build_eventnotif(const char *type,
+                                time_t created,
+                                const char *byprincipal,
+                                const char *byname,
+                                const char *byemail,
+                                struct jmap_caleventid *eid,
+                                const char *comment,
+                                int is_draft,
+                                json_t *jevent,
+                                json_t *jpatch)
+{
+    json_t *jn = json_object();
+    struct buf buf = BUF_INITIALIZER;
+
+    json_object_set_new(jn, "type", json_string(type));
+    json_object_set_new(jn, "isDraft", json_boolean(is_draft));
+
+    const char *id = jmap_caleventid_encode(eid, &buf);
+    json_object_set_new(jn, "calendarEventId", json_string(id));
+
+    char date3339[RFC3339_DATETIME_MAX+1];
+    time_to_rfc3339(created, date3339, RFC3339_DATETIME_MAX);
+    json_object_set_new(jn, "created", json_string(date3339));
+
+    json_t *jchangedby = json_object();
+    if (byemail) {
+        if (!strncasecmp(byemail, "mailto:", 7)) byemail += 7;
+        json_object_set_new(jchangedby, "email", json_string(byemail));
+    }
+    if (byname) {
+        json_object_set_new(jchangedby, "name", json_string(byname));
+    }
+    if (byprincipal) {
+        json_object_set_new(jchangedby, "calendarPrincipalId",
+                json_string(byprincipal));
+    }
+    if (!json_object_size(jchangedby)) {
+        json_decref(jchangedby);
+        jchangedby = json_null();
+    }
+    json_object_set_new(jn, "changedBy", jchangedby);
+
+    if (comment) {
+        json_object_set_new(jn, "comment", json_string(comment));
+    }
+    if (jpatch) {
+        json_object_set(jn, "eventPatch", jpatch);
+    }
+    if (jevent) {
+        json_object_set(jn, "event", jevent);
+    }
+
+    buf_free(&buf);
+    return jn;
+}
+
+
+HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
+                                     const char *userid,
+                                     const struct auth_state *authstate,
+                                     const char *calmboxname,
+                                     const char *type,
+                                     struct jmap_caleventid *eid,
+                                     const strarray_t *schedule_addresses,
+                                     const char *comment,
+                                     int is_draft,
+                                     json_t *jevent,
+                                     json_t *jpatch)
+{
+    if (!notifmbox) {
+        xsyslog(LOG_ERR, "can not create event notification (null notifmbox)",
+                "calendar=%s ical_uid=%s", calmboxname, eid->ical_uid);
+        return 0;
+    }
+
+    struct timespec now;
+    cyrus_gettime(CLOCK_REALTIME, &now);
+
+    const char *byemail = schedule_addresses ?
+        strarray_nth(schedule_addresses, 0) : NULL;
+
+    struct buf byname = BUF_INITIALIZER;
+    const char *annotname = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+    char *calhomename = caldav_mboxname(userid, NULL);
+    annotatemore_lookupmask(calhomename, annotname, userid, &byname);
+    free(calhomename);
+
+    json_t *jnotif = build_eventnotif(type, now.tv_sec, userid,
+            buf_cstring(&byname), byemail, eid, comment,
+            is_draft, jevent, jpatch);
+
+    char *from = jmap_caleventnotif_format_fromheader(userid);
+    int r = append_eventnotif(from, userid, authstate, notifmbox,
+            calmboxname, &now, jnotif);
+    free(from);
+
+    json_decref(jnotif);
+    buf_free(&byname);
+    return r;
+}
+
+/* Record a CalendarEventNotification for a change to the event eid in
+ * calmboxname.  The change is attributed to userid unless sender_address is
+ * given, in which case it came from that address (and display name). */
+HIDDEN int jmap_create_caldaveventnotif(const char *userid,
+                                        const struct auth_state *authstate,
+                                        const char *calmboxname,
+                                        struct jmap_caleventid *eid,
+                                        const strarray_t *schedule_addresses,
+                                        int is_draft,
+                                        icalcomponent *oldical,
+                                        icalcomponent *newical,
+                                        const char *sender_address,
+                                        const char *sender_name)
+{
+    mbname_t *mbname = mbname_from_intname(calmboxname);
+    const char *accountid = mbname_userid(mbname);
+    struct mailbox *notifmbox = NULL;
+    mbentry_t *notifmb = NULL;
+    struct timespec now;
+    json_t *jevent = NULL;
+    json_t *jpatch = NULL;
+    int r = 0;
+
+    assert(oldical || newical);
+
+    if ((user_nslock_islocked(accountid) == LOCK_SHARED) ||
+        (user_nslock_islocked(userid) == LOCK_SHARED)) {
+        /* bail out, before notification mailbox crashes on invalid lock */
+        xsyslog(LOG_ERR, "can not exlusively lock jmapnotify collection",
+                "accountid=%s", accountid);
+        goto done;
+    }
+
+    r = jmap_create_notify_collection(accountid, &notifmb);
+    if (r) {
+        xsyslog(LOG_ERR, "can not create jmapnotify collection",
+                "accountid=%s error=%s", accountid, error_message(r));
+        goto done;
+    }
+
+    r = mailbox_open_iwl(notifmb->name, &notifmbox);
+    if (r) {
+        xsyslog(LOG_ERR, "can not open notification mailbox",
+                "name=%s", notifmb->name);
+        goto done;
+    }
+
+    const char *type;
+    if (oldical) {
+        jevent = jscal_event_from_ical(NULL, oldical);
+        if (newical) {
+            type = "updated";
+            json_t *tmp = jscal_event_from_ical(NULL, newical);
+            jpatch = jmap_patchobject_create(jevent, tmp, 0/*no_remove*/);
+            json_decref(tmp);
+        }
+        else type = "destroyed";
+    }
+    else {
+        type = "created";
+        jevent = jscal_event_from_ical(NULL, newical);
+    }
+    if (!jevent) goto done;
+
+    jmap_calendarevent_remove_peruserprops(jevent);
+    jmap_calendarevent_remove_peruserprops(jpatch);
+
+    /* Determine who triggered that event notification */
+    struct buf byname = BUF_INITIALIZER;
+    const char *byemail = NULL;
+    const char *byprincipal = NULL;
+    char *from = NULL;
+
+    if (sender_address) {
+        /* Delivered by the scheduling engine on behalf of an iTIP sender */
+        byemail = sender_address;
+        if (!strncasecmp(byemail, "mailto:", 7)) {
+            byemail += 7;
+        }
+        from = strconcat("<", byemail, ">", NULL);
+        if (sender_name) {
+            char *val = charset_decode_mimeheader(sender_name, CHARSET_KEEPCASE);
+            if (val) buf_initmcstr(&byname, val);
+        }
+    }
+    else {
+        from = jmap_caleventnotif_format_fromheader(userid);
+        byprincipal = userid;
+        static const char *annotname = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+        char *calhomename = caldav_mboxname(userid, NULL);
+        annotatemore_lookupmask(calhomename, annotname, userid, &byname);
+        free(calhomename);
+        byemail = strarray_nth(schedule_addresses, 0);
+    }
+
+    cyrus_gettime(CLOCK_REALTIME, &now);
+    json_t *jnotif = build_eventnotif(type, now.tv_sec,
+            byprincipal, buf_cstring(&byname), byemail,
+            eid, NULL, is_draft, jevent, jpatch);
+
+    r = append_eventnotif(from, userid, authstate, notifmbox,
+                          calmboxname, &now, jnotif);
+
+    json_decref(jnotif);
+    buf_free(&byname);
+    free(from);
+
+done:
+    json_decref(jevent);
+    json_decref(jpatch);
+    mailbox_close(&notifmbox);
+    mboxlist_entry_free(&notifmb);
+    mbname_free(&mbname);
+    return r;
+}
+
+HIDDEN int calendar_has_sharees(const mbentry_t *mbentry)
+{
+    if (!mbentry->acl) return 0;
+
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    const char *ownerid = mbname_userid(mbname);
+
+    strarray_t *acls = strarray_split(mbentry->acl, "\t", STRARRAY_TRIM);
+    int has_sharees = 0;
+    for (int i = 0; i < strarray_size(acls); i += 2) {
+        const char *userid = strarray_nth(acls, i);
+        if (strcmp(ownerid, userid) && !is_system_user(userid)) {
+            has_sharees = 1;
+            break;
+        }
+    }
+
+    mbname_free(&mbname);
+    strarray_free(acls);
+
+    return has_sharees;
+}

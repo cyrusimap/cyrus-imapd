@@ -1,0 +1,575 @@
+/* util.h - general utility functions */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+#ifndef INCLUDED_UTIL_H
+#define INCLUDED_UTIL_H
+
+#include <config.h>
+
+#include <cyrus/buf.h>
+#include <cyrus/xmalloc.h>
+
+#include <ctype.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <inttypes.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <syslog.h>
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
+#ifndef STDIN_FILENO
+/* Standard file descriptors.  */
+#define STDIN_FILENO    0       /* Standard input.  */
+#define STDOUT_FILENO   1       /* Standard output.  */
+#define STDERR_FILENO   2       /* Standard error output.  */
+#endif
+
+/* version string printable in gdb tracking */
+extern const char CYRUS_VERSION[];
+
+#ifdef ENABLE_REGEX
+# if defined HAVE_PCREPOSIX_H
+#  include <pcre.h>
+#  include <pcreposix.h>
+# elif defined HAVE_PCRE2POSIX_H
+#  ifndef PCRE2POSIX_H_INCLUDED
+#   include <pcre2posix.h>
+#   define PCRE2POSIX_H_INCLUDED
+#  endif
+# elif defined HAVE_RXPOSIX_H
+#  include <rxposix.h>
+# else
+#  include <regex.h>
+# endif
+#endif
+
+#ifdef HAVE_LIBUUID
+#include <uuid/uuid.h>
+#endif
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN  37
+#endif
+
+#define BIT32_MAX 4294967295U
+#define BIT64_MAX 18446744073709551615UL
+
+#define BIT64_FMT          "%016" PRIx64
+#define UINT64_FMT         "%" PRIu64
+#define UINT64_LALIGN_FMT  "%-*" PRIu64
+#define UINT64_NANOSEC_FMT ".%.9" PRIu64
+
+typedef uint32_t bit32;
+typedef uint64_t bit64;
+typedef uint64_t modseq_t;
+
+#define MODSEQ_FMT UINT64_FMT
+#define atomodseq_t(s) strtoull(s, NULL, 10)
+char *modseqtoa(modseq_t modseq);
+
+#define Uisalnum(c) isalnum((int)((unsigned char)(c)))
+#define Uisalpha(c) isalpha((int)((unsigned char)(c)))
+#define Uisascii(c) isascii((int)((unsigned char)(c)))
+#define Uiscntrl(c) iscntrl((int)((unsigned char)(c)))
+#define Uisdigit(c) isdigit((int)((unsigned char)(c)))
+#define Uislower(c) islower((int)((unsigned char)(c)))
+#define Uisspace(c) isspace((int)((unsigned char)(c)))
+#define Uisupper(c) isupper((int)((unsigned char)(c)))
+#define Uisxdigit(c) isxdigit((int)((unsigned char)(c)))
+
+extern const unsigned char convert_to_lowercase[256];
+extern const unsigned char convert_to_uppercase[256];
+
+#ifndef TOUPPER
+#define TOUPPER(c) (convert_to_uppercase[(unsigned char)(c)])
+#endif
+#ifndef TOLOWER
+#define TOLOWER(c) (convert_to_lowercase[(unsigned char)(c)])
+#endif
+
+#ifndef MAX
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#endif
+#ifndef MIN
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#endif
+
+/* Some BSDs don't print "NULL" for a NULL pointer string. */
+#ifndef IS_NULL
+#define IS_NULL(s)      ((s) == NULL ? "(NULL)" : (s))
+#endif
+
+/* Calculate the number of entries in a vector */
+#define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
+
+#ifndef TIMESPEC_TO_TIMEVAL
+#define TIMESPEC_TO_TIMEVAL(tv, ts) {         \
+        (tv)->tv_sec  = (ts)->tv_sec;         \
+        (tv)->tv_usec = (ts)->tv_nsec / 1000; \
+}
+#endif
+
+/* We have an issue that we can't store UTIME_OMIT into the nanosecond
+ * space, so we reserve '0' to mean OMIT, meaning that we can only store
+ * postitive nanosecond values.  We also store 0 as 0, so callers are
+ * required to make sure they have a SAFE_NSEC value when writing */
+#define UTIME_SAFE_NSEC(n) (n > 0 && n < 1000000000)
+#define _NSVAL(n)                                                           \
+        (UTIME_SAFE_NSEC(n) ? n : 0)
+#define TIMESPEC_TO_NANOSEC(ts)                                             \
+        ((uint64_t) (ts)->tv_sec * 1000000000 + _NSVAL((ts)->tv_nsec))
+
+/* On the way back, we convert 0 to UTIME_OMIT and all other values stay the
+ * same, meaning that round-tripping a time with zero nanoseconds through this
+ * function pair will add one nanosecond */
+#define TIMESPEC_FROM_NANOSEC(ts, nanosec) {    \
+        (ts)->tv_sec  = (nanosec) / 1000000000; \
+        (ts)->tv_nsec = (nanosec) % 1000000000; \
+}
+
+#define NANOSEC_TO_JMAPID(buf, nanosec) {                                   \
+        assert(nanosec);                                                    \
+        uint64_t u64 = htonll(UINT64_MAX - (nanosec));                      \
+        charset_encode(buf, (const char *) &u64, 8, ENCODING_BASE64JMAPID); \
+}
+
+#define MODSEQ_TO_JMAPID(buf, modseq) {                                 \
+        uint64_t u64 = htonll(modseq);                                  \
+        const char *p = (const char *) &u64;                            \
+        size_t len = sizeof(u64);                                       \
+        for (; *p == 0 && len > 1; p++, len--);                         \
+        charset_encode(buf, p, len, ENCODING_BASE64JMAPID);             \
+}
+
+#define MODSEQ_FROM_JMAPID(jmapid, modseqp) {                                   \
+        struct buf decbuf = BUF_INITIALIZER;                                    \
+        charset_decode(&decbuf, jmapid, strlen(jmapid), ENCODING_BASE64JMAPID); \
+        /* right-align the network-order decoded data; ignore an id that        \
+         * decodes to more bytes than a modseq_t (it can not be valid) */       \
+        modseq_t u64 = 0;                                                       \
+        size_t len = buf_len(&decbuf);                                          \
+        if (len && len <= sizeof(u64))                                          \
+            memcpy((char *) &u64 + (sizeof(u64) - len), buf_base(&decbuf), len);\
+        buf_free(&decbuf);                                                      \
+        *modseqp = ntohll(u64);                                                 \
+}
+
+typedef struct keyvalue {
+    char *key, *value;
+} keyvalue;
+
+/* convert string to all lower case
+ */
+extern char *lcase (char *str);
+
+/* convert string to all upper case
+ */
+extern char *ucase (char *str);
+
+/* clean up control characters in a string while copying it
+ *  returns pointer to a static buffer containing the cleaned-up version
+ */
+extern char *beautify_string (const char *src);
+
+/* Same semantics as strcmp() but gracefully handles
+ * either or both it's arguments being NULL */
+int strcmpsafe(const char *a, const char *b);
+/* Same semantics as strcasecmp() but gracefully handles
+ * either or both it's arguments being NULL */
+int strcasecmpsafe(const char *a, const char *b);
+/* ditto strncmp */
+int strncmpsafe(const char *a, const char *b, size_t n);
+int strncasecmpsafe(const char *a, const char *b, size_t n);
+
+/* NULL isn't "" */
+int strcmpnull(const char *a, const char *b);
+
+/* do a binary search in a keyvalue array
+ *  nelem is the number of keyvalue elements in the kv array
+ *  cmpf is the comparison function (strcmp, stricmp, etc).
+ *  returns NULL if not found, or key/value pair if found.
+ */
+extern keyvalue *kv_bsearch (const char *key, keyvalue *kv, int nelem,
+                               int (*cmpf)(const char *s1, const char *s2));
+
+/*
+ * create an [unlinked] temporary file and return the file descriptor.
+ */
+extern int create_tempfile(const char *path);
+
+/* create a temporary directory at path and return the directory
+ * name "cyrus-subname-XXXXXX", where subname defaults to "tmpdir"
+ * and XXXXXX is a string that makes the directory name unique.
+ * */
+extern char *create_tempdir(const char *path, const char *subname);
+
+/* recursively call remove(3) on path and its descendants, except
+ * symlinks. Returns zero on success, or the first non-zero return
+ * value of remove on error. */
+extern int removedir(const char *path);
+
+/* Call rename but fsync the directory before returning success */
+extern int xopendir(const char *dest, int create);
+extern int xrenameat(int dirfd, const char *src, const char *dest);
+extern int cyrus_settime_fdptr(const char *path, struct timespec *when, int *dirfdp);
+extern int cyrus_unlink_fdptr(const char *fname, int *dirfdp);
+extern void xclosedir(int dirfd);
+extern int cyrus_rename(const char *src, const char *dest);
+
+/* Close a network filedescriptor the "safe" way */
+extern int cyrus_close_sock(int fd);
+
+/* Reset stdin/stdout/stderr */
+extern void cyrus_reset_stdio(void);
+
+/* Create all parent directories for the given path,
+ * up to but not including the basename.
+ */
+extern int cyrus_mkdir(const char *path, mode_t mode);
+
+enum {
+    COPYFILE_NOLINK = (1<<0),
+    COPYFILE_MKDIR  = (1<<1),
+    COPYFILE_KEEPTIME = (1<<2),
+    COPYFILE_NODIRSYNC = (1<<3)
+};
+
+extern int cyrus_copyfile_fdptr(const char *from, const char *to, int flags, int *dirfdp);
+#define cyrus_copyfile(from, to, flags) cyrus_copyfile_fdptr(from, to, flags, NULL)
+
+enum {
+    BEFORE_SETUID,
+    AFTER_SETUID,
+    BEFORE_BIND,
+    AFTER_BIND,
+    AFTER_FORK
+};
+
+extern int become_cyrus(void);
+extern const char *cyrus_user(void);
+extern const char *cyrus_group(void);
+
+/* Some systems have very inefficient implementations of isdigit,
+ * and we use it in a lot of inner loops
+ */
+
+#define cyrus_isdigit(x) ((x) >= '0' && (x) <= '9')
+int parseint32(const char *p, const char **ptr, int32_t *res);
+int parseuint32(const char *p, const char **ptr, uint32_t *res);
+int parsenum(const char *p, const char **ptr, int maxlen, bit64 *res);
+int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res);
+uint64_t str2uint64(const char *p);
+
+/* Timing related funcs/vars */
+extern void cmdtime_settimer(int enable);
+extern void cmdtime_starttimer(void);
+extern void cmdtime_endtimer(double * cmdtime, double * nettime);
+extern void cmdtime_netstart(void);
+extern void cmdtime_netend(void);
+extern int cmdtime_checksearch(void);
+extern double timeval_get_double(const struct timeval *tv);
+extern void timeval_set_double(struct timeval *tv, double d);
+extern void timeval_add_double(struct timeval *tv, double delta);
+extern double timesub(const struct timeval *start, const struct timeval *end);
+extern int64_t now_ms(void);
+
+extern clock_t sclock(void);
+
+#ifdef ENABLE_REGEX
+/* XXX These two ought to be declared in buf.h with their friends, but their
+ * XXX declarations depend on regex_t, which is only available with config.h,
+ * XXX and therefore not available within headers that are to be installed.
+ */
+int buf_replace_all_re(struct buf *buf, const regex_t *,
+                       const char *replace);
+int buf_replace_one_re(struct buf *buf, const regex_t *,
+                       const char *replace);
+#endif
+
+/*
+ * Given a list of strings, terminated by (char *)NULL,
+ * return a newly allocated string containing the
+ * concatenation of all the argument strings.  The
+ * caller must free the returned string using free().
+ *
+ * This API idea based on glib's g_strconcat() which
+ * is really quite amazingly convenient.
+ */
+char *strconcat(const char *s1, ...);
+
+#define BH_LOWER            (0)
+#define BH_UPPER            (1<<8)
+#define _BH_SEP             (1<<9)
+#define BH_SEPARATOR(c)     (_BH_SEP|((c)&0x7f))
+#define _BH_GETSEP(flags)   (flags & _BH_SEP ? (char)(flags & 0x7f) : '\0')
+int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags);
+int hex_to_bin(const char *hex, size_t hexlen, void *bin);
+
+int buf_bin_to_hex(struct buf *hex, const void *bin, size_t binlen, int flags);
+int buf_hex_to_bin(struct buf *bin, const char *hex, size_t hexlen);
+
+/* use getpassphrase on machines which support it */
+#ifdef HAVE_GETPASSPHRASE
+#define cyrus_getpass getpassphrase
+#else
+#define cyrus_getpass getpass
+#endif
+
+#ifdef HAVE_ZLIB
+enum {
+    DEFLATE_RAW,
+    DEFLATE_GZIP,
+    DEFLATE_ZLIB
+};
+
+int buf_inflate(struct buf *buf, int scheme);
+int buf_deflate(struct buf *buf, int compLevel, int scheme);
+#endif
+
+/* A wrapper for close() which handles the fd=-1 case cleanly.
+ * The argument may have side effects and must be an lvalue */
+#define xclose(fd) \
+    do { \
+        int *_fdp = &(fd); \
+        if (*_fdp >= 0) { \
+            close(*_fdp); \
+            *_fdp = -1; \
+        } \
+    } while(0)
+
+/* A wrapper for strncpy() which ensures that the destination
+ * string is always NUL-terminated.  Yes, I know we have an
+ * implementation of the BSD strlcpy() which has this semantic,
+ * but that isn't a highly optimised libc or compiler provided
+ * function like strncpy(), and we can trivially and efficiently
+ * add the NUL termination semantic on top of strncpy(). */
+#define xstrncpy(d, s, n) \
+    do { \
+        char *_d = (d); \
+        size_t _n = (n); \
+        strncpy(_d, (s), _n-1); \
+        _d[_n-1] = '\0'; \
+    } while(0)
+
+/* simple function to request a file gets pre-loaded by the OS */
+int warmup_file(const char *filename, off_t offset, off_t length);
+
+const char *makeuuid();
+const char *makeuuid5(const char *nsuuid, unsigned const char *value, size_t len);
+
+void tcp_enable_keepalive(int fd);
+void tcp_disable_nagle(int fd);
+
+__attribute__((format(printf, 6, 7)))
+void xsyslog_fn(int priority, const char *description,
+                const char *file, int line, const char *func,
+                const char *extra_fmt, ...);
+#define xsyslog(pri, desc, ...)  \
+    xsyslog_fn(pri, desc, __FILE__, __LINE__, __func__, __VA_ARGS__)
+
+/*
+ * GCC_VERSION macro usage:
+ * #if GCC_VERSION > 60909    //GCC version 7 and above
+ *   do_something();
+ * #endif
+ */
+#define GCC_VERSION (__GNUC__ * 10000           \
+                     + __GNUC_MINOR__ * 100     \
+                     + __GNUC_PATCHLEVEL__)
+
+struct logfmt;
+
+/* Pushes some struct's fields onto an event.  `key` is the key to log the
+ * value under, for types that log a single field; types that log a whole
+ * set of fields under fixed keys ignore it.
+ */
+typedef void (*lf_push_fn)(struct logfmt *lf, const char *key,
+                           const void *value);
+
+typedef struct xsyslog_ev_arg {
+    const char *name;
+    int type;
+    union {
+        char c;
+        int d;
+        long int ld;
+        long long int lld;
+        unsigned int u;
+        long unsigned int lu;
+        long long unsigned int llu;
+        ssize_t zd;
+        size_t zu;
+        double f;
+        const char *s;
+        struct {
+            lf_push_fn push;
+            const void *value;
+        } fn;
+    };
+} xsyslog_ev_arg;
+
+typedef struct xsyslog_ev_arg_list {
+    size_t nmemb;
+    xsyslog_ev_arg *data;
+} xsyslog_ev_arg_list;
+
+#define XSYSLOG_EV_ARG_LIST(...) (xsyslog_ev_arg_list *)                    \
+    &(xsyslog_ev_arg_list) {                                                \
+        sizeof((xsyslog_ev_arg []){__VA_ARGS__}) / sizeof(xsyslog_ev_arg),  \
+        (xsyslog_ev_arg []){__VA_ARGS__}                                    \
+    }
+
+void _xsyslog_ev(int saved_errno, int priority, const char *event,
+                 const char *file, int line, const char *func,
+                 xsyslog_ev_arg_list *arg);
+
+/* Would syslog actually keep a message logged at this priority?
+ *
+ * setlogmask(0) asks libc for the current mask without changing it, which is
+ * just a read of a global.  We check before building the argument list so
+ * that masked-out events -- LOG_DEBUG, most of the time -- don't pay for
+ * formatting nobody will read.
+ */
+static inline int logfmt_want(int priority)
+{
+    return setlogmask(0) & LOG_MASK(LOG_PRI(priority));
+}
+
+/* Log a structured event.  See docsrc/developer/logfmt.md.
+ *
+ * Arguments are built with the lf_*() macros below, e.g.
+ *
+ *     xsyslog_ev(LOG_ERR, "mailbox.append.failed",
+ *                lf_s("mbox.uniqueid", mailbox_uniqueid(mailbox)),
+ *                lf_u("msg.imapuid", record->uid),
+ *                lf_err("error", r));
+ *
+ * n.b. the arguments are only evaluated if the event will be logged.
+ */
+#define xsyslog_ev(priority, event, ...)                                    \
+    do {                                                                    \
+        int se = errno;                                                     \
+        if (logfmt_want(priority))                                          \
+            _xsyslog_ev(se, priority, event,                                \
+                        __FILE__, __LINE__, __func__,                       \
+                        XSYSLOG_EV_ARG_LIST(__VA_ARGS__));                  \
+    } while (0)
+
+enum xsyslog_ev_arg_type {
+    LF_C,
+    LF_D,
+    LF_LD,
+    LF_LLD,
+    LF_U,
+    LF_LU,
+    LF_LLU,
+    LF_ZD,
+    LF_ZU,
+    LF_LLX,
+    LF_F,
+    LF_S,
+    LF_UTF8,
+    LF_RAW,
+    LF_B,
+    LF_TIME,
+    LF_DURATION,
+    LF_SKIP,
+    LF_FN
+};
+
+#define lf_c(key, value)    (xsyslog_ev_arg){ key, LF_C,    { .c   = value } }
+#define lf_d(key, value)    (xsyslog_ev_arg){ key, LF_D,    { .d   = value } }
+#define lf_ld(key, value)   (xsyslog_ev_arg){ key, LF_LD,   { .ld  = value } }
+#define lf_lld(key, value)  (xsyslog_ev_arg){ key, LF_LLD,  { .lld = value } }
+#define lf_u(key, value)    (xsyslog_ev_arg){ key, LF_U,    { .u   = value } }
+#define lf_lu(key, value)   (xsyslog_ev_arg){ key, LF_LU,   { .lu  = value } }
+#define lf_llu(key, value)  (xsyslog_ev_arg){ key, LF_LLU,  { .llu = value } }
+#define lf_zd(key, value)   (xsyslog_ev_arg){ key, LF_ZD,   { .zd  = value } }
+#define lf_zu(key, value)   (xsyslog_ev_arg){ key, LF_ZU,   { .zu  = value } }
+#define lf_llx(key, value)  (xsyslog_ev_arg){ key, LF_LLX,  { .llu = value } }
+#define lf_f(key, value)    (xsyslog_ev_arg){ key, LF_F,    { .f   = value } }
+#define lf_s(key, value)    (xsyslog_ev_arg){ key, LF_S,    { .s   = value } }
+#define lf_utf8(key, value) (xsyslog_ev_arg){ key, LF_UTF8, { .s   = value } }
+
+#define lf_raw(key, fmt, ...) ({                                            \
+    struct buf value = BUF_INITIALIZER;                                     \
+    buf_printf(&value, fmt, __VA_ARGS__);                                   \
+    (xsyslog_ev_arg){ key, LF_RAW, { .s = buf_release(&value) } };          \
+})
+
+/* An argument that isn't there.  _xsyslog_ev() drops these, which is how the
+ * conditional helpers below manage to contribute nothing to the event.
+ */
+#define lf_skip()           (xsyslog_ev_arg){ "-", LF_SKIP, { .s = NULL } }
+
+/* A boolean, as 1 or 0.  Use this rather than lf_c(), which takes a char and
+ * would log lf_c("k", 1) as the control character 0x01.
+ */
+#define lf_b(key, value)    (xsyslog_ev_arg){ key, LF_B,                    \
+                                              { .d = (value) ? 1 : 0 } }
+
+/* A time_t, as epoch seconds. */
+#define lf_time(key, value) (xsyslog_ev_arg){ key, LF_TIME,                 \
+                                              { .lld = (long long)(value) } }
+
+/* An elapsed time, in seconds, to millisecond precision.  Always seconds:
+ * don't log milliseconds under a key that doesn't say so.
+ */
+#define lf_duration(key, secs)                                              \
+    (xsyslog_ev_arg){ key, LF_DURATION, { .f = (secs) } }
+
+/* A struct buf.  Takes a pointer, calls buf_cstring on it. */
+#define lf_buf(key, bufp)   lf_s(key, buf_cstring(bufp))
+
+/* A Cyrus error code, as its error_message() text.  The caller needs an
+ * *_err.h included for that, which anything with an `int r` will have.
+ */
+#define lf_err(key, r)      lf_s(key, error_message(r))
+
+/* A string, or nothing at all if it's NULL.
+ *
+ * This is for fields that only apply to some variants of an event.  Where a
+ * missing value is itself worth recording, use lf_s(), which logs ~null~.
+ */
+#define lf_s_opt(key, value) ({                                             \
+    const char *_lf_value = (value);                                        \
+    _lf_value ? lf_s(key, _lf_value) : lf_skip();                           \
+})
+
+/* key=1 if the condition holds, and nothing at all if it doesn't. */
+#define lf_flag(key, cond)  ((cond) ? lf_b(key, 1) : lf_skip())
+
+/* Log a whole struct, using a push function that knows its fields.
+ *
+ * lib/ can't see the structs that most events are about, so the actual
+ * helpers are declared alongside the struct they log -- lf_mailbox() in
+ * imap/mailbox.h, and so on.  Find them with:
+ *
+ *     $ git grep 'define lf_'
+ */
+#define lf_fn(key, pushfn, valuep)                                          \
+    (xsyslog_ev_arg){ key, LF_FN, { .fn = { (pushfn), (valuep) } } }
+
+/* Set up cyrus_gettime as a weak alias for a wrapper around clock_gettime.
+ * We then use cyrus_gettime everywhere instead of clock_gettime, and unit
+ * tests can mock cyrus_gettime if they need to fake the passing of time.
+ *
+ * We need this shim because, unlike gettimeofday, clock_gettime itself is
+ * not a weak alias, so it can't be overridden directly.
+ */
+#ifndef __cplusplus
+static int wrap_clock_gettime(clockid_t id, struct timespec *ts)
+{
+    return clock_gettime(id, ts);
+}
+__attribute__((weak, alias("wrap_clock_gettime"), visibility("default")))
+extern int cyrus_gettime(clockid_t, struct timespec *);
+#endif
+
+#endif /* INCLUDED_UTIL_H */

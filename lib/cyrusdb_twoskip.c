@@ -3,6 +3,14 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "cyrusdb.h"
+
+#include "libcyrus_min/byteorder.h"
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
 
 #include <errno.h>
 #include <limits.h>
@@ -14,16 +22,10 @@
 #include <unistd.h>
 #endif
 
-#include "assert.h"
 #include "bsearch.h"
-#include "byteorder.h"
-#include "cyrusdb.h"
 #include "crc32.h"
 #include "libcyr_cfg.h"
 #include "mappedfile.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xunlink.h"
 
 /*
  * twoskip disk format.

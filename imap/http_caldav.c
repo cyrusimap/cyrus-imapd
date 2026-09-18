@@ -16,6 +16,14 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/hash.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
+
 #include <sysexits.h>
 #include <syslog.h>
 
@@ -27,12 +35,11 @@
 #include "acl.h"
 #include "append.h"
 #include "caldav_db.h"
-#include "caldav_util.h"
+#include "common/caldav_util.h"
 #include "charset.h"
 #include "css3_color.h"
 #include "defaultalarms.h"
 #include "global.h"
-#include "hash.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
@@ -40,27 +47,22 @@
 #include "http_proxy.h"
 #include "index.h"
 #include "ical_support.h"
-#include "jmap_notif.h"
-#include "jcal.h"
+#include "common/jmap_notif.h"
+#include "common/jcal.h"
 #include "map.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "message.h"
 #include "message_guid.h"
 #include "msgrecord.h"
-#include "proxy.h"
+#include "common/proxy.h"
 #include "times.h"
 #include "spool.h"
-#include "strhash.h"
 #include "user.h"
-#include "util.h"
 #include "version.h"
 #include "webdav_db.h"
-#include "xmalloc.h"
 #include "xml_support.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
-#include "zoneinfo_db.h"
+#include "common/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

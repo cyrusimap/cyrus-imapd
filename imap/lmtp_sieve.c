@@ -4,6 +4,15 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+#include "libcyrus_min/xstrlcat.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/strhash.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -20,7 +29,6 @@
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
-#include "assert.h"
 #include "auditlog.h"
 #include "auth.h"
 #include "duplicate.h"
@@ -28,7 +36,7 @@
 #include "imapurl.h"
 #include "lmtpd.h"
 #include "lmtp_sieve.h"
-#include "lmtpengine.h"
+#include "common/lmtpengine.h"
 #include "map.h"
 #include "notify.h"
 #include "parseaddr.h"
@@ -38,19 +46,13 @@
 #include "sieve_db.h"
 #include "sievedir.h"
 #include "smtpclient.h"
-#include "strhash.h"
-#include "tok.h"
 #include "user.h"
-#include "util.h"
 #include "version.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
-#include "imap/zoneinfo_db.h"
+#include "common/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-#include "imap/lmtp_err.h"
+#include "common/lmtp_err.h"
 
 static int sieve_usehomedir = 0;
 
@@ -1673,7 +1675,7 @@ done:
     return ret;
 }
 
-#include "caldav_util.h"
+#include "common/caldav_util.h"
 #include "http_caldav_sched.h"
 
 char *httpd_userid = NULL;  // due to caldav_util.h including httpd.h
@@ -2456,7 +2458,7 @@ static sieve_duplicate_t duplicate = {
 };
 
 #ifdef WITH_JMAP
-#include "jmap_mail_query.h"
+#include "common/jmap_mail_query.h"
 
 static int jmapquery(void *ic, void *sc, void *mc, const char *json)
 {

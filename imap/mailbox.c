@@ -4,6 +4,17 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/proc.h>
+#include <cyrus/retry.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -40,7 +51,6 @@
 
 #include "acl.h"
 #include "annotate.h"
-#include "assert.h"
 #include "auditlog.h"
 #include "bsearch.h"
 #include "caldav_db.h"
@@ -48,7 +58,7 @@
 #include "carddav_db.h"
 #include "webdav_db.h"
 #include "ical_support.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "vcard_support.h"
 #ifdef USE_SIEVE
 #include "sieve_db.h"
@@ -59,7 +69,6 @@
 #include "global.h"
 #include "imparse.h"
 #include "index_file.h"
-#include "jmap_util.h"
 #include "cyr_lock.h"
 #include "mailbox.h"
 #include "mappedfile.h"
@@ -68,21 +77,11 @@
 #include "mboxevent.h"
 #include "mboxlist.h"
 #include "parseaddr.h"
-#include "proc.h"
-#include "retry.h"
 #include "seen.h"
 #include "user.h"
-#include "util.h"
 #include "seqset.h"
 #include "statuscache.h"
-#include "strarray.h"
 #include "sync_log.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
-#include "xunlink.h"
-
-
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -3864,7 +3863,6 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
 
 
 #ifdef WITH_JMAP
-#include "jmap_util.h"
 
 static int mailbox_update_email_alarms(struct mailbox *mailbox,
                                        const struct index_record *old,

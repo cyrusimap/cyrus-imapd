@@ -3,7 +3,7 @@
 
 #ifndef CRC32_H
 #define CRC32_H
-#include "util.h"
+#include "libcyrus_min/util.h"
 #include <sys/uio.h>
 #ifdef HAVE_INTTYPES_H
 # include <inttypes.h>

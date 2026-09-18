@@ -5,6 +5,13 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/dynarray.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
+
 #include <syslog.h>
 
 #include <jansson.h>
@@ -17,25 +24,20 @@
 
 #include <sasl/saslutil.h>
 
-#include "caldav_util.h"
-#include "dynarray.h"
+#include "common/caldav_util.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "ical_support.h"
-#include "jmap_util.h"
-#include "jscalendar.h"
+#include "common/jmap_util.h"
+#include "common/jscalendar.h"
 #include "msgrecord.h"
 #include "notify.h"
 #include "crc32.h"
 #include "smtpclient.h"
-#include "strhash.h"
 #include "times.h"
 #include "webdav_db.h"
-#include "xmalloc.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

@@ -4,6 +4,15 @@
 
 #include <config.h>
 
+#include "libcyrus_min/slowio.h"
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/proc.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -28,11 +37,10 @@
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
-#include "assert.h"
 #include "attachextract.h"
 #include "auth.h"
 #ifdef USE_AUTOCREATE
-#include "autocreate.h"
+#include "common/autocreate.h"
 #endif
 #include "backend.h"
 #include "carddav_db.h"
@@ -48,30 +56,24 @@
 #include "mupdate.h"
 #include "notify.h"
 #include "prometheus.h"
-#include "proc.h"
 #include "prot.h"
-#include "proxy.h"
-#include "slowio.h"
-#include "sync_support.h"
+#include "common/proxy.h"
+#include "common/sync_support.h"
 #include "telemetry.h"
 #include "times.h"
 #include "tls.h"
 #include "userdeny.h"
-#include "util.h"
 #include "version.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
-#include "imap/zoneinfo_db.h"
+#include "common/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
-#include "imap/lmtp_err.h"
+#include "common/lmtp_err.h"
 
 #include "master/service.h"
 
 #include "lmtpd.h"
-#include "lmtpengine.h"
+#include "common/lmtpengine.h"
 #ifdef USE_SIEVE
 #include "lmtp_sieve.h"
 #endif

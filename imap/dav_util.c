@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/strhash.h>
+
 #include <string.h>
 
 #include "append.h"
@@ -14,11 +18,9 @@
 #include "mailbox.h"
 #include "mboxname.h"
 #include "spool.h"
-#include "strhash.h"
 #include "syslog.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

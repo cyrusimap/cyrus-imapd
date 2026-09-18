@@ -4,6 +4,16 @@
 
 #include <config.h>
 
+#include "libcyrus_min/slowio.h"
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/hash.h>
+#include <cyrus/proc.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
@@ -30,35 +40,27 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "assert.h"
 #include "annotate.h"
 #include "append.h"
 #include "auth.h"
 #include "dav_db.h"
 #include "dlist.h"
 #include "global.h"
-#include "hash.h"
 #include "imparse.h"
-#include "imap_proxy.h"
+#include "common/imap_proxy.h"
 #include "loginlog.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
 #include "partlist.h"
-#include "proc.h"
 #include "prot.h"
 #include "quota.h"
 #include "seen.h"
-#include "slowio.h"
 #include "sync_log.h"
 #include "telemetry.h"
 #include "tls.h"
 #include "user.h"
-#include "util.h"
 #include "version.h"
-#include "xmalloc.h"
-#include "xstrlcat.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -66,7 +68,7 @@
 #include "master/service.h"
 
 #include "message_guid.h"
-#include "sync_support.h"
+#include "common/sync_support.h"
 /*#include "cdb.h"*/
 
 extern int optind;

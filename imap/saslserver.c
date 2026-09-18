@@ -4,12 +4,13 @@
 
 #include <config.h>
 
+#include <cyrus/xmalloc.h>
+
 #include <string.h>
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
 #include "prot.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

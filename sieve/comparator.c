@@ -6,6 +6,10 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
@@ -17,8 +21,6 @@
 #include "sieve/sieve_interface.h"
 #include "sieve/sieve.h"
 #include "bytecode.h"
-#include "util.h"
-#include "xmalloc.h"
 
 /*!!! uses B_CONTAINS not CONTAINS, etc, only works with bytecode*/
 

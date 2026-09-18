@@ -7,10 +7,10 @@
 
 #include "append.h"
 #include "auth.h"
-#include "lmtpengine.h"
+#include "common/lmtpengine.h"
 #include "mboxname.h"
 #include "message.h"
-#include "jmap_mail_query.h"
+#include "common/jmap_mail_query.h"
 
 /* data per message */
 typedef struct deliver_data {

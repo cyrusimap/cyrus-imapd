@@ -3,12 +3,13 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "imparse.h"
+
+#include "libcyrus_min/util.h"
+
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
-
-#include "imparse.h"
-#include "util.h"
 
 /*
  * Parse a word from the string starting at the pointer pointed to by 's'.

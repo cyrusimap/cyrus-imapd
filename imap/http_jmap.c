@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcpy.h"
+
 #include <errno.h>
 
 #include "acl.h"
@@ -14,12 +16,11 @@
 #include "http_ws.h"
 #include "jmap_push.h"
 #include "mboxname.h"
-#include "proxy.h"
+#include "common/proxy.h"
 #include "times.h"
-#include "sync_support.h"
+#include "common/sync_support.h"
 #include "syslog.h"
 #include "user.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

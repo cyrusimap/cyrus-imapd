@@ -15,11 +15,14 @@
  * To get that, you need to protect in the caller.
  *
  */
-
-
+#include <config.h>
 #include "mappedfile.h"
 
-#include <config.h>
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
 
 #include <libgen.h>
 #include <stdlib.h>
@@ -33,13 +36,9 @@
 #include <unistd.h>
 #endif
 
-#include "assert.h"
 #include "cyr_lock.h"
 #include "libcyr_cfg.h"
 #include "map.h"
-#include "retry.h"
-#include "util.h"
-#include "xmalloc.h"
 
 static void _ensure_mapped(struct mappedfile *mf, size_t offset, int update)
 {

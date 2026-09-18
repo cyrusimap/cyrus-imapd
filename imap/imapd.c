@@ -4,6 +4,17 @@
 
 #include <config.h>
 
+#include "libcyrus_min/bufarray.h"
+#include "libcyrus_min/slowio.h"
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/proc.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -37,25 +48,23 @@
 #include "auditlog.h"
 #include "auth.h"
 #ifdef USE_AUTOCREATE
-#include "autocreate.h"
+#include "common/autocreate.h"
 #endif // USE_AUTOCREATE
-#include "assert.h"
 #include "backend.h"
 #include "bsearch.h"
-#include "bufarray.h"
 #include "charset.h"
 #include "dlist.h"
 #include "idle.h"
 #include "idlemsg.h"
 #include "global.h"
 #include "times.h"
-#include "proxy.h"
-#include "imap_proxy.h"
+#include "common/proxy.h"
+#include "common/imap_proxy.h"
 #include "imapd.h"
 #include "imapurl.h"
 #include "imparse.h"
 #include "index.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "loginlog.h"
 #include "mailbox.h"
 #include "message.h"
@@ -65,27 +74,20 @@
 #include "mbdump.h"
 #include "mupdate-client.h"
 #include "partlist.h"
-#include "proc.h"
 #include "prometheus.h"
 #include "quota.h"
 #include "seen.h"
 #include "sieve_db.h"
-#include "slowio.h"
 #include "statuscache.h"
 #include "sync_log.h"
-#include "sync_support.h"
+#include "common/sync_support.h"
 #include "telemetry.h"
 #include "attachextract.h"
 #include "tls.h"
 #include "user.h"
 #include "userdeny.h"
-#include "util.h"
 #include "version.h"
-#include "xmalloc.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 #include "ptrarray.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

@@ -3,12 +3,17 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/libconfig.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
+
 #include <ctype.h>
 #include <sysexits.h>
 #include <syslog.h>
 #include "ptloader.h"
-#include "util.h"
-#include "xmalloc.h"
 
 #ifdef HAVE_AFSKRB
 #include <string.h>
@@ -26,8 +31,6 @@
 #include <krb5.h>
 
 #include "auth_pts.h"
-#include "libconfig.h"
-#include "strhash.h"
 
 /* AFS stuff */
 #include <lock.h>

@@ -23,7 +23,7 @@
 #include "calsched_support.h"
 #include "http_dav.h"
 #include "ical_support.h"
-#include "itip_support.h"
+#include "common/itip_support.h"
 
 
 struct freebusy {

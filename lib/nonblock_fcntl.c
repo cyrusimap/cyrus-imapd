@@ -3,12 +3,14 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include <cyrus/xmalloc.h>
+
 #include <sys/types.h>
 #include <sys/file.h>
 #include <fcntl.h>
 #include <sysexits.h>
 
-#include "xmalloc.h"
 #include "nonblock.h"
 
 #ifndef FNDELAY

@@ -25,7 +25,9 @@
 
 #include <config.h>
 #include "crc32.h"
-#include "util.h"
+
+#include "libcyrus_min/util.h"
+
 #include "string.h"
 
 static const uint32_t crc32_lookup[16][256] =
