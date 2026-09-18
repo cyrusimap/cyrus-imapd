@@ -47,7 +47,7 @@
 #include "dlist.h"
 #include "global.h"
 #include "imparse.h"
-#include "imap_proxy.h"
+#include "common/imap_proxy.h"
 #include "loginlog.h"
 #include "mailbox.h"
 #include "map.h"

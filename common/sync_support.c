@@ -34,7 +34,7 @@
 
 #include "lib/bsearch.h"
 #include "imap/global.h"
-#include "imap/imap_proxy.h"
+#include "common/imap_proxy.h"
 #include "imap/mboxlist.h"
 #include "imap/mailbox.h"
 #include "imap/quota.h"

@@ -59,7 +59,7 @@
 #include "global.h"
 #include "times.h"
 #include "common/proxy.h"
-#include "imap_proxy.h"
+#include "common/imap_proxy.h"
 #include "imapd.h"
 #include "imapurl.h"
 #include "imparse.h"

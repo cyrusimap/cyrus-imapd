@@ -946,8 +946,8 @@ imap_calalarmd_SOURCES = imap/calalarmd.c common/mutex_fake.c
 imap_calalarmd_LDADD = $(LD_SERVER_ADD)
 
 imap_imapd_SOURCES = \
-    imap/imap_proxy.c \
-    imap/imap_proxy.h \
+    common/imap_proxy.c \
+    common/imap_proxy.h \
     imap/imapd.c \
     imap/imapd.h \
     common/mutex_fake.c \
@@ -1466,13 +1466,13 @@ imap_squatter_LDADD = $(LD_UTILITY_ADD)
 imap_squat_dump_SOURCES = common/cli_fatal.c common/mutex_fake.c imap/squat_dump.c
 imap_squat_dump_LDADD = $(LD_UTILITY_ADD)
 
-imap_sync_client_SOURCES = common/mutex_fake.c imap/sync_client.c common/sync_support.c common/sync_support.h
+imap_sync_client_SOURCES = common/mutex_fake.c imap/sync_client.c common/imap_proxy.h common/sync_support.c common/sync_support.h
 imap_sync_client_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 imap_sync_reset_SOURCES = common/mutex_fake.c imap/sync_reset.c common/sync_support.c common/sync_support.h
 imap_sync_reset_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
-imap_sync_server_SOURCES = common/mutex_fake.c imap/sync_server.c common/sync_support.c common/sync_support.h master/service.c
+imap_sync_server_SOURCES = common/mutex_fake.c imap/sync_server.c common/imap_proxy.h common/sync_support.c common/sync_support.h master/service.c
 imap_sync_server_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 imap_tls_prune_SOURCES = common/cli_fatal.c common/mutex_fake.c imap/tls_prune.c

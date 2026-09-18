@@ -38,7 +38,7 @@
 #include "mboxname.h"
 #include "map.h"
 #include "imapd.h"
-#include "imap_proxy.h"
+#include "common/imap_proxy.h"
 #include "prot.h"
 #include "message_guid.h"
 #include "sync_log.h"
