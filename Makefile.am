@@ -222,19 +222,19 @@ sbin_PROGRAMS += \
     sbin/cyr_dbtool \
     sbin/cyr_deny \
     sbin/cyr_expire \
-    imap/cyr_info \
-    imap/cyr_buildinfo \
-    imap/cyr_synclog \
-    imap/cyr_userseen \
-    imap/cyr_virusscan \
+    sbin/cyr_info \
+    sbin/cyr_buildinfo \
+    sbin/cyr_synclog \
+    sbin/cyr_userseen \
+    sbin/cyr_virusscan \
     sbin/deliver \
-    imap/ipurge \
-    imap/mbexamine \
-    imap/mbpath \
-    imap/mbtool \
+    sbin/ipurge \
+    sbin/mbexamine \
+    sbin/mbpath \
+    sbin/mbtool \
     imap/quota \
-    imap/reconstruct \
-    imap/relocate_by_id \
+    sbin/reconstruct \
+    sbin/relocate_by_id \
     imap/tls_prune \
     imap/cvt_xlist_specialuse \
     ptclient/ptdump \
@@ -276,7 +276,7 @@ libexec_PROGRAMS += imap/httpd
 noinst_PROGRAMS += imap/ical_apply_patch
 sbin_PROGRAMS += \
     sbin/ctl_zoneinfo \
-    imap/dav_reconstruct
+    sbin/dav_reconstruct
 
 if HAVE_GUESSTZ
 sbin_PROGRAMS += sbin/cyr_guesstz
@@ -915,21 +915,21 @@ sbin_cyr_guesstz_SOURCES = sbin/cyr_guesstz.c common/cli_fatal.c common/mutex_fa
 sbin_cyr_guesstz_LDADD = $(LD_UTILITY_ADD)
 endif # HAVE_GUESSTZ
 
-imap_cyr_info_SOURCES = common/cli_fatal.c imap/cyr_info.c common/mutex_fake.c master/masterconf.c
-imap_cyr_info_LDADD = $(LD_UTILITY_ADD)
+sbin_cyr_info_SOURCES = sbin/cyr_info.c common/cli_fatal.c common/mutex_fake.c master/masterconf.c
+sbin_cyr_info_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_buildinfo_SOURCES = common/cli_fatal.c imap/cyr_buildinfo.c common/mutex_fake.c master/masterconf.c
-imap_cyr_buildinfo_LDADD = $(LD_UTILITY_ADD)
+sbin_cyr_buildinfo_SOURCES = sbin/cyr_buildinfo.c common/cli_fatal.c common/mutex_fake.c master/masterconf.c
+sbin_cyr_buildinfo_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_synclog_SOURCES = common/cli_fatal.c imap/cyr_synclog.c common/mutex_fake.c
-imap_cyr_synclog_LDADD = $(LD_UTILITY_ADD)
+sbin_cyr_synclog_SOURCES = sbin/cyr_synclog.c common/cli_fatal.c common/mutex_fake.c
+sbin_cyr_synclog_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_userseen_SOURCES = common/cli_fatal.c imap/cyr_userseen.c common/mutex_fake.c
-imap_cyr_userseen_LDADD = $(LD_UTILITY_ADD)
+sbin_cyr_userseen_SOURCES = sbin/cyr_userseen.c common/cli_fatal.c common/mutex_fake.c
+sbin_cyr_userseen_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyr_virusscan_SOURCES = common/cli_fatal.c imap/cyr_virusscan.c common/mutex_fake.c
-imap_cyr_virusscan_CFLAGS = $(AM_CFLAGS) $(CLAMAV_CFLAGS) $(CFLAG_VISIBILITY)
-imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) $(CLAMAV_LIBS)
+sbin_cyr_virusscan_SOURCES = sbin/cyr_virusscan.c common/cli_fatal.c common/mutex_fake.c
+sbin_cyr_virusscan_CFLAGS = $(AM_CFLAGS) $(CLAMAV_CFLAGS) $(CFLAG_VISIBILITY)
+sbin_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) $(CLAMAV_LIBS)
 
 sbin_deliver_SOURCES = \
     sbin/deliver.c \
@@ -965,8 +965,8 @@ endif
 
 imap_imapd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
-imap_ipurge_SOURCES = common/cli_fatal.c imap/ipurge.c common/mutex_fake.c
-imap_ipurge_LDADD = $(LD_UTILITY_ADD)
+sbin_ipurge_SOURCES = sbin/ipurge.c common/cli_fatal.c common/mutex_fake.c
+sbin_ipurge_LDADD = $(LD_UTILITY_ADD)
 
 nodist_imap_libcyrus_imap_la_SOURCES = \
     imap/http_err.c \
@@ -1194,14 +1194,14 @@ endif # SIEVE
 
 imap_lmtpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
-imap_mbexamine_SOURCES = common/cli_fatal.c imap/mbexamine.c common/mutex_fake.c
-imap_mbexamine_LDADD = $(LD_UTILITY_ADD)
+sbin_mbexamine_SOURCES = sbin/mbexamine.c common/cli_fatal.c common/mutex_fake.c
+sbin_mbexamine_LDADD = $(LD_UTILITY_ADD)
 
-imap_mbpath_SOURCES = common/cli_fatal.c imap/mbpath.c common/mutex_fake.c
-imap_mbpath_LDADD = $(LD_UTILITY_ADD)
+sbin_mbpath_SOURCES = sbin/mbpath.c common/cli_fatal.c common/mutex_fake.c
+sbin_mbpath_LDADD = $(LD_UTILITY_ADD)
 
-imap_mbtool_SOURCES = common/cli_fatal.c imap/mbtool.c common/mutex_fake.c
-imap_mbtool_LDADD = $(LD_UTILITY_ADD)
+sbin_mbtool_SOURCES = sbin/mbtool.c common/cli_fatal.c common/mutex_fake.c
+sbin_mbtool_LDADD = $(LD_UTILITY_ADD)
 
 imap_message_test_SOURCES = imap/message_test.c common/mutex_fake.c
 imap_message_test_LDADD = $(LD_UTILITY_ADD)
@@ -1442,14 +1442,14 @@ imap_promstatsd_LDADD = $(LD_UTILITY_ADD)
 imap_quota_SOURCES = common/cli_fatal.c common/mutex_fake.c imap/quota.c imap/quota.h
 imap_quota_LDADD = $(LD_UTILITY_ADD)
 
-imap_reconstruct_SOURCES = common/cli_fatal.c common/mutex_fake.c imap/reconstruct.c
-imap_reconstruct_LDADD = $(LD_UTILITY_ADD)
+sbin_reconstruct_SOURCES = sbin/reconstruct.c common/cli_fatal.c common/mutex_fake.c
+sbin_reconstruct_LDADD = $(LD_UTILITY_ADD)
 
-imap_relocate_by_id_SOURCES = common/cli_fatal.c common/mutex_fake.c imap/relocate_by_id.c
-imap_relocate_by_id_LDADD = $(LD_UTILITY_ADD)
+sbin_relocate_by_id_SOURCES = sbin/relocate_by_id.c common/cli_fatal.c common/mutex_fake.c
+sbin_relocate_by_id_LDADD = $(LD_UTILITY_ADD)
 
-imap_dav_reconstruct_SOURCES = common/cli_fatal.c common/mutex_fake.c imap/dav_reconstruct.c
-imap_dav_reconstruct_LDADD = $(LD_UTILITY_ADD)
+sbin_dav_reconstruct_SOURCES = sbin/dav_reconstruct.c common/cli_fatal.c common/mutex_fake.c
+sbin_dav_reconstruct_LDADD = $(LD_UTILITY_ADD)
 
 imap_ical_apply_patch_SOURCES = common/cli_fatal.c common/mutex_fake.c imap/ical_apply_patch.c
 imap_ical_apply_patch_LDADD = $(LD_UTILITY_ADD)

@@ -22,9 +22,9 @@
 #include <netinet/in.h>
 
 /* cyrus includes */
-#include "global.h"
-#include "mailbox.h"
-#include "mboxlist.h"
+#include "imap/global.h"
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

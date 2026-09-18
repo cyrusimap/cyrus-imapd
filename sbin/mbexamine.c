@@ -41,15 +41,15 @@
 # endif
 #endif
 
-#include "index.h"
-#include "global.h"
-#include "mailbox.h"
-#include "message.h"
-#include "message_guid.h"
-#include "mboxname.h"
-#include "mboxlist.h"
-#include "seen.h"
-#include "times.h"
+#include "imap/index.h"
+#include "imap/global.h"
+#include "imap/mailbox.h"
+#include "imap/message.h"
+#include "imap/message_guid.h"
+#include "imap/mboxname.h"
+#include "imap/mboxlist.h"
+#include "imap/seen.h"
+#include "lib/times.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

@@ -22,16 +22,16 @@
 #include <netinet/in.h>
 
 /* cyrus includes */
-#include "global.h"
-#include "append.h"
-#include "index.h"
-#include "mailbox.h"
-#include "map.h"
-#include "message.h"
-#include "mboxlist.h"
-#include "parseaddr.h"
-#include "prot.h"
-#include "times.h"
+#include "imap/global.h"
+#include "imap/append.h"
+#include "imap/index.h"
+#include "imap/mailbox.h"
+#include "lib/map.h"
+#include "imap/message.h"
+#include "imap/mboxlist.h"
+#include "lib/parseaddr.h"
+#include "lib/prot.h"
+#include "lib/times.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

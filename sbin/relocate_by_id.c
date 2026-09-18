@@ -19,16 +19,16 @@
 #include <sys/stat.h>
 #include <libgen.h>
 
-#include "dav_db.h"
-#include "global.h"
-#include "ical_support.h"
-#include "ptrarray.h"
-#include "mappedfile.h"
-#include "mboxlist.h"
-#include "mboxname.h"
-#include "seen.h"
-#include "sqldb.h"
-#include "user.h"
+#include "imap/dav_db.h"
+#include "imap/global.h"
+#include "imap/ical_support.h"
+#include "lib/ptrarray.h"
+#include "lib/mappedfile.h"
+#include "imap/mboxlist.h"
+#include "imap/mboxname.h"
+#include "imap/seen.h"
+#include "lib/sqldb.h"
+#include "imap/user.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

@@ -23,10 +23,10 @@
 #include <jansson.h>
 #include <syslog.h>
 
-#include "global.h"
-#include "mailbox.h"
-#include "mboxlist.h"
-#include "user.h"
+#include "imap/global.h"
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
+#include "imap/user.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

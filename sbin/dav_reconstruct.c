@@ -22,14 +22,14 @@
 
 #include <libical/ical.h>
 
-#include "annotate.h"
-#include "global.h"
-#include "http_dav.h"
-#include "mailbox.h"
-#include "message.h"
-#include "message_guid.h"
-#include "mboxname.h"
-#include "mboxlist.h"
+#include "imap/annotate.h"
+#include "imap/global.h"
+#include "imap/http_dav.h"
+#include "imap/mailbox.h"
+#include "imap/message.h"
+#include "imap/message_guid.h"
+#include "imap/mboxname.h"
+#include "imap/mboxlist.h"
 #include "common/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */

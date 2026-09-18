@@ -17,8 +17,8 @@
 #include <unistd.h>
 #endif
 
-#include "global.h"
-#include "sync_log.h"
+#include "imap/global.h"
+#include "imap/sync_log.h"
 
 __attribute__((noreturn))
 void usage(const char *name) {

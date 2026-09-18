@@ -21,8 +21,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#include "global.h"
-#include "../master/masterconf.h"
+#include "imap/global.h"
+#include "master/masterconf.h"
 
 /* config.c stuff */
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
