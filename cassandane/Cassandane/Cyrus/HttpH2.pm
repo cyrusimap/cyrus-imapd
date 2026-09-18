@@ -7,10 +7,12 @@ use warnings;
 
 use IO::Socket::INET;
 use IO::Select;
+use List::Util qw(pairs);
 use MIME::Base64 qw(encode_base64);
 
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Wire;
 
 =head1 NAME
 
@@ -24,6 +26,9 @@ Tests speak I<cleartext> HTTP/2 using the "prior knowledge" connection preface
 (RFC 7540 section 3.4): no TLS, and no C<Upgrade: h2c> handshake.  Cyrus
 accepts this on any plain C<http> service, so a test can open an ordinary
 socket and start sending HTTP/2 frames.
+
+Every request and response is written to the test log by
+L<Cassandane::Util::Wire>, so a failing test reports the exchange that failed.
 
 =cut
 
@@ -130,6 +135,10 @@ sub http2_request
                              . encode_base64("$username:$password", '');
     }
 
+    my $req_log = "$method $path HTTP/2\n";
+    $req_log .= "$_->[0]: $_->[1]\n" for pairs @req_headers;
+    wire_sent("$host:$port", $req_log . "\n" . ($args{body} // ''));
+
     my $res = { status => undef, headers => {}, body => '' };
     my $done;
 
@@ -183,6 +192,13 @@ sub http2_request
     }
 
     $sock->close;
+
+    if ($done) {
+        my $res_log = 'HTTP/2 ' . ($res->{status} // '(no :status)') . "\n";
+        $res_log .= "$_: $res->{headers}{$_}\n"
+            for sort keys %{ $res->{headers} };
+        wire_recv("$host:$port", $res_log . "\n" . $res->{body});
+    }
 
     # We die only when the peer never produced a terminal response event: a
     # well-behaved server always sets $done.  We deliberately don't require a
