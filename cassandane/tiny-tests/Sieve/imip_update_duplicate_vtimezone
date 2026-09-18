@@ -1,0 +1,153 @@
+#!perl
+use Cassandane::Tiny;
+
+# Regression test: an iTIP REQUEST carrying two VTIMEZONE components that share
+# a single TZID used to make deliver_merge_request() free the stored timezone
+# component twice: it looked the TZID up in a hash table, freed the matching
+# stored component, but never removed the hash entry, so a second request
+# VTIMEZONE with the same TZID retrieved the already-freed pointer and freed it
+# again.
+
+# Build a VTIMEZONE with $n STANDARD subcomponents, each carrying padding
+# properties so the component's allocation footprint is controllable.  The
+# stored timezone is made large and the first trigger timezone small so that
+# the freed child allocations are not all reclaimed between the two frees,
+# which lets glibc's tcache double-free detector abort the worker.
+my sub _dup_vtimezone
+{
+    my ($tzid, $n, $label, $pad) = @_;
+
+    my @lines = ("BEGIN:VTIMEZONE", "TZID:$tzid");
+    for my $i (0 .. $n - 1) {
+        push @lines,
+            "BEGIN:STANDARD",
+            sprintf("DTSTART:19700%d01T000000", ($i % 9) + 1),
+            "TZOFFSETFROM:+0000",
+            "TZOFFSETTO:+0000",
+            "TZNAME:$label-$i-$pad",
+            "X-PAD-$i:$pad",
+            "END:STANDARD";
+    }
+    push @lines, "END:VTIMEZONE";
+    return join("\n", @lines);
+}
+
+sub test_imip_update_duplicate_vtimezone
+    :needs_component_httpd :want_service_http
+{
+    my ($self) = @_;
+
+    my $IMAP = $self->{store}->get_client();
+    $self->{store}->_select();
+    $IMAP->uid(1);
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Create calendar user";
+    my $CalDAV = $self->{caldav};
+    my $CalendarId = 'Default';
+    my $uuid = "b1d81f3e-1f0e-4a2c-9d2b-4f2e3d4c5b6a";
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<~"EOF"
+      require ["body", "variables", "imap4flags", "processcalendar"];
+      if body :content "text/calendar" :contains "\nMETHOD:" {
+          processcalendar :outcome "outcome";
+          if string "\${outcome}" "updated" {
+              setflag "\\\\Flagged";
+          }
+      }
+      EOF
+    );
+
+    my $stored_tz = _dup_vtimezone("X", 8, "stored", "A" x 160);
+
+    my $imip = <<~"EOF";
+      Date: Thu, 23 Sep 2021 09:06:18 -0400
+      From: Foo <foo\@example.net>
+      To: Cassandane <cassandane\@example.com>
+      Message-ID: <$uuid-0\@example.net>
+      Content-Type: text/calendar; method=REQUEST; component=VEVENT
+      X-Cassandane-Unique: $uuid-0
+
+      BEGIN:VCALENDAR
+      VERSION:2.0
+      PRODID:-//Example//iTIP double-free//EN
+      METHOD:REQUEST
+      $stored_tz
+      BEGIN:VEVENT
+      CREATED:20210923T034327Z
+      UID:$uuid
+      DTEND;TZID=X:20300101T130000
+      TRANSP:OPAQUE
+      SUMMARY:An Event
+      DTSTART;TZID=X:20300101T120000
+      DTSTAMP:20210923T034327Z
+      SEQUENCE:0
+      ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+      ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+      ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+      END:VEVENT
+      END:VCALENDAR
+      EOF
+
+    xlog $self, "Deliver iMIP invite (stores one large VTIMEZONE with TZID:X)";
+    my $msg = Cassandane::Message->new(raw => $imip);
+    $msg->set_attribute(uid => 1,
+                        flags => [ '\\Recent', '\\Flagged' ]);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the event made it to calendar";
+    my $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_str_equals('An Event', $events->[0]{title});
+
+    xlog $self, "Expunge the message";
+    $IMAP->store('1', '+flags', '(\\Deleted)');
+    $IMAP->expunge();
+
+    my $trigger_a = _dup_vtimezone("X", 1, "trigger-a", "B" x 48);
+    my $trigger_b = _dup_vtimezone("X", 8, "trigger-b", "C" x 192);
+
+    $imip = <<~"EOF";
+      Date: Thu, 24 Sep 2021 09:06:18 -0400
+      From: Foo <foo\@example.net>
+      To: Cassandane <cassandane\@example.com>
+      Message-ID: <$uuid-1\@example.net>
+      Content-Type: text/calendar; method=REQUEST; component=VEVENT
+      X-Cassandane-Unique: $uuid-1
+
+      BEGIN:VCALENDAR
+      VERSION:2.0
+      PRODID:-//Example//iTIP double-free//EN
+      METHOD:REQUEST
+      $trigger_a
+      $trigger_b
+      BEGIN:VEVENT
+      CREATED:20210923T034327Z
+      UID:$uuid
+      DTEND;TZID=X:20300101T140000
+      TRANSP:OPAQUE
+      SUMMARY:An Updated Event
+      DTSTART;TZID=X:20300101T130000
+      DTSTAMP:20210924T034327Z
+      SEQUENCE:1
+      ORGANIZER;CN=Test User:MAILTO:foo\@example.net
+      ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:foo\@example.net
+      ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+      END:VEVENT
+      END:VCALENDAR
+      EOF
+
+    xlog $self, "Deliver iMIP update with two VTIMEZONEs sharing TZID:X";
+    $msg = Cassandane::Message->new(raw => $imip);
+    $msg->set_attribute(uid => 2,
+                        flags => [ '\\Recent', '\\Flagged' ]);
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Check that the merge completed and the event is intact";
+    $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_str_equals('An Updated Event', $events->[0]{title});
+}
