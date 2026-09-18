@@ -621,7 +621,6 @@ static const unsigned char qos[] = {
 EXPORTED void config_read(const char *alt_config, const int config_need_data)
 {
     enum imapopt opt = IMAPOPT_ZERO;
-    char buf[4096];
     char *p;
     int ival;
     int64_t i64val;
@@ -791,10 +790,11 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         }
 
         if (!found) {
-            snprintf(buf, sizeof(buf),
+            char errbuf[1024];
+            snprintf(errbuf, sizeof(errbuf),
                      "partition-%s option not specified in configuration file",
                      config_defpartition ? config_defpartition : "<name>");
-            fatal(buf, EX_CONFIG);
+            fatal(errbuf, EX_CONFIG);
         }
 
         if (config_check_partitions(NULL)) {
