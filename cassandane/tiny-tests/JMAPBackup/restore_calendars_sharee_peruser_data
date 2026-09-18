@@ -1,0 +1,114 @@
+#!perl
+use Cassandane::Tiny;
+
+# A sharee's per-user edits to a shared event are stored as that sharee's
+# private annotation on the resource, and the owner must never see them.
+# That has to stay true when the owner destroys the event and recovers it
+# with Backup/restoreCalendars.
+
+sub test_restore_calendars_sharee_peruser_data
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create an event on the default calendar";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarIds => {
+                        Default => JSON::true,
+                    },
+                    title => "shared event",
+                    start => "2021-01-01T09:00:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+
+    xlog $self, "create sharee and share the default calendar";
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("sharee");
+    $admintalk->setacl("user.cassandane.#calendars.Default",
+                       "sharee", "lrsiwntex") or die;
+
+    my $service = $self->{instance}->get_service("http");
+    my $shareeJmap = Mail::JMAPTalk->new(
+        user => 'sharee',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $shareeJmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    xlog $self, "sharee sets a private per-user keyword on the event";
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => { keywords => { 'sharee-keyword' => JSON::true } },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    $self->assert_keywords_seen($shareeJmap, { 'sharee-keyword' => JSON::true });
+    $self->assert_keywords_seen($jmap, {});
+
+    sleep 2;
+    my $mark = time();
+    sleep 2;
+
+    xlog $self, "owner destroys the event";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            destroy => [$eventId],
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals($eventId, $res->[0][1]{destroyed}[0]);
+
+    my $period = "PT" . (time() - $mark) . "S";
+
+    xlog $self, "owner restores calendars to before the destroy";
+    $res = $jmap->CallMethods([
+        ['Backup/restoreCalendars', {
+            undoPeriod     => $period,
+            verboseLogging => JSON::true,
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, $res->[0][1]{numDestroysUndone});
+
+    xlog $self, "owner still does not see the sharee's keyword";
+    $self->assert_keywords_seen($jmap, {});
+
+    xlog $self, "sharee still sees their own keyword";
+    $self->assert_keywords_seen($shareeJmap, { 'sharee-keyword' => JSON::true });
+}
+
+sub assert_keywords_seen
+{
+    my ($self, $jmap, $expect) = @_;
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId  => 'cassandane',
+            properties => ['keywords'],
+        }, 'R1'],
+    ]);
+
+    my $list = $res->[0][1]{list};
+    $self->assert_num_equals(1, scalar @$list);
+    $self->assert_deep_equals($expect, $list->[0]{keywords} // {});
+}

@@ -518,6 +518,22 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     return r;
 }
 
+/* Like mailbox_extract_annots(), but shared annotations only. */
+static int extract_shared_annots_cb(const char *mailbox __attribute__((unused)),
+                                    uint32_t uid __attribute__((unused)),
+                                    const char *entry, const char *userid,
+                                    const struct buf *value,
+                                    const struct annotate_metadata *mdata
+                                        __attribute__((unused)),
+                                    void *rock)
+{
+    if (!userid[0]) {
+        setentryatt((struct entryattlist **) rock, entry, "value.shared", value);
+    }
+
+    return 0;
+}
+
 static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
                              jmap_req_t *req, int is_update, int log_level)
 {
@@ -551,7 +567,10 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
     if (!r) {
         /* get existing flags and annotations */
         strarray_t *flags = mailbox_extract_flags(mailbox, record, req->accountid);
-        struct entryattlist *annots = mailbox_extract_annots(mailbox, record);
+        struct entryattlist *annots = NULL;
+        annotatemore_findall_mailbox(mailbox, record->uid, "*", /*modseq*/0,
+                                     extract_shared_annots_cb, &annots,
+                                     /*flags*/0);
         struct body *body = NULL;
 
         /* mark as undeleted */
@@ -570,6 +589,13 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
         strarray_free(flags);
         message_free_body(body);
         free(body);
+
+        if (!r) {
+            /* private annotations, under their own userids */
+            r = mailbox_get_annotate_state(tomailbox, as.baseuid, NULL);
+            if (!r) r = annotate_msg_copy(mailbox, record->uid,
+                                          tomailbox, as.baseuid, NULL);
+        }
 
         if (r) append_abort(&as);
         else {

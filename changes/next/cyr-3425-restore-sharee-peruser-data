@@ -1,0 +1,27 @@
+Description:
+
+Backup/restoreCalendars now recreates a destroyed event with each user's
+private per-user data (keywords, color, transparency, alerts) stored under the
+right user, so a sharee's private edits stay private.  Previously, the restore
+flattened every user's private per-message annotations onto the account being
+restored to.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
