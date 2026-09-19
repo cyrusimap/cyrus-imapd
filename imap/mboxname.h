@@ -286,26 +286,17 @@ char *mboxname_metapath(const char *partition,
 char *mboxname_lockpath(const char *mboxname);
 char *mboxname_lockpath_suffix(const char *mboxname, const char *suffix);
 
-/*
- * Return nonzero if (internal) mailbox 'name' consists of legal characters.
- * If using the unixhierarchysep '/', DOTCHAR ('.' placeholder) is allowed.
- */
-int mboxname_policycheck(const char *name);
-
-/* Skip the rules about who the name identifies -- the domain and the userid.
- * For a name created elsewhere and only replayed here, where refusing it now
- * would strand a mailbox that already exists. */
+/* don't check the domain or userid: for replaying a name that already exists */
 #define MBOXNAME_POLICY_SKIP_IDENTITY (1<<0)
+/* allow '!': the name has a domain prefix, so it can't be the separator */
+#define MBOXNAME_POLICY_UNDER_DOMAIN (1<<1)
 
-int mboxname_policycheck_flags(const char *name, int flags);
+/* Return 0 if internal mailbox 'name' is legal */
+int mboxname_policycheck(const char *name, int flags);
 
-/*
- * Return 0 if 'name' consists of legal characters for a single component of
- * a mailbox name.  Applies the same character rules as mboxname_policycheck(),
- * which only ever sees an assembled internal name, plus a ban on '^' -- the
- * internal spelling of a '.'.
- */
-int mboxname_policycheck_component(const char *name);
+/* Return 0 if 'name' is legal as a single component.  Also rejects '^',
+ * the internal spelling of '.' */
+int mboxname_policycheck_component(const char *name, int flags);
 
 void mboxname_todeleted(const char *name, char *result, int withtime);
 
