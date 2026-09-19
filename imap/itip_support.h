@@ -170,6 +170,8 @@ extern icalcomponent *master_to_recurrence(icalcomponent *master,
 
 extern void itip_strip_personal_data(icalcomponent *comp);
 
+extern void itip_strip_managedid(icalcomponent *comp);
+
 extern enum sched_deliver_outcome sched_deliver_local(const char *userid,
                                                       const char *sender,
                                                       const char *recipient,
