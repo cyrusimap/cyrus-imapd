@@ -1500,9 +1500,12 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
             txn->location = buf_cstring(&txn->buf);
 
             /* Create HTML body */
+            xmlChar *escaped =
+                xmlEncodeSpecialChars(NULL,
+                                      (const xmlChar *) buf_cstring(&txn->buf));
             buf_reset(html);
-            buf_printf(html, tls_message,
-                       buf_cstring(&txn->buf), buf_cstring(&txn->buf));
+            buf_printf(html, tls_message, (char *) escaped, (char *) escaped);
+            xmlFree(escaped);
 
             /* Output our HTML response */
             txn->resp_body.type = "text/html; charset=utf-8";
@@ -4010,12 +4013,17 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
         buf_printf_markup(html, level, "<h1>%s</h1>", error_message(code)+4);
         buf_printf_markup(html, level, "<p>%s</p>", txn->error.desc);
         if (config_serverinfo) {
+            xmlChar *safe_host = xmlEncodeSpecialChars(NULL, (const xmlChar *) host);
+            xmlChar *safe_port = xmlEncodeSpecialChars(NULL, (const xmlChar *) port);
+
             buf_printf_markup(html, level, "<hr>");
             buf_printf_markup(html, level,
                               "<address>%s Server at %s Port %s</address>",
                               (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) ?
                               buf_cstring(&serverinfo) : "HTTP",
-                              host, port);
+                              (char *) safe_host, (char *) safe_port);
+            xmlFree(safe_host);
+            xmlFree(safe_port);
         }
         buf_printf_markup(html, --level, "</body>");
         buf_printf_markup(html, --level, "</html>");
