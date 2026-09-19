@@ -726,8 +726,22 @@ static icalcomponent *vpatch_from_peruserdata(struct dlist *dl)
     return vpatch;
 }
 
+/* A subscription can outlive the ACL grant that created it -- nothing
+ * revokes it when a share is withdrawn -- so alarm delivery must not rely
+ * on subscription status alone.  Check that userid still holds DAV:read
+ * on the mailbox's *current* ACL. */
+static int sharee_can_read(const char *acl, const char *userid)
+{
+    struct auth_state *authstate = auth_newstate(userid);
+    int rights = cyrus_acl_myrights(authstate, acl);
+    auth_freestate(authstate);
+
+    return (rights & DACL_READ) == DACL_READ;
+}
+
 struct has_alarms_rock {
     uint32_t mbox_options;
+    const char *acl;
     int *has_alarms;
 };
 
@@ -744,8 +758,10 @@ static int has_peruser_alarms_cb(const char *mailbox,
 
     if (!mboxname_userownsmailbox(userid, mailbox) &&
         ((hrock->mbox_options & OPT_IMAP_SHAREDSEEN) ||
-         mboxlist_checksub(mailbox, userid) != 0)) {
-        /* No per-user-data, or sharee has unsubscribed from this calendar */
+         mboxlist_checksub(mailbox, userid) != 0 ||
+         !sharee_can_read(hrock->acl, userid))) {
+        /* No per-user-data, sharee has unsubscribed from this calendar,
+         * or sharee's access has since been revoked */
         return 0;
     }
 
@@ -975,7 +991,8 @@ static int has_alarms(void *data, struct mailbox *mailbox,
     }
 
     /* Check all per-user-cal-data for VALARMs */
-    struct has_alarms_rock hrock = { mailbox->i.options, &has_alarms };
+    struct has_alarms_rock hrock =
+        { mailbox->i.options, mailbox_acl(mailbox), &has_alarms };
 
     syslog(LOG_DEBUG, "checking per-user-data");
     mailbox_get_annotate_state(mailbox, uid, NULL);
@@ -1241,6 +1258,7 @@ static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
 
 struct process_alarms_rock {
     uint32_t mbox_options;
+    const char *acl;
     icalcomponent *ical;
     struct lastalarm_data *alarm;
     time_t runtime;
@@ -1264,8 +1282,10 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     if (!mboxname_userownsmailbox(userid, mailbox) &&
         ((prock->mbox_options & OPT_IMAP_SHAREDSEEN) ||
          mboxlist_checksub(mailbox, userid) != 0 ||
+         !sharee_can_read(prock->acl, userid) ||
          prock->is_secretarymode)) {
-        /* No per-user-data, or sharee has unsubscribed from this calendar,
+        /* No per-user-data, sharee has unsubscribed from this calendar,
+         * sharee's access has since been revoked,
          * or calendar is in secretary mode */
         return 0;
     }
@@ -1374,8 +1394,10 @@ static int process_valarms(struct mailbox *mailbox,
     mbname_free(&mbname);
 
     /* Process VALARMs in per-user-cal-data */
-    struct process_alarms_rock prock =
-        { mailbox->i.options, ical, &data, runtime, dryrun, is_secretarymode };
+    struct process_alarms_rock prock = {
+        mailbox->i.options, mailbox_acl(mailbox),
+        ical, &data, runtime, dryrun, is_secretarymode
+    };
 
     syslog(LOG_DEBUG, "processing per-user alarms");
 
