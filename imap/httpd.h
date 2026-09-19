@@ -498,6 +498,7 @@ struct connect_params {
         const char *endpoint;
         const char *subprotocol;
         const void *data_cb;
+        int64_t max_msgsize;    /* Max size of a (decompressed) WS message */
     } ws;
 };
 

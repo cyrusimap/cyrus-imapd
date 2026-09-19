@@ -69,7 +69,8 @@ typedef int ws_data_callback(struct transaction_t *txn, enum wslay_opcode opcode
                              struct buf *logbuf);
 
 extern int ws_start_channel(struct transaction_t *txn,
-                            const char *sub_prot, ws_data_callback *data_cb);
+                            const char *sub_prot, ws_data_callback *data_cb,
+                            int64_t max_msgsize);
 
 extern void ws_add_resp_hdrs(struct transaction_t *txn);
 

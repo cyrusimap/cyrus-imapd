@@ -1,0 +1,120 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Socket qw(create_client_socket);
+use Compress::Raw::Zlib ();
+use IO::Select;
+use Protocol::WebSocket::Frame;
+
+sub test_websocket_deflate_message_too_big
+    :NoStartInstances :needs_dependency_wslay
+{
+    my ($self) = @_;
+
+    # The suite default turns off compression (httpallowcompress);
+    # this test needs it on so the server negotiates permessage-
+    # deflate, since it's the decompression path being tested here.
+    $self->{instance}->{config}->set(httpallowcompress => 'yes');
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $service = $self->{instance}->get_service('http');
+    my $host = $service->host();
+    my $port = $service->port();
+
+    my $auth = $self->{jmap}->auth_header();
+
+    my $sock = create_client_socket('inet', $host, $port);
+    $self->assert($sock, "couldn't connect to $host:$port");
+    $sock->autoflush(1);
+
+    my $sel = IO::Select->new($sock);
+    my $read_more = sub {
+        my ($bufref) = @_;
+        my @ready = $sel->can_read(10);
+        $self->assert(scalar(@ready), "timed out waiting for server data");
+        my $n = sysread($sock, my $chunk, 65536);
+        $self->assert(defined($n) && $n > 0, "server closed connection");
+        $$bufref .= $chunk;
+    };
+
+    my $key = encode_base64(pack('C16', map { int(rand(256)) } 1 .. 16), '');
+    chomp $key;
+
+    $sock->print(join("\r\n",
+        "GET /jmap/ws/ HTTP/1.1",
+        "Host: $host:$port",
+        "Upgrade: websocket",
+        "Connection: Upgrade",
+        "Sec-WebSocket-Key: $key",
+        "Sec-WebSocket-Version: 13",
+        "Sec-WebSocket-Protocol: jmap",
+        "Sec-WebSocket-Extensions: permessage-deflate",
+        "Authorization: $auth",
+    ) . "\r\n\r\n");
+
+    my $buf = '';
+    $read_more->(\$buf) until $buf =~ /\r\n\r\n/;
+
+    my ($headers, $rest) = split(/\r\n\r\n/, $buf, 2);
+    $self->assert_matches(qr{^HTTP/1\.1 101\b}, $headers);
+    $self->assert_matches(qr/permessage-deflate/i, $headers);
+    xlog $self, "WS handshake succeeded: " . (split /\r\n/, $headers)[0];
+
+    # A JMAP request body that compresses extremely well (one long
+    # run of the same byte) but inflates to well beyond the suite's
+    # jmap_max_size_request (1k; see JMAPCore.pm).  This is meant to
+    # trip the decompression-bomb guard in zlib_decompress(), not
+    # wslay's own raw-frame-size cap, so the compressed frame itself
+    # must stay small.
+    my $body = encode_json({
+        using       => ['urn:ietf:params:jmap:core'],
+        methodCalls => [[ 'Core/echo', { filler => ('A' x 40000) }, '0' ]],
+    });
+
+    my $deflate = Compress::Raw::Zlib::Deflate->new(-WindowBits => -15);
+    my $compressed = '';
+    $deflate->deflate($body, $compressed);
+    $deflate->flush($compressed, Compress::Raw::Zlib::Z_SYNC_FLUSH());
+
+    # Per RFC 7692, the sender omits the trailing 4-byte sync-flush
+    # marker; the server adds it back before inflating.
+    $self->assert_str_equals("\x00\x00\xff\xff", substr($compressed, -4));
+    substr($compressed, -4, 4, '');
+
+    xlog $self, sprintf("compressed %d bytes down to %d bytes",
+                         length($body), length($compressed));
+
+    my $frame = Protocol::WebSocket::Frame->new(
+      type   => "text",
+      buffer => $compressed,
+      masked => 1,
+    );
+
+    # RSV1 bit is used by permessage-deflate to indicated a compressed frame
+    $frame->rsv([1, 0, 0]);
+
+    $sock->print($frame->to_bytes);
+
+    my $reader = Protocol::WebSocket::Frame->new;
+    $reader->append($rest);
+
+    my $close_bytes;
+
+    WANTCLOSE: while (1) {
+        my $buf;
+        $read_more->(\$buf);
+        $reader->append($buf);
+
+        while( defined( $close_bytes = $reader->next_bytes ) ) {
+            last WANTCLOSE if $reader->opcode == 0x8;
+        }
+    }
+
+    my $status_code = unpack('n', substr($close_bytes, 0, 2));
+    my $reason = substr($close_bytes, 2);
+    xlog $self, "WS close status=$status_code reason=\"$reason\"";
+
+    $self->assert_num_equals(1009, $status_code);
+
+    close($sock);
+}

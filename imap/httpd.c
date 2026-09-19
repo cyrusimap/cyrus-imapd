@@ -545,7 +545,8 @@ const struct known_meth_t http_methods[] = {
 static ws_data_callback ws_echo;
 
 static struct connect_params ws_params = {
-    NULL, { "/", NULL /* sub-protocol */, &ws_echo }
+    NULL, { "/", NULL /* sub-protocol */, &ws_echo,
+             0 /* max_msgsize: resolved in service_init() */ }
 };
 
 /* Namespace to fetch static content from filesystem */
@@ -885,6 +886,10 @@ int service_init(int argc __attribute__((unused)),
 
     http2_enabled = http2_init(&http_conn, &serverinfo);
     ws_enabled = ws_init(&http_conn, &serverinfo);
+
+    ws_params.ws.max_msgsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
+    if (ws_params.ws.max_msgsize <= 0)
+        ws_params.ws.max_msgsize = BYTESIZE_UNLIMITED;
 
 #ifdef HAVE_ZLIB
     buf_printf(&serverinfo, " Zlib/%s", ZLIB_VERSION);
@@ -4918,7 +4923,8 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
         return ret;
     }
     
-    ret = ws_start_channel(txn, cparams->ws.subprotocol, cparams->ws.data_cb);
+    ret = ws_start_channel(txn, cparams->ws.subprotocol, cparams->ws.data_cb,
+                           cparams->ws.max_msgsize);
 
     return (ret == HTTP_UPGRADE) ? HTTP_BAD_REQUEST : ret;
 }
@@ -4941,7 +4947,8 @@ static int meth_get(struct transaction_t *txn,
     /* Upgrade to WebSockets over HTTP/1.1 on root, if requested */
     if (!strcmp(txn->req_uri->path, "/")) {
         if (txn->flags.upgrade & UPGRADE_WS) {
-            return ws_start_channel(txn, NULL, &ws_echo);
+            return ws_start_channel(txn, NULL, &ws_echo,
+                                    ws_params.ws.max_msgsize);
         }
 
         if (ws_enabled) {
