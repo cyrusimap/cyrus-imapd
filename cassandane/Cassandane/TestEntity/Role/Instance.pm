@@ -36,6 +36,7 @@ has factory => (
 has id => (
     is       => 'ro',
     required => 1,
+    coerce   => sub { defined $_[0] ? "$_[0]" : $_[0] },
 );
 
 has properties => (
