@@ -1677,7 +1677,7 @@ static int mboxlist_create_namecheck(const char *mboxname,
     int r = 0;
 
     /* policy first */
-    r = mboxname_policycheck_flags(mboxname, policyflags);
+    r = mboxname_policycheck(mboxname, policyflags);
     if (r) goto done;
 
     /* is this the user's INBOX namespace? */
@@ -4946,7 +4946,8 @@ EXPORTED int mboxlist_setquotas(const char *root,
     if (r != IMAP_QUOTAROOT_NONEXISTENT)
         goto done;
 
-    if (config_virtdomains && root[strlen(root)-1] == '!') {
+    const char *bang = config_virtdomains ? strchr(root, '!') : NULL;
+    if (bang && !bang[1]) {
         /* domain quota */
     }
     else {

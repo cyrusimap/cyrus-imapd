@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+# A '!' after the domain prefix is an ordinary character, so a domain
+# user's folder may contain one and it replicates.
+sub test_bang_in_folder_name
+    :Replication :VirtDomains :NoAltNamespace
+    ($self)
+{
+    my $mastersvc = $self->{instance}->get_service('imap');
+    my $admintalk = $mastersvc->create_store(username => 'admin')->get_client();
+
+    $admintalk->create('user.foo@example.com');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $foostore = $mastersvc->create_store(username => 'foo@example.com');
+    my $footalk = $foostore->get_client();
+    $footalk->create('INBOX.sub!bar');
+    $self->assert_str_equals('ok', $footalk->get_last_completion_response());
+
+    $self->run_replication(user => 'foo@example.com');
+    $self->check_replication('foo@example.com');
+
+    my $replicasvc = $self->{replica}->get_service('imap');
+    my $rtalk = $replicasvc->create_store(username => 'foo@example.com')
+                          ->get_client();
+    my $list = $rtalk->list('', '*');
+    $self->assert_mailbox_structure($list, '.', {
+        'INBOX' => [qw( \\HasChildren )],
+        'INBOX.sub!bar' => [qw( \\HasNoChildren )],
+    });
+}

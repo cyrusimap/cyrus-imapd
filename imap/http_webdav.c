@@ -468,7 +468,9 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
 
         /* only a creation has to be representable: an existing collection
          * may have been made before we checked */
-        if (tgt->mbentry && mboxname_policycheck_component(val)) {
+        if (tgt->mbentry
+            && mboxname_policycheck_component(val,
+                                              MBOXNAME_POLICY_UNDER_DOMAIN)) {
             free(val);
             mbname_free(&mbname);
             *resultstr = "Invalid characters in collection name";

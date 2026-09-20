@@ -6468,7 +6468,7 @@ HIDDEN int mailbox_delete_cleanup(const char *part,
 
         /* Check if parent mailbox exists */
         ntail = strrchr(nbuf, '.');
-        if (!ntail || strchr(ntail, '!')) {
+        if (!ntail || ((p = strchr(nbuf, '!')) && p > ntail)) {
             /* Hit top of hierarchy or domain separator */
             break;
         }
