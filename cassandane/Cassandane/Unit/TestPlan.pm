@@ -976,12 +976,14 @@ sub _setup_logfile
         ($logfh, $logfile) = tempfile(UNLINK => 0);
     }
 
-    # Redirect both STDOUT and STDERR to the log file
-    open STDOUT, '>&', $logfh
-        or die "Cannot redirect STDOUT";
-    open STDERR, '>&', $logfh
-        or die "Cannot redirect STDERR";
-    close $logfh;
+    unless ($ENV{CASSANDANE_LIVE_OUTPUT}) {
+      # Redirect both STDOUT and STDERR to the log file
+      open STDOUT, '>&', $logfh
+          or die "Cannot redirect STDOUT";
+      open STDERR, '>&', $logfh
+          or die "Cannot redirect STDERR";
+      close $logfh;
+    }
 
     $witem->{logfile} = $logfile;
     $self->{oldout} = $oldout;
