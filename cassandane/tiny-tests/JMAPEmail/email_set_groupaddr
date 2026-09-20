@@ -161,9 +161,9 @@ sub test_email_set_groupaddr
             }, 'R2'],
         ]);
         $self->assert_not_null($res->[0][1]{created}{email1}{id});
-        $self->assert_deep_equals($tc->{wantAddresses},
+        $self->assert_cmp_deeply($tc->{wantAddresses},
             $res->[1][1]{list}[0]->{'header:to:asAddresses'});
-        $self->assert_deep_equals($tc->{wantGroupedAddresses},
+        $self->assert_cmp_deeply($tc->{wantGroupedAddresses},
             $res->[1][1]{list}[0]->{'header:to:asGroupedAddresses'});
 
         # Now assert that group addresses loop back if set in Email/set.
@@ -197,9 +197,9 @@ sub test_email_set_groupaddr
             }, 'R2'],
         ]);
         $self->assert_not_null($res->[0][1]{created}{email2}{id});
-        $self->assert_deep_equals($tc->{wantAddresses},
+        $self->assert_cmp_deeply($tc->{wantAddresses},
             $res->[1][1]{list}[0]->{'header:to:asAddresses'});
-        $self->assert_deep_equals($tc->{wantGroupedAddresses},
+        $self->assert_cmp_deeply($tc->{wantGroupedAddresses},
             $res->[1][1]{list}[0]->{'header:to:asGroupedAddresses'});
     }
 }

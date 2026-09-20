@@ -23,6 +23,6 @@ sub test_echo_tls
     xlog $self, "check pong";
     $self->assert_not_null($res);
     $self->assert_str_equals('Core/echo', $res->[0][0]);
-    $self->assert_deep_equals($req, $res->[0][1]);
+    $self->assert_cmp_deeply($req, $res->[0][1]);
     $self->assert_str_equals('R1', $res->[0][2]);
 }

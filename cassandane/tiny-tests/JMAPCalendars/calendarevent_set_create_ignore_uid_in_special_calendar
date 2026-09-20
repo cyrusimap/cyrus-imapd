@@ -67,7 +67,7 @@ EOF
             destroy => [$eventId],
         }, 'R0'],
     ]);
-    $self->assert_deep_equals([$eventId], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([$eventId], $res->[0][1]{destroyed});
 
     xlog "Create event having the same uid";
     $res = $jmap->CallMethods([

@@ -40,7 +40,7 @@ sub test_tls_login_event
     $self->assert_equals(1, $event_counts{'Login'});
 
     # XXX more correct, but may race against setup_mailbox finishing up
-    #$self->assert_deep_equals({ Login => 1 }, \%event_counts);
+    #$self->assert_cmp_deeply({ Login => 1 }, \%event_counts);
 
     # XXX explicitly log out to work around Mail::IMAPTalk destructor
     # XXX calling is_open()

@@ -132,6 +132,6 @@ sub test_email_copy_no_mailboxids ($self)
         }, 'R1']
     ]);
     my $wantKeywords = { 'bar' => JSON::true };
-    $self->assert_deep_equals($wantKeywords, $res->[0][1]{list}[0]{keywords});
+    $self->assert_cmp_deeply($wantKeywords, $res->[0][1]{list}[0]{keywords});
     $self->assert_str_equals($receivedAt, $res->[0][1]{list}[0]{receivedAt});
 }

@@ -162,7 +162,7 @@ sub do_test_list_order
         push @expect, qw(shared);
     }
     push @expect, qw( shared.order-c shared.order-co );
-    $self->assert_deep_equals(\@boxes, \@expect);
+    $self->assert_cmp_deeply(\@boxes, \@expect);
 }
 
 use Cassandane::Tiny::Loader;

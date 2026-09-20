@@ -78,7 +78,7 @@ EOF
 
         $self->assert_str_equals("error", $res->[0][0]);
         $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
-        $self->assert_deep_equals([ "emailBlobIds" ], $res->[0][1]{'arguments'});
+        $self->assert_cmp_deeply([ "emailBlobIds" ], $res->[0][1]{'arguments'});
     }
 
     xlog "test non-string entries in emailBlobIds - must not crash the worker";
@@ -101,7 +101,7 @@ EOF
         $self->assert_not_null($res);
         $self->assert_str_equals("error", $res->[0][0]);
         $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
-        $self->assert_deep_equals([ "emailBlobIds[0]" ], $res->[0][1]{'arguments'});
+        $self->assert_cmp_deeply([ "emailBlobIds[0]" ], $res->[0][1]{'arguments'});
 
         # verify the connection/worker survived to answer the next call
         $self->assert_str_equals("SieveScript/test", $res->[1][0]);

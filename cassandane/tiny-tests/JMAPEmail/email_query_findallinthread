@@ -139,7 +139,7 @@ sub test_email_query_findallinthread
         $gotThreadIdToEmailIds{$threadId} = \@emailIds;
     }
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals($wantThreadIdToEmailIds, \%gotThreadIdToEmailIds);
+    $self->assert_cmp_deeply($wantThreadIdToEmailIds, \%gotThreadIdToEmailIds);
 
     %gotThreadIdToEmailIds = ();
     while (my ($threadId, $emailIds) = each %{$res->[1][1]{threadIdToEmailIds}}) {
@@ -147,7 +147,7 @@ sub test_email_query_findallinthread
         $gotThreadIdToEmailIds{$threadId} = \@emailIds;
     }
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals($wantThreadIdToEmailIds, \%gotThreadIdToEmailIds);
+    $self->assert_cmp_deeply($wantThreadIdToEmailIds, \%gotThreadIdToEmailIds);
 
     xlog "Assert empty result";
     $res = $jmap->CallMethods([
@@ -165,8 +165,8 @@ sub test_email_query_findallinthread
             disableGuidSearch => JSON::true,
         }, 'R2'],
     ], $using);
-    $self->assert_deep_equals({}, $res->[0][1]{threadIdToEmailIds});
-    $self->assert_deep_equals({}, $res->[1][1]{threadIdToEmailIds});
+    $self->assert_cmp_deeply({}, $res->[0][1]{threadIdToEmailIds});
+    $self->assert_cmp_deeply({}, $res->[1][1]{threadIdToEmailIds});
 
     xlog "Assert threadIdToEmailIds isn't set if not requested";
     $res = $jmap->CallMethods([

@@ -49,7 +49,7 @@ sub test_mailbox_set_role_move_update
     $self->assert(exists $res->[0][1]{updated}{$mboxA});
     $self->assert(exists $res->[0][1]{updated}{$mboxB});
     my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[1][1]{list}};
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $inbox => 'inbox',
         $mboxA => undef,
         $mboxB => 'trash',

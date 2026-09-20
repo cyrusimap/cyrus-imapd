@@ -32,7 +32,7 @@ sub test_create_inherit_color
     xlog $self, "Check the child has the same color";
     $res = $imaptalk->getmetadata($folder, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $folder => { $entry => $color }
     }, $res);
 }

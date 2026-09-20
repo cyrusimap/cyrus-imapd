@@ -223,6 +223,6 @@ EOF
         my $wantTotal = defined $tc->{wantTotal} ?
             $tc->{wantTotal} : scalar @{$tc->{wantIds}};
         $self->assert_num_equals($wantTotal, $res->[0][1]{total});
-        $self->assert_deep_equals($tc->{wantIds}, $res->[0][1]{ids});
+        $self->assert_cmp_deeply($tc->{wantIds}, $res->[0][1]{ids});
     }
 }

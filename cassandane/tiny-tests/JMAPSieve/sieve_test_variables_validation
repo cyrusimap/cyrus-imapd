@@ -67,7 +67,7 @@ EOF
 
         $self->assert_str_equals("error", $res->[0][0]);
         $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
-        $self->assert_deep_equals([ "variables" ], $res->[0][1]{'arguments'});
+        $self->assert_cmp_deeply([ "variables" ], $res->[0][1]{'arguments'});
     }
 
     xlog "bad entries in variables";
@@ -93,7 +93,7 @@ EOF
 
     $self->assert_str_equals("error", $res->[0][0]);
     $self->assert_str_equals("invalidArguments", $res->[0][1]{type});
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         [ sort map { "variables/$_" } qw(null object array num bool), '', '@@foo', 'no way' ],
         [ sort @{ $res->[0][1]{'arguments'} } ],
     );

@@ -241,7 +241,7 @@ sub assert_card_set_create_onlineservices($self, $arg)
 
     xlog $self, "Assert Card object";
     delete($arg->{onlineServices}{1}{'@type'});
-    $self->assert_deep_equals( $arg->{onlineServices},
+    $self->assert_cmp_deeply( $arg->{onlineServices},
         $res->[1][1]{list}[0]{onlineServices} );
 
     xlog $self, "Assert vCard";

@@ -37,9 +37,9 @@ sub test_mailbox_changes_inbox_inbox
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -53,9 +53,9 @@ sub test_mailbox_changes_inbox_inbox
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -69,9 +69,9 @@ sub test_mailbox_changes_inbox_inbox
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 }

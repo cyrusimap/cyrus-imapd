@@ -41,11 +41,11 @@ sub test_mailbox_set_role_move_destroy
             properties => ['role', 'name'],
         }, 'R2'],
     ]);
-    $self->assert_deep_equals([$mboxA], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([$mboxA], $res->[0][1]{destroyed});
     my $mboxB = $res->[0][1]{created}{mboxB}{id};
     $self->assert_not_null($mboxB);
     my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[1][1]{list}};
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $inbox => 'inbox',
         $mboxB => 'trash',
     }, \%roleByMbox);

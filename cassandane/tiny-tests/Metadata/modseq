@@ -31,7 +31,7 @@ sub test_modseq ($self)
                            ['modseq', 'annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
             {
                 1 => {
                         uid => 1,
@@ -63,7 +63,7 @@ sub test_modseq ($self)
                         ['modseq', 'annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
             {
                 1 => {
                         uid => 1,
@@ -95,7 +95,7 @@ sub test_modseq ($self)
                         ['modseq', 'annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
             {
                 1 => {
                         uid => 1,

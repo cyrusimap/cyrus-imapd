@@ -118,6 +118,6 @@ sub test_email_query_attachmenttype_wildcards
         ], $using);
         my @gotIds = sort @{$res->[0][1]->{ids}};
         my @wantIds = sort @{$_->{wantIds}};
-        $self->assert_deep_equals(\@wantIds, \@gotIds);
+        $self->assert_cmp_deeply(\@wantIds, \@gotIds);
     }
 }

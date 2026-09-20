@@ -7,5 +7,5 @@ sub test_lint ($self)
 
     my @output = $self->{instance}->run_cyr_info('conf-lint');
     @output = grep { !m/_db: / } @output;  # skip database types
-    $self->assert_deep_equals([], \@output);
+    $self->assert_cmp_deeply([], \@output);
 }

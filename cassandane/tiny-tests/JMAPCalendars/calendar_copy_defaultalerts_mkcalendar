@@ -94,9 +94,9 @@ sub test_calendar_copy_defaultalerts_mkcalendar
             ],
         }, 'R1'],
     ]);
-    $self->assert_deep_equals($defaultAlertsWithTime1,
+    $self->assert_cmp_deeply($defaultAlertsWithTime1,
         $res->[0][1]{list}[0]{defaultAlertsWithTime});
-    $self->assert_deep_equals($defaultAlertsWithoutTime1,
+    $self->assert_cmp_deeply($defaultAlertsWithoutTime1,
         $res->[0][1]{list}[0]{defaultAlertsWithoutTime});
 
     xlog $self, "Set default alarms with time on Default alert";
@@ -137,7 +137,7 @@ sub test_calendar_copy_defaultalerts_mkcalendar
             ],
         }, 'R1'],
     ]);
-    $self->assert_deep_equals($defaultAlertsWithTime2,
+    $self->assert_cmp_deeply($defaultAlertsWithTime2,
         $res->[0][1]{list}[0]{defaultAlertsWithTime});
     $self->assert_null($res->[0][1]{list}[0]{defaultAlertsWithoutTime});
 }

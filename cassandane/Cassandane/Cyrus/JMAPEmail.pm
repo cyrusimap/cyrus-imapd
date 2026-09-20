@@ -193,7 +193,7 @@ sub email_query_window_internal
     $self->assert_equals($params{wantGuidSearch},
         $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..3];
-    $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
+    $self->assert_cmp_deeply(\@subids, $res->[0][1]->{ids});
     if ($params{calculateTotal}) {
         $self->assert_num_equals(4, $res->[0][1]->{total});
     }
@@ -225,7 +225,7 @@ sub email_query_window_internal
     $self->assert_equals($params{wantGuidSearch},
         $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..1];
-    $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
+    $self->assert_cmp_deeply(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(1, $res->[0][1]->{position});
     if ($params{calculateTotal}) {
         $self->assert_num_equals(4, $res->[0][1]->{total});
@@ -242,7 +242,7 @@ sub email_query_window_internal
     $self->assert_equals($params{wantGuidSearch},
         $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..3];
-    $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
+    $self->assert_cmp_deeply(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(1, $res->[0][1]->{position});
     if ($params{calculateTotal}) {
         $self->assert_num_equals(4, $res->[0][1]->{total});
@@ -260,7 +260,7 @@ sub email_query_window_internal
     $self->assert_equals($params{wantGuidSearch},
         $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[2..3];
-    $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
+    $self->assert_cmp_deeply(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(2, $res->[0][1]->{position});
     if ($params{calculateTotal}) {
         $self->assert_num_equals(4, $res->[0][1]->{total});
@@ -278,7 +278,7 @@ sub email_query_window_internal
     $self->assert_equals($params{wantGuidSearch},
         $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..3];
-    $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
+    $self->assert_cmp_deeply(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(1, $res->[0][1]->{position});
     if ($params{calculateTotal}) {
         $self->assert_num_equals(4, $res->[0][1]->{total});
@@ -297,7 +297,7 @@ sub email_query_window_internal
     $self->assert_equals($params{wantGuidSearch},
         $res->[0][1]{performance}{details}{isGuidSearch});
     @subids = @{$ids}[1..2];
-    $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
+    $self->assert_cmp_deeply(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(1, $res->[0][1]->{position});
     if ($params{calculateTotal}) {
         $self->assert_num_equals(4, $res->[0][1]->{total});

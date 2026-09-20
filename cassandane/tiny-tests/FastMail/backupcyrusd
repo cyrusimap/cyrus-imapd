@@ -25,7 +25,7 @@ sub test_backupcyrusd
     # the backup contains every folder cyrus knows about for this user,
     # under the same uniqueids
     my $backup = $self->_backup_content($meta);
-    $self->assert_deep_equals($self->_mailboxes_by_extname(),
+    $self->assert_cmp_deeply($self->_mailboxes_by_extname(),
                               $backup->{names});
 
     my $uniqueid = $self->_mailbox_uniqueid("INBOX");
@@ -38,17 +38,17 @@ sub test_backupcyrusd
     $self->assert_num_gt(0, $inbox->{meta}{index}{size});
 
     # and both messages, indexed by the uid cyrus gave them
-    $self->assert_deep_equals({ 1 => $msg1->guid, 2 => $msg2->guid },
+    $self->assert_cmp_deeply({ 1 => $msg1->guid, 2 => $msg2->guid },
                               $inbox->{uids});
 
     # the messages are the only files: the other folders are all empty
-    $self->assert_deep_equals([sort ($msg1->guid, $msg2->guid)],
+    $self->assert_cmp_deeply([sort ($msg1->guid, $msg2->guid)],
                               [sort keys %{$backup->{files}}]);
     $self->assert_num_equals(1, $backup->{files}{$msg1->guid}{refcount});
     $self->assert_num_equals(1, $backup->{files}{$msg2->guid}{refcount});
 
     # nothing has subscribed yet, so there's no subscriptions file to back up
-    $self->assert_deep_equals({}, $backup->{meta});
+    $self->assert_cmp_deeply({}, $backup->{meta});
 
     # we'll get a new email and a subscription
     my $talk = $self->{store}->get_client();
@@ -70,13 +70,13 @@ sub test_backupcyrusd
     $self->assert_num_gt(0, $backup->{meta}{sub}{size});
 
     # same folders, and the INBOX now has the third message too
-    $self->assert_deep_equals($self->_mailboxes_by_extname(),
+    $self->assert_cmp_deeply($self->_mailboxes_by_extname(),
                               $backup->{names});
     $inbox = $backup->{folders}{$uniqueid};
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         { 1 => $msg1->guid, 2 => $msg2->guid, 3 => $msg3->guid },
         $inbox->{uids});
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         [sort ($msg1->guid, $msg2->guid, $msg3->guid)],
         [sort keys %{$backup->{files}}]);
 

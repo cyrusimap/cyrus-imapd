@@ -25,6 +25,6 @@ sub test_calendarevent_organizer_noattendees_legacy
             participationStatus => 'needs-action',
         },
     };
-    $self->assert_deep_equals($wantParticipants, $event->{participants});
+    $self->assert_cmp_deeply($wantParticipants, $event->{participants});
     $self->assert_equals('mailto:organizer@local', $event->{organizerCalendarAddress});
 }

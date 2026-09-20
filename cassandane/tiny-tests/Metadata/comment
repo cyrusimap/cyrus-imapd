@@ -14,7 +14,7 @@ sub test_comment ($self)
     $res = $imaptalk->getmetadata("", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         "" => { $entry => undef }
     }, $res);
 
@@ -35,7 +35,7 @@ sub test_comment ($self)
     my $expected = {
             "" => { $entry => $value1 }
     };
-    $self->assert_deep_equals($expected, $res);
+    $self->assert_cmp_deeply($expected, $res);
 
     xlog $self, "the annot gives the same value in a new connection";
     $self->{adminstore}->disconnect();
@@ -47,7 +47,7 @@ sub test_comment ($self)
     $expected = {
             "" => { $entry => $value1 }
     };
-    $self->assert_deep_equals($expected, $res);
+    $self->assert_cmp_deeply($expected, $res);
 
     xlog $self, "can delete value";
     $imaptalk->setmetadata("", $entry, undef);
@@ -59,5 +59,5 @@ sub test_comment ($self)
     $expected = {
             "" => { $entry => undef }
     };
-    $self->assert_deep_equals($expected, $res);
+    $self->assert_cmp_deeply($expected, $res);
 }

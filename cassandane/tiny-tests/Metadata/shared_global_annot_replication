@@ -25,7 +25,7 @@ sub test_shared_global_annot_replication
     $res = $imaptalk->getmetadata("", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         "" => { $entry => undef }
     }, $res);
 
@@ -46,7 +46,7 @@ sub test_shared_global_annot_replication
     my $expected = {
             "" => { $entry => $value1 }
     };
-    $self->assert_deep_equals($expected, $res);
+    $self->assert_cmp_deeply($expected, $res);
 
     $self->{adminstore}->disconnect();
     $imaptalk = $self->{adminstore}->get_client();
@@ -58,14 +58,14 @@ sub test_shared_global_annot_replication
     $expected = {
             "" => { $entry => $value1 }
     };
-    $self->assert_deep_equals($expected, $res);
+    $self->assert_cmp_deeply($expected, $res);
 
     xlog $self, "replica value is NIL";
     $imaptalk = $self->{replica_store}->get_client();
     $res = $imaptalk->getmetadata("", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         "" => { $entry => undef }
     }, $res);
 
@@ -80,7 +80,7 @@ sub test_shared_global_annot_replication
     $expected = {
             "" => { $entry => $value1 }
     };
-    $self->assert_deep_equals($expected, $res);
+    $self->assert_cmp_deeply($expected, $res);
 
     xlog $self, "can delete value";
     $imaptalk = $self->{adminstore}->get_client();
@@ -93,7 +93,7 @@ sub test_shared_global_annot_replication
     $expected = {
             "" => { $entry => undef }
     };
-    $self->assert_deep_equals($expected, $res);
+    $self->assert_cmp_deeply($expected, $res);
 
     xlog $self, "run replication to clear annot";
     $self->run_replication(rolling => 1, inputfile => $synclogfname);
@@ -104,7 +104,7 @@ sub test_shared_global_annot_replication
     $res = $imaptalk->getmetadata("", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         "" => { $entry => undef }
     }, $res);
 }

@@ -108,7 +108,7 @@ sub test_basic
         $self->assert_str_equals('200', $res->code);
 
         my $json = decode_json($res->decoded_content);
-        $self->assert_deep_equals(
+        $self->assert_cmp_deeply(
             { good => "job" },
             $json,
         );
@@ -122,7 +122,7 @@ sub test_basic
         $self->assert_str_equals('400', $res->code);
 
         my $json = decode_json($res->decoded_content);
-        $self->assert_deep_equals(
+        $self->assert_cmp_deeply(
             { tough => "luck" },
             $json,
         );

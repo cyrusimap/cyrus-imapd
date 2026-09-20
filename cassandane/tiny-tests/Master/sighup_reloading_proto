@@ -14,7 +14,7 @@ sub test_sighup_reloading_proto ($self)
     $self->lemming_wait(A => { live => 2 });
 
     xlog $self, "preforked, so two lemmings running already";
-    $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
+    $self->assert_cmp_deeply({ A => { live => 2, dead => 0 } },
         $self->lemming_census());
 
     # check IPv4
@@ -22,13 +22,13 @@ sub test_sighup_reloading_proto ($self)
     $self->lemming_wait(A => { live => 3 });
 
     xlog $self, "connected so one lemming forked";
-    $self->assert_deep_equals({ A => { live => 3, dead => 0 } },
+    $self->assert_cmp_deeply({ A => { live => 3, dead => 0 } },
         $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog $self, "always at least two live lemmings";
-    $self->assert_deep_equals({ A => { live => 2, dead => 1 } },
+    $self->assert_cmp_deeply({ A => { live => 2, dead => 1 } },
         $self->lemming_census());
 
     # check IPv6
@@ -36,13 +36,13 @@ sub test_sighup_reloading_proto ($self)
     $self->lemming_wait(A => { live => 3 });
 
     xlog $self, "connected so one lemming forked";
-    $self->assert_deep_equals({ A => { live => 3, dead => 1 } },
+    $self->assert_cmp_deeply({ A => { live => 3, dead => 1 } },
         $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog $self, "always at least two live lemmings";
-    $self->assert_deep_equals({ A => { live => 2, dead => 2 } },
+    $self->assert_cmp_deeply({ A => { live => 2, dead => 2 } },
         $self->lemming_census());
 
 
@@ -54,7 +54,7 @@ sub test_sighup_reloading_proto ($self)
     # to die and be replaced by a new one
     $self->lemming_wait(A => { live => 1, dead => 4 });
 
-    $self->assert_deep_equals({ A => { live => 1, dead => 4 } },
+    $self->assert_cmp_deeply({ A => { live => 1, dead => 4 } },
         $self->lemming_census());
 
     # check IPv4
@@ -62,13 +62,13 @@ sub test_sighup_reloading_proto ($self)
     $self->lemming_wait(A => { live => 2 });
 
     xlog $self, "connected so one lemming forked";
-    $self->assert_deep_equals({ A => { live => 2, dead => 4 } },
+    $self->assert_cmp_deeply({ A => { live => 2, dead => 4 } },
         $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog $self, "always at least one live lemming";
-    $self->assert_deep_equals({ A => { live => 1, dead => 5 } },
+    $self->assert_cmp_deeply({ A => { live => 1, dead => 5 } },
         $self->lemming_census());
 
     # check IPv6
@@ -81,6 +81,6 @@ sub test_sighup_reloading_proto ($self)
     $self->assert_null($lemm);
 
     xlog $self, "always at least one live lemming";
-    $self->assert_deep_equals({ A => { live => 1, dead => 5 } },
+    $self->assert_cmp_deeply({ A => { live => 1, dead => 5 } },
         $self->lemming_census());
 }

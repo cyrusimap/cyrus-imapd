@@ -11,7 +11,7 @@ sub test_lsub_delete ($self)
     $imaptalk->subscribe("INBOX.deltest") || die;
     $imaptalk->subscribe("INBOX.deltest.sub2") || die;
     my $subdata = $imaptalk->lsub("INBOX.deltest", "*");
-    $self->assert_deep_equals($subdata, [
+    $self->assert_cmp_deeply($subdata, [
           [
             [
               '\\HasChildren'
@@ -28,7 +28,7 @@ sub test_lsub_delete ($self)
 
     $imaptalk->delete("INBOX.deltest.sub2");
     my $onedata = $imaptalk->lsub("INBOX.deltest", "*");
-    $self->assert_deep_equals($onedata, [
+    $self->assert_cmp_deeply($onedata, [
           [
             [
               '\\HasChildren'

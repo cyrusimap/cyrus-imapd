@@ -94,11 +94,11 @@ EOF
         }, 'R4'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $defaultCalendarId => JSON::true,
     }, $res->[1][1]{list}[0]{calendarIds});
     $self->assert_num_equals(1, scalar @{$res->[2][1]{ids}});
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $defaultCalendarId => JSON::true,
     }, $res->[3][1]{list}[0]{calendarIds});
 }

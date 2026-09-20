@@ -731,7 +731,7 @@ sub test_email_set_create_encoding ($self)
         xlog $self, "Assert test result";
         if ($tc->{wantInvalidProperties}) {
             my $jres = $jmapResponses{createEmail};
-            $self->assert_deep_equals({
+            $self->assert_cmp_deeply({
                     type => 'invalidProperties',
                     properties => $tc->{wantInvalidProperties},
                 }, $jmapResponses{createEmail}{notCreated}{$emailCreationId});

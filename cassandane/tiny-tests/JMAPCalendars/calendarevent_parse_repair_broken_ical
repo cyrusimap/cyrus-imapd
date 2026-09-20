@@ -189,7 +189,7 @@ EOF
         if (not grep(/^uid$/, @properties)) {
             delete $res->[1][1]{parsed}{'#ical'}{uid};
         }
-        $self->assert_deep_equals($tc->{wantParsed},
+        $self->assert_cmp_deeply($tc->{wantParsed},
             $res->[1][1]{parsed}{'#ical'});
     }
 }

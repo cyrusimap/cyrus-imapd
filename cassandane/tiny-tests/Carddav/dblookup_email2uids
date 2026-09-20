@@ -39,7 +39,7 @@ EOF
                     Mailbox => 'Default',
                 },
             });
-        $self->assert_deep_equals([$tc->{uid}],
+        $self->assert_cmp_deeply([$tc->{uid}],
             decode_json($httpRes->{content}));
     }
 }

@@ -29,7 +29,7 @@ sub test_email_set_seen
 
     my $keywords = { };
     my $msg = $res->[1][1]->{list}[0];
-    $self->assert_deep_equals($keywords, $msg->{keywords});
+    $self->assert_cmp_deeply($keywords, $msg->{keywords});
 
     $keywords->{'$seen'} = JSON::true;
     $res = $jmap->CallMethods([
@@ -37,5 +37,5 @@ sub test_email_set_seen
         ['Email/get', { ids => [ $msg->{id} ] }, 'R2'],
     ]);
     $msg = $res->[1][1]->{list}[0];
-    $self->assert_deep_equals($keywords, $msg->{keywords});
+    $self->assert_cmp_deeply($keywords, $msg->{keywords});
 }

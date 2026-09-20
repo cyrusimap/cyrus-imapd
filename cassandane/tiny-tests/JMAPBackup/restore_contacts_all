@@ -178,7 +178,7 @@ sub test_restore_contacts_all
             properties => [ 'name' ],
          }, "R8"],
     ]);
-    $self->assert_deep_equals([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
 
     xlog "get contact updates";
     $res = $jmap->CallMethods([

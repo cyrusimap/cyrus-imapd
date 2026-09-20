@@ -39,7 +39,7 @@ sub test_modseq ($self)
     xlog $self, "Set \\Flagged on message A";
     my $res = $talk->store('1', '+flags', '(\\Flagged)');
     $self->assert_not_null($res);
-    $self->assert_deep_equals([ '\\Flagged' ], $res->{1}->{flags});
+    $self->assert_cmp_deeply([ '\\Flagged' ], $res->{1}->{flags});
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     my $act1 = $self->check_messages(\%msg);
     my $hms1 = $self->get_highestmodseq();
@@ -52,7 +52,7 @@ sub test_modseq ($self)
 
     xlog $self, "Set \\Flagged on message A while already set";
     $res = $talk->store('1', '+flags', '(\\Flagged)');
-    $self->assert_deep_equals({}, $res);
+    $self->assert_cmp_deeply({}, $res);
     $self->assert_equals('ok', $talk->get_last_completion_response());
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     my $act2 = $self->check_messages(\%msg);
@@ -66,7 +66,7 @@ sub test_modseq ($self)
     xlog $self, "Clear \\Flagged on message A";
     $res = $talk->store('1', '-flags', '(\\Flagged)');
     $self->assert_not_null($res);
-    $self->assert_deep_equals([], $res->{1}->{flags});
+    $self->assert_cmp_deeply([], $res->{1}->{flags});
     $msg{A}->set_attribute(flags => []);
     my $act3 = $self->check_messages(\%msg);
     my $hms3 = $self->get_highestmodseq();
@@ -79,7 +79,7 @@ sub test_modseq ($self)
 
     xlog $self, "Clear \\Flagged on message A while already clear";
     $res = $talk->store('1', '-flags', '(\\Flagged)');
-    $self->assert_deep_equals({}, $res);
+    $self->assert_cmp_deeply({}, $res);
     $self->assert_equals('ok', $talk->get_last_completion_response());
     $msg{A}->set_attribute(flags => []);
     my $act4 = $self->check_messages(\%msg);

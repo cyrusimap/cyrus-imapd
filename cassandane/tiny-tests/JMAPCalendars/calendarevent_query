@@ -297,12 +297,12 @@ sub test_calendarevent_query
         ]);
         if ($tc->{wantErr}) {
             $self->assert_str_equals('error', $res->[0][0]);
-            $self->assert_deep_equals($tc->{wantErr}, $res->[0][1]);
+            $self->assert_cmp_deeply($tc->{wantErr}, $res->[0][1]);
         } else {
             my $wantTotal = defined $tc->{wantTotal} ?
                 $tc->{wantTotal} : scalar @{$tc->{wantIds}};
             $self->assert_num_equals($wantTotal, $res->[0][1]{total});
-            $self->assert_deep_equals($tc->{wantIds}, $res->[0][1]{ids});
+            $self->assert_cmp_deeply($tc->{wantIds}, $res->[0][1]{ids});
 
             if ($maj > 3 || ($maj == 3 && $min > 8)) {
                 $self->assert_equals($tc->{wantFastPath},

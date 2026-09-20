@@ -51,6 +51,6 @@ sub test_calendarevent_set_reject_duplicate_uid
     $self->assert_not_null($res->[0][1]{created}{calendarB});
     $self->assert_str_equals('invalidProperties',
         $res->[1][1]{notCreated}{eventB}{type});
-    $self->assert_deep_equals(['uid'],
+    $self->assert_cmp_deeply(['uid'],
         $res->[1][1]{notCreated}{eventB}{properties});
 }

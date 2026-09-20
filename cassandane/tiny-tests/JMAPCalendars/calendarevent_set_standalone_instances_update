@@ -85,9 +85,9 @@ sub test_calendarevent_set_standalone_instances_update
     $self->assert_str_not_equals($state, $res->[1][1]{state});
     $self->assert_str_not_equals($state, $res->[2][1]{state});
     $self->assert_str_not_equals($state, $res->[3][1]{newState});
-    $self->assert_deep_equals([], $res->[3][1]{created});
-    $self->assert_deep_equals([$instance1Id], $res->[3][1]{updated});
-    $self->assert_deep_equals([], $res->[3][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[3][1]{created});
+    $self->assert_cmp_deeply([$instance1Id], $res->[3][1]{updated});
+    $self->assert_cmp_deeply([], $res->[3][1]{destroyed});
     $state = $res->[3][1]{newState};
 
     xlog "Assert CalDAV resource contains both instances";
@@ -112,8 +112,8 @@ sub test_calendarevent_set_standalone_instances_update
             },
         }, 'R2'],
     ]);
-    $self->assert_deep_equals(['recurrenceId'],
+    $self->assert_cmp_deeply(['recurrenceId'],
         $res->[0][1]{notUpdated}{$instance1Id}{properties});
-    $self->assert_deep_equals(['recurrenceIdTimeZone'],
+    $self->assert_cmp_deeply(['recurrenceIdTimeZone'],
         $res->[1][1]{notUpdated}{$instance1Id}{properties});
 }

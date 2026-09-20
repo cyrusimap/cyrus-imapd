@@ -72,9 +72,9 @@ sub test_email_query_sort_break_tie
     ], $using);
 
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals(\@wantEmailIds, $res->[0][1]{ids});
+    $self->assert_cmp_deeply(\@wantEmailIds, $res->[0][1]{ids});
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals(\@wantEmailIds, $res->[1][1]{ids});
+    $self->assert_cmp_deeply(\@wantEmailIds, $res->[1][1]{ids});
     $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals(\@wantEmailIds, $res->[2][1]{ids});
+    $self->assert_cmp_deeply(\@wantEmailIds, $res->[2][1]{ids});
 }

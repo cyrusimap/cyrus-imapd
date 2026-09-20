@@ -79,8 +79,8 @@ sub test_19_replicate_to_19
             properties => ['id'],
         }, 'R2'],
     ]);
-    $self->assert_deep_equals([$calendarId], $res->[0][1]{destroyed});
-    $self->assert_deep_equals([$eventId], $res->[1][1]{notFound});
+    $self->assert_cmp_deeply([$calendarId], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([$eventId], $res->[1][1]{notFound});
 
     $self->run_replication();
     $self->check_replication('cassandane');

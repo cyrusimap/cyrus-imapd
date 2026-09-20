@@ -153,5 +153,5 @@ sub test_email_set_attachments
     }, "R1"]]);
     $msg = $res->[0][1]->{list}[0];
 
-    $self->assert_deep_equals($wantBodyStructure, $msg->{bodyStructure});
+    $self->assert_cmp_deeply($wantBodyStructure, $msg->{bodyStructure});
 }

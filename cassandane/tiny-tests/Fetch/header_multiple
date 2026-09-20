@@ -29,6 +29,6 @@ sub test_header_multiple ($self)
             'start agaaain',
         ],
     };
-    $self->assert_deep_equals($expected, $res->{1}->{headers});
-    $self->assert_deep_equals({}, $res->{2}->{headers});
+    $self->assert_cmp_deeply($expected, $res->{1}->{headers});
+    $self->assert_cmp_deeply({}, $res->{2}->{headers});
 }

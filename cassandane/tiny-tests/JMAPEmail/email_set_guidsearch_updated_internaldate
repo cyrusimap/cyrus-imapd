@@ -101,7 +101,7 @@ sub test_email_set_guidsearch_updated_internaldate
         }, 'R2'],
     ], $using);
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals([$emailIdA, $emailIdB], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$emailIdA, $emailIdB], $res->[0][1]{ids});
     $self->assert_str_equals($emailIdA, $res->[1][1]{destroyed}[0]);
 
     xlog $self, "Compact search tier t1 to t2";
@@ -138,5 +138,5 @@ sub test_email_set_guidsearch_updated_internaldate
         }, 'R1'],
     ], $using);
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals([$emailIdB, $emailIdC], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$emailIdB, $emailIdC], $res->[0][1]{ids});
 }

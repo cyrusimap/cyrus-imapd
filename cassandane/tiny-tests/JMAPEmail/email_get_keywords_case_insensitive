@@ -32,5 +32,5 @@ sub test_email_get_keywords_case_insensitive
         'foo' => JSON::true,
         '$flagged' => JSON::true,
     };
-    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+    $self->assert_cmp_deeply($keywords, $jmapmsg->{keywords});
 }

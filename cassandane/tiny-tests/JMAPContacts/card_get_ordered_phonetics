@@ -72,5 +72,5 @@ EOF
     normalize_jscard($want_jscard);
     normalize_jscard($have_jscard);
 
-    $self->assert_deep_equals($want_jscard, $have_jscard);
+    $self->assert_cmp_deeply($want_jscard, $have_jscard);
 }

@@ -19,7 +19,7 @@ sub test_maxforkrate ($self)
     $self->start();
 
     xlog $self, "not preforked, so no lemmings running yet";
-    $self->assert_deep_equals({},
+    $self->assert_cmp_deeply({},
                               $self->lemming_census());
 
     xlog $self, "Test that we can achieve the fast forks rate on the unlimited service";
@@ -39,7 +39,7 @@ sub test_maxforkrate ($self)
                   "Fork rate too fast, got $r wanted $slow");
 
     xlog $self, "no more live lemmings";
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
                                 A => { live => 0, dead => 100 },
                                 B => { live => 0, dead => 100 },
                               }, $self->lemming_census());

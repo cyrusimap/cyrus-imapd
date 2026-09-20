@@ -55,7 +55,7 @@ EOF
 
     my $email = $res->[0][1]{parsed}{$blobId};
     $self->assert_not_null($email);
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         [{
             name => 'Some Example Sender',
             email => 'example@example.com'

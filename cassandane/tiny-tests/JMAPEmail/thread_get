@@ -91,7 +91,7 @@ sub test_thread_get
     xlog $self, "get threads";
     $res = $jmap->CallMethods([['Thread/get', { ids => \@threadids }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{list}});
-    $self->assert_deep_equals([], $res->[0][1]->{notFound});
+    $self->assert_cmp_deeply([], $res->[0][1]->{notFound});
 
     %m = map { $_->{id} => $_ } @{$res->[0][1]{list}};
     my $threadA = $m{$msgA->{threadId}};

@@ -1328,7 +1328,7 @@ sub check_messages
         {
             next unless defined $expmsg->get_attribute($a);
             xlog $self, "checking attribute $a";
-            $self->assert_deep_equals($expmsg->get_attribute($a),
+            $self->assert_cmp_deeply($expmsg->get_attribute($a),
                                       $actmsg->get_attribute($a));
         }
 
@@ -1348,7 +1348,7 @@ sub check_messages
                 $act = [ sort @{$act} ];
             }
 
-            $self->assert_deep_equals($exp, $act);
+            $self->assert_cmp_deeply($exp, $act);
         }
 
         # check annotations
@@ -1427,9 +1427,9 @@ sub assert_seq_uids
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     my @seqs = sort { $a <=> $b } keys %$res;
-    $self->assert_deep_equals([ 1 .. scalar @$expected ],
+    $self->assert_cmp_deeply([ 1 .. scalar @$expected ],
                               [ map { 0 + $_ } @seqs ]);
-    $self->assert_deep_equals($expected,
+    $self->assert_cmp_deeply($expected,
                               [ map { 0 + $res->{$_}->{uid} } @seqs ]);
 }
 

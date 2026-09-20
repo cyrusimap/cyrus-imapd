@@ -10,7 +10,7 @@ sub test_session_capability_isrfc
     my $session = $jmap->get_client_session->client_session;
     $self->assert_not_null($session);
 
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         $session->{capabilities}{'https://cyrusimap.org/ns/jmap/calendars'},
         { isRFC => JSON::true });
 }

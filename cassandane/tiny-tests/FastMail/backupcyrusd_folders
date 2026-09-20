@@ -20,13 +20,13 @@ sub test_backupcyrusd_folders
                               $servername, 'cassandane');
 
     my $backup = $self->_backup_content($meta);
-    $self->assert_deep_equals($self->_mailboxes_by_extname(),
+    $self->assert_cmp_deeply($self->_mailboxes_by_extname(),
                               $backup->{names});
     $self->assert_str_equals($uniqueid, $backup->{names}{'INBOX.foo'});
 
     my $folder = $backup->{folders}{$uniqueid};
-    $self->assert_deep_equals({ 'INBOX.foo' => 0 }, $folder->{names});
-    $self->assert_deep_equals({ 1 => $msg->guid }, $folder->{uids});
+    $self->assert_cmp_deeply({ 'INBOX.foo' => 0 }, $folder->{names});
+    $self->assert_cmp_deeply({ 1 => $msg->guid }, $folder->{uids});
 
     # a rename keeps the same uniqueid, so the backup should keep pointing
     # at the same folder rather than fetching everything again
@@ -38,7 +38,7 @@ sub test_backupcyrusd_folders
                               $servername, 'cassandane');
 
     $backup = $self->_backup_content($meta);
-    $self->assert_deep_equals($self->_mailboxes_by_extname(),
+    $self->assert_cmp_deeply($self->_mailboxes_by_extname(),
                               $backup->{names});
     $self->assert_null($backup->{names}{'INBOX.foo'});
     $self->assert_str_equals($uniqueid, $backup->{names}{'INBOX.bar'});
@@ -49,7 +49,7 @@ sub test_backupcyrusd_folders
     $self->assert_num_gt(0, $folder->{names}{'INBOX.foo'});
 
     # and the message is still there, under the same folder
-    $self->assert_deep_equals({ 1 => $msg->guid }, $folder->{uids});
+    $self->assert_cmp_deeply({ 1 => $msg->guid }, $folder->{uids});
     $self->assert_num_equals(1, $backup->{files}{$msg->guid}{refcount});
 
     # now delete it entirely
@@ -70,7 +70,7 @@ sub test_backupcyrusd_folders
 
     # apart from that, the backup still matches what cyrus has
     delete $backup->{names}{$deleted};
-    $self->assert_deep_equals($self->_mailboxes_by_extname(),
+    $self->assert_cmp_deeply($self->_mailboxes_by_extname(),
                               $backup->{names});
 
     # both of the folder's old names are now marked deleted, but the folder
@@ -79,7 +79,7 @@ sub test_backupcyrusd_folders
     $self->assert_num_gt(0, $folder->{names}{'INBOX.foo'});
     $self->assert_num_gt(0, $folder->{names}{'INBOX.bar'});
     $self->assert_num_equals(0, $folder->{names}{$deleted});
-    $self->assert_deep_equals({ 1 => $msg->guid }, $folder->{uids});
+    $self->assert_cmp_deeply({ 1 => $msg->guid }, $folder->{uids});
     $self->assert_str_equals($msg->as_string(),
                              $self->_backup_file($meta, $msg->guid));
 }

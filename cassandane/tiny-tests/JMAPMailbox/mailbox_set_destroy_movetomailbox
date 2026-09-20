@@ -91,10 +91,10 @@ sub test_mailbox_set_destroy_movetomailbox
             properties => ['mailboxIds'],
         }, 'R3'],
     ], $using);
-    $self->assert_deep_equals([$mboxIdA],
+    $self->assert_cmp_deeply([$mboxIdA],
         $res->[0][1]{destroyed});
-    $self->assert_deep_equals({$mboxIdC => JSON::true},
+    $self->assert_cmp_deeply({$mboxIdC => JSON::true},
         $res->[1][1]{list}[0]{mailboxIds});
-    $self->assert_deep_equals({$mboxIdB => JSON::true},
+    $self->assert_cmp_deeply({$mboxIdB => JSON::true},
         $res->[2][1]{list}[0]{mailboxIds});
 }

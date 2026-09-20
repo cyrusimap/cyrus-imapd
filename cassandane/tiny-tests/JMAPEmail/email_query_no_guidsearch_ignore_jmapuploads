@@ -81,6 +81,6 @@ sub test_email_query_no_guidsearch_ignore_jmapuploads
     ], $using);
 
     xlog $self, "Assert that message from #jmap folder is not found";
-    $self->assert_deep_equals([$wantEmailId], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$wantEmailId], $res->[0][1]{ids});
 
 }

@@ -141,6 +141,6 @@ sub test_calendar_defaultalerts_synctoken_shared
 
     $self->assert_num_equals(1, scalar @{$adds});
     $self->assert_str_equals($adds->[0]{uid}, $event2Uid);
-    $self->assert_deep_equals($removes, []);
-    $self->assert_deep_equals($errors, []);
+    $self->assert_cmp_deeply($removes, []);
+    $self->assert_cmp_deeply($errors, []);
 }

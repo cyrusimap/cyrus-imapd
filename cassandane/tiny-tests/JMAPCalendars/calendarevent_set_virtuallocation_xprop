@@ -39,6 +39,6 @@ sub test_calendarevent_set_virtuallocation_xprop ($self)
         }, 'R2'],
     ]);
 
-    $self->assert_deep_equals($virtualLocations,
+    $self->assert_cmp_deeply($virtualLocations,
         $res->[1][1]{list}[0]{virtualLocations});
 }

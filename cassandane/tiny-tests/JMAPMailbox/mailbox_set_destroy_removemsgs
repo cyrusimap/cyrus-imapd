@@ -58,8 +58,8 @@ sub test_mailbox_set_destroy_removemsgs
             properties => ['mailboxIds'],
         }, 'R2'],
     ]);
-    $self->assert_deep_equals([$mboxId], $res->[0][1]{destroyed});
-    $self->assert_deep_equals({ $inboxId => JSON::true },
+    $self->assert_cmp_deeply([$mboxId], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply({ $inboxId => JSON::true },
         $res->[1][1]{list}[0]{mailboxIds});
 
     my ($maj, $min) = Cassandane::Instance->get_version();

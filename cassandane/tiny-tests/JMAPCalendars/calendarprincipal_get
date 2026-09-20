@@ -92,7 +92,7 @@ EOF
 
     $self->assert_not_null($p->{account});
     delete ($p->{account});
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         id => 'cassandane',
         name => 'Cassandane User',
         description => 'A description',
@@ -103,5 +103,5 @@ EOF
         accountId => 'cassandane',
         calendarAddress => 'mailto:cassandane@example.com',
     }, $p);
-    $self->assert_deep_equals(['nope'], $res->[0][1]{notFound});
+    $self->assert_cmp_deeply(['nope'], $res->[0][1]{notFound});
 }

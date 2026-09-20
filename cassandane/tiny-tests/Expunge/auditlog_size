@@ -45,6 +45,6 @@ sub test_auditlog_size
             m/\bmsg\.imapuid=(\d+)\b.*msg\.size=(\d+)\b/
         } @auditlogs;
 
-        $self->assert_deep_equals(\%expected_sizes, \%actual_sizes);
+        $self->assert_cmp_deeply(\%expected_sizes, \%actual_sizes);
     }
 }

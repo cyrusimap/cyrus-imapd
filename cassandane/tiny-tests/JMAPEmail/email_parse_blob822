@@ -38,7 +38,7 @@ EOF
     my $email = $res->[0][1]{parsed}{$blobId};
 
     $self->assert_not_null($email);
-    $self->assert_deep_equals([{name=>'Some Example Sender', email=>'example@example.com'}], $email->{from});
+    $self->assert_cmp_deeply([{name=>'Some Example Sender', email=>'example@example.com'}], $email->{from});
 
     my $bodyValue = $email->{bodyValues}{$email->{bodyStructure}{partId}};
     $self->assert_str_equals("This is a test email.\n", $bodyValue->{value});

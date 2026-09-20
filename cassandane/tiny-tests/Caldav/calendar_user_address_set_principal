@@ -110,7 +110,7 @@ sub assert_address_set ($self, $want_addrs)
         $addr
     } @$hrefs;
     # Compare addresses.
-    $self->assert_deep_equals($want_addrs, \@got_addrs);
+    $self->assert_cmp_deeply($want_addrs, \@got_addrs);
 }
 
 

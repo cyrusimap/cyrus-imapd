@@ -35,10 +35,10 @@ sub test_replication_storage
     xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
-    $self->assert_deep_equals(['STORAGE', 0, 12345], \@res);
+    $self->assert_cmp_deeply(['STORAGE', 0, 12345], \@res);
     @res = $replicatalk->getquota($folder);
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
-    $self->assert_deep_equals(['STORAGE', 0, 12345], \@res);
+    $self->assert_cmp_deeply(['STORAGE', 0, 12345], \@res);
 
     xlog $self, "change the STORAGE quota on the master";
     $mastertalk->setquota($folder, "(storage 67890)");
@@ -53,10 +53,10 @@ sub test_replication_storage
     xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
-    $self->assert_deep_equals(['STORAGE', 0, 67890], \@res);
+    $self->assert_cmp_deeply(['STORAGE', 0, 67890], \@res);
     @res = $replicatalk->getquota($folder);
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
-    $self->assert_deep_equals(['STORAGE', 0, 67890], \@res);
+    $self->assert_cmp_deeply(['STORAGE', 0, 67890], \@res);
 
     xlog $self, "clear the STORAGE quota on the master";
     $mastertalk->setquota($folder, "()");
@@ -71,8 +71,8 @@ sub test_replication_storage
     xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
-    $self->assert_deep_equals([], \@res);
+    $self->assert_cmp_deeply([], \@res);
     @res = $replicatalk->getquota($folder);
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
-    $self->assert_deep_equals([], \@res);
+    $self->assert_cmp_deeply([], \@res);
 }

@@ -114,7 +114,7 @@ EOF
 
     xlog $self, "Deliver new reply, causing a split";
     my $email = $deliver_reply->();
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         {
             '$matched_allinthread'  => JSON::true,
             '$matched_someinthread' => JSON::true,
@@ -127,7 +127,7 @@ EOF
 
     xlog $self, "Deliver new reply";
     $email = $deliver_reply->();
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         {
             '$matched_noneinthread' => JSON::true,
         },
@@ -140,7 +140,7 @@ EOF
 
     xlog $self, "Deliver new reply";
     $email = $deliver_reply->();
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         {
             '$matched_someinthread' => JSON::true,
         },
@@ -153,7 +153,7 @@ EOF
 
     xlog $self, "Deliver new reply";
     $email = $deliver_reply->();
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         {
             '$matched_allinthread' => JSON::true,
             '$matched_someinthread' => JSON::true,
@@ -167,7 +167,7 @@ EOF
 
     xlog $self, "Deliver new reply";
     $email = $deliver_reply->();
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         {
             '$matched_noneinthread' => JSON::true,
         },

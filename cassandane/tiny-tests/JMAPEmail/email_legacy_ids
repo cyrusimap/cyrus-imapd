@@ -172,14 +172,14 @@ EOF
 
     my $session = $auth->client_session;
     my $capabilities = $session->{accounts}->{cassandane}->{accountCapabilities};
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         {
             maxKeywordsPerEmail => 100,
             hasCompactIds => JSON::false
         },
         $capabilities->{'https://cyrusimap.org/ns/jmap/mail'});
     $capabilities = $session->{accounts}->{other}->{accountCapabilities};
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         {
             maxKeywordsPerEmail => 100,
             hasCompactIds => JSON::true

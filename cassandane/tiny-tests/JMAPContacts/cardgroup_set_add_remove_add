@@ -50,9 +50,9 @@ sub test_cardgroup_set_add_remove_add
 
     my $group_id = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($group_id);
-    $self->assert_deep_equals({}, $res->[0][1]{created}{1}{members});
+    $self->assert_cmp_deeply({}, $res->[0][1]{created}{1}{members});
     $self->assert_not_null($res->[0][1]{created}{2});
-    $self->assert_deep_equals({}, $res->[0][1]{created}{2}{members});
+    $self->assert_cmp_deeply({}, $res->[0][1]{created}{2}{members});
 
     xlog $self, "Add the member";
     $res = $jmap->CallMethods([
@@ -103,5 +103,5 @@ sub test_cardgroup_set_add_remove_add
          }, "R2"]
     ]);
     $self->assert_not_null($res->[0][1]{updated}{$group_id});
-    $self->assert_deep_equals({}, $res->[0][1]{updated}{$group_id}{members});
+    $self->assert_cmp_deeply({}, $res->[0][1]{updated}{$group_id}{members});
 }

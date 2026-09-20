@@ -162,7 +162,7 @@ sub test_dblookup_uid2groups
         Key => $ownContactUid,
         OtherUser => 'other'
     });
-    $self->assert_deep_equals({}, $res->{payload});
+    $self->assert_cmp_deeply({}, $res->{payload});
 
     xlog "Lookup own groups containing otherSharedContactUid";
     $res = $self->dblookup('/dblookup/uid2groups' => {
@@ -183,14 +183,14 @@ sub test_dblookup_uid2groups
         User => 'cassandane',
         Key => $otherSharedContactUid
     });
-    $self->assert_deep_equals({}, $res->{payload});
+    $self->assert_cmp_deeply({}, $res->{payload});
 
     xlog "Lookup other groups containing otherSharedContactUid in Default abook";
     $res = $self->dblookup('/dblookup/uid2groups' => {
         User => 'other',
         Key => $otherSharedContactUid,
     });
-    $self->assert_deep_equals({}, $res->{payload});
+    $self->assert_cmp_deeply({}, $res->{payload});
 
     xlog "Lookup other groups containing otherSharedContactUid in Shared abook";
     $res = $self->dblookup('/dblookup/uid2groups' => {

@@ -80,7 +80,7 @@ use utf8;
                 sort => [{ property => 'subject' }],
             }, 'R1'],
         ]);
-        $self->assert_deep_equals($_->{wantIds}, $res->[0][1]{ids});
+        $self->assert_cmp_deeply($_->{wantIds}, $res->[0][1]{ids});
     }
 
 no utf8;

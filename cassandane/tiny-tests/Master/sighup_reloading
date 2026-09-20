@@ -13,13 +13,13 @@ sub test_sighup_reloading ($self)
     my $lemmA = lemming_connect($srvA);
 
     xlog $self, "connected so one lemming forked";
-    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+    $self->assert_cmp_deeply({ A => { live => 1, dead => 0 } },
         $self->lemming_census());
 
     lemming_push($lemmA, 'success');
 
     xlog $self, "no more live lemmings";
-    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 1 } },
         $self->lemming_census());
 
     xlog $self, "connection fails due to unexisting lemming";
@@ -30,7 +30,7 @@ sub test_sighup_reloading ($self)
     };
     $self->assert_null($lemmB);
 
-    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 1 } },
         $self->lemming_census());
 
 
@@ -41,26 +41,26 @@ sub test_sighup_reloading ($self)
     $lemmA = lemming_connect($srvA);
 
     xlog $self, "connected so one lemming forked";
-    $self->assert_deep_equals({ A => { live => 1, dead => 1 } },
+    $self->assert_cmp_deeply({ A => { live => 1, dead => 1 } },
         $self->lemming_census());
 
     lemming_push($lemmA, 'success');
 
     xlog $self, "no more live lemmings";
-    $self->assert_deep_equals({ A => { live => 0, dead => 2 } },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 2 } },
         $self->lemming_census());
 
     $lemmB = lemming_connect($srvB);
 
     xlog $self, "connected so one lemming forked";
-    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 2 },
                                 B => { live => 1, dead => 0 } },
         $self->lemming_census());
 
     lemming_push($lemmB, 'success');
 
     xlog $self, "no more live lemmings";
-    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 2 },
                                 B => { live => 0, dead => 1 } },
         $self->lemming_census());
 
@@ -83,21 +83,21 @@ sub test_sighup_reloading ($self)
     };
     $self->assert_null($lemmA);
 
-    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 2 },
                                 B => { live => 0, dead => 1 } },
         $self->lemming_census());
 
     $lemmB = lemming_connect($srvB);
 
     xlog $self, "connected so one lemming forked";
-    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 2 },
                                 B => { live => 1, dead => 1 } },
         $self->lemming_census());
 
     lemming_push($lemmB, 'success');
 
     xlog $self, "no more live lemmings";
-    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 2 },
                                 B => { live => 0, dead => 2 } },
         $self->lemming_census());
 }

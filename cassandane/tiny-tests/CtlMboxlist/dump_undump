@@ -65,5 +65,5 @@ sub test_dump_undump
     });
     fudge_mtimes($dump1content);
     fudge_mtimes($dump2content);
-    $self->assert_deep_equals($dump1content, $dump2content);
+    $self->assert_cmp_deeply($dump1content, $dump2content);
 }

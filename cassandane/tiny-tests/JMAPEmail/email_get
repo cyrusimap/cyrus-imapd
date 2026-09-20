@@ -72,27 +72,27 @@ sub test_email_get
 
     $self->assert_str_equals('fake.123456789@local', $msg->{messageId}[0]);
     $self->assert_str_equals(" foo bar\r\n baz", $msg->{'header:x-tra'});
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
             name => "Sally Sender",
             email => "sally\@local"
     }, $msg->{from}[0]);
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
             name => "Tom To",
             email => "tom\@local"
     }, $msg->{to}[0]);
     $self->assert_num_equals(1, scalar @{$msg->{to}});
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
             name => "Cindy CeeCee",
             email => "cindy\@local"
     }, $msg->{cc}[0]);
     $self->assert_num_equals(1, scalar @{$msg->{cc}});
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
             name => "Benny CarbonCopy",
             email => "benny\@local"
     }, $msg->{bcc}[0]);
     $self->assert_num_equals(1, scalar @{$msg->{bcc}});
     $self->assert_null($msg->{replyTo});
-    $self->assert_deep_equals([{
+    $self->assert_cmp_deeply([{
             name => "Bla",
             email => "blu\@local"
     }], $msg->{sender});

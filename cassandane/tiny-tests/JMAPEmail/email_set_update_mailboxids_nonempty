@@ -110,7 +110,7 @@ sub test_email_set_update_mailboxids_nonempty
         }, 'R5'],
     ], $using);
 
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         type => 'invalidProperties',
         properties => ['mailboxIds'],
     }, $res->[0][1]{notUpdated}{$emailId});

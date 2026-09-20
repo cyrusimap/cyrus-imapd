@@ -338,7 +338,7 @@ sub test_email_query_shared
                         sort => [{ property => "id" }],
                     }, "R1"]]);
         my @ids = sort ($foo, $bar);
-        $self->assert_deep_equals(\@ids, $res->[0][1]->{ids});
+        $self->assert_cmp_deeply(\@ids, $res->[0][1]->{ids});
 
         xlog $self, "sort by descending id";
         $res = $jmap->CallMethods([['Email/query', {
@@ -346,7 +346,7 @@ sub test_email_query_shared
                         sort => [{ property => "id", isAscending => JSON::false }],
                     }, "R1"]]);
         @ids = reverse sort ($foo, $bar);
-        $self->assert_deep_equals(\@ids, $res->[0][1]->{ids});
+        $self->assert_cmp_deeply(\@ids, $res->[0][1]->{ids});
 
         xlog $self, "delete mailboxes";
         $talk->delete("$mboxprefix.A") or die;

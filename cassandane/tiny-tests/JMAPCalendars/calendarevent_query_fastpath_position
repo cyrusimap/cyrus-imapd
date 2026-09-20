@@ -52,6 +52,6 @@ sub test_calendarevent_query_fastpath_position
         }, 'R1'],
     ], $using);
     my @wantIds = @{$eventIds}[3 .. ($numEvents-1)];
-    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[0][1]{ids});
     $self->assert_equals(JSON::true, $res->[0][1]{debug}{isFastPath});
 }

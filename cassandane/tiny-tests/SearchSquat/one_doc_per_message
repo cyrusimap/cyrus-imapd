@@ -41,7 +41,7 @@ sub test_one_doc_per_message
         $self->{instance}->getsyslog();
 
         my $uids = $imap->search(@{$_->{search}}) || die;
-        $self->assert_deep_equals($_->{wantUids}, $uids);
+        $self->assert_cmp_deeply($_->{wantUids}, $uids);
 
         $self->assert_syslog_matches($self->{instance}, qr/Squat run/);
     }
@@ -77,7 +77,7 @@ sub test_one_doc_per_message
         $self->{instance}->getsyslog();
 
         my $uids = $imap->search(@{$_->{search}}) || die;
-        $self->assert_deep_equals($_->{wantUids}, $uids);
+        $self->assert_cmp_deeply($_->{wantUids}, $uids);
 
         $self->assert_syslog_matches($self->{instance}, qr/Squat run/);
     }

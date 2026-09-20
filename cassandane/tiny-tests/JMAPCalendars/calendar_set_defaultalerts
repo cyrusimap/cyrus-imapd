@@ -62,9 +62,9 @@ sub test_calendar_set_defaultalerts
     ]);
     my $calendarId = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($calendarId);
-    $self->assert_deep_equals($defaultAlertsWithTime,
+    $self->assert_cmp_deeply($defaultAlertsWithTime,
         $res->[1][1]{list}[0]{defaultAlertsWithTime});
-    $self->assert_deep_equals($defaultAlertsWithoutTime,
+    $self->assert_cmp_deeply($defaultAlertsWithoutTime,
         $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
 
     my $alert4Id = '5e7b49d3-fcef-484f-8d31-f9fb178ebc65';
@@ -94,9 +94,9 @@ sub test_calendar_set_defaultalerts
 
     delete $defaultAlertsWithTime->{$alert1Id};
     $defaultAlertsWithTime->{$alert4Id} = $alert4;
-    $self->assert_deep_equals($defaultAlertsWithTime,
+    $self->assert_cmp_deeply($defaultAlertsWithTime,
         $res->[1][1]{list}[0]{defaultAlertsWithTime});
-    $self->assert_deep_equals($defaultAlertsWithoutTime,
+    $self->assert_cmp_deeply($defaultAlertsWithoutTime,
         $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
 
     $res = $jmap->CallMethods([
@@ -115,9 +115,9 @@ sub test_calendar_set_defaultalerts
     $self->assert(exists $res->[0][1]{updated}{$calendarId});
 
     $defaultAlertsWithoutTime->{$alert3Id}{trigger}{offset} = '-PT5M';
-    $self->assert_deep_equals($defaultAlertsWithTime,
+    $self->assert_cmp_deeply($defaultAlertsWithTime,
         $res->[1][1]{list}[0]{defaultAlertsWithTime});
-    $self->assert_deep_equals($defaultAlertsWithoutTime,
+    $self->assert_cmp_deeply($defaultAlertsWithoutTime,
         $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
 
     $res = $jmap->CallMethods([
@@ -135,7 +135,7 @@ sub test_calendar_set_defaultalerts
     ]);
     $self->assert(exists $res->[0][1]{updated}{$calendarId});
     $self->assert_null($res->[1][1]{list}[0]{defaultAlertsWithTime});
-    $self->assert_deep_equals($defaultAlertsWithoutTime,
+    $self->assert_cmp_deeply($defaultAlertsWithoutTime,
         $res->[1][1]{list}[0]{defaultAlertsWithoutTime});
 
     $res = $jmap->CallMethods([

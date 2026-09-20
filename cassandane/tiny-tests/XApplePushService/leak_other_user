@@ -28,5 +28,5 @@ sub test_leak_other_user ($self)
     # mailbox exists and (via mboxevent_set_applepushservice) subscribes
     # the attacker's APNS device to the victim's mail.
     my @mailbox_echoes = grep { ($_->[0] // '') eq 'mailbox' } @responses;
-    $self->assert_deep_equals([], \@mailbox_echoes);
+    $self->assert_cmp_deeply([], \@mailbox_echoes);
 }

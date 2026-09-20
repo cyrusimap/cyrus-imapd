@@ -64,6 +64,6 @@ sub test_email_set_update_mailboxids_validate_nopatch
         }, 'R1'],
     ]);
     $self->assert_not_null($res->[0][1]{notUpdated}{$emailA});
-    $self->assert_deep_equals(['mailboxIds/'.$mboxA],
+    $self->assert_cmp_deeply(['mailboxIds/'.$mboxA],
         $res->[0][1]{notUpdated}{$emailA}{properties});
 }

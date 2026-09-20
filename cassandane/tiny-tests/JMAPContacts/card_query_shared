@@ -434,7 +434,7 @@ sub test_card_query_shared
         "R1"
     ] ]);
     $self->assert_num_equals(4, $res->[0][1]{total});
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         [ $id1, $id2, $id3, $id4 ],
         $res->[0][1]{ids}
     );

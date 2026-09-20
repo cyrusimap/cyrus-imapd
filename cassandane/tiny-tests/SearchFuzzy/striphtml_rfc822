@@ -40,11 +40,11 @@ sub test_striphtml_rfc822
 
     xlog "Assert that HTML in top-level message isn't stripped";
     my $uids = $talk->search('fuzzy', 'body', 'main') || die;
-    $self->assert_deep_equals([1], $uids);
+    $self->assert_cmp_deeply([1], $uids);
 
     xlog "Assert that HTML in embedded message plain text is stripped";
     $uids = $talk->search('fuzzy', 'body', 'div') || die;
-    $self->assert_deep_equals([], $uids);
+    $self->assert_cmp_deeply([], $uids);
     $uids = $talk->search('fuzzy', 'body', 'html') || die;
-    $self->assert_deep_equals([1], $uids);
+    $self->assert_cmp_deeply([1], $uids);
 }

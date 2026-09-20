@@ -24,20 +24,20 @@ sub test_header_multiple ($self)
     # we must be able to find a message by the first header value
     $uids = $talk->search('header', 'x-nice-day-for', 'come on');
     $self->assert_num_equals(1, scalar @{$uids});
-    $self->assert_deep_equals( [ 1 ], $uids);
+    $self->assert_cmp_deeply( [ 1 ], $uids);
 
     # we must be able to find a message by the last header value
     $uids = $talk->search('header', 'x-nice-day-for', 'start agaaain');
     $self->assert_num_equals(1, scalar @{$uids});
-    $self->assert_deep_equals( [ 1 ], $uids);
+    $self->assert_cmp_deeply( [ 1 ], $uids);
 
     # we must be able to find a message by some other header value
     $uids = $talk->search('header', 'x-nice-day-for', 'white wedding');
     $self->assert_num_equals(1, scalar @{$uids});
-    $self->assert_deep_equals( [ 1 ], $uids);
+    $self->assert_cmp_deeply( [ 1 ], $uids);
 
     # we must be able to ever find some other message!
     $uids = $talk->search('header', 'subject', 'nice day');
     $self->assert_num_equals(1, scalar @{$uids});
-    $self->assert_deep_equals( [ 2 ], $uids);
+    $self->assert_cmp_deeply( [ 2 ], $uids);
 }

@@ -215,8 +215,8 @@ sub test_email_get_bodystructure
         }, 'R2' ],
     ]);
     my $msg = $res->[1][1]{list}[0];
-    $self->assert_deep_equals($wantBodyStructure, $msg->{bodyStructure});
-    $self->assert_deep_equals($wantTextBody, $msg->{textBody});
-    $self->assert_deep_equals($wantHtmlBody, $msg->{htmlBody});
-    $self->assert_deep_equals($wantAttachments, $msg->{attachments});
+    $self->assert_cmp_deeply($wantBodyStructure, $msg->{bodyStructure});
+    $self->assert_cmp_deeply($wantTextBody, $msg->{textBody});
+    $self->assert_cmp_deeply($wantHtmlBody, $msg->{htmlBody});
+    $self->assert_cmp_deeply($wantAttachments, $msg->{attachments});
 }

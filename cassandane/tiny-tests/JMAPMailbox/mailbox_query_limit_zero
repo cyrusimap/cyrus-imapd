@@ -12,5 +12,5 @@ sub test_mailbox_query_limit_zero
     my $res = $jmap->CallMethods([
         ['Mailbox/query', { limit => 0 }, "R1"]
     ]);
-    $self->assert_deep_equals([], $res->[0][1]->{ids});
+    $self->assert_cmp_deeply([], $res->[0][1]->{ids});
 }

@@ -63,15 +63,15 @@ EOF
     $CalDAV->MoveEvent($href, $CalendarId);
 
     my ($adds, $removes, $errors) = $CalDAV->SyncEvents('Default', syncToken => $SrcCal->{syncToken});
-    $self->assert_deep_equals([], $adds);
+    $self->assert_cmp_deeply([], $adds);
     $self->assert_equals(1, scalar @$removes);
     $self->assert_str_equals("/dav/calendars/user/cassandane/" . $href, $removes->[0]);
-    $self->assert_deep_equals([], $errors);
+    $self->assert_cmp_deeply([], $errors);
 
     ($adds, $removes, $errors) = $CalDAV->SyncEvents($CalendarId, syncToken => $DestCal->{syncToken});
 
     $self->assert_equals(1, scalar @$adds);
     $self->assert_str_equals($adds->[0]{uid}, $uuid2);
-    $self->assert_deep_equals([], $removes);
-    $self->assert_deep_equals([], $errors);
+    $self->assert_cmp_deeply([], $removes);
+    $self->assert_cmp_deeply([], $errors);
 }

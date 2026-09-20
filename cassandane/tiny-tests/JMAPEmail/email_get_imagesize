@@ -74,9 +74,9 @@ sub test_email_get_imagesize
 
     $part = $email->{bodyStructure}{subParts}[1];
     $self->assert_str_equals('2', $part->{partId});
-    $self->assert_deep_equals($imageSize->{2}, $part->{imageSize});
+    $self->assert_cmp_deeply($imageSize->{2}, $part->{imageSize});
 
     $part = $email->{bodyStructure}{subParts}[2];
     $self->assert_str_equals('3', $part->{partId});
-    $self->assert_deep_equals($imageSize->{3}, $part->{imageSize});
+    $self->assert_cmp_deeply($imageSize->{3}, $part->{imageSize});
 }

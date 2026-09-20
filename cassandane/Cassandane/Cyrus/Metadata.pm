@@ -209,7 +209,7 @@ sub check_msg_annotation_replication
             uids => $self->list_uids($replica_store),
         ));
 
-    $self->assert_deep_equals($master_annots, $replica_annots);
+    $self->assert_cmp_deeply($master_annots, $replica_annots);
 }
 
 sub set_msg_annotation
@@ -274,7 +274,7 @@ sub folder_delete_mboxa_common
     my $res = $imaptalk->getmetadata($folder, $fentry)
         or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $folder => { $fentry => $data }
     }, $res);
 
@@ -290,7 +290,7 @@ sub folder_delete_mboxa_common
     $res = $imaptalk->getmetadata($folder, $fentry)
         or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $folder => { $fentry => undef }
     }, $res);
 }
@@ -317,7 +317,7 @@ sub folder_delete_mboxm_common
     my $res = $imaptalk->getmetadata($folder, $fentry)
         or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $folder => { $fentry => $data }
     }, $res);
 
@@ -338,7 +338,7 @@ sub folder_delete_mboxm_common
     $res = $imaptalk->getmetadata($folder, $fentry)
         or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $folder => { $fentry => undef }
     }, $res);
 }

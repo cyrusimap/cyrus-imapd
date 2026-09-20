@@ -51,7 +51,7 @@ sub test_ischedule_originator_mismatch
 
     xlog $self, "only the honest invitation reached the calendar";
     my $events = $CalDAV->GetEvents('Default');
-    $self->assert_deep_equals([ $honest_uid ], [ map { $_->{uid} } @$events ]);
+    $self->assert_cmp_deeply([ $honest_uid ], [ map { $_->{uid} } @$events ]);
 }
 
 sub _isched_post ($self, %arg)

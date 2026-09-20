@@ -158,5 +158,5 @@ sub test_email_query_guidsearch_mixedfilter
     # disjunctions of Xapian and non-Xapian filters. This might change.
     $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
     @wantIds = sort ($emailIdAfoo, $emailIdBfoo, $emailIdBbar);
-    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[0][1]{ids});
 }

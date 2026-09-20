@@ -53,7 +53,7 @@ EOF
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     my $emailId = $res->[0][1]{ids}[0];
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         { $srcMboxId => JSON::true },
         $res->[1][1]{list}[0]{mailboxIds}
     );
@@ -75,7 +75,7 @@ EOF
         }, 'R2'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$emailId});
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         { $dstMboxId => JSON::true },
         $res->[1][1]{list}[0]{mailboxIds}
     );

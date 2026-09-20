@@ -13,7 +13,7 @@ sub test_calendarevent_get_recurrence
     $self->assert_str_equals("monthly", $event->{recurrenceRule}{frequency});
     # This assertion is a bit brittle. It depends on the libical-internal
     # sort order for BYDAY
-    $self->assert_deep_equals([{
+    $self->assert_cmp_deeply([{
                 '@type' => 'NDay',
                 "day" => "mo",
                 "nthOfPeriod" => 2,

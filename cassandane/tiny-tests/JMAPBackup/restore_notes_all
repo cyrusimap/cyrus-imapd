@@ -98,7 +98,7 @@ sub test_restore_notes_all
 
     my @got = sort { $a->{title} cmp $b->{title} } @{$res->[0][1]{list}};
     $self->assert_num_equals(scalar @expect, scalar @got);
-    $self->assert_deep_equals(\@expect, \@got);
+    $self->assert_cmp_deeply(\@expect, \@got);
 
     xlog "get note updates";
     $res = $jmap->CallMethods([
@@ -143,7 +143,7 @@ sub test_restore_notes_all
     $self->assert_not_null($res);
     $self->assert_str_equals('Note/get', $res->[0][0]);
     $self->assert_str_equals('R8', $res->[0][2]);
-    $self->assert_deep_equals([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
 
     xlog "get note updates";
     $res = $jmap->CallMethods([

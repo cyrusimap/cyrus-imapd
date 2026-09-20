@@ -54,5 +54,5 @@ sub test_email_query_guidsearch
     $self->assert_num_equals(10, scalar @{$uidSearchIds});
 
     xlog "Comparing results";
-    $self->assert_deep_equals($guidSearchIds, $uidSearchIds);
+    $self->assert_cmp_deeply($guidSearchIds, $uidSearchIds);
 }

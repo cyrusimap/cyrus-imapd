@@ -25,8 +25,8 @@ sub test_mailboxids
     # expect to find it in INBOX only
     $res = $imaptalk->fetch('1', '(MAILBOXES MAILBOXIDS)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals([$inbox_id], $res->{1}->{'mailboxids'});
-    $self->assert_deep_equals(['INBOX'], $res->{1}->{'mailboxes'});
+    $self->assert_cmp_deeply([$inbox_id], $res->{1}->{'mailboxids'});
+    $self->assert_cmp_deeply(['INBOX'], $res->{1}->{'mailboxes'});
 
     # copy it to INBOX.target
     $imaptalk->copy($uid, "INBOX.target");
@@ -35,9 +35,9 @@ sub test_mailboxids
     # expect to find it in INBOX and INBOX.target
     $res = $imaptalk->fetch('1', '(MAILBOXES MAILBOXIDS)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals([$inbox_id, $target_id],
+    $self->assert_cmp_deeply([$inbox_id, $target_id],
                               $res->{1}->{'mailboxids'});
-    $self->assert_deep_equals(['INBOX', 'INBOX.target'],
+    $self->assert_cmp_deeply(['INBOX', 'INBOX.target'],
                               $res->{1}->{'mailboxes'});
 
     # delete it from INBOX
@@ -47,9 +47,9 @@ sub test_mailboxids
     # expect to find it in INBOX.target only
     $res = $imaptalk->fetch('1', '(MAILBOXES MAILBOXIDS)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals([$target_id],
+    $self->assert_cmp_deeply([$target_id],
                               $res->{1}->{'mailboxids'});
-    $self->assert_deep_equals(['INBOX.target'],
+    $self->assert_cmp_deeply(['INBOX.target'],
                               $res->{1}->{'mailboxes'});
 
     # expunge INBOX
@@ -64,8 +64,8 @@ sub test_mailboxids
     $imaptalk->select('INBOX.target');
     $res = $imaptalk->fetch('1', '(MAILBOXES MAILBOXIDS)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals([$target_id],
+    $self->assert_cmp_deeply([$target_id],
                               $res->{1}->{'mailboxids'});
-    $self->assert_deep_equals(['INBOX.target'],
+    $self->assert_cmp_deeply(['INBOX.target'],
                               $res->{1}->{'mailboxes'});
 }

@@ -12,20 +12,20 @@ sub test_sighup_reloading_listen ($self)
     $self->lemming_wait(A => { live => 1 });
 
     xlog $self, "preforked, so one lemming running already";
-    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+    $self->assert_cmp_deeply({ A => { live => 1, dead => 0 } },
         $self->lemming_census());
 
     my $lemm = lemming_connect($srv);
     $self->lemming_wait(A => { live => 2 });
 
     xlog $self, "connected so one lemming forked";
-    $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
+    $self->assert_cmp_deeply({ A => { live => 2, dead => 0 } },
         $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog $self, "always at least one live lemming";
-    $self->assert_deep_equals({ A => { live => 1, dead => 1 } },
+    $self->assert_cmp_deeply({ A => { live => 1, dead => 1 } },
         $self->lemming_census());
 
 
@@ -40,19 +40,19 @@ sub test_sighup_reloading_listen ($self)
     # to die and be replaced by a new one
     $self->lemming_wait(A => { live => 1, dead => 2 });
 
-    $self->assert_deep_equals({ A => { live => 1, dead => 2 } },
+    $self->assert_cmp_deeply({ A => { live => 1, dead => 2 } },
         $self->lemming_census());
 
     $lemm = lemming_connect($srv);
     $self->lemming_wait(A => { live => 2 });
 
     xlog $self, "connected so one lemming forked";
-    $self->assert_deep_equals({ A => { live => 2, dead => 2 } },
+    $self->assert_cmp_deeply({ A => { live => 2, dead => 2 } },
         $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog $self, "always at least one live lemming";
-    $self->assert_deep_equals({ A => { live => 1, dead => 3 } },
+    $self->assert_cmp_deeply({ A => { live => 1, dead => 3 } },
         $self->lemming_census());
 }

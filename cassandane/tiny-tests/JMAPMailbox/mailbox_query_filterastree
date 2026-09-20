@@ -36,7 +36,7 @@ sub test_mailbox_query_filterastree
     my $wantMboxIds = [
         $mboxIds{'A'}, $mboxIds{'A1'}, $mboxIds{'C'}, $mboxIds{'C1'},
     ];
-    $self->assert_deep_equals($wantMboxIds, $res->[0][1]->{ids});
+    $self->assert_cmp_deeply($wantMboxIds, $res->[0][1]->{ids});
 
     $res = $jmap->CallMethods([
         ['Mailbox/query', {
@@ -50,5 +50,5 @@ sub test_mailbox_query_filterastree
     ]);
 
     $wantMboxIds = [ ]; # Can't match anything because top-level is missing
-    $self->assert_deep_equals($wantMboxIds, $res->[0][1]->{ids});
+    $self->assert_cmp_deeply($wantMboxIds, $res->[0][1]->{ids});
 }

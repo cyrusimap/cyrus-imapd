@@ -64,9 +64,9 @@ sub test_calendarevent_query_get_after_dav_reconstruct ($self)
 
     # Every id /query returned must resolve in /get, and the id /get mints
     # (from its own createdmodseq) must match the one /query produced.
-    $self->assert_deep_equals([], $res->[1][1]{notFound});
+    $self->assert_cmp_deeply([], $res->[1][1]{notFound});
     my @gotten = sort map { $_->{id} } @{$res->[1][1]{list}};
-    $self->assert_deep_equals(\@queried, \@gotten);
+    $self->assert_cmp_deeply(\@queried, \@gotten);
 
     $self->assert_str_equals('edited', $res->[1][1]{list}[0]{title});
     $self->assert_str_equals($uuid, $res->[1][1]{list}[0]{uid});

@@ -31,10 +31,10 @@ sub test_mailbox_set_role_dups_createrole
     ]);
     my $inbox = $res->[0][1]{list}[0]{id};
     $self->assert_not_null($inbox);
-    $self->assert_deep_equals(['role'], $res->[1][1]{notCreated}{'mboxNope1'}{properties});
-    $self->assert_deep_equals(['role'], $res->[1][1]{notCreated}{'mboxNope2'}{properties});
+    $self->assert_cmp_deeply(['role'], $res->[1][1]{notCreated}{'mboxNope1'}{properties});
+    $self->assert_cmp_deeply(['role'], $res->[1][1]{notCreated}{'mboxNope2'}{properties});
     my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[2][1]{list}};
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $inbox => 'inbox',
     }, \%roleByMbox);
 }

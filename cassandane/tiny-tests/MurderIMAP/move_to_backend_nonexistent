@@ -27,13 +27,13 @@ sub test_move_to_backend_nonexistent ($self)
     $self->assert_str_equals('ok', $backend_admin->get_last_completion_response());
 
     my $f_folders = $frontend->list('', '*');
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         [[[ '\\HasChildren' ], '.', 'INBOX' ],
          [[ '\\HasNoChildren' ], '.', 'INBOX.dest' ]],
         $f_folders);
 
     my $b_folders = $backend->list('', '*');
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         [[[ '\\HasNoChildren' ], '.', 'INBOX' ]],
         $b_folders);
 

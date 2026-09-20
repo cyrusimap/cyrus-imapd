@@ -17,11 +17,11 @@ sub test_squatter_attachextract_cache
 
     xlog "Assert text bodies of both messages are indexed";
     my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
-    $self->assert_deep_equals([1,2], $uids);
+    $self->assert_cmp_deeply([1,2], $uids);
 
     xlog "Assert attachments of both messages are indexed";
     $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
-    $self->assert_deep_equals([1,2], $uids);
+    $self->assert_cmp_deeply([1,2], $uids);
 
     xlog "Assert extractor only got called once";
     my @tracefiles = glob($tracedir."/*_PUT_*");

@@ -29,5 +29,5 @@ sub test_mailbox_set_parent_acl
     my $myacl = $admintalk->getacl("user.cassandane.foo");
 
     xlog $self, "assert ACL matches parent ACL";
-    $self->assert_deep_equals($parentacl, $myacl);
+    $self->assert_cmp_deeply($parentacl, $myacl);
 }

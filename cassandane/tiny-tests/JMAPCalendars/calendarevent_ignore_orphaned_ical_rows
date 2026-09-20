@@ -82,7 +82,7 @@ EOF
             onDestroyRemoveEvents => JSON::true,
         }, 'R1'],
     ]);
-    $self->assert_deep_equals([$calendarId], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([$calendarId], $res->[0][1]{destroyed});
 
     xlog "Write back rows into dav.db";
     $dbh = DBI->connect("dbi:SQLite:dbname=$dbfile", "", "", {
@@ -139,7 +139,7 @@ EOF
     ]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
     $self->assert_num_equals(0, scalar @{$res->[1][1]{list}});
-    $self->assert_deep_equals([], $res->[2][1]{ids});
+    $self->assert_cmp_deeply([], $res->[2][1]{ids});
     $self->assert(exists $res->[3][1]{notUpdated}{$eventId});
     $self->assert(exists $res->[4][1]{notDestroyed}{$eventId});
 

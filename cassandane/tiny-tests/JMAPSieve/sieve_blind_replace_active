@@ -45,7 +45,7 @@ sub test_sieve_blind_replace_active
 
     my $id1 = $res->[1][1]{created}{"1"}{id};
 
-    $self->assert_deep_equals([], $res->[2][1]{ids});
+    $self->assert_cmp_deeply([], $res->[2][1]{ids});
 
     $self->assert_null($res->[3][1]{created});
     $self->assert_null($res->[3][1]{updated});
@@ -100,11 +100,11 @@ sub test_sieve_blind_replace_active
 
     my $id2 = $res->[1][1]{created}{"2"}{id};
 
-    $self->assert_deep_equals([$id1], $res->[2][1]{ids});
+    $self->assert_cmp_deeply([$id1], $res->[2][1]{ids});
 
     $self->assert_null($res->[3][1]{created});
     $self->assert_null($res->[3][1]{updated});
-    $self->assert_deep_equals([$id1], $res->[3][1]{destroyed});
+    $self->assert_cmp_deeply([$id1], $res->[3][1]{destroyed});
 
     $self->assert_num_equals(1, scalar @{$res->[4][1]{list}});
     $self->assert_str_equals($id2, $res->[4][1]{list}[0]{name});

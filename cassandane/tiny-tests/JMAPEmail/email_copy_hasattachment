@@ -124,6 +124,6 @@ sub test_email_copy_hasattachment
         '$hasattachment' => JSON::true,
         baz => JSON::true,
     };
-    $self->assert_deep_equals($wantKeywords1, $res->[0][1]{list}[0]{keywords});
-    $self->assert_deep_equals($wantKeywords2, $res->[0][1]{list}[1]{keywords});
+    $self->assert_cmp_deeply($wantKeywords1, $res->[0][1]{list}[0]{keywords});
+    $self->assert_cmp_deeply($wantKeywords2, $res->[0][1]{list}[1]{keywords});
 }

@@ -53,7 +53,7 @@ sub test_calendarevent_get_recurrenceoverrides_before_after
         }, 'R2'],
     ]);
 
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         '2020-01-03T09:00:00' => {
             title => 'override2',
         },

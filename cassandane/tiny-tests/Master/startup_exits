@@ -18,7 +18,7 @@ sub test_startup_exits ($self)
     $self->assert(!$self->{instance}->is_running());
 
     xlog $self, "expect 1 dead lemming";
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
                                 A => { live => 0, dead => 1 },
                               }, $self->lemming_census());
 }

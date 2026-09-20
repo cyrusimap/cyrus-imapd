@@ -17,7 +17,7 @@ sub test_folder_move_partition
     # annotation should be set yet
     my $res = $admintalk->getmetadata($folder, $entry);
     $self->assert_equals('ok', $admintalk->get_last_completion_response());
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $entry => undef,
     }, $res->{$folder});
 
@@ -28,7 +28,7 @@ sub test_folder_move_partition
     # annotation should be set now
     $res = $admintalk->getmetadata($folder, $entry);
     $self->assert_equals('ok', $admintalk->get_last_completion_response());
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $entry => $value,
     }, $res->{$folder});
 
@@ -39,7 +39,7 @@ sub test_folder_move_partition
     # annotation should still be set
     $res = $admintalk->getmetadata($folder, $entry);
     $self->assert_equals('ok', $admintalk->get_last_completion_response());
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $entry => $value,
     }, $res->{$folder});
 }

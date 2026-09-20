@@ -174,5 +174,5 @@ sub test_email_query_guidsearch_mixedfilter2
     # This might change in the future.
     $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
     my @wantIds = sort ( $emailA, $emailB );
-    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[0][1]{ids});
 }

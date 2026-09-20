@@ -67,7 +67,7 @@ sub test_card_set_update_vcardprops
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notUpdated}{$cardId}{type});
     my @gotInvalidProps = sort @{$res->[0][1]{notUpdated}{$cardId}{properties}};
-    $self->assert_deep_equals(\@wantInvalidProps, \@gotInvalidProps);
+    $self->assert_cmp_deeply(\@wantInvalidProps, \@gotInvalidProps);
 
     xlog $self, "Update card with vCard elements with Cyrus extension";
     push @$using, 'https://cyrusimap.org/ns/jmap/contacts';

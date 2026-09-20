@@ -103,7 +103,7 @@ EOF
     $self->assert_not_null($matches->{3}{blobId});
     delete($matches->{3}{blobId});
 
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         3 => {
             name => '<mark>December</mark>.pdf',
             type => 'application/pdf',
@@ -146,7 +146,7 @@ EOF
     $self->assert_not_null($matches->{3}{blobId});
     delete($matches->{3}{blobId});
 
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         2 => {
             name => 'November.jpg',
             type => 'image/jpg',

@@ -94,7 +94,7 @@ EOF
             properties => [ 'calendarIds' ],
         }, 'R2'],
     ]);
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $calendarX => JSON::true,
     }, $res->[1][1]{list}[0]{calendarIds});
     my $instance1 = $res->[1][1]{list}[0]{id};
@@ -162,10 +162,10 @@ EOF
         }, 'R1'],
     ]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $calendarY => JSON::true,
     }, $res->[0][1]{list}[0]{calendarIds});
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $calendarY => JSON::true,
     }, $res->[0][1]{list}[1]{calendarIds});
 }

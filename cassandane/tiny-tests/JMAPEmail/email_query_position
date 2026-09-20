@@ -61,16 +61,16 @@ sub test_email_query_position
     $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
     $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isCached});
     $self->assert_num_equals(1, $res->[0][1]{position});
-    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[0][1]{ids});
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
     $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isCached});
     $self->assert_num_equals(1, $res->[1][1]{position});
-    $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[1][1]{ids});
     # Check GUID search
     $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
     $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isCached});
     $self->assert_num_equals(1, $res->[2][1]{position});
-    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[2][1]{ids});
 
     xlog "Create dummy message to invalidate query cache";
     $self->make_message("dummy") || die;
@@ -104,14 +104,14 @@ sub test_email_query_position
     $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
     $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isCached});
     $self->assert_num_equals(9, $res->[0][1]{position});
-    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[0][1]{ids});
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
     $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isCached});
     $self->assert_num_equals(9, $res->[1][1]{position});
-    $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[1][1]{ids});
     # Check GUID search
     $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
     $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isCached});
     $self->assert_num_equals(9, $res->[2][1]{position});
-    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[2][1]{ids});
 }

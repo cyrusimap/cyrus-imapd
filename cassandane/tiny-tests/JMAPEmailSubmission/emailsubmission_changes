@@ -20,9 +20,9 @@ sub test_emailsubmission_changes
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/changes', {
         sinceState => $state,
     }, "R1" ] ] );
-    $self->assert_deep_equals([], $res->[0][1]->{created});
-    $self->assert_deep_equals([], $res->[0][1]->{updated});
-    $self->assert_deep_equals([], $res->[0][1]->{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]->{created});
+    $self->assert_cmp_deeply([], $res->[0][1]->{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]->{destroyed});
 
     xlog $self, "Generate an email via IMAP";
     $self->make_message("foo", body => "an email") or die;
@@ -47,9 +47,9 @@ sub test_emailsubmission_changes
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/changes', {
         sinceState => $state,
     }, "R1" ] ] );
-    $self->assert_deep_equals([$subid], $res->[0][1]->{created});
-    $self->assert_deep_equals([], $res->[0][1]->{updated});
-    $self->assert_deep_equals([], $res->[0][1]->{destroyed});
+    $self->assert_cmp_deeply([$subid], $res->[0][1]->{created});
+    $self->assert_cmp_deeply([], $res->[0][1]->{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]->{destroyed});
 
     xlog $self, "no events were added to the alarmdb";
     my $alarmdata = $self->{instance}->getalarmdb();

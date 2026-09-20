@@ -31,9 +31,9 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{updatedProperties});
 
     xlog $self, "create mailbox via IMAP";
@@ -53,8 +53,8 @@ sub test_mailbox_changes
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_str_equals($foo, $res->[0][1]{created}[0]);
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -76,8 +76,8 @@ sub test_mailbox_changes
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_str_equals($drafts, $res->[0][1]{created}[0]);
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -95,10 +95,10 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($foo, $res->[0][1]{updated}[0]);
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -123,8 +123,8 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($foo, $res->[0][1]{destroyed}[0]);
     $self->assert_null($res->[0][1]{updatedProperties});
@@ -135,10 +135,10 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($drafts, $res->[0][1]{updated}[0]);
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
@@ -147,8 +147,8 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{updatedProperties});
 }

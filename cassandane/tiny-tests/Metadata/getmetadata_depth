@@ -36,42 +36,42 @@ sub test_getmetadata_depth
     $res = getmetadata($imaptalk, $folder, $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({ $folder => { $rootentry => $entries{$rootentry} } } , $res);
+    $self->assert_cmp_deeply({ $folder => { $rootentry => $entries{$rootentry} } } , $res);
 
     xlog $self, "Getting metadata with DEPTH 0 in the right place";
     $res = getmetadata($imaptalk, $folder, [ DEPTH => 0 ], $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({ $folder => { $rootentry => $entries{$rootentry} } } , $res);
+    $self->assert_cmp_deeply({ $folder => { $rootentry => $entries{$rootentry} } } , $res);
 
     xlog $self, "Getting metadata with DEPTH 1 in the right place";
     my @subset = ( qw(/shared/selvage /shared/selvage/portland /shared/selvage/leggings) );
     $res = getmetadata($imaptalk, $folder, [ DEPTH => 1 ], $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({ $folder => { map { $_ => $entries{$_} } @subset } }, $res);
+    $self->assert_cmp_deeply({ $folder => { map { $_ => $entries{$_} } @subset } }, $res);
 
     xlog $self, "Getting metadata with DEPTH infinity in the right place";
     $res = getmetadata($imaptalk, $folder, [ DEPTH => 'infinity' ], $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({ $folder => { %entries } } , $res);
+    $self->assert_cmp_deeply({ $folder => { %entries } } , $res);
 
     xlog $self, "Getting metadata with DEPTH 0 in the wrong place";
     $res = getmetadata($imaptalk, $folder, [ DEPTH => 0 ], $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({ $folder => { $rootentry => $entries{$rootentry} } } , $res);
+    $self->assert_cmp_deeply({ $folder => { $rootentry => $entries{$rootentry} } } , $res);
 
     xlog $self, "Getting metadata with DEPTH 1 in the wrong place";
     $res = getmetadata($imaptalk, $folder, [ DEPTH => 1 ], $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({ $folder => { map { $_ => $entries{$_} } @subset } }, $res);
+    $self->assert_cmp_deeply({ $folder => { map { $_ => $entries{$_} } @subset } }, $res);
 
     xlog $self, "Getting metadata with DEPTH infinity in the wrong place";
     $res = getmetadata($imaptalk, $folder, [ DEPTH => 'infinity' ], $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({ $folder => { %entries } } , $res);
+    $self->assert_cmp_deeply({ $folder => { %entries } } , $res);
 }

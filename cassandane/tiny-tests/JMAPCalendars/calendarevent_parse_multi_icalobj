@@ -63,7 +63,7 @@ EOF
         ]
     );
 
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         {
             '@type' => "Group",
             entries => [

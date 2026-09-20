@@ -44,7 +44,7 @@ sub test_calendarevent_set_move
     $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
     my $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($id, $event->{id});
-    $self->assert_deep_equals({$calidA => JSON::true}, $event->{calendarIds});
+    $self->assert_cmp_deeply({$calidA => JSON::true}, $event->{calendarIds});
     $self->assert_str_equals($state, $res->[0][1]{state});
 
     xlog $self, "move event to unknown calendar";
@@ -62,7 +62,7 @@ sub test_calendarevent_set_move
     $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
     $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($id, $event->{id});
-    $self->assert_deep_equals({$calidA => JSON::true}, $event->{calendarIds});
+    $self->assert_cmp_deeply({$calidA => JSON::true}, $event->{calendarIds});
 
     xlog $self, "move event to calendar $calidB";
     $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
@@ -79,5 +79,5 @@ sub test_calendarevent_set_move
     $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
     $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($id, $event->{id});
-    $self->assert_deep_equals({$calidB => JSON::true}, $event->{calendarIds});
+    $self->assert_cmp_deeply({$calidB => JSON::true}, $event->{calendarIds});
 }

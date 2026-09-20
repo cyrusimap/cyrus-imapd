@@ -54,27 +54,27 @@ sub test_seen_otheruser
 
     xlog $self, "Set \\Seen on message A";
     my $res = $talk->store('1', '+flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ '\\Seen' ] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [ '\\Seen' ] }}, $res);
     $self->check_messages(\%msg, store => $otherstore);
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg, store => $self->{store});
 
     xlog $self, "Set \\Seen on message A as otheruser";
     $res = $othertalk->store('1', '+flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ '\\Seen' ] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [ '\\Seen' ] }}, $res);
     $self->check_messages(\%msg, store => $otherstore);
     $self->check_messages(\%msg, store => $self->{store});
 
     xlog $self, "Clear \\Seen on message A";
     $res = $talk->store('1', '-flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
     $self->check_messages(\%msg, store => $otherstore);
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg, store => $self->{store});
 
     xlog $self, "Clear \\Seen on message A as otheruser";
     $res = $othertalk->store('1', '-flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
     $self->check_messages(\%msg, store => $otherstore);
     $self->check_messages(\%msg, store => $self->{store});
 }

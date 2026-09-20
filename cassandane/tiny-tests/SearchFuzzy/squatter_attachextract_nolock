@@ -72,8 +72,8 @@ sub test_squatter_attachextract_nolock
 
     xlog $self, "Assert terms actually got indexed";
     my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
-    $self->assert_deep_equals([1,2], $uids);
+    $self->assert_cmp_deeply([1,2], $uids);
 
     $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
-    $self->assert_deep_equals([2], $uids);
+    $self->assert_cmp_deeply([2], $uids);
 }

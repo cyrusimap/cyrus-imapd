@@ -29,9 +29,9 @@ sub test_email_changes_cads ($self)
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
 
     xlog $self, "get email updates";
     $res = $jmap->CallMethods([['Email/changes', {
@@ -41,8 +41,8 @@ sub test_email_changes_cads ($self)
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($ida, $res->[0][1]{destroyed}[0]);
 }

@@ -78,5 +78,5 @@ sub test_duplicate_headers
     delete $res->{1}->{envelope}->{Sender};
     delete $res->{1}->{envelope}->{'Reply-To'};
 
-    $self->assert_deep_equals(\%exp, $res->{1}->{envelope});
+    $self->assert_cmp_deeply(\%exp, $res->{1}->{envelope});
 }

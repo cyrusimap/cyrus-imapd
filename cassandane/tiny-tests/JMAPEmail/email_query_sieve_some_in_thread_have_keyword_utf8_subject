@@ -97,7 +97,7 @@ EOF
         $res->[1][1]{list}[0]{threadId},
         $res->[1][1]{list}[1]{threadId}
     );
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         $res->[1][1]{list}[0]{mailboxIds},
         $res->[1][1]{list}[1]{mailboxIds}
     );

@@ -61,7 +61,7 @@ sub test_emailsubmission_set_envelope_injection ($self)
         # The rejected address is echoed back as the client sent it, not in
         # the canonical form we'd have stored had we accepted it.
         if ($field eq 'rcptTo') {
-            $self->assert_deep_equals(
+            $self->assert_cmp_deeply(
                 [ $value ],
                 $args->{notCreated}{sub}{invalidRecipients}
             );

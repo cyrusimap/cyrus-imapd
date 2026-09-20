@@ -64,7 +64,7 @@ sub test_card_blob_lookup ($self)
             ids => [$blobId],
         }, 'R1']],
     });
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         {
             'ContactCard' => [ $cardId ],
             'AddressBook' => [ $abookId ]

@@ -16,7 +16,7 @@ sub test_lsub_extrachild
     $imaptalk->subscribe("INBOX.Test Foo") || die;
     $imaptalk->delete("INBOX.Test.Sub") || die;
     my $subdata = $imaptalk->lsub("", "*");
-    $self->assert_deep_equals($subdata, [
+    $self->assert_cmp_deeply($subdata, [
           [
             [
               '\\HasChildren'

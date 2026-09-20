@@ -74,7 +74,7 @@ sub test_specialuse ($self)
         $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
         $self->assert_not_null($res);
         delete $res->{$sentry}; # may return a shared entry as well...
-        $self->assert_deep_equals({
+        $self->assert_cmp_deeply({
             $folder => { $entry => undef }
         }, $res);
 
@@ -90,7 +90,7 @@ sub test_specialuse ($self)
         my $expected = {
                 $folder => { $entry => ($tc->{result} eq 'ok' ?  $tc->{specialuse} : undef) }
             };
-        $self->assert_deep_equals($expected, $res);
+        $self->assert_cmp_deeply($expected, $res);
     }
 
     xlog $self, "can get same values in a new connection";
@@ -108,7 +108,7 @@ sub test_specialuse ($self)
         my $expected = {
                 $folder => { $entry => ($tc->{result} eq 'ok' ?  $tc->{specialuse} : undef) }
             };
-        $self->assert_deep_equals($expected, $res);
+        $self->assert_cmp_deeply($expected, $res);
     }
 
     xlog $self, "can delete values";
@@ -127,7 +127,7 @@ sub test_specialuse ($self)
         my $expected = {
                 $folder => { $entry => undef }
             };
-        $self->assert_deep_equals($expected, $res);
+        $self->assert_cmp_deeply($expected, $res);
     }
 
 }

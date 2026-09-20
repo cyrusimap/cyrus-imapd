@@ -29,7 +29,7 @@ sub test_splitconv_basecid
 
     my $master = $self->basecids($self->{store});
     $self->assert(scalar grep { $_ } values %$master);
-    $self->assert_deep_equals($master, $self->basecids($self->{replica_store}));
+    $self->assert_cmp_deeply($master, $self->basecids($self->{replica_store}));
 
     # zeroing the cids drops basecid on the master.  the replica has to follow:
     # it can only ever have got its own value from here
@@ -40,5 +40,5 @@ sub test_splitconv_basecid
     $self->assert_num_equals(0, scalar grep { $_ } values %$master);
 
     $self->run_replication();
-    $self->assert_deep_equals($master, $self->basecids($self->{replica_store}));
+    $self->assert_cmp_deeply($master, $self->basecids($self->{replica_store}));
 }

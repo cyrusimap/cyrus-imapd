@@ -47,6 +47,6 @@ sub test_getmetadata
 
     # better not see any DAV mailboxes via GETMETADATA either
     $res = $imaptalk->getmetadata('*', '/private/comment');
-    $self->assert_deep_equals({ 'INBOX' => { '/private/comment' => undef } },
+    $self->assert_cmp_deeply({ 'INBOX' => { '/private/comment' => undef } },
                               $res);
 }

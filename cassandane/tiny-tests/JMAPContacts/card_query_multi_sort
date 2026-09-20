@@ -77,7 +77,7 @@ sub test_card_query_multi_sort
             }],
         }, 'R2'],
     ]);
-    $self->assert_deep_equals([
+    $self->assert_cmp_deeply([
             $cardId2,
             $cardId3,
             $cardId1,

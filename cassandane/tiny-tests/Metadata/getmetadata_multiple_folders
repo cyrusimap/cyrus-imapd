@@ -41,6 +41,6 @@ sub test_getmetadata_multiple_folders ($self)
         $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
         $self->assert_not_null($res);
 
-        $self->assert_deep_equals(\%exp, $res);
+        $self->assert_cmp_deeply(\%exp, $res);
     }
 }

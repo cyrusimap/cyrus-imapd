@@ -27,12 +27,12 @@ sub test_mbox_replication_new_mas
     xlog $self, "Before replication, annotation is present on the master";
     $res = $master_talk->getmetadata($folder, $entry);
     $self->assert_str_equals('ok', $master_talk->get_last_completion_response());
-    $self->assert_deep_equals({ $folder => { $entry => $value1 } }, $res);
+    $self->assert_cmp_deeply({ $folder => { $entry => $value1 } }, $res);
 
     xlog $self, "Before replication, annotation is missing from the replica";
     $res = $replica_talk->getmetadata($folder, $entry);
     $self->assert_str_equals('ok', $replica_talk->get_last_completion_response());
-    $self->assert_deep_equals({ $folder => { $entry => undef } }, $res);
+    $self->assert_cmp_deeply({ $folder => { $entry => undef } }, $res);
 
     xlog $self, "run replication";
     $self->run_replication();
@@ -43,10 +43,10 @@ sub test_mbox_replication_new_mas
     xlog $self, "After replication, annotation is still present on the master";
     $res = $master_talk->getmetadata($folder, $entry);
     $self->assert_str_equals('ok', $master_talk->get_last_completion_response());
-    $self->assert_deep_equals({ $folder => { $entry => $value1 } }, $res);
+    $self->assert_cmp_deeply({ $folder => { $entry => $value1 } }, $res);
 
     xlog $self, "After replication, annotation is now present on the replica";
     $res = $replica_talk->getmetadata($folder, $entry);
     $self->assert_str_equals('ok', $replica_talk->get_last_completion_response());
-    $self->assert_deep_equals({ $folder => { $entry => $value1 } }, $res);
+    $self->assert_cmp_deeply({ $folder => { $entry => $value1 } }, $res);
 }

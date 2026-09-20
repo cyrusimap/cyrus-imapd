@@ -56,6 +56,6 @@ sub test_calendarevent_blob_lookup_standalone_instances ($self)
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:blob',
     ]);
-    $self->assert_deep_equals([sort($id1, $id2)],
+    $self->assert_cmp_deeply([sort($id1, $id2)],
         [sort @{$res->[0][1]{list}[0]{matchedIds}{CalendarEvent}}]);
 }

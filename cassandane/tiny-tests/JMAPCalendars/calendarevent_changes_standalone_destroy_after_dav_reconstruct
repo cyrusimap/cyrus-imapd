@@ -51,11 +51,11 @@ sub test_calendarevent_changes_standalone_destroy_after_dav_reconstruct ($self)
     $res = $jmap->CallMethods([['CalendarEvent/set', {
         destroy => [ $id1 ],
     }, 'R1']]);
-    $self->assert_deep_equals([$id1], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([$id1], $res->[0][1]{destroyed});
 
     xlog $self, "a client that had instance1 must be told it was destroyed";
     $res = $jmap->CallMethods([['CalendarEvent/changes', {
         sinceState => $state1,
     }, 'R1']]);
-    $self->assert_deep_equals([$id1], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([$id1], $res->[0][1]{destroyed});
 }

@@ -106,12 +106,12 @@ sub test_calendarsharenotification_query
             limit => 1,
         }, 'R3'],
     ]);
-    $self->assert_deep_equals([$notifIdT1], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$notifIdT1], $res->[0][1]{ids});
     $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_deep_equals([$notifIdT2], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([$notifIdT2], $res->[1][1]{ids});
     $self->assert_num_equals(1, $res->[1][1]{total});
-    $self->assert_deep_equals([$notifIdT2], $res->[2][1]{ids});
+    $self->assert_cmp_deeply([$notifIdT2], $res->[2][1]{ids});
     $self->assert_num_equals(2, $res->[2][1]{total});
-    $self->assert_deep_equals([$notifIdT1], $res->[3][1]{ids});
+    $self->assert_cmp_deeply([$notifIdT1], $res->[3][1]{ids});
     $self->assert_num_equals(2, $res->[2][1]{total});
 }

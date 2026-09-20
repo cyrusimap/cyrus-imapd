@@ -124,18 +124,18 @@ sub test_email_query_seen_shared
     ];
 
     $res = $otherJmap->CallMethods($methods);
-    $self->assert_deep_equals({},
+    $self->assert_cmp_deeply({},
         $res->[0][1]{list}[0]{keywords});
-    $self->assert_deep_equals({},
+    $self->assert_cmp_deeply({},
         $res->[1][1]{list}[0]{keywords});
-    $self->assert_deep_equals([], $res->[2][1]{ids});
-    $self->assert_deep_equals(\@emailIds, $res->[3][1]{ids});
+    $self->assert_cmp_deeply([], $res->[2][1]{ids});
+    $self->assert_cmp_deeply(\@emailIds, $res->[3][1]{ids});
 
     $res = $jmap->CallMethods($methods);
-    $self->assert_deep_equals({'$seen' => JSON::true},
+    $self->assert_cmp_deeply({'$seen' => JSON::true},
         $res->[0][1]{list}[0]{keywords});
-    $self->assert_deep_equals({},
+    $self->assert_cmp_deeply({},
         $res->[1][1]{list}[0]{keywords});
-    $self->assert_deep_equals([$email1], $res->[2][1]{ids});
-    $self->assert_deep_equals([$email2], $res->[3][1]{ids});
+    $self->assert_cmp_deeply([$email1], $res->[2][1]{ids});
+    $self->assert_cmp_deeply([$email2], $res->[3][1]{ids});
 }

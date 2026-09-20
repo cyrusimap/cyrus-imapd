@@ -34,7 +34,7 @@ sub test_blob_get
     ]);
 
     my $blob = $res->[0][1]{list}[0];
-    $self->assert_deep_equals($wantMailboxIds, $blob->{matchedIds}{Mailbox});
-    $self->assert_deep_equals($wantEmailIds, $blob->{matchedIds}{Email});
-    $self->assert_deep_equals($wantThreadIds, $blob->{matchedIds}{Thread});
+    $self->assert_cmp_deeply($wantMailboxIds, $blob->{matchedIds}{Mailbox});
+    $self->assert_cmp_deeply($wantEmailIds, $blob->{matchedIds}{Email});
+    $self->assert_cmp_deeply($wantThreadIds, $blob->{matchedIds}{Thread});
 }

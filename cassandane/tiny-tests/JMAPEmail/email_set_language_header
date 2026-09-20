@@ -40,6 +40,6 @@ sub test_email_set_language_header
     ]);
     $self->assert_str_equals(' de-DE, en-CA',
         $res->[1][1]{list}[0]{bodyStructure}{'header:Content-Language'});
-    $self->assert_deep_equals(['de-DE', 'en-CA'],
+    $self->assert_cmp_deeply(['de-DE', 'en-CA'],
         $res->[1][1]{list}[0]{bodyStructure}{language});
 }

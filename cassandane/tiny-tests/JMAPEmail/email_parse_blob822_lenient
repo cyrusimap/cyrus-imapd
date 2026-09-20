@@ -31,5 +31,5 @@ EOF
     $self->assert_not_null($email);
     $self->assert_null($email->{from});
     $self->assert_null($email->{sentAt});
-    $self->assert_deep_equals([{name=>undef, email=>'foo@bar.local'}], $email->{to});
+    $self->assert_cmp_deeply([{name=>undef, email=>'foo@bar.local'}], $email->{to});
 }

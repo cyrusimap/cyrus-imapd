@@ -71,8 +71,8 @@ EOF
             },
         }, 'R4'],
     ]);
-    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
-    $self->assert_deep_equals([$emailId], $res->[1][1]{ids});
-    $self->assert_deep_equals([$emailId], $res->[2][1]{ids});
-    $self->assert_deep_equals([], $res->[3][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[2][1]{ids});
+    $self->assert_cmp_deeply([], $res->[3][1]{ids});
 }

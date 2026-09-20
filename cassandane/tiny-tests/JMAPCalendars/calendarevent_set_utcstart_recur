@@ -138,7 +138,7 @@ sub test_calendarevent_set_utcstart_recur
         }, 'R2']
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
-    $self->assert_deep_equals($event, $res->[1][1]{list}[0]);
+    $self->assert_cmp_deeply($event, $res->[1][1]{list}[0]);
 
     # But it is not OK to update UTC times in a recurring event with overrides.
     $res = $jmap->CallMethods([

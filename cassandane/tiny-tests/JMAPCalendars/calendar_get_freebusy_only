@@ -39,5 +39,5 @@ sub test_calendar_get_freebusy_only
             properties => ['id'],
         }, 'R1'],
     ]);
-    $self->assert_deep_equals([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
 }

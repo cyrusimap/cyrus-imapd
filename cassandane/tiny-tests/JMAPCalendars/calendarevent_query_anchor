@@ -63,7 +63,7 @@ sub test_calendarevent_query_anchor
             anchor => $eventId2,
         }, 'R1']
     ]);
-    $self->assert_deep_equals([$eventId2,$eventId3], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$eventId2,$eventId3], $res->[0][1]{ids});
 
     $res = $jmap->CallMethods([
         ['CalendarEvent/query', {
@@ -76,7 +76,7 @@ sub test_calendarevent_query_anchor
             limit => 1,
         }, 'R1']
     ]);
-    $self->assert_deep_equals([$eventId1], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$eventId1], $res->[0][1]{ids});
 
     $res = $jmap->CallMethods([
         ['CalendarEvent/query', {
@@ -88,7 +88,7 @@ sub test_calendarevent_query_anchor
             anchorOffset => -5,
         }, 'R1']
     ]);
-    $self->assert_deep_equals([$eventId1, $eventId2, $eventId3], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$eventId1, $eventId2, $eventId3], $res->[0][1]{ids});
 
     $res = $jmap->CallMethods([
         ['CalendarEvent/query', {
@@ -100,5 +100,5 @@ sub test_calendarevent_query_anchor
             anchorOffset => 5,
         }, 'R1']
     ]);
-    $self->assert_deep_equals([], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([], $res->[0][1]{ids});
 }
