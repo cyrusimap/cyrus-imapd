@@ -12,6 +12,7 @@ use base qw(Test::Unit::TestCase);
 use Data::Dumper;
 use DateTime;
 use DateTime::Format::ISO8601;
+use Carp ();
 
 use Cassandane::Util::Log;
 use Cassandane::Util::TestUrl;
@@ -489,6 +490,11 @@ sub assert_not_file_test
     die $@ if $@;
     $self->assert(!$result,
                   "'$path' unexpectedly passed '$test_type' test");
+}
+
+sub assert_deep_equals
+{
+    Carp::confess('assert_deep_equals is gone; call assert_cmp_deeply instead');
 }
 
 sub assert_cmp_deeply
