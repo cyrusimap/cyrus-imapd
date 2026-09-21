@@ -158,6 +158,11 @@ static json_t *buildinfo()
 #else
     json_object_set_new(dependency, "nghttp2", json_false());
 #endif
+#ifdef HAVE_NGTCP2
+    json_object_set_new(dependency, "ngtcp2", json_true());
+#else
+    json_object_set_new(dependency, "ngtcp2", json_false());
+#endif
 #ifdef HAVE_LIBBPF
     json_object_set_new(dependency, "libbpf", json_true());
 #else

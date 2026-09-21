@@ -138,6 +138,7 @@ sieve.script            the name of a Sieve script
 sieve.srs.domain        the domain SRS rewrites a return path into
 sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
+tls.engine              which TLS server engine this event is about
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
 

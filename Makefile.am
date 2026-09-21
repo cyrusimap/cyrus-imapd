@@ -1275,6 +1275,12 @@ imap_httpd_SOURCES = \
     master/masterconf.c \
     $(imap_SERVICE_SOURCES)
 
+if WITH_QUIC
+imap_httpd_SOURCES += \
+    imap/quic.c \
+    imap/quic.h
+endif
+
 imap_httpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 if JMAP

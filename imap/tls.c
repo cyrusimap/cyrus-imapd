@@ -358,8 +358,8 @@ static void set_groups(SSL_CTX *ctx, const char *list)
   * This function is taken from OpenSSL apps/s_cb.c
   */
 
-static int set_cert_stuff(SSL_CTX * ctx,
-                          const char *cert_file, const char *key_file)
+EXPORTED int tls_set_cert_stuff(SSL_CTX * ctx,
+                                const char *cert_file, const char *key_file)
 {
     if (!cert_file) return 1;
 
@@ -774,6 +774,39 @@ done:
     return r;
 }
 
+/* Install (or, if alpn_map is empty/NULL, clear) the server-side ALPN
+ * selection callback on ctx. */
+EXPORTED void tls_set_alpn_map(SSL_CTX *ctx, const struct tls_alpn_t *alpn_map)
+{
+    if (alpn_map && alpn_map->id[0])
+        SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, (void *) alpn_map);
+    else
+        SSL_CTX_set_alpn_select_cb(ctx, NULL, NULL);
+}
+
+EXPORTED SSL_CTX *tls_new_serverctx(const char *tag)
+{
+    SSL_CTX *ctx;
+
+    SSL_library_init();
+    SSL_load_error_strings();
+    if (tls_rand_init() == -1) {
+        xsyslog_ev(LOG_ERR, "tls.server.prng_seed_failed",
+                   lf_s("tls.engine", tag));
+        return NULL;
+    }
+
+    ctx = SSL_CTX_new(TLS_server_method());
+    if (!ctx) return NULL;
+
+    SSL_CTX_set_info_callback(ctx, apps_ssl_info_callback);
+    SSL_CTX_set_tlsext_servername_callback(ctx, servername_callback);
+
+    set_groups(ctx, config_getstring(IMAPOPT_TLS_ECCURVE));
+
+    return ctx;
+}
+
  /*
   * This is the setup routine for the SSL server. As smtpd might be called
   * more than once, we only want to do the initialization one time.
@@ -785,10 +818,8 @@ done:
 
 /* must be called after cyrus_init */
 // I am the server
-EXPORTED int     tls_init_serverengine(const char *ident,
-                              int verifydepth,
-                              int askcert,
-                              SSL_CTX **ret)
+EXPORTED int tls_init_serverengine(const char *ident, int verifydepth,
+                                   int askcert, SSL_CTX **ret)
 {
     int     off = 0;
     int     verify_flags = SSL_VERIFY_NONE;
@@ -819,18 +850,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     if (var_imapd_tls_loglevel >= 2)
         syslog(LOG_DEBUG, "starting TLS server engine");
 
-    SSL_library_init();
-    SSL_load_error_strings();
-    if (tls_rand_init() == -1) {
-        syslog(LOG_ERR,"TLS server engine: cannot seed PRNG");
-        return -1;
-    }
-
-    s_ctx = SSL_CTX_new(TLS_server_method());
-
-    if (s_ctx == NULL) {
-        return (-1);
-    };
+    s_ctx = tls_new_serverctx("TLS server engine");
+    if (!s_ctx) return -1;
 
     off |= SSL_OP_ALL;            /* Work around all known bugs */
     off |= SSL_OP_NO_SSLv2;       /* Disable insecure SSLv2 */
@@ -864,7 +885,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         off |= SSL_OP_CIPHER_SERVER_PREFERENCE;
 
     SSL_CTX_set_options(s_ctx, off);
-    SSL_CTX_set_info_callback(s_ctx, apps_ssl_info_callback);
 
     cipher_list = config_getstring(IMAPOPT_TLS_CIPHERS);
     if (!SSL_CTX_set_cipher_list(s_ctx, cipher_list)) {
@@ -980,14 +1000,12 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         }
     }
 
-    if (!set_cert_stuff(s_ctx, server_cert_file, server_key_file)) {
+    if (!tls_set_cert_stuff(s_ctx, server_cert_file, server_key_file)) {
         syslog(LOG_ERR, "TLS server engine: cannot load cert/key data, may be a cert/key mismatch?");
         return (-1);
     }
 
     SSL_CTX_set_dh_auto(s_ctx, 1);
-
-    set_groups(s_ctx, config_getstring(IMAPOPT_TLS_ECCURVE));
 
     verify_depth = verifydepth;
 
@@ -1046,8 +1064,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     } /* crl_file_path */
 
     SSL_CTX_set_verify(s_ctx, verify_flags, verify_callback);
-
-    SSL_CTX_set_tlsext_servername_callback(s_ctx, servername_callback);
 
     /* Don't use an internal session cache */
     SSL_CTX_sess_set_cache_size(s_ctx, 1);  /* 0 is unlimited, so use 1 */
@@ -1255,10 +1271,7 @@ static int start_servertls(int readfd, int writefd, int timeout,
 
     saslprops_reset(saslprops);
 
-    if (alpn_map && alpn_map->id[0])
-        SSL_CTX_set_alpn_select_cb(s_ctx, alpn_select_cb, (void *) alpn_map);
-    else
-        SSL_CTX_set_alpn_select_cb(s_ctx, NULL, NULL);
+    tls_set_alpn_map(s_ctx, alpn_map);
 
     tls_conn = (SSL *) SSL_new(s_ctx);
     if (tls_conn == NULL) {
@@ -1778,7 +1791,7 @@ HIDDEN int tls_init_clientengine(int verifydepth,
         client_key = var_server_key;
 
     if (client_cert || client_key) {
-        if (!set_cert_stuff(c_ctx, client_cert, client_key)) {
+        if (!tls_set_cert_stuff(c_ctx, client_cert, client_key)) {
             syslog(LOG_ERR,"TLS client engine: cannot load cert/key data, may be a cert/key mismatch?");
             return -1;
         }
