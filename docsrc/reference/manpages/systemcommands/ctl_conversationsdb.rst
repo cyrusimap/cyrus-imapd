@@ -17,8 +17,8 @@ Synopsis
 
     **ctl_conversationsdb** [ -C *config-file* ] **-d** *userid* > text
     **ctl_conversationsdb** [ -C *config-file* ] **-u** *userid* < text
-    **ctl_conversationsdb** [ -C *config-file* ] [ **-v** ] [ **-z** | **-b** | **-R** ] *userid*
-    **ctl_conversationsdb** [ -C *config-file* ] [ **-v** ] [ **-z** | **-b** | **-R** ] **-r**
+    **ctl_conversationsdb** [ -C *config-file* ] [ **-v** ] [ **-z** | **-b** | **-R** | **-A** | **-F** ] *userid*
+    **ctl_conversationsdb** [ -C *config-file* ] [ **-v** ] [ **-z** | **-b** | **-R** | **-A** | **-F** ] **-r**
 
 Description
 ===========
@@ -38,10 +38,9 @@ second synopsis, the resulting *file* is fed back in, using the
 is useful for disaster recovery, or for changing the backend used to
 store the conversations database.
 
-The third synopsis is used to reconstruct conversations information
-in various ways for a specific user, and the fourth to reconstruct
-conversations information for all users.  See ``OPTIONS`` below for
-details.
+The third synopsis is used to check or reconstruct conversations
+information in various ways for a specific user, and the fourth to do
+the same for all users.  See ``OPTIONS`` below for details.
 
 |v3-new-command|
 
@@ -114,16 +113,57 @@ Options
 
 .. option:: -R, --update-counts
 
-    Recalculate counts of messages stored in existing conversations in
-    the conversations database for user *userid*.  This is a limited
-    subset of **-b**; in particular it does not create conversations or
-    assign messages to conversations.
+    Repair the conversations database for user *userid*: everything
+    **-A** reports.  It does not create conversations or assign messages
+    to conversations; use **-b** for that.
+
+    First, every message whose copies disagree is repaired.  Every copy
+    of a message (the same GUID in more than one folder) must have the
+    same conversation id, the same split-conversation state and the
+    same internaldate, or the same JMAP email has a different thread or
+    a different id depending on which folder it is viewed in.
+    Disagreeing copies are rewritten to match the copy with the highest
+    conversation id, which is the one a freshly threaded message would
+    have joined, and the highest internaldate, which is the one
+    **reconstruct** would keep.  Copies that have already been expunged
+    are left alone.
+
+    Then all counts of messages stored in existing conversations are
+    recalculated from the mailboxes.
 
 .. option:: -S, --split
 
     If given with **-b**, allows splitting of conversations during the
     rewrite.   Only do this if changing the maximum conversation size
     and you need to split those existing conversations.
+
+.. option:: -U, --upgrade
+
+    If given with **-R**, also upgrade the conversations database for
+    user *userid* to the current on-disk version.
+
+.. option:: -A, --audit
+
+    Report everything **-R** would repair for user *userid*, without
+    changing anything: counts are recalculated into a temporary
+    conversations database and every record that differs from the live
+    one is reported, then every message whose copies disagree about
+    their conversation is reported.  Use **-T** to choose where the
+    temporary database is written.
+
+.. option:: -T dir, --audit-temp-directory dir
+
+    Write the temporary database used by **-A** under *dir*.
+
+.. option:: -F, --check-folders
+
+    Check that every folder in the conversations database for user
+    *userid* still exists, and report any that do not.
+
+.. option:: -I switch, --enable-compact-emailids switch
+
+    Enable (``1``, ``on`` or ``yes``) or disable compact JMAP email ids
+    for user *userid*.
 
 Examples
 ========

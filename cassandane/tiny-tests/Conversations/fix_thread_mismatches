@@ -1,0 +1,177 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# ctl_conversationsdb -A reports, and -R repairs, mismatched copies
+#
+# Every copy of an email (same GUID) must have the same CID, the same
+# split-conversation state and the same internaldate.  Corrupt that invariant
+# directly in the index, then check that -A reports it, and that -R converges
+# every live copy onto the highest CID and the highest internaldate among live
+# copies, carrying the winning copy's basecid along.  An expunged copy neither
+# wins nor gets rewritten.
+#
+sub test_fix_thread_mismatches
+    :Conversations
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "create a message and copy it to four other folders";
+    my $msg = $self->make_message("Message A");
+    my $cidA = $msg->make_cid();
+    for my $folder (qw(foo baz bar qux)) {
+        $talk->create($folder) || die;
+        $talk->select("INBOX");
+        $talk->copy("1", $folder) || die;
+    }
+
+    # a CID lower than the natural one, so INBOX (cidA) stays the winner
+    $self->assert($cidA gt '0000000000000002');
+    my $cidB = '0000000000000001';
+    my $cidHIGH = 'ffffffffffffffff';
+    my $basecidA = 'feedfacefeedface';
+    my $basecidB = 'cafebabecafebabe';
+
+    my $inboxfile = $self->_index_path('INBOX');
+    my $foofile = $self->_index_path('INBOX.foo');
+    my $bazfile = $self->_index_path('INBOX.baz');
+    my $barfile = $self->_index_path('INBOX.bar');
+    my $quxfile = $self->_index_path('INBOX.qux');
+
+    xlog $self, "corrupt the index copies directly";
+    # drop the connection so no imapd holds the mailboxes open
+    $self->{store}->disconnect();
+
+    # INBOX: the winning CID, as a split conversation, and a day later than
+    # every other copy so it wins the internaldate too
+    $self->_set_index_cid($inboxfile, 1, $cidA, $basecidA, 1, 86400);
+    # qux: agrees with INBOX on everything but the internaldate
+    $self->_set_index_cid($quxfile, 1, $cidA, $basecidA, 1);
+    # foo: a lower CID plus its own split-conversation state
+    $self->_set_index_cid($foofile, 1, $cidB, $basecidB, 1);
+    # baz: a NULL CID
+    $self->_set_index_cid($bazfile, 1, '0000000000000000', undef, 0);
+    # bar: the highest CID of all, but it's about to be expunged
+    $self->_set_index_cid($barfile, 1, $cidHIGH, undef, 0);
+
+    xlog $self, "resync the G records from the corrupted index records";
+    # a flag change rewrites the index record, which records the (now
+    # corrupt) CID and internaldate into the conversations DB without
+    # re-threading.  (reconstruct would instead put the internaldate back
+    # from the G record, so it can't be used to plant this.)
+    $talk = $self->{store}->get_client();
+    for my $folder (qw(INBOX foo baz qux)) {
+        $talk->select($folder);
+        $talk->store('1', '+flags', '(\\Flagged)') || die;
+    }
+    $talk->select("bar");
+    $talk->store('1', '+flags', '(\\Deleted)') || die;
+    $talk->expunge() || die;
+
+    xlog $self, "confirm the mismatch was planted";
+    $self->assert_str_equals($cidA, $self->_fetch_cid($talk, "INBOX", 1));
+    $self->assert_str_equals($basecidA, $self->_fetch_basecid($talk, "INBOX", 1));
+    $self->assert_str_equals($cidB, $self->_fetch_cid($talk, "foo", 1));
+    $self->assert_str_equals($basecidB, $self->_fetch_basecid($talk, "foo", 1));
+    # FETCH reports a NULL CID as NIL
+    $self->assert_null($self->_fetch_cid($talk, "baz", 1));
+    my $dateA = $self->_fetch_internaldate($talk, "INBOX", 1);
+    $self->assert_str_not_equals($dateA, $self->_fetch_internaldate($talk, "qux", 1));
+
+    xlog $self, "audit reports the mismatches without changing anything";
+    my $out = "$self->{instance}->{basedir}/audit.out";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $out } },
+        'ctl_conversationsdb', '-A', 'cassandane');
+    my $shown = slurp_file($out);
+    $self->assert_matches(qr/CID,INTERNALDATE mismatch! \S+ user\.cassandane\.foo:1/, $shown);
+    $self->assert_matches(qr/CID,INTERNALDATE mismatch! \S+ user\.cassandane\.baz:1/, $shown);
+    $self->assert_matches(qr/ INTERNALDATE mismatch! \S+ user\.cassandane\.qux:1/, $shown);
+    # the planted CIDs throw the counts off too, so don't pin the number
+    $self->assert_matches(qr/cassandane is BROKEN \(\d+ differences\)/, $shown);
+    # the expunged copy is neither the target nor reported
+    $self->assert_does_not_match(qr/user\.cassandane\.bar/, $shown);
+    $self->assert_does_not_match(qr/$cidHIGH/, $shown);
+    # nothing changed yet
+    $self->assert_str_equals($cidB, $self->_fetch_cid($talk, "foo", 1));
+
+    xlog $self, "update-counts fixes the mismatches";
+    $self->{instance}->run_command({ cyrus => 1 },
+        'ctl_conversationsdb', '-R', 'cassandane');
+
+    xlog $self, "every live copy has converged onto the INBOX copy";
+    for my $folder (qw(INBOX foo baz qux)) {
+        $self->assert_str_equals($cidA, $self->_fetch_cid($talk, $folder, 1));
+        $self->assert_str_equals($basecidA, $self->_fetch_basecid($talk, $folder, 1));
+        $self->assert_str_equals($dateA, $self->_fetch_internaldate($talk, $folder, 1));
+    }
+
+    xlog $self, "the audit is now clean";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $out } },
+        'ctl_conversationsdb', '-A', 'cassandane');
+    $self->assert_str_equals('', slurp_file($out));
+
+    xlog $self, "recompute the sync CRCs the direct index edits left stale";
+    # now that every copy agrees, reconstruct has nothing else to change
+    $self->{instance}->run_command({ cyrus => 1 },
+        'reconstruct', 'user.cassandane', 'user.cassandane.foo',
+        'user.cassandane.baz', 'user.cassandane.bar', 'user.cassandane.qux');
+}
+
+sub _index_path
+{
+    my ($self, $folder) = @_;
+    my $dir = $self->{instance}->folder_to_directory($folder);
+    die "no directory for $folder" unless $dir;
+    return "$dir/cyrus.index";
+}
+
+# set the CID (and optionally BaseCID, split-conversation flag, and an
+# internaldate offset in seconds) of a record directly in cyrus.index
+sub _set_index_cid
+{
+    my ($self, $file, $uid, $cid, $basecid, $split, $dateoffset) = @_;
+
+    my $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    my $index = Cyrus::IndexFile->new($fh);
+
+    while (my $record = $index->next_record_hash()) {
+        next unless $record->{Uid} == $uid;
+        $record->{CID} = $cid;
+        $record->{BaseCID} = $basecid if defined $basecid;
+        # SystemFlags is an MSB-first bit string; FLAG_INTERNAL_SPLITCONVERSATION
+        # is 1<<27, i.e. string index 31-27 == 4
+        substr($record->{SystemFlags}, 4, 1) = '1' if $split;
+        # v20 InternalDate is nanoseconds; keep the nanosecond part intact
+        $record->{InternalDate} += $dateoffset * 1_000_000_000 if $dateoffset;
+        $index->rewrite_record($record);
+    }
+    close($fh);
+}
+
+sub _fetch_cid
+{
+    my ($self, $talk, $folder, $uid) = @_;
+    $talk->select($folder);
+    my $data = $talk->fetch($uid, '(cid)');
+    return $data->{$uid}{cid};
+}
+
+sub _fetch_basecid
+{
+    my ($self, $talk, $folder, $uid) = @_;
+    $talk->select($folder);
+    my $data = $talk->fetch($uid, '(basecid)');
+    return $data->{$uid}{basecid};
+}
+
+sub _fetch_internaldate
+{
+    my ($self, $talk, $folder, $uid) = @_;
+    $talk->select($folder);
+    my $data = $talk->fetch($uid, '(internaldate)');
+    return $data->{$uid}{internaldate};
+}
