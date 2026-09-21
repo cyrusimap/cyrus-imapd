@@ -46,6 +46,8 @@ struct service {
 
     /* quic service support */
     bool is_quic;               /* proto == "quic"/"quic4"/"quic6"? */
+    void *quic_ebpf_ctx;        /* loaded/attached eBPF steering program state.
+                                   NULL if eBPF dispatch isn't in use */
     dynarray_t quic_idle_workers; /* which workers are ready for a connection */
 };
 

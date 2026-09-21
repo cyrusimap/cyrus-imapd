@@ -383,6 +383,7 @@ EXTRA_DIST = \
     man/rehash.8 \
     man/translatesieve.8 \
     master/README \
+    master/quic/cyr_quic_steer.bpf.c \
     perl/annotator/Daemon.pm \
     perl/annotator/Makefile.PL \
     perl/annotator/MANIFEST \
@@ -1788,6 +1789,7 @@ master_master_CPPFLAGS = $(AM_CPPFLAGS)
 master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM) $(SSL_LIBS)
 if WITH_QUIC
 master_master_SOURCES += \
+    master/quic/quic_cidlen.h \
     master/quic/quic_handoff.c \
     master/quic/quic_handoff.h \
     master/quic/quic_idle_pool.c \
@@ -1797,6 +1799,28 @@ master_master_SOURCES += \
 
 master_master_CPPFLAGS += $(NGTCP2_CFLAGS)
 master_master_LDADD += $(NGTCP2_LIBS)
+
+if HAVE_LIBBPF
+master_master_SOURCES += \
+    master/quic/quic_ebpf.c \
+    master/quic/quic_ebpf.h
+
+master_master_CPPFLAGS += $(LIBBPF_CFLAGS) $(LIBCAP_CFLAGS)
+master_master_LDADD += $(LIBBPF_LIBS) $(LIBCAP_LIBS)
+
+# Not a normal C object -- compiled to BPF bytecode by clang,
+# loaded into the kernel at runtime by master/quic/quic_ebpf.c
+#
+# quicebpfdir is just libexecdir because
+# automake's _DATA primary doesn't accept the bare libexecdir name.
+quicebpfdir = $(libexecdir)
+quicebpf_DATA = master/quic/cyr_quic_steer.bpf.o
+
+master/quic/cyr_quic_steer.bpf.o: master/quic/cyr_quic_steer.bpf.c
+	$(AM_V_GEN)$(CLANG) -O2 -g -target bpf $(LIBBPF_CFLAGS) -c $< -o $@
+
+CLEANFILES += master/quic/cyr_quic_steer.bpf.o
+endif # HAVE_LIBBPF
 endif # WITH_QUIC
 
 

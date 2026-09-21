@@ -7,9 +7,11 @@
  * Performance figures in docsrc/concepts/features/quic-dispatch.rst
  * were taken with.
  *
- * Reads the AF_UNIX socketpair service.c hands it on stdin, whose
- * datagrams carry a struct quic_relay_pkt_hdr in front. Replies go
- * out on the handoff's send_fd where master passed one.
+ * Handles either kind of fd service.c hands it on stdin: a real UDP
+ * socket under eBPF steering, or the relay backend's AF_UNIX
+ * socketpair, whose datagrams carry a struct quic_relay_pkt_hdr in
+ * front. Replies go out on the handoff's send_fd where master
+ * passed one.
  *
  * Not part of the build. To build it, add to Makefile.am:
  *
@@ -68,7 +70,8 @@ int service_main(int argc __attribute__((unused)),
     if (!h) return 0;
 
     /* An AF_UNIX fd means master is relaying to us, so arriving
-     * datagrams carry a struct quic_relay_pkt_hdr. */
+     * datagrams carry a struct quic_relay_pkt_hdr; anything else is a
+     * socket of our own, steered by eBPF. */
     {
         struct sockaddr_storage me;
         socklen_t melen = sizeof(me);
@@ -78,8 +81,9 @@ int service_main(int argc __attribute__((unused)),
         relayed = (me.ss_family == AF_UNIX);
     }
 
-    /* Outgoing goes straight to the client, on the socket master
-     * passed us. */
+    /* Outgoing goes straight to the client either way: on the socket
+     * master passed for the relay backend, or on our own steered
+     * socket under eBPF. */
     sendfd = service_quic_send_fd();
     if (sendfd < 0) sendfd = STDIN_FILENO;
 

@@ -110,7 +110,9 @@ lmtp.rcpt.index         which recipient of the transaction, counting from zero
 lmtp.rcpt.state         a recipient's delivery state in the proxy state machine
 lmtp.target             how the destination mailbox was chosen: default, plus-addr, ...
 pop.subfolder           the subfolder a POP session was restricted to
+quic.bpf_obj            path to the compiled cyr_quic_steer eBPF object
 quic.dropped            how many datagrams a QUIC connection lost to a full queue
+quic.family             an address family, as a string: ipv4, ipv6 or unix
 quic.rcvbuf.granted     a socket receive buffer size the kernel granted, in bytes
 quic.rcvbuf.requested   a socket receive buffer size asked of the kernel, in bytes
 quic.worker_pid         the pid of a QUIC worker process (master)

@@ -57,6 +57,7 @@
 #include "master/cronevent.h"
 #include "master/event.h"
 #include "master/masterconf.h"
+#include "master/quic/quic_ebpf.h"
 #include "master/quic/quic_handoff.h"
 #include "master/quic/quic_idle_pool.h"
 #include "master/quic/quic_relay.h"
@@ -84,7 +85,11 @@ static int pidfd = -1;
 static bool have_quic_service = false;
 
 #ifdef WITH_QUIC
-/* Receive buffer for a quic service's rendezvous socket */
+/* Which QUIC dispatch backend is in use, decided once at startup
+ * from the quic_use_ebpf config switch; always the relay without libbpf. */
+static bool quic_use_ebpf = false;
+
+/* Receive buffer for a relay-mode service's rendezvous socket */
 #define QUIC_RELAY_RCVBUF (4 * 1024 * 1024)
 
 /* Send buffer for master's end of a relayed connection's socketpair */
@@ -143,7 +148,8 @@ struct centry {
     int quic_fd;
 
     /* this worker's current QUIC connection's dispatch state --
-     * the relay's CID registrations. */
+     * eBPF's steering map index, or the relay's CID registrations. */
+    uint32_t quic_ebpf_index;
     uint8_t quic_cids[QUIC_CID_POOL_SIZE + 1][QUIC_CIDLEN];
     uint8_t quic_ncids;
 
@@ -627,10 +633,10 @@ static void service_create(struct service *s, int is_startup)
         }
 
 #ifdef WITH_QUIC
-        if (s->is_quic) {
-            /* This one queue holds every packet of every connection
-             * until master reads it, which the default size can't do
-             * through a burst. */
+        if (s->is_quic && !quic_use_ebpf) {
+            /* Under the relay backend this one queue holds every
+             * packet of every connection until master reads it, which
+             * the default size can't do through a burst. */
             int rcvbuf = QUIC_RELAY_RCVBUF;
             int granted = 0;
             socklen_t grantedlen = sizeof(granted);
@@ -655,6 +661,21 @@ static void service_create(struct service *s, int is_startup)
             }
         }
 #endif
+
+#if defined(WITH_QUIC) && defined(HAVE_LIBBPF)
+        if (s->is_quic && quic_use_ebpf) {
+            /* An SK_REUSEPORT program only ever picks among one
+             * port's reuseport group, so every socket sharing this
+             * port has to opt in. */
+            r = setsockopt(s->socket, SOL_SOCKET, SO_REUSEPORT,
+                           (void *) &on, sizeof(on));
+            if (r < 0) {
+                xsyslog_ev(LOG_ERR, "quic.listen.reuseport_failed",
+                           lf_s("service.name", s->name));
+            }
+        }
+#endif
+
 #if defined(IPV6_V6ONLY) && !(defined(__FreeBSD__) && __FreeBSD__ < 3)
         if (res->ai_family == AF_INET6) {
             r = setsockopt(s->socket, IPPROTO_IPV6, IPV6_V6ONLY,
@@ -1077,34 +1098,72 @@ static int quic_dispatch_create_channel(int sv[2])
 /* Initialize the dispatch backend */
 static void quic_dispatch_init(void)
 {
-    quic_relay_init();
+    if (quic_use_ebpf) {
+#ifdef HAVE_LIBBPF
+        quic_rebind_rendezvous_sockets();
+#endif
+    }
+    else {
+        quic_relay_init();
+    }
 }
 
 /* Shutdown/cleanup the dispatch backend */
 static void quic_dispatch_shutdown(void)
 {
-    quic_relay_shutdown();
+    /* Close whichever backend was in use, now that every quic worker
+     * is confirmed dead -- otherwise eBPF's cyr_quic_steer and its
+     * stale maps collide with whichever master starts next. */
+    if (quic_use_ebpf) {
+#ifdef HAVE_LIBBPF
+        for (int i = 0; i < nservices; i++) {
+            if (Services[i].is_quic) quic_ebpf_shutdown_service(&Services[i]);
+        }
+#endif
+    }
+    else {
+        quic_relay_shutdown();
+    }
 }
 
-/* Undo the add_conn()/add_alias() calls that succeeded for a dispatch
- * that failed partway through: deleting a key that was never
- * registered is a no-op, so passing the full cid_pool is always safe.
- * The caller closes the fd. */
-static void quic_backend_del_conn(uint8_t dcidlen, const uint8_t *dcid,
+/* Undo whichever backend's add_conn()/add_sock()/add_alias() calls
+ * succeeded for a dispatch that failed partway through: deleting a key
+ * that was never registered is a no-op for either backend, so passing
+ * the full cid_pool is always safe. index is meaningful (and freed)
+ * only for the eBPF backend, if quic_ebpf_add_sock() succeeded; pass 0
+ * (the reserved fallback) otherwise. The caller closes the fd. */
+static void quic_backend_del_conn(struct service *s, uint32_t index,
+                                  uint8_t dcidlen, const uint8_t *dcid,
                                   const uint8_t cid_pool[][QUIC_CIDLEN],
                                   uint8_t ncids)
 {
-    if (dcidlen >= QUIC_CIDLEN) quic_relay_del_conn(dcid);
-    for (int i = 0; i < ncids; i++) quic_relay_del_conn(cid_pool[i]);
+    if (quic_use_ebpf) {
+#ifdef HAVE_LIBBPF
+        if (dcidlen >= QUIC_CIDLEN) quic_ebpf_del_conn(s, dcid);
+        for (int i = 0; i < ncids; i++) quic_ebpf_del_conn(s, cid_pool[i]);
+        if (index) quic_ebpf_del_sock(s, index);
+#else
+        (void) s;
+        (void) index;
+#endif
+    }
+    else {
+        if (dcidlen >= QUIC_CIDLEN) quic_relay_del_conn(dcid);
+        for (int i = 0; i < ncids; i++) quic_relay_del_conn(cid_pool[i]);
+    }
 }
 
 /* Stash conn's CID pool (plus its client-chosen dcid, if registered)
  * in c, so reap_child() and the MASTER_SERVICE_AVAILABLE handler know
  * what to clean up once this connection ends. */
-static void quic_centry_set_cids(struct centry *c,
+static void quic_centry_set_cids(struct centry *c, uint32_t index,
                                  const uint8_t cid_pool[][QUIC_CIDLEN],
                                  uint8_t dcidlen, const uint8_t *dcid)
 {
+    /* index is meaningful only for the eBPF backend (quic_ebpf_index is
+     * ignored by quic_centry_clear_cids()'s relay branch) -- harmless
+     * to store unconditionally either way. */
+    c->quic_ebpf_index = index;
     memcpy(c->quic_cids, cid_pool,
           QUIC_CID_POOL_SIZE * QUIC_CIDLEN);
     c->quic_ncids = QUIC_CID_POOL_SIZE;
@@ -1117,16 +1176,29 @@ static void quic_centry_set_cids(struct centry *c,
 /* Undo quic_centry_set_cids(), once a worker's connection has ended
  * (reap_child(), or MASTER_SERVICE_AVAILABLE if it's to be reused).
  * A no-op if c has nothing registered. */
-static void quic_centry_clear_cids(struct centry *c)
+static void quic_centry_clear_cids(struct service *s, struct centry *c)
 {
     if (c->quic_ncids == 0) return;
 
-    /* quic_relay_del_conn() on the primary (cid_pool[0], always
-     * c->quic_cids[0] -- see quic_centry_set_cids()) also closes the
-     * connection's socket. */
-    for (int i = 0; i < c->quic_ncids; i++)
-        quic_relay_del_conn(c->quic_cids[i]);
+    if (quic_use_ebpf) {
+#ifdef HAVE_LIBBPF
+        for (int i = 0; i < c->quic_ncids; i++)
+            quic_ebpf_del_conn(s, c->quic_cids[i]);
+        quic_ebpf_del_sock(s, c->quic_ebpf_index);
+#else
+        (void) s;
+#endif
+    }
+    else {
+        /* quic_relay_del_conn() on the primary (cid_pool[0], always
+         * c->quic_cids[0] -- see quic_centry_set_cids()) also closes
+         * the connection's socket, unlike the eBPF branch's separate
+         * quic_ebpf_del_sock() step. */
+        for (int i = 0; i < c->quic_ncids; i++)
+            quic_relay_del_conn(c->quic_cids[i]);
+    }
     c->quic_ncids = 0;
+    c->quic_ebpf_index = 0;
 }
 
 /* The QUIC versions master lists in Version Negotiation packets */
@@ -1172,11 +1244,12 @@ static bool quic_accept_initial(struct service *s,
     return (!r && ngtcp2_accept(hd, pkt, pktlen) == 0);
 }
 
-/* Handle one datagram from a service's rendezvous socket: forward it
- * to the connection it belongs to, or, if it's a new connection's
- * Initial, give that connection a socketpair in the relay table
- * (quic_relay.h), then hand it to an idle worker or fork one.
- * See docsrc/concepts/features/quic-dispatch.rst. */
+/* Handle one datagram from a service's rendezvous socket: under the
+ * relay backend, forward it to the connection it belongs to; otherwise,
+ * if it's a new connection's Initial, give that connection its own
+ * socket -- a UDP socket in the eBPF steering map, or a socketpair in
+ * the relay table (quic_relay.h) -- then hand it to an idle worker or
+ * fork one.  See docsrc/concepts/features/quic-dispatch.rst. */
 static void quic_dispatch_datagram(struct service *s, int si,
                                    const uint8_t *pkt, size_t pktlen,
                                    const struct sockaddr_storage *peer,
@@ -1188,13 +1261,14 @@ static void quic_dispatch_datagram(struct service *s, int si,
     uint8_t cid_pool[QUIC_CID_POOL_SIZE][QUIC_CIDLEN];
     int newsock = -1;
     int sendsock = -1;
+    uint32_t index = 0;
     struct quic_handoff handoff;
 
-    /* Every packet of every connection passes through this rendezvous
-     * socket, so most of them (anything past the first) need to go
-     * straight to an existing connection instead of through dispatch
-     * below. */
-    {
+    /* Relay backend only: every packet of every connection passes
+     * through this rendezvous socket, so most of them (anything past
+     * the first) need to go straight to an existing connection
+     * instead of through dispatch below. */
+    if (!quic_use_ebpf) {
         ngtcp2_version_cid vc;
 
         if (ngtcp2_pkt_decode_version_cid(&vc, pkt, pktlen,
@@ -1206,8 +1280,8 @@ static void quic_dispatch_datagram(struct service *s, int si,
     }
 
     /* Not a new connection's Initial: garbage, a retransmit racing our
-     * own not-yet-landed relay entry, a 0-RTT packet that overtook its
-     * Initial, or a version we don't dispatch */
+     * own not-yet-landed steering map/relay entry, a 0-RTT packet that
+     * overtook its Initial, or a version we don't dispatch */
     if (!quic_accept_initial(s, pkt, pktlen, peer, peerlen, &hd))
         return;
 
@@ -1221,76 +1295,142 @@ static void quic_dispatch_datagram(struct service *s, int si,
      * docsrc/concepts/features/quic-dispatch.rst. */
     RAND_bytes(cid_pool[0], sizeof(cid_pool));
 
-    /* sv[0] is master's own handle on this connection
-     * (master/quic/quic_relay.h); sv[1] goes to the worker, an fd to
-     * recv() this client's datagrams on. SOCK_SEQPACKET keeps each
-     * relayed datagram a distinct message. */
-    int sv[2];
-    int i;
+    if (quic_use_ebpf) {
+#ifdef HAVE_LIBBPF
+        int one = 1;
+        int i;
 
-    if (quic_dispatch_create_channel(sv)) {
-        xsyslog_ev(LOG_ERR, "quic.dispatch.socketpair_failed");
-        return;
-    }
-
-    newsock = sv[1];
-
-    /* The default send buffer holds only ~100KB of datagrams, less
-     * than a client may send in one burst (its per-stream flow-control
-     * window), so a worker briefly busy with something else would lose
-     * most of the burst. The kernel caps this at net.core.wmem_max. */
-    {
-        int sndbuf = QUIC_RELAY_SNDBUF;
-
-        if (setsockopt(sv[0], SOL_SOCKET, SO_SNDBUF,
-                       &sndbuf, sizeof(sndbuf))) {
-            xsyslog_ev(LOG_WARNING, "quic.dispatch.sndbuf_failed");
+        newsock = socket(peer->ss_family, SOCK_DGRAM, 0);
+        if (newsock < 0) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.socket_failed");
+            return;
         }
-    }
-
-    /* Enforce the one-way use: master never reads this connection, and
-     * the worker replies on sendsock below. A worker writing here
-     * would otherwise park a socket buffer of data nothing drains. */
-    shutdown(sv[0], SHUT_RD);
-    shutdown(sv[1], SHUT_WR);
-
-    /* The socketpair carries this connection inbound only. The
-     * worker sends outbound itself on a dup of the rendezvous
-     * socket, so replies leave from the address the client
-     * addressed. Send-only -- master remains its sole reader. */
-    sendsock = s->socket;
-
-    if (quic_relay_add_conn(cid_pool[0], sv[0], peer, peerlen)) {
-        close(sv[0]);
-        goto done;
-    }
-
-    /* The rest of the pool rides as aliases of cid_pool[0] -- see
-     * QUIC_CID_POOL_SIZE's comment. On a collision -- astronomically
-     * unlikely for random 8-byte CIDs -- roll back whatever already
-     * registered (quic_backend_del_conn() no-ops safely on the
-     * rest). */
-    for (i = 1; i < QUIC_CID_POOL_SIZE; i++) {
-        if (quic_relay_add_alias(cid_pool[0], cid_pool[i])) {
-            quic_backend_del_conn(0, NULL, cid_pool, (uint8_t) i);
+        /* SO_REUSEPORT: must bind the rendezvous socket's port, since
+         * SK_REUSEPORT only picks within one port's group. IPV6_V6ONLY:
+         * every socket in that group must agree on it, so match the
+         * rendezvous socket above. Deliberately not connect()ed to peer
+         * -- see "A spare CID pool ..." in quic-dispatch.rst. */
+        if (setsockopt(newsock, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one))) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.reuseport_failed");
             goto done;
         }
-    }
+#if defined(IPV6_V6ONLY) && !(defined(__FreeBSD__) && __FreeBSD__ < 3)
+        if (peer->ss_family == AF_INET6 &&
+            setsockopt(newsock, IPPROTO_IPV6, IPV6_V6ONLY, &one, sizeof(one))) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.v6only_failed");
+            goto done;
+        }
+#endif
+        if (bind(newsock, (struct sockaddr *) &local, locallen)) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.bind_failed");
+            goto done;
+        }
 
-    /* The client keeps addressing its first flight (retransmits,
-     * later ClientHello packets) to the dcid it originally chose, not
-     * cid_pool[0] -- register that too, or those packets miss the
-     * table and each looks like a new connection. Failing here almost
-     * always means an earlier packet of this same attempt already
-     * claimed it (clients routinely burst two Initial packets
-     * microseconds apart); drop it rather than fork a redundant
-     * "ghost" worker. quic_relay_del_conn(cid_pool[0]) closes sv[0]
-     * too (master/quic/quic_relay.h), so only sv[1] needs its own
-     * close(). */
-    if (hd.dcid.datalen >= QUIC_CIDLEN &&
-        quic_relay_add_alias(cid_pool[0], hd.dcid.data)) {
-        quic_backend_del_conn(0, NULL, cid_pool, QUIC_CID_POOL_SIZE);
-        goto done;
+        if (quic_ebpf_add_sock(s, newsock, &index)) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.sock_register_failed");
+            goto done;
+        }
+
+        /* Register every CID in the pool, not just the primary (see
+         * QUIC_CID_POOL_SIZE); they share the one index, all naming
+         * this same socket. On a collision -- astronomically unlikely
+         * for random 8-byte CIDs -- roll back what went in. */
+        for (i = 0; i < QUIC_CID_POOL_SIZE; i++) {
+            if (quic_ebpf_add_conn(s, cid_pool[i], index)) {
+                quic_backend_del_conn(s, index, 0, NULL, cid_pool, (uint8_t) i);
+                goto done;
+            }
+        }
+
+        /* The client keeps addressing its first flight (retransmits,
+         * later ClientHello packets) to the dcid it originally chose,
+         * not cid_pool[0] -- register that too, or those packets miss
+         * the map and each looks like a new connection. Skip if the
+         * (spec-violating) dcid is under 8 bytes rather than register
+         * undefined bytes. */
+        if (hd.dcid.datalen >= QUIC_CIDLEN &&
+            quic_ebpf_add_conn(s, hd.dcid.data, index)) {
+            /* Failing here almost always means this dcid is already
+             * claimed by an earlier packet for the same connection
+             * attempt (clients routinely burst two Initial packets
+             * microseconds apart). Drop it rather than fork a
+             * redundant "ghost" worker -- the client's own loss
+             * recovery will retransmit to the first worker if
+             * needed. */
+            quic_backend_del_conn(s, index, 0, NULL, cid_pool, QUIC_CID_POOL_SIZE);
+            goto done;
+        }
+#endif /* HAVE_LIBBPF */
+    }
+    else {
+        /* sv[0] is master's own handle on this connection
+         * (master/quic/quic_relay.h); sv[1] goes to the worker in
+         * place of the eBPF branch's per-connection UDP socket, an fd
+         * to recv() this client's datagrams on. SOCK_SEQPACKET keeps
+         * each relayed datagram a distinct message. */
+        int sv[2];
+        int i;
+
+        if (quic_dispatch_create_channel(sv)) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.socketpair_failed");
+            return;
+        }
+
+        newsock = sv[1];
+
+        /* The default send buffer holds only ~100KB of datagrams, less
+         * than a client may send in one burst (its per-stream
+         * flow-control window), so a worker briefly busy with something
+         * else would lose most of the burst. The kernel caps this at
+         * net.core.wmem_max. */
+        {
+            int sndbuf = QUIC_RELAY_SNDBUF;
+
+            if (setsockopt(sv[0], SOL_SOCKET, SO_SNDBUF,
+                           &sndbuf, sizeof(sndbuf))) {
+                xsyslog_ev(LOG_WARNING, "quic.dispatch.sndbuf_failed");
+            }
+        }
+
+        /* Enforce the one-way use: master never reads this connection,
+         * and the worker replies on sendsock below. A worker writing
+         * here would otherwise park a socket buffer of data nothing
+         * drains. */
+        shutdown(sv[0], SHUT_RD);
+        shutdown(sv[1], SHUT_WR);
+
+        /* The socketpair carries this connection inbound only. The
+         * worker sends outbound itself on a dup of the rendezvous
+         * socket, so replies leave from the address the client
+         * addressed and no second socket joins the reuseport group.
+         * Send-only -- master remains its sole reader. */
+        sendsock = s->socket;
+
+        if (quic_relay_add_conn(cid_pool[0], sv[0], peer, peerlen)) {
+            close(sv[0]);
+            goto done;
+        }
+
+        /* The rest of the pool rides as aliases of cid_pool[0] -- see
+         * QUIC_CID_POOL_SIZE's comment. Roll back whatever already
+         * registered (quic_backend_del_conn() no-ops safely on the
+         * rest) on any collision, same as the eBPF branch above. */
+        for (i = 1; i < QUIC_CID_POOL_SIZE; i++) {
+            if (quic_relay_add_alias(cid_pool[0], cid_pool[i])) {
+                quic_backend_del_conn(s, 0, 0, NULL, cid_pool, (uint8_t) i);
+                goto done;
+            }
+        }
+
+        /* Same collision the eBPF branch above handles -- see its
+         * comment. quic_relay_del_conn(cid_pool[0]) closes sv[0] too
+         * (master/quic/quic_relay.h), so only sv[1] needs its own
+         * close(). */
+        if (hd.dcid.datalen >= QUIC_CIDLEN &&
+            quic_relay_add_alias(cid_pool[0], hd.dcid.data)) {
+            quic_backend_del_conn(s, 0, 0, NULL, cid_pool, QUIC_CID_POOL_SIZE);
+            goto done;
+        }
     }
 
     memset(&handoff, 0, sizeof(handoff));
@@ -1335,7 +1475,7 @@ static void quic_dispatch_datagram(struct service *s, int si,
              * but tolerate the race: the worker's own
              * MASTER_SERVICE_UNAVAILABLE takes it out of ready_workers,
              * exactly as for a TCP worker. */
-            if (rc) quic_centry_set_cids(rc, cid_pool,
+            if (rc) quic_centry_set_cids(rc, index, cid_pool,
                                          (uint8_t) hd.dcid.datalen,
                                          hd.dcid.data);
             goto done;
@@ -1346,8 +1486,8 @@ static void quic_dispatch_datagram(struct service *s, int si,
                    lf_s("service.name", s->name));
     }
 
-    quic_backend_del_conn((uint8_t) hd.dcid.datalen, hd.dcid.data, cid_pool,
-                          QUIC_CID_POOL_SIZE);
+    quic_backend_del_conn(s, index, (uint8_t) hd.dcid.datalen, hd.dcid.data,
+                          cid_pool, QUIC_CID_POOL_SIZE);
 
  done:
     /* newsock is no longer needed.
@@ -1357,10 +1497,10 @@ static void quic_dispatch_datagram(struct service *s, int si,
 }
 
 /* Read what's queued on a service's rendezvous socket, up to
- * QUIC_DISPATCH_BATCH datagrams: that's every packet of every
- * connection, which one datagram per pass of master's event loop can't
- * keep up with, so the kernel would drop the rest.  The bound keeps the
- * other services and children from waiting. */
+ * QUIC_DISPATCH_BATCH datagrams: under the relay backend that's every
+ * packet of every connection, which one datagram per pass of master's
+ * event loop can't keep up with, so the kernel would drop the rest.
+ * The bound keeps the other services and children from waiting. */
 static void quic_dispatch_connection(struct service *s, int si)
 {
     for (int i = 0; i < QUIC_DISPATCH_BATCH; i++) {
@@ -1388,7 +1528,7 @@ static void quic_dispatch_conn_done(struct service *s, struct centry *c)
      * first), then close the handoff channel that was kept open
      * across connections. */
     quic_idle_pool_remove(s, c->pid);
-    quic_centry_clear_cids(c);
+    quic_centry_clear_cids(s, c);
     if (c->quic_fd >= 0) {
         close(c->quic_fd);
         c->quic_fd = -1;
@@ -1397,6 +1537,11 @@ static void quic_dispatch_conn_done(struct service *s, struct centry *c)
 
 static void quic_dispatch_service_reset(struct service *s)
 {
+    if (quic_use_ebpf) {
+#ifdef HAVE_LIBBPF
+        quic_ebpf_shutdown_service(s);
+#endif
+    }
     quic_idle_pool_fini(s);
 }
 
@@ -1421,7 +1566,7 @@ static void quic_dispatch_conn_idle(struct service *s, struct centry *c)
 {
     /* Its last connection is over -- drop that connection's CIDs
      * before offering the worker up for another. */
-    quic_centry_clear_cids(c);
+    quic_centry_clear_cids(s, c);
     quic_idle_pool_push(s, c->pid, c->quic_fd);
 }
 
@@ -3627,6 +3772,14 @@ int main(int argc, char **argv)
     /* set signal handlers */
     sighandler_setup();
 
+#if defined(WITH_QUIC) && defined(HAVE_LIBBPF)
+    /* Only actually use eBPF if config also wants it -- quic_use_ebpf lets
+     * a deployment fall back to the userspace relay backend
+     * (master/quic/quic_relay.c) even on a build/kernel that could use
+     * eBPF, e.g. because the TC/BPF machinery isn't permitted here */
+    quic_use_ebpf = config_getswitch(IMAPOPT_QUIC_USE_EBPF);
+#endif
+
     /* initialize services */
     for (i = 0; i < nservices; i++) {
         service_create(&Services[i], 1);
@@ -3637,10 +3790,26 @@ int main(int argc, char **argv)
                    Services[i].stat[0], Services[i].stat[1]);
     }
 
+#if defined(WITH_QUIC) && defined(HAVE_LIBBPF)
+    /* eBPF steering needs capabilities that become_cyrus()'s uid
+     * change would otherwise clear, and they can't be recovered
+     * afterwards -- see "Privileges" in quic-dispatch.rst. The relay
+     * backend needs none of them: it never binds a new privileged-port
+     * socket the way eBPF's per-connection sockets do, just reusing
+     * the rendezvous socket already bound while root. */
+    if (quic_use_ebpf && quic_keep_privs() != 0) exit(1);
+#endif
+
     if (become_cyrus() != 0) {
         syslog(LOG_ERR, "can't change to the cyrus user: %m");
         exit(1);
     }
+
+#if defined(WITH_QUIC) && defined(HAVE_LIBBPF)
+    /* Narrow to what the steering program needs, now that
+     * become_cyrus() has done the uid change. */
+    if (quic_use_ebpf && quic_drop_privs() != 0) exit(1);
+#endif
 
     if (have_quic_service) quic_dispatch_init();
 
