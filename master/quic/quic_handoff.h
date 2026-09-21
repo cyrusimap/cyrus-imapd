@@ -9,13 +9,7 @@
 #include <stdint.h>
 #include <sys/socket.h>
 
-/* The length of the Connection ID master assigns each connection for
- * dispatch: a policy choice of ours, not something QUIC dictates --
- * the protocol lets whichever endpoint generates a CID pick its own
- * length, from 1 to 20 bytes. Not to be confused with the
- * coincidentally equal RFC 9000 anti-amplification floor on a
- * client's first Destination Connection ID. */
-#define QUIC_CIDLEN 8
+#include "master/quic/quic_cidlen.h"
 
 /* Large enough to hold any single QUIC UDP datagram whole. The
  * dispatch-time recv() and the pkt[] below it relays verbatim must
@@ -55,16 +49,19 @@
  * passes it by SCM_RIGHTS, and quic_recv_handoff() overwrites the
  * field with the fd the receiver actually got.
  *
- * The relay passes a dup of the rendezvous socket, since its
- * connection fd is a socketpair. Send-only: master is the sole reader
- * of the rendezvous socket, and a worker reading from it would take
- * packets belonging to other connections.
+ * The relay backend passes a dup of the rendezvous socket, since its
+ * connection fd is a socketpair; the eBPF backend's connection fd is
+ * already a real socket, so it passes -1. Send-only: master is the
+ * sole reader of the rendezvous socket, and a worker reading from it
+ * would take packets belonging to other connections.
  *
- * local_addr/local_addrlen is the connection's real local IP:port,
- * which master fills in itself (it already has it from getsockname()
- * on the rendezvous socket) since the worker can't: its connection fd
- * is one end of an AF_UNIX socketpair, whose getsockname() reports an
- * anonymous unix address instead. */
+ * local_addr/local_addrlen is what getsockname() on the connection's
+ * own fd would return for the eBPF backend's real per-connection UDP
+ * socket -- master fills it in itself (already has it from
+ * getsockname() on the rendezvous socket) since the worker can't: for
+ * the userspace relay backend, that fd is one end of an AF_UNIX
+ * socketpair, whose getsockname() reports an anonymous unix address,
+ * not the connection's real local IP:port. */
 struct quic_handoff {
     /* Where the worker receives this connection's packets. Travels by
      * SCM_RIGHTS, not in the payload: the sender's fd number means

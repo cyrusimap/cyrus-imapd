@@ -83,7 +83,7 @@ int main(void)
 
     setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    /* --- the relay's shape: connection socketpair + send socket --- */
+    /* --- relay backend shape: connection socketpair + send socket --- */
     if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, hv) ||
         socketpair(AF_UNIX, SOCK_SEQPACKET, 0, sv)) {
         perror("socketpair");
@@ -127,15 +127,14 @@ int main(void)
     close(sv[0]);
     close(sv[1]);
 
-    /* --- the other shape the handoff allows: one real socket, and
-       no separate send fd --- */
+    /* --- eBPF backend shape: one real socket, no separate send fd --- */
     if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, hv)) {
         perror("socketpair");
         return 1;
     }
 
-    /* A real per-connection socket: the worker both receives and
-     * sends on this one. */
+    /* Stands in for the eBPF backend's per-connection UDP socket: the
+     * worker both receives and sends on this one. */
     struct sockaddr_in conn_addr;
     int connsock = bind_loopback(&conn_addr);
 
