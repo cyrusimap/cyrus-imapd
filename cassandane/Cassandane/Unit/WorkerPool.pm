@@ -44,8 +44,17 @@ sub assign
 {
     my ($self, $witem) = @_;
 
-    my @idle = grep { !$_->{busy}; } @{$self->{workers}};
-    my $w = shift @idle || $self->_wait();
+    my $w;
+    while (1)
+    {
+        ($w) = grep { !$_->{busy} && !$_->{dead}; } @{$self->{workers}};
+        last if $w;
+
+        die "No worker survives to run $witem->{suite}.$witem->{testname}"
+            if !grep { $_->{busy}; } @{$self->{workers}};
+
+        $self->_wait();
+    }
     $w->assign($witem);
 }
 
@@ -56,14 +65,16 @@ sub _wait
 {
     my ($self) = @_;
 
-
     # Build the bit mask for select()
     my $rbits = '';
+    my $nbusy = 0;
     foreach my $w (@{$self->{workers}})
     {
         next if (!$w->{busy});
         vec($rbits, fileno($w->{uppipe}), 1) = 1;
+        $nbusy++;
     }
+    die "Waiting for a worker, but none is busy" if !$nbusy;
 
     # select() with no timeout
     my $res;
@@ -77,7 +88,8 @@ sub _wait
     {
         if (vec($rbits, fileno($w->{uppipe}), 1))
         {
-            push(@{$self->{pending}}, $w->get_reply());
+            my $witem = $w->get_reply();
+            push(@{$self->{pending}}, $witem) if defined $witem;
             return $w;
         }
     }
@@ -91,10 +103,13 @@ sub retrieve
 {
     my ($self, $blocking) = @_;
 
-    if ($blocking && !scalar @{$self->{pending}})
+    # A worker that died instead of replying leaves nothing to retrieve, so
+    # keep waiting while any worker is still busy: otherwise one death would
+    # abandon the work items the other workers are still running.
+    while ($blocking && !scalar @{$self->{pending}})
     {
-        my @busy = grep { $_->{busy}; } @{$self->{workers}};
-        $self->_wait() if (scalar @busy);
+        last if !grep { $_->{busy}; } @{$self->{workers}};
+        $self->_wait();
     }
     return shift @{$self->{pending}};
 }

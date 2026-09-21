@@ -21,6 +21,7 @@ sub new
         downpipe => undef,
         uppipe => undef,
         busy => 0,
+        dead => 0,
         handler => undef,
     };
     return bless $self, $class;
@@ -86,8 +87,18 @@ sub _send
     my ($fh, $fmt, @args) = @_;
     my $msg = sprintf($fmt, @args);
 # print STDERR "--> \"$msg\"\n";
-    syswrite($fh, $msg)
-        or die "Cannot write to pipe: $!";
+
+    # syswrite is under no obligation to write the whole buffer at once, and a
+    # short write wouldn't be noticed here: it would surface much later, and
+    # somewhere else, as a message the other end can't parse.
+    my $sent = 0;
+    while ($sent < length $msg)
+    {
+        my $n = syswrite($fh, $msg, length($msg) - $sent, $sent);
+        die "Cannot write to pipe: $!" if not defined $n;
+        die "Cannot write to pipe: wrote nothing" if $n == 0;
+        $sent += $n;
+    }
 }
 
 sub _receive
@@ -133,7 +144,17 @@ sub get_reply
     my ($self) = @_;
     return if !$self->{busy};
     my $msg = _receive($self->{uppipe});
-    return if !defined $msg;
+
+    if (!defined $msg)
+    {
+        # End of file: the worker exited without answering.  It isn't going to
+        # become idle on its own, and leaving it marked busy means select()
+        # wakes on its dead pipe forever, so retire it here.
+        $self->{busy} = 0;
+        $self->{dead} = 1;
+        return;
+    }
+
     my ($command, @args) = split(/\s+/, $msg);
     die "Unknown message \"$msg\""
         if ($command ne 'done');
