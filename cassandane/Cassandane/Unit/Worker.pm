@@ -125,12 +125,12 @@ sub _mainloop
         }
         elsif ($command eq 'run')
         {
-            my ($witem) = thaw(decode_base64($args[0]));
-            $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID}) $witem->{suite}.$witem->{testname}";
-            $self->{handler}->($witem);
+            my ($assignment) = thaw(decode_base64($args[0]));
+            $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID}) $assignment->{suite}.$assignment->{testname}";
+            my $outcome = $self->{handler}->($assignment);
             $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID})";
             _send($self->{uppipe},
-                  "done %s\n", encode_base64(freeze($witem), ''));
+                  "done %s\n", encode_base64(freeze($outcome), ''));
         }
         else
         {
@@ -139,11 +139,15 @@ sub _mainloop
     }
 }
 
+# Collect the worker's answer and fold it into the work item we assigned.
+# Nothing identifies the work item on the wire: a worker runs one at a time,
+# and we still have the copy we sent it.
 sub get_reply
 {
     my ($self) = @_;
     return if !$self->{busy};
     my $msg = _receive($self->{uppipe});
+    my $witem = delete $self->{witem};
 
     if (!defined $msg)
     {
@@ -152,24 +156,40 @@ sub get_reply
         # wakes on its dead pipe forever, so retire it here.
         $self->{busy} = 0;
         $self->{dead} = 1;
-        return;
+
+        return if not $witem;
+
+        $witem->{outcome} = 'error';
+        $witem->{failure} = {
+            text => "worker $self->{id} exited without reporting a result",
+        };
+        return $witem;
     }
 
     my ($command, @args) = split(/\s+/, $msg);
     die "Unknown message \"$msg\""
         if ($command ne 'done');
     $self->{busy} = 0;
-    my ($witem) = thaw(decode_base64($args[0]));
-    return $witem;
+
+    my ($outcome) = thaw(decode_base64($args[0]));
+    return { %$witem, %$outcome };
 }
 
 sub assign
 {
     my ($self, $witem) = @_;
     $witem->{start_time} = time();
+    $self->{witem} = $witem;
     _send($self->{downpipe},
-          "run %s\n", encode_base64(freeze($witem), ''));
+          "run %s\n", encode_base64(freeze(_assignment($witem)), ''));
     $self->{busy} = 1;
+}
+
+# What the worker needs in order to run the test, and nothing else.
+sub _assignment
+{
+    my ($witem) = @_;
+    return { map {; $_ => $witem->{$_} } qw(suite testname logfile) };
 }
 
 sub stop

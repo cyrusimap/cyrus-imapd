@@ -10,10 +10,11 @@ use File::Find;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
+use Cassandane::Failure;
 use Cassandane::Util::Log;
 use Cassandane::Unit::TestCase;
 use Cassandane::Unit::TestPlanItem;
-use Cassandane::Unit::WorkerListener;
+use Cassandane::Unit::OutcomeListener;
 use Cassandane::Unit::WorkerPool;
 
 my @default_test_roots = (
@@ -442,9 +443,6 @@ sub _get_schedule
             push @res, {
                 suite => $item->{suite},
                 testname => $name,
-                result => 'unknown',
-                exception => undef,
-                logfile => undef,
             };
         }
     }
@@ -466,25 +464,15 @@ sub list
     return @res;
 }
 
-sub _setup_logfile
+# Choose the log file a work item's output will go to.  This happens in the
+# parent, before the item is handed to a worker, so that the parent can still
+# read the output if the worker never comes back to say where it went.
+sub _make_logfile
 {
     my ($self, $witem) = @_;
 
-    # Flush the old stdout/stderr
-    ${\*STDOUT}->flush;
-    ${\*STDERR}->flush;
-
-    # Save the old stdout/stderr - this is important
-    # for the single threaded case where inter-test
-    # messages go to the original stdout.
-    open my $oldout, '>&', \*STDOUT
-        or die "Cannot save STDOUT";
-    open my $olderr, '>&', \*STDERR
-        or die "Cannot save STDERR";
-
     my $logfh;
     my $logfile;
-    srand;   # XXX does this fix the tempfile() issue (#42)?
     if (defined $self->{log_directory})
     {
         # Log directory specified so create the log file
@@ -507,17 +495,33 @@ sub _setup_logfile
         # Create a per-test temporary logfile
         ($logfh, $logfile) = tempfile(UNLINK => 0);
     }
-
-    unless ($ENV{CASSANDANE_LIVE_OUTPUT}) {
-      # Redirect both STDOUT and STDERR to the log file
-      open STDOUT, '>&', $logfh
-          or die "Cannot redirect STDOUT";
-      open STDERR, '>&', $logfh
-          or die "Cannot redirect STDERR";
-      close $logfh;
-    }
+    close $logfh;
 
     $witem->{logfile} = $logfile;
+}
+
+# Point this process's STDOUT and STDERR at the log file, keeping the
+# originals: in the single threaded case, the messages between tests still go
+# to the terminal.
+sub _capture_output
+{
+    my ($self, $logfile) = @_;
+
+    ${\*STDOUT}->flush;
+    ${\*STDERR}->flush;
+
+    open my $oldout, '>&', \*STDOUT
+        or die "Cannot save STDOUT";
+    open my $olderr, '>&', \*STDERR
+        or die "Cannot save STDERR";
+
+    unless ($ENV{CASSANDANE_LIVE_OUTPUT}) {
+      open STDOUT, '>>', $logfile
+          or die "Cannot redirect STDOUT to $logfile: $!";
+      open STDERR, '>>', $logfile
+          or die "Cannot redirect STDERR to $logfile: $!";
+    }
+
     $self->{oldout} = $oldout;
     $self->{olderr} = $olderr;
 }
@@ -561,35 +565,68 @@ sub _get_suite_and_test
     return ($suite, $test);
 }
 
+# Run one work item and return its outcome: a verdict, plus a description of
+# the failure when there is one.  In a worker that goes back to the parent; in
+# the single threaded case the caller has it already.
 sub _run_workitem
 {
-    my ($self, $witem, $result, $runner, $annotate_flag) = @_;
+    my ($self, $witem, $result, $runner, $in_worker) = @_;
     my ($suite, $test) = $self->_get_suite_and_test($witem);
+
+    my $listener = $self->_listen_for_outcome($result, $in_worker);
+
+    # Every worker inherited the same random seed from the parent when it was
+    # forked, so without this they would all generate the same message ids,
+    # names and UUIDs as each other, test for test.
+    srand;
+
     Cassandane::Unit::TestCase->enable_test($witem->{testname});
-    $self->_setup_logfile($witem);
+    $self->_capture_output($witem->{logfile});
     $suite->run($result, $runner);
+
+    my $outcome = $listener->outcome() // { outcome => 'unknown' };
 
     if ($test->can('post_tear_down'))
     {
         eval
         {
-            $test->post_tear_down($witem->{result});
+            $test->post_tear_down($outcome->{outcome});
         };
         my $ex = $@;
         if ($ex)
         {
             $result->add_error($test,
                                Test::Unit::Error->make_new_from_error($ex));
+            $outcome = $listener->outcome();
         }
     }
 
     $self->_restore_stdout();
-    if ($annotate_flag)
+    if (!$in_worker)
     {
         $test->annotate_from_file($witem->{logfile});
         _dump_logfile($witem->{logfile}) if (get_verbose > 1);
         unlink($witem->{logfile}) if (!defined $self->{log_directory});
     }
+
+    return $outcome;
+}
+
+# Rebuild, from what came back over the pipe, an exception the result and the
+# formatters can report.  Error::new insists on describing this process, so
+# the stack trace from the process that actually failed is put back by hand.
+sub _rebuild_exception
+{
+    my ($class, $failure) = @_;
+
+    my $exception = $class->new(
+        '-text' => $failure->{text},
+        '-file' => $failure->{file},
+        '-line' => $failure->{line},
+    );
+    $exception->{'-stacktrace'} = $failure->{stacktrace} // $failure->{text};
+
+    return $exception;
 }
 
 sub _finish_workitem
@@ -617,39 +654,46 @@ sub _finish_workitem
     _dump_logfile($witem->{logfile}) if (get_verbose > 1);
     unlink($witem->{logfile}) if (!defined $self->{log_directory});
 
-    if ($witem->{result} eq 'pass')
+    if ($witem->{outcome} eq 'pass')
     {
         $result->add_pass($test);
     }
-    elsif ($witem->{result} eq 'fail')
+    elsif ($witem->{outcome} eq 'fail')
     {
-        $witem->{exception}->{'-object'} = $test;
-        $result->add_failure($test, $witem->{exception});
+        $result->add_failure($test,
+                             _rebuild_exception('Cassandane::Failure',
+                                                $witem->{failure}));
     }
-    elsif ($witem->{result} eq 'error')
+    elsif ($witem->{outcome} eq 'error')
     {
-        $witem->{exception}->{'-object'} = $test;
-        $result->add_error($test, $witem->{exception});
+        $result->add_error($test,
+                           _rebuild_exception('Test::Unit::Error',
+                                              $witem->{failure}));
     }
     $result->end_test($test);
 }
 
-sub _setup_worker_listeners
+# Arrange for the outcome of the next test to be recorded.  A worker also
+# drops the listeners that write the report, because the parent replays the
+# events to those once the outcome gets back to it.
+sub _listen_for_outcome
 {
-    my ($result, $wlistener) = @_;
+    my ($self, $result, $in_worker) = @_;
 
-    # Remove the output format listener
-    my @list;
-    my $found = 0;
-    foreach my $ll (@{$result->{_Listeners}})
-    {
-        push(@list, $ll)
-            unless defined $ll->{remove_me_in_cassandane_child};
-        $found ||= (ref($ll) eq ref($wlistener));
-    }
-    push(@list, $wlistener)
-        unless $found;
-    $result->{_Listeners} = \@list;
+    my $listener = $self->{outcome_listener}
+               ||= Cassandane::Unit::OutcomeListener->new();
+    $listener->reset();
+
+    my @listeners = grep {
+        !($in_worker && $_->{remove_me_in_cassandane_child})
+    } @{$result->{_Listeners}};
+
+    push @listeners, $listener
+        if !grep {; $_ == $listener } @listeners;
+
+    $result->{_Listeners} = \@listeners;
+
+    return $listener;
 }
 
 # The 'run' method makes this class look sufficiently like a
@@ -685,33 +729,32 @@ sub run
         # Just In Case any code samples this in a TestCase c'tor
         $ENV{TEST_UNIT_WORKER_ID} = 'invalid';
 
-        my $wlistener = Cassandane::Unit::WorkerListener->new();
-
         my $pool = Cassandane::Unit::WorkerPool->new(
             maxworkers => $maxworkers,
             handler => sub {
-                my ($witem) = @_;
-                $wlistener->{witem} = $witem;
-                _setup_worker_listeners($result, $wlistener);
-                $self->_run_workitem($witem, $result, $runner, 0);
+                my ($assignment) = @_;
+                return $self->_run_workitem($assignment, $result, $runner, 1);
             },
         );
-        my $witem;
+        my ($witem, $done);
         $pool->start();
         # first ^C stops spawning new work items
         while ($interrupted < 1 && ($witem = shift @workitems))
         {
-            $pool->assign($witem)
-                if ($self->{keep_going} || $result->was_successful());
-            while ($witem = $pool->retrieve(0))
+            if ($self->{keep_going} || $result->was_successful())
             {
-                $self->_finish_workitem($witem, $result, $runner);
+                $self->_make_logfile($witem);
+                $pool->assign($witem);
+            }
+            while ($done = $pool->retrieve(0))
+            {
+                $self->_finish_workitem($done, $result, $runner);
             }
         }
         # second ^C stops waiting for work items to finish
-        while ($interrupted < 2 && ($witem = $pool->retrieve(1)))
+        while ($interrupted < 2 && ($done = $pool->retrieve(1)))
         {
-            $self->_finish_workitem($witem, $result, $runner);
+            $self->_finish_workitem($done, $result, $runner);
         }
         $pool->stop();
     }
@@ -720,7 +763,8 @@ sub run
         # single threaded case: just run it all in-process
         foreach my $witem (@workitems)
         {
-            $self->_run_workitem($witem, $result, $runner, 1);
+            $self->_make_logfile($witem);
+            $self->_run_workitem($witem, $result, $runner, 0);
             last if ($interrupted || !($self->{keep_going} || $result->was_successful()));
         }
     }
