@@ -21,11 +21,11 @@ sub test_unrelated ($self)
 
     xlog $self, "The REFERENCES algorithm gives each message in a singleton thread";
     $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
-    $self->assert_deep_equals([ map { [ $_ ] } (1..$N) ], $res);
+    $self->assert_cmp_deeply([ map { [ $_ ] } (1..$N) ], $res);
 
     xlog $self, "The ORDEREDSUBJECT algorithm gives each message in a singleton thread";
     $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
-    $self->assert_deep_equals([ map { [ $_ ] } (1..$N) ], $res);
+    $self->assert_cmp_deeply([ map { [ $_ ] } (1..$N) ], $res);
 
     xlog $self, "Double-check the messages are still there";
     $self->check_messages(\%exp);

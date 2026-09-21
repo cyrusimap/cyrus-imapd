@@ -213,12 +213,12 @@ sub test_restore_mail_full
     $self->assert_num_equals(4, scalar(@{$res->[0][1]{destroyed}}));
     my @expect = sort ($emailId2, $draftId1, $draftId2, $draftId3);
     my @got = sort @{$res->[0][1]{destroyed}};
-    $self->assert_deep_equals(\@expect, \@got);
+    $self->assert_cmp_deeply(\@expect, \@got);
 
     $self->assert_num_equals(2, scalar @{$res->[1][1]{destroyed}});
     @expect = sort ($fooId, $barId);
     @got = sort @{$res->[1][1]{destroyed}};
-    $self->assert_deep_equals(\@expect, \@got);
+    $self->assert_cmp_deeply(\@expect, \@got);
 
     xlog "create a new 'bar' mailbox";
     $res = $jmap->CallMethods([
@@ -243,7 +243,7 @@ sub test_restore_mail_full
 
     @expect = sort ($emailId1, $emailId2, $emailId4, $emailId5, $emailId6, $draftId1, $draftId2, $draftId3);
     @got = sort @{$res->[2][1]{notFound}};
-    $self->assert_deep_equals(\@expect, \@got);
+    $self->assert_cmp_deeply(\@expect, \@got);
 
     my $diff = time() - $mark;
     my $period = "PT" . $diff . "S";
@@ -274,7 +274,7 @@ sub test_restore_mail_full
 
     @expect = sort ($emailId1, $emailId2, $emailId4, $emailId5, $emailId6, $draftId1, $draftId2, $draftId3);
     @got = sort @{$res->[1][1]{notFound}};
-    $self->assert_deep_equals(\@expect, \@got);
+    $self->assert_cmp_deeply(\@expect, \@got);
 
     $diff = time() - $mark;
     $period = "PT" . $diff . "S";
@@ -329,7 +329,7 @@ sub test_restore_mail_full
     $self->assert_num_equals(7, scalar(@{$res->[1][1]{notFound}}));
     @expect = sort ($emailId1, $emailId2, $emailId4, $emailId5, $emailId6, $draftId1, $draftId3);
     @got = sort @{$res->[1][1]{notFound}};
-    $self->assert_deep_equals(\@expect, \@got);
+    $self->assert_cmp_deeply(\@expect, \@got);
 
     $self->assert_str_equals('R6.5', $res->[2][2]);
     $self->assert_num_equals(0, $res->[2][1]{numDraftsRestored});
@@ -385,7 +385,7 @@ sub test_restore_mail_full
     $self->assert_num_equals(4, scalar(@{$res->[4][1]{notFound}}));
     @expect = sort ($emailId1, $emailId5, $draftId1, $draftId3);
     @got = sort @{$res->[4][1]{notFound}};
-    $self->assert_deep_equals(\@expect, \@got);
+    $self->assert_cmp_deeply(\@expect, \@got);
 
     $diff = time() - $mark;
     $period = "PT" . $diff . "S";

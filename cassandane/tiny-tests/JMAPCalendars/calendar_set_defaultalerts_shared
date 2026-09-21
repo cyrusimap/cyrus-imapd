@@ -213,7 +213,7 @@ sub assert_shared_defaultalerts ($self, $t, $owneralarmid, $shareealarmid)
         my $defaultAlertsWithTime =
             $t->{$who}->{defaultAlertsWithTime};
         if ($defaultAlertsWithTime) {
-            $self->assert_deep_equals($defaultAlertsWithTime,
+            $self->assert_cmp_deeply($defaultAlertsWithTime,
                 $res->[0][1]{list}[0]{defaultAlertsWithTime});
         } else {
             $self->assert_null(
@@ -223,7 +223,7 @@ sub assert_shared_defaultalerts ($self, $t, $owneralarmid, $shareealarmid)
         my $defaultAlertsWithoutTime =
             $t->{$who}->{defaultAlertsWithoutTime};
         if ($defaultAlertsWithoutTime) {
-            $self->assert_deep_equals($defaultAlertsWithoutTime,
+            $self->assert_cmp_deeply($defaultAlertsWithoutTime,
                 $res->[0][1]{list}[0]{defaultAlertsWithoutTime});
         } else {
             $self->assert_null(

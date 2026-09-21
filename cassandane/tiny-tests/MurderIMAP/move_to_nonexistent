@@ -16,12 +16,12 @@ sub test_move_to_nonexistent ($self)
 
     # make sure we don't unexpectedly have the nonexistent folder
     my $f_folders = $frontend->list('', '*');
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         [[[ '\\HasNoChildren' ], '.', 'INBOX' ]],
         $f_folders);
 
     my $b_folders = $backend->list('', '*');
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         [[[ '\\HasNoChildren' ], '.', 'INBOX' ]],
         $b_folders);
 

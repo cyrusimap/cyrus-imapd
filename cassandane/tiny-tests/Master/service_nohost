@@ -8,18 +8,18 @@ sub test_service_nohost ($self)
     $self->start();
 
     xlog $self, "not preforked, so no lemmings running yet";
-    $self->assert_deep_equals({},
+    $self->assert_cmp_deeply({},
                               $self->lemming_census());
 
     my $lemm = lemming_connect($srv);
 
     xlog $self, "connected so one lemming forked";
-    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+    $self->assert_cmp_deeply({ A => { live => 1, dead => 0 } },
                               $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog $self, "no more live lemmings";
-    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 1 } },
                               $self->lemming_census());
 }

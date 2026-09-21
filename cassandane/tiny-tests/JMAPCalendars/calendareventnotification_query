@@ -112,10 +112,10 @@ sub test_calendareventnotification_query
             },
         }, 'R4'],
     ]);
-    $self->assert_deep_equals([$notif1->{id}], $res->[0][1]{ids});
-    $self->assert_deep_equals([$notif2->{id}], $res->[1][1]{ids});
-    $self->assert_deep_equals([$notif1->{id}], $res->[2][1]{ids});
-    $self->assert_deep_equals([$notif2->{id}], $res->[3][1]{ids});
+    $self->assert_cmp_deeply([$notif1->{id}], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$notif2->{id}], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([$notif1->{id}], $res->[2][1]{ids});
+    $self->assert_cmp_deeply([$notif2->{id}], $res->[3][1]{ids});
 
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -156,7 +156,7 @@ sub test_calendareventnotification_query
             },
         }, 'R2'],
     ]);
-    $self->assert_deep_equals([], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([], $res->[0][1]{ids});
 
     $res = $manjmap->CallMethods([
         ['CalendarEventNotification/query', {
@@ -166,7 +166,7 @@ sub test_calendareventnotification_query
             },
         }, 'R3'],
     ]);
-    $self->assert_deep_equals([], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([], $res->[0][1]{ids});
 
     $res = $manjmap->CallMethods([
         ['CalendarEventNotification/query', {

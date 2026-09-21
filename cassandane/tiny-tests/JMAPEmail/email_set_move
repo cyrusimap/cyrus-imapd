@@ -52,7 +52,7 @@ sub test_email_set_move
         $res = $jmap->CallMethods( [ [ 'Email/get', { ids => [$id], properties => ['mailboxIds'] }, "R1" ] ] );
         $msg = $res->[0][1]->{list}[0];
 
-        $self->assert_deep_equals($moveto, $msg->{mailboxIds});
+        $self->assert_cmp_deeply($moveto, $msg->{mailboxIds});
     };
 
     assert_move({$a => JSON::true, $b => JSON::true});

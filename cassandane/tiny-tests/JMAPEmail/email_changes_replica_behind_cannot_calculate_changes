@@ -35,7 +35,7 @@ sub test_email_changes_replica_behind_cannot_calculate_changes
 
     xlog $self, "destroy Email on master";
     $res = $master_jmap->request([[ 'Email/set', { destroy => [$email_id] } ]]);
-    $self->assert_deep_equals([$email_id],
+    $self->assert_cmp_deeply([$email_id],
                               $res->single_sentence->arguments->{destroyed});
 
     xlog $self, "expunge the record on master, without replicating first";

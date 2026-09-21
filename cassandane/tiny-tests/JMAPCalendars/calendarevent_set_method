@@ -34,7 +34,7 @@ sub test_calendarevent_set_method
     ]);
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notCreated}{event}{type});
-    $self->assert_deep_equals(['method'],
+    $self->assert_cmp_deeply(['method'],
         $res->[0][1]{notCreated}{event}{properties});
 
     xlog "method on override event is ignored"; # see RFC8984, section 4.3.5
@@ -77,7 +77,7 @@ sub test_calendarevent_set_method
     my $eventId = $res->[0][1]{created}{event}{id};
     $self->assert_not_null($eventId);
     $self->assert_null($res->[1][1]{list}[0]{method});
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         '2022-01-29T09:00:00' => {
             title => 'override',
         },
@@ -95,6 +95,6 @@ sub test_calendarevent_set_method
     ]);
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notUpdated}{$eventId}{type});
-    $self->assert_deep_equals(['method'],
+    $self->assert_cmp_deeply(['method'],
         $res->[0][1]{notUpdated}{$eventId}{properties});
 }

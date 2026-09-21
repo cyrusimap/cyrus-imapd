@@ -36,5 +36,5 @@ sub test_multisearch_cross_user
     );
 
     $self->assert_str_equals('ok', $talk->get_last_completion_response);
-    $self->assert_deep_equals([], \@esearch_responses);
+    $self->assert_cmp_deeply([], \@esearch_responses);
 }

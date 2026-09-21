@@ -62,9 +62,9 @@ sub test_replication_email_set_update_snooze
     $self->assert_null($res->[0][1]{notUpdated});
 
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $oldState }, "R1"]]);
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([$emailId], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([$emailId], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $oldState = $res->[0][1]{newState};
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
@@ -81,9 +81,9 @@ sub test_replication_email_set_update_snooze
 
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $oldState }, "R1"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{newState});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
                                    { ids => [ $emailId ],
@@ -113,9 +113,9 @@ sub test_replication_email_set_update_snooze
 
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $oldState }, "R1"]]);
     $self->assert_str_not_equals($oldState, $res->[0][1]{newState});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([$emailId], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([$emailId], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $oldState = $res->[0][1]{newState};
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
@@ -133,9 +133,9 @@ sub test_replication_email_set_update_snooze
 
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $oldState }, "R1"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{newState});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
                                    { ids => [ $emailId ],
@@ -159,7 +159,7 @@ sub test_replication_email_set_update_snooze
 
     $res = $jmap->CallMethods([['Email/changes', { sinceState => $oldState }, "R1"]]);
     $self->assert_str_not_equals($oldState, $res->[0][1]{newState});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([$emailId], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([$emailId], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
 }

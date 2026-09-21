@@ -41,5 +41,5 @@ sub test_card_get_ids_null_empty
         ['ContactCard/get', { ids => [] }, 'R1'],
     ]);
     $self->assert_num_equals(0, 0+$res->single_sentence->arguments->{list}->@*);
-    $self->assert_deep_equals([], $res->single_sentence->arguments->{notFound});
+    $self->assert_cmp_deeply([], $res->single_sentence->arguments->{notFound});
 }

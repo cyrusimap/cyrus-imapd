@@ -66,7 +66,7 @@ sub test_calendarevent_participantreply_patch ($self)
     xlog $self, "Assert CalendarEvent/set imip patch keeps our participant ids";
     my $payload = $self->get_imip_notification();
     $self->assert_str_equals("REQUEST", $payload->{method});
-    $self->assert_deep_equals([ 'att1', 'org' ],
+    $self->assert_cmp_deeply([ 'att1', 'org' ],
         [ sort keys %{$payload->{patch}{participants}} ]);
 
     xlog $self, "Call /participantReply";

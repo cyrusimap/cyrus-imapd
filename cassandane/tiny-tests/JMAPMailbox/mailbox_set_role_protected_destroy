@@ -35,7 +35,7 @@ sub test_mailbox_set_role_protected_destroy
     my $mboxB = $res->[1][1]{created}{mboxB}{id};
     $self->assert_not_null($mboxB);
     my %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[2][1]{list}};
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $inbox => 'inbox',
         $mboxA => 'drafts',
         $mboxB => 'xspecialuse',
@@ -63,9 +63,9 @@ sub test_mailbox_set_role_protected_destroy
         }, 'R3'],
     ]);
     $self->assert_str_equals('serverFail', $res->[0][1]{notDestroyed}{$mboxA}{type});
-    $self->assert_deep_equals([$mboxB], $res->[1][1]{destroyed});
+    $self->assert_cmp_deeply([$mboxB], $res->[1][1]{destroyed});
     %roleByMbox = map { $_->{id} => $_->{role} } @{$res->[2][1]{list}};
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $inbox => 'inbox',
         $mboxA => 'drafts',
     }, \%roleByMbox);

@@ -104,7 +104,7 @@ sub test_calendarprincipal_getavailability_showdetails
     ]);
     $self->assert_num_equals(5, scalar keys %{$res->[0][1]{created}});
 
-    $self->assert_deep_equals([{
+    $self->assert_cmp_deeply([{
         utcStart => "2020-08-05T07:00:00Z",
         utcEnd => "2020-08-05T08:00:00Z",
         busyStatus => 'confirmed',

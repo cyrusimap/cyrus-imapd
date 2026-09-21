@@ -38,5 +38,5 @@ sub test_conf_all ($self)
         }
     }
 
-    $self->assert_deep_equals(\%imapd_conf, \%cyr_info_conf);
+    $self->assert_cmp_deeply(\%imapd_conf, \%cyr_info_conf);
 }

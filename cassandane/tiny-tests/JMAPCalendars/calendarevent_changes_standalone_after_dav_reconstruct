@@ -60,8 +60,8 @@ sub test_calendarevent_changes_standalone_after_dav_reconstruct ($self)
     $res = $jmap->CallMethods([['CalendarEvent/changes', {
         sinceState => $state0,
     }, 'R1']]);
-    $self->assert_deep_equals([sort($id1, $id2)],
+    $self->assert_cmp_deeply([sort($id1, $id2)],
         [sort $res->[0][1]{created}->@*]);
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
 }

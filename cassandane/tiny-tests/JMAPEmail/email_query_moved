@@ -121,11 +121,11 @@ sub test_email_query_moved
     ]);
     $self->assert_str_equals($emailId1, $res->[0][1]{list}[0]{id});
     my $wantMailboxIds1 = { $mboxIdA => JSON::true };
-    $self->assert_deep_equals($wantMailboxIds1, $res->[0][1]{list}[0]{mailboxIds});
+    $self->assert_cmp_deeply($wantMailboxIds1, $res->[0][1]{list}[0]{mailboxIds});
 
     $self->assert_str_equals($emailId2, $res->[0][1]{list}[1]{id});
     my $wantMailboxIds2 = { $mboxIdB => JSON::true };
-    $self->assert_deep_equals($wantMailboxIds2, $res->[0][1]{list}[1]{mailboxIds});
+    $self->assert_cmp_deeply($wantMailboxIds2, $res->[0][1]{list}[1]{mailboxIds});
 
     xlog $self, "query emails";
     $res = $jmap->CallMethods([

@@ -25,6 +25,6 @@ sub test_email_get_body_notext
     ]);
     my $msg = $res->[1][1]->{list}[0];
 
-    $self->assert_deep_equals([], $msg->{textBody});
-    $self->assert_deep_equals([], $msg->{htmlBody});
+    $self->assert_cmp_deeply([], $msg->{textBody});
+    $self->assert_cmp_deeply([], $msg->{htmlBody});
 }

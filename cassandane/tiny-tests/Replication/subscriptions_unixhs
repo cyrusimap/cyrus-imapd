@@ -29,7 +29,7 @@ sub test_subscriptions_unixhs
     $mastertalk->delete("INBOX/Test/Sub") || die;
 
     my $subdata = $mastertalk->lsub("", "*");
-    $self->assert_deep_equals($subdata, [
+    $self->assert_cmp_deeply($subdata, [
           [
             [
               '\\HasChildren'
@@ -74,7 +74,7 @@ sub test_subscriptions_unixhs
     my $replicatalk = $replicastore->get_client();
 
     $subdata = $replicatalk->lsub("", "*");
-    $self->assert_deep_equals($subdata, [
+    $self->assert_cmp_deeply($subdata, [
           [
             [
               '\\HasChildren'

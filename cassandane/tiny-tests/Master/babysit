@@ -10,7 +10,7 @@ sub test_babysit
     $self->lemming_wait(A => { live => 1 });
 
     xlog $self, "preforked, so one lemming running already";
-    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+    $self->assert_cmp_deeply({ A => { live => 1, dead => 0 } },
                               $self->lemming_census());
 
     # Quickly kill 5 children to trigger the backoff
@@ -29,13 +29,13 @@ sub test_babysit
                                  qr{ERROR: too many failures .*disabling});
 
     # master should not have restarted after 5 deaths
-    $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 5 } },
                               $self->lemming_census());
 
     # wait 5 seconds, we still shouldn't have one
     sleep 5;
 
-    $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 5 } },
                               $self->lemming_census());
 
     # wait up to 30 seconds, there should be one
@@ -45,6 +45,6 @@ sub test_babysit
       sleep 1;
     }
 
-    $self->assert_deep_equals({ A => { live => 1, dead => 5 } },
+    $self->assert_cmp_deeply({ A => { live => 1, dead => 5 } },
                               $self->lemming_census());
 }

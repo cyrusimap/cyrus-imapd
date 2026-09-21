@@ -94,5 +94,5 @@ sub test_email_query_guidsearch_only_email_mailboxes
         }, 'R1'],
     ], $using);
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[0][1]{ids});
 }

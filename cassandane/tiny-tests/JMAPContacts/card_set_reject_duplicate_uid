@@ -31,5 +31,5 @@ sub test_card_set_reject_duplicate_uid
 
     my $set = $res->single_sentence('ContactCard/set')->as_set;
     $self->assert_str_equals('invalidProperties', $set->create_errors->{cardB}{type});
-    $self->assert_deep_equals(['uid'], $set->create_errors->{cardB}{properties});
+    $self->assert_cmp_deeply(['uid'], $set->create_errors->{cardB}{properties});
 }

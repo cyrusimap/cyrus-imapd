@@ -41,7 +41,7 @@ EOF
     $admintalk->examine('user.other1');
     $res = $admintalk->fetch('1', '(flags)');
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-    $self->assert_deep_equals($res,
+    $self->assert_cmp_deeply($res,
                               { '1' => { 'uid' => '1',
                                          'flags' => [ '\\Recent'] }});
 
@@ -55,7 +55,7 @@ EOF
     $admintalk->examine('user.other2.sub');
     $res = $admintalk->fetch('1', '(flags)');
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-    $self->assert_deep_equals($res,
+    $self->assert_cmp_deeply($res,
                               { '1' => { 'uid' => '1',
                                          'flags' => [ '\\Recent', '\\Flagged'] }});
 }

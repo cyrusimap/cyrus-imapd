@@ -32,7 +32,7 @@ EOF
         =~ m{message/disposition-notification\r\n\r\n(.*?)\r\n\r\n}s;
     $self->assert_not_null($block);
     my @fields = $block =~ /^(Original-Recipient: .*?)\r?$/mg;
-    $self->assert_deep_equals([ "Original-Recipient: $expect" ], \@fields);
+    $self->assert_cmp_deeply([ "Original-Recipient: $expect" ], \@fields);
 }
 
 sub test_reject_mdn_original_recipient__typed

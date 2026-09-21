@@ -90,7 +90,7 @@ sub test_email_querychanges_sortflagged_otherfolder
               isAscending => $JSON::false },
          ],
     }, "R1"]]);
-    $self->assert_deep_equals([$idb, $idc], $res->[0][1]->{ids});
+    $self->assert_cmp_deeply([$idb, $idc], $res->[0][1]->{ids});
 
     $res = $jmap->CallMethods([['Email/queryChanges', {
         filter => { inMailbox => $mbid },
@@ -109,7 +109,7 @@ sub test_email_querychanges_sortflagged_otherfolder
     $self->assert_num_equals(3, scalar @{$res->[0][1]->{removed}});
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{added}});
     # check that the order is B C
-    $self->assert_deep_equals([{id => $idb, index => 0}, {id => $idc, index => 1}], $res->[0][1]{added});
+    $self->assert_cmp_deeply([{id => $idb, index => 0}, {id => $idc, index => 1}], $res->[0][1]{added});
 
     $talk->select("INBOX.foo");
     $talk->store('1', "+flags", '\\Flagged');
@@ -128,7 +128,7 @@ sub test_email_querychanges_sortflagged_otherfolder
               isAscending => $JSON::false },
          ],
     }, "R1"]]);
-    $self->assert_deep_equals([$idc, $idb], $res->[0][1]->{ids});
+    $self->assert_cmp_deeply([$idc, $idb], $res->[0][1]->{ids});
 
     $res = $jmap->CallMethods([['Email/queryChanges', {
         filter => { inMailbox => $mbid },
@@ -147,5 +147,5 @@ sub test_email_querychanges_sortflagged_otherfolder
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{removed}});
     $self->assert_contains($ida, $res->[0][1]->{removed});
     $self->assert_contains($idc, $res->[0][1]->{removed});
-    $self->assert_deep_equals([{id => $idc, index => 0}], $res->[0][1]{added});
+    $self->assert_cmp_deeply([{id => $idc, index => 0}], $res->[0][1]{added});
 }

@@ -58,7 +58,7 @@ sub test_email_set_keywords
     my $keywords = {
         foo => JSON::true
     };
-    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+    $self->assert_cmp_deeply($keywords, $jmapmsg->{keywords});
 
     xlog $self, "Update JMAP email keywords";
     $keywords = {
@@ -79,7 +79,7 @@ sub test_email_set_keywords
         }, 'R2' ]
     ]);
     $jmapmsg = $res->[1][1]{list}[0];
-    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+    $self->assert_cmp_deeply($keywords, $jmapmsg->{keywords});
 
     xlog $self, "Set \\Seen on message in mailbox B";
     $store->set_folder('INBOX.B');
@@ -110,7 +110,7 @@ sub test_email_set_keywords
         baz => JSON::true,
         qux => JSON::true,
     };
-    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+    $self->assert_cmp_deeply($keywords, $jmapmsg->{keywords});
 
     $self->assert_str_not_equals($res->[0][1]{oldState}, $res->[0][1]{newState});
 
@@ -134,5 +134,5 @@ sub test_email_set_keywords
         qux => JSON::true,
         '$seen' => JSON::true,
     };
-    $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
+    $self->assert_cmp_deeply($keywords, $jmapmsg->{keywords});
 }

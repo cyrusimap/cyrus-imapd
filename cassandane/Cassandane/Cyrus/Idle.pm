@@ -104,7 +104,7 @@ sub common_basic
 
     xlog $self, "Testing that normal IMAP commands still work";
     my $res = $talk->status('INBOX', '(messages unseen)');
-    $self->assert_deep_equals({ messages => 0, unseen => 0 }, $res);
+    $self->assert_cmp_deeply({ messages => 0, unseen => 0 }, $res);
 }
 
 sub common_delivery

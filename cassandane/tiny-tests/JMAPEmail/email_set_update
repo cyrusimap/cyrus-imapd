@@ -53,5 +53,5 @@ sub test_email_set_update
     xlog $self, "Get draft $id";
     $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
     $msg = $res->[0][1]->{list}[0];
-    $self->assert_deep_equals($draft->{keywords}, $msg->{keywords});
+    $self->assert_cmp_deeply($draft->{keywords}, $msg->{keywords});
 }

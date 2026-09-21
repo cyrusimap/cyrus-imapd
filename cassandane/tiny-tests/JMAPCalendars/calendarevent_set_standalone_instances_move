@@ -84,11 +84,11 @@ sub test_calendarevent_set_standalone_instances_move
         }, 'R4'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$instance1Id});
-    $self->assert_deep_equals({$calendarAId => JSON::true },
+    $self->assert_cmp_deeply({$calendarAId => JSON::true },
         $res->[1][1]{list}[0]{calendarIds});
 
     xlog "Moving one standalone instance also moves any other instances";
-    $self->assert_deep_equals({$calendarAId => JSON::true },
+    $self->assert_cmp_deeply({$calendarAId => JSON::true },
         $res->[2][1]{list}[0]{calendarIds});
 
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
@@ -96,9 +96,9 @@ sub test_calendarevent_set_standalone_instances_move
     $self->assert_str_not_equals($state, $res->[2][1]{state});
     $self->assert_str_not_equals($state, $res->[3][1]{newState});
 
-    $self->assert_deep_equals([], $res->[3][1]{created});
+    $self->assert_cmp_deeply([], $res->[3][1]{created});
     my @wantUpdated = sort ($instance1Id, $instance2Id);
     my @haveUpdated = sort @{$res->[3][1]{updated}};
-    $self->assert_deep_equals(\@wantUpdated, \@haveUpdated);
-    $self->assert_deep_equals([], $res->[3][1]{destroyed});
+    $self->assert_cmp_deeply(\@wantUpdated, \@haveUpdated);
+    $self->assert_cmp_deeply([], $res->[3][1]{destroyed});
 }

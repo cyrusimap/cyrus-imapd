@@ -249,7 +249,7 @@ sub XXX_test_service_primary_fail
     $self->assert_null($lemm);
 
     xlog $self, "expect 5 dead lemmings";
-    $self->assert_deep_equals({ foo => { live => 0, dead => 5 } },
+    $self->assert_cmp_deeply({ foo => { live => 0, dead => 5 } },
         $self->lemming_census());
 
     xlog $self, "check the IPv4 service is really dead";
@@ -258,18 +258,18 @@ sub XXX_test_service_primary_fail
         $lemm = lemming_connect($srv, 'inet');
     };
     $self->assert_null($lemm);
-    $self->assert_deep_equals({ foo => { live => 0, dead => 5 } },
+    $self->assert_cmp_deeply({ foo => { live => 0, dead => 5 } },
         $self->lemming_census());
 
     xlog $self, "breed one IPv6 lemming";
     $lemm = lemming_connect($srv, 'inet6');
-    $self->assert_deep_equals({ foo => { live => 1, dead => 5 } },
+    $self->assert_cmp_deeply({ foo => { live => 1, dead => 5 } },
         $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog $self, "no more live lemmings";
-    $self->assert_deep_equals({ foo => { live => 0, dead => 6 } },
+    $self->assert_cmp_deeply({ foo => { live => 0, dead => 6 } },
         $self->lemming_census());
 
     xlog $self, "revive the dead IPv4 service";
@@ -284,7 +284,7 @@ sub XXX_test_service_primary_fail
     $self->assert_null($lemm);
 
     xlog $self, "expect 5 more dead lemmings";
-    $self->assert_deep_equals({ foo => { live => 0, dead => 11 } },
+    $self->assert_cmp_deeply({ foo => { live => 0, dead => 11 } },
         $self->lemming_census());
 }
 
@@ -307,7 +307,7 @@ sub XXX_test_service_associate_fail
     $self->assert_null($lemm);
 
     xlog $self, "expect 5 dead lemmings";
-    $self->assert_deep_equals({ foo => { live => 0, dead => 5 } },
+    $self->assert_cmp_deeply({ foo => { live => 0, dead => 5 } },
         $self->lemming_census());
 
     xlog $self, "check the IPv6 service is really dead";
@@ -316,18 +316,18 @@ sub XXX_test_service_associate_fail
         $lemm = lemming_connect($srv, 'inet6');
     };
     $self->assert_null($lemm);
-    $self->assert_deep_equals({ foo => { live => 0, dead => 5 } },
+    $self->assert_cmp_deeply({ foo => { live => 0, dead => 5 } },
         $self->lemming_census());
 
     xlog $self, "breed one IPv4 lemming";
     $lemm = lemming_connect($srv, 'inet');
-    $self->assert_deep_equals({ foo => { live => 1, dead => 5 } },
+    $self->assert_cmp_deeply({ foo => { live => 1, dead => 5 } },
         $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog $self, "no more live lemmings";
-    $self->assert_deep_equals({ foo => { live => 0, dead => 6 } },
+    $self->assert_cmp_deeply({ foo => { live => 0, dead => 6 } },
         $self->lemming_census());
 
     xlog $self, "revive the dead IPv6 service";
@@ -342,7 +342,7 @@ sub XXX_test_service_associate_fail
     $self->assert_null($lemm);
 
     xlog $self, "expect 5 dead lemmings";
-    $self->assert_deep_equals({ foo => { live => 0, dead => 11 } },
+    $self->assert_cmp_deeply({ foo => { live => 0, dead => 11 } },
         $self->lemming_census());
 }
 

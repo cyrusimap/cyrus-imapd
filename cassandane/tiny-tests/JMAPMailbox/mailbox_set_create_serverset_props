@@ -47,5 +47,5 @@ sub test_mailbox_set_create_serverset_props
     my @gotInvalidProps = @{$res->[0][1]{notCreated}{mboxB}{properties}};
     @wantInvalidProps = sort @wantInvalidProps;
     @gotInvalidProps = sort @gotInvalidProps;
-    $self->assert_deep_equals(\@wantInvalidProps, \@gotInvalidProps);
+    $self->assert_cmp_deeply(\@wantInvalidProps, \@gotInvalidProps);
 }

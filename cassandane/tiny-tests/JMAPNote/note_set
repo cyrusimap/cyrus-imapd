@@ -151,5 +151,5 @@ sub test_note_set
         ['Note/get', { }, "R2"]
     ]);
     $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
-    $self->assert_deep_equals([], $res->[1][1]{list});
+    $self->assert_cmp_deeply([], $res->[1][1]{list});
 }

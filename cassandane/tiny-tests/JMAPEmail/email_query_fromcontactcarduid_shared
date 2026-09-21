@@ -226,12 +226,12 @@ sub test_email_query_fromcontactcarduid_shared
             sort => [{ property => "subject" }],
         }, 'R4']
     ], $using);
-    $self->assert_deep_equals([$emailIds->[0]], $res->[0][1]{ids});
-    $self->assert_deep_equals([$emailIds->[0],$emailIds->[3],$emailIds->[4]],
+    $self->assert_cmp_deeply([$emailIds->[0]], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$emailIds->[0],$emailIds->[3],$emailIds->[4]],
                               $res->[1][1]{ids});
-    $self->assert_deep_equals([$emailIds->[0],$emailIds->[1]],
+    $self->assert_cmp_deeply([$emailIds->[0],$emailIds->[1]],
                               $res->[2][1]{ids});
-    $self->assert_deep_equals([], $res->[3][1]{ids});
+    $self->assert_cmp_deeply([], $res->[3][1]{ids});
 
     xlog "Assert Sieve";
     $imap->create("INBOX.matches") or die;

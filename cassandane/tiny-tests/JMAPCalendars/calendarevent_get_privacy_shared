@@ -146,7 +146,7 @@ sub test_calendarevent_get_privacy_shared
     delete($sharedPublicEvent->{'blobId'});
     delete($publicEvent->{'debugBlobId'});
     delete($sharedPublicEvent->{'debugBlobId'});
-    $self->assert_deep_equals($publicEvent, $sharedPublicEvent);
+    $self->assert_cmp_deeply($publicEvent, $sharedPublicEvent);
 
     xlog "sharee may only see public properties of private event";
     $res = $shareeJmap->CallMethods([
@@ -189,7 +189,7 @@ sub test_calendarevent_get_privacy_shared
     }
     delete @{$privateEvent}{@nonPublic};
     delete $privateEvent->{recurrenceOverrides}{'2021-01-02T01:00:00'}{title};
-    $self->assert_deep_equals($privateEvent, $sharedPrivateEvent);
+    $self->assert_cmp_deeply($privateEvent, $sharedPrivateEvent);
 
     xlog "sharee must not see secret event";
     $res = $shareeJmap->CallMethods([
@@ -199,5 +199,5 @@ sub test_calendarevent_get_privacy_shared
             properties => \@wantProperties,
         }, 'R1'],
     ]);
-    $self->assert_deep_equals([$secretEvent->{id}], $res->[0][1]{notFound});
+    $self->assert_cmp_deeply([$secretEvent->{id}], $res->[0][1]{notFound});
 }

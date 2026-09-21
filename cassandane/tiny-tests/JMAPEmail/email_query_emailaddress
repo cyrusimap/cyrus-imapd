@@ -206,6 +206,6 @@ EOF
                 }],
             }, 'R1'],
         ]);
-        $self->assert_deep_equals($_->{wantIds}, $res->[0][1]{ids});
+        $self->assert_cmp_deeply($_->{wantIds}, $res->[0][1]{ids});
     }
 }

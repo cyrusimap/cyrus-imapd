@@ -109,5 +109,5 @@ sub test_email_query_guidsearch_inmailboxotherthan
     ], $using);
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
     my @wantIds = sort ($emailA);
-    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[0][1]{ids});
 }

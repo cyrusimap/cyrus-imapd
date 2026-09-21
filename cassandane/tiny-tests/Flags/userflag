@@ -32,19 +32,19 @@ sub test_userflag ($self)
 
     xlog $self, "Set \$Foobar on message A";
     my $res = $talk->store('1', '+flags', '($Foobar)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ '$Foobar' ] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [ '$Foobar' ] }}, $res);
     $msg{A}->set_attribute(flags => ['$Foobar']);
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \$Foobar on message A";
     $res = $talk->store('1', '-flags', '($Foobar)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
     xlog $self, "Set \$Foobar on message A again";
     $res = $talk->store('1', '+flags', '($Foobar)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ '$Foobar' ] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [ '$Foobar' ] }}, $res);
     $msg{A}->set_attribute(flags => ['$Foobar']);
     $self->check_messages(\%msg);
 

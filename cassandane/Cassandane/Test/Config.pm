@@ -190,7 +190,7 @@ sub test_bitfields
     # get in scalar context returns space separated string
     $self->assert_str_equals('caldav jmap', scalar $c->get('httpmodules'));
     # get in list context returns list
-    $self->assert_deep_equals([qw(caldav jmap)], [$c->get('httpmodules')]);
+    $self->assert_cmp_deeply([qw(caldav jmap)], [$c->get('httpmodules')]);
 
     # can clear a whole bitfield
     $c->clear_all_bits('httpmodules');
@@ -201,7 +201,7 @@ sub test_bitfields
     # get in scalar context returns space separated string
     $self->assert_str_equals('caldav jmap', scalar $c->get('httpmodules'));
     # get in list context returns list
-    $self->assert_deep_equals([qw(caldav jmap)], [$c->get('httpmodules')]);
+    $self->assert_cmp_deeply([qw(caldav jmap)], [$c->get('httpmodules')]);
 
     # can clear one bit
     $c->clear_bits('httpmodules', 'caldav');
@@ -272,15 +272,15 @@ sub test_bitfields
     # expectations should still hold for bitfields set via constructor
     $self->assert_str_equals('bar', $c2->get('foo'));
     $self->assert_str_equals('caldav jmap', scalar $c2->get('httpmodules'));
-    $self->assert_deep_equals([qw(caldav jmap)], [$c2->get('httpmodules')]);
+    $self->assert_cmp_deeply([qw(caldav jmap)], [$c2->get('httpmodules')]);
     $self->assert_str_equals('message quota', scalar $c2->get('event_groups'));
-    $self->assert_deep_equals([qw(message quota)], [$c2->get('event_groups')]);
+    $self->assert_cmp_deeply([qw(message quota)], [$c2->get('event_groups')]);
 
     # should be able to set bitfield values containing underscores
     $c->set_bits('sieve_extensions', 'vnd.cyrus.implicit_keep_target');
     $self->assert_str_equals('vnd.cyrus.implicit_keep_target',
                              scalar $c->get('sieve_extensions'));
-    $self->assert_deep_equals([qw(vnd.cyrus.implicit_keep_target)],
+    $self->assert_cmp_deeply([qw(vnd.cyrus.implicit_keep_target)],
                               [$c->get('sieve_extensions')]);
 }
 

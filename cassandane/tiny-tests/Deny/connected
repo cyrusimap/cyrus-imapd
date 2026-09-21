@@ -19,9 +19,9 @@ sub test_connected ($self)
     xlog $self, "Check that we can run a command in each of the two clients";
     my $res;
     $res = $cass_talk->status('inbox', [ 'messages' ]);
-    $self->assert_deep_equals({ messages => 0 }, $res);
+    $self->assert_cmp_deeply({ messages => 0 }, $res);
     $res = $user_talk->status('inbox', [ 'messages' ]);
-    $self->assert_deep_equals({ messages => 0 }, $res);
+    $self->assert_cmp_deeply({ messages => 0 }, $res);
 
     $user_talk->clear_response_code('alert');
 
@@ -30,7 +30,7 @@ sub test_connected ($self)
 
     xlog $self, "Check that we can run a command in the unaffected user";
     $res = $cass_talk->status('inbox', [ 'messages' ]);
-    $self->assert_deep_equals({ messages => 0 }, $res);
+    $self->assert_cmp_deeply({ messages => 0 }, $res);
 
     xlog $self, "Check that the affected user is disconnected";
     $res = undef;

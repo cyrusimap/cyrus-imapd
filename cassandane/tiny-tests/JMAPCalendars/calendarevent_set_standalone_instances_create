@@ -61,9 +61,9 @@ sub test_calendarevent_set_standalone_instances_create
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_str_not_equals($state, $res->[1][1]{state});
     $self->assert_str_not_equals($state, $res->[2][1]{newState});
-    $self->assert_deep_equals([$instance1Id], $res->[2][1]{created});
-    $self->assert_deep_equals([], $res->[2][1]{updated});
-    $self->assert_deep_equals([], $res->[2][1]{destroyed});
+    $self->assert_cmp_deeply([$instance1Id], $res->[2][1]{created});
+    $self->assert_cmp_deeply([], $res->[2][1]{updated});
+    $self->assert_cmp_deeply([], $res->[2][1]{destroyed});
     $state = $res->[2][1]{newState};
 
     xlog "Can't create a new standalone instance with same recurrence id";
@@ -92,14 +92,14 @@ sub test_calendarevent_set_standalone_instances_create
     ]);
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notCreated}{instance2}{type});
-    $self->assert_deep_equals(['uid', 'recurrenceId'],
+    $self->assert_cmp_deeply(['uid', 'recurrenceId'],
         $res->[0][1]{notCreated}{instance2}{properties});
 
     $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_str_equals($state, $res->[1][1]{newState});
-    $self->assert_deep_equals([], $res->[1][1]{created});
-    $self->assert_deep_equals([], $res->[1][1]{updated});
-    $self->assert_deep_equals([], $res->[1][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[1][1]{created});
+    $self->assert_cmp_deeply([], $res->[1][1]{updated});
+    $self->assert_cmp_deeply([], $res->[1][1]{destroyed});
 
     xlog "Create standalone instance with same uid but different recurrence id";
     $res = $jmap->CallMethods([
@@ -145,9 +145,9 @@ sub test_calendarevent_set_standalone_instances_create
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_str_not_equals($state, $res->[1][1]{state});
     $self->assert_str_not_equals($state, $res->[2][1]{newState});
-    $self->assert_deep_equals([$instance2Id], $res->[2][1]{created});
-    $self->assert_deep_equals([], $res->[2][1]{updated});
-    $self->assert_deep_equals([], $res->[2][1]{destroyed});
+    $self->assert_cmp_deeply([$instance2Id], $res->[2][1]{created});
+    $self->assert_cmp_deeply([], $res->[2][1]{updated});
+    $self->assert_cmp_deeply([], $res->[2][1]{destroyed});
     $state = $res->[2][1]{newState};
 
     xlog "Assert both events exist";

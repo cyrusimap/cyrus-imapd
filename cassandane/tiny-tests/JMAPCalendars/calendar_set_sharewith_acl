@@ -111,9 +111,9 @@ sub test_calendar_set_sharewith_acl
             mayDelete => JSON::false,
         ), %{$_->{wantRights}});
 
-        $self->assert_deep_equals(\%mergedrights,
+        $self->assert_cmp_deeply(\%mergedrights,
             $res->[1][1]{list}[0]{shareWith}{aatester});
-        $self->assert_deep_equals(\%mergedrights,
+        $self->assert_cmp_deeply(\%mergedrights,
             $res->[1][1]{list}[0]{shareWith}{zztester});
         my %acl = @{$admin->getacl("user.cassandane.#calendars.$mboxname")};
 

@@ -43,7 +43,7 @@ sub test_mailbox_set_update_serverset_props
     $self->assert_num_equals(0, $mboxA->{unreadEmails});
     $self->assert_num_equals(0, $mboxA->{totalThreads});
     $self->assert_num_equals(0, $mboxA->{unreadThreads});
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         mayReadItems => JSON::true,
         mayAddItems =>  JSON::true,
         mayRemoveItems => JSON::true,
@@ -91,7 +91,7 @@ sub test_mailbox_set_update_serverset_props
     my @gotInvalidProps = @{$res->[0][1]{notUpdated}{$mboxIdA}{properties}};
     @wantInvalidProps = sort @wantInvalidProps;
     @gotInvalidProps = sort @gotInvalidProps;
-    $self->assert_deep_equals(\@wantInvalidProps, \@gotInvalidProps);
+    $self->assert_cmp_deeply(\@wantInvalidProps, \@gotInvalidProps);
 
     xlog "update with unknown mailbox right";
     $res = $jmap->CallMethods([
@@ -105,6 +105,6 @@ sub test_mailbox_set_update_serverset_props
     ]);
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notUpdated}{$mboxIdA}{type});
-    $self->assert_deep_equals(['myRights'],
+    $self->assert_cmp_deeply(['myRights'],
         $res->[0][1]{notUpdated}{$mboxIdA}{properties})
 }

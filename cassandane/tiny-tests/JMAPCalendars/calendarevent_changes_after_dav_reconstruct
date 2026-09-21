@@ -44,7 +44,7 @@ sub test_calendarevent_changes_after_dav_reconstruct ($self)
     $res = $jmap->CallMethods([['CalendarEvent/changes', {
         sinceState => $state_after_create,
     }, 'R1']]);
-    $self->assert_deep_equals([$id], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([$id], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
 }

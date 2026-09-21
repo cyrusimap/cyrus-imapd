@@ -53,8 +53,8 @@ sub test_card_query_text
             },
         }, 'R2'],
     ]);
-    $self->assert_deep_equals([$cardId1], $res->[0][1]{ids});
-    $self->assert_deep_equals([$cardId2], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([$cardId1], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$cardId2], $res->[1][1]{ids});
 
     xlog "Query with phrase";
     $res = $jmap->CallMethods([
@@ -72,8 +72,8 @@ sub test_card_query_text
             },
         }, 'R1'],
     ]);
-    $self->assert_deep_equals([$cardId1], $res->[0][1]{ids});
-    $self->assert_deep_equals([$cardId2], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([$cardId1], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$cardId2], $res->[1][1]{ids});
 
     xlog "Query with both phrase and loose terms";
     $res = $jmap->CallMethods([
@@ -91,8 +91,8 @@ sub test_card_query_text
             },
         }, 'R2'],
     ]);
-    $self->assert_deep_equals([$cardId1], $res->[0][1]{ids});
-    $self->assert_deep_equals([$cardId2], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([$cardId1], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$cardId2], $res->[1][1]{ids});
 
     xlog "Query text";
     $res = $jmap->CallMethods([
@@ -110,8 +110,8 @@ sub test_card_query_text
             },
         }, 'R2'],
     ]);
-    $self->assert_deep_equals([$cardId1], $res->[0][1]{ids});
-    $self->assert_deep_equals([$cardId2], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([$cardId1], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$cardId2], $res->[1][1]{ids});
 
     xlog "Query text and notes";
     $res = $jmap->CallMethods([
@@ -140,6 +140,6 @@ sub test_card_query_text
             },
         }, 'R2'],
     ]);
-    $self->assert_deep_equals([$cardId1], $res->[0][1]{ids});
-    $self->assert_deep_equals([$cardId2], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([$cardId1], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$cardId2], $res->[1][1]{ids});
 }

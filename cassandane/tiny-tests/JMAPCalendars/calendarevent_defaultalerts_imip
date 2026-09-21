@@ -103,7 +103,7 @@ EOF
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
     $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{useDefaultAlerts});
-    $self->assert_deep_equals({ $alertWithTimeId => $alertWithTime },
+    $self->assert_cmp_deeply({ $alertWithTimeId => $alertWithTime },
         $res->[0][1]{list}[0]{alerts});
 
     my $eventId = $res->[0][1]{list}[0]{id};
@@ -176,6 +176,6 @@ EOF
         }, 'R1'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
-    $self->assert_deep_equals({ $customAlertId => $customAlert },
+    $self->assert_cmp_deeply({ $customAlertId => $customAlert },
         $res->[0][1]{list}[0]{alerts});
 }

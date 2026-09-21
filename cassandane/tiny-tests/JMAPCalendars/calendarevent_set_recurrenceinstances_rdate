@@ -76,7 +76,7 @@ sub test_calendarevent_set_recurrenceinstances_rdate
         }, 'R2'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId1});
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
             '2019-01-10T14:00:00' => { },
         },
         $res->[1][1]{list}[0]{recurrenceOverrides}

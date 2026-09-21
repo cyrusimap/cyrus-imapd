@@ -125,5 +125,5 @@ sub test_email_query_guidsearch_collapsethreads
     # Check GUID search results
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals($res->[1][1]{ids}, $res->[0][1]{ids});
+    $self->assert_cmp_deeply($res->[1][1]{ids}, $res->[0][1]{ids});
 }

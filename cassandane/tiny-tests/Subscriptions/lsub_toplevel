@@ -11,7 +11,7 @@ sub test_lsub_toplevel
     my $imaptalk = $self->{store}->get_client();
 
     my $alldata = $imaptalk->lsub("", "*");
-    $self->assert_deep_equals($alldata, [
+    $self->assert_cmp_deeply($alldata, [
           [
             [
               '\\HasChildren'
@@ -32,7 +32,7 @@ sub test_lsub_toplevel
     ], "LSUB all data mismatch: "  . Dumper($alldata));
 
     my $topdata = $imaptalk->lsub("", "%");
-    $self->assert_deep_equals($topdata, [
+    $self->assert_cmp_deeply($topdata, [
           [
             [
               '\\HasChildren'

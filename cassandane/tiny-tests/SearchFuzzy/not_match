@@ -18,5 +18,5 @@ sub test_not_match
     my $talk = $self->{store}->get_client();
     $talk->select("INBOX.A");
     my $uids = $talk->search('fuzzy', 'not', 'text', 'schenectady');
-    $self->assert_deep_equals([2], $uids);
+    $self->assert_cmp_deeply([2], $uids);
 }

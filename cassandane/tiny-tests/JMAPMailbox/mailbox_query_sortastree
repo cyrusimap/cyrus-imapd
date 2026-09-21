@@ -37,7 +37,7 @@ sub test_mailbox_query_sortastree
         $mboxIds{'D'},
         $mboxIds{'Inbox'},
     ];
-    $self->assert_deep_equals($wantMboxIds, $res->[0][1]->{ids});
+    $self->assert_cmp_deeply($wantMboxIds, $res->[0][1]->{ids});
 
     $res = $jmap->CallMethods([
         ['Mailbox/query', {
@@ -52,5 +52,5 @@ sub test_mailbox_query_sortastree
         $mboxIds{'B'},
         $mboxIds{'A'}, $mboxIds{'A2'}, $mboxIds{'A2A'}, $mboxIds{'A1'},
     ];
-    $self->assert_deep_equals($wantMboxIds, $res->[0][1]->{ids});
+    $self->assert_cmp_deeply($wantMboxIds, $res->[0][1]->{ids});
 }

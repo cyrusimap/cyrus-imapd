@@ -29,19 +29,19 @@ sub test_flagged ($self)
 
     xlog $self, "Set \\Flagged on message A";
     my $res = $talk->store('1', '+flags', '(\\Flagged)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ '\\Flagged' ] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [ '\\Flagged' ] }}, $res);
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \\Flagged on message A";
     $res = $talk->store('1', '-flags', '(\\Flagged)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
     xlog $self, "Set \\Flagged on message A again";
     $res = $talk->store('1', '+flags', '(\\Flagged)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ '\\Flagged' ] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [ '\\Flagged' ] }}, $res);
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     $self->check_messages(\%msg);
 

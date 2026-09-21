@@ -120,7 +120,7 @@ sub test_calendarprincipal_getavailability_merged
     use Data::Printer;
     p $res;
 
-    $self->assert_deep_equals([{
+    $self->assert_cmp_deeply([{
         utcStart => "2020-08-01T01:00:00Z",
         utcEnd => "2020-08-01T03:00:00Z",
         busyStatus => 'unavailable',

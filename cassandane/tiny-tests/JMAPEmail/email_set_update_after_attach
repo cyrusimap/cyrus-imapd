@@ -92,8 +92,8 @@ sub test_email_set_update_after_attach
     my %emailById = map { $_->{id} => $_ } @{$res->[0][1]{list}};
 
     # now we need to test for actual location
-    $self->assert_deep_equals({$mboxIdByName{'C'} => JSON::true},
+    $self->assert_cmp_deeply({$mboxIdByName{'C'} => JSON::true},
                               $emailById{$emailId}->{mailboxIds});
-    $self->assert_deep_equals({$mboxIdByName{'B'} => JSON::true},
+    $self->assert_cmp_deeply({$mboxIdByName{'B'} => JSON::true},
                               $emailById{$newEmailId}->{mailboxIds});
 }

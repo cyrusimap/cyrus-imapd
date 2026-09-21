@@ -59,9 +59,9 @@ sub test_mailbox_changes_counts
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{updatedProperties});
-    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{updated}});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
     xlog $self, "update mailbox";
@@ -71,9 +71,9 @@ sub test_mailbox_changes_counts
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_null($res->[0][1]{updatedProperties});
-    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{updated}});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
     xlog $self, "update email";
@@ -85,9 +85,9 @@ sub test_mailbox_changes_counts
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{updatedProperties});
-    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{updated}});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
     xlog $self, "update mailbox";
@@ -97,18 +97,18 @@ sub test_mailbox_changes_counts
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_null($res->[0][1]{updatedProperties});
-    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{updated}});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
     xlog $self, "get mailbox updates (expect no changes)";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_null($res->[0][1]{updatedProperties});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
     $draft->{subject} = "memo2";
@@ -121,8 +121,8 @@ sub test_mailbox_changes_counts
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{updatedProperties});
-    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
     $self->assert_num_not_equals(0, scalar $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 }

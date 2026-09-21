@@ -14,10 +14,10 @@ sub test_fuzzyalways_annot
 
     # Fuzzy search uses stemming.
     my $uids = $imap->search('body', 'bodies') || die;
-    $self->assert_deep_equals([1], $uids);
+    $self->assert_cmp_deeply([1], $uids);
     # But does not do substring search.
     $uids = $imap->search('body', 'bod') || die;
-    $self->assert_deep_equals([], $uids);
+    $self->assert_cmp_deeply([], $uids);
 
     xlog "Disable fuzzy search with annotation";
     my $entry = '/shared/vendor/cmu/cyrus-imapd/search-fuzzy-always';
@@ -37,10 +37,10 @@ sub test_fuzzyalways_annot
 
     # Regular search does no stemming.
     $uids = $imap->search('body', 'bodies') || die;
-    $self->assert_deep_equals([], $uids);
+    $self->assert_cmp_deeply([], $uids);
     # But does substring search.
     $uids = $imap->search('body', 'bod') || die;
-    $self->assert_deep_equals([1], $uids);
+    $self->assert_cmp_deeply([1], $uids);
 
     xlog "Remove annotation and fall back to config";
     $imap->setmetadata('INBOX', $entry, undef);
@@ -48,8 +48,8 @@ sub test_fuzzyalways_annot
 
     # Fuzzy search uses stemming.
     $uids = $imap->search('body', 'bodies') || die;
-    $self->assert_deep_equals([1], $uids);
+    $self->assert_cmp_deeply([1], $uids);
     # But does not do substring search.
     $uids = $imap->search('body', 'bod') || die;
-    $self->assert_deep_equals([], $uids);
+    $self->assert_cmp_deeply([], $uids);
 }

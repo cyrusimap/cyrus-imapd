@@ -52,5 +52,5 @@ sub test_rolling_retry_wait_limit
     my $output = slurp_file($errfile);
     my @waits = $output =~ m/retrying in (\d+) seconds/g;
     $self->assert_num_lte($maxwait, $_) for @waits;
-    $self->assert_deep_equals([ 15, 20, 20, 20 ], \@waits);
+    $self->assert_cmp_deeply([ 15, 20, 20, 20 ], \@waits);
 }

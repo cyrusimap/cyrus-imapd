@@ -54,7 +54,7 @@ sub test_rename_deepfolder_intermediates
     $data = $self->_fmjmap_ok('Mailbox/get', jmap => $rjmap, properties => ['name']);
     my %byname_repl = map { $_->{name} => $_->{id} } @{$data->{list}};
 
-    $self->assert_deep_equals(\%byname, \%byname_repl);
+    $self->assert_cmp_deeply(\%byname, \%byname_repl);
 
     # n.b. run_replication dropped all our store connections...
     $admintalk = $self->{adminstore}->get_client();
@@ -75,7 +75,7 @@ sub test_rename_deepfolder_intermediates
     # we renamed a folder!
     $byname{folderZ} = delete $byname{folderA};
 
-    $self->assert_deep_equals(\%byname, \%byname_new);
+    $self->assert_cmp_deeply(\%byname, \%byname_new);
 
     # replicate and check the renames
     $self->{replica}->getsyslog();
@@ -93,7 +93,7 @@ sub test_rename_deepfolder_intermediates
     $data = $self->_fmjmap_ok('Mailbox/get', jmap => $rjmap, properties => ['name']);
     my %byname_newrepl = map { $_->{name} => $_->{id} } @{$data->{list}};
 
-    $self->assert_deep_equals(\%byname, \%byname_newrepl);
+    $self->assert_cmp_deeply(\%byname, \%byname_newrepl);
 
     # n.b. run_replication dropped all our store connections...
     $admintalk = $self->{adminstore}->get_client();

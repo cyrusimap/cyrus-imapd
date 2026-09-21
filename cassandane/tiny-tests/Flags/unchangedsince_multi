@@ -42,7 +42,7 @@ sub test_unchangedsince_multi ($self)
 
     xlog $self, "Bump the modseq on M,N,O";
     my $res = $talk->store('13,14,15', '+flags', '(\\Draft)');
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         '13' => { 'uid' => '13', 'flags' => [ '\\Draft' ] },
         '14' => { 'uid' => '14', 'flags' => [ '\\Draft' ] },
         '15' => { 'uid' => '15', 'flags' => [ '\\Draft' ] },
@@ -64,7 +64,7 @@ sub test_unchangedsince_multi ($self)
         {
             my $letter = chr(64 + $i);  # D, E, F
             my $res = $talk2->store($i, '+flags', '(\\Deleted)');
-            $self->assert_deep_equals({
+            $self->assert_cmp_deeply({
                 "$i" => { 'uid' => "$i", 'flags' => [ '\\Deleted' ] }
             }, $res);
             delete $msg{$letter};
@@ -172,7 +172,7 @@ sub test_unchangedsince_multi ($self)
 
     xlog $self, "returned MODIFIED response code?";
     $self->assert_not_null($modified);
-    $self->assert_deep_equals($modified, ['13:15']);
+    $self->assert_cmp_deeply($modified, ['13:15']);
 
     xlog $self, "sent untagged FETCH responses with the new modseq?";
     # A server may not send EXPUNGE during a command that speaks in sequence

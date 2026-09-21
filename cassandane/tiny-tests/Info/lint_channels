@@ -20,7 +20,7 @@ sub test_lint_channels
     my @output = $self->{instance}->run_cyr_info('conf-lint');
     @output = grep { !m/_db: / } @output;  # skip database types
 
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         [ sort(
             "banana_sync_trust_fund: street art\n",
             "banana_tcp_keepalive: yes\n",

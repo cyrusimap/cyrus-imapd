@@ -71,8 +71,8 @@ EOF
             },
         }, 'R2'],
     ]);
-    $self->assert_deep_equals([$eventId], $res->[0][1]{ids});
-    $self->assert_deep_equals([], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([$eventId], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([], $res->[1][1]{ids});
 
     my @notifs = grep($_->{CLASS} eq 'IMIP', @{$self->{instance}->getnotify()});
     $self->assert_num_equals(1, scalar @notifs);

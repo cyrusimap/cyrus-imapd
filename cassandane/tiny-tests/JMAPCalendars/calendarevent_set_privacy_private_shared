@@ -71,8 +71,8 @@ sub test_calendarevent_set_privacy_private_shared
         }, 'R2' ],
     ]);
     $self->assert_str_equals($privateEventId, $res->[0][1]{list}[0]{id});
-    $self->assert_deep_equals([$privateEventId], $res->[1][1]{created});
-    $self->assert_deep_equals([$privateEventId], $res->[2][1]{ids});
+    $self->assert_cmp_deeply([$privateEventId], $res->[1][1]{created});
+    $self->assert_cmp_deeply([$privateEventId], $res->[2][1]{ids});
 
     xlog "sharee can't update or destroy, or copy";
     $res = $shareeJmap->CallMethods([

@@ -64,7 +64,7 @@ use utf8;
             },
         }, 'R1'],
     ]);
-    $self->assert_deep_equals([ $match_id ], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([ $match_id ], $res->[0][1]{ids});
 
 no utf8;
 }

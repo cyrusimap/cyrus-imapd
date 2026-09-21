@@ -48,9 +48,9 @@ sub test_mailbox_set_destroy_movetomailbox_errors
         }, 'R2'],
     ], $using);
     $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
-    $self->assert_deep_equals(['onDestroyMoveToMailboxIfNoMailbox'],
+    $self->assert_cmp_deeply(['onDestroyMoveToMailboxIfNoMailbox'],
             $res->[0][1]{arguments});
     $self->assert_str_equals('invalidArguments', $res->[1][1]{type});
-    $self->assert_deep_equals(['onDestroyMoveToMailboxIfNoMailbox'],
+    $self->assert_cmp_deeply(['onDestroyMoveToMailboxIfNoMailbox'],
             $res->[1][1]{arguments});
 }

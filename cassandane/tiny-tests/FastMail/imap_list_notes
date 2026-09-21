@@ -17,7 +17,7 @@ sub test_imap_list_notes
     $imaptalk->create("INBOX.Notes", "(USE (\\XNotes))");
 
     my $data = $imaptalk->list('', '*');
-    $self->assert_deep_equals([
+    $self->assert_cmp_deeply([
   [
     [
       '\\HasChildren',

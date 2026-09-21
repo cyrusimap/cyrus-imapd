@@ -43,12 +43,12 @@ sub test_msg_sort_search ($self)
                           'ANNOTATION', $entry, $attrib, { Quote => "eed" });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals(\@exp_search, $res);
+    $self->assert_cmp_deeply(\@exp_search, $res);
 
     xlog $self, "run the SORT command with both ANNOTATION search & order criteria";
     $res = $talk->sort("(ANNOTATION $entry $attrib)", 'utf-8',
                        'ANNOTATION', $entry, $attrib, { Quote => "eed" });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals(\@exp_order, $res);
+    $self->assert_cmp_deeply(\@exp_order, $res);
 }

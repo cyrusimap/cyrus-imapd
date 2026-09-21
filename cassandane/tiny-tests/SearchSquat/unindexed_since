@@ -16,10 +16,10 @@ sub test_unindexed_since
     $self->run_squatter;
 
     my $uids = $imap->search('text', 'needle', 'since', '1-Feb-2024');
-    $self->assert_deep_equals([1], $uids);
+    $self->assert_cmp_deeply([1], $uids);
 
     $uids = $imap->search('text', 'needle', 'not', 'since', '1-Feb-2024');
-    $self->assert_deep_equals([3], $uids);
+    $self->assert_cmp_deeply([3], $uids);
 
     $self->make_message("needle 4", body => "needle") || die;
     $self->make_message("xxxxxx 5", body => "xxxxxx") || die;
@@ -29,8 +29,8 @@ sub test_unindexed_since
     # a matching unindexed message.
 
     $uids = $imap->search('text', 'needle', 'since', '1-Feb-2024');
-    $self->assert_deep_equals([1,4], $uids);
+    $self->assert_cmp_deeply([1,4], $uids);
 
     $uids = $imap->search('text', 'needle', 'not', 'since', '1-Feb-2024');
-    $self->assert_deep_equals([3, 6], $uids);
+    $self->assert_cmp_deeply([3, 6], $uids);
 }

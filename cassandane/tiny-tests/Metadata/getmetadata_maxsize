@@ -27,27 +27,27 @@ sub test_getmetadata_maxsize ($self)
     $res = getmetadata($imaptalk, $folder, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({ $folder => { $entry => $uuid } } , $res);
+    $self->assert_cmp_deeply({ $folder => { $entry => $uuid } } , $res);
 
     xlog $self, "Getting metadata with a large MAXSIZE in the right place";
     $res = getmetadata($imaptalk, [ MAXSIZE => 2048 ], $folder, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({ $folder => { $entry => $uuid } } , $res);
+    $self->assert_cmp_deeply({ $folder => { $entry => $uuid } } , $res);
 
     xlog $self, "Getting metadata with a small MAXSIZE in the right place";
     $res = getmetadata($imaptalk, [ MAXSIZE => 8 ], $folder, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({ longentries => length($uuid) } , $res);
+    $self->assert_cmp_deeply({ longentries => length($uuid) } , $res);
 
     xlog $self, "Getting metadata with a large MAXSIZE in the wrong place";
     $res = getmetadata($imaptalk, $folder, [ MAXSIZE => 2048 ], $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    $self->assert_deep_equals({ $folder => { $entry => $uuid } } , $res);
+    $self->assert_cmp_deeply({ $folder => { $entry => $uuid } } , $res);
 
     xlog $self, "Getting metadata with a small MAXSIZE in the wrong place";
     $res = getmetadata($imaptalk, $folder, [ MAXSIZE => 8 ], $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({ longentries => length($uuid) } , $res);
+    $self->assert_cmp_deeply({ longentries => length($uuid) } , $res);
 }

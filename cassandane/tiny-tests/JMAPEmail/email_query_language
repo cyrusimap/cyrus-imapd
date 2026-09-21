@@ -188,26 +188,26 @@ no utf8;
     # fr
     my @wantIds = sort ($emailIds{'fr'}, $emailIds{'fr-and-de'});
     my @gotIds = sort @{$res->[0][1]->{ids}};
-    $self->assert_deep_equals(\@wantIds, \@gotIds);
+    $self->assert_cmp_deeply(\@wantIds, \@gotIds);
 
     # OR de,fr
     @wantIds = sort ($emailIds{'fr'}, $emailIds{'de'}, $emailIds{'fr-and-de'});
     @gotIds = sort @{$res->[1][1]->{ids}};
-    $self->assert_deep_equals(\@wantIds, \@gotIds);
+    $self->assert_cmp_deeply(\@wantIds, \@gotIds);
 
     # AND de,fr
-    $self->assert_deep_equals([$emailIds{'fr-and-de'}], $res->[2][1]->{ids});
+    $self->assert_cmp_deeply([$emailIds{'fr-and-de'}], $res->[2][1]->{ids});
 
     # en
-    $self->assert_deep_equals([$emailIds{'en'}], $res->[3][1]->{ids});
+    $self->assert_cmp_deeply([$emailIds{'en'}], $res->[3][1]->{ids});
 
     # NOT de
     @wantIds = sort ($emailIds{'en'}, $emailIds{'fr'});
     @gotIds = sort @{$res->[4][1]->{ids}};
-    $self->assert_deep_equals(\@wantIds, \@gotIds);
+    $self->assert_cmp_deeply(\@wantIds, \@gotIds);
 
     # chr
-    $self->assert_deep_equals([], $res->[5][1]->{ids});
+    $self->assert_cmp_deeply([], $res->[5][1]->{ids});
 
     # xxxx
     $self->assert_str_equals('invalidArguments', $res->[6][1]{type});

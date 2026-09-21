@@ -127,7 +127,7 @@ sub test_email_query_guidsearch_keywords
     ], $using);
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
     @wantIds = sort ($emailIdD);
-    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[0][1]{ids});
 
     xlog $self, "query anything but draft emails";
     $res = $jmap->CallMethods([
@@ -144,5 +144,5 @@ sub test_email_query_guidsearch_keywords
     ], $using);
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
     @wantIds = sort ($emailIdA, $emailIdF);
-    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[0][1]{ids});
 }

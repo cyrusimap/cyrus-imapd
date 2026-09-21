@@ -50,7 +50,7 @@ EOF
     my $event = $self->putandget_vevent('2a358cee-6489-4f14-a57f-c104db4dc357',
         $ical, ['recurrenceOverrides']);
 
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         '2016-09-02T16:15:14' => {
             title => 'testWithDateTimeRecurId',
         },

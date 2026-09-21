@@ -88,12 +88,12 @@ sub test_email_query_seen_multimbox
             },
         }, 'R6'],
     ]);
-    $self->assert_deep_equals([], $res->[0][1]{ids});
-    $self->assert_deep_equals([], $res->[1][1]{ids});
-    $self->assert_deep_equals([], $res->[2][1]{ids});
-    $self->assert_deep_equals([$emailId], $res->[3][1]{ids});
-    $self->assert_deep_equals([$emailId], $res->[4][1]{ids});
-    $self->assert_deep_equals([$emailId], $res->[5][1]{ids});
+    $self->assert_cmp_deeply([], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([], $res->[2][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[3][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[4][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[5][1]{ids});
 
     xlog 'Set \Seen on message in mailbox A';
     $imap->select('A');
@@ -136,12 +136,12 @@ sub test_email_query_seen_multimbox
             },
         }, 'R6'],
     ]);
-    $self->assert_deep_equals([], $res->[0][1]{ids});
-    $self->assert_deep_equals([], $res->[1][1]{ids});
-    $self->assert_deep_equals([], $res->[2][1]{ids});
-    $self->assert_deep_equals([$emailId], $res->[3][1]{ids});
-    $self->assert_deep_equals([$emailId], $res->[4][1]{ids});
-    $self->assert_deep_equals([$emailId], $res->[5][1]{ids});
+    $self->assert_cmp_deeply([], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([], $res->[2][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[3][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[4][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[5][1]{ids});
 
     xlog 'Set \Seen on message in mailbox B';
     $imap->select('B');
@@ -184,10 +184,10 @@ sub test_email_query_seen_multimbox
             },
         }, 'R6'],
     ]);
-    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
-    $self->assert_deep_equals([$emailId], $res->[1][1]{ids});
-    $self->assert_deep_equals([$emailId], $res->[2][1]{ids});
-    $self->assert_deep_equals([], $res->[3][1]{ids});
-    $self->assert_deep_equals([], $res->[4][1]{ids});
-    $self->assert_deep_equals([], $res->[5][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([$emailId], $res->[2][1]{ids});
+    $self->assert_cmp_deeply([], $res->[3][1]{ids});
+    $self->assert_cmp_deeply([], $res->[4][1]{ids});
+    $self->assert_cmp_deeply([], $res->[5][1]{ids});
 }

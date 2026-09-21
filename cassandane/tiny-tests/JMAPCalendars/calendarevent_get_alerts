@@ -71,5 +71,5 @@ sub test_calendarevent_get_alerts
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_null($event->{useDefaultAlerts});
-    $self->assert_deep_equals($alerts, $event->{alerts});
+    $self->assert_cmp_deeply($alerts, $event->{alerts});
 }

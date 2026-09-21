@@ -266,7 +266,7 @@ EOF
 
         xlog $self, "Testcase $i: assert Email/query";
         if ($tc->{wantMatch}) {
-            $self->assert_deep_equals([ $email->{id} ], $res->[2][1]{ids});
+            $self->assert_cmp_deeply([ $email->{id} ], $res->[2][1]{ids});
         } else {
             $self->assert_num_equals(0, scalar @{ $res->[2][1]{ids} });
         }
@@ -279,7 +279,7 @@ EOF
             },
             'R1'
         ] ]);
-        $self->assert_deep_equals([ $email->{id} ], $res->[0][1]{destroyed});
+        $self->assert_cmp_deeply([ $email->{id} ], $res->[0][1]{destroyed});
         $emailState = $res->[0][1]{newState};
     }
 }

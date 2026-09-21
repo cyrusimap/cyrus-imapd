@@ -104,7 +104,7 @@ sub test_replication_emailsubmission_set_futurerelease
 
     $res = $jmap->CallMethods([['EmailSubmission/get', { ids => [ $msgsubid1 ] }, "R4"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
-    $self->assert_deep_equals([], $res->[0][1]->{notFound});
+    $self->assert_cmp_deeply([], $res->[0][1]->{notFound});
     $self->assert_str_equals('canceled', $res->[0][1]->{list}[0]->{undoStatus});
 
     xlog $self, "destroy first email submission";
@@ -123,7 +123,7 @@ sub test_replication_emailsubmission_set_futurerelease
 
     $res = $jmap->CallMethods([['EmailSubmission/get', { ids => undef }, "R6"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
-    $self->assert_deep_equals([], $res->[0][1]->{notFound});
+    $self->assert_cmp_deeply([], $res->[0][1]->{notFound});
 
     xlog $self, "trigger delivery of second email submission";
     my $now = DateTime->now();
@@ -131,7 +131,7 @@ sub test_replication_emailsubmission_set_futurerelease
 
     $res = $jmap->CallMethods([['EmailSubmission/get', { ids => [ $msgsubid2 ] }, "R7"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
-    $self->assert_deep_equals([], $res->[0][1]->{notFound});
+    $self->assert_cmp_deeply([], $res->[0][1]->{notFound});
     $self->assert_str_equals('final', $res->[0][1]->{list}[0]->{undoStatus});
 
     xlog $self, "no events left in the alarmdb";

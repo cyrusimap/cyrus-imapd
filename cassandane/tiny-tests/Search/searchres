@@ -225,7 +225,7 @@ EOF
     $res = $imaptalk->fetch('$', 'UID');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     # The saved result still names the same five messages after the expunge.
-    $self->assert_deep_equals([ 3, 4, 5, 6, 7 ],
+    $self->assert_cmp_deeply([ 3, 4, 5, 6, 7 ],
                               [ sort { $a <=> $b } keys %{$res} ]);
 
     xlog $self, "Expunge the middle message in the search results range";
@@ -238,7 +238,7 @@ EOF
     xlog $self, "Fetch using the search results";
     $res = $imaptalk->fetch('$', 'UID');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals([ 3, 4, 6, 7 ],
+    $self->assert_cmp_deeply([ 3, 4, 6, 7 ],
                               [ sort { $a <=> $b } keys %{$res} ]);
 
     xlog $self, "Expunge the 1st message in the 1st range and the last in the 2nd";
@@ -251,7 +251,7 @@ EOF
     xlog $self, "Fetch using the search results";
     $res = $imaptalk->fetch('$', 'UID');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals([ 4, 6 ],
+    $self->assert_cmp_deeply([ 4, 6 ],
                               [ sort { $a <=> $b } keys %{$res} ]);
 
     xlog $self, "Search the mailbox for a from address in the saved results";
@@ -264,6 +264,6 @@ EOF
     xlog $self, "Fetch using the search results";
     $res = $imaptalk->fetch('$', 'UID');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals([ 6 ],
+    $self->assert_cmp_deeply([ 6 ],
                               [ sort { $a <=> $b } keys %{$res} ]);
 }

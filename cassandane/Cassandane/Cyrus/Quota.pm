@@ -135,7 +135,7 @@ sub XXtest_getset_multiple
     xlog $self, "get both resources back, and not STORAGE";
     @res = $admintalk->getquota($folder);
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-    $self->assert_deep_equals(['X-ANNOT-COUNT', 0, 20, 'X-ANNOT-SIZE', 0, 16384], \@res);
+    $self->assert_cmp_deeply(['X-ANNOT-COUNT', 0, 20, 'X-ANNOT-SIZE', 0, 16384], \@res);
 
     xlog $self, "set the X-ANNOT-SIZE resource only";
     $admintalk->setquota($folder, "(x-annot-size 32768)");
@@ -144,7 +144,7 @@ sub XXtest_getset_multiple
     xlog $self, "get new -SIZE only and neither STORAGE nor -COUNT";
     @res = $admintalk->getquota($folder);
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-    $self->assert_deep_equals(['X-ANNOT-SIZE', 0, 32768], \@res);
+    $self->assert_cmp_deeply(['X-ANNOT-SIZE', 0, 32768], \@res);
 
     xlog $self, "set all of -COUNT -SIZE and STORAGE";
     $admintalk->setquota($folder, "(x-annot-count 123 storage 123456 x-annot-size 65536)");
@@ -153,7 +153,7 @@ sub XXtest_getset_multiple
     xlog $self, "get back all three new values";
     @res = $admintalk->getquota($folder);
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-    $self->assert_deep_equals(['STORAGE', 0, 123456, 'X-ANNOT-COUNT', 0, 123, 'X-ANNOT-SIZE', 0, 65536], \@res);
+    $self->assert_cmp_deeply(['STORAGE', 0, 123456, 'X-ANNOT-COUNT', 0, 123, 'X-ANNOT-SIZE', 0, 65536], \@res);
 
     xlog $self, "clear all quotas";
     $admintalk->setquota($folder, "()");
@@ -165,7 +165,7 @@ sub XXtest_getset_multiple
     xlog $self, "get back an empty set of quotas, but the quota root still exists";
     @res = $admintalk->getquota($folder);
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-    $self->assert_deep_equals([], \@res);
+    $self->assert_cmp_deeply([], \@res);
 }
 
 # Magic: the word 'replication' in the name enables a replica
@@ -203,10 +203,10 @@ sub XXtest_replication_multiple
     xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
-    $self->assert_deep_equals(['X-ANNOT-COUNT', 0, 20, 'X-ANNOT-SIZE', 0, 16384], \@res);
+    $self->assert_cmp_deeply(['X-ANNOT-COUNT', 0, 20, 'X-ANNOT-SIZE', 0, 16384], \@res);
     @res = $replicatalk->getquota($folder);
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
-    $self->assert_deep_equals(['X-ANNOT-COUNT', 0, 20, 'X-ANNOT-SIZE', 0, 16384], \@res);
+    $self->assert_cmp_deeply(['X-ANNOT-COUNT', 0, 20, 'X-ANNOT-SIZE', 0, 16384], \@res);
 
     xlog $self, "set the X-ANNOT-SIZE quota on the master";
     $mastertalk->setquota($folder, "(x-annot-size 32768)");
@@ -221,10 +221,10 @@ sub XXtest_replication_multiple
     xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
-    $self->assert_deep_equals(['X-ANNOT-SIZE', 0, 32768], \@res);
+    $self->assert_cmp_deeply(['X-ANNOT-SIZE', 0, 32768], \@res);
     @res = $replicatalk->getquota($folder);
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
-    $self->assert_deep_equals(['X-ANNOT-SIZE', 0, 32768], \@res);
+    $self->assert_cmp_deeply(['X-ANNOT-SIZE', 0, 32768], \@res);
 
     xlog $self, "clear all the quotas";
     $mastertalk->setquota($folder, "()");
@@ -239,10 +239,10 @@ sub XXtest_replication_multiple
     xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
-    $self->assert_deep_equals([], \@res);
+    $self->assert_cmp_deeply([], \@res);
     @res = $replicatalk->getquota($folder);
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
-    $self->assert_deep_equals([], \@res);
+    $self->assert_cmp_deeply([], \@res);
 }
 
 Cassandane::Cyrus::TestCase::magic(Bug3735 => sub {

@@ -80,7 +80,7 @@ sub test_calendarevent_set_baseeventid
     my $eventInstance1Id = encode_eventid($event1Id, '20230101T090000');
     my $eventInstance2Id = encode_eventid($event1Id, '20230102T090000');
 
-    $self->assert_deep_equals([
+    $self->assert_cmp_deeply([
         $eventInstance1Id, $eventInstance2Id
     ], $res->[0][1]{ids});
 

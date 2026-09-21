@@ -57,7 +57,7 @@ sub test_xlist ($self)
     }
 
     # make sure no expected responses were missing
-    $self->assert_deep_equals({ 'INBOX' => 1, %specialuse, %other }, \%found);
+    $self->assert_cmp_deeply({ 'INBOX' => 1, %specialuse, %other }, \%found);
 
     # ask the frontend about them
     my $fresult = $frontend->xlist("", "*");
@@ -65,5 +65,5 @@ sub test_xlist ($self)
     xlog $self, "frontend: " . Dumper $fresult;
 
     # expect the same results as on backend
-    $self->assert_deep_equals($bresult, $fresult);
+    $self->assert_cmp_deeply($bresult, $fresult);
 }

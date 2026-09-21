@@ -27,6 +27,6 @@ sub test_calendar_set_unknown_calendarright
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notUpdated}{$default_cal_id}{type});
 
-    $self->assert_deep_equals(['shareWith/calshare/unknownCalendarRight'],
+    $self->assert_cmp_deeply(['shareWith/calshare/unknownCalendarRight'],
         $res->[0][1]{notUpdated}{$default_cal_id}{properties});
 }

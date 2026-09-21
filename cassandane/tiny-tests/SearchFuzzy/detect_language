@@ -23,7 +23,7 @@ sub test_detect_language
     my $talk = $self->{store}->get_client();
 
     my $uids = $talk->search('fuzzy', 'body', 'atmet');
-    $self->assert_deep_equals([1], $uids);
+    $self->assert_cmp_deeply([1], $uids);
 
     my $r = $talk->select("INBOX") || die;
     $r = $self->get_snippets('INBOX', $uids, { body => 'atmet' });

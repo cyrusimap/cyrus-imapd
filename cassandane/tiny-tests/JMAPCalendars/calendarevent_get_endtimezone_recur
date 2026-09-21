@@ -54,7 +54,7 @@ EOF
     $self->assert_str_equals('America/New_York', $res->[1][1]{list}[0]{endTimeZone});
 
     my @recurOverrides = values %{ $res->[1][1]{list}[0]{recurrenceOverrides} };
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         \@recurOverrides,
         [ { start => '2024-09-30T17:00:00', duration => 'PT7H' } ],
     );

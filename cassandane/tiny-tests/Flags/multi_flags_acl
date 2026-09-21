@@ -45,11 +45,11 @@ sub test_multi_flags_acl
         $talk->select('INBOX');
         my $res = $talk->store('1', 'flags', '()');
         if ($firsttime) {
-            $self->assert_deep_equals({}, $res);
+            $self->assert_cmp_deeply({}, $res);
             $firsttime = 0;
         }
         else {
-            $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
+            $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
         }
         $msg{A}->set_attribute(flags => []);
         $self->check_messages(\%msg);
@@ -64,7 +64,7 @@ sub test_multi_flags_acl
         $res = $talk->store('1', '+flags', "(@flags)");
 
         # it should work, but only the allowed flag should have been set
-        $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ $flag ] }}, $res);
+        $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [ $flag ] }}, $res);
         $self->assert_equals('ok', $talk->get_last_completion_response());
         $msg{A}->set_attribute(flags => [$flag]);
         $self->check_messages(\%msg);
@@ -75,7 +75,7 @@ sub test_multi_flags_acl
         $talk->select('INBOX');
         $res = $talk->store('1', 'flags', "(@flags)");
         $self->assert_not_null($res);
-        $self->assert_deep_equals([@flags], [sort @{$res->{1}->{flags}}]);
+        $self->assert_cmp_deeply([@flags], [sort @{$res->{1}->{flags}}]);
         $msg{A}->set_attribute(flags => [@flags]);
         $self->check_messages(\%msg);
 
@@ -90,7 +90,7 @@ sub test_multi_flags_acl
 
         # it should work, but only the allowed flag should have been changed
         $self->assert_not_null($res);
-        $self->assert_deep_equals([ grep { $_ ne $flag } @flags ],
+        $self->assert_cmp_deeply([ grep { $_ ne $flag } @flags ],
                                   [ sort @{$res->{1}->{flags}} ]);
         $self->assert_equals('ok', $talk->get_last_completion_response());
         $msg{A}->set_attribute(flags => [ grep { $_ ne $flag } @flags ]);

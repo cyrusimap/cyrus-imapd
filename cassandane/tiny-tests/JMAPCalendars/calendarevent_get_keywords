@@ -13,5 +13,5 @@ sub test_calendarevent_get_keywords
         'bar' => JSON::true,
         'baz' => JSON::true,
     };
-    $self->assert_deep_equals($keywords, $event->{keywords});
+    $self->assert_cmp_deeply($keywords, $event->{keywords});
 }

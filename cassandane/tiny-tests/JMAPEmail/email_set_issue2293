@@ -75,5 +75,5 @@ sub test_email_set_issue2293
         ['Email/get', { ids => [ "#1" ] }, "R2" ],
     ]);
     $ret = $res->[1][1]->{list}[0];
-    $self->assert_deep_equals($email->{to}, $ret->{to});
+    $self->assert_cmp_deeply($email->{to}, $ret->{to});
 }

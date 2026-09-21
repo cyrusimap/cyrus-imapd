@@ -73,5 +73,5 @@ sub assert_keywords_seen ($self, $jmap, $expect)
 
     my $list = $res->single_sentence('CalendarEvent/get')->arguments->{list};
     $self->assert_num_equals(1, scalar @$list);
-    $self->assert_deep_equals($expect, $list->[0]{keywords} // {});
+    $self->assert_cmp_deeply($expect, $list->[0]{keywords} // {});
 }

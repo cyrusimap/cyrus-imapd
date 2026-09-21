@@ -53,6 +53,6 @@ EOF
 
     $self->assert_equals(scalar @$adds, 1);
     $self->assert_str_equals($adds->[0]{uid}, $uuid);
-    $self->assert_deep_equals($removes, []);
-    $self->assert_deep_equals($errors, []);
+    $self->assert_cmp_deeply($removes, []);
+    $self->assert_cmp_deeply($errors, []);
 }

@@ -89,7 +89,7 @@ sub test_calendarevent_query_get_standalone_added_later
     # Every id /query returned must be resolvable by /get: nothing in notFound.
     my @queried = sort $res->[0][1]{ids}->@*;
     $self->assert_num_equals(2, scalar @queried);
-    $self->assert_deep_equals([], $res->[1][1]{notFound});
+    $self->assert_cmp_deeply([], $res->[1][1]{notFound});
 
     my %events = map { $_->{title} => $_ } $res->[1][1]{list}->@*;
     $self->assert_num_equals(2, scalar keys %events);
@@ -99,5 +99,5 @@ sub test_calendarevent_query_get_standalone_added_later
     # While we're here, make sure that the ids in the /get match the ids in the
     # /query!
     my @gotten = sort map { $_->{id} } $res->[1][1]{list}->@*;
-    $self->assert_deep_equals(\@queried, \@gotten);
+    $self->assert_cmp_deeply(\@queried, \@gotten);
 }

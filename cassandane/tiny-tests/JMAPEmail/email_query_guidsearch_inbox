@@ -90,11 +90,11 @@ EOF
             },
         }, "R3"],
     ], $using);
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $mboxId => JSON::true,
     }, $res->[0][1]{list}[0]{mailboxIds});
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals([], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([], $res->[1][1]{ids});
     my ($maj, $min) = Cassandane::Instance->get_version();
     if ($maj < 3 || ($maj ==3 && $min < 5)) {
         $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
@@ -104,7 +104,7 @@ EOF
         $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isGuidSearch});
     }
 
-    $self->assert_deep_equals([], $res->[2][1]{ids});
+    $self->assert_cmp_deeply([], $res->[2][1]{ids});
 
     xlog "Create message in inbox";
     $res = $jmap->CallMethods([
@@ -154,7 +154,7 @@ EOF
         }, "R1"],
     ], $using);
     $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals([$email2Id], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$email2Id], $res->[0][1]{ids});
     $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals([$email2Id], $res->[1][1]{ids});
+    $self->assert_cmp_deeply([$email2Id], $res->[1][1]{ids});
 }

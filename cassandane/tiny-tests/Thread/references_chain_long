@@ -33,5 +33,5 @@ sub test_references_chain_long ($self)
 
     xlog $self, "All messages should still be threaded";
     my $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
-    $self->assert_deep_equals([[ @expthreads ]], $res);
+    $self->assert_cmp_deeply([[ @expthreads ]], $res);
 }

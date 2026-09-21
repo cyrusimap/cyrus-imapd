@@ -48,9 +48,9 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
 
     xlog $self, "generating email A";
     $dt = DateTime->now();
@@ -64,8 +64,8 @@ sub test_thread_changes
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
     $threadA = $res->[0][1]{created}[0];
 
@@ -80,10 +80,10 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($threadA, $res->[0][1]{updated}[0]);
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
     xlog $self, "get thread updates (expect no changes)";
@@ -91,9 +91,9 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
 
     xlog $self, "generating email B";
     $exp{B} = $self->make_message("Email B", body => "b");
@@ -118,8 +118,8 @@ sub test_thread_changes
     $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_str_not_equals($threadA, $res->[0][1]{created}[0]);
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
     $threadB = $res->[0][1]{created}[0];
 
@@ -128,10 +128,10 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($threadA, $res->[0][1]{updated}[0]);
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
     xlog $self, "fetch emails";
@@ -173,7 +173,7 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($threadA, $res->[0][1]{updated}[0]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
@@ -194,10 +194,10 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($threadA, $res->[0][1]{updated}[0]);
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
     $self->assert_str_equals('Thread/get', $res->[1][0]);
@@ -215,8 +215,8 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($threadA, $res->[0][1]{destroyed}[0]);
     $state = $res->[0][1]->{newState};
@@ -226,7 +226,7 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_deep_equals([], $res->[0][1]{created});
-    $self->assert_deep_equals([], $res->[0][1]{updated});
-    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]{created});
+    $self->assert_cmp_deeply([], $res->[0][1]{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]{destroyed});
 }

@@ -118,7 +118,7 @@ sub test_email_set_update_bulk
     my $wantMailboxesEmail3 = {
         $mboxIdByName{'D'} => JSON::true,
     };
-    $self->assert_deep_equals($wantMailboxesEmail1, $emailById{$emailId1}->{mailboxIds});
-    $self->assert_deep_equals($wantMailboxesEmail2, $emailById{$emailId2}->{mailboxIds});
-    $self->assert_deep_equals($wantMailboxesEmail3, $emailById{$emailId3}->{mailboxIds});
+    $self->assert_cmp_deeply($wantMailboxesEmail1, $emailById{$emailId1}->{mailboxIds});
+    $self->assert_cmp_deeply($wantMailboxesEmail2, $emailById{$emailId2}->{mailboxIds});
+    $self->assert_cmp_deeply($wantMailboxesEmail3, $emailById{$emailId3}->{mailboxIds});
 }

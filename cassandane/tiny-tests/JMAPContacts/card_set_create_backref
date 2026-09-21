@@ -43,7 +43,7 @@ sub test_card_set_create_backref
         }, 'R1']
     ]);
 
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         { type => 'invalidProperties', properties => [ 'addressBookIds' ] },
         $badres->[0][1]{notCreated}{1}
     );
@@ -83,7 +83,7 @@ sub test_card_set_create_backref
         }, "R1"],
     ]);
 
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         { $goodres->[0][1]{created}{good}{id} => JSON::true },
         $checkres->[0][1]{list}[0]{addressBookIds}
     );

@@ -18,9 +18,9 @@ sub test_calendar_changes_shared
                 }, 'R1']
         ]);
 
-        $self->assert_deep_equals($changes->{created}, $res->[0][1]{created});
-        $self->assert_deep_equals($changes->{updated}, $res->[0][1]{updated});
-        $self->assert_deep_equals($changes->{destroyed}, $res->[0][1]{destroyed});
+        $self->assert_cmp_deeply($changes->{created}, $res->[0][1]{created});
+        $self->assert_cmp_deeply($changes->{updated}, $res->[0][1]{updated});
+        $self->assert_cmp_deeply($changes->{destroyed}, $res->[0][1]{destroyed});
         $self->assert_str_equals($sinceState, $res->[0][1]{oldState});
 
         return $res->[0][1]{newState};
@@ -37,7 +37,7 @@ sub test_calendar_changes_shared
 
         my @wantCalendars = sort @{$calendars};
         my @haveCalendars = sort map { $_->{id} } @{$res->[0][1]{list}};
-        $self->assert_deep_equals(\@wantCalendars, \@haveCalendars);
+        $self->assert_cmp_deeply(\@wantCalendars, \@haveCalendars);
     };
 
     xlog $self, "Create sharer and share default calendar";
@@ -211,7 +211,7 @@ sub test_calendar_changes_shared
             destroy => [$calendarA->id],
         }, 'R1'],
     ]);
-    $self->assert_deep_equals([$calendarA->id], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([$calendarA->id], $res->[0][1]{destroyed});
 
     $state = $assert_changes->($state, {
         created => [],

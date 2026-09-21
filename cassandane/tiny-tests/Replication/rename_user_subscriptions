@@ -47,5 +47,5 @@ sub test_rename_user_subscriptions
 
     my $subdata = $replicatalk->lsub("", "*");
     my @names = sort map { $_->[2] } @$subdata;
-    $self->assert_deep_equals(['INBOX', 'INBOX.Test', 'INBOX.Test.Sub'], \@names);
+    $self->assert_cmp_deeply(['INBOX', 'INBOX.Test', 'INBOX.Test.Sub'], \@names);
 }

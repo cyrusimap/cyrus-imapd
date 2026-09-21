@@ -54,13 +54,13 @@ sub test_email_set_draft
     $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
 
-    $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
-    $self->assert_deep_equals($msg->{from}, $draft->{from});
-    $self->assert_deep_equals($msg->{sender}, $draft->{sender});
-    $self->assert_deep_equals($msg->{to}, $draft->{to});
-    $self->assert_deep_equals($msg->{cc}, $draft->{cc});
-    $self->assert_deep_equals($msg->{bcc}, $draft->{bcc});
-    $self->assert_deep_equals($msg->{replyTo}, $draft->{replyTo});
+    $self->assert_cmp_deeply($msg->{mailboxIds}, $draft->{mailboxIds});
+    $self->assert_cmp_deeply($msg->{from}, $draft->{from});
+    $self->assert_cmp_deeply($msg->{sender}, $draft->{sender});
+    $self->assert_cmp_deeply($msg->{to}, $draft->{to});
+    $self->assert_cmp_deeply($msg->{cc}, $draft->{cc});
+    $self->assert_cmp_deeply($msg->{bcc}, $draft->{bcc});
+    $self->assert_cmp_deeply($msg->{replyTo}, $draft->{replyTo});
     $self->assert_str_equals($msg->{subject}, $draft->{subject});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'$draft'});
     $self->assert_num_equals(1, scalar keys %{$msg->{keywords}});

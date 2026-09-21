@@ -54,7 +54,7 @@ sub test_list_specialuse ($self)
     }
 
     # make sure no expected responses were missing
-    $self->assert_deep_equals(\%specialuse, \%found);
+    $self->assert_cmp_deeply(\%specialuse, \%found);
 
     # ask the frontend about them
     my $fresult = $frontend->list([qw(SPECIAL-USE)], "", "*",
@@ -63,5 +63,5 @@ sub test_list_specialuse ($self)
     xlog $self, Dumper $fresult;
 
     # expect the same results as on backend
-    $self->assert_deep_equals($bresult, $fresult);
+    $self->assert_cmp_deeply($bresult, $fresult);
 }

@@ -35,7 +35,7 @@ sub test_calendarprincipal_query
             },
         }, 'R1'],
     ]);
-    $self->assert_deep_equals(['cassandane'], $res->[0][1]{ids});
+    $self->assert_cmp_deeply(['cassandane'], $res->[0][1]{ids});
 
     xlog "test sorting";
     $res = $jmap->CallMethods([
@@ -51,6 +51,6 @@ sub test_calendarprincipal_query
             }],
         }, 'R2'],
     ]);
-    $self->assert_deep_equals(['cassandane', 'manifold'], $res->[0][1]{ids});
-    $self->assert_deep_equals(['manifold', 'cassandane'], $res->[1][1]{ids});
+    $self->assert_cmp_deeply(['cassandane', 'manifold'], $res->[0][1]{ids});
+    $self->assert_cmp_deeply(['manifold', 'cassandane'], $res->[1][1]{ids});
 }

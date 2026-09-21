@@ -49,6 +49,6 @@ EOF
         }, 'R1'],
     ]);
     $self->assert_str_equals('private', $res->[0][1]{list}[0]{privacy});
-    $self->assert_deep_equals({ title => 'An event exception'},
+    $self->assert_cmp_deeply({ title => 'An event exception'},
         $res->[0][1]{list}[0]{recurrenceOverrides}{'2021-01-02T15:30:00'});
 }

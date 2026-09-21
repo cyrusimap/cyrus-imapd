@@ -38,11 +38,11 @@ sub test_squatter_attachextract_timeout
 
     xlog "Assert text body is indexed";
     my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
-    $self->assert_deep_equals([1], $uids);
+    $self->assert_cmp_deeply([1], $uids);
 
     xlog "Assert attachement is not indexed";
     $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
-    $self->assert_deep_equals([], $uids);
+    $self->assert_cmp_deeply([], $uids);
 
     xlog "Assert extractor got called once";
     my @tracefiles = glob($tracedir."/*");
@@ -54,11 +54,11 @@ sub test_squatter_attachextract_timeout
 
     xlog "Assert text body is indexed";
     $uids = $imap->search('fuzzy', 'body', 'bodyterm');
-    $self->assert_deep_equals([1], $uids);
+    $self->assert_cmp_deeply([1], $uids);
 
     xlog "Assert attachement is indexed";
     $uids = $imap->search('fuzzy', 'xattachmentbody', 'attachterm');
-    $self->assert_deep_equals([1], $uids);
+    $self->assert_cmp_deeply([1], $uids);
 
     xlog "Assert extractor got called three times";
     @tracefiles = glob($tracedir."/*");

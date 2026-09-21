@@ -26,7 +26,7 @@ sub test_calendarevent_set_recurrenceoverrides_mixed_datetypes
     $self->assert_null($event->{timeZone});
     $self->assert_str_equals('P1D', $event->{duration});
     # Validate overrides.
-    $self->assert_deep_equals($wantOverrides, $event->{recurrenceOverrides});
+    $self->assert_cmp_deeply($wantOverrides, $event->{recurrenceOverrides});
     my $eventId = $event->{id};
 
     # Add recurrenceOverrides with showWithoutTime=true
@@ -63,5 +63,5 @@ sub test_calendarevent_set_recurrenceoverrides_mixed_datetypes
         showWithoutTime => undef,
     };
     $event = $res->[1][1]{list}[0];
-    $self->assert_deep_equals($wantOverrides, $event->{recurrenceOverrides});
+    $self->assert_cmp_deeply($wantOverrides, $event->{recurrenceOverrides});
 }

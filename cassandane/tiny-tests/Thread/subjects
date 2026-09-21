@@ -35,11 +35,11 @@ sub test_subjects ($self)
     xlog $self, "The REFERENCES algorithm gives one thread per subject, even";
     xlog $self, "though the References headers are completely missing";
     $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
-    $self->assert_deep_equals(\@expthreads, $res);
+    $self->assert_cmp_deeply(\@expthreads, $res);
 
     xlog $self, "The ORDEREDSUBJECT algorithm gives one thread per subject";
     $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
-    $self->assert_deep_equals(\@expthreads, $res);
+    $self->assert_cmp_deeply(\@expthreads, $res);
 
     xlog $self, "Double-check the messages are still there";
     $self->check_messages(\%exp);

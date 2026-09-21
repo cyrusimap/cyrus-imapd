@@ -43,19 +43,19 @@ sub test_seen_sharedmb_sharedseen
     # and the expected untagged fetch response
     xlog $self, "Set \\Seen on message A";
     my $res = $talk->store('1', '+flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ '\\Seen' ] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [ '\\Seen' ] }}, $res);
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
     xlog $self, "Clear \\Seen on message A";
     $res = $talk->store('1', '-flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [] }}, $res);
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
     xlog $self, "Set \\Seen on message A again";
     $res = $talk->store('1', '+flags', '(\\Seen)');
-    $self->assert_deep_equals({ '1' => { 'uid' => '1', 'flags' => [ '\\Seen' ] }}, $res);
+    $self->assert_cmp_deeply({ '1' => { 'uid' => '1', 'flags' => [ '\\Seen' ] }}, $res);
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 

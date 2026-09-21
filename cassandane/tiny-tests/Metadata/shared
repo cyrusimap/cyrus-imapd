@@ -81,7 +81,7 @@ sub test_shared ($self)
         $specific_entries{'/shared/vendor/cmu/cyrus-imapd/noexpire_until'} = undef;
     }
 
-    $self->assert_deep_equals(\%specific_entries, $r);
+    $self->assert_cmp_deeply(\%specific_entries, $r);
 
     # individual item fetch:
     my $part = $imaptalk->getmetadata('INBOX', "/shared/vendor/cmu/cyrus-imapd/partition");

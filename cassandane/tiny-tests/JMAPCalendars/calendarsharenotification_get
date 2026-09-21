@@ -58,7 +58,7 @@ sub test_calendarsharenotification_get
     $self->assert_not_null($notif->{created});
     delete($notif->{created});
     # Assert remaining values.
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         changedBy => {
             name => 'Test User',
             email => 'cassandane@example.com',
@@ -86,6 +86,6 @@ sub test_calendarsharenotification_get
         }, 'R1']
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
-    $self->assert_deep_equals(['nope'], $res->[0][1]{notFound});
+    $self->assert_cmp_deeply(['nope'], $res->[0][1]{notFound});
     $self->assert_str_not_equals($state, $res->[0][1]{state});
 }

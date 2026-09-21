@@ -44,7 +44,7 @@ sub test_mailbox_set_sharewith
     ], $using);
 
     $self->assert_null($res->[0][1]{list}[0]{shareWith});
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         sharee => {
             mayRead => JSON::true,
             mayWrite => JSON::false,
@@ -70,7 +70,7 @@ sub test_mailbox_set_sharewith
         }, 'R2'],
     ], $using);
 
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         sharee => {
             mayRead => JSON::true,
             mayWrite => JSON::true,
@@ -93,6 +93,6 @@ sub test_mailbox_set_sharewith
     ], $using);
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notUpdated}{$inboxId}{type});
-    $self->assert_deep_equals(['shareWith/sharee/unknownRight'],
+    $self->assert_cmp_deeply(['shareWith/sharee/unknownRight'],
         $res->[0][1]{notUpdated}{$inboxId}{properties});
 }

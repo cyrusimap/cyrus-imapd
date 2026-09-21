@@ -81,7 +81,7 @@ sub test_calendarevent_set_privacy
     $self->assert_not_null($eventShared1Id);
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notCreated}{eventShared2}{type});
-    $self->assert_deep_equals(['privacy'],
+    $self->assert_cmp_deeply(['privacy'],
         $res->[0][1]{notCreated}{eventShared2}{properties});
     my $eventOwned1Id = $res->[1][1]{created}{eventOwned1}{id};
     $self->assert_not_null($eventOwned1Id);
@@ -106,7 +106,7 @@ sub test_calendarevent_set_privacy
     ]);
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notUpdated}{$eventShared1Id}{type});
-    $self->assert_deep_equals(['privacy'],
+    $self->assert_cmp_deeply(['privacy'],
         $res->[0][1]{notUpdated}{$eventShared1Id}{properties});
     $self->assert(exists $res->[1][1]{updated}{$eventOwned1Id});
 }

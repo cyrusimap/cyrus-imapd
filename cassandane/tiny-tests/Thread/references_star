@@ -44,11 +44,11 @@ sub test_references_star ($self)
 
     xlog $self, "The REFERENCES algorithm gives the true thread structure which is flat";
     $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
-    $self->assert_deep_equals(\@expthreads, $res);
+    $self->assert_cmp_deeply(\@expthreads, $res);
 
     xlog $self, "The ORDEREDSUBJECT algorithm gives the same flat view";
     $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
-    $self->assert_deep_equals(\@expthreads, $res);
+    $self->assert_cmp_deeply(\@expthreads, $res);
 
     xlog $self, "Double-check the messages are still there";
     $self->check_messages(\%exp, keyed_on => 'uid');

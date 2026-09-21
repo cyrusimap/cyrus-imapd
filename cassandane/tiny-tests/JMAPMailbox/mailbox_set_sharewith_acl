@@ -71,7 +71,7 @@ sub test_mailbox_set_sharewith_acl
             mayRead => JSON::false,
         ), %{$_->{wantRights}});
 
-        $self->assert_deep_equals(\%mergedrights,
+        $self->assert_cmp_deeply(\%mergedrights,
             $res->[1][1]{list}[0]{shareWith}{sharee});
         my %acl = @{$admin->getacl("user.cassandane.A")};
         $self->assert_str_equals($_->{acl}, $acl{sharee});

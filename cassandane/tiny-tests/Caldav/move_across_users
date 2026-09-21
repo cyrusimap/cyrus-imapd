@@ -80,18 +80,18 @@ EOF
 
     my ($adds, $removes, $errors, $manToken) =
         $CalDAV->SyncEvents($mancal->{id}, syncToken => $preman->{syncToken});
-    $self->assert_deep_equals([], $adds);
+    $self->assert_cmp_deeply([], $adds);
     $self->assert_equals(1, scalar @$removes);
     $self->assert_str_equals($href, $removes->[0]);
-    $self->assert_deep_equals([], $errors);
+    $self->assert_cmp_deeply([], $errors);
 
     ($adds, $removes, $errors, my $casToken) =
         $CalDAV->SyncEvents($CalendarId, syncToken => $precas->{syncToken});
 
     $self->assert_equals(1, scalar @$adds);
     $self->assert_str_equals($adds->[0]{uid}, $uuid1);
-    $self->assert_deep_equals([], $removes);
-    $self->assert_deep_equals([], $errors);
+    $self->assert_cmp_deeply([], $removes);
+    $self->assert_cmp_deeply([], $errors);
 
     xlog $self, "move event back to shared calendar";
     $href = $CalDAV->fullpath("$CalendarId/$uuid1.ics");
@@ -100,16 +100,16 @@ EOF
     ($adds, $removes, $errors) =
         $CalDAV->SyncEvents($CalendarId, syncToken => $casToken);
 
-    $self->assert_deep_equals([], $adds);
+    $self->assert_cmp_deeply([], $adds);
     $self->assert_equals(1, scalar @$removes);
     $self->assert_str_equals($href, $removes->[0]);
-    $self->assert_deep_equals([], $errors);
+    $self->assert_cmp_deeply([], $errors);
 
     ($adds, $removes, $errors) =
         $CalDAV->SyncEvents($mancal->{id}, syncToken => $manToken);
 
     $self->assert_equals(1, scalar @$adds);
     $self->assert_str_equals($adds->[0]{uid}, $uuid1);
-    $self->assert_deep_equals([], $removes);
-    $self->assert_deep_equals([], $errors);
+    $self->assert_cmp_deeply([], $removes);
+    $self->assert_cmp_deeply([], $errors);
 }

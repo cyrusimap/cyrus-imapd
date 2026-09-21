@@ -34,7 +34,7 @@ sub test_squatter_attachextract_empty_part
 
     xlog "Assert text body is indexed";
     my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
-    $self->assert_deep_equals([1], $uids);
+    $self->assert_cmp_deeply([1], $uids);
 
     xlog "Assert extractor never got called";
     my @tracefiles = glob($tracedir."/*");

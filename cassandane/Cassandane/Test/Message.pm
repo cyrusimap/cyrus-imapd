@@ -122,7 +122,7 @@ sub test_multiple_headers
     $m->add_header("received", "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100");
     $m->add_header("received", "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100");
     $m->add_header("received", "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100");
-    $self->assert_deep_equals([
+    $self->assert_cmp_deeply([
         "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100",
         "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
         "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
@@ -234,7 +234,7 @@ EOF
     $self->assert_str_equals(
         'Hello World',
         $m->get_headers('Subject')->[0]);
-    $self->assert_deep_equals([
+    $self->assert_cmp_deeply([
         "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
         "from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
         "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
@@ -252,7 +252,7 @@ EOF
     $self->assert_str_equals(
         'Hello World',
         $m->get_headers('Subject')->[0]);
-    $self->assert_deep_equals([
+    $self->assert_cmp_deeply([
         "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
         "from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
         "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
@@ -294,7 +294,7 @@ EOF
     $self->assert_str_equals(
         'Hello World',
         $m->get_headers('Subject')->[0]);
-    $self->assert_deep_equals([
+    $self->assert_cmp_deeply([
         "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
         "from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
         "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
@@ -312,7 +312,7 @@ EOF
     $self->assert_str_equals(
         'Hello World',
         $m->get_headers('Subject')->[0]);
-    $self->assert_deep_equals([
+    $self->assert_cmp_deeply([
         "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
         "from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
         "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
@@ -418,7 +418,7 @@ EOF
     $self->assert_str_equals(
         'Hello World',
         $m->get_headers('Subject')->[0]);
-    $self->assert_deep_equals([
+    $self->assert_cmp_deeply([
         "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
         "from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
         "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
@@ -439,7 +439,7 @@ EOF
     $self->assert_str_equals(
         'Hello World',
         $m->get_headers('Subject')->[0]);
-    $self->assert_deep_equals([
+    $self->assert_cmp_deeply([
         "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
         "from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
         "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
@@ -636,7 +636,7 @@ sub test_annotations
     $self->assert_null($m->get_annotation({ entry => $e2, attrib => $a2 }));
     # list_annotations returns no annotations
     my @aa = $m->list_annotations();
-    $self->assert_deep_equals([], \@aa);
+    $self->assert_cmp_deeply([], \@aa);
 
     # set_annotation() sets an annotation to the given value
     $m->set_annotation($e1, $a1, 'wayfarers');
@@ -649,7 +649,7 @@ sub test_annotations
     $self->assert_str_equals('wayfarers', $m->get_annotation({ entry => $e1, attrib => $a1 }));
     $self->assert_null($m->get_annotation({ entry => $e2, attrib => $a2 }));
     @aa = $m->list_annotations();
-    $self->assert_deep_equals([{entry => $e1, attrib => $a1}], \@aa);
+    $self->assert_cmp_deeply([{entry => $e1, attrib => $a1}], \@aa);
 
     # set_annotation to an undef value doesn't remove the annotation
     # but remembers the undef - this is necessary for strict checking
@@ -664,7 +664,7 @@ sub test_annotations
     $self->assert_null($m->get_annotation({ entry => $e1, attrib => $a1 }));
     $self->assert_null($m->get_annotation({ entry => $e2, attrib => $a2 }));
     @aa = $m->list_annotations();
-    $self->assert_deep_equals([{entry => $e1, attrib => $a1}], \@aa);
+    $self->assert_cmp_deeply([{entry => $e1, attrib => $a1}], \@aa);
 
     # Can set two annotations
     $m->set_annotation($e1, $a1, 'brooklyn');
@@ -679,7 +679,7 @@ sub test_annotations
     $self->assert_str_equals('sustainable', $m->get_annotation({ entry => $e2, attrib => $a2 }));
     @aa = $m->list_annotations();
     @aa = sort { $a->{entry} cmp $b->{entry} } @aa;
-    $self->assert_deep_equals([
+    $self->assert_cmp_deeply([
             {entry => $e1, attrib => $a1},
             {entry => $e2, attrib => $a2},
         ], \@aa);
@@ -710,7 +710,7 @@ sub test_annotations_from_fetch
     $self->assert_str_equals('sartorial', $m->get_annotation({ entry => $e2, attrib => $a2 }));
     my @aa = $m->list_annotations();
     @aa = sort { $a->{entry} cmp $b->{entry} } @aa;
-    $self->assert_deep_equals([
+    $self->assert_cmp_deeply([
             {entry => $e1, attrib => $a1},
             {entry => $e2, attrib => $a2},
         ], \@aa);

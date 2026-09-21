@@ -24,7 +24,7 @@ sub test_bad_name_chars ($self)
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     my $list = $talk->list('', '%');
-    $self->assert_deep_equals(['INBOX', 'a^b', 'owner'],
+    $self->assert_cmp_deeply(['INBOX', 'a^b', 'owner'],
                               [sort map { $_->[2] } @$list]);
 }
 
@@ -53,6 +53,6 @@ sub test_bad_name_chars_unixhs
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     my $list = $talk->list('', '%');
-    $self->assert_deep_equals(['INBOX', 'a.b', 'owner'],
+    $self->assert_cmp_deeply(['INBOX', 'a.b', 'owner'],
                               [sort map { $_->[2] } @$list]);
 }

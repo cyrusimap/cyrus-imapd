@@ -19,7 +19,7 @@ sub test_lint_services
     my @output = $self->{instance}->run_cyr_info('conf-lint');
     @output = grep { !m/_db: / } @output;  # skip database types
 
-    $self->assert_deep_equals(
+    $self->assert_cmp_deeply(
         [ sort(
             "http_trust_fund: street art\n",
             # XXX we don't verify sasl keys, so this isn't reported

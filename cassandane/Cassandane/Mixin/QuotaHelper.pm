@@ -24,7 +24,7 @@ sub check_usages
     $self->assert_num_equals(scalar(keys %$limits) * 3, scalar(@result));
 
     # Convert the IMAP result to a conveniently checkable hash.
-    # By checkable, we mean that a failure in assert_deep_equals()
+    # By checkable, we mean that a failure in assert_cmp_deeply()
     # will give a human some idea of what went wrong.
     my %act;
     while (scalar(@result)) {
@@ -50,7 +50,7 @@ sub check_usages
     }
 
     # Now actually compare
-    $self->assert_deep_equals(\%exp, \%act);
+    $self->assert_cmp_deeply(\%exp, \%act);
 }
 
 # Reset the recorded usage in the database.  Used for testing

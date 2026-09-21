@@ -12,5 +12,5 @@ sub test_subject_and_body_match
     my $talk = $self->{store}->get_client();
 
     my $uids = $talk->search('fuzzy', 'text', 'fwd', 'text', 'schenectady');
-    $self->assert_deep_equals([1], $uids);
+    $self->assert_cmp_deeply([1], $uids);
 }

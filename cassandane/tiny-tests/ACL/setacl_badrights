@@ -17,5 +17,5 @@ sub test_setacl_badrights
     $self->assert_str_equals('bad', $admintalk->get_last_completion_response());
 
     my $newacl = $admintalk->getacl("user.cassandane.badrights");
-    $self->assert_deep_equals($origacl, $newacl);
+    $self->assert_cmp_deeply($origacl, $newacl);
 }

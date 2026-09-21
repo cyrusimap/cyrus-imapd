@@ -13,7 +13,7 @@ sub test_service_exit_during_start ($self)
     $self->start();
 
     xlog $self, "not preforked, so no lemmings running yet";
-    $self->assert_deep_equals({},
+    $self->assert_cmp_deeply({},
                               $self->lemming_census());
 
     xlog $self, "connection fails due to dead lemming";
@@ -24,7 +24,7 @@ sub test_service_exit_during_start ($self)
     $self->assert_null($lemm);
 
     xlog $self, "expect 5 dead lemmings";
-    $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 5 } },
                               $self->lemming_census());
 
     xlog $self, "connections should fail because service disabled";
@@ -33,7 +33,7 @@ sub test_service_exit_during_start ($self)
         $lemm = lemming_connect($srv);
     };
     $self->assert_null($lemm);
-    $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
+    $self->assert_cmp_deeply({ A => { live => 0, dead => 5 } },
                               $self->lemming_census());
 
     if ($self->{instance}->{have_syslog_replacement}) {

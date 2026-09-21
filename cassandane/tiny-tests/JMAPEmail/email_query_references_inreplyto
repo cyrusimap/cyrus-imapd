@@ -100,20 +100,20 @@ sub test_email_query_references_inreplyto
             'R4'
         ],
     ]);
-    $self->assert_deep_equals([$email1Id], $res->[0][1]{ids});
-    $self->assert_deep_equals(['xapian'],  $res->[0][1]{performance}{details}{filters});
+    $self->assert_cmp_deeply([$email1Id], $res->[0][1]{ids});
+    $self->assert_cmp_deeply(['xapian'],  $res->[0][1]{performance}{details}{filters});
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
 
-    $self->assert_deep_equals([$email1Id], $res->[1][1]{ids});
-    $self->assert_deep_equals(['cache'],   $res->[1][1]{performance}{details}{filters});
+    $self->assert_cmp_deeply([$email1Id], $res->[1][1]{ids});
+    $self->assert_cmp_deeply(['cache'],   $res->[1][1]{performance}{details}{filters});
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
 
-    $self->assert_deep_equals([$email1Id], $res->[2][1]{ids});
-    $self->assert_deep_equals(['xapian'],  $res->[2][1]{performance}{details}{filters});
+    $self->assert_cmp_deeply([$email1Id], $res->[2][1]{ids});
+    $self->assert_cmp_deeply(['xapian'],  $res->[2][1]{performance}{details}{filters});
     $self->assert_equals(JSON::true, $res->[2][1]{performance}{details}{isGuidSearch});
 
-    $self->assert_deep_equals([$email2Id], $res->[3][1]{ids});
-    $self->assert_deep_equals(['xapian'],  $res->[3][1]{performance}{details}{filters});
+    $self->assert_cmp_deeply([$email2Id], $res->[3][1]{ids});
+    $self->assert_cmp_deeply(['xapian'],  $res->[3][1]{performance}{details}{filters});
     $self->assert_equals(JSON::true, $res->[3][1]{performance}{details}{isGuidSearch});
 
     xlog $self, "Assert 'inReplyTo' and 'references' filters in Sieve";

@@ -56,11 +56,11 @@ EOF
             'R2'
         ],
     ]);
-    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
-    $self->assert_deep_equals(['xapian'], $res->[0][1]{performance}{details}{filters});
+    $self->assert_cmp_deeply([$emailId], $res->[0][1]{ids});
+    $self->assert_cmp_deeply(['xapian'], $res->[0][1]{performance}{details}{filters});
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
-    $self->assert_deep_equals([$emailId], $res->[1][1]{ids});
-    $self->assert_deep_equals(['cache'],  $res->[1][1]{performance}{details}{filters});
+    $self->assert_cmp_deeply([$emailId], $res->[1][1]{ids});
+    $self->assert_cmp_deeply(['cache'],  $res->[1][1]{performance}{details}{filters});
     $self->assert_equals(JSON::false, $res->[1][1]{performance}{details}{isGuidSearch});
 
     xlog $self, "Assert 'messageId' filter in Sieve";
@@ -118,7 +118,7 @@ EOF
             'R1'
         ],
     ]);
-    $self->assert_deep_equals([$emailId], $res->[0][1]{ids});
-    $self->assert_deep_equals(['cache'],  $res->[0][1]{performance}{details}{filters});
+    $self->assert_cmp_deeply([$emailId], $res->[0][1]{ids});
+    $self->assert_cmp_deeply(['cache'],  $res->[0][1]{performance}{details}{filters});
     $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
 }

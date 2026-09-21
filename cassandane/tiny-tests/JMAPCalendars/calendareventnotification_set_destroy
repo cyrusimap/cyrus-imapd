@@ -139,7 +139,7 @@ EOF
             destroy => [$notifId],
         }, 'R1'],
     ]);
-    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([$notifId], $res->[0][1]{destroyed});
 
     xlog "refetch notifications";
 
@@ -185,7 +185,7 @@ EOF
             destroy => [$notifId],
         }, 'R1'],
     ]);
-    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+    $self->assert_cmp_deeply([$notifId], $res->[0][1]{destroyed});
 
     xlog "refetch notifications";
 

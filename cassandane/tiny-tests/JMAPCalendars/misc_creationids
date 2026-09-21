@@ -35,5 +35,5 @@ sub test_misc_creationids
     my $calendar = $res->[3][1]{list}[0];
     $self->assert_str_equals("foo", $calendar->{name});
 
-    $self->assert_deep_equals({$calendar->{id} => JSON::true}, $event->{calendarIds});
+    $self->assert_cmp_deeply({$calendar->{id} => JSON::true}, $event->{calendarIds});
 }

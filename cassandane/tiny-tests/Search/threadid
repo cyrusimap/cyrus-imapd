@@ -40,5 +40,5 @@ sub test_threadid
     $self->assert_num_equals(200, $uids1->[99]);
 
     my $uids2 = $imaptalk->search('threadid', $thrid);
-    $self->assert_deep_equals($uids1, $uids2);
+    $self->assert_cmp_deeply($uids1, $uids2);
 }

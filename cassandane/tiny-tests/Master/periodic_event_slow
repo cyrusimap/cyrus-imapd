@@ -17,7 +17,7 @@ sub test_periodic_event_slow ($self)
     xlog $self, "waiting 5 mins for events to fire, plus some slop";
     sleep(5*60 + 5);
 
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
                                 B => { live => 0, dead => 6 },
                               }, $self->lemming_census());
 }

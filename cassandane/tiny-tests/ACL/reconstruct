@@ -11,5 +11,5 @@ sub test_reconstruct ($self)
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
 
     my $newacl = $admintalk->getacl("user.archive.cassandane.sent");
-    $self->assert_deep_equals($oldacl, $newacl);
+    $self->assert_cmp_deeply($oldacl, $newacl);
 }

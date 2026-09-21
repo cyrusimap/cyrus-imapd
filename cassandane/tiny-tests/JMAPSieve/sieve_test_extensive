@@ -333,7 +333,7 @@ sub run_sieve_test ($self, $sieve_blob_id, $email_blob_id, $expect, $variables=u
     $self->assert_null($res->[0][1]{notCompleted});
 
     eval {
-        $self->assert_deep_equals(
+        $self->assert_cmp_deeply(
             $expect,
             $res->[0][1]{completed}{$email_blob_id},
         );

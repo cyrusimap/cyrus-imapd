@@ -20,7 +20,7 @@ sub test_size ($self)
     xlog $self, "initial value is numeric zero";
     $res = $imaptalk->getmetadata($folder_cass, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $folder_cass => { $entry => "0" }
     }, $res);
 
@@ -43,7 +43,7 @@ sub test_size ($self)
 
     $res = $imaptalk->getmetadata($folder_cass, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $folder_cass => { $entry => "" . $expected }
     }, $res);
 
@@ -53,7 +53,7 @@ sub test_size ($self)
 
     $res = $imaptalk->getmetadata($folder_cass, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
         $folder_cass => { $entry => "" . $expected }
     }, $res);
 

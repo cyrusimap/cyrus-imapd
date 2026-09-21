@@ -171,6 +171,6 @@ EOF
         }, "R1"]], $using);
         my @wantIds = sort @{$wantIds};
         my @gotIds = sort @{$res->[0][1]->{ids}};
-        $self->assert_deep_equals(\@wantIds, \@gotIds);
+        $self->assert_cmp_deeply(\@wantIds, \@gotIds);
     }
 }

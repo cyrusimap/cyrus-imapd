@@ -41,14 +41,14 @@ sub test_hash
     my ($self) = @_;
     my $a = { foo => 42 };
     my $b = clone($a);
-    $self->assert_deep_equals({ foo => 42 }, $a);
-    $self->assert_deep_equals({ foo => 42 }, $b);
+    $self->assert_cmp_deeply({ foo => 42 }, $a);
+    $self->assert_cmp_deeply({ foo => 42 }, $b);
     $b->{bar} = 123;
-    $self->assert_deep_equals({ foo => 42 }, $a);
-    $self->assert_deep_equals({ foo => 42, bar => 123 }, $b);
+    $self->assert_cmp_deeply({ foo => 42 }, $a);
+    $self->assert_cmp_deeply({ foo => 42, bar => 123 }, $b);
     delete $b->{foo};
-    $self->assert_deep_equals({ foo => 42 }, $a);
-    $self->assert_deep_equals({ bar => 123 }, $b);
+    $self->assert_cmp_deeply({ foo => 42 }, $a);
+    $self->assert_cmp_deeply({ bar => 123 }, $b);
 }
 
 sub test_array
@@ -56,14 +56,14 @@ sub test_array
     my ($self) = @_;
     my $a = [ 42 ];
     my $b = clone($a);
-    $self->assert_deep_equals([ 42 ], $a);
-    $self->assert_deep_equals([ 42 ], $b);
+    $self->assert_cmp_deeply([ 42 ], $a);
+    $self->assert_cmp_deeply([ 42 ], $b);
     push(@$b, 123);
-    $self->assert_deep_equals([ 42 ], $a);
-    $self->assert_deep_equals([ 42, 123 ], $b);
+    $self->assert_cmp_deeply([ 42 ], $a);
+    $self->assert_cmp_deeply([ 42, 123 ], $b);
     shift @$b;
-    $self->assert_deep_equals([ 42 ], $a);
-    $self->assert_deep_equals([ 123 ], $b);
+    $self->assert_cmp_deeply([ 42 ], $a);
+    $self->assert_cmp_deeply([ 123 ], $b);
 }
 
 sub test_complex
@@ -72,7 +72,7 @@ sub test_complex
     my $a = { foo => [ { x => 42, y => 123 } ],
               bar => { quux => 37, foonly => 475 } };
     my $b = clone($a);
-    $self->assert_deep_equals($a, $b);
+    $self->assert_cmp_deeply($a, $b);
 }
 
 1;

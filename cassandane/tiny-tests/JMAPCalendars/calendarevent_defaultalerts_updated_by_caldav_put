@@ -69,7 +69,7 @@ sub assert_valarms ($self, $vevent, %args)
     my @gotUids = sort map { @{$_->property('UID')}[0]->value } @valarms;
     my @wantUids = sort @{${args}{uids}};
 
-    $self->assert_deep_equals(\@wantUids, \@gotUids);
+    $self->assert_cmp_deeply(\@wantUids, \@gotUids);
 }
 
 sub caldav_get ($self, $eventHref)

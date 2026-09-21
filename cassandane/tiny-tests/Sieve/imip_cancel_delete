@@ -109,5 +109,5 @@ EOF
 
     xlog $self, "Check that the event was removed from calendar";
     $events = $CalDAV->GetEvents($CalendarHref);
-    $self->assert_deep_equals($events, []);
+    $self->assert_cmp_deeply($events, []);
 }

@@ -45,8 +45,8 @@ sub test_email_set_move_keywords
     ]);
     my $archiveId = $res->[0][1]{created}[0];
     $self->assert_not_null($archiveId);
-    $self->assert_deep_equals([], $res->[0][1]->{updated});
-    $self->assert_deep_equals([], $res->[0][1]->{destroyed});
+    $self->assert_cmp_deeply([], $res->[0][1]->{updated});
+    $self->assert_cmp_deeply([], $res->[0][1]->{destroyed});
 
     xlog $self, "move email to Archive";
     xlog $self, "update email";
@@ -59,5 +59,5 @@ sub test_email_set_move_keywords
         ['Email/get', { ids => [ $msgId ], properties => ['keywords'] }, 'R2'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$msgId});
-    $self->assert_deep_equals($keywords, $res->[1][1]{list}[0]{keywords});
+    $self->assert_cmp_deeply($keywords, $res->[1][1]{list}[0]{keywords});
 }

@@ -16,35 +16,35 @@ sub test_email_query_keyword_splitconv
     $imap->store('1:*', '-flags', '($IsMailingList)');
 
     my $ids = $self->query_emails;
-    $self->assert_deep_equals($bothIds, $ids->{noneHaveKeyword});
-    $self->assert_deep_equals($bothIds, $ids->{noneHaveKeywordGuidSearch});
-    $self->assert_deep_equals([],       $ids->{someHaveKeyword});
-    $self->assert_deep_equals([],       $ids->{someHaveKeywordGuidSearch});
-    $self->assert_deep_equals([],       $ids->{allHaveKeyword});
-    $self->assert_deep_equals([],       $ids->{allHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($bothIds, $ids->{noneHaveKeyword});
+    $self->assert_cmp_deeply($bothIds, $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply([],       $ids->{someHaveKeyword});
+    $self->assert_cmp_deeply([],       $ids->{someHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply([],       $ids->{allHaveKeyword});
+    $self->assert_cmp_deeply([],       $ids->{allHaveKeywordGuidSearch});
 
     xlog $self, "Set flag in first split";
     $imap->store('2', '+flags', '($IsMailingList)');
 
     $ids = $self->query_emails;
-    $self->assert_deep_equals($split2Ids, $ids->{noneHaveKeyword});
-    $self->assert_deep_equals($split2Ids, $ids->{noneHaveKeywordGuidSearch});
-    $self->assert_deep_equals($split1Ids, $ids->{someHaveKeyword});
-    $self->assert_deep_equals($split1Ids, $ids->{someHaveKeywordGuidSearch});
-    $self->assert_deep_equals([],         $ids->{allHaveKeyword});
-    $self->assert_deep_equals([],         $ids->{allHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($split2Ids, $ids->{noneHaveKeyword});
+    $self->assert_cmp_deeply($split2Ids, $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($split1Ids, $ids->{someHaveKeyword});
+    $self->assert_cmp_deeply($split1Ids, $ids->{someHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply([],         $ids->{allHaveKeyword});
+    $self->assert_cmp_deeply([],         $ids->{allHaveKeywordGuidSearch});
 
     xlog $self, "Set flag in second split";
     $imap->store('1:*',           '-flags', '($IsMailingList)');
     $imap->store($nMaxThread + 1, '+flags', '($IsMailingList)');
 
     $ids = $self->query_emails;
-    $self->assert_deep_equals($split1Ids, $ids->{noneHaveKeyword});
-    $self->assert_deep_equals($split1Ids, $ids->{noneHaveKeywordGuidSearch});
-    $self->assert_deep_equals($split2Ids, $ids->{someHaveKeyword});
-    $self->assert_deep_equals($split2Ids, $ids->{someHaveKeywordGuidSearch});
-    $self->assert_deep_equals([],         $ids->{allHaveKeyword});
-    $self->assert_deep_equals([],         $ids->{allHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($split1Ids, $ids->{noneHaveKeyword});
+    $self->assert_cmp_deeply($split1Ids, $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($split2Ids, $ids->{someHaveKeyword});
+    $self->assert_cmp_deeply($split2Ids, $ids->{someHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply([],         $ids->{allHaveKeyword});
+    $self->assert_cmp_deeply([],         $ids->{allHaveKeywordGuidSearch});
 
     xlog $self, "Set flag in bothIds splits";
     $imap->store('1:*',           '-flags', '($IsMailingList)');
@@ -52,36 +52,36 @@ sub test_email_query_keyword_splitconv
     $imap->store($nMaxThread + 1, '+flags', '($IsMailingList)');
 
     $ids = $self->query_emails;
-    $self->assert_deep_equals([],       $ids->{noneHaveKeyword});
-    $self->assert_deep_equals([],       $ids->{noneHaveKeywordGuidSearch});
-    $self->assert_deep_equals($bothIds, $ids->{someHaveKeyword});
-    $self->assert_deep_equals($bothIds, $ids->{someHaveKeywordGuidSearch});
-    $self->assert_deep_equals([],       $ids->{allHaveKeyword});
-    $self->assert_deep_equals([],       $ids->{allHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply([],       $ids->{noneHaveKeyword});
+    $self->assert_cmp_deeply([],       $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($bothIds, $ids->{someHaveKeyword});
+    $self->assert_cmp_deeply($bothIds, $ids->{someHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply([],       $ids->{allHaveKeyword});
+    $self->assert_cmp_deeply([],       $ids->{allHaveKeywordGuidSearch});
 
     xlog $self, "Set flag in all of first split";
     $imap->store('1:*',              '-flags', '($IsMailingList)');
     $imap->store("1:" . $nMaxThread, '+flags', '($IsMailingList)');
 
     $ids = $self->query_emails;
-    $self->assert_deep_equals($split2Ids, $ids->{noneHaveKeyword});
-    $self->assert_deep_equals($split2Ids, $ids->{noneHaveKeywordGuidSearch});
-    $self->assert_deep_equals($split1Ids, $ids->{someHaveKeyword});
-    $self->assert_deep_equals($split1Ids, $ids->{someHaveKeywordGuidSearch});
-    $self->assert_deep_equals($split1Ids, $ids->{allHaveKeyword});
-    $self->assert_deep_equals($split1Ids, $ids->{allHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($split2Ids, $ids->{noneHaveKeyword});
+    $self->assert_cmp_deeply($split2Ids, $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($split1Ids, $ids->{someHaveKeyword});
+    $self->assert_cmp_deeply($split1Ids, $ids->{someHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($split1Ids, $ids->{allHaveKeyword});
+    $self->assert_cmp_deeply($split1Ids, $ids->{allHaveKeywordGuidSearch});
 
     xlog $self, "Set flag in all of second split";
     $imap->store('1:*',                  '-flags', '($IsMailingList)');
     $imap->store($nMaxThread + 1 . ":*", '+flags', '($IsMailingList)');
 
     $ids = $self->query_emails;
-    $self->assert_deep_equals($split1Ids, $ids->{noneHaveKeyword});
-    $self->assert_deep_equals($split1Ids, $ids->{noneHaveKeywordGuidSearch});
-    $self->assert_deep_equals($split2Ids, $ids->{someHaveKeyword});
-    $self->assert_deep_equals($split2Ids, $ids->{someHaveKeywordGuidSearch});
-    $self->assert_deep_equals($split2Ids, $ids->{allHaveKeyword});
-    $self->assert_deep_equals($split2Ids, $ids->{allHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($split1Ids, $ids->{noneHaveKeyword});
+    $self->assert_cmp_deeply($split1Ids, $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($split2Ids, $ids->{someHaveKeyword});
+    $self->assert_cmp_deeply($split2Ids, $ids->{someHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($split2Ids, $ids->{allHaveKeyword});
+    $self->assert_cmp_deeply($split2Ids, $ids->{allHaveKeywordGuidSearch});
 
     xlog $self, "Set flag in all of first and some of second split";
     $imap->store('1:*',              '-flags', '($IsMailingList)');
@@ -89,12 +89,12 @@ sub test_email_query_keyword_splitconv
     $imap->store($nMaxThread + 1,    '+flags', '($IsMailingList)');
 
     $ids = $self->query_emails;
-    $self->assert_deep_equals([],         $ids->{noneHaveKeyword});
-    $self->assert_deep_equals([],         $ids->{noneHaveKeywordGuidSearch});
-    $self->assert_deep_equals($bothIds,   $ids->{someHaveKeyword});
-    $self->assert_deep_equals($bothIds,   $ids->{someHaveKeywordGuidSearch});
-    $self->assert_deep_equals($split1Ids, $ids->{allHaveKeyword});
-    $self->assert_deep_equals($split1Ids, $ids->{allHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply([],         $ids->{noneHaveKeyword});
+    $self->assert_cmp_deeply([],         $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($bothIds,   $ids->{someHaveKeyword});
+    $self->assert_cmp_deeply($bothIds,   $ids->{someHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($split1Ids, $ids->{allHaveKeyword});
+    $self->assert_cmp_deeply($split1Ids, $ids->{allHaveKeywordGuidSearch});
 
     xlog $self, "Set flag in some of first and all of second split";
     $imap->store('1:*',                  '-flags', '($IsMailingList)');
@@ -102,23 +102,23 @@ sub test_email_query_keyword_splitconv
     $imap->store($nMaxThread + 1 . ":*", '+flags', '($IsMailingList)');
 
     $ids = $self->query_emails;
-    $self->assert_deep_equals([],         $ids->{noneHaveKeyword});
-    $self->assert_deep_equals([],         $ids->{noneHaveKeywordGuidSearch});
-    $self->assert_deep_equals($bothIds,   $ids->{someHaveKeyword});
-    $self->assert_deep_equals($bothIds,   $ids->{someHaveKeywordGuidSearch});
-    $self->assert_deep_equals($split2Ids, $ids->{allHaveKeyword});
-    $self->assert_deep_equals($split2Ids, $ids->{allHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply([],         $ids->{noneHaveKeyword});
+    $self->assert_cmp_deeply([],         $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($bothIds,   $ids->{someHaveKeyword});
+    $self->assert_cmp_deeply($bothIds,   $ids->{someHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($split2Ids, $ids->{allHaveKeyword});
+    $self->assert_cmp_deeply($split2Ids, $ids->{allHaveKeywordGuidSearch});
 
     xlog $self, "Set flag in all of first and second split";
     $imap->store('1:*', '+flags', '($IsMailingList)');
 
     $ids = $self->query_emails;
-    $self->assert_deep_equals([],       $ids->{noneHaveKeyword});
-    $self->assert_deep_equals([],       $ids->{noneHaveKeywordGuidSearch});
-    $self->assert_deep_equals($bothIds, $ids->{someHaveKeyword});
-    $self->assert_deep_equals($bothIds, $ids->{someHaveKeywordGuidSearch});
-    $self->assert_deep_equals($bothIds, $ids->{allHaveKeyword});
-    $self->assert_deep_equals($bothIds, $ids->{allHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply([],       $ids->{noneHaveKeyword});
+    $self->assert_cmp_deeply([],       $ids->{noneHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($bothIds, $ids->{someHaveKeyword});
+    $self->assert_cmp_deeply($bothIds, $ids->{someHaveKeywordGuidSearch});
+    $self->assert_cmp_deeply($bothIds, $ids->{allHaveKeyword});
+    $self->assert_cmp_deeply($bothIds, $ids->{allHaveKeywordGuidSearch});
 }
 
 sub query_emails ($self)

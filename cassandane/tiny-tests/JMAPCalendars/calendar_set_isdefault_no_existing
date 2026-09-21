@@ -12,7 +12,7 @@ sub test_calendar_set_isdefault_no_existing
         'Calendar/get' => { },
     ]])->single_sentence("Calendar/get")->arguments;
 
-    $self->assert_deep_equals([], $res->{list});
+    $self->assert_cmp_deeply([], $res->{list});
 
     xlog $self, "create a calendar and mark it default in one call";
     $res = $jmap->request([[

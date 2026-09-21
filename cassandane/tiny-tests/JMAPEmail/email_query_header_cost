@@ -35,8 +35,8 @@ sub test_email_query_header_cost
             },
         }, 'R2'],
     ], $using);
-    $self->assert_deep_equals(['body'],
+    $self->assert_cmp_deeply(['body'],
         $res->[0][1]{performance}{details}{filters});
-    $self->assert_deep_equals(['cache'],
+    $self->assert_cmp_deeply(['cache'],
         $res->[1][1]{performance}{details}{filters});
 }

@@ -58,13 +58,13 @@ sub test_squatter_skip422
 
     xlog "Assert text bodies of both messages are indexed";
     my $uids = $imap->search('fuzzy', 'body', 'bodyterm');
-    $self->assert_deep_equals([1,2], $uids);
+    $self->assert_cmp_deeply([1,2], $uids);
 
     xlog "Assert attachment of first message is not indexed";
     $uids = $imap->search('fuzzy', 'xattachmentbody', 'attach1');
-    $self->assert_deep_equals([], $uids);
+    $self->assert_cmp_deeply([], $uids);
 
     xlog "Assert attachment of second message is not indexed";
     $uids = $imap->search('fuzzy', 'xattachmentbody', 'attach2');
-    $self->assert_deep_equals([], $uids);
+    $self->assert_cmp_deeply([], $uids);
 }

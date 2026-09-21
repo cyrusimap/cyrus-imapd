@@ -20,6 +20,6 @@ sub test_autocreate_acl
 
     while (my ($folder, $acl) = each %folder_acls) {
         my $res = $talk->getacl($folder);
-        $self->assert_deep_equals($folder_acls{$folder}, $res);
+        $self->assert_cmp_deeply($folder_acls{$folder}, $res);
     }
 }

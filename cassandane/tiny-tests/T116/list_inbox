@@ -19,5 +19,5 @@ sub test_list_inbox
 
     my @list = $admintalk->list('', '*');
     my @items = sort map { $_->[2] } @list;
-    $self->assert_deep_equals(\@items, ['user.cassandane', 'user.test@inbox.com', 'user.test@inbox2.com']);
+    $self->assert_cmp_deeply(\@items, ['user.cassandane', 'user.test@inbox.com', 'user.test@inbox2.com']);
 }

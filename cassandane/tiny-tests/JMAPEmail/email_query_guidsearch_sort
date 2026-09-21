@@ -109,20 +109,20 @@ sub test_email_query_guidsearch_sort
     # Check GUID search results
     $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
     @wantIds = map { $_->{id} } sort { $a->{id} cmp $b->{id} } @emails;
-    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[0][1]{ids});
 
     $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isGuidSearch});
     @wantIds = map { $_->{id} } sort { $b->{id} cmp $a->{id} } @emails;
-    $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[1][1]{ids});
 
     # Check UID search result
     $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isGuidSearch});
     @wantIds = map { $_->{id} } sort { $a->{id} cmp $b->{id} } @emails;
-    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[2][1]{ids});
 
     $self->assert_equals(JSON::false, $res->[3][1]{performance}{details}{isGuidSearch});
     @wantIds = map { $_->{id} } sort { $b->{id} cmp $a->{id} } @emails;
-    $self->assert_deep_equals(\@wantIds, $res->[3][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[3][1]{ids});
 
     xlog "Sort by internaldate (break ties by id) (ascending and descending)";
     $res = $jmap->CallMethods([
@@ -171,24 +171,24 @@ sub test_email_query_guidsearch_sort
     @wantIds = map { $_->{id} } sort {
         $a->{receivedAt} cmp $b->{receivedAt} or $b->{id} cmp $a->{id}
     } @emails;
-    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[0][1]{ids});
 
     $self->assert_equals(JSON::true, $res->[1][1]{performance}{details}{isGuidSearch});
     @wantIds = map { $_->{id} } sort {
         $b->{receivedAt} cmp $a->{receivedAt} or $b->{id} cmp $a->{id}
     } @emails;
-    $self->assert_deep_equals(\@wantIds, $res->[1][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[1][1]{ids});
 
     # Check UID search result
     $self->assert_equals(JSON::false, $res->[2][1]{performance}{details}{isGuidSearch});
     @wantIds = map { $_->{id} } sort {
         $a->{receivedAt} cmp $b->{receivedAt} or $b->{id} cmp $a->{id}
     } @emails;
-    $self->assert_deep_equals(\@wantIds, $res->[2][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[2][1]{ids});
 
     $self->assert_equals(JSON::false, $res->[3][1]{performance}{details}{isGuidSearch});
     @wantIds = map { $_->{id} } sort {
         $b->{receivedAt} cmp $a->{receivedAt} or $b->{id} cmp $a->{id}
     } @emails;
-    $self->assert_deep_equals(\@wantIds, $res->[3][1]{ids});
+    $self->assert_cmp_deeply(\@wantIds, $res->[3][1]{ids});
 }

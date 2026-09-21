@@ -35,6 +35,6 @@ sub test_email_set_flagged
     $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
     my $msg = $res->[0][1]->{list}[0];
 
-    $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
+    $self->assert_cmp_deeply($msg->{mailboxIds}, $draft->{mailboxIds});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'$flagged'});
 }

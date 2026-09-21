@@ -15,7 +15,7 @@ sub test_list_2011 ($self)
     }
 
     my $alldata = $imaptalk->list("", "2001");
-    $self->assert_deep_equals($alldata, [
+    $self->assert_cmp_deeply($alldata, [
           [
             \@inter_flags,
             '/',

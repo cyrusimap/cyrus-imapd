@@ -59,12 +59,12 @@ sub test_card_query_group_with_member
     $res = $jmap->CallMethods([[
       'ContactCard/query', { filter => { uid => $iuid } }, "R1"
     ]]);
-    $self->assert_deep_equals($res->[0][1]{ids}, [ $iid ]);
+    $self->assert_cmp_deeply($res->[0][1]{ids}, [ $iid ]);
 
     $res = $jmap->CallMethods([[
       'ContactCard/query', { filter => { uid => $guid } }, "R1"
     ]]);
-    $self->assert_deep_equals($res->[0][1]{ids}, [ $gid ]);
+    $self->assert_cmp_deeply($res->[0][1]{ids}, [ $gid ]);
 
     # Now add the contact to the group
     $res = $jmap->CallMethods([[
@@ -82,11 +82,11 @@ sub test_card_query_group_with_member
     $res = $jmap->CallMethods([[
       'ContactCard/query', { filter => { uid => $iuid } }, "R1"
     ]]);
-    $self->assert_deep_equals($res->[0][1]{ids}, [ $iid ]);
+    $self->assert_cmp_deeply($res->[0][1]{ids}, [ $iid ]);
 
     $res = $jmap->CallMethods([[
       'ContactCard/query', { filter => { uid => $guid } }, "R1"
     ]]);
-    $self->assert_deep_equals($res->[0][1]{ids}, [ $gid ]);
+    $self->assert_cmp_deeply($res->[0][1]{ids}, [ $gid ]);
 
 }

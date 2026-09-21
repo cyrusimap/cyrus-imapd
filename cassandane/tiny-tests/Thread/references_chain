@@ -42,7 +42,7 @@ sub test_references_chain ($self)
         push(@expthreads, [ map { $_->uid } @{$exp_by_sub{$sub}} ]);
     }
     $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
-    $self->assert_deep_equals(\@expthreads, $res);
+    $self->assert_cmp_deeply(\@expthreads, $res);
 
 # From RFC5256
 #          The top level or "root" in ORDEREDSUBJECT threading contains
@@ -61,7 +61,7 @@ sub test_references_chain ($self)
         push(@expthreads, [ $parent, map { [ $_ ] } @thread ] );
     }
     $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
-    $self->assert_deep_equals(\@expthreads, $res);
+    $self->assert_cmp_deeply(\@expthreads, $res);
 
     xlog $self, "Double-check the messages are still there";
     $self->check_messages(\%exp);

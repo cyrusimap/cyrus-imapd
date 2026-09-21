@@ -27,7 +27,7 @@ sub test_setseen ($self)
 
     xlog $self, "Fetch body of message A";
     my $res = $talk->fetch('1', '(body[])');
-    $self->assert_deep_equals([ '\\Seen' ], $res->{1}->{flags});
+    $self->assert_cmp_deeply([ '\\Seen' ], $res->{1}->{flags});
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
@@ -38,7 +38,7 @@ sub test_setseen ($self)
 
     xlog $self, "Fetch binary of message C";
     $res = $talk->fetch('3', '(binary[])');
-    $self->assert_deep_equals([ '\\Seen' ], $res->{3}->{flags});
+    $self->assert_cmp_deeply([ '\\Seen' ], $res->{3}->{flags});
     $msg{C}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 

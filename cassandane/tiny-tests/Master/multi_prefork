@@ -22,7 +22,7 @@ sub test_multi_prefork ($self)
     $lemm = lemming_connect($srvA);
     $self->lemming_wait(A => { live => 3 });
     push(@lemmings, $lemm);
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
                                 A => { live => 3, dead => 0 },
                                 C => { live => 3, dead => 0 },
                               }, $self->lemming_census());
@@ -31,7 +31,7 @@ sub test_multi_prefork ($self)
     $lemm = lemming_connect($srvA);
     $self->lemming_wait(A => { live => 4 });
     push(@lemmings, $lemm);
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
                                 A => { live => 4, dead => 0 },
                                 C => { live => 3, dead => 0 },
                               }, $self->lemming_census());
@@ -40,7 +40,7 @@ sub test_multi_prefork ($self)
     $lemm = lemming_connect($srvA);
     $self->lemming_wait(A => { live => 5 });
     push(@lemmings, $lemm);
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
                                 A => { live => 5, dead => 0 },
                                 C => { live => 3, dead => 0 },
                               }, $self->lemming_census());
@@ -48,7 +48,7 @@ sub test_multi_prefork ($self)
     xlog $self, "connect to B";
     $lemm = lemming_connect($srvB);
     push(@lemmings, $lemm);
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
                                 A => { live => 5, dead => 0 },
                                 B => { live => 1, dead => 0 },
                                 C => { live => 3, dead => 0 },
@@ -60,7 +60,7 @@ sub test_multi_prefork ($self)
     }
 
     xlog $self, "our lemmings are gone, others have replaced them";
-    $self->assert_deep_equals({
+    $self->assert_cmp_deeply({
                                 A => { live => 2, dead => 3 },
                                 B => { live => 0, dead => 1 },
                                 C => { live => 3, dead => 0 },

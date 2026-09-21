@@ -36,6 +36,6 @@ sub test_list_groupaccess_racl
     my $list = $imaptalk->list("", "*");
     my @boxes = sort map { $_->[2] } @{$list};
 
-    $self->assert_deep_equals(\@boxes,
+    $self->assert_cmp_deeply(\@boxes,
                               ['INBOX', 'user.otheruser.groupaccess']);
 }

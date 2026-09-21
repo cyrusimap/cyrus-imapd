@@ -28,6 +28,6 @@ sub test_addressbook_set_unknown_addressbookright
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notUpdated}{$id}{type});
 
-    $self->assert_deep_equals(['shareWith/abooksharer/unknownAddressBookRight'],
+    $self->assert_cmp_deeply(['shareWith/abooksharer/unknownAddressBookRight'],
         $res->[0][1]{notUpdated}{$id}{properties});
 }

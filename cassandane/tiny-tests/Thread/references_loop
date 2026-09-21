@@ -42,11 +42,11 @@ sub test_references_loop ($self)
     xlog $self, "The REFERENCES algorithm gives the true thread";
     xlog $self, "structure which is flat";
     $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
-    $self->assert_deep_equals([[[1], [2]]], $res);
+    $self->assert_cmp_deeply([[[1], [2]]], $res);
 
     xlog $self, "The ORDEREDSUBJECT algorithm gives a false more flat view of the structure";
     $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
-    $self->assert_deep_equals([[1, 2]], $res);
+    $self->assert_cmp_deeply([[1, 2]], $res);
 
     xlog $self, "Double-check the messages are still there";
     $self->check_messages(\%exp, keyed_on => 'uid');

@@ -23,7 +23,7 @@ sub test_mailbox_ignore_notes_subfolders
         ['Mailbox/query', { }, 'R1'],
         ['Mailbox/get', { }, 'R2']
     ]);
-    $self->assert_deep_equals([$inboxId], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$inboxId], $res->[0][1]{ids});
     $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
     $self->assert_str_equals($inboxId, $res->[1][1]{list}[0]{id});
 
@@ -35,7 +35,7 @@ sub test_mailbox_ignore_notes_subfolders
         ['Mailbox/query', { }, 'R1'],
         ['Mailbox/get', { }, 'R2']
     ]);
-    $self->assert_deep_equals([$inboxId], $res->[0][1]{ids});
+    $self->assert_cmp_deeply([$inboxId], $res->[0][1]{ids});
     $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
     $self->assert_str_equals($inboxId, $res->[1][1]{list}[0]{id});
 }

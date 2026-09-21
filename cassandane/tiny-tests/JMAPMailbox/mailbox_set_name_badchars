@@ -30,12 +30,12 @@ sub test_mailbox_set_name_badchars ($self)
 
         $self->assert_str_equals('invalidProperties',
                                  $res->[0][1]{notCreated}{bad}{type});
-        $self->assert_deep_equals(['name'],
+        $self->assert_cmp_deeply(['name'],
                                   $res->[0][1]{notCreated}{bad}{properties});
 
         $self->assert_str_equals('invalidProperties',
                                  $res->[0][1]{notUpdated}{$victim}{type});
-        $self->assert_deep_equals(['name'],
+        $self->assert_cmp_deeply(['name'],
                                   $res->[0][1]{notUpdated}{$victim}{properties});
     }
 

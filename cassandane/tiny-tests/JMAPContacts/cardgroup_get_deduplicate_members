@@ -52,5 +52,5 @@ EOF
     my @gotids = sort keys %{$res->[0][1]{list}[0]{members}};
 
     xlog "Assert contactIds in group got deduplicated";
-    $self->assert_deep_equals(\@wantids, \@gotids);
+    $self->assert_cmp_deeply(\@wantids, \@gotids);
 }

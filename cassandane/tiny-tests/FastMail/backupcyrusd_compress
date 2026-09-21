@@ -81,7 +81,7 @@ sub test_backupcyrusd_compress
     # compaction throws away dead data, not live content: everything we had
     # before is still described by the state database
     my $after = $self->_backup_content($meta);
-    $self->assert_deep_equals($self->_backup_summary($before),
+    $self->assert_cmp_deeply($self->_backup_summary($before),
                               $self->_backup_summary($after));
 
     # and the messages still come back out of the new tar file intact
@@ -99,6 +99,6 @@ sub test_backupcyrusd_compress
     Cyrus::Backup::RebuildState($meta, $data, $newfile, 'rebuilt.sqlite3');
 
     my $rebuilt = $self->_backup_content($meta, 'rebuilt.sqlite3');
-    $self->assert_deep_equals($self->_backup_summary($after),
+    $self->assert_cmp_deeply($self->_backup_summary($after),
                               $self->_backup_summary($rebuilt));
 }

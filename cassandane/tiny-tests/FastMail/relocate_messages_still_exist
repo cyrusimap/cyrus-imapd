@@ -80,5 +80,5 @@ sub test_relocate_messages_still_exist
     $imaptalk->list('', '*', 'return', [ "status", [ "messages", "uidvalidity", "highestmodseq", "mailboxid" ] ]);
     my $poststatus = $imaptalk->get_response_code('status');
 
-    $self->assert_deep_equals($prestatus, $poststatus);
+    $self->assert_cmp_deeply($prestatus, $poststatus);
 }
