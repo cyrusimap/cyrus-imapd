@@ -29,6 +29,7 @@ Makefile.old
 aclocal.m4
 autom4te.cache/
 bench/cyrdbbench
+bin/imtest
 cassandane/Cassandane/Config/Bitfields.pm
 cmulocal/libtool.m4
 cmulocal/ltoptions.m4
@@ -107,7 +108,6 @@ imap/search_test
 imap/squat_dump
 imap/tz_err.c
 imap/tz_err.h
-imtest/imtest
 include/cyrus/imapopts.h
 install-sh
 lib/chartable.c

@@ -39,11 +39,11 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "imparse.h"
-#include "iptostring.h"
-#include "md5.h"
-#include "prot.h"
-#include "stristr.h"
+#include "lib/imparse.h"
+#include "lib/iptostring.h"
+#include "lib/md5.h"
+#include "lib/prot.h"
+#include "lib/stristr.h"
 
 #include <openssl/ssl.h>
 
