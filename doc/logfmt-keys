@@ -634,6 +634,12 @@ pts.time                the current time, as the PTS code compared it
 pts.timeout             how long the PTS client will wait, in seconds
 pts.waited              1 if the PTS client had to wait to connect
 pts.write               1 if the PTS client is waiting to write
+quic.dropped            how many datagrams a QUIC connection lost to a full queue
+quic.nofile.hard        master's hard RLIMIT_NOFILE, the ceiling it may raise to
+quic.nofile.soft        master's soft RLIMIT_NOFILE after it was raised to the hard limit
+quic.rcvbuf.granted     a socket receive buffer size the kernel granted, in bytes
+quic.rcvbuf.requested   a socket receive buffer size asked of the kernel, in bytes
+quic.worker_pid         the pid of a QUIC worker process (master)
 quota.detail            what the quota tool was doing when it failed
 quota.diff.message      the change in message count a quota update carried
 quota.diff.storage      the change in storage a quota update carried, in bytes
@@ -701,6 +707,7 @@ search.updates          how many update passes indexed nothing
 search.value            a search term's value, as given
 seen.op                 which seen database operation is being logged
 seen.uids               a seen state's uid sequence, as stored
+service.name            a service's name, as configured in cyrus.conf
 shutdown_file.text      the contents of the shutdown file
 sieve.bytecode.length   the length of a compiled Sieve script, in bytes
 sieve.duration          how long a Sieve operation took, in seconds
