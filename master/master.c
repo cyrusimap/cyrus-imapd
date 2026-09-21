@@ -34,6 +34,8 @@
 #include <math.h>
 #include <inttypes.h>
 
+#include <openssl/rand.h>
+
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
@@ -55,6 +57,9 @@
 #include "master/cronevent.h"
 #include "master/event.h"
 #include "master/masterconf.h"
+#include "master/quic/quic_handoff.h"
+#include "master/quic/quic_idle_pool.h"
+#include "master/quic/quic_relay.h"
 #include "master/service.h"
 
 #include "lib/assert.h"
@@ -74,6 +79,20 @@ enum {
 static int verbose = 0;
 static int listen_queue_backlog = 32;
 static int pidfd = -1;
+
+/* Set once, permanently, when the first QUIC service is configured */
+static bool have_quic_service = false;
+
+#ifdef WITH_QUIC
+/* Receive buffer for a quic service's rendezvous socket */
+#define QUIC_RELAY_RCVBUF (4 * 1024 * 1024)
+
+/* Send buffer for master's end of a relayed connection's socketpair */
+#define QUIC_RELAY_SNDBUF (1024 * 1024)
+
+/* Most datagrams quic_dispatch_connection() reads per readable event */
+#define QUIC_DISPATCH_BATCH 64
+#endif
 
 static int in_shutdown = 0;
 
@@ -117,6 +136,17 @@ struct centry {
     struct timeval spawntime;   /* when the centry was allocated */
     time_t sighuptime;          /* when did we send a SIGHUP */
     struct proc_handle *proc_handle; /* for tracking proc registrations */
+
+    /* master's end of this worker's QUIC_HANDOFF_FD socketpair, or -1.
+     * Unlike other per-child fds it lives as long as the worker, being
+     * reused for every connection; closed in reap_child(). */
+    int quic_fd;
+
+    /* this worker's current QUIC connection's dispatch state --
+     * the relay's CID registrations. */
+    uint8_t quic_cids[QUIC_CID_POOL_SIZE + 1][QUIC_CIDLEN];
+    uint8_t quic_ncids;
+
     struct centry *next;
 };
 static struct centry *ctable[child_table_size];
@@ -134,6 +164,7 @@ static char *prom_report_fname = NULL;
 static void limit_fds(rlim_t);
 #endif
 static void child_sighandler_setup(void);
+static struct centry *spawn_service(struct service *s, int si, int wdi);
 
 #if HAVE_PSELECT
 static sigset_t pselect_sigmask;
@@ -230,6 +261,7 @@ static struct centry *centry_alloc(void)
     t = xzmalloc(sizeof(*t));
     t->si = SERVICE_NONE;
     t->wdi = SERVICE_NONE;
+    t->quic_fd = -1;
     gettimeofday(&t->spawntime, NULL);
     t->sighuptime = (time_t)-1;
 
@@ -510,6 +542,20 @@ static void service_create(struct service *s, int is_startup)
             hints.ai_family = PF_INET6;
             hints.ai_socktype = SOCK_DGRAM;
 #endif
+        } else if (s->is_quic) {
+            /* A QUIC listener is a UDP socket at the OS level,
+             * but master demultiplexes it itself --
+             * see docsrc/concepts/features/quic-dispatch.rst. */
+            if (s->proto[4] == '4') {
+                hints.ai_family = PF_INET;
+#ifdef PF_INET6
+            } else if (s->proto[4] == '6') {
+                hints.ai_family = PF_INET6;
+#endif
+            } else {
+                hints.ai_family = PF_UNSPEC;
+            }
+            hints.ai_socktype = SOCK_DGRAM;
         } else {
             syslog(LOG_INFO, "invalid proto '%s', disabling %s",
                    s->proto, s->name);
@@ -579,6 +625,36 @@ static void service_create(struct service *s, int is_startup)
             syslog(LOG_ERR, "unable to setsocketopt(SO_REUSEADDR) service %s/%s: %m",
                 s->name, s->familyname);
         }
+
+#ifdef WITH_QUIC
+        if (s->is_quic) {
+            /* This one queue holds every packet of every connection
+             * until master reads it, which the default size can't do
+             * through a burst. */
+            int rcvbuf = QUIC_RELAY_RCVBUF;
+            int granted = 0;
+            socklen_t grantedlen = sizeof(granted);
+
+            r = setsockopt(s->socket, SOL_SOCKET, SO_RCVBUF,
+                           &rcvbuf, sizeof(rcvbuf));
+            if (r < 0) {
+                xsyslog_ev(LOG_WARNING, "quic.listen.rcvbuf_failed",
+                           lf_s("service.name", s->name));
+            }
+            /* Linux silently caps the size at net.core.rmem_max (208KB
+             * by default), so say so rather than leave the relay short.
+             * It reports double what it granted, for its own
+             * bookkeeping; other systems report it as is. */
+            else if (!getsockopt(s->socket, SOL_SOCKET, SO_RCVBUF,
+                                 &granted, &grantedlen) &&
+                     granted < rcvbuf) {
+                xsyslog_ev(LOG_NOTICE, "quic.listen.rcvbuf_capped",
+                           lf_s("service.name", s->name),
+                           lf_d("quic.rcvbuf.requested", rcvbuf),
+                           lf_d("quic.rcvbuf.granted", granted));
+            }
+        }
+#endif
 #if defined(IPV6_V6ONLY) && !(defined(__FreeBSD__) && __FreeBSD__ < 3)
         if (res->ai_family == AF_INET6) {
             r = setsockopt(s->socket, IPPROTO_IPV6, IPV6_V6ONLY,
@@ -980,14 +1056,423 @@ done:
     }
 }
 
-static void spawn_service(struct service *s, int si, int wdi)
+/*
+ * QUIC dispatch. A QUIC worker can't accept(), so master reads the
+ * service's rendezvous socket itself, demultiplexes by Connection ID,
+ * and hands each connection to a worker over QUIC_HANDOFF_FD.
+ * See docsrc/concepts/features/quic-dispatch.rst.
+ */
+
+#ifdef WITH_QUIC
+#include <ngtcp2/ngtcp2.h>
+
+/* Create the dispatch communication channel: SOCK_SEQPACKET so each message
+ * stays a distinct datagram, which both the handoff and the relay depend on.
+ * Returns 0 on success. */
+static int quic_dispatch_create_channel(int sv[2])
+{
+    return socketpair(AF_UNIX, SOCK_SEQPACKET, 0, sv);
+}
+
+/* Initialize the dispatch backend */
+static void quic_dispatch_init(void)
+{
+    quic_relay_init();
+}
+
+/* Shutdown/cleanup the dispatch backend */
+static void quic_dispatch_shutdown(void)
+{
+    quic_relay_shutdown();
+}
+
+/* Undo the add_conn()/add_alias() calls that succeeded for a dispatch
+ * that failed partway through: deleting a key that was never
+ * registered is a no-op, so passing the full cid_pool is always safe.
+ * The caller closes the fd. */
+static void quic_backend_del_conn(uint8_t dcidlen, const uint8_t *dcid,
+                                  const uint8_t cid_pool[][QUIC_CIDLEN],
+                                  uint8_t ncids)
+{
+    if (dcidlen >= QUIC_CIDLEN) quic_relay_del_conn(dcid);
+    for (int i = 0; i < ncids; i++) quic_relay_del_conn(cid_pool[i]);
+}
+
+/* Stash conn's CID pool (plus its client-chosen dcid, if registered)
+ * in c, so reap_child() and the MASTER_SERVICE_AVAILABLE handler know
+ * what to clean up once this connection ends. */
+static void quic_centry_set_cids(struct centry *c,
+                                 const uint8_t cid_pool[][QUIC_CIDLEN],
+                                 uint8_t dcidlen, const uint8_t *dcid)
+{
+    memcpy(c->quic_cids, cid_pool,
+          QUIC_CID_POOL_SIZE * QUIC_CIDLEN);
+    c->quic_ncids = QUIC_CID_POOL_SIZE;
+    if (dcidlen >= QUIC_CIDLEN) {
+        memcpy(c->quic_cids[c->quic_ncids], dcid, QUIC_CIDLEN);
+        c->quic_ncids++;
+    }
+}
+
+/* Undo quic_centry_set_cids(), once a worker's connection has ended
+ * (reap_child(), or MASTER_SERVICE_AVAILABLE if it's to be reused).
+ * A no-op if c has nothing registered. */
+static void quic_centry_clear_cids(struct centry *c)
+{
+    if (c->quic_ncids == 0) return;
+
+    /* quic_relay_del_conn() on the primary (cid_pool[0], always
+     * c->quic_cids[0] -- see quic_centry_set_cids()) also closes the
+     * connection's socket. */
+    for (int i = 0; i < c->quic_ncids; i++)
+        quic_relay_del_conn(c->quic_cids[i]);
+    c->quic_ncids = 0;
+}
+
+/* The QUIC versions master lists in Version Negotiation packets */
+static const uint32_t quic_versions[] = QUIC_ADVERTISED_VERSIONS;
+
+/* Decide whether pkt can start a new connection, by ngtcp2_accept()'s
+ * test, which a worker built on ngtcp2 applies too: an Initial of a
+ * version ngtcp2 supports, in a datagram of at least 1200 bytes, with a
+ * long enough DCID.  Anything else is dropped, except that a client
+ * asking for a version ngtcp2 doesn't support is told which ones we
+ * advertise (RFC 9000 section 6).  Returns true, with *hd filled in, if
+ * pkt should be dispatched. */
+static bool quic_accept_initial(struct service *s,
+                                const uint8_t *pkt, size_t pktlen,
+                                const struct sockaddr_storage *peer,
+                                socklen_t peerlen, ngtcp2_pkt_hd *hd)
+{
+    ngtcp2_version_cid vc;
+    int r;
+
+    r = ngtcp2_pkt_decode_version_cid(&vc, pkt, pktlen, QUIC_CIDLEN);
+
+    /* Reported only for a datagram of at least 1200 bytes, so answering
+     * doesn't amplify towards a spoofed source (RFC 9000 section 14.1) */
+    if (r == NGTCP2_ERR_VERSION_NEGOTIATION) {
+        uint8_t vn[QUIC_PKT_BUFSIZE];
+        ngtcp2_ssize vnlen;
+        uint8_t unused;
+
+        RAND_bytes(&unused, 1);
+        vnlen = ngtcp2_pkt_write_version_negotiation(
+            vn, sizeof(vn), unused, vc.scid, vc.scidlen, vc.dcid, vc.dcidlen,
+            quic_versions, VECTOR_SIZE(quic_versions));
+        if (vnlen < 0 ||
+            sendto(s->socket, vn, (size_t) vnlen, 0,
+                   (const struct sockaddr *) peer, peerlen) < 0) {
+            xsyslog_ev(LOG_ERR, "quic.dispatch.version_negotiation_failed",
+                       lf_s("service.name", s->name));
+        }
+        return false;
+    }
+
+    return (!r && ngtcp2_accept(hd, pkt, pktlen) == 0);
+}
+
+/* Handle one datagram from a service's rendezvous socket: forward it
+ * to the connection it belongs to, or, if it's a new connection's
+ * Initial, give that connection a socketpair in the relay table
+ * (quic_relay.h), then hand it to an idle worker or fork one.
+ * See docsrc/concepts/features/quic-dispatch.rst. */
+static void quic_dispatch_datagram(struct service *s, int si,
+                                   const uint8_t *pkt, size_t pktlen,
+                                   const struct sockaddr_storage *peer,
+                                   socklen_t peerlen)
+{
+    struct sockaddr_storage local;
+    socklen_t locallen = sizeof(local);
+    ngtcp2_pkt_hd hd;
+    uint8_t cid_pool[QUIC_CID_POOL_SIZE][QUIC_CIDLEN];
+    int newsock = -1;
+    int sendsock = -1;
+    struct quic_handoff handoff;
+
+    /* Every packet of every connection passes through this rendezvous
+     * socket, so most of them (anything past the first) need to go
+     * straight to an existing connection instead of through dispatch
+     * below. */
+    {
+        ngtcp2_version_cid vc;
+
+        if (ngtcp2_pkt_decode_version_cid(&vc, pkt, pktlen,
+                                          QUIC_CIDLEN) == 0 &&
+            quic_relay_forward(vc.dcid, (uint8_t) vc.dcidlen,
+                               pkt, pktlen, peer, peerlen)) {
+            return;
+        }
+    }
+
+    /* Not a new connection's Initial: garbage, a retransmit racing our
+     * own not-yet-landed relay entry, a 0-RTT packet that overtook its
+     * Initial, or a version we don't dispatch */
+    if (!quic_accept_initial(s, pkt, pktlen, peer, peerlen, &hd))
+        return;
+
+    if (getsockname(s->socket, (struct sockaddr *) &local, &locallen)) {
+        xsyslog_ev(LOG_ERR, "quic.dispatch.getsockname_failed");
+        return;
+    }
+
+    /* One RAND_bytes() for the whole pool; cid_pool[0] is the primary
+     * CID. See "A spare CID pool for future connection migration" in
+     * docsrc/concepts/features/quic-dispatch.rst. */
+    RAND_bytes(cid_pool[0], sizeof(cid_pool));
+
+    /* sv[0] is master's own handle on this connection
+     * (master/quic/quic_relay.h); sv[1] goes to the worker, an fd to
+     * recv() this client's datagrams on. SOCK_SEQPACKET keeps each
+     * relayed datagram a distinct message. */
+    int sv[2];
+    int i;
+
+    if (quic_dispatch_create_channel(sv)) {
+        xsyslog_ev(LOG_ERR, "quic.dispatch.socketpair_failed");
+        return;
+    }
+
+    newsock = sv[1];
+
+    /* The default send buffer holds only ~100KB of datagrams, less
+     * than a client may send in one burst (its per-stream flow-control
+     * window), so a worker briefly busy with something else would lose
+     * most of the burst. The kernel caps this at net.core.wmem_max. */
+    {
+        int sndbuf = QUIC_RELAY_SNDBUF;
+
+        if (setsockopt(sv[0], SOL_SOCKET, SO_SNDBUF,
+                       &sndbuf, sizeof(sndbuf))) {
+            xsyslog_ev(LOG_WARNING, "quic.dispatch.sndbuf_failed");
+        }
+    }
+
+    /* Enforce the one-way use: master never reads this connection, and
+     * the worker replies on sendsock below. A worker writing here
+     * would otherwise park a socket buffer of data nothing drains. */
+    shutdown(sv[0], SHUT_RD);
+    shutdown(sv[1], SHUT_WR);
+
+    /* The socketpair carries this connection inbound only. The
+     * worker sends outbound itself on a dup of the rendezvous
+     * socket, so replies leave from the address the client
+     * addressed. Send-only -- master remains its sole reader. */
+    sendsock = s->socket;
+
+    if (quic_relay_add_conn(cid_pool[0], sv[0], peer, peerlen)) {
+        close(sv[0]);
+        goto done;
+    }
+
+    /* The rest of the pool rides as aliases of cid_pool[0] -- see
+     * QUIC_CID_POOL_SIZE's comment. On a collision -- astronomically
+     * unlikely for random 8-byte CIDs -- roll back whatever already
+     * registered (quic_backend_del_conn() no-ops safely on the
+     * rest). */
+    for (i = 1; i < QUIC_CID_POOL_SIZE; i++) {
+        if (quic_relay_add_alias(cid_pool[0], cid_pool[i])) {
+            quic_backend_del_conn(0, NULL, cid_pool, (uint8_t) i);
+            goto done;
+        }
+    }
+
+    /* The client keeps addressing its first flight (retransmits,
+     * later ClientHello packets) to the dcid it originally chose, not
+     * cid_pool[0] -- register that too, or those packets miss the
+     * table and each looks like a new connection. Failing here almost
+     * always means an earlier packet of this same attempt already
+     * claimed it (clients routinely burst two Initial packets
+     * microseconds apart); drop it rather than fork a redundant
+     * "ghost" worker. quic_relay_del_conn(cid_pool[0]) closes sv[0]
+     * too (master/quic/quic_relay.h), so only sv[1] needs its own
+     * close(). */
+    if (hd.dcid.datalen >= QUIC_CIDLEN &&
+        quic_relay_add_alias(cid_pool[0], hd.dcid.data)) {
+        quic_backend_del_conn(0, NULL, cid_pool, QUIC_CID_POOL_SIZE);
+        goto done;
+    }
+
+    memset(&handoff, 0, sizeof(handoff));
+    memcpy(handoff.cids, cid_pool, sizeof(cid_pool));
+    handoff.ncids = QUIC_CID_POOL_SIZE;
+    memcpy(&handoff.local_addr, &local, locallen);
+    handoff.local_addrlen = locallen;
+    memcpy(&handoff.peer_addr, peer, peerlen);
+    handoff.peer_addrlen = peerlen;
+    handoff.pktlen = pktlen;
+    memcpy(handoff.pkt, pkt, pktlen);
+
+    /* Hand off to a ready worker. A send failure means it died or
+     * started exiting since being pooled, or (EAGAIN) still has an
+     * earlier handoff unread -- try the next, or fork, rather than drop
+     * the connection. See "Choosing a worker" in quic-dispatch.rst. */
+    for (bool forked = false; ; ) {
+        struct quic_idle_worker *wp = quic_idle_pool_pop(s);
+
+        if (!wp) {
+            /* None ready. Forking is the only path the service's
+             * worker ceiling and fork rate gate: reuse above costs no
+             * fork. Over either, drop the connection and let the
+             * client's own loss recovery retry it, by which time a
+             * worker may have come free. A freshly forked worker pools
+             * itself, so go round and pick it up. */
+            if (forked || s->nactive >= s->max_workers ||
+                service_is_fork_limited(s) ||
+                !spawn_service(s, si, SERVICE_NONE)) {
+                xsyslog_ev(LOG_DEBUG, "quic.dispatch.no_worker",
+                           lf_s("service.name", s->name));
+                break;
+            }
+            forked = true;
+            continue;
+        }
+
+        if (quic_send_handoff(wp->fd, newsock, sendsock, &handoff) == 0) {
+            struct centry *rc = centry_find(wp->pid);
+
+            /* rc shouldn't be NULL (the worker just proved it's alive),
+             * but tolerate the race: the worker's own
+             * MASTER_SERVICE_UNAVAILABLE takes it out of ready_workers,
+             * exactly as for a TCP worker. */
+            if (rc) quic_centry_set_cids(rc, cid_pool,
+                                         (uint8_t) hd.dcid.datalen,
+                                         hd.dcid.data);
+            goto done;
+        }
+
+        xsyslog_ev(LOG_WARNING, "quic.dispatch.idle_worker_gone",
+                   lf_d("quic.worker_pid", (int) wp->pid),
+                   lf_s("service.name", s->name));
+    }
+
+    quic_backend_del_conn((uint8_t) hd.dcid.datalen, hd.dcid.data, cid_pool,
+                          QUIC_CID_POOL_SIZE);
+
+ done:
+    /* newsock is no longer needed.
+     * If we successfully connected to a new/reused worker,
+     * it now has its own SCM_RIGHTS-dup'd copy */
+    close(newsock);
+}
+
+/* Read what's queued on a service's rendezvous socket, up to
+ * QUIC_DISPATCH_BATCH datagrams: that's every packet of every
+ * connection, which one datagram per pass of master's event loop can't
+ * keep up with, so the kernel would drop the rest.  The bound keeps the
+ * other services and children from waiting. */
+static void quic_dispatch_connection(struct service *s, int si)
+{
+    for (int i = 0; i < QUIC_DISPATCH_BATCH; i++) {
+        uint8_t pktbuf[QUIC_PKT_BUFSIZE];
+        struct sockaddr_storage peer;
+        socklen_t peerlen = sizeof(peer);
+        ssize_t n;
+
+        n = recvfrom(s->socket, pktbuf, sizeof(pktbuf), MSG_DONTWAIT,
+                     (struct sockaddr *) &peer, &peerlen);
+        if (n < 0) {
+            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
+                xsyslog_ev(LOG_ERR, "quic.dispatch.recvfrom_failed");
+            return;
+        }
+
+        quic_dispatch_datagram(s, si, pktbuf, (size_t) n, &peer, peerlen);
+    }
+}
+
+static void quic_dispatch_conn_done(struct service *s, struct centry *c)
+{
+    /* Drop the worker from the idle pool and clean up any connection
+     * it still had registered (both no-ops if it reported available
+     * first), then close the handoff channel that was kept open
+     * across connections. */
+    quic_idle_pool_remove(s, c->pid);
+    quic_centry_clear_cids(c);
+    if (c->quic_fd >= 0) {
+        close(c->quic_fd);
+        c->quic_fd = -1;
+    }
+}
+
+static void quic_dispatch_service_reset(struct service *s)
+{
+    quic_idle_pool_fini(s);
+}
+
+/* A just-forked quic worker is ready for a connection, and master has
+ * to know which one it is -- see "Choosing a worker" in
+ * docsrc/concepts/features/quic-dispatch.rst. */
+static void quic_dispatch_worker_forked(struct service *s, pid_t pid,
+                                        struct centry *c)
+{
+    quic_idle_pool_push(s, pid, c->quic_fd);
+}
+
+/* A quic worker reported itself unavailable: it took a connection
+ * (already popped from the pool), or it's exiting (still in it). */
+static void quic_dispatch_worker_busy(struct service *s, struct centry *c)
+{
+    quic_idle_pool_remove(s, c->pid);
+}
+
+/* A quic worker finished a connection and is available again. */
+static void quic_dispatch_conn_idle(struct service *s, struct centry *c)
+{
+    /* Its last connection is over -- drop that connection's CIDs
+     * before offering the worker up for another. */
+    quic_centry_clear_cids(c);
+    quic_idle_pool_push(s, c->pid, c->quic_fd);
+}
+
+#else /* !WITH_QUIC */
+static int quic_dispatch_create_channel(int sv[2] __attribute__((unused)))
+{
+    return -1;
+}
+
+static void quic_dispatch_init(void)
+{ }
+
+static void quic_dispatch_shutdown(void)
+{ }
+
+static void quic_dispatch_connection(struct service *s __attribute__((unused)),
+                                     int si __attribute__((unused)))
+{ }
+
+static void quic_dispatch_conn_done(struct service *s __attribute__((unused)),
+                                    struct centry *c __attribute__((unused)))
+{ }
+
+static void quic_dispatch_service_reset(struct service *s __attribute__((unused)))
+{ }
+
+static void quic_dispatch_worker_forked(struct service *s __attribute__((unused)),
+                                        pid_t pid __attribute__((unused)),
+                                        struct centry *c __attribute__((unused)))
+{ }
+
+static void quic_dispatch_worker_busy(struct service *s __attribute__((unused)),
+                                      struct centry *c __attribute__((unused)))
+{ }
+
+static void quic_dispatch_conn_idle(struct service *s __attribute__((unused)),
+                                    struct centry *c __attribute__((unused)))
+{ }
+
+#endif /* WITH_QUIC */
+
+/* Fork a new worker for s.
+ * Returns the new worker's centry on success, or NULL if no worker was forked */
+static struct centry *spawn_service(struct service *s, int si, int wdi)
 {
     pid_t p;
     int i;
     char path[PATH_MAX], ignored;
-    static char name_env[100], name_env2[100], name_env3[100];
+    static char name_env[100], name_env2[100], name_env3[100], name_env4[100];
     struct centry *c;
-    int wdpgid_pipe[2];
+    int ipc_fd[2] = { -1, -1 };
     int r;
 
     if (!s->name) {
@@ -996,11 +1481,17 @@ static void spawn_service(struct service *s, int si, int wdi)
     }
 
     if (service_is_fork_limited(s))
-        return;
+        return NULL;
 
     get_executable(path, sizeof(path), s->exec);
 
-    if (wdi != SERVICE_NONE) {
+    if (s->is_quic) {
+        if (quic_dispatch_create_channel(ipc_fd)) {
+            xsyslog_ev(LOG_ERR, "quic.prefork.socketpair_failed");
+            return NULL;
+        }
+    }
+    else if (wdi != SERVICE_NONE) {
         /* In order for the parent to set the pgid of the child process, it
          * must get in BEFORE its execve call.  So, set up a pipe thus:
          *
@@ -1008,12 +1499,12 @@ static void spawn_service(struct service *s, int si, int wdi)
          * the parent sets the child's pgid, then closes the write end
          * the child unblocks and can carry on, now that its pgid is set
          */
-        r = pipe(wdpgid_pipe);
+        r = pipe(ipc_fd);
         if (r) {
             syslog(LOG_ERR,
                    "ERROR: unable to respawn waitdaemon %s/%s: pipe failed: %m",
                    s->name, s->familyname);
-            return;
+            return NULL;
         }
     }
 
@@ -1021,7 +1512,9 @@ static void spawn_service(struct service *s, int si, int wdi)
     case -1:
         syslog(LOG_ERR, "can't fork process to run service %s/%s: %m",
             s->name, s->familyname);
-        break;
+        close(ipc_fd[0]);
+        close(ipc_fd[1]);
+        return NULL;
 
     case 0:
         if (verbose > 2) {
@@ -1039,13 +1532,24 @@ static void spawn_service(struct service *s, int si, int wdi)
                 syslog(LOG_ERR, "can't duplicate status fd: %m");
                 exit(1);
             }
-            if (dup2(s->socket, LISTEN_FD) < 0) {
+
+            int listen_fd;
+            if (s->is_quic) {
+                listen_fd = QUIC_HANDOFF_FD;
+                r = dup2(ipc_fd[1], QUIC_HANDOFF_FD);
+            }
+            else {
+                listen_fd = LISTEN_FD;
+                r = dup2(s->socket, LISTEN_FD);
+            }
+
+            if (r < 0) {
                 syslog(LOG_ERR, "can't duplicate listener fd: %m");
                 exit(1);
             }
 
             fcntl_unset(STATUS_FD, FD_CLOEXEC);
-            fcntl_unset(LISTEN_FD, FD_CLOEXEC);
+            fcntl_unset(listen_fd, FD_CLOEXEC);
         }
         else {
             snprintf(name_env3, sizeof(name_env3), "CYRUS_ISDAEMON=1");
@@ -1067,16 +1571,20 @@ static void spawn_service(struct service *s, int si, int wdi)
             xclose(WaitDaemons[i].stat[1]);
         }
 
-        /* wait for parent to finish setting our pgid */
-        if (wdi != SERVICE_NONE) {
+        if (s->is_quic) {
+            close(ipc_fd[0]);
+            if (ipc_fd[1] != QUIC_HANDOFF_FD) close(ipc_fd[1]);
+        }
+        else if (wdi != SERVICE_NONE) {
+            /* wait for parent to finish setting our pgid */
             syslog(LOG_DEBUG, "waiting for parent to set our pgid...");
-            close(wdpgid_pipe[1]);
-            int len = read(wdpgid_pipe[0], &ignored, sizeof ignored);
+            close(ipc_fd[1]);
+            int len = read(ipc_fd[0], &ignored, sizeof ignored);
             if (len < 0) {
                 syslog(LOG_ERR, "can't read parent pgid: %m");
                 exit(1);
             }
-            close(wdpgid_pipe[0]);
+            close(ipc_fd[0]);
         }
 
         syslog(LOG_DEBUG, "about to exec %s", path);
@@ -1086,6 +1594,9 @@ static void spawn_service(struct service *s, int si, int wdi)
         putenv(name_env);
         snprintf(name_env2, sizeof(name_env2), "CYRUS_ID=%d", s->associate);
         putenv(name_env2);
+        snprintf(name_env4, sizeof(name_env4), "CYRUS_SERVICE_PROTO=%s",
+                s->is_quic ? "quic" : s->proto);
+        putenv(name_env4);
 
         execv(path, s->exec->data);
         syslog(LOG_ERR, "couldn't exec %s: %m", path);
@@ -1097,17 +1608,33 @@ static void spawn_service(struct service *s, int si, int wdi)
         s->nforks++;
         s->nactive++;
 
-        /* If it's a waitdaemon, we need to add it to the same process group
-         * as the other waitdaemons.  If this is the first one to be started,
-         * (i.e. new waitdaemon was added to config, but master was only
-         * SIGHUP'd and not fully restarted), then we also need to initialise
-         * waitdaemon_pgid in case there's more.
-         */
-        if (wdi != SERVICE_NONE) {
+        /* add to child table */
+        c = centry_alloc();
+        centry_set_name(c, s->listen ? "SERVICE" : "DAEMON", s->name, path);
+        c->si = si;
+        c->wdi = wdi;
+        centry_set_state(c, SERVICE_STATE_READY);
+
+        if (s->is_quic) {
+            c->quic_fd = ipc_fd[0];
+            close(ipc_fd[1]);     /* child's end */
+
+            /* A TCP worker makes itself available by blocking in
+             * accept(); a QUIC one can't, so master records it as the
+             * worker to hand the next connection to. */
+            quic_dispatch_worker_forked(s, p, c);
+        }
+        else if (wdi != SERVICE_NONE) {
+            /* If it's a waitdaemon, we need to add it to the same process group
+             * as the other waitdaemons. If this is the first one to be started,
+             * (i.e. new waitdaemon was added to config, but master was only
+             * SIGHUP'd and not fully restarted), then we also need to initialise
+             * waitdaemon_pgid in case there's more.
+             */
             pid_t pgid = 0;
             if (waitdaemon_pgid != -1)
                 pgid = waitdaemon_pgid;
-            close(wdpgid_pipe[0]);
+            close(ipc_fd[0]);
             r = setpgid(p, pgid);
             if (r) {
                 /* not a crisis, but when cyrus shuts down it will just shut
@@ -1119,15 +1646,9 @@ static void spawn_service(struct service *s, int si, int wdi)
             else if (waitdaemon_pgid == -1) {
                 waitdaemon_pgid = p;
             }
-            close(wdpgid_pipe[1]);
+            close(ipc_fd[1]);
         }
 
-        /* add to child table */
-        c = centry_alloc();
-        centry_set_name(c, s->listen ? "SERVICE" : "DAEMON", s->name, path);
-        c->si = si;
-        c->wdi = wdi;
-        centry_set_state(c, SERVICE_STATE_READY);
         if (!s->listen) {
             /* we only register DAEMONs -- SERVICEs register themselves */
             r = proc_register(&c->proc_handle, p,
@@ -1140,7 +1661,7 @@ static void spawn_service(struct service *s, int si, int wdi)
             }
         }
         centry_add(c, p);
-        break;
+        return c;
     }
 }
 
@@ -1337,6 +1858,11 @@ static void reap_child(void)
                 default:
                     /* Shouldn't get here */
                     break;
+                }
+
+                if (s->is_quic) {
+                    /* Idle or busy, this worker is gone now */
+                    quic_dispatch_conn_done(s, c);
                 }
             } else if (wd) {
                 /* WaitDaemons are only ever in READY state, there's only one
@@ -1765,6 +2291,7 @@ static void process_msg(int si, struct notify_message *msg)
                        SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
             centry_set_state(c, SERVICE_STATE_READY);
             s->ready_workers++;
+            if (s->is_quic) quic_dispatch_conn_idle(s, c);
             break;
 
         case SERVICE_STATE_DEAD:
@@ -1800,6 +2327,7 @@ static void process_msg(int si, struct notify_message *msg)
                        SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
             centry_set_state(c, SERVICE_STATE_BUSY);
             s->ready_workers--;
+            if (s->is_quic) quic_dispatch_worker_busy(s, c);
             break;
 
         case SERVICE_STATE_DEAD:
@@ -2215,6 +2743,14 @@ static void add_service(const char *name, struct entry *e, void *rock)
     Services[i].proto = proto;
     proto = NULL; /* avoid freeing it */
 
+#ifdef WITH_QUIC  // don't allow "quic*" if no services will use it
+    if (!strcmp(Services[i].proto, "quic") ||
+        !strcmp(Services[i].proto, "quic4") ||
+        !strcmp(Services[i].proto, "quic6")) {
+        have_quic_service = Services[i].is_quic = true;
+    }
+#endif
+
     strarray_free(Services[i].exec);
     Services[i].exec = strarray_split(cmd, NULL, 0);
 
@@ -2228,7 +2764,8 @@ static void add_service(const char *name, struct entry *e, void *rock)
     Services[i].maxforkrate = maxforkrate;
     Services[i].maxfds = maxfds;
 
-    if (!strcmp(Services[i].proto, "tcp") ||
+    if (Services[i].is_quic ||  // one process per connection, same shape as tcp
+        !strcmp(Services[i].proto, "tcp") ||
         !strcmp(Services[i].proto, "tcp4") ||
         !strcmp(Services[i].proto, "tcp6")) {
         Services[i].desired_workers = prefork;
@@ -2631,6 +3168,10 @@ static void send_sighup(struct service *s, int si, int wdi)
             free(s->listen);
             free(s->proto);
         }
+        if (s->is_quic) {
+            quic_dispatch_service_reset(s);
+            s->is_quic = 0;
+        }
         s->listen = NULL;
         s->proto = NULL;
         s->desired_workers = 0;
@@ -2660,6 +3201,8 @@ static void reread_conf(struct timeval now)
     for (i = 0; i < nservices; i++) service_forget_exec(&Services[i]);
     for (i = 0; i < nwaitdaemons; i++) service_forget_exec(&WaitDaemons[i]);
 
+    have_quic_service = false;
+
     /* read services */
     masterconf_getsection("SERVICES", &add_service, (void*) 1);
     masterconf_getsection("DAEMON", &add_daemon, (void *)1);
@@ -2670,6 +3213,11 @@ static void reread_conf(struct timeval now)
     for (i = 0; i < nwaitdaemons; i++) {
         send_sighup(&WaitDaemons[i], SERVICE_NONE, i);
     }
+
+    /* A quic service can first appear at a reload, and dispatching
+     * must be set up before the first packet reaches it.
+     * This is a no-op for a service that is already running. */
+    if (have_quic_service) quic_dispatch_init();
 
     /* remove existing events */
     schedule_clear();
@@ -3093,6 +3641,9 @@ int main(int argc, char **argv)
         syslog(LOG_ERR, "can't change to the cyrus user: %m");
         exit(1);
     }
+
+    if (have_quic_service) quic_dispatch_init();
+
     if (daemon_mode) chdir_cores();
 
     /* init ctable janitor */
@@ -3187,10 +3738,18 @@ int main(int argc, char **argv)
             }
             if (x > maxfd) maxfd = x;
 
-            /* connections */
-            if (y >= 0 && Services[i].ready_workers == 0 &&
-                Services[i].nactive < Services[i].max_workers &&
-                !service_is_fork_limited(&Services[i])) {
+            /* connections -- ready_workers can't gate a QUIC service:
+             * its workers never wait in accept(). Nor can the worker
+             * limits, under the relay backend: this socket carries
+             * every packet of every established connection too, so
+             * refusing to read it at capacity would stall those.
+             * quic_dispatch_connection() applies the limits itself,
+             * to new connections only. */
+            if (y >= 0 &&
+                (Services[i].is_quic ||
+                 (Services[i].ready_workers == 0 &&
+                  Services[i].nactive < Services[i].max_workers &&
+                  !service_is_fork_limited(&Services[i])))) {
                 if (verbose > 2)
                     syslog(LOG_DEBUG, "listening for connections for %s/%s",
                            Services[i].name, Services[i].familyname);
@@ -3274,12 +3833,18 @@ int main(int argc, char **argv)
                 }
 
                 if (!in_shutdown && Services[i].exec &&
-                    Services[i].nactive < Services[i].max_workers &&
-                    Services[i].ready_workers == 0 &&
                     y >= 0 && FD_ISSET(y, &rfds))
                 {
                     /* huh, someone wants to talk to us */
-                    spawn_service(&Services[i], i, SERVICE_NONE);
+                    if (Services[i].is_quic) {
+                        /* Reading is not optional: this packet may
+                         * belong to a connection already in progress. */
+                        quic_dispatch_connection(&Services[i], i);
+                    }
+                    else if (Services[i].nactive < Services[i].max_workers &&
+                             Services[i].ready_workers == 0) {
+                        spawn_service(&Services[i], i, SERVICE_NONE);
+                    }
                 }
             }
         }
@@ -3361,6 +3926,8 @@ finished:
 
     schedule_clear();
     cronevent_clear();
+
+    if (have_quic_service) quic_dispatch_shutdown();
 
     /* tell caller we're done */
     master_ready(ready_file, 0);

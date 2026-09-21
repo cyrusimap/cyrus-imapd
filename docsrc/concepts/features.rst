@@ -102,3 +102,11 @@ Load Management
     :maxdepth: 1
 
     features/server-aggregation
+
+Protocols
+---------
+
+.. toctree::
+    :maxdepth: 1
+
+    features/quic-dispatch
