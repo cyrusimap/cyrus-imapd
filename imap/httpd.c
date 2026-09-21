@@ -1469,14 +1469,26 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
 
 static int check_method(struct transaction_t *txn)
 {
-    const char **hdr;
     struct request_line_t *req_line = &txn->req_line;
 
     if (txn->flags.redirect) return 0;
 
     /* Check for HTTP method override */
-    if (!strcmp(req_line->meth, "POST") &&
-        (hdr = spool_getheader(txn->req_hdrs, "X-HTTP-Method-Override"))) {
+    if (!strcmp(req_line->meth, "POST")) {
+        const char **hdr = spool_getheader(txn->req_hdrs, "X-HTTP-Method-Override");
+        if (!hdr) {
+            /* As we've already established that this is a POST request, skip
+             * the loop below. */
+            txn->meth = METH_POST;
+            return 0;
+        }
+        if (hdr[1]) {
+            /* If the header is repeated, the request makes no sense, and we
+             * suspect shenanigans. */
+            txn->conn->close = 1;
+            txn->conn->close_str = "Duplicate method override header";
+            return HTTP_BAD_REQUEST;
+        }
         txn->flags.override = 1;
         req_line->meth = (char *) hdr[0];
     }
@@ -1486,7 +1498,11 @@ static int check_method(struct transaction_t *txn)
              strcmp(http_methods[txn->meth].name, req_line->meth);
          txn->meth++);
 
-    if (txn->meth == METH_UNKNOWN) return HTTP_NOT_IMPLEMENTED;
+    if (txn->meth == METH_UNKNOWN) {
+        txn->conn->close = 1;
+        txn->conn->close_str = "Unknown method";
+        return HTTP_NOT_IMPLEMENTED;
+    }
 
     return 0;
 }
