@@ -7,6 +7,7 @@ use warnings;
 
 use IO::Handle;
 use POSIX ();
+use Time::HiRes qw(time);
 use JSON::XS ();
 
 my $nextid = 1;
