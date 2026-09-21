@@ -944,6 +944,16 @@ imap_idled_LDADD = $(LD_UTILITY_ADD)
 imap_calalarmd_SOURCES = imap/calalarmd.c imap/mutex_fake.c
 imap_calalarmd_LDADD = $(LD_SERVER_ADD)
 
+# Required by every service binary that receives a connection handoff from master
+imap_SERVICE_SOURCES = \
+    master/service.c
+
+if WITH_QUIC
+imap_SERVICE_SOURCES += \
+    master/quic/quic_handoff.c \
+    master/quic/quic_handoff.h
+endif
+
 imap_imapd_SOURCES = \
     imap/imap_proxy.c \
     imap/imap_proxy.h \
@@ -954,7 +964,7 @@ imap_imapd_SOURCES = \
     imap/proxy.h \
     imap/sync_support.c \
     imap/sync_support.h \
-    master/service.c
+    $(imap_SERVICE_SOURCES)
 
 if AUTOCREATE
 imap_imapd_SOURCES += \
@@ -1167,7 +1177,7 @@ imap_lmtpd_SOURCES = \
     imap/proxy.c \
     imap/sync_support.c \
     imap/sync_support.h \
-    master/service.c
+    $(imap_SERVICE_SOURCES)
 
 nodist_imap_lmtpd_SOURCES = imap/lmtp_err.c
 
@@ -1262,7 +1272,7 @@ imap_httpd_SOURCES = \
     imap/zoneinfo_db.c \
     imap/zoneinfo_db.h \
     master/masterconf.c \
-    master/service.c
+    $(imap_SERVICE_SOURCES)
 
 imap_httpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
@@ -1407,7 +1417,7 @@ endif # JMAP
 imap_backupcyrusd_SOURCES = \
     imap/mutex_fake.c \
     imap/backupcyrusd.c \
-    master/service.c
+    $(imap_SERVICE_SOURCES)
 
 imap_pop3d_SOURCES = \
     imap/mutex_fake.c \
@@ -1415,7 +1425,7 @@ imap_pop3d_SOURCES = \
     imap/proxy.c \
     imap/sync_support.c \
     imap/sync_support.h \
-    master/service.c
+    $(imap_SERVICE_SOURCES)
 
 if AUTOCREATE
 imap_pop3d_SOURCES += \
@@ -1456,7 +1466,7 @@ imap_ical_apply_patch_LDADD = $(LD_UTILITY_ADD)
 imap_search_test_SOURCES = imap/search_test.c imap/mutex_fake.c
 imap_search_test_LDADD = $(LD_UTILITY_ADD)
 
-imap_smmapd_SOURCES = imap/mutex_fake.c imap/proxy.c imap/smmapd.c master/service.c
+imap_smmapd_SOURCES = imap/mutex_fake.c imap/proxy.c imap/smmapd.c $(imap_SERVICE_SOURCES)
 imap_smmapd_LDADD = $(LD_SERVER_ADD)
 
 imap_squatter_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squatter.c
@@ -1471,7 +1481,7 @@ imap_sync_client_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 imap_sync_reset_SOURCES = imap/mutex_fake.c imap/sync_reset.c imap/sync_support.c imap/sync_support.h
 imap_sync_reset_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
-imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c imap/sync_support.h master/service.c
+imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c imap/sync_support.h $(imap_SERVICE_SOURCES)
 imap_sync_server_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 imap_tls_prune_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/tls_prune.c
@@ -1771,12 +1781,28 @@ master_master_SOURCES = \
     master/event.c \
     master/event.h \
     master/service.h
+
+# Set unconditionally: once defined in any condition, it replaces
+# AM_CPPFLAGS for master in every one
+master_master_CPPFLAGS = $(AM_CPPFLAGS)
 master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM) $(SSL_LIBS)
+if WITH_QUIC
+master_master_SOURCES += \
+    master/quic/quic_handoff.c \
+    master/quic/quic_handoff.h \
+    master/quic/quic_idle_pool.c \
+    master/quic/quic_idle_pool.h \
+    master/quic/quic_relay.c \
+    master/quic/quic_relay.h
+
+master_master_CPPFLAGS += $(NGTCP2_CFLAGS)
+master_master_LDADD += $(NGTCP2_LIBS)
+endif # WITH_QUIC
 
 
 notifyd_notifyd_SOURCES = \
     imap/mutex_fake.c \
-    master/service.c \
+    $(imap_SERVICE_SOURCES) \
     notifyd/notify_external.c \
     notifyd/notify_external.h \
     notifyd/notify_log.c \
@@ -1917,7 +1943,7 @@ sieve_test_mailbox_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 timsieved_timsieved_SOURCES = \
     imap/mutex_fake.c \
     imap/proxy.c \
-    master/service.c \
+    $(imap_SERVICE_SOURCES) \
     timsieved/actions.c \
     timsieved/actions.h \
     timsieved/codes.h \
