@@ -38,6 +38,36 @@ int tls_init_clientengine(int verifydepth,
                           const char *var_server_cert,
                           const char *var_server_key);
 
+/**
+ * Create a server SSL_CTX with the settings every Cyrus server context
+ * shares (PRNG seeding, info and SNI callbacks, the tls_eccurve group),
+ * for a caller to specialise, as tls_init_serverengine() does for TCP
+ * and quic_init_tls_ctx() for QUIC.  Does OpenSSL's library-wide init
+ * itself, so it needn't follow any other tls_*() call.
+ *
+ * @param tag  names the context in log messages
+ * @return     a new SSL_CTX, or NULL (logged) on failure
+ */
+SSL_CTX *tls_new_serverctx(const char *tag);
+
+/**
+ * Load a certificate and its private key into ctx.  Both may be in one
+ * file, and each argument may name two files separated by a comma for a
+ * second certificate and key (e.g. RSA and ECDSA).  With no cert_file,
+ * leave ctx as it is.
+ *
+ * @param ctx        the context to load into
+ * @param cert_file  PEM certificate (chain) file(s), or NULL
+ * @param key_file   PEM private key file(s); NULL means cert_file
+ * @return           1 on success (or nothing to do), 0 (logged) on failure
+ */
+int tls_set_cert_stuff(SSL_CTX *ctx, const char *cert_file,
+                       const char *key_file);
+
+/* Install (or, if alpn_map is empty/NULL, clear) the server-side ALPN
+ * selection callback on ctx. */
+void tls_set_alpn_map(SSL_CTX *ctx, const struct tls_alpn_t *alpn_map);
+
 /* start tls negotiation */
 int tls_start_servertls(int readfd, int writefd, int timeout,
                         struct saslprops_t *saslprops,

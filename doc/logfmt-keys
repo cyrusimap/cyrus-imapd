@@ -111,6 +111,9 @@ lmtp.rcpt.state         a recipient's delivery state in the proxy state machine
 lmtp.target             how the destination mailbox was chosen: default, plus-addr, ...
 pop.subfolder           the subfolder a POP session was restricted to
 quic.bpf_obj            path to the compiled cyr_quic_steer eBPF object
+quic.close.code         a QUIC CONNECTION_CLOSE error code, in hex
+quic.close.reason       the reason phrase of a QUIC CONNECTION_CLOSE
+quic.close.type         whether a QUIC close code is a transport or an application one
 quic.dropped            how many datagrams a QUIC connection lost to a full queue
 quic.family             an address family, as a string: ipv4, ipv6 or unix
 quic.rcvbuf.granted     a socket receive buffer size the kernel granted, in bytes
@@ -141,6 +144,7 @@ sieve.script            the name of a Sieve script
 sieve.srs.domain        the domain SRS rewrites a return path into
 sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
+tls.engine              which TLS server engine this event is about
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
 
