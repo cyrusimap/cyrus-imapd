@@ -22,9 +22,11 @@
 /* The owning record for one live connection -- reachable via
  * quic_relay_conns under `key`, and optionally also via
  * quic_relay_aliases under any of `alias_keys[0..nalias-1]` (see
- * quic_relay_add_alias()). Never duplicated: the two tables can't
- * both independently own the same `sock`, so there's one owning
- * record per connection, found by any of its keys. alias_keys is sized for the client's
+ * quic_relay_add_alias()). Never duplicated: unlike the eBPF backend's
+ * REUSEPORT_SOCKARRAY, where two map keys can cheaply point at the
+ * same kernel socket, our two tables can't both independently own
+ * the same `sock` -- so there's one owning record per connection,
+ * found by any of its keys. alias_keys is sized for the client's
  * original DCID plus every spare CID in the pool (QUIC_CID_POOL_SIZE,
  * quic_handoff.h). */
 struct quic_relay_conn {

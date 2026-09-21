@@ -396,7 +396,9 @@ mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
 pop.subfolder           the subfolder a POP session was restricted to
 proxy.server            the backend server a request was proxied to
+quic.bpf_obj            path to the compiled cyr_quic_steer eBPF object
 quic.dropped            how many datagrams a QUIC connection lost to a full queue
+quic.family             an address family, as a string: ipv4, ipv6 or unix
 quic.nofile.hard        master's hard RLIMIT_NOFILE, the ceiling it may raise to
 quic.nofile.soft        master's soft RLIMIT_NOFILE after it was raised to the hard limit
 quic.rcvbuf.granted     a socket receive buffer size the kernel granted, in bytes
