@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -17,11 +21,9 @@
 #include <string.h>
 #include <errno.h>
 
-#include "assert.h"
 #include "idle.h"
 #include "idlemsg.h"
 #include "global.h"
-#include "util.h"
 
 HIDDEN const char *idle_method_desc = "no";
 

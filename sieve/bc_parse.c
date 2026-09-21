@@ -6,11 +6,12 @@
 #include <config.h>
 #endif
 
-#include <stdio.h>
-
 #include "bc_parse.h"
-#include "strarray.h"
-#include "arrayu64.h"
+
+#include <cyrus/arrayu64.h>
+#include <cyrus/strarray.h>
+
+#include <stdio.h>
 
 #define MAX_ARGS  15  /* processcalendar currently uses 13 */
 

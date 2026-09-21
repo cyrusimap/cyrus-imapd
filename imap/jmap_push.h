@@ -5,12 +5,13 @@
 #ifndef JMAP_PUSH_H
 #define JMAP_PUSH_H
 
+#include "libcyrus_min/util.h"
+
 #include <jansson.h>
 
 #include "httpd.h"
 #include "mboxname.h"
 #include "prot.h"
-#include "util.h"
 
 extern int jmap_push_poll;
 

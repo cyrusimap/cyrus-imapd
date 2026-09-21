@@ -12,7 +12,7 @@ AC_INIT([cyrus-imapd],
         ,
         [https://www.cyrusimap.org])
 AC_PREREQ([2.63])
-AC_CONFIG_SRCDIR([imap/imapd.c])
+AC_CONFIG_SRCDIR([libexec/imapd.c])
 AC_CONFIG_HEADERS(config.h)
 AC_CONFIG_MACRO_DIR([cmulocal])
 AC_CANONICAL_SYSTEM
@@ -2438,7 +2438,7 @@ fi
 dnl make sure that Makefile is the last thing output
 AC_CONFIG_FILES([
     libcyrus_imap.pc
-    libcyrus_min.pc
+    libcyrus_min/libcyrus_min.pc
     libcyrus.pc
     libcyrus_sieve.pc
     Makefile

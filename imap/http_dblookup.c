@@ -2,16 +2,16 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
 
 #include "carddav_db.h"
 #include "http_dav.h"
-#include "jmap_mail_query.h"
+#include "common/jmap_mail_query.h"
 #include "json_support.h"
 #include "spool.h"
 #include "mboxlist.h"
 #include "user.h"
-#include "util.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

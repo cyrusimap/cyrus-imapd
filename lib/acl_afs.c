@@ -10,15 +10,17 @@
  */
 
 #include <config.h>
+
+#include <cyrus/libconfig.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
 #include "acl.h"
 #include "auth.h"
-#include "xmalloc.h"
-#include "strarray.h"
-#include "libconfig.h"
 #include "lib/libcyr_cfg.h"
 
 /*

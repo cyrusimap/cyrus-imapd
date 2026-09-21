@@ -4,6 +4,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -14,7 +19,6 @@
 #include <sys/stat.h>
 
 /* cyrus includes */
-#include "assert.h"
 #include "bsearch.h"
 #include "global.h"
 #include "index.h"
@@ -22,8 +26,6 @@
 #include "search_expr.h"
 #include "search_query.h"
 #include "message.h"
-#include "util.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

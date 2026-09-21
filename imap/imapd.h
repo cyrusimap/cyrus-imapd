@@ -5,14 +5,16 @@
 #ifndef INCLUDED_IMAPD_H
 #define INCLUDED_IMAPD_H
 
+#include "libcyrus_min/bufarray.h"
+
+#include <cyrus/hash.h>
+#include <cyrus/strarray.h>
+
 #include "annotate.h"
-#include "bufarray.h"
-#include "hash.h"
 #include "imparse.h"
 #include "mailbox.h"
 #include "message.h"
 #include "prot.h"
-#include "strarray.h"
 #include "search_expr.h"
 #include "search_sort.h"
 #include "conversations.h"

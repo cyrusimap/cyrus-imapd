@@ -7,10 +7,11 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include "jmap_api.h"
 #include "json_support.h"
 #include "ptrarray.h"
-#include "util.h"
 
 extern json_t *jmap_calendar_events_from_msg(hash_table *icsbody_by_partid,
                                              unsigned allow_max_uids,

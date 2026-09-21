@@ -1,4 +1,9 @@
 #include <config.h>
+#include "cunit/unit.h"
+
+#include <cyrus/strhash.h>
+
+#include "libcyrus_min/util.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -8,10 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#include "cunit/unit.h"
-#include "lib/util.h"
-#include "lib/strhash.h"
 
 extern int verbose;
 

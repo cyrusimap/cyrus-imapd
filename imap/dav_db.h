@@ -5,9 +5,10 @@
 #ifndef DAV_DB_H
 #define DAV_DB_H
 
+#include "libcyrus_min/util.h"
+
 #include "sqldb.h"
 #include "mailbox.h"
-#include "util.h"
 
 #define FNAME_DAVSUFFIX "dav" /* per-user DAV DB extension */
 
