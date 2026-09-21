@@ -46,11 +46,24 @@ struct service {
 
     /* quic service support */
     bool is_quic;               /* proto == "quic"/"quic4"/"quic6"? */
+    void *quic_ebpf_ctx;        /* loaded/attached eBPF steering program state.
+                                   NULL if eBPF dispatch isn't in use */
     dynarray_t quic_idle_workers; /* which workers are ready for a connection */
 };
 
 extern struct service *Services;
 extern int nservices;
+
+/**
+ * Size the receive queue of a quic service's rendezvous socket.  Under
+ * the relay backend it holds every packet of every connection until
+ * master reads it, and under eBPF every new connection's first flight,
+ * neither of which the default size holds through a burst.
+ *
+ * @param s     the service, for logging
+ * @param sock  its rendezvous socket
+ */
+extern void quic_set_rcvbuf(struct service *s, int sock);
 
 /*
  * Description of multiple address family support from
