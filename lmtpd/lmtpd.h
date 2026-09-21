@@ -5,11 +5,11 @@
 #ifndef LMTPD_H
 #define LMTPD_H
 
-#include "append.h"
-#include "auth.h"
+#include "imap/append.h"
+#include "lib/auth.h"
 #include "common/lmtpengine.h"
-#include "mboxname.h"
-#include "message.h"
+#include "imap/mboxname.h"
+#include "imap/message.h"
 #include "common/jmap_mail_query.h"
 
 /* data per message */

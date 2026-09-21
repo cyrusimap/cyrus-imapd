@@ -13,6 +13,8 @@
 #include <cyrus/tok.h>
 #include <cyrus/xmalloc.h>
 
+#include <jansson.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -26,29 +28,33 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include "acl.h"
-#include "annotate.h"
-#include "append.h"
-#include "auditlog.h"
-#include "auth.h"
-#include "duplicate.h"
-#include "global.h"
-#include "imapurl.h"
-#include "lmtpd.h"
-#include "lmtp_sieve.h"
+#include "lib/acl.h"
+#include "imap/annotate.h"
+#include "imap/append.h"
+#include "imap/auditlog.h"
+#include "lib/auth.h"
+#include "imap/duplicate.h"
+#include "imap/global.h"
+#include "imap/ical_support.h"
+#include "lib/imapurl.h"
+#include "lmtpd/lmtpd.h"
+#include "lmtpd/lmtp_sieve.h"
 #include "common/lmtpengine.h"
-#include "map.h"
-#include "notify.h"
-#include "parseaddr.h"
-#include "prometheus.h"
-#include "prot.h"
-#include "times.h"
-#include "sieve_db.h"
-#include "sievedir.h"
-#include "smtpclient.h"
-#include "user.h"
-#include "version.h"
+#include "lib/map.h"
+#include "imap/notify.h"
+#include "lib/parseaddr.h"
+#include "imap/prometheus.h"
+#include "lib/prot.h"
+#include "lib/times.h"
+#include "imap/sieve_db.h"
+#include "imap/sievedir.h"
+#include "imap/smtpclient.h"
+#include "imap/user.h"
+#include "imap/version.h"
 #include "common/zoneinfo_db.h"
+
+#include "common/caldav_util.h"
+#include "imap/http_caldav_sched.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -1441,9 +1447,6 @@ done:
     return ret;
 }
 
-#include <jansson.h>
-#include "ical_support.h"
-
 static void add_keywords(strarray_t *flags, json_t *set_keywords, int add)
 {
     int i;
@@ -1674,9 +1677,6 @@ done:
 
     return ret;
 }
-
-#include "common/caldav_util.h"
-#include "http_caldav_sched.h"
 
 char *httpd_userid = NULL;  // due to caldav_util.h including httpd.h
 struct namespace_t namespace_calendar = { .allow = ALLOW_USERDATA | ALLOW_CAL_NOTZ };

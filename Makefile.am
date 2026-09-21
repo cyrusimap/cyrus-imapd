@@ -196,15 +196,15 @@ BUILT_SOURCES += \
 lib_LTLIBRARIES += imap/libcyrus_imap.la
 
 libexec_PROGRAMS += \
-    master/master \
+    libexec/master \
     libexec/imapd \
-    imap/lmtpd \
+    libexec/lmtpd \
     libexec/pop3d \
     libexec/backupcyrusd \
     libexec/calalarmd \
     libexec/promstatsd \
     libexec/smmapd \
-    ptclient/ptloader
+    libexec/ptloader
 
 sbin_PROGRAMS += \
     sbin/arbitron \
@@ -237,8 +237,8 @@ sbin_PROGRAMS += \
     sbin/relocate_by_id \
     sbin/tls_prune \
     sbin/cvt_xlist_specialuse \
-    ptclient/ptdump \
-    ptclient/ptexpire
+    sbin/ptdump \
+    sbin/ptexpire
 
 dist_sbin_SCRIPTS += \
     imap/cyr_cd.sh
@@ -260,7 +260,7 @@ libexec_PROGRAMS += libexec/idled
 endif # IDLED
 
 if MURDER
-libexec_PROGRAMS += imap/mupdate
+libexec_PROGRAMS += libexec/mupdate
 endif # MURDER
 
 AM_CPPFLAGS += $(HTTP_CPPFLAGS)
@@ -291,7 +291,7 @@ sbin_PROGRAMS += sbin/unexpunge
 
 if SIEVE
 noinst_PROGRAMS += notifyd/notifytest
-libexec_PROGRAMS += notifyd/notifyd
+libexec_PROGRAMS += libexec/notifyd
 endif # SIEVE
 endif # SERVER
 
@@ -311,7 +311,7 @@ noinst_PROGRAMS += sieve/test sieve/test_mailbox
 sbin_PROGRAMS += sieve/sievec sieve/sieved
 
 if SERVER
-libexec_PROGRAMS += timsieved/timsieved
+libexec_PROGRAMS += libexec/timsieved
 endif # SERVER
 
 endif # SIEVE
@@ -1065,6 +1065,7 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/message.h \
     imap/msgrecord.c \
     imap/msgrecord.h \
+    imap/mupdate.h \
     imap/mupdate-client.c \
     imap/mupdate-client.h \
     imap/mutex.h \
@@ -1160,9 +1161,9 @@ endif
 
 endif
 
-imap_lmtpd_SOURCES = \
-    imap/lmtpd.c \
-    imap/lmtpd.h \
+libexec_lmtpd_SOURCES = \
+    lmtpd/lmtpd.c \
+    lmtpd/lmtpd.h \
     common/lmtpengine.c \
     common/lmtpengine.h \
     common/mutex_fake.c \
@@ -1171,29 +1172,37 @@ imap_lmtpd_SOURCES = \
     common/sync_support.h \
     master/service.c
 
-nodist_imap_lmtpd_SOURCES = common/lmtp_err.c
+nodist_libexec_lmtpd_SOURCES = common/lmtp_err.c
 
-imap_lmtpd_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY) -DBUILD_LMTPD
+libexec_lmtpd_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY) -DBUILD_LMTPD
 
 if AUTOCREATE
-imap_lmtpd_SOURCES += \
+libexec_lmtpd_SOURCES += \
     common/autocreate.c \
     common/autocreate.h
 endif # AUTOCREATE
 
 if SIEVE
-imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h common/zoneinfo_db.c
-imap_lmtpd_SOURCES += common/jmap_util.c common/caldav_util.c common/itip_support.c
+libexec_lmtpd_SOURCES += \
+    lmtpd/lmtp_sieve.c \
+    lmtpd/lmtp_sieve.h \
+    common/zoneinfo_db.c \
+    common/jmap_util.c \
+    common/caldav_util.c \
+    common/itip_support.c
 
 if JMAP
-imap_lmtpd_SOURCES += \
-    common/jmap_mail_query.c common/jmap_mail_query_parse.c \
-    common/jmap_notif.c common/jcal.c common/jscalendar.c
+libexec_lmtpd_SOURCES += \
+    common/jmap_mail_query.c \
+    common/jmap_mail_query_parse.c \
+    common/jmap_notif.c \
+    common/jcal.c \
+    common/jscalendar.c
 endif # JMAP
 
 endif # SIEVE
 
-imap_lmtpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
+libexec_lmtpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 sbin_mbexamine_SOURCES = sbin/mbexamine.c common/cli_fatal.c common/mutex_fake.c
 sbin_mbexamine_LDADD = $(LD_UTILITY_ADD)
@@ -1207,14 +1216,13 @@ sbin_mbtool_LDADD = $(LD_UTILITY_ADD)
 imap_message_test_SOURCES = imap/message_test.c common/mutex_fake.c
 imap_message_test_LDADD = $(LD_UTILITY_ADD)
 
-imap_mupdate_SOURCES = \
-    imap/mupdate.c \
-    imap/mupdate.h \
-    imap/mupdate-slave.c \
+libexec_mupdate_SOURCES = \
+    mupdate/mupdate.c \
+    mupdate/mupdate-slave.c \
     common/mutex_pthread.c \
     master/service-thread.c
-imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
-imap_mupdate_CFLAGS =  $(AM_CFLAGS) -pthread
+libexec_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
+libexec_mupdate_CFLAGS =  $(AM_CFLAGS) -pthread
 
 nodist_imap_httpd_SOURCES = \
     imap/tz_err.c \
@@ -1785,7 +1793,7 @@ bench_cyrdbbench_SOURCES = bench/cyrdbbench.c common/mutex_fake.c
 bench_cyrdbbench_LDADD = $(LD_BASIC_ADD)
 endif # BENCH
 
-master_master_SOURCES = \
+libexec_master_SOURCES = \
     master/master.c \
     master/master.h \
     master/masterconf.c \
@@ -1795,12 +1803,10 @@ master_master_SOURCES = \
     master/event.c \
     master/event.h \
     master/service.h
-master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM) $(SSL_LIBS)
+libexec_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM) $(SSL_LIBS)
 
 
-notifyd_notifyd_SOURCES = \
-    common/mutex_fake.c \
-    master/service.c \
+libexec_notifyd_SOURCES = \
     notifyd/notify_external.c \
     notifyd/notify_external.h \
     notifyd/notify_log.c \
@@ -1810,11 +1816,13 @@ notifyd_notifyd_SOURCES = \
     notifyd/notify_null.c \
     notifyd/notify_null.h \
     notifyd/notifyd.c \
-    notifyd/notifyd.h
+    notifyd/notifyd.h \
+    common/mutex_fake.c \
+    master/service.c
 if ZEPHYR
-notifyd_notifyd_SOURCES += notifyd/notify_zephyr.c notifyd/notify_zephyr.h
+libexec_notifyd_SOURCES += notifyd/notify_zephyr.c notifyd/notify_zephyr.h
 endif
-notifyd_notifyd_LDADD = $(LD_SERVER_ADD) $(ZEPHYR_LIBS)
+libexec_notifyd_LDADD = $(LD_SERVER_ADD) $(ZEPHYR_LIBS)
 
 notifyd_notifytest_SOURCES = notifyd/notifytest.c common/mutex_fake.c
 notifyd_notifytest_LDADD = $(LD_BASIC_ADD)
@@ -1835,30 +1843,31 @@ perl_sieve_lib_libisieve_la_SOURCES = \
     perl/sieve/lib/request.c \
     perl/sieve/lib/request.h
 
-ptclient_ptdump_SOURCES = common/cli_fatal.c common/mutex_fake.c ptclient/ptdump.c
-ptclient_ptdump_LDADD = $(LD_UTILITY_ADD)
-ptclient_ptexpire_SOURCES = common/cli_fatal.c common/mutex_fake.c ptclient/ptexpire.c
-ptclient_ptexpire_LDADD = $(LD_UTILITY_ADD)
+sbin_ptdump_SOURCES = ptclient/ptdump.c common/cli_fatal.c common/mutex_fake.c
+sbin_ptdump_LDADD = $(LD_UTILITY_ADD)
 
-ptclient_ptloader_SOURCES = \
-    common/mutex_fake.c \
-    ptclient/http.c \
+sbin_ptexpire_SOURCES = ptclient/ptexpire.c common/cli_fatal.c common/mutex_fake.c
+sbin_ptexpire_LDADD = $(LD_UTILITY_ADD)
+
+libexec_ptloader_SOURCES = \
     ptclient/ptloader.c \
     ptclient/ptloader.h \
+    ptclient/http.c \
+    common/mutex_fake.c \
     master/service-thread.c
-ptclient_ptloader_LDFLAGS =
-ptclient_ptloader_LDADD = $(LD_SERVER_ADD)
+libexec_ptloader_LDFLAGS =
+libexec_ptloader_LDADD = $(LD_SERVER_ADD)
 
 if HAVE_LDAP
-ptclient_ptloader_SOURCES += ptclient/ldap.c
-ptclient_ptloader_LDADD += $(LDAP_LIBS)
-ptclient_ptloader_LDFLAGS += $(LDAP_LDFLAGS)
+libexec_ptloader_SOURCES += ptclient/ldap.c
+libexec_ptloader_LDADD += $(LDAP_LIBS)
+libexec_ptloader_LDFLAGS += $(LDAP_LDFLAGS)
 endif
 
 if USE_AFSKRB
-ptclient_ptloader_SOURCES += ptclient/afskrb.c
-ptclient_ptloader_LDADD += $(AFS_LIBS)
-ptclient_ptloader_LDFLAGS += $(AFS_LDFLAGS)
+libexec_ptloader_SOURCES += ptclient/afskrb.c
+libexec_ptloader_LDADD += $(AFS_LIBS)
+libexec_ptloader_LDFLAGS += $(AFS_LDFLAGS)
 endif
 
 # Each new version of flex seems to generate new sign-comparison
@@ -1941,10 +1950,7 @@ sieve_test_mailbox_SOURCES = \
     common/mutex_fake.c
 sieve_test_mailbox_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
-timsieved_timsieved_SOURCES = \
-    common/mutex_fake.c \
-    common/proxy.c \
-    master/service.c \
+libexec_timsieved_SOURCES = \
     timsieved/actions.c \
     timsieved/actions.h \
     timsieved/codes.h \
@@ -1952,9 +1958,12 @@ timsieved_timsieved_SOURCES = \
     timsieved/lex.h \
     timsieved/parser.c \
     timsieved/parser.h \
-    timsieved/timsieved.c
+    timsieved/timsieved.c \
+    common/mutex_fake.c \
+    common/proxy.c \
+    master/service.c
 
-timsieved_timsieved_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
+libexec_timsieved_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 snapshot::
 	@echo "Creating snapshot $(PACKAGE_NAME)-$(PACKAGE_VERSION)"
