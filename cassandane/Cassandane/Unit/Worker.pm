@@ -7,10 +7,13 @@ use warnings;
 
 use IO::Handle;
 use POSIX ();
-use Storable qw(freeze thaw);
-use MIME::Base64;
+use JSON::XS ();
 
 my $nextid = 1;
+
+# One message per line, so the encoding has to fit on one line.  Totally "plain
+# data" protocol, no blessed objects, just good ol' JSON.
+my $JSON = JSON::XS->new->ascii->canonical;
 
 sub new
 {
@@ -117,7 +120,7 @@ sub _mainloop
 
     while (my $msg = _receive($self->{downpipe}))
     {
-        my ($command, @args) = split(/\s+/, $msg);
+        my ($command, $payload) = split(/\s+/, $msg, 2);
 
         if ($command eq 'stop')
         {
@@ -125,12 +128,11 @@ sub _mainloop
         }
         elsif ($command eq 'run')
         {
-            my ($assignment) = thaw(decode_base64($args[0]));
+            my $assignment = $JSON->decode($payload);
             $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID}) $assignment->{suite}.$assignment->{testname}";
             my $outcome = $self->{handler}->($assignment);
             $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID})";
-            _send($self->{uppipe},
-                  "done %s\n", encode_base64(freeze($outcome), ''));
+            _send($self->{uppipe}, "done %s\n", $JSON->encode($outcome));
         }
         else
         {
@@ -166,13 +168,12 @@ sub get_reply
         return $witem;
     }
 
-    my ($command, @args) = split(/\s+/, $msg);
+    my ($command, $payload) = split(/\s+/, $msg, 2);
     die "Unknown message \"$msg\""
         if ($command ne 'done');
     $self->{busy} = 0;
 
-    my ($outcome) = thaw(decode_base64($args[0]));
-    return { %$witem, %$outcome };
+    return { %$witem, %{ $JSON->decode($payload) } };
 }
 
 sub assign
@@ -181,7 +182,7 @@ sub assign
     $witem->{start_time} = time();
     $self->{witem} = $witem;
     _send($self->{downpipe},
-          "run %s\n", encode_base64(freeze(_assignment($witem)), ''));
+          "run %s\n", $JSON->encode(_assignment($witem)));
     $self->{busy} = 1;
 }
 
