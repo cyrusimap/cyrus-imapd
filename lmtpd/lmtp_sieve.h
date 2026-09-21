@@ -5,11 +5,11 @@
 #ifndef LMTP_SIEVE_H
 #define LMTP_SIEVE_H
 
-#include "lmtpd.h"
-#include "conversations.h"
+#include "lmtpd/lmtpd.h"
+#include "imap/conversations.h"
 #include "sieve/sieve_interface.h"
 
-#include "carddav_db.h"
+#include "imap/carddav_db.h"
 
 struct sieve_interp_ctx {
     const char *userid;

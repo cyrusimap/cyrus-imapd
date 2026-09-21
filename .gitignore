@@ -95,12 +95,10 @@ imap/jmap_props/*.h
 imap/jmap_data_types.h
 imap/jmap_err.c
 imap/jmap_err.h
-imap/lmtpd
 imap/mailbox_header_cache.h
 imap/message_test
 imap/mupdate_err.c
 imap/mupdate_err.h
-imap/mupdate
 imap/promdata.c
 imap/promdata.h
 imap/rfc822_header.h
@@ -120,10 +118,16 @@ libexec/backupcyrusd
 libexec/calalarmd
 libexec/idled
 libexec/imapd
+libexec/lmtpd
+libexec/master
+libexec/mupdate
+libexec/notifyd
 libexec/pop3d
 libexec/promstatsd
+libexec/ptloader
 libexec/smmapd
 libexec/sync_server
+libexec/timsieved
 lib/htmlchar.h
 lib/mkchartable
 libcyrus.pc
@@ -133,9 +137,7 @@ libtool
 ltmain.sh
 makedepend.log
 man/
-master/master
 missing
-notifyd/notifyd
 notifyd/notifytest
 perl/annotator/Cyrus-Annotator-Daemon-*/
 perl/annotator/Makefile.old
@@ -168,9 +170,6 @@ perl/sieve/managesieve/managesieve.c
 perl/sieve/managesieve/pm_to_blib
 perl/sieve/scripts/installsieve
 perl/sieve/scripts/sieveshell
-ptclient/ptexpire
-ptclient/ptdump
-ptclient/ptloader
 sbin/arbitron
 sbin/chk_cyrus
 sbin/ctl_conversationsdb
@@ -200,6 +199,8 @@ sbin/ipurge
 sbin/mbexamine
 sbin/mbpath
 sbin/mbtool
+sbin/ptdump
+sbin/ptexpire
 sbin/quota
 sbin/reconstruct
 sbin/relocate_by_id
@@ -222,7 +223,6 @@ sieve/test
 sieve/test_mailbox
 sieve/tests/
 stamp-h1
-timsieved/timsieved
 tools/mkimap
 tools/rehash
 ylwrap

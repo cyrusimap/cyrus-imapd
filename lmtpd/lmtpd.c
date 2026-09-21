@@ -34,36 +34,36 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "acl.h"
-#include "annotate.h"
-#include "append.h"
-#include "attachextract.h"
-#include "auth.h"
+#include "lib/acl.h"
+#include "imap/annotate.h"
+#include "imap/append.h"
+#include "imap/attachextract.h"
+#include "lib/auth.h"
 #ifdef USE_AUTOCREATE
 #include "common/autocreate.h"
 #endif
-#include "backend.h"
-#include "carddav_db.h"
-#include "duplicate.h"
-#include "global.h"
-#include "idle.h"
-#include "mailbox.h"
-#include "map.h"
-#include "mboxevent.h"
-#include "mboxlist.h"
-#include "mboxname.h"
-#include "message.h"
-#include "mupdate.h"
-#include "notify.h"
-#include "prometheus.h"
-#include "prot.h"
+#include "imap/backend.h"
+#include "imap/carddav_db.h"
+#include "imap/duplicate.h"
+#include "imap/global.h"
+#include "imap/idle.h"
+#include "imap/mailbox.h"
+#include "lib/map.h"
+#include "imap/mboxevent.h"
+#include "imap/mboxlist.h"
+#include "imap/mboxname.h"
+#include "imap/message.h"
+#include "imap/mupdate.h"
+#include "imap/notify.h"
+#include "imap/prometheus.h"
+#include "lib/prot.h"
 #include "common/proxy.h"
 #include "common/sync_support.h"
-#include "telemetry.h"
-#include "times.h"
-#include "tls.h"
-#include "userdeny.h"
-#include "version.h"
+#include "imap/telemetry.h"
+#include "lib/times.h"
+#include "imap/tls.h"
+#include "imap/userdeny.h"
+#include "imap/version.h"
 #include "common/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
@@ -72,13 +72,13 @@
 
 #include "master/service.h"
 
-#include "lmtpd.h"
+#include "lmtpd/lmtpd.h"
 #include "common/lmtpengine.h"
 #ifdef USE_SIEVE
-#include "lmtp_sieve.h"
+#include "lmtpd/lmtp_sieve.h"
 #endif
 
-#include "iostat.h"
+#include "lib/iostat.h"
 
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,

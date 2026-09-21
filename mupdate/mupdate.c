@@ -40,18 +40,18 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "mupdate.h"
-#include "mupdate-client.h"
-#include "telemetry.h"
+#include "imap/mupdate.h"
+#include "imap/mupdate-client.h"
+#include "imap/telemetry.h"
 
-#include "global.h"
-#include "loginlog.h"
-#include "mailbox.h"
-#include "mboxlist.h"
-#include "nonblock.h"
-#include "prot.h"
-#include "tls.h"
-#include "version.h"
+#include "imap/global.h"
+#include "imap/loginlog.h"
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
+#include "lib/nonblock.h"
+#include "lib/prot.h"
+#include "imap/tls.h"
+#include "imap/version.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

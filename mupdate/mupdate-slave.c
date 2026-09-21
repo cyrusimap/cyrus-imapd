@@ -31,9 +31,9 @@
 #include <sys/select.h>
 #endif
 
-#include "prot.h"
-#include "global.h"
-#include "mupdate.h"
+#include "lib/prot.h"
+#include "imap/global.h"
+#include "imap/mupdate.h"
 
 /* Returns file descriptor of kick socket (or does not return) */
 static int open_kick_socket(void)
