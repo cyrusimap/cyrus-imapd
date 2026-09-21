@@ -1565,6 +1565,98 @@ if test "x$enable_quic" = "xyes"; then
 fi
 AM_CONDITIONAL([WITH_QUIC], [test "x$enable_quic" = "xyes"])
 
+dnl eBPF steering for QUIC dispatch (master): the kernel delivers each
+dnl connection's packets straight to its worker's socket, so master
+dnl only ever sees a connection's first packet.
+AC_ARG_WITH(quic-ebpf,
+        [AS_HELP_STRING([--without-quic-ebpf],
+                        [disable eBPF-based per-connection QUIC dispatch in
+                         master (check)])],,
+        [with_quic_ebpf="check"])
+AC_ARG_VAR([CLANG],
+        [Location of clang, used to compile master/quic/cyr_quic_steer.bpf.c])
+
+dnl Steering is part of QUIC dispatch, so there is nothing to build without it.
+if test "x$enable_quic" != "xyes"; then
+        if test "x$with_quic_ebpf" = "xyes"; then
+                AC_MSG_ERROR([QUIC eBPF dispatch explicitly requested, but
+                        QUIC dispatch support is disabled])
+        fi
+        with_quic_ebpf=no
+fi
+
+dnl master/quic/cyr_quic_steer.bpf.c is compiled to BPF bytecode by clang.
+if test "x$with_quic_ebpf" = "xyes" -o "x$with_quic_ebpf" = "xcheck"; then
+        AC_PATH_PROG([CLANG],[clang])
+        AC_MSG_CHECKING([whether clang can compile to BPF])
+        quic_clang_bpf=no
+        if test -n "$CLANG"; then
+                echo 'int x;' > conftest.bpf.c
+                if $CLANG -O2 -target bpf -c conftest.bpf.c \
+                        -o conftest.bpf.o >&AS_MESSAGE_LOG_FD 2>&1; then
+                        quic_clang_bpf=yes
+                fi
+                rm -f conftest.bpf.c conftest.bpf.o
+        fi
+        AC_MSG_RESULT([$quic_clang_bpf])
+        if test "x$quic_clang_bpf" != "xyes"; then
+                if test "x$with_quic_ebpf" = "xyes"; then
+                        AC_MSG_ERROR([QUIC eBPF dispatch explicitly requested,
+                                but no clang that can compile to BPF was
+                                found])
+                fi
+                AC_MSG_NOTICE([master will not have eBPF-based QUIC dispatch.
+                        Consider installing clang])
+                with_quic_ebpf=no
+        fi
+fi
+
+if test "x$with_quic_ebpf" = "xyes" -o "x$with_quic_ebpf" = "xcheck"; then
+        PKG_CHECK_MODULES([LIBBPF], [libbpf], [
+                PKG_CHECK_MODULES([LIBCAP], [libcap], [
+                        dnl quic_ebpf.c uses CAP_BPF and CAP_PERFMON
+                        dnl unguarded: loading a networking BPF program
+                        dnl needs both, and neither is declared before
+                        dnl Linux 5.8's headers.
+                        AC_CHECK_DECL([CAP_BPF], [
+                                AC_DEFINE(HAVE_LIBBPF,[],
+                                        [Build eBPF-based per-connection QUIC
+                                                dispatch into master?])
+                                with_quic_ebpf=yes
+                        ], [
+                                if test "x$with_quic_ebpf" = "xyes"; then
+                                        AC_MSG_ERROR([QUIC eBPF dispatch
+                                                explicitly requested, but
+                                                CAP_BPF is not declared --
+                                                needs kernel headers >= 5.8])
+                                fi
+                                AC_MSG_NOTICE([master will not have
+                                        eBPF-based QUIC dispatch: CAP_BPF is
+                                        not declared. Consider kernel headers
+                                        >= 5.8])
+                                with_quic_ebpf=no
+                        ], [[#include <linux/capability.h>]])
+                ], [
+                        if test "x$with_quic_ebpf" = "xyes"; then
+                                AC_MSG_ERROR([QUIC eBPF dispatch explicitly
+                                        requested, but libcap was not found])
+                        fi
+                        AC_MSG_NOTICE([master will not have eBPF-based QUIC
+                                dispatch. Consider installing libcap-devel])
+                        with_quic_ebpf=no
+                ])
+        ], [
+                if test "x$with_quic_ebpf" = "xyes"; then
+                        AC_MSG_ERROR([QUIC eBPF dispatch explicitly requested,
+                                but libbpf was not found])
+                fi
+                AC_MSG_NOTICE([master will not have eBPF-based QUIC dispatch.
+                        Consider installing libbpf-devel])
+                with_quic_ebpf=no
+        ])
+fi
+AM_CONDITIONAL([HAVE_LIBBPF], [test "x$with_quic_ebpf" = "xyes"])
+
 
 AC_ARG_WITH(wslay, [AS_HELP_STRING([--without-wslay], [disable WebSockets support (check)])],,[with_wslay="check"])
 if test "x$with_wslay" = "xyes" -o "x$with_wslay" = "xcheck"; then
@@ -2527,6 +2619,7 @@ External dependencies:
    clamav:             $with_clamav
    -----------------------
    nghttp2:            $with_nghttp2
+   ebpf:               $with_quic_ebpf
    wslay:              $with_wslay
    brotli:             $with_brotli
    zstd:               $with_zstd
