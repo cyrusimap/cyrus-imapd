@@ -396,6 +396,12 @@ mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
 pop.subfolder           the subfolder a POP session was restricted to
 proxy.server            the backend server a request was proxied to
+quic.dropped            how many datagrams a QUIC connection lost to a full queue
+quic.nofile.hard        master's hard RLIMIT_NOFILE, the ceiling it may raise to
+quic.nofile.soft        master's soft RLIMIT_NOFILE after it was raised to the hard limit
+quic.rcvbuf.granted     a socket receive buffer size the kernel granted, in bytes
+quic.rcvbuf.requested   a socket receive buffer size asked of the kernel, in bytes
+quic.worker_pid         the pid of a QUIC worker process (master)
 quota.root              the quota root a quota applies to
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
 sasl.result             a SASL result code
@@ -426,6 +432,7 @@ search.uncommitted      how many documents were pending when a commit failed
 search.updates          how many update passes indexed nothing
 seen.op                 which seen database operation is being logged
 seen.uids               a seen state's uid sequence, as stored
+service.name            a service's name, as configured in cyrus.conf
 sieve.lineno            the line of a Sieve script an error was found on
 sieve.result            a SIEVE_* result code
 sieve.script            the name of a Sieve script

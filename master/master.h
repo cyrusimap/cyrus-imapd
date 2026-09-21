@@ -2,8 +2,10 @@
 #define HAVE_MASTER_H
 
 #include <config.h>
+#include <stdbool.h>
 #include <sys/resource.h> /* for rlim_t */
 
+#include "dynarray.h"
 #include "libconfig.h" /* for config_dir and IMAPOPT_SYNC_MACHINEID */
 #include "strarray.h"
 
@@ -41,6 +43,10 @@ struct service {
     /* fork rate computation */
     struct timeval last_interval_start;
     unsigned int interval_forks;
+
+    /* quic service support */
+    bool is_quic;               /* proto == "quic"/"quic4"/"quic6"? */
+    dynarray_t quic_idle_workers; /* which workers are ready for a connection */
 };
 
 extern struct service *Services;
