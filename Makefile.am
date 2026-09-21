@@ -174,7 +174,7 @@ BUILT_SOURCES += com_err/et/compile_et com_err/et/libcyrus_com_err.la
 lib_LTLIBRARIES += com_err/et/libcyrus_com_err.la
 endif # COM_ERR
 
-bin_PROGRAMS = imtest/imtest
+bin_PROGRAMS = bin/imtest
 
 if SERVER
 BUILT_SOURCES += \
@@ -1520,9 +1520,9 @@ if HAVE_XXD
 	$(AM_V_GEN)(cd $(<D) > /dev/null && $(XXD) -i $(<F)|sed 's/unsigned char/static const char/') > $@.NEW && mv $@.NEW $@
 endif
 
-imtest_imtest_SOURCES = imtest/imtest.c
-imtest_imtest_LDADD = $(LD_BASIC_ADD)
-imtest_imtest_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+bin_imtest_SOURCES = bin/imtest.c
+bin_imtest_LDADD = $(LD_BASIC_ADD)
+bin_imtest_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 nodist_lib_libcyrus_la_SOURCES = lib/chartable.c
 lib_libcyrus_la_SOURCES = \
