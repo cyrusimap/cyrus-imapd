@@ -109,6 +109,11 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "jmap", json_false());
 #endif
+#ifdef WITH_QUIC
+    json_object_set_new(component, "quic", json_true());
+#else
+    json_object_set_new(component, "quic", json_false());
+#endif
 #ifdef ENABLE_DEBUG_SLOWIO
     json_object_set_new(component, "slowio", json_true());
 #else
