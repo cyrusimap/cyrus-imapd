@@ -20,9 +20,9 @@
 #include <signal.h>
 #include <fcntl.h>
 
-#include "global.h"
-#include "caldav_db.h"
-#include "caldav_alarm.h"
+#include "imap/global.h"
+#include "imap/caldav_db.h"
+#include "imap/caldav_alarm.h"
 
 extern int optind;
 extern char *optarg;

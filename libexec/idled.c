@@ -21,14 +21,14 @@
 #include <signal.h>
 #include <fcntl.h>
 
-#include "acl.h"
-#include "idle.h"
-#include "idlemsg.h"
-#include "global.h"
-#include "json_support.h"
-#include "mboxevent.h"
-#include "mboxlist.h"
-#include "sqldb.h"
+#include "lib/acl.h"
+#include "imap/idle.h"
+#include "imap/idlemsg.h"
+#include "imap/global.h"
+#include "imap/json_support.h"
+#include "imap/mboxevent.h"
+#include "imap/mboxlist.h"
+#include "lib/sqldb.h"
 
 #define CMD_CREATE                                  \
     "CREATE TABLE event_groups ("                   \

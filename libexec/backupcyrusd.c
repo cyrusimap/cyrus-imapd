@@ -31,24 +31,23 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "acl.h"
+#include "lib/acl.h"
 #ifdef USE_AUTOCREATE
 #include "common/autocreate.h"
 #endif
-#include "auth.h"
-#include "global.h"
+#include "lib/auth.h"
+#include "imap/global.h"
 
-#include "auditlog.h"
-#include "loginlog.h"
-#include "mailbox.h"
-#include "map.h"
-#include "user.h"
-#include "version.h"
-#include "mboxlist.h"
+#include "imap/auditlog.h"
+#include "imap/loginlog.h"
+#include "imap/mailbox.h"
+#include "lib/map.h"
+#include "imap/user.h"
+#include "imap/version.h"
+#include "imap/mboxlist.h"
 
-/* generated headers are not necessarily in current directory */
 #include "master/service.h"
-#include "iostat.h"
+#include "lib/iostat.h"
 
 extern int optind;
 extern char *optarg;
