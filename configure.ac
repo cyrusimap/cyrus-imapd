@@ -1504,6 +1504,67 @@ if test "x$with_nghttp2" = "xyes" -o "x$with_nghttp2" = "xcheck"; then
         ])
 fi
 
+dnl QUIC connection dispatch (master, service): whether master and its
+dnl worker binaries build the master/quic/* dispatch layer at all. The
+dnl switch is parsed here so the probes below can be skipped entirely
+dnl when it is off; its value is settled once they have all run.
+AC_ARG_ENABLE(quic,
+        [AS_HELP_STRING([--disable-quic],
+                        [disable master/service QUIC dispatch support (check)])],,
+        [enable_quic="check"])
+
+dnl master hands a QUIC connection's fd to a worker over an AF_UNIX
+dnl SOCK_SEQPACKET socketpair, the fd itself riding via SCM_RIGHTS --
+dnl see docsrc/concepts/features/quic-dispatch.rst.
+dnl Neither is optional, so a platform missing either gets no QUIC dispatch.
+quic_fd_passing=yes
+if test "x$enable_quic" != "xno"; then
+        AC_CHECK_DECL([SOCK_SEQPACKET],, [quic_fd_passing=no],
+                [[#include <sys/socket.h>]])
+        AC_CHECK_DECL([SCM_RIGHTS],, [quic_fd_passing=no],
+                [[#include <sys/socket.h>]])
+fi
+
+dnl master parses QUIC packet headers, and writes Version Negotiation,
+dnl with ngtcp2: the library QUIC workers are meant to be built on, so
+dnl that both agree about which packets can start a connection.
+quic_ngtcp2=no
+if test "x$enable_quic" != "xno"; then
+        PKG_CHECK_MODULES([NGTCP2], [libngtcp2], [quic_ngtcp2=yes],
+                [quic_ngtcp2=no])
+fi
+
+dnl Finalize enable_quic, now that the probes above have run.
+if test "x$enable_quic" != "xno"; then
+        if test "x$quic_ngtcp2" != "xyes"; then
+                if test "x$enable_quic" = "xyes"; then
+                        AC_MSG_ERROR([QUIC dispatch support explicitly
+                                requested, but libngtcp2 was not found])
+                fi
+                AC_MSG_NOTICE([master will not have QUIC dispatch support:
+                        requires libngtcp2])
+                enable_quic=no
+        elif test "x$quic_fd_passing" != "xyes"; then
+                if test "x$enable_quic" = "xyes"; then
+                        AC_MSG_ERROR([QUIC dispatch support explicitly
+                                requested, but this platform's
+                                <sys/socket.h> has no SOCK_SEQPACKET or no
+                                SCM_RIGHTS, which master needs to hand a
+                                connection to a worker])
+                fi
+                AC_MSG_NOTICE([master will not have QUIC dispatch support:
+                        this platform cannot pass fds over a SOCK_SEQPACKET
+                        socketpair])
+                enable_quic=no
+        else
+                enable_quic=yes
+        fi
+fi
+if test "x$enable_quic" = "xyes"; then
+        AC_DEFINE(WITH_QUIC,[],[Build master/service QUIC dispatch support?])
+fi
+AM_CONDITIONAL([WITH_QUIC], [test "x$enable_quic" = "xyes"])
+
 
 AC_ARG_WITH(wslay, [AS_HELP_STRING([--without-wslay], [disable WebSockets support (check)])],,[with_wslay="check"])
 if test "x$with_wslay" = "xyes" -o "x$with_wslay" = "xcheck"; then
@@ -2454,6 +2515,7 @@ Cyrus Server configured components
    sieve:              $enable_sieve
    srs:                $enable_srs
    jmap:               $enable_jmap
+   quic:               $enable_quic
    com_err:            $with_com_err
 
 External dependencies:
