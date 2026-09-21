@@ -557,12 +557,12 @@ sub _dump_logfile
     close LOGFILE;
 }
 
-sub _get_suite_and_test
+sub _get_test
 {
     my ($self, $witem) = @_;
     my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
     my ($test) = grep { $_->name() eq 'test_' . $witem->{testname}; } @{$suite->tests()};
-    return ($suite, $test);
+    return $test;
 }
 
 # Run one work item and return its outcome: a verdict, plus a description of
@@ -571,7 +571,7 @@ sub _get_suite_and_test
 sub _run_workitem
 {
     my ($self, $witem, $result, $runner, $in_worker) = @_;
-    my ($suite, $test) = $self->_get_suite_and_test($witem);
+    my $test = $self->_get_test($witem);
 
     my $listener = $self->_listen_for_outcome($result, $in_worker);
 
@@ -580,11 +580,19 @@ sub _run_workitem
     # names and UUIDs as each other, test for test.
     srand;
 
-    Cassandane::Unit::TestCase->enable_test($witem->{testname});
     $self->_capture_output($witem->{logfile});
-    $suite->run($result, $runner);
 
-    my $outcome = $listener->outcome() // { outcome => 'unknown' };
+    my $outcome;
+    if (my $reason = _skip_reason($test, $runner))
+    {
+        $outcome = { outcome => 'skip', reason => $reason };
+    }
+    else
+    {
+        $test->run($result, $runner);
+        $outcome = $listener->outcome()
+            or die "$witem->{suite}.$witem->{testname} ran but reported nothing";
+    }
 
     if ($test->can('post_tear_down'))
     {
@@ -604,12 +612,47 @@ sub _run_workitem
     $self->_restore_stdout();
     if (!$in_worker)
     {
-        $test->annotate_from_file($witem->{logfile});
-        _dump_logfile($witem->{logfile}) if (get_verbose > 1);
+        if ($outcome->{outcome} eq 'skip')
+        {
+            _report_skip($runner, $test, $outcome->{reason});
+        }
+        else
+        {
+            $test->annotate_from_file($witem->{logfile});
+            _dump_logfile($witem->{logfile}) if (get_verbose > 1);
+        }
         unlink($witem->{logfile}) if (!defined $self->{log_directory});
     }
 
     return $outcome;
+}
+
+# The filters that decide whether a test runs at all.  The first one with an
+# answer wins, and its answer is why the test was skipped.  They're consulted
+# in the order the runner was given them, because some have side effects: a
+# test's :want_service_http attribute is honoured by a filter.
+sub _skip_reason
+{
+    my ($test, $runner) = @_;
+
+    foreach my $token ($runner->filter())
+    {
+        my $reason = $test->filter_method($token);
+        return $reason if $reason;
+    }
+
+    return;
+}
+
+# A skipped test has no result to add: it never started, so the listeners that
+# count runs and record failures have nothing to hear.  The formatters are
+# told, because a skip is worth reporting.
+sub _report_skip
+{
+    my ($runner, $test, $reason) = @_;
+
+    $runner->tell_formatters('add_skip', $test, $reason)
+        if $runner->can('tell_formatters');
 }
 
 # Rebuild, from what came back over the pipe, an exception the result and the
@@ -632,7 +675,14 @@ sub _rebuild_exception
 sub _finish_workitem
 {
     my ($self, $witem, $result, $runner) = @_;
-    my ($suite, $test) = $self->_get_suite_and_test($witem);
+    my $test = $self->_get_test($witem);
+
+    if ($witem->{outcome} eq 'skip')
+    {
+        unlink($witem->{logfile}) if (!defined $self->{log_directory});
+        _report_skip($runner, $test, $witem->{reason});
+        return;
+    }
 
     # The test was actually started earlier by _run_workitem, but its
     # start_test event wasn't sent.  It might have got swallowed due to
@@ -669,6 +719,11 @@ sub _finish_workitem
         $result->add_error($test,
                            _rebuild_exception('Test::Unit::Error',
                                               $witem->{failure}));
+    }
+    else
+    {
+        die "Unknown outcome '$witem->{outcome}' for"
+            . " $witem->{suite}.$witem->{testname}";
     }
     $result->end_test($test);
 }

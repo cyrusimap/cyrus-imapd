@@ -17,7 +17,6 @@ use Carp ();
 use Cassandane::Util::Log;
 use Cassandane::Util::TestUrl;
 
-my $enabled;
 my $buildinfo;
 
 sub new
@@ -27,12 +26,6 @@ sub new
         $buildinfo = Cassandane::BuildInfo->new();
     }
     return $class->SUPER::new(@_);
-}
-
-sub enable_test
-{
-    my ($class, $test) = @_;
-    $enabled = $test;
 }
 
 sub _skip_version
@@ -81,21 +74,18 @@ sub _skip_version
     return;
 }
 
+# Returns why this build can't run the test, or nothing if it can.
 sub is_feature_missing
 {
     my ($self, $category, $key, $want_value) = @_;
 
     if (defined $want_value) {
         my $actual = $buildinfo->get($category, $key);
-        if ($actual ne $want_value) {
-            xlog "$category.$key not '$want_value' (is '$actual'),",
-                 "$self->{_name} will be skipped";
-            return 1;
-        }
+        return "$category.$key is '$actual', not '$want_value'"
+            if $actual ne $want_value;
     }
     elsif (not $buildinfo->get($category, $key)) {
-        xlog "$category.$key not enabled, $self->{_name} will be skipped";
-        return 1;
+        return "$category.$key is not enabled";
     }
 
     return;
@@ -106,14 +96,8 @@ sub filter
     my ($self) = @_;
     return
     {
-        # filters return 1 if the test should be skipped, or undef otherwise
-        x => sub
-        {
-            my $method = shift;
-            $method =~ s/^test_//;
-            # Only the explicitly enabled test runs
-            return ($enabled eq $method ? undef : 1);
-        },
+        # A filter returns why the test should be skipped, or nothing if it
+        # should run.  The reason is reported, so write it for a reader.
         skip_version => sub
         {
             return if not exists $self->{_name};
@@ -121,7 +105,8 @@ sub filter
             return if not defined $sub;
             foreach my $attr (attributes::get($sub)) {
                 next if $attr !~ m/^(?:min|max)_(?:other_)?version_[\d_]+$/;
-                return 1 if _skip_version($attr);
+                return "this Cyrus does not satisfy :$attr"
+                    if _skip_version($attr);
             }
             return;
         },
@@ -133,14 +118,16 @@ sub filter
             foreach my $attr (attributes::get($sub)) {
                 next if $attr !~
                     m/^needs_([A-Za-z0-9]+)_(\w+)(?:\(([^\)]*)\))?$/;
-                return 1 if $self->is_feature_missing($1, $2, $3);
+                my $missing = $self->is_feature_missing($1, $2, $3);
+                return $missing if $missing;
             }
             return if not exists $self->{needs};
             while (my ($category, $subhash) = each %{$self->{needs}}) {
                 while (my ($key, $want_value) = each %{$subhash}) {
-                    return 1 if $self->is_feature_missing($category,
-                                                          $key,
-                                                          $want_value);
+                    my $missing = $self->is_feature_missing($category,
+                                                            $key,
+                                                            $want_value);
+                    return $missing if $missing;
                 }
             }
             return;
@@ -148,13 +135,15 @@ sub filter
         skip_slow => sub
         {
             my ($method) = @_;
-            return 1 if $method =~ m/_slow$/;
+            return 'test is slow, and slow tests were not requested'
+                if $method =~ m/_slow$/;
             return;
         },
         slow_only => sub
         {
             my ($method) = @_;
-            return 1 if $method !~ m/_slow$/;
+            return 'test is not slow, and only slow tests were requested'
+                if $method !~ m/_slow$/;
             return;
         },
         skip_runtime_check => sub
@@ -166,11 +155,7 @@ sub filter
             # being skipped
             return if not $self->can('skip_check');
             my $reason = $self->skip_check();
-            if ($reason) {
-                xlog "$self->{_name} will be skipped:",
-                     "skip_check said '$reason'";
-                return 1;
-            }
+            return "skip_check said '$reason'" if $reason;
             return;
         },
     };

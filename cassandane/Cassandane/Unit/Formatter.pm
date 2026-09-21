@@ -62,6 +62,20 @@ sub add_failure
     my ($self, $test, $exception) = @_;
 }
 
+# A skipped test never ran, so it never started either: this is the only event
+# a formatter hears about it.
+sub add_skip
+{
+    my ($self, $test, $reason) = @_;
+    $self->{skip_count}++;
+}
+
+sub skip_count
+{
+    my ($self) = @_;
+    return $self->{skip_count} || 0;
+}
+
 sub end_test
 {
     my ($self, $test) = @_;
@@ -96,8 +110,16 @@ sub print_header
 {
     my ($self, $result) = @_;
 
+    my $skipped = $self->skip_count()
+                ? ", Skipped: " . $self->skip_count()
+                : "";
+
     if ($result->was_successful()) {
-        $self->_print("\n", "OK", " (", $result->run_count(), " tests)\n");
+        $self->_print("\n", "OK", " (", $result->run_count(), " tests",
+                      $self->skip_count()
+                        ? ", " . $self->skip_count() . " skipped"
+                        : "",
+                      ")\n");
     }
     else {
         $self->_print("\n", "!!!FAILURES!!!", "\n",
@@ -105,6 +127,7 @@ sub print_header
                       "Run: ", $result->run_count(),
                       ", Failures: ", $result->failure_count(),
                       ", Errors: ", $result->error_count(),
+                      $skipped,
                       "\n");
     }
 }

@@ -509,7 +509,7 @@ else
         die "$joined formatters all want to write to stdout\n";
     }
 
-    my @filters = qw(x skip_version skip_missing_features
+    my @filters = qw(skip_version skip_missing_features
                      skip_runtime_check
                      enable_wanted_properties);
     push @filters, 'skip_slow' if $plan->{skip_slow};

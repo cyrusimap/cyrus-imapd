@@ -54,6 +54,22 @@ sub add_failure
     $self->_print_line_for($test, 0, 'failure');
 }
 
+sub add_skip
+{
+    my ($self, $test, $reason) = @_;
+
+    $self->SUPER::add_skip($test, $reason);
+
+    # TAP has its own way of saying this, and a skip is an 'ok'
+    my $line = sprintf "ok %i - %s.%s # SKIP %s\n",
+        ++$self->{i},
+        ref($test),
+        ($test->name =~ s/^test_//r),
+        $reason;
+
+    $self->_print($line);
+}
+
 sub print_summary
 {
     my ($self) = @_; # ignoring the other args
