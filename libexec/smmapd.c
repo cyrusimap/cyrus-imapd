@@ -53,14 +53,14 @@
 #include <syslog.h>
 #include <signal.h>
 
-#include "acl.h"
-#include "append.h"
-#include "auditlog.h"
-#include "global.h"
-#include "mboxlist.h"
-#include "mupdate-client.h"
-#include "quota.h"
-#include "userdeny.h"
+#include "lib/acl.h"
+#include "imap/append.h"
+#include "imap/auditlog.h"
+#include "imap/global.h"
+#include "imap/mboxlist.h"
+#include "imap/mupdate-client.h"
+#include "imap/quota.h"
+#include "imap/userdeny.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

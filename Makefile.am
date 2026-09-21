@@ -197,13 +197,13 @@ lib_LTLIBRARIES += imap/libcyrus_imap.la
 
 libexec_PROGRAMS += \
     master/master \
-    imap/imapd \
+    libexec/imapd \
     imap/lmtpd \
-    imap/pop3d \
-    imap/backupcyrusd \
-    imap/calalarmd \
-    imap/promstatsd \
-    imap/smmapd \
+    libexec/pop3d \
+    libexec/backupcyrusd \
+    libexec/calalarmd \
+    libexec/promstatsd \
+    libexec/smmapd \
     ptclient/ptloader
 
 sbin_PROGRAMS += \
@@ -256,7 +256,7 @@ sbin_PROGRAMS += sbin/squatter
 endif
 
 if IDLED
-libexec_PROGRAMS += imap/idled
+libexec_PROGRAMS += libexec/idled
 endif # IDLED
 
 if MURDER
@@ -283,7 +283,7 @@ sbin_PROGRAMS += sbin/cyr_guesstz
 endif # HAVE_GUESSTZ
 
 if REPLICATION
-libexec_PROGRAMS += imap/sync_server
+libexec_PROGRAMS += libexec/sync_server
 sbin_PROGRAMS += sbin/sync_client sbin/sync_reset
 endif # REPLICATION
 
@@ -939,17 +939,16 @@ sbin_deliver_SOURCES = \
 nodist_sbin_deliver_SOURCES = common/lmtp_err.c
 sbin_deliver_LDADD = $(LD_UTILITY_ADD)
 
-imap_idled_SOURCES = imap/idled.c common/mutex_fake.c
-imap_idled_LDADD = $(LD_UTILITY_ADD)
+libexec_idled_SOURCES = libexec/idled.c common/mutex_fake.c
+libexec_idled_LDADD = $(LD_UTILITY_ADD)
 
-imap_calalarmd_SOURCES = imap/calalarmd.c common/mutex_fake.c
-imap_calalarmd_LDADD = $(LD_SERVER_ADD)
+libexec_calalarmd_SOURCES = libexec/calalarmd.c common/mutex_fake.c
+libexec_calalarmd_LDADD = $(LD_SERVER_ADD)
 
-imap_imapd_SOURCES = \
+libexec_imapd_SOURCES = \
+    libexec/imapd.c \
     common/imap_proxy.c \
     common/imap_proxy.h \
-    imap/imapd.c \
-    imap/imapd.h \
     common/mutex_fake.c \
     common/proxy.c \
     common/proxy.h \
@@ -958,12 +957,12 @@ imap_imapd_SOURCES = \
     master/service.c
 
 if AUTOCREATE
-imap_imapd_SOURCES += \
+libexec_imapd_SOURCES += \
     common/autocreate.h \
     common/autocreate.c
 endif
 
-imap_imapd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
+libexec_imapd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 sbin_ipurge_SOURCES = sbin/ipurge.c common/cli_fatal.c common/mutex_fake.c
 sbin_ipurge_LDADD = $(LD_UTILITY_ADD)
@@ -1037,6 +1036,7 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/idle.h \
     imap/idlemsg.c \
     imap/idlemsg.h \
+    imap/imapd.h \
     imap/imapparse.c \
     imap/imapparse.h \
     imap/index_file.c \
@@ -1406,28 +1406,27 @@ endif # CUNIT
 
 endif # JMAP
 
-imap_backupcyrusd_SOURCES = \
+libexec_backupcyrusd_SOURCES = \
+    libexec/backupcyrusd.c \
     common/mutex_fake.c \
-    imap/backupcyrusd.c \
     master/service.c
+libexec_backupcyrusd_LDADD = $(LD_SERVER_ADD)
 
-imap_pop3d_SOURCES = \
+libexec_pop3d_SOURCES = \
+    libexec/pop3d.c \
     common/mutex_fake.c \
-    imap/pop3d.c \
     common/proxy.c \
     common/sync_support.c \
     common/sync_support.h \
     master/service.c
 
 if AUTOCREATE
-imap_pop3d_SOURCES += \
+libexec_pop3d_SOURCES += \
     common/autocreate.c \
     common/autocreate.h
 endif # AUTOCREATE
 
-imap_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
-
-imap_backupcyrusd_LDADD = $(LD_SERVER_ADD)
+libexec_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 PROMDATAGEN = $(abs_top_srcdir)/imap/promdatagen
 
@@ -1437,8 +1436,8 @@ imap/promdata.c: imap/promdata.p $(PROMDATAGEN)
 imap/promdata.h: imap/promdata.p $(PROMDATAGEN)
 	$(AM_V_GEN)$(PERL) $(PROMDATAGEN) -h $@.NEW $< && mv $@.NEW $@
 
-imap_promstatsd_SOURCES = imap/promstatsd.c common/mutex_fake.c
-imap_promstatsd_LDADD = $(LD_UTILITY_ADD)
+libexec_promstatsd_SOURCES = libexec/promstatsd.c common/mutex_fake.c
+libexec_promstatsd_LDADD = $(LD_UTILITY_ADD)
 
 sbin_quota_SOURCES = sbin/quota.c common/cli_fatal.c common/mutex_fake.c
 sbin_quota_LDADD = $(LD_UTILITY_ADD)
@@ -1458,8 +1457,12 @@ imap_ical_apply_patch_LDADD = $(LD_UTILITY_ADD)
 imap_search_test_SOURCES = imap/search_test.c common/mutex_fake.c
 imap_search_test_LDADD = $(LD_UTILITY_ADD)
 
-imap_smmapd_SOURCES = common/mutex_fake.c common/proxy.c imap/smmapd.c master/service.c
-imap_smmapd_LDADD = $(LD_SERVER_ADD)
+libexec_smmapd_SOURCES = \
+    libexec/smmapd.c \
+    common/mutex_fake.c \
+    common/proxy.c \
+    master/service.c
+libexec_smmapd_LDADD = $(LD_SERVER_ADD)
 
 sbin_squatter_SOURCES = sbin/squatter.c common/cli_fatal.c common/mutex_fake.c
 sbin_squatter_LDADD = $(LD_UTILITY_ADD)
@@ -1473,8 +1476,14 @@ sbin_sync_client_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 sbin_sync_reset_SOURCES = sbin/sync_reset.c common/mutex_fake.c common/sync_support.c common/sync_support.h
 sbin_sync_reset_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
-imap_sync_server_SOURCES = common/mutex_fake.c imap/sync_server.c common/imap_proxy.h common/sync_support.c common/sync_support.h master/service.c
-imap_sync_server_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
+libexec_sync_server_SOURCES = \
+    libexec/sync_server.c \
+    common/mutex_fake.c \
+    common/imap_proxy.h \
+    common/sync_support.c \
+    common/sync_support.h \
+    master/service.c
+libexec_sync_server_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 sbin_tls_prune_SOURCES = sbin/tls_prune.c common/cli_fatal.c common/mutex_fake.c
 sbin_tls_prune_LDADD = $(LD_UTILITY_ADD)

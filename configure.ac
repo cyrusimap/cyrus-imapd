@@ -12,7 +12,7 @@ AC_INIT([cyrus-imapd],
         ,
         [https://www.cyrusimap.org])
 AC_PREREQ([2.63])
-AC_CONFIG_SRCDIR([imap/imapd.c])
+AC_CONFIG_SRCDIR([libexec/imapd.c])
 AC_CONFIG_HEADERS(config.h)
 AC_CONFIG_MACRO_DIR([cmulocal])
 AC_CANONICAL_SYSTEM

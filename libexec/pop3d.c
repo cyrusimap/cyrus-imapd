@@ -32,38 +32,38 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
-#include "acl.h"
+#include "lib/acl.h"
 #ifdef USE_AUTOCREATE
 #include "common/autocreate.h"
 #endif
-#include "auth.h"
-#include "global.h"
-#include "tls.h"
+#include "lib/auth.h"
+#include "imap/global.h"
+#include "imap/tls.h"
 
-#include "auditlog.h"
-#include "imapd.h"
-#include "loginlog.h"
-#include "mailbox.h"
-#include "mboxevent.h"
-#include "version.h"
-#include "mboxlist.h"
-#include "idle.h"
-#include "telemetry.h"
-#include "backend.h"
+#include "imap/auditlog.h"
+#include "imap/imapd.h"
+#include "imap/loginlog.h"
+#include "imap/mailbox.h"
+#include "imap/mboxevent.h"
+#include "imap/version.h"
+#include "imap/mboxlist.h"
+#include "imap/idle.h"
+#include "imap/telemetry.h"
+#include "imap/backend.h"
 #include "common/proxy.h"
 #include "common/sync_support.h"
-#include "seen.h"
-#include "userdeny.h"
-#include "prometheus.h"
+#include "imap/seen.h"
+#include "imap/userdeny.h"
+#include "imap/prometheus.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
 #include "master/service.h"
 
-#include "statuscache.h"
+#include "imap/statuscache.h"
 
-#include "iostat.h"
+#include "lib/iostat.h"
 
 #ifndef MAXHOSTNAMELEN
 #define MAXHOSTNAMELEN 256
