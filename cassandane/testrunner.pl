@@ -169,6 +169,7 @@ use List::Util qw(uniq);
 
 use lib '.';
 use Cassandane::Util::Setup;
+use Cassandane::Error;
 use Cassandane::Unit::FormatPretty;
 use Cassandane::Unit::FormatTAP;
 use Cassandane::Unit::FormatXML;
@@ -220,7 +221,7 @@ if ($missing_binaries) {
     use Error;
     use Test::Unit::Exception;
 
-    # We also convert string exceptions into Test::Unit errors.
+    # We also convert string exceptions into Cassandane errors.
     $SIG{__DIE__} = sub
     {
         my ($e) = @_;
@@ -230,7 +231,7 @@ if ($missing_binaries) {
             if ($line)
             {
                 local $Error::Depth = 1;
-                Test::Unit::Error->throw('-text' => "Perl exception: $text\n");
+                Cassandane::Error->throw('-text' => "Perl exception: $text\n");
             }
         }
         die @_;

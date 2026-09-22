@@ -10,6 +10,7 @@ use File::Find;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
+use Cassandane::Error;
 use Cassandane::Failure;
 use Cassandane::Util::Log;
 use Cassandane::Unit::TestCase;
@@ -597,8 +598,7 @@ sub _run_workitem
         my $ex = $@;
         if ($ex)
         {
-            $result->add_error($test,
-                               Test::Unit::Error->make_new_from_error($ex));
+            $result->add_error($test, Cassandane::Error->from_thrown($ex));
             $outcome = $listener->outcome();
         }
     }
@@ -711,7 +711,7 @@ sub _finish_workitem
     elsif ($witem->{outcome} eq 'error')
     {
         $result->add_error($test,
-                           _rebuild_exception('Test::Unit::Error',
+                           _rebuild_exception('Cassandane::Error',
                                               $witem->{failure}));
     }
     else
