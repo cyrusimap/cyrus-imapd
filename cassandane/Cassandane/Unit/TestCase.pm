@@ -291,6 +291,59 @@ sub assert_num_not_equals
     return 1;
 }
 
+# This is irritating inherited behavior from Test::Unit, and I'd like to be
+# able to ditch it.  In Test::Unit's assert_equals, a value that numifies to
+# something other than zero, or that really is zero, is a number;
+# so is an object that overloads '=='.  Everything else is a string.
+sub _compare_numerically
+{
+    my ($value) = @_;
+
+    {
+        no warnings 'numeric';
+        return 1 if $value == 0 ? $value =~ m/^\s*[+-]?0(e0)?\s*$/i : 1;
+    }
+
+    if (ref $value && eval { $value->isa('UNIVERSAL') }) {
+        require overload;
+        return 1 if overload::Method($value, '==');
+    }
+
+    return;
+}
+
+sub assert_equals
+{
+    my ($self, $expected, $actual, @message) = @_;
+
+    local $Error::Depth = $Error::Depth + 1;
+
+    return 1 if not defined $expected and not defined $actual;
+
+    $self->fail(@message ? @message : 'one arg was not defined')
+        if not defined $expected or not defined $actual;
+
+    return _compare_numerically($expected)
+        ? $self->assert_num_equals($expected, $actual, @message)
+        : $self->assert_str_equals($expected, $actual, @message);
+}
+
+sub assert_not_equals
+{
+    my ($self, $expected, $actual, @message) = @_;
+
+    local $Error::Depth = $Error::Depth + 1;
+
+    $self->fail(@message ? @message : 'both args were undefined')
+        if not defined $expected and not defined $actual;
+
+    return 1 if not defined $expected or not defined $actual;
+
+    return _compare_numerically($expected)
+        ? $self->assert_num_not_equals($expected, $actual, @message)
+        : $self->assert_str_not_equals($expected, $actual, @message);
+}
+
 sub assert_null
 {
     my ($self, $actual, @message) = @_;
