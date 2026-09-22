@@ -2846,18 +2846,17 @@ static int jmap_addressbook_set(struct jmap_req *req)
         !json_object_size(set.not_updated) &&
         !json_object_size(set.not_destroyed)) {
 
-        /* resolve new default addressbook id */
+        /* Resolve the new default addressbook id.  A creation id may
+         * belong to an earlier method call, so this goes through the
+         * request's map, where the create registered it. */
         const char *newid = setargs.on_success_set_is_default;
-        if (*newid == '#') {
-            json_t *jobj = json_object_get(set.created, newid+1);
-            if (jobj) newid = json_string_value(json_object_get(jobj, "id"));
-        }
+        if (*newid == '#') newid = jmap_lookup_id(req, newid + 1);
 
         /* Make sure the new default addressbook exists, and that the caller
          * has admin rights on the addressbook home: for changing per-account
          * state, per-addressbook rights aren't enough. */
         mbentry_t *mbentry = NULL;
-        abookid_to_mbentry(req, newid, &mbentry);
+        if (newid) abookid_to_mbentry(req, newid, &mbentry);
         if (!mbentry ||
             !jmap_hasrights(req, cardhomename, JACL_ADMIN_ADDRBOOK)) {
             /* Report the failure to set the new default */
@@ -2882,7 +2881,7 @@ static int jmap_addressbook_set(struct jmap_req *req)
             }
             else {
                 /* report that isDefault has been moved to new addressbook */
-                jmap_report_isdefault(&set, mbentry->name,
+                jmap_report_isdefault(req, &set, mbentry->name,
                                       setargs.on_success_set_is_default, true);
 
                 /* report that isDefault has been removed from old default */
@@ -2892,7 +2891,8 @@ static int jmap_addressbook_set(struct jmap_req *req)
                     char oldid[JMAP_MAX_ADDRBOOKID_SIZE];
 
                     jmap_set_addrbookid(req->cstate, mbentry, oldid);
-                    jmap_report_isdefault(&set, mbentry->name, oldid, false);
+                    jmap_report_isdefault(req, &set, mbentry->name,
+                                          oldid, false);
                 }
             }
         }
