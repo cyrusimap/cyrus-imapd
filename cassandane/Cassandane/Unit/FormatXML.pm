@@ -34,8 +34,8 @@ sub _classrec {
     my ($self, $test) = @_;
 
     return $self->{classrecs}->{ref($test)} ||= {
-                testrecs => {}, tests => 0,
-                errors => 0, failures => 0,
+                testrecs => {}, tests => 0, time => 0,
+                errors => 0, failures => 0, skipped => 0,
                 timestamp => strftime("%Y-%m-%dT%H:%M:%S", gmtime(time())),
                 };
 }
@@ -79,6 +79,25 @@ sub add_error {
          $self->{gen}->error({type => _extype($exception),
                               message => $exception->get_message()},
                               $exception->stringify()));
+}
+
+# A skipped test never starts or ends, so its testcase element has to be
+# built here rather than in end_test.
+sub add_skip {
+    my ($self, $test, $reason) = @_;
+
+    $self->SUPER::add_skip($test, $reason);
+
+    my $cr = $self->_classrec($test);
+    my $tr = $self->_testrec($test);
+    $cr->{tests}++;
+    $cr->{skipped}++;
+    $tr->{node} = $self->{gen}->testcase({name => $test->name(),
+                                          classname => ref($test),
+                                          time => '0.0000'},
+                                         $self->{gen}->skipped({
+                                             message => $reason,
+                                         }));
 }
 
 sub start_test {
@@ -133,6 +152,7 @@ sub _emit_xml {
         my $xml = $self->{gen}->testsuite({tests => $cr->{tests},
                                            failures => $cr->{failures},
                                            errors => $cr->{errors},
+                                           skipped => $cr->{skipped},
                                            time => $time,
                                            name => $class,
                                            hostname => $hostname,

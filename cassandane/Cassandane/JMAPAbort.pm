@@ -6,21 +6,20 @@ use strict;
 use warnings;
 use experimental 'signatures';
 
-use parent qw(Test::Unit::Failure);
+use parent qw(Cassandane::Failure);
 
 use Error ();
 
 =head1 NAME
 
-Cassandane::JMAPAbort - a JMAP::Tester abort that Test::Unit calls a failure
+Cassandane::JMAPAbort - a JMAP::Tester abort that counts as a failing test
 
 =head1 DESCRIPTION
 
 When JMAP::Tester gives up, it throws a L<JMAP::Tester::Abort>, which is a
-Throwable::Error.  Test::Unit only understands Error.pm exceptions, and of
-those only a Test::Unit::Failure is reported as a failing test; anything else
-is an error, meaning the test suite itself is broken.  An abort is a I<failing>
-test, so it should look like one.
+Throwable::Error.  The test framework needs failures to be a
+L<Cassandane::Failure>.  (Otherwise they get treated as I<errors>, which they
+aren't.)
 
 This stupid class saves us from multiple inheritance, and
 L<Cassandane::Role::JMAPTester> makes our JMAP::Tester classes use it.

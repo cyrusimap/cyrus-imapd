@@ -79,6 +79,21 @@ sub add_failure
     $self->_print($line);
 }
 
+sub add_skip
+{
+    my ($self, $test, $reason) = @_;
+
+    $self->SUPER::add_skip($test, $reason);
+
+    return if $self->{_no_ok};
+
+    my $line = sprintf "%s %s (%s)\n",
+                       $self->ansi([36], '[ SKIP ]'),
+                       _getname($test),
+                       $reason;
+    $self->_print($line);
+}
+
 sub _getname
 {
     my $test = shift;
@@ -184,10 +199,17 @@ sub print_failures
 sub print_header {
     my $self = shift;
     my ($result) = @_;
+    my $skipped = $self->skip_count()
+                ? ", Skipped: " . $self->ansi([36], $self->skip_count())
+                : "";
     if ($result->was_successful()) {
         $self->_print("\n",
                       $self->ansi([32], "OK"),
-                      " (", $result->run_count(), " tests)\n");
+                      " (", $result->run_count(), " tests",
+                      $self->skip_count()
+                        ? ", " . $self->skip_count() . " skipped"
+                        : "",
+                      ")\n");
     } else {
         my $failure_count = $result->failure_count()
                           ? $self->ansi([33], $result->failure_count)
@@ -206,6 +228,7 @@ sub print_header {
                       ", Successes: $success_count",
                       ", Failures: $failure_count",
                       ", Errors: $error_count",
+                      $skipped,
                       "\n");
     }
 }

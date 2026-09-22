@@ -1,483 +1,21 @@
 # SPDX-License-Identifier: BSD-3-Clause-CMU
 # See COPYING file at the root of the distribution for more details.
 
-package Cassandane::Unit::TestPlanItem;
+package Cassandane::Unit::TestPlan;
 use strict;
 use warnings;
 use experimental 'signatures';
-use IO::Handle;
-use POSIX;
-use Time::HiRes qw(time);
 
-use Cassandane::Unit::TestCase;
-
-sub new
-{
-    my ($class, $suite) = @_;
-    my $self = {
-        suite => $suite,
-        loaded_suite => undef,
-        denied => {},
-        allowed => {},
-    };
-    return bless $self, $class;
-}
-
-sub _get_loaded_suite
-{
-    my ($self) = @_;
-    return $self->{loaded_suite} ||= Test::Unit::Loader::load($self->{suite});
-}
-
-sub _is_allowed
-{
-    my ($self, $name) = @_;
-
-    # Rules are:
-    # deny if method has been explicitly denied
-    return 0 if $self->{denied}->{$name};
-
-    # deny if test name matches any denied pattern
-    $name =~ $_ && return 0 for @{ $self->{denied_patterns} // [] };
-
-    # allow if method has been explicitly allowed
-    return 1 if $self->{allowed}->{$name};
-
-    # allow if test name matches any allowed patterns
-    my @allow_patterns = @{ $self->{allowed_patterns} // []};
-    $name =~ $_ && return 1 for @allow_patterns;
-
-    # deny if anything is explicitly allowed
-    return 0 if %{$self->{allowed}} || @allow_patterns;
-
-    # finally, allow
-    return 1;
-}
-
-sub _deny
-{
-    my ($self, $test) = @_;
-    if (ref $test) {
-        push @{ $self->{denied_patterns} }, $test;
-    } else {
-        $self->{denied}->{$test} = 1;
-    }
-    return;
-}
-
-sub _allow
-{
-    my ($self, $test, $spec) = @_;
-
-    # $spec is the specification this came from, kept only so that
-    # _get_candidates can complain about it by the name the user typed
-    push $self->{allowed_specs}->@*, { spec => $spec, test => $test };
-
-    if (ref $test) {
-        push @{ $self->{allowed_patterns} }, $test;
-    } else {
-        $self->{allowed}->{$test} = 1;
-    }
-    return;
-}
-
-# Returns, for each specification that selected individual tests from this
-# suite, a hash of the specification and the test names it actually matched.
-# Loading the suite is the only way to know those names, so this can't be
-# answered until scheduling is finished.
-sub _get_candidates ($self)
-{
-    return if not $self->{allowed_specs};
-
-    my @names = map {; s/^test_//r } $self->_get_loaded_suite()->names()->@*;
-
-    my @matches;
-    foreach my $allowed ($self->{allowed_specs}->@*)
-    {
-        my $test = $allowed->{test};
-        my @matched = ref $test ? grep {; $_ =~ $test } @names
-                                : grep {; $_ eq $test } @names;
-
-        push @matches, { spec => $allowed->{spec}, tests => \@matched };
-    }
-
-    return @matches;
-}
-
-package Cassandane::Unit::Worker;
-use Storable qw(freeze thaw);
-use MIME::Base64;
-
-my $nextid = 1;
-
-sub new
-{
-    my ($class) = @_;
-    my $self = {
-        id => $nextid++,
-        pid => undef,
-        downpipe => undef,
-        uppipe => undef,
-        busy => 0,
-        handler => undef,
-    };
-    return bless $self, $class;
-}
-
-sub _pipe_read_fh
-{
-    my ($r, $w) = @_;
-
-    POSIX::close($w);
-    my $fh = IO::Handle->new_from_fd($r, "r");
-    $fh->autoflush(1);
-    return $fh;
-}
-
-sub _pipe_write_fh
-{
-    my ($r, $w) = @_;
-
-    POSIX::close($r);
-    my $fh = IO::Handle->new_from_fd($w, "w");
-    $fh->autoflush(1);
-    return $fh;
-}
-
-sub start
-{
-    my ($self) = @_;
-
-    my ($dr, $dw) = POSIX::pipe();
-    die "Cannot create down pipe: $!"
-        unless defined $dw;
-
-    my ($ur, $uw) = POSIX::pipe();
-    die "Cannot create up pipe: $!"
-        unless defined $uw;
-
-    my $pid = fork();
-    die "Cannot fork: $!" unless defined $pid;
-
-    if ($pid)
-    {
-        # parent
-        $self->{downpipe} = _pipe_write_fh($dr, $dw);
-        $self->{uppipe} = _pipe_read_fh($ur, $uw);
-        $self->{pid} = $pid;
-    }
-    else
-    {
-        # child
-        $self->{downpipe} = _pipe_read_fh($dr, $dw);
-        $self->{uppipe} = _pipe_write_fh($ur, $uw);
-        $ENV{TEST_UNIT_WORKER_ID} = $self->{id};    # 1, 2, 3...
-        $ENV{TEST_UNIT_BASENAME} = $0;
-        $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID})";
-        $self->_mainloop();
-        exit(0);
-    }
-}
-
-sub _send
-{
-    my ($fh, $fmt, @args) = @_;
-    my $msg = sprintf($fmt, @args);
-# print STDERR "--> \"$msg\"\n";
-    syswrite($fh, $msg)
-        or die "Cannot write to pipe: $!";
-}
-
-sub _receive
-{
-    my ($fh) = @_;
-    my $msg = $fh->gets()
-        or return;
-# print STDERR "<-- \"$msg\"\n";
-    chomp $msg;
-    return $msg;
-}
-
-sub _mainloop
-{
-    my ($self) = @_;
-
-    while (my $msg = _receive($self->{downpipe}))
-    {
-        my ($command, @args) = split(/\s+/, $msg);
-
-        if ($command eq 'stop')
-        {
-            return;
-        }
-        elsif ($command eq 'run')
-        {
-            my ($witem) = thaw(decode_base64($args[0]));
-            $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID}) $witem->{suite}.$witem->{testname}";
-            $self->{handler}->($witem);
-            $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID})";
-            _send($self->{uppipe},
-                  "done %s\n", encode_base64(freeze($witem), ''));
-        }
-        else
-        {
-            print STDERR "_mainloop: unknown command '$command'\n";
-        }
-    }
-}
-
-sub get_reply
-{
-    my ($self) = @_;
-    return if !$self->{busy};
-    my $msg = _receive($self->{uppipe});
-    return if !defined $msg;
-    my ($command, @args) = split(/\s+/, $msg);
-    die "Unknown message \"$msg\""
-        if ($command ne 'done');
-    $self->{busy} = 0;
-    my ($witem) = thaw(decode_base64($args[0]));
-    return $witem;
-}
-
-sub assign
-{
-    my ($self, $witem) = @_;
-    $witem->{start_time} = time();
-    _send($self->{downpipe},
-          "run %s\n", encode_base64(freeze($witem), ''));
-    $self->{busy} = 1;
-}
-
-sub stop
-{
-    my ($self) = @_;
-    eval
-    {
-        # We don't care if this dies, it just
-        # means the Worker has died prematurely.
-        _send($self->{downpipe}, "stop\n");
-    };
-    while (1)
-    {
-        my $res = waitpid($self->{pid}, 0);
-        last if ($res < 0 || $res == $self->{pid});
-    }
-    $self->_cleanup();
-}
-
-sub _cleanup
-{
-    my ($self) = @_;
-
-    if ($self->{downpipe})
-    {
-        close $self->{downpipe};
-        $self->{downpipe} = undef;
-    }
-
-    if ($self->{uppipe})
-    {
-        close $self->{uppipe};
-        $self->{uppipe} = undef;
-    }
-
-    $self->{pid} = undef;
-}
-
-sub DESTROY
-{
-    my ($self) = @_;
-    $self->_cleanup();
-}
-
-package Cassandane::Unit::WorkerPool;
-
-use Errno qw(EINTR);
-
-sub new
-{
-    my ($class, %params) = @_;
-    my $self = {
-        workers => [],
-        maxworkers => 2,
-        pending => [],
-        handler => sub { die "This should not happen"; },
-    };
-    foreach my $p (qw(maxworkers handler))
-    {
-        $self->{$p} = $params{$p} if $params{$p};
-    }
-    return bless $self, $class;
-}
-
-sub start
-{
-    my ($self) = @_;
-
-    while (scalar @{$self->{workers}} < $self->{maxworkers})
-    {
-        my $w = Cassandane::Unit::Worker->new();
-        $w->{handler} = $self->{handler};
-        $w->start();
-        push(@{$self->{workers}}, $w);
-    }
-}
-
-# Assign an work item to an idle worker if necessary
-# block until a worker is idle.
-sub assign
-{
-    my ($self, $witem) = @_;
-
-    my @idle = grep { !$_->{busy}; } @{$self->{workers}};
-    my $w = shift @idle || $self->_wait();
-    $w->assign($witem);
-}
-
-# Wait for a Worker to send back a completed work item.
-# Mark the Worker idle, remember its work item where
-# retrieve() will find it, and returns the Worker.
-sub _wait
-{
-    my ($self) = @_;
-
-
-    # Build the bit mask for select()
-    my $rbits = '';
-    foreach my $w (@{$self->{workers}})
-    {
-        next if (!$w->{busy});
-        vec($rbits, fileno($w->{uppipe}), 1) = 1;
-    }
-
-    # select() with no timeout
-    my $res;
-    do {
-        $res = select($rbits, undef, undef, undef);
-    } while ($res < 0 && $! == EINTR);
-    die "select failed: $!" if ($res < 0);
-
-    # discover which of our workers has responded
-    foreach my $w (@{$self->{workers}})
-    {
-        if (vec($rbits, fileno($w->{uppipe}), 1))
-        {
-            push(@{$self->{pending}}, $w->get_reply());
-            return $w;
-        }
-    }
-    die "Unexpected result from select: $res";
-}
-
-# Retrieve a completed work item.  If $blocking is true,
-# wait if necessary (used when draining i.e. no more work
-# items will be made available).
-sub retrieve
-{
-    my ($self, $blocking) = @_;
-
-    if ($blocking && !scalar @{$self->{pending}})
-    {
-        my @busy = grep { $_->{busy}; } @{$self->{workers}};
-        $self->_wait() if (scalar @busy);
-    }
-    return shift @{$self->{pending}};
-}
-
-# reap all workers
-sub stop
-{
-    my ($self) = @_;
-
-    while (my $w = pop @{$self->{workers}})
-    {
-        $w->stop();
-    }
-}
-
-sub DESTROY
-{
-    my ($self) = @_;
-    $self->stop();
-}
-
-package Cassandane::Unit::WorkerListener;
-use base qw(Test::Unit::Listener);
-use Cassandane::Util::Log;
-
-sub new
-{
-    my ($class) = shift;
-    my $self = {
-        witem => undef,
-    };
-    return bless $self, $class;
-}
-
-sub start_suite
-{
-    my ($self, $suite) = @_;
-    # nothing to see here
-}
-
-sub start_test
-{
-    my ($self, $test) = @_;
-    # nothing to see here
-}
-
-sub end_test
-{
-    my ($self, $test) = @_;
-    # nothing to see here
-}
-
-sub end_suite
-{
-    my ($self, $suite) = @_;
-    # nothing to see here
-}
-
-sub add_error
-{
-    my ($self, $test, $exception) = @_;
-    my $witem = $self->{witem};
-    $witem->{result} = 'error';
-
-    # Remove '-object' which points at the TestCase, which will have all
-    # sorts of stuff we can't thaw.  We have enough information to
-    # discover the right TestCase in the parent process.
-    $exception->{'-object'} = undef;
-    $witem->{exception} = $exception;
-}
-
-sub add_failure
-{
-    my ($self, $test, $exception) = @_;
-    my $witem = $self->{witem};
-    $witem->{result} = 'fail';
-
-    # Remove '-object' which points at the TestCase, which will have all
-    # sorts of stuff we can't thaw.  We have enough information to
-    # discover the right TestCase in the parent process.
-    $exception->{'-object'} = undef;
-    $witem->{exception} = $exception;
-}
-
-sub add_pass
-{
-    my ($self, $test) = @_;
-    my $witem = $self->{witem};
-    $witem->{result} = 'pass';
-}
-
-package Cassandane::Unit::TestPlan;
 use File::Find;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
+use Cassandane::Failure;
 use Cassandane::Util::Log;
+use Cassandane::Unit::TestCase;
+use Cassandane::Unit::TestPlanItem;
+use Cassandane::Unit::OutcomeListener;
+use Cassandane::Unit::WorkerPool;
 
 my @default_test_roots = (
     'Cassandane/Test',
@@ -902,18 +440,10 @@ sub _get_schedule
             $name =~ s/^test_//;
             next unless $item->_is_allowed($name);
 
-            my (@settings) = Cassandane::Unit::TestCase->make_parameter_settings($item->{suite});
-            foreach my $setting (@settings)
-            {
-                push(@res, {
-                    suite => $item->{suite},
-                    testname => $name,
-                    result => 'unknown',
-                    exception => undef,
-                    logfile => undef,
-                    parameter_setting => $setting,
-                });
-            }
+            push @res, {
+                suite => $item->{suite},
+                testname => $name,
+            };
         }
     }
     return @res;
@@ -934,25 +464,15 @@ sub list
     return @res;
 }
 
-sub _setup_logfile
+# Choose the log file a work item's output will go to.  This happens in the
+# parent, before the item is handed to a worker, so that the parent can still
+# read the output if the worker never comes back to say where it went.
+sub _make_logfile
 {
     my ($self, $witem) = @_;
 
-    # Flush the old stdout/stderr
-    ${\*STDOUT}->flush;
-    ${\*STDERR}->flush;
-
-    # Save the old stdout/stderr - this is important
-    # for the single threaded case where inter-test
-    # messages go to the original stdout.
-    open my $oldout, '>&', \*STDOUT
-        or die "Cannot save STDOUT";
-    open my $olderr, '>&', \*STDERR
-        or die "Cannot save STDERR";
-
     my $logfh;
     my $logfile;
-    srand;   # XXX does this fix the tempfile() issue (#42)?
     if (defined $self->{log_directory})
     {
         # Log directory specified so create the log file
@@ -975,17 +495,33 @@ sub _setup_logfile
         # Create a per-test temporary logfile
         ($logfh, $logfile) = tempfile(UNLINK => 0);
     }
-
-    unless ($ENV{CASSANDANE_LIVE_OUTPUT}) {
-      # Redirect both STDOUT and STDERR to the log file
-      open STDOUT, '>&', $logfh
-          or die "Cannot redirect STDOUT";
-      open STDERR, '>&', $logfh
-          or die "Cannot redirect STDERR";
-      close $logfh;
-    }
+    close $logfh;
 
     $witem->{logfile} = $logfile;
+}
+
+# Point this process's STDOUT and STDERR at the log file, keeping the
+# originals: in the single threaded case, the messages between tests still go
+# to the terminal.
+sub _capture_output
+{
+    my ($self, $logfile) = @_;
+
+    ${\*STDOUT}->flush;
+    ${\*STDERR}->flush;
+
+    open my $oldout, '>&', \*STDOUT
+        or die "Cannot save STDOUT";
+    open my $olderr, '>&', \*STDERR
+        or die "Cannot save STDERR";
+
+    unless ($ENV{CASSANDANE_LIVE_OUTPUT}) {
+      open STDOUT, '>>', $logfile
+          or die "Cannot redirect STDOUT to $logfile: $!";
+      open STDERR, '>>', $logfile
+          or die "Cannot redirect STDERR to $logfile: $!";
+    }
+
     $self->{oldout} = $oldout;
     $self->{olderr} = $olderr;
 }
@@ -1021,50 +557,132 @@ sub _dump_logfile
     close LOGFILE;
 }
 
-sub _get_suite_and_test
+sub _get_test
 {
     my ($self, $witem) = @_;
     my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
     my ($test) = grep { $_->name() eq 'test_' . $witem->{testname}; } @{$suite->tests()};
-    return ($suite, $test);
+    return $test;
 }
 
+# Run one work item and return its outcome: a verdict, plus a description of
+# the failure when there is one.  In a worker that goes back to the parent; in
+# the single threaded case the caller has it already.
 sub _run_workitem
 {
-    my ($self, $witem, $result, $runner, $annotate_flag) = @_;
-    my ($suite, $test) = $self->_get_suite_and_test($witem);
-    Cassandane::Unit::TestCase->enable_test($witem->{testname});
-    $self->_setup_logfile($witem);
-    Cassandane::Unit::TestCase->apply_parameter_setting($witem->{parameter_setting});
-    $suite->run($result, $runner);
+    my ($self, $witem, $result, $runner, $in_worker) = @_;
+    my $test = $self->_get_test($witem);
+
+    my $listener = $self->_listen_for_outcome($result, $in_worker);
+
+    # Every worker inherited the same random seed from the parent when it was
+    # forked, so without this they would all generate the same message ids,
+    # names and UUIDs as each other, test for test.
+    srand;
+
+    $self->_capture_output($witem->{logfile});
+
+    my $outcome;
+    if (my $reason = _skip_reason($test, $runner))
+    {
+        $outcome = { outcome => 'skip', reason => $reason };
+    }
+    else
+    {
+        $test->run($result, $runner);
+        $outcome = $listener->outcome()
+            or die "$witem->{suite}.$witem->{testname} ran but reported nothing";
+    }
 
     if ($test->can('post_tear_down'))
     {
         eval
         {
-            $test->post_tear_down($witem->{result});
+            $test->post_tear_down($outcome->{outcome});
         };
         my $ex = $@;
         if ($ex)
         {
             $result->add_error($test,
                                Test::Unit::Error->make_new_from_error($ex));
+            $outcome = $listener->outcome();
         }
     }
 
     $self->_restore_stdout();
-    if ($annotate_flag)
+    if (!$in_worker)
     {
-        $test->annotate_from_file($witem->{logfile});
-        _dump_logfile($witem->{logfile}) if (get_verbose > 1);
+        if ($outcome->{outcome} eq 'skip')
+        {
+            _report_skip($runner, $test, $outcome->{reason});
+        }
+        else
+        {
+            $test->annotate_from_file($witem->{logfile});
+            _dump_logfile($witem->{logfile}) if (get_verbose > 1);
+        }
         unlink($witem->{logfile}) if (!defined $self->{log_directory});
     }
+
+    return $outcome;
+}
+
+# The filters that decide whether a test runs at all.  The first one with an
+# answer wins, and its answer is why the test was skipped.  They're consulted
+# in the order the runner was given them, because some have side effects: a
+# test's :want_service_http attribute is honoured by a filter.
+sub _skip_reason
+{
+    my ($test, $runner) = @_;
+
+    foreach my $token ($runner->filter())
+    {
+        my $reason = $test->filter_method($token);
+        return $reason if $reason;
+    }
+
+    return;
+}
+
+# A skipped test has no result to add: it never started, so the listeners that
+# count runs and record failures have nothing to hear.  The formatters are
+# told, because a skip is worth reporting.
+sub _report_skip
+{
+    my ($runner, $test, $reason) = @_;
+
+    $runner->tell_formatters('add_skip', $test, $reason)
+        if $runner->can('tell_formatters');
+}
+
+# Rebuild, from what came back over the pipe, an exception the result and the
+# formatters can report.  Error::new insists on describing this process, so
+# the stack trace from the process that actually failed is put back by hand.
+sub _rebuild_exception
+{
+    my ($class, $failure) = @_;
+
+    my $exception = $class->new(
+        '-text' => $failure->{text},
+        '-file' => $failure->{file},
+        '-line' => $failure->{line},
+    );
+    $exception->{'-stacktrace'} = $failure->{stacktrace} // $failure->{text};
+
+    return $exception;
 }
 
 sub _finish_workitem
 {
     my ($self, $witem, $result, $runner) = @_;
-    my ($suite, $test) = $self->_get_suite_and_test($witem);
+    my $test = $self->_get_test($witem);
+
+    if ($witem->{outcome} eq 'skip')
+    {
+        unlink($witem->{logfile}) if (!defined $self->{log_directory});
+        _report_skip($runner, $test, $witem->{reason});
+        return;
+    }
 
     # The test was actually started earlier by _run_workitem, but its
     # start_test event wasn't sent.  It might have got swallowed due to
@@ -1086,39 +704,51 @@ sub _finish_workitem
     _dump_logfile($witem->{logfile}) if (get_verbose > 1);
     unlink($witem->{logfile}) if (!defined $self->{log_directory});
 
-    if ($witem->{result} eq 'pass')
+    if ($witem->{outcome} eq 'pass')
     {
         $result->add_pass($test);
     }
-    elsif ($witem->{result} eq 'fail')
+    elsif ($witem->{outcome} eq 'fail')
     {
-        $witem->{exception}->{'-object'} = $test;
-        $result->add_failure($test, $witem->{exception});
+        $result->add_failure($test,
+                             _rebuild_exception('Cassandane::Failure',
+                                                $witem->{failure}));
     }
-    elsif ($witem->{result} eq 'error')
+    elsif ($witem->{outcome} eq 'error')
     {
-        $witem->{exception}->{'-object'} = $test;
-        $result->add_error($test, $witem->{exception});
+        $result->add_error($test,
+                           _rebuild_exception('Test::Unit::Error',
+                                              $witem->{failure}));
+    }
+    else
+    {
+        die "Unknown outcome '$witem->{outcome}' for"
+            . " $witem->{suite}.$witem->{testname}";
     }
     $result->end_test($test);
 }
 
-sub _setup_worker_listeners
+# Arrange for the outcome of the next test to be recorded.  A worker also
+# drops the listeners that write the report, because the parent replays the
+# events to those once the outcome gets back to it.
+sub _listen_for_outcome
 {
-    my ($result, $wlistener) = @_;
+    my ($self, $result, $in_worker) = @_;
 
-    # Remove the output format listener
-    my @list;
-    my $found = 0;
-    foreach my $ll (@{$result->{_Listeners}})
-    {
-        push(@list, $ll)
-            unless defined $ll->{remove_me_in_cassandane_child};
-        $found ||= (ref($ll) eq ref($wlistener));
-    }
-    push(@list, $wlistener)
-        unless $found;
-    $result->{_Listeners} = \@list;
+    my $listener = $self->{outcome_listener}
+               ||= Cassandane::Unit::OutcomeListener->new();
+    $listener->reset();
+
+    my @listeners = grep {
+        !($in_worker && $_->{remove_me_in_cassandane_child})
+    } @{$result->{_Listeners}};
+
+    push @listeners, $listener
+        if !grep {; $_ == $listener } @listeners;
+
+    $result->{_Listeners} = \@listeners;
+
+    return $listener;
 }
 
 # The 'run' method makes this class look sufficiently like a
@@ -1154,33 +784,32 @@ sub run
         # Just In Case any code samples this in a TestCase c'tor
         $ENV{TEST_UNIT_WORKER_ID} = 'invalid';
 
-        my $wlistener = Cassandane::Unit::WorkerListener->new();
-
         my $pool = Cassandane::Unit::WorkerPool->new(
             maxworkers => $maxworkers,
             handler => sub {
-                my ($witem) = @_;
-                $wlistener->{witem} = $witem;
-                _setup_worker_listeners($result, $wlistener);
-                $self->_run_workitem($witem, $result, $runner, 0);
+                my ($assignment) = @_;
+                return $self->_run_workitem($assignment, $result, $runner, 1);
             },
         );
-        my $witem;
+        my ($witem, $done);
         $pool->start();
         # first ^C stops spawning new work items
         while ($interrupted < 1 && ($witem = shift @workitems))
         {
-            $pool->assign($witem)
-                if ($self->{keep_going} || $result->was_successful());
-            while ($witem = $pool->retrieve(0))
+            if ($self->{keep_going} || $result->was_successful())
             {
-                $self->_finish_workitem($witem, $result, $runner);
+                $self->_make_logfile($witem);
+                $pool->assign($witem);
+            }
+            while ($done = $pool->retrieve(0))
+            {
+                $self->_finish_workitem($done, $result, $runner);
             }
         }
         # second ^C stops waiting for work items to finish
-        while ($interrupted < 2 && ($witem = $pool->retrieve(1)))
+        while ($interrupted < 2 && ($done = $pool->retrieve(1)))
         {
-            $self->_finish_workitem($witem, $result, $runner);
+            $self->_finish_workitem($done, $result, $runner);
         }
         $pool->stop();
     }
@@ -1189,7 +818,8 @@ sub run
         # single threaded case: just run it all in-process
         foreach my $witem (@workitems)
         {
-            $self->_run_workitem($witem, $result, $runner, 1);
+            $self->_make_logfile($witem);
+            $self->_run_workitem($witem, $result, $runner, 0);
             last if ($interrupted || !($self->{keep_going} || $result->was_successful()));
         }
     }
