@@ -557,8 +557,8 @@ sub assert_num_lt
                   "$actual is not less-than $expected");
 }
 
-# override assert_matches from Test::Unit:Assert, whose default failure
-# message is very hard to read in common cases
+# A multiline message goes to the log rather than into the failure message,
+# where quoting it makes the message unreadable.
 sub assert_matches
 {
     my ($self, $pattern, $string, @rest) = @_;
@@ -586,8 +586,7 @@ sub assert_matches
     $self->assert($matches, $message);
 }
 
-# override assert_does_not_match from Test::Unit:Assert, whose default failure
-# message is very hard to read in common cases
+# As assert_matches, and multiline messages go to the log for the same reason.
 sub assert_does_not_match
 {
     my ($self, $pattern, $string, @rest) = @_;

@@ -745,10 +745,8 @@ sub _listen_for_outcome
     return $listener;
 }
 
-# The 'run' method makes this class look sufficiently like a
-# Test::Unit::TestCase that Test::Unit::TestRunner will happily run it.
-# This enables us to run all our scheduled tests with a single
-# TestResult and a single summary of errors.
+# The runner hands the whole plan to run(), rather than one suite at a time,
+# so that every scheduled test lands in one result and one summary.
 sub run
 {
     my ($self, $result, $runner) = @_;
