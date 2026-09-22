@@ -1,5 +1,5 @@
-leak:__cunit_test_bitfield_invalid
-leak:__cunit_test_enum_invalid
-leak:__cunit_test_duration_invalid
-leak:__cunit_test_bytesize_invalid
-leak:__cunit_test_stringlist_invalid
+# Suppressions for LeakSanitizer for cunit tests
+# This file is referenced by cyd build
+# Suppressions for valgrind have a different format, and are in the file vg.supp
+
+# Currently no cunit tests cause leaks, so this file is empty. This is good.
