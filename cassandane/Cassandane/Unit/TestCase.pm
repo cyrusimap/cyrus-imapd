@@ -13,7 +13,9 @@ use Data::Dumper;
 use DateTime;
 use DateTime::Format::ISO8601;
 use Carp ();
+use Error ();
 
+use Cassandane::Failure;
 use Cassandane::Util::Log;
 use Cassandane::Util::TestUrl;
 
@@ -173,6 +175,31 @@ sub annotate_from_file
         $self->annotate($_);
     }
     close LOG;
+}
+
+# Report that the test failed.  Every assertion below ends up here.
+#
+# $Error::Depth is how many frames Error.pm climbs before deciding where the
+# failure happened, and it decides both the reported line and where the stack
+# trace starts.  fail() blames whoever called it, so an assertion calling
+# fail() adds one to the depth first, and the test that called the assertion
+# gets the blame rather than this file.
+sub fail
+{
+    my ($self, @message) = @_;
+
+    local $Error::Depth = $Error::Depth + 1;
+    Cassandane::Failure->throw(-text => join(q{}, @message));
+}
+
+sub assert
+{
+    my ($self, $bool, @message) = @_;
+
+    return 1 if $bool;
+
+    local $Error::Depth = $Error::Depth + 1;
+    $self->fail(@message ? @message : 'Boolean assertion failed');
 }
 
 # n.b. it's okay for unexpected bits to also be set!
