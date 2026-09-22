@@ -4,7 +4,6 @@
 package Cassandane::Unit::Runner;
 use strict;
 use warnings;
-use base qw(Test::Unit::Runner);
 use Test::Unit::Result;
 use Benchmark;
 use IO::File;
@@ -22,9 +21,22 @@ sub new
 
     return bless {
         remove_me_in_cassandane_child => 1,
+        filter => [],
         formatters => [],
         failed_fh => IO::File->new($failed_file, 'w'),
     }, $class;
+}
+
+# The filter tokens that decide whether a test runs at all: testrunner.pl sets
+# them from the command line, the plan asks each test about them in turn.  See
+# Cassandane::Unit::TestCase::filter for what a token means.
+sub filter
+{
+    my ($self, @tokens) = @_;
+
+    $self->{filter} = \@tokens if @tokens;
+
+    return @{ $self->{filter} };
 }
 
 sub create_test_result
