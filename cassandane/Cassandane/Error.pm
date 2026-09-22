@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use experimental 'signatures';
 
-use parent qw(Test::Unit::Error);
+use parent qw(Cassandane::Exception);
 
 =head1 NAME
 

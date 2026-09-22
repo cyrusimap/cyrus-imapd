@@ -5,7 +5,7 @@ package Cassandane::Failure;
 use strict;
 use warnings;
 
-use parent qw(Test::Unit::Failure);
+use parent qw(Cassandane::Exception);
 
 =head1 NAME
 
