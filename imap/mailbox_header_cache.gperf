@@ -57,6 +57,8 @@ struct mailbox_header_cache {
 "sender", 7
 "subject", BIT32_MAX
 "to", BIT32_MAX
+"dkim2-signature", BIT32_MAX
+"message-instance", BIT32_MAX
 "dkim-signature", BIT32_MAX
 "domainkey-signature", BIT32_MAX
 "domainkey-x509", BIT32_MAX
