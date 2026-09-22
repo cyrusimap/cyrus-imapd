@@ -105,8 +105,7 @@ sub record_failed
     my $suite = ref($test);
     $suite =~ s/^Cassandane:://;
 
-    my $testname = $test->{"Test::Unit::TestCase_name"};
-    $testname =~ s/^test_//;
+    my $testname = $test->name =~ s/^test_//r;
 
     $self->{failed_fh}->print("$suite.$testname\n");
 }

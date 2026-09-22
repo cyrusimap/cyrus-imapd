@@ -100,8 +100,7 @@ sub _getname
     my $suite = ref($test);
     $suite =~ s/^Cassandane:://;
 
-    my $testname = $test->{"Test::Unit::TestCase_name"};
-    $testname =~ s/^test_//;
+    my $testname = $test->name =~ s/^test_//r;
 
     return "$suite.$testname";
 }

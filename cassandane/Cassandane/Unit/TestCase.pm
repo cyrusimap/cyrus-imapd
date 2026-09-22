@@ -24,11 +24,44 @@ my $buildinfo;
 
 sub new
 {
-    my $class = shift;
-    if (not $buildinfo) {
-        $buildinfo = Cassandane::BuildInfo->new();
-    }
-    return $class->SUPER::new(@_);
+    my ($class, $name) = @_;
+
+    $buildinfo ||= Cassandane::BuildInfo->new();
+
+    return bless {
+        name        => $name,
+        annotations => '',
+    }, $class;
+}
+
+# The test method this object exists to run.
+sub name
+{
+    my ($self) = @_;
+    return $self->{name};
+}
+
+# How a failure names the test in a report.  FormatPretty picks the two apart
+# again, so keep the shape.
+sub to_string
+{
+    my ($self) = @_;
+    return ($self->name() // 'ANON') . '(' . ref($self) . ')';
+}
+
+# Whatever the test wrote while it ran.  The plan feeds it the test's log file
+# when the test is over, and the formatters print it under a failure.
+sub annotate
+{
+    my ($self, @text) = @_;
+    $self->{annotations} .= join q{}, @text;
+    return;
+}
+
+sub annotations
+{
+    my ($self) = @_;
+    return $self->{annotations};
 }
 
 # This returns a list of the subroutine names in this class that are tests to
