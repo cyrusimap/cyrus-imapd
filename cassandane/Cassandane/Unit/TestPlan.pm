@@ -264,9 +264,7 @@ sub _check_not_empty ($self)
 {
     foreach my $item (values $self->{schedule}->%*)
     {
-        my @names = map {; s/^test_//r } $item->_get_loaded_suite()->names()->@*;
-
-        return if grep {; $item->_is_allowed($_) } @names;
+        return if grep {; $item->_is_allowed($_) } $item->_test_names();
     }
 
     die "No tests to run: the test plan is empty\n";
@@ -434,10 +432,8 @@ sub _get_schedule
     my @res;
     foreach my $item (@items)
     {
-        my $loaded = $item->_get_loaded_suite();
-        foreach my $name (sort @{$loaded->names()})
+        foreach my $name ($item->_test_names())
         {
-            $name =~ s/^test_//;
             next unless $item->_is_allowed($name);
 
             push @res, {
@@ -560,9 +556,7 @@ sub _dump_logfile
 sub _get_test
 {
     my ($self, $witem) = @_;
-    my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
-    my ($test) = grep { $_->name() eq 'test_' . $witem->{testname}; } @{$suite->tests()};
-    return $test;
+    return $self->_get_item($witem->{suite})->_make_test($witem->{testname});
 }
 
 # Run one work item and return its outcome: a verdict, plus a description of
