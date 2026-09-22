@@ -11,11 +11,12 @@ sub test_http2_upgrade_settings
     my $s = http1_connect($self);
 
     # Missing HTTP2-Settings header: declines the upgrade, stays HTTP/1.1.
-    print $s "GET /.well-known HTTP/1.1\r\n"
-           . "Host: " . $service->host . ":" . $service->port . "\r\n"
-           . "Connection: Upgrade\r\n"
-           . "Upgrade: h2c\r\n"
-           . "\r\n";
+    http1_send($s,
+        "GET /.well-known HTTP/1.1\r\n",
+        "Host: " . $service->host . ":" . $service->port . "\r\n",
+        "Connection: Upgrade\r\n",
+        "Upgrade: h2c\r\n",
+        "\r\n");
 
     my $res = http1_read_response($s);
     xlog $self, "response 1: $res->{status}";
@@ -23,12 +24,13 @@ sub test_http2_upgrade_settings
     $self->assert(!exists $res->{headers}{upgrade});
 
     # Well-formed HTTP2-Settings header: upgrades to h2c.
-    print $s "GET /.well-known HTTP/1.1\r\n"
-           . "Host: " . $service->host . ":" . $service->port . "\r\n"
-           . "Connection: Upgrade, HTTP2-Settings\r\n"
-           . "Upgrade: h2c\r\n"
-           . "HTTP2-Settings: AAMAAABkAAQAAQAAAAIAAAAA\r\n"
-           . "\r\n";
+    http1_send($s,
+        "GET /.well-known HTTP/1.1\r\n",
+        "Host: " . $service->host . ":" . $service->port . "\r\n",
+        "Connection: Upgrade, HTTP2-Settings\r\n",
+        "Upgrade: h2c\r\n",
+        "HTTP2-Settings: AAMAAABkAAQAAQAAAAIAAAAA\r\n",
+        "\r\n");
 
     $res = http1_read_response($s);
     xlog $self, "response 2: $res->{status}";
@@ -46,12 +48,13 @@ sub test_http2_upgrade_settings
     # Malformed HTTP2-Settings header (invalid base64url): 400, connection closes.
     $s = http1_connect($self);
 
-    print $s "GET /.well-known HTTP/1.1\r\n"
-           . "Host: " . $service->host . ":" . $service->port . "\r\n"
-           . "Connection: Upgrade, HTTP2-Settings\r\n"
-           . "Upgrade: h2c\r\n"
-           . "HTTP2-Settings: not!valid!base64url\r\n"
-           . "\r\n";
+    http1_send($s,
+        "GET /.well-known HTTP/1.1\r\n",
+        "Host: " . $service->host . ":" . $service->port . "\r\n",
+        "Connection: Upgrade, HTTP2-Settings\r\n",
+        "Upgrade: h2c\r\n",
+        "HTTP2-Settings: not!valid!base64url\r\n",
+        "\r\n");
 
     $res = http1_read_response($s);
     xlog $self, "response (bad settings): $res->{status}";
@@ -62,12 +65,13 @@ sub test_http2_upgrade_settings
     # HTTP2-Settings decodes to fewer than 6 octets: 400, connection closes.
     $s = http1_connect($self);
 
-    print $s "GET /.well-known HTTP/1.1\r\n"
-           . "Host: " . $service->host . ":" . $service->port . "\r\n"
-           . "Connection: Upgrade, HTTP2-Settings\r\n"
-           . "Upgrade: h2c\r\n"
-           . "HTTP2-Settings: AAAA\r\n"
-           . "\r\n";
+    http1_send($s,
+        "GET /.well-known HTTP/1.1\r\n",
+        "Host: " . $service->host . ":" . $service->port . "\r\n",
+        "Connection: Upgrade, HTTP2-Settings\r\n",
+        "Upgrade: h2c\r\n",
+        "HTTP2-Settings: AAAA\r\n",
+        "\r\n");
 
     $res = http1_read_response($s);
     xlog $self, "response (short settings): $res->{status}";

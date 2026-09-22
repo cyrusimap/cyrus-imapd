@@ -10,12 +10,13 @@ sub test_alt_svc_frame
     my $service = $self->{instance}->get_service('http');
     my $s = http1_connect($self);
 
-    print $s "GET /.well-known HTTP/1.1\r\n"
-           . "Host: " . $service->host . ":" . $service->port . "\r\n"
-           . "Connection: Upgrade, HTTP2-Settings\r\n"
-           . "Upgrade: h2c\r\n"
-           . "HTTP2-Settings: AAMAAABkAAQAAQAAAAIAAAAA\r\n"
-           . "\r\n";
+    http1_send($s,
+        "GET /.well-known HTTP/1.1\r\n",
+        "Host: " . $service->host . ":" . $service->port . "\r\n",
+        "Connection: Upgrade, HTTP2-Settings\r\n",
+        "Upgrade: h2c\r\n",
+        "HTTP2-Settings: AAMAAABkAAQAAQAAAAIAAAAA\r\n",
+        "\r\n");
 
     my $res = http1_read_response($s);
     $self->assert_num_equals(101, $res->{status});
