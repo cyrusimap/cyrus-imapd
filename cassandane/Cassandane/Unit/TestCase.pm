@@ -14,6 +14,7 @@ use DateTime;
 use DateTime::Format::ISO8601;
 use Carp ();
 use Error ();
+use Package::Stash;
 
 use Cassandane::Failure;
 use Cassandane::Util::Log;
@@ -28,6 +29,36 @@ sub new
         $buildinfo = Cassandane::BuildInfo->new();
     }
     return $class->SUPER::new(@_);
+}
+
+# This returns a list of the subroutine names in this class that are tests to
+# be run.  By default, it's every sub whose name starts with "test", here and
+# in anything we inherit from.
+#
+# It's okay to override this method in a subclass, and some test suites do.
+sub list_tests
+{
+    my ($class) = @_;
+    $class = ref($class) || $class;
+
+    my (@names, %seen, %visited);
+    my @packages = ($class);
+
+    while (my $package = shift @packages) {
+        next if $visited{$package}++;
+
+        no strict 'refs';
+        push @packages, @{"${package}::ISA"};
+
+        foreach my $name (Package::Stash->new($package)
+                                        ->list_all_symbols('CODE'))
+        {
+            next if $name !~ m/\Atest/;
+            push @names, $name if not $seen{$name}++;
+        }
+    }
+
+    return @names;
 }
 
 sub _skip_version
