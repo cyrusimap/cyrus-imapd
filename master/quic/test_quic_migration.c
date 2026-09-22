@@ -922,7 +922,7 @@ int main(int argc, char **argv)
 
     config_read(argv[1], 0);
 
-    if (quic_init_tls_ctx(&server_ssl_ctx)) {
+    if (quic_init_tls_ctx(&server_ssl_ctx, false)) {
         fprintf(stderr, "test_quic_migration: quic_init_tls_ctx "
                "failed (check tls_server_cert/tls_server_key)\n");
         return 1;
