@@ -129,7 +129,9 @@ struct quic_app_ops {
 
     /* Called once right after quic_process_datagram() first succeeds,
      * and again after every subsequent one that didn't set
-     * qs->draining -- a chance to do credit-gated setup that can't
+     * qs->draining, as well as before each delivery of stream data (0-RTT
+     * data can come within the first datagram) -- so it must be cheap
+     * once its work is done.  A chance to do credit-gated setup that can't
      * happen at quic_session_new() time (e.g. opening application-defined
      * control streams once uni-stream credit exists). Return nonzero
      * (having logged why) to abort the connection. */
@@ -184,13 +186,16 @@ ngtcp2_tstamp quic_now(void);
 /**
  * Create, once per process, the TLS 1.3 server context QUIC connections
  * use: tls_new_serverctx()'s shared settings plus tls_server_cert and
- * tls_server_key.  Later calls return the same context.  Pass it to
- * quic_session_new().
+ * tls_server_key.  Later calls return the same context, whatever their
+ * early_data.  Pass it to quic_session_new().
  *
- * @param ret  set to the context on success (may be NULL)
- * @return     0 on success, -1 (logged) on failure
+ * @param ret         set to the context on success (may be NULL)
+ * @param early_data  accept 0-RTT early data, with single-use session
+ *                    tickets (see tls_enable_early_data()); no effect
+ *                    if tls_session_timeout is 0
+ * @return            0 on success, -1 (logged) on failure
  */
-int quic_init_tls_ctx(SSL_CTX **ret);
+int quic_init_tls_ctx(SSL_CTX **ret, bool early_data);
 
 /* Parse the relayed first Initial packet master handed off (the
  * process-global `quic_handoff` from master/quic/quic_handoff.h,
@@ -228,6 +233,20 @@ void quic_process_datagram(struct quic_session *qs, const uint8_t *pkt,
  * connection now, setting *close_reason to a static string explaining
  * why -- false means keep going. */
 bool quic_input(struct quic_session *qs, const char **close_reason);
+
+/**
+ * Whether the handshake is still in progress, so that stream data
+ * arriving now was sent as 0-RTT early data (RFC 9001 4.6).  Such data
+ * can be replayed, so an application should act on it only if doing so
+ * twice is harmless, e.g. by answering anything else with HTTP's 425
+ * (Too Early, RFC 8470).  Without early_data to quic_init_tls_ctx() no
+ * stream data arrives before the handshake completes, so this is then
+ * false whenever an application has any to handle.
+ *
+ * @param qs  the connection
+ * @return    true while data may be arriving as early data
+ */
+bool quic_in_early_data(struct quic_session *qs);
 
 /* Flush any output ngtcp2/the app has queued. Call after anything that
  * might have queued new stream data (get_output() has more to give,

@@ -107,11 +107,6 @@ static int tls_serverengine = 0; /* server engine initialized? */
 static int tls_clientengine = 0; /* client engine initialized? */
 static int do_dump = 0;         /* actively dumping protocol? */
 
-static int early_data_enabled = 0; /* accept TLS 1.3 early data? */
-
-/* How much early data a resumed client may send (one record) */
-#define TLS_MAX_EARLY_DATA (16384)
-
 
 EXPORTED int tls_enabled(void)
 {
@@ -435,6 +430,35 @@ EXPORTED int tls_set_cert_stuff(SSL_CTX * ctx,
     return res;
 }
 
+/* Open the session database shared by every process, if not already open */
+static void open_sessdb(void)
+{
+    const char *fname = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
+    char *tofree = NULL;
+    int r;
+
+    if (sess_dbopen) return;
+
+    if (!fname) {
+        tofree = strconcat(config_dir, FNAME_TLSSESSIONS, (char *)NULL);
+        fname = tofree;
+    }
+
+    /* A cache: losing writes costs clients only a full handshake, so
+     * new sessions needn't each wait for a sync (with a backend that
+     * honours NOSYNC).  After an OS crash, a session taken for 0-RTT
+     * just before it could be resumed once more. */
+    r = cyrusdb_open(DB, fname, CYRUSDB_CREATE | CYRUSDB_NOSYNC, &sessdb);
+    if (r != 0) {
+        syslog(LOG_ERR, "DBERROR: opening %s: %s",
+               fname, cyrusdb_strerror(r));
+    }
+    else
+        sess_dbopen = 1;
+
+    free(tofree);
+}
+
 /*
  * The new_session_cb() is called, whenever a new session has been
  * negotiated and session caching is enabled.  We save the session in
@@ -671,20 +695,50 @@ static SSL_SESSION *take_session_cb(SSL *ssl __attribute__((unused)),
     return sess;
 }
 
-EXPORTED bool tls_enable_early_data(void)
+EXPORTED bool tls_set_session_db(SSL_CTX *ctx, const char *ident)
 {
-    assert(tls_serverengine);
+    long timeout = config_getduration(IMAPOPT_TLS_SESSION_TIMEOUT);
 
+    /* Don't use an internal session cache */
+    SSL_CTX_sess_set_cache_size(ctx, 1);  /* 0 is unlimited, so use 1 */
+    SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_SERVER |
+                                   SSL_SESS_CACHE_NO_AUTO_CLEAR |
+                                   SSL_SESS_CACHE_NO_INTERNAL);
+
+    /* No stateless tickets: they're encrypted with keys each process
+     * makes up for itself, so only the issuing process could resume
+     * them.  A TLS 1.3 ticket then just names a session in the session
+     * database, and TLS 1.2 clients resume by session ID. */
+    SSL_CTX_set_options(ctx, SSL_OP_NO_TICKET);
+
+    if (timeout <= 0) {
+        SSL_CTX_set_num_tickets(ctx, 0);
+        return false;
+    }
+    if (timeout > 24 * 60 * 60) timeout = 24 * 60 * 60; /* 24 hours max */
+
+    SSL_CTX_set_session_id_context(ctx, (const unsigned char *) ident,
+                                   strlen(ident));
+    SSL_CTX_set_timeout(ctx, timeout);
+    SSL_CTX_sess_set_new_cb(ctx, new_session_cb);
+    SSL_CTX_sess_set_remove_cb(ctx, remove_session_cb);
+    SSL_CTX_sess_set_get_cb(ctx, get_session_cb);
+    open_sessdb();
+
+    return true;
+}
+
+EXPORTED bool tls_enable_early_data(SSL_CTX *ctx, uint32_t max)
+{
     /* Without the session database there's nothing to resume */
-    if (!sess_dbopen) return false;
+    if (!sess_dbopen || !SSL_CTX_sess_get_get_cb(ctx)) return false;
 
     /* Taking a session uses up its ticket, which is what stops replays;
      * OpenSSL's own check needs its in-process cache */
-    SSL_CTX_sess_set_get_cb(s_ctx, take_session_cb);
-    SSL_CTX_set_options(s_ctx, SSL_OP_NO_ANTI_REPLAY);
-    SSL_CTX_set_max_early_data(s_ctx, TLS_MAX_EARLY_DATA);
-    SSL_CTX_set_recv_max_early_data(s_ctx, TLS_MAX_EARLY_DATA);
-    early_data_enabled = 1;
+    SSL_CTX_sess_set_get_cb(ctx, take_session_cb);
+    SSL_CTX_set_options(ctx, SSL_OP_NO_ANTI_REPLAY);
+    SSL_CTX_set_max_early_data(ctx, max);
+    SSL_CTX_set_recv_max_early_data(ctx, max);
 
     return true;
 }
@@ -832,7 +886,6 @@ EXPORTED int tls_init_serverengine(const char *ident, int verifydepth,
     const char   *crl_file_path;
     enum enum_value tls_client_certs;
     int server_cipher_order;
-    int timeout;
 
     if (ret) *ret = s_ctx;
 
@@ -1065,72 +1118,16 @@ EXPORTED int tls_init_serverengine(const char *ident, int verifydepth,
 
     SSL_CTX_set_verify(s_ctx, verify_flags, verify_callback);
 
-    /* Don't use an internal session cache */
-    SSL_CTX_sess_set_cache_size(s_ctx, 1);  /* 0 is unlimited, so use 1 */
-    SSL_CTX_set_session_cache_mode(s_ctx, SSL_SESS_CACHE_SERVER |
-                                   SSL_SESS_CACHE_NO_AUTO_CLEAR |
-                                   SSL_SESS_CACHE_NO_INTERNAL);
-
-    /* Get the session timeout from the config file */
-    timeout = config_getduration(IMAPOPT_TLS_SESSION_TIMEOUT);
-    if (timeout < 0) timeout = 0;
-    if (timeout > 24 * 60 * 60) timeout = 24 * 60 * 60; /* 24 hours max */
-
-    /* No stateless tickets: they're encrypted with keys each process
-     * makes up for itself, so only the issuing process could resume
-     * them.  A TLS 1.3 ticket then just names a session in the session
-     * database, and TLS 1.2 clients resume by session ID.
-     *
-     * A client that just closes the connection, as browsers often do,
+    /* A client that just closes the connection, as browsers often do,
      * isn't an error: OpenSSL would otherwise take the missing
      * close_notify for one, and drop the session from the database.  Our
      * protocols frame their own messages, so truncation can't go unseen. */
-    SSL_CTX_set_options(s_ctx,
-                        SSL_OP_NO_TICKET | SSL_OP_IGNORE_UNEXPECTED_EOF);
+    SSL_CTX_set_options(s_ctx, SSL_OP_IGNORE_UNEXPECTED_EOF);
 
-    /* A timeout of zero disables session caching */
-    if (!timeout) SSL_CTX_set_num_tickets(s_ctx, 0);
-    else {
-        const char *fname = NULL;
-        char *tofree = NULL;
-        int r;
-
+    if (tls_set_session_db(s_ctx, ident)) {
         /* A stored session can be resumed repeatedly, so one ticket
          * is enough, and each one costs a database write */
         SSL_CTX_set_num_tickets(s_ctx, 1);
-
-        /* Set the context for session reuse -- use the service ident */
-        SSL_CTX_set_session_id_context(s_ctx, (void*) ident, strlen(ident));
-
-        /* Set the timeout for the internal/external cache */
-        SSL_CTX_set_timeout(s_ctx, timeout);
-
-        /* Set the callback functions for the external session cache */
-        SSL_CTX_sess_set_new_cb(s_ctx, new_session_cb);
-        SSL_CTX_sess_set_remove_cb(s_ctx, remove_session_cb);
-        SSL_CTX_sess_set_get_cb(s_ctx, get_session_cb);
-
-        fname = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
-
-        /* create the name of the db file */
-        if (!fname) {
-            tofree = strconcat(config_dir, FNAME_TLSSESSIONS, (char *)NULL);
-            fname = tofree;
-        }
-
-        /* A cache: losing writes costs clients only a full handshake, so
-         * new sessions needn't each wait for a sync (with a backend that
-         * honours NOSYNC).  After an OS crash, a session taken for 0-RTT
-         * just before it could be resumed once more. */
-        r = cyrusdb_open(DB, fname, CYRUSDB_CREATE | CYRUSDB_NOSYNC, &sessdb);
-        if (r != 0) {
-            syslog(LOG_ERR, "DBERROR: opening %s: %s",
-                   fname, cyrusdb_strerror(r));
-        }
-        else
-            sess_dbopen = 1;
-
-        free(tofree);
     }
 
     tls_serverengine = 1;
@@ -1308,7 +1305,7 @@ static int start_servertls(int readfd, int writefd, int timeout,
 
     nonblock(readfd, 1);
 
-    if (early_data_enabled && early_in) {
+    if (early_in && SSL_get_max_early_data(tls_conn)) {
         early = read_early_data(tls_conn, early_in, timeout);
         if (early < 0) {
             r = -1;
@@ -1571,16 +1568,15 @@ EXPORTED int tls_shutdown_serverengine(void)
 {
     int r;
 
-    if (tls_serverengine) {
-        if (sess_dbopen) {
-            r = cyrusdb_close(sessdb);
-            if (r) {
-                syslog(LOG_ERR, "DBERROR: error closing tlsdb: %s",
-                       cyrusdb_strerror(r));
-            }
-            sessdb = NULL;
-            sess_dbopen = 0;
+    /* Not just when tls_serverengine: a QUIC-only process opens it too */
+    if (sess_dbopen) {
+        r = cyrusdb_close(sessdb);
+        if (r) {
+            syslog(LOG_ERR, "DBERROR: error closing tlsdb: %s",
+                   cyrusdb_strerror(r));
         }
+        sessdb = NULL;
+        sess_dbopen = 0;
     }
 
     return 0;

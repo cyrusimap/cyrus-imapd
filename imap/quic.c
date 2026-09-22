@@ -38,7 +38,75 @@ ngtcp2_tstamp quic_now(void)
            (ngtcp2_tstamp) ts.tv_nsec;
 }
 
-int quic_init_tls_ctx(SSL_CTX **ret)
+/* Room for a 0-RTT ticket's appdata: the QUIC version (4 bytes, network
+ * order), then the 0-RTT transport parameters the server offered */
+#define QUIC_TICKET_APPDATA_MAX 256
+
+static ngtcp2_conn *quic_ssl_conn(SSL *ssl)
+{
+    ngtcp2_crypto_conn_ref *ref = SSL_get_app_data(ssl);
+
+    return ref ? ref->get_conn(ref) : NULL;
+}
+
+/* Build a ticket's appdata for |qconn| (see QUIC_TICKET_APPDATA_MAX);
+ * returns its length, or -1 */
+static ngtcp2_ssize quic_ticket_appdata(ngtcp2_conn *qconn, uint32_t version,
+                                        uint8_t *buf, size_t buflen)
+{
+    ngtcp2_ssize n;
+
+    buf[0] = version >> 24;
+    buf[1] = version >> 16;
+    buf[2] = version >> 8;
+    buf[3] = version;
+
+    n = ngtcp2_conn_encode_0rtt_transport_params(qconn, buf + 4, buflen - 4);
+    return n < 0 ? -1 : n + 4;
+}
+
+/* Record in each ticket what the client's 0-RTT will be held to */
+static int quic_gen_ticket_cb(SSL *ssl, void *arg __attribute__((unused)))
+{
+    ngtcp2_conn *qconn = quic_ssl_conn(ssl);
+    uint8_t buf[QUIC_TICKET_APPDATA_MAX];
+    ngtcp2_ssize n;
+
+    if (!qconn) return 1;
+
+    n = quic_ticket_appdata(qconn, ngtcp2_conn_get_negotiated_version(qconn),
+                            buf, sizeof(buf));
+    /* A ticket without appdata still resumes, just never with 0-RTT */
+    if (n > 0) {
+        SSL_SESSION_set1_ticket_appdata(SSL_get0_session(ssl), buf, n);
+    }
+    return 1;
+}
+
+/* Accept early data only in the QUIC version the ticket was issued for,
+ * and only while the server still offers the transport parameters the
+ * client remembered from then (RFC 9000 7.4.1) */
+static int quic_allow_early_data_cb(SSL *ssl, void *arg __attribute__((unused)))
+{
+    ngtcp2_conn *qconn = quic_ssl_conn(ssl);
+    uint8_t want[QUIC_TICKET_APPDATA_MAX];
+    void *have;
+    size_t havelen;
+    ngtcp2_ssize n;
+
+    if (!qconn ||
+        !SSL_SESSION_get0_ticket_appdata(SSL_get0_session(ssl),
+                                         &have, &havelen)) {
+        return 0;
+    }
+
+    n = quic_ticket_appdata(qconn,
+                            ngtcp2_conn_get_client_chosen_version(qconn),
+                            want, sizeof(want));
+    return n > 0 && (size_t) n == havelen && !memcmp(want, have, havelen);
+}
+
+int quic_init_tls_ctx(SSL_CTX **ret, bool early_data)
 {
     static SSL_CTX *s_ctx_quic = NULL;
     const char *server_cert_file;
@@ -80,9 +148,21 @@ int quic_init_tls_ctx(SSL_CTX **ret)
         return -1;
     }
 
-    /* Not shared with the TCP session cache/ticket infrastructure --
-     * no 0-RTT support. */
-    SSL_CTX_set_session_cache_mode(s_ctx_quic, SSL_SESS_CACHE_OFF);
+    /* RFC 9001 4.6.1: QUIC always advertises the maximum */
+    if (early_data && tls_set_session_db(s_ctx_quic, config_ident) &&
+        tls_enable_early_data(s_ctx_quic, UINT32_MAX)) {
+        SSL_CTX_set_session_ticket_cb(s_ctx_quic, quic_gen_ticket_cb, NULL,
+                                      NULL);
+        SSL_CTX_set_allow_early_data_cb(s_ctx_quic, quic_allow_early_data_cb,
+                                        NULL);
+
+        /* Each ticket costs a database write, and each is good for only
+         * one connection, which only ever needs one */
+        SSL_CTX_set_num_tickets(s_ctx_quic, 1);
+    }
+    else {
+        SSL_CTX_set_session_cache_mode(s_ctx_quic, SSL_SESS_CACHE_OFF);
+    }
 
     if (ret) *ret = s_ctx_quic;
     return 0;
@@ -199,6 +279,10 @@ static int quic_recv_stream_data_cb(
     struct quic_session *qs = (struct quic_session *) user_data;
     bool fin = flags & NGTCP2_STREAM_DATA_FLAG_FIN;
     ngtcp2_ssize nconsumed;
+
+    /* 0-RTT stream data arrives while the first datagram is still being
+     * processed, before quic_process_datagram() gets to call io_ready() */
+    if (qs->ops->io_ready(qs)) return NGTCP2_ERR_CALLBACK_FAILURE;
 
     nconsumed = qs->ops->recv_stream_data(qs, stream_id, data, datalen, fin);
     if (nconsumed < 0) return NGTCP2_ERR_CALLBACK_FAILURE;
@@ -363,6 +447,12 @@ int quic_session_new(struct quic_session *qs, int fd, SSL_CTX *ssl_ctx,
 
     if (ngtcp2_crypto_ossl_ctx_new(&ossl_ctx, ssl)) goto fail;
     if (ngtcp2_crypto_ossl_configure_server_session(ssl)) goto fail;
+
+    /* quic_init_tls_ctx() allows early data only when asked to, and
+     * with a session cache to make it replay-safe */
+    if (SSL_CTX_get_max_early_data(ssl_ctx)) {
+        SSL_set_quic_tls_early_data_enabled(ssl, 1);
+    }
 
     qs->conn_ref.get_conn = &quic_get_conn;
     qs->conn_ref.user_data = qs;
@@ -682,6 +772,14 @@ bool quic_input(struct quic_session *qs, const char **close_reason)
     return false;
 }
 
+bool quic_in_early_data(struct quic_session *qs)
+{
+    /* The client's 1-RTT keys only come into use after its Finished,
+     * which is what completes the handshake here, so stream data that
+     * arrives before that can only have been sent as 0-RTT */
+    return !ngtcp2_conn_get_handshake_completed(qs->qconn);
+}
+
 unsigned long quic_get_timeout(struct quic_session *qs)
 {
     ngtcp2_tstamp now, exp;
@@ -771,6 +869,11 @@ void quic_session_free(struct quic_session *qs)
     if (qs->ossl_ctx) ngtcp2_crypto_ossl_ctx_del(qs->ossl_ctx);
     if (qs->ssl) {
         SSL_set_app_data(qs->ssl, NULL);
+        /* QUIC closes with CONNECTION_CLOSE, never a TLS close_notify, so
+         * say the TLS side is shut down too: otherwise SSL_free() takes
+         * the connection for a failed one and drops its latest session
+         * ticket from the session cache */
+        SSL_set_shutdown(qs->ssl, SSL_SENT_SHUTDOWN | SSL_RECEIVED_SHUTDOWN);
         SSL_free(qs->ssl);
     }
 }

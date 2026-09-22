@@ -390,6 +390,7 @@ char *httpd_altsvc = NULL;
 static struct http_connection http_conn;
 
 static sasl_ssf_t extprops_ssf = 0;
+static SSL_CTX *ssl_ctx = NULL;
 bool https = false;
 static bool httpd_tls_required = false;
 static bool httpd_starttls_enabled = false;
@@ -838,7 +839,7 @@ int service_init(int argc __attribute__((unused)),
 
         /* Only a connection that starts with TLS can carry early data */
         if (config_getswitch(IMAPOPT_HTTP_ALLOW_0RTT))
-            tls_enable_early_data();
+            tls_enable_early_data(ssl_ctx, TLS_MAX_EARLY_DATA);
     }
     r = 0;
 
@@ -1254,8 +1255,8 @@ static int tls_init(int client_auth, struct buf *serverinfo)
 
     if (!tls_enabled()) return HTTP_UNAVAILABLE;
 
-    SSL_CTX *ctx = NULL;
-    if (tls_init_serverengine("http", 5 /* depth */, client_auth, &ctx) == -1) {
+    if (tls_init_serverengine("http", 5 /* depth */,
+                              client_auth, &ssl_ctx) == -1) {
         syslog(LOG_ERR, "error initializing TLS");
         return HTTP_SERVER_ERROR;
     }
