@@ -774,7 +774,7 @@ sub run
         $SIG{PIPE} = 'IGNORE';
 
         # Just In Case any code samples this in a TestCase c'tor
-        $ENV{TEST_UNIT_WORKER_ID} = 'invalid';
+        $ENV{CASSANDANE_WORKER_ID} = 'invalid';
 
         my $pool = Cassandane::Unit::WorkerPool->new(
             maxworkers => $maxworkers,

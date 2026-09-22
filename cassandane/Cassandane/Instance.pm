@@ -373,8 +373,8 @@ sub _make_unique_instance_info
         $stamp = to_iso8601(DateTime->now);
         $stamp =~ s/.*T(\d+)Z/$1/;
 
-        my $workerid = $ENV{TEST_UNIT_WORKER_ID};
-        die "Invalid TEST_UNIT_WORKER_ID - code not run in Worker context"
+        my $workerid = $ENV{CASSANDANE_WORKER_ID};
+        die "Invalid CASSANDANE_WORKER_ID - code not run in Worker context"
             if (defined($workerid) && $workerid eq 'invalid');
         $stamp .= sprintf("%02X", $workerid) if defined $workerid;
     }

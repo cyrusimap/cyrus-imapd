@@ -12,6 +12,10 @@ use JSON::XS ();
 
 my $nextid = 1;
 
+# $0 as it was before a worker renamed itself, so that it can keep saying which
+# test it is on.  Only ever set in a worker, after the fork.
+my $basename;
+
 # One message per line, so the encoding has to fit on one line.  Totally "plain
 # data" protocol, no blessed objects, just good ol' JSON.
 my $JSON = JSON::XS->new->ascii->canonical;
@@ -78,9 +82,9 @@ sub start
         # child
         $self->{downpipe} = _pipe_read_fh($dr, $dw);
         $self->{uppipe} = _pipe_write_fh($ur, $uw);
-        $ENV{TEST_UNIT_WORKER_ID} = $self->{id};    # 1, 2, 3...
-        $ENV{TEST_UNIT_BASENAME} = $0;
-        $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID})";
+        $ENV{CASSANDANE_WORKER_ID} = $self->{id};    # 1, 2, 3...
+        $basename = $0;
+        $0 = "$basename ($self->{id})";
         $self->_mainloop();
         exit(0);
     }
@@ -130,9 +134,10 @@ sub _mainloop
         elsif ($command eq 'run')
         {
             my $assignment = $JSON->decode($payload);
-            $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID}) $assignment->{suite}.$assignment->{testname}";
+            $0 = "$basename ($self->{id})"
+               . " $assignment->{suite}.$assignment->{testname}";
             my $outcome = $self->{handler}->($assignment);
-            $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID})";
+            $0 = "$basename ($self->{id})";
             _send($self->{uppipe}, "done %s\n", $JSON->encode($outcome));
         }
         else

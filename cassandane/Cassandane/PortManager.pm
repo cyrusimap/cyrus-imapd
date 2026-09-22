@@ -20,8 +20,8 @@ sub alloc
 
     if (!defined $base_port)
     {
-        my $workerid = $ENV{TEST_UNIT_WORKER_ID} || '1';
-        die "Invalid TEST_UNIT_WORKER_ID - code not run in Worker context"
+        my $workerid = $ENV{CASSANDANE_WORKER_ID} || '1';
+        die "Invalid CASSANDANE_WORKER_ID - code not run in Worker context"
             if (defined($workerid) && $workerid eq 'invalid');
         my $cassini = Cassandane::Cassini->instance();
         my $cassandane_base_port = 0 + $cassini->val('cassandane', 'base_port', '29100');
