@@ -253,8 +253,8 @@ if ($missing_binaries) {
         # Note, -stacktrace includes -text
 
         my $st = $self->{-stacktrace};
-        # Prune all Test::Unit internal calls
-        $st =~ s/Test::Unit::TestCase::run_test.*/[...framework calls elided...]/s;
+        # Prune the framework's own frames, from whichever run_test got us here
+        $st =~ s/[\w:]+::run_test\(.*/[...framework calls elided...]/s;
         $s .= $st;
 
         return $s;

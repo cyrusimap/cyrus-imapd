@@ -5,15 +5,11 @@ package Cassandane::Unit::TestCase;
 use strict;
 use warnings;
 
-# We need 0.29 because of a fix for exception handling
-use Test::Unit 0.29 ();
-
-use base qw(Test::Unit::TestCase);
 use Data::Dumper;
 use DateTime;
 use DateTime::Format::ISO8601;
 use Carp ();
-use Error ();
+use Error qw(:try);
 use Package::Stash;
 
 use Cassandane::Failure;
@@ -62,6 +58,69 @@ sub annotations
 {
     my ($self) = @_;
     return $self->{annotations};
+}
+
+sub run
+{
+    my ($self, $result, $runner) = @_;
+
+    $result->run($self);
+
+    return $result;
+}
+
+sub run_bare
+{
+    my ($self) = @_;
+
+    # set_up is deliberately outside the guard: if it dies, tear_down doesn't
+    # run.  Tearing down what was never set up tends to die *again*.  The error
+    # we want reported is failure to set up, not tear down.
+    $self->set_up();
+
+    try {
+        $self->run_test();
+    }
+    finally {
+        $self->tear_down();
+    };
+
+    return;
+}
+
+# Run the one test this object is for.  A suite whose tests aren't subs
+# overrides this to dispatch on the name itself; see list_tests.
+sub run_test
+{
+    my ($self) = @_;
+
+    my $method = $self->name();
+
+    return $self->fail("no test method named '$method'")
+        if not $self->can($method);
+
+    $self->$method();
+
+    return;
+}
+
+sub set_up { return 1 }
+
+sub tear_down { return 1 }
+
+# Ask one of this test's filters whether to run it, and get back the reason if
+# the answer is no.  See filter() for what a filter is.
+sub filter_method
+{
+    my ($self, $token) = @_;
+
+    my $filter = $self->filter->{$token};
+    return if not $filter;
+
+    die ref($self) . ": the '$token' filter is not a sub\n"
+        if ref $filter ne 'CODE';
+
+    return $filter->($self->name());
 }
 
 # This returns a list of the subroutine names in this class that are tests to
