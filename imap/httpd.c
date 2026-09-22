@@ -454,6 +454,7 @@ static int reset_saslconn(sasl_conn_t **conn);
 static void cmdloop(struct http_connection *conn);
 static int parse_expect(struct transaction_t *txn);
 static int parse_connection(struct transaction_t *txn);
+static dynarray_t *parse_accept_codings(const char **hdr);
 static int parse_ranges(const char *hdr, unsigned long len,
                         struct range **ranges);
 static int proxy_authz(const char **authzid, struct transaction_t *txn);
@@ -1855,7 +1856,7 @@ static void postauth_check_hdrs(struct transaction_t *txn)
     if (txn->zstrm &&
         txn->flags.ver == VER_1_1 &&
         (hdr = spool_getheader(txn->req_hdrs, "TE"))) {
-        dynarray_t *enc = parse_accept(hdr);
+        dynarray_t *enc = parse_accept_codings(hdr);
         int i;
 
         for (i = 0; i < dynarray_size(enc); i++) {
@@ -1873,7 +1874,7 @@ static void postauth_check_hdrs(struct transaction_t *txn)
     }
     else if ((txn->zstrm || txn->brotli || txn->zstd) &&
              (hdr = spool_getheader(txn->req_hdrs, "Accept-Encoding"))) {
-        dynarray_t *enc = parse_accept(hdr);
+        dynarray_t *enc = parse_accept_codings(hdr);
         float qual = 0.0;
         int i;
 
@@ -2523,7 +2524,9 @@ static int compare_accept(const struct accept *a1, const struct accept *a2)
     return 0;
 }
 
-dynarray_t *parse_accept(const char **hdr)
+/* Parse an Accept-style header: media ranges, or with |codings|, the
+   bare tokens of Accept-Encoding and TE */
+static dynarray_t *parse_accept_list(const char **hdr, bool codings)
 {
     dynarray_t *ret = dynarray_new(sizeof(struct accept));
     int i;
@@ -2537,12 +2540,20 @@ dynarray_t *parse_accept(const char **hdr)
             char *type = NULL, *subtype = NULL;
             struct accept accept = { .qual = 1.0, .version = NULL, .charset = NULL };
 
-            message_parse_type(token, &type, &subtype, &params);
+            if (codings) {
+                char *value = NULL;
 
-            if (type)
-                accept.token = lcase(strconcat(type, "/", subtype, NULL));
-            else
-                accept.token = lcase(xstrdup(token));
+                message_parse_disposition(token, &value, &params);
+                accept.token = lcase(value ? value : xstrdup(token));
+            }
+            else {
+                message_parse_type(token, &type, &subtype, &params);
+
+                if (type)
+                    accept.token = lcase(strconcat(type, "/", subtype, NULL));
+                else
+                    accept.token = lcase(xstrdup(token));
+            }
 
             for (param = params; param; param = param->next) {
                 if (!strcasecmp(param->attribute, "q")) {
@@ -2571,6 +2582,16 @@ dynarray_t *parse_accept(const char **hdr)
                   (int (*)(const void *, const void *)) &compare_accept);
 
     return ret;
+}
+
+dynarray_t *parse_accept(const char **hdr)
+{
+    return parse_accept_list(hdr, false);
+}
+
+static dynarray_t *parse_accept_codings(const char **hdr)
+{
+    return parse_accept_list(hdr, true);
 }
 
 HIDDEN void free_accept(struct accept *a)

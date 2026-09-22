@@ -1,0 +1,84 @@
+#!perl
+use Cassandane::Tiny;
+use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
+
+my $event_path = '/dav/calendars/user/cassandane/Default/accept-encoding.ics';
+
+# GET the test event with the given Accept-Encoding (none if undef);
+# returns the Content-Encoding (undef if none) and the raw body.
+sub fetch_event ($self, $accept_encoding)
+{
+    my $service = $self->{instance}->get_service('http');
+    my $s = http1_connect($self);
+
+    print $s "GET $event_path HTTP/1.1\r\n"
+           . "Host: " . $service->host . ":" . $service->port . "\r\n"
+           . "Authorization: Basic " . encode_base64('cassandane:pass', '')
+           . "\r\n"
+           . (defined $accept_encoding
+                ? "Accept-Encoding: $accept_encoding\r\n" : "")
+           . "\r\n";
+
+    my $res = http1_read_response($s);
+    close($s);
+
+    $self->assert_num_equals(200, $res->{status});
+    return ($res->{headers}{'content-encoding'}, $res->{body});
+}
+
+# Start with compression on and store an event comfortably larger than
+# the size below which httpd never compresses (GZIP_MIN_LEN); returns
+# its uncompressed body.
+sub start_with_compression ($self)
+{
+    $self->{instance}->{config}->set(httpallowcompress => 'yes');
+    $self->_start_instances();
+
+    my $description = join(' ', map { "line $_ of a long description." } 1..40);
+    my $ical = join("\r\n",
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Cassandane//EN',
+        'BEGIN:VEVENT',
+        'UID:accept-encoding',
+        'DTSTAMP:20260101T000000Z',
+        'DTSTART:20260101T100000Z',
+        'DURATION:PT1H',
+        'SUMMARY:Accept-Encoding test',
+        "DESCRIPTION:$description",
+        'END:VEVENT',
+        'END:VCALENDAR',
+        '');
+
+    my $res = $self->http1_request(
+        method  => 'PUT',
+        path    => $event_path,
+        headers => [ 'content-type' => 'text/calendar' ],
+        body    => $ical,
+        timeout => 2,
+    );
+    $self->assert_matches(qr/^20[14]$/, $res->{statuses}[0] // '');
+
+    my ($ce, $plain) = fetch_event($self, undef);
+    $self->assert_null($ce);
+    $self->assert(length($plain) > 1000,
+                  "event too short to be compressed: " . length($plain));
+    return $plain;
+}
+
+sub test_accept_encoding_gzip
+    :NoStartInstances :needs_dependency_zlib
+    ($self)
+{
+    my $plain = start_with_compression($self);
+
+    my ($ce, $body) = fetch_event($self, 'gzip');
+    $self->assert_str_equals('gzip', $ce);
+    gunzip(\$body => \my $decoded) or die "gunzip failed: $GunzipError";
+    $self->assert_str_equals($plain, $decoded);
+
+    # An unsupported coding leaves the response uncompressed
+    ($ce, $body) = fetch_event($self, 'compress');
+    $self->assert_null($ce);
+    $self->assert_str_equals($plain, $body);
+}
