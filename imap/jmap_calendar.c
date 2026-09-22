@@ -2453,16 +2453,15 @@ static int jmap_calendar_set(struct jmap_req *req)
         !json_object_size(set.not_updated) &&
         !json_object_size(set.not_destroyed)) {
 
-        /* resolve new default calendar id */
+        /* Resolve the new default calendar id.  A creation id may belong
+         * to an earlier method call, so this goes through the request's
+         * map, where setcalendars_create() registered it. */
         const char *newid = setargs.on_success_set_is_default;
-        if (*newid == '#') {
-            json_t *jobj = json_object_get(set.created, newid+1);
-            if (jobj) newid = json_string_value(json_object_get(jobj, "id"));
-        }
+        if (*newid == '#') newid = jmap_lookup_id(req, newid + 1);
 
         /* make sure new default calendar exists */
         mbentry_t *mbentry = NULL;
-        calid_to_mbentry(req, newid, &mbentry);
+        if (newid) calid_to_mbentry(req, newid, &mbentry);
 
         /* The default calendar is per-account state, so changing it requires
          * admin rights on the calendar home set. */
@@ -2496,7 +2495,7 @@ static int jmap_calendar_set(struct jmap_req *req)
             }
             else {
                 /* report that isDefault has been moved to new calendar */
-                jmap_report_isdefault(&set, mbentry->name,
+                jmap_report_isdefault(req, &set, mbentry->name,
                                       setargs.on_success_set_is_default, true);
 
                 /* report that isDefault has been removed from old default */
@@ -2506,7 +2505,8 @@ static int jmap_calendar_set(struct jmap_req *req)
                     char oldid[JMAP_MAX_CALENDARID_SIZE];
 
                     jmap_set_calendarid(req->cstate, mbentry, oldid);
-                    jmap_report_isdefault(&set, mbentry->name, oldid, false);
+                    jmap_report_isdefault(req, &set, mbentry->name,
+                                          oldid, false);
                 }
             }
         }

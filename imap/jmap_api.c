@@ -1924,8 +1924,9 @@ HIDDEN void jmap_set_default_failed(struct jmap_set *set, const char *id,
     else id = NULL;
 
     if (!id) {
-        /* Nothing to hang the error on without contradicting what this
-         * call already reported. */
+        /* Nothing to hang the error on: either the creation id didn't
+         * resolve, or reporting it would contradict what this call
+         * already reported. */
         xsyslog_ev(LOG_NOTICE, "jmap.set.default.unreported",
                    lf_s("error.type", type),
                    lf_s("error.description", desc ? desc : ""));
@@ -3739,17 +3740,24 @@ EXPORTED void jmap_add_methods(jmap_method_t methods[],
     }
 }
 
-EXPORTED void jmap_report_isdefault(struct jmap_set *set, const char *name,
+EXPORTED void jmap_report_isdefault(jmap_req_t *req, struct jmap_set *set,
+                                    const char *name,
                                     const char *id, bool isdef)
 {
-    json_t *obj;
+    json_t *obj = NULL;
 
     if (!(id && name)) return;
 
-    if (*id == '#')
+    if (*id == '#') {
         obj = json_object_get(set->created, id+1);
-    else
-        obj = json_object_get(set->updated, id);
+        if (!obj) {
+            /* A creation id from an earlier method call isn't in this
+             * call's created map; it resolves through the request. */
+            id = jmap_lookup_id(req, id+1);
+            if (!id) return;
+        }
+    }
+    if (!obj) obj = json_object_get(set->updated, id);
 
     if (json_is_object(obj)) {
         json_object_set_new(obj, "isDefault", json_boolean(isdef));

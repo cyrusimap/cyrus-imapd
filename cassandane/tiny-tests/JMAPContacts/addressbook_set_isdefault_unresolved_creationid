@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_set_isdefault_unresolved_creationid ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    # The creation id belongs to an earlier method call, so the second call
+    # can't find it in its own created map.
+    xlog $self, "create an addressbook, then name its creation id later";
+    my $res = $jmap->request([
+        [ 'AddressBook/set' => {
+            create => { 1 => { name => 'foo' } },
+        } ],
+        [ 'AddressBook/set' => {
+            onSuccessSetIsDefault => '#1',
+        } ],
+    ]);
+    my ($create, $set_default) = map { $_->as_set } $res->sentences;
+
+    $self->assert_not_null($create->created_id(1));
+
+    xlog $self, "notUpdated must not be keyed by an unresolved creation id";
+    my @creation_ids = grep { /\A#/ } keys $set_default->update_errors->%*;
+    $self->assert_cmp_deeply([], \@creation_ids);
+}
