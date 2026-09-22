@@ -177,18 +177,34 @@ sub annotate_from_file
     close LOG;
 }
 
+# How many frames of assertion sit between here and the code that made the
+# assertion?  We want to ascribe blame to the "real" caller, which we're going
+# to say is "the first caller that isn't an assert_* method (or ->fail)".
+# Goofy hack, but will be 99.999% effective.
+sub _assertion_depth
+{
+    # frame 0 is this sub, so counting starts at fail() in frame 1
+    my $depth = 1;
+
+    while (my $sub = (caller $depth)[3]) {
+        last if $sub !~ m/(?:\A|::)(?:assert\w*|fail)\z/;
+        $depth++;
+    }
+
+    return $depth - 1;
+}
+
 # Report that the test failed.  Every assertion below ends up here.
 #
 # $Error::Depth is how many frames Error.pm climbs before deciding where the
-# failure happened, and it decides both the reported line and where the stack
-# trace starts.  fail() blames whoever called it, so an assertion calling
-# fail() adds one to the depth first, and the test that called the assertion
-# gets the blame rather than this file.
+# failure happened; it sets both the line the failure is reported against and
+# where the stack trace starts.  Skipping the assertions blames the caller of
+# the outermost one, which is the code a reader needs to look at.
 sub fail
 {
     my ($self, @message) = @_;
 
-    local $Error::Depth = $Error::Depth + 1;
+    local $Error::Depth = $Error::Depth + _assertion_depth();
     Cassandane::Failure->throw(-text => join(q{}, @message));
 }
 
@@ -198,15 +214,12 @@ sub assert
 
     return 1 if $bool;
 
-    local $Error::Depth = $Error::Depth + 1;
     $self->fail(@message ? @message : 'Boolean assertion failed');
 }
 
 sub assert_str_equals
 {
     my ($self, $expected, $actual, @message) = @_;
-
-    local $Error::Depth = $Error::Depth + 1;
 
     if (not defined $expected) {
         $self->fail(@message ? @message : 'expected value was undef; should be using assert_null?');
@@ -227,8 +240,6 @@ sub assert_str_not_equals
 {
     my ($self, $expected, $actual, @message) = @_;
 
-    local $Error::Depth = $Error::Depth + 1;
-
     if (not defined $expected) {
         $self->fail(@message ? @message : 'expected value was undef; should be using assert_not_null?');
     }
@@ -247,8 +258,6 @@ sub assert_str_not_equals
 sub assert_num_equals
 {
     my ($self, $expected, $actual, @message) = @_;
-
-    local $Error::Depth = $Error::Depth + 1;
 
     # an empty or non-numeric string compares as 0 rather than warning about it
     no warnings 'numeric';
@@ -271,8 +280,6 @@ sub assert_num_equals
 sub assert_num_not_equals
 {
     my ($self, $expected, $actual, @message) = @_;
-
-    local $Error::Depth = $Error::Depth + 1;
 
     no warnings 'numeric';
 
@@ -316,8 +323,6 @@ sub assert_equals
 {
     my ($self, $expected, $actual, @message) = @_;
 
-    local $Error::Depth = $Error::Depth + 1;
-
     return 1 if not defined $expected and not defined $actual;
 
     $self->fail(@message ? @message : 'one arg was not defined')
@@ -331,8 +336,6 @@ sub assert_equals
 sub assert_not_equals
 {
     my ($self, $expected, $actual, @message) = @_;
-
-    local $Error::Depth = $Error::Depth + 1;
 
     $self->fail(@message ? @message : 'both args were undefined')
         if not defined $expected and not defined $actual;
@@ -350,7 +353,6 @@ sub assert_null
 
     return 1 if not defined $actual;
 
-    local $Error::Depth = $Error::Depth + 1;
     $self->fail(@message ? @message : "$actual is defined");
 }
 
@@ -360,7 +362,6 @@ sub assert_not_null
 
     return 1 if defined $actual;
 
-    local $Error::Depth = $Error::Depth + 1;
     $self->fail(@message ? @message : '<undef> unexpected');
 }
 
