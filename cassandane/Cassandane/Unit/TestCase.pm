@@ -202,6 +202,115 @@ sub assert
     $self->fail(@message ? @message : 'Boolean assertion failed');
 }
 
+sub assert_str_equals
+{
+    my ($self, $expected, $actual, @message) = @_;
+
+    local $Error::Depth = $Error::Depth + 1;
+
+    if (not defined $expected) {
+        $self->fail(@message ? @message : 'expected value was undef; should be using assert_null?');
+    }
+
+    if (not defined $actual) {
+        $self->fail(@message ? @message : "expected '$expected', got undef");
+    }
+
+    if ($expected ne $actual) {
+        $self->fail(@message ? @message : "expected '$expected', got '$actual'");
+    }
+
+    return 1;
+}
+
+sub assert_str_not_equals
+{
+    my ($self, $expected, $actual, @message) = @_;
+
+    local $Error::Depth = $Error::Depth + 1;
+
+    if (not defined $expected) {
+        $self->fail(@message ? @message : 'expected value was undef; should be using assert_not_null?');
+    }
+
+    if (not defined $actual) {
+        $self->fail(@message ? @message : "expected a string ne '$expected', got undef");
+    }
+
+    if ($expected eq $actual) {
+        $self->fail(@message ? @message : "'$expected' and '$actual' should differ");
+    }
+
+    return 1;
+}
+
+sub assert_num_equals
+{
+    my ($self, $expected, $actual, @message) = @_;
+
+    local $Error::Depth = $Error::Depth + 1;
+
+    # an empty or non-numeric string compares as 0 rather than warning about it
+    no warnings 'numeric';
+
+    if (not defined $expected) {
+        $self->fail(@message ? @message : 'expected value was undef; should be using assert_null?');
+    }
+
+    if (not defined $actual) {
+        $self->fail(@message ? @message : "expected '$expected', got undef");
+    }
+
+    if ($expected != $actual) {
+        $self->fail(@message ? @message : "expected $expected, got $actual");
+    }
+
+    return 1;
+}
+
+sub assert_num_not_equals
+{
+    my ($self, $expected, $actual, @message) = @_;
+
+    local $Error::Depth = $Error::Depth + 1;
+
+    no warnings 'numeric';
+
+    if (not defined $expected) {
+        $self->fail(@message ? @message : 'expected value was undef; should be using assert_not_null?');
+    }
+
+    if (not defined $actual) {
+        $self->fail(@message ? @message : "expected a number != '$expected', got undef");
+    }
+
+    if ($expected == $actual) {
+        $self->fail(@message ? @message : "$expected and $actual should differ");
+    }
+
+    return 1;
+}
+
+sub assert_null
+{
+    my ($self, $actual, @message) = @_;
+
+    return 1 if not defined $actual;
+
+    local $Error::Depth = $Error::Depth + 1;
+    $self->fail(@message ? @message : "$actual is defined");
+}
+
+sub assert_not_null
+{
+    my ($self, $actual, @message) = @_;
+
+    return 1 if defined $actual;
+
+    local $Error::Depth = $Error::Depth + 1;
+    $self->fail(@message ? @message : '<undef> unexpected');
+}
+
 # n.b. it's okay for unexpected bits to also be set!
 # if you need to test that ONLY specific bits are set, try:
 #
