@@ -4,11 +4,11 @@
 package Cassandane::Unit::Runner;
 use strict;
 use warnings;
-use Test::Unit::Result;
 use Benchmark;
 use IO::File;
 
 use Cassandane::Cassini;
+use Cassandane::Unit::Result;
 
 sub new
 {
@@ -42,7 +42,7 @@ sub filter
 sub create_test_result
 {
     my ($self) = @_;
-    $self->{_result} = Test::Unit::Result->new();
+    $self->{_result} = Cassandane::Unit::Result->new();
     return $self->{_result};
 }
 
@@ -53,7 +53,7 @@ sub add_formatter
     push @{$self->{formatters}}, $formatter;
 }
 
-# this is very similar to Test::Unit::Result's tell_listeners(), except
+# this is very similar to Cassandane::Unit::Result's tell_listeners(), except
 # without the annoying crash when the listener doesn't care about the event
 sub tell_formatters
 {

@@ -735,12 +735,12 @@ sub _listen_for_outcome
 
     my @listeners = grep {
         !($in_worker && $_->{remove_me_in_cassandane_child})
-    } @{$result->{_Listeners}};
+    } $result->listeners();
 
     push @listeners, $listener
         if !grep {; $_ == $listener } @listeners;
 
-    $result->{_Listeners} = \@listeners;
+    $result->set_listeners(@listeners);
 
     return $listener;
 }
