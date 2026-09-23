@@ -26,12 +26,6 @@ sub outcome
     return $self->{outcome};
 }
 
-sub start_suite
-{
-    my ($self, $suite) = @_;
-    # nothing to see here
-}
-
 sub start_test
 {
     my ($self, $test) = @_;
@@ -41,12 +35,6 @@ sub start_test
 sub end_test
 {
     my ($self, $test) = @_;
-    # nothing to see here
-}
-
-sub end_suite
-{
-    my ($self, $suite) = @_;
     # nothing to see here
 }
 

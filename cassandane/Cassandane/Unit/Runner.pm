@@ -87,10 +87,6 @@ sub do_run
     return $result->was_successful;
 }
 
-sub start_suite { }
-
-sub end_suite { }
-
 sub start_test { }
 
 sub end_test { }
