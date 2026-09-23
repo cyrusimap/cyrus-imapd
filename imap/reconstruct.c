@@ -8,6 +8,7 @@
 #include <unistd.h>
 #endif
 #include <getopt.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -512,6 +513,145 @@ static int do_reconstruct_p(const mbentry_t *mbentry, void *rock)
 }
 
 /*
+ * Mint a JMAP mailbox id from a fresh modseq of 'mailbox'.  A fresh modseq
+ * can't collide with any createdmodseq, but the key space may hold ids from
+ * before a modseq reset, so check.  Returns the id, or NULL if none was free.
+ */
+static char *reconstruct_mint_mailboxid(struct mailbox *mailbox,
+                                        modseq_t *modseqp)
+{
+    mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
+    const char *userid = mbname_userid(mbname);
+    struct buf newid = BUF_INITIALIZER;
+
+    if (!userid) {
+        userid = "";
+    }
+
+    for (int tries = 0; tries < 100; tries++) {
+        *modseqp = mailbox_modseq_dirty(mailbox);
+        buf_reset(&newid);
+        buf_putc(&newid, JMAP_MAILBOXID_PREFIX);
+        MODSEQ_TO_JMAPID(&newid, *modseqp);
+        mbentry_t *taken = NULL;
+        int r = mboxlist_lookup_by_jmapid(userid,
+                                          buf_cstring(&newid),
+                                          &taken,
+                                          NULL);
+        mboxlist_entry_free(&taken);
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            break;
+        }
+        buf_reset(&newid);
+    }
+
+    mbname_free(&mbname);
+    if (!buf_len(&newid)) {
+        buf_free(&newid);
+        return NULL;
+    }
+    return buf_release(&newid);
+}
+
+/* The id encodes the createdmodseq, and a new id is a new mailbox as far
+ * as Mailbox/changes is concerned, so both change together. */
+static void reconstruct_set_mailboxid(struct mailbox *mailbox,
+                                      mbentry_t *mbentry,
+                                      const char *jmapid,
+                                      modseq_t modseq)
+{
+    free(mbentry->jmapid);
+    mbentry->jmapid = xstrdup(jmapid);
+    mbentry->createdmodseq = modseq;
+    mailbox->i.createdmodseq = modseq;
+    mailbox_set_jmapid(mailbox, jmapid);
+    free(mailbox->mbentry->jmapid);
+    mailbox->mbentry->jmapid = xstrdup(jmapid);
+    mailbox->mbentry->createdmodseq = modseq;
+    mailbox_index_dirty(mailbox);
+}
+
+/*
+ * Give 'name' a new uniqueid, because 'other' is already using this one.
+ *
+ * Legacy-dir mailboxes only need the header and mbentry changed.
+ *
+ * A UUID-dir mailbox shares its directory with 'other', so it gets a copy
+ * of all the files into a new directory for its new uniqueid.
+ *
+ * *mailboxp points to 'name's mailbox, opened on its (possibly new) path
+ * with the updated files read.
+>>>>>>> 03d7b850a0 (fix wording)
+ */
+static int reconstruct_new_uniqueid(const char *name,
+                                    struct mailbox **mailboxp,
+                                    mbentry_t *mbentry,
+                                    const mbentry_t *other,
+                                    int make_changes)
+{
+    struct mailbox *mailbox = *mailboxp;
+    bool legacy = mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS;
+    char *newuid = xstrdup(makeuuid());
+    int r = 0;
+
+    printf("Assigning new uniqueid to %s (%s -> %s)%s\n",
+           name,
+           mailbox_uniqueid(mailbox),
+           newuid,
+           legacy ? "" : ", copying files");
+
+    xsyslog_ev(LOG_NOTICE, "reconstruct.uniqueid.reassigned",
+               lf_intname("mbox.name", name),
+               lf_s("mbox.uniqueid", newuid),
+               lf_s("old.mbox.uniqueid", mailbox_uniqueid(mailbox)),
+               lf_intname("other.mbox.name", other->name),
+               lf_flag("reconstruct.dryrun", !make_changes));
+
+    if (!make_changes) {
+        goto done;
+    }
+
+    if (legacy) {
+        mailbox_set_uniqueid(mailbox, newuid);
+    }
+    else {
+        /* the files must be complete before anything points at them */
+        r = mailbox_commit(mailbox);
+        if (r) {
+            goto done;
+        }
+        r = mailbox_copy_files(mailbox,
+                               mailbox_partition(mailbox),
+                               name,
+                               newuid);
+        if (r) {
+            goto done;
+        }
+    }
+
+    free(mbentry->uniqueid);
+    mbentry->uniqueid = xstrdup(newuid);
+
+    if (!legacy) {
+        r = mboxlist_update(mbentry, 1);
+        if (r) {
+            goto done;
+        }
+
+        mailbox_close(mailboxp);
+        r = mailbox_open_iwl(name, mailboxp);
+        if (r) {
+            goto done;
+        }
+        mailbox_set_uniqueid(*mailboxp, newuid);
+    }
+
+done:
+    free(newuid);
+    return r;
+}
+
+/*
  * mboxlist_findall() callback function to reconstruct a mailbox
  */
 static int do_reconstruct(struct findall_data *data, void *rock)
@@ -652,16 +792,19 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     else if (strcmpsafe(mbentry_byid->name, name)) {
         printf("Wrong uniqueid! %s (should be %s)\n", mbentry_byid->name, name);
         if (updateuniqueids) {
-            mailbox_make_uniqueid(mailbox);
-            xzfree(mbentry_byname->uniqueid);
-            mbentry_byname->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
+            r = reconstruct_new_uniqueid(name, &mailbox, mbentry_byname,
+                                         mbentry_byid, make_changes);
+            if (r) {
+                printf("Failed to give %s a new uniqueid: %s\n",
+                       name, error_message(r));
+                exit(1);
+            }
             mbentry_dirty = 1;
-            syslog (LOG_ERR, "uniqueid clash with %s - changed %s (%s => %s)",
-                    mbentry_byid->name, mailbox_name(mailbox), mbentry_byid->uniqueid, mailbox_uniqueid(mailbox));
         }
         else {
-            syslog (LOG_ERR, "uniqueid clash with %s for %s (%s)",
-                    mbentry_byid->name, mailbox_name(mailbox), mailbox_uniqueid(mailbox));
+            xsyslog_ev(LOG_ERR, "reconstruct.uniqueid.clash",
+                       lf_mailbox(mailbox),
+                       lf_intname("other.mbox.name", mbentry_byid->name));
             exit(1);
         }
     }
