@@ -1,0 +1,31 @@
+Description:
+
+TLS 1.3 sessions can now be resumed from any service process, not only the
+one that issued the ticket: tickets are stateful and name a session in the
+TLS session database, and one ticket is issued per handshake instead of
+two.
+TLS 1.2 clients resume by session ID, which also works across processes.
+Servers now send close_notify when closing a TLS connection, so
+clients no longer discard the session as truncated, and a
+tls_session_timeout of 0 now disables resumption entirely.
+
+
+Documentation:
+
+No documentation change: tls_session_timeout already says 0 disables session
+caching.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
