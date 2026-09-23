@@ -21,7 +21,7 @@ use File::stat;
 use MIME::Base64 qw(encode_base64);
 use Encode qw(decode encode);
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use Cassandane::Util::Wait;

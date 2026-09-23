@@ -9,7 +9,7 @@ use JSON::XS;
 use Data::Dumper;
 use MIME::Base64 qw(encode_base64);
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 

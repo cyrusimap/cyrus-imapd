@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Cwd qw(abs_path);
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 use Cassandane::Util::Wait;

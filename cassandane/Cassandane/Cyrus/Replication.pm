@@ -9,7 +9,7 @@ use DateTime;
 
 use Cyrus::DList;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;

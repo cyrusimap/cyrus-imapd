@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use experimental 'signatures';
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 
 sub new ($class, @rest)

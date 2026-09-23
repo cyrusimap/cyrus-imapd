@@ -7,7 +7,7 @@ use warnings;
 use Data::Dumper;
 use POSIX qw(getcwd);
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 
 my $crash_bin = getcwd() . '/utils/crash';

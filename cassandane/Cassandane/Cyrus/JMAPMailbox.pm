@@ -13,7 +13,7 @@ use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
 use Cwd qw(abs_path getcwd);
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 
 use lib '../perl/imap/lib';

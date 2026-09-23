@@ -7,7 +7,7 @@ use warnings;
 use DateTime;
 use Data::Dumper;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Instance;
 use Cassandane::Mboxname;
 use Cassandane::Util::Log;

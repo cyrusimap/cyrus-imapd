@@ -7,7 +7,7 @@ use warnings;
 use URI;
 use Data::Dumper;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
 

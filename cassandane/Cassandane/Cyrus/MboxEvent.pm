@@ -7,7 +7,7 @@ use warnings;
 use Data::Dumper;
 use JSON;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;

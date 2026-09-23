@@ -8,7 +8,7 @@ use Cwd qw(getcwd);
 use Data::Dumper;
 use File::Temp qw(tempdir);
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 
 sub new

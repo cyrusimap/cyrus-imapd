@@ -5,7 +5,7 @@ package Cassandane::Test::Skip;
 use strict;
 use warnings;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 
 sub new
 {

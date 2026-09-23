@@ -6,16 +6,16 @@ use strict;
 use warnings;
 use IO::File;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 
-Cassandane::Cyrus::TestCase::magic(DuplicateSuppressionOff => sub {
+Cassandane::Cyrus::TestSuite::magic(DuplicateSuppressionOff => sub {
     shift->config_set(duplicatesuppression => 0);
 });
-Cassandane::Cyrus::TestCase::magic(DuplicateSuppressionOn => sub {
+Cassandane::Cyrus::TestSuite::magic(DuplicateSuppressionOn => sub {
     shift->config_set(duplicatesuppression => 1);
 });
-Cassandane::Cyrus::TestCase::magic(FuzzyMatch => sub {
+Cassandane::Cyrus::TestSuite::magic(FuzzyMatch => sub {
     shift->config_set(lmtp_fuzzy_mailbox_match => 1);
 });
 sub new

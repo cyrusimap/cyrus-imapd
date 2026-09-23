@@ -8,7 +8,7 @@ use Cwd qw(getcwd realpath);
 use Data::Dumper;
 use DateTime;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;

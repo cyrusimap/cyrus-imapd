@@ -6,11 +6,11 @@ use strict;
 use warnings;
 use Data::Dumper;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
 
-Cassandane::Cyrus::TestCase::magic(MetaPartition => sub {
+Cassandane::Cyrus::TestSuite::magic(MetaPartition => sub {
     shift->config_set(
         'metapartition-default' => '@basedir@/meta',
         'metapartition_files' => 'header index'

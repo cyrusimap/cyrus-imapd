@@ -8,7 +8,7 @@ use Cwd qw(realpath);
 use JSON;
 use Data::Dumper;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use base qw(Cassandane::Unit::TestSuite);
 use Cassandane::Util::Log;
 

@@ -8,7 +8,7 @@ use Data::Dumper;
 use DateTime;
 use IO::Scalar;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Address;
 use Cassandane::Util::DateTime qw(to_rfc822);
 use Cassandane::Util::Log;
