@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+use MIME::Base64 qw(encode_base64);
+
+# Send one authenticated request and return its status
+sub request_status ($self, $method, $path, @headers)
+{
+    my $service = $self->{instance}->get_service('http');
+    my $s = http1_connect($self);
+
+    print $s "$method $path HTTP/1.1\r\n"
+           . "Host: " . $service->host . ":" . $service->port . "\r\n"
+           . "Authorization: Basic "
+           . encode_base64('cassandane:pass', '') . "\r\n"
+           . join('', map { "$_\r\n" } @headers)
+           . "Connection: close\r\n"
+           . "\r\n";
+
+    return http1_read_response($s)->{status};
+}
+
+sub test_early_data_header
+    ($self)
+{
+    my $event = '/dav/calendars/user/cassandane/Default/nosuch.ics';
+    my $home = '/dav/calendars/user/cassandane/';
+
+    # An intermediary forwarded an unsafe request it got as early data:
+    # it could be a replay, so the client has to send it again later
+    $self->assert_num_equals(425, request_status($self, 'DELETE', $event,
+                                                 'Early-Data: 1'));
+
+    # The same request, not early
+    $self->assert_num_equals(404, request_status($self, 'DELETE', $event));
+    $self->assert_num_equals(404, request_status($self, 'DELETE', $event,
+                                                 'Early-Data: 0'));
+
+    # A safe request is fine as early data
+    $self->assert_num_equals(207, request_status($self, 'PROPFIND', $home,
+                                                 'Early-Data: 1',
+                                                 'Depth: 0',
+                                                 'Content-Length: 0'));
+}
