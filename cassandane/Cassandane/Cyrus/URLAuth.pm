@@ -58,6 +58,7 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(servername => "127.0.0.1"); # urlauth needs matching servername
+    $config->set(allowurlauth => 'yes');
 
     return $class->SUPER::new({
         config => $config,
@@ -65,6 +66,11 @@ sub new
         services => ['imap']
     }, @_);
 }
+
+# Run with allowurlauth unset, to exercise the compiled-in default
+Cassandane::Cyrus::TestCase::magic(URLAuthDefault => sub {
+    shift->{_config}->set(allowurlauth => undef);
+});
 
 sub set_up
 {
@@ -305,6 +311,91 @@ sub test_forged_empty_key
     );
 
     $self->assert_null($stolen);
+}
+
+sub test_urlauth_enabled
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    my $caps = $talk->capability();
+    $self->assert(exists $caps->{urlauth});
+    $self->assert(exists $caps->{'urlauth=binary'});
+
+    $self->make_message("Message A");
+
+    my $url;
+    $talk->_imap_cmd(
+        'genurlauth', 0,
+        { genurlauth => sub { $url = $_[1]->[0] } },
+        'imap://cassandane@127.0.0.1/INBOX/;uid=1;urlauth=user+cassandane',
+        'INTERNAL',
+    );
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_not_null($url);
+
+    (my $bare_url = $url) =~ s/\A"(.*)"\z/$1/;
+    my $data;
+    $talk->_imap_cmd(
+        'urlfetch', 0,
+        { urlfetch => sub { $data = $_[1]->[1] } },
+        $bare_url,
+    );
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_not_null($data);
+
+    $talk->_imap_cmd('resetkey', 0, {}, 'INBOX', 'INTERNAL');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->_imap_cmd('resetkey', 0, {});
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+}
+
+sub test_urlauth_disabled
+    :URLAuthDefault
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    my $caps = $talk->capability();
+    $self->assert(!exists $caps->{urlauth});
+    $self->assert(!exists $caps->{'urlauth=binary'});
+
+    $self->make_message("Message A");
+
+    my $url;
+    $talk->_imap_cmd(
+        'genurlauth', 0,
+        { genurlauth => sub { $url = $_[1]->[0] } },
+        'imap://cassandane@127.0.0.1/INBOX/;uid=1;urlauth=user+cassandane',
+        'INTERNAL',
+    );
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/disabled/, $talk->get_last_error());
+    $self->assert_null($url);
+
+    # a well-formed URL is still refused without any token validation
+    my $data;
+    $talk->_imap_cmd(
+        'urlfetch', 0,
+        { urlfetch => sub { $data = $_[1]->[1] } },
+        'imap://cassandane@127.0.0.1/INBOX/;uid=1',
+    );
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/disabled/, $talk->get_last_error());
+    $self->assert_null($data);
+
+    $talk->_imap_cmd('resetkey', 0, {});
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/disabled/, $talk->get_last_error());
+
+    $talk->_imap_cmd('resetkey', 0, {}, 'INBOX', 'INTERNAL');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/disabled/, $talk->get_last_error());
+
+    # connection is still usable afterwards
+    $talk->select('INBOX');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
 }
 
 1;

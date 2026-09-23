@@ -203,6 +203,7 @@ static int imapd_notify_enabled = 0;
 static int imapd_login_disabled = 0;
 static int imapd_compress_allowed = 0;
 static int imapd_utf8_allowed = 0;
+static int imapd_urlauth_allowed = 0;
 static int imapd_starttls_allowed = 0;
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 static int imapd_tls_required = 0; /* is tls required? */
@@ -479,8 +480,10 @@ static struct capa_struct base_capabilities[] = {
     { "UNSELECT",              CAPA_POSTAUTH,           { 0 } }, /* RFC 3691 */
     { "URL-PARTIAL",           CAPA_POSTAUTH,           { 0 } }, /* RFC 5550 */
 #ifdef HAVE_SSL
-    { "URLAUTH",               CAPA_POSTAUTH,           { 0 } }, /* RFC 4467 */
-    { "URLAUTH=BINARY",        CAPA_POSTAUTH,           { 0 } }, /* RFC 5524 */
+    { "URLAUTH",               CAPA_POSTAUTH|CAPA_STATE,         /* RFC 4467 */
+      { .statep = &imapd_urlauth_allowed }                    },
+    { "URLAUTH=BINARY",        CAPA_POSTAUTH|CAPA_STATE,         /* RFC 5524 */
+      { .statep = &imapd_urlauth_allowed }                    },
 #endif
     { "UTF8=ACCEPT",           CAPA_POSTAUTH|CAPA_STATE,         /* RFC 6855 */
       { .statep = &imapd_utf8_allowed }                       },
@@ -1041,6 +1044,7 @@ static void imapd_reset(void)
     imapd_tls_comp = NULL;
     imapd_starttls_done = 0;
     imapd_starttls_allowed = tls_starttls_enabled();
+    imapd_urlauth_allowed = config_getswitch(IMAPOPT_ALLOWURLAUTH);
 #ifdef HAVE_ZLIB
     imapd_compress_allowed = 1;
 #endif
@@ -1072,6 +1076,7 @@ int service_init(int argc, char **argv, char **envp)
     global_sasl_init(1, 1, mysasl_cb);
 
     imapd_starttls_allowed = tls_starttls_enabled();
+    imapd_urlauth_allowed = config_getswitch(IMAPOPT_ALLOWURLAUTH);
 #ifdef HAVE_ZLIB
     imapd_compress_allowed = 1;
 #endif
@@ -1942,6 +1947,7 @@ static void cmdloop(void)
 #ifdef HAVE_SSL
             else if (!strcmp(cmd.s, "Genurlauth")) {
                 if (c != ' ') goto missingargs;
+                if (!imapd_urlauth_allowed) goto disabled;
 
                 cmd_genurlauth(tag.s);
                 prometheus_increment(CYRUS_IMAP_GENURLAUTH_TOTAL);
@@ -2282,6 +2288,7 @@ static void cmdloop(void)
                 }
 
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
+                if (!imapd_urlauth_allowed) goto disabled;
                 cmd_resetkey(tag.s, have_mbox ? arg1.s : 0,
                              have_mech ? arg2.s : 0);
                 /* XXX prometheus_increment(CYRUS_IMAP_RESETKEY_TOTAL); */
@@ -2637,6 +2644,7 @@ static void cmdloop(void)
 #ifdef HAVE_SSL
             else if (!strcmp(cmd.s, "Urlfetch")) {
                 if (c != ' ') goto missingargs;
+                if (!imapd_urlauth_allowed) goto disabled;
 
                 cmd_urlfetch(tag.s);
                 /* XXX prometheus_increment(CYRUS_IMAP_URLFETCH_TOTAL); */
@@ -2909,6 +2917,12 @@ static void cmdloop(void)
         prot_printf(imapd_out,
                     "%s NO only administrators may use %s command\r\n",
                     tag.s, cmd.s);
+        eatline(imapd_in, c);
+        continue;
+
+    disabled:
+        prot_printf(imapd_out, "%s NO %s\r\n", tag.s,
+                    error_message(IMAP_DISABLED));
         eatline(imapd_in, c);
         continue;
     }

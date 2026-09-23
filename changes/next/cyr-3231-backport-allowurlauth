@@ -1,0 +1,24 @@
+
+Description:
+
+Disable advertisement and use of URLAUTH extension by default.
+Can be enabled with the 'allowurlauth' option.
+
+
+Config changes:
+
+Added 'allowurlauth' option, defaulting to off.
+
+
+Upgrade instructions:
+
+Sites that have clients that use/require the URLAUTH extension will have
+to enable support for it using the 'allowurlauth' option.
+Note that URLAUTH tokens survive mailbox deletion and grant access
+to recreated mailbox content.
+Also note that support for URLAUTH will be removed from Cyrus v3.14.
+
+
+GitHub issue:
+
+None.
