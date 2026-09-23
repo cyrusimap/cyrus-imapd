@@ -17,6 +17,7 @@ sub new
         maxworkers => 2,
         pending => [],
         handler => sub { die "This should not happen"; },
+        owner => $$,
     };
     foreach my $p (qw(maxworkers handler))
     {
@@ -46,6 +47,24 @@ sub _new_worker
     return $w;
 }
 
+# Replace any worker that has died.  A test can take its worker down with it
+# -- by exiting, or by dying in a way perl can't catch -- and the run has
+# every other test still to get through.  The replacement takes the dead
+# worker's slot, and so its number and its range of ports.
+sub _replace_dead_workers
+{
+    my ($self) = @_;
+
+    foreach my $w (@{$self->{workers}})
+    {
+        next if !$w->{dead};
+
+        my $id = $w->{id};
+        $w->stop();
+        $w = $self->_new_worker($id);
+    }
+}
+
 # Assign an work item to an idle worker if necessary
 # block until a worker is idle.
 sub assign
@@ -55,11 +74,10 @@ sub assign
     my $w;
     while (1)
     {
-        ($w) = grep { !$_->{busy} && !$_->{dead}; } @{$self->{workers}};
-        last if $w;
+        $self->_replace_dead_workers();
 
-        die "No worker survives to run $witem->{suite}.$witem->{testname}"
-            if !grep { $_->{busy}; } @{$self->{workers}};
+        ($w) = grep { !$_->{busy}; } @{$self->{workers}};
+        last if $w;
 
         $self->_wait();
     }
@@ -133,10 +151,14 @@ sub stop
     }
 }
 
+# Only the process that built the pool may take it down.  A worker inherits a
+# copy of the pool when it is forked, and reaping the other workers -- or
+# sending them a stop down the pipes it also inherited -- is no business of a
+# worker's.
 sub DESTROY
 {
     my ($self) = @_;
-    $self->stop();
+    $self->stop() if $self->{owner} == $$;
 }
 
 1;
