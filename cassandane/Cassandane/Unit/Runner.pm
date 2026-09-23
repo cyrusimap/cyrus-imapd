@@ -14,21 +14,8 @@ sub new
     my ($class) = @_;
 
     return bless {
-        filter => [],
         listeners => [ Cassandane::Unit::FailedTests->new() ],
     }, $class;
-}
-
-# The filter tokens that decide whether a test runs at all: testrunner.pl sets
-# them from the command line, the plan asks each test about them in turn.  See
-# Cassandane::Unit::TestCase::filter for what a token means.
-sub filter
-{
-    my ($self, @tokens) = @_;
-
-    $self->{filter} = \@tokens if @tokens;
-
-    return @{ $self->{filter} };
 }
 
 # A formatter is a listener that reports what it hears, and there is only the
@@ -48,7 +35,7 @@ sub do_run
     $result->add_listener($_) for @{$self->{listeners}};
 
     my $start_time = new Benchmark();
-    $plan->run($result, $self);
+    $plan->run($result);
     my $end_time = new Benchmark();
 
     $result->tell_listeners(finished => $result, $start_time, $end_time);

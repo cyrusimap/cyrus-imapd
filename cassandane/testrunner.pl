@@ -435,15 +435,8 @@ else
     $plan->check_sanity(nonfatal => $opt->no_fatal_plan);
 
     # Run the schedule
-    my @filters = qw(skip_version skip_missing_features
-                     skip_runtime_check
-                     enable_wanted_properties);
-    push @filters, 'skip_slow' if $plan->{skip_slow};
-    push @filters, 'slow_only' if $plan->{slow_only};
-
     my $runner = Cassandane::Unit::Runner->new();
     $runner->add_formatter($formatters{$want_format}->({%format_params}));
-    $runner->filter(@filters);
 
     exit !$runner->do_run($plan);
 }

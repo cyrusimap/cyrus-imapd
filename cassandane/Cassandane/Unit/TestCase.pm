@@ -59,15 +59,6 @@ sub annotations
     return $self->{annotations};
 }
 
-sub run
-{
-    my ($self, $result, $runner) = @_;
-
-    $result->run($self);
-
-    return $result;
-}
-
 sub run_bare
 {
     my ($self) = @_;

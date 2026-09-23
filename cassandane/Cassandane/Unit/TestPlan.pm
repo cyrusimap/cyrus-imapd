@@ -564,7 +564,7 @@ sub _get_test
 # back to the parent, which is what reports it.
 sub _run_workitem
 {
-    my ($self, $witem, $result, $runner) = @_;
+    my ($self, $witem, $result) = @_;
     my $test = $self->_get_test($witem);
 
     my $listener = $self->_listen_for_outcome($result);
@@ -577,13 +577,13 @@ sub _run_workitem
     $self->_capture_output($witem->{logfile});
 
     my $outcome;
-    if (my $reason = _skip_reason($test, $runner))
+    if (my $reason = $self->_skip_reason($test))
     {
         $outcome = { outcome => 'skip', reason => $reason };
     }
     else
     {
-        $test->run($result, $runner);
+        $result->run($test);
         $outcome = $listener->outcome()
             or die "$witem->{suite}.$witem->{testname} ran but reported nothing";
     }
@@ -608,14 +608,19 @@ sub _run_workitem
 }
 
 # The filters that decide whether a test runs at all.  The first one with an
-# answer wins, and its answer is why the test was skipped.  They're consulted
-# in the order the runner was given them, because some have side effects: a
-# test's :want_service_http attribute is honoured by a filter.
-sub _skip_reason
+# answer wins, and its answer is why the test was skipped.  Order matters,
+# because some have side effects: a test's :want_service_http attribute is
+# honoured by a filter.
+sub _skip_reason ($self, $test)
 {
-    my ($test, $runner) = @_;
+    my @filters = qw(skip_version skip_missing_features
+                     skip_runtime_check
+                     enable_wanted_properties);
 
-    foreach my $token ($runner->filter())
+    push @filters, 'skip_slow' if $self->{skip_slow};
+    push @filters, 'slow_only' if $self->{slow_only};
+
+    foreach my $token (@filters)
     {
         my $reason = $test->filter_method($token);
         return $reason if $reason;
@@ -720,7 +725,7 @@ sub _listen_for_outcome
 # them: one way of working is worth more than the fork it costs.
 sub run
 {
-    my ($self, $result, $runner) = @_;
+    my ($self, $result) = @_;
 
     # we expand the schedule before forking the
     # workers so that we can just hand the reference
@@ -745,7 +750,7 @@ sub run
         maxworkers => $self->{maxworkers} || 1,
         handler => sub {
             my ($assignment) = @_;
-            return $self->_run_workitem($assignment, $result, $runner);
+            return $self->_run_workitem($assignment, $result);
         },
     );
 
