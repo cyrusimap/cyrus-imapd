@@ -62,7 +62,8 @@ extern void fatal(const char *fatal_message, int fatal_code)
    __attribute__ ((noreturn));
 
 /* prototype to allow for sane function ordering */
-static void config_read_file(const char *filename);
+static char *config_read_file(const char *filename, char *buf, size_t *bufsize);
+#define GROWSIZE 4096
 
 static void assert_not_deprecated(enum imapopt opt)
 {
@@ -621,7 +622,6 @@ static const unsigned char qos[] = {
 EXPORTED void config_read(const char *alt_config, const int config_need_data)
 {
     enum imapopt opt = IMAPOPT_ZERO;
-    char buf[4096];
     char *p;
     int ival;
     int64_t i64val;
@@ -643,7 +643,11 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         fatal("could not construct include file  hash table", EX_CONFIG);
     }
 
-    config_read_file(config_filename);
+    size_t bufsize = GROWSIZE;
+    char *read_buf = xmalloc(bufsize);
+
+    read_buf = config_read_file(config_filename, read_buf, &bufsize);
+    free(read_buf);
 
     free_hash_table(&includehash, NULL);
 
@@ -791,10 +795,11 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         }
 
         if (!found) {
-            snprintf(buf, sizeof(buf),
+            char errbuf[1024];
+            snprintf(errbuf, sizeof(errbuf),
                      "partition-%s option not specified in configuration file",
                      config_defpartition ? config_defpartition : "<name>");
-            fatal(buf, EX_CONFIG);
+            fatal(errbuf, EX_CONFIG);
         }
 
         if (config_check_partitions(NULL)) {
@@ -876,17 +881,18 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
                                    NULL, STRARRAY_TRIM);
 }
 
-#define GROWSIZE 4096
-
-static void config_add_overflowstring(const char *key, const char *value, int lineno)
+static void config_add_overflowstring(const char *key, const char *value, int lineno, void *buf)
 {
     char *newval = xstrdup(value);
-    if (newval != hash_insert(key, newval, &confighash)) {
+    char *oldval = hash_insert(key, newval, &confighash);
+    if (newval != oldval) {
+        free(oldval);
         char errbuf[1024];
         snprintf(errbuf, sizeof(errbuf),
                 "option '%s' was specified twice in config file "
                 "(second occurrence on line %d)",
                 key, lineno);
+        free(buf);
         fatal(errbuf, EX_CONFIG);
     }
 }
@@ -904,27 +910,24 @@ EXPORTED int config_parse_switch(const char *p)
     return -1;
 }
 
-static void config_read_file(const char *filename)
+static char *config_read_file(const char *filename, char *buf, size_t *bufsize)
 {
     FILE *infile = NULL;
     enum imapopt opt = IMAPOPT_ZERO;
     int lineno = 0;
-    char *buf, errbuf[1024];
+    char errbuf[1024];
     const char *cyrus_path;
-    unsigned bufsize, len;
+    unsigned len;
     char *p, *q, *key, *fullkey, *srvkey;
     int service_specific;
     int idlen = (config_ident ? strlen(config_ident) : 0);
-
-    bufsize = GROWSIZE;
-    buf = xmalloc(bufsize);
 
     /* read in config file
        Check if we have CYRUS_PREFIX defined, and then use that config */
     cyrus_path = getenv("CYRUS_PREFIX");
     if (cyrus_path) {
-        strlcpy(buf, cyrus_path, bufsize);
-        strlcat(buf, filename, bufsize);
+        strlcpy(buf, cyrus_path, *bufsize);
+        strlcat(buf, filename, *bufsize);
         infile = fopen(buf, "r");
     }
 
@@ -952,7 +955,7 @@ static void config_read_file(const char *filename)
     }
 
     len = 0;
-    while (fgets(buf+len, bufsize-len, infile)) {
+    while (fgets(buf+len, *bufsize-len, infile)) {
         if (buf[len]) {
             len = strlen(buf);
             if (buf[len-1] == '\n') {
@@ -966,10 +969,10 @@ static void config_read_file(const char *filename)
                     continue;
                 }
             }
-            else if (!feof(infile) && len == bufsize-1) {
+            else if (!feof(infile) && len == *bufsize-1) {
                 /* line is longer than the buffer */
-                bufsize += GROWSIZE;
-                buf = xrealloc(buf, bufsize);
+                *bufsize += GROWSIZE;
+                buf = xrealloc(buf, *bufsize);
                 continue;
             }
         }
@@ -990,10 +993,10 @@ static void config_read_file(const char *filename)
             if (Uisupper(*p)) *p = tolower((unsigned char) *p);
             p++;
         }
-        if (*p != ':') {
+        if (key == p || *p != ':') {
             snprintf(errbuf, sizeof(errbuf),
-                     "invalid option name on line %d of configuration file %s",
-                     lineno, filename);
+                     "%s option name on line %d of configuration file %s",
+                     *p == ':' ? "empty" : "invalid", lineno, filename);
             free(buf);
             fatal(errbuf, EX_CONFIG);
         }
@@ -1020,7 +1023,7 @@ static void config_read_file(const char *filename)
         /* Look for directives */
         if (key[0] == '@') {
             if (!strcasecmp(key, "@include")) {
-                config_read_file(p);
+                buf = config_read_file(p, buf, bufsize);
                 continue;
             }
             else {
@@ -1103,7 +1106,7 @@ static void config_read_file(const char *filename)
              * some reason, we can do so with config_getoverflowstring().
              */
             if (imapopts[opt].deprecated_since) {
-                config_add_overflowstring(fullkey, p, lineno);
+                config_add_overflowstring(fullkey, p, lineno, buf);
             }
 
             /* this is a known option */
@@ -1280,12 +1283,12 @@ static void config_read_file(const char *filename)
 */
 
             /* Put it in the overflow hash table */
-            config_add_overflowstring(key, p, lineno);
+            config_add_overflowstring(key, p, lineno, buf);
         }
     }
 
     fclose(infile);
-    free(buf);
+    return buf;
 }
 
 EXPORTED void config_toggle_debug(void)
