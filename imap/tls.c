@@ -988,8 +988,14 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     /* No stateless tickets: they're encrypted with keys each process
      * makes up for itself, so only the issuing process could resume
      * them.  A TLS 1.3 ticket then just names a session in the session
-     * database, and TLS 1.2 clients resume by session ID. */
-    SSL_CTX_set_options(s_ctx, SSL_OP_NO_TICKET);
+     * database, and TLS 1.2 clients resume by session ID.
+     *
+     * A client that just closes the connection, as browsers often do,
+     * isn't an error: OpenSSL would otherwise take the missing
+     * close_notify for one, and drop the session from the database.  Our
+     * protocols frame their own messages, so truncation can't go unseen. */
+    SSL_CTX_set_options(s_ctx,
+                        SSL_OP_NO_TICKET | SSL_OP_IGNORE_UNEXPECTED_EOF);
 
     /* A timeout of zero disables session caching */
     if (!timeout) SSL_CTX_set_num_tickets(s_ctx, 0);
