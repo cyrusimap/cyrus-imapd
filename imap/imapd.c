@@ -12225,7 +12225,8 @@ static int sync_mailbox(struct xfer_header *xfer,
 
     master_folders = sync_folder_list_create();
     sync_folder_list_add(master_folders,
-                         mailbox_uniqueid(mailbox), mailbox_name(mailbox),
+                         mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
+                         mailbox_name(mailbox),
                          mailbox_mbtype(mailbox),
                          mailbox_partition(mailbox),
                          mailbox_acl(mailbox),
