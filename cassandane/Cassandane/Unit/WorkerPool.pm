@@ -29,13 +29,21 @@ sub start
 {
     my ($self) = @_;
 
-    while (scalar @{$self->{workers}} < $self->{maxworkers})
+    while ((my $id = scalar @{$self->{workers}} + 1) <= $self->{maxworkers})
     {
-        my $w = Cassandane::Unit::Worker->new();
-        $w->{handler} = $self->{handler};
-        $w->start();
-        push(@{$self->{workers}}, $w);
+        push(@{$self->{workers}}, $self->_new_worker($id));
     }
+}
+
+sub _new_worker
+{
+    my ($self, $id) = @_;
+
+    my $w = Cassandane::Unit::Worker->new($id);
+    $w->{handler} = $self->{handler};
+    $w->start();
+
+    return $w;
 }
 
 # Assign an work item to an idle worker if necessary

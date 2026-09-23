@@ -10,8 +10,6 @@ use POSIX ();
 use Time::HiRes qw(time);
 use JSON::XS ();
 
-my $nextid = 1;
-
 # $0 as it was before a worker renamed itself, so that it can keep saying which
 # test it is on.  Only ever set in a worker, after the fork.
 my $basename;
@@ -20,11 +18,13 @@ my $basename;
 # data" protocol, no blessed objects, just good ol' JSON.
 my $JSON = JSON::XS->new->ascii->canonical;
 
+# The id is the pool slot this worker fills: it appears in the process title,
+# and Cassandane derives the worker's port range from it.
 sub new
 {
-    my ($class) = @_;
+    my ($class, $id) = @_;
     my $self = {
-        id => $nextid++,
+        id => $id,
         pid => undef,
         downpipe => undef,
         uppipe => undef,
