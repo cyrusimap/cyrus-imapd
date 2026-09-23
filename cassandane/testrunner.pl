@@ -169,6 +169,7 @@ use List::Util qw(uniq);
 
 use lib '.';
 use Cassandane::Util::Setup;
+use Cassandane::Error;
 use Cassandane::Unit::FormatPretty;
 use Cassandane::Unit::FormatTAP;
 use Cassandane::Unit::FormatXML;
@@ -214,13 +215,11 @@ if ($missing_binaries) {
     exit 1;
 }
 
-# This disgusting hack makes Test::Unit report a useful stack trace for
-# it's assert failures instead of just a file name and line number.
+# A test that dies with a plain string gets turned into an exception, so that
+# the report can say where it came from rather than just quoting it.
 {
     use Error;
-    use Test::Unit::Exception;
 
-    # We also convert string exceptions into Test::Unit errors.
     $SIG{__DIE__} = sub
     {
         my ($e) = @_;
@@ -230,35 +229,16 @@ if ($missing_binaries) {
             if ($line)
             {
                 local $Error::Depth = 1;
-                Test::Unit::Error->throw('-text' => "Perl exception: $text\n");
+                Cassandane::Error->throw('-text' => "Perl exception: $text\n");
             }
         }
         die @_;
     };
 
-    # Disable the warning about redefining T:U:E:stringify.
-    # We know what we're doing, dammit.
-    no warnings;
-    # This makes Error->new() capture a full stacktrace
+    # so that Error->new() captures a stack trace, which is most of what a
+    # failure report is
     $Error::Debug = 1;
-    *Test::Unit::Exception::stringify = sub
-    {
-        my ($self) = @_;
-        my $s = '';
-
-        my $o = $self->object;
-        $s .= $o->to_string() . "\n " if $o && $o->can('to_string');
-
-        # Note, -stacktrace includes -text
-
-        my $st = $self->{-stacktrace};
-        # Prune all Test::Unit internal calls
-        $st =~ s/Test::Unit::TestCase::run_test.*/[...framework calls elided...]/s;
-        $s .= $st;
-
-        return $s;
-    };
-};
+}
 
 my %formatters = (
     tap => {

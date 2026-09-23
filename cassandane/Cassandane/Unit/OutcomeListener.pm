@@ -5,8 +5,6 @@ package Cassandane::Unit::OutcomeListener;
 use strict;
 use warnings;
 
-use base qw(Test::Unit::Listener);
-
 sub new
 {
     my ($class) = shift;

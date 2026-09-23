@@ -5,7 +5,6 @@ package Cassandane::Unit::Formatter;
 use strict;
 use warnings;
 
-use base 'Test::Unit::Listener';
 use Benchmark;
 use Date::Format;
 use IO::Handle;

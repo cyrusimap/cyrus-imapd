@@ -10,6 +10,7 @@ use File::Find;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
+use Cassandane::Error;
 use Cassandane::Failure;
 use Cassandane::Util::Log;
 use Cassandane::Unit::TestCase;
@@ -264,9 +265,7 @@ sub _check_not_empty ($self)
 {
     foreach my $item (values $self->{schedule}->%*)
     {
-        my @names = map {; s/^test_//r } $item->_get_loaded_suite()->names()->@*;
-
-        return if grep {; $item->_is_allowed($_) } @names;
+        return if grep {; $item->_is_allowed($_) } $item->_test_names();
     }
 
     die "No tests to run: the test plan is empty\n";
@@ -434,10 +433,8 @@ sub _get_schedule
     my @res;
     foreach my $item (@items)
     {
-        my $loaded = $item->_get_loaded_suite();
-        foreach my $name (sort @{$loaded->names()})
+        foreach my $name ($item->_test_names())
         {
-            $name =~ s/^test_//;
             next unless $item->_is_allowed($name);
 
             push @res, {
@@ -560,9 +557,7 @@ sub _dump_logfile
 sub _get_test
 {
     my ($self, $witem) = @_;
-    my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
-    my ($test) = grep { $_->name() eq 'test_' . $witem->{testname}; } @{$suite->tests()};
-    return $test;
+    return $self->_get_item($witem->{suite})->_make_test($witem->{testname});
 }
 
 # Run one work item and return its outcome: a verdict, plus a description of
@@ -603,8 +598,7 @@ sub _run_workitem
         my $ex = $@;
         if ($ex)
         {
-            $result->add_error($test,
-                               Test::Unit::Error->make_new_from_error($ex));
+            $result->add_error($test, Cassandane::Error->from_thrown($ex));
             $outcome = $listener->outcome();
         }
     }
@@ -717,7 +711,7 @@ sub _finish_workitem
     elsif ($witem->{outcome} eq 'error')
     {
         $result->add_error($test,
-                           _rebuild_exception('Test::Unit::Error',
+                           _rebuild_exception('Cassandane::Error',
                                               $witem->{failure}));
     }
     else
@@ -741,20 +735,18 @@ sub _listen_for_outcome
 
     my @listeners = grep {
         !($in_worker && $_->{remove_me_in_cassandane_child})
-    } @{$result->{_Listeners}};
+    } $result->listeners();
 
     push @listeners, $listener
         if !grep {; $_ == $listener } @listeners;
 
-    $result->{_Listeners} = \@listeners;
+    $result->set_listeners(@listeners);
 
     return $listener;
 }
 
-# The 'run' method makes this class look sufficiently like a
-# Test::Unit::TestCase that Test::Unit::TestRunner will happily run it.
-# This enables us to run all our scheduled tests with a single
-# TestResult and a single summary of errors.
+# The runner hands the whole plan to run(), rather than one suite at a time,
+# so that every scheduled test lands in one result and one summary.
 sub run
 {
     my ($self, $result, $runner) = @_;
@@ -782,7 +774,7 @@ sub run
         $SIG{PIPE} = 'IGNORE';
 
         # Just In Case any code samples this in a TestCase c'tor
-        $ENV{TEST_UNIT_WORKER_ID} = 'invalid';
+        $ENV{CASSANDANE_WORKER_ID} = 'invalid';
 
         my $pool = Cassandane::Unit::WorkerPool->new(
             maxworkers => $maxworkers,

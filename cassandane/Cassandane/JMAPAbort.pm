@@ -44,11 +44,10 @@ my $PLUMBING = qr{
 
 Those are the two ways JMAP::Tester builds an abort.  The diagnostics have
 already been formatted by the tester's diagnostic dumper, and get folded into
-the message, because the message is all that Test::Unit will ever show.
+the message, because the message is what a report shows.
 
-Called any other way, we assume we've been given the usual Error.pm arguments.
-That happens when Test::Unit::Assert rethrows an exception to blame the caller
-of an assertion, which it does by passing our own guts back to C<new>.
+Called any other way, we assume we've been given the usual Error.pm arguments,
+so that an abort can be rethrown like any other exception.
 
 =cut
 

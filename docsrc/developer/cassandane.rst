@@ -12,7 +12,7 @@ Introduction
 
 Cyrus IMAP includes two test suites.  One is written in C, using CUnit, and is
 primarily *unit testing*.  The other, known as Cassandane, is written in Perl,
-using Test::Unit, and is primarily *integration testing*.  This page covers the
+and is primarily *integration testing*.  This page covers the
 Cassandane test suite.
 
 Tests are grouped into *suites*, and each suite is a Perl module: those under
@@ -112,7 +112,7 @@ fit together is to read a real one, lightly polished:
             ['ContactCard/query', { filter => { inAddressBook => 'foo' } } ]
         ]);
 
-        $self->assert_deep_equals(
+        $self->assert_cmp_deeply(
             {
                 type => 'invalidArguments',
                 arguments => [ 'filter/inAddressBook' ]
@@ -242,27 +242,27 @@ Assertions
 ^^^^^^^^^^
 
 A test passes unless it dies or an assertion fails, so assertions are how you
-state what "correct" means.  The ones you'll reach for most often come from
-`Test::Unit::Assert <https://metacpan.org/pod/Test::Unit::Assert>`__:
+state what "correct" means.  They all live in ``Cassandane::Unit::TestCase``.
+The ones you'll reach for most often:
 
+* ``assert($condition, $message)``
 * ``assert_str_equals($expect, $got)``
 * ``assert_num_equals($expect, $got)``
 * ``assert_null($value)``
 * ``assert_not_null($value)``
 * ``assert_matches($regex, $string)``
 * ``assert_does_not_match($regex, $string)``
-* ``assert_deep_equals($expect, $got)`` for data structures
+* ``assert_cmp_deeply($expect, $got)`` for data structures
 
-Cassandane adds more in ``Cassandane::Unit::TestCase``.  The most generally
-useful is ``assert_cmp_deeply``, which compares against `Test::Deep
+``assert_cmp_deeply`` takes plain data, and also `Test::Deep
 <https://metacpan.org/pod/Test::Deep>`__ matchers — ``bag`` (order-insensitive
 lists, as in the example above), ``superhashof`` (partial hashes), and so on —
-when an exact ``assert_deep_equals`` would be too strict.  There are also
+for when an exact comparison would be too strict.  There are also
 domain-specific assertions such as ``assert_mailbox_structure`` and
 ``assert_syslog_matches``.
 
-Run ``perldoc Cassandane/Unit/TestCase.pm`` for the Cassandane assertions, and
-see the Test::Unit and Test::Deep documentation for the rest.
+Run ``perldoc Cassandane/Unit/TestCase.pm`` for the whole set, and see the
+Test::Deep documentation for what a matcher can do.
 
 Comparing iCalendar and vCard data
 """"""""""""""""""""""""""""""""""

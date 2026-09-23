@@ -10,7 +10,7 @@ The CUnit test suite
 
 Cyrus IMAP includes two test suites.  One is written in C, using CUnit, and is
 primarily *unit testing*.  The other, known as Cassandane, is written in Perl,
-using Test::Unit, and is primarily *integration testing*.  This page covers the
+and is primarily *integration testing*.  This page covers the
 CUnit test suite.
 
 2. Running the tests

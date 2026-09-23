@@ -5,15 +5,14 @@ package Cassandane::Unit::TestCase;
 use strict;
 use warnings;
 
-# We need 0.29 because of a fix for exception handling
-use Test::Unit 0.29 ();
-
-use base qw(Test::Unit::TestCase);
 use Data::Dumper;
 use DateTime;
 use DateTime::Format::ISO8601;
 use Carp ();
+use Error qw(:try);
+use Package::Stash;
 
+use Cassandane::Failure;
 use Cassandane::Util::Log;
 use Cassandane::Util::TestUrl;
 
@@ -21,11 +20,137 @@ my $buildinfo;
 
 sub new
 {
-    my $class = shift;
-    if (not $buildinfo) {
-        $buildinfo = Cassandane::BuildInfo->new();
+    my ($class, $name) = @_;
+
+    $buildinfo ||= Cassandane::BuildInfo->new();
+
+    return bless {
+        name        => $name,
+        annotations => '',
+    }, $class;
+}
+
+# The test method this object exists to run.
+sub name
+{
+    my ($self) = @_;
+    return $self->{name};
+}
+
+# How a failure names the test in a report.  FormatPretty picks the two apart
+# again, so keep the shape.
+sub to_string
+{
+    my ($self) = @_;
+    return ($self->name() // 'ANON') . '(' . ref($self) . ')';
+}
+
+# Whatever the test wrote while it ran.  The plan feeds it the test's log file
+# when the test is over, and the formatters print it under a failure.
+sub annotate
+{
+    my ($self, @text) = @_;
+    $self->{annotations} .= join q{}, @text;
+    return;
+}
+
+sub annotations
+{
+    my ($self) = @_;
+    return $self->{annotations};
+}
+
+sub run
+{
+    my ($self, $result, $runner) = @_;
+
+    $result->run($self);
+
+    return $result;
+}
+
+sub run_bare
+{
+    my ($self) = @_;
+
+    # set_up is deliberately outside the guard: if it dies, tear_down doesn't
+    # run.  Tearing down what was never set up tends to die *again*.  The error
+    # we want reported is failure to set up, not tear down.
+    $self->set_up();
+
+    try {
+        $self->run_test();
     }
-    return $class->SUPER::new(@_);
+    finally {
+        $self->tear_down();
+    };
+
+    return;
+}
+
+# Run the one test this object is for.  A suite whose tests aren't subs
+# overrides this to dispatch on the name itself; see list_tests.
+sub run_test
+{
+    my ($self) = @_;
+
+    my $method = $self->name();
+
+    return $self->fail("no test method named '$method'")
+        if not $self->can($method);
+
+    $self->$method();
+
+    return;
+}
+
+sub set_up { return 1 }
+
+sub tear_down { return 1 }
+
+# Ask one of this test's filters whether to run it, and get back the reason if
+# the answer is no.  See filter() for what a filter is.
+sub filter_method
+{
+    my ($self, $token) = @_;
+
+    my $filter = $self->filter->{$token};
+    return if not $filter;
+
+    die ref($self) . ": the '$token' filter is not a sub\n"
+        if ref $filter ne 'CODE';
+
+    return $filter->($self->name());
+}
+
+# This returns a list of the subroutine names in this class that are tests to
+# be run.  By default, it's every sub whose name starts with "test", here and
+# in anything we inherit from.
+#
+# It's okay to override this method in a subclass, and some test suites do.
+sub list_tests
+{
+    my ($class) = @_;
+    $class = ref($class) || $class;
+
+    my (@names, %seen, %visited);
+    my @packages = ($class);
+
+    while (my $package = shift @packages) {
+        next if $visited{$package}++;
+
+        no strict 'refs';
+        push @packages, @{"${package}::ISA"};
+
+        foreach my $name (Package::Stash->new($package)
+                                        ->list_all_symbols('CODE'))
+        {
+            next if $name !~ m/\Atest/;
+            push @names, $name if not $seen{$name}++;
+        }
+    }
+
+    return @names;
 }
 
 sub _skip_version
@@ -175,6 +300,194 @@ sub annotate_from_file
     close LOG;
 }
 
+# How many frames of assertion sit between here and the code that made the
+# assertion?  We want to ascribe blame to the "real" caller, which we're going
+# to say is "the first caller that isn't an assert_* method (or ->fail)".
+# Goofy hack, but will be 99.999% effective.
+sub _assertion_depth
+{
+    # frame 0 is this sub, so counting starts at fail() in frame 1
+    my $depth = 1;
+
+    while (my $sub = (caller $depth)[3]) {
+        last if $sub !~ m/(?:\A|::)(?:assert\w*|fail)\z/;
+        $depth++;
+    }
+
+    return $depth - 1;
+}
+
+# Report that the test failed.  Every assertion below ends up here.
+#
+# $Error::Depth is how many frames Error.pm climbs before deciding where the
+# failure happened; it sets both the line the failure is reported against and
+# where the stack trace starts.  Skipping the assertions blames the caller of
+# the outermost one, which is the code a reader needs to look at.
+sub fail
+{
+    my ($self, @message) = @_;
+
+    local $Error::Depth = $Error::Depth + _assertion_depth();
+    Cassandane::Failure->throw(-text => join(q{}, @message));
+}
+
+sub assert
+{
+    my ($self, $bool, @message) = @_;
+
+    return 1 if $bool;
+
+    $self->fail(@message ? @message : 'Boolean assertion failed');
+}
+
+sub assert_str_equals
+{
+    my ($self, $expected, $actual, @message) = @_;
+
+    if (not defined $expected) {
+        $self->fail(@message ? @message : 'expected value was undef; should be using assert_null?');
+    }
+
+    if (not defined $actual) {
+        $self->fail(@message ? @message : "expected '$expected', got undef");
+    }
+
+    if ($expected ne $actual) {
+        $self->fail(@message ? @message : "expected '$expected', got '$actual'");
+    }
+
+    return 1;
+}
+
+sub assert_str_not_equals
+{
+    my ($self, $expected, $actual, @message) = @_;
+
+    if (not defined $expected) {
+        $self->fail(@message ? @message : 'expected value was undef; should be using assert_not_null?');
+    }
+
+    if (not defined $actual) {
+        $self->fail(@message ? @message : "expected a string ne '$expected', got undef");
+    }
+
+    if ($expected eq $actual) {
+        $self->fail(@message ? @message : "'$expected' and '$actual' should differ");
+    }
+
+    return 1;
+}
+
+sub assert_num_equals
+{
+    my ($self, $expected, $actual, @message) = @_;
+
+    # an empty or non-numeric string compares as 0 rather than warning about it
+    no warnings 'numeric';
+
+    if (not defined $expected) {
+        $self->fail(@message ? @message : 'expected value was undef; should be using assert_null?');
+    }
+
+    if (not defined $actual) {
+        $self->fail(@message ? @message : "expected '$expected', got undef");
+    }
+
+    if ($expected != $actual) {
+        $self->fail(@message ? @message : "expected $expected, got $actual");
+    }
+
+    return 1;
+}
+
+sub assert_num_not_equals
+{
+    my ($self, $expected, $actual, @message) = @_;
+
+    no warnings 'numeric';
+
+    if (not defined $expected) {
+        $self->fail(@message ? @message : 'expected value was undef; should be using assert_not_null?');
+    }
+
+    if (not defined $actual) {
+        $self->fail(@message ? @message : "expected a number != '$expected', got undef");
+    }
+
+    if ($expected == $actual) {
+        $self->fail(@message ? @message : "$expected and $actual should differ");
+    }
+
+    return 1;
+}
+
+# This is irritating inherited behavior from Test::Unit, and I'd like to be
+# able to ditch it.  In Test::Unit's assert_equals, a value that numifies to
+# something other than zero, or that really is zero, is a number;
+# so is an object that overloads '=='.  Everything else is a string.
+sub _compare_numerically
+{
+    my ($value) = @_;
+
+    {
+        no warnings 'numeric';
+        return 1 if $value == 0 ? $value =~ m/^\s*[+-]?0(e0)?\s*$/i : 1;
+    }
+
+    if (ref $value && eval { $value->isa('UNIVERSAL') }) {
+        require overload;
+        return 1 if overload::Method($value, '==');
+    }
+
+    return;
+}
+
+sub assert_equals
+{
+    my ($self, $expected, $actual, @message) = @_;
+
+    return 1 if not defined $expected and not defined $actual;
+
+    $self->fail(@message ? @message : 'one arg was not defined')
+        if not defined $expected or not defined $actual;
+
+    return _compare_numerically($expected)
+        ? $self->assert_num_equals($expected, $actual, @message)
+        : $self->assert_str_equals($expected, $actual, @message);
+}
+
+sub assert_not_equals
+{
+    my ($self, $expected, $actual, @message) = @_;
+
+    $self->fail(@message ? @message : 'both args were undefined')
+        if not defined $expected and not defined $actual;
+
+    return 1 if not defined $expected or not defined $actual;
+
+    return _compare_numerically($expected)
+        ? $self->assert_num_not_equals($expected, $actual, @message)
+        : $self->assert_str_not_equals($expected, $actual, @message);
+}
+
+sub assert_null
+{
+    my ($self, $actual, @message) = @_;
+
+    return 1 if not defined $actual;
+
+    $self->fail(@message ? @message : "$actual is defined");
+}
+
+sub assert_not_null
+{
+    my ($self, $actual, @message) = @_;
+
+    return 1 if defined $actual;
+
+    $self->fail(@message ? @message : '<undef> unexpected');
+}
+
 # n.b. it's okay for unexpected bits to also be set!
 # if you need to test that ONLY specific bits are set, try:
 #
@@ -244,8 +557,8 @@ sub assert_num_lt
                   "$actual is not less-than $expected");
 }
 
-# override assert_matches from Test::Unit:Assert, whose default failure
-# message is very hard to read in common cases
+# A multiline message goes to the log rather than into the failure message,
+# where quoting it makes the message unreadable.
 sub assert_matches
 {
     my ($self, $pattern, $string, @rest) = @_;
@@ -273,8 +586,7 @@ sub assert_matches
     $self->assert($matches, $message);
 }
 
-# override assert_does_not_match from Test::Unit:Assert, whose default failure
-# message is very hard to read in common cases
+# As assert_matches, and multiline messages go to the log for the same reason.
 sub assert_does_not_match
 {
     my ($self, $pattern, $string, @rest) = @_;

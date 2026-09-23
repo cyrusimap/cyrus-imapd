@@ -13,17 +13,47 @@ sub new
     my ($class, $suite) = @_;
     my $self = {
         suite => $suite,
-        loaded_suite => undef,
+        test_names => undef,
         denied => {},
         allowed => {},
     };
     return bless $self, $class;
 }
 
-sub _get_loaded_suite
+# The class this item's tests live in, loaded the first time it's wanted.
+sub _suite_class ($self)
 {
-    my ($self) = @_;
-    return $self->{loaded_suite} ||= Test::Unit::Loader::load($self->{suite});
+    my $class = $self->{suite};
+
+    if (not $self->{loaded}) {
+        my $file = ($class =~ s{::}{/}gr) . '.pm';
+        require $file;
+
+        die "$class is not a Cassandane::Unit::TestCase\n"
+            if not $class->isa('Cassandane::Unit::TestCase');
+
+        $self->{loaded} = 1;
+    }
+
+    return $class;
+}
+
+# Every test in the suite, named the way the plan and the command line name
+# them: without the "test_" the methods themselves carry.
+sub _test_names ($self)
+{
+    $self->{test_names} //= [ sort
+                              map {; s/^test_//r }
+                              $self->_suite_class->list_tests() ];
+
+    return $self->{test_names}->@*;
+}
+
+# One test of this suite, ready to run.  Tests are built when they're wanted,
+# so a worker that runs three of a suite's two hundred builds three.
+sub _make_test ($self, $name)
+{
+    return $self->_suite_class->new("test_$name");
 }
 
 sub _is_allowed
@@ -86,7 +116,7 @@ sub _get_candidates ($self)
 {
     return if not $self->{allowed_specs};
 
-    my @names = map {; s/^test_//r } $self->_get_loaded_suite()->names()->@*;
+    my @names = $self->_test_names();
 
     my @matches;
     foreach my $allowed ($self->{allowed_specs}->@*)

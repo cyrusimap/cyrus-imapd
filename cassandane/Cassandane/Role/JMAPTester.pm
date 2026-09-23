@@ -8,7 +8,7 @@ use Encode ();
 use JMAP::Tester ();
 use JMAP::Tester::Abort ();
 
-# A JMAP::Tester::Abort is a Throwable::Error, which Test::Unit reports as an
+# A JMAP::Tester::Abort is a Throwable::Error, which the runner reports as an
 # error -- as though the suite were broken -- instead of as a failing test.
 # We want to throw an Error instead -- or, well, we don't want to, but we sort
 # of have to.  This solution is absolutely gross: just replace the

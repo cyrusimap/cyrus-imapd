@@ -4,12 +4,11 @@
 package Cassandane::Unit::Runner;
 use strict;
 use warnings;
-use base qw(Test::Unit::Runner);
-use Test::Unit::Result;
 use Benchmark;
 use IO::File;
 
 use Cassandane::Cassini;
+use Cassandane::Unit::Result;
 
 sub new
 {
@@ -22,15 +21,28 @@ sub new
 
     return bless {
         remove_me_in_cassandane_child => 1,
+        filter => [],
         formatters => [],
         failed_fh => IO::File->new($failed_file, 'w'),
     }, $class;
 }
 
+# The filter tokens that decide whether a test runs at all: testrunner.pl sets
+# them from the command line, the plan asks each test about them in turn.  See
+# Cassandane::Unit::TestCase::filter for what a token means.
+sub filter
+{
+    my ($self, @tokens) = @_;
+
+    $self->{filter} = \@tokens if @tokens;
+
+    return @{ $self->{filter} };
+}
+
 sub create_test_result
 {
     my ($self) = @_;
-    $self->{_result} = Test::Unit::Result->new();
+    $self->{_result} = Cassandane::Unit::Result->new();
     return $self->{_result};
 }
 
@@ -41,7 +53,7 @@ sub add_formatter
     push @{$self->{formatters}}, $formatter;
 }
 
-# this is very similar to Test::Unit::Result's tell_listeners(), except
+# this is very similar to Cassandane::Unit::Result's tell_listeners(), except
 # without the annoying crash when the listener doesn't care about the event
 sub tell_formatters
 {
@@ -93,8 +105,7 @@ sub record_failed
     my $suite = ref($test);
     $suite =~ s/^Cassandane:://;
 
-    my $testname = $test->{"Test::Unit::TestCase_name"};
-    $testname =~ s/^test_//;
+    my $testname = $test->name =~ s/^test_//r;
 
     $self->{failed_fh}->print("$suite.$testname\n");
 }
