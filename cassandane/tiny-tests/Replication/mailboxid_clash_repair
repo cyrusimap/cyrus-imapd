@@ -1,0 +1,102 @@
+#!perl
+use Cassandane::Tiny;
+
+# A JMAP id clash on the master replicates as a clash, and the replica may
+# end up with the other mailbox holding the lookup key.  When the master
+# repairs it, the replica takes the new id and createdmodseq, and gives the
+# old id back to the mailbox that was left carrying it without the key.
+sub test_mailboxid_clash_repair
+    :NoAltNameSpace :Conversations
+    ($self)
+{
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my $keeper = "user\x1fcassandane\x1fkeeper";
+    my $loser = "user\x1fcassandane\x1floser";
+    my $master = $self->{instance};
+    my $replica = $self->{replica};
+    my $format = $master->{config}->get('mboxlist_db');
+
+    my sub record ($instance, $key) {
+        my $db = $instance->get_basedir() . '/conf/mailboxes.db';
+        my (undef, $value) = $instance->run_dbcommand($db, $format, ['SHOW', $key]);
+        return unless defined $value;
+        return Cyrus::DList->parse_string($value)->as_perl();
+    }
+
+    my sub set_record ($instance, $key, $hash) {
+        my $db = $instance->get_basedir() . '/conf/mailboxes.db';
+        $instance->run_dbcommand($db, $format,
+            ['SET', $key, Cyrus::DList->new_perl('', $hash)->as_string()]);
+    }
+
+    my $mtalk = $self->{master_store}->get_client();
+    $mtalk->create('INBOX.keeper');
+    $mtalk->create('INBOX.loser');
+    my $keeperid = $mtalk->status('INBOX.keeper', ['mailboxid'])->{mailboxid}[0];
+    my $loserid = $mtalk->status('INBOX.loser', ['mailboxid'])->{mailboxid}[0];
+    my $loseruid = $mtalk->getmetadata('INBOX.loser', $entry)->{'INBOX.loser'}{$entry};
+    $self->assert_str_not_equals($keeperid, $loserid);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "give the loser the keeper's id on the master; the keeper keeps the key";
+    $self->{master_store}->disconnect();
+    $master->stop();
+    $master->{re_use_dir} = 1;
+    for my $key ("N$loser", "I$loseruid") {
+        my $hash = record($master, $key) or die "no record for $key";
+        $hash->{J} = $keeperid;
+        set_record($master, $key, $hash);
+    }
+    $master->start();
+
+    xlog $self, "the clash replicates; on the replica the loser takes the key";
+    $replica->getsyslog();
+    $self->run_replication();
+    $self->assert_syslog_matches($replica, qr/event=mboxlist\.mailboxid\.clash/);
+    my %expect = (
+        "N$loser" => superhashof({ J => $keeperid }),
+        "Jcassandane\x1e$keeperid" => superhashof({ N => $loser }),
+        "Jcassandane\x1e$loserid" => undef,
+    );
+    $self->assert_cmp_deeply(\%expect,
+        { map { $_ => scalar record($replica, $_) } keys %expect });
+
+    xlog $self, "repair on the master";
+    $master->getsyslog();
+    $master->run_command({ cyrus => 1 }, 'reconstruct', '-u', 'cassandane');
+    $self->assert_syslog_matches($master, qr/event=reconstruct\.mailboxid\.reassigned/);
+
+    $mtalk = $self->{master_store}->get_client();
+    my $newid = $mtalk->status('INBOX.loser', ['mailboxid'])->{mailboxid}[0];
+    $self->assert_str_not_equals($keeperid, $newid);
+    $self->assert_str_equals($keeperid,
+        $mtalk->status('INBOX.keeper', ['mailboxid'])->{mailboxid}[0]);
+
+    xlog $self, "the repair replicates and the keeper gets its key back";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    my $rtalk = $self->{replica_store}->get_client();
+    $self->assert_cmp_deeply(
+        { loser => $newid, keeper => $keeperid },
+        { loser => $rtalk->status('INBOX.loser', ['mailboxid'])->{mailboxid}[0],
+          keeper => $rtalk->status('INBOX.keeper', ['mailboxid'])->{mailboxid}[0] });
+
+    %expect = (
+        "Jcassandane\x1e$newid" => superhashof({ N => $loser }),
+        "Jcassandane\x1e$keeperid" => superhashof({ N => $keeper }),
+        "N$loser" => superhashof({ C => record($master, "N$loser")->{C} }),
+    );
+    $self->assert_cmp_deeply(\%expect,
+        { map { $_ => scalar record($replica, $_) } keys %expect });
+
+    xlog $self, "neither side has anything left to fix";
+    $master->getsyslog();
+    $master->run_command({ cyrus => 1 }, 'reconstruct', '-u', 'cassandane');
+    $self->assert_syslog_does_not_match($master, qr/event=reconstruct\.mailboxid\.reassigned/);
+    $replica->getsyslog();
+    $replica->run_command({ cyrus => 1 }, 'reconstruct', '-u', 'cassandane');
+    $self->assert_syslog_does_not_match($replica, qr/event=reconstruct\.mailboxid\.reassigned/);
+}
