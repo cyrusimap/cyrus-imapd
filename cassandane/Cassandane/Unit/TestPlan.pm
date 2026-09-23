@@ -624,17 +624,6 @@ sub _skip_reason
     return;
 }
 
-# A skipped test has no result to add: it never started, so the listeners that
-# count runs and record failures have nothing to hear.  The formatters are
-# told, because a skip is worth reporting.
-sub _report_skip
-{
-    my ($runner, $test, $reason) = @_;
-
-    $runner->tell_formatters('add_skip', $test, $reason)
-        if $runner->can('tell_formatters');
-}
-
 # Rebuild, from what came back over the pipe, an exception the result and the
 # formatters can report.  Error::new insists on describing this process, so
 # the stack trace from the process that actually failed is put back by hand.
@@ -654,13 +643,17 @@ sub _rebuild_exception
 
 sub _finish_workitem
 {
-    my ($self, $witem, $result, $runner) = @_;
+    my ($self, $witem, $result) = @_;
     my $test = $self->_get_test($witem);
 
     if ($witem->{outcome} eq 'skip')
     {
         unlink($witem->{logfile}) if (!defined $self->{log_directory});
-        _report_skip($runner, $test, $witem->{reason});
+
+        # A skipped test has no result to add: it never started, so nothing
+        # counts it as a run.  The listeners still hear about it, because a
+        # skip is worth reporting.
+        $result->tell_listeners(add_skip => $test, $witem->{reason});
         return;
     }
 
@@ -768,13 +761,13 @@ sub run
         }
         while ($done = $pool->retrieve(0))
         {
-            $self->_finish_workitem($done, $result, $runner);
+            $self->_finish_workitem($done, $result);
         }
     }
     # second ^C stops waiting for work items to finish
     while ($interrupted < 2 && ($done = $pool->retrieve(1)))
     {
-        $self->_finish_workitem($done, $result, $runner);
+        $self->_finish_workitem($done, $result);
     }
     $pool->stop();
 

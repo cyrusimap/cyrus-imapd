@@ -15,8 +15,7 @@ sub new
 
     return bless {
         filter => [],
-        formatters => [],
-        failed_tests => Cassandane::Unit::FailedTests->new(),
+        listeners => [ Cassandane::Unit::FailedTests->new() ],
     }, $class;
 }
 
@@ -32,50 +31,27 @@ sub filter
     return @{ $self->{filter} };
 }
 
-sub create_test_result
-{
-    my ($self) = @_;
-    $self->{_result} = Cassandane::Unit::Result->new();
-    return $self->{_result};
-}
-
+# A formatter is a listener that reports what it hears, and there is only the
+# one list of listeners for it to go on.
 sub add_formatter
 {
     my ($self, $formatter) = @_;
 
-    push @{$self->{formatters}}, $formatter;
-}
-
-# this is very similar to Cassandane::Unit::Result's tell_listeners(), except
-# without the annoying crash when the listener doesn't care about the event
-sub tell_formatters
-{
-    my ($self, $method, @args) = @_;
-
-    foreach my $formatter (@{$self->{formatters}}) {
-        if ($formatter->can($method)) {
-            $formatter->$method(@args);
-        }
-    }
+    push @{$self->{listeners}}, $formatter;
 }
 
 sub do_run
 {
-    my ($self, $suite) = @_;
-    my $result = $self->create_test_result();
+    my ($self, $plan) = @_;
 
-    $result->add_listener($self->{failed_tests});
-    foreach my $f (@{$self->{formatters}}) {
-        $result->add_listener($f);
-    }
+    my $result = Cassandane::Unit::Result->new();
+    $result->add_listener($_) for @{$self->{listeners}};
 
     my $start_time = new Benchmark();
-    $suite->run($result, $self);
+    $plan->run($result, $self);
     my $end_time = new Benchmark();
 
-    foreach my $f (@{$self->{formatters}}) {
-        $f->finished($result, $start_time, $end_time);
-    }
+    $result->tell_listeners(finished => $result, $start_time, $end_time);
 
     return $result->was_successful;
 }
