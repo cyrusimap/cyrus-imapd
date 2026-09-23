@@ -415,6 +415,10 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
 
     /* find the size of the ASN1 representation of the session */
     len = i2d_SSL_SESSION(sess, NULL);
+    if (len <= 0) {
+        xsyslog_ev(LOG_ERR, "tls.session.encode_failed");
+        return 0;
+    }
 
     /*
      * create the data buffer.  the data is stored as:
@@ -534,9 +538,14 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
         ret = cyrusdb_fetch(sessdb, (const char *) id, idlen, &data, &len, NULL);
     } while (ret == CYRUSDB_AGAIN);
 
-    if (!ret && data) {
-        assert(len >= (int) sizeof(time_t));
+    if (!ret && data && len < sizeof(time_t)) {
+        /* Not a record we wrote: drop it rather than crash on it */
+        xsyslog_ev(LOG_ERR, "tls.session.corrupt_record");
+        remove_session(id, idlen);
+        data = NULL;
+    }
 
+    if (!ret && data) {
         /* grab the expire time */
         memcpy(&expire, data, sizeof(time_t));
 
@@ -549,7 +558,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
                into an SSL_SESSION object */
             const unsigned char *asn = (unsigned char *) data + sizeof(time_t);
             sess = d2i_SSL_SESSION(NULL, &asn, len - sizeof(time_t));
-            if (!sess) syslog(LOG_ERR, "d2i_SSL_SESSION failed: %m");
+            if (!sess) syslog(LOG_ERR, "d2i_SSL_SESSION failed");
         }
     }
 
@@ -944,11 +953,22 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     if (timeout < 0) timeout = 0;
     if (timeout > 24 * 60 * 60) timeout = 24 * 60 * 60; /* 24 hours max */
 
+    /* No stateless tickets: they're encrypted with keys each process
+     * makes up for itself, so only the issuing process could resume
+     * them.  A TLS 1.3 ticket then just names a session in the session
+     * database, and TLS 1.2 clients resume by session ID. */
+    SSL_CTX_set_options(s_ctx, SSL_OP_NO_TICKET);
+
     /* A timeout of zero disables session caching */
-    if (timeout) {
+    if (!timeout) SSL_CTX_set_num_tickets(s_ctx, 0);
+    else {
         const char *fname = NULL;
         char *tofree = NULL;
         int r;
+
+        /* A stored session can be resumed repeatedly, so one ticket
+         * is enough, and each one costs a database write */
+        SSL_CTX_set_num_tickets(s_ctx, 1);
 
         /* Set the context for session reuse -- use the service ident */
         SSL_CTX_set_session_id_context(s_ctx, (void*) ident, strlen(ident));
@@ -1292,10 +1312,24 @@ EXPORTED int tls_reset_servertls(SSL **conn)
     if (*conn) {
         if (TLS_FAST_SHUTDOWN) {
             /*
-             * Don't bother spending time closing the TLS session,
-             * but make sure it is available for reuse.
+             * Send our close_notify, but don't wait for the peer's.
+             * Without it a client takes the connection as truncated and
+             * throws away the session it would have resumed.  Marking
+             * the shutdown as sent also keeps the session reusable here.
+             *
+             * Best effort: don't block on a peer that has stopped
+             * reading, and don't leave a failed write's errors queued
+             * for the next connection this process handles.
              */
-            SSL_set_shutdown(*conn,SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
+            int wfd = SSL_get_wfd(*conn);
+
+            if (wfd >= 0) {
+                nonblock(wfd, 1);
+                SSL_shutdown(*conn);
+                nonblock(wfd, 0);
+            }
+            else SSL_set_shutdown(*conn, SSL_SENT_SHUTDOWN);
+            ERR_clear_error();
         }
         else {
             /* Follow the TLS protocol and do a shutdown handshake */
@@ -1348,7 +1382,8 @@ static int prune_p(void *rock, const char *id, size_t idlen,
 
     prock->count++;
 
-    assert(datalen >= (int) sizeof(time_t));
+    /* Not a record we wrote: prune it */
+    if (datalen < sizeof(time_t)) return 1;
 
     /* grab the expire time */
     memcpy(&expire, data, sizeof(time_t));

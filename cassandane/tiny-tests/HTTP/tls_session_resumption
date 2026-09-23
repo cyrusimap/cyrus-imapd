@@ -1,0 +1,74 @@
+#!perl
+use Cassandane::Tiny;
+use IO::Socket::SSL;
+
+# An https service whose processes each serve a single connection, so a
+# second connection can only resume a session through the session
+# database shared by every process.
+sub start_one_connection_https ($self)
+{
+    $self->{instance}->add_service(name => 'httpsonce',
+                                   argv => ['httpd', '-s', '-U', '1']);
+    $self->_start_instances();
+    return $self->{instance}->get_service('httpsonce');
+}
+
+# Make one https request, and return whether its TLS session was resumed
+sub https_request_resumed ($self, $service, $ctx)
+{
+    my $sock = IO::Socket::SSL->new(
+        PeerAddr => $service->host,
+        PeerPort => $service->port,
+        SSL_reuse_ctx => $ctx,
+        SSL_session_key => 'httpsonce',
+    );
+    $self->assert_not_null($sock, "TLS connect failed: $SSL_ERROR");
+
+    my $resumed = $sock->get_session_reused();
+
+    # The server closes the connection, and has to send close_notify when
+    # it does: an OpenSSL client drops the session of a connection that
+    # merely ends
+    print $sock "GET /.well-known HTTP/1.1\r\n"
+              . "Host: " . $service->host . "\r\n"
+              . "Connection: close\r\n\r\n";
+    my $response = join('', <$sock>);
+    close($sock);
+    $self->assert_matches(qr{^HTTP/1\.1 200 }, $response);
+
+    return $resumed;
+}
+
+sub assert_resumes_across_processes ($self, $version)
+{
+    my $service = start_one_connection_https($self);
+
+    # One client context for both connections: freeing a context also
+    # drops the sessions cached with it
+    my $ctx = IO::Socket::SSL::SSL_Context->new(
+        SSL_verify_mode => SSL_VERIFY_NONE,
+        SSL_version => $version,
+        SSL_session_cache_size => 4,
+    );
+    $self->assert_not_null($ctx, "TLS context failed: $SSL_ERROR");
+
+    $self->assert(!https_request_resumed($self, $service, $ctx),
+                  "first $version connection resumed a session");
+    $self->assert(https_request_resumed($self, $service, $ctx),
+                  "second $version connection did a full handshake");
+}
+
+sub test_tls_session_resumption_tls13
+    :NoStartInstances
+    ($self)
+{
+    assert_resumes_across_processes($self, 'TLSv1_3');
+}
+
+sub test_tls_session_resumption_tls12
+    :NoStartInstances
+    ($self)
+{
+    # The client offers a session ticket; the server resumes by session ID
+    assert_resumes_across_processes($self, 'TLSv1_2');
+}
