@@ -168,9 +168,8 @@ sub get_reply
         return if not $witem;
 
         $witem->{outcome} = 'error';
-        $witem->{failure} = {
-            text => "worker $self->{id} exited without reporting a result",
-        };
+        $witem->{report} =
+            "worker $self->{id} exited without reporting a result";
         return $witem;
     }
 

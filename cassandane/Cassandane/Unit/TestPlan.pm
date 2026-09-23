@@ -11,7 +11,6 @@ use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
 use Cassandane::Error;
-use Cassandane::Failure;
 use Cassandane::Util::Log;
 use Cassandane::Unit::TestCase;
 use Cassandane::Unit::TestPlanItem;
@@ -597,7 +596,8 @@ sub _run_workitem
         my $ex = $@;
         if ($ex)
         {
-            $result->add_error($test, Cassandane::Error->from_thrown($ex));
+            $result->add_error($test,
+                               Cassandane::Error->from_thrown($ex)->stringify);
             $outcome = $listener->outcome();
         }
     }
@@ -627,23 +627,6 @@ sub _skip_reason ($self, $test)
     }
 
     return;
-}
-
-# Rebuild, from what came back over the pipe, an exception the result and the
-# formatters can report.  Error::new insists on describing this process, so
-# the stack trace from the process that actually failed is put back by hand.
-sub _rebuild_exception
-{
-    my ($class, $failure) = @_;
-
-    my $exception = $class->new(
-        '-text' => $failure->{text},
-        '-file' => $failure->{file},
-        '-line' => $failure->{line},
-    );
-    $exception->{'-stacktrace'} = $failure->{stacktrace} // $failure->{text};
-
-    return $exception;
 }
 
 sub _finish_workitem
@@ -678,15 +661,11 @@ sub _finish_workitem
     }
     elsif ($witem->{outcome} eq 'fail')
     {
-        $result->add_failure($test,
-                             _rebuild_exception('Cassandane::Failure',
-                                                $witem->{failure}));
+        $result->add_failure($test, $witem->{report});
     }
     elsif ($witem->{outcome} eq 'error')
     {
-        $result->add_error($test,
-                           _rebuild_exception('Cassandane::Error',
-                                              $witem->{failure}));
+        $result->add_error($test, $witem->{report});
     }
     else
     {

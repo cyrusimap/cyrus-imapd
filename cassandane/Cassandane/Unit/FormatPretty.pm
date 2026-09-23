@@ -105,16 +105,6 @@ sub _getname
     return "$suite.$testname";
 }
 
-sub _prettytest
-{
-    my $test = shift;
-    die "WEIRD TEST $test" unless $test =~ m/^test_(.*)\((.*)\)$/;
-    my $item = $1;
-    my $suite = $2;
-    $suite =~ s/^Cassandane::Cyrus:://;
-    return "$suite.$item";
-}
-
 sub print_errors
 {
     my $self = shift;
@@ -141,13 +131,12 @@ sub print_errors
 
     my $i = 0;
     for my $e (@{$result->errors()}) {
-        my ($test, $errors) = split(/\n/, $e->to_string(), 2);
-        chomp $errors;
-        my $prettytest = _prettytest($test);
+        chomp(my $report = $e->{report});
         $self->_print("\n") if $i++;
-        $self->_print($self->ansi([31], "$i) $prettytest") . "\n$errors\n");
-        $self->_print("\nAnnotations:\n", $e->object->annotations())
-          if $e->object->annotations();
+        $self->_print($self->ansi([31], "$i) " . _getname($e->{test}))
+                      . "\n$report\n");
+        $self->_print("\nAnnotations:\n", $e->{test}->annotations())
+          if $e->{test}->annotations();
     }
 
     if ($saved_output_stream) {
@@ -181,13 +170,12 @@ sub print_failures
 
     my $i = 0;
     for my $f (@{$result->failures()}) {
-        my ($test, $failures) = split(/\n/, $f->to_string(), 2);
-        chomp $failures;
-        my $prettytest = _prettytest($test);
+        chomp(my $report = $f->{report});
         $self->_print("\n") if $i++;
-        $self->_print($self->ansi([33], "$i) $prettytest") . "\n$failures\n");
-        $self->_print("\nAnnotations:\n", $f->object->annotations())
-          if $f->object->annotations();
+        $self->_print($self->ansi([33], "$i) " . _getname($f->{test}))
+                      . "\n$report\n");
+        $self->_print("\nAnnotations:\n", $f->{test}->annotations())
+          if $f->{test}->annotations();
     }
 
     if ($saved_output_stream) {

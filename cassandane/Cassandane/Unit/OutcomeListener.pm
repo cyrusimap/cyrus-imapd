@@ -27,27 +27,16 @@ sub outcome
     return $self->{outcome};
 }
 
-sub _failure
-{
-    my ($exception) = @_;
-    return {
-        text       => $exception->text(),
-        stacktrace => $exception->{'-stacktrace'},
-        file       => $exception->file(),
-        line       => $exception->line(),
-    };
-}
-
 sub add_error
 {
-    my ($self, $test, $exception) = @_;
-    $self->{outcome} = { outcome => 'error', failure => _failure($exception) };
+    my ($self, $test, $report) = @_;
+    $self->{outcome} = { outcome => 'error', report => $report };
 }
 
 sub add_failure
 {
-    my ($self, $test, $exception) = @_;
-    $self->{outcome} = { outcome => 'fail', failure => _failure($exception) };
+    my ($self, $test, $report) = @_;
+    $self->{outcome} = { outcome => 'fail', report => $report };
 }
 
 sub add_pass

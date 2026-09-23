@@ -36,14 +36,6 @@ sub name
     return $self->{name};
 }
 
-# How a failure names the test in a report.  FormatPretty picks the two apart
-# again, so keep the shape.
-sub to_string
-{
-    my ($self) = @_;
-    return ($self->name() // 'ANON') . '(' . ref($self) . ')';
-}
-
 # Whatever the test wrote while it ran.  The plan feeds it the test's log file
 # when the test is over, and the formatters print it under a failure.
 sub annotate

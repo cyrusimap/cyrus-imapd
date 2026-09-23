@@ -113,11 +113,11 @@ sub print_errors
 
     my $i = 0;
     for my $e (@{$result->errors()}) {
-        chomp(my $e_to_str = $e);
+        chomp(my $report = $e->{report});
         $i++;
-        $self->_print("$i) $e_to_str\n");
-        $self->_print("\nAnnotations:\n", $e->object->annotations())
-          if $e->object->annotations();
+        $self->_print("$i) $report\n");
+        $self->_print("\nAnnotations:\n", $e->{test}->annotations())
+          if $e->{test}->annotations();
     }
 }
 
@@ -136,11 +136,11 @@ sub print_failures
 
     my $i = 0;
     for my $f (@{$result->failures()}) {
-        chomp(my $f_to_str = $f);
+        chomp(my $report = $f->{report});
         $self->_print("\n") if $i++;
-        $self->_print("$i) $f_to_str\n");
-        $self->_print("\nAnnotations:\n", $f->object->annotations())
-          if $f->object->annotations();
+        $self->_print("$i) $report\n");
+        $self->_print("\nAnnotations:\n", $f->{test}->annotations())
+          if $f->{test}->annotations();
     }
 }
 
