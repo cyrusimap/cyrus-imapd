@@ -66,6 +66,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
+#include "jmap_util.h"
 
 /* current namespace */
 static struct namespace recon_namespace;
@@ -581,7 +582,6 @@ static void reconstruct_set_mailboxid(struct mailbox *mailbox,
  *
  * *mailboxp points to 'name's mailbox, opened on its (possibly new) path
  * with the updated files read.
->>>>>>> 03d7b850a0 (fix wording)
  */
 static int reconstruct_new_uniqueid(const char *name,
                                     struct mailbox **mailboxp,
@@ -633,6 +633,8 @@ static int reconstruct_new_uniqueid(const char *name,
     mbentry->uniqueid = xstrdup(newuid);
 
     if (!legacy) {
+        /* the copy shares the JMAP id too; it gets its own once open */
+        xzfree(mbentry->jmapid);
         r = mboxlist_update(mbentry, 1);
         if (r) {
             goto done;
@@ -644,11 +646,149 @@ static int reconstruct_new_uniqueid(const char *name,
             goto done;
         }
         mailbox_set_uniqueid(*mailboxp, newuid);
+
+        modseq_t modseq = 0;
+        char *jmapid = reconstruct_mint_mailboxid(*mailboxp, &modseq);
+        if (!jmapid) {
+            printf("Failed to find a free mailboxid for %s\n", name);
+            r = IMAP_INTERNAL;
+            goto done;
+        }
+        printf("Assigning new mailboxid to %s (%s)\n", name, jmapid);
+        reconstruct_set_mailboxid(*mailboxp, mbentry, jmapid, modseq);
+        free(jmapid);
     }
 
 done:
     free(newuid);
     return r;
+}
+
+/*
+ * A JMAP mailbox id must name exactly one live mailbox for its owner.
+ * Make sure it exists, matches the mbentry, and create a new one if there's
+ * a clash.  If no existing jmapid, skip (like with ctl_conversationsdb's -R/-b
+ * split).
+ */
+static int reconstruct_mailboxid(struct mailbox *mailbox,
+                                 mbentry_t *mbentry,
+                                 int make_changes)
+{
+    /* ids are only unique where the per-user modseq counters exist */
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS)) {
+        return 0;
+    }
+
+    const char *name = mailbox_name(mailbox);
+    mbname_t *mbname = mbname_from_intname(name);
+    const char *userid = mbname_userid(mbname);
+    mbentry_t *holder = NULL;
+    mbentry_t *current = NULL;
+    int dirty = 0;
+    bool clash = false;
+
+    if (!userid) {
+        userid = "";
+    }
+
+    /* deleted mailboxes don't need fixing */
+    if (mboxname_isdeletedmailbox(name, NULL)) {
+        goto done;
+    }
+
+    /* a replica takes its ids from the master, so it can only report */
+    if (config_getswitch(IMAPOPT_REPLICAONLY) || user_isreplicaonly(userid)) {
+        make_changes = 0;
+    }
+
+    if (!mbentry->jmapid && mailbox->h.jmapid) {
+        printf("Missing mailboxid in mbentry, fixing %s (%s)\n",
+               name,
+               mailbox->h.jmapid);
+        mbentry->jmapid = xstrdup(mailbox->h.jmapid);
+        dirty = make_changes;
+    }
+    else if (mbentry->jmapid && mailbox->h.jmapid
+             && strcmp(mailbox->h.jmapid, mbentry->jmapid))
+    {
+        printf("Wrong mailboxid in header, fixing %s (%s -> %s)\n",
+               name,
+               mailbox->h.jmapid,
+               mbentry->jmapid);
+        mailbox_set_jmapid(mailbox, mbentry->jmapid);
+    }
+
+    if (mbentry->jmapid) {
+        int r =
+            mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, &holder, NULL);
+        if (r == IMAP_MAILBOX_NONEXISTENT || r == IMAP_MAILBOX_RESERVED) {
+            printf(
+                "Missing mboxlist entry for mailboxid - will rewrite %s (%s)\n",
+                name,
+                mbentry->jmapid);
+            dirty = make_changes;
+        }
+        else if (r) {
+            printf("Error reading mailboxesdb for %s\n", name);
+            exit(1);
+        }
+        else if (strcmpsafe(holder->uniqueid, mbentry->uniqueid)) {
+            /* the key names another mailbox: a clash only if that one is
+             * still live and still carries the id, otherwise it's stale */
+            r = mboxlist_lookup(holder->name, &current, NULL);
+            clash = !r && strcmp(holder->name, name)
+                    && !mboxname_isdeletedmailbox(holder->name, NULL)
+                    && !strcmpsafe(current->uniqueid, holder->uniqueid)
+                    && !strcmpsafe(current->jmapid, mbentry->jmapid);
+            if (!clash) {
+                printf("Stale mboxlist entry for mailboxid - will rewrite %s "
+                       "(%s)\n",
+                       name,
+                       mbentry->jmapid);
+                dirty = make_changes;
+            }
+        }
+    }
+
+    if (clash) {
+        char *newid = NULL;
+        modseq_t modseq = 0;
+
+        if (make_changes) {
+            newid = reconstruct_mint_mailboxid(mailbox, &modseq);
+            if (!newid) {
+                printf("Failed to find a free mailboxid for %s\n", name);
+                exit(1);
+            }
+        }
+
+        printf("Mailboxid clash with %s - assigning new id to %s (%s -> %s)\n",
+               holder->name,
+               name,
+               mbentry->jmapid,
+               newid ? newid : "?");
+
+        xsyslog_ev(LOG_NOTICE, "reconstruct.mailboxid.reassigned",
+                   lf_intname("mbox.name", name),
+                   lf_s("mbox.uniqueid", mbentry->uniqueid),
+                   lf_s_opt("mbox.mailboxid", newid),
+                   lf_s("old.mbox.mailboxid", mbentry->jmapid),
+                   lf_intname("other.mbox.name", holder->name),
+                   lf_flag("reconstruct.dryrun", !make_changes));
+
+        if (newid) {
+            reconstruct_set_mailboxid(mailbox, mbentry, newid, modseq);
+            dirty = 1;
+        }
+        free(newid);
+    }
+
+done:
+    mboxlist_entry_free(&holder);
+    mboxlist_entry_free(&current);
+    mbname_free(&mbname);
+
+    return dirty;
 }
 
 /*
@@ -868,6 +1008,9 @@ static int do_reconstruct(struct findall_data *data, void *rock)
             mbentry_dirty = 1;
         }
     }
+
+    if (reconstruct_mailboxid(mailbox, mbentry_byname, make_changes))
+        mbentry_dirty = 1;
 
     if (mbentry_dirty && make_changes) {
         r = mboxlist_update(mbentry_byname, 1);
