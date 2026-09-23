@@ -43,6 +43,8 @@ struct mailbox_header_cache {
 "x-truedomain-domain", 3
 "x-me-message-id", 4
 "x-cyrus-session-id", 4
+"x-fm-masked-email", 4
+"x-fm-masked-email-reply", 4
 "bcc", BIT32_MAX
 "cc", BIT32_MAX
 "date", BIT32_MAX
