@@ -4,6 +4,8 @@
 package Cassandane::Unit::Runner;
 use strict;
 use warnings;
+use base qw(Cassandane::Unit::Listener);
+
 use Benchmark;
 use IO::File;
 
@@ -86,12 +88,6 @@ sub do_run
 
     return $result->was_successful;
 }
-
-sub start_test { }
-
-sub end_test { }
-
-sub add_pass { }
 
 sub record_failed
 {

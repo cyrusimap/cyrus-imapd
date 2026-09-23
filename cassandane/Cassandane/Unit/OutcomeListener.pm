@@ -4,6 +4,7 @@
 package Cassandane::Unit::OutcomeListener;
 use strict;
 use warnings;
+use base qw(Cassandane::Unit::Listener);
 
 sub new
 {
@@ -24,18 +25,6 @@ sub outcome
 {
     my ($self) = @_;
     return $self->{outcome};
-}
-
-sub start_test
-{
-    my ($self, $test) = @_;
-    # nothing to see here
-}
-
-sub end_test
-{
-    my ($self, $test) = @_;
-    # nothing to see here
 }
 
 sub _failure
