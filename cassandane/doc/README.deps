@@ -70,27 +70,6 @@ Cassandane needs the following software to work:
     Ubuntu package libbsd-resource-perl
     RH/CentOS package perl-BSD-Resource
 
- * Test::Unit
-    Unit testing framework for Perl
-    CPAN package http://search.cpan.org/dist/Test-Unit/
-    Ubuntu package libtest-unit-perl
-    RH/CentOS package perl-Test-Unit
-
- * (Cassandane has it's own copy of this code for now)
-    Test::Unit::Runner::XML
-    Addition to Test::Unit which outputs in jUnit's XML
-    format, for integration with Jenkins CI.
-    CPAN package http://search.cpan.org/dist/Test-Unit-Runner-Xml/
-    No Ubuntu package (sorry) - but install depends on:
-        libxml-generator-perl libxml-xpath-perl
-    RH/CentOS package perl-Test-Unit-Runner-Xml
-
- * XML::Generator
-    Needed by Test::Unit::Runner::XML
-    CPAN package http://search.cpan.org/dist/XML-Generator/
-    Ubuntu package libxml-generator-perl
-    RH/CentOS package perl-XML-Generator
-
  * Clone
     Provides a Perl structure deep-clone operation
     CPAN package http://search.cpan.org/dist/Clone/
@@ -159,14 +138,13 @@ Cassandane needs the following software to work:
  * Convert::Base64
  * DateTime::Format::ISO8601
  * String::CRC32
- * XML::DOM
  * XML::Simple
     These are available from CPAN
 
 Debian/Ubuntu copypasta:
   sudo apt-get -y install liburi-perl libdigest-sha-perl \
        libdatetime-perl libbsd-resource-perl \
-       libxml-generator-perl libxml-xpath-perl libclone-perl \
+       libclone-perl \
        libencode-imaputf7-perl libconfig-inifiles-perl \
        libio-socket-inet6-perl libio-socket-ssl-perl libnet-server-perl \
        libunix-syslog-perl \
@@ -184,15 +162,14 @@ Debian/Ubuntu copypasta:
   sudo cpan Math::Int64 Mail::IMAPTalk \
        Text::JSCalendar Text::JSContact \
        Net::CalDAVTalk Net::CardDAVTalk String::CRC32 \
-       IO::File::Lockable Archive::Tar::Stream Test::Unit
+       IO::File::Lockable Archive::Tar::Stream
 
 Fedora copypasta:
    # there's heaps more to add here... needs to be tested
    # XXX 2019-07-01: this is stale, someone with fedora please update!
     dnf install perl-String-CRC32 perl-File-chdir perl-Unix-Syslog \
         perl-Net-Server perl-Clone perl-Test-NoWarnings perl-URI \
-        perl-Digest-SHA perl-BSD-Resource perl-Test-Unit \
-        perl-Test-Unit-Runner-Xml perl-XML-Generator perl-Config-IniFiles \
+        perl-Digest-SHA perl-BSD-Resource perl-Config-IniFiles \
         perl-IO-Socket-INET6 perl-Net-Server \
         perl-Unix-Syslog perl-File-chdir perl-Math-Int64 \
         perl-Mail-IMAPTalk perl-String-CRC32 perl-File-chdir \
