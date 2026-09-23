@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+# Count the ServerHello messages a TLS 1.3 handshake takes when the client
+# sends a key share for only the first of the groups it supports.  Two
+# means the server asked for another key share with a HelloRetryRequest.
+sub count_server_hellos ($self, $groups)
+{
+    my $service = $self->{instance}->get_service('https');
+    my $addr = $service->host . ':' . $service->port;
+
+    my $out = `openssl s_client -connect $addr -tls1_3 -groups $groups -msg </dev/null 2>&1`;
+    $self->assert_matches(qr/^CONNECTED/m, $out);
+
+    my @hellos = $out =~ /<<< TLS 1\.3, Handshake .*, ServerHello$/mg;
+    return scalar @hellos;
+}
+
+sub test_tls_groups_default
+    ($self)
+{
+    # A client leading with X25519 gets the handshake it guessed
+    $self->assert_num_equals(1, count_server_hellos($self, 'X25519:P-256'));
+}
+
+sub test_tls_groups_single
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(tls_eccurve => 'prime256v1');
+    $self->_start_instances();
+
+    # Only P-256 on offer: the same client has to retry
+    $self->assert_num_equals(2, count_server_hellos($self, 'X25519:P-256'));
+}

@@ -308,6 +308,42 @@ static int tls_dump(const char *s, int len)
     return (ret);
 }
 
+/*
+ * Offer the key exchange groups in the colon-separated list, in order of
+ * preference.  Names this OpenSSL doesn't know are skipped, so one list
+ * can name groups (like X25519MLKEM768) that only newer versions have.
+ */
+static void set_groups(SSL_CTX *ctx, const char *list)
+{
+    strarray_t *names = strarray_split(list, ":", STRARRAY_TRIM);
+    struct buf known = BUF_INITIALIZER;
+    int i;
+
+    for (i = 0; i < strarray_size(names); i++) {
+        const char *name = strarray_nth(names, i);
+
+        if (SSL_CTX_set1_groups_list(ctx, name)) {
+            if (buf_len(&known)) buf_putc(&known, ':');
+            buf_appendcstr(&known, name);
+        }
+        else {
+            xsyslog(LOG_WARNING, "unknown TLS group", "group=<%s>", name);
+        }
+    }
+    ERR_clear_error();
+
+    /* An empty list leaves OpenSSL's own default */
+    if (buf_len(&known) &&
+        !SSL_CTX_set1_groups_list(ctx, buf_cstring(&known))) {
+        xsyslog(LOG_ERR, "cannot set TLS groups", "groups=<%s>",
+                buf_cstring(&known));
+        ERR_clear_error();
+    }
+
+    buf_free(&known);
+    strarray_free(names);
+}
+
  /*
   * Set up the cert things on the server side. We do need both the
   * private key (in key_file) and the cert (in cert_file).
@@ -876,11 +912,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     SSL_CTX_set_dh_auto(s_ctx, 1);
 
-    const char *ec = config_getstring(IMAPOPT_TLS_ECCURVE);
-    int openssl_nid = OBJ_sn2nid(ec);
-    if (openssl_nid != 0) {
-        SSL_CTX_set1_curves(s_ctx, &openssl_nid, 1);
-    }
+    set_groups(s_ctx, config_getstring(IMAPOPT_TLS_ECCURVE));
 
     verify_depth = verifydepth;
 
