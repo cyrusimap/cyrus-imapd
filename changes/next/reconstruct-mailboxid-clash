@@ -1,0 +1,29 @@
+Description:
+
+reconstruct now repairs JMAP mailbox id clashes, and its -I uniqueid repair
+works for mailboxes that keep their files under the uniqueid.  A mailbox
+record written with the id of another live mailbox is logged as
+event=mboxlist.mailboxid.clash.
+
+
+Documentation:
+
+docsrc/reference/manpages/systemcommands/reconstruct.rst
+docsrc/developer/logfmt.md
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Sites that have seen two folders of one user report the same JMAP mailbox id
+should run "reconstruct -u <user>" on the master; the new id replicates.
+The repaired mailbox appears as created in Mailbox/changes.
+
+
+GitHub issue:
+
+None.

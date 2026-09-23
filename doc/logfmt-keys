@@ -148,6 +148,7 @@ other.mbox.uniqueid     the uniqueid of the other mailbox involved
 ### old. - the value before a change, paired with the unprefixed key
 
 old.mbox.acl            the mailbox ACL before the change
+old.mbox.mailboxid      the mailbox's JMAP id before it changed
 old.mbox.name           the mailbox name before the rename
 old.mbox.part           the partition before the move
 old.mbox.uidvalidity    the mailbox's uidvalidity before it changed
