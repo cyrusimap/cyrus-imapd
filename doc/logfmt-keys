@@ -139,6 +139,11 @@ vacation.to             the To address of a vacation response
 
 out.msg.id              Message-ID we sent, where msg.id is the one we got
 
+### other. - the second mailbox in an event about two of them
+
+other.mbox.name         the name of the other mailbox involved, in the admin namespace
+other.mbox.uniqueid     the uniqueid of the other mailbox involved
+
 ### old. - the value before a change, paired with the unprefixed key
 
 old.mbox.acl            the mailbox ACL before the change

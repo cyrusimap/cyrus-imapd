@@ -140,6 +140,8 @@ int mboxlist_lookup_by_uniqueid(const char *uniqueid,
 int mboxlist_lookup_by_jmapid(const char *userid, const char *jmapid,
                               mbentry_t **entryptr, struct txn **tid);
 
+int mboxlist_rehome_jmapid(const char *userid, const char *jmapid);
+
 char *mboxlist_find_specialuse(const char *use, const char *userid);
 char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
                              const struct auth_state *auth_state);
