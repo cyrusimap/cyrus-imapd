@@ -498,8 +498,7 @@ sub _make_logfile
 }
 
 # Point this process's STDOUT and STDERR at the log file, keeping the
-# originals: in the single threaded case, the messages between tests still go
-# to the terminal.
+# originals so that they can be put back once the test is done.
 sub _capture_output
 {
     my ($self, $logfile) = @_;
@@ -561,14 +560,14 @@ sub _get_test
 }
 
 # Run one work item and return its outcome: a verdict, plus a description of
-# the failure when there is one.  In a worker that goes back to the parent; in
-# the single threaded case the caller has it already.
+# the failure when there is one.  This runs in a worker, and the outcome goes
+# back to the parent, which is what reports it.
 sub _run_workitem
 {
-    my ($self, $witem, $result, $runner, $in_worker) = @_;
+    my ($self, $witem, $result, $runner) = @_;
     my $test = $self->_get_test($witem);
 
-    my $listener = $self->_listen_for_outcome($result, $in_worker);
+    my $listener = $self->_listen_for_outcome($result);
 
     # Every worker inherited the same random seed from the parent when it was
     # forked, so without this they would all generate the same message ids,
@@ -604,19 +603,6 @@ sub _run_workitem
     }
 
     $self->_restore_stdout();
-    if (!$in_worker)
-    {
-        if ($outcome->{outcome} eq 'skip')
-        {
-            _report_skip($runner, $test, $outcome->{reason});
-        }
-        else
-        {
-            $test->annotate_from_file($witem->{logfile});
-            _dump_logfile($witem->{logfile}) if (get_verbose > 1);
-        }
-        unlink($witem->{logfile}) if (!defined $self->{log_directory});
-    }
 
     return $outcome;
 }
@@ -722,20 +708,19 @@ sub _finish_workitem
     $result->end_test($test);
 }
 
-# Arrange for the outcome of the next test to be recorded.  A worker also
-# drops the listeners that write the report, because the parent replays the
-# events to those once the outcome gets back to it.
+# Arrange for the outcome of the next test to be recorded.  The listeners that
+# write the report are dropped, because the parent replays the events to those
+# once the outcome gets back to it.
 sub _listen_for_outcome
 {
-    my ($self, $result, $in_worker) = @_;
+    my ($self, $result) = @_;
 
     my $listener = $self->{outcome_listener}
                ||= Cassandane::Unit::OutcomeListener->new();
     $listener->reset();
 
-    my @listeners = grep {
-        !($in_worker && $_->{remove_me_in_cassandane_child})
-    } $result->listeners();
+    my @listeners = grep {; !$_->{remove_me_in_cassandane_child} }
+                    $result->listeners();
 
     push @listeners, $listener
         if !grep {; $_ == $listener } @listeners;
@@ -747,11 +732,12 @@ sub _listen_for_outcome
 
 # The runner hands the whole plan to run(), rather than one suite at a time,
 # so that every scheduled test lands in one result and one summary.
+#
+# Tests always run in a worker, even when there is only one worker to run
+# them: one way of working is worth more than the fork it costs.
 sub run
 {
     my ($self, $result, $runner) = @_;
-
-    my $maxworkers = $self->{maxworkers} || 1;
 
     # we expand the schedule before forking the
     # workers so that we can just hand the reference
@@ -766,55 +752,41 @@ sub run
         $SIG{INT} = 'DEFAULT' if $interrupted >= 2;
     };
 
-    if ($maxworkers > 1)
+    # we want an error not a signal
+    $SIG{PIPE} = 'IGNORE';
+
+    # Just In Case any code samples this in a TestCase c'tor
+    $ENV{CASSANDANE_WORKER_ID} = 'invalid';
+
+    my $pool = Cassandane::Unit::WorkerPool->new(
+        maxworkers => $self->{maxworkers} || 1,
+        handler => sub {
+            my ($assignment) = @_;
+            return $self->_run_workitem($assignment, $result, $runner);
+        },
+    );
+
+    my ($witem, $done);
+    $pool->start();
+    # first ^C stops spawning new work items
+    while ($interrupted < 1 && ($witem = shift @workitems))
     {
-        # multi-threaded case: use worker pool
-
-        # we want an error not a signal
-        $SIG{PIPE} = 'IGNORE';
-
-        # Just In Case any code samples this in a TestCase c'tor
-        $ENV{CASSANDANE_WORKER_ID} = 'invalid';
-
-        my $pool = Cassandane::Unit::WorkerPool->new(
-            maxworkers => $maxworkers,
-            handler => sub {
-                my ($assignment) = @_;
-                return $self->_run_workitem($assignment, $result, $runner, 1);
-            },
-        );
-        my ($witem, $done);
-        $pool->start();
-        # first ^C stops spawning new work items
-        while ($interrupted < 1 && ($witem = shift @workitems))
+        if ($self->{keep_going} || $result->was_successful())
         {
-            if ($self->{keep_going} || $result->was_successful())
-            {
-                $self->_make_logfile($witem);
-                $pool->assign($witem);
-            }
-            while ($done = $pool->retrieve(0))
-            {
-                $self->_finish_workitem($done, $result, $runner);
-            }
+            $self->_make_logfile($witem);
+            $pool->assign($witem);
         }
-        # second ^C stops waiting for work items to finish
-        while ($interrupted < 2 && ($done = $pool->retrieve(1)))
+        while ($done = $pool->retrieve(0))
         {
             $self->_finish_workitem($done, $result, $runner);
         }
-        $pool->stop();
     }
-    else
+    # second ^C stops waiting for work items to finish
+    while ($interrupted < 2 && ($done = $pool->retrieve(1)))
     {
-        # single threaded case: just run it all in-process
-        foreach my $witem (@workitems)
-        {
-            $self->_make_logfile($witem);
-            $self->_run_workitem($witem, $result, $runner, 0);
-            last if ($interrupted || !($self->{keep_going} || $result->was_successful()));
-        }
+        $self->_finish_workitem($done, $result, $runner);
     }
+    $pool->stop();
 
     return $result->was_successful();
 }
