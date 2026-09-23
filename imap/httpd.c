@@ -1917,6 +1917,18 @@ static void postauth_check_hdrs(struct transaction_t *txn)
 }
 
 
+/* Did any of the request arrive as TLS early data, here or at an
+ * intermediary that says so with "Early-Data: 1" (RFC 8470 5.1)? */
+static int request_is_early(struct transaction_t *txn)
+{
+    const char **hdr;
+
+    if (txn->flags.early) return 1;
+
+    hdr = spool_getheader(txn->req_hdrs, "Early-Data");
+    return (hdr && !strcmp(hdr[0], "1"));
+}
+
 EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
 {
     int r, ret = 0, sasl_result = 0;
@@ -1972,6 +1984,13 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
 
     /* Perform post-authentication check of headers */
     postauth_check_hdrs(txn);
+
+    /* Early data can be replayed, so only a safe request may act on it;
+     * the client retries anything else after the handshake (RFC 8470) */
+    if (!(http_methods[txn->meth].flags & METH_SAFE) &&
+        request_is_early(txn)) {
+        return HTTP_TOO_EARLY;
+    }
 
     return 0;
 }
