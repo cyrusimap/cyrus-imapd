@@ -14,7 +14,6 @@ use Package::Stash;
 
 use Cassandane::Failure;
 use Cassandane::Util::Log;
-use Cassandane::Util::TestUrl;
 
 my $buildinfo;
 
@@ -787,6 +786,11 @@ sub assert_not_contains
 sub new_test_url
 {
     my ($self, $content_or_app) = @_;
+
+    # Loaded on demand, because it brings in Test::TCP, which brings in Test2's
+    # IPC layer, which then spends every run's exit complaining about temp
+    # directories it can no longer reach.
+    require Cassandane::Util::TestUrl;
 
     return Cassandane::Util::TestURL->new({
         app => $content_or_app,
