@@ -92,7 +92,7 @@ The options most worth knowing about:
 
 =item B<-f>, B<--format> I<FORMAT>
 
-Choose a test report format; repeatable.  The formats are:
+Choose the test report format.  The formats are:
 
 =over 4
 
@@ -233,28 +233,19 @@ if ($missing_binaries) {
 }
 
 my %formatters = (
-    tap => {
-        writes_to_stdout => 1,
-        formatter => sub {
-            my ($params, $fh) = @_;
-            return Cassandane::Unit::FormatTAP->new($fh);
-        },
+    tap => sub {
+        my ($params, $fh) = @_;
+        return Cassandane::Unit::FormatTAP->new($fh);
     },
-    pretty => {
-        writes_to_stdout => 1,
-        formatter => sub {
-            my ($params, $fh) = @_;
-            $params->{quiet} = 0;
-            return Cassandane::Unit::FormatPretty->new($params, $fh);
-        },
+    pretty => sub {
+        my ($params, $fh) = @_;
+        $params->{quiet} = 0;
+        return Cassandane::Unit::FormatPretty->new($params, $fh);
     },
-    prettier => {
-        writes_to_stdout => 1,
-        formatter => sub {
-            my ($params, $fh) = @_;
-            $params->{quiet} = 1;
-            return Cassandane::Unit::FormatPretty->new($params, $fh);
-        },
+    prettier => sub {
+        my ($params, $fh) = @_;
+        $params->{quiet} = 1;
+        return Cassandane::Unit::FormatPretty->new($params, $fh);
     },
 );
 
@@ -263,8 +254,8 @@ become_cyrus();
 my ($opt, $usage) = describe_options(
     "%c %o [testname...]",
 
-    [ 'format|f=s@',   "test report format, repeatable: tap, pretty, or"
-                     . " prettier (default: prettier)" ],
+    [ 'format|f=s',    "test report format: tap, pretty, or prettier"
+                     . " (default: prettier)", { default => 'prettier' } ],
     [ 'list|l+',       "list matching tests instead of running them; repeat"
                      . " (-ll) to list individual tests, not just suites" ],
     [],
@@ -335,11 +326,8 @@ local $ENV{CASSANDANE_LIVE_OUTPUT} = 1 if $opt->live_output;
 my $cassini_filename = $opt->config;
 my @cassini_overrides;
 
-my %want_formats;
-for my $format (@{ $opt->format // [] }) {
-    usage() unless defined $formatters{$format};
-    $want_formats{$format} = 1;
-}
+my $want_format = $opt->format;
+usage() unless defined $formatters{$want_format};
 
 set_verbose(get_verbose() + $opt->verbose);
 
@@ -446,15 +434,6 @@ else
     $plan->check_sanity(nonfatal => $opt->no_fatal_plan);
 
     # Run the schedule
-    $want_formats{prettier} = 1 if not scalar keys %want_formats;
-    my @writes_to_stdout = grep {
-        $formatters{$_}->{writes_to_stdout}
-    } keys %want_formats;
-    if (scalar @writes_to_stdout > 1) {
-        my $joined = join ', ', map { "'$_'" } @writes_to_stdout;
-        die "$joined formatters all want to write to stdout\n";
-    }
-
     my @filters = qw(skip_version skip_missing_features
                      skip_runtime_check
                      enable_wanted_properties);
@@ -462,10 +441,7 @@ else
     push @filters, 'slow_only' if $plan->{slow_only};
 
     my $runner = Cassandane::Unit::Runner->new();
-    foreach my $f (keys %want_formats) {
-        my $formatter = $formatters{$f}->{formatter}->({%format_params});
-        $runner->add_formatter($formatter);
-    }
+    $runner->add_formatter($formatters{$want_format}->({%format_params}));
     $runner->filter(@filters);
 
     exit !$runner->do_run($plan);
