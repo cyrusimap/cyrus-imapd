@@ -4,6 +4,7 @@
 
 #include <config.h>
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1077,6 +1078,196 @@ EXPORTED int mboxlist_lookup_by_jmapid(const char *inboxid, const char *jmapid,
     return 0;
 }
 
+/* Is this the same jmapid held by an mbentry with a different uniqueid? */
+static bool mboxlist_jmapid_held_elsewhere(const char *name,
+                                           const mbentry_t *mbentry,
+                                           const mbentry_t *holder,
+                                           struct txn **txn)
+{
+    if (!strcmpsafe(holder->uniqueid, mbentry->uniqueid)) {
+        return false;
+    }
+    if (!strcmp(holder->name, name)) {
+        return false;
+    }
+    /* a mailbox awaiting delayed delete is not addressed by id any more */
+    if (mboxname_isdeletedmailbox(holder->name, NULL)) {
+        return false;
+    }
+
+    mbname_t *mbname = mbname_from_intname(holder->name);
+    char *dbname = mbname_dbname(mbname);
+    mbentry_t *current = NULL;
+    bool live = false;
+
+    int r =
+        mboxlist_mylookup(dbname, &current, txn, /*wrlock*/ 0, /*allow_all*/ 1);
+    if (!r && !(current->mbtype & MBTYPE_DELETED)
+        && !strcmpsafe(current->uniqueid, holder->uniqueid)
+        && !strcmpsafe(current->jmapid, mbentry->jmapid))
+    {
+        live = true;
+    }
+
+    mboxlist_entry_free(&current);
+    free(dbname);
+    mbname_free(&mbname);
+
+    return live;
+}
+
+/* Point the J key at the uniqueid for mbentry.  Two live mailboxes can
+ * only share a JMAP id through corruption or a rename into another user's
+ * namespace.  The live record being written wins, as a resync that swaps
+ * ids between two mailboxes is only consistent once both are written, but
+ * the other mailbox is now unreachable by id until reconstruct gives one of
+ * them a fresh id, so say so.  Without conversations there are no per-user
+ * modseq counters, so ids collide by design and nothing uses them. */
+static int mboxlist_store_jmapid(const char *name,
+                                 const char *dbname,
+                                 const char *userid,
+                                 const mbentry_t *mbentry,
+                                 struct txn **txn)
+{
+    mbentry_t *holder = NULL;
+    struct buf key = BUF_INITIALIZER;
+    struct buf mboxent = BUF_INITIALIZER;
+    int r = 0;
+
+    if (config_getswitch(IMAPOPT_CONVERSATIONS)) {
+        r = mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, &holder, txn);
+    }
+    if (r && r != IMAP_MAILBOX_NONEXISTENT && r != IMAP_MAILBOX_RESERVED) {
+        goto done;
+    }
+
+    if (holder && mboxlist_jmapid_held_elsewhere(name, mbentry, holder, txn)) {
+        /* tombstone and delayed delete mailboxes don't need a J key */
+        if ((mbentry->mbtype & MBTYPE_DELETED)
+            || mboxname_isdeletedmailbox(name, NULL))
+        {
+            goto done;
+        }
+        xsyslog_ev(LOG_WARNING, "mboxlist.mailboxid.clash",
+                   lf_mbentry(mbentry),
+                   lf_intname("other.mbox.name", holder->name),
+                   lf_s("other.mbox.uniqueid", holder->uniqueid));
+    }
+
+    struct dlist *dl = mboxlist_entry_dlist(dbname, mbentry, KEY_TYPE_JID);
+    dlist_printbuf(dl, 0, &mboxent);
+    mboxlist_jmapid_to_key(userid, mbentry->jmapid, &key);
+    r = cyrusdb_store(mbdb,
+                      buf_base(&key),
+                      buf_len(&key),
+                      buf_cstring(&mboxent),
+                      buf_len(&mboxent),
+                      txn);
+    dlist_free(&dl);
+
+done:
+    mboxlist_entry_free(&holder);
+    buf_free(&mboxent);
+    buf_free(&key);
+    return r;
+}
+
+/* Delete the J key for 'jmapid' under 'userid', unless it's pointing elsewhere */
+static int mboxlist_delete_jmapid(const char *userid,
+                                  const char *jmapid,
+                                  const char *uniqueid,
+                                  struct txn **txn)
+{
+    mbentry_t *holder = NULL;
+    struct buf key = BUF_INITIALIZER;
+    int r = mboxlist_lookup_by_jmapid(userid, jmapid, &holder, txn);
+
+    if (r == IMAP_MAILBOX_NONEXISTENT || r == IMAP_MAILBOX_RESERVED) {
+        r = 0;
+        goto done;
+    }
+    if (r) {
+        goto done;
+    }
+
+    if (!strcmpsafe(holder->uniqueid, uniqueid)) {
+        mboxlist_jmapid_to_key(userid, jmapid, &key);
+        r = cyrusdb_delete(mbdb,
+                           buf_base(&key),
+                           buf_len(&key),
+                           txn,
+                           /*force*/ 1);
+    }
+
+done:
+    mboxlist_entry_free(&holder);
+    buf_free(&key);
+    return r;
+}
+
+struct rehome_rock
+{
+    const char *jmapid;
+    ptrarray_t claimants;
+};
+
+static int rehome_jmapid_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct rehome_rock *rrock = rock;
+
+    if (mbentry->mbtype & MBTYPE_DELETED) {
+        return 0;
+    }
+    if (strcmpsafe(mbentry->jmapid, rrock->jmapid)) {
+        return 0;
+    }
+
+    ptrarray_append(&rrock->claimants, mboxlist_entry_copy(mbentry));
+    return 0;
+}
+
+EXPORTED int mboxlist_rehome_jmapid(const char *userid, const char *jmapid)
+{
+    mbentry_t *holder = NULL;
+    int r = mboxlist_lookup_by_jmapid(userid, jmapid, &holder, NULL);
+
+    /* a live holder keeps it */
+    if (!r) {
+        mbentry_t *current = NULL;
+        r = mboxlist_lookup(holder->name, &current, NULL);
+        bool live = !r && !strcmpsafe(current->uniqueid, holder->uniqueid)
+                    && !strcmpsafe(current->jmapid, jmapid);
+        mboxlist_entry_free(&current);
+        mboxlist_entry_free(&holder);
+        if (live) {
+            return 0;
+        }
+    }
+    else if (r != IMAP_MAILBOX_NONEXISTENT && r != IMAP_MAILBOX_RESERVED) {
+        return r;
+    }
+
+    /* collect first: the walk holds the database open for reading */
+    struct rehome_rock rrock = { jmapid, PTRARRAY_INITIALIZER };
+    r = mboxlist_usermboxtree(userid,
+                              NULL,
+                              rehome_jmapid_cb,
+                              &rrock,
+                              MBOXTREE_INTERMEDIATES);
+
+    /* rewriting a record stores its J key again */
+    mbentry_t *claimant;
+    while ((claimant = ptrarray_shift(&rrock.claimants))) {
+        if (!r) {
+            r = mboxlist_update_full(claimant, /*localonly*/ 1, /*silent*/ 1);
+        }
+        mboxlist_entry_free(&claimant);
+    }
+    ptrarray_fini(&rrock.claimants);
+
+    return r;
+}
+
 /* given a mailbox name, find the staging directory.  XXX - this should
  * require more locking, and staging directories should be by pid */
 HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
@@ -1369,13 +1560,7 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
 
         /* If there's an jmapid, update the J key too */
         if (!r && mbentry->jmapid) {
-            dl = mboxlist_entry_dlist(dbname, mbentry, KEY_TYPE_JID);
-            dlist_printbuf(dl, 0, &mboxent);
-            mboxlist_jmapid_to_key(userid, mbentry->jmapid, &key);
-            r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
-                              buf_cstring(&mboxent), buf_len(&mboxent), txn);
-            dlist_free(&dl);
-            buf_reset(&mboxent);
+            r = mboxlist_store_jmapid(name, dbname, userid, mbentry, txn);
         }
 
         /* If there's an uniqueid, update the I key too */
@@ -1401,18 +1586,18 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
                         item->mbtype = oldi->mbtype;
                         item->partition = xstrdupnull(oldi->partition);
                         ptrarray_append(&newi->name_history, item);
+                    }
 
-                        // and delete the J key for the old item if it's changed
-                        if (oldi->jmapid) {
-                            mbname_t *oldmbname = mbname_from_intname(oldi->name);
-                            const char *olduserid = mbname_userid(oldmbname);
-                            if (strcmpsafe(olduserid, userid) || strcmpsafe(oldi->jmapid, mbentry->jmapid)) {
-                                mboxlist_jmapid_to_key(olduserid, oldi->jmapid, &key);
-                                r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
-                            }
-                            mbname_free(&oldmbname);
-                            if (r) goto done;
+                    // the old J key goes if the id or the owner changed
+                    if (oldi->jmapid) {
+                        mbname_t *oldmbname = mbname_from_intname(oldi->name);
+                        const char *olduserid = mbname_userid(oldmbname);
+                        if (strcmpsafe(olduserid, userid) || strcmpsafe(oldi->jmapid, mbentry->jmapid)) {
+                            r = mboxlist_delete_jmapid(olduserid, oldi->jmapid,
+                                                       mbentry->uniqueid, txn);
                         }
+                        mbname_free(&oldmbname);
+                        if (r) goto done;
                     }
                     // copy the remaining items
                     while (ptrarray_size(&oldi->name_history)) {
@@ -1461,8 +1646,8 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
 
                 /* Delete the existing J record value */
                 if (old->jmapid) {
-                    mboxlist_jmapid_to_key(userid, old->jmapid, &key);
-                    r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
+                    r = mboxlist_delete_jmapid(userid, old->jmapid,
+                                               old->uniqueid, txn);
                     if (r) goto done;
                 }
             }
