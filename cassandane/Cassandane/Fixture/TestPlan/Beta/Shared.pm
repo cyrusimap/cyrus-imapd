@@ -7,7 +7,7 @@ package Cassandane::Fixture::TestPlan::Beta::Shared;
 use strict;
 use warnings;
 
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Unit::TestSuite);
 
 sub test_from_beta { }
 

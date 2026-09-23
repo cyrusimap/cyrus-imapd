@@ -5,7 +5,7 @@ package Cassandane::Test::CRLF;
 use strict;
 use warnings;
 
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Unit::TestSuite);
 
 use Cassandane::Util::CRLF;
 

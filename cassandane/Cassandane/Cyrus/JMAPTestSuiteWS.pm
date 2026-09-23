@@ -126,7 +126,7 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-# n.b. similar to _skip_version() in Cassandane::Unit::TestCase
+# n.b. similar to _skip_version() in Cassandane::Unit::TestSuite
 sub skip_before
 {
     my ($lim) = @_;

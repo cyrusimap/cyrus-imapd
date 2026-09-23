@@ -12,7 +12,7 @@ use File::Path qw(mkpath);
 use Data::Dumper;
 use Cassandane::Error;
 use Cassandane::Util::Log;
-use Cassandane::Unit::TestCase;
+use Cassandane::Unit::TestSuite;
 use Cassandane::Unit::TestPlanItem;
 use Cassandane::Unit::OutcomeListener;
 use Cassandane::Unit::WorkerPool;

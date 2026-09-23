@@ -16,7 +16,7 @@ use File::Temp qw(tempfile);
 use List::Util qw(uniq);
 use Scalar::Util qw(refaddr);
 
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Unit::TestSuite);
 use Cassandane::TestUser;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
@@ -204,7 +204,7 @@ sub needs
     # $category and $key are as per cyr_buildinfo output. $want_value is
     # optional and defaults to '1', but can be a particular value for
     # category=>key pairs that aren't boolean.
-    # See Cassandane::Unit:TestCase::is_feature_missing to see how
+    # See Cassandane::Unit::TestSuite::is_feature_missing to see how
     # needs are used.
     $self->{needs}->{$category}->{$key} = $want_value // 1;
 }

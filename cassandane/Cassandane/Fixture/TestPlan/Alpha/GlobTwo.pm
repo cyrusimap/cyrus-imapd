@@ -7,7 +7,7 @@ package Cassandane::Fixture::TestPlan::Alpha::GlobTwo;
 use strict;
 use warnings;
 
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Unit::TestSuite);
 
 sub test_alpha { }
 sub test_delta { }

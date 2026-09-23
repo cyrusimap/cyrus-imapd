@@ -5,7 +5,7 @@ package Cassandane::Test::Address;
 use strict;
 use warnings;
 
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Unit::TestSuite);
 use Cassandane::Address;
 
 sub new

@@ -242,7 +242,7 @@ Assertions
 ^^^^^^^^^^
 
 A test passes unless it dies or an assertion fails, so assertions are how you
-state what "correct" means.  They all live in ``Cassandane::Unit::TestCase``.
+state what "correct" means.  They all live in ``Cassandane::Unit::TestSuite``.
 The ones you'll reach for most often:
 
 * ``assert($condition, $message)``
@@ -261,7 +261,7 @@ for when an exact comparison would be too strict.  There are also
 domain-specific assertions such as ``assert_mailbox_structure`` and
 ``assert_syslog_matches``.
 
-Run ``perldoc Cassandane/Unit/TestCase.pm`` for the whole set, and see the
+Run ``perldoc Cassandane/Unit/TestSuite.pm`` for the whole set, and see the
 Test::Deep documentation for what a matcher can do.
 
 Comparing iCalendar and vCard data
@@ -284,7 +284,7 @@ Test attributes
 A test subroutine can carry *attributes*, written between its name and its
 signature, that tell the test planner how and whether to run it.  These apply
 to suites inheriting from ``Cassandane::Cyrus::TestCase`` (which is almost all
-of them); suites inheriting directly from ``Cassandane::Unit::TestCase`` ignore
+of them); suites inheriting directly from ``Cassandane::Unit::TestSuite`` ignore
 them, but you shouldn't be inheriting from that unless you're testing
 Cassandane itself.
 

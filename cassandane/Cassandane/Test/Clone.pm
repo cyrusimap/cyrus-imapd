@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Clone qw(clone);
 
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Unit::TestSuite);
 
 sub new
 {

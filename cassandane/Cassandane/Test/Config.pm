@@ -7,7 +7,7 @@ use warnings;
 use Data::Dumper;
 use File::Temp qw(tempfile);
 
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Unit::TestSuite);
 use Cassandane::Config;
 use Cassandane::Util::Log;
 
