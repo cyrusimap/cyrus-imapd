@@ -111,12 +111,6 @@ handy when debugging a single test, especially with C<-vvv>.
 
 Test Anything Protocol.  Rudimentary, but should be valid TAP.
 
-=item C<xml>
-
-jUnit-style XML, written to a F<reports/> subdirectory of the current
-directory.  (Not the same F<reports> as C<prettier> uses.)  Useful for some CI
-systems; our GitHub CI doesn't use it.
-
 =back
 
 =item B<-v>, B<--verbose>
@@ -172,7 +166,6 @@ use Cassandane::Util::Setup;
 use Cassandane::Error;
 use Cassandane::Unit::FormatPretty;
 use Cassandane::Unit::FormatTAP;
-use Cassandane::Unit::FormatXML;
 use Cassandane::Unit::Runner;
 use Cassandane::Unit::TestPlan;
 use Cassandane::Util::Log;
@@ -189,7 +182,6 @@ $ENV{DATAPRINTERRC} = abs_path('.dataprinter')
     unless exists $ENV{DATAPRINTERRC};
 
 my %format_params = ();
-my $output_dir = 'reports';
 my @names;
 
 # Make sure our binary components have been built already
@@ -264,40 +256,14 @@ my %formatters = (
             return Cassandane::Unit::FormatPretty->new($params, $fh);
         },
     },
-    xml => {
-        writes_to_stdout => 0,
-        formatter => sub {
-            my ($params, $fh) = @_;
-            $params->{directory} = $output_dir;
-            return Cassandane::Unit::FormatXML->new($params);
-        },
-    },
 );
 
 become_cyrus();
 
-eval {
-    if ( ! -d $output_dir ) {
-        mkdir($output_dir)
-            or die "Cannot make output directory \"$output_dir\": $!\n";
-    }
-
-    if (! -w $output_dir ) {
-        die "Cannot write to output directory \"$output_dir\"\n";
-    }
-};
-if ($@) {
-    my $eval_err = $@;
-    $formatters{xml}->{formatter} = sub {
-        die "Sorry, XML output format not available due to:\n",
-            "=> $eval_err";
-    };
-}
-
 my ($opt, $usage) = describe_options(
     "%c %o [testname...]",
 
-    [ 'format|f=s@',   "test report format, repeatable: xml, tap, pretty, or"
+    [ 'format|f=s@',   "test report format, repeatable: tap, pretty, or"
                      . " prettier (default: prettier)" ],
     [ 'list|l+',       "list matching tests instead of running them; repeat"
                      . " (-ll) to list individual tests, not just suites" ],

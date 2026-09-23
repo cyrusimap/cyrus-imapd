@@ -665,20 +665,10 @@ sub _finish_workitem
     }
 
     # The test was actually started earlier by _run_workitem, but its
-    # start_test event wasn't sent.  It might have got swallowed due to
-    # the output format listeners being removed in the workitem handling.
-    # Send the event again now, to make sure the formatters actually get
-    # it...
+    # start_test event wasn't sent: the worker drops the listeners that
+    # write the report.  Send the event again now, so that the formatters
+    # hear about the test before they hear how it went.
     $result->start_test($test);
-    # But! If they're computing their own start time based on this event
-    # they'll get it wrong.  We know the real start time, so tell the
-    # formatter to use that instead.
-    if ($runner->can('tell_formatters'))
-    {
-        $runner->tell_formatters('fake_start_time',
-                                 $test,
-                                 $witem->{start_time});
-    }
 
     $test->annotate_from_file($witem->{logfile});
     _dump_logfile($witem->{logfile}) if (get_verbose > 1);
