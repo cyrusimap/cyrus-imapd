@@ -55,16 +55,24 @@ sub run_bare
 {
     my ($self) = @_;
 
-    # set_up is deliberately outside the guard: if it dies, tear_down doesn't
-    # run.  Tearing down what was never set up tends to die *again*.  The error
-    # we want reported is failure to set up, not tear down.
-    $self->set_up();
+    my $set_up_ok = 0;
 
     try {
+        $self->set_up();
+        $set_up_ok = 1;
+
         $self->run_test();
     }
     finally {
-        $self->tear_down();
+        if ($set_up_ok) {
+            $self->tear_down();
+        }
+        else {
+            # We know that set_up didn't succeed, but did it *partly* succeed?
+            # Maybe, so we'll try to tear_down, but if that fails, that's the
+            # limit of what we can do, so just ignore failure on that.
+            eval { $self->tear_down() };
+        }
     };
 
     return;
