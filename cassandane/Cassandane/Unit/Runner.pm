@@ -4,28 +4,19 @@
 package Cassandane::Unit::Runner;
 use strict;
 use warnings;
-use base qw(Cassandane::Unit::Listener);
-
 use Benchmark;
-use IO::File;
 
-use Cassandane::Cassini;
+use Cassandane::Unit::FailedTests;
 use Cassandane::Unit::Result;
 
 sub new
 {
     my ($class) = @_;
 
-    my $cassini = Cassandane::Cassini->instance();
-    my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
-    my $failed_file = "$rootdir/failed";
-    # if we can't write there, we just won't record failed tests!
-
     return bless {
-        remove_me_in_cassandane_child => 1,
         filter => [],
         formatters => [],
-        failed_fh => IO::File->new($failed_file, 'w'),
+        failed_tests => Cassandane::Unit::FailedTests->new(),
     }, $class;
 }
 
@@ -73,7 +64,7 @@ sub do_run
     my ($self, $suite) = @_;
     my $result = $self->create_test_result();
 
-    $result->add_listener($self);
+    $result->add_listener($self->{failed_tests});
     foreach my $f (@{$self->{formatters}}) {
         $result->add_listener($f);
     }
@@ -87,31 +78,6 @@ sub do_run
     }
 
     return $result->was_successful;
-}
-
-sub record_failed
-{
-    my ($self, $test) = @_;
-    return if not $self->{failed_fh};
-
-    my $suite = ref($test);
-    $suite =~ s/^Cassandane:://;
-
-    my $testname = $test->name =~ s/^test_//r;
-
-    $self->{failed_fh}->print("$suite.$testname\n");
-}
-
-sub add_error
-{
-    my ($self, $test) = @_;
-    $self->record_failed($test);
-}
-
-sub add_failure
-{
-    my ($self, $test) = @_;
-    $self->record_failed($test);
 }
 
 1;

@@ -164,6 +164,7 @@ use List::Util qw(uniq);
 use lib '.';
 use Cassandane::Util::Setup;
 use Cassandane::Error;
+use Cassandane::Unit::FailedTests;
 use Cassandane::Unit::FormatPretty;
 use Cassandane::Unit::FormatTAP;
 use Cassandane::Unit::Runner;
@@ -384,7 +385,7 @@ unless (-e $rootdir) {
 }
 
 if ($want_rerun) {
-    my $failed_file = "$rootdir/failed";
+    my $failed_file = Cassandane::Unit::FailedTests->filename();
 
     my @failed = eval { read_file($failed_file, { chomp => 1 }) };
     if ($@) {
