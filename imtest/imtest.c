@@ -1865,7 +1865,7 @@ static int append_msg(const char *mbox, int size)
 {
     int lup;
 
-    prot_printf(pout,"A003 APPEND %s (\\Seen) {" SIZE_T_FMT "}\r\n",
+    prot_printf(pout,"A003 APPEND %s (\\Seen) {%zu}\r\n",
                 mbox,size+strlen(HEADERS));
     /* do normal header foo */
     prot_printf(pout,HEADERS);

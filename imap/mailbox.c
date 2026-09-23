@@ -479,8 +479,8 @@ static int cache_parserecord(struct mappedfile *cachefile, uint64_t cache_offset
         /* bounds checking */
         if (offset >= buf_size) {
             xsyslog(LOG_ERR, "IOERROR: offset greater than cache size",
-                             "offset=<" SIZE_T_FMT "> "
-                             "buf_size=<" SIZE_T_FMT "> "
+                             "offset=<%zu> "
+                             "buf_size=<%zu> "
                              "cache_ent=<%d>",
                              offset, buf_size, cache_ent);
             return IMAP_IOERROR;
@@ -488,9 +488,9 @@ static int cache_parserecord(struct mappedfile *cachefile, uint64_t cache_offset
 
         if (offset + CACHE_ITEM_SIZE_SKIP + CACHE_ITEM_LEN(cacheitem) > buf_size) {
             xsyslog(LOG_ERR, "IOERROR: cache entry truncated",
-                             "offset=<" SIZE_T_FMT "> "
+                             "offset=<%zu> "
                              "length=<%u> "
-                             "buf_size=<" SIZE_T_FMT "> "
+                             "buf_size=<%zu> "
                              "cache_ent=<%d>",
                              offset, CACHE_ITEM_LEN(cacheitem),
                              buf_size, cache_ent);
@@ -566,7 +566,7 @@ static int cache_append_record(struct mappedfile *mf, struct index_record *recor
 
     n = mappedfile_pwritebuf(mf, buf, offset);
     if (n < 0) {
-        syslog(LOG_ERR, "failed to append " SIZE_T_FMT " bytes to cache", buf->len);
+        syslog(LOG_ERR, "failed to append %zu bytes to cache", buf->len);
         return IMAP_IOERROR;
     }
 

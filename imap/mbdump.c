@@ -383,7 +383,7 @@ static int dump_file(int first, int sync,
 
     /* send: name, size, and contents */
     if (first) {
-        prot_printf(pout, " {" SIZE_T_FMT "}\r\n", strlen(ftag));
+        prot_printf(pout, " {%zu}\r\n", strlen(ftag));
 
         if (sync) {
             /* synchronize */
@@ -399,7 +399,7 @@ static int dump_file(int first, int sync,
         prot_printf(pout, "%s {%lu%s}\r\n",
                     ftag, (long unsigned)len, (sync ? "+" : ""));
     } else {
-        prot_printf(pout, " {" SIZE_T_FMT "%s}\r\n%s {%lu%s}\r\n",
+        prot_printf(pout, " {%zu%s}\r\n%s {%lu%s}\r\n",
                     strlen(ftag), (sync ? "+" : ""),
                     ftag, (long unsigned)len, (sync ? "+" : ""));
     }

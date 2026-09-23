@@ -1702,9 +1702,9 @@ static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
     if (m && m->t == SET_ACTIVE) {
         prot_printf(C->pout,
                 "%s MAILBOX "
-                "{" SIZE_T_FMT "+}\r\n%s "
-                "{" SIZE_T_FMT "+}\r\n%s "
-                "{" SIZE_T_FMT "+}\r\n%s\r\n",
+                "{%zu+}\r\n%s "
+                "{%zu+}\r\n%s "
+                "{%zu+}\r\n%s\r\n",
                 tag,
                 strlen(m->mailbox), m->mailbox,
                 strlen(m->location), m->location,
@@ -1714,8 +1714,8 @@ static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
     } else if (m && m->t == SET_RESERVE) {
         prot_printf(C->pout,
                 "%s RESERVE "
-                "{" SIZE_T_FMT "+}\r\n%s "
-                "{" SIZE_T_FMT "+}\r\n%s\r\n",
+                "{%zu+}\r\n%s "
+                "{%zu+}\r\n%s\r\n",
                 tag,
                 strlen(m->mailbox), m->mailbox,
                 strlen(m->location), m->location
@@ -1724,7 +1724,7 @@ static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
         /* not found, if needed, send a delete */
         prot_printf(C->pout,
                 "%s DELETE "
-                "{" SIZE_T_FMT "+}\r\n%s\r\n",
+                "{%zu+}\r\n%s\r\n",
                 tag,
                 strlen(mailbox), mailbox
             );
@@ -1759,9 +1759,9 @@ static int sendupdate(const mbentry_t *mbentry, void *rock)
             case SET_ACTIVE:
                 prot_printf(C->pout,
                         "%s MAILBOX "
-                        "{" SIZE_T_FMT "+}\r\n%s "
-                        "{" SIZE_T_FMT "+}\r\n%s "
-                        "{" SIZE_T_FMT "+}\r\n%s\r\n",
+                        "{%zu+}\r\n%s "
+                        "{%zu+}\r\n%s "
+                        "{%zu+}\r\n%s\r\n",
                         C->streaming,
                         strlen(m->mailbox), m->mailbox,
                         strlen(m->location), m->location,
@@ -1772,8 +1772,8 @@ static int sendupdate(const mbentry_t *mbentry, void *rock)
             case SET_RESERVE:
                 prot_printf(C->pout,
                         "%s RESERVE "
-                        "{" SIZE_T_FMT "+}\r\n%s "
-                        "{" SIZE_T_FMT "+}\r\n%s\r\n",
+                        "{%zu+}\r\n%s "
+                        "{%zu+}\r\n%s\r\n",
                         C->streaming,
                         strlen(m->mailbox), m->mailbox,
                         strlen(m->location), m->location

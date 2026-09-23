@@ -164,7 +164,7 @@ static void usage(void)
 
 static void print_rec(const char *name, const struct buf *citem)
 {
-    printf(" %s>{" SIZE_T_FMT "}%.*s\n", name, citem->len, (int)citem->len, citem->s);
+    printf(" %s>{%zu}%.*s\n", name, citem->len, (int)citem->len, citem->s);
 }
 
 /*
