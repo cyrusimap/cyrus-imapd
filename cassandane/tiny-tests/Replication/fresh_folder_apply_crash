@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+use File::Path qw(make_path);
+
+# The replica commits a new folder before applying its records.  A first
+# apply that dies in between must leave a folder the next sync can fill.
+sub test_fresh_folder_apply_crash
+    :NoAltNameSpace
+    ($self)
+{
+    my $master_store = $self->{master_store};
+    my $mtalk = $master_store->get_client();
+    $mtalk->create("INBOX.big");
+    $self->assert_str_equals('ok', $mtalk->get_last_completion_response());
+
+    $master_store->set_folder("INBOX.big");
+    $master_store->set_fetch_attributes('uid');
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{B} = $self->make_message("Message B", store => $master_store);
+    $exp{C} = $self->make_message("Message C", store => $master_store);
+
+    xlog $self, "Make the first message copy on the replica fail";
+    # spool paths are keyed by uniqueid, so the master's maps onto the replica
+    my $dir = $self->{instance}->folder_to_directory('INBOX.big');
+    my $master_base = $self->{instance}->get_basedir();
+    my $replica_base = $self->{replica}->get_basedir();
+    $dir =~ s/^\Q$master_base\E/$replica_base/
+        or die "unexpected master spool path $dir";
+    make_path("$dir/1.");
+
+    xlog $self, "First sync dies part way through applying the folder";
+    eval { $self->run_replication(); };
+    my $e = $@;
+    $self->assert_not_null($e);
+    $self->assert_matches(qr/sync_client pid \d+\) exited with code/,
+                          $e->to_string());
+    $self->assert_syslog_matches($self->{replica},
+                                 qr/SYNCERROR: mailbox compare update failed/);
+
+    # the abort() in the apply leaves a core
+    unlink $_ for $self->{replica}->find_cores();
+    $self->{instance}->getsyslog();
+    $self->{replica}->getsyslog();
+
+    rmdir "$dir/1." or die "rmdir $dir/1.: $!";
+
+    xlog $self, "Second sync must converge without a full update";
+    $self->run_replication(nosyncback => 1);
+    $self->check_replication('cassandane');
+
+    my $replica_store = $self->{replica_store};
+    $replica_store->set_folder("INBOX.big");
+    $replica_store->set_fetch_attributes('uid');
+    $self->check_messages(\%exp, store => $replica_store);
+}
