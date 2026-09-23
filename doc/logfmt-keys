@@ -110,6 +110,7 @@ lmtp.rcpt.state         a recipient's delivery state in the proxy state machine
 lmtp.target             how the destination mailbox was chosen: default, plus-addr, ...
 pop.subfolder           the subfolder a POP session was restricted to
 quota.root              the quota root a quota applies to
+reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
 sched.addresses         the scheduling addresses considered, one per indexed subkey
 sched.userid            the userid whose scheduling addresses were used
 scope                   the scope a duplicate-delivery check applied to

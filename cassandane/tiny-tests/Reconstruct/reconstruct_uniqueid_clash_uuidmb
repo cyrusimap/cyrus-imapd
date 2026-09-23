@@ -1,0 +1,89 @@
+#!perl
+use Cassandane::Tiny;
+
+# A UUID-dir mailbox keeps its files under its uniqueid, so two names with
+# one uniqueid share one directory.  reconstruct -I must give the name the
+# I key doesn't point at its own uniqueid and its own copy of the files.
+sub test_reconstruct_uniqueid_clash_uuidmb
+    :NoAltNameSpace :Conversations
+    ($self)
+{
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my $stale = "user\x1fcassandane\x1fstale";
+    my $current = "user\x1fcassandane\x1fcurrent";
+
+    my $talk = $self->{store}->get_client();
+    $talk->create('INBOX.stale');
+    $self->{store}->set_folder('INBOX.stale');
+    $self->make_message("Message A");
+    $self->make_message("Message B");
+    $talk->rename('INBOX.stale', 'INBOX.current');
+    my $uniqueid = $talk->getmetadata('INBOX.current', $entry)->{'INBOX.current'}{$entry};
+
+    my $db = $self->{instance}->get_basedir() . '/conf/mailboxes.db';
+    my $format = $self->{instance}->{config}->get('mboxlist_db');
+
+    xlog $self, "resurrect the old name as a live record with the same uniqueid";
+    $self->{store}->disconnect();
+    $self->{instance}->stop();
+    $self->{instance}->{re_use_dir} = 1;
+    my (undef, $value) = $self->{instance}->run_dbcommand($db, $format, ['SHOW', "N$current"]);
+    $self->{instance}->run_dbcommand($db, $format, ['SET', "N$stale", $value]);
+    $self->{instance}->start();
+    $self->{store}->connect();
+
+    xlog $self, "without -I reconstruct refuses";
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({ cyrus => 1,
+                                     handlers => { exited_abnormally => sub {} } },
+                                   'reconstruct', 'user.cassandane.stale');
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/event=reconstruct\.uniqueid\.clash/);
+
+    xlog $self, "with -I the stale name gets its own uniqueid and files";
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'reconstruct', '-I', 'user.cassandane.stale');
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/event=reconstruct\.uniqueid\.reassigned/);
+
+    $talk = $self->{store}->get_client();
+    my $newuid = $talk->getmetadata('INBOX.stale', $entry)->{'INBOX.stale'}{$entry};
+    $self->assert_not_null($newuid);
+    $self->assert_str_not_equals($uniqueid, $newuid);
+    $self->assert_str_equals($uniqueid,
+        $talk->getmetadata('INBOX.current', $entry)->{'INBOX.current'}{$entry});
+
+    xlog $self, "the copy is a new mailbox with its own JMAP id";
+    $self->assert_str_not_equals(
+        $talk->status('INBOX.current', ['mailboxid'])->{mailboxid}[0],
+        $talk->status('INBOX.stale', ['mailboxid'])->{mailboxid}[0]);
+
+    xlog $self, "both mailboxes open and hold the messages";
+    for my $folder (qw(INBOX.stale INBOX.current)) {
+        $talk->select($folder);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $self->assert_num_equals(2, $talk->get_response_code('exists'));
+    }
+
+    xlog $self, "mailboxes.db points each name at its own uniqueid";
+    my sub record ($key) {
+        my (undef, $value) = $self->{instance}->run_dbcommand($db, $format, ['SHOW', $key]);
+        return unless defined $value;
+        return Cyrus::DList->parse_string($value)->as_perl();
+    }
+    my %expect = (
+        "N$stale" => superhashof({ I => $newuid }),
+        "I$newuid" => superhashof({ N => $stale }),
+        "N$current" => superhashof({ I => $uniqueid }),
+        "I$uniqueid" => superhashof({ N => $current }),
+    );
+    $self->assert_cmp_deeply(\%expect,
+        { map { $_ => scalar record($_) } keys %expect });
+
+    xlog $self, "the header at the new location carries the new uniqueid";
+    my $header = $self->{instance}->folder_to_directory('INBOX.stale')
+                 . '/cyrus.header';
+    my $hf = Cyrus::HeaderFile->new_file($header);
+    $self->assert_str_equals($newuid, $hf->{header}->{UniqueId});
+}

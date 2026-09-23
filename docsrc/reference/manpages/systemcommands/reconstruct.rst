@@ -119,7 +119,8 @@ Options
     If two mailboxes exist with the same UNIQUEID and reconstruct visits
     both of them, -I will cause the second mailbox to have a new UNIQUEID
     created for it.  If you don't specify -I, you will just get a syslog
-    entry telling you of the clash.
+    entry telling you of the clash.  A mailbox that keeps its files under
+    its UNIQUEID gets its own copy of them under the new one.
 
 .. option:: -R, --guid-mismatch-keep
 
