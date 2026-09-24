@@ -86,21 +86,6 @@ sub set_up { return 1 }
 
 sub tear_down { return 1 }
 
-# Ask one of this test's filters whether to run it, and get back the reason if
-# the answer is no.  See filter() for what a filter is.
-sub filter_method
-{
-    my ($self, $token) = @_;
-
-    my $filter = $self->filter->{$token};
-    return if not $filter;
-
-    die ref($self) . ": the '$token' filter is not a sub\n"
-        if ref $filter ne 'CODE';
-
-    return $filter->($self->name());
-}
-
 # This returns a list of the subroutine names in this class that are tests to
 # be run.  By default, it's every sub whose name starts with "test", here and
 # in anything we inherit from.
@@ -194,67 +179,73 @@ sub is_feature_missing
     return;
 }
 
-sub filter
+# Why this test shouldn't run, or nothing if it should.  The reason is
+# reported, so write it for a reader.  %opt is how the run was configured;
+# only the slow tests care so far.
+sub reason_to_skip
+{
+    my ($self, %opt) = @_;
+
+    return 'test is slow, and slow tests were not requested'
+        if $opt{skip_slow} and $self->name() =~ m/_slow$/;
+
+    my $reason = $self->_unsatisfied_version();
+    return $reason if $reason;
+
+    return $self->_missing_feature();
+}
+
+# If we can get the subroutine for this test, get it.  We'll use this to
+# read attributes that configure the test.
+sub _test_sub
 {
     my ($self) = @_;
-    return
-    {
-        # A filter returns why the test should be skipped, or nothing if it
-        # should run.  The reason is reported, so write it for a reader.
-        skip_version => sub
-        {
-            return if not exists $self->{_name};
-            my $sub = $self->can($self->{_name});
-            return if not defined $sub;
-            foreach my $attr (attributes::get($sub)) {
-                next if $attr !~ m/^(?:min|max)_(?:other_)?version_[\d_]+$/;
-                return "this Cyrus does not satisfy :$attr"
-                    if _skip_version($attr);
-            }
-            return;
-        },
-        skip_missing_features => sub
-        {
-            return if not exists $self->{_name};
-            my $sub = $self->can($self->{_name});
-            return if not defined $sub;
-            foreach my $attr (attributes::get($sub)) {
-                next if $attr !~
-                    m/^needs_([A-Za-z0-9]+)_(\w+)(?:\(([^\)]*)\))?$/;
-                my $missing = $self->is_feature_missing($1, $2, $3);
-                return $missing if $missing;
-            }
-            return if not exists $self->{needs};
-            while (my ($category, $subhash) = each %{$self->{needs}}) {
-                while (my ($key, $want_value) = each %{$subhash}) {
-                    my $missing = $self->is_feature_missing($category,
-                                                            $key,
-                                                            $want_value);
-                    return $missing if $missing;
-                }
-            }
-            return;
-        },
-        skip_slow => sub
-        {
-            my ($method) = @_;
-            return 'test is slow, and slow tests were not requested'
-                if $method =~ m/_slow$/;
-            return;
-        },
-        skip_runtime_check => sub
-        {
-            # To use: add a skip_check method to your test suite that
-            # implements logic to determine whether some test should run or
-            # not (perhaps by examining $self->{_name}).  Return undef if
-            # the test should run, or a message explaining why the test is
-            # being skipped
-            return if not $self->can('skip_check');
-            my $reason = $self->skip_check();
-            return "skip_check said '$reason'" if $reason;
-            return;
-        },
-    };
+
+    return if not exists $self->{_name};
+    return $self->can($self->{_name});
+}
+
+# A test can be marked :min_version_3_5, etc.  Does this Cyrus match?
+sub _unsatisfied_version
+{
+    my ($self) = @_;
+
+    my $sub = $self->_test_sub() or return;
+
+    foreach my $attr (attributes::get($sub)) {
+        next if $attr !~ m/^(?:min|max)_(?:other_)?version_[\d_]+$/;
+        return "this Cyrus does not satisfy :$attr"
+            if _skip_version($attr);
+    }
+
+    return;
+}
+
+# A test can be marked :needs_component_jmap, etc.  Check for the needed stuff.
+sub _missing_feature
+{
+    my ($self) = @_;
+
+    my $sub = $self->_test_sub() or return;
+
+    foreach my $attr (attributes::get($sub)) {
+        next if $attr !~ m/^needs_([A-Za-z0-9]+)_(\w+)(?:\(([^\)]*)\))?$/;
+        my $missing = $self->is_feature_missing($1, $2, $3);
+        return $missing if $missing;
+    }
+
+    return if not exists $self->{needs};
+
+    while (my ($category, $subhash) = each %{$self->{needs}}) {
+        while (my ($key, $want_value) = each %{$subhash}) {
+            my $missing = $self->is_feature_missing($category,
+                                                    $key,
+                                                    $want_value);
+            return $missing if $missing;
+        }
+    }
+
+    return;
 }
 
 # How many frames of assertion sit between here and the code that made the

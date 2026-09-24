@@ -114,45 +114,39 @@ sub id
     return $self->{_name}; # XXX something cleverer?
 }
 
-sub filter
+# The :want_service_http and friends attributes on a test are wants on the
+# object about to run it.  This has to happen before anything reads them,
+# which means before the instances are created.
+sub _apply_wanted_properties
 {
     my ($self) = @_;
 
-    my $filter = $self->SUPER::filter(@_);
+    my $sub = $self->_test_sub() or return;
 
-    $filter->{enable_wanted_properties} = sub {
-        return if not exists $self->{_name};
-        my $sub = $self->can($self->{_name});
-        return if not defined $sub;
+    # n.b. cannot be used to unwant, sorry
+    foreach my $attr (attributes::get($sub)) {
+        next if $attr !~ m/^want(_service)?_(\w+)$/;
 
-        # n.b. cannot be used to unwant, sorry
-        foreach my $attr (attributes::get($sub)) {
-            next if $attr !~ m/^want(_service)?_(\w+)$/;
+        # XXX It could also check whether the required components are
+        # XXX configured ala :needs_foo, and skip the test if they're
+        # XXX missing, rather than failing to start them.  That is,
+        # XXX :want_service_http could be taken to imply
+        # XXX :needs_component_httpd, and the test skipped if it's
+        # XXX unavailable.  But note that there isn't a clean mapping
+        # XXX between the names!  For now, tests will need to be annotated
+        # XXX with both attributes in these cases.
 
-            # XXX Since this is a 'filter', it could also check
-            # XXX whether the required components are configured
-            # XXX ala :needs_foo, and skip the test if they're
-            # XXX missing, rather than failing to start them.
-            # XXX That is, :want_service_http could be taken to
-            # XXX imply :needs_component_httpd, and the test
-            # XXX skipped if it's unavailable.  But note that
-            # XXX there isn't a clean mapping between the names!
-            # XXX For now, tests will need to be annotated with
-            # XXX both attributes in these cases.
-
-            $self->{_current_magic} = "Test function attribute ':$attr'";
-            if (defined $1 && $1 eq '_service') {
-                $self->want_services($2);
-            }
-            else {
-                $self->want($2);
-            }
-            $self->{_current_magic} = undef;
+        $self->{_current_magic} = "Test function attribute ':$attr'";
+        if (defined $1 && $1 eq '_service') {
+            $self->want_services($2);
         }
-        return;
-    };
+        else {
+            $self->want($2);
+        }
+        $self->{_current_magic} = undef;
+    }
 
-    return $filter;
+    return;
 }
 
 # will magically cause some special actions to be taken during test
@@ -946,6 +940,7 @@ sub set_up
 
     xlog "---------- BEGIN $self->{_name} ----------";
 
+    $self->_apply_wanted_properties();
     $self->_create_instances();
     if ($self->{_want}->{start_instances}) {
         eval {
