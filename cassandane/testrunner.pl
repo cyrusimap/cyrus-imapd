@@ -406,25 +406,22 @@ if ($want_rerun) {
     }
 }
 
-my $plan = Cassandane::Unit::TestPlan->new();
+my $planner = Cassandane::Unit::TestPlan->new();
 
 if ($do_list)
 {
-    # Build the schedule per commandline
-    $plan->schedule(@names);
-    # dump the plan to stdout
-    my %plan = map { _listitem($_) => 1 } $plan->list();
-    foreach my $nm (sort keys %plan)
-    {
-        print "$nm\n";
-    }
+    my @named = map {; _listitem("$_->{suite}.$_->{testname}") }
+                $planner->plan_for(@names)->@*;
+
+    my %seen;
+    print "$_\n" for grep {; !$seen{$_}++ } sort @named;
+
     exit 0;
 }
 else
 {
-    # Build the schedule per commandline
-    $plan->schedule(@names);
-    $plan->check_sanity(nonfatal => $opt->no_fatal_plan);
+    my $plan = $planner->plan_for(@names);
+    $planner->check_sanity(nonfatal => $opt->no_fatal_plan);
 
     # Run the schedule
     my $runner = Cassandane::Unit::Runner->new(
