@@ -522,12 +522,8 @@ static char *reconstruct_mint_mailboxid(struct mailbox *mailbox,
                                         modseq_t *modseqp)
 {
     mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
-    const char *userid = mbname_userid(mbname);
+    const char *scope = mbname_jmapid_scope(mbname);
     struct buf newid = BUF_INITIALIZER;
-
-    if (!userid) {
-        userid = "";
-    }
 
     for (int tries = 0; tries < 100; tries++) {
         *modseqp = mailbox_modseq_dirty(mailbox);
@@ -535,7 +531,7 @@ static char *reconstruct_mint_mailboxid(struct mailbox *mailbox,
         buf_putc(&newid, JMAP_MAILBOXID_PREFIX);
         MODSEQ_TO_JMAPID(&newid, *modseqp);
         mbentry_t *taken = NULL;
-        int r = mboxlist_lookup_by_jmapid(userid,
+        int r = mboxlist_lookup_by_jmapid(scope,
                                           buf_cstring(&newid),
                                           &taken,
                                           NULL);
@@ -682,14 +678,11 @@ static int reconstruct_mailboxid(struct mailbox *mailbox,
     const char *name = mailbox_name(mailbox);
     mbname_t *mbname = mbname_from_intname(name);
     const char *userid = mbname_userid(mbname);
+    const char *scope = mbname_jmapid_scope(mbname);
     mbentry_t *holder = NULL;
     mbentry_t *current = NULL;
     int dirty = 0;
     bool clash = false;
-
-    if (!userid) {
-        userid = "";
-    }
 
     /* deleted mailboxes don't need fixing */
     if (mboxname_isdeletedmailbox(name, NULL)) {
@@ -697,7 +690,9 @@ static int reconstruct_mailboxid(struct mailbox *mailbox,
     }
 
     /* a replica takes its ids from the master, so it can only report */
-    if (config_getswitch(IMAPOPT_REPLICAONLY) || user_isreplicaonly(userid)) {
+    if (config_getswitch(IMAPOPT_REPLICAONLY)
+        || (userid && user_isreplicaonly(userid)))
+    {
         make_changes = 0;
     }
 
@@ -720,7 +715,7 @@ static int reconstruct_mailboxid(struct mailbox *mailbox,
 
     if (mbentry->jmapid) {
         int r =
-            mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, &holder, NULL);
+            mboxlist_lookup_by_jmapid(scope, mbentry->jmapid, &holder, NULL);
         if (r == IMAP_MAILBOX_NONEXISTENT || r == IMAP_MAILBOX_RESERVED) {
             printf(
                 "Missing mboxlist entry for mailboxid - will rewrite %s (%s)\n",

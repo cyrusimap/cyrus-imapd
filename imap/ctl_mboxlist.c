@@ -1238,12 +1238,10 @@ static int fix_cb(const mbentry_t *mbentry, void *rockp __attribute__((unused)))
 
     if (mbentry->jmapid) {
         mbname_t *mbname = mbname_from_intname(mbentry->name);
-        const char *userid = mbname_userid(mbname);
-
-        if (!userid) userid = "";
 
         // already got a record, we're good!
-        int res = mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, NULL, NULL);
+        int res = mboxlist_lookup_by_jmapid(mbname_jmapid_scope(mbname),
+                                            mbentry->jmapid, NULL, NULL);
         mbname_free(&mbname);
         if (!res) return 0;
 

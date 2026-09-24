@@ -61,6 +61,7 @@ struct mbname_parts;
 typedef struct mbname_parts mbname_t;
 
 const char *mbname_userid(const mbname_t *mbname);
+const char *mbname_jmapid_scope(const mbname_t *mbname);
 const char *mbname_intname(const mbname_t *mbname);
 const char *mbname_extname(const mbname_t *mbname, const struct namespace *ns, const char *userid);
 int mbname_category(const mbname_t *mbname, const struct namespace *ns, const char *userid);

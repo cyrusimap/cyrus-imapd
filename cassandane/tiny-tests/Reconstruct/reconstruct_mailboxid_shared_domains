@@ -1,0 +1,53 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Slurp;
+
+# Shared mailboxes mint their JMAP ids from one counters file per domain,
+# so the id lookup key is scoped the same way: shared mailboxes in
+# different domains, or in a domain and in none, may carry the same id.
+sub test_reconstruct_mailboxid_shared_domains
+    :NoAltNameSpace :Conversations :VirtDomains
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('shared');
+    $admintalk->create('shared@example.com');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $db = $self->{instance}->get_basedir() . '/conf/mailboxes.db';
+    my $format = $self->{instance}->{config}->get('mboxlist_db');
+
+    my sub record ($key) {
+        my (undef, $value) = $self->{instance}->run_dbcommand($db, $format, ['SHOW', $key]);
+        return unless defined $value;
+        return Cyrus::DList->parse_string($value)->as_perl();
+    }
+
+    my $plain = record('Nshared');
+    my $domain = record("Nexample.com\x1dshared");
+
+    xlog $self, "the first mailbox in each scope gets the same id";
+    $self->assert_str_equals($plain->{J}, $domain->{J});
+
+    xlog $self, "each id is keyed under its own scope";
+    my %expect = (
+        "J\x1e$plain->{J}" => superhashof({ N => 'shared' }),
+        "J\@example.com\x1e$domain->{J}"
+            => superhashof({ N => "example.com\x1dshared" }),
+    );
+    $self->assert_cmp_deeply(\%expect,
+        { map { $_ => scalar record($_) } keys %expect });
+
+    xlog $self, "reconstruct has nothing to repair";
+    my $out = $self->{instance}->get_basedir() . '/reconstruct.out';
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $out } },
+        'reconstruct', '-q', '-G');
+    $self->assert_str_equals('', slurp_file($out));
+
+    xlog $self, "deleting one scope's mailbox leaves the other's key";
+    $admintalk->delete('shared');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_str_equals("example.com\x1dshared",
+        record("J\@example.com\x1e$domain->{J}")->{N});
+}
