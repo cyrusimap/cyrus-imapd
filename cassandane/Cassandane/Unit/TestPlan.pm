@@ -10,11 +10,12 @@ use File::Find;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
+use Error qw(:try);
 use Cassandane::Error;
+use Cassandane::Failure;
 use Cassandane::Util::Log;
 use Cassandane::Unit::TestSuite;
 use Cassandane::Unit::TestPlanItem;
-use Cassandane::Unit::OutcomeListener;
 use Cassandane::Unit::WorkerPool;
 
 my @default_test_roots = (
@@ -539,12 +540,37 @@ sub _get_test
 # Run one work item and return its outcome: a verdict, plus a description of
 # the failure when there is one.  This runs in a worker, and the outcome goes
 # back to the parent, which is what reports it.
+# Run one test and say how it went.  A Cassandane::Failure means the test ran
+# and came out wrong; anything else thrown means it never got to say.
+sub _outcome_of ($test)
+{
+    my $outcome;
+
+    try {
+        $test->run_bare();
+        $outcome = { outcome => 'pass' };
+    }
+    catch Cassandane::Failure with {
+        $outcome = { outcome => 'fail', report => shift->stringify };
+    }
+    catch Error with {
+        my $thrown = shift;
+        $thrown = Cassandane::Error->from_thrown($thrown)
+            if not $thrown->isa('Cassandane::Error');
+        $outcome = { outcome => 'error', report => $thrown->stringify };
+    }
+    otherwise {
+        my $report = Cassandane::Error->from_thrown(shift)->stringify;
+        $outcome = { outcome => 'error', report => $report };
+    };
+
+    return $outcome;
+}
+
 sub _run_workitem
 {
-    my ($self, $witem, $result) = @_;
+    my ($self, $witem) = @_;
     my $test = $self->_get_test($witem);
-
-    my $listener = $self->_listen_for_outcome($result);
 
     # Every worker inherited the same random seed from the parent when it was
     # forked, so without this they would all generate the same message ids,
@@ -560,9 +586,7 @@ sub _run_workitem
     }
     else
     {
-        $result->run($test);
-        $outcome = $listener->outcome()
-            or die "$witem->{suite}.$witem->{testname} ran but reported nothing";
+        $outcome = _outcome_of($test);
     }
 
     if ($test->can('post_tear_down'))
@@ -574,9 +598,8 @@ sub _run_workitem
         my $ex = $@;
         if ($ex)
         {
-            $result->add_error($test,
-                               Cassandane::Error->from_thrown($ex)->stringify);
-            $outcome = $listener->outcome();
+            my $report = Cassandane::Error->from_thrown($ex)->stringify;
+            $outcome = { outcome => 'error', report => $report };
         }
     }
 
@@ -652,28 +675,6 @@ sub _finish_workitem
     $result->end_test($test);
 }
 
-# Arrange for the outcome of the next test to be recorded.  The listeners that
-# write the report are dropped, because the parent replays the events to those
-# once the outcome gets back to it.
-sub _listen_for_outcome
-{
-    my ($self, $result) = @_;
-
-    my $listener = $self->{outcome_listener}
-               ||= Cassandane::Unit::OutcomeListener->new();
-    $listener->reset();
-
-    my @listeners = grep {; !$_->{remove_me_in_cassandane_child} }
-                    $result->listeners();
-
-    push @listeners, $listener
-        if !grep {; $_ == $listener } @listeners;
-
-    $result->set_listeners(@listeners);
-
-    return $listener;
-}
-
 # The runner hands the whole plan to run(), rather than one suite at a time,
 # so that every scheduled test lands in one result and one summary.
 #
@@ -706,7 +707,7 @@ sub run
         maxworkers => $self->{maxworkers} || 1,
         handler => sub {
             my ($assignment) = @_;
-            return $self->_run_workitem($assignment, $result);
+            return $self->_run_workitem($assignment);
         },
     );
 
