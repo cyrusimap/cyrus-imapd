@@ -2061,6 +2061,7 @@ struct mboxset_result {
     char *old_imapname;
     char *new_imapname;
     char *tmp_imapname;
+    int partial;            /* failed after committing part of the change */
 };
 
 static void _mboxset_result_fini(struct mboxset_result *result)
@@ -2097,7 +2098,7 @@ static int _mbox_sharewith_to_rights(int rights, json_t *jsharewith)
     return newrights;
 }
 
-#define MBOXSET_RESULT_INITIALIZER { NULL, 0, NULL, NULL, NULL }
+#define MBOXSET_RESULT_INITIALIZER { NULL, 0, NULL, NULL, NULL, 0 }
 
 struct mboxset {
     struct jmap_set super;
@@ -2395,6 +2396,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     /* So many names... manage them in our own string pool */
     ptrarray_t strpool = PTRARRAY_INITIALIZER;
     int r = 0;
+    bool renamed = false;
     mbentry_t *mbinbox = NULL, *mbparent = NULL, *mbentry = NULL;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
 
@@ -2493,6 +2495,33 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             !jmap_hasrights_mbentry(req, mbentry, JACL_ADMIN_MAILBOX)) {
         result->err = json_pack("{s:s}", "type", "forbidden");
         goto done;
+    }
+
+    /* Likewise for the annotations: the mailbox may be renamed below */
+    int set_annots = 0;
+    if (args->name || args->specialuse) {
+        // these set for everyone
+        if (!jmap_hasrights_mbentry(req, mbentry, JACL_SETKEYWORDS)) {
+            mboxlist_entry_free(&mbentry);
+            result->err = json_pack("{s:s}", "type", "forbidden");
+            goto done;
+        }
+        /* specialuse is an owner-scoped annotation; sharees must not set it */
+        if (args->specialuse && strcmp(req->userid, req->accountid)) {
+            mboxlist_entry_free(&mbentry);
+            result->err = json_pack("{s:s}", "type", "forbidden");
+            goto done;
+        }
+        set_annots = 1;
+    }
+    if (args->sortorder >= 0 || args->color || args->show_as_label >= 0) {
+        // these are per-user, so you just need READ access
+        if (!jmap_hasrights_mbentry(req, mbentry, ACL_READ)) {
+            mboxlist_entry_free(&mbentry);
+            result->err = json_pack("{s:s}", "type", "forbidden");
+            goto done;
+        }
+        set_annots = 1;
     }
 
     /* Now parent_id always has a proper mailbox id */
@@ -2666,36 +2695,12 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                 goto done;
             }
             mboxname = newmboxname;  // cheap and nasty change!
+            renamed = true;
         }
     }
 
     /* Write annotations and isSubscribed */
 
-    int set_annots = 0;
-    if (args->name || args->specialuse) {
-        // these set for everyone
-        if (!jmap_hasrights_mbentry(req, mbentry, JACL_SETKEYWORDS)) {
-            mboxlist_entry_free(&mbentry);
-            result->err = json_pack("{s:s}", "type", "forbidden");
-            goto done;
-        }
-        /* specialuse is an owner-scoped annotation; sharees must not set it */
-        if (args->specialuse && strcmp(req->userid, req->accountid)) {
-            mboxlist_entry_free(&mbentry);
-            result->err = json_pack("{s:s}", "type", "forbidden");
-            goto done;
-        }
-        set_annots = 1;
-    }
-    if (args->sortorder >= 0 || args->color || args->show_as_label >= 0) {
-        // these are per-user, so you just need READ access
-        if (!jmap_hasrights_mbentry(req, mbentry, ACL_READ)) {
-            mboxlist_entry_free(&mbentry);
-            result->err = json_pack("{s:s}", "type", "forbidden");
-            goto done;
-        }
-        set_annots = 1;
-    }
     if (set_annots) {
         if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
             r = mboxlist_promote_intermediary(mbentry->name);
@@ -2762,6 +2767,8 @@ done:
     }
     else if (r) {
         result->err = jmap_server_error(r);
+        /* The rename stuck, so notUpdated would not be true either */
+        if (renamed) result->partial = 1;
     }
     jmap_parser_fini(&parser);
     while (strpool.count) free(ptrarray_pop(&strpool));
@@ -3249,6 +3256,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
         else {
             struct mboxset_result result = MBOXSET_RESULT_INITIALIZER;
             _mbox_update(req, args, mode, &result, update_intermediaries);
+            if (result.partial) set->partial_fail = 1;
             if (result.err) {
                 json_object_set(set->super.not_updated,
                         args->mbox_id, result.err);
