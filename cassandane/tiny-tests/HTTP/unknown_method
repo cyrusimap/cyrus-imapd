@@ -33,7 +33,16 @@ sub server_closed_connection($self, $s, $desc) {
     my $res = eval {
         http1_read_response($s);
     };
-    $self->assert_matches(qr/\bServer closed connection without sending any data back\b/, $@ // '', "Server closed the connection for $desc");
+
+    # Either way the server closed the connection: if our request arrived
+    # before its close(), it was unread, so the kernel reset the connection
+    # instead of ending it cleanly -- which is likely on a busy or slow
+    # (valgrind) server.
+    my $err = $@ // '';
+    my $closed = qr/Server closed connection without sending any data back/;
+    my $reset = qr/Connection reset by peer/;
+    $self->assert_matches(qr/\b(?:$closed|$reset)\b/, $err,
+        "Server closed the connection for $desc (got: $err)");
     $self->assert(!defined $res, "hence no response for $desc");
 }
 
