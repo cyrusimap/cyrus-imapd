@@ -8,7 +8,7 @@ use Data::Dumper;
 use File::Slurp;
 use HTTP::Tiny;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
 

@@ -5,6 +5,8 @@ package Cassandane::Unit::Formatter;
 use strict;
 use warnings;
 
+use base qw(Cassandane::Unit::Listener);
+
 use Benchmark;
 use Date::Format;
 use IO::Handle;
@@ -28,38 +30,8 @@ sub _print
     $self->{fh}->print(@args);
 }
 
-# No-op implementations of Listener interface.  To create a new output
-# format, subclass from this and override the appropriate event handlers
-
-sub start_suite
-{
-    my ($self, $suite) = @_;
-}
-
-sub end_suite
-{
-    my ($self, $suite) = @_;
-}
-
-sub start_test
-{
-    my ($self, $test) = @_;
-}
-
-sub add_pass
-{
-    my ($self, $test) = @_;
-}
-
-sub add_error
-{
-    my ($self, $test, $exception) = @_;
-}
-
-sub add_failure
-{
-    my ($self, $test, $exception) = @_;
-}
+# To create a new output format, subclass from this and override the event
+# handlers it cares about.  Cassandane::Unit::Listener has the whole set.
 
 # A skipped test never ran, so it never started either: this is the only event
 # a formatter hears about it.
@@ -73,11 +45,6 @@ sub skip_count
 {
     my ($self) = @_;
     return $self->{skip_count} || 0;
-}
-
-sub end_test
-{
-    my ($self, $test) = @_;
 }
 
 # Override this with your output format's end-of-tests handling.  The
@@ -146,11 +113,11 @@ sub print_errors
 
     my $i = 0;
     for my $e (@{$result->errors()}) {
-        chomp(my $e_to_str = $e);
+        chomp(my $report = $e->{report});
         $i++;
-        $self->_print("$i) $e_to_str\n");
-        $self->_print("\nAnnotations:\n", $e->object->annotations())
-          if $e->object->annotations();
+        $self->_print("$i) $report\n");
+        $self->_print("\nAnnotations:\n", $e->{test}->annotations())
+          if $e->{test}->annotations();
     }
 }
 
@@ -169,11 +136,11 @@ sub print_failures
 
     my $i = 0;
     for my $f (@{$result->failures()}) {
-        chomp(my $f_to_str = $f);
+        chomp(my $report = $f->{report});
         $self->_print("\n") if $i++;
-        $self->_print("$i) $f_to_str\n");
-        $self->_print("\nAnnotations:\n", $f->object->annotations())
-          if $f->object->annotations();
+        $self->_print("$i) $report\n");
+        $self->_print("\nAnnotations:\n", $f->{test}->annotations())
+          if $f->{test}->annotations();
     }
 }
 

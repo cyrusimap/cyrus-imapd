@@ -5,7 +5,7 @@ package Cassandane::Test::Message;
 use strict;
 use warnings;
 
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Unit::TestSuite);
 use Cassandane::Message;
 use Cassandane::Address;
 use Cassandane::Util::CRLF;

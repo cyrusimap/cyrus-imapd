@@ -8,17 +8,15 @@ use experimental 'signatures';
 
 use parent qw(Error);
 
+# What a report says about this exception: the stack trace when Error was
+# asked to take one, and otherwise just the message.  Below the test method
+# it's all framework, and nobody reading a failure wants to see it.
 sub stringify ($self, @)
 {
-    my $test = $self->object;
-
-    my $named = $test && $test->can('to_string') ? $test->to_string() . "\n "
-                                                 : q{};
-
     my $trace = $self->{'-stacktrace'} // $self->text // 'Died';
     $trace =~ s/[\w:]+::run_test\(.*/[...framework calls elided...]/s;
 
-    return $named . $trace;
+    return $trace;
 }
 
 sub to_string ($self)

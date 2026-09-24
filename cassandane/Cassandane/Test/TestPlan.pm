@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use experimental 'signatures';
 
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Unit::TestSuite);
 use Cassandane::Unit::TestPlan;
 
 # We plan against a fixture tree rather than the real test roots so that these

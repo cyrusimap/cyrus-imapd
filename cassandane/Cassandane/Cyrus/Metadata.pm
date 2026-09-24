@@ -8,7 +8,7 @@ use DateTime;
 use File::Temp qw(:POSIX);
 use Config;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 
 use lib '../perl/imap/lib';

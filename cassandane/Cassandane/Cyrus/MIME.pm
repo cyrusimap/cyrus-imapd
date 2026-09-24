@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Data::Dumper;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 

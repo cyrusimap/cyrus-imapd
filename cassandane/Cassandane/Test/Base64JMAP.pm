@@ -4,7 +4,7 @@ package Cassandane::Test::Base64JMAP;
 use strict;
 use warnings;
 
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Unit::TestSuite);
 
 use Cassandane::Util::Base64JMAP;
 use MIME::Base64 qw(encode_base64url decode_base64url);

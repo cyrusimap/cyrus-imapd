@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause-CMU
 # See COPYING file at the root of the distribution for more details.
 
-package Cassandane::Unit::TestCase;
+package Cassandane::Unit::TestSuite;
 use strict;
 use warnings;
 
@@ -14,7 +14,6 @@ use Package::Stash;
 
 use Cassandane::Failure;
 use Cassandane::Util::Log;
-use Cassandane::Util::TestUrl;
 
 my $buildinfo;
 
@@ -37,14 +36,6 @@ sub name
     return $self->{name};
 }
 
-# How a failure names the test in a report.  FormatPretty picks the two apart
-# again, so keep the shape.
-sub to_string
-{
-    my ($self) = @_;
-    return ($self->name() // 'ANON') . '(' . ref($self) . ')';
-}
-
 # Whatever the test wrote while it ran.  The plan feeds it the test's log file
 # when the test is over, and the formatters print it under a failure.
 sub annotate
@@ -60,29 +51,28 @@ sub annotations
     return $self->{annotations};
 }
 
-sub run
-{
-    my ($self, $result, $runner) = @_;
-
-    $result->run($self);
-
-    return $result;
-}
-
 sub run_bare
 {
     my ($self) = @_;
 
-    # set_up is deliberately outside the guard: if it dies, tear_down doesn't
-    # run.  Tearing down what was never set up tends to die *again*.  The error
-    # we want reported is failure to set up, not tear down.
-    $self->set_up();
+    my $set_up_ok = 0;
 
     try {
+        $self->set_up();
+        $set_up_ok = 1;
+
         $self->run_test();
     }
     finally {
-        $self->tear_down();
+        if ($set_up_ok) {
+            $self->tear_down();
+        }
+        else {
+            # We know that set_up didn't succeed, but did it *partly* succeed?
+            # Maybe, so we'll try to tear_down, but if that fails, that's the
+            # limit of what we can do, so just ignore failure on that.
+            eval { $self->tear_down() };
+        }
     };
 
     return;
@@ -787,6 +777,11 @@ sub assert_not_contains
 sub new_test_url
 {
     my ($self, $content_or_app) = @_;
+
+    # Loaded on demand, because it brings in Test::TCP, which brings in Test2's
+    # IPC layer, which then spends every run's exit complaining about temp
+    # directories it can no longer reach.
+    require Cassandane::Util::TestUrl;
 
     return Cassandane::Util::TestURL->new({
         app => $content_or_app,

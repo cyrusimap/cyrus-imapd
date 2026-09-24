@@ -14,7 +14,7 @@ use Data::GUID qw(guid_string);
 use XML::Spice;
 use XML::Simple;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 

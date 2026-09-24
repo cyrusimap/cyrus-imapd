@@ -13,7 +13,7 @@ use Storable 'dclone';
 use File::Basename;
 use XML::Spice;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 
 use charnames ':full';

@@ -7,14 +7,14 @@ use warnings;
 use DateTime;
 use Net::POP3;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 
-Cassandane::Cyrus::TestCase::magic(PopSubFolders => sub {
+Cassandane::Cyrus::TestSuite::magic(PopSubFolders => sub {
     shift->config_set(popsubfolders => 1);
 });
 
-Cassandane::Cyrus::TestCase::magic(PopUseImapFlags => sub {
+Cassandane::Cyrus::TestSuite::magic(PopUseImapFlags => sub {
     shift->config_set('popuseimapflags' => 'yes');
 });
 

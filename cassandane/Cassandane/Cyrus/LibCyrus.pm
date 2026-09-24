@@ -10,7 +10,7 @@ use DateTime;
 use File::Copy;
 use File::Find;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 

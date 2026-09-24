@@ -7,7 +7,7 @@ use warnings;
 use DateTime;
 use Data::Dumper;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;

@@ -10,7 +10,7 @@ use File::Basename;
 use File::Copy;
 use File::Path qw(mkpath);
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Mboxname;
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;

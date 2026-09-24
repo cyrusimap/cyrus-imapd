@@ -8,7 +8,7 @@ use JSON;
 use JSON::XS;
 use Data::Dumper;
 
-use base qw(Cassandane::Cyrus::TestCase Cassandane::Mixin::QuotaHelper);
+use base qw(Cassandane::Cyrus::TestSuite Cassandane::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
 
 use charnames ':full';

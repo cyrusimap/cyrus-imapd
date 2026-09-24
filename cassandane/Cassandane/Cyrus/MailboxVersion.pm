@@ -15,7 +15,7 @@ use Encode qw(decode_utf8);
 use Cwd qw(abs_path getcwd);
 use POSIX qw(mktime);
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 

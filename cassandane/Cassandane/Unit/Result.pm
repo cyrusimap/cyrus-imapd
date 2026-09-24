@@ -55,16 +55,16 @@ sub run ($self, $test)
         $self->add_pass($test);
     }
     catch Cassandane::Failure with {
-        $self->add_failure($test, shift);
+        $self->add_failure($test, shift->stringify);
     }
     catch Error with {
         my $thrown = shift;
-        $self->add_error($test, $thrown->isa('Cassandane::Error')
-                              ? $thrown
-                              : Cassandane::Error->from_thrown($thrown));
+        $thrown = Cassandane::Error->from_thrown($thrown)
+            if not $thrown->isa('Cassandane::Error');
+        $self->add_error($test, $thrown->stringify);
     }
     otherwise {
-        $self->add_error($test, Cassandane::Error->from_thrown(shift));
+        $self->add_error($test, Cassandane::Error->from_thrown(shift)->stringify);
     };
 
     $self->end_test($test);
@@ -90,22 +90,17 @@ sub add_pass ($self, $test)
     return;
 }
 
-sub add_failure ($self, $test, $exception)
+sub add_failure ($self, $test, $report)
 {
-    # the formatters ask the exception which test it belongs to
-    $exception->{'-object'} = $test;
-
-    push $self->{failures}->@*, $exception;
-    $self->tell_listeners(add_failure => $test, $exception);
+    push $self->{failures}->@*, { test => $test, report => $report };
+    $self->tell_listeners(add_failure => $test, $report);
     return;
 }
 
-sub add_error ($self, $test, $exception)
+sub add_error ($self, $test, $report)
 {
-    $exception->{'-object'} = $test;
-
-    push $self->{errors}->@*, $exception;
-    $self->tell_listeners(add_error => $test, $exception);
+    push $self->{errors}->@*, { test => $test, report => $report };
+    $self->tell_listeners(add_error => $test, $report);
     return;
 }
 
@@ -114,6 +109,8 @@ sub run_count ($self)
     return $self->{run_count};
 }
 
+# Each is an arrayref of { test, report }: the test that went wrong, and what
+# a report should say about it.
 sub failures ($self)
 {
     return $self->{failures};

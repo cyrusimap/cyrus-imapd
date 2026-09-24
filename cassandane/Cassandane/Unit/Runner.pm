@@ -5,121 +5,42 @@ package Cassandane::Unit::Runner;
 use strict;
 use warnings;
 use Benchmark;
-use IO::File;
 
-use Cassandane::Cassini;
+use Cassandane::Unit::FailedTests;
 use Cassandane::Unit::Result;
 
 sub new
 {
     my ($class) = @_;
 
-    my $cassini = Cassandane::Cassini->instance();
-    my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
-    my $failed_file = "$rootdir/failed";
-    # if we can't write there, we just won't record failed tests!
-
     return bless {
-        remove_me_in_cassandane_child => 1,
-        filter => [],
-        formatters => [],
-        failed_fh => IO::File->new($failed_file, 'w'),
+        listeners => [ Cassandane::Unit::FailedTests->new() ],
     }, $class;
 }
 
-# The filter tokens that decide whether a test runs at all: testrunner.pl sets
-# them from the command line, the plan asks each test about them in turn.  See
-# Cassandane::Unit::TestCase::filter for what a token means.
-sub filter
-{
-    my ($self, @tokens) = @_;
-
-    $self->{filter} = \@tokens if @tokens;
-
-    return @{ $self->{filter} };
-}
-
-sub create_test_result
-{
-    my ($self) = @_;
-    $self->{_result} = Cassandane::Unit::Result->new();
-    return $self->{_result};
-}
-
+# A formatter is a listener that reports what it hears, and there is only the
+# one list of listeners for it to go on.
 sub add_formatter
 {
     my ($self, $formatter) = @_;
 
-    push @{$self->{formatters}}, $formatter;
-}
-
-# this is very similar to Cassandane::Unit::Result's tell_listeners(), except
-# without the annoying crash when the listener doesn't care about the event
-sub tell_formatters
-{
-    my ($self, $method, @args) = @_;
-
-    foreach my $formatter (@{$self->{formatters}}) {
-        if ($formatter->can($method)) {
-            $formatter->$method(@args);
-        }
-    }
+    push @{$self->{listeners}}, $formatter;
 }
 
 sub do_run
 {
-    my ($self, $suite) = @_;
-    my $result = $self->create_test_result();
+    my ($self, $plan) = @_;
 
-    $result->add_listener($self);
-    foreach my $f (@{$self->{formatters}}) {
-        $result->add_listener($f);
-    }
+    my $result = Cassandane::Unit::Result->new();
+    $result->add_listener($_) for @{$self->{listeners}};
 
     my $start_time = new Benchmark();
-    $suite->run($result, $self);
+    $plan->run($result);
     my $end_time = new Benchmark();
 
-    foreach my $f (@{$self->{formatters}}) {
-        $f->finished($result, $start_time, $end_time);
-    }
+    $result->tell_listeners(finished => $result, $start_time, $end_time);
 
     return $result->was_successful;
-}
-
-sub start_suite { }
-
-sub end_suite { }
-
-sub start_test { }
-
-sub end_test { }
-
-sub add_pass { }
-
-sub record_failed
-{
-    my ($self, $test) = @_;
-    return if not $self->{failed_fh};
-
-    my $suite = ref($test);
-    $suite =~ s/^Cassandane:://;
-
-    my $testname = $test->name =~ s/^test_//r;
-
-    $self->{failed_fh}->print("$suite.$testname\n");
-}
-
-sub add_error
-{
-    my ($self, $test) = @_;
-    $self->record_failed($test);
-}
-
-sub add_failure
-{
-    my ($self, $test) = @_;
-    $self->record_failed($test);
 }
 
 1;

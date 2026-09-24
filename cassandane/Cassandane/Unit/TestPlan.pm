@@ -11,9 +11,8 @@ use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
 use Cassandane::Error;
-use Cassandane::Failure;
 use Cassandane::Util::Log;
-use Cassandane::Unit::TestCase;
+use Cassandane::Unit::TestSuite;
 use Cassandane::Unit::TestPlanItem;
 use Cassandane::Unit::OutcomeListener;
 use Cassandane::Unit::WorkerPool;
@@ -50,7 +49,7 @@ sub _get_item
 sub _schedule
 {
     my ($self, $neg, $path, $testname, $spec) = @_;
-    return if ($path =~ m/\/TestCase\.pm$/);
+    return if ($path =~ m/\/TestSuite\.pm$/);
 
     my $suite = $path;
     $suite =~ s/\.pm$//;
@@ -498,8 +497,7 @@ sub _make_logfile
 }
 
 # Point this process's STDOUT and STDERR at the log file, keeping the
-# originals: in the single threaded case, the messages between tests still go
-# to the terminal.
+# originals so that they can be put back once the test is done.
 sub _capture_output
 {
     my ($self, $logfile) = @_;
@@ -561,14 +559,14 @@ sub _get_test
 }
 
 # Run one work item and return its outcome: a verdict, plus a description of
-# the failure when there is one.  In a worker that goes back to the parent; in
-# the single threaded case the caller has it already.
+# the failure when there is one.  This runs in a worker, and the outcome goes
+# back to the parent, which is what reports it.
 sub _run_workitem
 {
-    my ($self, $witem, $result, $runner, $in_worker) = @_;
+    my ($self, $witem, $result) = @_;
     my $test = $self->_get_test($witem);
 
-    my $listener = $self->_listen_for_outcome($result, $in_worker);
+    my $listener = $self->_listen_for_outcome($result);
 
     # Every worker inherited the same random seed from the parent when it was
     # forked, so without this they would all generate the same message ids,
@@ -578,13 +576,13 @@ sub _run_workitem
     $self->_capture_output($witem->{logfile});
 
     my $outcome;
-    if (my $reason = _skip_reason($test, $runner))
+    if (my $reason = $self->_skip_reason($test))
     {
         $outcome = { outcome => 'skip', reason => $reason };
     }
     else
     {
-        $test->run($result, $runner);
+        $result->run($test);
         $outcome = $listener->outcome()
             or die "$witem->{suite}.$witem->{testname} ran but reported nothing";
     }
@@ -598,38 +596,31 @@ sub _run_workitem
         my $ex = $@;
         if ($ex)
         {
-            $result->add_error($test, Cassandane::Error->from_thrown($ex));
+            $result->add_error($test,
+                               Cassandane::Error->from_thrown($ex)->stringify);
             $outcome = $listener->outcome();
         }
     }
 
     $self->_restore_stdout();
-    if (!$in_worker)
-    {
-        if ($outcome->{outcome} eq 'skip')
-        {
-            _report_skip($runner, $test, $outcome->{reason});
-        }
-        else
-        {
-            $test->annotate_from_file($witem->{logfile});
-            _dump_logfile($witem->{logfile}) if (get_verbose > 1);
-        }
-        unlink($witem->{logfile}) if (!defined $self->{log_directory});
-    }
 
     return $outcome;
 }
 
 # The filters that decide whether a test runs at all.  The first one with an
-# answer wins, and its answer is why the test was skipped.  They're consulted
-# in the order the runner was given them, because some have side effects: a
-# test's :want_service_http attribute is honoured by a filter.
-sub _skip_reason
+# answer wins, and its answer is why the test was skipped.  Order matters,
+# because some have side effects: a test's :want_service_http attribute is
+# honoured by a filter.
+sub _skip_reason ($self, $test)
 {
-    my ($test, $runner) = @_;
+    my @filters = qw(skip_version skip_missing_features
+                     skip_runtime_check
+                     enable_wanted_properties);
 
-    foreach my $token ($runner->filter())
+    push @filters, 'skip_slow' if $self->{skip_slow};
+    push @filters, 'slow_only' if $self->{slow_only};
+
+    foreach my $token (@filters)
     {
         my $reason = $test->filter_method($token);
         return $reason if $reason;
@@ -638,61 +629,27 @@ sub _skip_reason
     return;
 }
 
-# A skipped test has no result to add: it never started, so the listeners that
-# count runs and record failures have nothing to hear.  The formatters are
-# told, because a skip is worth reporting.
-sub _report_skip
-{
-    my ($runner, $test, $reason) = @_;
-
-    $runner->tell_formatters('add_skip', $test, $reason)
-        if $runner->can('tell_formatters');
-}
-
-# Rebuild, from what came back over the pipe, an exception the result and the
-# formatters can report.  Error::new insists on describing this process, so
-# the stack trace from the process that actually failed is put back by hand.
-sub _rebuild_exception
-{
-    my ($class, $failure) = @_;
-
-    my $exception = $class->new(
-        '-text' => $failure->{text},
-        '-file' => $failure->{file},
-        '-line' => $failure->{line},
-    );
-    $exception->{'-stacktrace'} = $failure->{stacktrace} // $failure->{text};
-
-    return $exception;
-}
-
 sub _finish_workitem
 {
-    my ($self, $witem, $result, $runner) = @_;
+    my ($self, $witem, $result) = @_;
     my $test = $self->_get_test($witem);
 
     if ($witem->{outcome} eq 'skip')
     {
         unlink($witem->{logfile}) if (!defined $self->{log_directory});
-        _report_skip($runner, $test, $witem->{reason});
+
+        # A skipped test has no result to add: it never started, so nothing
+        # counts it as a run.  The listeners still hear about it, because a
+        # skip is worth reporting.
+        $result->tell_listeners(add_skip => $test, $witem->{reason});
         return;
     }
 
     # The test was actually started earlier by _run_workitem, but its
-    # start_test event wasn't sent.  It might have got swallowed due to
-    # the output format listeners being removed in the workitem handling.
-    # Send the event again now, to make sure the formatters actually get
-    # it...
+    # start_test event wasn't sent: the worker drops the listeners that
+    # write the report.  Send the event again now, so that the formatters
+    # hear about the test before they hear how it went.
     $result->start_test($test);
-    # But! If they're computing their own start time based on this event
-    # they'll get it wrong.  We know the real start time, so tell the
-    # formatter to use that instead.
-    if ($runner->can('tell_formatters'))
-    {
-        $runner->tell_formatters('fake_start_time',
-                                 $test,
-                                 $witem->{start_time});
-    }
 
     $test->annotate_from_file($witem->{logfile});
     _dump_logfile($witem->{logfile}) if (get_verbose > 1);
@@ -704,15 +661,11 @@ sub _finish_workitem
     }
     elsif ($witem->{outcome} eq 'fail')
     {
-        $result->add_failure($test,
-                             _rebuild_exception('Cassandane::Failure',
-                                                $witem->{failure}));
+        $result->add_failure($test, $witem->{report});
     }
     elsif ($witem->{outcome} eq 'error')
     {
-        $result->add_error($test,
-                           _rebuild_exception('Cassandane::Error',
-                                              $witem->{failure}));
+        $result->add_error($test, $witem->{report});
     }
     else
     {
@@ -722,20 +675,19 @@ sub _finish_workitem
     $result->end_test($test);
 }
 
-# Arrange for the outcome of the next test to be recorded.  A worker also
-# drops the listeners that write the report, because the parent replays the
-# events to those once the outcome gets back to it.
+# Arrange for the outcome of the next test to be recorded.  The listeners that
+# write the report are dropped, because the parent replays the events to those
+# once the outcome gets back to it.
 sub _listen_for_outcome
 {
-    my ($self, $result, $in_worker) = @_;
+    my ($self, $result) = @_;
 
     my $listener = $self->{outcome_listener}
                ||= Cassandane::Unit::OutcomeListener->new();
     $listener->reset();
 
-    my @listeners = grep {
-        !($in_worker && $_->{remove_me_in_cassandane_child})
-    } $result->listeners();
+    my @listeners = grep {; !$_->{remove_me_in_cassandane_child} }
+                    $result->listeners();
 
     push @listeners, $listener
         if !grep {; $_ == $listener } @listeners;
@@ -747,11 +699,12 @@ sub _listen_for_outcome
 
 # The runner hands the whole plan to run(), rather than one suite at a time,
 # so that every scheduled test lands in one result and one summary.
+#
+# Tests always run in a worker, even when there is only one worker to run
+# them: one way of working is worth more than the fork it costs.
 sub run
 {
-    my ($self, $result, $runner) = @_;
-
-    my $maxworkers = $self->{maxworkers} || 1;
+    my ($self, $result) = @_;
 
     # we expand the schedule before forking the
     # workers so that we can just hand the reference
@@ -766,55 +719,41 @@ sub run
         $SIG{INT} = 'DEFAULT' if $interrupted >= 2;
     };
 
-    if ($maxworkers > 1)
+    # we want an error not a signal
+    $SIG{PIPE} = 'IGNORE';
+
+    # Just In Case any code samples this in a TestSuite c'tor
+    $ENV{CASSANDANE_WORKER_ID} = 'invalid';
+
+    my $pool = Cassandane::Unit::WorkerPool->new(
+        maxworkers => $self->{maxworkers} || 1,
+        handler => sub {
+            my ($assignment) = @_;
+            return $self->_run_workitem($assignment, $result);
+        },
+    );
+
+    my ($witem, $done);
+    $pool->start();
+    # first ^C stops spawning new work items
+    while ($interrupted < 1 && ($witem = shift @workitems))
     {
-        # multi-threaded case: use worker pool
-
-        # we want an error not a signal
-        $SIG{PIPE} = 'IGNORE';
-
-        # Just In Case any code samples this in a TestCase c'tor
-        $ENV{CASSANDANE_WORKER_ID} = 'invalid';
-
-        my $pool = Cassandane::Unit::WorkerPool->new(
-            maxworkers => $maxworkers,
-            handler => sub {
-                my ($assignment) = @_;
-                return $self->_run_workitem($assignment, $result, $runner, 1);
-            },
-        );
-        my ($witem, $done);
-        $pool->start();
-        # first ^C stops spawning new work items
-        while ($interrupted < 1 && ($witem = shift @workitems))
-        {
-            if ($self->{keep_going} || $result->was_successful())
-            {
-                $self->_make_logfile($witem);
-                $pool->assign($witem);
-            }
-            while ($done = $pool->retrieve(0))
-            {
-                $self->_finish_workitem($done, $result, $runner);
-            }
-        }
-        # second ^C stops waiting for work items to finish
-        while ($interrupted < 2 && ($done = $pool->retrieve(1)))
-        {
-            $self->_finish_workitem($done, $result, $runner);
-        }
-        $pool->stop();
-    }
-    else
-    {
-        # single threaded case: just run it all in-process
-        foreach my $witem (@workitems)
+        if ($self->{keep_going} || $result->was_successful())
         {
             $self->_make_logfile($witem);
-            $self->_run_workitem($witem, $result, $runner, 0);
-            last if ($interrupted || !($self->{keep_going} || $result->was_successful()));
+            $pool->assign($witem);
+        }
+        while ($done = $pool->retrieve(0))
+        {
+            $self->_finish_workitem($done, $result);
         }
     }
+    # second ^C stops waiting for work items to finish
+    while ($interrupted < 2 && ($done = $pool->retrieve(1)))
+    {
+        $self->_finish_workitem($done, $result);
+    }
+    $pool->stop();
 
     return $result->was_successful();
 }

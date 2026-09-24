@@ -250,7 +250,7 @@ sub get_version
     # Need to check the named-installation directory AND the
     # default installation directory, before falling back to the
     # default-default
-    # Usually Cassandane::Cyrus::TestCase only initialises an Instance
+    # Usually Cassandane::Cyrus::TestSuite only initialises an Instance
     # object with a non-default installation if that installation actually
     # exists, but this is a class method, not an object method, so we
     # don't have that protection and have to DIY.
@@ -2856,7 +2856,7 @@ sub setup_syslog_replacement
 # $instance->{have_syslog_replacement} is true, otherwise you will always
 # fail on systems where the syslog replacement doesn't work.
 #
-# In most cases you probably want assert_syslog_matches from TestCase
+# In most cases you probably want assert_syslog_matches from TestSuite
 # (or assert_syslog_does_not_match).  If you need something trickier,
 # check those anyway to see how to do so safely.
 #
@@ -3411,7 +3411,7 @@ sub _new_jmaptester_for_user($self, $tester_class, $tester_arg, $user, $new_arg 
 
 sub new_carddavtalk_for_user ($self, $user) {
     local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} =
-        Cassandane::Cyrus::TestCase::_need_http_tiny_env();
+        Cassandane::Cyrus::TestSuite::_need_http_tiny_env();
 
     unless ($self->{config}->get_bit('httpmodules', 'carddav')) {
         Carp::croak("User CardDAV client requested, but carddav httpmodule not enabled");
@@ -3429,7 +3429,7 @@ sub new_carddavtalk_for_user ($self, $user) {
 
 sub new_caldavtalk_for_user ($self, $user) {
     local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} =
-        Cassandane::Cyrus::TestCase::_need_http_tiny_env();
+        Cassandane::Cyrus::TestSuite::_need_http_tiny_env();
 
     unless ($self->{config}->get_bit('httpmodules', 'caldav')) {
         Carp::croak("User CalDAV client requested, but caldav httpmodule not enabled");

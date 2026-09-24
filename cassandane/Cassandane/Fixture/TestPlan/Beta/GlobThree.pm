@@ -7,7 +7,7 @@ package Cassandane::Fixture::TestPlan::Beta::GlobThree;
 use strict;
 use warnings;
 
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Unit::TestSuite);
 
 sub test_alpha { }
 

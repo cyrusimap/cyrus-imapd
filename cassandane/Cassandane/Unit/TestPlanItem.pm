@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use experimental 'signatures';
 
-use Cassandane::Unit::TestCase;
+use Cassandane::Unit::TestSuite;
 
 sub new
 {
@@ -29,8 +29,8 @@ sub _suite_class ($self)
         my $file = ($class =~ s{::}{/}gr) . '.pm';
         require $file;
 
-        die "$class is not a Cassandane::Unit::TestCase\n"
-            if not $class->isa('Cassandane::Unit::TestCase');
+        die "$class is not a Cassandane::Unit::TestSuite\n"
+            if not $class->isa('Cassandane::Unit::TestSuite');
 
         $self->{loaded} = 1;
     }

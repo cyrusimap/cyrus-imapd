@@ -92,7 +92,7 @@ The options most worth knowing about:
 
 =item B<-f>, B<--format> I<FORMAT>
 
-Choose a test report format; repeatable.  The formats are:
+Choose the test report format.  The formats are:
 
 =over 4
 
@@ -110,12 +110,6 @@ handy when debugging a single test, especially with C<-vvv>.
 =item C<tap>
 
 Test Anything Protocol.  Rudimentary, but should be valid TAP.
-
-=item C<xml>
-
-jUnit-style XML, written to a F<reports/> subdirectory of the current
-directory.  (Not the same F<reports> as C<prettier> uses.)  Useful for some CI
-systems; our GitHub CI doesn't use it.
 
 =back
 
@@ -170,9 +164,9 @@ use List::Util qw(uniq);
 use lib '.';
 use Cassandane::Util::Setup;
 use Cassandane::Error;
+use Cassandane::Unit::FailedTests;
 use Cassandane::Unit::FormatPretty;
 use Cassandane::Unit::FormatTAP;
-use Cassandane::Unit::FormatXML;
 use Cassandane::Unit::Runner;
 use Cassandane::Unit::TestPlan;
 use Cassandane::Util::Log;
@@ -189,7 +183,6 @@ $ENV{DATAPRINTERRC} = abs_path('.dataprinter')
     unless exists $ENV{DATAPRINTERRC};
 
 my %format_params = ();
-my $output_dir = 'reports';
 my @names;
 
 # Make sure our binary components have been built already
@@ -241,64 +234,29 @@ if ($missing_binaries) {
 }
 
 my %formatters = (
-    tap => {
-        writes_to_stdout => 1,
-        formatter => sub {
-            my ($params, $fh) = @_;
-            return Cassandane::Unit::FormatTAP->new($fh);
-        },
+    tap => sub {
+        my ($params, $fh) = @_;
+        return Cassandane::Unit::FormatTAP->new($fh);
     },
-    pretty => {
-        writes_to_stdout => 1,
-        formatter => sub {
-            my ($params, $fh) = @_;
-            $params->{quiet} = 0;
-            return Cassandane::Unit::FormatPretty->new($params, $fh);
-        },
+    pretty => sub {
+        my ($params, $fh) = @_;
+        $params->{quiet} = 0;
+        return Cassandane::Unit::FormatPretty->new($params, $fh);
     },
-    prettier => {
-        writes_to_stdout => 1,
-        formatter => sub {
-            my ($params, $fh) = @_;
-            $params->{quiet} = 1;
-            return Cassandane::Unit::FormatPretty->new($params, $fh);
-        },
-    },
-    xml => {
-        writes_to_stdout => 0,
-        formatter => sub {
-            my ($params, $fh) = @_;
-            $params->{directory} = $output_dir;
-            return Cassandane::Unit::FormatXML->new($params);
-        },
+    prettier => sub {
+        my ($params, $fh) = @_;
+        $params->{quiet} = 1;
+        return Cassandane::Unit::FormatPretty->new($params, $fh);
     },
 );
 
 become_cyrus();
 
-eval {
-    if ( ! -d $output_dir ) {
-        mkdir($output_dir)
-            or die "Cannot make output directory \"$output_dir\": $!\n";
-    }
-
-    if (! -w $output_dir ) {
-        die "Cannot write to output directory \"$output_dir\"\n";
-    }
-};
-if ($@) {
-    my $eval_err = $@;
-    $formatters{xml}->{formatter} = sub {
-        die "Sorry, XML output format not available due to:\n",
-            "=> $eval_err";
-    };
-}
-
 my ($opt, $usage) = describe_options(
     "%c %o [testname...]",
 
-    [ 'format|f=s@',   "test report format, repeatable: xml, tap, pretty, or"
-                     . " prettier (default: prettier)" ],
+    [ 'format|f=s',    "test report format: tap, pretty, or prettier"
+                     . " (default: prettier)", { default => 'prettier' } ],
     [ 'list|l+',       "list matching tests instead of running them; repeat"
                      . " (-ll) to list individual tests, not just suites" ],
     [],
@@ -369,11 +327,8 @@ local $ENV{CASSANDANE_LIVE_OUTPUT} = 1 if $opt->live_output;
 my $cassini_filename = $opt->config;
 my @cassini_overrides;
 
-my %want_formats;
-for my $format (@{ $opt->format // [] }) {
-    usage() unless defined $formatters{$format};
-    $want_formats{$format} = 1;
-}
+my $want_format = $opt->format;
+usage() unless defined $formatters{$want_format};
 
 set_verbose(get_verbose() + $opt->verbose);
 
@@ -430,7 +385,7 @@ unless (-e $rootdir) {
 }
 
 if ($want_rerun) {
-    my $failed_file = "$rootdir/failed";
+    my $failed_file = Cassandane::Unit::FailedTests->filename();
 
     my @failed = eval { read_file($failed_file, { chomp => 1 }) };
     if ($@) {
@@ -480,27 +435,8 @@ else
     $plan->check_sanity(nonfatal => $opt->no_fatal_plan);
 
     # Run the schedule
-    $want_formats{prettier} = 1 if not scalar keys %want_formats;
-    my @writes_to_stdout = grep {
-        $formatters{$_}->{writes_to_stdout}
-    } keys %want_formats;
-    if (scalar @writes_to_stdout > 1) {
-        my $joined = join ', ', map { "'$_'" } @writes_to_stdout;
-        die "$joined formatters all want to write to stdout\n";
-    }
-
-    my @filters = qw(skip_version skip_missing_features
-                     skip_runtime_check
-                     enable_wanted_properties);
-    push @filters, 'skip_slow' if $plan->{skip_slow};
-    push @filters, 'slow_only' if $plan->{slow_only};
-
     my $runner = Cassandane::Unit::Runner->new();
-    foreach my $f (keys %want_formats) {
-        my $formatter = $formatters{$f}->{formatter}->({%format_params});
-        $runner->add_formatter($formatter);
-    }
-    $runner->filter(@filters);
+    $runner->add_formatter($formatters{$want_format}->({%format_params}));
 
     exit !$runner->do_run($plan);
 }

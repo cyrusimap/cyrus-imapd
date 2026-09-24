@@ -11,7 +11,7 @@ use JSON::XS qw(encode_json);
 use File::Find;
 use Module::Load::Conditional qw(check_install);
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestSuite);
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
 
@@ -126,7 +126,7 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-# n.b. similar to _skip_version() in Cassandane::Unit::TestCase
+# n.b. similar to _skip_version() in Cassandane::Unit::TestSuite
 sub skip_before
 {
     my ($lim) = @_;

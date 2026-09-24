@@ -242,7 +242,7 @@ Assertions
 ^^^^^^^^^^
 
 A test passes unless it dies or an assertion fails, so assertions are how you
-state what "correct" means.  They all live in ``Cassandane::Unit::TestCase``.
+state what "correct" means.  They all live in ``Cassandane::Unit::TestSuite``.
 The ones you'll reach for most often:
 
 * ``assert($condition, $message)``
@@ -261,7 +261,7 @@ for when an exact comparison would be too strict.  There are also
 domain-specific assertions such as ``assert_mailbox_structure`` and
 ``assert_syslog_matches``.
 
-Run ``perldoc Cassandane/Unit/TestCase.pm`` for the whole set, and see the
+Run ``perldoc Cassandane/Unit/TestSuite.pm`` for the whole set, and see the
 Test::Deep documentation for what a matcher can do.
 
 Comparing iCalendar and vCard data
@@ -283,8 +283,8 @@ Test attributes
 
 A test subroutine can carry *attributes*, written between its name and its
 signature, that tell the test planner how and whether to run it.  These apply
-to suites inheriting from ``Cassandane::Cyrus::TestCase`` (which is almost all
-of them); suites inheriting directly from ``Cassandane::Unit::TestCase`` ignore
+to suites inheriting from ``Cassandane::Cyrus::TestSuite`` (which is almost all
+of them); suites inheriting directly from ``Cassandane::Unit::TestSuite`` ignore
 them, but you shouldn't be inheriting from that unless you're testing
 Cassandane itself.
 
@@ -337,7 +337,7 @@ and a feature that survives only on a stable branch with:
 There is also a family of ``:want_*`` "magic" attributes that switch on
 services or features (replication, and so on) before the test runs.  For the
 full, current set of magic and ``:needs_*`` categories, read
-``Cassandane/Cyrus/TestCase.pm`` — this is exactly the kind of list that rots
+``Cassandane/Cyrus/TestSuite.pm`` — this is exactly the kind of list that rots
 in prose, so the source is the reference.
 
 If you need to branch on the Cyrus version *inside* a test (or inside

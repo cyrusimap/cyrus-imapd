@@ -4,6 +4,7 @@
 package Cassandane::Unit::OutcomeListener;
 use strict;
 use warnings;
+use base qw(Cassandane::Unit::Listener);
 
 sub new
 {
@@ -26,51 +27,16 @@ sub outcome
     return $self->{outcome};
 }
 
-sub start_suite
-{
-    my ($self, $suite) = @_;
-    # nothing to see here
-}
-
-sub start_test
-{
-    my ($self, $test) = @_;
-    # nothing to see here
-}
-
-sub end_test
-{
-    my ($self, $test) = @_;
-    # nothing to see here
-}
-
-sub end_suite
-{
-    my ($self, $suite) = @_;
-    # nothing to see here
-}
-
-sub _failure
-{
-    my ($exception) = @_;
-    return {
-        text       => $exception->text(),
-        stacktrace => $exception->{'-stacktrace'},
-        file       => $exception->file(),
-        line       => $exception->line(),
-    };
-}
-
 sub add_error
 {
-    my ($self, $test, $exception) = @_;
-    $self->{outcome} = { outcome => 'error', failure => _failure($exception) };
+    my ($self, $test, $report) = @_;
+    $self->{outcome} = { outcome => 'error', report => $report };
 }
 
 sub add_failure
 {
-    my ($self, $test, $exception) = @_;
-    $self->{outcome} = { outcome => 'fail', failure => _failure($exception) };
+    my ($self, $test, $report) = @_;
+    $self->{outcome} = { outcome => 'fail', report => $report };
 }
 
 sub add_pass
