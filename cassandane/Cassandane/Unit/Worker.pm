@@ -10,9 +10,9 @@ use IO::Handle;
 use POSIX ();
 use Time::HiRes qw(time);
 use JSON::XS ();
-use Error qw(:try);
+use Scalar::Util ();
 
-use Cassandane::Error;
+use Cassandane::Exception;
 use Cassandane::Failure;
 
 # $0 as it was before a worker renamed itself, so that it can keep saying which
@@ -183,7 +183,7 @@ sub _run_test
         my $ex = $@;
         if ($ex)
         {
-            my $report = Cassandane::Error->from_thrown($ex)->stringify;
+            my $report = _report_from_exception($ex);
             $outcome = { outcome => 'error', report => $report };
         }
     }
@@ -198,31 +198,35 @@ sub _test_for ($witem)
     return $witem->{suite}->new("test_$witem->{testname}");
 }
 
-# Run one test and say how it went.  A Cassandane::Failure means the test ran
-# and came out wrong; anything else thrown means it never got to say.
+# Run one test and say how it went.  There are only three answers: it returned,
+# it threw a Cassandane::Failure, meaning it ran and came out wrong, or it
+# threw something else, meaning it never got to say.
 sub _outcome_of ($test)
 {
-    my $outcome;
+    my $ok = eval { $test->run_bare(); 1 };
+    return { outcome => 'pass' } if $ok;
 
-    try {
-        $test->run_bare();
-        $outcome = { outcome => 'pass' };
-    }
-    catch Cassandane::Failure with {
-        $outcome = { outcome => 'fail', report => shift->stringify };
-    }
-    catch Error with {
-        my $thrown = shift;
-        $thrown = Cassandane::Error->from_thrown($thrown)
-            if not $thrown->isa('Cassandane::Error');
-        $outcome = { outcome => 'error', report => $thrown->stringify };
-    }
-    otherwise {
-        my $report = Cassandane::Error->from_thrown(shift)->stringify;
-        $outcome = { outcome => 'error', report => $report };
-    };
+    my $thrown = $@;
 
-    return $outcome;
+    return { outcome => 'fail', report => $thrown->stringify }
+        if Scalar::Util::blessed($thrown)
+        && $thrown->isa('Cassandane::Failure');
+
+    return { outcome => 'error', report => _report_from_exception($thrown) };
+}
+
+# What a report says about whatever was thrown.  Ours knows how to describe
+# itself; a string is already someone's message; anything else isn't ours and
+# gets said so before being quoted.
+sub _report_from_exception ($thrown)
+{
+    return $thrown->stringify
+        if Scalar::Util::blessed($thrown)
+        && $thrown->isa('Cassandane::Exception');
+
+    return $thrown if not ref $thrown;
+
+    return "exception while testing: $thrown";
 }
 
 # The filters that decide whether a test runs at all.  The first one with an
