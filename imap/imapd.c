@@ -7252,6 +7252,7 @@ localcreate:
 
     if (!r && (parent || !mbname_userid(mbname))) {
         mbname_t *ancestor = mbname_from_intname(parent ? parent->name : NULL);
+        if (!parent) mbname_set_domain(ancestor, mbname_domain(mbname));
         int oldest = strarray_size(mbname_boxes(ancestor));
         int youngest = strarray_size(boxes) - 1;
 
