@@ -881,7 +881,7 @@ static void sort_children(search_expr_t *e)
 {
     search_expr_t *child;
     hashu64_table maxcostcache = HASHU64_TABLE_INITIALIZER;
-    construct_hashu64_table(&maxcostcache, 512, 0);
+    construct_hashu64_table(&maxcostcache, 509, 0);
     hashu64_table *costcache = &maxcostcache;
 
     if (sizeof(uint64_t) < sizeof(search_expr_t*)) {
