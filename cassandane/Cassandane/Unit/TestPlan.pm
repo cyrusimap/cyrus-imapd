@@ -500,7 +500,7 @@ sub _annotations_from
 
 sub _finish_workitem
 {
-    my ($self, $witem, $result) = @_;
+    my ($self, $witem, $runner) = @_;
 
     if ($witem->{outcome} eq 'skip')
     {
@@ -509,7 +509,7 @@ sub _finish_workitem
         # A skipped test has no result to add: it never started, so nothing
         # counts it as a run.  The listeners still hear about it, because a
         # skip is worth reporting.
-        $result->tell_listeners(add_skip => $witem);
+        $runner->add_skip($witem);
         return;
     }
 
@@ -520,26 +520,26 @@ sub _finish_workitem
     # The test ran in a worker, which has no listeners to tell.  Send the
     # start_test event now, so that the formatters hear about the test
     # before they hear how it went.
-    $result->start_test($witem);
+    $runner->start_test($witem);
 
     if ($witem->{outcome} eq 'pass')
     {
-        $result->add_pass($witem);
+        $runner->add_pass($witem);
     }
     elsif ($witem->{outcome} eq 'fail')
     {
-        $result->add_failure($witem);
+        $runner->add_failure($witem);
     }
     elsif ($witem->{outcome} eq 'error')
     {
-        $result->add_error($witem);
+        $runner->add_error($witem);
     }
     else
     {
         die "Unknown outcome '$witem->{outcome}' for"
             . " $witem->{suite}.$witem->{testname}";
     }
-    $result->end_test($witem);
+    $runner->end_test($witem);
 }
 
 # The runner hands the whole plan to run(), rather than one suite at a time,
@@ -549,7 +549,7 @@ sub _finish_workitem
 # them: one way of working is worth more than the fork it costs.
 sub run
 {
-    my ($self, $result) = @_;
+    my ($self, $runner) = @_;
 
     # we expand the schedule before forking the
     # workers so that we can just hand the reference
@@ -580,24 +580,24 @@ sub run
     # first ^C stops spawning new work items
     while ($interrupted < 1 && ($witem = shift @workitems))
     {
-        if ($self->{keep_going} || $result->was_successful())
+        if ($self->{keep_going} || $runner->was_successful())
         {
             $self->_make_logfile($witem);
             $pool->assign($witem);
         }
         while ($done = $pool->retrieve(0))
         {
-            $self->_finish_workitem($done, $result);
+            $self->_finish_workitem($done, $runner);
         }
     }
     # second ^C stops waiting for work items to finish
     while ($interrupted < 2 && ($done = $pool->retrieve(1)))
     {
-        $self->_finish_workitem($done, $result);
+        $self->_finish_workitem($done, $runner);
     }
     $pool->stop();
 
-    return $result->was_successful();
+    return $runner->was_successful();
 }
 
 1;

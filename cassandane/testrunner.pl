@@ -433,7 +433,7 @@ else
 
     # Run the schedule
     my $runner = Cassandane::Unit::Runner->new();
-    $runner->add_formatter($formatters{$want_format}->({%format_params}));
+    $runner->add_listener($formatters{$want_format}->({%format_params}));
 
     exit !$runner->do_run($plan);
 }

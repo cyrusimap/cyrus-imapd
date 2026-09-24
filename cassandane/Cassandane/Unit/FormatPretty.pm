@@ -80,8 +80,6 @@ sub add_skip
 {
     my ($self, $witem) = @_;
 
-    $self->SUPER::add_skip($witem);
-
     return if $self->{_no_ok};
 
     my $line = sprintf "%s %s (%s)\n",
@@ -114,8 +112,8 @@ sub print_errors
         }
     }
 
-    my ($result) = @_;
-    return unless my $error_count = $result->error_count();
+    my ($summary) = @_;
+    return unless my $error_count = scalar $summary->{errors}->@*;
     my $msg = "\nThere " .
               ($error_count == 1 ?
                 "was 1 error"
@@ -124,7 +122,7 @@ sub print_errors
     $self->_print($msg);
 
     my $i = 0;
-    for my $e (@{$result->errors()}) {
+    for my $e ($summary->{errors}->@*) {
         chomp(my $report = $e->{report});
         $self->_print("\n") if $i++;
         $self->_print($self->ansi([31], "$i) " . _getname($e))
@@ -153,8 +151,8 @@ sub print_failures
         }
     }
 
-    my ($result) = @_;
-    return unless my $failure_count = $result->failure_count;
+    my ($summary) = @_;
+    return unless my $failure_count = scalar $summary->{failures}->@*;
     my $msg = "\nThere " .
               ($failure_count == 1 ?
                 "was 1 failure"
@@ -163,7 +161,7 @@ sub print_failures
     $self->_print($msg);
 
     my $i = 0;
-    for my $f (@{$result->failures()}) {
+    for my $f ($summary->{failures}->@*) {
         chomp(my $report = $f->{report});
         $self->_print("\n") if $i++;
         $self->_print($self->ansi([33], "$i) " . _getname($f))
@@ -178,34 +176,30 @@ sub print_failures
 }
 
 sub print_header {
-    my $self = shift;
-    my ($result) = @_;
-    my $skipped = $self->skip_count()
-                ? ", Skipped: " . $self->ansi([36], $self->skip_count())
-                : "";
-    if ($result->was_successful()) {
+    my ($self, $summary) = @_;
+
+    my $skips = scalar $summary->{skips}->@*;
+    my $skipped = $skips ? ", Skipped: " . $self->ansi([36], $skips) : "";
+
+    if ($summary->{was_successful}) {
         $self->_print("\n",
                       $self->ansi([32], "OK"),
-                      " (", $result->run_count(), " tests",
-                      $self->skip_count()
-                        ? ", " . $self->skip_count() . " skipped"
-                        : "",
+                      " (", $summary->{run_count}, " tests",
+                      $skips ? ", $skips skipped" : "",
                       ")\n");
     } else {
-        my $failure_count = $result->failure_count()
-                          ? $self->ansi([33], $result->failure_count)
-                          : "0";
-        my $error_count = $result->error_count()
-                        ? $self->ansi([31], $result->error_count)
-                        : "0";
+        my $failures = $summary->{failures}->@*;
+        my $errors   = $summary->{errors}->@*;
 
-        my $x = $result->run_count() - ($result->failure_count()
-                                        + $result->error_count());
+        my $failure_count = $failures ? $self->ansi([33], $failures) : "0";
+        my $error_count   = $errors   ? $self->ansi([31], $errors)   : "0";
+
+        my $x = $summary->{run_count} - ($failures + $errors);
         my $success_count = $x ? $self->ansi([32], $x) : "0";
 
         $self->_print("\n", $self->ansi([31], "!!!FAILURES!!!"), "\n",
                       "Test Results:\n",
-                      "Run: ", $result->run_count(),
+                      "Run: ", $summary->{run_count},
                       ", Successes: $success_count",
                       ", Failures: $failure_count",
                       ", Errors: $error_count",
