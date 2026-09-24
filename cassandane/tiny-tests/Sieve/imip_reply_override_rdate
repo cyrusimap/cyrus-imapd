@@ -58,9 +58,9 @@ EOF
     $self->assert_equals(1, scalar @$events);
     $self->assert_str_equals($uuid, $events->[0]{uid});
     $self->assert_str_equals('',
-                             Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{name});
+                             Cassandane::TestSuite::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{name});
     $self->assert_str_equals('needs-action',
-                             Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{participationStatus});
+                             Cassandane::TestSuite::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{participationStatus});
 
     my $imip = <<EOF;
 Date: Thu, 23 Sep 2021 09:06:18 -0400
@@ -106,12 +106,12 @@ EOF
     $self->assert_equals(1, scalar @$events);
     $self->assert_str_equals($uuid, $events->[0]{uid});
     $self->assert_str_equals('Test User',
-                             Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{name});
+                             Cassandane::TestSuite::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{name});
     $self->assert_str_equals('accepted',
-                             Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{participationStatus});
+                             Cassandane::TestSuite::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{participationStatus});
 
     $self->assert_str_equals('accepted',
-                             Cassandane::Cyrus::Sieve::_participant($events->[0]{recurrenceOverrides}{'2021-10-21T15:30:00'}{participants}, 'cassandane@example.com')->{participationStatus});
+                             Cassandane::TestSuite::Sieve::_participant($events->[0]{recurrenceOverrides}{'2021-10-21T15:30:00'}{participants}, 'cassandane@example.com')->{participationStatus});
     $self->assert_str_equals('declined',
-                             Cassandane::Cyrus::Sieve::_participant($events->[0]{recurrenceOverrides}{'2021-10-21T15:30:00'}{participants}, 'foo@example.net')->{participationStatus});
+                             Cassandane::TestSuite::Sieve::_participant($events->[0]{recurrenceOverrides}{'2021-10-21T15:30:00'}{participants}, 'foo@example.net')->{participationStatus});
 }

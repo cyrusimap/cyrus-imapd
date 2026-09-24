@@ -116,5 +116,5 @@ EOF
     $self->assert_str_equals($uuid, $events->[0]{uid});
     $self->assert_not_null($events->[0]{recurrenceRule});
     $self->assert_null($events->[0]{recurrenceOverrides});
-    $self->assert_str_equals('needs-action', Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'cassandane@example.com')->{participationStatus});    
+    $self->assert_str_equals('needs-action', Cassandane::TestSuite::Sieve::_participant($events->[0]{participants}, 'cassandane@example.com')->{participationStatus});    
 }

@@ -66,7 +66,7 @@ With no test names, every test is run.  Otherwise, name what you want:
 
 =item *
 
-a whole suite by its name without the leading C<Cassandane::Cyrus::>, e.g.
+a whole suite by its name without the leading C<Cassandane::TestSuite::>, e.g.
 C<Quota>;
 
 =item *
