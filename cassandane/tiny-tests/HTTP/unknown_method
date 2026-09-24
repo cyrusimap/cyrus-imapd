@@ -3,12 +3,6 @@ use Cassandane::Tiny;
 
 my $host_line;
 
-# If the server has closed the connection, we don't find out until we attempt to
-# use it again
-# (because the read() on the socket will return 0 bytes. And if it's not closed
-# it would block. So... technically we could turn the socket non-blocking and
-# see if it's EOF already. Or select on it, or ... But this is clearer:)
-
 sub valid_options($self, $s, $desc) {
     my $res = http1_read_response($s);
     $self->assert_num_equals(200, $res->{status}, "status 200 for $desc");
@@ -27,14 +21,16 @@ sub bad_request($self, $s, $desc) {
     $self->assert(!defined $res->{headers}{allow}, "no Allow header for $desc");
 }
 
+# Wait for EOF rather than probing with another request: a write to a socket
+# that's closed at the server end gets an RST, and if that lands before our
+# read, the read fails with ECONNRESET instead of returning EOF.
 sub server_closed_connection($self, $s, $desc) {
-    print $s "OPTIONS * HTTP/1.1\r\n" . $host_line . "\r\n";
+    $self->assert(scalar IO::Select->new($s)->can_read(10),
+                  "socket readable for $desc");
 
-    my $res = eval {
-        http1_read_response($s);
-    };
-    $self->assert_matches(qr/\bServer closed connection without sending any data back\b/, $@ // '', "Server closed the connection for $desc");
-    $self->assert(!defined $res, "hence no response for $desc");
+    my $n = $s->my_read(my $buf, 4096);
+    $self->assert_not_null($n, "read failed for $desc: $!");
+    $self->assert_num_equals(0, $n, "server closed the connection for $desc");
 }
 
 sub test_unknown_method
