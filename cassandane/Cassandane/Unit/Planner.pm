@@ -11,16 +11,13 @@ use File::Find;
 use Cassandane::Cassini;
 use Cassandane::Unit::TestSuite;
 
-my @default_test_roots = (
-    'Cassandane/TestSuite',
-    'Cassandane/TestSuite/Cassandane',
-);
+my $DEFAULT_TEST_ROOT = 'Cassandane/TestSuite';
 
 sub new
 {
     my ($class, %opts) = @_;
     my $self = {
-        test_roots => delete $opts{test_roots} // [ @default_test_roots ],
+        test_root => delete $opts{test_root} // $DEFAULT_TEST_ROOT,
     };
     die "Unknown options: " . join(' ', keys %opts)
         if scalar %opts;
@@ -37,105 +34,91 @@ sub _glob_to_regex ($glob)
     return qr{\A$regex\z};
 }
 
-# Given a path whose last component may be a glob -- ".../Cyrus/JMAP*" --
-# return the suite files it matches, in sorted order.  Returns nothing if
-# there's no glob to expand, or if the directory that would hold the matches
-# doesn't exist, so the caller can use this to ask "is this a globbed suite
-# name?" without checking first.
-sub _glob_suites ($path)
+# Every suite under the root, whatever depth it's at.  Reading the tree once
+# is what lets a specification be matched against what's there, rather than
+# guessed at and probed for.
+sub _suites ($self)
 {
-    my ($dir, $leaf) = ($path =~ m/^(.*)\/([^\/]+)$/);
-    return if not defined $leaf;
-    return if $leaf !~ m/\*/;
-    return if not -d $dir;
+    return $self->{suites}->@* if $self->{suites};
 
-    my $regex = _glob_to_regex($leaf);
+    my @found;
+    find({
+        no_chdir => 1,
+        wanted => sub {
+            my $path = $File::Find::name;
+            return if $path !~ m/\.pm$/;
+            push @found, ($path =~ s/\.pm$//r =~ s{/}{::}gr);
+        },
+    }, $self->{test_root});
 
-    opendir my $dh, $dir
-        or die "Cannot open directory $dir for reading: $!";
-    my @moniker = grep {; my $m = $_; $m =~ s/\.pm$// and $m =~ $regex }
-                  readdir $dh;
-    closedir $dh;
+    $self->{suites} = [ sort @found ];
 
-    return map {; "$dir/$_" } sort @moniker;
+    return $self->{suites}->@*;
 }
 
-# Returns a list of [ $neg, $ostype, $ospath, $testname ] tuples.  It's a list
-# because one specification can name more than one test case.
-#
-# An exact name is resolved against the roots in order and the first hit wins,
-# so that a test case in an earlier root shadows one of the same name later on.  A
-# globbed test case name is instead collected from every root, because "JMAP*"
-# plainly means all of them and not just the ones in whichever root happened to
-# match first.
-sub _parse_test_spec
+# A specification, with its negation stripped and its separators flattened:
+# '.', '/' and '::' all mean the same thing, and '+' stands in for '*',
+# because '*' can't be typed unquoted at a shell prompt.
+sub _split_spec ($name)
 {
-    my ($self, $name) = @_;
-
     my ($neg, $path) = ($name =~ m/^([~!]?)(.*)$/);
-    $path =~ s/\.pm$//g;
+
+    $path =~ s/\.pm$//;
     $path =~ s/::/\//g;
     $path =~ s/\./\//g;
-    $path =~ s/\/+/\//g;
-    $path =~ s/^\/*//;
-    $path =~ s/\/*$//;
-
-    $neg = '!' if $neg eq '~';
-
-    # '*' has to be quoted in every shell worth using, so let '+' mean the same
-    # thing.  Neither suite names nor test names can contain a '+', so there's
-    # no loss in functionality.
+    $path =~ s{/+}{/}g;
+    $path =~ s{^/}{};
+    $path =~ s{/$}{};
     $path =~ s/\+/*/g;
 
-    # Allow Cyrus::TesterJMAP and TesterJMAP to work
-    my @paths;
+    return (($neg ne q{}), [ split m{/}, $path ]);
+}
 
-    my @dirs = split('/', $path);
+# Do the wanted components, which may be globs, match the last components of
+# what we have?  That's how a suite is named: by its own name, by as much of
+# its package as you care to type, or by all of it.
+sub _tail_matches ($have, $want)
+{
+    return 0 if @$want > @$have;
 
-    while (@dirs) {
-        push @paths, join('/', @dirs);
-        shift @dirs;
+    my $offset = @$have - @$want;
+    foreach my $i (0 .. $#$want) {
+        return 0 if $have->[$offset + $i] !~ _glob_to_regex($want->[$i]);
     }
 
-    foreach my $candidate (@paths) {
-        my @globbed;
+    return 1;
+}
 
-        foreach my $root ($self->{test_roots}->@*)
-        {
-            return [ $neg, q{d}, $candidate, undef ]
-                if ($root eq $candidate);
+# ... and the first components?  That's how a directory is named, so the match
+# has to be a proper prefix: the suite lives under it rather than being it.
+sub _head_matches ($have, $want)
+{
+    return 0 if @$want >= @$have;
 
-            my $fpath = $candidate;
-            $fpath = "$root/$candidate"
-                if ("$root/" ne substr($candidate, 0, length($root)+1));
-
-            return [ $neg, q{d}, $fpath, undef ]
-                if ( -d $fpath );
-            return [ $neg, q{f}, "$fpath.pm", undef ]
-                if ( -f "$fpath.pm" );
-
-            # the whole thing may be a globbed suite name, with no test named
-            push @globbed, map {; [ $neg, q{f}, $_, undef ] }
-                           _glob_suites($fpath);
-
-            my $test;
-            ($fpath, $test) = ($fpath =~ m/^(.*)\/([^\/]+)$/);
-            next unless defined $test;
-
-            $test = _glob_to_regex($test) if $test =~ m/\*/;
-
-            return [ $neg, q{f}, "$fpath.pm", $test ]
-                if ( -f "$fpath.pm" );
-
-            # ... or the suite part alone may be globbed, with a test after it
-            push @globbed, map {; [ $neg, q{f}, $_, $test ] }
-                           _glob_suites($fpath);
-        }
-
-        return @globbed if @globbed;
+    foreach my $i (0 .. $#$want) {
+        return 0 if $have->[$i] !~ _glob_to_regex($want->[$i]);
     }
 
-    die "Unrecognised test specification: $name";
+    return 1;
+}
+
+# The suites a specification's suite part names.  A name beats a directory, so
+# that a suite called Foo wins over a directory of the same name, and a
+# directory can be named from the root or from the top.
+sub _suites_named ($self, $parts)
+{
+    my @suites = $self->_suites();
+
+    my @named = grep {; _tail_matches([ split /::/, $_ ], $parts) } @suites;
+    return @named if @named;
+
+    my @root = split m{/}, $self->{test_root};
+    foreach my $prefix ([ @root, @$parts ], $parts) {
+        my @under = grep {; _head_matches([ split /::/, $_ ], $prefix) } @suites;
+        return @under if @under;
+    }
+
+    return;
 }
 
 sub _default_test_list
@@ -147,7 +130,7 @@ sub _default_test_list
 
     my %default;
     my %suppressed;
-    @default{$self->{test_roots}->@*} = ();
+    @default{ $self->{test_root} } = ();
 
     # skip suppressions
     foreach my $s (@tosuppress) {
@@ -178,41 +161,34 @@ sub _names_to_plan ($self, @names)
     return @names;
 }
 
-# The .pm files directly under a directory a specification named.
-sub _suite_files_in ($dir)
-{
-    opendir my $dh, $dir
-        or die "Cannot open directory $dir for reading: $!";
-    my @files = grep {; m/\.pm$/ } readdir $dh;
-    closedir $dh;
-
-    return map {; "$dir/$_" } @files;
-}
-
 # One specification, resolved into rules: which suites it names, which test
 # within them if it names one, and whether it is taking them away rather than
 # asking for them.  One specification makes several rules when its suite part
 # is a glob, or when it names a directory.
 sub _rules_for ($self, $name)
 {
-    my @rules;
+    my ($deny, $parts) = _split_spec($name);
 
-    foreach my $found ($self->_parse_test_spec($name))
-    {
-        my ($neg, $type, $path, $test) = @$found;
+    my @suites = $self->_suites_named($parts);
+    my $test;
 
-        foreach my $file ($type eq 'd' ? _suite_files_in($path) : $path)
-        {
-            push @rules, {
-                spec  => $name,
-                deny  => ($neg eq '!'),
-                suite => ($file =~ s/\.pm$//r =~ s{/}{::}gr),
-                test  => $test,
-            };
-        }
+    # Nothing of that name, so the last component is a test within the rest.
+    if (not @suites and @$parts > 1) {
+        my @head = @$parts;
+        my $last = pop @head;
+
+        @suites = $self->_suites_named(\@head);
+        $test = $last =~ m/\*/ ? _glob_to_regex($last) : $last;
     }
 
-    return @rules;
+    die "Unrecognised test specification: $name" if not @suites;
+
+    return map {; {
+        spec  => $name,
+        deny  => $deny,
+        suite => $_,
+        test  => $test,
+    } } @suites;
 }
 
 # The class a suite's tests live in, loaded the first time it's wanted.  Only
@@ -325,7 +301,7 @@ sub check_sanity
             }
             close $fh;
         },
-    }, $self->{test_roots}->@*);
+    }, $self->{test_root});
 
     # collect tiny-tests directories that exist on disk
     my %real_tt_dirs;
