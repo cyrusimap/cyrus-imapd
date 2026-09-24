@@ -40,28 +40,27 @@ sub run_bare
 {
     my ($self) = @_;
 
-    my $set_up_ok = 0;
-
     my $ok = eval {
         $self->set_up();
-        $set_up_ok = 1;
-
         $self->run_test();
         1;
     };
     my $thrown = $@;
 
-    if ($set_up_ok) {
-        $self->tear_down();
-    }
-    else {
-        # We know that set_up didn't succeed, but did it *partly* succeed?
-        # Maybe, so we'll try to tear_down, but if that fails, that's the
-        # limit of what we can do, so just ignore failure on that.
-        eval { $self->tear_down() };
+    # Tearing down runs whatever happened above: a set_up that died partway
+    # can still have left a Cyrus instance running, and that has to come down
+    # or it sits there holding its ports.
+    my $torn_down = eval { $self->tear_down(); 1 };
+
+    if (not $torn_down) {
+        # Tearing down can fail in its own right, and tearing down a fixture
+        # that was never finished often does.  It's always worth saying so,
+        # but it only becomes the answer when the test had none of its own.
+        xlog "tear_down failed: $@";
+
+        ($ok, $thrown) = (0, $@) if $ok;
     }
 
-    # Whatever went wrong is still what went wrong, now that we've tidied up.
     die $thrown if not $ok;
 
     return;

@@ -1112,63 +1112,35 @@ sub tear_down
     my @stop_errors;
     my @basedirs;
 
-    if (defined $self->{instance})
+    foreach my $which (qw(instance backend2 replica frontend))
     {
-        eval {
-            push @stop_errors, $self->{instance}->stop(
+        my $instance = $self->{$which};
+        next if not defined $instance;
+
+        my $stopped = eval {
+            push @stop_errors, $instance->stop(
                 no_check_syslog => defined $self->{no_check_syslog}
             );
+            1;
         };
-        push @basedirs, $self->{instance}->get_basedir();
-        $self->{instance} = undef;
-    }
-    if (defined $self->{backend2})
-    {
-        eval {
-            push @stop_errors, $self->{backend2}->stop(
-                no_check_syslog => defined $self->{no_check_syslog}
-            );
-        };
-        push @basedirs, $self->{backend2}->get_basedir();
-        $self->{backend2} = undef;
-    }
-    if (defined $self->{replica})
-    {
-        eval {
-            push @stop_errors, $self->{replica}->stop(
-                no_check_syslog => defined $self->{no_check_syslog}
-            );
-        };
-        push @basedirs, $self->{replica}->get_basedir();
-        $self->{replica} = undef;
-    }
-    if (defined $self->{frontend})
-    {
-        eval {
-            push @stop_errors, $self->{frontend}->stop(
-                no_check_syslog => defined $self->{no_check_syslog}
-            );
-        };
-        push @basedirs, $self->{frontend}->get_basedir();
-        $self->{frontend} = undef;
+
+        # stop() reports what it found wrong by returning it.  Dying instead
+        # means stop() itself broke, which is worth hearing about even though
+        # we carry on stopping the others.
+        xlog $self, "stopping the $which instance failed: $@"
+            if not $stopped;
+
+        push @basedirs, $instance->get_basedir();
+        $self->{$which} = undef;
     }
 
     $self->{cleanup_basedirs} = [@basedirs];
 
-    if (@stop_errors) {
-        if (exists $self->{'__Error__'}) {
-            # XXX this feels fragile, but there isn't a correct way for
-            # XXX tear_down to see the test's result.
-
-            # looks like we already failed, and dying again here would conceal
-            # the test failure details, which are probably more interesting
-            xlog "errors found during instance shutdown";
-        }
-        else {
-            # maybe there's multiple errors, but we can only die once...
-            die $stop_errors[0];
-        }
-    }
+    # maybe there's multiple errors, but we can only die once...  run_bare
+    # decides whether this is the failure worth reporting: if the test itself
+    # said something, that's the more interesting answer and this is logged
+    # instead.
+    die $stop_errors[0] if @stop_errors;
 
     xlog "---------- END $self->{_name} ----------";
 }
