@@ -168,7 +168,7 @@ use Cassandane::Unit::FailedTests;
 use Cassandane::Unit::FormatPretty;
 use Cassandane::Unit::FormatTAP;
 use Cassandane::Unit::Runner;
-use Cassandane::Unit::TestPlan;
+use Cassandane::Unit::Planner;
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
 use Cassandane::Instance;
@@ -406,7 +406,7 @@ if ($want_rerun) {
     }
 }
 
-my $planner = Cassandane::Unit::TestPlan->new();
+my $planner = Cassandane::Unit::Planner->new();
 
 if ($do_list)
 {

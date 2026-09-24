@@ -1,24 +1,24 @@
 # SPDX-License-Identifier: BSD-3-Clause-CMU
 # See COPYING file at the root of the distribution for more details.
 
-package Cassandane::Test::TestPlan;
+package Cassandane::Test::Planner;
 use strict;
 use warnings;
 use experimental 'signatures';
 
 use base qw(Cassandane::Unit::TestSuite);
-use Cassandane::Unit::TestPlan;
+use Cassandane::Unit::Planner;
 
 # We plan against a fixture tree rather than the real test roots so that these
 # expectations don't have to be rewritten every time a suite is added or
-# renamed.  See Cassandane/Fixture/TestPlan/README.  Like the real roots, these
+# renamed.  See Cassandane/Fixture/Planner/README.  Like the real roots, these
 # are relative to the cassandane directory, which is where a test run's cwd is.
-my $ALPHA = 'Cassandane/Fixture/TestPlan/Alpha';
-my $BETA  = 'Cassandane/Fixture/TestPlan/Beta';
+my $ALPHA = 'Cassandane/Fixture/Planner/Alpha';
+my $BETA  = 'Cassandane/Fixture/Planner/Beta';
 
 # Trimmed off both sides of every comparison, so that expectations below can
 # read "Alpha::GlobOne.beta" instead of the full package name.
-my $PREFIX = 'Cassandane::Fixture::TestPlan::';
+my $PREFIX = 'Cassandane::Fixture::Planner::';
 
 # The whole of Alpha::GlobOne, which most of these cases select one way or
 # another.  Note that it has both slow and regular tests in it.
@@ -39,7 +39,7 @@ my @EVERYTHING = (@GLOB_STAR, qw(Alpha::Other.alpha
 # Plan @$specs over the fixture roots, as "Alpha::GlobOne.beta" strings.
 sub _fixture_plan ($specs, %opts)
 {
-    my $planner = Cassandane::Unit::TestPlan->new(
+    my $planner = Cassandane::Unit::Planner->new(
         test_roots => [ $ALPHA, $BETA ],
         %opts,
     );
@@ -97,8 +97,8 @@ sub test_suite_naming ($self)
                   'Alpha::GlobOne',
                   'Alpha.GlobOne',
                   'Alpha/GlobOne',
-                  'Cassandane::Fixture::TestPlan::Alpha::GlobOne',
-                  'Cassandane/Fixture/TestPlan/Alpha/GlobOne.pm')
+                  'Cassandane::Fixture::Planner::Alpha::GlobOne',
+                  'Cassandane/Fixture/Planner/Alpha/GlobOne.pm')
     {
         $self->assert_plan([$spec], \@GLOB_ONE);
     }
@@ -151,7 +151,7 @@ sub test_suite_globs ($self)
     $self->assert_plan(['*'], \@EVERYTHING);
 
     # a fully qualified glob is confined to the root it names
-    $self->assert_plan(['Cassandane::Fixture::TestPlan::Beta::Glob*'],
+    $self->assert_plan(['Cassandane::Fixture::Planner::Beta::Glob*'],
                        [qw(Beta::GlobThree.alpha)]);
 
     # a glob matching no suite is as fatal as a name that doesn't exist
@@ -237,7 +237,7 @@ sub test_root_shadowing ($self)
     $self->assert_plan(['Beta::Shared'], [qw(Alpha::Shared.from_alpha)]);
 
     # ... so the only way to name the other one is in full
-    $self->assert_plan(['Cassandane::Fixture::TestPlan::Beta::Shared'],
+    $self->assert_plan(['Cassandane::Fixture::Planner::Beta::Shared'],
                        [qw(Beta::Shared.from_beta)]);
 
     # A leading component that doesn't resolve is dropped rather than being
