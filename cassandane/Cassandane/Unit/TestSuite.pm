@@ -23,10 +23,7 @@ sub new
 
     $buildinfo ||= Cassandane::BuildInfo->new();
 
-    return bless {
-        name        => $name,
-        annotations => '',
-    }, $class;
+    return bless { name => $name }, $class;
 }
 
 # The test method this object exists to run.
@@ -34,21 +31,6 @@ sub name
 {
     my ($self) = @_;
     return $self->{name};
-}
-
-# Whatever the test wrote while it ran.  The plan feeds it the test's log file
-# when the test is over, and the formatters print it under a failure.
-sub annotate
-{
-    my ($self, @text) = @_;
-    $self->{annotations} .= join q{}, @text;
-    return;
-}
-
-sub annotations
-{
-    my ($self) = @_;
-    return $self->{annotations};
 }
 
 sub run_bare
@@ -267,20 +249,6 @@ sub filter
             return;
         },
     };
-}
-
-sub annotate_from_file
-{
-    my ($self, $filename) = @_;
-    return if !defined $filename;
-
-    open LOG, '<', $filename
-        or die "Cannot open $filename for reading: $!";
-    while (<LOG>)
-    {
-        $self->annotate($_);
-    }
-    close LOG;
 }
 
 # How many frames of assertion sit between here and the code that made the
