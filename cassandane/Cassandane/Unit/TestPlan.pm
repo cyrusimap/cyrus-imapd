@@ -485,19 +485,22 @@ sub _dump_logfile
     close LOGFILE;
 }
 
-sub _get_test
+# Whatever the test wrote while it ran.  The worker pointed the test's output
+# at this file; a report quotes it under a failure.
+sub _annotations_from
 {
-    my ($self, $witem) = @_;
-    return $self->_get_item($witem->{suite})->_make_test($witem->{testname});
+    my ($logfile) = @_;
+    return if not defined $logfile;
+
+    open my $fh, '<', $logfile
+        or die "Cannot open $logfile for reading: $!";
+    local $/;
+    return <$fh>;
 }
 
-# Run one work item and return its outcome: a verdict, plus a description of
-# the failure when there is one.  This runs in a worker, and the outcome goes
-# back to the parent, which is what reports it.
 sub _finish_workitem
 {
     my ($self, $witem, $result) = @_;
-    my $test = $self->_get_test($witem);
 
     if ($witem->{outcome} eq 'skip')
     {
@@ -506,37 +509,37 @@ sub _finish_workitem
         # A skipped test has no result to add: it never started, so nothing
         # counts it as a run.  The listeners still hear about it, because a
         # skip is worth reporting.
-        $result->tell_listeners(add_skip => $test, $witem->{reason});
+        $result->tell_listeners(add_skip => $witem);
         return;
     }
+
+    $witem->{annotations} = _annotations_from($witem->{logfile});
+    _dump_logfile($witem->{logfile}) if (get_verbose > 1);
+    unlink($witem->{logfile}) if (!defined $self->{log_directory});
 
     # The test ran in a worker, which has no listeners to tell.  Send the
     # start_test event now, so that the formatters hear about the test
     # before they hear how it went.
-    $result->start_test($test);
-
-    $test->annotate_from_file($witem->{logfile});
-    _dump_logfile($witem->{logfile}) if (get_verbose > 1);
-    unlink($witem->{logfile}) if (!defined $self->{log_directory});
+    $result->start_test($witem);
 
     if ($witem->{outcome} eq 'pass')
     {
-        $result->add_pass($test);
+        $result->add_pass($witem);
     }
     elsif ($witem->{outcome} eq 'fail')
     {
-        $result->add_failure($test, $witem->{report});
+        $result->add_failure($witem);
     }
     elsif ($witem->{outcome} eq 'error')
     {
-        $result->add_error($test, $witem->{report});
+        $result->add_error($witem);
     }
     else
     {
         die "Unknown outcome '$witem->{outcome}' for"
             . " $witem->{suite}.$witem->{testname}";
     }
-    $result->end_test($test);
+    $result->end_test($witem);
 }
 
 # The runner hands the whole plan to run(), rather than one suite at a time,

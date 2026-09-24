@@ -11,19 +11,20 @@ use experimental 'signatures';
 #
 # Every event handler is a no-op in this base class, so as subclass can just
 # handle the things it cares about.
+#
+# An event is what the worker send back: a hashref with suite, testname,
+# outcome, report (for a failure or an error), reason (for a skip), and
+# annotations (whatever the test wrote while it ran).
 
 # A test is about to run, or has finished running.
-sub start_test ($self, $test) { }
-sub end_test ($self, $test) { }
+sub start_test ($self, $witem) { }
+sub end_test ($self, $witem) { }
 
 # How it went.  Exactly one of these arrives between start_test and end_test.
-# A failure or an error comes with the report to print for it: a string, so
-# that a worker can send the parent's listeners exactly what its own would
-# have heard.
-sub add_pass ($self, $test) { }
-sub add_failure ($self, $test, $report) { }
-sub add_error ($self, $test, $report) { }
-sub add_skip ($self, $test, $reason) { } # won't have a start/end
+sub add_pass ($self, $witem) { }
+sub add_failure ($self, $witem) { }
+sub add_error ($self, $witem) { }
+sub add_skip ($self, $witem) { } # won't have a start/end
 
 # Every test that was going to run has run.
 sub finished ($self, $result, $start_time, $end_time) { }

@@ -36,7 +36,7 @@ sub _print
 # a formatter hears about it.
 sub add_skip
 {
-    my ($self, $test, $reason) = @_;
+    my ($self, $witem) = @_;
     $self->{skip_count}++;
 }
 
@@ -115,8 +115,8 @@ sub print_errors
         chomp(my $report = $e->{report});
         $i++;
         $self->_print("$i) $report\n");
-        $self->_print("\nAnnotations:\n", $e->{test}->annotations())
-          if $e->{test}->annotations();
+        $self->_print("\nAnnotations:\n", $e->{annotations})
+          if $e->{annotations};
     }
 }
 
@@ -138,8 +138,8 @@ sub print_failures
         chomp(my $report = $f->{report});
         $self->_print("\n") if $i++;
         $self->_print("$i) $report\n");
-        $self->_print("\nAnnotations:\n", $f->{test}->annotations())
-          if $f->{test}->annotations();
+        $self->_print("\nAnnotations:\n", $f->{annotations})
+          if $f->{annotations};
     }
 }
 

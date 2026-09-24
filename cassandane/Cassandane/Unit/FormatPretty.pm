@@ -46,63 +46,57 @@ sub ansi
 
 sub add_pass
 {
-    my $self = shift;
-    my $test = shift;
+    my ($self, $witem) = @_;
 
     return if $self->{_no_ok};
 
     my $line = sprintf "%s %s\n",
                        $self->ansi([32], '[  OK  ]'),
-                       _getname($test);
+                       _getname($witem);
     $self->_print($line);
 }
 
 sub add_error
 {
-    my $self = shift;
-    my $test = shift;
+    my ($self, $witem) = @_;
 
     my $line = sprintf "%s %s\n",
                        $self->ansi([31], '[ERROR ]'),
-                       _getname($test);
+                       _getname($witem);
     $self->_print($line);
 }
 
 sub add_failure
 {
-    my $self = shift;
-    my $test = shift;
+    my ($self, $witem) = @_;
 
     my $line = sprintf "%s %s\n",
                        $self->ansi([33], '[FAILED]'),
-                       _getname($test);
+                       _getname($witem);
     $self->_print($line);
 }
 
 sub add_skip
 {
-    my ($self, $test, $reason) = @_;
+    my ($self, $witem) = @_;
 
-    $self->SUPER::add_skip($test, $reason);
+    $self->SUPER::add_skip($witem);
 
     return if $self->{_no_ok};
 
     my $line = sprintf "%s %s (%s)\n",
                        $self->ansi([36], '[ SKIP ]'),
-                       _getname($test),
-                       $reason;
+                       _getname($witem),
+                       $witem->{reason};
     $self->_print($line);
 }
 
 sub _getname
 {
-    my $test = shift;
-    my $suite = ref($test);
-    $suite =~ s/^Cassandane:://;
+    my ($witem) = @_;
+    my $suite = $witem->{suite} =~ s/^Cassandane:://r;
 
-    my $testname = $test->name =~ s/^test_//r;
-
-    return "$suite.$testname";
+    return "$suite.$witem->{testname}";
 }
 
 sub print_errors
@@ -133,10 +127,10 @@ sub print_errors
     for my $e (@{$result->errors()}) {
         chomp(my $report = $e->{report});
         $self->_print("\n") if $i++;
-        $self->_print($self->ansi([31], "$i) " . _getname($e->{test}))
+        $self->_print($self->ansi([31], "$i) " . _getname($e))
                       . "\n$report\n");
-        $self->_print("\nAnnotations:\n", $e->{test}->annotations())
-          if $e->{test}->annotations();
+        $self->_print("\nAnnotations:\n", $e->{annotations})
+          if $e->{annotations};
     }
 
     if ($saved_output_stream) {
@@ -172,10 +166,10 @@ sub print_failures
     for my $f (@{$result->failures()}) {
         chomp(my $report = $f->{report});
         $self->_print("\n") if $i++;
-        $self->_print($self->ansi([33], "$i) " . _getname($f->{test}))
+        $self->_print($self->ansi([33], "$i) " . _getname($f))
                       . "\n$report\n");
-        $self->_print("\nAnnotations:\n", $f->{test}->annotations())
-          if $f->{test}->annotations();
+        $self->_print("\nAnnotations:\n", $f->{annotations})
+          if $f->{annotations};
     }
 
     if ($saved_output_stream) {

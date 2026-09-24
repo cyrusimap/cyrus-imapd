@@ -28,36 +28,36 @@ sub tell_listeners ($self, $event, @args)
     return;
 }
 
-sub start_test ($self, $test)
+sub start_test ($self, $witem)
 {
     $self->{run_count}++;
-    $self->tell_listeners(start_test => $test);
+    $self->tell_listeners(start_test => $witem);
     return;
 }
 
-sub end_test ($self, $test)
+sub end_test ($self, $witem)
 {
-    $self->tell_listeners(end_test => $test);
+    $self->tell_listeners(end_test => $witem);
     return;
 }
 
-sub add_pass ($self, $test)
+sub add_pass ($self, $witem)
 {
-    $self->tell_listeners(add_pass => $test);
+    $self->tell_listeners(add_pass => $witem);
     return;
 }
 
-sub add_failure ($self, $test, $report)
+sub add_failure ($self, $witem)
 {
-    push $self->{failures}->@*, { test => $test, report => $report };
-    $self->tell_listeners(add_failure => $test, $report);
+    push $self->{failures}->@*, $witem;
+    $self->tell_listeners(add_failure => $witem);
     return;
 }
 
-sub add_error ($self, $test, $report)
+sub add_error ($self, $witem)
 {
-    push $self->{errors}->@*, { test => $test, report => $report };
-    $self->tell_listeners(add_error => $test, $report);
+    push $self->{errors}->@*, $witem;
+    $self->tell_listeners(add_error => $witem);
     return;
 }
 
@@ -66,8 +66,8 @@ sub run_count ($self)
     return $self->{run_count};
 }
 
-# Each is an arrayref of { test, report }: the test that went wrong, and what
-# a report should say about it.
+# Each is an arrayref of finished work items: what the test was called, what a
+# report should say about it, and whatever it wrote while it ran.
 sub failures ($self)
 {
     return $self->{failures};

@@ -49,13 +49,6 @@ sub _test_names ($self)
     return $self->{test_names}->@*;
 }
 
-# One test of this suite, ready to run.  Tests are built when they're wanted,
-# so a worker that runs three of a suite's two hundred builds three.
-sub _make_test ($self, $name)
-{
-    return $self->_suite_class->new("test_$name");
-}
-
 sub _is_allowed
 {
     my ($self, $name) = @_;
