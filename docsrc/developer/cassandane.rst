@@ -15,11 +15,11 @@ primarily *unit testing*.  The other, known as Cassandane, is written in Perl,
 and is primarily *integration testing*.  This page covers the
 Cassandane test suite.
 
-Tests are grouped into *suites*, and each suite is a Perl module: those under
-``Cassandane/TestSuite/`` exercise Cyrus, and those under ``Cassandane/TestSuite/Cassandane/``
-exercise Cassandane itself.  Most Cyrus tests are written as *tiny-tests* — one
-subroutine per file under ``cassandane/tiny-tests/{Suite}/``, sharing the
-suite module's setup.
+Tests are grouped into *suites*, and each suite is a Perl module under
+``Cassandane/TestSuite/``.  Nearly all of them test Cyrus; the handful that
+test Cassandane itself live in ``Cassandane/TestSuite/Cassandane/``.  Most
+tests are written as *tiny-tests* — one subroutine per file under
+``cassandane/tiny-tests/{Suite}/``, sharing the suite module's setup.
 
 If you just want to get productive fast, the :ref:`developer quickstart
 <developer-hacking>` takes you from a fresh checkout to a first passing test
