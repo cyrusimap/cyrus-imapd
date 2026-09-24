@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that different mailboxes get different MAILBOXIDs
+#
+sub test_objectidplus_mailboxid_unique
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('folder1');
+    $talk->create('folder2');
+    $talk->create('folder3');
+
+    my $s1 = $talk->status('folder1', "(mailboxid)");
+    my $s2 = $talk->status('folder2', "(mailboxid)");
+    my $s3 = $talk->status('folder3', "(mailboxid)");
+    my $si = $talk->status('INBOX', "(mailboxid)");
+
+    # all MAILBOXIDs must be non-null
+    $self->assert_not_null($s1->{mailboxid});
+    $self->assert_not_null($s2->{mailboxid});
+    $self->assert_not_null($s3->{mailboxid});
+    $self->assert_not_null($si->{mailboxid});
+
+    # all MAILBOXIDs must be different
+    my %seen;
+    for my $id ($s1->{mailboxid}[0], $s2->{mailboxid}[0],
+                $s3->{mailboxid}[0], $si->{mailboxid}[0]) {
+        $self->assert(!$seen{$id}, "duplicate MAILBOXID: $id");
+        $seen{$id} = 1;
+    }
+}

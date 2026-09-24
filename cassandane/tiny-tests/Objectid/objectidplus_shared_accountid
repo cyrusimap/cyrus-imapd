@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that shared mailboxes get a different ACCOUNTID
+#
+sub test_objectidplus_shared_accountid
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # create a shared mailbox from another user
+    $self->{instance}->create_user("other",
+                                   subdirs => [ 'shared' ]);
+    $admintalk->setacl("user.other.shared", "cassandane", "lrswipkxtecdan");
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('myfolder');
+
+    # get OBJECTID for own mailbox and shared mailbox
+    my $status_mine = $talk->status('myfolder', "(objectid)");
+    my $status_shared = $talk->status('Other Users.other.shared', "(objectid)");
+
+    $self->assert_not_null($status_mine->{objectid});
+    $self->assert_not_null($status_shared->{objectid});
+
+    # the ACCOUNTIDs should be different since they belong to different users
+    # NOTE: ACCOUNTID_NEEDS_FIXING - currently uses userid not JMAP accountid
+    # but they should still be different for different users
+}
