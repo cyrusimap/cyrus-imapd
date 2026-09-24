@@ -1,0 +1,261 @@
+#!perl
+use Cassandane::Tiny;
+use MIME::Base64 qw(encode_base64);
+
+# An https service whose processes each serve a single connection, so a
+# session can only be resumed through the session database shared by
+# every process, which is also what makes each ticket good only once
+sub start_early_data_https ($self)
+{
+    $self->config_set(http_allow_0rtt => 'on');
+    $self->{instance}->add_service(name => 'httpsonce',
+                                   argv => ['httpd', '-s', '-U', '1']);
+    $self->_start_instances();
+    return $self->{instance}->get_service('httpsonce');
+}
+
+# How long to let openssl s_client run: under valgrind the server is
+# much slower, and an HTTP/2 connection only ends when this runs out
+sub early_timeout ()
+{
+    return Cassandane::Cassini->instance()->bool_val('valgrind', 'enabled')
+           ? 60 : 10;
+}
+
+sub early_tmpfile ($self, $name)
+{
+    return $self->{instance}->get_basedir() . "/tmp/$name";
+}
+
+sub early_http1_request ($service, $method, $path)
+{
+    return "$method $path HTTP/1.1\r\n"
+         . "Host: " . $service->host . "\r\n"
+         . "Authorization: Basic "
+         . encode_base64('cassandane:pass', '') . "\r\n"
+         . "Connection: close\r\n\r\n";
+}
+
+# Connect with openssl s_client, resuming the session in $sess_in if
+# given, sending $request as early data (or, with no session to resume,
+# after the handshake), and saving the new session in $sess_out.
+# Returns s_client's output.
+sub early_s_client ($self, $service, $request, $sess_in, $sess_out)
+{
+    my $addr = $service->host . ':' . $service->port;
+    my $reqfile = early_tmpfile($self, 'request');
+
+    open my $fh, '>', $reqfile or die "$reqfile: $!";
+    print $fh $request;
+    close $fh;
+
+    my $cmd = "timeout " . early_timeout()
+            . " openssl s_client -connect $addr -tls1_3 -ign_eof"
+            . " -sess_out $sess_out";
+    $cmd .= $sess_in ? " -sess_in $sess_in -early_data $reqfile </dev/null"
+                     : " <$reqfile";
+
+    my $out = `$cmd 2>&1`;
+    $self->assert_matches(qr/^CONNECTED/m, $out);
+    return $out;
+}
+
+sub early_response_status ($out)
+{
+    return $out =~ m{^HTTP/1\.1 (\d{3}) }m ? $1 : undef;
+}
+
+sub test_tls_early_data_http1
+    :NoStartInstances
+    ($self)
+{
+    my $service = start_early_data_https($self);
+    my $get = early_http1_request($service, 'GET', '/.well-known');
+    my $delete = early_http1_request($service, 'DELETE',
+        '/dav/calendars/user/cassandane/Default/nosuch.ics');
+    my @sess = map { early_tmpfile($self, "sess$_") } 0..3;
+
+    # A full handshake gets us a ticket
+    my $out = early_s_client($self, $service, $get, undef, $sess[0]);
+    $self->assert_str_equals('200', early_response_status($out));
+    $self->assert_matches(qr/^New, TLSv1\.3/m, $out);
+
+    # Resuming it, a safe request can be answered from early data
+    $out = early_s_client($self, $service, $get, $sess[0], $sess[1]);
+    $self->assert_matches(qr/^Reused, TLSv1\.3/m, $out);
+    $self->assert_matches(qr/^Early data was accepted/m, $out);
+    $self->assert_str_equals('200', early_response_status($out));
+
+    # but an unsafe one has to wait for the handshake
+    $out = early_s_client($self, $service, $delete, $sess[1], $sess[2]);
+    $self->assert_matches(qr/^Early data was accepted/m, $out);
+    $self->assert_str_equals('425', early_response_status($out));
+
+    # A ticket is good once: replaying the first ClientHello gets a full
+    # handshake, and its early data goes unread
+    $out = early_s_client($self, $service, $get, $sess[0], $sess[3]);
+    $self->assert_matches(qr/^New, TLSv1\.3/m, $out);
+    $self->assert_matches(qr/^Early data was rejected/m, $out);
+    $self->assert_null(early_response_status($out));
+}
+
+# More early data than tls_start_servertls() reads before it returns:
+# the rest comes through the input stream while the handshake is still
+# open, and every request in it has to be answered and marked early
+sub test_tls_early_data_large
+    :NoStartInstances
+    ($self)
+{
+    my $service = start_early_data_https($self);
+    my ($sess0, $sess1) = map { early_tmpfile($self, $_) } qw(big0 big1);
+    my $count = 30;
+
+    # Padded, so that $count of them make over 8 KiB
+    my $get = early_http1_request($service, 'GET', '/.well-known');
+    $get =~ s/\r\n/\r\nX-Pad: @{[ 'x' x 250 ]}\r\n/;
+    (my $keepalive = $get) =~ s/Connection: close\r\n//;
+    my $early = ($keepalive x ($count - 1)) . $get;
+    $self->assert(length($early) > 8192, "early data is only "
+                                         . length($early) . " bytes");
+
+    my $out = early_s_client($self, $service, $get, undef, $sess0);
+    $self->assert_str_equals('200', early_response_status($out));
+
+    $self->{instance}->getsyslog();
+
+    $out = early_s_client($self, $service, $early, $sess0, $sess1);
+    $self->assert_matches(qr/^Early data was accepted/m, $out);
+    my @ok = $out =~ m{^HTTP/1\.1 200 }mg;
+    $self->assert_num_equals($count, scalar @ok);
+
+    my @early = grep { m{"GET /\.well-known HTTP/1\.1".*\(early-data\)} }
+                $self->{instance}->getsyslog();
+    $self->assert_num_equals($count, scalar @early);
+}
+
+# One httpd process, serving connection after connection: the early data
+# state of each must go away with it, and not leak into the next
+sub test_tls_early_data_process_reuse
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(http_allow_0rtt => 'on');
+    $self->{instance}->add_service(name => 'httpsreuse',
+                                   argv => ['httpd', '-s', '-U', '10'],
+                                   maxchild => 1);
+    $self->_start_instances();
+    my $service = $self->{instance}->get_service('httpsreuse');
+
+    my $get = early_http1_request($service, 'GET', '/.well-known');
+    my $delete = early_http1_request($service, 'DELETE',
+        '/dav/calendars/user/cassandane/Default/nosuch.ics');
+    my @sess = map { early_tmpfile($self, "reuse$_") } 0..4;
+
+    $self->{instance}->getsyslog();
+
+    my $out = early_s_client($self, $service, $get, undef, $sess[0]);
+    $self->assert_str_equals('200', early_response_status($out));
+
+    # Each of these follows a connection that had early data, answered
+    # requests, and was closed by the client
+    for my $i (1..3) {
+        my $req = $i == 2 ? $delete : $get;
+        $out = early_s_client($self, $service, $req, $sess[$i-1], $sess[$i]);
+        $self->assert_matches(qr/^Early data was accepted/m, $out);
+        $self->assert_str_equals($i == 2 ? '425' : '200',
+                                 early_response_status($out));
+    }
+
+    # And a connection without early data after all that
+    $out = early_s_client($self, $service, $get, undef, $sess[4]);
+    $self->assert_matches(qr/^New, TLSv1\.3/m, $out);
+    $self->assert_str_equals('200', early_response_status($out));
+
+    # All five were served by the same process
+    my %pids = map { /httpsreuse\[(\d+)\]: starttls:/ ? ($1 => 1) : () }
+               $self->{instance}->getsyslog();
+    $self->assert_num_equals(1, scalar keys %pids);
+}
+
+# An HTTP/2 frame (RFC 9113 4.1)
+sub early_h2_frame ($type, $flags, $stream, $payload)
+{
+    return substr(pack('N', length $payload), 1)
+         . pack('CCN', $type, $flags, $stream) . $payload;
+}
+
+# A request HEADERS frame, its fields HPACK literals without indexing
+# (RFC 7541 6.2.2) naming static table entries, so nothing to Huffman-code
+sub early_h2_request ($service, $stream, $method, $path)
+{
+    my $literal = sub ($idx, $value) {
+        return ($idx < 15 ? chr($idx) : chr(15) . chr($idx - 15))
+             . chr(length $value) . $value;
+    };
+    my $block = $literal->(2, $method)                          # :method
+              . "\x87"                                          # :scheme https
+              . $literal->(4, $path)                            # :path
+              . $literal->(1, $service->host)                   # :authority
+              . $literal->(23, 'Basic '
+                           . encode_base64('cassandane:pass', ''));
+
+    # END_STREAM | END_HEADERS
+    return early_h2_frame(1, 0x5, $stream, $block);
+}
+
+sub test_tls_early_data_http2
+    :NoStartInstances
+    ($self)
+{
+    my $service = start_early_data_https($self);
+    my $addr = $service->host . ':' . $service->port;
+    my $event = '/dav/calendars/user/cassandane/Default/nosuch.ics';
+    my ($sess0, $sess1, $first, $early, $late) =
+        map { early_tmpfile($self, $_) } qw(sess0 sess1 first early late);
+
+    my $write = sub ($file, $data) {
+        open my $fh, '>', $file or die "$file: $!";
+        print $fh $data;
+        close $fh;
+    };
+    my $preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+                . early_h2_frame(4, 0, 0, '');                  # SETTINGS
+
+    # GOAWAY, so the server closes the connection once it has answered
+    my $goaway = early_h2_frame(7, 0, 0, pack('NN', 0, 0));
+    my $timeout = early_timeout();
+
+    # Two requests as early data, and one after the handshake
+    $write->($first, $preface . $goaway);
+    $write->($early, $preface
+                     . early_h2_request($service, 1, 'GET', '/.well-known')
+                     . early_h2_request($service, 3, 'DELETE', $event));
+    $write->($late, early_h2_request($service, 5, 'DELETE', $event)
+                    . $goaway);
+
+    # A full handshake gets us a ticket
+    my $out = `timeout $timeout openssl s_client -connect $addr -tls1_3 -alpn h2 -ign_eof -sess_out $sess0 <$first 2>&1`;
+    $self->assert_matches(qr/^New, TLSv1\.3/m, $out);
+
+    $self->{instance}->getsyslog();
+
+    $out = `timeout $timeout openssl s_client -connect $addr -tls1_3 -alpn h2 -ign_eof -sess_in $sess0 -sess_out $sess1 -early_data $early <$late 2>&1`;
+    $self->assert_matches(qr/^Reused, TLSv1\.3/m, $out);
+    $self->assert_matches(qr/^Early data was accepted/m, $out);
+
+    my @log = $self->{instance}->getsyslog();
+    my ($starttls) = grep { /starttls:/ } @log;
+    $self->assert_matches(qr/reused.*application protocol = h2.*early data accepted/,
+                          $starttls);
+
+    # Only the requests that arrived early are early, and only the unsafe
+    # one of those has to wait
+    my %status;
+    for (@log) {
+        next unless m{"(\w+) \S+ HTTP/2".*? => "HTTP/2 (\d{3})[^"]*" \(stream-id=(\d+)(; early-data)?};
+        $status{$3} = $2 . ($4 ? ' early' : '');
+    }
+    $self->assert_cmp_deeply({ 1 => '200 early',
+                                3 => '425 early',
+                                5 => '404' }, \%status);
+}

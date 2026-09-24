@@ -838,6 +838,13 @@ int service_init(int argc __attribute__((unused)),
     }
     r = 0;
 
+    /* Only a connection that starts with TLS can carry early data */
+    if (https && config_getswitch(IMAPOPT_HTTP_ALLOW_0RTT) &&
+        !tls_enable_early_data()) {
+        xsyslog(LOG_NOTICE,
+                "http_allow_0rtt needs a nonzero tls_session_timeout", NULL);
+    }
+
     http2_enabled = http2_init(&http_conn, &serverinfo);
     ws_enabled = ws_init(&http_conn, &serverinfo);
 
@@ -1263,10 +1270,10 @@ static int tls_init(int client_auth, struct buf *serverinfo)
 
 static void starttls(struct http_connection *conn, int timeout)
 {
-    int result = tls_start_servertls(conn->pin->fd, conn->pout->fd,
-                                     timeout, &saslprops,
-                                     http_alpn_map,
-                                     (SSL **) &conn->tls_ctx);
+    int result = tls_start_servertls_early(conn->pin, conn->pout,
+                                           timeout, &saslprops,
+                                           http_alpn_map,
+                                           (SSL **) &conn->tls_ctx);
 
     /* if error */
     if (result == -1) {
@@ -2118,9 +2125,15 @@ static int http1_input(struct transaction_t *txn)
 {
     struct request_line_t *req_line = &txn->req_line;
     int ignore_empty = 1, ret = 0;
+    SSL *tls = txn->conn->tls_ctx;
 
     /* Reset txn state */
     transaction_reset(txn);
+
+    /* prot_peek() reads the start of the request
+       and if the handshake is still open, the request began in early data */
+    prot_peek(httpd_in);
+    txn->flags.early = tls && !SSL_is_init_finished(tls);
 
     do {
         /* Read request-line */
@@ -3095,6 +3108,10 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
     if (txn->req_hdrs &&
         (hdr = spool_getheader(txn->req_hdrs, ":stream-id"))) {
         buf_printf(logbuf, "%sstream-id=%s", sep, hdr[0]);
+        sep = "; ";
+    }
+    if (txn->flags.early) {
+        buf_printf(logbuf, "%searly-data", sep);
         sep = "; ";
     }
     if (code == HTTP_SWITCH_PROT || code == HTTP_UPGRADE) {
