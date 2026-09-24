@@ -1,0 +1,94 @@
+#!perl
+use Cassandane::Tiny;
+use feature 'signatures';
+no warnings 'experimental::signatures';
+
+my $host_line;
+
+# If the server has closed the connection, we don't find out until we attempt to
+# use it again
+# (because the read() on the socket will return 0 bytes. And if it's not closed
+# it would block. So... technically we could turn the socket non-blocking and
+# see if it's EOF already. Or select on it, or ... But this is clearer:)
+
+sub valid_options($self, $s, $desc) {
+    my $res = http1_read_response($s);
+    $self->assert_num_equals(200, $res->{status}, "status 200 for $desc");
+    $self->assert(defined $res->{headers}{allow}, "Allow header for $desc");
+}
+
+sub unknown_method($self, $s, $desc) {
+    my $res = http1_read_response($s);
+    $self->assert_num_equals(501, $res->{status}, "status 501 for $desc");
+    $self->assert(!defined $res->{headers}{allow}, "no Allow header for $desc");
+}
+
+sub bad_request($self, $s, $desc) {
+    my $res = http1_read_response($s);
+    $self->assert_num_equals(400, $res->{status}, "status 400 for $desc");
+    $self->assert(!defined $res->{headers}{allow}, "no Allow header for $desc");
+}
+
+sub server_closed_connection($self, $s, $desc) {
+    print $s "OPTIONS * HTTP/1.1\r\n" . $host_line . "\r\n";
+
+    my $res = eval {
+        http1_read_response($s);
+    };
+    $self->assert_matches(qr/\bServer closed connection without sending any data back\b/, $@ // '', "Server closed the connection for $desc");
+    $self->assert(!defined $res, "hence no response for $desc");
+}
+
+sub test_unknown_method
+    ($self)
+{
+    my $service = $self->{instance}->get_service('http');
+    $host_line = "Host: " . $service->host . ":" . $service->port . "\r\n";
+
+    my $s = http1_connect($self);
+    print $s "OPTIONS * HTTP/1.1\r\n"
+           . $host_line
+           . "\r\n";
+    valid_options($self, $s, "plain OPTIONS");
+
+    print $s "POST * HTTP/1.1\r\n"
+           . $host_line
+           . "X-HTTP-Method-Override: OPTIONS\r\n"
+           . "\r\n";
+    valid_options($self, $s, "Method Override OPTIONS");
+
+    print $s "POST * HTTP/1.1\r\n"
+           . $host_line
+           . "X-HTTP-Method-Override: BREW\r\n"
+           . "\r\n";
+    unknown_method($self, $s, "Method Override BREW");
+    server_closed_connection($self, $s, "Method Override BREW");
+
+    $s = http1_connect($self);
+    print $s "BREW * HTTP/1.1\r\n"
+           . $host_line
+           . "\r\n";
+    unknown_method($self, $s, "plain BREW");
+    server_closed_connection($self, $s, "plain BREW");
+
+    $s = http1_connect($self);
+    print $s "POST * HTTP/1.1\r\n"
+           . $host_line
+           . "X-HTTP-Method-Override: OPTIONS\r\n"
+           . "X-HTTP-Method-Override: OPTIONS\r\n"
+           . "\r\n";
+    bad_request($self, $s, "repeated Method Override");
+    server_closed_connection($self, $s, "repeated Method Override");
+
+    $s = http1_connect($self);
+    print $s "OPTIONS * HTTP/1.1\r\n"
+           . $host_line
+           . $host_line
+           . "\r\n";
+    bad_request($self, $s, "repeated Host header");
+
+    $s = http1_connect($self);
+    print $s "OPTIONS * HTTP/1.1\r\n"
+           . "\r\n";
+    bad_request($self, $s, "missing Host header");
+}
