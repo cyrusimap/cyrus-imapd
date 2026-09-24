@@ -9,7 +9,7 @@ use DateTime;
 use Data::Dumper;
 use JSON::XS;
 
-use base qw(Cassandane::Cyrus::TestSuite Cassandane::Mixin::QuotaHelper);
+use base qw(Cassandane::Unit::TestSuite::Cyrus Cassandane::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
 use Cassandane::Util::NetString;
 use Cassandane::Util::Slurp;
@@ -245,7 +245,7 @@ sub XXtest_replication_multiple
     $self->assert_cmp_deeply([], \@res);
 }
 
-Cassandane::Cyrus::TestSuite::magic(Bug3735 => sub {
+Cassandane::Unit::TestSuite::Cyrus::magic(Bug3735 => sub {
     my ($testcase) = @_;
     $testcase->config_set(quota_db => 'quotalegacy');
     $testcase->config_set(hashimapspool => 1);

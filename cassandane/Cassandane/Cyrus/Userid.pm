@@ -5,13 +5,13 @@ package Cassandane::Cyrus::Userid;
 use strict;
 use warnings;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 
-Cassandane::Cyrus::TestSuite::magic(NoAutocreate => sub {
+Cassandane::Unit::TestSuite::Cyrus::magic(NoAutocreate => sub {
     shift->config_set('autocreate_users' => 'nobody');
 });
-Cassandane::Cyrus::TestSuite::magic(PopUseACL => sub {
+Cassandane::Unit::TestSuite::Cyrus::magic(PopUseACL => sub {
     shift->config_set('popuseacl' => 'yes');
 });
 

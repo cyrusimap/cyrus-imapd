@@ -18,7 +18,7 @@ use File::Basename;
 use XML::Spice;
 use MIME::Base64 qw(encode_base64url decode_base64url encode_base64 decode_base64);
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;

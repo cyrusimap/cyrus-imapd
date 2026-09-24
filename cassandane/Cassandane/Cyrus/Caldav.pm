@@ -13,7 +13,7 @@ use Data::Dumper;
 use Text::VCardFast;
 use Cwd qw(abs_path);
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use utf8;

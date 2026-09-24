@@ -15,7 +15,7 @@ use Cyrus::Backup;
 use Cyrus::Backup::Restore;
 use Cyrus::Backup::State;
 
-use base qw(Cassandane::Cyrus::TestSuite Cassandane::Mixin::QuotaHelper);
+use base qw(Cassandane::Unit::TestSuite::Cyrus Cassandane::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
 
 use charnames ':full';

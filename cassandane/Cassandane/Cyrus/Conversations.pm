@@ -7,7 +7,7 @@ use warnings;
 use DateTime;
 use URI::Escape;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::ThreadedGenerator;
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;

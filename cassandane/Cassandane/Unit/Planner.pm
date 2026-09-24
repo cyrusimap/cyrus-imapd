@@ -203,9 +203,6 @@ sub _rules_for ($self, $name)
 
         foreach my $file ($type eq 'd' ? _suite_files_in($path) : $path)
         {
-            # The base class lives among the suites but isn't one.
-            next if $file =~ m{/TestSuite\.pm$};
-
             push @rules, {
                 spec  => $name,
                 deny  => ($neg eq '!'),

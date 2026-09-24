@@ -8,7 +8,7 @@ use File::stat;
 use POSIX qw(getcwd);
 use DateTime;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 use Cassandane::Util::Wait;
 use Cassandane::Util::Socket;

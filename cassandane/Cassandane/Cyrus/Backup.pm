@@ -8,7 +8,7 @@ use experimental 'signatures';
 use DBI;
 use File::Path;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 
 sub new ($class, @args)

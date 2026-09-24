@@ -15,7 +15,7 @@ use File::Temp qw/tempfile/;
 use DateTime;
 use Date::Parse;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use Encode qw(decode encode);

@@ -9,7 +9,7 @@ use File::Path qw(mkpath);
 use DateTime;
 use JSON::XS;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 use Cassandane::Cassini;
