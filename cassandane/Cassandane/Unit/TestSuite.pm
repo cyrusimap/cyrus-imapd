@@ -9,7 +9,7 @@ use Data::Dumper;
 use DateTime;
 use DateTime::Format::ISO8601;
 use Carp ();
-use Error qw(:try);
+use Error ();
 use Package::Stash;
 
 use Cassandane::Failure;
@@ -42,23 +42,27 @@ sub run_bare
 
     my $set_up_ok = 0;
 
-    try {
+    my $ok = eval {
         $self->set_up();
         $set_up_ok = 1;
 
         $self->run_test();
-    }
-    finally {
-        if ($set_up_ok) {
-            $self->tear_down();
-        }
-        else {
-            # We know that set_up didn't succeed, but did it *partly* succeed?
-            # Maybe, so we'll try to tear_down, but if that fails, that's the
-            # limit of what we can do, so just ignore failure on that.
-            eval { $self->tear_down() };
-        }
+        1;
     };
+    my $thrown = $@;
+
+    if ($set_up_ok) {
+        $self->tear_down();
+    }
+    else {
+        # We know that set_up didn't succeed, but did it *partly* succeed?
+        # Maybe, so we'll try to tear_down, but if that fails, that's the
+        # limit of what we can do, so just ignore failure on that.
+        eval { $self->tear_down() };
+    }
+
+    # Whatever went wrong is still what went wrong, now that we've tidied up.
+    die $thrown if not $ok;
 
     return;
 }

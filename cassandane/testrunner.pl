@@ -163,7 +163,7 @@ use List::Util qw(uniq);
 
 use lib '.';
 use Cassandane::Util::Setup;
-use Cassandane::Error;
+use Cassandane::Exception;
 use Cassandane::Unit::FailedTests;
 use Cassandane::Unit::FormatPretty;
 use Cassandane::Unit::FormatTAP;
@@ -222,7 +222,7 @@ if ($missing_binaries) {
             if ($line)
             {
                 local $Error::Depth = 1;
-                Cassandane::Error->throw('-text' => "Perl exception: $text\n");
+                Cassandane::Exception->throw('-text' => "Perl exception: $text\n");
             }
         }
         die @_;
