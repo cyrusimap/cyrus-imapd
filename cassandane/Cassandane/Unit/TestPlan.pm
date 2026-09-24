@@ -10,9 +10,6 @@ use File::Find;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
-use Error qw(:try);
-use Cassandane::Error;
-use Cassandane::Failure;
 use Cassandane::Util::Log;
 use Cassandane::Unit::TestSuite;
 use Cassandane::Unit::TestPlanItem;
@@ -475,49 +472,6 @@ sub _make_logfile
     $witem->{logfile} = $logfile;
 }
 
-# Point this process's STDOUT and STDERR at the log file, keeping the
-# originals so that they can be put back once the test is done.
-sub _capture_output
-{
-    my ($self, $logfile) = @_;
-
-    ${\*STDOUT}->flush;
-    ${\*STDERR}->flush;
-
-    open my $oldout, '>&', \*STDOUT
-        or die "Cannot save STDOUT";
-    open my $olderr, '>&', \*STDERR
-        or die "Cannot save STDERR";
-
-    unless ($ENV{CASSANDANE_LIVE_OUTPUT}) {
-      open STDOUT, '>>', $logfile
-          or die "Cannot redirect STDOUT to $logfile: $!";
-      open STDERR, '>>', $logfile
-          or die "Cannot redirect STDERR to $logfile: $!";
-    }
-
-    $self->{oldout} = $oldout;
-    $self->{olderr} = $olderr;
-}
-
-# Redirect STDOUT and STDERR back to their original fds
-sub _restore_stdout
-{
-    my ($self) = @_;
-
-    ${\*STDOUT}->flush;
-    open STDOUT, '>&', $self->{oldout}
-        or die "Cannot restore STDOUT";
-    close $self->{oldout};
-    $self->{oldout} = undef;
-
-    ${\*STDERR}->flush;
-    open STDERR, '>&', $self->{olderr}
-        or die "Cannot restore STDERR";
-    close $self->{olderr};
-    $self->{olderr} = undef;
-}
-
 sub _dump_logfile
 {
     my ($logfile) = @_;
@@ -540,95 +494,6 @@ sub _get_test
 # Run one work item and return its outcome: a verdict, plus a description of
 # the failure when there is one.  This runs in a worker, and the outcome goes
 # back to the parent, which is what reports it.
-# Run one test and say how it went.  A Cassandane::Failure means the test ran
-# and came out wrong; anything else thrown means it never got to say.
-sub _outcome_of ($test)
-{
-    my $outcome;
-
-    try {
-        $test->run_bare();
-        $outcome = { outcome => 'pass' };
-    }
-    catch Cassandane::Failure with {
-        $outcome = { outcome => 'fail', report => shift->stringify };
-    }
-    catch Error with {
-        my $thrown = shift;
-        $thrown = Cassandane::Error->from_thrown($thrown)
-            if not $thrown->isa('Cassandane::Error');
-        $outcome = { outcome => 'error', report => $thrown->stringify };
-    }
-    otherwise {
-        my $report = Cassandane::Error->from_thrown(shift)->stringify;
-        $outcome = { outcome => 'error', report => $report };
-    };
-
-    return $outcome;
-}
-
-sub _run_workitem
-{
-    my ($self, $witem) = @_;
-    my $test = $self->_get_test($witem);
-
-    # Every worker inherited the same random seed from the parent when it was
-    # forked, so without this they would all generate the same message ids,
-    # names and UUIDs as each other, test for test.
-    srand;
-
-    $self->_capture_output($witem->{logfile});
-
-    my $outcome;
-    if (my $reason = $self->_skip_reason($test))
-    {
-        $outcome = { outcome => 'skip', reason => $reason };
-    }
-    else
-    {
-        $outcome = _outcome_of($test);
-    }
-
-    if ($test->can('post_tear_down'))
-    {
-        eval
-        {
-            $test->post_tear_down($outcome->{outcome});
-        };
-        my $ex = $@;
-        if ($ex)
-        {
-            my $report = Cassandane::Error->from_thrown($ex)->stringify;
-            $outcome = { outcome => 'error', report => $report };
-        }
-    }
-
-    $self->_restore_stdout();
-
-    return $outcome;
-}
-
-# The filters that decide whether a test runs at all.  The first one with an
-# answer wins, and its answer is why the test was skipped.  Order matters,
-# because some have side effects: a test's :want_service_http attribute is
-# honoured by a filter.
-sub _skip_reason ($self, $test)
-{
-    my @filters = qw(skip_version skip_missing_features
-                     skip_runtime_check
-                     enable_wanted_properties);
-
-    push @filters, 'skip_slow' if $self->{skip_slow};
-
-    foreach my $token (@filters)
-    {
-        my $reason = $test->filter_method($token);
-        return $reason if $reason;
-    }
-
-    return;
-}
-
 sub _finish_workitem
 {
     my ($self, $witem, $result) = @_;
@@ -645,10 +510,9 @@ sub _finish_workitem
         return;
     }
 
-    # The test was actually started earlier by _run_workitem, but its
-    # start_test event wasn't sent: the worker drops the listeners that
-    # write the report.  Send the event again now, so that the formatters
-    # hear about the test before they hear how it went.
+    # The test ran in a worker, which has no listeners to tell.  Send the
+    # start_test event now, so that the formatters hear about the test
+    # before they hear how it went.
     $result->start_test($test);
 
     $test->annotate_from_file($witem->{logfile});
@@ -705,10 +569,7 @@ sub run
 
     my $pool = Cassandane::Unit::WorkerPool->new(
         maxworkers => $self->{maxworkers} || 1,
-        handler => sub {
-            my ($assignment) = @_;
-            return $self->_run_workitem($assignment);
-        },
+        skip_slow  => $self->{skip_slow},
     );
 
     my ($witem, $done);
