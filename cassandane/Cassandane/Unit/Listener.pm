@@ -26,7 +26,8 @@ sub add_failure ($self, $witem) { }
 sub add_error ($self, $witem) { }
 sub add_skip ($self, $witem) { } # won't have a start/end
 
-# Every test that was going to run has run.
-sub finished ($self, $result, $start_time, $end_time) { }
+# Every test that was going to run has run.  The summary is plain data: see
+# Cassandane::Unit::Runner::result_summary.
+sub finished ($self, $summary, $start_time, $end_time) { }
 
 1;

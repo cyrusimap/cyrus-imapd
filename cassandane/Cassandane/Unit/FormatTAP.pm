@@ -58,8 +58,6 @@ sub add_skip
 {
     my ($self, $witem) = @_;
 
-    $self->SUPER::add_skip($witem);
-
     # TAP has its own way of saying this, and a skip is an 'ok'
     my $line = sprintf "ok %i - %s.%s # SKIP %s\n",
         ++$self->{i},

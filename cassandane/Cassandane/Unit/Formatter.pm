@@ -34,31 +34,19 @@ sub _print
 
 # A skipped test never ran, so it never started either: this is the only event
 # a formatter hears about it.
-sub add_skip
-{
-    my ($self, $witem) = @_;
-    $self->{skip_count}++;
-}
-
-sub skip_count
-{
-    my ($self) = @_;
-    return $self->{skip_count} || 0;
-}
-
 # Override this with your output format's end-of-tests handling.  The
 # default is to print a summary.
 sub finished
 {
-    my ($self, $result, $start_time, $end_time) = @_;
-    $self->print_summary($result, $start_time, $end_time);
+    my ($self, $summary, $start_time, $end_time) = @_;
+    $self->print_summary($summary, $start_time, $end_time);
 }
 
 # Override this, and/or subs print_header, print_errors, print_failures
 # to change how the summary is presented.
 sub print_summary
 {
-    my ($self, $result, $start_time, $end_time) = @_;
+    my ($self, $summary, $start_time, $end_time) = @_;
 
     my $run_time = timediff($end_time, $start_time);
 
@@ -66,32 +54,29 @@ sub print_summary
     print "Time: ", timestr($run_time), "\n";
     print "Finished: ", time2str("%T", $end_time->real()), "\n";
 
-    $self->print_header($result);
-    $self->print_errors($result);
-    $self->print_failures($result);
+    $self->print_header($summary);
+    $self->print_errors($summary);
+    $self->print_failures($summary);
 }
 
 sub print_header
 {
-    my ($self, $result) = @_;
+    my ($self, $summary) = @_;
 
-    my $skipped = $self->skip_count()
-                ? ", Skipped: " . $self->skip_count()
-                : "";
+    my $skip_count = scalar $summary->{skips}->@*;
+    my $skipped = $skip_count ? ", Skipped: $skip_count" : "";
 
-    if ($result->was_successful()) {
-        $self->_print("\n", "OK", " (", $result->run_count(), " tests",
-                      $self->skip_count()
-                        ? ", " . $self->skip_count() . " skipped"
-                        : "",
+    if ($summary->{was_successful}) {
+        $self->_print("\n", "OK", " (", $summary->{run_count}, " tests",
+                      $skip_count ? ", $skip_count skipped" : "",
                       ")\n");
     }
     else {
         $self->_print("\n", "!!!FAILURES!!!", "\n",
                       "Test Results:\n",
-                      "Run: ", $result->run_count(),
-                      ", Failures: ", $result->failure_count(),
-                      ", Errors: ", $result->error_count(),
+                      "Run: ", $summary->{run_count},
+                      ", Failures: ", scalar $summary->{failures}->@*,
+                      ", Errors: ", scalar $summary->{errors}->@*,
                       $skipped,
                       "\n");
     }
@@ -99,9 +84,9 @@ sub print_header
 
 sub print_errors
 {
-    my ($self, $result) = @_;
+    my ($self, $summary) = @_;
 
-    return unless my $error_count = $result->error_count();
+    return unless my $error_count = scalar $summary->{errors}->@*;
 
     my $msg = "\nThere " .
               ($error_count == 1 ?
@@ -111,7 +96,7 @@ sub print_errors
     $self->_print($msg);
 
     my $i = 0;
-    for my $e (@{$result->errors()}) {
+    for my $e ($summary->{errors}->@*) {
         chomp(my $report = $e->{report});
         $i++;
         $self->_print("$i) $report\n");
@@ -122,9 +107,9 @@ sub print_errors
 
 sub print_failures
 {
-    my ($self, $result) = @_;
+    my ($self, $summary) = @_;
 
-    return unless my $failure_count = $result->failure_count;
+    return unless my $failure_count = scalar $summary->{failures}->@*;
 
     my $msg = "\nThere " .
               ($failure_count == 1 ?
@@ -134,7 +119,7 @@ sub print_failures
     $self->_print($msg);
 
     my $i = 0;
-    for my $f (@{$result->failures()}) {
+    for my $f ($summary->{failures}->@*) {
         chomp(my $report = $f->{report});
         $self->_print("\n") if $i++;
         $self->_print("$i) $report\n");
