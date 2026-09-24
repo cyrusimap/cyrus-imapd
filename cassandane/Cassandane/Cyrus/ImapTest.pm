@@ -8,7 +8,7 @@ use Cwd qw(abs_path);
 use File::Path qw(mkpath);
 use DateTime;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
 

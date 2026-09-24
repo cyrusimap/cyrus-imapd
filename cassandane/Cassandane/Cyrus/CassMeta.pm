@@ -9,10 +9,10 @@ use strict;
 use warnings;
 use Data::Dumper;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 
-# See Cassandane::Cyrus::TestSuite::_create_instances()
+# See Cassandane::Unit::TestSuite::Cyrus::_create_instances()
 sub all_instance_names
 {
     return qw(instance replica frontend backend2);

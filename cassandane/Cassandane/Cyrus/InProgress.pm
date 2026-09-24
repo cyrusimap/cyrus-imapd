@@ -13,7 +13,7 @@ use File::Basename;
 use IO::File;
 use Cwd qw(abs_path getcwd);
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 
 use charnames ':full';

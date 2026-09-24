@@ -7,7 +7,7 @@ use warnings;
 use DateTime;
 use Data::Dumper;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 
 sub new
 {

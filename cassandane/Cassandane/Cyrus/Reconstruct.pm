@@ -10,7 +10,7 @@ use IO::File;
 use JSON;
 use Cwd qw(abs_path);
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
 

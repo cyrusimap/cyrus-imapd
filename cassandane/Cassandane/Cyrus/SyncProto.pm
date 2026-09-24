@@ -5,7 +5,7 @@ package Cassandane::Cyrus::SyncProto;
 use strict;
 use warnings;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
 use Data::Dumper;

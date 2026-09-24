@@ -5,7 +5,7 @@ package Cassandane::Cyrus::Delete;
 use strict;
 use warnings;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 use File::Basename;
 

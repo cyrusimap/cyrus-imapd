@@ -12,7 +12,7 @@ use Data::Dumper;
 use POSIX;
 use Carp;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 
 sub new

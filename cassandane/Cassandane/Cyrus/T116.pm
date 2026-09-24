@@ -5,7 +5,7 @@ package Cassandane::Cyrus::T116;
 use strict;
 use warnings;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
 
@@ -27,7 +27,7 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-Cassandane::Cyrus::TestSuite::magic(T116 => sub {
+Cassandane::Unit::TestSuite::Cyrus::magic(T116 => sub {
     my ($testcase) = @_;
     $testcase->config_set(virtdomains => 'userid');
 });

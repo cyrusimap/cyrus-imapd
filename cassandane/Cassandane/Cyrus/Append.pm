@@ -13,7 +13,7 @@ use File::Basename;
 use IO::File;
 use IO::Select;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 

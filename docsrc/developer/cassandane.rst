@@ -283,7 +283,7 @@ Test attributes
 
 A test subroutine can carry *attributes*, written between its name and its
 signature, that tell the test planner how and whether to run it.  These apply
-to suites inheriting from ``Cassandane::Cyrus::TestSuite`` (which is almost all
+to suites inheriting from ``Cassandane::Unit::TestSuite::Cyrus`` (which is almost all
 of them); suites inheriting directly from ``Cassandane::Unit::TestSuite`` ignore
 them, but you shouldn't be inheriting from that unless you're testing
 Cassandane itself.
@@ -337,7 +337,7 @@ and a feature that survives only on a stable branch with:
 There is also a family of ``:want_*`` "magic" attributes that switch on
 services or features (replication, and so on) before the test runs.  For the
 full, current set of magic and ``:needs_*`` categories, read
-``Cassandane/Cyrus/TestSuite.pm`` — this is exactly the kind of list that rots
+``Cassandane/Unit/TestSuite/Cyrus.pm`` — this is exactly the kind of list that rots
 in prose, so the source is the reference.
 
 If you need to branch on the Cyrus version *inside* a test (or inside

@@ -9,7 +9,7 @@ use Net::DAVTalk 0.24;
 use Net::CardDAVTalk 0.11;
 use Text::JSContact 0.01 qw(vcard_to_jscontact);
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Generator;
 use Cassandane::Util::Log;
 

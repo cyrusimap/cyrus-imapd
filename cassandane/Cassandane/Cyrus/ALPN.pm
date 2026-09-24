@@ -10,7 +10,7 @@ use HTTP::Tiny;
 use IO::Socket::SSL;
 use XML::Spice;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 
 # When ALPN negotiation fails, depending on the openssl version, we might get

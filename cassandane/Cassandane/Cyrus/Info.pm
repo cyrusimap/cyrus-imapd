@@ -9,7 +9,7 @@ use Data::Dumper;
 use Date::Format qw(time2str);
 use Time::HiRes qw(usleep);
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 use Cassandane::Instance;
 
@@ -31,7 +31,7 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-Cassandane::Cyrus::TestSuite::magic(ConfigJunk => sub {
+Cassandane::Unit::TestSuite::Cyrus::magic(ConfigJunk => sub {
     shift->config_set(trust_fund => 'street art');
 });
 

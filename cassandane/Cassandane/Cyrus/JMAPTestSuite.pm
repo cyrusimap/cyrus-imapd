@@ -10,7 +10,7 @@ use DateTime;
 use JSON::XS qw(encode_json);
 use File::Find;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
 

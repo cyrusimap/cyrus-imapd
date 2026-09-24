@@ -12,7 +12,7 @@ use Text::JSContact 0.01 qw(vcard_to_jscontact);
 use Data::Dumper;
 use XML::Spice;
 
-use base qw(Cassandane::Cyrus::TestSuite);
+use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 
 sub new
