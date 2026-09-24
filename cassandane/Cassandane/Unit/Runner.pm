@@ -108,10 +108,10 @@ sub result_summary ($self)
 
 sub do_run
 {
-    my ($self, $planner) = @_;
+    my ($self, $plan) = @_;
 
     my $start_time = new Benchmark();
-    $self->_run_plan($planner);
+    $self->_run_plan($plan);
     my $end_time = new Benchmark();
 
     $self->tell_listeners(finished => $self->result_summary,
@@ -225,9 +225,9 @@ sub _finish_workitem
 
 sub _run_plan
 {
-    my ($self, $planner) = @_;
+    my ($self, $plan) = @_;
 
-    my @workitems = $planner->work_items();
+    my @workitems = $plan->@*;
 
     # try to clean up after ourselves on interrupt
     my $interrupted = 0;

@@ -7,7 +7,9 @@ use warnings;
 use experimental 'signatures';
 
 use File::Find;
-use Cassandane::Unit::TestPlanItem;
+
+use Cassandane::Cassini;
+use Cassandane::Unit::TestSuite;
 
 my @default_test_roots = (
     'Cassandane/Test',
@@ -18,52 +20,11 @@ sub new
 {
     my ($class, %opts) = @_;
     my $self = {
-        schedule => {},
         test_roots => delete $opts{test_roots} // [ @default_test_roots ],
     };
     die "Unknown options: " . join(' ', keys %opts)
         if scalar %opts;
     return bless $self, $class;
-}
-
-sub _get_item
-{
-    my ($self, $suite) = @_;
-    return $self->{schedule}->{$suite} ||=
-        Cassandane::Unit::TestPlanItem->new($suite);
-}
-
-sub _schedule
-{
-    my ($self, $neg, $path, $testname, $spec) = @_;
-    return if ($path =~ m/\/TestSuite\.pm$/);
-
-    my $suite = $path;
-    $suite =~ s/\.pm$//;
-    $suite =~ s/\//::/g;
-
-    if ($neg eq '!')
-    {
-        if (defined $testname)
-        {
-            # disable a specific test
-            $self->_get_item($suite)->_deny($testname);
-        }
-        else
-        {
-            # remove entire suite
-            delete $self->{schedule}->{$suite};
-        }
-    }
-    else
-    {
-        # add to the schedule
-        my $item = $self->_get_item($suite);
-        if (defined $testname)
-        {
-            $item->_allow($testname, $spec) if $testname;
-        }
-    }
 }
 
 # Turns a glob into an anchored regex.  '*' matches any run of characters,
@@ -204,87 +165,140 @@ sub _default_test_list
     return (sort(keys %default), sort(keys %suppressed));
 }
 
-sub schedule
+# The names to plan for.  Naming nothing means the default roots; naming only
+# things to leave out means the default roots minus those.
+sub _names_to_plan ($self, @names)
 {
-    my ($self, @names) = @_;
+    return $self->_default_test_list()
+        if not scalar @names;
 
-    if (not scalar @names) {
-        # if no names provided, use default list
-        @names = $self->_default_test_list();
-    }
-    elsif (not scalar grep { m/^[^!~]/ } @names) {
-        # if only negations provided, start with default list
-        @names = ($self->_default_test_list(), @names);
-    }
+    return ($self->_default_test_list(), @names)
+        if not scalar grep {; m/^[^!~]/ } @names;
 
-    foreach my $name (@names)
+    return @names;
+}
+
+# The .pm files directly under a directory a specification named.
+sub _suite_files_in ($dir)
+{
+    opendir my $dh, $dir
+        or die "Cannot open directory $dir for reading: $!";
+    my @files = grep {; m/\.pm$/ } readdir $dh;
+    closedir $dh;
+
+    return map {; "$dir/$_" } @files;
+}
+
+# One specification, resolved into rules: which suites it names, which test
+# within them if it names one, and whether it is taking them away rather than
+# asking for them.  One specification makes several rules when its suite part
+# is a glob, or when it names a directory.
+sub _rules_for ($self, $name)
+{
+    my @rules;
+
+    foreach my $found ($self->_parse_test_spec($name))
     {
-        foreach my $spec ($self->_parse_test_spec($name))
-        {
-            my ($neg, $type, $path, $test) = @$spec;
+        my ($neg, $type, $path, $test) = @$found;
 
-            if ($type eq 'd')
-            {
-                opendir DIR, $path
-                    or die "Cannot open directory $path for reading: $!";
-                while ($_ = readdir DIR)
-                {
-                    next unless m/\.pm$/;
-                    $self->_schedule($neg, "$path/$_", undef, $name);
-                }
-                closedir DIR;
-            }
-            else
-            {
-                $self->_schedule($neg, $path, $test, $name);
-            }
+        foreach my $file ($type eq 'd' ? _suite_files_in($path) : $path)
+        {
+            # The base class lives among the suites but isn't one.
+            next if $file =~ m{/TestSuite\.pm$};
+
+            push @rules, {
+                spec  => $name,
+                deny  => ($neg eq '!'),
+                suite => ($file =~ s/\.pm$//r =~ s{/}{::}gr),
+                test  => $test,
+            };
         }
     }
 
-    $self->_check_selections();
-    $self->_check_not_empty();
+    return @rules;
 }
 
-# Every specification can be fine, but we still have nothing to run, because a
-# negation can cancel out a selection: "ACL !ACL" is nothing.
-sub _check_not_empty ($self)
+# The class a suite's tests live in, loaded the first time it's wanted.  Only
+# the suites some specification named are ever loaded.
+sub _load_suite ($suite)
 {
-    foreach my $item (values $self->{schedule}->%*)
-    {
-        return if grep {; $item->_is_allowed($_) } $item->_test_names();
-    }
+    my $file = ($suite =~ s{::}{/}gr) . '.pm';
+    require $file;
 
-    die "No tests to run: the test plan is empty\n";
+    die "$suite is not a Cassandane::Unit::TestSuite\n"
+        if not $suite->isa('Cassandane::Unit::TestSuite');
+
+    return $suite;
 }
 
-# Check what the specifications that named individual tests actually selected.
-# This can't happen while they're being parsed, because it needs the suites to
-# be loaded, which can't happen until we know which suites to load.
+# A rule's test part is a name or a glob's regex, and undef when the rule is
+# about the whole suite.
+sub _rule_covers ($rule, $test)
+{
+    return 1 if not defined $rule->{test};
+    return $test =~ $rule->{test} if ref $rule->{test};
+    return $test eq $rule->{test};
+}
+
+# Work out which tests @names asks for: an arrayref of {suite, testname}, in
+# alphabetical order by suite and then by test.
 #
-# A specification that matches no tests at all is fatal.  It's nearly always a
-# typo, and you think everything passed, but actually nothing ran.
-sub _check_selections ($self)
+# The rules, in the order they're applied to each test:
+#
+#   * a suite nothing asked for isn't in the plan at all
+#   * a suite something denied outright is gone, however it was asked for
+#   * if anything named tests in this suite, only the tests it named run
+#   * a denied test doesn't run, whatever asked for it
+#
+# Denial always beats selection, whichever order they were given in.
+sub plan_for ($self, @names)
 {
-    # One specification can be applied to several suites, so gather up
-    # everything it matched before judging it.  "JMAP*.blob_get" has done its
-    # job if any one of the JMAP suites has that test; it's only a mistake if
-    # none of them do.
-    my (@specs, %matched);
+    my @rules = map {; $self->_rules_for($_) } $self->_names_to_plan(@names);
 
-    foreach my $item ($self->{schedule}->@{ sort keys $self->{schedule}->%* })
+    my @allow = grep {; ! $_->{deny} } @rules;
+    my @deny  = grep {;   $_->{deny} } @rules;
+
+    # A specification that named a test has to match one somewhere; remember
+    # the ones to judge, in the order they were given.
+    my (@judged, %matches);
+    foreach my $rule (grep {; defined $_->{test} } @allow)
     {
-        foreach my $match ($item->_get_candidates())
-        {
-            my $spec = $match->{spec};
+        push @judged, $rule->{spec} if not exists $matches{ $rule->{spec} };
+        $matches{ $rule->{spec} } //= 0;
+    }
 
-            push @specs, $spec if not $matched{$spec};
-            $matched{$spec} //= [];
-            push $matched{$spec}->@*, $match->{tests}->@*;
+    my %wanted = map {; $_->{suite} => 1 } @allow;
+
+    my @plan;
+    foreach my $suite (sort keys %wanted)
+    {
+        my @allowed_here = grep {; $_->{suite} eq $suite } @allow;
+        my @denied_here  = grep {; $_->{suite} eq $suite } @deny;
+
+        next if grep {; ! defined $_->{test} } @denied_here;
+
+        # Naming even one test in a suite means the rest of it isn't wanted,
+        # even if something else asked for the whole suite.
+        my @named = grep {; defined $_->{test} } @allowed_here;
+
+        foreach my $test (sort map {; s/^test_//r } _load_suite($suite)->list_tests())
+        {
+            my @covering = grep {; _rule_covers($_, $test) } @named;
+            $matches{ $_->{spec} }++ for @covering;
+
+            next if @named && ! @covering;
+            next if grep {; _rule_covers($_, $test) } @denied_here;
+
+            push @plan, { suite => $suite, testname => $test };
         }
     }
 
-    my @unmatched = grep {; ! $matched{$_}->@* } @specs;
+    my @unmatched = grep {; ! $matches{$_} } @judged;
     die "No tests matched: " . join(q{, }, @unmatched) . "\n" if @unmatched;
+
+    die "No tests to run: the test plan is empty\n" if not @plan;
+
+    return \@plan;
 }
 
 sub check_sanity
@@ -384,44 +398,6 @@ sub check_sanity
             die 'bad tiny-tests detected';
         }
     }
-}
-
-# The whole expanded plan, as {suite,testname} tuples, sorted in alphabetic
-# order on suite name then testname.  This is what a runner wants.
-sub work_items
-{
-    my ($self) = @_;
-
-    my @items = sort { $a->{suite} cmp $b->{suite} } values %{$self->{schedule}};
-    my @res;
-    foreach my $item (@items)
-    {
-        foreach my $name ($item->_test_names())
-        {
-            next unless $item->_is_allowed($name);
-
-            push @res, {
-                suite => $item->{suite},
-                testname => $name,
-            };
-        }
-    }
-    return @res;
-}
-
-# Sort and return the schedule as a list of "suite.test" strings
-# e.g. "Cassandane::Cyrus::Quota.using_storage".
-sub list
-{
-    my ($self) = @_;
-
-    my @res;
-    foreach my $witem ($self->work_items())
-    {
-        push(@res, "$witem->{suite}.$witem->{testname}");
-    }
-
-    return @res;
 }
 
 1;

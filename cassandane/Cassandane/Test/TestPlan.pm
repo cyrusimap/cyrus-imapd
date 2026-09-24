@@ -36,16 +36,16 @@ my @EVERYTHING = (@GLOB_STAR, qw(Alpha::Other.alpha
                                  Alpha::Shared.from_alpha
                                  Beta::Shared.from_beta));
 
-# Build a plan over the fixture roots and schedule @$specs on it.
+# Plan @$specs over the fixture roots, as "Alpha::GlobOne.beta" strings.
 sub _fixture_plan ($specs, %opts)
 {
-    my $plan = Cassandane::Unit::TestPlan->new(
+    my $planner = Cassandane::Unit::TestPlan->new(
         test_roots => [ $ALPHA, $BETA ],
         %opts,
     );
-    $plan->schedule(@$specs);
 
-    return $plan;
+    return [ map {; "$_->{suite}.$_->{testname}" =~ s/^\Q$PREFIX\E//r }
+             $planner->plan_for(@$specs)->@* ];
 }
 
 # Assert that scheduling $specs would run exactly the tests in @$expect, each
@@ -54,7 +54,7 @@ sub _fixture_plan ($specs, %opts)
 sub assert_plan ($self, $specs, $expect, $desc = undef)
 {
     my $label = $desc // join q{ }, @$specs;
-    my @got = map {; s/^\Q$PREFIX\E//r } _fixture_plan($specs)->list();
+    my @got = _fixture_plan($specs)->@*;
 
     $self->assert_str_equals(
         join(q{ }, "$label:", sort @$expect),
