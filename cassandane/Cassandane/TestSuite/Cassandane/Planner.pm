@@ -9,12 +9,13 @@ use experimental 'signatures';
 use base qw(Cassandane::Unit::TestSuite);
 use Cassandane::Unit::Planner;
 
-# We plan against a fixture tree rather than the real test roots so that these
+# We plan against a fixture tree rather than the real test root so that these
 # expectations don't have to be rewritten every time a suite is added or
-# renamed.  See Cassandane/Fixture/Planner/README.  Like the real roots, these
-# are relative to the cassandane directory, which is where a test run's cwd is.
-my $ALPHA = 'Cassandane/Fixture/Planner/Alpha';
-my $BETA  = 'Cassandane/Fixture/Planner/Beta';
+# renamed.  See Cassandane/Fixture/Planner/README.  Like the real root, this is
+# relative to the cassandane directory, which is where a test run's cwd is.
+my $ROOT  = 'Cassandane/Fixture/Planner';
+my $ALPHA = "$ROOT/Alpha";
+my $BETA  = "$ROOT/Beta";
 
 # Trimmed off both sides of every comparison, so that expectations below can
 # read "Alpha::GlobOne.beta" instead of the full package name.
@@ -40,7 +41,7 @@ my @EVERYTHING = (@GLOB_STAR, qw(Alpha::Other.alpha
 sub _fixture_plan ($specs, %opts)
 {
     my $planner = Cassandane::Unit::Planner->new(
-        test_roots => [ $ALPHA, $BETA ],
+        test_root => $ROOT,
         %opts,
     );
 
@@ -125,12 +126,19 @@ sub test_separators_are_interchangeable ($self)
     }
 }
 
-sub test_whole_root ($self)
+sub test_whole_directory ($self)
 {
     $self->assert_plan([$BETA],
                        [qw(Beta::GlobThree.alpha Beta::Shared.from_beta)]);
 
     $self->assert_plan([$ALPHA, $BETA], \@EVERYTHING);
+
+    # a directory can be named on its own, not just by its full path
+    $self->assert_plan(['Beta'],
+                       [qw(Beta::GlobThree.alpha Beta::Shared.from_beta)]);
+
+    # ... and the root itself is every suite there is
+    $self->assert_plan([$ROOT], \@EVERYTHING);
 }
 
 sub test_suite_globs ($self)
@@ -230,19 +238,27 @@ sub test_negation ($self)
     $self->assert_plan(['GlobOne', '!GlobOne.zz*'], \@GLOB_ONE);
 }
 
-sub test_root_shadowing ($self)
+sub test_naming_is_not_ambiguous ($self)
 {
-    # Shared exists in both roots, and the earlier root wins ...
-    $self->assert_plan(['Shared'], [qw(Alpha::Shared.from_alpha)]);
-    $self->assert_plan(['Beta::Shared'], [qw(Alpha::Shared.from_alpha)]);
+    # Shared exists in both directories, and a bare name doesn't choose
+    # between them: it means both.
+    $self->assert_plan(['Shared'],
+                       [qw(Alpha::Shared.from_alpha Beta::Shared.from_beta)]);
 
-    # ... so the only way to name the other one is in full
+    # Saying which one you mean is enough; there's no precedence to work
+    # around and no need to name it in full.
+    $self->assert_plan(['Beta::Shared'], [qw(Beta::Shared.from_beta)]);
     $self->assert_plan(['Cassandane::Fixture::Planner::Beta::Shared'],
                        [qw(Beta::Shared.from_beta)]);
 
-    # A leading component that doesn't resolve is dropped rather than being
-    # treated as a constraint, so naming a root doesn't confine a glob to it.
-    $self->assert_plan(['Alpha::Glob*'], \@GLOB_STAR);
+    # A leading component is a constraint, so naming a directory confines a
+    # glob to it.
+    $self->assert_plan(['Alpha::Glob*'],
+                       [qw(Alpha::GlobOne.alpha
+                           Alpha::GlobOne.beta
+                           Alpha::GlobOne.gamma_slow
+                           Alpha::GlobTwo.alpha
+                           Alpha::GlobTwo.delta)]);
 }
 
 sub test_plus_stands_in_for_star ($self)
