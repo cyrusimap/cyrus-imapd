@@ -31,7 +31,6 @@ sub new
         log_directory => delete $opts{log_directory},
         maxworkers => delete $opts{maxworkers} || 1,
         skip_slow => delete $opts{skip_slow} // 1,
-        slow_only => delete $opts{slow_only} // 0,
         test_roots => delete $opts{test_roots} // [ @default_test_roots ],
     };
     die "Unknown options: " . join(' ', keys %opts)
@@ -276,10 +275,6 @@ sub _check_not_empty ($self)
 #
 # A specification that matches no tests at all is fatal.  It's nearly always a
 # typo, and you think everything passed, but actually nothing ran.
-#
-# A specification that matches only slow tests turns the skip_slow filter off,
-# on the grounds that you can't have meant to ask for tests that were then
-# going to be filtered out from under you.
 sub _check_selections ($self)
 {
     # One specification can be applied to several suites, so gather up
@@ -302,23 +297,6 @@ sub _check_selections ($self)
 
     my @unmatched = grep {; ! $matched{$_}->@* } @specs;
     die "No tests matched: " . join(q{, }, @unmatched) . "\n" if @unmatched;
-
-    foreach my $spec (@specs)
-    {
-        my @tests = $matched{$spec}->@*;
-
-        if ($self->{skip_slow} and @tests == grep {; /_slow$/ } @tests)
-        {
-            xlog "$spec was explicitly requested. Enabling slow tests!";
-            $self->{skip_slow} = 0;
-        }
-
-        if ($self->{slow_only} and not grep {; $_ =~ m/_slow$/ } @tests)
-        {
-            xlog "$spec was explicitly requested. Enabling regular tests!";
-            $self->{slow_only} = 0;
-        }
-    }
 }
 
 sub check_sanity
@@ -618,7 +596,6 @@ sub _skip_reason ($self, $test)
                      enable_wanted_properties);
 
     push @filters, 'skip_slow' if $self->{skip_slow};
-    push @filters, 'slow_only' if $self->{slow_only};
 
     foreach my $token (@filters)
     {
