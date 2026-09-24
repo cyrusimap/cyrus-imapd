@@ -51,13 +51,19 @@ sub new
     return $self;
 }
 
-# Skip the whole suite unless the HTTP/2 client library is available.
-sub skip_check
+# Skip the whole suite unless the HTTP/2 client library is available.  Anything
+# else that would have skipped the test gets to say so first.
+sub reason_to_skip
 {
-    my ($self) = @_;
+    my ($self, %opt) = @_;
+
+    my $reason = $self->SUPER::reason_to_skip(%opt);
+    return $reason if $reason;
+
     return "Protocol::HTTP2 is not installed"
         unless eval { require Protocol::HTTP2::Client; 1 };
-    return undef;
+
+    return;
 }
 
 =head1 METHODS

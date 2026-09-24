@@ -229,25 +229,10 @@ sub _report_from_exception ($thrown)
     return "exception while testing: $thrown";
 }
 
-# The filters that decide whether a test runs at all.  The first one with an
-# answer wins, and its answer is why the test was skipped.  Order matters,
-# because some have side effects: a test's :want_service_http attribute is
-# honoured by a filter.
+# Why this test shouldn't run, if it shouldn't.
 sub _skip_reason ($self, $test)
 {
-    my @filters = qw(skip_version skip_missing_features
-                     skip_runtime_check
-                     enable_wanted_properties);
-
-    push @filters, 'skip_slow' if $self->{skip_slow};
-
-    foreach my $token (@filters)
-    {
-        my $reason = $test->filter_method($token);
-        return $reason if $reason;
-    }
-
-    return;
+    return $test->reason_to_skip(skip_slow => $self->{skip_slow});
 }
 
 # Point this process's STDOUT and STDERR at the log file, keeping the
