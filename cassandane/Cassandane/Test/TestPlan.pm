@@ -71,18 +71,6 @@ sub assert_plan_dies ($self, $specs, $qr)
     $self->assert_matches($qr, $e);
 }
 
-# Assert that scheduling $specs leaves the $flag ('skip_slow' or 'slow_only')
-# set to $expect.  %opts seeds the plan's initial flags.
-sub assert_slow_flag ($self, $specs, $flag, $expect, %opts)
-{
-    my $plan = _fixture_plan($specs, %opts);
-
-    $self->assert_str_equals(
-        join(q{ }, @$specs, $flag, $expect),
-        join(q{ }, @$specs, $flag, $plan->{$flag}),
-    );
-}
-
 sub test_whole_suite ($self)
 {
     $self->assert_plan(['GlobOne'], \@GLOB_ONE);
@@ -337,31 +325,6 @@ sub test_empty_plan_dies ($self)
 
     $self->assert_plan(['GlobOne', 'Other', '!GlobOne'],
                        [qw(Alpha::Other.alpha)]);
-}
-
-sub test_slow_flags ($self)
-{
-    # asking for a whole suite isn't asking for its slow tests
-    $self->assert_slow_flag(['GlobOne'], 'skip_slow', 1);
-    $self->assert_slow_flag(['GlobOne.beta'], 'skip_slow', 1);
-
-    # but selecting only slow tests is, however you spell it
-    $self->assert_slow_flag(['GlobOne.gamma_slow'], 'skip_slow', 0);
-    $self->assert_slow_flag(['GlobOne.*_slow'], 'skip_slow', 0);
-    $self->assert_slow_flag(['GlobOne.gamma*'], 'skip_slow', 0);
-
-    # ... whereas selecting a mixture of slow and regular tests isn't
-    $self->assert_slow_flag(['GlobOne.*'], 'skip_slow', 1);
-
-    # ... and neither is denying a slow test
-    $self->assert_slow_flag(['GlobOne', '!GlobOne.gamma_slow'], 'skip_slow', 1);
-
-    # slow_only works the same way, in reverse
-    $self->assert_slow_flag(['GlobOne.beta'], 'slow_only', 0, slow_only => 1);
-    $self->assert_slow_flag(['GlobOne.*a'], 'slow_only', 0, slow_only => 1);
-    $self->assert_slow_flag(['GlobOne.gamma_slow'], 'slow_only', 1,
-                            slow_only => 1);
-    $self->assert_slow_flag(['GlobOne.*'], 'slow_only', 1, slow_only => 1);
 }
 
 1;

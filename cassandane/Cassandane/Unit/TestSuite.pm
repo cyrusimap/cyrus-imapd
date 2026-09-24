@@ -254,13 +254,6 @@ sub filter
                 if $method =~ m/_slow$/;
             return;
         },
-        slow_only => sub
-        {
-            my ($method) = @_;
-            return 'test is not slow, and only slow tests were requested'
-                if $method !~ m/_slow$/;
-            return;
-        },
         skip_runtime_check => sub
         {
             # To use: add a skip_check method to your test suite that

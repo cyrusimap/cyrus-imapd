@@ -136,9 +136,9 @@ and use C<--no-cleanup> to override it.
 Run I<N> test workers in parallel.  Defaults to the C<cassandane.maxworkers>
 setting from F<cassandane.ini>.
 
-=item B<--slow>, B<--slow-only>
+=item B<--slow>
 
-Also run (or run only) the tests marked slow, which are skipped by default.
+Also run the tests marked slow, which are skipped by default.
 
 =item B<--rerun>, B<--rerun-suite>
 
@@ -266,7 +266,6 @@ my ($opt, $usage) = describe_options(
     [ 'stop|S',        "stop at the first failing test; same as --no-keep-going" ],
     [],
     [ 'slow',          "also run the tests marked slow" ],
-    [ 'slow-only',     "run *only* the tests marked slow" ],
     [ 'rerun',         "rerun only the tests that failed on the previous run" ],
     [ 'rerun-suite',   "like --rerun, but rerun the whole suite of each failure" ],
     [],
@@ -336,8 +335,7 @@ $format_params{no_ok} = 1 if $opt->no_ok;
 
 my $do_list       = $opt->list // 0;
 my $keep_going    = $opt->stop ? 0 : $opt->keep_going;
-my $skip_slow     = ($opt->slow || $opt->slow_only) ? 0 : 1;
-my $slow_only     = $opt->slow_only ? 1 : 0;
+my $skip_slow     = $opt->slow ? 0 : 1;
 my $log_directory = $opt->log_directory;
 my $want_rerun    = $opt->rerun_suite ? 2 : $opt->rerun ? 1 : 0;
 
@@ -413,7 +411,6 @@ my $plan = Cassandane::Unit::TestPlan->new(
         maxworkers => $cassini->val('cassandane', 'maxworkers') || undef,
         log_directory => $log_directory,
         skip_slow => $skip_slow,
-        slow_only => $slow_only,
     );
 
 if ($do_list)
