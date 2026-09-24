@@ -406,12 +406,7 @@ if ($want_rerun) {
     }
 }
 
-my $plan = Cassandane::Unit::TestPlan->new(
-        keep_going => $keep_going,
-        maxworkers => $cassini->val('cassandane', 'maxworkers') || undef,
-        log_directory => $log_directory,
-        skip_slow => $skip_slow,
-    );
+my $plan = Cassandane::Unit::TestPlan->new();
 
 if ($do_list)
 {
@@ -432,7 +427,12 @@ else
     $plan->check_sanity(nonfatal => $opt->no_fatal_plan);
 
     # Run the schedule
-    my $runner = Cassandane::Unit::Runner->new();
+    my $runner = Cassandane::Unit::Runner->new(
+        keep_going    => $keep_going,
+        maxworkers    => $cassini->val('cassandane', 'maxworkers') || undef,
+        log_directory => $log_directory,
+        skip_slow     => $skip_slow,
+    );
     $runner->add_listener($formatters{$want_format}->({%format_params}));
 
     exit !$runner->do_run($plan);

@@ -7,13 +7,7 @@ use warnings;
 use experimental 'signatures';
 
 use File::Find;
-use File::Temp qw(tempfile);
-use File::Path qw(mkpath);
-use Data::Dumper;
-use Cassandane::Util::Log;
-use Cassandane::Unit::TestSuite;
 use Cassandane::Unit::TestPlanItem;
-use Cassandane::Unit::WorkerPool;
 
 my @default_test_roots = (
     'Cassandane/Test',
@@ -25,10 +19,6 @@ sub new
     my ($class, %opts) = @_;
     my $self = {
         schedule => {},
-        keep_going => delete $opts{keep_going} || 0,
-        log_directory => delete $opts{log_directory},
-        maxworkers => delete $opts{maxworkers} || 1,
-        skip_slow => delete $opts{skip_slow} // 1,
         test_roots => delete $opts{test_roots} // [ @default_test_roots ],
     };
     die "Unknown options: " . join(' ', keys %opts)
@@ -396,11 +386,9 @@ sub check_sanity
     }
 }
 
-#
-# Get the entire expanded schedule as specific {suite,testname} tuples,
-# sorted in alphabetic order on suite name then testname.
-#
-sub _get_schedule
+# The whole expanded plan, as {suite,testname} tuples, sorted in alphabetic
+# order on suite name then testname.  This is what a runner wants.
+sub work_items
 {
     my ($self) = @_;
 
@@ -428,176 +416,12 @@ sub list
     my ($self) = @_;
 
     my @res;
-    foreach my $witem ($self->_get_schedule())
+    foreach my $witem ($self->work_items())
     {
         push(@res, "$witem->{suite}.$witem->{testname}");
     }
 
     return @res;
-}
-
-# Choose the log file a work item's output will go to.  This happens in the
-# parent, before the item is handed to a worker, so that the parent can still
-# read the output if the worker never comes back to say where it went.
-sub _make_logfile
-{
-    my ($self, $witem) = @_;
-
-    my $logfh;
-    my $logfile;
-    if (defined $self->{log_directory})
-    {
-        # Log directory specified so create the log file
-        # there with a semi-obvious name
-        if (! -d $self->{log_directory})
-        {
-            mkpath($self->{log_directory})
-                or die "Cannot create directory $self->{log_directory}: $!";
-        }
-        my $template = $witem->{suite} .  '.' .  $witem->{testname} .  '.XXXXXX';
-        $template =~ s/::/./g;
-        ($logfh, $logfile) = tempfile($template,
-                                      DIR => $self->{log_directory},
-                                      SUFFIX => '.log',
-                                      UNLINK => 0);
-        chmod(0644, $logfile);
-    }
-    else
-    {
-        # Create a per-test temporary logfile
-        ($logfh, $logfile) = tempfile(UNLINK => 0);
-    }
-    close $logfh;
-
-    $witem->{logfile} = $logfile;
-}
-
-sub _dump_logfile
-{
-    my ($logfile) = @_;
-
-    open LOGFILE, '<', $logfile
-        or die "Cannot open $logfile for reading: $!";
-    while (<LOGFILE>)
-    {
-        print STDERR $_;
-    }
-    close LOGFILE;
-}
-
-# Whatever the test wrote while it ran.  The worker pointed the test's output
-# at this file; a report quotes it under a failure.
-sub _annotations_from
-{
-    my ($logfile) = @_;
-    return if not defined $logfile;
-
-    open my $fh, '<', $logfile
-        or die "Cannot open $logfile for reading: $!";
-    local $/;
-    return <$fh>;
-}
-
-sub _finish_workitem
-{
-    my ($self, $witem, $runner) = @_;
-
-    if ($witem->{outcome} eq 'skip')
-    {
-        unlink($witem->{logfile}) if (!defined $self->{log_directory});
-
-        # A skipped test has no result to add: it never started, so nothing
-        # counts it as a run.  The listeners still hear about it, because a
-        # skip is worth reporting.
-        $runner->add_skip($witem);
-        return;
-    }
-
-    $witem->{annotations} = _annotations_from($witem->{logfile});
-    _dump_logfile($witem->{logfile}) if (get_verbose > 1);
-    unlink($witem->{logfile}) if (!defined $self->{log_directory});
-
-    # The test ran in a worker, which has no listeners to tell.  Send the
-    # start_test event now, so that the formatters hear about the test
-    # before they hear how it went.
-    $runner->start_test($witem);
-
-    if ($witem->{outcome} eq 'pass')
-    {
-        $runner->add_pass($witem);
-    }
-    elsif ($witem->{outcome} eq 'fail')
-    {
-        $runner->add_failure($witem);
-    }
-    elsif ($witem->{outcome} eq 'error')
-    {
-        $runner->add_error($witem);
-    }
-    else
-    {
-        die "Unknown outcome '$witem->{outcome}' for"
-            . " $witem->{suite}.$witem->{testname}";
-    }
-    $runner->end_test($witem);
-}
-
-# The runner hands the whole plan to run(), rather than one suite at a time,
-# so that every scheduled test lands in one result and one summary.
-#
-# Tests always run in a worker, even when there is only one worker to run
-# them: one way of working is worth more than the fork it costs.
-sub run
-{
-    my ($self, $runner) = @_;
-
-    # we expand the schedule before forking the
-    # workers so that we can just hand the reference
-    # to the worker
-    my @workitems = $self->_get_schedule();
-
-    # try to clean up after ourselves on interrupt
-    my $interrupted = 0;
-    $SIG{INT} = sub {
-        $interrupted ++;
-        # third ^C will terminate without cleanup
-        $SIG{INT} = 'DEFAULT' if $interrupted >= 2;
-    };
-
-    # we want an error not a signal
-    $SIG{PIPE} = 'IGNORE';
-
-    # Just In Case any code samples this in a TestSuite c'tor
-    $ENV{CASSANDANE_WORKER_ID} = 'invalid';
-
-    my $pool = Cassandane::Unit::WorkerPool->new(
-        maxworkers => $self->{maxworkers} || 1,
-        skip_slow  => $self->{skip_slow},
-    );
-
-    my ($witem, $done);
-    $pool->start();
-    # first ^C stops spawning new work items
-    while ($interrupted < 1 && ($witem = shift @workitems))
-    {
-        if ($self->{keep_going} || $runner->was_successful())
-        {
-            $self->_make_logfile($witem);
-            $pool->assign($witem);
-        }
-        while ($done = $pool->retrieve(0))
-        {
-            $self->_finish_workitem($done, $runner);
-        }
-    }
-    # second ^C stops waiting for work items to finish
-    while ($interrupted < 2 && ($done = $pool->retrieve(1)))
-    {
-        $self->_finish_workitem($done, $runner);
-    }
-    $pool->stop();
-
-    return $runner->was_successful();
 }
 
 1;
