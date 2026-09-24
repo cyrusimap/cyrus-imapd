@@ -21,7 +21,7 @@ sub new
     for my $required (qw(app)) {
         $attrs{$required} = delete $args->{$required};
         unless ($attrs{$required}) {
-            croak("'$required' required for Cassandane::Test::URL->new");
+            croak("'$required' required for Cassandane::TestSuite::Cassandane::URL->new");
         }
     }
 

@@ -145,7 +145,7 @@ EOF
     xlog $self, "Make sure that per-user data remains";
     $self->assert_str_equals('free', $events->[0]{freeBusyStatus});
     $self->assert_not_null($events->[0]{alerts}{myalarm});
-    $self->assert_str_equals('accepted', Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'cassandane@example.com')->{participationStatus});    
+    $self->assert_str_equals('accepted', Cassandane::TestSuite::Sieve::_participant($events->[0]{participants}, 'cassandane@example.com')->{participationStatus});    
 
     $response = $CalDAV->Request('GET', $href);
     $ical = Data::ICal->new(data => $response->{content});

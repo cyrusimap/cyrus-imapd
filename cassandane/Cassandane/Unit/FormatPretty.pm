@@ -89,10 +89,11 @@ sub add_skip
     $self->_print($line);
 }
 
+# Suites all live under one namespace, so saying so every time is noise.
 sub _getname
 {
     my ($witem) = @_;
-    my $suite = $witem->{suite} =~ s/^Cassandane:://r;
+    my $suite = $witem->{suite} =~ s/^Cassandane::TestSuite:://r;
 
     return "$suite.$witem->{testname}";
 }

@@ -16,7 +16,7 @@ and is primarily *integration testing*.  This page covers the
 Cassandane test suite.
 
 Tests are grouped into *suites*, and each suite is a Perl module: those under
-``Cassandane/Cyrus/`` exercise Cyrus, and those under ``Cassandane/Test/``
+``Cassandane/TestSuite/`` exercise Cyrus, and those under ``Cassandane/TestSuite/Cassandane/``
 exercise Cassandane itself.  Most Cyrus tests are written as *tiny-tests* — one
 subroutine per file under ``cassandane/tiny-tests/{Suite}/``, sharing the
 suite module's setup.
@@ -71,7 +71,7 @@ A test is a subroutine whose name begins with ``test_``.  Most live as
 *tiny-tests*: one such subroutine to a file under
 ``cassandane/tiny-tests/{Suite}/``, the file beginning with ``#!perl`` and
 ``use Cassandane::Tiny;``.  Drop the file into the suite's directory and the
-suite module in ``Cassandane/Cyrus/`` picks it up automatically; run it with
+suite module in ``Cassandane/TestSuite/`` picks it up automatically; run it with
 ``dar test Suite.name``.
 
 The example that follows shows only the subroutine — the ``use

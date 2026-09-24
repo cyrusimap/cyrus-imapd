@@ -12,7 +12,7 @@ sub import {
 
   my $into = caller;
 
-  my ($moniker) = $into =~ /\ACassandane::Cyrus::([_0-9A-Za-z]+)\z/;
+  my ($moniker) = $into =~ /\ACassandane::TestSuite::([_0-9A-Za-z]+)\z/;
 
   my $path = "tiny-tests/$moniker";
 

@@ -2,7 +2,7 @@ These are not tests.  Nothing here is run by a normal Cassandane run, and
 nothing here tests Cyrus.
 
 The suites under Alpha/ and Beta/ are fixture data for
-Cassandane::Test::Planner, which is a test of the test planner itself.
+Cassandane::TestSuite::Cassandane::Planner, which is a test of the test planner itself.
 Rather than making assertions about the real tests, which are changing all the
 time, the test planner tester builds a plan over these two roots instead, and
 asserts exactly which tests a given specification selects.  The tests here are

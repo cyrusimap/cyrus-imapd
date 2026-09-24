@@ -60,7 +60,7 @@ When you're done with the container, ``dar prune`` will destroy it.
 ``dar test`` is for running Cassandane tests.  Roughly speaking, each test is a
 file in ``./cassandane/tiny-tests/{SuiteName}`` and contains one Perl
 subroutine.  Each suite has common code in a perl module file in
-``./cassandane/Cassandane/Cyrus``.
+``./cassandane/Cassandane/TestSuite``.
 
 If you want to run specific Cassandane tests only, you can run ``dar test
 SuiteName`` or ``dar test SuiteName.prefix_*`` or ``dar test
@@ -94,7 +94,7 @@ and starts with ``use Cassandane::Tiny;``:
     }
 
 Drop the file in the suite's directory and it's picked up automatically by the
-suite's module in ``./cassandane/Cassandane/Cyrus/``.  Run just your new test
+suite's module in ``./cassandane/Cassandane/TestSuite/``.  Run just your new test
 with ``dar test SuiteName.my_new_feature``.
 
 Conventions

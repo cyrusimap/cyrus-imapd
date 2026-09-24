@@ -34,7 +34,7 @@ sub _record ($self, $witem)
 {
     return if not $self->{fh};
 
-    my $suite = $witem->{suite} =~ s/^Cassandane:://r;
+    my $suite = $witem->{suite} =~ s/^Cassandane::TestSuite:://r;
 
     $self->{fh}->print("$suite.$witem->{testname}\n");
     return;

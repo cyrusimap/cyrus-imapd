@@ -12,8 +12,8 @@ use Cassandane::Cassini;
 use Cassandane::Unit::TestSuite;
 
 my @default_test_roots = (
-    'Cassandane/Test',
-    'Cassandane/Cyrus',
+    'Cassandane/TestSuite',
+    'Cassandane/TestSuite/Cassandane',
 );
 
 sub new
