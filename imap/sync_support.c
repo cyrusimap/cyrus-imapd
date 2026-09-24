@@ -3670,9 +3670,7 @@ static int sync_apply_mailbox(struct dlist *kin,
 
         /* another local mailbox may have been waiting for the old id */
         if (!r && newjmapid && oldjmapid) {
-            char *userid = mboxname_to_userid(mboxname);
-            r = mboxlist_rehome_jmapid(userid, oldjmapid);
-            free(userid);
+            r = mboxlist_rehome_jmapid(mboxname, oldjmapid);
         }
         free(oldjmapid);
         if (r) goto done;

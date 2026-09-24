@@ -23,6 +23,10 @@ Sites that have seen two folders of one user report the same JMAP mailbox id
 should run "reconstruct -u <user>" on the master; the new id replicates.
 The repaired mailbox appears as created in Mailbox/changes.
 
+Shared mailboxes under a virtual domain now have their id lookup key scoped
+to the domain, matching the counters their ids come from.  The first
+reconstruct of such a mailbox rewrites its record to add the key.
+
 
 GitHub issue:
 

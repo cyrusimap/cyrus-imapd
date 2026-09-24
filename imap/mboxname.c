@@ -59,6 +59,7 @@ struct mbname_parts {
     char *intname;
     char *extname;
     char *recipient;
+    char *jmapid_scope;
 };
 
 #define XX 127
@@ -333,11 +334,13 @@ static void _mbdirty(mbname_t *mbname)
     free(mbname->intname);
     free(mbname->extname);
     free(mbname->recipient);
+    free(mbname->jmapid_scope);
 
     mbname->userid = NULL;
     mbname->intname = NULL;
     mbname->extname = NULL;
     mbname->recipient = NULL;
+    mbname->jmapid_scope = NULL;
 }
 
 EXPORTED void mbname_downcaseuser(mbname_t *mbname)
@@ -943,6 +946,7 @@ EXPORTED void mbname_free(mbname_t **mbnamep)
     free(mbname->extname);
     free(mbname->extuserid);
     free(mbname->recipient);
+    free(mbname->jmapid_scope);
 
     /* thing itself */
     free(mbname);
@@ -1049,6 +1053,25 @@ EXPORTED const char *mbname_userid(const mbname_t *mbname)
     backdoor->userid = buf_release(&buf);
 
     return mbname->userid;
+}
+
+/* The scope of the modseq counters a mailbox's JMAP id was minted from, so
+ * the space it's unique within: the userid, or for a shared mailbox its
+ * domain as "@domain", or "" without one.  No userid ever starts with '@'. */
+EXPORTED const char *mbname_jmapid_scope(const mbname_t *mbname)
+{
+    if (mbname->localpart)
+        return mbname_userid(mbname);
+
+    if (mbname->jmapid_scope)
+        return mbname->jmapid_scope;
+
+    mbname_t *backdoor = (mbname_t *)mbname;
+    backdoor->jmapid_scope =
+        mbname->domain ? strconcat("@", mbname->domain, (char *)NULL)
+                       : xstrdup("");
+
+    return mbname->jmapid_scope;
 }
 
 /* A "recipient" is a full username in external form (including domain) with an optional
