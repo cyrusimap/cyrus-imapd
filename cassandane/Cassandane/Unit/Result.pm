@@ -6,11 +6,6 @@ use strict;
 use warnings;
 use experimental 'signatures';
 
-use Error qw(:try);
-
-use Cassandane::Error;
-use Cassandane::Failure;
-
 sub new ($class)
 {
     return bless {
@@ -21,53 +16,15 @@ sub new ($class)
     }, $class;
 }
 
-sub listeners ($self)
-{
-    return $self->{listeners}->@*;
-}
-
 sub add_listener ($self, $listener)
 {
     push $self->{listeners}->@*, $listener;
     return;
 }
 
-sub set_listeners ($self, @listeners)
-{
-    $self->{listeners} = \@listeners;
-    return;
-}
-
 sub tell_listeners ($self, $event, @args)
 {
     $_->$event(@args) for $self->{listeners}->@*;
-    return;
-}
-
-# Run one test and record how it went.  A Cassandane::Failure means the test
-# ran and came out wrong; anything else thrown means it never got to say.
-sub run ($self, $test)
-{
-    $self->start_test($test);
-
-    try {
-        $test->run_bare();
-        $self->add_pass($test);
-    }
-    catch Cassandane::Failure with {
-        $self->add_failure($test, shift->stringify);
-    }
-    catch Error with {
-        my $thrown = shift;
-        $thrown = Cassandane::Error->from_thrown($thrown)
-            if not $thrown->isa('Cassandane::Error');
-        $self->add_error($test, $thrown->stringify);
-    }
-    otherwise {
-        $self->add_error($test, Cassandane::Error->from_thrown(shift)->stringify);
-    };
-
-    $self->end_test($test);
     return;
 }
 

@@ -25,7 +25,6 @@ sub filename ($class)
 sub new ($class)
 {
     return bless {
-        remove_me_in_cassandane_child => 1,
         # if we can't write there, we just won't record failed tests!
         fh => IO::File->new($class->filename, 'w'),
     }, $class;

@@ -19,7 +19,6 @@ sub new
     $fh->autoflush(1);
 
     return bless {
-        remove_me_in_cassandane_child => 1,
         fh => $fh,
     }, $class;
 }
