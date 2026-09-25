@@ -1,4 +1,4 @@
-/* httpd.h - Common state for HTTP/RSS/xDAV/JMAP/TZdist/iSchedule daemon */
+/* httpd.h - Common state for HTTP/xDAV/JMAP/TZdist/iSchedule daemon */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
@@ -85,7 +85,6 @@ enum {
     URL_NS_ISCHEDULE,
     URL_NS_DOMAINKEY,
     URL_NS_TZDIST,
-    URL_NS_RSS,
     URL_NS_DBLOOKUP,
 #ifdef WITH_JMAP
     URL_NS_JMAP,
@@ -93,7 +92,6 @@ enum {
     URL_NS_ADMIN,
     URL_NS_APPLEPUSH,
     URL_NS_PROMETHEUS,
-    URL_NS_CGI,
 };
 
 /* Bitmask of features/methods to allow, based on URL */
@@ -355,9 +353,6 @@ struct transaction_t {
                                              - error desc string
                                              - Location hdr on redirects
                                              - Etag for static docs
-                                           http_rss:
-                                             - Content-Type for MIME parts
-                                             - URL for feed & items
                                            http_caldav:
                                              - precond error resource URL
                                            http_ischedule:
@@ -508,12 +503,10 @@ extern struct namespace_t namespace_tzdist;
 extern struct namespace_t namespace_jmap;
 extern struct namespace_t namespace_convert;
 #endif
-extern struct namespace_t namespace_rss;
 extern struct namespace_t namespace_dblookup;
 extern struct namespace_t namespace_admin;
 extern struct namespace_t namespace_applepush;
 extern struct namespace_t namespace_prometheus;
-extern struct namespace_t namespace_cgi;
 
 
 /* XXX  These should be included in struct transaction_t */

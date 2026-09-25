@@ -43,10 +43,8 @@ Its feature set is limited to:
       collections and :rfc:`5322` message to store files.
 * JMAP support
     * Allows synchronization of mail clients via the JSON Mail Access Protocol (JMAP).
-* Other (RSS, static content)
-    * Serves static content (such as the RSS feed list template and the
-      CalDAV/CardDAV web GUIs).
-    * Serves IMAP mailboxes as RSS feeds.
+* Other
+    * Serves static content (such as the CalDAV/CardDAV web GUIs).
 
 HTTPD Configuration
 ===================
@@ -56,7 +54,7 @@ General configuration
 
 The Cyrus httpd service is configured using options in :cyrusman:`imapd.conf(5)`.
 
-The support for RSS, CalDAV, and CardDAV is divided into separate modules which
+The support for CalDAV, and CardDAV is divided into separate modules which
 run as part of the Cyrus httpd service. Selection of which module(s) are enabled
 is done by setting the :imapdconf:`httpmodules` option. **By default, no modules
 are enabled.**
@@ -96,7 +94,6 @@ Module-specific information
     http/carddav
     http/webdav
     http/jmap
-    http/rss
     http/convert
 
 For end users
@@ -120,6 +117,3 @@ needs to be customized to your specific hostnames.
     * The address book(s) are automatically filtered based on the username and password supplied.
 * WebDAV
     * ``https://<servername>/dav/drive/user/<userid>``
-* RSS
-    * ``https://<servername>/rss/``
-    * Serves up all mailboxes (read-only) that the authenticated user has access to.
