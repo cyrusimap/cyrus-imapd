@@ -1969,20 +1969,6 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
     }
 
     /* Delete calendar */
-    r = caldav_delmbox(db, mbentry);
-    if (r) {
-        xsyslog(LOG_ERR, "failed to delete mailbox from caldav_db",
-                "mboxname=<%s> mboxid=<%s> err=<%s>",
-                mbentry->name, mbentry->uniqueid, error_message(r));
-        goto done;
-    }
-    if (r) goto done;
-
-    jmap_myrights_delete(req, mboxname);
-
-    /* Remove from subscriptions db */
-    mboxlist_changesub(mboxname, req->userid, req->authstate, 0, 1, 0, 1);
-
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
     if (mboxlist_delayed_delete_isenabled()) {
         r = mboxlist_delayed_deletemailbox(mboxname,
@@ -1996,14 +1982,24 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
                 MBOXLIST_DELETE_CHECKACL|MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
     }
     mboxevent_free(&mboxevent);
+    if (r) goto done;
 
-    if (!r) r = caldav_update_shareacls(req->accountid);
+    jmap_myrights_delete(req, mboxname);
+
+    /* Remove from subscriptions db */
+    mboxlist_changesub(mboxname, req->userid, req->authstate, 0, 1, 0, 1);
+
+    /* The mailbox is already gone by here: neither this nor a close failure
+     * may turn a completed destroy into notDestroyed. */
+    int r2 = caldav_update_shareacls(req->accountid);
+    if (r2) {
+        xsyslog_ev(LOG_WARNING, "jmap.calendar.shareacls.failed",
+                   lf_s("mbox.name", mboxname),
+                   lf_err("error", r2));
+    }
 
 done:
-    if (db) {
-        int rr = caldav_close(db);
-        if (!r) r = rr;
-    }
+    if (db) caldav_close(db);
     if (r && *err == NULL) {
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             *err = json_pack("{s:s}", "type", "notFound");
