@@ -1,0 +1,34 @@
+Description:
+
+Event notifications gain opt-in parameters for special-use attributes
+(vnd.fastmail.specialUse, vnd.fastmail.oldSpecialUse), the JMAP ids of the
+affected emails (vnd.cmu.emailids) and of the mailboxes
+(vnd.fastmail.mailboxJMAPId, vnd.fastmail.oldMailboxJMAPId).  Copy, move and
+rename events now always carry oldMailboxUniqueId.
+
+mailboxID is now a URI describing the mailbox, as RFC 5423 defines it,
+rather than the mailbox's JMAP id or uniqueid.
+
+vnd.cmu.mbtype, vnd.cmu.mailboxACL and vnd.cmu.visibleUsers are now only
+included when listed in event_extra_params; previously they were always
+included.
+
+Documentation:
+
+The event_extra_params option in imapd.conf(5).
+
+Config changes:
+
+event_extra_params: new values vnd.fastmail.specialUse, vnd.cmu.emailids and
+vnd.fastmail.mailboxJMAPId.
+
+Upgrade instructions:
+
+Consumers that read mailboxID as an id should switch to mailboxUniqueId, or
+enable vnd.fastmail.mailboxJMAPId for the value mailboxID used to have.
+Deployments that rely on vnd.cmu.mbtype, vnd.cmu.mailboxACL or
+vnd.cmu.visibleUsers must add them to event_extra_params.
+
+GitHub issue:
+
+None.

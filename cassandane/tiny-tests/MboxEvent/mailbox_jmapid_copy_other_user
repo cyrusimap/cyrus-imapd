@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+# The source of a cross-user COPY has no conversations state open, so its
+# JMAP id comes from briefly opening the other user's db.
+sub test_mailbox_jmapid_copy_other_user
+    :Admin :Conversations
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.other", "cassandane", "lr");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $otherstore = $self->{instance}->get_service('imap')
+                          ->create_store(username => "other");
+    $otherstore->set_folder("INBOX");
+
+    $self->{instance}->getnotify();
+    $self->make_message("Message A", store => $otherstore);
+    my ($append) = grep { $_->{event} eq 'MessageAppend' }
+                   map { decode_json($_->{MESSAGE}) }
+                   $self->{instance}->getnotify->@*;
+    my $other_id = $append->{'vnd.fastmail.mailboxJMAPId'};
+    $self->assert_str_not_equals($append->{mailboxUniqueId}, $other_id);
+
+    $imaptalk->select("Other Users.other");
+    $imaptalk->copy("1", "INBOX");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    my ($copy) = grep { $_->{event} eq 'vnd.cmu.MessageCopy' }
+                 map { decode_json($_->{MESSAGE}) }
+                 $self->{instance}->getnotify->@*;
+    $self->assert_not_null($copy);
+    $self->assert_str_equals($other_id,
+                             $copy->{'vnd.fastmail.oldMailboxJMAPId'});
+
+    $imaptalk->logout();
+}
