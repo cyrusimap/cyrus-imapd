@@ -45,6 +45,14 @@ sub test_email_set_update_too_many_mailboxes_lowlimit
     }, 'R1']]);
     $self->assert_str_equals('tooManyMailboxes', $res->[0][1]{notUpdated}{$emailId}{type});
 
-    $self->assert_syslog_matches($self->{instance},
-                                 qr{IOERROR: conversations GUID limit});
+    xlog $self, "refused before anything changed: still only in INBOX";
+    my $get = $self->default_user->jmap->request([
+        [ 'Email/get' => {
+            ids => [ $emailId ], properties => [ 'mailboxIds' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $inboxId => jtrue() },
+        $get->single_sentence('Email/get')->arguments->{list}[0]{mailboxIds},
+    );
 }
