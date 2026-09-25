@@ -283,35 +283,43 @@ CU_BOOL CU_assertFormatImplementation(
     return CU_assertImplementation(bValue, uiLine, buf, strFile, strFunction, bFatal);
 }
 
+EXPORTED void config_write_configdirectory_directive(int fd,
+                                                     const char *confdir)
+{
+    struct buf opt_confdir = BUF_INITIALIZER;
+
+    if (confdir[0] == '/') {
+        buf_printf(&opt_confdir, "configdirectory: %s\n", confdir);
+    }
+    else {
+        char cwd[PATH_MAX];
+        if (!getcwd(cwd, sizeof(cwd))) {
+            /* if this fails there's not much we can do about it now */
+            perror("getcwd");
+            abort();
+        }
+        buf_printf(&opt_confdir, "configdirectory: %s/%s\n", cwd, confdir);
+    }
+    retry_write(fd, buf_cstring(&opt_confdir), buf_len(&opt_confdir));
+    buf_free(&opt_confdir);
+}
+
 EXPORTED void config_read_string(const char *confdir, const char *s)
 {
     char fname[PATH_MAX] = {0};
-    struct buf opt_confdir = BUF_INITIALIZER;
     int fd;
+
+    /* write config to the tmp file and then read it normally */
+    fd = cunit_tmpfile(fname, sizeof(fname), "imapd.conf-XXXXXX");
+    if (!fd) fatal("cunit_tmpfile", errno);
 
     /* n.b. you should almost always set a confdir, unless you're testing
      * the fact that cyrus fatals when it's not set!
      */
     if (confdir) {
-        if (confdir[0] == '/') {
-            buf_printf(&opt_confdir, "configdirectory: %s\n", confdir);
-        }
-        else {
-            char cwd[PATH_MAX];
-            if (!getcwd(cwd, sizeof(cwd))) {
-                /* if this fails there's not much we can do about it now */
-                perror("getcwd");
-                abort();
-            }
-            buf_printf(&opt_confdir, "configdirectory: %s/%s\n", cwd, confdir);
-        }
+        config_write_configdirectory_directive(fd, confdir);
     }
 
-    /* write config to the tmp file and then read it normally */
-    fd = cunit_tmpfile(fname, sizeof(fname), "imapd.conf-XXXXXX");
-    if (!fd) fatal("cunit_tmpfile", errno);
-    retry_write(fd, buf_cstring(&opt_confdir), buf_len(&opt_confdir));
-    buf_free(&opt_confdir);
     if (s) {
         retry_write(fd, s, strlen(s));
     }
@@ -373,6 +381,24 @@ EXPORTED char *cunit_tmpdir(char *buf, size_t len, const char *pattern)
     }
 
     return buf;
+}
+
+EXPORTED FILE *cunit_fmemopen(void *buf, size_t len, const char *mode)
+{
+#ifdef HAVE_FMEMOPEN
+    return fmemopen(buf, len, mode);
+#else
+    /* Seems the only portable approach is a temporary file */
+    char fname[PATH_MAX] = {0};
+    int fd = cunit_tmpfile(fname, sizeof(fname), "cunit_fmemopen-XXXXXX");
+    if (!fd) fatal("cunit_tmpfile", errno);
+    xunlink(fname);
+
+    retry_write(fd, buf, len);
+    if (lseek(fd, 0, SEEK_SET) != 0) fatal("cunit_memopen lseek", errno);
+
+    return fdopen(fd, mode);
+#endif
 }
 
 static void run_tests(void)

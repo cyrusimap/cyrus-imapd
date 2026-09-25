@@ -16,10 +16,16 @@ extern int verbose;
 
 /* initialise libconfig from a string */
 extern void config_read_string(const char *confdir, const char *s);
+/* write a "configdirectory: %s\n" directive with an absolute path */
+extern void config_write_configdirectory_directive(int fd,
+                                                   const char *confdir);
 
 /* utilities for consistent test tmpdir behaviour */
 extern int cunit_tmpfile(char *buf, size_t len, const char *pattern);
 extern char *cunit_tmpdir(char *buf, size_t len, const char *pattern);
+
+/* Call fmemopen, or emulate it if the C library doesn't provide it */
+extern FILE *cunit_fmemopen(void *buf, size_t len, const char *mode);
 
 /*
  * The standard CUnit assertion *EQUAL* macros have a flaw: they do
