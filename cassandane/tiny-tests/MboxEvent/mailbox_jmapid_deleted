@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+# Compact ids belong to the user, not to the mailbox, so a mailbox moved into
+# the DELETED namespace still has the JMAP id it had while it was alive.
+# Reporting the uniqueid instead would be indistinguishable from a JMAP id to
+# a consumer, and cyr_expire and unexpunge both emit events on these.
+
+sub test_mailbox_jmapid_deleted
+    :Admin :Conversations :DelayedDelete
+    ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my sub jmapid_from_event ($name) {
+        my @events = map { decode_json($_->{MESSAGE}) }
+                         $self->{instance}->getnotify->@*;
+        my ($event) = grep { $_->{event} eq $name } @events;
+        $self->assert_not_null($event);
+
+        my $id = $event->{'vnd.fastmail.mailboxJMAPId'};
+        $self->assert_not_null($id);
+        return $id;
+    }
+
+    # discard events from setup
+    $self->{instance}->getnotify();
+
+    $imaptalk->create("INBOX.Doomed");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+    my $live_id = jmapid_from_event('MailboxCreate');
+
+    # a compact JMAP id, not the uniqueid we used to fall back to
+    $self->assert_matches(qr/^P/, $live_id);
+
+    $self->{store}->set_folder("INBOX.Doomed");
+    $self->make_message("Message A");
+
+    $imaptalk->delete("INBOX.Doomed");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    my ($deleted) = map { $_->[2] } $admintalk->list(
+        "", "DELETED.user.cassandane.INBOX.Doomed.%")->@*;
+    $self->assert_not_null($deleted);
+
+    $admintalk->select($deleted);
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    $self->{instance}->getnotify();
+    $admintalk->store('1', '+flags', '(\\Flagged)');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    $self->assert_str_equals($live_id, jmapid_from_event('FlagsSet'));
+
+    $admintalk->logout();
+    $imaptalk->logout();
+}
