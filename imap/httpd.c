@@ -1,4 +1,4 @@
-/* httpd.c - HTTP/RSS/xDAV/JMAP/TZdist/iSchedule server protocol parsing */
+/* httpd.c - HTTP/xDAV/JMAP/TZdist/iSchedule server protocol parsing */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
@@ -4318,10 +4318,6 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
             case URL_NS_ADDRESSBOOK:
                 realm = config_getstring(IMAPOPT_CARDDAV_REALM);
-                break;
-
-            case URL_NS_RSS:
-                realm = config_getstring(IMAPOPT_RSS_REALM);
                 break;
             }
             if (!realm) realm = config_servername;
