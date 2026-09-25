@@ -6,7 +6,6 @@ use Cassandane::Tiny;
 # prefix of it; for other events the two are the same mailbox URI.
 
 sub test_mailboxid_uri
-    :min_version_3_13
     ($self)
 {
     my $imaptalk = $self->{store}->get_client();

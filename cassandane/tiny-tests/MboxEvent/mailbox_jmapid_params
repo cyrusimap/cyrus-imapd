@@ -10,7 +10,6 @@ use Cassandane::Tiny;
 # mailboxUniqueId for the source folder.
 
 sub test_mailbox_jmapid_params
-    :min_version_3_13
     ($self)
 {
     my $imaptalk = $self->{store}->get_client();

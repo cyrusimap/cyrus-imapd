@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+# MOVE expunges the source after the destination has committed its
+# conversations state, so the source must not have kept a pointer to it.
+sub test_mailbox_jmapid_move
+    :Conversations
+    ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Target");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    my $events_named = sub ($name) {
+        return grep { $_->{event} eq $name }
+               map { decode_json($_->{MESSAGE}) }
+               $self->{instance}->getnotify->@*;
+    };
+
+    $self->{instance}->getnotify();
+
+    $self->{store}->set_folder("INBOX.Target");
+    $self->make_message("Message A");
+    my ($target_append) = $events_named->('MessageAppend');
+    my $target_id = $target_append->{'vnd.fastmail.mailboxJMAPId'};
+
+    $self->{store}->set_folder("INBOX");
+    $self->make_message("Message B");
+    $self->make_message("Message C");
+    my ($inbox_append) = $events_named->('MessageAppend');
+    my $inbox_id = $inbox_append->{'vnd.fastmail.mailboxJMAPId'};
+
+    # both are compact JMAP ids, not uniqueids
+    $self->assert_str_not_equals($target_append->{mailboxUniqueId},
+                                 $target_id);
+    $self->assert_str_not_equals($inbox_append->{mailboxUniqueId},
+                                 $inbox_id);
+
+    $imaptalk->select("INBOX");
+    $imaptalk->move("1", "INBOX.Target");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    # the source mailbox is still usable after the move
+    $imaptalk->store("1", "+flags", "(\\Flagged)");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    my @events = map { decode_json($_->{MESSAGE}) }
+                 $self->{instance}->getnotify->@*;
+    my ($move) = grep { $_->{event} eq 'vnd.cmu.MessageMove' } @events;
+    $self->assert_not_null($move);
+    $self->assert_str_equals($target_id, $move->{'vnd.fastmail.mailboxJMAPId'});
+    $self->assert_str_equals($inbox_id,
+                             $move->{'vnd.fastmail.oldMailboxJMAPId'});
+
+    $imaptalk->logout();
+}

@@ -7,7 +7,6 @@ use Cassandane::Tiny;
 # omitted when the mailbox has no special-use attribute.
 
 sub test_specialuse_params
-    :min_version_3_13
     ($self)
 {
     my $imaptalk = $self->{store}->get_client();

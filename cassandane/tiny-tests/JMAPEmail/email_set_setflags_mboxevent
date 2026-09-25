@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_set_setflags_mboxevent
-    :min_version_3_13 :needs_component_sieve
+    :needs_component_sieve
     ($self)
 {
     my $jmap = $self->{jmap};
