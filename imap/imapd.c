@@ -3341,13 +3341,15 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
         return;
     }
 
-    prot_setsasl(imapd_in,  imapd_saslconn);
-    prot_setsasl(imapd_out, imapd_saslconn);
-
     snprintf(replybuf, sizeof(replybuf),
              "Success (%s) SESSIONID=<%s>", ssfmsg, session_id());
 
     authentication_success(tag, saslprops.ssf, replybuf);
+
+    /* Per RFC 9051, Section 6.2.2: a SASL security layer
+       takes effect after the CRLF of the tagged OK response. */
+    prot_setsasl(imapd_in,  imapd_saslconn);
+    prot_setsasl(imapd_out, imapd_saslconn);
 }
 
 /*
