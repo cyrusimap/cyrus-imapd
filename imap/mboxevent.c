@@ -297,29 +297,40 @@ static const char *mboxevent_mailbox_jmapid(struct mailbox *mailbox)
     const char *jmapid = mailbox_jmapid(mailbox);
     const char *uniqueid = mailbox_uniqueid(mailbox);
 
-    if (!jmapid || !mailbox_has_conversations(mailbox))
+    if (!jmapid || !config_getswitch(IMAPOPT_CONVERSATIONS))
         return uniqueid;
 
-    struct conversations_state *cstate =
-        conversations_get_mbox(mailbox_name(mailbox));
-    if (cstate)
-        return USER_COMPACT_EMAILIDS(cstate) ? jmapid : uniqueid;
-
-    /* Opening the db takes the user's namespace lock if it isn't held,
-     * and taking it with this mailbox namelocked is a lock order
-     * violation */
+    /* Ask about the user rather than the mailbox: compact ids are the
+     * user's, but mailbox_has_conversations() is false for deleted and
+     * submission mailboxes, and conversations_getmboxpath() gives no path
+     * for a deleted name */
     char *userid = mboxname_to_userid(mailbox_name(mailbox));
-    bool nslocked = user_nslock_islocked(userid);
+    if (!userid)
+        return uniqueid;
+
+    const char *id = NULL;
+    char *path = conversations_getuserpath(userid);
+    struct conversations_state *cstate =
+        path ? conversations_get_path(path) : NULL;
+    free(path);
+
+    if (cstate) {
+        id = USER_COMPACT_EMAILIDS(cstate) ? jmapid : uniqueid;
+    }
+    else if (user_nslock_islocked(userid)) {
+        /* Opening the db takes the user's namespace lock if it isn't held,
+         * and taking it with this mailbox namelocked is a lock order
+         * violation */
+        if (!conversations_open_user(userid, /*shared*/1, &cstate)) {
+            bool compact = USER_COMPACT_EMAILIDS(cstate);
+            conversations_abort(&cstate);
+            id = compact ? jmapid : uniqueid;
+        }
+    }
+
     free(userid);
-    if (!nslocked)
-        return NULL;
 
-    if (conversations_open_mbox(mailbox_name(mailbox), /*shared*/1, &cstate))
-        return NULL;
-    bool compact = USER_COMPACT_EMAILIDS(cstate);
-    conversations_abort(&cstate);
-
-    return compact ? jmapid : uniqueid;
+    return id;
 }
 
 static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)

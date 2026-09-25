@@ -17,22 +17,23 @@ sub test_mailbox_jmapid_compactids
     # discard events from setup
     $self->{instance}->getnotify();
 
-    my $named_event = sub ($name) {
+    my sub jmapid_from_event ($name) {
         my @events = map { decode_json($_->{MESSAGE}) }
                          $self->{instance}->getnotify->@*;
         my ($event) = grep { $_->{event} eq $name } @events;
         $self->assert_not_null($event);
-        return $event;
-    };
+
+        my $id = $event->{'vnd.fastmail.mailboxJMAPId'};
+        $self->assert_not_null($id);
+        return $id;
+    }
 
     # a message event: this path opens the conversations db itself, so it
     # sees the compact ids this user has and reports a JMAP id
     $self->make_message("Message A");
 
-    my $append = $named_event->('MessageAppend');
-    my $jmapid = $append->{'vnd.fastmail.mailboxJMAPId'};
-    $self->assert_not_null($jmapid);
-    $self->assert_str_not_equals($append->{mailboxUniqueId}, $jmapid);
+    my $jmapid = jmapid_from_event('MessageAppend');
+    $self->assert_matches(qr/^P/, $jmapid);
 
     # a header-only event for the same mailbox: nothing on this path has any
     # reason to open the conversations db, but the id must still agree
@@ -40,8 +41,7 @@ sub test_mailbox_jmapid_compactids
     $self->assert_str_equals('ok',
         $imaptalk->get_last_completion_response());
 
-    my $acl = $named_event->('AclChange');
-    $self->assert_str_equals($jmapid, $acl->{'vnd.fastmail.mailboxJMAPId'});
+    $self->assert_str_equals($jmapid, jmapid_from_event('AclChange'));
 
     $imaptalk->logout();
 }
