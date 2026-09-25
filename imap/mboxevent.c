@@ -3,6 +3,7 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -285,15 +286,40 @@ static char *mboxevent_mailbox_specialuse(const struct mailbox *mailbox)
 }
 
 /* Return the JMAP id of the mailbox: the short JMAP id when the user's
- * conversations db uses compact ids, otherwise the mailbox's uniqueid */
-static const char *mboxevent_mailbox_jmapid(const struct mailbox *mailbox)
+ * conversations db uses compact ids, otherwise the mailbox's uniqueid.
+ * Returns NULL if that can't be determined.
+ *
+ * This never attaches a conversations state to the mailbox: the source
+ * mailbox of a COPY or MOVE would keep a pointer to the destination's
+ * state after the destination's unlock frees it. */
+static const char *mboxevent_mailbox_jmapid(struct mailbox *mailbox)
 {
+    const char *jmapid = mailbox_jmapid(mailbox);
+    const char *uniqueid = mailbox_uniqueid(mailbox);
+
+    if (!jmapid || !mailbox_has_conversations(mailbox))
+        return uniqueid;
+
     struct conversations_state *cstate =
         conversations_get_mbox(mailbox_name(mailbox));
-    const char *jmapid = mailbox_jmapid(mailbox);
+    if (cstate)
+        return USER_COMPACT_EMAILIDS(cstate) ? jmapid : uniqueid;
 
-    return jmapid && USER_COMPACT_EMAILIDS(cstate) ?
-        jmapid : mailbox_uniqueid(mailbox);
+    /* Opening the db takes the user's namespace lock if it isn't held,
+     * and taking it with this mailbox namelocked is a lock order
+     * violation */
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+    bool nslocked = user_nslock_islocked(userid);
+    free(userid);
+    if (!nslocked)
+        return NULL;
+
+    if (conversations_open_mbox(mailbox_name(mailbox), /*shared*/1, &cstate))
+        return NULL;
+    bool compact = USER_COMPACT_EMAILIDS(cstate);
+    conversations_abort(&cstate);
+
+    return compact ? jmapid : uniqueid;
 }
 
 static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
@@ -1547,7 +1573,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
 }
 
 void mboxevent_extract_copied_record(struct mboxevent *event,
-                                     const struct mailbox *mailbox,
+                                     struct mailbox *mailbox,
                                      struct index_record *record)
 {
     int first = 0;
@@ -2000,7 +2026,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 }
 
 void mboxevent_extract_old_mailbox(struct mboxevent *event,
-                                   const struct mailbox *mailbox)
+                                   struct mailbox *mailbox)
 {
     struct imapurl imapurl;
 

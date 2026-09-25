@@ -7,7 +7,7 @@ use Cassandane::Tiny;
 # round-trip copy.
 
 sub test_emailids_param
-    :Conversations :min_version_3_13
+    :Conversations
     ($self)
 {
     my $imaptalk = $self->{store}->get_client();
@@ -48,9 +48,7 @@ sub test_emailids_param
                   $self->{instance}->getnotify->@*;
     ($copy) = grep { $_->{event} eq 'vnd.cmu.MessageCopy' } @events;
     $self->assert_not_null($copy);
-    $self->assert_deep_equals(
-        [ sort @$emailids ],
-        [ sort $copy->{'vnd.cmu.emailids'}->@* ]);
+    $self->assert_cmp_deeply(bag(@$emailids), $copy->{'vnd.cmu.emailids'});
 
     # an expunge should carry the ids of the removed messages too
     $imaptalk->store('1', '+flags', '(\\Deleted)');
