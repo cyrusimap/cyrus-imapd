@@ -54,6 +54,7 @@ static int jmap_card_parse(jmap_req_t *req);
 typedef struct {
     json_t *invalid;
     json_t *blobNotFound;
+    bool partial;       /* failed, and couldn't take back what it did */
 } jmap_contact_errors_t;
 
 /** Defines an addresbook membership change for a Card */
@@ -820,7 +821,7 @@ static int jmap_card_set(struct jmap_req *req)
     json_t *arg;
     json_object_foreach(set.create, key, arg) {
         json_t *invalid = json_array();
-        jmap_contact_errors_t errors = { invalid, NULL };
+        jmap_contact_errors_t errors = { invalid, NULL, false };
         json_t *item = json_object();
         // XXX Silently remove conversion properties if extension
         // capability is used. This is because due to a bug
@@ -879,11 +880,14 @@ static int jmap_card_set(struct jmap_req *req)
         jmap_add_id(req, key, json_string_value(json_object_get(item, "id")));
     }
 
+    /* Set if a card is left half-changed, so no response would be true */
+    bool partial = false;
+
     /* update */
     const char *uid;
     json_object_foreach(set.update, uid, arg) {
         json_t *invalid = json_array();
-        jmap_contact_errors_t errors = { invalid, NULL };
+        jmap_contact_errors_t errors = { invalid, NULL, false };
         json_t *item = NULL;
         // XXX Silently remove conversion properties if extension
         // capability is used. This is because due to a bug
@@ -894,6 +898,7 @@ static int jmap_card_set(struct jmap_req *req)
                 jmap_is_using(req, JMAP_CONTACTS_EXTENSION));
         r = _card_set_update(req, set.apply_empty_updates,
                              uid, arg, db, &mailbox, &item, &errors);
+        if (errors.partial) partial = true;
         if (r) {
             json_t *err;
             switch (r) {
@@ -956,6 +961,12 @@ static int jmap_card_set(struct jmap_req *req)
 
     /* force modseq to stable */
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
+
+    if (partial) {
+        jmap_error(req, json_pack("{s:s}", "type", "serverPartialFail"));
+        r = 0;
+        goto done;
+    }
 
     set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_ADDRESSBOOK, JMAP_MODSEQ_RELOAD));
 
@@ -1607,7 +1618,7 @@ static void _contact_copy(jmap_req_t *req,
     json_decref(src_card);
 
     /* Create vcard */
-    jmap_contact_errors_t errors = { invalid, NULL };
+    jmap_contact_errors_t errors = { invalid, NULL, false };
     json_t *item = json_object();
     r = _card_set_create(req, dst_card, &dst_mbox, item, &errors);
     if (r || json_array_size(invalid) || errors.blobNotFound) {
@@ -4594,7 +4605,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
         if (!r) {
             struct index_record record;
 
-            mailbox_find_index_record(this_mailbox,
+            int have_record = !mailbox_find_index_record(this_mailbox,
                                       this_mailbox->i.last_uid, &record);
 
             jmap_encode_rawdata_blobid('V', mailbox_uniqueid(this_mailbox),
@@ -4643,6 +4654,21 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
             r = carddav_remove(*mailbox, olduid,
                                /*isreplace*/!newmailbox, req->userid);
+            if (r && newmailbox) {
+                /* A move: drop the copy we just wrote, so notUpdated
+                 * doesn't leave the card in both address books. */
+                int rr = have_record ?
+                    carddav_remove(newmailbox, record.uid,
+                                   /*isreplace*/0, req->userid) :
+                    IMAP_NOTFOUND;
+                if (rr) {
+                    xsyslog(LOG_ERR, "can't undo card move",
+                            "mboxname=<%s> err=<%s>",
+                            mailbox_name(newmailbox), error_message(rr));
+                    /* It's in both, so no per-item report would be true */
+                    errors->partial = true;
+                }
+            }
         }
     }
 

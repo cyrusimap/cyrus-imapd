@@ -680,6 +680,7 @@ struct set_rock {
     struct jmap_set *set;
     struct buf *buf;
     int rights;
+    bool partial;       /* a note was left half-updated */
 };
 
 static void _notes_update_cb(const char *id, message_t *msg,
@@ -735,6 +736,23 @@ static void _notes_update_cb(const char *id, message_t *msg,
                 newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
 
                 r = mailbox_rewrite_index_record(mailbox, &newrecord);
+            }
+            if (r) {
+                /* An update is a create plus this expunge.
+                 * Drop the new so we don't leave two notes with one id. */
+                struct index_record tmp;
+                int rr = mailbox_find_index_record(mailbox,
+                                                   mailbox->i.last_uid, &tmp);
+
+                if (!rr) {
+                    tmp.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+                    rr = mailbox_rewrite_index_record(mailbox, &tmp);
+                }
+                if (rr) {
+                    syslog(LOG_ERR, "jmap: can't undo note update %s", id);
+                    /* No per-item report would be true */
+                    srock->partial = true;
+                }
             }
         }
 
@@ -847,7 +865,7 @@ static int jmap_note_set(jmap_req_t *req)
     json_t *val;
     size_t i;
     hash_table ids = HASH_TABLE_INITIALIZER;
-    struct set_rock srock = { &set, &buf, rights };
+    struct set_rock srock = { &set, &buf, rights, false };
 
     construct_hash_table(&ids, 32, 0);
 
@@ -905,6 +923,11 @@ static int jmap_note_set(jmap_req_t *req)
 
     /* force modseq to stable */
     mailbox_unlock_index(mbox, NULL);
+
+    if (srock.partial) {
+        jmap_error(req, json_pack("{s:s}", "type", "serverPartialFail"));
+        goto done;
+    }
 
     /* Build response */
     buf_reset(&buf);
