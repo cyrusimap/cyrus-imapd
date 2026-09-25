@@ -129,12 +129,6 @@ EXPORTED char *buf_releasenull(struct buf *buf)
     return ret;
 }
 
-EXPORTED void buf_getmap(struct buf *buf, const char **base, size_t *len)
-{
-    *base = buf->s;
-    *len = buf->len;
-}
-
 /* fetch a single line a file - terminated with \n ONLY.
  * buf does not contain the \n.
  * NOTE: if the final line does not contain a \n we still
