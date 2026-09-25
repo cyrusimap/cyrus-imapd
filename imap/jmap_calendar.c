@@ -2453,22 +2453,26 @@ static int jmap_calendar_set(struct jmap_req *req)
         !json_object_size(set.not_updated) &&
         !json_object_size(set.not_destroyed)) {
 
-        /* resolve new default calendar id */
+        /* Resolve the new default calendar id.  A creation id may belong
+         * to an earlier method call, so this goes through the request's
+         * map, where setcalendars_create() registered it. */
         const char *newid = setargs.on_success_set_is_default;
-        if (*newid == '#') {
-            json_t *jobj = json_object_get(set.created, newid+1);
-            if (jobj) newid = json_string_value(json_object_get(jobj, "id"));
-        }
+        if (*newid == '#') newid = jmap_lookup_id(req, newid + 1);
 
         /* make sure new default calendar exists */
         mbentry_t *mbentry = NULL;
-        calid_to_mbentry(req, newid, &mbentry);
+        if (newid) calid_to_mbentry(req, newid, &mbentry);
 
         /* The default calendar is per-account state, so changing it requires
          * admin rights on the calendar home set. */
         char *calhome_mboxname = caldav_mboxname(req->accountid, NULL);
-        if (mbentry &&
-            jmap_hasrights(req, calhome_mboxname, JACL_ADMIN_CALENDAR)) {
+        if (!mbentry ||
+            !jmap_hasrights(req, calhome_mboxname, JACL_ADMIN_CALENDAR)) {
+            /* Report the failure to set the new default */
+            jmap_set_default_failed(&set, newid,
+                                    mbentry ? "forbidden" : "notFound", NULL);
+        }
+        else {
             /* set CALDAV:schedule-default-calendar annotation */
             static const char annot[] =
                 DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
@@ -2481,9 +2485,17 @@ static int jmap_calendar_set(struct jmap_req *req)
             buf_free(&buf);
             mbname_free(&mbname);
 
-            if (!r) {
+            if (r) {
+                /* The calendars are already written: report an error
+                 * for changing the default calendar, not for the whole
+                 * batch. */
+                jmap_set_default_failed(&set, newid, "serverFail",
+                                        error_message(r));
+                r = 0;
+            }
+            else {
                 /* report that isDefault has been moved to new calendar */
-                jmap_report_isdefault(&set, mbentry->name,
+                jmap_report_isdefault(req, &set, mbentry->name,
                                       setargs.on_success_set_is_default, true);
 
                 /* report that isDefault has been removed from old default */
@@ -2493,7 +2505,8 @@ static int jmap_calendar_set(struct jmap_req *req)
                     char oldid[JMAP_MAX_CALENDARID_SIZE];
 
                     jmap_set_calendarid(req->cstate, mbentry, oldid);
-                    jmap_report_isdefault(&set, mbentry->name, oldid, false);
+                    jmap_report_isdefault(req, &set, mbentry->name,
+                                          oldid, false);
                 }
             }
         }
@@ -9945,45 +9958,58 @@ static int jmap_principal_set(struct jmap_req *req)
             continue;
         }
         json_decref(invalid);
-        /* Update princpial */
-        const char *tzid = json_string_value(json_object_get(jarg, "timeZone"));
-        if (tzid) {
-            icaltimezone *tz;
-            if ((tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid))) {
-                char *calhomename = caldav_mboxname(req->userid, NULL);
-                struct mailbox *mbox = NULL;
-                int r = mailbox_open_iwl(calhomename, &mbox);
-                if (!r) {
-                    annotate_state_t *astate = NULL;
-                    r = mailbox_get_annotate_state(mbox, 0, &astate);
-                    if (!r) {
-                        static const char *tzid_annot =
-                            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
-                        static const char *tz_annot =
-                            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
-
-                        struct buf val = BUF_INITIALIZER;
-                        buf_setcstr(&val, tzid);
-                        r = annotate_state_writemask(astate, tzid_annot, req->userid, &val);
-                        icalcomponent *vtz = icaltimezone_get_component(tz);
-                        if (vtz) {
-                            buf_setcstr(&val, icalcomponent_as_ical_string(vtz));
-                            int r2 = annotate_state_writemask(astate, tz_annot, req->userid, &val);
-                            if (!r) r = r2;
-                        }
-                        buf_free(&val);
-                    }
-                }
-                mailbox_close(&mbox);
-                free(calhomename);
-                if (!r) {
-                    json_object_set_new(set.updated, id, json_object());
-                }
-                else json_object_set_new(set.not_updated, id, jmap_server_error(r));
-            }
-            else json_object_set_new(set.not_updated, id, json_pack("{s:s s:[s]}",
-                        "type", "invalidProperties", "properties", "timeZone"));
+        /* Update principal */
+        json_t *jtz = json_object_get(jarg, "timeZone");
+        if (!jtz) {
+            /* Nothing to change, but the id still has to be reported. */
+            json_object_set_new(set.updated, id, json_null());
+            continue;
         }
+        /* A time zone we know, or null to clear it (RFC 9670) */
+        const char *tzid = json_string_value(jtz);
+        icaltimezone *tz =
+            tzid ? icaltimezone_get_cyrus_timezone_from_tzid(tzid) : NULL;
+        if (!tz && !json_is_null(jtz)) {
+            json_object_set_new(set.not_updated, id, json_pack("{s:s s:[s]}",
+                        "type", "invalidProperties", "properties", "timeZone"));
+            continue;
+        }
+
+        char *calhomename = caldav_mboxname(req->userid, NULL);
+        struct mailbox *mbox = NULL;
+        int r = mailbox_open_iwl(calhomename, &mbox);
+        if (!r) {
+            annotate_state_t *astate = NULL;
+            r = mailbox_get_annotate_state(mbox, 0, &astate);
+            if (!r) {
+                static const char *tzid_annot =
+                    DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+                static const char *tz_annot =
+                    DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+                icalcomponent *vtz =
+                    tz ? icaltimezone_get_component(tz) : NULL;
+
+                /* An empty value removes the annotation */
+                struct buf val = BUF_INITIALIZER;
+                buf_setcstr(&val, tz ? tzid : "");
+                r = annotate_state_writemask(astate, tzid_annot,
+                                             req->userid, &val);
+                buf_setcstr(&val,
+                            vtz ? icalcomponent_as_ical_string(vtz) : "");
+                int r2 = annotate_state_writemask(astate, tz_annot,
+                                                  req->userid, &val);
+                if (!r) r = r2;
+                buf_free(&val);
+            }
+            /* Both annotations or neither. */
+            if (r) mailbox_abort(mbox);
+        }
+        mailbox_close(&mbox);
+        free(calhomename);
+        if (!r) {
+            json_object_set_new(set.updated, id, json_object());
+        }
+        else json_object_set_new(set.not_updated, id, jmap_server_error(r));
     }
 
     /* destroy */

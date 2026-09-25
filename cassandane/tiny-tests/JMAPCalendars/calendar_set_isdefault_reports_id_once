@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_isdefault_reports_id_once ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    xlog $self, "create sharer with a calendar shared to cassandane";
+    my $sharer = $self->{instance}->create_user('sharer');
+
+    my $shared_cal = $sharer->calendars->create({ name => 'Shared' });
+    $shared_cal->share_with(cassandane => [ qw( mayReadItems mayWriteAll ) ]);
+
+    # Cassandane may write this calendar, but has no admin on the calendar
+    # home, so the onSuccessSetIsDefault is refused while the update succeeds.
+    xlog $self, "update the calendar and ask for it to become the default";
+    my $res = $jmap->request([
+        [ 'Calendar/set' => {
+            accountId => 'sharer',
+            update => { $shared_cal->id => { color => 'blue' } },
+            onSuccessSetIsDefault => $shared_cal->id,
+        } ],
+    ]);
+
+    my $set = $res->single_sentence('Calendar/set')->as_set;
+
+    xlog $self, "the update itself succeeded";
+    $self->assert_cmp_deeply([ $shared_cal->id . "" ], [ $set->updated_ids ]);
+
+    xlog $self, "no id may be reported in both updated and notUpdated";
+    my @both = grep { exists $set->update_errors->{$_} } $set->updated_ids;
+    $self->assert_cmp_deeply([], \@both);
+}

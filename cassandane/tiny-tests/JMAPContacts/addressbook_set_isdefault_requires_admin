@@ -19,12 +19,16 @@ sub test_addressbook_set_isdefault_requires_admin ($self)
     $shared_ab->share_with(cassandane => [ qw( mayRead mayWrite mayShare ) ]);
 
     xlog $self, "as cassandane, attempt to flip sharer's default via onSuccessSetIsDefault";
-    $jmap->CallMethods([
+    my $set = $jmap->request([
         [ 'AddressBook/set' => {
             accountId => 'sharer',
             onSuccessSetIsDefault => $shared_ab->id,
-        }, "R1" ],
-    ]);
+        } ],
+    ])->single_sentence('AddressBook/set')->as_set;
+
+    xlog $self, "the refusal must be reported, not silently dropped";
+    $self->assert_str_equals('forbidden',
+        $set->update_errors->{$shared_ab->id}{type});
 
     xlog $self, "re-read the default; it must not have changed";
     my $res = $sharer->jmap->CallMethods([

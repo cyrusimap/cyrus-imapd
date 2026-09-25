@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_principal_set_reports_every_id ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $set_tz = sub ($update) {
+        my $res = $jmap->request([
+            [ 'Principal/set' => { update => { cassandane => $update } } ],
+        ]);
+        return $res->single_sentence('Principal/set')->as_set;
+    };
+    my $get_tz = sub {
+        my $res = $jmap->request([
+            [ 'Principal/get' => {
+                ids => ['cassandane'], properties => ['timeZone'],
+            } ],
+        ]);
+        return $res->single_sentence('Principal/get')->arguments->{list}[0]
+                   {timeZone};
+    };
+
+    xlog $self, "update with nothing to change";
+    $self->assert_cmp_deeply(['cassandane'], [ $set_tz->({})->updated_ids ]);
+
+    xlog $self, "set a timeZone";
+    $self->assert_cmp_deeply(['cassandane'],
+        [ $set_tz->({ timeZone => 'Europe/Vienna' })->updated_ids ]);
+    $self->assert_str_equals('Europe/Vienna', $get_tz->());
+
+    xlog $self, "clear it again with null (RFC 9670)";
+    $self->assert_cmp_deeply(['cassandane'],
+        [ $set_tz->({ timeZone => undef })->updated_ids ]);
+    $self->assert_null($get_tz->());
+
+    xlog $self, "update with a timeZone we don't know";
+    $self->assert_cmp_deeply(
+        {
+            cassandane => superhashof({
+                type => 'invalidProperties',
+                properties => ['timeZone'],
+            }),
+        },
+        $set_tz->({ timeZone => 'Bogus/Nowhere' })->update_errors,
+    );
+}
