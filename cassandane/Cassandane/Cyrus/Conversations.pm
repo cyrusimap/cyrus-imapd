@@ -111,6 +111,62 @@ sub _munge_annot_crc
     $fh->close();
 }
 
+sub _index_path
+{
+    my ($self, $folder) = @_;
+    my $dir = $self->{instance}->folder_to_directory($folder);
+    die "no directory for $folder" unless $dir;
+    return "$dir/cyrus.index";
+}
+
+# set the CID (and optionally BaseCID, split-conversation flag, and an
+# internaldate offset in seconds) of a record directly in cyrus.index
+sub _set_index_cid
+{
+    my ($self, $file, $uid, $cid, $basecid, $split, $dateoffset) = @_;
+
+    my $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    my $index = Cyrus::IndexFile->new($fh);
+
+    while (my $record = $index->next_record_hash()) {
+        next unless $record->{Uid} == $uid;
+        $record->{CID} = $cid;
+        $record->{BaseCID} = $basecid if defined $basecid;
+        # SystemFlags is an MSB-first bit string; FLAG_INTERNAL_SPLITCONVERSATION
+        # is 1<<27, i.e. string index 31-27 == 4
+        substr($record->{SystemFlags}, 4, 1) = '1' if $split;
+        # v20 InternalDate is nanoseconds; keep the nanosecond part intact
+        $record->{InternalDate} += $dateoffset * 1_000_000_000 if $dateoffset;
+        $index->rewrite_record($record);
+    }
+    close($fh);
+}
+
+sub _fetch_cid
+{
+    my ($self, $talk, $folder, $uid) = @_;
+    $talk->select($folder);
+    my $data = $talk->fetch($uid, '(cid)');
+    return $data->{$uid}{cid};
+}
+
+sub _fetch_basecid
+{
+    my ($self, $talk, $folder, $uid) = @_;
+    $talk->select($folder);
+    my $data = $talk->fetch($uid, '(basecid)');
+    return $data->{$uid}{basecid};
+}
+
+sub _fetch_internaldate
+{
+    my ($self, $talk, $folder, $uid) = @_;
+    $talk->select($folder);
+    my $data = $talk->fetch($uid, '(internaldate)');
+    return $data->{$uid}{internaldate};
+}
+
 #
 # Test APPEND of messages to IMAP which results in a CID clash.
 #
