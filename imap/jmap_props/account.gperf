@@ -1,0 +1,45 @@
+%{
+/* account.c -- Lookup function for JMAP Account properties */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+#include "imap/jmap_api.h"
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,NULL,0
+%define constants-prefix      ACCOUNT_PROP_
+%define word-array-name       account_prop_array
+%define length-table-name     account_prop_lengths
+%define hash-function-name    account_prop_hash
+%define lookup-function-name  account_prop_lookup
+
+jmap_property_t;
+
+%%
+"id",                            NULL,               JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+"email",                         NULL,               JMAP_PROP_MANDATORY
+"kind",                          NULL,               0
+"compactIds",                    NULL,               JMAP_PROP_IMMUTABLE
+"quotas",                        JMAP_URN_QUOTA,     0
+"mailboxes",                     JMAP_URN_MAIL,      0
+"defaultCalendarName",           JMAP_URN_CALENDARS, 0
+"defaultAddressBookName",        JMAP_URN_CONTACTS,  0
+%%
+
+const jmap_prop_hash_table_t jmap_account_props_map = {
+    account_prop_array,
+    ACCOUNT_PROP_TOTAL_KEYWORDS,
+    ACCOUNT_PROP_MIN_HASH_VALUE,
+    ACCOUNT_PROP_MAX_HASH_VALUE,
+    &account_prop_lookup
+};

@@ -1,0 +1,334 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_account_create
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    xlog $self, "Make sure regular user can't call Account/create method";
+    my $res = $jmap->request([['Account/create', {} ]]);
+    $self->assert_str_equals('accountNotSupportedByMethod',
+                             $res->single_sentence->{arguments}{type});
+
+    my $admin_user = $self->{instance}->create_user_without_setup('admin');
+    my $adminJmap = $admin_user->jmap;
+
+    my $email = 'u98765@example.com';
+    my $email2 = 'u43210@example.com';
+    my $storageLimit = 5242880;
+
+    xlog $self, "Run Account/create as admin with bad/missing arguments";
+    $res = $adminJmap->request([[
+        'Account/create', {
+            1 => {
+                foo => 'bar'
+            }
+        }
+    ]]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => JSON::null,
+            notCreated => {
+                1 => superhashof({
+                    type => 'invalidProperties',
+                    properties => superbagof( 'email', 'foo' )
+                })
+            }
+        }),
+        $res->single_sentence->arguments,
+    );
+
+    $res = $adminJmap->request([[
+        'Account/create', {
+            2 => {
+                email => $email,
+                kind => 'super',
+                compactIds => 'yes',
+                mailboxes => [ ],
+                quotas => { },
+                defaultCalendarName => JSON::true,
+                defaultAddressBookName => JSON::null
+            }
+        }
+    ]]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => JSON::null,
+            notCreated => {
+                2 => superhashof({
+                    type => 'invalidProperties',
+                    properties => superbagof(
+                        'kind', 'compactIds', 'mailboxes', 'quotas',
+                        'defaultCalendarName', 'defaultAddressBookName'
+                    )
+                })
+            }
+        }),
+        $res->single_sentence->arguments,
+    );
+
+    $res = $adminJmap->request([[
+        'Account/create', {
+            3 => {
+                email => $email,
+                mailboxes => [
+                    "foo",
+                    { name => 'Trash' },
+                    { role => 'sent' },
+                ],
+                quotas => {
+                    stuff => $storageLimit,
+                    storage => 'tons'
+                }
+            }
+        }
+    ]]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => JSON::null,
+            notCreated => {
+                3 => superhashof({
+                    type => 'invalidProperties',
+                    properties => superbagof(
+                        'mailboxes[0]', 'mailboxes[1]/role', 'mailboxes[2]/name',
+                        'quotas/stuff', 'quotas/storage'
+                    )
+                })
+            }
+        }),
+        $res->single_sentence->arguments,
+    );
+
+    xlog $self, "Run Account/create as admin";
+    $res = $adminJmap->request([[
+        'Account/create', {
+            4 => {
+                email => $email,
+                compactIds => JSON::true,
+                quotas => { storage => $storageLimit },
+                mailboxes => [
+                    { name => 'Trash',     role => 'trash'     },
+                    { name => 'Sent',      role => 'sent'      },
+                    { name => 'Drafts',    role => 'drafts'    },
+                    { name => 'Spam',      role => 'junk'      },
+                    { name => 'Archive',   role => 'archive'   },
+                    { name => 'Scheduled', role => 'scheduled' },
+                ],
+                defaultCalendarName => "Ada Lovelace",
+                defaultAddressBookName => "Contacts",
+            }
+        }
+    ]]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => {
+                4 => {
+                    id => $email
+                }
+            },
+            notCreated => JSON::null,
+            accountId => 'admin'
+        }),
+        $res->sentence_named('Account/create')->arguments
+    );
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            list => [
+                superhashof({
+                    id => ignore(),
+                    uniqueId => ignore(),
+                    name => 'Inbox',
+                    role => 'inbox',
+                    parentId => JSON::null,
+                    isSubscribed => JSON::true
+                })
+            ],
+            accountId => $email
+        }),
+        $res->sentence_named('Mailbox/get')->arguments
+    );
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => superhashof({
+                archive => superhashof({
+                    id => ignore(),
+                    uniqueId => ignore(),
+                }),
+                drafts => superhashof({
+                    id => ignore(),
+                    uniqueId => ignore(),
+                }),
+                junk => superhashof({
+                    id => ignore(),
+                    uniqueId => ignore(),
+                }),
+                scheduled => superhashof({
+                    id => ignore(),
+                    uniqueId => ignore(),
+                }),
+                sent => superhashof({
+                    id => ignore(),
+                    uniqueId => ignore(),
+                }),
+                trash => superhashof({
+                    id => ignore(),
+                    uniqueId => ignore(),
+                }),
+            }),
+            notCreated => JSON::null
+        }),
+        $res->sentence_named('Mailbox/set')->arguments
+    );
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => {
+                cal => superhashof({
+                    id => ignore(),
+                    mailboxUniqueId => ignore(),
+                    'x-href' => ignore(),
+                    isDefault => JSON::true,
+                    myRights => superhashof({
+                        mayDelete => JSON::false
+                    })
+                })
+            },
+            notCreated => JSON::null
+        }),
+        $res->sentence_named('Calendar/set')->arguments
+    );
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => {
+                abook => superhashof({
+                    id => ignore(),
+                    mailboxUniqueId => ignore(),
+                    'cyrusimap.org:href' => ignore(),
+                    isDefault => JSON::true,
+                    myRights => superhashof({
+                        mayDelete => JSON::false
+                    })
+                })
+            },
+            notCreated => JSON::null
+        }),
+        $res->sentence_named('AddressBook/set')->arguments
+    );
+
+    my $new_user = $self->{instance}->create_user_without_setup($email);
+    my $newJmap = $new_user->jmap;
+    $res = $newJmap->request({
+        methodCalls => [
+            ['ParticipantIdentity/get', {}, 'R1'],
+            ['Quota/get', {}, 'R2'],
+        ]
+    });
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            list => [
+                superhashof({
+                    id => ignore(),
+                    calendarAddress => "mailto:$email"
+                })
+            ],
+            accountId => $email
+        }),
+        $res->sentence_named('ParticipantIdentity/get')->arguments
+    );
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            list => [
+                superhashof({
+                    id => ignore(),
+                    resourceType => 'octets',
+                    hardLimit => $storageLimit,
+                    used => 0,
+                    scope => 'account',
+                    name => 'root',
+                    types => superbagof('ContactCard', 'CalendarEvent', 'Email')
+                })
+            ],
+            accountId => $email
+        }),
+        $res->sentence_named('Quota/get')->arguments
+    );
+
+    xlog $self, "Try to create the same account";
+    $res = $adminJmap->request([[
+        'Account/create', {
+            5 => {
+                email => $email,
+            }
+        }
+    ]]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => JSON::null,
+            notCreated => {
+                5 => {
+                    type => 'alreadyExists',
+                }
+            },
+            accountId => 'admin'
+        }),
+        $res->sentence_named('Account/create')->arguments
+    );
+
+    xlog $self, "Create an archive account";
+    $res = $adminJmap->request([[
+        'Account/create', {
+            6 => {
+                email => $email2,
+                kind => 'archive',
+                mailboxes => JSON::null,
+                quotas => JSON::null
+            }
+        }
+    ]]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => {
+                6 => {
+                    id => $email2
+                }
+            },
+            notCreated => JSON::null,
+            accountId => 'admin'
+        }),
+        $res->sentence_named('Account/create')->arguments
+    );
+
+    $new_user = $self->{instance}->create_user_without_setup($email2);
+    $newJmap = $new_user->jmap;
+    $res = $newJmap->request([[ 'Mailbox/get', {} ]]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            list => [
+                superhashof({
+                    myRights => superhashof({
+                        mayAddItems    => JSON::false,
+                        mayRemoveItems => JSON::false,
+                        mayCreateChild => JSON::false,
+                        mayDelete      => JSON::false,
+                        maySetKeywords => JSON::false,
+                    })
+                })
+            ],
+            accountId => $email2
+        }),
+        $res->single_sentence->arguments,
+    );
+}

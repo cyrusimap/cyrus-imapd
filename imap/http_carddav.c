@@ -470,13 +470,15 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
     }
     if (r) goto done;
 
-    /* Default addressbook */
-    mbname_push_boxes(mbname, DEFAULT_ADDRBOOK);
-    r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        r = _create_mailbox(userid, mbname_intname(mbname),
-                            MBTYPE_ADDRESSBOOK, "Personal",
-                            &user_nslock);
+    if (config_getswitch(IMAPOPT_CARDDAV_CREATE_DEFAULT)) {
+        /* Default addressbook */
+        mbname_push_boxes(mbname, DEFAULT_ADDRBOOK);
+        r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            r = _create_mailbox(userid, mbname_intname(mbname),
+                                MBTYPE_ADDRESSBOOK, "Personal",
+                                &user_nslock);
+        }
     }
 
  done:
