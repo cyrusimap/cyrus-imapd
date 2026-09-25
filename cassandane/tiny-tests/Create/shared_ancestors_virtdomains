@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+# Missing ancestors of a shared mailbox are created in its domain
+sub test_shared_ancestors_virtdomains
+    :VirtDomains :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create('shared.magic.foo@example.com');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my @names = sort map { $_->[2] } $admintalk->list('', '*')->@*;
+    $self->assert_cmp_deeply(
+        [ 'shared.magic.foo@example.com', 'shared.magic@example.com',
+          'shared@example.com', 'user.cassandane' ],
+        \@names);
+}

@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include <stdbool.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -578,7 +580,9 @@ struct sync_folder_list *sync_folder_list_create(void)
 }
 
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
-                                         const char *uniqueid, const char *name,
+                                         const char *uniqueid,
+                                         const char *jmapid,
+                                         const char *name,
                                          uint32_t mbtype,
                                          const char *partition, const char *acl,
                                          uint32_t options,
@@ -610,6 +614,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->mailbox = NULL;
 
     result->uniqueid = xstrdupnull(uniqueid);
+    result->jmapid = xstrdupnull(jmapid);
     result->name = xstrdupnull(name);
     result->mbtype = mbtype;
     result->partition = xstrdupnull(partition);
@@ -671,6 +676,7 @@ void sync_folder_list_free(struct sync_folder_list **lp)
     while (current) {
         next = current->next;
         free(current->uniqueid);
+        free(current->jmapid);
         free(current->name);
         free(current->partition);
         free(current->acl);
@@ -3647,15 +3653,33 @@ static int sync_apply_mailbox(struct dlist *kin,
         strarray_fini(&mygroups);
     }
 
-    if (jmapid && strcmpnull(jmapid, mailbox_jmapid(mailbox))) {
+    /* the JMAP id and the createdmodseq it encodes only change when the
+     * master repaired a clash, so take both together */
+    bool newjmapid = jmapid && strcmpnull(jmapid, mailbox_jmapid(mailbox));
+    if (newjmapid ||
+        (createdmodseq && createdmodseq != mailbox->i.createdmodseq)) {
         mbentry_t *copy = mboxlist_entry_copy(mailbox_mbentry(mailbox));
-        free(copy->jmapid);
-        copy->jmapid = xstrdup(jmapid);
+        char *oldjmapid = xstrdupnull(mailbox_jmapid(mailbox));
+        if (newjmapid) {
+            free(copy->jmapid);
+            copy->jmapid = xstrdup(jmapid);
+        }
+        if (createdmodseq) copy->createdmodseq = createdmodseq;
         r = mboxlist_update_full(copy, /*localonly*/1, /*silent*/1);
         mboxlist_entry_free(&copy);
+
+        /* another local mailbox may have been waiting for the old id */
+        if (!r && newjmapid && oldjmapid) {
+            r = mboxlist_rehome_jmapid(mboxname, oldjmapid);
+        }
+        free(oldjmapid);
         if (r) goto done;
 
-        mailbox_set_jmapid(mailbox, jmapid);
+        if (newjmapid) mailbox_set_jmapid(mailbox, jmapid);
+        if (createdmodseq && createdmodseq != mailbox->i.createdmodseq) {
+            mailbox->i.createdmodseq = createdmodseq;
+            mailbox_index_dirty(mailbox);
+        }
     }
 
     r = sync_mailbox_compare_update(mailbox, kr, 0, partition_list);
@@ -5414,7 +5438,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
         if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
             struct synccrcs synccrcs = {0, 0};
-            sync_folder_list_add(master_folders, mbentry->uniqueid, mbentry->name,
+            sync_folder_list_add(master_folders, mbentry->uniqueid,
+                                 mbentry->jmapid, mbentry->name,
                                  mbentry->mbtype,
                                  mbentry->partition, mbentry->acl, 0,
                                  mbentry->uidvalidity, 0,
@@ -5482,7 +5507,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
             }
         }
 
-        sync_folder_list_add(master_folders, mailbox_uniqueid(mailbox), mailbox_name(mailbox),
+        sync_folder_list_add(master_folders, mailbox_uniqueid(mailbox),
+                             mailbox_jmapid(mailbox), mailbox_name(mailbox),
                              mailbox_mbtype(mailbox),
                              mailbox_partition(mailbox), mailbox_acl(mailbox), mailbox->i.options,
                              mailbox->i.uidvalidity, touid,
@@ -5812,7 +5838,7 @@ static int sync_kl_parse(struct dlist *kin,
             if (dlist_getlist(kl, "ANNOTATIONS", &al))
                 decode_annotations(al, &annots, NULL, NULL);
 
-            sync_folder_list_add(folder_list, uniqueid, mboxname,
+            sync_folder_list_add(folder_list, uniqueid, jmapid, mboxname,
                                  mboxlist_string_to_mbtype(mboxtype),
                                  partition, acl,
                                  sync_parse_options(options),
@@ -6965,6 +6991,8 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->options != options) return 0;
     if (remote->foldermodseq && remote->foldermodseq != mailbox_foldermodseq(mailbox)) return 0;
     if (strcmpsafe(remote->acl, mailbox_acl(mailbox))) return 0;
+    /* a peer too old to send the JMAP id sends NULL */
+    if (remote->jmapid && strcmpsafe(remote->jmapid, mailbox_jmapid(mailbox))) return 0;
 
     if (config_getswitch(IMAPOPT_REVERSEACLS)) {
         modseq_t raclmodseq = mboxname_readraclmodseq(mailbox_name(mailbox));

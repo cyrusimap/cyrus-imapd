@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+# A legacy-dir mailbox keeps its files under its name, so a uniqueid clash
+# only needs the header and mailboxes.db records changed.
+sub test_reconstruct_uniqueid_clash_legacymb
+    :MailboxLegacyDirs :NoAltNameSpace :Conversations
+    ($self)
+{
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my $keeper = "user\x1fcassandane\x1fkeeper";
+    my $loser = "user\x1fcassandane\x1floser";
+
+    my $talk = $self->{store}->get_client();
+    $talk->create('INBOX.keeper');
+    $talk->create('INBOX.loser');
+    $self->{store}->set_folder('INBOX.loser');
+    $self->make_message("Message A");
+    my $keeperuid = $talk->getmetadata('INBOX.keeper', $entry)->{'INBOX.keeper'}{$entry};
+    my $loseruid = $talk->getmetadata('INBOX.loser', $entry)->{'INBOX.loser'}{$entry};
+
+    my $db = $self->{instance}->get_basedir() . '/conf/mailboxes.db';
+    my $format = $self->{instance}->{config}->get('mboxlist_db');
+
+    my sub record ($key) {
+        my (undef, $value) = $self->{instance}->run_dbcommand($db, $format, ['SHOW', $key]);
+        return unless defined $value;
+        return Cyrus::DList->parse_string($value)->as_perl();
+    }
+
+    xlog $self, "give the loser the keeper's uniqueid";
+    $self->{store}->disconnect();
+    $self->{instance}->stop();
+    $self->{instance}->{re_use_dir} = 1;
+    my $hash = record("N$loser") or die "no record for the loser";
+    $hash->{I} = $keeperuid;
+    $self->{instance}->run_dbcommand($db, $format,
+        ['SET', "N$loser", Cyrus::DList->new_perl('', $hash)->as_string()]);
+    $self->{instance}->run_dbcommand($db, $format, ['DELETE', "I$loseruid"]);
+    $self->{instance}->start();
+    $self->{store}->connect();
+
+    xlog $self, "reconstruct -I gives the loser a fresh uniqueid";
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'reconstruct', '-I', 'user.cassandane.loser');
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/event=reconstruct\.uniqueid\.reassigned/);
+
+    $talk = $self->{store}->get_client();
+    my $newuid = $talk->getmetadata('INBOX.loser', $entry)->{'INBOX.loser'}{$entry};
+    $self->assert_not_null($newuid);
+    $self->assert_str_not_equals($keeperuid, $newuid);
+    $self->assert_str_equals($keeperuid,
+        $talk->getmetadata('INBOX.keeper', $entry)->{'INBOX.keeper'}{$entry});
+    $talk->select('INBOX.loser');
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+
+    xlog $self, "mailboxes.db and the header agree on the new uniqueid";
+    my %expect = (
+        "N$loser" => superhashof({ I => $newuid }),
+        "I$newuid" => superhashof({ N => $loser }),
+        "I$keeperuid" => superhashof({ N => $keeper }),
+    );
+    $self->assert_cmp_deeply(\%expect,
+        { map { $_ => scalar record($_) } keys %expect });
+    my $header = $self->{instance}->folder_to_directory('INBOX.loser')
+                 . '/cyrus.header';
+    my $hf = Cyrus::HeaderFile->new_file($header);
+    $self->assert_str_equals($newuid, $hf->{header}->{UniqueId});
+}

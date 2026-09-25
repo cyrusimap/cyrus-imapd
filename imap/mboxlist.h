@@ -137,8 +137,14 @@ int mboxlist_lookup_allow_all(const char *name,
 int mboxlist_lookup_by_uniqueid(const char *uniqueid,
                                 mbentry_t **entryptr, struct txn **tid);
 
-int mboxlist_lookup_by_jmapid(const char *userid, const char *jmapid,
+/* 'scope' is the owner's userid, or mbname_jmapid_scope() for a shared
+ * mailbox */
+int mboxlist_lookup_by_jmapid(const char *scope, const char *jmapid,
                               mbentry_t **entryptr, struct txn **tid);
+
+/* Point 'jmapid' at whichever live mailbox in 'mboxname's scope still
+ * carries it, if the current holder no longer does */
+int mboxlist_rehome_jmapid(const char *mboxname, const char *jmapid);
 
 char *mboxlist_find_specialuse(const char *use, const char *userid);
 char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
