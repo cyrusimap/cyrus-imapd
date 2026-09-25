@@ -36,7 +36,7 @@ jobs:
           - compiler: "--gcc"
             desc: "gcc+asan w/cass"
             san: "--asan"
-            skip: "!Cyrus::LibCyrus"
+            skip: "!LibCyrus"
           - compiler: "--gcc"
             # -Og finds more errors at compile time
             desc: "gcc -Og cunit"

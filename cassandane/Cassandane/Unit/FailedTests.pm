@@ -25,25 +25,23 @@ sub filename ($class)
 sub new ($class)
 {
     return bless {
-        remove_me_in_cassandane_child => 1,
         # if we can't write there, we just won't record failed tests!
         fh => IO::File->new($class->filename, 'w'),
     }, $class;
 }
 
-sub _record ($self, $test)
+sub _record ($self, $witem)
 {
     return if not $self->{fh};
 
-    my $suite = ref($test) =~ s/^Cassandane:://r;
-    my $name  = $test->name =~ s/^test_//r;
+    my $suite = $witem->{suite} =~ s/^Cassandane::TestSuite:://r;
 
-    $self->{fh}->print("$suite.$name\n");
+    $self->{fh}->print("$suite.$witem->{testname}\n");
     return;
 }
 
-sub add_failure ($self, $test, $exception) { $self->_record($test) }
+sub add_failure ($self, $witem) { $self->_record($witem) }
 
-sub add_error ($self, $test, $exception) { $self->_record($test) }
+sub add_error ($self, $witem) { $self->_record($witem) }
 
 1;

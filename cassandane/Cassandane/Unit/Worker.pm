@@ -4,11 +4,16 @@
 package Cassandane::Unit::Worker;
 use strict;
 use warnings;
+use experimental 'signatures';
 
 use IO::Handle;
 use POSIX ();
 use Time::HiRes qw(time);
 use JSON::XS ();
+use Scalar::Util ();
+
+use Cassandane::Exception;
+use Cassandane::Failure;
 
 # $0 as it was before a worker renamed itself, so that it can keep saying which
 # test it is on.  Only ever set in a worker, after the fork.
@@ -22,7 +27,7 @@ my $JSON = JSON::XS->new->ascii->canonical;
 # and Cassandane derives the worker's port range from it.
 sub new
 {
-    my ($class, $id) = @_;
+    my ($class, $id, %params) = @_;
     my $self = {
         id => $id,
         pid => undef,
@@ -30,7 +35,7 @@ sub new
         uppipe => undef,
         busy => 0,
         dead => 0,
-        handler => undef,
+        skip_slow => $params{skip_slow} // 1,
     };
     return bless $self, $class;
 }
@@ -136,7 +141,7 @@ sub _mainloop
             my $assignment = $JSON->decode($payload);
             $0 = "$basename ($self->{id})"
                . " $assignment->{suite}.$assignment->{testname}";
-            my $outcome = $self->{handler}->($assignment);
+            my $outcome = $self->_run_test($assignment);
             $0 = "$basename ($self->{id})";
             _send($self->{uppipe}, "done %s\n", $JSON->encode($outcome));
         }
@@ -145,6 +150,132 @@ sub _mainloop
             print STDERR "_mainloop: unknown command '$command'\n";
         }
     }
+}
+
+sub _run_test
+{
+    my ($self, $witem) = @_;
+    my $test = _test_for($witem);
+
+    # Every worker inherited the same random seed from the parent when it was
+    # forked, so without this they would all generate the same message ids,
+    # names and UUIDs as each other, test for test.
+    srand;
+
+    $self->_capture_output($witem->{logfile});
+
+    my $outcome;
+    if (my $reason = $self->_skip_reason($test))
+    {
+        $outcome = { outcome => 'skip', reason => $reason };
+    }
+    else
+    {
+        $outcome = _outcome_of($test);
+    }
+
+    if ($test->can('post_tear_down'))
+    {
+        eval
+        {
+            $test->post_tear_down($outcome->{outcome});
+        };
+        my $ex = $@;
+        if ($ex)
+        {
+            my $report = _report_from_exception($ex);
+            $outcome = { outcome => 'error', report => $report };
+        }
+    }
+
+    $self->_restore_stdout();
+
+    return $outcome;
+}
+
+sub _test_for ($witem)
+{
+    return $witem->{suite}->new("test_$witem->{testname}");
+}
+
+# Run one test and say how it went.  There are only three answers: it returned,
+# it threw a Cassandane::Failure, meaning it ran and came out wrong, or it
+# threw something else, meaning it never got to say.
+sub _outcome_of ($test)
+{
+    my $ok = eval { $test->run_bare(); 1 };
+    return { outcome => 'pass' } if $ok;
+
+    my $thrown = $@;
+
+    return { outcome => 'fail', report => $thrown->stringify }
+        if Scalar::Util::blessed($thrown)
+        && $thrown->isa('Cassandane::Failure');
+
+    return { outcome => 'error', report => _report_from_exception($thrown) };
+}
+
+# What a report says about whatever was thrown.  Ours knows how to describe
+# itself; a string is already someone's message; anything else isn't ours and
+# gets said so before being quoted.
+sub _report_from_exception ($thrown)
+{
+    return $thrown->stringify
+        if Scalar::Util::blessed($thrown)
+        && $thrown->isa('Cassandane::Exception');
+
+    return $thrown if not ref $thrown;
+
+    return "exception while testing: $thrown";
+}
+
+# Why this test shouldn't run, if it shouldn't.
+sub _skip_reason ($self, $test)
+{
+    return $test->reason_to_skip(skip_slow => $self->{skip_slow});
+}
+
+# Point this process's STDOUT and STDERR at the log file, keeping the
+# originals so that they can be put back once the test is done.
+sub _capture_output
+{
+    my ($self, $logfile) = @_;
+
+    ${\*STDOUT}->flush;
+    ${\*STDERR}->flush;
+
+    open my $oldout, '>&', \*STDOUT
+        or die "Cannot save STDOUT";
+    open my $olderr, '>&', \*STDERR
+        or die "Cannot save STDERR";
+
+    unless ($ENV{CASSANDANE_LIVE_OUTPUT}) {
+      open STDOUT, '>>', $logfile
+          or die "Cannot redirect STDOUT to $logfile: $!";
+      open STDERR, '>>', $logfile
+          or die "Cannot redirect STDERR to $logfile: $!";
+    }
+
+    $self->{oldout} = $oldout;
+    $self->{olderr} = $olderr;
+}
+
+# Redirect STDOUT and STDERR back to their original fds
+sub _restore_stdout
+{
+    my ($self) = @_;
+
+    ${\*STDOUT}->flush;
+    open STDOUT, '>&', $self->{oldout}
+        or die "Cannot restore STDOUT";
+    close $self->{oldout};
+    $self->{oldout} = undef;
+
+    ${\*STDERR}->flush;
+    open STDERR, '>&', $self->{olderr}
+        or die "Cannot restore STDERR";
+    close $self->{olderr};
+    $self->{olderr} = undef;
 }
 
 # Collect the worker's answer and fold it into the work item we assigned.

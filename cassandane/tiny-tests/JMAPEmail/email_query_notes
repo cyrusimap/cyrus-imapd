@@ -1,6 +1,5 @@
 #!perl
 use Cassandane::Tiny;
-use base qw(Cassandane::Cyrus::TestSuite);
 
 sub test_email_query_notes
     :min_version_3_1 :JMAPExtensions
