@@ -10734,8 +10734,7 @@ static int apply_cb(struct findall_data *data, void* rock)
      * extname less horribly one day */
     const char *extname = mbname_extname(data->mbname, &imapd_namespace, imapd_userid);
     mbentry_t *backdoor = (mbentry_t *)data->mbentry;
-    backdoor->ext_name = xmalloc(strlen(extname)+1);
-    strcpy(backdoor->ext_name, extname);
+    backdoor->ext_name = xstrdup(extname);
 
     r = annotate_state_set_mailbox_mbe(state, data->mbentry);
     if (r) return r;
