@@ -152,6 +152,7 @@ struct backend *proxy_findinboxserver(const char *userid)
    force_notfatal says to not fatal() if we lose connection to backend_current
    even though it is in 95% of the cases, a good idea...
 */
+
 static int pipe_response(struct backend *s, const char *tag, int include_last,
                          int force_notfatal)
 {
@@ -864,8 +865,8 @@ static char *editflags(char *flags)
     return flags;
 }
 
-void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
-                int usinguid, struct backend *s)
+int proxy_copy(const char *tag, char *sequence, char *name, int myrights,
+                int usinguid, struct backend *s, int ismove)
 {
     char mytag[128];
     struct d {
@@ -875,6 +876,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
         struct d *next;
     } *head, *p, *q;
     int c;
+    int ret = PROXY_NO;
 
     /* find out what the flags & internaldate for this message are */
     proxy_gentag(mytag, sizeof(mytag));
@@ -1169,6 +1171,35 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
         res = pipe_until_tag(s, tag, 0);
 
         if (res == PROXY_OK) {
+            if (ismove) {
+                char movetag[128];
+                const char *expseq = sequence;
+
+                /* mark \Deleted on source backend */
+                proxy_gentag(movetag, sizeof(movetag));
+                prot_printf(backend_current->out,
+                            "%s UID Store %s +FLAGS.SILENT (\\Deleted)\r\n",
+                            movetag, expseq);
+                if (pipe_until_tag(backend_current, movetag, 0) != PROXY_OK) {
+                    syslog(LOG_ERR, "MOVE proxy: UID STORE \\Deleted failed on source "
+                                    "after successful APPEND, expunge will be skipped "
+                                    "(user: %s)",
+                                    imapd_userid);
+                }
+
+                /* UID EXPUNGE (RFC 4315, always available on Cyrus backends) */
+                proxy_gentag(movetag, sizeof(movetag));
+                prot_printf(backend_current->out,
+                            "%s UID Expunge %s\r\n",
+                            movetag, expseq);
+                if (pipe_until_tag(backend_current, movetag, 0) != PROXY_OK) {
+                     syslog(LOG_ERR, "MOVE proxy: UID EXPUNGE failed on source after "
+                                     "successful APPEND, message may be duplicated "
+                                     "(user: %s)",
+                                     imapd_userid);
+                }
+            }
+
             if (myrights & ACL_READ) {
                 appenduid = strchr(s->last_result.s, '[');
                 /* skip over APPENDUID */
@@ -1186,6 +1217,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                 prot_printf(imapd_out, "%s OK %s\r\n", tag,
                             error_message(IMAP_OK_COMPLETED));
             }
+            ret = PROXY_OK;
         } else {
             prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
         }
@@ -1207,6 +1239,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
         if (p->flags) free(p->flags);
         free(p);
     }
+    return ret;
 }
 /* xxx  end of separate proxy-only code */
 
