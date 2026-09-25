@@ -2061,6 +2061,7 @@ struct mboxset_result {
     char *old_imapname;
     char *new_imapname;
     char *tmp_imapname;
+    int partial;            /* failed after committing part of the change */
 };
 
 static void _mboxset_result_fini(struct mboxset_result *result)
@@ -2097,7 +2098,7 @@ static int _mbox_sharewith_to_rights(int rights, json_t *jsharewith)
     return newrights;
 }
 
-#define MBOXSET_RESULT_INITIALIZER { NULL, 0, NULL, NULL, NULL }
+#define MBOXSET_RESULT_INITIALIZER { NULL, 0, NULL, NULL, NULL, 0 }
 
 struct mboxset {
     struct jmap_set super;
@@ -2106,6 +2107,7 @@ struct mboxset {
     strarray_t *destroy;
     int on_destroy_remove_msgs;
     const char *on_destroy_move_to_mailboxid;
+    int partial_fail;           /* a change was left half-done */
 };
 
 static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
@@ -2115,6 +2117,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
 {
     char *mboxname = NULL;
     int r = 0;
+    bool created = false;
     mbentry_t *mbinbox = NULL, *mbentry = NULL;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct mailbox *mailbox = NULL;
@@ -2239,6 +2242,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
                 mboxname, error_message(r));
         goto done;
     }
+    created = true;
     strarray_add(update_intermediaries, mboxname);
 
      /* invalidate ACL cache */
@@ -2292,6 +2296,15 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     }
 
 done:
+    if (r && created) {
+        /* Undo the create, so notCreated doesn't leave a mailbox behind. */
+        int rr = mboxlist_deletemailbox(mboxname, 1, "", NULL, NULL, 0);
+        if (rr) {
+            xsyslog_ev(LOG_ERR, "jmap.mailbox.create.rollback.failed",
+                       lf_s("mbox.name", mboxname),
+                       lf_err("error", rr));
+        }
+    }
     if (result->err) {
         /* already set above (e.g. alreadyExists) */
     }
@@ -2383,6 +2396,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     /* So many names... manage them in our own string pool */
     ptrarray_t strpool = PTRARRAY_INITIALIZER;
     int r = 0;
+    bool renamed = false;
     mbentry_t *mbinbox = NULL, *mbparent = NULL, *mbentry = NULL;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
 
@@ -2481,6 +2495,33 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             !jmap_hasrights_mbentry(req, mbentry, JACL_ADMIN_MAILBOX)) {
         result->err = json_pack("{s:s}", "type", "forbidden");
         goto done;
+    }
+
+    /* Likewise for the annotations: the mailbox may be renamed below */
+    int set_annots = 0;
+    if (args->name || args->specialuse) {
+        // these set for everyone
+        if (!jmap_hasrights_mbentry(req, mbentry, JACL_SETKEYWORDS)) {
+            mboxlist_entry_free(&mbentry);
+            result->err = json_pack("{s:s}", "type", "forbidden");
+            goto done;
+        }
+        /* specialuse is an owner-scoped annotation; sharees must not set it */
+        if (args->specialuse && strcmp(req->userid, req->accountid)) {
+            mboxlist_entry_free(&mbentry);
+            result->err = json_pack("{s:s}", "type", "forbidden");
+            goto done;
+        }
+        set_annots = 1;
+    }
+    if (args->sortorder >= 0 || args->color || args->show_as_label >= 0) {
+        // these are per-user, so you just need READ access
+        if (!jmap_hasrights_mbentry(req, mbentry, ACL_READ)) {
+            mboxlist_entry_free(&mbentry);
+            result->err = json_pack("{s:s}", "type", "forbidden");
+            goto done;
+        }
+        set_annots = 1;
     }
 
     /* Now parent_id always has a proper mailbox id */
@@ -2654,36 +2695,12 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                 goto done;
             }
             mboxname = newmboxname;  // cheap and nasty change!
+            renamed = true;
         }
     }
 
     /* Write annotations and isSubscribed */
 
-    int set_annots = 0;
-    if (args->name || args->specialuse) {
-        // these set for everyone
-        if (!jmap_hasrights_mbentry(req, mbentry, JACL_SETKEYWORDS)) {
-            mboxlist_entry_free(&mbentry);
-            result->err = json_pack("{s:s}", "type", "forbidden");
-            goto done;
-        }
-        /* specialuse is an owner-scoped annotation; sharees must not set it */
-        if (args->specialuse && strcmp(req->userid, req->accountid)) {
-            mboxlist_entry_free(&mbentry);
-            result->err = json_pack("{s:s}", "type", "forbidden");
-            goto done;
-        }
-        set_annots = 1;
-    }
-    if (args->sortorder >= 0 || args->color || args->show_as_label >= 0) {
-        // these are per-user, so you just need READ access
-        if (!jmap_hasrights_mbentry(req, mbentry, ACL_READ)) {
-            mboxlist_entry_free(&mbentry);
-            result->err = json_pack("{s:s}", "type", "forbidden");
-            goto done;
-        }
-        set_annots = 1;
-    }
     if (set_annots) {
         if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
             r = mboxlist_promote_intermediary(mbentry->name);
@@ -2750,6 +2767,8 @@ done:
     }
     else if (r) {
         result->err = jmap_server_error(r);
+        /* The rename stuck, so notUpdated would not be true either */
+        if (renamed) result->partial = 1;
     }
     jmap_parser_fini(&parser);
     while (strpool.count) free(ptrarray_pop(&strpool));
@@ -3007,7 +3026,8 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
             "mboxid=<%s> uniqueid=<%s> msgcount=<%zu>",
             mboxid, mbentry->uniqueid, msgcount);
 
-    /* Remove subscription */
+    /* Remove subscription.  Logged, not reported: the mailbox really is
+     * destroyed, so all a failure here leaves is a stale subscription. */
     int r2 = mboxlist_changesub(mbentry->name, req->userid, httpd_authstate, 0, 1, 0, 1);
     if (r2) {
         syslog(LOG_ERR, "jmap: mbox_destroy: can't unsubscribe %s:%s",
@@ -3236,6 +3256,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
         else {
             struct mboxset_result result = MBOXSET_RESULT_INITIALIZER;
             _mbox_update(req, args, mode, &result, update_intermediaries);
+            if (result.partial) set->partial_fail = 1;
             if (result.err) {
                 json_object_set(set->super.not_updated,
                         args->mbox_id, result.err);
@@ -3304,6 +3325,11 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
             syslog(LOG_ERR, "jmap: mailbox rename failed half-way: old=%s tmp=%s new=%s: %s",
                     tmp->old_imapname ? tmp->old_imapname : "null",
                     tmp->tmp_imapname, tmp->new_imapname, error_message(r));
+
+            /* The mailbox is stuck under its temporary name, which is
+             * neither what was asked for nor what it was, and later ops
+             * may already depend on it: no per-item report would be true. */
+            set->partial_fail = 1;
         }
         /* invalidate ACL cache */
         if (tmp->old_imapname) jmap_myrights_delete(req, tmp->old_imapname);
@@ -4113,7 +4139,10 @@ static int jmap_mailbox_set(jmap_req_t *req)
     set.super.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
 
     _mboxset(req, &set);
-    jmap_ok(req, jmap_set_reply(&set.super));
+    if (set.partial_fail) {
+        jmap_error(req, json_pack("{s:s}", "type", "serverPartialFail"));
+    }
+    else jmap_ok(req, jmap_set_reply(&set.super));
 
 done:
     jmap_parser_fini(&parser);
