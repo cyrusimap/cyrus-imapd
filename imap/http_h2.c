@@ -14,6 +14,7 @@
 #include <syslog.h>
 
 #include <sasl/saslutil.h>
+#include <openssl/ssl.h>
 
 #include "http_ws.h"
 #include "prometheus.h"
@@ -123,6 +124,11 @@ static int begin_headers_cb(nghttp2_session *session,
     strm->id = frame->hd.stream_id;
     txn->strm_ctx = strm;
     ptrarray_add(&txn->done_callbacks, &stream_free);
+
+    /* The handshake stays open until all early data has been read
+     * (a frame header split across its end is missed) */
+    SSL *tls = txn->conn->tls_ctx;
+    txn->flags.early = tls && !SSL_is_init_finished(tls);
 
     /* Tell syslog our stream-id */
     buf_printf(&txn->buf, "%d", strm->id);

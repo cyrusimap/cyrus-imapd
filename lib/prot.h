@@ -194,7 +194,8 @@ extern int prot_setsasl(struct protstream *s, sasl_conn_t *conn);
 extern void prot_unsetsasl(struct protstream *s);
 
 /* Set TLS options for a given protstream (requires a completed tls
- * negotiation */
+ * negotiation, or one tls_start_servertls_early() left for the reader to
+ * finish because the client sent TLS 1.3 early data) */
 extern int prot_settls(struct protstream *s, SSL *tlsconn);
 
 /* Mark this protstream as a "client" for the purpose of generating

@@ -161,8 +161,8 @@ ec HTTP_LOCKED,
 ec HTTP_FAILED_DEP,
    "424 Failed Dependency"               /* RFC 4918 (WebDAV) */
 
-#ec HTTP_TOO_EARLY,
-#   "425 Too Early"                      /* RFC 8470 (Using Early Data) */
+ec HTTP_TOO_EARLY,
+   "425 Too Early"                       /* RFC 8470 (Using Early Data) */
 
 ec HTTP_UPGRADE,
    "426 Upgrade Required"

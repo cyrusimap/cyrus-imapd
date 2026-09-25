@@ -285,6 +285,7 @@ struct txn_flags_t {
     unsigned long trailer  : 3;         /* Headers which will be in trailer */
     unsigned long redirect : 1;         /* CGI local redirect */
     unsigned long retry    : 1;         /* Retry-After */
+    unsigned long early    : 1;         /* Request began as TLS early data */
 };
 
 struct transaction_t;
