@@ -157,16 +157,35 @@ sub add_atom {
   return $res;
 }
 
+# The parser walks the string with pos() and \G matches instead of
+# removing consumed text, so a parse is linear in the input size.
+
+sub _atend {
+  my $ref = shift;
+  return (pos($$ref) // 0) >= length($$ref);
+}
+
+sub _skipws {
+  my $ref = shift;
+  $$ref =~ m/\G\s+/gc;
+}
+
 sub _getastring {
   my $ref = shift;
-  return undef if $$ref eq '';
-  if ($$ref =~ m/^{/) {
-    $$ref =~ s/^{(\d+)\+?}\r?\n//; # strip literal spec
+  return undef if _atend($ref);
+  # Dispatch on the next character before trying the literal and quoted
+  # patterns: when either fails, the regex engine searches the rest of the
+  # string for its fixed substring, which is quadratic over a whole parse.
+  my $c = substr($$ref, pos($$ref) // 0, 1);
+  if ($c eq '{') {
+    die "bad literal" unless $$ref =~ m/\G\{(\d+)\+?\}\r?\n/gc;
     my $len = $1;
-    return substr($$ref, 0, $len, '');
+    my $res = substr($$ref, pos($$ref), $len);
+    pos($$ref) += $len;
+    return $res;
   }
-  if ($$ref =~ m/^"/) {
-    $$ref =~ s/^"((?:[^"\\]++|\\.)*+)"//;
+  if ($c eq '"') {
+    die "bad quoted string" unless $$ref =~ m/\G"((?:[^"\\]++|\\.)*+)"/gc;
     return $1;
   }
   return _getword($ref);
@@ -174,13 +193,12 @@ sub _getastring {
 
 sub _getword {
   my $ref = shift;
-  $$ref =~ s/^([^\ \)]+)//;
+  return undef unless $$ref =~ m/\G([^\ \)]+)/gc;
   my $res = $1;
   return undef if $res eq 'NIL';
   return $res;
 }
 
-# Great - custom magic
 sub _parse_string {
   my $Self = shift;
   my $ref = shift;
@@ -190,42 +208,43 @@ sub _parse_string {
 
   if ($parsekey) {
     $key = _getword($ref);
-    $$ref =~ s/^\s+//;
-    die unless $$ref;
+    _skipws($ref);
+    die if _atend($ref);
   }
 
-  if ($$ref =~ s/^\(//) {
+  if ($$ref =~ m/\G\(/gc) {
     my $Child = $Self->add_list($key);
-    while ($$ref !~ s/^\)//) {
-      $$ref =~ s/^\s+//;
-      die unless $$ref;
+    until ($$ref =~ m/\G\)/gc) {
+      _skipws($ref);
+      die if _atend($ref);
       $Child->_parse_string($ref, 0);
-      $$ref =~ s/^\s+//;
+      _skipws($ref);
     }
   }
 
-  elsif ($$ref =~ s/^\%//) {
+  elsif ($$ref =~ m/\G\%/gc) {
     # kvlist
-    if ($$ref =~ s/^\(//) {
-      die unless $$ref;
+    if ($$ref =~ m/\G\(/gc) {
+      die if _atend($ref);
       my $Child = $Self->add_kvlist($key);
-      while (not ($$ref =~ s/^\)//)) {
+      until ($$ref =~ m/\G\)/gc) {
         $Child->_parse_string($ref, 1);
-        $$ref =~ s/^\s+//;
+        _skipws($ref);
       }
     }
-    elsif ($$ref =~ s/^\{//) {
-      die unless $$ref;
+    elsif ($$ref =~ m/\G\{/gc) {
+      die if _atend($ref);
       my $partition = _getword($ref);
       die "No partition" unless length($partition);
-      $$ref =~ s/^\s+//;
+      _skipws($ref);
       my $guid = _getword($ref);
       die "No guid" unless length($guid);
-      $$ref =~ s/^\s+//;
-      die "no size" unless $$ref =~ s/^(\d+)//;
+      _skipws($ref);
+      die "no size" unless $$ref =~ m/\G(\d+)/gc;
       my $size = $1;
-      die "no file-pattern end" unless $$ref =~ s/^\+?\}\r?\n//;
-      my $content = substr($$ref, 0, $size, '');
+      die "no file-pattern end" unless $$ref =~ m/\G\+?\}\r?\n/gc;
+      my $content = substr($$ref, pos($$ref), $size);
+      pos($$ref) += $size;
       $Self->add_file($key, $partition, $guid, $size, $content);
     }
   }
