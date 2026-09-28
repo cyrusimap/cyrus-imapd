@@ -17,3 +17,4 @@ Standard Operating Procedures
     sop/squatter
     sop/splitting-metadata
     sop/userdeny
+    sop/deduplicate
