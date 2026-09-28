@@ -201,6 +201,16 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
         #expected, _e ? _e : "(null)");                                 \
 } while(0)
 
+/* custom -- no prior definition to undef */
+#define CU_ASSERT_STRING_CONTAINS(actual,expected) do {                 \
+    const char *_a = (actual), *_e = (expected);                        \
+    CU_assertFormatImplementation(!!strstr(_a?_a:"",_e?_e:""),          \
+        __LINE__, __FILE__, "", CU_FALSE,                               \
+        "CU_ASSERT_STRING_CONTAINS(%s=\"%s\",%s=\"%s\")",               \
+        #actual, _a ? _a : "(null)",                                    \
+        #expected, _e ? _e : "(null)");                                 \
+} while (0)
+
 #undef CU_ASSERT_DOUBLE_EQUAL
 #define CU_ASSERT_DOUBLE_EQUAL(actual,expected,granularity) do {        \
     double _a = (actual), _e = (expected), _g = (granularity);          \
