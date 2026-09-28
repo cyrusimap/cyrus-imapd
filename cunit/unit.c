@@ -287,7 +287,8 @@ EXPORTED void config_read_string(const char *confdir, const char *s)
 {
     char fname[PATH_MAX] = {0};
     struct buf opt_confdir = BUF_INITIALIZER;
-    int fd;
+    struct buf config_err = BUF_INITIALIZER;
+    int fd, r;
 
     /* n.b. you should almost always set a confdir, unless you're testing
      * the fact that cyrus fatals when it's not set!
@@ -316,7 +317,16 @@ EXPORTED void config_read_string(const char *confdir, const char *s)
         retry_write(fd, s, strlen(s));
     }
     config_reset();
-    config_read(fname, 0);
+
+    r = config_read(fname, 0, &config_err);
+    if (r) {
+        char tmp[1024];
+
+        /* stack copy of the error string so we don't "leak" the original */
+        snprintf(tmp, sizeof(tmp), "%s", buf_cstring(&config_err));
+        buf_free(&config_err);
+        fatal(tmp, r);
+    }
     xunlink(fname);
     close(fd);
 

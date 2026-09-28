@@ -48,8 +48,10 @@ void fatalf(int code, const char *fmt, ...)
 
 int masterconf_init(const char *ident, const char *alt_config)
 {
+    struct buf config_err = BUF_INITIALIZER;
     char *buf = NULL;
     const char *prefix;
+    int r;
 
     /* If our prefix is configured in the environment we can set it early */
     if ((prefix = getenv("CYRUS_SYSLOG_PREFIX"))) {
@@ -61,7 +63,9 @@ int masterconf_init(const char *ident, const char *alt_config)
     }
 
     config_ident = ident;
-    config_read(alt_config, 0);
+    r = config_read(alt_config, 0, &config_err);
+    if (r) fatal(buf_cstring(&config_err), r);
+    buf_free(&config_err);
 
     /* If we didn't already get the syslog prefix from the environment,
      * check config. */
