@@ -1,0 +1,97 @@
+#!perl
+use Cassandane::Tiny;
+
+# Two live mailboxes of one user must never share a JMAP id.  A record
+# written with another live mailbox's id takes the lookup key and is logged,
+# and reconstruct gives the mailbox left without the key a fresh id.
+sub test_reconstruct_mailboxid_clash
+    :NoAltNameSpace :Conversations
+    ($self)
+{
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my $alpha = "user\x1fcassandane\x1falpha";
+    my $beta = "user\x1fcassandane\x1fbeta";
+
+    my $talk = $self->{store}->get_client();
+    $talk->create('INBOX.alpha');
+    $talk->create('INBOX.beta');
+    my $alphaid = $talk->status('INBOX.alpha', ['mailboxid'])->{mailboxid}[0];
+    my $betaid = $talk->status('INBOX.beta', ['mailboxid'])->{mailboxid}[0];
+    my $alphauid = $talk->getmetadata('INBOX.alpha', $entry)->{'INBOX.alpha'}{$entry};
+    my $betauid = $talk->getmetadata('INBOX.beta', $entry)->{'INBOX.beta'}{$entry};
+    $self->assert_str_not_equals($alphaid, $betaid);
+
+    my $db = $self->{instance}->get_basedir() . '/conf/mailboxes.db';
+    my $format = $self->{instance}->{config}->get('mboxlist_db');
+
+    my sub record ($key) {
+        my (undef, $value) = $self->{instance}->run_dbcommand($db, $format, ['SHOW', $key]);
+        return unless defined $value;
+        return Cyrus::DList->parse_string($value)->as_perl();
+    }
+
+    my sub set_fields ($key, %fields) {
+        my $hash = record($key) or die "no record for $key";
+        $hash->{$_} = $fields{$_} for keys %fields;
+        $self->{instance}->run_dbcommand($db, $format,
+            ['SET', $key, Cyrus::DList->new_perl('', $hash)->as_string()]);
+    }
+
+    xlog $self, "give beta alpha's id; alpha still holds the lookup key";
+    $self->{store}->disconnect();
+    $self->{instance}->stop();
+    $self->{instance}->{re_use_dir} = 1;
+    set_fields("N$beta", J => $alphaid);
+    set_fields("I$betauid", J => $alphaid);
+    $self->{instance}->start();
+    $self->{store}->connect();
+
+    xlog $self, "rewriting beta's record takes the key and is logged";
+    $self->{instance}->getsyslog();
+    $talk = $self->{store}->get_client();
+    $talk->setacl('INBOX.beta', 'anyone', 'p');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/event=mboxlist\.mailboxid\.clash/);
+    $self->assert_str_equals($beta, record("Jcassandane\x1e$alphaid")->{N});
+
+    xlog $self, "reconstruct assigns alpha, now without a key, a fresh id";
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'reconstruct', '-u', 'cassandane');
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/event=reconstruct\.mailboxid\.reassigned/);
+
+    $talk = $self->{store}->get_client();
+    $self->assert_str_equals($alphaid,
+        $talk->status('INBOX.beta', ['mailboxid'])->{mailboxid}[0]);
+    my $newid = $talk->status('INBOX.alpha', ['mailboxid'])->{mailboxid}[0];
+    $self->assert_str_not_equals($alphaid, $newid);
+
+    xlog $self, "both ids resolve to their own mailbox";
+    my %expect = (
+        "Jcassandane\x1e$alphaid" => superhashof({ N => $beta }),
+        "Jcassandane\x1e$newid" => superhashof({ N => $alpha }),
+        "N$alpha" => superhashof({ J => $newid }),
+        "I$alphauid" => superhashof({ J => $newid }),
+        "I$betauid" => superhashof({ J => $alphaid }),
+    );
+    $self->assert_cmp_deeply(\%expect,
+        { map { $_ => scalar record($_) } keys %expect });
+
+    xlog $self, "the header agrees with the mbentry";
+    for my $folder (['INBOX.alpha', $newid], ['INBOX.beta', $alphaid]) {
+        my $header = $self->{instance}->folder_to_directory($folder->[0])
+                     . '/cyrus.header';
+        my $hf = Cyrus::HeaderFile->new_file($header);
+        my $dl = Cyrus::DList->parse_string($hf->{dlistheader})->as_perl();
+        $self->assert_str_equals($folder->[1], $dl->{J});
+    }
+
+    xlog $self, "a second run has nothing left to fix";
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'reconstruct', '-u', 'cassandane');
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr/event=reconstruct\.mailboxid\.reassigned/);
+}

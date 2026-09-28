@@ -7252,6 +7252,7 @@ localcreate:
 
     if (!r && (parent || !mbname_userid(mbname))) {
         mbname_t *ancestor = mbname_from_intname(parent ? parent->name : NULL);
+        if (!parent) mbname_set_domain(ancestor, mbname_domain(mbname));
         int oldest = strarray_size(mbname_boxes(ancestor));
         int youngest = strarray_size(boxes) - 1;
 
@@ -12225,7 +12226,8 @@ static int sync_mailbox(struct xfer_header *xfer,
 
     master_folders = sync_folder_list_create();
     sync_folder_list_add(master_folders,
-                         mailbox_uniqueid(mailbox), mailbox_name(mailbox),
+                         mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
+                         mailbox_name(mailbox),
                          mailbox_mbtype(mailbox),
                          mailbox_partition(mailbox),
                          mailbox_acl(mailbox),

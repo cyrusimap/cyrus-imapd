@@ -75,6 +75,7 @@ struct sync_folder {
     struct sync_folder *next;
     struct mailbox *mailbox;
     char *uniqueid;
+    char *jmapid;
     char *name;
     uint32_t mbtype;
     char *partition;
@@ -107,7 +108,9 @@ struct sync_folder_list {
 struct sync_folder_list *sync_folder_list_create(void);
 
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
-                                         const char *uniqueid, const char *name,
+                                         const char *uniqueid,
+                                         const char *jmapid,
+                                         const char *name,
                                          uint32_t mbtype,
                                          const char *partition, const char *acl,
                                          uint32_t options,

@@ -110,6 +110,7 @@ lmtp.rcpt.state         a recipient's delivery state in the proxy state machine
 lmtp.target             how the destination mailbox was chosen: default, plus-addr, ...
 pop.subfolder           the subfolder a POP session was restricted to
 quota.root              the quota root a quota applies to
+reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
 sched.addresses         the scheduling addresses considered, one per indexed subkey
 sched.userid            the userid whose scheduling addresses were used
 scope                   the scope a duplicate-delivery check applied to
@@ -139,9 +140,15 @@ vacation.to             the To address of a vacation response
 
 out.msg.id              Message-ID we sent, where msg.id is the one we got
 
+### other. - the second mailbox in an event about two of them
+
+other.mbox.name         the name of the other mailbox involved, in the admin namespace
+other.mbox.uniqueid     the uniqueid of the other mailbox involved
+
 ### old. - the value before a change, paired with the unprefixed key
 
 old.mbox.acl            the mailbox ACL before the change
+old.mbox.mailboxid      the mailbox's JMAP id before it changed
 old.mbox.name           the mailbox name before the rename
 old.mbox.part           the partition before the move
 old.mbox.uidvalidity    the mailbox's uidvalidity before it changed
