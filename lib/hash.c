@@ -247,6 +247,11 @@ static inline size_t table_index(const hash_table *table, uint32_t hash) {
  *
  * So we go with integer sizes and a good enough hash function as a reasonable
  * speed/size trade off.
+ *
+ * XXX This always returns the pointer that was passed in.  If that was NULL,
+ * XXX it asserts rather than returning NULL.  All allocation paths use
+ * XXX xmalloc, so it will fatal on an allocation failure.  We might consider
+ * XXX changing the return type to void.
  */
 
 EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)

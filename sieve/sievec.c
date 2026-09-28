@@ -34,6 +34,8 @@ int main(int argc, char **argv)
     bytecode_info_t *bc = NULL;
     int opt, fd, usage_error = 0;
     char *alt_config = NULL;
+    struct buf config_err = BUF_INITIALIZER;
+    int r;
 
     /* keep this in alphabetical order */
     static const char short_options[] = "C:";
@@ -69,7 +71,9 @@ int main(int argc, char **argv)
     }
 
     /* Load configuration file. */
-    config_read(alt_config, 0);
+    r = config_read(alt_config, 0, &config_err);
+    if (r) fatal(buf_cstring(&config_err), r);
+    buf_free(&config_err);
 
     if(sieve_script_parse_only(instream, &err, &s) != SIEVE_OK) {
         if(err) {

@@ -16,7 +16,6 @@
 #include <sys/stat.h>
 
 #include "assert.h"
-#include "buf.h"
 #include "hash.h"
 #include "libconfig.h"
 #include "xmalloc.h"
@@ -543,15 +542,13 @@ static void config_option_deprecate(const int dopt)
 }
 
 /*
- * Reset the global configuration to a virginal state.  This is
- * only useful for unit tests.
+ * Reset the global configuration to a virginal state.
  */
 EXPORTED void config_reset(void)
 {
     enum imapopt opt;
 
-    /* XXX this gate should probably use config_loaded, not config_filename */
-    if (!config_filename)
+    if (!config_loaded)
         return;
 
     free((char *)config_filename);
@@ -616,58 +613,55 @@ static const unsigned char qos[] = {
 /* ef */                0xb8
 };
 
-
-EXPORTED void config_read(const char *alt_config, const int config_need_data)
+EXPORTED int config_read(const char *alt_config,
+                         const int config_need_data,
+                         struct buf *err)
 {
     enum imapopt opt = IMAPOPT_ZERO;
-    char buf[4096];
     char *p;
     int ival;
     int64_t i64val;
     const char *cua_domains;
     char *domain;
     tok_t tok;
-    struct buf err = BUF_INITIALIZER;
+    int r = 0;
 
     config_loaded = 1;
 
-    /* XXX this is leaked, this may be able to be better in 2.2 (cyrus_done) */
     if (alt_config) config_filename = xstrdup(alt_config);
     else config_filename = xstrdup(CONFIG_FILENAME);
 
-    if (!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
-        fatal("could not construct configuration hash table", EX_CONFIG);
-    }
+    construct_hash_table(&confighash, CONFIGHASHSIZE, 1);
+    construct_hash_table(&includehash, INCLUDEHASHSIZE, 1);
 
-    if (!construct_hash_table(&includehash, INCLUDEHASHSIZE, 1)) {
-        fatal("could not construct include file  hash table", EX_CONFIG);
-    }
+    r = config_read_file(config_filename, err);
+    if (r) goto done;
 
-    if (config_read_file(config_filename, &err)) {
-        char tmp[1024];
-
-        /* log the real error, in case it gets truncated below */
-        syslog(LOG_ERR, "%s", buf_cstring(&err));
-
-        /* free the error string so our tests don't need leak suppressions */
-        snprintf(tmp, sizeof(tmp), "%s", buf_cstring(&err));
-        buf_free(&err);
-
-        fatal(tmp, EX_CONFIG);
-    }
-
+    /* don't need to carry this around anymore */
     free_hash_table(&includehash, NULL);
 
     /* Check configdirectory config option */
     if (!config_dir) {
-        fatal("configdirectory option not specified in configuration file",
-              EX_CONFIG);
+        if (err) {
+            buf_appendcstr(err,
+                "configdirectory option not specified in configuration file");
+        }
+        r = EX_CONFIG;
+        goto done;
     }
     else if (config_dir[0] != '/') {
-        fatal("configdirectory must be fully qualified", EX_CONFIG);
+        if (err) {
+            buf_appendcstr(err, "configdirectory must be fully qualified");
+        }
+        r = EX_CONFIG;
+        goto done;
     }
     else if (!config_dir[1]) {
-        fatal("configdirectory must not be '/'", EX_CONFIG);
+        if (err) {
+            buf_appendcstr(err, "configdirectory must not be '/'");
+        }
+        r = EX_CONFIG;
+        goto done;
     }
 
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
@@ -726,11 +720,13 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
                                          &bytesize))
             {
                 /* uh-oh, we've got a bogus Default-Value */
-                char errbuf[1024];
-                snprintf(errbuf, sizeof(errbuf),
-                         "%s: %s: couldn't parse default bytesize '%s'",
-                         __func__, imapopts[opt].name, imapopts[opt].def.s);
-                fatal(errbuf, EX_SOFTWARE);
+                if (err) {
+                    buf_printf(err,
+                               "%s: %s: couldn't parse default bytesize '%s'",
+                               __func__, imapopts[opt].name, imapopts[opt].def.s);
+                }
+                r = EX_SOFTWARE;
+                goto done;
             }
 
             imapopts[opt].val.i64 = bytesize;
@@ -746,11 +742,13 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
                                           &duration))
             {
                 /* uh-oh, we've got a bogus Default-Value */
-                char errbuf[1024];
-                snprintf(errbuf, sizeof(errbuf),
-                         "%s: %s: couldn't parse default duration '%s'",
-                         __func__, imapopts[opt].name, imapopts[opt].def.s);
-                fatal(errbuf, EX_SOFTWARE);
+                if (err) {
+                    buf_printf(err,
+                               "%s: %s: couldn't parse default duration '%s'",
+                               __func__, imapopts[opt].name, imapopts[opt].def.s);
+                }
+                r = EX_SOFTWARE;
+                goto done;
             }
 
             imapopts[opt].val.i32 = duration;
@@ -773,8 +771,12 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         if (!Uisalnum(*p)) {
             syslog(LOG_ERR, "INVALID defaultpartition: %s",
                    config_defpartition);
-            fatal("defaultpartition option contains non-alnum character",
-                  EX_CONFIG);
+            if (err) {
+                buf_appendcstr(err,
+                    "defaultpartition option contains non-alnum character");
+            }
+            r = EX_CONFIG;
+            goto done;
         }
         if (Uisupper(*p)) *p = tolower((unsigned char) *p);
     }
@@ -802,14 +804,21 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         }
 
         if (!found) {
-            snprintf(buf, sizeof(buf),
-                     "partition-%s option not specified in configuration file",
-                     config_defpartition ? config_defpartition : "<name>");
-            fatal(buf, EX_CONFIG);
+            if (err) {
+                buf_printf(err,
+                           "partition-%s option not specified in configuration file",
+                           config_defpartition ? config_defpartition : "<name>");
+            }
+            r = EX_CONFIG;
+            goto done;
         }
 
         if (config_check_partitions(NULL)) {
-            fatal("invalid partition value detected", EX_CONFIG);
+            if (err) {
+                buf_appendcstr(err, "invalid partition value detected");
+            }
+            r = EX_CONFIG;
+            goto done;
         }
     }
 
@@ -886,7 +895,10 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     config_admins = strarray_split(config_getstring(IMAPOPT_ADMINS),
                                    NULL, STRARRAY_TRIM);
 
-    buf_free(&err);
+ done:
+    if (r) config_reset();
+
+    return r;
 }
 
 #define GROWSIZE 4096
