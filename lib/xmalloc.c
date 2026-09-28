@@ -23,14 +23,18 @@ EXPORTED void *xmalloc(size_t size)
 
 EXPORTED void *xzmalloc(size_t size)
 {
-    void *ret = xmalloc(size);
-    memset(ret, 0, size);
-    return ret;
+    return xcalloc(1, size);
 }
 
 EXPORTED void *xcalloc(size_t nmemb, size_t size)
 {
-    return xzmalloc(nmemb * size);
+    void *ret;
+
+    ret = calloc(nmemb, size);
+    if (ret != NULL) return ret;
+
+    fatal("Virtual memory exhausted", EX_TEMPFAIL);
+    return 0; /*NOTREACHED*/
 }
 
 EXPORTED void *xrealloc(void *ptr, size_t size)
@@ -56,9 +60,9 @@ EXPORTED void *xzrealloc(void *ptr, size_t orig_size, size_t new_size)
 
 EXPORTED char *xstrdup(const char* str)
 {
-    char *p = xmalloc(strlen(str)+1);
-    strcpy(p, str);
-    return p;
+    size_t wanted = strlen(str)+1;
+    char *p = xmalloc(wanted);
+    return memcpy(p, str, wanted);
 }
 
 /* return a malloced "" if NULL is passed */
