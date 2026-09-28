@@ -3,7 +3,7 @@ use v5.28.0;
 use warnings;
 
 use Carp ();
-use Package::Stash;
+use Package::Stash::PP;
 
 our $RELOADED;
 
@@ -30,7 +30,7 @@ sub import {
 
   my (@bad_name, @no_tests);
 
-  my $stash = Package::Stash->new($into);
+  my $stash = Package::Stash::PP->new($into);
 
   for my $test (sort @tests) {
     local $RELOADED;
