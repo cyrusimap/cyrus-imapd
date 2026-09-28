@@ -151,8 +151,8 @@ static void test_stringlist_invalid(void)
         "annotation_db: junk\n"
     );
     CU_ASSERT_EQUAL(r, EX_CONFIG);
-    CU_ASSERT_STRING_EQUAL(buf_cstring(&err),
-                           "invalid value 'junk' for annotation_db in line 2");
+    CU_ASSERT_STRING_CONTAINS(buf_cstring(&err),
+                              ":2: invalid value 'junk' for 'annotation_db'");
 
     buf_free(&err);
 }
@@ -194,8 +194,8 @@ static void test_enum_invalid(void)
         "delete_mode: junk\n"
     );
     CU_ASSERT_EQUAL(r, EX_CONFIG);
-    CU_ASSERT_STRING_EQUAL(buf_cstring(&err),
-                           "invalid value 'junk' for delete_mode in line 2");
+    CU_ASSERT_STRING_CONTAINS(buf_cstring(&err),
+                              ":2: invalid value 'junk' for 'delete_mode'");
 
     buf_free(&err);
 }
@@ -264,8 +264,8 @@ static void test_bitfield_invalid(void)
         "httpmodules: caldav junk\n"
     );
     CU_ASSERT_EQUAL(r, EX_CONFIG);
-    CU_ASSERT_STRING_EQUAL(buf_cstring(&err),
-                           "invalid value 'junk' for httpmodules in line 2");
+    CU_ASSERT_STRING_CONTAINS(buf_cstring(&err),
+                              ":2: invalid value 'junk' for 'httpmodules'");
 
     buf_free(&err);
 }
@@ -421,8 +421,8 @@ static void test_duration_invalid(void)
         "timeout: junk\n"
     );
     CU_ASSERT_EQUAL(r, EX_CONFIG);
-    CU_ASSERT_STRING_EQUAL(buf_cstring(&err),
-                           "unparsable duration 'junk' for timeout in line 2");
+    CU_ASSERT_STRING_CONTAINS(buf_cstring(&err),
+                              ":2: unparsable duration 'junk' for 'timeout'");
 
     buf_free(&err);
 }
@@ -665,9 +665,9 @@ static void test_bytesize_invalid(void)
         "archive_maxsize: junk\n"
     );
     CU_ASSERT_EQUAL(r, EX_CONFIG);
-    CU_ASSERT_STRING_EQUAL(
+    CU_ASSERT_STRING_CONTAINS(
         buf_cstring(&err),
-        "unparsable byte size 'junk' for archive_maxsize in line 2"
+        ":2: unparsable byte size 'junk' for 'archive_maxsize'"
     );
 
     buf_free(&err);
@@ -904,7 +904,7 @@ static void test_configdirectory_missing(void)
         "annotation_db: twoskip\n"
     );
     CU_ASSERT_EQUAL(r, EX_CONFIG);
-    CU_ASSERT_STRING_EQUAL(
+    CU_ASSERT_STRING_CONTAINS(
         buf_cstring(&err),
         "configdirectory option not specified in configuration file"
     );
@@ -921,7 +921,7 @@ static void test_configdirectory_relative(void)
         "configdirectory: "DBDIR"/conf\n"
     );
     CU_ASSERT_EQUAL(r, EX_CONFIG);
-    CU_ASSERT_STRING_EQUAL(
+    CU_ASSERT_STRING_CONTAINS(
         buf_cstring(&err),
         "configdirectory must be fully qualified"
     );
@@ -936,7 +936,7 @@ static void test_configdirectory_root(void)
 
     r = config_read_string("/", &err, NULL);
     CU_ASSERT_EQUAL(r, EX_CONFIG);
-    CU_ASSERT_STRING_EQUAL(
+    CU_ASSERT_STRING_CONTAINS(
         buf_cstring(&err),
         "configdirectory must not be '/'"
     );
@@ -953,10 +953,7 @@ static void test_configdirectory_empty(void)
         "configdirectory: \n"
     );
     CU_ASSERT_EQUAL(r, EX_CONFIG);
-    CU_ASSERT_STRING_EQUAL(
-        buf_cstring(&err),
-        "empty option value on line 1 of configuration file"
-    );
+    CU_ASSERT_STRING_CONTAINS(buf_cstring(&err), ":1: empty option value");
 
     buf_free(&err);
 }
