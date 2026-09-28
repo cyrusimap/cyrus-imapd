@@ -79,6 +79,9 @@ sub new
     $config->set(caldav_realm => 'Cassandane');
     $config->set(httpallowcompress => 'no');
     $config->set(conversations => 'yes');
+    # The JMAP-TestSuite checks RFC 8620 conformance, which includes
+    # rejecting a call with no accountId.
+    $config->set(jmap_require_accountid => 'yes');
 
     $config->set(search_engine => 'xapian');
     $config->set(search_index_headers => 'no');
