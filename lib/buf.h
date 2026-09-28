@@ -33,6 +33,7 @@ char *buf_release(struct buf *buf);
 char *buf_releasenull(struct buf *buf);
 void buf_getmap(struct buf *buf, const char **base, size_t *len);
 int buf_getline(struct buf *buf, FILE *fp);
+int buf_getline_continuation(struct buf *buf, FILE *fp);
 size_t buf_len(const struct buf *buf);
 const char *buf_base(const struct buf *buf);
 void buf_reset(struct buf *buf);

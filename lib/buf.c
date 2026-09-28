@@ -13,6 +13,7 @@
 #include "lib/xmalloc.h"
 
 #include <string.h>
+#include <stdbool.h>
 
 /* predeclarations to avoid including util.h */
 extern char *lcase(char* str);
@@ -135,6 +136,69 @@ EXPORTED void buf_getmap(struct buf *buf, const char **base, size_t *len)
     *len = buf->len;
 }
 
+static int buf_getline_internal(struct buf *b, FILE *fp, bool fold_backslash)
+{
+    buf_reset(b);
+    int raw_lines = 0;
+    while (1) {
+        size_t len = b->len;
+        buf_ensure(b, len + 81);
+        char *end = b->s + b->alloc;
+        char *here = b->s + len;
+
+        char *result = fgets(here, end - here, fp);
+        if (!result) {
+            /* EOF or error, but buf_getline()'s API never had a way to
+             * communicate the difference to its caller */
+
+            if (!len) {
+                /* If EOF and no content, then we're done.
+                 * Also, fgets() won't have touched the buffer, so we must: */
+                b->s[0] = '\0';
+                return 0;
+            }
+
+            assert(b->s[b->len] == '\0');
+            /* We're at EOF without a final newline. Hence we have one extra
+             * "raw line" to report: */
+            return 1 + raw_lines;
+        }
+
+        size_t got = strlen(here);
+        /* There is a corner case of file that ends with a NUL byte (or a single
+         * byte file that is just NUL) where fgets() will return non-NULL, but
+         * strlen() will be zero. There might be bytes read beyond the NUL, but
+         * we have no cheap way of telling. (We could try ftell() before and
+         * after, but then we don't work on non-seekable streams. I figure if we
+         * *really* need to we memset() the buffer to non-NUL, then memrchr() to
+         * find the NUL that fgets() wrote *after* the bytes that it read.) */
+        if (!got) {
+            ++raw_lines;
+            break;
+        }
+
+        b->len += got;
+        if (b->s[b->len - 1] == '\n') {
+            ++raw_lines;
+            /* We read a trailing newline, so chomp it. */
+            --b->len;
+            if (fold_backslash && b->len > 0 && b->s[b->len - 1] == '\\') {
+                /* Trailing newline preceded by a backslash.
+                 * chomp both, and carry on reading */
+                --b->len;
+                b->s[b->len] = '\0';
+                continue;
+            }
+            /* chomp it, and correctly terminate the buffer ... */
+            b->s[b->len] = '\0';
+            break;
+        }
+    }
+
+    assert(b->s[b->len] == '\0');
+    return raw_lines;
+}
+
 /* fetch a single line a file - terminated with \n ONLY.
  * buf does not contain the \n.
  * NOTE: if the final line does not contain a \n we still
@@ -142,21 +206,16 @@ EXPORTED void buf_getmap(struct buf *buf, const char **base, size_t *len)
  * so a file A\nB will return two true responses with bufs
  * containing "A" and "B" respectively before returning a
  * false to the third call */
-EXPORTED int buf_getline(struct buf *buf, FILE *fp)
+EXPORTED int buf_getline(struct buf *b, FILE *fp)
 {
-    int c;
+    return buf_getline_internal(b, fp, false);
+}
 
-    buf_reset(buf);
-    while ((c = fgetc(fp)) != EOF) {
-        if (c == '\n')
-            break;
-        buf_putc(buf, c);
-    }
-    /* ensure trailing NULL */
-    buf_cstring(buf);
-
-    /* EOF and no content, we're done */
-    return (!(buf->len == 0 && c == EOF));
+/* As buf_getline, but backslash-newline pairs are folded to nothing.
+ * Returns the count of raw file lines folded into the returned line. */
+EXPORTED int buf_getline_continuation(struct buf *b, FILE *fp)
+{
+    return buf_getline_internal(b, fp, true);
 }
 
 #ifdef HAVE_DECLARE_OPTIMIZE

@@ -538,19 +538,6 @@ static int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
     return SIEVE_OK;
 }
 
-#ifndef HAVE_FMEMOPEN
-static FILE *fmemopen(const void *buf, size_t len, const char *mode)
-{
-    FILE *fp;
-
-    fp = fopen("/dev/null", mode);
-    if (!fp)
-        return NULL;
-    setbuffer(fp, buf, len);
-    return fp;
-}
-#endif
-
 static int set_up(void)
 {
     config_read_string(DBDIR"/conf",
