@@ -1411,9 +1411,10 @@ static int set_up(void)
         return e;
     }
 
-    config_read_string(DBDIR"/conf",
+    r = config_read_string(DBDIR"/conf", NULL,
         "conversations_keep_existing: false\n"
     );
+    if (r) return r;
 
     cyrusdb_init();
     config_conversations_db = "twoskip";

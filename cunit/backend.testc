@@ -1801,7 +1801,7 @@ static int sasl_initialised;
  */
 static int set_up(void)
 {
-    int rend_sock, port = 0;
+    int r, rend_sock, port = 0;
     char *sr;
     char cwd[PATH_MAX];
     struct buf myconfig = BUF_INITIALIZER;
@@ -1824,8 +1824,9 @@ static int set_up(void)
     buf_printf(&myconfig, "tls_server_key: %s/data/key.pem\n", cwd);
     buf_printf(&myconfig, "tls_session_timeout: 0\n");
 
-    config_read_string(DBDIR"/conf", buf_cstring(&myconfig));
+    r = config_read_string(DBDIR"/conf", NULL, buf_cstring(&myconfig));
     buf_free(&myconfig);
+    if (r) return -1;
 
     rend_sock = create_server_socket(&port);
     if (rend_sock < 0)

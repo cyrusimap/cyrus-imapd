@@ -12,9 +12,7 @@
 static int set_up(void)
 {
     /* need basic configuration for getxstring */
-    config_read_string(DBDIR"/conf", NULL);
-
-    return 0;
+    return config_read_string(DBDIR"/conf", NULL, NULL);
 }
 
 static int tear_down(void)
@@ -469,7 +467,9 @@ static void test_parse_allow_file_literal(void)
     /* reservefile() needs a configured partition to stage bytes into */
     r = system("mkdir -p " DBDIR "/data");
     CU_ASSERT_EQUAL_FATAL(r, 0);
-    config_read_string(DBDIR"/conf", "partition-default: " DBDIR "/data\n");
+    r = config_read_string(DBDIR"/conf", NULL,
+                           "partition-default: " DBDIR "/data\n");
+    CU_ASSERT_EQUAL_FATAL(r, 0);
 
     /* "TESTFILE %{<partition> <guid> <size>}\r\n<size bytes>" */
     buf_printf(&b,
@@ -508,9 +508,6 @@ static void test_parse_allow_file_literal(void)
 
     dlist_free(&dl);
     buf_free(&b);
-
-    /* restore the plain config for the remaining tests in this suite */
-    config_read_string(DBDIR"/conf", NULL);
 }
 
 static void test_copy(void)
@@ -560,7 +557,9 @@ static void test_copy_file(void)
     /* reservefile() needs a configured partition to stage bytes into */
     r = system("mkdir -p " DBDIR "/data");
     CU_ASSERT_EQUAL_FATAL(r, 0);
-    config_read_string(DBDIR"/conf", "partition-default: " DBDIR "/data\n");
+    r = config_read_string(DBDIR"/conf", NULL,
+                           "partition-default: " DBDIR "/data\n");
+    CU_ASSERT_EQUAL_FATAL(r, 0);
 
     buf_printf(&b,
         "TESTFILE %%{default "
@@ -592,9 +591,6 @@ static void test_copy_file(void)
     dlist_free(&dl);
     dlist_free(&copy);
     buf_free(&b);
-
-    /* restore the plain config for the remaining tests in this suite */
-    config_read_string(DBDIR"/conf", NULL);
 }
 
 static void test_printiter(void)

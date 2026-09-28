@@ -278,7 +278,8 @@ static int set_up(void)
         }
     }
 
-    config_read_string(DBDIR"/conf", NULL);
+    r = config_read_string(DBDIR"/conf", NULL, NULL);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
 
     cyrusdb_init();
     config_duplicate_db = "skiplist";

@@ -12,10 +12,14 @@
 
 #include "cunit/unit-syslog.h"
 
+#include "buf.h"
+
 extern int verbose;
 
 /* initialise libconfig from a string */
-extern void config_read_string(const char *confdir, const char *s);
+extern int config_read_string(const char *confdir,
+                              struct buf *err,
+                              const char *s);
 
 /* utilities for consistent test tmpdir behaviour */
 extern int cunit_tmpfile(char *buf, size_t len, const char *pattern);

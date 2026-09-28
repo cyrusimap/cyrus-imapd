@@ -32,9 +32,7 @@ static int set_up(void)
 
     myconfigdir = xstrdup(dir);
 
-    config_read_string(myconfigdir, NULL);
-
-    return 0;
+    return config_read_string(myconfigdir, NULL, NULL);
 }
 
 static int tear_down(void)
