@@ -283,11 +283,12 @@ CU_BOOL CU_assertFormatImplementation(
     return CU_assertImplementation(bValue, uiLine, buf, strFile, strFunction, bFatal);
 }
 
-EXPORTED void config_read_string(const char *confdir, const char *s)
+EXPORTED int config_read_string(const char *confdir,
+                                struct buf *err,
+                                const char *s)
 {
     char fname[PATH_MAX] = {0};
     struct buf opt_confdir = BUF_INITIALIZER;
-    struct buf config_err = BUF_INITIALIZER;
     int fd, r;
 
     /* n.b. you should almost always set a confdir, unless you're testing
@@ -318,20 +319,15 @@ EXPORTED void config_read_string(const char *confdir, const char *s)
     }
     config_reset();
 
-    r = config_read(fname, 0, &config_err);
-    if (r) {
-        char tmp[1024];
-
-        /* stack copy of the error string so we don't "leak" the original */
-        snprintf(tmp, sizeof(tmp), "%s", buf_cstring(&config_err));
-        buf_free(&config_err);
-        fatal(tmp, r);
-    }
+    r = config_read(fname, 0, err);
     xunlink(fname);
     close(fd);
+    if (r) return r;
 
     /* make sure libcyrus configdirectory is properly initialised */
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
+
+    return 0;
 }
 
 EXPORTED int cunit_tmpfile(char *buf, size_t len, const char *pattern)

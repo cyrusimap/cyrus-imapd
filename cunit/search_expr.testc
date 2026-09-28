@@ -1435,9 +1435,10 @@ static int set_up(void)
     /* n.b. initalising like this skips the on-shutdown cleanup... */
     search_attr_init();
 
-    config_read_string(DBDIR"/conf",
+    r = config_read_string(DBDIR"/conf", NULL,
         "conversations: yes\n"
     );
+    if (r) return r;
 
     r = mboxname_init_namespace(&ns, isadmin);
     if (r) return r;
