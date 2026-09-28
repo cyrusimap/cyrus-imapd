@@ -8,6 +8,7 @@
 #include <unistd.h>
 #endif
 #include <getopt.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
@@ -23,6 +24,7 @@
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "message.h"
+#include "ptrarray.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xunlink.h"
@@ -33,7 +35,7 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, ENABLE_COMPACTIDS };
+enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, ENABLE_COMPACTIDS};
 
 static int recalc_repair  = 0;
 static int recalc_upgrade = 0;
@@ -348,6 +350,220 @@ static int do_build(const char *userid)
     return r;
 }
 
+// one copy of a message, as recorded in its G record
+struct fixthread_member {
+    int foldernum;
+    uint32_t uid;
+    conversation_id_t cid;
+    conversation_id_t basecid;
+    uint32_t internal_flags;
+    uint64_t nano_internaldate; // 0 if the G record is too old to carry one
+};
+
+struct fixthread_fix {
+    struct fixthread_member m;
+    // what the copy should have; nano_internaldate 0 means leave it alone
+    conversation_id_t cid;
+    conversation_id_t basecid;
+    uint64_t nano_internaldate;
+};
+
+struct fixthread_rock {
+    const char *userid;
+    struct conversations_state *state;
+    int really;
+    // full GUID of the current group ([0]==0 if none) and of the group before it
+    char groupguid[2*MESSAGE_GUID_SIZE+1];
+    char prevguid[2*MESSAGE_GUID_SIZE+1];
+    ptrarray_t members; // struct fixthread_member* for the current group
+    ptrarray_t fixes;   // struct fixthread_fix* accumulated across all groups
+    unsigned nmismatches;
+    unsigned ncollisions;
+};
+
+static const char *fixthread_mboxname(struct fixthread_rock *frock, int foldernum)
+{
+    const char *name = conversations_folder_mboxname(frock->state, foldernum);
+    return name ? name : "<unknown folder>";
+}
+
+// a G record's internaldate is only meaningful once it has been through
+// the v20 nanosecond assignment
+static bool fixthread_has_internaldate(const struct fixthread_member *m)
+{
+    return UTIME_SAFE_NSEC(m->nano_internaldate % 1000000000);
+}
+
+// process one completed GUID group:
+// * every instance must have the same CID, the same split-conversation
+//   state and the same internaldate.
+// * target CID is the highest among non-Expunged copies, which is how a
+//   freshly-threaded message works too.
+// * target internaldate is likewise the highest, the same way reconstruct
+//   would fix it.
+static void fixthread_flush(struct fixthread_rock *frock)
+{
+    int n = ptrarray_size(&frock->members);
+    int i;
+
+    struct fixthread_member *target = NULL;
+    uint64_t target_internaldate = 0;
+    for (i = 0; i < n; i++) {
+        struct fixthread_member *m = ptrarray_nth(&frock->members, i);
+        if (m->internal_flags & FLAG_INTERNAL_EXPUNGED) continue;
+        if (m->cid && (!target || m->cid > target->cid)) target = m;
+        if (fixthread_has_internaldate(m) && m->nano_internaldate > target_internaldate)
+            target_internaldate = m->nano_internaldate;
+    }
+
+    for (i = 0; i < n; i++) {
+        struct fixthread_member *m = ptrarray_nth(&frock->members, i);
+        if (m->internal_flags & FLAG_INTERNAL_EXPUNGED) continue;
+
+        struct buf what = BUF_INITIALIZER;
+        // target could be missing if no active records have a CID.
+        if (target) {
+            int split = !!(m->internal_flags & FLAG_INTERNAL_SPLITCONVERSATION);
+            if (m->cid != target->cid) buf_appendcstr(&what, "CID");
+            else if (m->basecid != target->basecid) buf_appendcstr(&what, "BASECID");
+            else if (split != !!m->basecid) buf_appendcstr(&what, "SPLIT flag");
+        }
+        bool fix_internaldate = fixthread_has_internaldate(m)
+                             && m->nano_internaldate != target_internaldate;
+        if (fix_internaldate) {
+            if (buf_len(&what)) buf_putc(&what, ',');
+            buf_appendcstr(&what, "INTERNALDATE");
+        }
+        if (!buf_len(&what)) {
+            buf_free(&what);
+            continue;
+        }
+        frock->nmismatches++;
+
+        printf("%s %s mismatch! %s %s:%u", frock->userid, buf_cstring(&what),
+               frock->groupguid, fixthread_mboxname(frock, m->foldernum), m->uid);
+        if (target) {
+            printf(" cid " CONV_FMT "/" CONV_FMT " -> " CONV_FMT "/" CONV_FMT,
+                   m->cid, m->basecid, target->cid, target->basecid);
+        }
+        if (fix_internaldate) {
+            printf(" internaldate " UINT64_FMT " -> " UINT64_FMT,
+                   m->nano_internaldate, target_internaldate);
+        }
+        printf("\n");
+        buf_free(&what);
+
+        if (frock->really) {
+            struct fixthread_fix *fix = xzmalloc(sizeof(struct fixthread_fix));
+            fix->m = *m;
+            fix->cid = target ? target->cid : m->cid;
+            fix->basecid = target ? target->basecid : m->basecid;
+            if (fix_internaldate) fix->nano_internaldate = target_internaldate;
+            ptrarray_append(&frock->fixes, fix);
+        }
+    }
+
+    struct fixthread_member *m;
+    while ((m = ptrarray_pop(&frock->members)))
+        free(m);
+    strcpy(frock->prevguid, frock->groupguid);
+    frock->groupguid[0] = '\0';
+}
+
+static int fixthread_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct fixthread_rock *frock = (struct fixthread_rock *)rock;
+
+    if (rec->part) return 0;
+
+    if (strncmp(rec->guidrep, frock->groupguid, 2*MESSAGE_GUID_SIZE)) {
+        fixthread_flush(frock);
+        memcpy(frock->groupguid, rec->guidrep, 2*MESSAGE_GUID_SIZE);
+        frock->groupguid[2*MESSAGE_GUID_SIZE] = '\0';
+
+        // G records sort by GUID, so distinct messages sharing a JMAP EmailId
+        // (the first 24 hex digits) land in adjacent groups.  Nothing to fix,
+        // but somebody should know.
+        if (!strncmp(frock->groupguid, frock->prevguid, 24)) {
+            printf("%s EMAILID COLLISION! %s / %s\n",
+                   frock->userid, frock->prevguid, frock->groupguid);
+            frock->ncollisions++;
+        }
+    }
+
+    struct fixthread_member *m = xzmalloc(sizeof(struct fixthread_member));
+    m->foldernum = rec->foldernum;
+    m->uid = rec->uid;
+    m->cid = rec->cid;
+    m->basecid = rec->basecid;
+    m->internal_flags = rec->internal_flags;
+    if (rec->version >= 4) m->nano_internaldate = rec->nano_internaldate;
+    ptrarray_append(&frock->members, m);
+
+    return 0;
+}
+
+static int apply_fixthread_fix(struct fixthread_rock *frock, struct fixthread_fix *fix)
+{
+    struct mailbox *mailbox = NULL;
+    struct index_record record;
+    const char *mboxname = conversations_folder_mboxname(frock->state, fix->m.foldernum);
+    int r = mboxname ? 0 : IMAP_MAILBOX_NONEXISTENT;
+
+    if (!r) r = mailbox_open_iwl(mboxname, &mailbox);
+    if (!r) r = mailbox_find_index_record(mailbox, fix->m.uid, &record);
+    if (!r) {
+        record.cid = fix->cid;
+        // mailbox_rewrite_index_record clears the flag when basecid is
+        // zero, but never sets it
+        record.basecid = fix->basecid;
+        if (fix->basecid)
+            record.internal_flags |= FLAG_INTERNAL_SPLITCONVERSATION;
+        else
+            record.internal_flags &= ~FLAG_INTERNAL_SPLITCONVERSATION;
+        if (fix->nano_internaldate)
+            TIMESPEC_FROM_NANOSEC(&record.internaldate, fix->nano_internaldate);
+        r = mailbox_rewrite_index_record(mailbox, &record);
+    }
+    if (r) {
+        printf("%s Failed to rewrite %s:%u! %s\n", frock->userid,
+               fixthread_mboxname(frock, fix->m.foldernum), fix->m.uid,
+               error_message(r));
+    }
+    mailbox_close(&mailbox);
+
+    return r;
+}
+
+// report (and if really, queue fixes for) every message whose copies
+// disagree.  Adds the number of problems found to *nfound.
+static int fix_mismatches(struct conversations_state *state, const char *userid,
+                          int really, unsigned *nfound)
+{
+    struct fixthread_rock rock = { userid, state, really, "", "",
+                                   PTRARRAY_INITIALIZER, PTRARRAY_INITIALIZER, 0, 0 };
+    int r = conversations_guid_foreach(state, "", fixthread_cb, &rock);
+    fixthread_flush(&rock); // the final group
+
+    // apply the fixes only now that iteration is complete: rewriting an
+    // index record updates the conversations DB we were iterating over.
+    // Apply them all and report the first failure.
+    int iter_r = r;
+    struct fixthread_fix *fix;
+    while ((fix = ptrarray_pop(&rock.fixes))) {
+        if (!iter_r) {
+            int r2 = apply_fixthread_fix(&rock, fix);
+            if (r2 && !r) r = r2;
+        }
+        free(fix);
+    }
+    ptrarray_fini(&rock.fixes);
+    ptrarray_fini(&rock.members);
+
+    *nfound += rock.nmismatches + rock.ncollisions;
+    return r;
+}
+
 static int recalc_counts_cb(const mbentry_t *mbentry,
                             void *rock __attribute__((unused)))
 {
@@ -397,6 +613,11 @@ static int do_recalc(const char *userid)
         conversations_commit(&state);
         return 0;
     }
+
+    // rewriting could leave stale J records behind, which the recount below cleans up.
+    unsigned nfound = 0;
+    r = fix_mismatches(state, userid, /*really*/1, &nfound);
+    if (r) goto err;
 
     // wipe if it's currently folders_byname, will recreate with byid
     int wipe = state->folders_byname;
@@ -958,6 +1179,14 @@ static int do_audit(const char *userid)
     }
 
     ndiffs += diff_records(state_real, state_temp);
+
+    r = fix_mismatches(state_real, userid, /*really*/0, &ndiffs);
+    if (r) {
+        fprintf(stderr, "Failed to check thread mismatches for %s: %s\n",
+                userid, error_message(r));
+        goto out;
+    }
+
     if (ndiffs)
         printf("%s is BROKEN (%u differences)\n", userid, ndiffs);
     else if (verbose)
@@ -1255,9 +1484,9 @@ static int usage(const char *name)
     fprintf(stderr, "    -d             dump the conversations database to stdout\n");
     fprintf(stderr, "    -z             zero the conversations DB (make all NULLs)\n");
     fprintf(stderr, "    -b             build conversations entries for any NULL records\n");
-    fprintf(stderr, "    -R             recalculate all counts\n");
+    fprintf(stderr, "    -R             fix mismatched copies and recalculate all counts\n");
     fprintf(stderr, "    -U             upgrade to latest version of conversations.db\n");
-    fprintf(stderr, "    -A             audit conversations DB counts\n");
+    fprintf(stderr, "    -A             audit conversations DB counts and thread mismatches\n");
     fprintf(stderr, "    -F             check folder names\n");
     fprintf(stderr, "    -I switch      enable/disable compact emailids.  1/on/yes to enable\n");
     fprintf(stderr, "    -T dir         store temporary data for audit in dir\n");

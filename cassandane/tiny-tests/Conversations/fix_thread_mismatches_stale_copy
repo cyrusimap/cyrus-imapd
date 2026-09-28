@@ -1,0 +1,106 @@
+#!perl
+use Cassandane::Tiny;
+use File::Copy ();
+
+#
+# ctl_conversationsdb -R copes with a G record for a copy that is gone
+#
+# Roll one folder's cyrus.index back to before a copy was made, which leaves
+# the conversations DB holding a G record for a UID the folder doesn't have.
+# Whether that stale copy has the highest CID (so it would be the target if
+# trusted) or a lower one (so a fix would be queued for it), -R must succeed,
+# leave the live copies alone, and drop the stale record.
+#
+sub test_fix_thread_mismatches_stale_copy_wins
+    :Conversations
+    ($self)
+{
+    $self->_check_stale_copy_repair('ffffffffffffffff');
+}
+
+sub test_fix_thread_mismatches_stale_copy_loses
+    :Conversations
+    ($self)
+{
+    $self->_check_stale_copy_repair('0000000000000001');
+}
+
+sub _check_stale_copy_repair
+{
+    my ($self, $stale_cid) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "create a message and copy it to foo";
+    my $msg = $self->make_message("Message A");
+    my $cidA = $msg->make_cid();
+    $talk->create("foo") || die;
+    $talk->create("stale") || die;
+    $talk->select("INBOX");
+    $talk->copy("1", "foo") || die;
+
+    my $stalefile = $self->_index_path('INBOX.stale');
+    my $staledir = $self->{instance}->folder_to_directory('INBOX.stale');
+    my $snapshot = "$self->{instance}->{basedir}/stale.index";
+
+    xlog $self, "snapshot the empty stale folder, then copy the message in";
+    $self->{store}->disconnect();
+    File::Copy::copy($stalefile, $snapshot) || die "copy: $!";
+    $talk = $self->{store}->get_client();
+    $talk->select("INBOX");
+    $talk->copy("1", "stale") || die;
+    $self->{store}->disconnect();
+
+    xlog $self, "give the stale copy CID $stale_cid and record it in its G record";
+    $self->_set_index_cid($stalefile, 1, $stale_cid, undef, 0);
+    $talk = $self->{store}->get_client();
+    $talk->select("stale");
+    $talk->store('1', '+flags', '(\\Flagged)') || die;
+    $self->{store}->disconnect();
+
+    xlog $self, "roll the stale folder back so its G record points at nothing";
+    File::Copy::copy($snapshot, $stalefile) || die "copy: $!";
+    unlink("$staledir/1.") || die "unlink: $!";
+    $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f', '-q');
+
+    $talk = $self->{store}->get_client();
+    $talk->select("stale");
+    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+    $self->assert_num_equals(3, $self->_count_toplevel_g_records());
+
+    xlog $self, "audit notices something is wrong";
+    my $out = "$self->{instance}->{basedir}/audit.out";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $out } },
+        'ctl_conversationsdb', '-A', 'cassandane');
+    $self->assert_matches(qr/cassandane is BROKEN/, slurp_file($out));
+
+    xlog $self, "update-counts succeeds";
+    $self->{instance}->run_command({ cyrus => 1 },
+        'ctl_conversationsdb', '-R', 'cassandane');
+
+    xlog $self, "the live copies kept their CID and the stale record is gone";
+    for my $folder (qw(INBOX foo)) {
+        $self->assert_str_equals($cidA, $self->_fetch_cid($talk, $folder, 1));
+    }
+    $self->assert_num_equals(2, $self->_count_toplevel_g_records());
+
+    xlog $self, "the audit is now clean";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $out } },
+        'ctl_conversationsdb', '-A', 'cassandane');
+    $self->assert_str_equals('', slurp_file($out));
+}
+
+# the number of G records for whole messages (not parts) in cassandane's
+# conversations DB
+sub _count_toplevel_g_records
+{
+    my ($self) = @_;
+    my $out = "$self->{instance}->{basedir}/conversations.dump";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $out } },
+        'ctl_conversationsdb', '-d', 'cassandane');
+    my @records = grep { /^G[0-9a-f]{40}:\d+:\d+\t/ } split /\n/, slurp_file($out);
+    return scalar @records;
+}

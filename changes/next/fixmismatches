@@ -1,0 +1,26 @@
+Description:
+
+ctl_conversationsdb -R now also repairs messages whose copies in
+different folders disagree about their conversation id, split state or
+internaldate, so it fixes everything -A reports.  -A reports those
+disagreements alongside count differences.
+
+
+Documentation:
+
+ctl_conversationsdb(8)
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None
