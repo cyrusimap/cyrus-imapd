@@ -46,9 +46,20 @@ run by naming suites and individual tests:
     dar test ~Quota              # everything except the Quota suite
 
 Names accumulate from left to right, and any name can be negated with ``!`` or
-``~`` (``~`` is usually easier to slip past the shell).  ``dar test`` also
-exposes the options most people reach for — ``--slow``, ``--rerun``,
-``--valgrind``, ``-j``, and so on; run ``dar test --help`` to see them.
+``~`` (``~`` is usually easier to slip past the shell).
+
+A test can also be named by the path to the file it lives in, as typed from
+the top of the repository.  This makes tab completion do what you want.
+
+.. code::
+
+    dar test cassandane/tiny-tests/Quota/quotarename
+    dar test cassandane/tiny-tests/Quota/        # the whole suite
+    dar test cassandane/Cassandane/TestSuite/Quota.pm
+
+``dar test`` also exposes the options most people reach for — ``--slow``,
+``--rerun``, ``--valgrind``, ``-j``, and so on; run ``dar test --help`` to see
+them.
 
 Underneath, the actual runner is ``cassandane/testrunner.pl``, run as the
 ``cyrus`` user from inside the ``cassandane`` directory.  You need it directly

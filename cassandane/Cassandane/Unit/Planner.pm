@@ -59,6 +59,9 @@ sub _suites ($self)
 # A specification, with its negation stripped and its separators flattened:
 # '.', '/' and '::' all mean the same thing, and '+' stands in for '*',
 # because '*' can't be typed unquoted at a shell prompt.
+#
+# A test can also be named by the path to the file holding it, as typed from
+# the top of the repository, so that a shell can complete one.
 sub _split_spec ($name)
 {
     my ($neg, $path) = ($name =~ m/^([~!]?)(.*)$/);
@@ -71,7 +74,16 @@ sub _split_spec ($name)
     $path =~ s{/$}{};
     $path =~ s/\+/*/g;
 
-    return (($neg ne q{}), [ split m{/}, $path ]);
+    my $parts = [ split m{/}, $path ];
+
+    if (@$parts and $parts->[0] eq 'cassandane') {
+        shift @$parts;
+        shift @$parts if @$parts and $parts->[0] eq 'tiny-tests';
+
+        die "path-like spec was not specific enough: $name" if not @$parts;
+    }
+
+    return (($neg ne q{}), $parts);
 }
 
 # Do the wanted components, which may be globs, match the last components of

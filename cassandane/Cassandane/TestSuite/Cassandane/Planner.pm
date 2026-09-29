@@ -69,6 +69,14 @@ sub assert_plan_dies ($self, $specs, $qr)
     eval { _fixture_plan($specs) };
     my $e = $@;
 
+    # Ugh.  So, say you called ->assert_plan_dies($spec, qr{abcdef}).  The
+    # exception thrown will, if confess-ified, contain the args to the original
+    # method, which will stringify to (?^:abcdef), which means the regex will
+    # match the stack trace because the regex is *in* the stack trace.
+    #
+    # Let's promise to only assert about the first line.
+    ($e) = split /\v/, $e;
+
     $self->assert_matches($qr, $e);
 }
 
@@ -103,6 +111,58 @@ sub test_suite_naming ($self)
     {
         $self->assert_plan([$spec], \@GLOB_ONE);
     }
+}
+
+sub test_file_paths ($self)
+{
+    # A test can be named by the path to the file it lives in, so that a shell
+    # can complete it.
+    $self->assert_plan(['cassandane/tiny-tests/GlobOne/beta'],
+                       [qw(Alpha::GlobOne.beta)]);
+
+    # We've quietly stripped leading . and /, which is sort of weird, but it
+    # makes the "tab complete to a test" case simple, so let's not accidentally
+    # lose that behavior.
+    $self->assert_plan(['./cassandane/tiny-tests/GlobOne/beta'],
+                       [qw(Alpha::GlobOne.beta)]);
+
+    # The directory alone is the whole suite, with or without a slash.
+    $self->assert_plan(['cassandane/tiny-tests/GlobOne'], \@GLOB_ONE);
+    $self->assert_plan(['cassandane/tiny-tests/GlobOne/'], \@GLOB_ONE);
+
+    # A glob still globs, for a shell that didn't expand it first
+    $self->assert_plan(['cassandane/tiny-tests/GlobOne/b*'],
+                       [qw(Alpha::GlobOne.beta)]);
+
+    # a suite module's own path works too, from the top of the repository
+    $self->assert_plan(['cassandane/Cassandane/Fixture/Planner/Alpha/GlobOne.pm'],
+                       \@GLOB_ONE);
+    $self->assert_plan(["cassandane/$BETA"],
+                       [qw(Beta::GlobThree.alpha Beta::Shared.from_beta)]);
+
+    # a path can be negated like any other name
+    $self->assert_plan(['GlobOne', '!cassandane/tiny-tests/GlobOne/beta'],
+                       [qw(Alpha::GlobOne.alpha Alpha::GlobOne.gamma_slow)]);
+
+    # ... but only as typed from the top of the repository.  A path starting
+    # inside the cassandane directory, or an absolute one, is not a name.
+    $self->assert_plan_dies(['tiny-tests/GlobOne/beta'],
+                            qr{Unrecognised test specification: });
+    $self->assert_plan_dies(['/src/cyrus-imapd/cassandane/tiny-tests/GlobOne/beta'],
+                            qr{Unrecognised test specification: });
+
+    # Asking for a path without reaching anything specific is no good.  If
+    # nothing else, we can't deal with cassandane/tiny-tests as a means to
+    # distinguish "just the tiny tests" from ones in the modules.
+    $self->assert_plan_dies(['cassandane'],
+                            qr{not specific enough: cassandane});
+    $self->assert_plan_dies(['cassandane/tiny-tests'],
+                            qr{not specific enough: cassandane/tiny-tests});
+
+    # Resolving a path is lexical, so a path that isn't there fails the same
+    # way a name that isn't there does.
+    $self->assert_plan_dies(['cassandane/tiny-tests/Nonesuch/beta'],
+                            qr{Unrecognised test specification: });
 }
 
 sub test_separators_are_interchangeable ($self)
