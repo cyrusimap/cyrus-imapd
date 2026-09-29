@@ -22,6 +22,8 @@ struct tls_alpn_t {
     void *rock;
 };
 
+#include <stdbool.h>
+
 #include <openssl/ssl.h>
 
 #include "global.h" /* for saslprops_t */
@@ -41,6 +43,22 @@ int tls_start_servertls(int readfd, int writefd, int timeout,
                         struct saslprops_t *saslprops,
                         const struct tls_alpn_t *alpn_map,
                         SSL **ret);
+
+/* Accept TLS 1.3 early data on connections tls_start_servertls_early()
+ * starts.  Since early data can be replayed, each session can then be
+ * resumed only once.  Returns false if sessions aren't being cached. */
+bool tls_enable_early_data(void);
+
+/* tls_start_servertls() on the fds of pin and pout, which accepts early
+ * data if enabled: it then returns with the handshake still open and the
+ * first of it in pin, which must not have read anything yet.  pin reads
+ * the rest, then finishes the handshake, so SSL_is_init_finished() is 0
+ * exactly while pin is handing out early data. */
+int tls_start_servertls_early(struct protstream *pin,
+                              struct protstream *pout, int timeout,
+                              struct saslprops_t *saslprops,
+                              const struct tls_alpn_t *alpn_map,
+                              SSL **ret);
 
 int tls_start_clienttls(int readfd, int writefd,
                         int *layerbits, char **authid,

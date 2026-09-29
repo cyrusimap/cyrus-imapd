@@ -179,6 +179,56 @@ EXPORTED int prot_setisclient(struct protstream *s, int val)
     return 0;
 }
 
+/* Returned by prot_tls_read() when the handshake moved on but there's no
+ * data yet */
+#define PROT_TLS_NO_DATA (-2)
+
+/*
+ * SSL_read(), unless the peer is a client whose early data we accepted and
+ * the handshake isn't complete: OpenSSL won't let a server call SSL_read()
+ * until SSL_read_early_data() has read all of that.
+ * Then complete the handshake without waiting for more data,
+ * which the client may be holding back until we answer the early data.
+ *
+ * Callers rely on the handshake completing here, only once the early data
+ * has all been read and never sooner: while it's open, every byte handed
+ * out came in early data (see http1_input() and begin_headers_cb()).
+ */
+static int prot_tls_read(struct protstream *s)
+{
+    size_t n = 0;
+
+    if (SSL_is_init_finished(s->tls_conn)) {
+        return SSL_read(s->tls_conn, (char *) s->buf, PROT_BUFSIZE);
+    }
+
+    switch (SSL_read_early_data(s->tls_conn, s->buf, PROT_BUFSIZE, &n)) {
+    case SSL_READ_EARLY_DATA_SUCCESS:
+        return n ? (int) n : PROT_TLS_NO_DATA;
+
+    case SSL_READ_EARLY_DATA_FINISH:
+        if (SSL_do_handshake(s->tls_conn) == 1) return PROT_TLS_NO_DATA;
+        GCC_FALLTHROUGH
+
+    default:
+        if (!errno) errno = EPROTO;
+        return -1;
+    }
+}
+
+/* SSL_write(), or SSL_write_early_data() while prot_tls_read() is still
+ * reading a client's early data, as OpenSSL requires */
+static int prot_tls_write(struct protstream *s, const char *buf, size_t len)
+{
+    size_t n = 0;
+
+    if (SSL_is_init_finished(s->tls_conn)) {
+        return SSL_write(s->tls_conn, buf, len);
+    }
+
+    return SSL_write_early_data(s->tls_conn, buf, len, &n) ? (int) n : -1;
+}
+
 /*
  * Turn on TLS for this connection
  */
@@ -727,13 +777,16 @@ EXPORTED int prot_fill(struct protstream *s)
             }
             /* just do a SSL read instead if we're under a tls layer */
             else if (s->tls_conn != NULL) {
-                n = SSL_read(s->tls_conn, (char *) s->buf, PROT_BUFSIZE);
+                n = prot_tls_read(s);
             }
             else {
                 n = read(s->fd, s->buf, PROT_BUFSIZE);
             }
             cmdtime_netend();
         } while (n == -1 && errno == EINTR && !signals_poll());
+
+        /* The handshake moved on, but no data came of it: wait again */
+        if (n == PROT_TLS_NO_DATA) continue;
 
         if (n <= 0) {
             if (n) s->error = xstrdup(strerror(errno));
@@ -936,7 +989,7 @@ static int prot_flush_writebuffer(struct protstream *s,
     do {
         cmdtime_netstart();
         if (s->tls_conn != NULL) {
-            n = SSL_write(s->tls_conn, (char *)buf, len);
+            n = prot_tls_write(s, buf, len);
         } else {
             n = write(s->fd, buf, len);
         }

@@ -1,7 +1,15 @@
 Name: tls_eccurve
 Type: STRING
-Default-Value: prime256v1
-Last-Modified: 2.5.0
+Default-Value: X25519MLKEM768:X25519:prime256v1:secp384r1
+Last-Modified: UNRELEASED
 
-The elliptic curve used for ECDHE. Default is NIST Suite B prime256.  See
-'openssl ecparam -list_curves' for possible values.
+Colon-separated list of the groups (elliptic curves and hybrid
+post-quantum key exchanges) offered for ECDHE, most preferred first.
+Groups this build of OpenSSL doesn't support are skipped.  See
+'openssl list -tls-groups' for possible values.
+
+A TLS 1.3 client guesses which group the server will take and sends a key
+share for it up front.  If the server offers none of the client's guesses,
+it answers with a HelloRetryRequest, which costs an extra round trip on
+every connection and rules out 0-RTT early data, so keep the groups
+popular clients lead with (X25519MLKEM768 and X25519) near the front.

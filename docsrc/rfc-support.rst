@@ -770,6 +770,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP "$Important" Keyword and "\Important" Special-Use Attribute
 
+:rfc:`8470`
+
+    Using Early Data in HTTP
+
 :rfc:`8474`
 
     IMAP Extension for Object Identifiers
@@ -1020,10 +1024,6 @@ RFC Wishlist
 :rfc:`6785`
 
     Support for Internet Message Access Protocol (IMAP) Events in Sieve
-
-:rfc:`8470`
-
-    Using Early Data in HTTP
 
 :rfc:`9738`
 

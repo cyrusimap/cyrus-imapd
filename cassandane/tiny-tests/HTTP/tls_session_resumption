@@ -72,3 +72,43 @@ sub test_tls_session_resumption_tls12
     # The client offers a session ticket; the server resumes by session ID
     assert_resumes_across_processes($self, 'TLSv1_2');
 }
+
+sub test_tls_session_resumption_abrupt_close
+    :NoStartInstances
+    ($self)
+{
+    my $service = start_one_connection_https($self);
+    my $ctx = IO::Socket::SSL::SSL_Context->new(
+        SSL_verify_mode => SSL_VERIFY_NONE,
+        SSL_version => 'TLSv1_3',
+        SSL_session_cache_size => 4,
+    );
+    $self->assert_not_null($ctx, "TLS context failed: $SSL_ERROR");
+
+    my $sock = IO::Socket::SSL->new(
+        PeerAddr => $service->host,
+        PeerPort => $service->port,
+        SSL_reuse_ctx => $ctx,
+        SSL_session_key => 'httpsonce',
+    );
+    $self->assert_not_null($sock, "TLS connect failed: $SSL_ERROR");
+
+    # Keep the connection open after the response, which comes after the
+    # ticket, and then drop it without a close_notify, as browsers often
+    # do.  The server must not take that for a failed connection and
+    # throw the session away.
+    print $sock "HEAD /.well-known HTTP/1.1\r\n"
+              . "Host: " . $service->host . "\r\n\r\n";
+    my $status = <$sock>;
+    $self->assert_matches(qr{^HTTP/1\.1 200 }, $status);
+    while (my $line = <$sock>) { last if $line eq "\r\n" }
+
+    # Marking the shutdown done keeps our own end from dropping the session
+    Net::SSLeay::set_shutdown($sock->_get_ssl_object,
+                              Net::SSLeay::SENT_SHUTDOWN()
+                              | Net::SSLeay::RECEIVED_SHUTDOWN());
+    $sock->close(SSL_no_shutdown => 1);
+
+    $self->assert(https_request_resumed($self, $service, $ctx),
+                  "session was dropped by a close without close_notify");
+}

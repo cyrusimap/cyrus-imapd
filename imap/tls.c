@@ -78,6 +78,7 @@
 #include "assert.h"
 #include "hash.h"
 #include "nonblock.h"
+#include "prot.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "tls.h"
@@ -105,6 +106,11 @@ static SSL_CTX *s_ctx = NULL, *c_ctx = NULL;
 static int tls_serverengine = 0; /* server engine initialized? */
 static int tls_clientengine = 0; /* client engine initialized? */
 static int do_dump = 0;         /* actively dumping protocol? */
+
+static int early_data_enabled = 0; /* accept TLS 1.3 early data? */
+
+/* How much early data a resumed client may send (one record) */
+#define TLS_MAX_EARLY_DATA (16384)
 
 
 EXPORTED int tls_enabled(void)
@@ -306,6 +312,42 @@ static int tls_dump(const char *s, int len)
     }
 #endif
     return (ret);
+}
+
+/*
+ * Offer the key exchange groups in the colon-separated list, in order of
+ * preference.  Names this OpenSSL doesn't know are skipped, so one list
+ * can name groups (like X25519MLKEM768) that only newer versions have.
+ */
+static void set_groups(SSL_CTX *ctx, const char *list)
+{
+    strarray_t *names = strarray_split(list, ":", STRARRAY_TRIM);
+    struct buf known = BUF_INITIALIZER;
+    int i;
+
+    for (i = 0; i < strarray_size(names); i++) {
+        const char *name = strarray_nth(names, i);
+
+        if (SSL_CTX_set1_groups_list(ctx, name)) {
+            if (buf_len(&known)) buf_putc(&known, ':');
+            buf_appendcstr(&known, name);
+        }
+        else {
+            xsyslog(LOG_WARNING, "unknown TLS group", "group=<%s>", name);
+        }
+    }
+    ERR_clear_error();
+
+    /* An empty list leaves OpenSSL's own default */
+    if (buf_len(&known) &&
+        !SSL_CTX_set1_groups_list(ctx, buf_cstring(&known))) {
+        xsyslog(LOG_ERR, "cannot set TLS groups", "groups=<%s>",
+                buf_cstring(&known));
+        ERR_clear_error();
+    }
+
+    buf_free(&known);
+    strarray_free(names);
 }
 
  /*
@@ -576,6 +618,75 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
 
     *copy = 0;
     return sess;
+}
+
+/*
+ * Like get_session_cb(), but a session can be taken only once: fetch
+ * and delete happen in one transaction, so two processes can't both
+ * resume it.  This is what makes 0-RTT early data replay-safe across
+ * processes (RFC 8446 8.1): a replayed ClientHello finds its session
+ * gone and gets a full handshake, with its early data ignored.
+ */
+static SSL_SESSION *take_session_cb(SSL *ssl __attribute__((unused)),
+                                    const unsigned char *id, int idlen,
+                                    int *copy)
+{
+    struct txn *tid = NULL;
+    const char *data = NULL;
+    size_t len = 0;
+    SSL_SESSION *sess = NULL;
+    int r;
+
+    *copy = 0;
+    if (!sess_dbopen || !idlen) return NULL;
+
+    do {
+        r = cyrusdb_fetchlock(sessdb, (const char *) id, idlen,
+                              &data, &len, &tid);
+    } while (r == CYRUSDB_AGAIN);
+
+    if (!r && data && len >= sizeof(time_t)) {
+        time_t expire;
+
+        memcpy(&expire, data, sizeof(time_t));
+        if (expire >= time(NULL)) {
+            const unsigned char *asn =
+                (const unsigned char *) data + sizeof(time_t);
+
+            sess = d2i_SSL_SESSION(NULL, &asn, len - sizeof(time_t));
+        }
+        r = cyrusdb_delete(sessdb, (const char *) id, idlen, &tid, 1);
+    }
+
+    if (tid) {
+        if (r) cyrusdb_abort(sessdb, tid);
+        else r = cyrusdb_commit(sessdb, tid);
+    }
+    if (r && sess) {
+        /* Couldn't prove it was removed, so don't resume from it */
+        SSL_SESSION_free(sess);
+        sess = NULL;
+    }
+
+    return sess;
+}
+
+EXPORTED bool tls_enable_early_data(void)
+{
+    assert(tls_serverengine);
+
+    /* Without the session database there's nothing to resume */
+    if (!sess_dbopen) return false;
+
+    /* Taking a session uses up its ticket, which is what stops replays;
+     * OpenSSL's own check needs its in-process cache */
+    SSL_CTX_sess_set_get_cb(s_ctx, take_session_cb);
+    SSL_CTX_set_options(s_ctx, SSL_OP_NO_ANTI_REPLAY);
+    SSL_CTX_set_max_early_data(s_ctx, TLS_MAX_EARLY_DATA);
+    SSL_CTX_set_recv_max_early_data(s_ctx, TLS_MAX_EARLY_DATA);
+    early_data_enabled = 1;
+
+    return true;
 }
 
 /*
@@ -876,11 +987,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     SSL_CTX_set_dh_auto(s_ctx, 1);
 
-    const char *ec = config_getstring(IMAPOPT_TLS_ECCURVE);
-    int openssl_nid = OBJ_sn2nid(ec);
-    if (openssl_nid != 0) {
-        SSL_CTX_set1_curves(s_ctx, &openssl_nid, 1);
-    }
+    set_groups(s_ctx, config_getstring(IMAPOPT_TLS_ECCURVE));
 
     verify_depth = verifydepth;
 
@@ -956,8 +1063,14 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     /* No stateless tickets: they're encrypted with keys each process
      * makes up for itself, so only the issuing process could resume
      * them.  A TLS 1.3 ticket then just names a session in the session
-     * database, and TLS 1.2 clients resume by session ID. */
-    SSL_CTX_set_options(s_ctx, SSL_OP_NO_TICKET);
+     * database, and TLS 1.2 clients resume by session ID.
+     *
+     * A client that just closes the connection, as browsers often do,
+     * isn't an error: OpenSSL would otherwise take the missing
+     * close_notify for one, and drop the session from the database.  Our
+     * protocols frame their own messages, so truncation can't go unseen. */
+    SSL_CTX_set_options(s_ctx,
+                        SSL_OP_NO_TICKET | SSL_OP_IGNORE_UNEXPECTED_EOF);
 
     /* A timeout of zero disables session caching */
     if (!timeout) SSL_CTX_set_num_tickets(s_ctx, 0);
@@ -1035,6 +1148,69 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp,
 
 
 
+/*
+ * Wait up to timeout seconds for fd to be readable (or, if want_write,
+ * writable).  Returns 1 when it is, 0 on timeout, -1 on error.
+ */
+static int wait_for_fd(int fd, int want_write, int timeout)
+{
+    fd_set fds;
+    struct timeval tv = { .tv_sec = timeout };
+
+    FD_ZERO(&fds);
+    FD_SET(fd, &fds);
+
+    return select(fd + 1, want_write ? NULL : &fds, want_write ? &fds : NULL,
+                  NULL, &tv);
+}
+
+/*
+ * The first read on a connection that may carry early data has to be
+ * SSL_read_early_data().  Read it straight into pin, as prot_fill()
+ * would (pin has no SASL or compression layer yet).
+ *
+ * Returns 1 if early data was accepted, leaving the rest of it and the
+ * end of the handshake to pin; 0 if there was none, or it was rejected,
+ * so SSL_accept() finishes the handshake; -1 on failure.
+ */
+static int read_early_data(SSL *conn, struct protstream *pin, int timeout)
+{
+    assert(!pin->write && !pin->cnt);
+
+    for (;;) {
+        size_t n = 0;
+        int r, err;
+
+        r = SSL_read_early_data(conn, pin->buf, PROT_BUFSIZE, &n);
+        if (r == SSL_READ_EARLY_DATA_FINISH) return 0;
+        if (r == SSL_READ_EARLY_DATA_SUCCESS) {
+            if (!n) continue;
+            pin->ptr = pin->buf;
+            pin->cnt = n;
+            pin->can_unget = 0;
+            return 1;
+        }
+
+        err = SSL_get_error(conn, 0);
+        if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
+            r = wait_for_fd(err == SSL_ERROR_WANT_WRITE ?
+                            SSL_get_wfd(conn) : pin->fd,
+                            err == SSL_ERROR_WANT_WRITE, timeout);
+            if (r > 0) continue;
+            if (r == 0) syslog(LOG_DEBUG, "SSL_read_early_data() timed out");
+        }
+        else if (err == SSL_ERROR_SYSCALL && errno == EINTR) {
+            continue;
+        }
+        else {
+            syslog(LOG_DEBUG, "SSL_read_early_data() failed: %s",
+                   ERR_reason_error_string(ERR_get_error()));
+        }
+
+        return -1;
+    }
+}
+
  /*
   * This is the actual startup routine for the connection. We expect
   * that the buffers are flushed and the "Ready to start TLS" was
@@ -1044,11 +1220,14 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp,
   * 'layerbits' and 'authid' are filled in on success. authid is only
   * filled in if the client authenticated. 'ret' is the SSL connection
   * on success.
+  *
+  * With early_in (the input protstream on readfd), early data may be
+  * accepted into it; see tls_start_servertls_early().
   */
-EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
-                                 struct saslprops_t *saslprops,
-                                 const struct tls_alpn_t *alpn_map,
-                                 SSL **ret)
+static int start_servertls(int readfd, int writefd, int timeout,
+                           struct saslprops_t *saslprops,
+                           const struct tls_alpn_t *alpn_map,
+                           struct protstream *early_in, SSL **ret)
 {
     int     sts;
     unsigned int n;
@@ -1062,6 +1241,7 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
     int tls_cipher_usebits = 0;
     int tls_cipher_algbits = 0;
     SSL *tls_conn;
+    int early = 0;
     int r = 0;
 
     assert(tls_serverengine);
@@ -1110,17 +1290,20 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
         do_dump = 1;
 
     nonblock(readfd, 1);
-    while (1) {
-        fd_set rfds;
-        struct timeval tv;
+
+    if (early_data_enabled && early_in) {
+        early = read_early_data(tls_conn, early_in, timeout);
+        if (early < 0) {
+            r = -1;
+            goto done;
+        }
+    }
+
+    /* Unless the reader will finish it, as it reads the early data */
+    while (!early) {
         int err;
 
-        FD_ZERO(&rfds);
-        FD_SET(readfd, &rfds);
-        tv.tv_sec = timeout;
-        tv.tv_usec = 0;
-
-        sts = select(readfd+1, &rfds, NULL, NULL, &tv);
+        sts = wait_for_fd(readfd, 0, timeout);
         if (sts <= 0) {
             if (sts == 0) {
                 syslog(LOG_DEBUG, "SSL_accept() timed out -> fail");
@@ -1270,6 +1453,8 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
                    alpn_len, (const char *) alpn);
     }
 
+    if (early) buf_appendcstr(&log, "; early data accepted");
+
     syslog(LOG_NOTICE, "%s", buf_cstring(&log));
     buf_free(&log);
 
@@ -1286,6 +1471,25 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
     }
     *ret = tls_conn;
     return r;
+}
+
+EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
+                                 struct saslprops_t *saslprops,
+                                 const struct tls_alpn_t *alpn_map,
+                                 SSL **ret)
+{
+    return start_servertls(readfd, writefd, timeout, saslprops, alpn_map,
+                           NULL, ret);
+}
+
+EXPORTED int tls_start_servertls_early(struct protstream *pin,
+                                       struct protstream *pout, int timeout,
+                                       struct saslprops_t *saslprops,
+                                       const struct tls_alpn_t *alpn_map,
+                                       SSL **ret)
+{
+    return start_servertls(pin->fd, pout->fd, timeout, saslprops, alpn_map,
+                           pin, ret);
 }
 
 /* query which (if any) ALPN protocol was chosen

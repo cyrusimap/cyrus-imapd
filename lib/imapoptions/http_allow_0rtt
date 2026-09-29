@@ -1,0 +1,16 @@
+Name: http_allow_0rtt
+Type: SWITCH
+Default-Value: 0
+Last-Modified: UNRELEASED
+
+Whether to accept TLS 1.3 early data (0-RTT) on HTTPS connections, so a
+client resuming an earlier session can send its first requests without
+waiting a round trip for the handshake.
+
+Early data can be replayed, so each session can then be resumed only once
+(TLS 1.2 clients included), and an early request with an unsafe method,
+such as PUT, POST or DELETE, is answered with 425 Too Early (RFC 8470)
+for the client to repeat after the handshake.
+
+Only affects httpd services started with -s, and needs a nonzero
+tls_session_timeout.
