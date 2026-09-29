@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_keywords_shared_slash_bypass
+    :needs_component_sieve
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Create owner and share their Inbox read-only";
+    $self->{instance}->create_user("foo");
+    $admintalk->setacl("user.foo", "cassandane", "lr") or die;
+
+    xlog $self, "Deliver a fresh unread message to the owner's Inbox";
+    $self->{adminstore}->set_folder('user.foo');
+    $self->make_message("An Email", store => $self->{adminstore}) or die;
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { accountId => 'foo' }, "R1"],
+    ]);
+    my $id = $res->[0][1]{ids}[0];
+    $self->assert_not_null($id);
+
+    xlog $self, "Sharee cannot ordinarily set \$seen or a keyword";
+    $res = $jmap->CallMethods([['Email/set', {
+        accountId => 'foo',
+        update => { $id => { keywords => { '$seen' => JSON::true } } },
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{notUpdated}{$id});
+
+    xlog $self, "Sharee patches keywords using a slash in the keyword name";
+    $res = $jmap->CallMethods([['Email/set', {
+        accountId => 'foo',
+        update => { $id => {
+            'keywords/$seen' => JSON::true,
+            'keywords/attacker/placed/this/keyword' => JSON::true,
+        } },
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{notUpdated}{$id});
+
+    xlog $self, "Make sure neither \$seen nor the keyword got set";
+    $res = $jmap->CallMethods([
+        ['Email/get', {
+            accountId => 'foo',
+            ids => [$id],
+            properties => ['keywords'],
+        }, "R1"],
+    ]);
+    $self->assert_deep_equals({}, $res->[0][1]{list}[0]{keywords});
+}
