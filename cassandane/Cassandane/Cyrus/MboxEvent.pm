@@ -34,7 +34,12 @@ sub new
 
     # The default value of event_extra_params is just 'timestamp'; opt in
     # to the parameters individual tests want to inspect.
-    $config->set(event_extra_params => 'timestamp vnd.fastmail.traceId');
+    $config->set(event_extra_params =>
+        'timestamp vnd.fastmail.traceId vnd.fastmail.jmapStates');
+
+    # vnd.fastmail.jmapStates reports the per-type JMAP modseqs, which are only
+    # tracked when conversations are enabled.
+    $config->set(conversations => 'yes');
 
     # Enable enough HTTP to drive CalDAV requests from tests that want to
     # exercise the http engine's contribution to events (e.g. X-Trace-Id).
