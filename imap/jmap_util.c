@@ -426,6 +426,7 @@ EXPORTED int jmap_email_keyword_is_valid(const char *keyword)
             case '*':
             case '"':
             case '\\':
+            case '/':
                 return 0;
             default:
                 ;
