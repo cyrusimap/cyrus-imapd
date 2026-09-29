@@ -1,0 +1,128 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_get_hideattendees_alternate_representations
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $cal = $self->default_user->calendars->default;
+    my $default_cal_id = $cal->id;
+
+    my $hidden_addr = 'hidden@example.invalid';
+    my $participants = {
+        owner => {
+            roles => { owner => JSON::true, attendee => JSON::true },
+            calendarAddress => 'mailto:cassandane@example.com',
+        },
+        hidden => {
+            roles => { attendee => JSON::true },
+            calendarAddress => "mailto:$hidden_addr",
+        },
+    };
+
+    xlog $self, "create a hideAttendees event";
+    my $event = $cal->create_event({
+        hideAttendees => JSON::true,
+        participants => $participants,
+    });
+    my $eventId = $event->id;
+
+    xlog $self, "share the calendar read-only";
+    my $sharee_user = $self->{instance}->create_user('sharee');
+    my $sharee_jmap = $sharee_user->jmap;
+    my $sharee_cal_id = $sharee_user->calendars->default->id;
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $default_cal_id => {
+                    shareWith => {
+                        sharee => { mayReadItems => JSON::true },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
+
+    xlog $self, "sharee's JSON view omits the hidden participant";
+    $res = $sharee_jmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$eventId],
+            properties => ['participants', 'blobId'],
+        }, 'R1'],
+    ]);
+    my $shared_event = $res->[0][1]{list}[0];
+    $self->assert_cmp_deeply(
+        ['owner'],
+        [ sort keys %{$shared_event->{participants} // {}} ],
+    );
+
+    xlog $self, "the blob must not let the sharee recover the hidden participant";
+    $self->assert_not_null($shared_event->{blobId});
+    my $download = $sharee_jmap->Download('cassandane', $shared_event->{blobId});
+    $self->assert_num_equals(-1, index($download->{content}, $hidden_addr));
+
+    xlog $self, "CalendarEvent/copy must not carry the hidden participant along";
+    $res = $sharee_jmap->CallMethods([
+        ['CalendarEvent/copy', {
+            fromAccountId => 'cassandane',
+            accountId => 'sharee',
+            create => {
+                event1copy => {
+                    id => $eventId,
+                    calendarIds => { $sharee_cal_id => JSON::true },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $copyId = $res->[0][1]{created}{event1copy}{id};
+    $self->assert_not_null($copyId);
+
+    $res = $sharee_jmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'sharee',
+            ids => [$copyId],
+            properties => ['participants'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        ['owner'],
+        [ sort keys %{$res->[0][1]{list}[0]{participants} // {}} ],
+    );
+
+    xlog $self, "grant mayWriteAll and confirm the full view still works";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $default_cal_id => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                            mayWriteAll => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
+
+    $res = $sharee_jmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$eventId],
+            properties => ['participants', 'blobId'],
+        }, 'R1'],
+    ]);
+    $shared_event = $res->[0][1]{list}[0];
+    $self->assert_cmp_deeply(
+        ['hidden', 'owner'],
+        [ sort keys %{$shared_event->{participants} // {}} ],
+    );
+    $self->assert_not_null($shared_event->{blobId});
+
+    $download = $sharee_jmap->Download('cassandane', $shared_event->{blobId});
+    $self->assert_num_not_equals(-1, index($download->{content}, $hidden_addr));
+}
