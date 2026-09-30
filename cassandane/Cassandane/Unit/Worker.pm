@@ -13,6 +13,7 @@ use JSON::XS ();
 use Scalar::Util ();
 
 use Cassandane::Exception;
+use Cassandane::Util::Log;
 use Cassandane::Failure;
 
 # $0 as it was before a worker renamed itself, so that it can keep saying which
@@ -176,15 +177,21 @@ sub _run_test
 
     if ($test->can('post_tear_down'))
     {
-        eval
+        my $cleaned_up = eval { $test->post_tear_down($outcome->{outcome}); 1 };
+
+        if (not $cleaned_up)
         {
-            $test->post_tear_down($outcome->{outcome});
-        };
-        my $ex = $@;
-        if ($ex)
-        {
-            my $report = _report_from_exception($ex);
-            $outcome = { outcome => 'error', report => $report };
+            my $report = _report_from_exception($@);
+
+            # What post_tear_down finds wrong is usually a consequence of the
+            # test going wrong, so it only becomes the answer when the test
+            # had none of its own.  Same rule run_bare uses for tear_down.
+            if (defined $outcome->{report}) {
+                xlog "post_tear_down failed: $report";
+            }
+            else {
+                $outcome = { outcome => 'error', report => $report };
+            }
         }
     }
 
