@@ -322,6 +322,133 @@ Security fixes
 
   Reported by: Michael Lynch (mtlynch.io)
 
+* :cve:`CVE-2026-61906` SMTP command injection via JMAP EmailSubmission/set
+  envelope
+
+  An authenticated JMAP user could smuggle SMTP commands into Cyrus's internal
+  connection to the backend SMTP server by including CRLF in envelope
+  parameters, and so pass arbitrary commands to the local SMTP server.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+* :cve:`CVE-2026-61907` JMAP snooze bypasses destination-mailbox ACL
+
+  An authenticated user with insert permissions on another user's snoozed
+  mailbox could cause insertion of mail to that user's inbox, or any other of
+  their mailboxes whose id was known to the user, despite having no insert
+  permissions to the target mailbox.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+* :cve:`CVE-2026-61908` JMAP email-header blob ID out-of-bounds index
+
+  An authenticated user could attempt to download a specially crafted JMAP blob
+  ID of the form ``H<emailid>-<index>``, which could read past the end of the
+  internal blob_headers array during download, exposing adjacent heap memory.
+
+  Reported by: Ahmed Said.
+
+* :cve:`CVE-2026-61909` CalDAV/CardDAV multiget bypasses per-href ACL
+
+  An authenticated DAV user with some shared access to another user's calendar
+  or address book could read even unshared events or contacts by including the
+  target hrefs in a calendar-multiget or addressbook-multiget REPORT.
+
+  Reported by: Ahmed Said.
+
+* :cve:`CVE-2026-61910` Mailbox/set let sharee change special-use role on
+  shared mailboxes
+
+  An authenticated user with maySetKeywords on another user's mailbox could
+  change that mailbox's specialuse annotation.  This could allow the sharee to
+  change the shared mailbox to perform the archived, snoozed, or other role,
+  which might cause mail to be written to the shared mailbox, sharing more
+  content than intended.
+
+  This is likely to be an unusual situation, made more unusual because if the
+  target already has a non-shared mailbox with that role, role duplication
+  suppression will prevent the update.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+* :cve:`CVE-2026-61911` Sieve mailbox existence oracle
+
+  An authenticated user could install a Sieve script that probed whether
+  another user's private mailbox existed, or read the value of shared mailbox
+  annotations, by observing which fileinto branch fired during LMTP delivery.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+* :cve:`CVE-2026-61915` VPATCH BYPARAM double-free
+
+  An authenticated calendar user could crash a Cyrus CalDAV worker with a PATCH
+  containing ``PATCH-ACTION="BYPARAM@..."`` against a resource with two or more
+  properties of the matched kind.  The memory holding the selector would be
+  freed once on each iteration over the properties.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+The following security fixes were made in public, without an embargo, as
+described in :ref:`security-classification`.
+
+* Deeply nested message/rfc822 parts no longer overflow the stack in the MIME
+  parser; parsing stops descending at :imapdconf:`boundary_limit`.
+* Revoking a sharee's DAV access to a calendar or address book now also drops
+  their subscription to it, and calalarmd no longer sends alarms to a sharee
+  whose access has been revoked.
+* IMAP CATENATE now counts TEXT and UTF8 parts toward
+  :imapdconf:`maxmessagesize`, which could previously be exceeded.
+* JMAP ``Email/copy`` between accounts and the saved copy made by
+  ``EmailSubmission/set`` are now charged against the storage quota.
+* The list form of IMAP GETMETADATA now performs the same ACL checks as the
+  single-mailbox form, and no longer reveals whether a mailbox exists.
+* IMAP LIST ... RETURN (STATUS) now returns STATUS only for mailboxes the user
+  can read, and LIST (SUBSCRIBED) reports a subscribed mailbox the user can no
+  longer look up as \\NonExistent.
+* IMAP THREAD now reads at most 20 references from any one message.
+* Fixed a buffer overflow when appending DEPTH to a long metadata entry name.
+* xtext escapes in an LMTP ``AUTH=`` parameter now decode correctly, rather
+  than truncating the identity used for ACL checks.
+* The number of parameters accepted from one MIME header is now capped at 128.
+* HTTP/2 request bodies are now bounded by :imapdconf:`maxmessagesize`.
+* WebSocket messages are now bounded in size, both as received and after
+  permessage-deflate inflation.
+* Malformed or out-of-range HTTP chunk sizes are now rejected, rather than
+  truncated so that a chunk could be read as the start of another request.
+* A malformed DAV If: header no longer crashes httpd.
+* httpd now escapes the client-supplied Host header in HTML responses,
+  preventing reflected cross-site scripting.
+* Negative numeric Sieve match variable references are now rejected.
+* A dlist parsed from stored metadata can no longer contain a file literal,
+  which previously wrote a file to disk.
+* JMAP vCard blobIds now encode the content identifier of the card, so they
+  cannot be constructed and do not resolve to replaced content.  Older blobIds
+  are rejected.
+* JMAP ``CalendarEvent/participantReply`` now requires the event's organizer
+  to be one of the calendar owner's addresses, and sharees acting for the
+  owner need ``mayWriteAll``.
+* A calendar's display name is now properly escaped in a Content-Disposition
+  header, and httpd drops any response header containing control characters.
+* JMAP ``accountId`` and ``fromAccountId`` arguments are now validated before
+  being used to build paths.
+* Setting ``isSeenShared`` with JMAP ``Mailbox/set`` now requires the admin
+  right.
+* MANAGED-ID parameters are now stripped from ATTACH properties in iMIP
+  messages, so a sender can no longer cause another event's managed
+  attachment to be expunged.
+* JMAP ``Backup/restoreCalendars`` now stores each user's private per-user
+  data under that user, rather than all of it under the restored account.
+* The iSchedule receiver now requires the Originator header to match the
+  ORGANIZER (or, for a REPLY, an ATTENDEE) of the message.
+* CalDAV and CardDAV DELETE and MOVE now require both the ``t`` and ``e``
+  rights.
+* A calendar sharee without ``mayWriteAll`` or ``mayWriteOwn`` can no longer
+  change an event's SEQUENCE.
+* An iMIP REPLY from an attendee not on the stored event no longer adds that
+  attendee to it.
+* Recurrence expansion is now bounded by
+  :imapdconf:`calendar_max_expanded_instances`.
+
 Significant bugfixes
 ====================
 
