@@ -21,6 +21,8 @@ struct jmap_email_filter_parse_context {
     void *rock;
 };
 
+extern int jmap_email_threadkeyword_is_valid(const char *keyword);
+
 extern void jmap_email_filtercondition_parse(json_t *filter,
                                              jmap_email_filter_parse_ctx_t *ctx);
 

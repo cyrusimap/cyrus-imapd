@@ -32,39 +32,6 @@
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
 #endif
 
-static int _email_threadkeyword_is_valid(const char *keyword)
-{
-    /* \Seen is always supported */
-    if (!strcasecmp(keyword, "$Seen"))
-        return 1;
-
-    const char *counted_flags = config_getstring(IMAPOPT_CONVERSATIONS_COUNTED_FLAGS);
-    if (!counted_flags)
-        return 0;
-
-    /* We really shouldn't do all this string mangling for each keyword */
-    strarray_t *flags = strarray_split(counted_flags, " ", STRARRAY_TRIM);
-    int i, is_supported = 0;
-    for (i = 0; i < flags->count; i++) {
-        const char *flag = strarray_nth(flags, i);
-        const char *kw = keyword;
-        if (*flag == '\\') { // special case \ => $
-            flag++;
-            if (*kw != '$') continue;
-            kw++;
-        }
-        if (!strcasecmp(flag, kw)) {
-            is_supported = 1;
-            break;
-        }
-    }
-    strarray_free(flags);
-
-    return is_supported;
-}
-
-
-
 #include "annotate.h"
 #include "carddav_db.h"
 #include "global.h"
@@ -1586,7 +1553,7 @@ HIDDEN void jmap_email_filtercondition_validate(const char *field, json_t *arg,
             !jmap_email_keyword_is_valid(s)) {
             jmap_parser_invalid(frock->parser, field);
         }
-        else if (!_email_threadkeyword_is_valid(s)) {
+        else if (!jmap_email_threadkeyword_is_valid(s)) {
             json_array_append_new(frock->unsupported,
                                   json_pack("{s:s}", field, s));
         }

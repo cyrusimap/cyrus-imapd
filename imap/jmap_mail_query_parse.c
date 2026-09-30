@@ -6,9 +6,42 @@
 
 #include <string.h>
 
+#include "libconfig.h"
+
 #include "jmap_api.h"
 #include "jmap_mail_query_parse.h"
 #include "json_support.h"
+
+HIDDEN int jmap_email_threadkeyword_is_valid(const char *keyword)
+{
+    /* \Seen is always supported */
+    if (!strcasecmp(keyword, "$Seen"))
+        return 1;
+
+    const char *counted_flags = config_getstring(IMAPOPT_CONVERSATIONS_COUNTED_FLAGS);
+    if (!counted_flags)
+        return 0;
+
+    /* We really shouldn't do all this string mangling for each keyword */
+    strarray_t *flags = strarray_split(counted_flags, " ", STRARRAY_TRIM);
+    int i, is_supported = 0;
+    for (i = 0; i < flags->count; i++) {
+        const char *flag = strarray_nth(flags, i);
+        const char *kw = keyword;
+        if (*flag == '\\') { // special case \ => $
+            flag++;
+            if (*kw != '$') continue;
+            kw++;
+        }
+        if (!strcasecmp(flag, kw)) {
+            is_supported = 1;
+            break;
+        }
+    }
+    strarray_free(flags);
+
+    return is_supported;
+}
 
 HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                                              jmap_email_filter_parse_ctx_t *ctx)
