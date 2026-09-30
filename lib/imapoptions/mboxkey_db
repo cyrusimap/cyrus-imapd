@@ -2,8 +2,8 @@ Name: mboxkey_db
 Type: STRINGLIST
 Allowed-Values: skiplist twom twoskip zeroskip
 Default-Value: twoskip
-Last-Modified: UNRELEASED
-Deprecated-Since: UNRELEASED
+Last-Modified: 3.13.8
+Deprecated-Since: 3.13.8
 
 The cyrusdb backend to use for mailbox keys.
 

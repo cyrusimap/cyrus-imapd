@@ -2,5 +2,5 @@ Name: nntptimeout
 Type: DURATION
 Default-Value: 3m
 Default-Unit: m
-Last-Modified: UNRELEASED
-Deprecated-Since: UNRELEASED
+Last-Modified: 3.13.8
+Deprecated-Since: 3.13.8

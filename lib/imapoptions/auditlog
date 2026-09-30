@@ -1,8 +1,8 @@
 Name: auditlog
 Type: SWITCH
 Default-Value: 0
-Last-Modified: UNRELEASED
-Deprecated-Since: UNRELEASED
+Last-Modified: 3.13.8
+Deprecated-Since: 3.13.8
 
 This option once controlled whether "auditlog" log entries were emitted.  These
 are now logged unconditionally and this option does nothing.

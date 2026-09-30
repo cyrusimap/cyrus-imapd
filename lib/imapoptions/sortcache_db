@@ -2,5 +2,5 @@ Name: sortcache_db
 Type: STRINGLIST
 Allowed-Values: skiplist twom twoskip zeroskip
 Default-Value: twoskip
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.8
 Deprecated-Since: 3.13.1

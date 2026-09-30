@@ -1,7 +1,7 @@
 Name: calendar_max_expanded_instances
 Type: INT
 Default-Value: 1000
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.8
 
 The maximum number of individual instances that the server will expand
 for one recurring calendar component.  The number is estimated from the

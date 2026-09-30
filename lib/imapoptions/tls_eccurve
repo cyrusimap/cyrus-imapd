@@ -1,7 +1,7 @@
 Name: tls_eccurve
 Type: STRING
 Default-Value: X25519MLKEM768:X25519:prime256v1:secp384r1
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.8
 
 Colon-separated list of the groups (elliptic curves and hybrid
 post-quantum key exchanges) offered for ECDHE, most preferred first.

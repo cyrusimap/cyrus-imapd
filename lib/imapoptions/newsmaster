@@ -1,5 +1,5 @@
 Name: newsmaster
 Type: STRING
 Default-Value: news
-Last-Modified: UNRELEASED
-Deprecated-Since: UNRELEASED
+Last-Modified: 3.13.8
+Deprecated-Since: 3.13.8
