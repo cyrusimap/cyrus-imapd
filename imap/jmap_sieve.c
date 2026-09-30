@@ -302,8 +302,8 @@ done:
     return 0;
 }
 
-static int putscript(struct mailbox *mailbox, const char *script,
-                     struct sieve_data *sdata, json_t **err)
+static void putscript(struct mailbox *mailbox, const char *script,
+                      struct sieve_data *sdata, json_t **err)
 {
     struct buf buf = BUF_INITIALIZER;
     int r;
@@ -317,7 +317,7 @@ static int putscript(struct mailbox *mailbox, const char *script,
         /* check script size */
         if ((json_int_t) strlen(script) > maxscriptsize) {
             *err = json_pack("{s:s}", "type", "tooLarge");
-            return 0;
+            return;
         }
 
         /* parse the script */
@@ -327,7 +327,7 @@ static int putscript(struct mailbox *mailbox, const char *script,
             *err = json_pack("{s:s, s:s}", "type", "invalidScript",
                              "description", errors);
             free(errors);
-            return 0;
+            return;
         }
 
         buf_init_ro_cstr(&buf, script);
@@ -339,8 +339,6 @@ static int putscript(struct mailbox *mailbox, const char *script,
     if (r) *err = jmap_server_error(r);
 
     buf_free(&buf);
-
-    return 0;
 }
 
 static const char *script_findblob(struct jmap_req *req, const char *id,
@@ -447,24 +445,22 @@ static const char *set_create(struct jmap_req *req,
     memset(&sdata, 0, sizeof(sdata));
     sdata.id = id;
     sdata.name = name;
-    r = putscript(mailbox, content, &sdata, &err);
+    putscript(mailbox, content, &sdata, &err);
     if (err) goto done;
 
-    if (!r) {
-        /* Report script as created, with server-set properties */
-        buf_reset(&buf);
-        buf_printf(&buf, "G%s", sdata.contentid);
+    /* Report script as created, with server-set properties */
+    buf_reset(&buf);
+    buf_printf(&buf, "G%s", sdata.contentid);
 
-        json_t *new_sieve = json_pack("{s:s s:b s:s}",
-                                      "id", id, "isActive", 0,
-                                      "blobId", buf_cstring(&buf));
+    json_t *new_sieve = json_pack("{s:s s:b s:s}",
+                                  "id", id, "isActive", 0,
+                                  "blobId", buf_cstring(&buf));
 
-        if (name == id) {
-            json_object_set_new(new_sieve, "name", json_string(name));
-        }
-
-        json_object_set_new(set->created, creation_id, new_sieve);
+    if (name == id) {
+        json_object_set_new(new_sieve, "name", json_string(name));
     }
+
+    json_object_set_new(set->created, creation_id, new_sieve);
 
   done:
     if (err) {
@@ -569,7 +565,7 @@ static void set_update(struct jmap_req *req,
 
     if (name) sdata->name = name;
 
-    r = putscript(mailbox, content, sdata, &err);
+    putscript(mailbox, content, sdata, &err);
     if (err) goto done;
 
     /* Report script as updated, with server-set properties */

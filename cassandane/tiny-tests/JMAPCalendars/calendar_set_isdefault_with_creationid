@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+# A creation id from one Calendar/set call can be used by a later call's
+# onSuccessSetIsDefault.
+sub test_calendar_set_isdefault_with_creationid ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    xlog $self, "create a calendar, then make it the default in a later call";
+    my $res = $jmap->request([
+        [ 'Calendar/set' => {
+            create => { 1 => { name => 'foo' } },
+        } ],
+        [ 'Calendar/set' => {
+            onSuccessSetIsDefault => '#1',
+        } ],
+    ]);
+    my ($create, $set_default) = map { $_->as_set } $res->sentences;
+
+    xlog $self, "the first call created the calendar";
+    my $calid = $create->created_id(1);
+    $self->assert_not_null($calid);
+    $self->assert_cmp_deeply({}, $create->create_errors);
+
+    xlog $self, "the second call made the new calendar the default";
+    $self->assert_cmp_deeply(
+        superhashof({ $calid => superhashof({ isDefault => JSON::true }) }),
+        $set_default->updated,
+    );
+    $self->assert_cmp_deeply({}, $set_default->update_errors);
+}
