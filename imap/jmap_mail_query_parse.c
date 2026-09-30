@@ -208,7 +208,8 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
             ctx->validate_field(field, arg, ctx->rock);
         }
         else {
-            // can just check for syntactical correctness
+            // can just check for syntactical correctness, except that
+            // thread keywords only work if they're counted flags
             if (!strcmp(field, "inMailbox")) {
                 if (!json_is_string(arg)) {
                     ctx->invalid_field(field, ctx->rock);
@@ -222,7 +223,8 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
             else if (!strcmp(field, "allInThreadHaveKeyword") ||
                     !strcmp(field, "someInThreadHaveKeyword") ||
                     !strcmp(field, "noneInThreadHaveKeyword")) {
-                if (!json_string_value(arg)) {
+                if (!json_string_value(arg) ||
+                    !jmap_email_threadkeyword_is_valid(json_string_value(arg))) {
                     ctx->invalid_field(field, ctx->rock);
                 }
             }

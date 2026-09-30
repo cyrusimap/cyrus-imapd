@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_validate_jmapquery_thread_keyword
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    # The suite's conversations_counted_flags include \Flagged and $muted,
+    # but not $followed.  $seen is always usable.
+    my sub check_filter ($want_ok, $filter, $name) {
+        my $json = JSON->new->canonical->encode($filter);
+        my $script = <<~"EOF";
+        require ["vnd.cyrus.jmapquery", "fileinto"];
+        if jmapquery text:
+        $json
+        .
+        {
+          fileinto "INBOX";
+        }
+        EOF
+
+        my $res = $jmap->request([
+            [ 'Blob/upload', {
+                create => { "A" => { data => [{'data:asText' => $script}] } }
+            } ],
+            [ 'SieveScript/validate', { blobId => "#A" } ],
+        ]);
+
+        my $error = $res->sentence(1)->arguments->{error};
+
+        if ($want_ok) {
+            $self->assert_null($error, "$name: should compile");
+            return;
+        }
+
+        $self->assert_not_null($error, "$name: should not compile");
+        $self->assert_str_equals('invalidScript', $error->{type});
+        $self->assert_matches(
+            qr/invalid jmapquery argument: '\S*InThreadHaveKeyword'/,
+            $error->{description},
+        );
+    };
+
+    my sub filter_accepted { check_filter(1, @_) }
+    my sub filter_rejected { check_filter(0, @_) }
+
+    filter_accepted({ noneInThreadHaveKeyword => '$seen' }, '$seen');
+
+    filter_accepted({ someInThreadHaveKeyword => '$muted' },  'counted keyword');
+    filter_accepted({ allInThreadHaveKeyword => '$flagged' }, 'counted sysflag');
+    filter_accepted({ hasKeyword => '$followed' },            'uncounted hasKeyword');
+
+    filter_rejected({ someInThreadHaveKeyword => '$followed' }, 'uncounted some');
+    filter_rejected({ allInThreadHaveKeyword  => '$followed' }, 'uncounted all');
+    filter_rejected({ noneInThreadHaveKeyword => '$followed' }, 'uncounted none');
+    filter_rejected(
+        {
+            operator   => 'OR',
+            conditions => [
+                { hasKeyword => '$followed' },
+                { someInThreadHaveKeyword => '$followed' },
+            ],
+        },
+        'uncounted, nested',
+    );
+}
