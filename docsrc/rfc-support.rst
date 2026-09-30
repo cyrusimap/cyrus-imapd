@@ -245,10 +245,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve Extension: Copying Without Side Effects
 
-:rfc:`4287`
-
-    The Atom Syndication Format
-
 :rfc:`4314`
 
     IMAP4 Access Control List (ACL) Extension
@@ -572,10 +568,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 :rfc:`6203`
 
     IMAP4 Extension for Fuzzy Search
-
-:rfc:`6321`
-
-    xCal: The XML Format for iCalendar
 
 :rfc:`6350`
 
