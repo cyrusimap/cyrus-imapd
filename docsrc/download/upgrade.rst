@@ -104,6 +104,69 @@ Configuration updates
 
 If configdirectory was set to a relative path, it must be changed.
 
+Audit logging is now always on.  Sites that did not previously enable
+``auditlog`` will see ``event=auditlog.*`` entries in syslog, many at "info".
+Your logging volume will increase.
+
+There's a new default :imapdconf:`tls_eccurve` list.  If you've got this
+setting naming a single curve, you may wish to clear the setting and get the
+list.  If you enable :imapdconf:`http_allow_0rtt`,
+:imapdconf:`tls_session_timeout` must not be 0.
+
+NNTP and fud have been removed.  You must remove any ``SERVICES`` entries in
+:cyrusman:`cyrus.conf(5)` that run ``fud`` or ``nntpd``, and any ``EVENTS``
+entries that run ``fetchnews``.
+
+Values stored in the ``/vendor/cmu/cyrus-imapd/news2mail`` annotation are now
+ignored.  They can be removed beforehand with
+``cyradm> mboxconfig <mailbox> news2mail ""``.
+
+URLAUTH has been removed.  Users' mboxkey databases can be deleted.
+
+.. _upgrade_timezones:
+
+Time zone data
+##############
+
+Cyrus now builds and installs its own time zone data.  An existing
+:imapdconf:`zoneinfo_dir` setting still wins, and existing time zone data
+keeps working.  The TZDist chapter of the CalDAV installation guide describes
+how to switch to the data Cyrus installs.
+
+Packagers: ``vzic`` is now a build-time dependency for the time zone data.  See
+the same chapter of the installation guide, or configure with
+``--without-vzic`` to keep shipping time zone data separately.
+
+Replication
+###########
+
+If you use :imapdconf:`sync_cache_db_path`, a replica may be silently missing
+users whose folders are all tombstoned in its ``mailboxes.db``.  Any whole-user
+sync repairs such a user: run ``sync_client -u <user>`` or ``sync_client -A``.
+
+Search indexes
+##############
+
+The "category" comparator of ``Email/query`` needs a Xapian index of version
+17 or later to group by ``messageId``, ``references`` or ``inReplyTo``.
+
+Client-visible changes
+######################
+
+These changes may affect clients:
+
+* JMAP for Calendars accepts only JSCalendar 2.0 names.  For example, on
+  Calendar, use ``mayShare`` rather than ``mayAdmin``; on CalendarEvent, use
+  ``iCalendar`` rather than ``cyrusimap.org:iCalProps``.
+* ``CalendarEvent/query`` no longer accepts ``inCalendars``; use one or more
+  ``inCalendar`` conditions.
+* Clients must stop sending the ``https://cyrusimap.org/ns/jmap/admin``
+  capability.
+* JMAP vCard blobIds issued by earlier versions are no longer accepted.
+* Data depending on the ``X-JMAP-PRIVACY`` property should be migrated to use
+  ``CLASS``.
+* A scheduling CalDAV PUT no longer returns an ETag.
+
 How are you planning on upgrading?
 ##################################
 
