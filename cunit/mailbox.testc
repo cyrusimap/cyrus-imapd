@@ -27,12 +27,66 @@
 #define MBOXNAME    "user.smurf"
 #define SIBLING     "user.smurf.sub"
 
+static int create_mailbox(const char *name);
+extern int verbose;
+
+static int set_up(void)
+{
+    static const char * const dirs[] = {
+        DBDIR, DBDIR"/db", DBDIR"/conf", DBDIR"/data", NULL
+    };
+
+    int r = system("rm -rf " DBDIR);
+    if (r) return r;
+
+    for (const char * const *d = dirs ; *d ; d++) {
+        if (mkdir(*d, 0777) < 0) {
+            int e = errno;
+            perror(*d);
+            return e;
+        }
+    }
+
+    config_read_string(DBDIR"/conf", NULL,
+        "defaultpartition: "PARTITION"\n"
+        "partition-"PARTITION": "DBDIR"/data\n"
+    );
+
+    cyrusdb_init();
+    config_mboxlist_db = "skiplist";
+    config_annotation_db = "skiplist";
+    config_quota_db = "skiplist";
+
+    quotadb_init();
+    quotadb_open(NULL);
+    mboxlist_init();
+    mboxlist_open(NULL);
+
+    r = create_mailbox(MBOXNAME);
+    if (!r) r = create_mailbox(SIBLING);
+    return r;
+}
+
+static int tear_down(void)
+{
+    mboxlist_close();
+    mboxlist_done();
+    quotadb_close();
+    quotadb_done();
+    cyrusdb_done();
+    config_reset();
+    config_mboxlist_db = NULL;
+    config_annotation_db = NULL;
+    config_quota_db = NULL;
+
+    int r = system("rm -rf " DBDIR);
+    return r ? -1 : 0;
+}
+
 /* XXX record cache_offset is 64b in memory but 32b on disk, and cache_version
  * XXX is 16b in memory but 32b on disk.
  */
 typedef bit32 XXX_CACHE32_TYPE;
-
-extern int verbose;
 
 struct offset {
     const char *name;
@@ -504,60 +558,6 @@ static int create_mailbox(const char *name)
     }
     user_nslock_release(&user_nslock);
     return r;
-}
-
-static int set_up(void)
-{
-    static const char * const dirs[] = {
-        DBDIR, DBDIR"/db", DBDIR"/conf", DBDIR"/data", NULL
-    };
-
-    int r = system("rm -rf " DBDIR);
-    if (r) return r;
-
-    for (const char * const *d = dirs ; *d ; d++) {
-        if (mkdir(*d, 0777) < 0) {
-            int e = errno;
-            perror(*d);
-            return e;
-        }
-    }
-
-    r = config_read_string(DBDIR"/conf", NULL,
-        "defaultpartition: "PARTITION"\n"
-        "partition-"PARTITION": "DBDIR"/data\n"
-    );
-    if (r) return r;
-
-    cyrusdb_init();
-    config_mboxlist_db = "skiplist";
-    config_annotation_db = "skiplist";
-    config_quota_db = "skiplist";
-
-    quotadb_init();
-    quotadb_open(NULL);
-    mboxlist_init();
-    mboxlist_open(NULL);
-
-    r = create_mailbox(MBOXNAME);
-    if (!r) r = create_mailbox(SIBLING);
-    return r;
-}
-
-static int tear_down(void)
-{
-    mboxlist_close();
-    mboxlist_done();
-    quotadb_close();
-    quotadb_done();
-    cyrusdb_done();
-    config_reset();
-    config_mboxlist_db = NULL;
-    config_annotation_db = NULL;
-    config_quota_db = NULL;
-
-    int r = system("rm -rf " DBDIR);
-    return r ? -1 : 0;
 }
 
 /* vim: set ft=c: */
