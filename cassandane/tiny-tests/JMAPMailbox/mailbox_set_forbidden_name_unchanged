@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+# A sharee who may rename a mailbox, but not set its name (which needs the
+# 'w' right), must get forbidden with nothing changed -- not a mailbox that
+# was renamed anyway and then reported as notUpdated.
+sub test_mailbox_set_forbidden_name_unchanged ($self)
+{
+    my $jmap  = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "share a mailbox that cassandane may rename but not write";
+    $self->{instance}->create_user("other");
+    $admin->create("user.other.shared") or die "create: $@";
+    $admin->setacl("user.other", cassandane => 'lrk') or die "setacl: $@";
+    $admin->setacl("user.other.shared", cassandane => 'lrx')
+        or die "setacl: $@";
+
+    my $get_names = sub {
+        my $res = $jmap->request([
+            [ 'Mailbox/get', { accountId => 'other', properties => ['name'] } ],
+        ]);
+        return [ map {; $_->{name} }
+                 $res->single_sentence('Mailbox/get')->arguments->{list}->@* ];
+    };
+
+    my $res = $jmap->request([
+        [ 'Mailbox/get', { accountId => 'other', properties => ['name'] } ],
+    ]);
+    my ($mbox) = grep {; $_->{name} eq 'shared' }
+                 $res->single_sentence('Mailbox/get')->arguments->{list}->@*;
+    $self->assert_not_null($mbox);
+
+    xlog $self, "try to rename it";
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            accountId => 'other',
+            update    => { $mbox->{id} => { name => 'renamed' } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $mbox->{id} => superhashof({ type => 'forbidden' }) },
+        $res->single_sentence('Mailbox/set')->as_set->update_errors,
+    );
+
+    xlog $self, "the mailbox still has its old name";
+    my $names = $get_names->();
+    $self->assert_cmp_deeply(supersetof('shared'), $names);
+    $self->assert(!(grep {; $_ eq 'renamed' } @$names),
+                  "the mailbox was renamed anyway");
+}
