@@ -1950,8 +1950,9 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
 
     db = caldav_open_userid(req->accountid);
     if (!db) {
-        xsyslog(LOG_ERR, "caldav_open_mailbox failed", "accountid=<%s>",
-                req->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.calendar.dbopen.failed",
+                   lf_s("jmap.accountid", req->accountid));
+        r = IMAP_IOERROR;
         goto done;
     }
 
