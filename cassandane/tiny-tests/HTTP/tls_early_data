@@ -204,7 +204,7 @@ sub early_h2_request ($service, $stream, $method, $path)
 }
 
 sub test_tls_early_data_http2
-    :NoStartInstances
+    :NoStartInstances :needs_dependency_nghttp2
     ($self)
 {
     my $service = start_early_data_https($self);
