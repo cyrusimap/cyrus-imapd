@@ -1,0 +1,75 @@
+#!perl
+use Cassandane::Tiny;
+
+# An update that drops a managed attachment but then fails to store must
+# leave the attachment in place for the unchanged event.
+sub test_calendarevent_set_failed_update_keeps_attachment ($self)
+{
+    my $caldav = $self->{caldav};
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "create an event with a managed attachment via CalDAV";
+    my $ical = <<'EOF';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Example//NONSGML v1.0//EN
+BEGIN:VEVENT
+UID:keeps-attachment
+DTSTAMP:20150806T234327Z
+DTSTART:20160831T153000Z
+DURATION:PT1H
+SUMMARY:test
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+    my $eventHref = '/dav/calendars/user/cassandane/Default/test.ics';
+
+    my $res = $caldav->ua->post(
+        $caldav->request_url($eventHref) . '?action=attachment-add', {
+            headers => {
+                'Content-Type' => 'application/octet-stream',
+                'Content-Disposition' => 'attachment;filename=test',
+                'Prefer' => 'return=representation',
+                'Authorization' => $caldav->auth_header(),
+            },
+            content => 'davattach',
+        });
+    $self->assert_str_equals('201', $res->{status});
+    my $hash = Text::VCardFast::vcard2hash($res->{content});
+    my $attachHref =
+        $hash->{objects}[0]{objects}[0]{properties}{attach}[0]{value};
+    $self->assert_not_null($attachHref);
+
+    my $jmap = $self->default_user->jmap;
+    $res = $jmap->request([
+        [ 'CalendarEvent/get' => { properties => [ 'uid' ] } ],
+    ]);
+    my ($event) = grep { $_->{uid} eq 'keeps-attachment' }
+                  $res->single_sentence('CalendarEvent/get')
+                      ->arguments->{list}->@*;
+    $self->assert_not_null($event);
+
+    xlog $self, "drop the attachment in an update that can't be stored";
+    $admin->setquota('user.cassandane', '(STORAGE 1)');
+    $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            update => { $event->{id} => {
+                links => undef,
+                description => 'x' x 10_000,
+            } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $event->{id} => superhashof({ type => 'overQuota' }) },
+        $res->single_sentence('CalendarEvent/set')->as_set->update_errors,
+    );
+
+    xlog $self, "the attachment is still there";
+    $res = $caldav->ua->request('GET', $attachHref, {
+        headers => { 'Authorization' => $caldav->auth_header() },
+    });
+    $self->assert_str_equals('200', $res->{status});
+    $self->assert_str_equals('davattach', $res->{content});
+}

@@ -5178,7 +5178,8 @@ static int createevent_store(jmap_req_t *req,
     }
 
     // Process managed attachments
-    int r2 = caldav_manage_attachments(req->accountid, create->ical, NULL);
+    int r2 = caldav_manage_attachments(req->accountid, create->ical, NULL,
+                                       CALDAV_MATTACH_ADDED);
     if (r2 && r2 != HTTP_NOT_FOUND) {
         xsyslog(LOG_ERR, "caldav_manage_attachments failed", "err=<%s>",
                 error_message(r2));
@@ -6359,6 +6360,16 @@ static void setcalendarevents_update(jmap_req_t *req,
     }
     else if (r) goto done;
 
+    /* Attachments this drops are released only once it's stored */
+    int ret = caldav_manage_attachments(req->accountid,
+                                        update.newical, update.oldical,
+                                        CALDAV_MATTACH_ADDED);
+    if (ret && ret != HTTP_NOT_FOUND) {
+        syslog(LOG_ERR, "caldav_manage_attachments: %s", error_message(ret));
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
     if (dstmbox) {
         /* Expunge the resource from mailbox. */
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
@@ -6434,8 +6445,9 @@ static void setcalendarevents_update(jmap_req_t *req,
 
     /* The event is stored, so a failure here only leaves attachment
      * refcounts off; it mustn't fail the item */
-    int ret = caldav_manage_attachments(req->accountid,
-            update.newical, update.oldical);
+    ret = caldav_manage_attachments(req->accountid,
+                                    update.newical, update.oldical,
+                                    CALDAV_MATTACH_REMOVED);
     if (ret && ret != HTTP_NOT_FOUND) {
         xsyslog_ev(LOG_ERR, "jmap.calendarevent.attachments.failed",
                    lf_s("cal.uid", eid->ical_uid),
@@ -6700,14 +6712,6 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         newical = NULL;
     }
 
-    /* Manage attachments */
-    int ret = caldav_manage_attachments(req->accountid, newical, oldical);
-    if (ret && ret != HTTP_NOT_FOUND) {
-        syslog(LOG_ERR, "caldav_manage_attachments: %s", error_message(ret));
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-
     if (!newical) {
         /* Expunge the resource from mailbox. */
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
@@ -6737,6 +6741,16 @@ static int setcalendarevents_destroy(jmap_req_t *req,
             goto done;
         }
         r = 0;
+    }
+
+    /* Release attachments only once the event is gone, since that can
+     * expunge them; a failure here only leaves refcounts off */
+    int ret = caldav_manage_attachments(req->accountid, newical, oldical,
+                                        CALDAV_MATTACH_REMOVED);
+    if (ret && ret != HTTP_NOT_FOUND) {
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.attachments.failed",
+                   lf_s("cal.uid", eid->ical_uid),
+                   lf_err("error", ret));
     }
 
     /* Handle scheduling. */

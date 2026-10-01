@@ -60,14 +60,28 @@ extern int caldav_create_defaultcalendars(const char *userid,
 extern void caldav_attachment_url(struct buf *buf, const char *userid,
                                   const char *baseurl, const char *managedid);
 
+/* The managed attachment refcount change caldav_manage_attachments() applies */
+enum caldav_mattach_change {
+    /* Increment attachments that have been added */
+    CALDAV_MATTACH_ADDED,
+    /* Decrement, and expunge at zero, attachments that have been removed */
+    CALDAV_MATTACH_REMOVED
+};
+
 /* Update refcounts for managed attachments owned by userid.
  * For updated events, both ical and oldical must be non-null.
  * for deleted events, ical must be null.
+ *
+ * Removing an attachment can expunge it, which can't be undone,
+ * so apply CALDAV_MATTACH_ADDED before storing the new
+ * resource and CALDAV_MATTACH_REMOVED only once it is stored.
+ *
  * Returns HTTP_NOT_FOUND for any invalid managed id, or some
  * other HTTP error on internal error. */
 extern int caldav_manage_attachments(const char *userid,
                                      icalcomponent *ical,
-                                     icalcomponent *oldical);
+                                     icalcomponent *oldical,
+                                     enum caldav_mattach_change change);
 
 enum caldav_rewrite_attachments_mode {
     caldav_attachments_to_binary,
