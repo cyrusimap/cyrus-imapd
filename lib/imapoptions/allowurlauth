@@ -1,0 +1,8 @@
+Name: allowurlauth
+Type: SWITCH
+Default-Value: 0
+Last-Modified: UNRELEASED
+Deprecated-Since: UNRELEASED
+
+This option once controlled whether the use of the URLAUTH extension commands
+were allowed in IMAP.  Support for the IMAP URLAUTH extension has been removed.
