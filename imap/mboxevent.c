@@ -1211,14 +1211,16 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
                 struct carddav_data *cdata = NULL;
                 carddavdb = mailbox_open_carddav(mailbox);
                 carddav_lookup_resource(carddavdb, &mbentry, resource, &cdata, 1);
-                FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->vcard_uid));
+                FILL_STRING_PARAM(event, EVENT_DAV_UID,
+                                  xstrdupsafe(cdata->vcard_uid));
             }
             else if (mbtype_isa(mbtype) == MBTYPE_CALENDAR) {
                 struct caldav_db *caldavdb = NULL;
                 struct caldav_data *cdata = NULL;
                 caldavdb = mailbox_open_caldav(mailbox);
                 caldav_lookup_resource(caldavdb, &mbentry, resource, &cdata, 1);
-                FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->ical_uid));
+                FILL_STRING_PARAM(event, EVENT_DAV_UID,
+                                  xstrdupsafe(cdata->ical_uid));
             }
             else {
                 /* don't bail for MBTYPE_COLLECTION or any new things */
