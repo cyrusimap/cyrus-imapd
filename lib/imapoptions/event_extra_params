@@ -8,7 +8,8 @@ Allowed-Values: bodyStructure clientAddress diskUsed flagNames
  vnd.fastmail.convUnseen vnd.fastmail.cid vnd.fastmail.counters
  vnd.fastmail.jmapEmail vnd.fastmail.jmapStates vnd.cmu.emailid
  vnd.cmu.threadid vnd.cmu.visibleUsers vnd.fastmail.traceId
+ vnd.fastmail.specialUse vnd.cmu.emailids vnd.fastmail.mailboxJMAPId
 Default-Value: timestamp
-Last-Modified: 3.13.6
+Last-Modified: UNRELEASED
 
 Space-separated list of extra parameters to add to any appropriated event.

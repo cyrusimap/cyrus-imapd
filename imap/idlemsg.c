@@ -216,12 +216,7 @@ EXPORTED json_t *idle_recv(struct sockaddr_un *remote)
 
 EXPORTED const char *idle_msg_get_mboxid(json_t *msg)
 {
-    const char *mboxid =
-        json_string_value(json_object_get(msg, "mailboxUniqueId"));
-
-    if (!mboxid)
-        mboxid = json_string_value(json_object_get(msg, "mailboxID"));
-
-    return mboxid;
+    /* mailboxID is a URI (RFC 5423), not an id, so don't fall back to it */
+    return json_string_value(json_object_get(msg, "mailboxUniqueId"));
 }
 
