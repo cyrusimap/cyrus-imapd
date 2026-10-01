@@ -1,7 +1,7 @@
 Name: zeroskip_index_path
 Type: STRING
 Default-Value: NULL
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.8
 
 The directory under which the zeroskip backend caches pointer tables, which
 speed up opening a database that has accumulated unordered files.  Each

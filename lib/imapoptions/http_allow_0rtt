@@ -1,7 +1,7 @@
 Name: http_allow_0rtt
 Type: SWITCH
 Default-Value: 0
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.8
 
 Whether to accept TLS 1.3 early data (0-RTT) on HTTPS connections, so a
 client resuming an earlier session can send its first requests without

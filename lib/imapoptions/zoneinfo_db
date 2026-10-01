@@ -2,7 +2,7 @@ Name: zoneinfo_db
 Type: STRINGLIST
 Allowed-Values: flat skiplist twom twoskip zeroskip
 Default-Value: twoskip
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.8
 
 The cyrusdb backend to use for zoneinfo.  This database is used by the
 "tzdist" :imapdconf:`httpmodule <httpmodules>`, and is managed by

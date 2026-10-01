@@ -1,7 +1,7 @@
 Name: squatter_batch_delay
 Type: DURATION
 Default-Value: 0s
-Last-Modified: 3.13.7
+Last-Modified: 3.13.8
 
 Time for squatter to pause between two indexing batches of the same mailbox.
 Squatter holds no lock on that mailbox while it pauses, so other processes

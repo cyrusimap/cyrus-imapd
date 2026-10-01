@@ -1,7 +1,7 @@
 Name: prometheus_usage_update_freq
 Type: DURATION
 Default-Value: NULL
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.8
 
 Frequency in at which promstatsd should re-collate its usage statistics
 report.  Note that this report is relatively expensive to produce.  If not

@@ -2,7 +2,7 @@ Name: dkim2_message_instance
 Type: ENUM
 Allowed-Values: off verify trust
 Default-Value: off
-Last-Modified: UNRELEASED
+Last-Modified: 3.13.8
 
 Whether a Sieve "redirect" adds a DKIM2 "Message-Instance" header field
 documenting the header fields the script changed with "addheader" or
