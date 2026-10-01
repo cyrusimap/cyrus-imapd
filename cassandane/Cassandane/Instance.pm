@@ -1101,6 +1101,15 @@ sub _start_master
     xlog "_start_master: all services listening";
 }
 
+# Close every fd but stdin, stdout and stderr, for a forked child.  Don't leave
+# syslog closed.
+sub _close_inherited_fds
+{
+    Sys::Syslog::closelog();
+    POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
+    Cassandane::Util::Log::open_syslog();
+}
+
 sub _start_notifyd
 {
     my ($self) = @_;
@@ -1111,7 +1120,7 @@ sub _start_notifyd
     unless ($notifypid) {
         $SIG{TERM} = sub { POSIX::_exit(0) };
 
-        POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
+        _close_inherited_fds();
 
         # child;
         $0 = "cassandane notifyd: $basedir";
@@ -1316,7 +1325,7 @@ sub start_httpd {
         # XXX state...
         $SIG{TERM} = sub { exit 0; };
 
-        POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
+        _close_inherited_fds();
 
         $0 = "cassandane httpd: $basedir";
 
