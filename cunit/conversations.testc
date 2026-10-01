@@ -17,6 +17,53 @@
 #define DBNAME2 DBDIR "/conversations2.db"
 #define DBNAME3 DBDIR "/conversations.db"
 
+static int set_up(void)
+{
+    int r;
+
+    r = system("rm -rf " DBDIR);
+    if (r)
+        return r;
+
+    r = mkdir(DBDIR, 0777);
+    if (r < 0) {
+        int e = errno;
+        perror(DBDIR);
+        return e;
+    }
+
+    r = mkdir(DBDIR "/db", 0777);
+    if (r < 0) {
+        int e = errno;
+        perror(DBDIR "/db");
+        return e;
+    }
+
+    config_read_string(DBDIR"/conf",
+        "conversations_keep_existing: false\n"
+    );
+
+    cyrusdb_init();
+    config_conversations_db = "twoskip";
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    int r;
+
+    mboxlist_close();
+    mboxlist_done();
+    cyrusdb_done();
+    config_reset();
+    config_conversations_db = NULL;
+
+    r = system("rm -rf " DBDIR);
+
+    return r;
+}
+
 static void test_open(void)
 {
     int r;
@@ -1388,49 +1435,4 @@ static void test_subject_normalise(void)
 
 #undef TESTCASE
 
-
-static int set_up(void)
-{
-    int r;
-
-    r = system("rm -rf " DBDIR);
-    if (r)
-        return r;
-
-    r = mkdir(DBDIR, 0777);
-    if (r < 0) {
-        int e = errno;
-        perror(DBDIR);
-        return e;
-    }
-
-    r = mkdir(DBDIR "/db", 0777);
-    if (r < 0) {
-        int e = errno;
-        perror(DBDIR "/db");
-        return e;
-    }
-
-    config_read_string(DBDIR"/conf",
-        "conversations_keep_existing: false\n"
-    );
-
-    cyrusdb_init();
-    config_conversations_db = "twoskip";
-
-    return 0;
-}
-
-static int tear_down(void)
-{
-    int r;
-
-    cyrusdb_done();
-    config_reset();
-    config_conversations_db = NULL;
-
-    r = system("rm -rf " DBDIR);
-
-    return r;
-}
 /* vim: set ft=c: */
