@@ -16,8 +16,13 @@ our @EXPORT = qw(
 
 my $verbose = 0;
 
-openlog('cassandane', '', LOG_LOCAL6)
-    or die "Cannot openlog";
+sub open_syslog
+{
+    openlog('cassandane', '', LOG_LOCAL6)
+        or die "Cannot openlog";
+}
+
+open_syslog();
 
 sub xlog
 {
