@@ -376,6 +376,10 @@ static int jmap_blob_get(jmap_req_t *req)
                 }
                 else {
                     json_object_set_new(item, "isEncodingProblem", json_true());
+                    // RFC 9404 S4.2: if data:asText itself was requested,
+                    // "the data:asText response value MUST be null"
+                    if (want_text == 1)
+                        json_object_set_new(item, "data:asText", json_null());
                     // if we asked for 'data' then the encoding problem means we get base64
                     if (want_text == 2) want_base64 = 1;
                 }
