@@ -903,17 +903,28 @@ EXPORTED int config_read(const char *alt_config,
 
 #define GROWSIZE 4096
 
-static void config_add_overflowstring(const char *key, const char *value, int lineno)
+/* Only fails if the key already exists, which is forbidden. */
+static int config_add_overflowstring(const char *key, const char *value)
 {
-    char *newval = xstrdup(value);
-    if (newval != hash_insert(key, newval, &confighash)) {
-        char errbuf[1024];
-        snprintf(errbuf, sizeof(errbuf),
-                "option '%s' was specified twice in config file "
-                "(second occurrence on line %d)",
-                key, lineno);
-        fatal(errbuf, EX_CONFIG);
+    char *oldval, *newval;
+
+    if (hash_lookup(key, &confighash)) {
+        /* Duplicate key detected. Don't replace the existing value! */
+        return EX_CONFIG;
     }
+
+    newval = xstrdup(value);
+    oldval = hash_insert(key, newval, &confighash);
+
+    if (oldval != newval) {
+        /* This shouldn't happen due to the duplicate check above, but if it
+         * does, the hash now owns newvalue and we have to free oldvalue.
+         */
+        free(oldval);
+        return EX_CONFIG;
+    }
+
+    return 0;
 }
 
 EXPORTED int config_parse_switch(const char *p)
@@ -1138,7 +1149,15 @@ static int config_read_file(const char *filename, struct buf *err)
              * some reason, we can do so with config_getoverflowstring().
              */
             if (imapopts[opt].deprecated_since) {
-                config_add_overflowstring(fullkey, p, lineno);
+                r = config_add_overflowstring(fullkey, p);
+                if (r) {
+                    if (err) {
+                        buf_printf(err, "%s:%d: '%s' was already specified\n",
+                                        filename, lineno, fullkey);
+                    }
+                    r = EX_CONFIG;
+                    goto done;
+                }
             }
 
             /* this is a known option */
@@ -1325,7 +1344,15 @@ static int config_read_file(const char *filename, struct buf *err)
 */
 
             /* Put it in the overflow hash table */
-            config_add_overflowstring(key, p, lineno);
+            r = config_add_overflowstring(fullkey, p);
+            if (r) {
+                if (err) {
+                    buf_printf(err, "%s:%d: '%s' was already specified\n",
+                                    filename, lineno, fullkey);
+                }
+                r = EX_CONFIG;
+                goto done;
+            }
         }
     }
 
