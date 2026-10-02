@@ -2,6 +2,121 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
+/**
+ * @file mailbox.h
+ * @brief Mailboxes: the in-memory API and the on-disk format
+ *
+ * A mailbox is a directory of message files plus a few metadata files.
+ * Nothing but Cyrus itself should touch them: the supported ways in are the
+ * protocols and the command-line tools.
+ *
+ * **Where the files live**
+ *
+ * A mailbox lives on a partition.  Unless its mbtype has MBTYPE_LEGACY_DIRS,
+ * its directory is named for its uniqueid, as
+ * `<partition>/uuid/<u1>/<u2>/<uniqueid>`, where u1 and u2 are the first two
+ * characters of the uniqueid; a legacy mailbox's directory is named for the
+ * hashed mailbox name.  The `metapartition_files` option can move each
+ * metadata file to the same relative path on a metapartition.  An archived
+ * message (FLAG_INTERNAL_ARCHIVED) lives on the archive partition, and its
+ * cache record is in that partition's own cyrus.cache.
+ *
+ * A message file is named for its UID followed by a dot, so UID 423 is
+ * `423.`.  It holds the message as delivered, with CRLF line endings.
+ *
+ * The metadata files, named by the FNAME_* macros:
+ *
+ * - **cyrus.header**: mailbox-wide data that rarely changes
+ * - **cyrus.index**: a fixed-size header, then a fixed-size record per
+ *   message; the only copy of flags, modseqs and the like
+ * - **cyrus.cache**: data parsed from the message files, so FETCH, SEARCH
+ *   and SORT needn't reparse them
+ * - **cyrus.annotations**: the mailbox's and its messages' annotations
+ * - **cyrus.dav**: the DAV database, only for a mailbox outside any user's
+ *   tree; a user's DAV database is per-user (see dav_getpath())
+ * - **cyrus.squat**: the search index, only when %search_engine is squat
+ * - **cyrus.expunge**: obsolete; read only to recover UIDs during
+ *   reconstruct
+ *
+ * **cyrus.header**
+ *
+ * MAILBOX_HEADER_MAGIC, then a single line holding a DLIST kvlist, with
+ * these keys:
+ *
+ * - `T`: the mbtype, as mboxlist_mbtype_to_string() names it
+ * - `N`: the mailbox name
+ * - `I`: the uniqueid
+ * - `J`: the JMAP id
+ * - `Q`: the quota root, if any
+ * - `A`: the ACL, as a kvlist of identifier and rights
+ * - `U`: the user flag names, as a list; a flag's position is its bit in
+ *   index_record::user_flags, so a removed flag leaves a NIL behind
+ *
+ * An older format, still read, has three lines after the magic: the quota
+ * root and uniqueid separated by a tab, the user flag names separated by
+ * spaces, and the ACL as tab-separated identifier and rights pairs.
+ *
+ * The file is only ever replaced whole, by writing a new copy and renaming it
+ * into place.  Its CRC32 is stored in index_header::header_file_crc, so
+ * changing it needs the exclusive index lock.
+ *
+ * **cyrus.index**
+ *
+ * A header of index_header::start_offset bytes, then
+ * index_header::num_records records of index_header::record_size bytes, in
+ * UID order.  Record number N (counting from 1) is at
+ * `start_offset + (N-1) * record_size`.  Every field is in network byte order.
+ * The header and each record end with a CRC32 of all the bytes before it.  In
+ * the current version, times are 64-bit counts of nanoseconds since the
+ * epoch, and every 64-bit field is 8-byte aligned.
+ *
+ * The OFFSET_* macros give the current version's layout.  The layout of every
+ * version that can still be read, 6 through MAILBOX_MINOR_VERSION, is in the
+ * templates in imap/index_file.c; mailbox_setversion() converts between them.
+ *
+ * Expunging a message doesn't remove its record, only sets
+ * FLAG_INTERNAL_EXPUNGED on it.  When the message is going to be removed for
+ * good (which is "right now" an immediate expunge and otherwise later) by
+ * cyr_expire, the record also gets FLAG_INTERNAL_UNLINKED and the message file
+ * is deleted.  A repack rewrites the index without the unlinked records, which
+ * is the only time a record changes position.
+ *
+ * Two record fields encode more than their names say.  The high 16 bits of
+ * the stored system_flags are the internal flags (MsgInternalFlags), and the
+ * high 16 bits of the stored cache_version are bits 32-47 of cache_offset.
+ *
+ * **cyrus.cache**
+ *
+ * The first four bytes are the index_header::generation_no of the index the
+ * file belongs to; a repack starts a new file with a new generation.  Then
+ * come the cache records, each appended at the end of the file and found
+ * through index_record::cache_offset.  A record is NUM_CACHE_FIELDS items, in
+ * the order of the CACHE_* enum, each a 32-bit length followed by that many
+ * bytes, padded to a multiple of four (see CACHE_ITEM_NEXT()).
+ *
+ * index_record::cache_crc is the CRC32 of the whole cache record, and
+ * index_record::cache_version says what's in it, notably which header fields
+ * CACHE_HEADERS holds (see mailbox_cached_header()).  Replacing a record
+ * leaves the old one behind, counted in index_header::leaked_cache_records,
+ * until the next repack.  Everything here can be rebuilt from the message
+ * files by reconstruct.
+ *
+ * **Locking and commit order**
+ *
+ * Opening a mailbox takes a shared namelock on it, held until the struct
+ * mailbox is closed.  A repack needs the exclusive namelock, so a record
+ * doesn't move under anyone who has the mailbox open.  Reading the index
+ * needs at least the shared index lock, so the CRCs can be checked, and
+ * changing any of the metadata files needs the exclusive one.
+ *
+ * mailbox_commit() writes the cache records, then cyrus.header, then the
+ * index records, and last the index header.  The cache and cyrus.header are
+ * each synced before the index is written, and the index after.  The index
+ * header is what makes a change visible: readers see only num_records
+ * records, so records appended before a crash but not yet published by the
+ * header are ignored, and later overwritten.
+ */
+
 #ifndef INCLUDED_MAILBOX_H
 #define INCLUDED_MAILBOX_H
 
@@ -32,7 +147,10 @@
      "\t--Jim Morris on Andrew\n")
 
 
-/* NOTE: the mailbox minor version must be changed whenever any on-disk
+/**
+ * The cyrus.index format version that new and repacked mailboxes get.
+ *
+ * NOTE: the mailbox minor version must be changed whenever any on-disk
  * format changes are made to any mailbox files.  It is also important to
  * make sure all the mailbox upgrade and downgrade code in mailbox.c is
  * changed to be able to convert both backwards and forwards between the
@@ -41,6 +159,7 @@
  * changes to backend_version() in backend.c.
  */
 #define MAILBOX_MINOR_VERSION       (20) /* read comment above! */
+/** The index_record::cache_version that new cache records get */
 #define MAILBOX_CACHE_MINOR_VERSION (14)
 
 #define FNAME_HEADER "/cyrus.header"
@@ -111,30 +230,42 @@ struct statusdata {
 
 #define STATUSDATA_INIT { NULL, 0, 0, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, CONV_STATUS_INIT }
 
+/**
+ * One message's cyrus.index record, as it is in memory.
+ *
+ * The fields down to guid are stored on disk, at the OFFSET_* positions; the
+ * rest are working state.
+ */
 // sorting for good packing rather than on-disk file order, since not
 // all target datastructures are neat sizes
 struct index_record {
-    uint32_t uid;
-    uint32_t header_size;
-    uint32_t system_flags;
-    uint32_t internal_flags;
-    uint32_t cache_crc;
-    uint32_t cache_version;
-    uint64_t cache_offset;
-    uint64_t size;
-    uint64_t modseq;
-    uint64_t createdmodseq;
-    uint64_t cid;
-    uint64_t basecid;
-    struct timespec internaldate;
-    struct timespec sentdate;
-    struct timespec gmtime;
-    struct timespec last_updated;
-    struct timespec savedate;
+    uint32_t uid;               /**< the message's UID */
+    uint32_t header_size;       /**< octets of the message's header */
+    uint32_t system_flags;      /**< MsgFlags */
+    uint32_t internal_flags;    /**< MsgInternalFlags; stored in the high
+                                     bits of system_flags */
+    uint32_t cache_crc;         /**< CRC32 of the cyrus.cache record */
+    uint32_t cache_version;     /**< format of the cyrus.cache record */
+    uint64_t cache_offset;      /**< where the cyrus.cache record starts */
+    uint64_t size;              /**< octets of the whole message */
+    uint64_t modseq;            /**< modseq of the last change (CONDSTORE) */
+    uint64_t createdmodseq;     /**< modseq when the record was created */
+    uint64_t cid;               /**< conversation id */
+    uint64_t basecid;           /**< the conversation id before a split by
+                                     conversations_max_thread, if any */
+    struct timespec internaldate; /**< IMAP INTERNALDATE; where possible,
+                                       also the message file's mtime */
+    struct timespec sentdate;   /**< the Date header, at day resolution and
+                                     with no zone, for SEARCH SENTON etc. */
+    struct timespec gmtime;     /**< the Date header, in UTC, for SORT */
+    struct timespec last_updated; /**< when the record last changed */
+    struct timespec savedate;   /**< when the message was saved to this
+                                     mailbox (RFC 8514) */
     // this is 4x uint32_t
-    uint32_t user_flags[MAX_USER_FLAGS/32];
+    uint32_t user_flags[MAX_USER_FLAGS/32]; /**< a bit per user flag, in
+                                                 the cyrus.header order */
     // this is 21x char - how annoyingly offset
-    struct message_guid guid;
+    struct message_guid guid;   /**< SHA-1 of the message file */
 
     /* metadata */
     uint32_t recno;
@@ -143,54 +274,68 @@ struct index_record {
     struct cacherecord crec;
 };
 
+/** The sync CRCs replication compares to find mailboxes that differ */
 struct synccrcs {
-    uint32_t basic;
-    uint32_t annot;
+    uint32_t basic;     /**< XOR of the CRCs of the unexpunged records */
+    uint32_t annot;     /**< XOR of the CRCs of the annotations */
 };
 
+/**
+ * The cyrus.index header, as it is in memory.
+ *
+ * Everything but dirty is stored on disk, at the OFFSET_* positions.
+ */
 struct index_header {
     /* track if it's been changed */
     int dirty;
 
     /* header fields */
-    bit32 generation_no;
-    int format;
-    int minor_version;
-    uint32_t start_offset;
-    uint32_t record_size;
-    uint32_t num_records;
-    struct timespec last_appenddate;
-    uint32_t last_uid;
-    quota_t quota_mailbox_used;
-    struct timespec pop3_last_login;
-    uint32_t uidvalidity;
+    bit32 generation_no;        /**< bumped by each repack; must match the
+                                     first four bytes of cyrus.cache */
+    int format;                 /**< obsolete */
+    int minor_version;          /**< the index format version */
+    uint32_t start_offset;      /**< octets of header before the first record */
+    uint32_t record_size;       /**< octets in each record */
+    uint32_t num_records;       /**< records in the file, expunged or not */
+    struct timespec last_appenddate; /**< time of the last append */
+    uint32_t last_uid;          /**< the highest UID used, so UIDNEXT - 1 */
+    quota_t quota_mailbox_used; /**< octets of the unexpunged messages */
+    struct timespec pop3_last_login; /**< the owner's last POP3 login, for
+                                          the poptimeout option */
+    uint32_t uidvalidity;       /**< the IMAP UIDVALIDITY */
 
-    uint32_t deleted;
-    uint32_t answered;
-    uint32_t flagged;
-    uint32_t unseen;
+    uint32_t deleted;           /**< unexpunged messages with \\Deleted */
+    uint32_t answered;          /**< unexpunged messages with \\Answered */
+    uint32_t flagged;           /**< unexpunged messages with \\Flagged */
+    uint32_t unseen;            /**< unexpunged messages without \\Seen */
 
-    uint32_t options;
-    uint32_t leaked_cache_records;
-    modseq_t highestmodseq;
-    modseq_t deletedmodseq;
-    uint32_t exists;
-    struct timespec first_expunged;
-    struct timespec last_repack_time;
-    struct timespec changes_epoch;
+    uint32_t options;           /**< OPT_* flags */
+    uint32_t leaked_cache_records; /**< dead records in cyrus.cache */
+    modseq_t highestmodseq;     /**< the IMAP HIGHESTMODSEQ */
+    modseq_t deletedmodseq;     /**< modseq below which expunges may have been
+                                     forgotten, for QRESYNC */
+    uint32_t exists;            /**< unexpunged records: the IMAP EXISTS */
+    struct timespec first_expunged; /**< last_updated of the oldest expunged
+                                         record, to decide when to repack */
+    struct timespec last_repack_time; /**< time of the last repack */
+    struct timespec changes_epoch; /**< time from which changes can be
+                                        calculated; see deletedmodseq */
 
-    modseq_t createdmodseq;
+    modseq_t createdmodseq;     /**< the modseq when the mailbox was created */
 
-    bit32 header_file_crc;
-    struct synccrcs synccrcs;
+    bit32 header_file_crc;      /**< CRC32 of cyrus.header */
+    struct synccrcs synccrcs;   /**< for replication */
 
-    uint32_t recentuid;
-    struct timespec recenttime;
+    uint32_t recentuid;         /**< the highest UID the owner has been
+                                     shown, for \\Recent */
+    struct timespec recenttime; /**< when recentuid last changed */
 
-    struct timespec pop3_show_after;
-    quota_t quota_annot_used;
-    quota_t quota_deleted_used;
-    quota_t quota_expunged_used;
+    struct timespec pop3_show_after; /**< POP3 hides messages whose
+                                          internaldate is no later */
+    quota_t quota_annot_used;   /**< octets of annotations */
+    quota_t quota_deleted_used; /**< octets of messages with \\Deleted */
+    quota_t quota_expunged_used; /**< octets of expunged, not unlinked,
+                                      messages */
 };
 
 #define CHANGE_ISAPPEND (1<<0)
@@ -319,41 +464,41 @@ struct mailbox_iter;
 #define OFFSET_START_OFFSET           12
 #define OFFSET_RECORD_SIZE            16
 #define OFFSET_NUM_RECORDS            20
-#define OFFSET_LAST_APPENDDATE        24 /* grew to 64-bit in v20 */
-#define OFFSET_QUOTA_MAILBOX_USED     32 /* offset for 64bit quotas */
-#define OFFSET_POP3_LAST_LOGIN        40 /* grew to 64-bit in v20 */
-#define OFFSET_DELETED                48 /* added for ACAP */
+#define OFFSET_LAST_APPENDDATE        24 /**< grew to 64-bit in v20 */
+#define OFFSET_QUOTA_MAILBOX_USED     32 /**< offset for 64bit quotas */
+#define OFFSET_POP3_LAST_LOGIN        40 /**< grew to 64-bit in v20 */
+#define OFFSET_DELETED                48 /**< added for ACAP */
 #define OFFSET_ANSWERED               52
 #define OFFSET_FLAGGED                56
-#define OFFSET_EXISTS                 60 /* Non-expunged records */
+#define OFFSET_EXISTS                 60 /**< Non-expunged records */
 #define OFFSET_MAILBOX_OPTIONS        64
-#define OFFSET_LEAKED_CACHE           68 /* Number of leaked records in cache file */
-#define OFFSET_HIGHESTMODSEQ          72 /* CONDSTORE (64-bit modseq) */
-#define OFFSET_DELETEDMODSEQ          80 /* CONDSTORE (64-bit modseq) */
+#define OFFSET_LEAKED_CACHE           68 /**< Number of leaked records in cache file */
+#define OFFSET_HIGHESTMODSEQ          72 /**< CONDSTORE (64-bit modseq) */
+#define OFFSET_DELETEDMODSEQ          80 /**< CONDSTORE (64-bit modseq) */
 #define OFFSET_LAST_UID               88
 #define OFFSET_UIDVALIDITY            92
-#define OFFSET_HEADER_FILE_CRC        96 /* CRC32 of the index header file */
-#define OFFSET_SYNCCRCS_BASIC        100 /* XOR of SYNC CRCs of unexpunged records */
-#define OFFSET_RECENTTIME            104 /* last timestamp for seen data
+#define OFFSET_HEADER_FILE_CRC        96 /**< CRC32 of cyrus.header */
+#define OFFSET_SYNCCRCS_BASIC        100 /**< XOR of SYNC CRCs of unexpunged records */
+#define OFFSET_RECENTTIME            104 /**< last timestamp for seen data
                                           * (grew to 64-bit in v20) */
-#define OFFSET_POP3_SHOW_AFTER       112 /* time after which to show messages 
+#define OFFSET_POP3_SHOW_AFTER       112 /**< time after which to show messages 
                                           * to POP3 (grew to 64-bit in v20) */
-#define OFFSET_SYNCCRCS_ANNOT        120 /* SYNC_CRC of the annotations */
-#define OFFSET_UNSEEN                124 /* total number of UNSEEN messages (owner) */
-#define OFFSET_MAILBOX_CREATEDMODSEQ 128 /* MODSEQ at creation time */
-#define OFFSET_QUOTA_DELETED_USED    136 /* bytes of \Deleted messages
+#define OFFSET_SYNCCRCS_ANNOT        120 /**< SYNC_CRC of the annotations */
+#define OFFSET_UNSEEN                124 /**< total number of UNSEEN messages (owner) */
+#define OFFSET_MAILBOX_CREATEDMODSEQ 128 /**< MODSEQ at creation time */
+#define OFFSET_QUOTA_DELETED_USED    136 /**< bytes of \\Deleted messages
                                            * for this mailbox (64-bit) */
-#define OFFSET_QUOTA_EXPUNGED_USED   144 /* bytes of \Expunged messages
+#define OFFSET_QUOTA_EXPUNGED_USED   144 /**< bytes of \\Expunged messages
                                           * for this mailbox (64-bit) */
-#define OFFSET_QUOTA_ANNOT_USED      152 /* bytes of per-mailbox and per-message
+#define OFFSET_QUOTA_ANNOT_USED      152 /**< bytes of per-mailbox and per-message
                                           * annotations for this mailbox */
-#define OFFSET_CHANGES_EPOCH         160 /* time from which we can calculate changes
+#define OFFSET_CHANGES_EPOCH         160 /**< time from which we can calculate changes
                                           * (grew to 64-bit in v20) */
-#define OFFSET_FIRST_EXPUNGED        168 /* last_updated of oldest expunged message
+#define OFFSET_FIRST_EXPUNGED        168 /**< last_updated of oldest expunged message
                                           * (grew to 64-bit in v20) */
-#define OFFSET_LAST_REPACK_TIME      176 /* time of last expunged cleanup
+#define OFFSET_LAST_REPACK_TIME      176 /**< time of last expunged cleanup
                                           * (grew to 64-bit in v20) */
-#define OFFSET_RECENTUID             184 /* last UID the owner was told about */
+#define OFFSET_RECENTUID             184 /**< last UID the owner was told about */
 #define OFFSET_HEADER_CRC            188
 
 /* Offsets of index_record fields in index/expunge file
@@ -368,33 +513,35 @@ struct mailbox_iter;
  */
 #define OFFSET_UID              0
 #define OFFSET_CACHE_OFFSET     4
-#define OFFSET_INTERNALDATE     8 /* grew to 64-bit in v20 (nsec since epoch) */
-#define OFFSET_SENTDATE        16 /* grew to 64-bit in v20 */
-#define OFFSET_SIZE            24 /* grew to 64-bit in v20 */
+#define OFFSET_INTERNALDATE     8 /**< grew to 64-bit in v20 (nsec since epoch) */
+#define OFFSET_SENTDATE        16 /**< grew to 64-bit in v20 */
+#define OFFSET_SIZE            24 /**< grew to 64-bit in v20 */
 #define OFFSET_HEADER_SIZE     32
 #define OFFSET_SYSTEM_FLAGS    36
 #define OFFSET_USER_FLAGS      40
 #define OFFSET_CACHE_VERSION   56
 #define OFFSET_MESSAGE_GUID    60
-#define OFFSET_MODSEQ          80 /* CONDSTORE (64-bit modseq) */
-#define OFFSET_CID             88 /* conversation id, added in v13 */
-#define OFFSET_CREATEDMODSEQ   96 /* modseq of creation time, added in v16 */
-#define OFFSET_GMTIME         104 /* grew to 64-bit in v20 */
-#define OFFSET_LAST_UPDATED   112 /* grew to 64-bit in v20 */
-#define OFFSET_SAVEDATE       120 /* added in v15 */
-#define OFFSET_BASECID        128 /* base conversation id, added in v20 */
-#define OFFSET_CACHE_CRC      136 /* CRC32 of cache record */
+#define OFFSET_MODSEQ          80 /**< CONDSTORE (64-bit modseq) */
+#define OFFSET_CID             88 /**< conversation id, added in v13 */
+#define OFFSET_CREATEDMODSEQ   96 /**< modseq of creation time, added in v16 */
+#define OFFSET_GMTIME         104 /**< grew to 64-bit in v20 */
+#define OFFSET_LAST_UPDATED   112 /**< grew to 64-bit in v20 */
+#define OFFSET_SAVEDATE       120 /**< added in v15 */
+#define OFFSET_BASECID        128 /**< base conversation id, added in v20 */
+#define OFFSET_CACHE_CRC      136 /**< CRC32 of cache record */
 #define OFFSET_RECORD_CRC     140
 
 #define INDEX_HEADER_SIZE (OFFSET_HEADER_CRC+4)
 #define INDEX_RECORD_SIZE (OFFSET_RECORD_CRC+4)
 
+/** The IMAP system flags, in index_record::system_flags */
 typedef enum _MsgFlags {
     FLAG_ANSWERED           = (1<<0),
     FLAG_FLAGGED            = (1<<1),
     FLAG_DELETED            = (1<<2),
     FLAG_DRAFT              = (1<<3),
-    FLAG_SEEN               = (1<<4),
+    FLAG_SEEN               = (1<<4), /**< the owner's \\Seen, or everyone's
+                                           with OPT_IMAP_SHAREDSEEN */
 } MsgFlags;
 
 /* NOTE: you can only use up to 1<<15 for MsgFlags and down to 1<<16 for
@@ -404,31 +551,36 @@ typedef enum _MsgFlags {
  *     record->internal_flags = stored_system_flags & 0xffff0000;
  */
 
+/** Cyrus's own per-message state, in index_record::internal_flags */
 typedef enum _MsgInternalFlags {
-    FLAG_INTERNAL_SNOOZED            = (1<<26),
-    FLAG_INTERNAL_SPLITCONVERSATION  = (1<<27),
-    FLAG_INTERNAL_NEEDS_CLEANUP      = (1<<28),
-    FLAG_INTERNAL_ARCHIVED           = (1<<29),
-    FLAG_INTERNAL_UNLINKED           = (1<<30),
-    FLAG_INTERNAL_EXPUNGED           = (1U<<31),
+    FLAG_INTERNAL_SNOOZED            = (1<<26), /**< snoozed, by JMAP */
+    FLAG_INTERNAL_SPLITCONVERSATION  = (1<<27), /**< index_record::basecid
+                                                     is meaningful */
+    FLAG_INTERNAL_NEEDS_CLEANUP      = (1<<28), /**< the message file awaits
+                                                     deletion */
+    FLAG_INTERNAL_ARCHIVED           = (1<<29), /**< the message file is on
+                                                     the archive partition */
+    FLAG_INTERNAL_UNLINKED           = (1<<30), /**< the message file is gone,
+                                                     or about to be */
+    FLAG_INTERNAL_EXPUNGED           = (1U<<31), /**< expunged */
 } MsgInternalFlags;
 
 #define FLAGS_SYSTEM   (FLAG_ANSWERED|FLAG_FLAGGED|FLAG_DELETED|FLAG_DRAFT|FLAG_SEEN)
 
-#define OPT_POP3_NEW_UIDL (1<<0)        /* added for Outlook stupidity */
+#define OPT_POP3_NEW_UIDL (1<<0)        /**< added for Outlook stupidity */
 /* NOTE: not used anymore - but don't reuse it */
-#define OPT_IMAP_CONDSTORE (1<<1)       /* added for CONDSTORE extension */
+#define OPT_IMAP_CONDSTORE (1<<1)       /**< added for CONDSTORE extension */
 
 /* these two are annotations, if you add more, update annotate.c
  * struct annotate_mailbox_flags */
-#define OPT_IMAP_SHAREDSEEN (1<<2)      /* added for shared \Seen flag */
-#define OPT_IMAP_DUPDELIVER (1<<3)      /* added to allow duplicate delivery */
+#define OPT_IMAP_SHAREDSEEN (1<<2)      /**< added for shared \\Seen flag */
+#define OPT_IMAP_DUPDELIVER (1<<3)      /**< added to allow duplicate delivery */
 
-#define OPT_IMAP_HAS_ALARMS (1<<4)      /* messages in mailbox have alarms */
+#define OPT_IMAP_HAS_ALARMS (1<<4)      /**< messages in mailbox have alarms */
 
-#define OPT_MAILBOX_NEEDS_UNLINK (1<<29)        /* files to be unlinked */
-#define OPT_MAILBOX_NEEDS_REPACK (1<<30)        /* repacking to do */
-#define OPT_MAILBOX_DELETED (1U<<31)    /* mailbox is deleted an awaiting cleanup */
+#define OPT_MAILBOX_NEEDS_UNLINK (1<<29)        /**< files to be unlinked */
+#define OPT_MAILBOX_NEEDS_REPACK (1<<30)        /**< repacking to do */
+#define OPT_MAILBOX_DELETED (1U<<31)    /**< mailbox is deleted an awaiting cleanup */
 
 #define MAILBOX_OPTIONS_MASK (OPT_POP3_NEW_UIDL | \
                               OPT_IMAP_SHAREDSEEN | \
@@ -475,18 +627,32 @@ typedef union {
 /* Size of a bit32 to skip when jumping over cache item sizes */
 #define CACHE_ITEM_SIZE_SKIP sizeof(bit32)
 
-/* Cache item positions */
+/**
+ * Cache item positions: the items of a cyrus.cache record, in order.
+ *
+ * CACHE_SECTION is binary, built from 32-bit values in network byte order
+ * by message_write_section(), and it nests.  A section for a part with no
+ * subparts is a single 0.  Otherwise it is N+1, for N subparts; a
+ * description of part 0, the header, which a multipart lacks; a description
+ * of each subpart; and then a section for each subpart.  A description is
+ * the offset and size of the part's header and of its content in the message
+ * file, with a size of -1 for a part that doesn't exist; a word holding the
+ * length of the charset name (high 16 bits) and the encoding (low 8 bits,
+ * 0xff for none); the charset name, NUL-padded to that length; the content
+ * GUID (20 bytes); and the decoded size and line count of the content.
+ */
 enum {
-    CACHE_ENVELOPE = 0,
-    CACHE_BODYSTRUCTURE,
-    CACHE_BODY,
-    CACHE_SECTION,
-    CACHE_HEADERS,
-    CACHE_FROM,
-    CACHE_TO,
-    CACHE_CC,
-    CACHE_BCC,
-    CACHE_SUBJECT
+    CACHE_ENVELOPE = 0,     /**< the IMAP ENVELOPE */
+    CACHE_BODYSTRUCTURE,    /**< the IMAP BODYSTRUCTURE */
+    CACHE_BODY,             /**< the IMAP BODY */
+    CACHE_SECTION,          /**< where each MIME part is; see above */
+    CACHE_HEADERS,          /**< the cached header fields, as in the
+                                 message; see mailbox_cached_header() */
+    CACHE_FROM,             /**< the From addresses, for SEARCH */
+    CACHE_TO,               /**< the To addresses, for SEARCH */
+    CACHE_CC,               /**< the Cc addresses, for SEARCH */
+    CACHE_BCC,              /**< the Bcc addresses, for SEARCH */
+    CACHE_SUBJECT           /**< the decoded Subject, for SEARCH and SORT */
 };
 
 /* Cached envelope token positions */
