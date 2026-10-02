@@ -11,6 +11,9 @@ on:
       - 'docsrc/**'
       - 'lib/imapoptions/**'
       - 'cassandane/**/*.pm'
+      - 'imap/**/*.h'
+      - 'lib/**/*.h'
+      - 'sieve/**/*.h'
   pull_request:
     branches:
       - master
@@ -20,6 +23,9 @@ on:
       - 'docsrc/**'
       - 'lib/imapoptions/**'
       - 'cassandane/**/*.pm'
+      - 'imap/**/*.h'
+      - 'lib/**/*.h'
+      - 'sieve/**/*.h'
 
 defaults:
   run:
