@@ -5191,7 +5191,8 @@ static int createevent_store(jmap_req_t *req,
     }
 
     // Process managed attachments
-    int r2 = caldav_manage_attachments(req->accountid, create->ical, NULL);
+    int r2 = caldav_manage_attachments(req->accountid, create->ical, NULL,
+                                       CALDAV_MATTACH_ADDED);
     if (r2 && r2 != HTTP_NOT_FOUND) {
         xsyslog(LOG_ERR, "caldav_manage_attachments failed", "err=<%s>",
                 error_message(r2));
@@ -5258,7 +5259,7 @@ static int createevent_store(jmap_req_t *req,
         .ical_recurid = create->ical_recurid,
     };
 
-    // Handle scheduling
+    /* The event is already stored, so a failure here can't fail the item. */
     if (send_itip && !is_draft) {
         icalcomponent *sched_ical = create->ical_standalone ?
             create->ical_standalone : create->ical;
@@ -5267,8 +5268,9 @@ static int createevent_store(jmap_req_t *req,
                                         sched_ical, eid.createdmodseq,
                                         JMAP_CREATE);
         if (r2) {
-            xsyslog(LOG_WARNING, "could not send scheduling messages",
-                    "uid=%s error=%s", create->ical_uid, error_message(r2));
+            xsyslog_ev(LOG_WARNING, "jmap.calendarevent.schedule.failed",
+                    lf_s("cal.uid", create->ical_uid),
+                    lf_err("error", r2));
         }
     }
 
@@ -6371,6 +6373,16 @@ static void setcalendarevents_update(jmap_req_t *req,
     }
     else if (r) goto done;
 
+    /* Attachments this drops are released only once it's stored */
+    int ret = caldav_manage_attachments(req->accountid,
+                                        update.newical, update.oldical,
+                                        CALDAV_MATTACH_ADDED);
+    if (ret && ret != HTTP_NOT_FOUND) {
+        syslog(LOG_ERR, "caldav_manage_attachments: %s", error_message(ret));
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
     if (dstmbox) {
         /* Expunge the resource from mailbox. */
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
@@ -6444,24 +6456,31 @@ static void setcalendarevents_update(jmap_req_t *req,
     }
     r = 0;
 
+    /* The event is stored, so a failure here only leaves attachment
+     * refcounts off; it mustn't fail the item */
+    ret = caldav_manage_attachments(req->accountid,
+                                    update.newical, update.oldical,
+                                    CALDAV_MATTACH_REMOVED);
+    if (ret && ret != HTTP_NOT_FOUND) {
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.attachments.failed",
+                   lf_s("cal.uid", eid->ical_uid),
+                   lf_err("error", ret));
+    }
+
     /* Remove related iTIP messages from CalDAV Scheduling Inbox */
     remove_itip_messages(db, schedinbox, eid->ical_uid,
                          update.is_standalone ? eid->ical_recurid : NULL);
 
     /* Handle scheduling. */
     if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
-        r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
-                update.oldical, update.newical, eid->createdmodseq, JMAP_UPDATE);
-        if (r) goto done;
-    }
-
-    /* Manage attachments */
-    int ret = caldav_manage_attachments(req->accountid,
-            update.newical, update.oldical);
-    if (ret && ret != HTTP_NOT_FOUND) {
-        syslog(LOG_ERR, "caldav_manage_attachments: %s", error_message(ret));
-        r = IMAP_INTERNAL;
-        goto done;
+        int r2 = setcalendarevents_schedule(mbox, sched_userid,
+                &schedule_addresses, update.oldical, update.newical,
+                eid->createdmodseq, JMAP_UPDATE);
+        if (r2) {
+            xsyslog_ev(LOG_WARNING, "jmap.calendarevent.schedule.failed",
+                    lf_s("cal.uid", eid->ical_uid),
+                    lf_err("error", r2));
+        }
     }
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
@@ -6706,21 +6725,6 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         newical = NULL;
     }
 
-    /* Handle scheduling. */
-    if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
-        r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
-                oldical, newical, eid->createdmodseq, JMAP_DESTROY);
-        if (r) goto done;
-    }
-
-    /* Manage attachments */
-    int ret = caldav_manage_attachments(req->accountid, newical, oldical);
-    if (ret && ret != HTTP_NOT_FOUND) {
-        syslog(LOG_ERR, "caldav_manage_attachments: %s", error_message(ret));
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-
     if (!newical) {
         /* Expunge the resource from mailbox. */
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
@@ -6750,6 +6754,28 @@ static int setcalendarevents_destroy(jmap_req_t *req,
             goto done;
         }
         r = 0;
+    }
+
+    /* Release attachments only once the event is gone, since that can
+     * expunge them; a failure here only leaves refcounts off */
+    int ret = caldav_manage_attachments(req->accountid, newical, oldical,
+                                        CALDAV_MATTACH_REMOVED);
+    if (ret && ret != HTTP_NOT_FOUND) {
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.attachments.failed",
+                   lf_s("cal.uid", eid->ical_uid),
+                   lf_err("error", ret));
+    }
+
+    /* Handle scheduling. */
+    if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
+        int r2 = setcalendarevents_schedule(mbox, sched_userid,
+                &schedule_addresses, oldical, newical,
+                eid->createdmodseq, JMAP_DESTROY);
+        if (r2) {
+            xsyslog_ev(LOG_WARNING, "jmap.calendarevent.schedule.failed",
+                    lf_s("cal.uid", eid->ical_uid),
+                    lf_err("error", r2));
+        }
     }
 
     if (calendar_has_sharees(mbox->mbentry)) {

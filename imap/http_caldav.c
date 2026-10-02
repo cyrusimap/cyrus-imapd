@@ -1261,6 +1261,7 @@ enum {
 struct update_rock {
     struct mailbox *attachments;
     struct webdav_db *webdavdb;
+    enum caldav_mattach_change change;
 };
 
 static void update_refcount(const char *mid, short *op,
@@ -1268,11 +1269,13 @@ static void update_refcount(const char *mid, short *op,
 {
     switch (*op) {
     case REFCNT_DEC:
-        decrement_refcount(mid, urock->attachments, urock->webdavdb);
+        if (urock->change == CALDAV_MATTACH_REMOVED)
+            decrement_refcount(mid, urock->attachments, urock->webdavdb);
         break;
 
     case REFCNT_INC:
-        increment_refcount(mid, urock->webdavdb);
+        if (urock->change == CALDAV_MATTACH_ADDED)
+            increment_refcount(mid, urock->webdavdb);
         break;
     }
 }
@@ -1308,7 +1311,8 @@ static int open_attachments(const char *userid, struct mailbox **attachments,
 /* Check an iCal object to see if managed attachments are being manipulated */
 HIDDEN int caldav_manage_attachments(const char *userid,
                                      icalcomponent *ical,
-                                     icalcomponent *oldical)
+                                     icalcomponent *oldical,
+                                     enum caldav_mattach_change change)
 {
     /* Compare any managed attachments in new and existing resources */
     struct mailbox *attachments = NULL;
@@ -1413,7 +1417,7 @@ HIDDEN int caldav_manage_attachments(const char *userid,
         }
 
         /* Update reference counts of attachments in hash table */
-        struct update_rock urock = { attachments, webdavdb };
+        struct update_rock urock = { attachments, webdavdb, change };
         hash_enumerate(&mattach_table,
                        (void(*)(const char*,void*,void*)) &update_refcount,
                        &urock);
@@ -1430,7 +1434,9 @@ done:
 static int manage_attachments(struct transaction_t *txn,
                               struct mailbox *mailbox,
                               icalcomponent *ical, struct caldav_data *cdata,
-                              icalcomponent **oldical, strarray_t *schedule_addresses)
+                              icalcomponent **oldical,
+                              strarray_t *schedule_addresses,
+                              enum caldav_mattach_change change)
 {
     int ret = 0;
 
@@ -1449,7 +1455,7 @@ static int manage_attachments(struct transaction_t *txn,
         }
     }
 
-    ret = caldav_manage_attachments(httpd_userid, ical, *oldical);
+    ret = caldav_manage_attachments(httpd_userid, ical, *oldical, change);
     if (ret == HTTP_NOT_FOUND) {
         txn->error.precond = CALDAV_VALID_MANAGEDID;
         ret = HTTP_FORBIDDEN;
@@ -1478,7 +1484,8 @@ static int caldav_delete_cal(struct transaction_t *txn,
     if ((namespace_calendar.allow & ALLOW_CAL_ATTACH) &&
         cdata->comp_flags.mattach) {
         r = manage_attachments(txn, mailbox, NULL,
-                               cdata, &ical, &schedule_addresses);
+                               cdata, &ical, &schedule_addresses,
+                               CALDAV_MATTACH_REMOVED);
         if (r) goto done;
     }
 
@@ -4107,8 +4114,10 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     }
 
     if (namespace_calendar.allow & ALLOW_CAL_ATTACH) {
+        /* attachments this drops are released once it's stored */
         ret = manage_attachments(txn, mailbox, ical,
-                                 cdata, &oldical, &schedule_addresses);
+                                 cdata, &oldical, &schedule_addresses,
+                                 CALDAV_MATTACH_ADDED);
         if (ret) goto done;
     }
 
@@ -4259,6 +4268,19 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         ret = caldav_store_resource(txn, ical, mailbox, resource, cmodseq,
                                     db, flags, httpd_userid, NULL, NULL,
                                     &schedule_addresses);
+
+        if ((namespace_calendar.allow & ALLOW_CAL_ATTACH) &&
+            (ret == HTTP_CREATED || ret == HTTP_NO_CONTENT)) {
+            /* The resource is stored, so a failure here only leaves
+             * attachment refcounts off */
+            int r2 = caldav_manage_attachments(httpd_userid, ical, oldical,
+                                               CALDAV_MATTACH_REMOVED);
+            if (r2 && r2 != HTTP_NOT_FOUND) {
+                xsyslog_ev(LOG_ERR, "caldav.attachments.failed",
+                           lf_s("cal.uid", uid),
+                           lf_err("error", r2));
+            }
+        }
 
         if (stripped_overrides && !(flags & PREFER_REP)) {
             /* iCal data has been rewritten - don't return validators */
