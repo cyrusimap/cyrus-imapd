@@ -1,0 +1,85 @@
+#!/usr/bin/perl
+# SPDX-License-Identifier: BSD-3-Clause-CMU
+# See COPYING file at the root of the distribution for more details.
+use v5.28.0;
+use warnings;
+
+use experimental 'signatures';
+
+use Getopt::Long::Descriptive;
+
+# Build the generated C API docs from a list of header stems -- paths under
+# the source root, without the .h, e.g. "imap/auditlog".  The content comes
+# from Doxygen, by way of breathe; this only writes the reST that points
+# breathe at each header:
+#
+#   --page     the page for the one header named: a title and a doxygenfile
+#              directive
+#
+#   --listing  the reStructuredText that developer/API.rst includes: one
+#              bullet per header (its :doc: link and the @brief from its
+#              @file block), followed by a hidden toctree of the pages
+#
+# A docname is the absolute Sphinx name of a header's page, "<base>/<stem>".
+
+my ($opt, $usage) = describe_options(
+    '%c %o <header-stem>...',
+    [ 'page',     'print the reST page for one header' ],
+    [ 'listing',  'print the reST header listing and hidden toctree' ],
+    [],
+    [ 'base=s',   'doc-root-relative base for the generated pages',
+                  { default => '/developer/c-api' } ],
+    [ 'srcdir=s', 'directory the stems are relative to; needed by --listing' ],
+    [ 'help',     'print this message and exit' ],
+);
+
+if ($opt->help or !($opt->page xor $opt->listing)) {
+    print $usage->text;
+    exit($opt->help ? 0 : 1);
+}
+
+my @stems = @ARGV
+    or die "$0: no header stems given\n";
+
+sub header_of  ($stem) { "$stem.h" }
+sub docname_of ($stem) { $opt->base . "/" . $stem }
+
+if ($opt->page) {
+    @stems == 1 or die "$0: --page takes exactly one header stem\n";
+    my $header = header_of($stems[0]);
+
+    print $header, "\n", "=" x length($header), "\n\n";
+    print ".. doxygenfile:: $header\n";
+    exit 0;
+}
+
+# --listing
+defined $opt->srcdir or die "$0: --listing needs --srcdir\n";
+
+for my $stem (@stems) {
+    printf "* :doc:`%s <%s>` - %s\n",
+        header_of($stem), docname_of($stem), brief_of($stem);
+}
+
+print "\n.. toctree::\n   :hidden:\n\n";
+print "   ", docname_of($_), "\n" for @stems;
+
+# The brief is the @brief (or \brief) line of the header's @file block:
+#
+#     /**
+#      * @file auditlog.h
+#      * @brief Structured audit logging API
+sub brief_of ($stem) {
+    my $file = $opt->srcdir . "/" . header_of($stem);
+    open my $fh, '<', $file or die "$0: can't read $file: $!";
+    my $source = do { local $/; <$fh> };
+    close $fh;
+
+    for my $block ($source =~ m{/\*\*(.*?)\*/}sg) {
+        next unless $block =~ /[\@\\]file\b/;
+        my ($brief) = $block =~ /[\@\\]brief[ \t]+(.+?)[ \t]*$/m;
+        return $brief if defined $brief;
+    }
+
+    return '(no summary)';
+}
