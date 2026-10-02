@@ -521,6 +521,7 @@ dist_noinst_SCRIPTS = \
     lib/mkchartable.pl \
     perl/sieve/scripts/sieveshell.pl \
     tools/arbitronsort.pl \
+    tools/doxygen-index \
     tools/lint-logfmt-keys \
     tools/fixsearchpath.pl \
     tools/fixup-zoneinfo.pl \
@@ -1987,6 +1988,29 @@ $(cassandane_apidir)/listing.inc: $(top_srcdir)/tools/pod-index $(cassandane_pod
 $(cassandane_apidir)/.stamp: $(cassandane_pod_rst) $(cassandane_apidir)/listing.inc
 	@touch $@
 
+# The generated C API docs: one reST page per header with a Doxygen @file
+# block, each just a doxygenfile directive for breathe, plus a listing that
+# developer/API.rst includes.  Like the Cassandane pages, it's all a build
+# artifact, and the header list is discovered at make time (see
+# docsrc/c-api.mk), shared with docsrc/Makefile.
+c_api_srcdir = $(top_srcdir)
+include docsrc/c-api.mk
+
+c_api_dir     = docsrc/developer/c-api
+c_api_rst     = $(C_API_STEMS:%=$(c_api_dir)/%.rst)
+c_api_headers = $(C_API_STEMS:%=$(c_api_srcdir)/%.h)
+
+$(c_api_dir)/%.rst: $(c_api_srcdir)/%.h $(top_srcdir)/tools/doxygen-index
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/doxygen-index --page $* >$@.NEW && mv $@.NEW $@
+
+$(c_api_dir)/listing.inc: $(top_srcdir)/tools/doxygen-index $(c_api_headers)
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/doxygen-index --listing --srcdir $(c_api_srcdir) $(C_API_STEMS) >$@.NEW && mv $@.NEW $@
+
+$(c_api_dir)/.stamp: $(c_api_rst) $(c_api_dir)/listing.inc
+	@touch $@
+
 %.1: man/.sphinx-build.stamp
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)touch $@
@@ -2041,7 +2065,7 @@ SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
 ## that we have a single "source directory" for sphinx-build to use.
-docsrc/.sphinx-build.stamp: docsrc/reference/manpages/configs/imapd.conf.rst docsrc/reference/manpages/usercommands/cyradm.rst docsrc/reference/manpages/usercommands/sieveshell.rst docsrc/developer/cassandane-api/.stamp
+docsrc/.sphinx-build.stamp: docsrc/reference/manpages/configs/imapd.conf.rst docsrc/reference/manpages/usercommands/cyradm.rst docsrc/reference/manpages/usercommands/sieveshell.rst docsrc/developer/cassandane-api/.stamp docsrc/developer/c-api/.stamp
 	$(AM_V_GEN)test x"$(top_srcdir)" = x"$(top_builddir)" || \
         (cd $(top_srcdir) && tar cf - --mode=gu+w docsrc doc/examples) | tar xf -
 	@touch $@

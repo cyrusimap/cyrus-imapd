@@ -9,6 +9,7 @@ SOURCEDIR     = .
 BUILDDIR      = build
 PERL2RST      = ../tools/perl2rst
 POD_INDEX     = ../tools/pod-index
+DOXYGEN_INDEX = ../tools/doxygen-index
 
 # User-friendly check for sphinx-build
 ifeq ($(shell which $(SPHINXBUILD) >/dev/null 2>&1; echo $$?), 1)
@@ -33,7 +34,7 @@ I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(SOURCEDIR)
 # sphinx-build does its own parallelism.
 .NOTPARALLEL:
 
-.PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext doxygen cassandane-api
+.PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext doxygen cassandane-api c-api
 
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
@@ -64,6 +65,7 @@ clean:
 	rm -rf $(BUILDDIR)/*
 	rm -rf _doxygen
 	rm -rf $(SOURCEDIR)/developer/cassandane-api
+	rm -rf $(SOURCEDIR)/developer/c-api
 
 doxygen:
 	@echo "Running Doxygen to generate XML for Breathe..."
@@ -95,7 +97,27 @@ $(cassandane_apidir)/listing.inc: $(POD_INDEX) $(cassandane_pod_pm)
 	@mkdir -p $(@D)
 	$(POD_INDEX) --listing --srcdir $(cassandane_srcdir) $(CASSANDANE_POD) >$@.NEW && mv $@.NEW $@
 
-init: doxygen cassandane-api ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
+# Generated C API pages, one per header with a Doxygen @file block.  Like the
+# Cassandane docs, the list is discovered by c-api.mk, shared with the
+# top-level Makefile.am.
+c_api_srcdir = ..
+include c-api.mk
+
+c_api_dir     = $(SOURCEDIR)/developer/c-api
+c_api_rst     = $(C_API_STEMS:%=$(c_api_dir)/%.rst)
+c_api_headers = $(C_API_STEMS:%=$(c_api_srcdir)/%.h)
+
+c-api: $(c_api_rst) $(c_api_dir)/listing.inc
+
+$(c_api_dir)/%.rst: $(c_api_srcdir)/%.h $(DOXYGEN_INDEX)
+	@mkdir -p $(@D)
+	$(DOXYGEN_INDEX) --page $* >$@.NEW && mv $@.NEW $@
+
+$(c_api_dir)/listing.inc: $(DOXYGEN_INDEX) $(c_api_headers)
+	@mkdir -p $(@D)
+	$(DOXYGEN_INDEX) --listing --srcdir $(c_api_srcdir) $(C_API_STEMS) >$@.NEW && mv $@.NEW $@
+
+init: doxygen cassandane-api c-api ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
 	@echo "Creating reference/manpages/usercommands/cyradm.rst"
 	$(PERL2RST) cyradm < ../perl/imap/IMAP/Shell.pm > $(SOURCEDIR)/reference/manpages/usercommands/cyradm.rst
 	@echo "Creating reference/manpages/usercommands/sieveshell.rst"
