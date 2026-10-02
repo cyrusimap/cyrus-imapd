@@ -66,7 +66,7 @@ With no test names, every test is run.  Otherwise, name what you want:
 
 =item *
 
-a whole suite by its name without the leading C<Cassandane::Cyrus::>, e.g.
+a whole suite by its name without the leading C<Cassandane::TestSuite::>, e.g.
 C<Quota>;
 
 =item *
@@ -136,9 +136,9 @@ and use C<--no-cleanup> to override it.
 Run I<N> test workers in parallel.  Defaults to the C<cassandane.maxworkers>
 setting from F<cassandane.ini>.
 
-=item B<--slow>, B<--slow-only>
+=item B<--slow>
 
-Also run (or run only) the tests marked slow, which are skipped by default.
+Also run the tests marked slow, which are skipped by default.
 
 =item B<--rerun>, B<--rerun-suite>
 
@@ -163,12 +163,12 @@ use List::Util qw(uniq);
 
 use lib '.';
 use Cassandane::Util::Setup;
-use Cassandane::Error;
+use Cassandane::Exception;
 use Cassandane::Unit::FailedTests;
 use Cassandane::Unit::FormatPretty;
 use Cassandane::Unit::FormatTAP;
 use Cassandane::Unit::Runner;
-use Cassandane::Unit::TestPlan;
+use Cassandane::Unit::Planner;
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
 use Cassandane::Instance;
@@ -222,7 +222,7 @@ if ($missing_binaries) {
             if ($line)
             {
                 local $Error::Depth = 1;
-                Cassandane::Error->throw('-text' => "Perl exception: $text\n");
+                Cassandane::Exception->throw('-text' => "Perl exception: $text\n");
             }
         }
         die @_;
@@ -266,7 +266,6 @@ my ($opt, $usage) = describe_options(
     [ 'stop|S',        "stop at the first failing test; same as --no-keep-going" ],
     [],
     [ 'slow',          "also run the tests marked slow" ],
-    [ 'slow-only',     "run *only* the tests marked slow" ],
     [ 'rerun',         "rerun only the tests that failed on the previous run" ],
     [ 'rerun-suite',   "like --rerun, but rerun the whole suite of each failure" ],
     [],
@@ -336,8 +335,7 @@ $format_params{no_ok} = 1 if $opt->no_ok;
 
 my $do_list       = $opt->list // 0;
 my $keep_going    = $opt->stop ? 0 : $opt->keep_going;
-my $skip_slow     = ($opt->slow || $opt->slow_only) ? 0 : 1;
-my $slow_only     = $opt->slow_only ? 1 : 0;
+my $skip_slow     = $opt->slow ? 0 : 1;
 my $log_directory = $opt->log_directory;
 my $want_rerun    = $opt->rerun_suite ? 2 : $opt->rerun ? 1 : 0;
 
@@ -408,35 +406,31 @@ if ($want_rerun) {
     }
 }
 
-my $plan = Cassandane::Unit::TestPlan->new(
-        keep_going => $keep_going,
-        maxworkers => $cassini->val('cassandane', 'maxworkers') || undef,
-        log_directory => $log_directory,
-        skip_slow => $skip_slow,
-        slow_only => $slow_only,
-    );
+my $planner = Cassandane::Unit::Planner->new();
 
 if ($do_list)
 {
-    # Build the schedule per commandline
-    $plan->schedule(@names);
-    # dump the plan to stdout
-    my %plan = map { _listitem($_) => 1 } $plan->list();
-    foreach my $nm (sort keys %plan)
-    {
-        print "$nm\n";
-    }
+    my @named = map {; _listitem("$_->{suite}.$_->{testname}") }
+                $planner->plan_for(@names)->@*;
+
+    my %seen;
+    print "$_\n" for grep {; !$seen{$_}++ } sort @named;
+
     exit 0;
 }
 else
 {
-    # Build the schedule per commandline
-    $plan->schedule(@names);
-    $plan->check_sanity(nonfatal => $opt->no_fatal_plan);
+    my $plan = $planner->plan_for(@names);
+    $planner->check_sanity(nonfatal => $opt->no_fatal_plan);
 
     # Run the schedule
-    my $runner = Cassandane::Unit::Runner->new();
-    $runner->add_formatter($formatters{$want_format}->({%format_params}));
+    my $runner = Cassandane::Unit::Runner->new(
+        keep_going    => $keep_going,
+        maxworkers    => $cassini->val('cassandane', 'maxworkers') || undef,
+        log_directory => $log_directory,
+        skip_slow     => $skip_slow,
+    );
+    $runner->add_listener($formatters{$want_format}->({%format_params}));
 
     exit !$runner->do_run($plan);
 }

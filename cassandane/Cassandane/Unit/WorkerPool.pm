@@ -16,12 +16,14 @@ sub new
         workers => [],
         maxworkers => 2,
         pending => [],
-        handler => sub { die "This should not happen"; },
+        skip_slow => 1,
         owner => $$,
     };
-    foreach my $p (qw(maxworkers handler))
+    # Tested for definedness, not truth: skip_slow is a boolean, and "don't
+    # skip them" is exactly the value a truth test would throw away.
+    foreach my $p (qw(maxworkers skip_slow))
     {
-        $self->{$p} = $params{$p} if $params{$p};
+        $self->{$p} = $params{$p} if defined $params{$p};
     }
     return bless $self, $class;
 }
@@ -40,8 +42,8 @@ sub _new_worker
 {
     my ($self, $id) = @_;
 
-    my $w = Cassandane::Unit::Worker->new($id);
-    $w->{handler} = $self->{handler};
+    my $w = Cassandane::Unit::Worker->new($id,
+                                          skip_slow => $self->{skip_slow});
     $w->start();
 
     return $w;

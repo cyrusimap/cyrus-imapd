@@ -17,7 +17,7 @@ if (!@ARGV or !-e $ARGV[0]) {
 
   Run this program from ./cassandane like this:
 
-    ./utils/tiny-test-splitter Cassandane/Cyrus/SomeClass.pm
+    ./utils/tiny-test-splitter Cassandane/TestSuite/SomeClass.pm
 
   That will edit SomeClass.pl, removing all the test subroutines and adding, at
   the end, a `use` statement to load all the tiny test files.  The tiny test

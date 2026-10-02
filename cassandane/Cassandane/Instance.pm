@@ -29,6 +29,7 @@ use HTTP::Daemon;
 use DBI;
 use Time::HiRes qw(usleep);
 use List::Util qw(uniqstr);
+use Scalar::Util ();
 use MIME::Base64 qw(decode_base64 encode_base64);
 
 use Cassandane::Util::DateTime qw(to_iso8601);
@@ -126,8 +127,15 @@ sub new
         if defined $params{lsan_suppressions};
     $self->{old_jmap_ids} = $params{old_jmap_ids}
         if defined $params{old_jmap_ids};
-    $self->{test_case} = $params{test_case}
-        if defined $params{test_case};
+
+    # The test and instance hold refs to each other.  A cycle here would keep
+    # both alive until global destruction, at which point we're prone to have
+    # weird cleanup failures in DESTROY.  Avoid it by letting the test get
+    # garbage collected first. -- rjbs, 2026-09-30
+    if (defined $params{test_case}) {
+        $self->{test_case} = $params{test_case};
+        Scalar::Util::weaken($self->{test_case});
+    }
 
     $self->{buildinfo} = Cassandane::BuildInfo->new($self->{installation});
 
@@ -250,7 +258,7 @@ sub get_version
     # Need to check the named-installation directory AND the
     # default installation directory, before falling back to the
     # default-default
-    # Usually Cassandane::Cyrus::TestSuite only initialises an Instance
+    # Usually Cassandane::Unit::TestSuite::Cyrus only initialises an Instance
     # object with a non-default installation if that installation actually
     # exists, but this is a class method, not an object method, so we
     # don't have that protection and have to DIY.
@@ -3420,7 +3428,7 @@ sub _new_jmaptester_for_user($self, $tester_class, $tester_arg, $user, $new_arg 
 
 sub new_carddavtalk_for_user ($self, $user) {
     local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} =
-        Cassandane::Cyrus::TestSuite::_need_http_tiny_env();
+        Cassandane::Unit::TestSuite::Cyrus::_need_http_tiny_env();
 
     unless ($self->{config}->get_bit('httpmodules', 'carddav')) {
         Carp::croak("User CardDAV client requested, but carddav httpmodule not enabled");
@@ -3438,7 +3446,7 @@ sub new_carddavtalk_for_user ($self, $user) {
 
 sub new_caldavtalk_for_user ($self, $user) {
     local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} =
-        Cassandane::Cyrus::TestSuite::_need_http_tiny_env();
+        Cassandane::Unit::TestSuite::Cyrus::_need_http_tiny_env();
 
     unless ($self->{config}->get_bit('httpmodules', 'caldav')) {
         Carp::croak("User CalDAV client requested, but caldav httpmodule not enabled");

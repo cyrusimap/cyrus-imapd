@@ -20,13 +20,13 @@ sub new
 }
 
 sub _print_line_for {
-    my ($self, $test, $ok, $extra) = @_;
+    my ($self, $witem, $ok, $extra) = @_;
 
     my $line = sprintf "%sok %i - %s.%s%s\n",
         ($ok ? q{} : 'not '),
         ++$self->{i},
-        ref($test),
-        ($test->name =~ s/^test_//r),
+        $witem->{suite},
+        $witem->{testname},
         (length $extra ? " ($extra)" : q{});
 
     $self->_print($line);
@@ -38,34 +38,32 @@ sub start_test
 }
 
 sub add_pass {
-    my ($self, $test) = @_;
-    $self->_print_line_for($test, 1);
+    my ($self, $witem) = @_;
+    $self->_print_line_for($witem, 1);
 }
 
 sub add_error
 {
-    my ($self, $test, $exception) = @_;
-    $self->_print_line_for($test, 0, 'error');
+    my ($self, $witem) = @_;
+    $self->_print_line_for($witem, 0, 'error');
 }
 
 sub add_failure
 {
-    my ($self, $test, $exception) = @_;
-    $self->_print_line_for($test, 0, 'failure');
+    my ($self, $witem) = @_;
+    $self->_print_line_for($witem, 0, 'failure');
 }
 
 sub add_skip
 {
-    my ($self, $test, $reason) = @_;
-
-    $self->SUPER::add_skip($test, $reason);
+    my ($self, $witem) = @_;
 
     # TAP has its own way of saying this, and a skip is an 'ok'
     my $line = sprintf "ok %i - %s.%s # SKIP %s\n",
         ++$self->{i},
-        ref($test),
-        ($test->name =~ s/^test_//r),
-        $reason;
+        $witem->{suite},
+        $witem->{testname},
+        $witem->{reason};
 
     $self->_print($line);
 }
