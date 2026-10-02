@@ -442,13 +442,18 @@ done:
     return 0;
 }
 
+struct lookup_types {
+    uint32_t datatypes;
+    int unknown;
+};
+
 static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
                             struct jmap_parser *parser,
                             const char *key,
                             json_t *arg,
                             void *rock)
 {
-    uint32_t *datatypesp = rock;
+    struct lookup_types *types = rock;
 
     if (!strcmp(key, "typeNames")) {
         if (!json_is_array(arg)) {
@@ -465,12 +470,12 @@ static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
                 val ? jmap_data_types_lookup(val, strlen(val)) : NULL;
 
             if (dtype && (dtype->attributes & JMAP_TYPE_HAS_BLOB)) {
-                *datatypesp |= dtype->kind;
+                types->datatypes |= dtype->kind;
             }
             else {
-                jmap_parser_push_index(parser, key, i, NULL);
-                jmap_parser_invalid(parser, NULL);
-                jmap_parser_pop(parser);
+                /* RFC 9404 S4.3: an unknown type name is an unknownDataType
+                 * error; the caller reports it */
+                types->unknown = 1;
             }
         }
 
@@ -633,7 +638,8 @@ static int jmap_blob_lookup(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get = JMAP_GET_INITIALIZER;
-    uint32_t datatypes = 0;
+    struct lookup_types types = { 0, 0 };
+    uint32_t datatypes;
     json_t *err = NULL;
     struct buf buf = BUF_INITIALIZER;
     json_t *jval;
@@ -641,12 +647,18 @@ static int jmap_blob_lookup(jmap_req_t *req)
 
     /* Parse request */
     jmap_get_parse(req, &parser, NULL, /*allow_null_ids*/0,
-                   _parse_datatypes, &datatypes, &get, &err);
+                   _parse_datatypes, &types, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
     }
+    datatypes = types.datatypes;
 
+    if (types.unknown) {
+        err = json_pack("{s:s}", "type", "unknownDataType");
+        jmap_error(req, err);
+        goto done;
+    }
     if (!datatypes) {
         err = json_pack("{s:s s:[s]}", "type", "invalidArguments", "arguments", "typeNames");
         jmap_error(req, err);
