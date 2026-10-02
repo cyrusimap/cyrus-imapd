@@ -60,9 +60,7 @@ static int config_loaded;
 
 extern void fatal(const char *fatal_message, int fatal_code)
    __attribute__ ((noreturn));
-
-/* prototype to allow for sane function ordering */
-static void config_read_file(const char *filename);
+static int config_read_file(const char *filename, struct buf *err);
 
 static void assert_not_deprecated(enum imapopt opt)
 {
@@ -544,15 +542,13 @@ static void config_option_deprecate(const int dopt)
 }
 
 /*
- * Reset the global configuration to a virginal state.  This is
- * only useful for unit tests.
+ * Reset the global configuration to a virginal state.
  */
 EXPORTED void config_reset(void)
 {
     enum imapopt opt;
 
-    /* XXX this gate should probably use config_loaded, not config_filename */
-    if (!config_filename)
+    if (!config_loaded)
         return;
 
     free((char *)config_filename);
@@ -617,46 +613,55 @@ static const unsigned char qos[] = {
 /* ef */                0xb8
 };
 
-
-EXPORTED void config_read(const char *alt_config, const int config_need_data)
+EXPORTED int config_read(const char *alt_config,
+                         const int config_need_data,
+                         struct buf *err)
 {
     enum imapopt opt = IMAPOPT_ZERO;
-    char buf[4096];
     char *p;
     int ival;
     int64_t i64val;
     const char *cua_domains;
     char *domain;
     tok_t tok;
+    int r = 0;
 
     config_loaded = 1;
 
-    /* XXX this is leaked, this may be able to be better in 2.2 (cyrus_done) */
     if (alt_config) config_filename = xstrdup(alt_config);
     else config_filename = xstrdup(CONFIG_FILENAME);
 
-    if (!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
-        fatal("could not construct configuration hash table", EX_CONFIG);
-    }
+    construct_hash_table(&confighash, CONFIGHASHSIZE, 1);
+    construct_hash_table(&includehash, INCLUDEHASHSIZE, 1);
 
-    if (!construct_hash_table(&includehash, INCLUDEHASHSIZE, 1)) {
-        fatal("could not construct include file  hash table", EX_CONFIG);
-    }
+    r = config_read_file(config_filename, err);
+    if (r) goto done;
 
-    config_read_file(config_filename);
-
+    /* don't need to carry this around anymore */
     free_hash_table(&includehash, NULL);
 
     /* Check configdirectory config option */
     if (!config_dir) {
-        fatal("configdirectory option not specified in configuration file",
-              EX_CONFIG);
+        if (err) {
+            buf_appendcstr(err,
+                "configdirectory option not specified in configuration file\n");
+        }
+        r = EX_CONFIG;
+        goto done;
     }
     else if (config_dir[0] != '/') {
-        fatal("configdirectory must be fully qualified", EX_CONFIG);
+        if (err) {
+            buf_appendcstr(err, "configdirectory must be fully qualified\n");
+        }
+        r = EX_CONFIG;
+        goto done;
     }
     else if (!config_dir[1]) {
-        fatal("configdirectory must not be '/'", EX_CONFIG);
+        if (err) {
+            buf_appendcstr(err, "configdirectory must not be '/'\n");
+        }
+        r = EX_CONFIG;
+        goto done;
     }
 
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
@@ -715,11 +720,13 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
                                          &bytesize))
             {
                 /* uh-oh, we've got a bogus Default-Value */
-                char errbuf[1024];
-                snprintf(errbuf, sizeof(errbuf),
-                         "%s: %s: couldn't parse default bytesize '%s'",
-                         __func__, imapopts[opt].name, imapopts[opt].def.s);
-                fatal(errbuf, EX_SOFTWARE);
+                if (err) {
+                    buf_printf(err,
+                               "%s: %s: couldn't parse default bytesize '%s'\n",
+                               __func__, imapopts[opt].name, imapopts[opt].def.s);
+                }
+                r = EX_SOFTWARE;
+                goto done;
             }
 
             imapopts[opt].val.i64 = bytesize;
@@ -735,11 +742,13 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
                                           &duration))
             {
                 /* uh-oh, we've got a bogus Default-Value */
-                char errbuf[1024];
-                snprintf(errbuf, sizeof(errbuf),
-                         "%s: %s: couldn't parse default duration '%s'",
-                         __func__, imapopts[opt].name, imapopts[opt].def.s);
-                fatal(errbuf, EX_SOFTWARE);
+                if (err) {
+                    buf_printf(err,
+                               "%s: %s: couldn't parse default duration '%s'\n",
+                               __func__, imapopts[opt].name, imapopts[opt].def.s);
+                }
+                r = EX_SOFTWARE;
+                goto done;
             }
 
             imapopts[opt].val.i32 = duration;
@@ -762,8 +771,12 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         if (!Uisalnum(*p)) {
             syslog(LOG_ERR, "INVALID defaultpartition: %s",
                    config_defpartition);
-            fatal("defaultpartition option contains non-alnum character",
-                  EX_CONFIG);
+            if (err) {
+                buf_appendcstr(err,
+                    "defaultpartition option contains non-alnum character\n");
+            }
+            r = EX_CONFIG;
+            goto done;
         }
         if (Uisupper(*p)) *p = tolower((unsigned char) *p);
     }
@@ -791,14 +804,21 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         }
 
         if (!found) {
-            snprintf(buf, sizeof(buf),
-                     "partition-%s option not specified in configuration file",
-                     config_defpartition ? config_defpartition : "<name>");
-            fatal(buf, EX_CONFIG);
+            if (err) {
+                buf_printf(err,
+                           "partition-%s option not specified in configuration file\n",
+                           config_defpartition ? config_defpartition : "<name>");
+            }
+            r = EX_CONFIG;
+            goto done;
         }
 
         if (config_check_partitions(NULL)) {
-            fatal("invalid partition value detected", EX_CONFIG);
+            if (err) {
+                buf_appendcstr(err, "invalid partition value detected\n");
+            }
+            r = EX_CONFIG;
+            goto done;
         }
     }
 
@@ -874,21 +894,37 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 
     config_admins = strarray_split(config_getstring(IMAPOPT_ADMINS),
                                    NULL, STRARRAY_TRIM);
+
+ done:
+    if (r) config_reset();
+
+    return r;
 }
 
 #define GROWSIZE 4096
 
-static void config_add_overflowstring(const char *key, const char *value, int lineno)
+/* Only fails if the key already exists, which is forbidden. */
+static int config_add_overflowstring(const char *key, const char *value)
 {
-    char *newval = xstrdup(value);
-    if (newval != hash_insert(key, newval, &confighash)) {
-        char errbuf[1024];
-        snprintf(errbuf, sizeof(errbuf),
-                "option '%s' was specified twice in config file "
-                "(second occurrence on line %d)",
-                key, lineno);
-        fatal(errbuf, EX_CONFIG);
+    char *oldval, *newval;
+
+    if (hash_lookup(key, &confighash)) {
+        /* Duplicate key detected. Don't replace the existing value! */
+        return EX_CONFIG;
     }
+
+    newval = xstrdup(value);
+    oldval = hash_insert(key, newval, &confighash);
+
+    if (oldval != newval) {
+        /* This shouldn't happen due to the duplicate check above, but if it
+         * does, the hash now owns newvalue and we have to free oldvalue.
+         */
+        free(oldval);
+        return EX_CONFIG;
+    }
+
+    return 0;
 }
 
 EXPORTED int config_parse_switch(const char *p)
@@ -904,17 +940,18 @@ EXPORTED int config_parse_switch(const char *p)
     return -1;
 }
 
-static void config_read_file(const char *filename)
+static int config_read_file(const char *filename, struct buf *err)
 {
     FILE *infile = NULL;
     enum imapopt opt = IMAPOPT_ZERO;
     int lineno = 0;
-    char *buf, errbuf[1024];
+    char *buf;
     const char *cyrus_path;
     unsigned bufsize, len;
     char *p, *q, *key, *fullkey, *srvkey;
     int service_specific;
     int idlen = (config_ident ? strlen(config_ident) : 0);
+    int r = 0;
 
     bufsize = GROWSIZE;
     buf = xmalloc(bufsize);
@@ -932,20 +969,22 @@ static void config_read_file(const char *filename)
         infile = fopen(filename, "r");
 
     if (!infile) {
-        snprintf(errbuf, sizeof(errbuf),
-                 "can't open configuration file %s: %s",
-                 filename, strerror(errno));
-        free(buf);
-        fatal(errbuf, EX_CONFIG);
+        if (err) {
+            buf_printf(err,
+                       "can't open configuration file %s: %s\n",
+                       filename, strerror(errno));
+        }
+        r = EX_CONFIG;
+        goto done;
     }
 
     /* check to see if we've already read this file */
     if (hash_lookup(filename, &includehash)) {
-        snprintf(errbuf, sizeof(errbuf),
-                 "configuration file %s included twice",
-                 filename);
-        free(buf);
-        fatal(errbuf, EX_CONFIG);
+        if (err) {
+            buf_printf(err, "%s: already included\n", filename);
+        }
+        r = EX_CONFIG;
+        goto done;
     }
     else {
         hash_insert(filename, (void*) 0xDEADBEEF, &includehash);
@@ -991,11 +1030,11 @@ static void config_read_file(const char *filename)
             p++;
         }
         if (*p != ':') {
-            snprintf(errbuf, sizeof(errbuf),
-                     "invalid option name on line %d of configuration file %s",
-                     lineno, filename);
-            free(buf);
-            fatal(errbuf, EX_CONFIG);
+            if (err) {
+                buf_printf(err, "%s:%d: invalid option\n", filename, lineno);
+            }
+            r = EX_CONFIG;
+            goto done;
         }
         *p++ = '\0';
 
@@ -1008,11 +1047,11 @@ static void config_read_file(const char *filename)
         }
 
         if (!*p) {
-            snprintf(errbuf, sizeof(errbuf),
-                     "empty option value on line %d of configuration file",
-                     lineno);
-            free(buf);
-            fatal(errbuf, EX_CONFIG);
+            if (err) {
+                buf_printf(err, "%s:%d: empty option value\n", filename, lineno);
+            }
+            r = EX_CONFIG;
+            goto done;
         }
 
         srvkey = NULL;
@@ -1020,15 +1059,24 @@ static void config_read_file(const char *filename)
         /* Look for directives */
         if (key[0] == '@') {
             if (!strcasecmp(key, "@include")) {
-                config_read_file(p);
+                if (config_read_file(p, err)) {
+                    if (err) {
+                        buf_printf(err, "\tincluded at %s:%d\n",
+                                   filename, lineno);
+                    }
+                    r = EX_CONFIG;
+                    goto done;
+                }
+
                 continue;
             }
             else {
-                snprintf(errbuf, sizeof(errbuf),
-                         "invalid directive on line %d of configuration file %s",
-                         lineno, filename);
-                free(buf);
-                fatal(errbuf, EX_CONFIG);
+                if (err) {
+                    buf_printf(err, "%s:%d: invalid directive\n",
+                                    filename, lineno);
+                }
+                r = EX_CONFIG;
+                goto done;
             }
         }
 
@@ -1072,17 +1120,15 @@ static void config_read_file(const char *filename)
              *  If we have already seen a service-specific form, and this is
              *  a generic form, just skip it and don't moan.
              */
-            if (
-                    (imapopts[opt].seen == 1 && !service_specific) ||
-                    (imapopts[opt].seen == 2 && service_specific)
-                ) {
-
-                snprintf(errbuf, sizeof(errbuf),
-                         "option '%s' was specified twice in config file"
-                         " (second occurrence on line %d)",
-                         fullkey, lineno);
-                free(buf);
-                fatal(errbuf, EX_CONFIG);
+            if ((imapopts[opt].seen == 1 && !service_specific)
+                || (imapopts[opt].seen == 2 && service_specific))
+            {
+                if (err) {
+                    buf_printf(err, "%s:%d: '%s' was already specified\n",
+                                    filename, lineno, fullkey);
+                }
+                r = EX_CONFIG;
+                goto done;
 
             } else if (imapopts[opt].seen == 2 && !service_specific) {
                 continue;
@@ -1103,7 +1149,15 @@ static void config_read_file(const char *filename)
              * some reason, we can do so with config_getoverflowstring().
              */
             if (imapopts[opt].deprecated_since) {
-                config_add_overflowstring(fullkey, p, lineno);
+                r = config_add_overflowstring(fullkey, p);
+                if (r) {
+                    if (err) {
+                        buf_printf(err, "%s:%d: '%s' was already specified\n",
+                                        filename, lineno, fullkey);
+                    }
+                    r = EX_CONFIG;
+                    goto done;
+                }
             }
 
             /* this is a known option */
@@ -1125,11 +1179,12 @@ static void config_read_file(const char *filename)
                 val = strtol(p, &ptr, 0);
                 if (!ptr || *ptr != '\0') {
                     /* error during conversion */
-                    snprintf(errbuf, sizeof(errbuf),
-                             "non-integer value for %s in line %d",
-                             imapopts[opt].name, lineno);
-                    free(buf);
-                    fatal(errbuf, EX_CONFIG);
+                    if (err) {
+                        buf_printf(err, "%s:%d: '%s' has non-integer value\n",
+                                        filename, lineno, imapopts[opt].name);
+                    }
+                    r = EX_CONFIG;
+                    goto done;
                 }
 
                 imapopts[opt].val.i32 = val;
@@ -1140,11 +1195,13 @@ static void config_read_file(const char *filename)
                 int b = config_parse_switch(p);
                 if (b < 0) {
                     /* error during conversion */
-                    snprintf(errbuf, sizeof(errbuf),
-                             "non-switch value for %s in line %d",
-                             imapopts[opt].name, lineno);
-                    free(buf);
-                    fatal(errbuf, EX_CONFIG);
+                    if (err) {
+                        buf_printf(err,
+                                   "%s:%d: '%s' has non-switch value\n",
+                                   filename, lineno, imapopts[opt].name);
+                    }
+                    r = EX_CONFIG;
+                    goto done;
                 }
                 imapopts[opt].val.b = !!b;
                 break;
@@ -1192,11 +1249,13 @@ static void config_read_file(const char *filename)
 
                     if (!e->name) {
                         /* error during conversion */
-                        snprintf(errbuf, sizeof(errbuf),
-                                 "invalid value '%s' for %s in line %d",
-                                 p, imapopts[opt].name, lineno);
-                        free(buf);
-                        fatal(errbuf, EX_CONFIG);
+                        if (err) {
+                            buf_printf(err,
+                                       "%s:%d: invalid value '%s' for '%s'\n",
+                                       filename, lineno, p, imapopts[opt].name);
+                        }
+                        r = EX_CONFIG;
+                        goto done;
                     }
                     else if (imapopts[opt].type == OPT_STRINGLIST)
                         imapopts[opt].val.s = e->name;
@@ -1230,11 +1289,13 @@ static void config_read_file(const char *filename)
                 if (config_parseduration(p, imapopts[opt].defunit, &duration))
                 {
                     imapopts[opt].seen = 0; /* not seen after all */
-                    snprintf(errbuf, sizeof(errbuf),
-                             "unparsable duration '%s' for %s in line %d",
-                             p, imapopts[opt].name, lineno);
-                    free(buf);
-                    fatal(errbuf, EX_CONFIG);
+                    if (err) {
+                        buf_printf(err,
+                                   "%s:%d: unparsable duration '%s' for '%s'\n",
+                                   filename, lineno, p, imapopts[opt].name);
+                    }
+                    r = EX_CONFIG;
+                    goto done;
                 }
 
                 imapopts[opt].val.i32 = duration;
@@ -1246,11 +1307,13 @@ static void config_read_file(const char *filename)
 
                 if (config_parsebytesize(p, imapopts[opt].defunit, &bytesize)) {
                     imapopts[opt].seen = 0; /* not seen after all */
-                    snprintf(errbuf, sizeof(errbuf),
-                             "unparsable byte size '%s' for %s in line %d",
-                             p, imapopts[opt].name, lineno);
-                    free(buf);
-                    fatal(errbuf, EX_CONFIG);
+                    if (err) {
+                        buf_printf(err,
+                                   "%s:%d: unparsable byte size '%s' for '%s'\n",
+                                   filename, lineno, p, imapopts[opt].name);
+                    }
+                    r = EX_CONFIG;
+                    goto done;
                 }
 
                 imapopts[opt].val.i64 = bytesize;
@@ -1271,21 +1334,33 @@ static void config_read_file(const char *filename)
             if (strncasecmp(key,"sasl_",5)
                 && strncasecmp(key,"partition-",10))
             {
-                snprintf(errbuf, sizeof(errbuf),
-                         "option '%s' is unknown on line %d of config file",
-                         fullkey, lineno);
-                free(buf);
-                fatal(errbuf, EX_CONFIG);
+                if (err) {
+                    buf_printf(err, "%s:%d: '%s' is unknown\n",
+                                    filename, lineno, fullkey);
+                }
+                r = EX_CONFIG;
+                goto done;
             }
 */
 
             /* Put it in the overflow hash table */
-            config_add_overflowstring(key, p, lineno);
+            r = config_add_overflowstring(fullkey, p);
+            if (r) {
+                if (err) {
+                    buf_printf(err, "%s:%d: '%s' was already specified\n",
+                                    filename, lineno, fullkey);
+                }
+                r = EX_CONFIG;
+                goto done;
+            }
         }
     }
 
-    fclose(infile);
+ done:
+    if (infile)
+        fclose(infile);
     free(buf);
+    return r;
 }
 
 EXPORTED void config_toggle_debug(void)

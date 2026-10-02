@@ -266,8 +266,9 @@ void test_xsha1(void)
 
 int main(int argc, char **argv)
 {
+    struct buf config_err = BUF_INITIALIZER;
     const char *alt_config = NULL;
-    int opt;
+    int opt, r;
 
     while ((opt = getopt(argc, argv, "C:")) != -1) {
         switch(opt) {
@@ -281,7 +282,9 @@ int main(int argc, char **argv)
         }
     }
 
-    config_read(alt_config, 0);
+    r = config_read(alt_config, 0, &config_err);
+    if (r) fatal(buf_cstring(&config_err), r);
+    buf_free(&config_err);
 
     test_arrayu64();
     test_buf();

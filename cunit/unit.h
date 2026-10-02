@@ -12,10 +12,14 @@
 
 #include "cunit/unit-syslog.h"
 
+#include "buf.h"
+
 extern int verbose;
 
 /* initialise libconfig from a string */
-extern void config_read_string(const char *confdir, const char *s);
+extern int config_read_string(const char *confdir,
+                              struct buf *err,
+                              const char *s);
 
 /* utilities for consistent test tmpdir behaviour */
 extern int cunit_tmpfile(char *buf, size_t len, const char *pattern);
@@ -196,6 +200,16 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
         #actual, _a ? _a : "(null)",                                    \
         #expected, _e ? _e : "(null)");                                 \
 } while(0)
+
+/* custom -- no prior definition to undef */
+#define CU_ASSERT_STRING_CONTAINS(actual,expected) do {                 \
+    const char *_a = (actual), *_e = (expected);                        \
+    CU_assertFormatImplementation(!!strstr(_a?_a:"",_e?_e:""),          \
+        __LINE__, __FILE__, "", CU_FALSE,                               \
+        "CU_ASSERT_STRING_CONTAINS(%s=\"%s\",%s=\"%s\")",               \
+        #actual, _a ? _a : "(null)",                                    \
+        #expected, _e ? _e : "(null)");                                 \
+} while (0)
 
 #undef CU_ASSERT_DOUBLE_EQUAL
 #define CU_ASSERT_DOUBLE_EQUAL(actual,expected,granularity) do {        \

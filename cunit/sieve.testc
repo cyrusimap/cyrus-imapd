@@ -553,7 +553,9 @@ static FILE *fmemopen(const void *buf, size_t len, const char *mode)
 
 static int set_up(void)
 {
-    config_read_string(DBDIR"/conf",
+    int r;
+
+    r = config_read_string(DBDIR"/conf", NULL,
         "defaultpartition: "PARTITION"\n"
         "partition-"PARTITION": "DBDIR"/data\n"
         "sievenotifier: mailto\n"
@@ -561,6 +563,8 @@ static int set_up(void)
 	    " envelope body relational regex subaddress copy date index" \
 	    " imap4flags variables\n"
     );
+    if (r) return r;
+
     libcyrus_init();
     return 0;
 }

@@ -168,6 +168,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     int syslog_opts = LOG_PID;
     const char *facility;
     char *ident_buf = NULL;
+    struct buf config_err = BUF_INITIALIZER;
+    int r;
 
     if (cyrus_init_run != NOT_RUNNING) {
         fatal("cyrus_init called twice!", EX_CONFIG);
@@ -215,7 +217,9 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     }
 
     /* Load configuration file.  This will set config_dir when it finds it */
-    config_read(alt_config, config_need_data);
+    r = config_read(alt_config, config_need_data, &config_err);
+    if (r) fatal(buf_cstring(&config_err), r);
+    buf_free(&config_err);
 
     debug_update_log_suppression();
 
