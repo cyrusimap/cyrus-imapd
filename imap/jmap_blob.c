@@ -4,6 +4,7 @@
 
 #include <config.h>
 
+#include <ctype.h>
 #include <errno.h>
 
 #include <syslog.h>
@@ -819,6 +820,26 @@ done:
     return 0;
 }
 
+/* RFC 4648 S4 base64: the 64-character alphabet in groups of four, with
+ * at most two '=' at the very end. Whitespace is ignored, so content
+ * wrapped as RFC 2045 does is accepted; anything else is not. */
+static int _is_strict_base64(const char *s, size_t len)
+{
+    size_t i, n = 0, pad = 0;
+    for (i = 0; i < len; i++) {
+        unsigned char c = s[i];
+        if (isspace(c)) continue;
+        if (c == '=') {
+            if (++pad > 2) return 0;
+        }
+        else if (pad || !(isalnum(c) || c == '+' || c == '/')) {
+            return 0;
+        }
+        n++;
+    }
+    return n % 4 == 0;
+}
+
 static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, int recurse, json_t **errp)
 {
     json_t *jitem;
@@ -827,6 +848,7 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
     // plain text only
     jitem = json_object_get(arg, "data:asText");
     if (JNOTNULL(jitem) && json_is_string(jitem)) {
+        if (seen_one++) return IMAP_MAILBOX_EXISTS;
         buf_init_ro(buf, json_string_value(jitem), json_string_length(jitem));
     }
 
@@ -834,6 +856,12 @@ static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, i
     jitem = json_object_get(arg, "data:asBase64");
     if (JNOTNULL(jitem) && json_is_string(jitem)) {
         if (seen_one++) return IMAP_MAILBOX_EXISTS;
+        /* RFC 9404 S4.1: invalid base64 MUST be a notCreated response;
+         * charset_decode() accepts anything, so validate first */
+        if (!_is_strict_base64(json_string_value(jitem), json_string_length(jitem))) {
+            *errp = json_string("data:asBase64 is not valid base64");
+            return IMAP_PROTOCOL_BAD_PARAMETERS;
+        }
         int r = charset_decode(buf, json_string_value(jitem),
                                json_string_length(jitem), ENCODING_BASE64);
         if (r) {
