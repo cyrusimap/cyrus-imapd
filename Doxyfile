@@ -20,6 +20,9 @@
   MACRO_EXPANSION        = YES
   EXPAND_ONLY_PREDEF     = NO
 
+  # Drop GCC attributes, which split declarations Sphinx then can't parse
+  PREDEFINED             = "__attribute__(x)="
+
 ### What do we emit?
 
   # Only generate XML, it's all breathe needs
