@@ -1,0 +1,29 @@
+Description:
+
+imapd implements the OBJECTID+ extension from
+draft-ietf-mailmaint-imap-objectid-bis: a compound OBJECTID response
+carrying MAILBOXID and ACCOUNTID (and EMAILID/THREADID for messages),
+mailbox selection by identifier, an OBJECTID response code on RENAME, and
+OBJECTID as a STATUS attribute, FETCH item and LIST return option.  Once a
+client has activated the extension, every LIST response it did not ask for,
+such as a NOTIFY MailboxName event, carries the mailbox's identifiers too.
+
+
+Documentation:
+
+docsrc/rfc-support.rst lists the draft.  The draft itself is the reference.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

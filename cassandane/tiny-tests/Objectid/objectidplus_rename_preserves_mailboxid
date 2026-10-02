@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test MAILBOXID preserved across rename
+#
+sub test_objectidplus_rename_preserves_mailboxid
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('foo');
+    $talk->create('bar');
+
+    # get mailboxids before rename
+    my $status_foo_before = $talk->status('foo', "(mailboxid)");
+    my $status_bar_before = $talk->status('bar', "(mailboxid)");
+
+    # activate OBJECTID+ so RENAME returns OBJECTID response code
+    $talk->enable('objectid+');
+
+    # rename foo to renamed
+    $talk->rename('foo', 'renamed');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # check mailboxid is preserved after rename
+    my $status_renamed = $talk->status('renamed', "(mailboxid)");
+    my $status_bar_after = $talk->status('bar', "(mailboxid)");
+
+    $self->assert_str_equals($status_foo_before->{mailboxid}[0],
+                             $status_renamed->{mailboxid}[0]);
+    $self->assert_str_equals($status_bar_before->{mailboxid}[0],
+                             $status_bar_after->{mailboxid}[0]);
+}

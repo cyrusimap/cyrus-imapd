@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# RETURN (OBJECTID STATUS (OBJECTID)) may be combined; the LIST item
+# and the STATUS attribute must then carry identical identifiers.
+#
+sub test_objectidplus_list_return_with_status
+    :AltNamespace :Conversations
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('foo');
+    $talk->create('bar');
+
+    my %list;
+    my %status;
+    my %handlers = (
+        list => sub ($, $data) { $list{$data->[2]} = $data },
+        status => sub ($, $data) { $status{$data->[0]} = { @{$data->[1]} } },
+    );
+    $talk->_imap_cmd('LIST', 0, \%handlers, '', '*',
+                     'RETURN', ['OBJECTID', 'STATUS', ['OBJECTID']]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    for my $name (qw(INBOX foo bar)) {
+        my %ext = @{$list{$name}[3] // []};
+        $self->assert_not_null($ext{OBJECTID}, "$name has OBJECTID item");
+        $self->assert_not_null($status{$name}{OBJECTID},
+                               "$name has STATUS OBJECTID");
+        $self->assert_cmp_deeply($ext{OBJECTID}, $status{$name}{OBJECTID});
+    }
+}

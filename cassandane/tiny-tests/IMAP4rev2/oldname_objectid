@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Once OBJECTID+ is active, every unsolicited LIST response carries
+# the OBJECTID extended data item, including the \NonExistent
+# response for a deleted mailbox.
+#
+sub test_oldname_objectid
+    :NoAltNameSpace :Conversations
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $talk->unselect();
+
+    my $res = $talk->_imap_cmd('ENABLE', 0, "enabled", "IMAP4rev2", "OBJECTID+");
+    $self->assert_num_equals(1, $res->{imap4rev2});
+    $self->assert_num_equals(1, $res->{'objectid+'});
+
+    # A + COMBINING RING ABOVE normalizes to U+00C5; OHM SIGN to U+03A9
+    my $a_denorm = "INBOX.A\xCC\x8A";
+    my $a_nfc = "INBOX.\xC3\x85";
+    my $o_denorm = "INBOX.\xE2\x84\xA6";
+    my $o_nfc = "INBOX.\xCE\xA9";
+
+    my @results;
+    my %handlers = (
+        list => sub ($, $list) { push @results, $list },
+    );
+
+    xlog $self, "CREATE with a denormalized name";
+    $talk->_imap_cmd('CREATE', 0, \%handlers, $a_denorm);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_num_equals(1, scalar @results);
+    $self->assert_str_equals($a_nfc, $results[0][2]);
+    my %ext = @{$results[0][3]};
+    $self->assert_cmp_deeply([$a_denorm], $ext{OLDNAME});
+    my %ids = @{$ext{OBJECTID}};
+    $self->assert_matches(qr/\S/, $ids{MAILBOXID});
+    $self->assert_matches(qr/\S/, $ids{ACCOUNTID});
+
+    # the status() wrapper would re-encode the UTF-8 name as modified UTF-7
+    my $status = $talk->_imap_cmd('STATUS', 0, 'status', $a_nfc, '(objectid)');
+    $self->assert_cmp_deeply({ @{$status->{objectid}} }, \%ids);
+
+    xlog $self, "RENAME with denormalized names";
+    @results = ();
+    $talk->_imap_cmd('RENAME', 0, \%handlers, $a_denorm, $o_denorm);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_num_equals(2, scalar @results);
+    $self->assert_str_equals("\\NonExistent", $results[0][0][0]);
+    $self->assert_str_equals($a_nfc, $results[0][2]);
+    %ext = @{$results[0][3]};
+    $self->assert_cmp_deeply(\%ids, { @{$ext{OBJECTID}} });
+    $self->assert_str_equals($o_nfc, $results[1][2]);
+    %ext = @{$results[1][3]};
+    $self->assert_cmp_deeply(\%ids, { @{$ext{OBJECTID}} });
+
+    xlog $self, "DELETE with a denormalized name";
+    @results = ();
+    $talk->_imap_cmd('DELETE', 0, \%handlers, $o_denorm);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_num_equals(1, scalar @results);
+    $self->assert_str_equals("\\NonExistent", $results[0][0][0]);
+    %ext = @{$results[0][3]};
+    $self->assert_cmp_deeply([$o_denorm], $ext{OLDNAME});
+    $self->assert_cmp_deeply(\%ids, { @{$ext{OBJECTID}} });
+}

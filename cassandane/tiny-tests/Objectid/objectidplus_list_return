@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# LIST RETURN (OBJECTID) activates OBJECTID+ and puts the same
+# identifiers STATUS (OBJECTID) reports into each LIST response.
+# Lookup rights are enough to see them, and a name with no mailbox
+# behind it gets the empty item.
+#
+sub test_objectidplus_list_return
+    :AltNamespace :Conversations
+    ($self)
+{
+    $self->{instance}->create_user("other", subdirs => [ 'shared' ]);
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->setacl("user.other.shared", "cassandane", "l");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $talk = $self->{store}->get_client();
+    $talk->create('foo');
+    $talk->create('foo.bar');
+
+    my %list;
+    my $enabled;
+    my %handlers = (
+        list => sub ($, $data) { $list{$data->[2]} = $data },
+        enabled => sub { $enabled = 1 },
+    );
+    $talk->_imap_cmd('LIST', 0, \%handlers, '', '*', 'RETURN', ['OBJECTID']);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert($enabled, "LIST RETURN (OBJECTID) activated OBJECTID+");
+
+    my %ids;
+    for my $name ('INBOX', 'foo', 'foo.bar', 'Other Users.other.shared') {
+        my %ext = @{$list{$name}[3] // []};
+        $self->assert_not_null($ext{OBJECTID}, "$name has OBJECTID item");
+        $ids{$name} = { @{$ext{OBJECTID}} };
+        $self->assert_matches(qr/\S/, $ids{$name}{MAILBOXID});
+        $self->assert_matches(qr/\S/, $ids{$name}{ACCOUNTID});
+    }
+
+    xlog $self, "LIST and STATUS agree on every mailbox we can STATUS";
+    for my $name (qw(INBOX foo foo.bar)) {
+        my $status = $talk->status($name, '(objectid)');
+        $self->assert_cmp_deeply($ids{$name}, { @{$status->{objectid}} });
+    }
+
+    xlog $self, "lookup-only shared mailbox is identified, and belongs to other";
+    $self->assert_str_not_equals($ids{INBOX}{ACCOUNTID},
+                                 $ids{'Other Users.other.shared'}{ACCOUNTID});
+    $talk->status('Other Users.other.shared', '(objectid)');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    xlog $self, "namespace prefix has no mailbox, so gets the empty item";
+    %list = ();
+    $talk->_imap_cmd('LIST', 0, \%handlers, '', '%', 'RETURN', ['OBJECTID']);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_contains('\\NonExistent', $list{'Other Users'}[0], 1);
+    my %ext = @{$list{'Other Users'}[3]};
+    $self->assert_cmp_deeply([], $ext{OBJECTID});
+}
