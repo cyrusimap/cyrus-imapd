@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_blob_upload_invalid_sources
+    :min_version_3_5 :needs_component_jmap :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    $jmap->AddUsing('urn:ietf:params:jmap:blob');
+
+    # RFC 9404 Section 4.1: "invalid characters in the base64 of
+    # data:asBase64 ... MUST result in a notCreated response", a
+    # DataSourceObject has "Exactly one of" the data properties, and zero
+    # sources make an empty blob. Whitespace is not an invalid character:
+    # RFC 2045 wraps base64 at 76 columns.
+    my $res = $jmap->CallMethods([['Blob/upload', {
+        create => {
+            bad64   => { data => [ { 'data:asBase64' => 'not*base64!' } ] },
+            short   => { data => [ { 'data:asBase64' => 'aGVsbG8' } ] },
+            badpad  => { data => [ { 'data:asBase64' => 'aGVsbG8=YQ==' } ] },
+            two     => { data => [ { 'data:asText' => 'a', 'data:asBase64' => 'YQ==' } ] },
+            ok      => { data => [ { 'data:asBase64' => 'aGVsbG8=' } ] },
+            wrapped => { data => [ { 'data:asBase64' => "aGVs\r\nbG8gd29y\nbGQ=\n" } ] },
+            empty   => { data => [] },
+        },
+    }, 'R1']]);
+    $self->assert_str_equals('Blob/upload', $res->[0][0]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{bad64}{type});
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{short}{type});
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{badpad}{type});
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{two}{type});
+    $self->assert_not_null($res->[0][1]{created}{ok}{id});
+    $self->assert_num_equals(5, $res->[0][1]{created}{ok}{size});
+    $self->assert_not_null($res->[0][1]{created}{wrapped}{id});
+    $self->assert_num_equals(11, $res->[0][1]{created}{wrapped}{size});
+    $self->assert_not_null($res->[0][1]{created}{empty}{id});
+    $self->assert_num_equals(0, $res->[0][1]{created}{empty}{size});
+}
