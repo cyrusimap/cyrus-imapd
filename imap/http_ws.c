@@ -896,10 +896,13 @@ HIDDEN void ws_input(struct transaction_t *txn)
             goaway, prot_IS_EOF(pin), want_read, want_write);
 
     if (want_read && !goaway) {
+        /* In scope for wslay_event_recv(), which reads it via ctx->pin */
+        struct protstream h2_data;
+
         if (txn->flags.ver > VER_1_1) {
             /* Data has been read into the request body,
                which we place into a fixed-size protstream */
-            struct protstream h2_data = {
+            h2_data = (struct protstream) {
                 .fixedsize = 1,
                 .ptr = (unsigned char *) buf_base(&txn->req_body.payload),
                 .cnt = buf_len(&txn->req_body.payload)
@@ -910,6 +913,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
         /* Read frame(s) */
         int r = wslay_event_recv(ev);
+        ctx->pin = pin;
 
         if (prot_IS_EOF(pin)) {
             /* Client closed connection */
