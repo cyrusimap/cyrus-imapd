@@ -546,8 +546,8 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 }
 
 
-HIDDEN int ws_init(struct http_connection *conn __attribute__((unused)),
-                   struct buf *serverinfo)
+HIDDEN bool ws_init(struct http_connection *conn __attribute__((unused)),
+                    struct buf *serverinfo)
 {
     buf_printf(serverinfo, " Wslay/%s", WSLAY_VERSION);
 
@@ -975,10 +975,10 @@ HIDDEN void ws_send(struct transaction_t *txn, struct buf *outbuf)
 
 #else /* !HAVE_WSLAY */
 
-HIDDEN int ws_init(struct http_connection *conn __attribute__((unused)),
-                   struct buf *serverinfo __attribute__((unused)))
+HIDDEN bool ws_init(struct http_connection *conn __attribute__((unused)),
+                    struct buf *serverinfo __attribute__((unused)))
 {
-    return 0;
+    return false;
 }
 
 HIDDEN int ws_start_channel(struct transaction_t *txn __attribute__((unused)),

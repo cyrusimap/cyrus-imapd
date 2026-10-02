@@ -7,6 +7,8 @@
 
 #include <config.h>
 
+#include <stdbool.h>
+
 #ifdef HAVE_NGHTTP2
 #include <nghttp2/nghttp2.h>
 #endif
@@ -15,11 +17,11 @@
 
 #define HTTP2_CLEARTEXT_ID  "h2c"
 
-extern int http2_init(struct http_connection *conn, struct buf *serverinfo);
+extern bool http2_init(struct http_connection *conn, struct buf *serverinfo);
 
 extern void http2_altsvc(struct buf *altsvc);
 
-extern int http2_preface(struct http_connection *conn);
+extern bool http2_preface(struct http_connection *conn);
 
 extern int http2_start_session(struct transaction_t *txn,
                                struct http_connection *conn);
