@@ -390,20 +390,20 @@ char *httpd_altsvc = NULL;
 static struct http_connection http_conn;
 
 static sasl_ssf_t extprops_ssf = 0;
-int https = 0;
-static int httpd_tls_required = 0;
-static int httpd_starttls_enabled = 0;
+bool https = false;
+static bool httpd_tls_required = false;
+static bool httpd_starttls_enabled = false;
 static unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
 uint64_t config_httpmodules;
 
 static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
 static ptrarray_t httpd_pipes = PTRARRAY_INITIALIZER;
-static int http2_enabled = 0;
+static bool http2_enabled = false;
 
 int ignorequota = 0;
 int apns_enabled = 0;
-int ws_enabled = 0;
+bool ws_enabled = false;
 
 /* List of HTTP auth schemes that we support -
    in descending order of security properties */
@@ -793,7 +793,7 @@ int service_init(int argc __attribute__((unused)),
             break;
 
         case 's': /* https (do TLS right away) */
-            https = 1;
+            https = true;
             break;
 
         case 'q':
@@ -1007,8 +1007,8 @@ int service_main(int argc __attribute__((unused)),
 
     /* we were connected on https port so we should do
        TLS negotiation immediately */
-    int do_h2 = 0;
-    if (https == 1) {
+    bool do_h2 = false;
+    if (https) {
         starttls(&http_conn, 180 /* timeout */);
 
         /* Check negotiated protocol */
@@ -1292,7 +1292,7 @@ static void starttls(struct http_connection *conn, int timeout)
     ptrarray_add(&conn->reset_callbacks, &_reset_tls);
     ptrarray_add(&conn->shutdown_callbacks, &_shutdown_tls);
 
-    httpd_tls_required = 0;
+    httpd_tls_required = false;
 
     avail_auth_schemes |= AUTH_BASIC;
 }
@@ -1819,7 +1819,7 @@ static void postauth_check_hdrs(struct transaction_t *txn)
         xmlURIPtr uri = parse_uri(METH_UNKNOWN, hdr[0], 0, &err);
 
         if (uri && uri->scheme && uri->server) {
-            int o_https = !strcasecmp(uri->scheme, "https");
+            bool o_https = !strcasecmp(uri->scheme, "https");
 
             if ((https == o_https) &&
                 !strcasecmp(uri->server,

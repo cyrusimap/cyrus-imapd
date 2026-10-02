@@ -7,6 +7,8 @@
 
 #include <config.h>
 
+#include <stdbool.h>
+
 #ifdef HAVE_WSLAY
 #include <wslay/wslay.h>
 
@@ -23,7 +25,7 @@ enum wslay_opcode {
 #define WS_TOKEN         "websocket"
 #define WS_VERSION       "13"
 
-extern int ws_init(struct http_connection *conn, struct buf *serverinfo);
+extern bool ws_init(struct http_connection *conn, struct buf *serverinfo);
 
 typedef int ws_data_callback(struct transaction_t *txn, enum wslay_opcode opcode,
                              struct buf *inbuf, struct buf *outbuf,

@@ -524,7 +524,7 @@ static void http2_done(struct http_connection *conn)
     nghttp2_session_callbacks_del(http2_callbacks);
 }
 
-HIDDEN int http2_init(struct http_connection *conn, struct buf *serverinfo)
+HIDDEN bool http2_init(struct http_connection *conn, struct buf *serverinfo)
 {
     int r;
 
@@ -534,7 +534,7 @@ HIDDEN int http2_init(struct http_connection *conn, struct buf *serverinfo)
     if ((r = nghttp2_session_callbacks_new(&http2_callbacks))) {
         syslog(LOG_WARNING,
                "nghttp2_session_callbacks_new: %s", nghttp2_strerror(r));
-        return 0;
+        return false;
     }
 
     nghttp2_session_callbacks_set_on_begin_headers_callback(http2_callbacks,
@@ -559,7 +559,7 @@ HIDDEN int http2_init(struct http_connection *conn, struct buf *serverinfo)
 
     ptrarray_add(&conn->shutdown_callbacks, &http2_done);
 
-    return 1;
+    return true;
 }
 
 
@@ -576,7 +576,7 @@ HIDDEN void http2_altsvc(struct buf *altsvc)
 }
 
 
-HIDDEN int http2_preface(struct http_connection *conn)
+HIDDEN bool http2_preface(struct http_connection *conn)
 {
     if (http2_callbacks) {
         /* Check initial client input for HTTP/2 preface */
@@ -585,11 +585,11 @@ HIDDEN int http2_preface(struct http_connection *conn)
         if (prot_lookahead(conn->pin,
                            NGHTTP2_CLIENT_MAGIC, NGHTTP2_CLIENT_MAGIC_LEN, &c)) {
             syslog(LOG_DEBUG, "HTTP/2 client connection preface");
-            return 1;
+            return true;
         }
     }
 
-    return 0;
+    return false;
 }
 
 
@@ -1099,19 +1099,19 @@ HIDDEN void http2_input(struct http_connection *conn)
 
 #else /* !HAVE_NGHTTP2 */
 
-HIDDEN int http2_init(struct http_connection *conn __attribute__((unused)),
-                       struct buf *serverinfo __attribute__((unused)))
+HIDDEN bool http2_init(struct http_connection *conn __attribute__((unused)),
+                        struct buf *serverinfo __attribute__((unused)))
 {
-    return 0;
+    return false;
 }
 
 HIDDEN void http2_altsvc(struct buf *altsvc __attribute__((unused)))
 {
 }
 
-HIDDEN int http2_preface(struct http_connection *conn __attribute__((unused)))
+HIDDEN bool http2_preface(struct http_connection *conn __attribute__((unused)))
 {
-    return 0;
+    return false;
 }
 
 HIDDEN int http2_start_session(struct transaction_t *txn __attribute__((unused)),

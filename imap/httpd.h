@@ -5,6 +5,8 @@
 #ifndef HTTPD_H
 #define HTTPD_H
 
+#include <stdbool.h>
+
 #include <sasl/sasl.h>
 #include <libxml/tree.h>
 #include <libxml/uri.h>
@@ -514,7 +516,7 @@ extern struct namespace_t namespace_prometheus;
 extern struct buf serverinfo;
 extern ptrarray_t backend_cached;
 extern struct protstream *httpd_in;
-extern int https;
+extern bool https;
 extern sasl_conn_t *httpd_saslconn;
 extern int httpd_timeout;
 extern int httpd_userisadmin;
@@ -532,7 +534,7 @@ extern char *httpd_altsvc;
 
 extern int ignorequota;
 extern int apns_enabled;
-extern int ws_enabled;
+extern bool ws_enabled;
 
 extern struct proc_handle *httpd_proc_handle;
 
