@@ -46,8 +46,12 @@ int pipe_command(struct backend *s, int optimistic_literal);
 int pipe_lsub(struct backend *s, const char *userid, const char *tag,
               int force_notfatal, struct listargs *listargs, strarray_t *subs);
 
-void print_listresponse(unsigned cmd, const char *extname, const char *oldname,
-                        char hier_sep, uint32_t attributes, struct buf *extraflags);
+/* 'objectid' is the body of the OBJECTID extended data item, or NULL to
+ * omit the item; an empty buf gives the empty item "OBJECTID ()" */
+void print_listresponse(unsigned cmd, const char *extname,
+                        const char *oldname, char hier_sep,
+                        uint32_t attributes, struct buf *extraflags,
+                        const struct buf *objectid);
 
 int proxy_fetch(char *sequence, int usinguid, unsigned items,
                 void (*item_cb)(uint32_t seqno, unsigned item,
