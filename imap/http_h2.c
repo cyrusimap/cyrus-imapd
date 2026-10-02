@@ -38,6 +38,8 @@ struct http2_context {
     nghttp2_session *session;           /* HTTP/2 session */
     nghttp2_option *options;            /* Config options for HTTP/2 session */
     arrayu64_t ws_ids;                  /* Array of WebSocket stream ids */
+    ptrarray_t open_txns;               /* Transactions still on a stream:
+                                           see session_free() */
 };
 
 /* HTTP/2 stream context */
@@ -136,6 +138,9 @@ static int begin_headers_cb(nghttp2_session *session,
                          buf_release(&txn->buf), txn->req_hdrs);
 
     nghttp2_session_set_stream_user_data(session, frame->hd.stream_id, txn);
+
+    struct http2_context *ctx = (struct http2_context *) txn->conn->sess_ctx;
+    ptrarray_append(&ctx->open_txns, txn);
 
     return 0;
 }
@@ -336,6 +341,18 @@ static int frame_recv_cb(nghttp2_session *session,
     return 0;
 }
 
+/* Release txn, whose stream has closed or is about to be deleted */
+static void stream_txn_free(struct http2_context *ctx,
+                            struct transaction_t *txn)
+{
+    int idx = ptrarray_find(&ctx->open_txns, txn, 0);
+
+    if (idx >= 0) ptrarray_remove(&ctx->open_txns, idx);
+
+    transaction_free(txn);
+    free(txn);
+}
+
 static int stream_close_cb(nghttp2_session *session, int32_t stream_id,
                            uint32_t error_code,
                            void *user_data __attribute__((unused)))
@@ -347,11 +364,11 @@ static int stream_close_cb(nghttp2_session *session, int32_t stream_id,
            stream_id, nghttp2_http2_strerror(error_code));
 
     if (txn) {
+        struct http2_context *http2_ctx =
+            (struct http2_context *) txn->conn->sess_ctx;
+
         if (txn->ws_ctx) {
             /* Remove from WebSocket stream id array */
-            struct http2_context *http2_ctx =
-                (struct http2_context *) txn->conn->sess_ctx;
-
             arrayu64_remove_all(&http2_ctx->ws_ids, stream_id);
 
             if (arrayu64_size(&http2_ctx->ws_ids) == 0) {
@@ -362,8 +379,7 @@ static int stream_close_cb(nghttp2_session *session, int32_t stream_id,
 
         /* Memory cleanup */
         nghttp2_session_set_stream_user_data(session, stream_id, NULL);
-        transaction_free(txn);
-        free(txn);
+        stream_txn_free(http2_ctx, txn);
     }
 
     return 0;
@@ -439,6 +455,12 @@ static void session_free(struct http_connection *conn)
     struct http2_context *ctx = (struct http2_context *) conn->sess_ctx;
 
     if (!ctx) return;
+
+    /* nghttp2_session_del() frees its streams without calling
+     * stream_close_cb(), so free the transactions still on them */
+    struct transaction_t *txn;
+    while ((txn = ptrarray_pop(&ctx->open_txns))) stream_txn_free(ctx, txn);
+    ptrarray_fini(&ctx->open_txns);
 
     nghttp2_option_del(ctx->options);
     nghttp2_session_del(ctx->session);
