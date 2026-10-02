@@ -3,17 +3,20 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "auth.h"
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
 #include <pwd.h>
 #include <grp.h>
 #include <ctype.h>
 #include <string.h>
 
-#include "auth.h"
 #include "libcyr_cfg.h"
-#include "xmalloc.h"
-#include "strarray.h"
-#include "util.h"
 
 struct auth_state {
     char userid[81];

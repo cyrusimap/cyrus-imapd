@@ -7,11 +7,12 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
 #include <libical/vcard.h>
 
 #include "mailbox.h"
 #include "message_guid.h"
-#include "util.h"
 
 #define VCARD_MEMBER_URI_PREFIX     "urn:uuid:"
 #define VCARD_MEMBER_URI_PREFIX_LEN 9

@@ -1,4 +1,10 @@
 #include <config.h>
+#include "procinfo.h"
+
+#include "libcyrus_min/xstrlcat.h"
+
+#include <cyrus/xmalloc.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -6,10 +12,6 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <ctype.h>
-
-#include "procinfo.h"
-#include "xmalloc.h"
-#include "xstrlcat.h"
 
 static struct proc_info *
 add_procinfo_generic(piarray_t *piarray, pid_t pid, const char *servicename,

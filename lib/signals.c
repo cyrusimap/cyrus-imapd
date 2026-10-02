@@ -3,6 +3,13 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "signals.h"
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/xmalloc.h>
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -11,12 +18,6 @@
 #include <syslog.h>
 #include <string.h>
 #include <errno.h>
-
-#include "assert.h"
-#include "libconfig.h"
-#include "signals.h"
-#include "xmalloc.h"
-#include "util.h"
 
 #ifndef _NSIG
 #define _NSIG 65

@@ -3,6 +3,15 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/dynarray.h>
+#include <cyrus/hash.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xsha1.h>
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,15 +19,9 @@
 
 #include "unicode/ucnv.h"
 
-#include "assert.h"
 #include "charset.h"
-#include "dynarray.h"
-#include "xmalloc.h"
 #include "chartable.h"
-#include "hash.h"
 #include "htmlchar.h"
-#include "util.h"
-#include "xsha1.h"
 
 #include <unicode/ubrk.h>
 #include <unicode/ucasemap.h>

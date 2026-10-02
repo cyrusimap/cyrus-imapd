@@ -1,8 +1,13 @@
 /* dlist.c - list protocol for dump and sync */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
-
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xunlink.h>
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -20,19 +25,15 @@
 #include <errno.h>
 
 #include "global.h"
-#include "assert.h"
 #include "mboxlist.h"
 #include "mailbox.h"
 #include "quota.h"
-#include "xmalloc.h"
 #include "seen.h"
 #include "mboxname.h"
 #include "map.h"
 #include "imapd.h"
 #include "message.h"
-#include "util.h"
 #include "prot.h"
-#include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

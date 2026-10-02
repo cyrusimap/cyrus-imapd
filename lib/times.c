@@ -1,6 +1,11 @@
 /* times.c - Time/date utilities */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
+#include "times.h"
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
 
 #include <ctype.h>
 #include <inttypes.h>
@@ -9,9 +14,6 @@
 #include <string.h>
 #include <strings.h>
 
-#include "assert.h"
-#include "times.h"
-#include "util.h"
 #include "gmtoff.h"
 #include "mkgmtime.h"
 

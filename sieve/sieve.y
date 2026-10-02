@@ -11,10 +11,15 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
-#include <assert.h>
 #include <string.h>
-#include "xmalloc.h"
 #include "sieve/bytecode.h"
 #include "sieve/comparator.h"
 #include "sieve/interp.h"
@@ -25,11 +30,8 @@
 #include "sieve/sieve_err.h"
 #include "sieve/sieve_interface.h"
 
-#include "util.h"
 #include "imparse.h"
-#include "libconfig.h"
 #include "times.h"
-#include "tok.h"
 
 #define ERR_BUF_SIZE 1024
 
@@ -3395,7 +3397,7 @@ static test_t *build_duplicate(sieve_script_t *sscript, test_t *t)
 
 #ifdef WITH_JMAP
 #include "imap/jmap_api.h"
-#include "imap/jmap_mail_query_parse.h"
+#include "common/jmap_mail_query_parse.h"
 
 struct filter_rock {
     strarray_t *path;

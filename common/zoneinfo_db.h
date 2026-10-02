@@ -1,0 +1,71 @@
+/* zoneinfo_db.h - zoneinfo DB routines */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+#ifndef ZONEINFO_DB_H
+#define ZONEINFO_DB_H
+
+#include <time.h>
+
+#include "imap/annotate.h" /* for strlist functionality */
+
+/* name of the NIST leap seconds file (provided with IANA tzdata) */
+#define FNAME_LEAPSECFILE "/leap-seconds.list"
+
+/* name of the world shape file (http://efele.net/maps/tz/world/) */
+#define FNAME_WORLD_SHAPEFILE "/tz_world.shp"
+
+/* name of the antarctica shape file (http://efele.net/maps/tz/world/) */
+#define FNAME_AQ_SHAPEFILE "/tz_antarctica.shp"
+
+/* offset between NIST and UNIX epochs (in seconds) */
+#define NIST_EPOCH_OFFSET 2208988800U
+
+/* name of the zoneinfo database */
+#define FNAME_ZONEINFODB "/zoneinfo.db"
+#define ZONEINFO_VERSION 1
+
+#define INFO_TZID    ".info"
+#define zoneinfo_lookup_info(zi) zoneinfo_lookup(INFO_TZID, zi)
+
+#define LEAP_TZID    ".leap"
+#define zoneinfo_lookup_leap(zi) zoneinfo_lookup(LEAP_TZID, zi)
+
+struct zoneinfo {
+    unsigned type;
+    time_t dtstamp;
+    struct strlist *data;
+};
+
+/* zoneinfo record types */
+enum {
+    ZI_ZONE = 0,
+    ZI_LINK,
+    ZI_INFO,
+    ZI_LEAP
+};
+
+/* open the zoneinfo db */
+extern int zoneinfo_open(const char *name);
+
+/* lookup a single zoneinfo entry and return result, or error if it
+   doesn't exist or doesn't have the fields we need */
+extern int zoneinfo_lookup(const char *tzid, struct zoneinfo *zi);
+
+/* store a zoneinfo entry */
+extern int zoneinfo_store(const char *tzid, struct zoneinfo *zi,
+                          struct txn **tid);
+
+/* process all zoneinfo entries (optionally matching 'find') */
+extern int zoneinfo_find(const char *find, int tzid_only, time_t changedsince,
+                         int (*proc)(const char *tzid, int tzidlen,
+                                     struct zoneinfo *zi, void *rock),
+                         void *rock);
+
+/* close the database (optionally committing txn) */
+extern void zoneinfo_close(struct txn *tid);
+
+/* done with database stuff */
+extern void zoneinfo_done(void);
+
+#endif /* ZONEINFO_DB_H */

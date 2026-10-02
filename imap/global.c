@@ -4,6 +4,15 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcat.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,7 +31,6 @@
 #endif
 
 #include "acl.h"
-#include "assert.h"
 #include "charset.h"
 #include "cyr_lock.h"
 #include "gmtoff.h"
@@ -30,17 +38,11 @@
 #include "iptostring.h"
 #include "global.h"
 #include "ical_support.h"
-#include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "mutex.h"
 #include "prot.h" /* for PROT_BUFSIZE */
-#include "strarray.h"
 #include "userdeny.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xstrlcat.h"
-#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

@@ -1,8 +1,8 @@
 #include "annotate.h"
 #include "bsearch.h"
-#include "caldav_util.h"
+#include "common/caldav_util.h"
 #include "defaultalarms.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "syslog.h"
 
 #define CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME \

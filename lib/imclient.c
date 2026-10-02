@@ -3,6 +3,15 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+#include "imclient.h"
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -30,13 +39,7 @@
 #include <openssl/x509.h>
 #include <openssl/ssl.h>
 
-#include "assert.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "strarray.h"
-#include "imclient.h"
 #include "nonblock.h"
-#include "util.h"
 #include "iptostring.h"
 
 /* I/O buffer size */

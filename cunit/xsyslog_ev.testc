@@ -1,12 +1,14 @@
 #include "cunit/unit.h"
-#include "lib/util.h"
+#include "libcyrus_min/util.h"
+
+#include "libcyrus_min/sessionid.h"
+
+#include <cyrus/libconfig.h>
+#include <cyrus/logfmt.h>
+
+#include <cyrus/strarray.h>
 
 #include "imap/imap_err.h"
-
-#include "lib/libconfig.h"
-#include "lib/logfmt.h"
-#include "lib/sessionid.h"
-#include "lib/strarray.h"
 
 #include <syslog.h>
 #include <limits.h>

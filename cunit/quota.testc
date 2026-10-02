@@ -1,15 +1,18 @@
-#include <unistd.h>
-#include <stdlib.h>
 #include "config.h"
 #include "cunit/unit.h"
+
 #include "imap/quota.h"
-#include "xmalloc.h"
-#include "retry.h"
+
+#include <cyrus/hash.h>
+#include <cyrus/libconfig.h>
+#include <cyrus/retry.h>
+#include <cyrus/xmalloc.h>
+
+#include <unistd.h>
+#include <stdlib.h>
 #include "imap/global.h"
 #include "imap/imap_err.h"
 #include "cyrusdb.h"
-#include "libconfig.h"
-#include "hash.h"
 
 #define DBDIR                   "test-quota-dbdir"
 #define QUOTAROOT               "user.smurf"

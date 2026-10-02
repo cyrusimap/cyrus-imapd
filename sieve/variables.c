@@ -11,9 +11,10 @@
 #include <config.h>
 #endif
 
+#include "libcyrus_min/util.h"
+
 #include "variables.h"
 #include "bytecode.h"
-#include "util.h"
 
 #include <ctype.h>
 

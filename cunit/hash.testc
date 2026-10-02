@@ -1,7 +1,11 @@
+#include <config.h>
 #include "cunit/unit.h"
-#include "strarray.h"
-#include "util.h"
-#include "hash.h"
+
+#include <cyrus/hash.h>
+
+#include "libcyrus_min/util.h"
+
+#include <cyrus/strarray.h>
 
 static void count_cb(const char *key __attribute__((unused)),
                      void *data __attribute__((unused)),

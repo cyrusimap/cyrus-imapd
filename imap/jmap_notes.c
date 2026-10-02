@@ -4,13 +4,16 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/assert.h>
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <ctype.h>
 #include <string.h>
 #include <syslog.h>
-#include <assert.h>
 #include <errno.h>
 
 #include "acl.h"
@@ -18,13 +21,12 @@
 #include "http_jmap.h"
 #include "http_proxy.h"
 #include "jmap_mail.h"
-#include "jmap_util.h"
+#include "common/jmap_util.h"
 #include "json_support.h"
-#include "proxy.h"
-#include "sync_support.h"
+#include "common/proxy.h"
+#include "common/sync_support.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

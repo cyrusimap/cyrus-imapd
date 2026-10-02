@@ -3,6 +3,14 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/retry.h>
+#include <cyrus/strhash.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,11 +28,6 @@
 #include "auth_pts.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
-#include "retry.h"
-#include "strhash.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xstrlcpy.h"
 
 static char *canonuser_id = NULL;
 static struct auth_state *canonuser_cache = NULL;

@@ -3,10 +3,11 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
-#include <string.h>
-
 #include "bsearch.h"
-#include "util.h"
+
+#include "libcyrus_min/util.h"
+
+#include <string.h>
 
 /* Case-dependent comparison converter.
  * Treats \r and \t as end-of-string and treats '.' lower than

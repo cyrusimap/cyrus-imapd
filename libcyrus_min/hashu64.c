@@ -1,0 +1,350 @@
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+#include <cyrus/hashu64.h>
+
+#include <cyrus/assert.h>
+#include <cyrus/mpool.h>
+#include <cyrus/xmalloc.h>
+
+#include <string.h>
+#include <stdlib.h>
+
+EXPORTED extern inline size_t hashu64_count(const hashu64_table *table);
+
+#include "hash_priv.h"
+
+struct bucketu64 {
+    uint64_t key;
+    void *data;
+    struct bucketu64 *next;
+};
+
+/*
+** public domain code by Jerry Coffin, with improvements by HenkJan Wolthuis.
+**
+** Tested with Visual C 1.0 and Borland C 3.1.
+** Compiles without warnings, and seems like it should be pretty
+** portable.
+**
+** Modified for use with libcyrus by Ken Murchison.
+**  - prefixed functions with 'hash_' to avoid symbol clashing
+**  - use xmalloc() and xstrdup()
+**  - cleaned up free_hash_table(), doesn't use enumerate anymore
+**  - added 'rock' to hash_enumerate()
+**
+** Further modified by Rob Siemborski.
+**  - xmalloc can never return NULL, so don't worry about it
+**  - sort the buckets for faster searching
+**  - actually, we'll just use a memory pool for this sucker
+**    (atleast, in the cases where it is advantageous to do so)
+*/
+
+/* Initialize the hashu64_table to the size asked for.  Allocates space
+** for the correct number of pointers and sets them to NULL.  If it
+** can't allocate sufficient memory it will terminate the program with the
+** diagnostic "Virtual memory exhausted"
+*/
+
+/* `static inline` encourages gcc -Og to inline this trivial function. */
+static inline size_t table_size(const hashu64_table *table) {
+    return table && table->table ? (1ULL << table->size_log2) : 0;
+}
+
+static inline size_t table_index(const hashu64_table *table, uint64_t key) {
+    uint64_t mixed = (key ^ table->chaff) * 0x9e3779b97f4a7c15ULL;
+    return mixed >> (64 - table->size_log2);
+}
+
+EXPORTED hashu64_table *construct_hashu64_table(hashu64_table *table, size_t size, int use_mpool)
+{
+      assert(table);
+
+      uint8_t size_log2 = hash_base2_size_for_entries(size);
+      size = 1ULL << size_log2;
+      table->size_log2 = size_log2;
+      table->count = 0;
+      table->chaff = rand();
+
+      /* Allocate the table -- different for using memory pools and not */
+      if(use_mpool) {
+          /* Allocate an initial memory pool for 32 byte keys + the hash table
+           * + the buckets themselves */
+          table->pool =
+              new_mpool(size * (32 + sizeof(bucketu64*) + sizeof(bucketu64)));
+          table->table =
+              (bucketu64 **)mpool_malloc(table->pool,sizeof(bucketu64 *) * size);
+      } else {
+          table->pool = NULL;
+          table->table = xmalloc(sizeof(bucketu64 *) * size);
+      }
+
+      /* Allocate the table and initialize it */
+      memset(table->table, 0, sizeof(bucketu64 *) * size);
+
+      return table;
+}
+
+static void hash_split(hashu64_table *table) {
+    size_t old_size = 1ULL << table->size_log2++;
+    size_t new_size = old_size * 2;
+    size_t wanted = sizeof(bucketu64 *) * new_size;
+
+    if(new_size < old_size) {
+        fatal("Virtual memory exhausted by hash", EX_TEMPFAIL);
+    }
+
+    bucketu64 **old_table = table->table;
+    bucketu64 **new_table;
+
+    if (table->pool) {
+        new_table = (bucketu64 **)mpool_malloc(table->pool, wanted);
+    } else {
+        new_table = xmalloc(wanted);
+    }
+    memset(new_table, 0, wanted);
+
+    size_t i = old_size;
+
+    table->chaff = rand();
+
+    /* This is (roughly) hash_enumerate */
+    while(i-- > 0) {
+        bucketu64 *next = old_table[i];
+
+        /* Peel each bucket off in turn.
+         * Remember the next bucket, and set this bucket's next pointer to NULL
+         * Splice this bucket into the correct place in the new table
+         */
+        while(next) {
+            bucketu64 *current = next;
+            next = next->next;
+            /* Conceptually current->next should be assigned NULL at this point
+             * (the bucket is detached and no longer linked to the previous
+             * chain) but we assign it a new value just below:
+             */
+
+            /* This is the logic at the guts of hash_insert: */
+            size_t val = table_index(table, current->key);
+
+            current->next = new_table[val];
+            new_table[val] = current;
+        }
+    }
+
+    table->table = new_table;
+
+    if(!table->pool) {
+        free(old_table);
+    }
+}
+
+/*
+** Insert 'key' into hashu64 table.
+** Returns a non-NULL pointer which is either the passed @data pointer
+** or, if there was already an entry for @key, the old data pointer.
+*/
+
+EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
+{
+      size_t val = table_index(table, key);
+      bucketu64 *ptr, *newptr;
+
+      /*
+      ** See if the current string has already been inserted, and if so,
+      ** increment its count.
+      */
+      for (ptr=(table->table)[val];
+           ptr;
+           ptr=ptr->next) {
+          if (key == ptr->key) {
+              /* Match! Replace this value and return the old */
+              void *old_data;
+
+              old_data = ptr->data;
+              ptr -> data = data;
+              return old_data;
+          }
+      }
+
+      if(++table->count > table_size(table) * HASH_LOAD_FACTOR) {
+          hash_split(table);
+          val = table_index(table, key);
+      }
+
+      /*
+      ** Add new keys to the start of the list (which might be empty)
+      */
+      if(table->pool) {
+          newptr=(bucketu64 *)mpool_malloc(table->pool,sizeof(bucketu64));
+          newptr->key = key;
+      } else {
+          newptr=(bucketu64 *)xmalloc(sizeof(bucketu64));
+          newptr->key = key;
+      }
+      newptr->data = data;
+      newptr->next = (table->table)[val];
+      (table->table)[val] = newptr;
+      return data;
+}
+
+
+/*
+** Look up a key and return the associated data.  Returns NULL if
+** the key is not in the table.
+*/
+
+EXPORTED void *hashu64_lookup(uint64_t key, hashu64_table *table)
+{
+      if (!table->table || !table->count)
+          return NULL;
+
+      size_t val = table_index(table, key);
+      bucketu64 *ptr;
+
+      if (!(table->table)[val])
+            return NULL;
+
+      for ( ptr = (table->table)[val];NULL != ptr; ptr = ptr->next )
+      {
+          if (key == ptr->key)
+              return ptr->data;
+      }
+      return NULL;
+}
+
+/*
+** Delete a key from the hashu64 table and return associated
+** data, or NULL if not present.
+*/
+/* Warning: use this function judiciously if you are using memory pools,
+ * since it will leak memory until you get rid of the entire hash table */
+EXPORTED void *hashu64_del(uint64_t key, hashu64_table *table)
+{
+      size_t val = table_index(table, key);
+      bucketu64 *ptr, *last = NULL;
+
+      if (!(table->table)[val])
+            return NULL;
+
+      /*
+      ** Traverse the list, keeping track of the previous node in the list.
+      ** When we find the node to delete, we set the previous node's next
+      ** pointer to point to the node after ourself instead.  We then delete
+      ** the key from the present node, and return a pointer to the data it
+      ** contains.
+      */
+
+      for (last = NULL, ptr = (table->table)[val];
+            NULL != ptr;
+            last = ptr, ptr = ptr->next)
+      {
+          if (key == ptr->key)
+          {
+              void *data = ptr->data;
+              if (last != NULL)
+              {
+                  last->next = ptr->next;
+              }
+
+              /*
+              ** If 'last' still equals NULL, it means that we need to
+              ** delete the first node in the list. This simply consists
+              ** of putting our own 'next' pointer in the array holding
+              ** the head of the list.  We then dispose of the current
+              ** node as above.
+              */
+
+              else
+              {
+                  (table->table)[val] = ptr->next;
+              }
+              if(!table->pool) {
+                  free(ptr);
+              }
+              table->count--;
+              return data;
+          }
+      }
+
+      /*
+      ** If we get here, it means we didn't find the item in the table.
+      ** Signal this by returning NULL.
+      */
+      return NULL;
+}
+
+/*
+** Frees a complete table by iterating over it and freeing each node.
+** the second parameter is the address of a function it will call with a
+** pointer to the data associated with each node.  This function is
+** responsible for freeing the data, or doing whatever is needed with
+** it.
+*/
+
+EXPORTED void free_hashu64_table(hashu64_table *table, void (*func)(void *))
+{
+      unsigned i;
+      bucketu64 *ptr, *temp;
+      size_t size = table_size(table);
+
+      /* If we have a function to free the data, apply it everywhere */
+      /* We also need to traverse this anyway if we aren't using a memory
+       * pool */
+      if(func || !table->pool) {
+          for (i=0;i<size; i++)
+          {
+              ptr = (table->table)[i];
+              while (ptr)
+              {
+                  temp = ptr;
+                  ptr = ptr->next;
+                  if (func)
+                      func(temp->data);
+                  if(!table->pool) {
+                      free(temp);
+                  }
+              }
+          }
+      }
+
+      /* Free the main structures */
+      if(table->pool) {
+          free_mpool(table->pool);
+          table->pool = NULL;
+      } else {
+          free(table->table);
+      }
+      table->table = NULL;
+      table->size_log2 = 0;
+      table->count = 0;
+}
+
+/*
+** Simply invokes the function given as the second parameter for each
+** node in the table, passing it the key, the associated data and 'rock'.
+*/
+
+EXPORTED void hashu64_enumerate(hashu64_table *table,
+                                void (*func)(uint64_t, void *, void *),
+                                void *rock)
+{
+      unsigned i;
+      bucketu64 *temp, *temp_next;
+      size_t size = table_size(table);
+
+      for (i=0;i<size; i++)
+      {
+            if ((table->table)[i] != NULL)
+            {
+                  for (temp = (table->table)[i];
+                        NULL != temp;
+                        temp = temp_next)
+                  {
+                        temp_next = temp->next;
+                        func(temp -> key, temp->data, rock);
+                  }
+            }
+      }
+}

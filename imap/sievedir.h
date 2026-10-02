@@ -5,7 +5,7 @@
 #ifndef INCLUDED_SIEVEDIR_H
 #define INCLUDED_SIEVEDIR_H
 
-#include "util.h"
+#include "libcyrus_min/util.h"
 
 /* error codes */
 #define SIEVEDIR_DONE      1  /* for short-circuiting sievedir_foreach() */

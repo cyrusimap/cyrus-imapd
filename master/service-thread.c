@@ -4,6 +4,10 @@
 
 #include <config.h>
 
+#include <cyrus/libconfig.h>
+#include <cyrus/strarray.h>
+#include <cyrus/xmalloc.h>
+
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -26,9 +30,6 @@
 #include <string.h>
 
 #include "service.h"
-#include "libconfig.h"
-#include "xmalloc.h"
-#include "strarray.h"
 #include "signals.h"
 
 extern int optind;

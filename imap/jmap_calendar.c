@@ -4,9 +4,17 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/dynarray.h>
+#include <cyrus/hash.h>
+#include <cyrus/xmalloc.h>
+#include <cyrus/xsha1.h>
+
 #include <ctype.h>
 #include <errno.h>
-#include <assert.h>
 #include <string.h>
 #include <syslog.h>
 #ifdef HAVE_UNISTD_H
@@ -19,12 +27,10 @@
 #include "annotate.h"
 #include "append.h"
 #include "caldav_db.h"
-#include "caldav_util.h"
+#include "common/caldav_util.h"
 #include "cyr_qsort_r.h"
 #include "defaultalarms.h"
-#include "dynarray.h"
 #include "global.h"
-#include "hash.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
@@ -34,21 +40,17 @@
 #include "ical_support.h"
 #include "mboxname.h"
 #include "json_support.h"
-#include "jscalendar.h"
-#include "jmap_notif.h"
-#include "jmap_util.h"
+#include "common/jscalendar.h"
+#include "common/jmap_notif.h"
+#include "common/jmap_util.h"
 #include "search_query.h"
 #include "seen.h"
 #include "stristr.h"
 #include "sync_log.h"
 #include "times.h"
 #include "user.h"
-#include "util.h"
 #include "xapian_wrap.h"
-#include "xmalloc.h"
-#include "xsha1.h"
-#include "xstrlcpy.h"
-#include "zoneinfo_db.h"
+#include "common/zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

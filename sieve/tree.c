@@ -6,8 +6,9 @@
 #include <config.h>
 #endif
 
+#include <cyrus/xmalloc.h>
+
 #include <stdlib.h>
-#include "xmalloc.h"
 
 #include "tree.h"
 #include "script.h"

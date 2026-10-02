@@ -4,6 +4,12 @@
 
 #include <config.h>
 
+#include "libcyrus_min/xstrlcpy.h"
+
+#include <cyrus/assert.h>
+#include <cyrus/smallarrayu64.h>
+#include <cyrus/xmalloc.h>
+
 #include <errno.h>
 #include <sys/types.h>
 #include <stdlib.h>
@@ -13,7 +19,6 @@
 #include <unistd.h>
 #endif
 
-#include "assert.h"
 #include "cyr_qsort_r.h"
 #include "search_expr.h"
 #include "search_query.h"
@@ -22,9 +27,6 @@
 #include "annotate.h"
 #include "global.h"
 #include "bsearch.h"
-#include "xstrlcpy.h"
-#include "xmalloc.h"
-#include "smallarrayu64.h"
 #include "statuscache.h"
 
 /* generated headers are not necessarily in current directory */

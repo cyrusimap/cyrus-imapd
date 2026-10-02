@@ -4,12 +4,17 @@
 
 #include <config.h>
 
+#include "libcyrus_min/util.h"
+
+#include <cyrus/hash.h>
+#include <cyrus/tok.h>
+#include <cyrus/xmalloc.h>
+
 #include <string.h>
 #include <syslog.h>
 
 #include <libxml/uri.h>
 
-#include "hash.h"
 #include "http_dav.h"
 #include "jmap_api.h"
 #include "jscontact.h"
@@ -17,10 +22,7 @@
 #include "mailbox.h"
 #include "mkgmtime.h"
 #include "times.h"
-#include "tok.h"
-#include "util.h"
 #include "vcard_support.h"
-#include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

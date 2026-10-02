@@ -17,10 +17,10 @@
 // Don't let util.h override our regex include
 #ifdef ENABLE_REGEX
 #undef ENABLE_REGEX
-#include "lib/util.h"
+#include "libcyrus_min/util.h"
 #define ENABLE_REGEX
 #else
-#include "lib/util.h"
+#include "libcyrus_min/util.h"
 #endif
 
 extern int verbose;

@@ -1,8 +1,9 @@
-#include <stdlib.h>
-
 #include "cunit/unit.h"
 #include "bitvector.h"
-#include "util.h"
+
+#include "libcyrus_min/util.h"
+
+#include <stdlib.h>
 
 static void test_free(void)
 {
