@@ -1,0 +1,30 @@
+Description:
+
+The TLS session database is no longer synced to disk on every write.  It is
+a cache, and losing writes only costs a client a full handshake.  With
+http_allow_0rtt, which stores a session for every full handshake, this keeps
+concurrent handshakes from queueing on each other's syncs.  twoskip, the
+default tls_sessions_db backend, ignores the change and still syncs; twom
+honours it.
+
+
+Documentation:
+
+The http_allow_0rtt entry in imapd.conf(5) now recommends keeping the session
+database on fast storage, or in a backend such as twom.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.  Sites using http_allow_0rtt may want tls_sessions_db: twom, or
+tls_sessions_db_path on tmpfs.
+
+
+GitHub issue:
+
+None.

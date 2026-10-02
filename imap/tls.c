@@ -1102,7 +1102,11 @@ EXPORTED int     tls_init_serverengine(const char *ident,
             fname = tofree;
         }
 
-        r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &sessdb);
+        /* A cache: losing writes costs clients only a full handshake, so
+         * new sessions needn't each wait for a sync (with a backend that
+         * honours NOSYNC).  After an OS crash, a session taken for 0-RTT
+         * just before it could be resumed once more. */
+        r = cyrusdb_open(DB, fname, CYRUSDB_CREATE | CYRUSDB_NOSYNC, &sessdb);
         if (r != 0) {
             syslog(LOG_ERR, "DBERROR: opening %s: %s",
                    fname, cyrusdb_strerror(r));
@@ -1640,7 +1644,7 @@ EXPORTED int tls_prune_sessions(void)
         fname = tofree;
     }
 
-    ret = cyrusdb_open(DB, fname, 0, &sessdb);
+    ret = cyrusdb_open(DB, fname, CYRUSDB_NOSYNC, &sessdb);
     if (ret == CYRUSDB_OK) {
         /* check each session in our database */
         sess_dbopen = 1;

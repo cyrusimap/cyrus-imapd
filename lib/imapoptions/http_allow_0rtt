@@ -14,3 +14,8 @@ for the client to repeat after the handshake.
 
 Only affects httpd services started with -s, and needs a nonzero
 tls_session_timeout.
+
+Every full handshake then stores its session in the TLS session database,
+so on a busy server keep tls_sessions_db_path on fast storage such as
+tmpfs, or use a tls_sessions_db backend that doesn't sync each write,
+such as twom (twoskip, the default, syncs every one).
