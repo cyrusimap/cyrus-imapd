@@ -25,10 +25,7 @@ sub test_19_wrong_record_size
     my $mailbox_id = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($mailbox_id);
 
-    my $created_modseq = $res->[0][1]{newState};
-    $self->assert_not_null($created_modseq);
-
-    $created_modseq =~ s/^J//;
+    my $modseq = 0;
 
     # Our base assumptions. Will be overridden below as things change
     my %v19_header_expect = (
@@ -49,7 +46,8 @@ sub test_19_wrong_record_size
         Options           => '00000000000000000000000000000001',
         Pop3LastLogin     => 0,
         Pop3ShowAfter     => 0,
-        QuotaAnnotUsed    => 0,
+        # one byte for the sortOrder annotation value
+        QuotaAnnotUsed    => 1,
         QuotaDeletedUsed  => 0,
         QuotaExpungedUsed => 0,
         QuotaUsed         => 0,
@@ -57,8 +55,6 @@ sub test_19_wrong_record_size
         RecentUid         => 0,
         Unseen            => 0,
 
-        CreatedModseq     => $created_modseq,
-        HighestModseq     => $created_modseq,
         UidValidity       => re('\A[1-9][0-9]+\z'),
         ChangesEpoch      => num(time, 60),
 
@@ -74,7 +70,17 @@ sub test_19_wrong_record_size
     xlog $self, "Checking index for newly created folder";
     {
         my $index = $self->index_file_for('user.cassandane.foo');
-        $self->assert_cmp_deeply(\%v19_header_expect, $index->header_copy);
+        my $header = $self->header_after_modseq($index, \$modseq);
+        $self->assert_num_gt(0, $header->{CreatedModseq});
+        $self->assert_num_lte($modseq, $header->{CreatedModseq});
+
+        %v19_header_expect = (
+            %v19_header_expect,
+
+            CreatedModseq => $header->{CreatedModseq},
+            HighestModseq => $modseq,
+        );
+        $self->assert_cmp_deeply(\%v19_header_expect, $header);
 
         my @recs = $self->index_file_records($index);
         $self->assert_num_equals(0, 0+@recs);
@@ -139,9 +145,7 @@ sub test_19_wrong_record_size
 
     my %v19_record_expect = (
         CID           => $cid,
-        CreatedModseq => $created_modseq + 1,
         MessageGuid   => $guid,
-        Modseq        => $created_modseq + 1,
         Size          => length $msg->as_string,
         SystemFlags   => {},
         Uid           => 1,
@@ -165,10 +169,13 @@ sub test_19_wrong_record_size
 
     xlog $self, "Checking index for newly created message";
     {
+        my $index = $self->index_file_for('user.cassandane.foo');
+        my $header = $self->header_after_modseq($index, \$modseq);
+
         %v19_header_expect = (
             %v19_header_expect,
 
-            HighestModseq  => $created_modseq + 1,
+            HighestModseq  => $modseq,
             LastAppenddate => num(time, 60),
             LastUid        => 1,
             RecentTime     => num(time, 60),
@@ -182,11 +189,17 @@ sub test_19_wrong_record_size
             RecordSize     => 144,
         );
 
-        my $index = $self->index_file_for('user.cassandane.foo');
-        $self->assert_cmp_deeply(\%v19_header_expect, $index->header_copy);
+        $self->assert_cmp_deeply(\%v19_header_expect, $header);
 
         my @recs = $self->index_file_records($index);
         $self->assert_num_equals(1, 0+@recs);
+
+        %v19_record_expect = (
+            %v19_record_expect,
+
+            CreatedModseq => $modseq,
+            Modseq        => $modseq,
+        );
 
         $self->assert_cmp_deeply(\%v19_record_expect, $recs[0]);
     }

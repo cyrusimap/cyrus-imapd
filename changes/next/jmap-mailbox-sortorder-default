@@ -1,0 +1,28 @@
+
+Description:
+
+A Mailbox created through JMAP Mailbox/set without a sortOrder gets
+the RFC mandated value: 0.
+
+Mailboxes created by non-JMAP (e.g. IMAP) still get 10, to sort after
+role mailboxes.
+
+
+Documentation:
+
+None.  The behaviour follows RFC 8621 as written.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
