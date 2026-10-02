@@ -11,8 +11,7 @@
 
 /**
  * @file dkim2_mi.h
- *
- * DKIM2 Message-Instance calculation.
+ * @brief DKIM2 Message-Instance calculation
  *
  * Cyrus documents its own modifications but never signs: everything here
  * produces a Message-Instance header field for some other hop to sign.
