@@ -5,6 +5,7 @@
 #include <config.h>
 
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sysexits.h>
@@ -496,6 +497,99 @@ void print_listresponse(unsigned cmd, const char *extname, const char *oldname,
     prot_puts(imapd_out, "\r\n");
 }
 
+/* Read a parenthesized value whose opening paren is already consumed,
+ * appending it to 'out' without the closing paren, and return the
+ * character after that paren.  Parens inside quoted strings and
+ * literals don't nest. */
+static int read_parenthesized(struct protstream *in, struct buf *out)
+{
+    int depth = 1;
+    bool quoted = false;
+
+    for (;;) {
+        int c = prot_getc(in);
+        if (c == EOF) {
+            return EOF;
+        }
+
+        if (quoted) {
+            if (c == '\\') {
+                buf_putc(out, c);
+                c = prot_getc(in);
+                if (c == EOF) {
+                    return EOF;
+                }
+            }
+            else if (c == '"') {
+                quoted = false;
+            }
+        }
+        else if (c == '"') {
+            quoted = true;
+        }
+        else if (c == '{') {
+            /* {n}CRLF then n raw bytes */
+            size_t len = 0;
+            buf_putc(out, c);
+            while ((c = prot_getc(in)) != EOF && Uisdigit(c)) {
+                len = len * 10 + (c - '0');
+                buf_putc(out, c);
+            }
+            if (c != '}') {
+                return EOF;
+            }
+            buf_putc(out, c);
+            if (prot_getc(in) != '\r' || prot_getc(in) != '\n') {
+                return EOF;
+            }
+            buf_appendcstr(out, "\r\n");
+            while (len--) {
+                c = prot_getc(in);
+                if (c == EOF) {
+                    return EOF;
+                }
+                buf_putc(out, c);
+            }
+            continue;
+        }
+        else if (c == '(') {
+            depth++;
+        }
+        else if (c == ')' && --depth == 0) {
+            return prot_getc(in);
+        }
+
+        buf_putc(out, c);
+    }
+}
+
+/* Decode the single astring an OLDNAME item holds, as copied by
+ * read_parenthesized(), into 'name'. */
+static void decode_oldname(const struct buf *val, struct buf *name)
+{
+    const char *p = val->s;
+
+    buf_reset(name);
+    if (*p == '"') {
+        for (p++; *p && *p != '"'; p++) {
+            if (*p == '\\' && p[1]) {
+                p++;
+            }
+            buf_putc(name, *p);
+        }
+    }
+    else if (*p == '{') {
+        const char *body = strstr(p, "\r\n");
+        if (body) {
+            buf_appendcstr(name, body + 2);
+        }
+    }
+    else {
+        buf_appendcstr(name, p);
+    }
+    buf_cstring(name);
+}
+
 /* add subscription flags or filter out non-subscribed mailboxes */
 static int check_subs(mbentry_t *mbentry, strarray_t *subs,
                       struct listargs *listargs, uint32_t *flags)
@@ -575,7 +669,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
     int c;
     int r = PROXY_OK;
     int exist_r;
-    static struct buf tagb, cmd, sep, name, ext;
+    static struct buf tagb, cmd, sep, name, ext, etag, oldname;
     struct buf extraflags = BUF_INITIALIZER;
     int build_list_only = subs && !(listargs->ret & LIST_RET_SUBSCRIBED);
     int suppress_resp = 0;
@@ -703,18 +797,48 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
             /* Get name */
             c = getastring(s->in, s->out, &name);
 
-            /* Get extension(s) */
-            buf_reset(&ext);
+            /* Get extended data items (RFC 5258) */
+            buf_reset(&oldname);
+            bool have_oldname = false;
             if (c == ' ') {
-                do {
-                    buf_putc(&ext, c);
-                    c = prot_getc(s->in);
-                } while (c != '\r' && c != '\n' && c != EOF);
+                c = prot_getc(s->in);
+                if (c == '(') c = prot_getc(s->in);
+                else c = EOF;
 
-                /* XXX  Currently there are no other documented extensions */
-                attributes |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
+                while (c != ')' && c != EOF) {
+                    prot_ungetc(c, s->in);
+                    c = getastring(s->in, s->out, &etag);
+                    if (c != ' ') {
+                        c = EOF;
+                        break;
+                    }
+
+                    buf_reset(&ext);
+                    c = prot_getc(s->in);
+                    if (c == '(') {
+                        c = read_parenthesized(s->in, &ext);
+                    }
+                    else {
+                        /* tagged-ext-simple */
+                        prot_ungetc(c, s->in);
+                        c = getword(s->in, &ext);
+                    }
+                    if (c == EOF) break;
+
+                    if (!strcasecmp(etag.s, "CHILDINFO")) {
+                        attributes |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
+                    }
+                    else if (!strcasecmp(etag.s, "OLDNAME")) {
+                        decode_oldname(&ext, &oldname);
+                        have_oldname = true;
+                    }
+
+                    if (c == ' ') c = prot_getc(s->in);
+                }
+
+                if (c == ')') c = prot_getc(s->in);
+                else c = EOF;
             }
-            buf_cstring(&ext);
 
             if(c == '\r') c = prot_getc(s->in);
             if(c != '\n') {
@@ -771,7 +895,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
             if (!suppress_resp) {
                 /* send response to the client */
-                print_listresponse(listargs->cmd, name.s, NULL,
+                print_listresponse(listargs->cmd, name.s,
+                                   have_oldname ? oldname.s : NULL,
                                    sep.s[0], attributes, &extraflags);
 
                 /* send any PROXY_ONLY metadata items */
