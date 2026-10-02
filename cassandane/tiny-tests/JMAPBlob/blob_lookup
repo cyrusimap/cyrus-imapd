@@ -71,4 +71,12 @@ sub test_blob_lookup
     );
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{notFound}});
+
+    xlog "A type name the server does not know is unknownDataType";
+    # RFC 9404 Section 4.3
+    $res = $jmap->CallMethods(
+        [['Blob/lookup', { ids => [$blobId], typeNames => ['Email', 'NoSuchType'] }, 'R1']],
+    );
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('unknownDataType', $res->[0][1]{type});
 }
