@@ -11488,12 +11488,16 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
     const char *blob_id = jmap_id_string_value(req, json_object_get(jpart, "blobId"));
     json_t *bodyValue = part_id ? json_object_get(bodies, part_id) : NULL;
 
-    if (part_id && blob_id)
-        jmap_parser_invalid(parser, "blobId");
-    if (part_id && !bodyValue)
+    if (part_id && blob_id) {
+        /* RFC 8621 S4.6: a partId OR a blobId, not both */
         jmap_parser_invalid(parser, "partId");
-
-    if (subParts || !strcasecmpsafe(part->type, "MULTIPART")) {
+        jmap_parser_invalid(parser, "blobId");
+    }
+    else if (part_id && !bodyValue) {
+        /* RFC 8621 S4.6: a partId MUST be present in bodyValues */
+        jmap_parser_invalid(parser, "partId");
+    }
+    else if (subParts || !strcasecmpsafe(part->type, "MULTIPART")) {
         /* Must have subParts */
         if (!json_array_size(subParts))
             jmap_parser_invalid(parser, "subParts");
@@ -11696,11 +11700,12 @@ static void _email_parse_bodies(jmap_req_t *req,
             json_t *jheader;
             json_object_foreach(email->body->headers.all, name, jheader) {
                 if (json_object_get(email->headers.all, name)) {
-                    /* Report offending header property */
-                    json_t *jprop = json_object_get(jheader, "prop");
+                    /* RFC 8621 S4.6: report as bodyStructure/header:Foo */
+                    json_t *jprop = json_object_get(json_array_get(jheader, 0), "prop");
                     const char *prop = json_string_value(jprop);
-                    if (prop) prop = "bodyStructure";
+                    jmap_parser_push(parser, "bodyStructure");
                     jmap_parser_invalid(parser, prop);
+                    jmap_parser_pop(parser);
                 }
             }
         }
