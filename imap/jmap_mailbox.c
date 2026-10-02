@@ -1857,6 +1857,10 @@ static void _mboxset_args_parse(json_t *jargs,
 
     /* sortOrder */
     json_t *jsortOrder = json_object_get(jargs, "sortOrder");
+    if (is_create && !jsortOrder) {
+        /* RFC mandated default */
+        args->sortorder = 0;
+    }
     if (json_is_integer(jsortOrder)) {
         args->sortorder = json_integer_value(jsortOrder);
         if (args->sortorder < 0 || args->sortorder >= INT_MAX) {

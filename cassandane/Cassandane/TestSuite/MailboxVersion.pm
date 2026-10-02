@@ -282,6 +282,18 @@ sub index_file_records {
     return @recs;
 }
 
+# Returns the index header after checking that HighestModseq advanced
+# past $$modseq, then advances $$modseq to it.
+sub header_after_modseq {
+    my ($self, $index, $modseq) = @_;
+
+    my $header = $index->header_copy;
+    $self->assert_num_gt($$modseq, $header->{HighestModseq});
+    $$modseq = $header->{HighestModseq};
+
+    return $header;
+}
+
 sub sentdate_ts {
     my ($self, $seconds) = @_;
 
