@@ -37,7 +37,7 @@ Cyrus annotations are based on :rfc:`5464`.
 * **vendor/cmu/cyrus-imapd/duplicatedeliver** - Flag signalling that we're
   allowing duplicate delivery of messages to the mailbox, overriding
   system-wide duplicate suppression.
-  (:ref:`imap-developer-guidance-mailbox-format`)
+  (:doc:`/developer/c-api/imap/mailbox`)
 
 * **/vendor/cmu/cyrus-imapd/expire** - Sets the number of days after which
   messages will be expired from the mailbox. (cyradm(8))
@@ -52,18 +52,18 @@ Cyrus annotations are based on :rfc:`5464`.
 
 * **/vendor/cmu/cyrus-imapd/lastpop** - (time_t) of the last pop3 login to
   this INBOX, used to enforce the "poptimeout" imapd.conf option.
-  (:ref:`imap-developer-guidance-mailbox-format`)
+  (:doc:`/developer/c-api/imap/mailbox`)
 
 * **vendor/cmu/cyrus-imapd/lastupdate** - (time_t) of the last time a message
   was appended
-  (:ref:`imap-developer-guidance-mailbox-format`)
+  (:doc:`/developer/c-api/imap/mailbox`)
 
 * **/vendor/cmu/cyrus-imapd/partition** - Undocumented.
 
 * **/vendor/cmu/cyrus-imapd/pop3newuidl** - Flag signalling that we're using
   "uidvalidity.uid" instead of just "uid" for the output of the POP3 UIDL
   command.
-  (:ref:`imap-developer-guidance-mailbox-format`)
+  (:doc:`/developer/c-api/imap/mailbox`)
 
 * **/vendor/cmu/cyrus-imapd/serve** - Undocumented.
 
