@@ -1,0 +1,152 @@
+#!perl
+use Cassandane::Tiny;
+use IO::Select;
+use IO::Socket::INET;
+
+# maxmessagesize bounds a request body, but a WebSocket over HTTP/2 (RFC 8441)
+# is a CONNECT stream whose DATA never ends: it must not count against
+# that limit as it adds up, or a session dies once its client has sent that
+# much in total.  Each WebSocket message is still held to the limit, so an
+# oversized one gets a 1009 (Message Too Big) close.
+#
+# Protocol::HTTP2 can't open an extended CONNECT stream, so this speaks just
+# enough HTTP/2 itself: cleartext with prior knowledge, HPACK literals going
+# out, and only the frame types the exchange needs coming back.
+sub test_websocket_maxmessagesize
+    :needs_dependency_nghttp2 :needs_dependency_wslay :SetMaxMessageSize(8k)
+    ($self)
+{
+    my $service = $self->{instance}->get_service('http');
+    my $peer = $service->host . ':' . $service->port;
+    my $sock = IO::Socket::INET->new(PeerAddr => $peer, Proto => 'tcp')
+        or die "connect to $peer: $!";
+
+    my sub frame ($type, $flags, $stream, $payload) {
+        my $len = length $payload;
+        return pack('C3 C C N', $len >> 16, ($len >> 8) & 0xff, $len & 0xff,
+                    $type, $flags, $stream) . $payload;
+    }
+    # HPACK (RFC 7541) integers and literals without indexing or Huffman
+    my sub hpack_int ($prefix, $n) {
+        my $max = (1 << $prefix) - 1;
+        return pack('C', $n) if $n < $max;
+        my $out = pack('C', $max);
+        for ($n -= $max; $n >= 128; $n >>= 7) {
+            $out .= pack('C', ($n & 0x7f) | 0x80);
+        }
+        return $out . pack('C', $n);
+    }
+    my sub hpack (@headers) {
+        my $out = '';
+        while (my ($name, $value) = splice @headers, 0, 2) {
+            $out .= "\0" . hpack_int(7, length $name) . $name
+                  . hpack_int(7, length $value) . $value;
+        }
+        return $out;
+    }
+    my sub send_frame (@args) {
+        my $f = frame(@args);
+        wire_sent($peer, sprintf("HTTP/2 frame type %d, stream %d, %d bytes",
+                                 $args[0], $args[2], length $args[3]));
+        print $sock $f or die "write: $!";
+    }
+    my sub read_exactly ($len) {
+        my $buf = '';
+        while (length $buf < $len) {
+            IO::Select->new($sock)->can_read(10) or die "read timed out";
+            my $n = sysread($sock, $buf, $len - length $buf, length $buf);
+            die "read: " . ($n // $!) unless $n;
+        }
+        return $buf;
+    }
+
+    # Client WebSocket frames are masked (RFC 6455 5.3)
+    my sub ws_frame ($opcode, $payload) {
+        my $len = length $payload;
+        my $hdr = pack('C', 0x80 | $opcode);
+        $hdr .= $len < 126 ? pack('C', 0x80 | $len)
+              : $len < 65536 ? pack('C n', 0x80 | 126, $len)
+              : pack('C Q>', 0x80 | 127, $len);
+        my $mask = pack('N', int rand 2**32);
+        my $masked = $payload ^. substr($mask x (int($len / 4) + 1), 0, $len);
+        return $hdr . $mask . $masked;
+    }
+
+    my $ws_in = '';
+    my $got_response = 0;
+
+    # Read until stream 1 yields a complete WebSocket frame, and return it
+    # as [opcode, payload].  Anything on stream 1 other than one response
+    # HEADERS and DATA means the stream was abandoned.
+    my sub read_ws_frame () {
+        while (1) {
+            if (length $ws_in >= 2) {
+                my ($b0, $b1) = unpack('C2', $ws_in);
+                my ($len, $off) = ($b1 & 0x7f, 2);
+                ($len, $off) = (unpack('x2 n', $ws_in), 4) if $len == 126;
+                ($len, $off) = (unpack('x2 Q>', $ws_in), 10) if $len == 127;
+                if (length $ws_in >= $off + $len) {
+                    my $payload = substr($ws_in, $off, $len);
+                    substr($ws_in, 0, $off + $len) = '';
+                    return [ $b0 & 0x0f, $payload ];
+                }
+            }
+
+            my ($l0, $l1, $l2, $type, $flags, $stream)
+                = unpack('C3 C C N', read_exactly(9));
+            my $payload = read_exactly(($l0 << 16) | ($l1 << 8) | $l2);
+            $stream &= 0x7fffffff;
+            wire_recv($peer, sprintf("HTTP/2 frame type %d, flags 0x%02x, "
+                                     . "stream %d, %d bytes", $type, $flags,
+                                     $stream, length $payload));
+
+            if ($type == 0x4 && !($flags & 0x1)) {      # SETTINGS: ack it
+                send_frame(0x4, 0x1, 0, '');
+            }
+            elsif ($type == 0x7) {                      # GOAWAY
+                die "server sent GOAWAY";
+            }
+            elsif ($stream != 1) {
+                next;
+            }
+            elsif ($type == 0x1) {                      # HEADERS
+                die "a second HEADERS on the WebSocket stream" if $got_response;
+                # nghttp2 always sends ":status: 200" as static index 8
+                die "CONNECT was refused" if substr($payload, 0, 1) ne "\x88";
+                $got_response = 1;
+            }
+            elsif ($type == 0x0) {                      # DATA
+                $ws_in .= $payload;
+                send_frame(0x8, 0, 0, pack('N', length $payload)) if $payload;
+                send_frame(0x8, 0, 1, pack('N', length $payload)) if $payload;
+            }
+            elsif ($type == 0x3) {                      # RST_STREAM
+                die "server reset the WebSocket stream";
+            }
+        }
+    }
+
+    print $sock "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" or die "write: $!";
+    send_frame(0x4, 0, 0, '');
+    send_frame(0x1, 0x4, 1, hpack(':method' => 'CONNECT',
+                                  ':protocol' => 'websocket',
+                                  ':scheme' => 'http',
+                                  ':path' => '/',
+                                  ':authority' => $peer,
+                                  'sec-websocket-version' => '13'));
+
+    xlog $self, "20 KB in 1 KB messages, more than maxmessagesize in total";
+    for my $i (1 .. 20) {
+        my $msg = "message $i " . ('y' x 1000);
+        send_frame(0x0, 0, 1, ws_frame(0x1, $msg));
+        my $echo = read_ws_frame();
+        $self->assert_num_equals(0x1, $echo->[0]);
+        $self->assert_str_equals($msg, $echo->[1]);
+    }
+
+    xlog $self, "a single message over maxmessagesize is refused";
+    send_frame(0x0, 0, 1, ws_frame(0x1, 'z' x 9000));
+    my $close = read_ws_frame();
+    $self->assert_num_equals(0x8, $close->[0]);
+    $self->assert_num_equals(1009, unpack('n', $close->[1]));
+}
