@@ -110,6 +110,9 @@ lmtp.rcpt.index         which recipient of the transaction, counting from zero
 lmtp.rcpt.state         a recipient's delivery state in the proxy state machine
 lmtp.target             how the destination mailbox was chosen: default, plus-addr, ...
 pop.subfolder           the subfolder a POP session was restricted to
+quic.bpf_obj            path to the compiled cyr_quic_steer eBPF object
+quic.family             an address family, as a string: ipv4, ipv6 or unix
+quic.worker_pid         the pid of a QUIC worker process (master)
 quota.root              the quota root a quota applies to
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
 sched.addresses         the scheduling addresses considered, one per indexed subkey
@@ -128,12 +131,14 @@ search.op               a search operator, e.g. OR
 search.restarts         how many times indexing restarted from the first message
 search.uncommitted      how many documents were pending when a commit failed
 search.updates          how many update passes indexed nothing
+service.name            a service's name, as configured in cyrus.conf
 sieve.lineno            the line of a Sieve script an error was found on
 sieve.result            a SIEVE_* result code
 sieve.script            the name of a Sieve script
 sieve.srs.domain        the domain SRS rewrites a return path into
 sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
+tls.engine              which TLS server engine this event is about
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
 

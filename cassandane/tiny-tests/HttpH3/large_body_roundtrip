@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+# A body much larger than QUIC's initial flow-control windows, both ways:
+# the upload only completes if httpd keeps extending stream credit as it
+# reads, and the download only if it keeps sending as the client acks
+sub test_large_body_roundtrip
+    ($self)
+{
+    $self->{caldav}->GetCalendars();
+
+    my $rpath = '/dav/calendars/user/cassandane/Default/large.ics';
+    my $uid = 'h3-large@example.com';
+    # Folded into 75-octet lines, as RFC 5545 3.1 requires
+    my $description = join("\r\n ", ('x' x 74) x 8000);
+    my $ical = <<~"EOF" =~ s/\r?\n/\r\n/gr;
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//Cassandane//HttpH3//EN
+        BEGIN:VEVENT
+        UID:$uid
+        DTSTAMP:20260101T000000Z
+        DTSTART:20260101T100000Z
+        DURATION:PT1H
+        SUMMARY:HTTP/3 large body
+        DESCRIPTION:$description
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+
+    my $put = $self->http3_request(
+        method => 'PUT',
+        path => $rpath,
+        headers => [ 'Content-Type' => 'text/calendar; charset=utf-8' ],
+        body => $ical,
+    );
+    $self->assert_num_equals(201, $put->{status});
+
+    my $get = $self->http3_request(method => 'GET', path => $rpath);
+    $self->assert_num_equals(200, $get->{status});
+    $self->assert_matches(qr/^UID:\Q$uid\E\r$/m, $get->{body});
+
+    # The description survives intact, whatever folding the server chose
+    my ($got) = $get->{body} =~ m/^DESCRIPTION:(.*?)\r\n(?! )/ms;
+    $self->assert_not_null($got);
+    $got =~ s/\r\n //g;
+    $self->assert_num_equals(74 * 8000, length $got);
+}

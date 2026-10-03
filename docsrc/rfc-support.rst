@@ -814,6 +814,14 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP4 Extension: Message Preview Generation
 
+:rfc:`9000`
+
+    QUIC: A UDP-Based Multiplexed and Secure Transport
+
+:rfc:`9001`
+
+    Using TLS to Secure QUIC
+
 :rfc:`9007`
 
     Handling Message Disposition Notification with the JSON Meta
@@ -843,9 +851,21 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     HTTP/2
 
+:rfc:`9114`
+
+    HTTP/3
+
 :rfc:`9208`
 
     IMAP QUOTA Extension
+
+:rfc:`9220`
+
+    Bootstrapping WebSockets with HTTP/3
+
+:rfc:`9369`
+
+    QUIC Version 2
 
 :rfc:`9394`
 

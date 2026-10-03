@@ -5,6 +5,7 @@
 #ifndef INCLUDED_GLOBAL_H
 #define INCLUDED_GLOBAL_H
 
+#include <sys/socket.h>
 #include <sasl/sasl.h>
 #include "libconfig.h"
 #include "auth.h"
@@ -109,6 +110,12 @@ extern int shutdown_file(char *buf, int size);
 #define UNIX_SOCKET "[unix socket]"
 extern const char *get_clienthost(int s,
                                   const char **localip, const char **remoteip);
+extern const char *get_clienthost_from_addrs(struct sockaddr *localsock,
+                                             socklen_t locallen,
+                                             struct sockaddr *remotesock,
+                                             socklen_t remotelen,
+                                             const char **localip,
+                                             const char **remoteip);
 extern void saslprops_reset(struct saslprops_t *saslprops);
 extern void saslprops_free(struct saslprops_t *saslprops);
 extern int saslprops_set_tls(struct saslprops_t *saslprops,

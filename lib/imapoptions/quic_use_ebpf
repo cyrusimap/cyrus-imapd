@@ -1,0 +1,16 @@
+Name: quic_use_ebpf
+Type: SWITCH
+Default-Value: 0
+Last-Modified: UNRELEASED
+
+Whether to use eBPF-based kernel steering to dispatch proto="quic"
+connections (see master/quic/quic_ebpf.c), when this build has that support
+compiled in. Off by default, because master must retain CAP_BPF,
+CAP_NET_ADMIN and CAP_PERFMON for its whole life to load and attach the
+steering program: that is worth opting into, not something a deployment
+should acquire merely by installing a build that happens to have eBPF
+support. Left off, master uses its userspace relay-based dispatch instead
+(see master/quic/quic_relay.c), which needs no elevated privileges but
+relays every packet of a connection rather than just the first. Has no
+effect on a build without eBPF support at all, which always uses the
+userspace relay regardless of this setting.

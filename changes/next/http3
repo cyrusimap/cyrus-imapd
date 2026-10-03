@@ -1,0 +1,43 @@
+Description:
+
+Adds HTTP/3 (RFC 9114) support to httpd, served by a proto="quic"
+service, including WebSockets over HTTP/3 (RFC 9220) and, with
+http_allow_0rtt, 0-RTT early data.
+
+To support it, master can now dispatch QUIC services, giving each
+connection its own worker as it does for TCP.  By default master relays
+a connection's packets to its worker; with quic_use_ebpf, an eBPF
+SK_REUSEPORT program steers them to the worker directly.  The QUIC
+transport (imap/quic.c, QUIC v1 and v2) is independent of HTTP/3.
+
+
+Documentation:
+
+docsrc/concepts/features/quic-dispatch.rst
+
+
+Config changes:
+
+New cyrus.conf service types: proto="quic", "quic4" and "quic6".
+
+New imapoptions: http_h3_altsvc, quic_use_ebpf.
+
+httptimeout, websocket_timeout and http_allow_0rtt now also apply to
+HTTP/3 services.
+
+New configure options: --disable-quic, --without-ngtcp2,
+--without-nghttp3 and --without-quic-ebpf.
+
+
+Upgrade instructions:
+
+Opt-in: add a proto="quic" httpd service to cyrus.conf.  Requires
+ngtcp2 and nghttp3, built against OpenSSL 3.5 or later.  The eBPF
+backend also needs libbpf, libcap, clang and Linux 5.8, and master then
+keeps CAP_BPF, CAP_NET_ADMIN, CAP_PERFMON and CAP_NET_BIND_SERVICE for
+its whole life.
+
+
+GitHub issue:
+
+None.

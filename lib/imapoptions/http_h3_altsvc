@@ -1,0 +1,7 @@
+Name: http_h3_altsvc
+Type: STRING
+Default-Value: NULL
+Last-Modified: UNRELEASED
+
+If set, HTTP/3 (over QUIC) will be advertised as being available on the
+specified [host]:port.

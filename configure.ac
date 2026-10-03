@@ -1504,6 +1504,211 @@ if test "x$with_nghttp2" = "xyes" -o "x$with_nghttp2" = "xcheck"; then
         ])
 fi
 
+dnl QUIC connection dispatch (master, service): whether master and its
+dnl worker binaries build the master/quic/* dispatch layer at all. The
+dnl switch is parsed here so the probes below can be skipped entirely
+dnl when it is off; its value is settled once they have all run.
+AC_ARG_ENABLE(quic,
+        [AS_HELP_STRING([--disable-quic],
+                        [disable master/service QUIC dispatch support (check)])],,
+        [enable_quic="check"])
+
+dnl master hands a QUIC connection's fd to a worker over an AF_UNIX
+dnl SOCK_SEQPACKET socketpair, the fd itself riding via SCM_RIGHTS --
+dnl see docsrc/concepts/features/quic-dispatch.rst.
+dnl Neither is optional, so a platform missing either gets no QUIC dispatch.
+quic_fd_passing=yes
+if test "x$enable_quic" != "xno"; then
+        AC_CHECK_DECL([SOCK_SEQPACKET],, [quic_fd_passing=no],
+                [[#include <sys/socket.h>]])
+        AC_CHECK_DECL([SCM_RIGHTS],, [quic_fd_passing=no],
+                [[#include <sys/socket.h>]])
+fi
+
+dnl QUIC transport support:
+dnl ngtcp2 + ngtcp2's OpenSSL-3.5+ native QUIC TLS backend ("ossl").
+AC_ARG_WITH(ngtcp2,
+        [AS_HELP_STRING([--without-ngtcp2],
+                        [disable QUIC transport support (check)])],,
+        [with_ngtcp2="check"])
+
+if test "x$with_ngtcp2" = "xyes" -o "x$with_ngtcp2" = "xcheck"; then
+        PKG_CHECK_MODULES([NGTCP2], [libngtcp2], [
+                PKG_CHECK_MODULES([NGTCP2_CRYPTO_OSSL],
+                        [libngtcp2_crypto_ossl], [
+                        AC_DEFINE(HAVE_NGTCP2,[],
+                                [Build QUIC transport support?])
+                        with_ngtcp2=yes
+                ], [
+                        if test "x$with_ngtcp2" = "xyes"; then
+                                AC_MSG_ERROR([QUIC transport explicitly
+                                        requested, but
+                                        libngtcp2_crypto_ossl was not
+                                        found (requires ngtcp2's OpenSSL
+                                        3.5+ native QUIC backend)])
+                        fi
+                        AC_MSG_NOTICE([QUIC transport support will not be
+                                built. Consider installing
+                                libngtcp2_crypto_ossl])
+                        with_ngtcp2=no
+                ])
+        ], [
+                if test "x$with_ngtcp2" = "xyes"; then
+                        AC_MSG_ERROR([QUIC transport explicitly requested,
+                                but libngtcp2 was not found])
+                fi
+                AC_MSG_NOTICE([QUIC transport support will not be built.
+                        Consider installing libngtcp2])
+                with_ngtcp2=no
+        ])
+fi
+AM_CONDITIONAL([HAVE_NGTCP2], [test "x$with_ngtcp2" = "xyes"])
+
+dnl Finalize enable_quic, now that everything it needs has been probed.
+if test "x$enable_quic" != "xno"; then
+        if test "x$with_ngtcp2" != "xyes"; then
+                if test "x$enable_quic" = "xyes"; then
+                        AC_MSG_ERROR([QUIC dispatch support explicitly
+                                requested, but ngtcp2 is not available])
+                fi
+                AC_MSG_NOTICE([master will not have QUIC dispatch support:
+                        requires QUIC transport support (see --with-ngtcp2)])
+                enable_quic=no
+        elif test "x$quic_fd_passing" != "xyes"; then
+                if test "x$enable_quic" = "xyes"; then
+                        AC_MSG_ERROR([QUIC dispatch support explicitly
+                                requested, but this platform's
+                                <sys/socket.h> has no SOCK_SEQPACKET or no
+                                SCM_RIGHTS, which master needs to hand a
+                                connection to a worker])
+                fi
+                AC_MSG_NOTICE([master will not have QUIC dispatch support:
+                        this platform cannot pass fds over a SOCK_SEQPACKET
+                        socketpair])
+                enable_quic=no
+        else
+                enable_quic=yes
+        fi
+fi
+if test "x$enable_quic" = "xyes"; then
+        AC_DEFINE(WITH_QUIC,[],[Build master/service QUIC dispatch support?])
+fi
+AM_CONDITIONAL([WITH_QUIC], [test "x$enable_quic" = "xyes"])
+
+dnl HTTP/3 support: nghttp3 (HTTP/3 framing) on top of the QUIC transport.
+AC_ARG_WITH(nghttp3,
+        [AS_HELP_STRING([--without-nghttp3],
+                        [disable HTTP/3 (QUIC) support (check)])],,
+        [with_nghttp3="check"])
+
+if test "x$with_nghttp3" = "xyes" -o "x$with_nghttp3" = "xcheck"; then
+        PKG_CHECK_MODULES([NGHTTP3], [libnghttp3], [
+                AC_DEFINE(HAVE_NGHTTP3,[],
+                        [Build HTTP/3 support into httpd?])
+                with_nghttp3=yes
+        ], [
+                if test "x$with_nghttp3" = "xyes"; then
+                        AC_MSG_ERROR([HTTP/3 explicitly requested, but
+                                libnghttp3 was not found])
+                fi
+                AC_MSG_NOTICE([httpd will not have support for HTTP/3.
+                        Consider installing libnghttp3])
+                with_nghttp3=no
+        ])
+fi
+
+dnl eBPF steering for QUIC dispatch (master): the kernel delivers each
+dnl connection's packets straight to its worker's socket, so master
+dnl only ever sees a connection's first packet.
+AC_ARG_WITH(quic-ebpf,
+        [AS_HELP_STRING([--without-quic-ebpf],
+                        [disable eBPF-based per-connection QUIC dispatch in
+                         master (check)])],,
+        [with_quic_ebpf="check"])
+AC_ARG_VAR([CLANG],
+        [Location of clang, used to compile master/quic/cyr_quic_steer.bpf.c])
+
+dnl Steering is part of QUIC dispatch, so there is nothing to build without it.
+if test "x$enable_quic" != "xyes"; then
+        if test "x$with_quic_ebpf" = "xyes"; then
+                AC_MSG_ERROR([QUIC eBPF dispatch explicitly requested, but
+                        QUIC dispatch support is disabled])
+        fi
+        with_quic_ebpf=no
+fi
+
+dnl master/quic/cyr_quic_steer.bpf.c is compiled to BPF bytecode by clang.
+if test "x$with_quic_ebpf" = "xyes" -o "x$with_quic_ebpf" = "xcheck"; then
+        AC_PATH_PROG([CLANG],[clang])
+        AC_MSG_CHECKING([whether clang can compile to BPF])
+        quic_clang_bpf=no
+        if test -n "$CLANG"; then
+                echo 'int x;' > conftest.bpf.c
+                if $CLANG -O2 -target bpf -c conftest.bpf.c \
+                        -o conftest.bpf.o >&AS_MESSAGE_LOG_FD 2>&1; then
+                        quic_clang_bpf=yes
+                fi
+                rm -f conftest.bpf.c conftest.bpf.o
+        fi
+        AC_MSG_RESULT([$quic_clang_bpf])
+        if test "x$quic_clang_bpf" != "xyes"; then
+                if test "x$with_quic_ebpf" = "xyes"; then
+                        AC_MSG_ERROR([QUIC eBPF dispatch explicitly requested,
+                                but no clang that can compile to BPF was
+                                found])
+                fi
+                AC_MSG_NOTICE([master will not have eBPF-based QUIC dispatch.
+                        Consider installing clang])
+                with_quic_ebpf=no
+        fi
+fi
+
+if test "x$with_quic_ebpf" = "xyes" -o "x$with_quic_ebpf" = "xcheck"; then
+        PKG_CHECK_MODULES([LIBBPF], [libbpf], [
+                PKG_CHECK_MODULES([LIBCAP], [libcap], [
+                        dnl quic_ebpf.c uses CAP_BPF and CAP_PERFMON
+                        dnl unguarded: loading a networking BPF program
+                        dnl needs both, and neither is declared before
+                        dnl Linux 5.8's headers.
+                        AC_CHECK_DECL([CAP_BPF], [
+                                AC_DEFINE(HAVE_LIBBPF,[],
+                                        [Build eBPF-based per-connection QUIC
+                                                dispatch into master?])
+                                with_quic_ebpf=yes
+                        ], [
+                                if test "x$with_quic_ebpf" = "xyes"; then
+                                        AC_MSG_ERROR([QUIC eBPF dispatch
+                                                explicitly requested, but
+                                                CAP_BPF is not declared --
+                                                needs kernel headers >= 5.8])
+                                fi
+                                AC_MSG_NOTICE([master will not have
+                                        eBPF-based QUIC dispatch: CAP_BPF is
+                                        not declared. Consider kernel headers
+                                        >= 5.8])
+                                with_quic_ebpf=no
+                        ], [[#include <linux/capability.h>]])
+                ], [
+                        if test "x$with_quic_ebpf" = "xyes"; then
+                                AC_MSG_ERROR([QUIC eBPF dispatch explicitly
+                                        requested, but libcap was not found])
+                        fi
+                        AC_MSG_NOTICE([master will not have eBPF-based QUIC
+                                dispatch. Consider installing libcap-devel])
+                        with_quic_ebpf=no
+                ])
+        ], [
+                if test "x$with_quic_ebpf" = "xyes"; then
+                        AC_MSG_ERROR([QUIC eBPF dispatch explicitly requested,
+                                but libbpf was not found])
+                fi
+                AC_MSG_NOTICE([master will not have eBPF-based QUIC dispatch.
+                        Consider installing libbpf-devel])
+                with_quic_ebpf=no
+        ])
+fi
+AM_CONDITIONAL([HAVE_LIBBPF], [test "x$with_quic_ebpf" = "xyes"])
+
 
 AC_ARG_WITH(wslay, [AS_HELP_STRING([--without-wslay], [disable WebSockets support (check)])],,[with_wslay="check"])
 if test "x$with_wslay" = "xyes" -o "x$with_wslay" = "xcheck"; then
@@ -1565,8 +1770,8 @@ PKG_CHECK_MODULES([SHAPELIB], [shapelib >= 1.3.0],[
         ],
         AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
-HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
-HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIBM}"
+HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${NGTCP2_CFLAGS} ${NGTCP2_CRYPTO_OSSL_CFLAGS} ${NGHTTP3_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
+HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${NGTCP2_LIBS} ${NGTCP2_CRYPTO_OSSL_LIBS} ${NGHTTP3_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIBM}"
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
 
@@ -2454,6 +2659,7 @@ Cyrus Server configured components
    sieve:              $enable_sieve
    srs:                $enable_srs
    jmap:               $enable_jmap
+   quic:               $enable_quic
    com_err:            $with_com_err
 
 External dependencies:
@@ -2465,6 +2671,9 @@ External dependencies:
    clamav:             $with_clamav
    -----------------------
    nghttp2:            $with_nghttp2
+   nghttp3:            $with_nghttp3
+   ngtcp2:             $with_ngtcp2
+   ebpf:               $with_quic_ebpf
    wslay:              $with_wslay
    brotli:             $with_brotli
    zstd:               $with_zstd

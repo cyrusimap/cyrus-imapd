@@ -151,16 +151,22 @@ on certain Internet/UNIX sockets.
 ..
 
     The protocol used for this service (*tcp*, *tcp4*, *tcp6*,
-    *udp*, *udp4*, *udp6*).  This string argument is optional.
+    *udp*, *udp4*, *udp6*, *quic*, *quic4*, *quic6*).  This string
+    argument is optional.
 
-    **tcp4**, **udp4**: These arguments are used to bind the
-    service to IPv4 only.
+    **tcp4**, **udp4**, **quic4**: These arguments are used to bind
+    the service to IPv4 only.
 
-    **tcp6**, **udp6**: These arguments are used to bind the
-    service to IPv6 only, if the operating system supports this.
+    **tcp6**, **udp6**, **quic6**: These arguments are used to bind
+    the service to IPv6 only, if the operating system supports this.
 
-    **tcp**, **udp**: These arguments are used to bind to both IPv4
-    and IPv6 if possible.
+    **tcp**, **udp**, **quic**: These arguments are used to bind to
+    both IPv4 and IPv6 if possible.
+
+    **quic**, **quic4**, **quic6**: Unlike tcp/udp, master dispatches
+    connections for these itself instead of the kernel, forking one
+    worker per connection the same way it does for tcp -- see
+    :ref:`imap-features-quic-dispatch`.
 
 .. parsed-literal::
 

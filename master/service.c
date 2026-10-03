@@ -48,6 +48,22 @@ static int verbose = 0;
 static int lockfd = -1;
 static int newfile = 0;
 
+/* Whether this worker belongs to a proto="quic" service. */
+static bool service_is_quic_flag = false;
+
+bool service_is_quic(void)
+{
+    return service_is_quic_flag;
+}
+
+/* This worker's current QUIC connection, refilled per connection. */
+static struct quic_handoff quic_handoff;
+
+const struct quic_handoff *service_quic_handoff(void)
+{
+    return quic_handoff.ncids ? &quic_handoff : NULL;
+}
+
 void notify_master(int fd, int msg)
 {
     struct notify_message notifymsg;
@@ -257,6 +273,7 @@ int main(int argc, char **argv, char **envp)
     int reuse_timeout = REUSE_TIMEOUT;
     int soctype = 0;
     socklen_t typelen = sizeof(soctype);
+    bool is_quic = false;
     struct sockaddr socname;
     socklen_t addrlen = sizeof(struct sockaddr);
     int id;
@@ -351,6 +368,9 @@ int main(int argc, char **argv, char **envp)
     }
     id = atoi(p);
 
+    p = getenv("CYRUS_SERVICE_PROTO");
+    service_is_quic_flag = is_quic = !strcmpnull(p, "quic");
+
     /* if timeout is enabled, pick a random timeout between reuse_timeout
      * and 2*reuse_timeout to avoid massive IO overload if the network
      * connection goes away */
@@ -390,35 +410,54 @@ int main(int argc, char **argv, char **envp)
     }
     else {
         /* set close on exec */
-        fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
-        if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD,
-                                        fdflags | FD_CLOEXEC);
-        if (fdflags == -1) {
-            syslog(LOG_ERR, "unable to set close on exec: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
-                notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-            return 1;
+        if (is_quic) {
+            /* No raw listening socket for quic workers -- each
+             * connection arrives individually via QUIC_HANDOFF_FD.
+             * Treat it as UDP-shaped for the soctype-gated code
+             * further down. */
+            fdflags = fcntl(QUIC_HANDOFF_FD, F_GETFD, 0);
+            if (fdflags != -1) fdflags = fcntl(QUIC_HANDOFF_FD, F_SETFD,
+                                            fdflags | FD_CLOEXEC);
+            if (fdflags == -1) {
+                xsyslog_ev(LOG_ERR, "service.quic_handoff.cloexec_failed");
+                if (MESSAGE_MASTER_ON_EXIT)
+                    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                return 1;
+            }
+            soctype = SOCK_DGRAM;
         }
+        else {
+            fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
+            if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD,
+                                            fdflags | FD_CLOEXEC);
+            if (fdflags == -1) {
+                xsyslog_ev(LOG_ERR, "service.listen.cloexec_failed");
+                if (MESSAGE_MASTER_ON_EXIT)
+                    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                return 1;
+            }
+
+            /* figure out what sort of socket this is */
+            if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
+                        (char *) &soctype, &typelen) < 0) {
+                xsyslog_ev(LOG_ERR, "service.listen.socktype_failed");
+                if (MESSAGE_MASTER_ON_EXIT)
+                    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                return 1;
+            }
+            if (getsockname(LISTEN_FD, &socname, &addrlen) < 0) {
+                xsyslog_ev(LOG_ERR, "service.listen.sockname_failed");
+                if (MESSAGE_MASTER_ON_EXIT)
+                    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                return 1;
+            }
+        }
+
         fdflags = fcntl(STATUS_FD, F_GETFD, 0);
         if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD,
                                         fdflags | FD_CLOEXEC);
         if (fdflags == -1) {
             syslog(LOG_ERR, "unable to set close on exec: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
-                notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-            return 1;
-        }
-
-        /* figure out what sort of socket this is */
-        if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
-                    (char *) &soctype, &typelen) < 0) {
-            syslog(LOG_ERR, "getsockopt: SOL_SOCKET: failed to get type: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
-                notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-            return 1;
-        }
-        if (getsockname(LISTEN_FD, &socname, &addrlen) < 0) {
-            syslog(LOG_ERR, "getsockname: failed: %m");
             if (MESSAGE_MASTER_ON_EXIT)
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
             return 1;
@@ -461,8 +500,13 @@ int main(int argc, char **argv, char **envp)
             alarm(reuse_timeout);
         }
 
-        /* lock */
-        lockaccept();
+        if (!is_quic) {
+            /* lock -- pointless for quic: QUIC_HANDOFF_FD is private
+             * to this one worker, so there's no shared accept() race
+             * with sibling workers to serialize against the way there
+             * is for a shared LISTEN_FD. */
+            lockaccept();
+        }
 
         fd = -1;
         while (fd < 0 && !signals_poll()) { /* loop until we succeed */
@@ -482,7 +526,39 @@ int main(int argc, char **argv, char **envp)
                 break;
             }
 
-            if (soctype == SOCK_STREAM) {
+            if (is_quic) {
+#ifdef WITH_QUIC
+                /* Wait signal-safely, same rationale as the SOCK_STREAM
+                 * and udp cases below. */
+                if (safe_wait_readable(QUIC_HANDOFF_FD) < 0)
+                    continue;
+                if (quic_recv_handoff(QUIC_HANDOFF_FD, &quic_handoff) == 0) {
+                    /* Ownership moves to fd, which is dup2()ed onto
+                     * stdin/stdout and closed below -- so the struct
+                     * must stop naming it. */
+                    fd = quic_handoff.recv_fd;
+                    quic_handoff.recv_fd = -1;
+                }
+                else {
+                    switch (errno) {
+                    case EINTR:
+                        signals_poll();
+                        GCC_FALLTHROUGH
+                    case EAGAIN:
+                        break;
+
+                    default:
+                        xsyslog_ev(LOG_ERR,
+                                  "service.quic_handoff.recv_failed");
+                        if (MESSAGE_MASTER_ON_EXIT)
+                            notify_master(STATUS_FD,
+                                         MASTER_SERVICE_UNAVAILABLE);
+                        service_abort(EX_OSERR);
+                    }
+                }
+#endif /* WITH_QUIC */
+            }
+            else if (soctype == SOCK_STREAM) {
                 /* Wait for the file descriptor to be connected to, in a
                  * signal-safe manner.  This ensures the accept() does
                  * not block and we don't need to make it signal-safe.  */
@@ -544,7 +620,7 @@ int main(int argc, char **argv, char **envp)
         }
 
         /* unlock */
-        unlockaccept();
+        if (!is_quic) unlockaccept();
 
         if (fd < 0 && (signals_poll() || newfile)) {
             /* timed out (SIGALRM), SIGHUP, or new process file */
@@ -596,14 +672,17 @@ int main(int argc, char **argv, char **envp)
         }
 #endif
 
-        /* tcp only */
-        if(soctype == SOCK_STREAM) {
+        /* quic & tcp only */
+        if (is_quic || soctype == SOCK_STREAM) {
             if (fd > STDERR_FILENO) close(fd);
         }
 
         notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);
         use_count++;
         service_main(service_argv.count, service_argv.data, envp);
+
+        xclose(quic_handoff.send_fd);
+
         /* if we returned, we can service another client with this process */
 
         if (signals_poll() || use_count >= max_use) {

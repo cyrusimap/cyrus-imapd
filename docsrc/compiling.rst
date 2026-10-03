@@ -175,6 +175,9 @@ Other
     (probabilistically detects over 80 languages in Unicode UTF-8 text, either
     plain text or HTML/XML). Required for **Xapian** (``--enable-xapian``),
     otherwise not needed."
+    `ngtcp2`_, libngtcp2-dev, "no", "It lets **master** dispatch QUIC
+    services, reading QUIC packet headers with it. Without it, there is no
+    QUIC dispatch. Configure option: ``--enable-quic``."
     `openldap`_, libldap2-dev, "no", "Development headers
     to enable **ptloader** to interface with LDAP directly, for canonification
     of login usernames to mailbox names, and verification of login usernames,
@@ -201,6 +204,7 @@ Other
 .. _mysql: http://www.mysql.com
 .. _mariadb: http://mariadb.org
 .. _nghttp2: https://nghttp2.org/
+.. _ngtcp2: https://nghttp2.org/ngtcp2/
 .. _openldap: http://www.openldap.org/
 .. _pcre2: http://www.pcre.org/
 .. _perl(Term::ReadLine): https://metacpan.org/pod/Term::ReadLine
