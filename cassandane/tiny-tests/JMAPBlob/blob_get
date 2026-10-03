@@ -53,4 +53,20 @@ sub test_blob_get
     $self->assert_str_equals($body, $res->[0][1]{list}[0]{'data:asText'});
     $self->assert_str_equals(encode_base64($body, ''), $res->[0][1]{list}[0]{'data:asBase64'});
     $self->assert_num_equals(length($body), $res->[0][1]{list}[0]{'size'});
+
+    xlog "Octets that are not UTF-8";
+    # RFC 9404 Section 4.2: when data:asText was requested and the octets
+    # are not valid UTF-8, isEncodingProblem MUST be true and "the
+    # data:asText response value MUST be null"; for data, base64 is returned.
+    my $binary = "\xff\xfe\x00binary";
+    my $upload = $jmap->Upload($binary, "application/octet-stream");
+    $res = $jmap->CallMethods([['Blob/get', { ids => [$upload->{blobId}], properties => [ 'data:asText' ] }, 'R1']]);
+    my $item = $res->[0][1]{list}[0];
+    $self->assert_equals(JSON::true, $item->{isEncodingProblem});
+    $self->assert(exists $item->{'data:asText'});
+    $self->assert_null($item->{'data:asText'});
+    $res = $jmap->CallMethods([['Blob/get', { ids => [$upload->{blobId}], properties => [ 'data' ] }, 'R1']]);
+    $item = $res->[0][1]{list}[0];
+    $self->assert_equals(JSON::true, $item->{isEncodingProblem});
+    $self->assert_str_equals(encode_base64($binary, ''), $item->{'data:asBase64'});
 }
