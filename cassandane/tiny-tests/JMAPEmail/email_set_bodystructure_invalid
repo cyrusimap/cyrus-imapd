@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_bodystructure_invalid
+    :min_version_3_1 :needs_component_jmap
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my $inboxid = $self->getinbox()->{id};
+
+    my $blob = $jmap->Upload("hello", "text/plain");
+
+    # RFC 8621 Section 4.6 on the body parts of a created Email: "The client
+    # may specify a partId OR a blobId, but not both. If a partId is given,
+    # this partId MUST be present in the bodyValues property", and the
+    # top-level bodyStructure part "MUST NOT contain a property representing
+    # a header field that is already defined on the Email object". Each
+    # rejection names exactly the offending properties.
+    my %cases = (
+        both => {
+            email => {
+                bodyStructure => { partId => 'text', type => 'text/plain', blobId => $blob->{blobId} },
+                bodyValues    => { text => { value => 'ok' } },
+            },
+            properties => [ 'bodyStructure/blobId', 'bodyStructure/partId' ],
+        },
+        missingValue => {
+            email => {
+                bodyStructure => { partId => 'text', type => 'text/plain' },
+                bodyValues    => { notText => { value => 'ok' } },
+            },
+            properties => [ 'bodyStructure/partId' ],
+        },
+        duplicateHeader => {
+            email => {
+                'header:X-Foo' => 'bar',
+                bodyStructure => { partId => 'text', type => 'text/plain', 'header:X-Foo' => 'bar' },
+                bodyValues    => { text => { value => 'ok' } },
+            },
+            properties => [ 'bodyStructure/header:X-Foo' ],
+        },
+    );
+
+    for my $name (sort keys %cases) {
+        xlog $self, "create with $name";
+        my $res = $jmap->CallMethods([['Email/set', {
+            create => { new => { mailboxIds => { $inboxid => JSON::true }, %{ $cases{$name}{email} } } },
+        }, 'R1']]);
+        my $err = $res->[0][1]{notCreated}{new};
+        $self->assert_not_null($err);
+        $self->assert_str_equals('invalidProperties', $err->{type});
+        $self->assert_cmp_deeply($cases{$name}{properties}, [ sort @{ $err->{properties} } ]);
+    }
+}
