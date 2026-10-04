@@ -523,10 +523,11 @@ static int set_up(void)
         }
     }
 
-    config_read_string(DBDIR"/conf",
+    r = config_read_string(DBDIR"/conf", NULL,
         "defaultpartition: "PARTITION"\n"
         "partition-"PARTITION": "DBDIR"/data\n"
     );
+    if (r) return r;
 
     cyrusdb_init();
     config_mboxlist_db = "skiplist";

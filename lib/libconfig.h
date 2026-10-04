@@ -5,15 +5,19 @@
 #ifndef INCLUDED_LIBCONFIG_H
 #define INCLUDED_LIBCONFIG_H
 
+#include "buf.h"
 #include "imapopts.h"
 #include "strarray.h"
 
 #include <stdio.h>
 
-/* these will assert() if they're called on the wrong type of
-   option (imapopts.c) */
+/* load/unload configuration */
+extern int config_read(const char *alt_config,
+                       const int config_need_data,
+                       struct buf *err);
 extern void config_reset(void);
-extern void config_read(const char *alt_config, const int config_need_data);
+
+/* these will assert() if they're called on the wrong type of option */
 extern const char *config_getstring(enum imapopt opt);
 extern int32_t config_getint(enum imapopt opt);
 extern bool config_getswitch(enum imapopt opt);

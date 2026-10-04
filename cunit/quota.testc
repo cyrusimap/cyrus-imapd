@@ -1024,7 +1024,8 @@ static int set_up(void)
         }
     }
 
-    config_read_string(DBDIR"/conf", NULL);
+    r = config_read_string(DBDIR"/conf", NULL, NULL);
+    if (r) return r;
 
     cyrusdb_init();
     config_quota_db = "skiplist";

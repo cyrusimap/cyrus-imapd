@@ -283,11 +283,13 @@ CU_BOOL CU_assertFormatImplementation(
     return CU_assertImplementation(bValue, uiLine, buf, strFile, strFunction, bFatal);
 }
 
-EXPORTED void config_read_string(const char *confdir, const char *s)
+EXPORTED int config_read_string(const char *confdir,
+                                struct buf *err,
+                                const char *s)
 {
     char fname[PATH_MAX] = {0};
     struct buf opt_confdir = BUF_INITIALIZER;
-    int fd;
+    int fd, r;
 
     /* n.b. you should almost always set a confdir, unless you're testing
      * the fact that cyrus fatals when it's not set!
@@ -316,12 +318,16 @@ EXPORTED void config_read_string(const char *confdir, const char *s)
         retry_write(fd, s, strlen(s));
     }
     config_reset();
-    config_read(fname, 0);
+
+    r = config_read(fname, 0, err);
     xunlink(fname);
     close(fd);
+    if (r) return r;
 
     /* make sure libcyrus configdirectory is properly initialised */
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
+
+    return 0;
 }
 
 EXPORTED int cunit_tmpfile(char *buf, size_t len, const char *pattern)
