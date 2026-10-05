@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+# Each migration retires a connection ID, and the server replaces it with
+# one from the spare pool master registered.  Once the pool is used up the
+# server closes the connection, rather than issue an ID master wouldn't
+# route.
+sub test_connection_migration_cid_pool
+    # :NoCheckSyslog -- failing the connection logs quic.conn.writev_failed
+    # as an error
+    :NoCheckSyslog
+    ($self)
+{
+    my $migrations = 20;
+    my $run = $self->h3migrate(migrations => $migrations, timeout => 3);
+
+    $self->assert_num_equals(3, $run->{exit});
+    $self->assert_str_equals('closed CONNECTION_CLOSE', $run->{end});
+
+    my $migrated = scalar @{$run->{migrated}};
+    $self->assert($migrated >= 1 && $migrated < $migrations,
+                  "migrated $migrated times before the pool ran out");
+
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/event=quic\.conn\.cid_pool_exhausted/);
+}
