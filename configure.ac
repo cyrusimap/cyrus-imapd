@@ -1527,11 +1527,15 @@ fi
 
 dnl master parses QUIC packet headers, and writes Version Negotiation,
 dnl with ngtcp2: the library QUIC workers are meant to be built on, so
-dnl that both agree about which packets can start a connection.
+dnl that both agree about which packets can start a connection.  It makes
+dnl and checks Retry tokens with ngtcp2's OpenSSL backend.
 quic_ngtcp2=no
 if test "x$enable_quic" != "xno"; then
-        PKG_CHECK_MODULES([NGTCP2], [libngtcp2], [quic_ngtcp2=yes],
-                [quic_ngtcp2=no])
+        PKG_CHECK_MODULES([NGTCP2], [libngtcp2], [
+                PKG_CHECK_MODULES([NGTCP2_CRYPTO_OSSL],
+                        [libngtcp2_crypto_ossl], [quic_ngtcp2=yes],
+                        [quic_ngtcp2=no])
+        ], [quic_ngtcp2=no])
 fi
 
 dnl Finalize enable_quic, now that the probes above have run.
@@ -1539,10 +1543,11 @@ if test "x$enable_quic" != "xno"; then
         if test "x$quic_ngtcp2" != "xyes"; then
                 if test "x$enable_quic" = "xyes"; then
                         AC_MSG_ERROR([QUIC dispatch support explicitly
-                                requested, but libngtcp2 was not found])
+                                requested, but libngtcp2 or
+                                libngtcp2_crypto_ossl was not found])
                 fi
                 AC_MSG_NOTICE([master will not have QUIC dispatch support:
-                        requires libngtcp2])
+                        requires libngtcp2 and libngtcp2_crypto_ossl])
                 enable_quic=no
         elif test "x$quic_fd_passing" != "xyes"; then
                 if test "x$enable_quic" = "xyes"; then

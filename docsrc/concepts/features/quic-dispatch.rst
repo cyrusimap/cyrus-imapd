@@ -99,6 +99,7 @@ kinds of things:
                     <TR><TD>local_addr + local_addrlen</TD></TR>
                     <TR><TD>peer_addr + peer_addrlen</TD></TR>
                     <TR><TD>pktlen + pkt[]</TD></TR>
+                    <TR><TD>odcid[] + odcidlen</TD></TR>
                 </TABLE>>];
 
             msg:c -> fd [color=green4];
@@ -598,6 +599,34 @@ Reusing an idle worker costs no fork and isn't gated at all. A new
 connection that arrives with no worker available is dropped, leaving
 the client's loss recovery to retry it.
 
+Address validation
+==================
+
+A new connection costs a worker, perhaps a fork, until its handshake
+completes or times out, and its first packet's source address proves
+nothing: a flood of Initials with forged addresses could otherwise
+use up ``maxchild``.  So, per :imapdconf:`quic_retry`,
+:program:`master` can answer a new connection's Initial with a Retry
+(:rfc:`9000` section 8.1) instead of dispatching it.  The client must
+send its Initial again, carrying the Retry's token, and only that
+Initial gets a worker.
+
+:program:`master` keeps no state between the two.  The token is
+encrypted with a key :program:`master` picks at startup, and binds the
+client's address, the Retry's source CID (the new Initial's DCID) and
+the DCID of the first Initial, which the worker needs for the
+``original_dcid`` transport parameter and gets in the handoff.  A
+token that doesn't verify -- expired after 10 seconds, from before a
+restart, or for another address -- gets a CONNECTION_CLOSE with
+INVALID_TOKEN rather than a second Retry, which the client would
+ignore.
+
+A Retry costs every connection it applies to a round trip, so by
+default (``load``) :program:`master` sends one only while a service has
+at least half its ``maxchild`` workers running.  It only stops forged
+addresses: a flood from addresses that answer still needs other
+limits.
+
 Performance
 ============
 
@@ -663,5 +692,8 @@ Related configuration
     a ``SOCK_SEQPACKET`` socketpair.
 *   :imapdconf:`quic_use_ebpf` -- eBPF vs. userspace relay backend.
     Off by default; the relay needs no elevated privileges.
+*   :imapdconf:`quic_retry` -- when to validate a new connection's
+    address with a Retry: ``never``, under ``load`` (the default), or
+    ``always``.
 
 Back to :ref:`imap-features`

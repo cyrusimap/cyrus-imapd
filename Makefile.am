@@ -1797,8 +1797,8 @@ master_master_SOURCES += \
     master/quic/quic_relay.c \
     master/quic/quic_relay.h
 
-master_master_CPPFLAGS += $(NGTCP2_CFLAGS)
-master_master_LDADD += $(NGTCP2_LIBS)
+master_master_CPPFLAGS += $(NGTCP2_CFLAGS) $(NGTCP2_CRYPTO_OSSL_CFLAGS)
+master_master_LDADD += $(NGTCP2_LIBS) $(NGTCP2_CRYPTO_OSSL_LIBS)
 
 if HAVE_LIBBPF
 master_master_SOURCES += \

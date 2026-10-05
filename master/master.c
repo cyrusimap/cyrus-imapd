@@ -1086,6 +1086,8 @@ done:
 
 #ifdef WITH_QUIC
 #include <ngtcp2/ngtcp2.h>
+#include <ngtcp2/ngtcp2_crypto.h>
+#include <ngtcp2/ngtcp2_crypto_ossl.h>
 
 /* Create the dispatch communication channel: SOCK_SEQPACKET so each message
  * stays a distinct datagram, which both the handoff and the relay depend on.
@@ -1244,6 +1246,94 @@ static bool quic_accept_initial(struct service *s,
     return (!r && ngtcp2_accept(hd, pkt, pktlen) == 0);
 }
 
+/* Address validation with Retry (RFC 9000 section 8.1) -- see "Retry"
+ * in quic-dispatch.rst.  Tokens are master's alone: it makes and
+ * checks them, so their key lives and dies with master. */
+static uint8_t quic_retry_secret[32];
+static int quic_retry_mode = IMAP_ENUM_QUIC_RETRY_NEVER;
+
+/* How long a client has to come back with a Retry token */
+#define QUIC_RETRY_TOKEN_TIMEOUT (10 * NGTCP2_SECONDS)
+
+static ngtcp2_tstamp quic_dispatch_now(void)
+{
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (ngtcp2_tstamp) ts.tv_sec * NGTCP2_SECONDS +
+           (ngtcp2_tstamp) ts.tv_nsec;
+}
+
+/* Whether a new connection to s must prove its address before it gets
+ * a worker, by quic_retry */
+static bool quic_retry_wanted(const struct service *s)
+{
+    switch (quic_retry_mode) {
+    case IMAP_ENUM_QUIC_RETRY_ALWAYS:
+        return true;
+    case IMAP_ENUM_QUIC_RETRY_LOAD:
+        /* without maxchild there's no "half" to reach */
+        return s->max_workers != INT_MAX &&
+               s->nactive >= s->max_workers / 2;
+    default:
+        return false;
+    }
+}
+
+/* Answer the Initial described by hd with a Retry carrying a token for
+ * its sender's address.  Keeps no state: everything the eventual
+ * dispatch needs comes back in the token. */
+static void quic_send_retry(struct service *s, const ngtcp2_pkt_hd *hd,
+                            const struct sockaddr_storage *peer,
+                            socklen_t peerlen)
+{
+    uint8_t token[NGTCP2_CRYPTO_MAX_RETRY_TOKENLEN2];
+    uint8_t buf[QUIC_PKT_BUFSIZE];
+    ngtcp2_cid scid;
+    ngtcp2_ssize tokenlen, n = -1;
+
+    scid.datalen = QUIC_CIDLEN;
+    RAND_bytes(scid.data, QUIC_CIDLEN);
+
+    tokenlen = ngtcp2_crypto_generate_retry_token2(
+        token, quic_retry_secret, sizeof(quic_retry_secret), hd->version,
+        (const ngtcp2_sockaddr *) peer, peerlen, &scid, &hd->dcid,
+        quic_dispatch_now());
+    if (tokenlen > 0) {
+        n = ngtcp2_crypto_write_retry(buf, sizeof(buf), hd->version,
+                                      &hd->scid, &scid, &hd->dcid,
+                                      token, (size_t) tokenlen);
+    }
+    if (n < 0 ||
+        sendto(s->socket, buf, (size_t) n, 0,
+               (const struct sockaddr *) peer, peerlen) < 0) {
+        xsyslog_ev(LOG_ERR, "quic.dispatch.retry_failed",
+                   lf_s("service.name", s->name));
+    }
+}
+
+/* Refuse the Initial described by hd, whose Retry token didn't verify:
+ * a client follows only one Retry per attempt (RFC 9000 section
+ * 17.2.5.2), so a second would just leave it waiting. */
+static void quic_send_invalid_token(struct service *s,
+                                    const ngtcp2_pkt_hd *hd,
+                                    const struct sockaddr_storage *peer,
+                                    socklen_t peerlen)
+{
+    uint8_t buf[QUIC_PKT_BUFSIZE];
+    ngtcp2_ssize n;
+
+    n = ngtcp2_crypto_write_connection_close(buf, sizeof(buf), hd->version,
+                                             &hd->scid, &hd->dcid,
+                                             NGTCP2_INVALID_TOKEN, NULL, 0);
+    if (n < 0 ||
+        sendto(s->socket, buf, (size_t) n, 0,
+               (const struct sockaddr *) peer, peerlen) < 0) {
+        xsyslog_ev(LOG_ERR, "quic.dispatch.invalid_token_failed",
+                   lf_s("service.name", s->name));
+    }
+}
+
 /* Handle one datagram from a service's rendezvous socket: under the
  * relay backend, forward it to the connection it belongs to; otherwise,
  * if it's a new connection's Initial, give that connection its own
@@ -1263,6 +1353,7 @@ static void quic_dispatch_datagram(struct service *s, int si,
     int sendsock = -1;
     uint32_t index = 0;
     struct quic_handoff handoff;
+    ngtcp2_cid odcid = { .datalen = 0 };
 
     /* Relay backend only: every packet of every connection passes
      * through this rendezvous socket, so most of them (anything past
@@ -1284,6 +1375,28 @@ static void quic_dispatch_datagram(struct service *s, int si,
      * overtook its Initial, or a version we don't dispatch */
     if (!quic_accept_initial(s, pkt, pktlen, peer, peerlen, &hd))
         return;
+
+    /* A token from one of our Retries proves the address, and holds
+     * the DCID of the client's first Initial.  Any other token -- a
+     * NEW_TOKEN token, which master never issues, or none -- proves
+     * nothing. */
+    if (hd.tokenlen && hd.token[0] == NGTCP2_CRYPTO_TOKEN_MAGIC_RETRY2) {
+        if (ngtcp2_crypto_verify_retry_token2(
+                &odcid, hd.token, hd.tokenlen, quic_retry_secret,
+                sizeof(quic_retry_secret), hd.version,
+                (const ngtcp2_sockaddr *) peer, peerlen, &hd.dcid,
+                QUIC_RETRY_TOKEN_TIMEOUT, quic_dispatch_now()) != 0) {
+            odcid.datalen = 0;
+            if (quic_retry_wanted(s)) {
+                quic_send_invalid_token(s, &hd, peer, peerlen);
+                return;
+            }
+        }
+    }
+    else if (quic_retry_wanted(s)) {
+        quic_send_retry(s, &hd, peer, peerlen);
+        return;
+    }
 
     if (getsockname(s->socket, (struct sockaddr *) &local, &locallen)) {
         xsyslog_ev(LOG_ERR, "quic.dispatch.getsockname_failed");
@@ -1442,6 +1555,8 @@ static void quic_dispatch_datagram(struct service *s, int si,
     handoff.peer_addrlen = peerlen;
     handoff.pktlen = pktlen;
     memcpy(handoff.pkt, pkt, pktlen);
+    memcpy(handoff.odcid, odcid.data, odcid.datalen);
+    handoff.odcidlen = (uint8_t) odcid.datalen;
 
     /* Hand off to a ready worker. A send failure means it died or
      * started exiting since being pooled, or (EAGAIN) still has an
@@ -3778,6 +3893,12 @@ int main(int argc, char **argv)
      * (master/quic/quic_relay.c) even on a build/kernel that could use
      * eBPF, e.g. because the TC/BPF machinery isn't permitted here */
     quic_use_ebpf = config_getswitch(IMAPOPT_QUIC_USE_EBPF);
+#endif
+
+#ifdef WITH_QUIC
+    quic_retry_mode = config_getenum(IMAPOPT_QUIC_RETRY);
+    ngtcp2_crypto_ossl_init();
+    RAND_bytes(quic_retry_secret, sizeof(quic_retry_secret));
 #endif
 
     /* initialize services */

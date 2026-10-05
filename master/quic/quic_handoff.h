@@ -16,6 +16,10 @@
  * agree on this size, or a large Initial packet gets truncated. */
 #define QUIC_PKT_BUFSIZE 2048
 
+/* A client-chosen Destination Connection ID is at most this long
+ * (NGTCP2_MAX_CIDLEN, RFC 9000 section 17.2) */
+#define QUIC_MAX_ODCIDLEN 20
+
 /* The QUIC versions to advertise, in master's Version Negotiation
  * packets and a worker's version_information transport parameter:
  * v1 (RFC 9000) and v2 (RFC 9369).  ngtcp2 decides which versions are
@@ -57,6 +61,13 @@ struct quic_handoff {
     socklen_t peer_addrlen;
     size_t pktlen;
     uint8_t pkt[QUIC_PKT_BUFSIZE];
+
+    /* The DCID of the client's first Initial, recovered from the Retry
+     * token in pkt that master verified, or odcidlen 0 if master sent
+     * no Retry: the worker needs it for the original_dcid transport
+     * parameter, and the token itself for ngtcp2_settings. */
+    uint8_t odcid[QUIC_MAX_ODCIDLEN];
+    uint8_t odcidlen;
 };
 
 /* Hand one QUIC connection to a worker over handoff_fd, master's end of
