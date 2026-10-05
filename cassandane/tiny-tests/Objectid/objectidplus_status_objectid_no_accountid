@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that STATUS does not accept standalone ACCOUNTID (it was removed),
+# and that OBJECTID returns the compound format.
+#
+sub test_objectidplus_status_objectid_no_accountid
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('testbox');
+
+    # STATUS OBJECTID should work and activate OBJECTID+
+    my $status = $talk->status('testbox', "(objectid)");
+    $self->assert_not_null($status->{objectid});
+
+    # STATUS MAILBOXID should still work (RFC 8474)
+    my $status2 = $talk->status('testbox', "(mailboxid)");
+    $self->assert_not_null($status2->{mailboxid});
+
+    # STATUS with both MAILBOXID and OBJECTID
+    my $status3 = $talk->status('testbox', "(mailboxid objectid)");
+    $self->assert_not_null($status3->{mailboxid});
+    $self->assert_not_null($status3->{objectid});
+}

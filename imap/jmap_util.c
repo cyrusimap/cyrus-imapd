@@ -1342,8 +1342,44 @@ EXPORTED void jmap_set_mailboxid(struct conversations_state *cstate,
                                  const mbentry_t *mbentry, char *mboxid)
 {
     strlcpy(mboxid,
-            USER_COMPACT_EMAILIDS(cstate) ? mbentry->jmapid : mbentry->uniqueid,
+            USER_COMPACT_EMAILIDS(cstate) && mbentry->jmapid ?
+            mbentry->jmapid : mbentry->uniqueid,
             JMAP_MAX_MAILBOXID_SIZE);
+}
+
+EXPORTED void jmap_get_mailbox_objectids(const mbentry_t *mbentry,
+                                         struct buf *mailboxid,
+                                         struct buf *accountid)
+{
+    /* userid as ACCOUNTID - see prot_print_objectids() */
+    char *userid = mboxname_to_userid(mbentry->name);
+
+    buf_reset(accountid);
+    if (!userid) {
+        /* shared mailbox: no ACCOUNTID, uniqueid as MAILBOXID */
+        buf_setcstr(mailboxid, mbentry->uniqueid);
+        return;
+    }
+
+    /* compact ids are a per-user setting held in the conversations db,
+     * so without conversations there are none */
+    struct conversations_state *cstate = NULL, *mine = NULL;
+    if (config_getswitch(IMAPOPT_CONVERSATIONS)) {
+        cstate = conversations_get_user(userid);
+        if (!cstate && !conversations_open_user(userid, 1 /*shared*/, &mine)) {
+            cstate = mine;
+        }
+    }
+
+    char id[JMAP_MAX_MAILBOXID_SIZE];
+    jmap_set_mailboxid(cstate, mbentry, id);
+    buf_setcstr(mailboxid, id);
+
+    if (mine) {
+        conversations_abort(&mine);
+    }
+    buf_setcstr(accountid, userid);
+    free(userid);
 }
 
 EXPORTED void jmap_set_threadid(struct conversations_state *cstate,

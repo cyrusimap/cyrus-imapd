@@ -926,6 +926,10 @@ draft-ietf-jmap-calendars
 
     JMAP for Calendars
 
+draft-ietf-mailmaint-imap-objectid-bis
+
+    IMAP Extension for Object Identifiers (OBJECTID+)
+
 draft-murchison-lmtp-ignorequota
 
     LMTP Service Extension for Ignoring Recipient Quotas

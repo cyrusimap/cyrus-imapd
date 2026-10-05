@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A murder frontend relays the OBJECTID extended data item from the
+# backend unchanged.
+#
+sub test_list_return_objectid
+    ($self)
+{
+    my $frontend = $self->{frontend_store}->get_client();
+    my $backend = $self->{backend1_store}->get_client();
+
+    for my $f (qw(lists personal)) {
+        $frontend->create("INBOX.$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    }
+
+    my $collect = sub ($talk) {
+        my %list;
+        my %handlers = (
+            list => sub ($, $data) { $list{$data->[2]} = $data },
+        );
+        $talk->_imap_cmd('LIST', 0, \%handlers, '', '*', 'RETURN', ['OBJECTID']);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        return \%list;
+    };
+
+    my $bresult = $collect->($backend);
+    my $fresult = $collect->($frontend);
+
+    for my $name ('INBOX', 'INBOX.lists', 'INBOX.personal') {
+        my %ext = @{$bresult->{$name}[3] // []};
+        $self->assert_not_null($ext{OBJECTID}, "backend lists $name with OBJECTID");
+    }
+
+    $self->assert_cmp_deeply($bresult, $fresult);
+}
