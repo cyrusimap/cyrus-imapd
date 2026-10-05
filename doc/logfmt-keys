@@ -223,6 +223,9 @@ mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
 pop.subfolder           the subfolder a POP session was restricted to
 quic.bpf_obj            path to the compiled cyr_quic_steer eBPF object
+quic.close.code         a QUIC CONNECTION_CLOSE error code, in hex
+quic.close.reason       the reason phrase of a QUIC CONNECTION_CLOSE
+quic.close.type         whether a QUIC close code is a transport or an application one
 quic.dropped            how many datagrams a QUIC connection lost to a full queue
 quic.family             an address family, as a string: ipv4, ipv6 or unix
 quic.nofile.hard        master's hard RLIMIT_NOFILE, the ceiling it may raise to
