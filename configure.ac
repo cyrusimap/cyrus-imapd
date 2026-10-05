@@ -1891,36 +1891,6 @@ AC_CONFIG_FILES([tools/rehash], [chmod +x tools/rehash])
 
 CMU_LIBWRAP
 
-# Figure out what directories we're linking against.
-# Lots of fun for the whole family.
-# This probably chokes on anything with spaces in it.
-# All we want is the list of -L directories, and -L may or may not be
-# followed by a space.
-isdir=no
-libpath=""
-#echo "debug ldflags: << ${ldflags} >>"
-#echo "debug default_ldflags: << ${default_ldflags} >>"
-for flag in ${ldflags} ${default_ldflags}; do
-  case $flag in
-    -L)
-      # it's a split -L option, we'll mark the next option as a dir.
-      isdir=yes
-      ;;
-
-    -L*)
-      # attached -L option: split off the directory
-      larg=`echo $flag | sed -e 's:-L\(..*\):\1:'`
-      libpath="${libpath} ${larg}"
-      ;;
-
-    *)
-      if test $isdir = yes ; then
-        libpath="${libpath} ${flag}"
-        isdir=no
-      fi
-  esac
-done
-
 AC_SUBST(LIB_SASL)
 AC_SUBST(LIB_UUID)
 
