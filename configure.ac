@@ -1525,29 +1525,59 @@ if test "x$enable_quic" != "xno"; then
                 [[#include <sys/socket.h>]])
 fi
 
-dnl master parses QUIC packet headers, and writes Version Negotiation,
-dnl with ngtcp2: the library QUIC workers are meant to be built on, so
-dnl that both agree about which packets can start a connection.  It makes
-dnl and checks Retry tokens with ngtcp2's OpenSSL backend.
-quic_ngtcp2=no
-if test "x$enable_quic" != "xno"; then
-        PKG_CHECK_MODULES([NGTCP2], [libngtcp2], [
-                PKG_CHECK_MODULES([NGTCP2_CRYPTO_OSSL],
-                        [libngtcp2_crypto_ossl], [quic_ngtcp2=yes],
-                        [quic_ngtcp2=no])
-        ], [quic_ngtcp2=no])
-fi
+dnl QUIC transport support:
+dnl ngtcp2 + ngtcp2's OpenSSL-3.5+ native QUIC TLS backend ("ossl").
+dnl 1.16.0 is the floor: imap/http_h3.c calls ngtcp2_conn_get_conn_info(),
+dnl added in that release.
+AC_ARG_WITH(ngtcp2,
+        [AS_HELP_STRING([--without-ngtcp2],
+                        [disable QUIC transport support (check)])],,
+        [with_ngtcp2="check"])
 
-dnl Finalize enable_quic, now that the probes above have run.
+if test "x$with_ngtcp2" = "xyes" -o "x$with_ngtcp2" = "xcheck"; then
+        PKG_CHECK_MODULES([NGTCP2], [libngtcp2 >= 1.16.0], [
+                PKG_CHECK_MODULES([NGTCP2_CRYPTO_OSSL],
+                        [libngtcp2_crypto_ossl], [
+                        AC_DEFINE(HAVE_NGTCP2,[],
+                                [Build QUIC transport support?])
+                        with_ngtcp2=yes
+                ], [
+                        if test "x$with_ngtcp2" = "xyes"; then
+                                AC_MSG_ERROR([QUIC transport explicitly
+                                        requested, but
+                                        libngtcp2_crypto_ossl was not
+                                        found (requires ngtcp2's OpenSSL
+                                        3.5+ native QUIC backend)])
+                        fi
+                        AC_MSG_NOTICE([QUIC transport support will not be
+                                built. Consider installing
+                                libngtcp2_crypto_ossl])
+                        with_ngtcp2=no
+                ])
+        ], [
+                if test "x$with_ngtcp2" = "xyes"; then
+                        AC_MSG_ERROR([QUIC transport explicitly requested,
+                                but libngtcp2 >= 1.16.0 was not found])
+                fi
+                AC_MSG_NOTICE([QUIC transport support will not be built.
+                        Consider installing libngtcp2 >= 1.16.0])
+                with_ngtcp2=no
+        ])
+fi
+AM_CONDITIONAL([HAVE_NGTCP2], [test "x$with_ngtcp2" = "xyes"])
+
+dnl Lets a QUIC worker read a burst of datagrams in one call
+AC_CHECK_FUNCS(recvmmsg)
+
+dnl Finalize enable_quic, now that everything it needs has been probed.
 if test "x$enable_quic" != "xno"; then
-        if test "x$quic_ngtcp2" != "xyes"; then
+        if test "x$with_ngtcp2" != "xyes"; then
                 if test "x$enable_quic" = "xyes"; then
                         AC_MSG_ERROR([QUIC dispatch support explicitly
-                                requested, but libngtcp2 or
-                                libngtcp2_crypto_ossl was not found])
+                                requested, but ngtcp2 is not available])
                 fi
                 AC_MSG_NOTICE([master will not have QUIC dispatch support:
-                        requires libngtcp2 and libngtcp2_crypto_ossl])
+                        requires QUIC transport support (see --with-ngtcp2)])
                 enable_quic=no
         elif test "x$quic_fd_passing" != "xyes"; then
                 if test "x$enable_quic" = "xyes"; then
@@ -1569,6 +1599,28 @@ if test "x$enable_quic" = "xyes"; then
         AC_DEFINE(WITH_QUIC,[],[Build master/service QUIC dispatch support?])
 fi
 AM_CONDITIONAL([WITH_QUIC], [test "x$enable_quic" = "xyes"])
+
+dnl HTTP/3 support: nghttp3 (HTTP/3 framing) on top of the QUIC transport.
+AC_ARG_WITH(nghttp3,
+        [AS_HELP_STRING([--without-nghttp3],
+                        [disable HTTP/3 (QUIC) support (check)])],,
+        [with_nghttp3="check"])
+
+if test "x$with_nghttp3" = "xyes" -o "x$with_nghttp3" = "xcheck"; then
+        PKG_CHECK_MODULES([NGHTTP3], [libnghttp3], [
+                AC_DEFINE(HAVE_NGHTTP3,[],
+                        [Build HTTP/3 support into httpd?])
+                with_nghttp3=yes
+        ], [
+                if test "x$with_nghttp3" = "xyes"; then
+                        AC_MSG_ERROR([HTTP/3 explicitly requested, but
+                                libnghttp3 was not found])
+                fi
+                AC_MSG_NOTICE([httpd will not have support for HTTP/3.
+                        Consider installing libnghttp3])
+                with_nghttp3=no
+        ])
+fi
 
 dnl eBPF steering for QUIC dispatch (master): the kernel delivers each
 dnl connection's packets straight to its worker's socket, so master
@@ -1723,8 +1775,8 @@ PKG_CHECK_MODULES([SHAPELIB], [shapelib >= 1.3.0],[
         ],
         AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
-HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
-HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIBM}"
+HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${NGTCP2_CFLAGS} ${NGTCP2_CRYPTO_OSSL_CFLAGS} ${NGHTTP3_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS}"
+HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${NGTCP2_LIBS} ${NGTCP2_CRYPTO_OSSL_LIBS} ${NGHTTP3_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIBM}"
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
 
@@ -2624,6 +2676,8 @@ External dependencies:
    clamav:             $with_clamav
    -----------------------
    nghttp2:            $with_nghttp2
+   nghttp3:            $with_nghttp3
+   ngtcp2:             $with_ngtcp2
    ebpf:               $with_quic_ebpf
    wslay:              $with_wslay
    brotli:             $with_brotli

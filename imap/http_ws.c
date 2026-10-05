@@ -739,7 +739,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
         resp_code = HTTP_SWITCH_PROT;
     }
     else {
-        /* HTTP/2 - Treat WS data as chunked response */
+        /* HTTP/2+ - Treat WS data as a chunked response */
         txn->flags.te = TE_CHUNKED;
 
         resp_code = HTTP_OK;
@@ -805,8 +805,9 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     prot_setlog(txn->conn->pin, PROT_NO_FD);
     prot_setlog(txn->conn->pout, PROT_NO_FD);
 
-    /* Set inactivity timer */
-    prot_settimeout(txn->conn->pin, ws_timeout);
+    /* Set inactivity timer: HTTP/3 never reads through conn->pin, so it
+     * would never be reset, and times itself out (http3_get_timeout()) */
+    if (txn->flags.ver < VER_3) prot_settimeout(txn->conn->pin, ws_timeout);
 
     /* Register service/module as a WebSocket */
     const struct namespace_t *namespace = txn->req_tgt.namespace;

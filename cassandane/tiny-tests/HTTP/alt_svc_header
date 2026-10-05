@@ -6,8 +6,11 @@ sub test_alt_svc_header
     ($self)
 {
     my $service = $self->{instance}->get_service('http');
+    my $buildinfo = $self->{instance}->{buildinfo};
+    my $h3 = $buildinfo->get('component', 'quic')
+             && $buildinfo->get('dependency', 'nghttp3');
 
-    # Plaintext HTTP/1.1: Alt-Svc present, advertises h2, never h2c.
+    # Plaintext HTTP/1.1: Alt-Svc advertises h2 (and h3 if built), never h2c.
     my $s = http1_connect($self);
 
     http1_send($s,
@@ -17,12 +20,15 @@ sub test_alt_svc_header
 
     my $res = http1_read_response($s);
     $self->assert_num_equals(200, $res->{status});
+    if ($h3) {
+        $self->assert_matches(qr/\bh3=/, $res->{headers}{'alt-svc'} // '');
+    }
     $self->assert_matches(qr/\bh2=/, $res->{headers}{'alt-svc'} // '');
     $self->assert($res->{headers}{'alt-svc'} !~ /\bh2c\b/,
                   "h2c must never be advertised in Alt-Svc");
     close($s);
 
-    # TLS (https service): no Alt-Svc at all.
+    # TLS (https service): only h3 is worth advertising.
     my $https_service = $self->{instance}->get_service('https');
     $s = https1_connect($self);
 
@@ -33,6 +39,13 @@ sub test_alt_svc_header
 
     $res = http1_read_response($s);
     $self->assert_num_equals(200, $res->{status});
-    $self->assert(!exists $res->{headers}{'alt-svc'});
+    if ($h3) {
+        $self->assert_matches(qr/\bh3=/, $res->{headers}{'alt-svc'} // '');
+        $self->assert($res->{headers}{'alt-svc'} !~ /\bh2\b/,
+                      "h2 should not be advertised in Alt-Svc over https");
+    }
+    else {
+        $self->assert(!exists $res->{headers}{'alt-svc'});
+    }
     close($s);
 }
