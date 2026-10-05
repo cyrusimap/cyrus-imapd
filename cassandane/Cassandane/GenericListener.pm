@@ -19,6 +19,7 @@ sub new
     my $config = delete $params{config};
     my $argv = delete $params{argv};
     my $name = delete $params{name};
+    my $protocol = delete $params{protocol} || 'tcp';
 
     die "Unexpected parameters: " . join(" ", keys %params)
         if scalar %params;
@@ -30,6 +31,7 @@ sub new
         port => $port,
         config => $config,
         argv => $argv,
+        protocol => $protocol,
     }, $class;
 }
 
@@ -152,6 +154,8 @@ my %netstat_parse = (
         my ($line, $wantpid) = @_;
 
         my @a = split(/\s+/, $line);
+        # UDP sockets have no State
+        splice(@a, 5, 0, '') if $a[0] =~ m/^udp/;
         return unless scalar(@a) == 6 + ($wantpid ? 1 : 0);
 
         my ($addr, $port) = ($a[3] =~ m/^(.*):([0-9]+)$/);
@@ -187,6 +191,8 @@ my %netstat_parse = (
         my ($line, $wantpid) = @_;
 
         my @a = split(/\s+/, $line);
+        # UDP sockets have no State
+        splice(@a, 5, 0, '') if $a[0] =~ m/^udp/;
         return unless scalar(@a) == 6 + ($wantpid ? 1 : 0);
 
         my $prot = $a[0];       # tcp or tcp6
@@ -307,8 +313,8 @@ sub _is_listening_af
         chomp;
         my $ii = $parser->($_, 0);
         next unless $ii;
-        next if ($ii->{protocol} ne 'tcp');
-        next if ($ii->{state} ne 'LISTEN');
+        next if ($ii->{protocol} ne $self->{protocol});
+        next if ($self->{protocol} eq 'tcp' && $ii->{state} ne 'LISTEN');
         next if ($ii->{local_port} ne "$self->{port}");
         next if ($ii->{local_addr} ne $host && $ii->{local_addr} ne 'any');
         $found = 1;
