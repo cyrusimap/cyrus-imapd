@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+use Digest::MD5 qw(md5);
+use MIME::Base64 qw(encode_base64);
+
+# A PROPFIND's multistatus is chunked, and with httpcontentmd5 its Content-MD5
+# follows the body as a trailer field, so the stream ends with a trailer
+# section rather than with the last DATA frame
+sub test_propfind_trailer
+    ($self)
+{
+    $self->{caldav}->GetCalendars();
+
+    my $res = $self->http3_request(
+        method => 'PROPFIND',
+        path => '/dav/calendars/user/cassandane/',
+        headers => [
+            'Content-Type' => 'application/xml; charset=utf-8',
+            'Depth' => '1',
+        ],
+        body => <<~'EOF',
+            <?xml version="1.0" encoding="utf-8"?>
+            <D:propfind xmlns:D="DAV:"><D:prop><D:resourcetype/></D:prop></D:propfind>
+            EOF
+    );
+    $self->assert_num_equals(207, $res->{status});
+    $self->assert_matches(qr{</D:multistatus>\s*$}, $res->{body});
+    $self->assert_str_equals(encode_base64(md5($res->{body}), ''),
+                             $res->{trailers}{'content-md5'});
+}
