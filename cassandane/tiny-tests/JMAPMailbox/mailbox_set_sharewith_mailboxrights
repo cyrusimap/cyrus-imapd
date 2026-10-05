@@ -57,7 +57,7 @@ sub test_mailbox_set_sharewith_mailboxrights
 
         my %want = ((map {; $_ => JSON::false } @ALL_RIGHTS), %$rights);
 
-        $self->assert_deep_equals(
+        $self->assert_cmp_deeply(
             \%want,
             $res->sentence_named('Mailbox/get')
                 ->arguments->{list}[0]{shareWith}{sharee},
@@ -94,6 +94,6 @@ sub test_mailbox_set_sharewith_mailboxrights
                           ->arguments->{notUpdated}{ $mailbox->id };
 
     $self->assert_str_equals('invalidProperties', $not_updated->{type});
-    $self->assert_deep_equals([ 'shareWith/sharee/mayRead' ],
+    $self->assert_cmp_deeply([ 'shareWith/sharee/mayRead' ],
         $not_updated->{properties});
 }
