@@ -326,6 +326,9 @@ AC_DEFUN([SASL_SET_GSSAPI_LIBS],
 # generally want to have (e.g. if static is requested, make it that,
 # otherwise make it dynamic.
 #
+# Caller needs to arrange for with_sasl and/or with_staticsasl to
+# be set appropriately.
+#
 # We also want to create LIB_DYN_SASL and DYNSASLFLAGS.
 #
 # Also sets using_static_sasl to "no" "static" or "staticonly"
@@ -333,19 +336,12 @@ AC_DEFUN([SASL_SET_GSSAPI_LIBS],
 AC_DEFUN([CMU_SASL2],
 [AC_REQUIRE([SASL_GSSAPI_CHK])
 
-AC_ARG_WITH(sasl,
-            [AC_HELP_STRING([--with-sasl=DIR],[Compile with libsasl2 in <DIR>])],
-            with_sasl="$withval",
-            with_sasl="yes")
+AS_IF([test "x$with_staticsasl" != "xno"],
+      [using_static_sasl="static"]
+      [using_static_sasl="no"])
 
-AC_ARG_WITH(staticsasl,
-            [AC_HELP_STRING([--with-staticsasl=DIR],
-                            [Compile with statically linked libsasl2 in <DIR>])],
-            [with_staticsasl="$withval";
-             if test $with_staticsasl != "no"; then
-               using_static_sasl="static"
-             fi],
-            [with_staticsasl="no"; using_static_sasl="no"])
+# XXX cyrus-sasl ships a pc file so perhaps a lot of this complexity could be
+# XXX delegated to PKG_CHECK_MODULES
 
 SASLFLAGS=""
 LIB_SASL=""
