@@ -30,7 +30,7 @@ sub test_mailbox_set_sharewith_mailboxrights
     # Share the mailbox with exactly $rights -- replacing whatever the sharee had
     # before -- then check the ACL we ended up with, and that we report the same
     # rights back.  Any right not named in $rights must come back false.
-    my $assert_share = sub ($rights, $want_acl) {
+    my sub assert_share ($rights, $want_acl) {
         my $label = join q{+}, sort keys %$rights;
 
         my $res = $jmap->request({
@@ -63,17 +63,17 @@ sub test_mailbox_set_sharewith_mailboxrights
                 ->arguments->{list}[0]{shareWith}{sharee},
             "$label: shareWith",
         );
-    };
+    }
 
-    $assert_share->({ mayReadItems   => JSON::true }, 'lr');
-    $assert_share->({ mayAddItems    => JSON::true }, 'i');
-    $assert_share->({ mayRemoveItems => JSON::true }, 'ted');
-    $assert_share->({ mayCreateChild => JSON::true }, 'kc');
-    $assert_share->({ mayDelete      => JSON::true }, 'xc');
-    $assert_share->({ maySubmit      => JSON::true }, 'p');
-    $assert_share->({ maySetSeen     => JSON::true }, 's');
-    $assert_share->({ maySetKeywords => JSON::true }, 'wn');
-    $assert_share->({ mayShare       => JSON::true }, 'a');
+    assert_share({ mayReadItems   => JSON::true }, 'lr');
+    assert_share({ mayAddItems    => JSON::true }, 'i');
+    assert_share({ mayRemoveItems => JSON::true }, 'ted');
+    assert_share({ mayCreateChild => JSON::true }, 'kc');
+    assert_share({ mayDelete      => JSON::true }, 'xc');
+    assert_share({ maySubmit      => JSON::true }, 'p');
+    assert_share({ maySetSeen     => JSON::true }, 's');
+    assert_share({ maySetKeywords => JSON::true }, 'wn');
+    assert_share({ mayShare       => JSON::true }, 'a');
 
     xlog $self, 'the old vocabulary is not accepted under mail:share';
 
