@@ -444,6 +444,7 @@ sieve.text              text a Sieve script logged with the log action
 statuscache.hit         1 if the status cache had the answer
 statuscache.items       the STATUS items a lookup asked for, as a hex mask
 sync.channel            a replication channel name
+tls.engine              which TLS server engine this event is about
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
 xfer.capability         a capability the transfer destination advertises
