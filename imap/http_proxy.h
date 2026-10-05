@@ -19,7 +19,7 @@ extern int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 extern int http_proxy_h2_connect(struct backend *be, struct transaction_t *txn);
 extern int http_proxy_check_input(struct http_connection *conn,
                                   ptrarray_t *pipes,
-                                  unsigned long timeout_sec);
+                                  unsigned long timeout_usec);
 extern long http_status_to_code(unsigned code);
 
 #endif /* _HTTP_PROXY_H */
