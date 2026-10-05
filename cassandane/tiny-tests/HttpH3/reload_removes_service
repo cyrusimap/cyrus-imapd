@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+use Time::HiRes qw(sleep);
+
+# Removing a quic service on reload releases master's end of each of its
+# workers' handoff channels, which a worker that is still running when the
+# service goes keeps open until it is reaped
+sub test_reload_removes_service
+    ($self)
+{
+    my $instance = $self->{instance};
+    my $master = $instance->_read_pid_file('master');
+
+    # master's only SOCK_SEQPACKET sockets are quic handoff channels
+    my $seqpackets = sub {
+        open my $fh, '<', '/proc/net/unix' or die "/proc/net/unix: $!";
+        my %seqpacket;
+        while (<$fh>) {
+            my @f = split ' ';
+            $seqpacket{$f[6]} = 1 if ($f[4] // '') eq '0005';
+        }
+        close $fh;
+
+        my $n = 0;
+        opendir my $dh, "/proc/$master/fd" or die "/proc/$master/fd: $!";
+        for my $fd (readdir $dh) {
+            my $link = readlink "/proc/$master/fd/$fd" // next;
+            $n++ if $link =~ m/^socket:\[(\d+)\]$/ && $seqpacket{$1};
+        }
+        closedir $dh;
+        return $n;
+    };
+
+    xlog $self, "an HTTP/3 request leaves a worker waiting for the next one";
+    my $res = $self->http3_request(method => 'OPTIONS', path => '/');
+    $self->assert_num_equals(200, $res->{status});
+    $self->assert_num_gte(1, $seqpackets->());
+
+    xlog $self, "remove the http3 service and reload";
+    $instance->remove_service('http3');
+    $instance->_generate_master_conf();
+    $instance->send_sighup();
+
+    my $left;
+    for (1 .. 100) {
+        $left = $seqpackets->();
+        last if !$left;
+        sleep 0.1;
+    }
+    $self->assert_num_equals(0, $left);
+}

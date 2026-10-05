@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+# tls_client_certs: require holds for HTTP/3 as it does over TCP
+sub test_client_cert_required
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(tls_client_certs => 'require',
+                      tls_client_ca_file => '@basedir@/conf/certs/cacert.pem');
+    $self->_start_instances();
+
+    eval { $self->http3_request(method => 'OPTIONS', path => '/') };
+    $self->assert_matches(qr/curl exited with status/, $@);
+
+    my $certdir = $self->{instance}->get_basedir() . '/conf/certs';
+    my $res = $self->http3_request(method => 'OPTIONS', path => '/',
+                                   cert => "$certdir/cert.pem",
+                                   key => "$certdir/key.pem");
+    $self->assert_num_equals(200, $res->{status});
+}
