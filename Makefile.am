@@ -317,6 +317,14 @@ endif # SERVER
 
 endif # SIEVE
 
+if USE_INTERNAL_SASL
+noinst_LTLIBRARIES += lib/libsasl_min.la
+endif # USE_INTERNAL_SASL
+
+lib_libsasl_min_la_SOURCES =
+lib_libsasl_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+lib_libsasl_min_la_LIBADD =
+
 EXTRA_DIST = \
     COPYING \
     Doxyfile \
@@ -1575,6 +1583,10 @@ lib_libcyrus_la_SOURCES += lib/nonblock_fcntl.c
 else
 lib_libcyrus_la_SOURCES += lib/nonblock_ioctl.c
 endif
+if USE_INTERNAL_SASL
+EXTRA_lib_libcyrus_la_DEPENDENCIES = lib/libsasl_min.la
+endif # USE_INTERNAL_SASL
+
 lib_libcyrus_la_LIBADD = libcrc32.la ${LIB_SASL} $(SSL_LIBS) $(GCOV_LIBS) $(LIBM)
 lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
