@@ -1815,9 +1815,16 @@ AC_ARG_WITH(staticsasl,
                             [look for static libsasl2 in PATH])],
             [],
             [with_staticsasl="no"])
-SASL_SET_GSSAPI_LIBS
-CMU_SASL2_REQUIRE_VER(2,1,7)
-CMU_SASL2_CHECKAPOP_REQUIRED
+AS_IF([test "x$with_staticsasl" != "xno" -o "x$with_sasl" != "xno"],
+      [ SASL_SET_GSSAPI_LIBS
+        CMU_SASL2_REQUIRE_VER(2,1,7)
+        CMU_SASL2_CHECKAPOP_REQUIRED
+      ],
+      [ with_sasl="internal"
+        LIB_SASL=lib/libsasl_min.la ])
+AS_IF([test "x$with_sasl" = "xinternal"],
+      [AC_DEFINE([USE_INTERNAL_SASL], [], [Build with libsasl_min])])
+AM_CONDITIONAL([USE_INTERNAL_SASL], [test "x$with_sasl" = "xinternal" ])
 AC_SUBST(LIB_SASL)
 
 # find perl
@@ -2440,6 +2447,7 @@ External dependencies:
    ldap:               $have_ldap
    zlib:               $with_zlib
    jansson:            $with_jansson
+   sasl:               $with_sasl
    pcre:               $cyrus_cv_pcre_utf8
    pcre2:              $cyrus_cv_pcre2_utf8
    clamav:             $with_clamav
