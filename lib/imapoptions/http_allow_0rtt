@@ -12,8 +12,8 @@ Early data can be replayed, so each session can then be resumed only once
 such as PUT, POST or DELETE, is answered with 425 Too Early (RFC 8470)
 for the client to repeat after the handshake.
 
-Only affects httpd services started with -s, and needs a nonzero
-tls_session_timeout.
+Only affects httpd services started with -s and HTTP/3 (proto="quic")
+services, and needs a nonzero tls_session_timeout.
 
 Every full handshake then stores its session in the TLS session database,
 so on a busy server keep tls_sessions_db_path on fast storage such as
