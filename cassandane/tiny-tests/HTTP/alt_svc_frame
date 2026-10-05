@@ -8,6 +8,9 @@ sub test_alt_svc_frame
     ($self)
 {
     my $service = $self->{instance}->get_service('http');
+    my $buildinfo = $self->{instance}->{buildinfo};
+    my $h3 = $buildinfo->get('component', 'quic')
+             && $buildinfo->get('dependency', 'nghttp3');
     my $s = http1_connect($self);
 
     http1_send($s,
@@ -39,6 +42,7 @@ sub test_alt_svc_frame
     my $field_value = substr($altsvc->{payload}, 2 + $origin_len);
 
     $self->assert_matches(qr{^https://}, $origin);
+    $self->assert_matches(qr/\bh3=/, $field_value) if $h3;
     $self->assert_matches(qr/\bh2=/, $field_value);
     $self->assert($field_value !~ /\bh2c\b/,
                   "h2c must never be advertised in the ALTSVC frame");
