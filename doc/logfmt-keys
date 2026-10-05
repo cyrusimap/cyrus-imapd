@@ -271,7 +271,7 @@ http.reqline.extra      anything the client sent after the version on the reques
 http.requested_with     the X-Requested-With header, naming the client application
 http.status             the HTTP status code of a response
 http.step               which step of a multi-step HTTP operation is being logged
-http.stream.id          the HTTP/2 stream a request or frame belongs to
+http.stream.id          the HTTP/2 or HTTP/3 stream a request or frame belongs to
 http.te                 the TE header of a request
 http.te.flags           the transfer codings applied to a response, as a hex mask
 http.tls.required       1 if the connection must be under TLS before it is used
@@ -397,12 +397,16 @@ mboxlist.subs.version   the version of a user's subscriptions db
 pop.subfolder           the subfolder a POP session was restricted to
 proxy.server            the backend server a request was proxied to
 quic.bpf_obj            path to the compiled cyr_quic_steer eBPF object
+quic.close.code         a QUIC CONNECTION_CLOSE error code, in hex
+quic.close.reason       the reason phrase of a QUIC CONNECTION_CLOSE
+quic.close.type         whether a QUIC close code is a transport or an application one
 quic.dropped            how many datagrams a QUIC connection lost to a full queue
 quic.family             an address family, as a string: ipv4, ipv6 or unix
 quic.nofile.hard        master's hard RLIMIT_NOFILE, the ceiling it may raise to
 quic.nofile.soft        master's soft RLIMIT_NOFILE after it was raised to the hard limit
 quic.rcvbuf.granted     a socket receive buffer size the kernel granted, in bytes
 quic.rcvbuf.requested   a socket receive buffer size asked of the kernel, in bytes
+quic.version            the QUIC version a connection negotiated: 1, 2 or hex
 quic.worker_pid         the pid of a QUIC worker process (master)
 quota.root              the quota root a quota applies to
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing

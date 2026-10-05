@@ -543,14 +543,21 @@ A spare CID pool for connection migration
 
 QUIC's connection migration (:rfc:`9000#section-9`) lets a client keep
 a connection alive across a change of IP address or port, but requires
-switching to a fresh, previously-unused CID when it does. This page
-covers the dispatch layer's half of that, for both backends:
+switching to a fresh, previously-unused CID when it does. Cyrus
+advertises support for it: the ``disable_active_migration`` transport
+parameter isn't set, precisely because both dispatch backends and
+``imap/http_h3.c`` are built to honor migration, as this page describes.
 :program:`master` generates a small pool of CIDs per connection
 (``QUIC_CID_POOL_SIZE``, see ``master/quic/quic_handoff.h``) and
 registers every one before the connection is even handed off, all
 pointing at the same connection. The whole pool travels in the handoff
-too, so a consumer can hand out a fresh one each time it needs one,
-with no further signal back to :program:`master` required.
+too, so the worker (``imap/http_h3.c``'s
+``get_new_connection_id_cb()``) can hand one out each time ngtcp2
+asks for a fresh CID, with no further signal back to :program:`master`
+required; once the pool is exhausted it closes the connection, with a
+CONNECTION_CLOSE, rather than hand out a CID neither dispatch backend
+would recognize -- sized well above what a connection would plausibly
+churn through in practice, so this should be rare.
 
 The client's own originally-chosen CID is registered too, alongside
 the pool, since a client keeps addressing its first flight (retransmits,
@@ -581,12 +588,26 @@ explicitly. ``quic_relay_forward()`` tracks each connection's current
 peer address, updating it whenever a registered CID's traffic arrives
 from somewhere new -- covering plain NAT rebinding as well as
 migration -- and prefixes every relayed datagram with a ``struct
-quic_relay_pkt_hdr`` carrying that address, so a consumer reading from
-the relay socketpair can recover each datagram's real arrival address
-the same way the eBPF backend's worker would get it from
-``recvfrom()``. That address is also what the worker sends its replies
-to, so a migration it learns about this way takes effect in both
-directions at once.
+quic_relay_pkt_hdr`` carrying that address, so ``imap/http_h3.c``'s
+``http3_input()`` can recover each datagram's real arrival address
+reading from the relay socketpair, the same way the eBPF backend's
+worker gets it from ``recvfrom()`` directly (it tells the two apart by
+address family: ``AF_UNIX`` means the relay backend, anything else
+means eBPF).
+
+Either way, ``http3_input()`` only feeds this address to
+``ngtcp2_conn_read_pkt()`` as where a packet *arrived from* -- it is
+never written to the connection's own tracked peer address directly,
+so a forged packet claiming a new source can't redirect the worker's
+replies. Those go wherever ngtcp2 sends: ``ngtcp2_conn_writev_stream()``
+reports the path of each packet it writes, and ngtcp2 moves to a new
+path only for packets that decrypt.  It moves at once, validating the
+new path per :rfc:`9000#section-9.3`'s PATH_CHALLENGE/PATH_RESPONSE,
+sending there only what the anti-amplification limit allows until it
+is validated, and falling back to the old path if validation fails.
+A CONNECTION_CLOSE also goes to the address the client last sent
+from, in case ngtcp2 couldn't follow it there, e.g. with no spare
+connection ID for the new path.
 
 Choosing a worker
 =================
@@ -688,6 +709,42 @@ handles only the Initials. The relay's ceiling is therefore one CPU's
 worth of forwarding for every QUIC service together, and anything else
 :program:`master` does waits behind it. eBPF has no such ceiling.
 
+The same comparison with :program:`httpd` serving HTTP/3, driven by
+``h2load`` against an optimised (``-O2``) build, used a pool of 300
+preforked workers.  Requests were for a small static file at a fixed
+1500 a second, about half of what the server's two CPUs could sustain,
+so that latency reflects dispatch rather than queueing for a CPU.  Each
+figure is the median of five runs, each against a freshly started
+:program:`master`:
+
+==============================  ===============  ===============
+HTTP/3                          eBPF             relay
+==============================  ===============  ===============
+one handshake (p50)             3.3 ms           3.3 ms
+requests, 50 conns, p50 / p99   0.4 / 2.9 ms     1.1 / 11.0 ms
+requests, 150 conns, p50 / p99  0.6 / 5.0 ms     1.6 / 14.0 ms
+master CPU during requests      0%               22%
+==============================  ===============  ===============
+
+A single handshake costs the same on both, so dispatch is not the
+bottleneck for one connection.  The per-request difference is the relay
+forwarding every packet through the one :program:`master` process --
+about a fifth of a core here -- where eBPF leaves :program:`master`
+idle once a connection is established.
+
+Twenty concurrent 5MB WebDAV PUTs, each into its own collection, took 10
+to 20 s either way, bound by storing the messages.  The workers used
+1.4 s of CPU in all under eBPF, where ``UDP_GRO`` hands a worker a burst
+of datagrams in one read, against about 2 s under the relay.  The relay
+also overflowed the rendezvous socket's 4MB buffer on every run,
+dropping 130 to 1100 datagrams for the clients to retransmit, while eBPF
+dropped none.
+
+Downloads show the same forwarding cost as a throughput ceiling: a
+hundred 5MB GETs over 20 connections ran at about 390 MB/s under eBPF
+and 310 MB/s under the relay, with :program:`master` using 1% and 9% of
+a core respectively.
+
 Related configuration
 =======================
 
@@ -705,5 +762,11 @@ Related configuration
 *   :imapdconf:`quic_retry` -- when to validate a new connection's
     address with a Retry: ``never``, under ``load`` (the default), or
     ``always``.
+*   :imapdconf:`httptimeout` and :imapdconf:`websocket_timeout` time
+    out an idle HTTP/3 connection, as they do HTTP/1.1 and HTTP/2.
+    QUIC's own idle timeout is set just past the longer of the two, so
+    the connection gets a CONNECTION_CLOSE rather than going quiet, or
+    to 5 minutes if both are 0, since QUIC has no keepalive to notice a
+    client that vanished.
 
 Back to :ref:`imap-features`
