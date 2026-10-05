@@ -1194,8 +1194,6 @@ if test "$with_krb5config" != "no"; then
     CFLAGS="$KRB5_CFLAGS $CFLAGS"
 fi
 
-SASL_SET_GSSAPI_LIBS
-
 dnl
 dnl Check for OpenSSL library, needed for TLS support
 dnl
@@ -1806,8 +1804,21 @@ AC_ARG_ENABLE(oldsievename,
         fi,
         AC_MSG_RESULT(no))
 
+dnl Check which SASL to use
+AC_ARG_WITH(sasl,
+            [AC_HELP_STRING([--with-sasl=PATH],
+                            [look for libsasl2 in PATH])],
+            [],
+            [with_sasl="yes"])
+AC_ARG_WITH(staticsasl,
+            [AC_HELP_STRING([--with-staticsasl=PATH],
+                            [look for static libsasl2 in PATH])],
+            [],
+            [with_staticsasl="no"])
+SASL_SET_GSSAPI_LIBS
 CMU_SASL2_REQUIRE_VER(2,1,7)
 CMU_SASL2_CHECKAPOP_REQUIRED
+AC_SUBST(LIB_SASL)
 
 # find perl
 AC_ARG_VAR(PERL, [Location of perl])
@@ -1891,7 +1902,6 @@ AC_CONFIG_FILES([tools/rehash], [chmod +x tools/rehash])
 
 CMU_LIBWRAP
 
-AC_SUBST(LIB_SASL)
 AC_SUBST(LIB_UUID)
 
 dnl
