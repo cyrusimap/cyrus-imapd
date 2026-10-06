@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+# A PUT that drops a managed attachment but is then refused must leave the
+# attachment in place for the unchanged event.
+sub test_put_refused_keeps_managed_attachment
+    :needs_component_jmap
+    ($self)
+{
+    my $caldav = $self->{caldav};
+
+    my sub event ($organizer) {
+        return <<~"EOF";
+          BEGIN:VCALENDAR
+          VERSION:2.0
+          PRODID:-//Example//NONSGML v1.0//EN
+          BEGIN:VEVENT
+          UID:keeps-attachment
+          DTSTAMP:20150806T234327Z
+          DTSTART:20160831T153000Z
+          DURATION:PT1H
+          SUMMARY:test
+          ORGANIZER:mailto:$organizer
+          ATTENDEE;PARTSTAT=ACCEPTED:mailto:$organizer
+          ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:friend\@example.com
+          END:VEVENT
+          END:VCALENDAR
+          EOF
+    };
+
+    xlog $self, "create an event with a managed attachment";
+    $caldav->Request('PUT', 'Default/test.ics',
+        event('cassandane@example.com'),
+        'Content-Type' => 'text/calendar');
+    my $eventHref = '/dav/calendars/user/cassandane/Default/test.ics';
+
+    my $res = $caldav->ua->post(
+        $caldav->request_url($eventHref) . '?action=attachment-add', {
+            headers => {
+                'Content-Type' => 'application/octet-stream',
+                'Content-Disposition' => 'attachment;filename=test',
+                'Prefer' => 'return=representation',
+                'Authorization' => $caldav->auth_header(),
+            },
+            content => 'davattach',
+        });
+    $self->assert_str_equals('201', $res->{status});
+    my $hash = Text::VCardFast::vcard2hash($res->{content});
+    my $attachHref =
+        $hash->{objects}[0]{objects}[0]{properties}{attach}[0]{value};
+    $self->assert_not_null($attachHref);
+
+    # Changing ORGANIZER is refused only after the attachments are handled.
+    xlog $self, "PUT without the attachment and with a new organizer";
+    $res = $caldav->ua->request('PUT', $caldav->request_url($eventHref), {
+        headers => {
+            'Content-Type' => 'text/calendar',
+            'Authorization' => $caldav->auth_header(),
+        },
+        content => event('other@example.com'),
+    });
+    $self->assert_str_equals('403', $res->{status});
+
+    xlog $self, "the attachment is still there";
+    $res = $caldav->ua->request('GET', $attachHref, {
+        headers => { 'Authorization' => $caldav->auth_header() },
+    });
+    $self->assert_str_equals('200', $res->{status});
+    $self->assert_str_equals('davattach', $res->{content});
+}
