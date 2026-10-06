@@ -1,0 +1,28 @@
+Description:
+
+Chunked HTTP bodies with an out-of-range, empty, or otherwise malformed chunk
+size are now rejected.  Previously the size was parsed into a 32-bit value
+that silently truncated, so a declared size just above the 32-bit range became
+zero -- the marker for the last chunk -- and the body that followed it stayed
+in the stream to be read as the beginning of the next request.
+
+Tracked as GitHub security advisory GHSA-v5r2-7989-g575.
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
