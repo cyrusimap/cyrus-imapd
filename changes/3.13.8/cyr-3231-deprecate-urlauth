@@ -11,7 +11,7 @@ None.
 
 Config changes:
 
-The mboxkey_db option is deprecated and can be removed.
+The allowurlauth and mboxkey_db options are deprecated and can be removed.
 
 
 Upgrade instructions:
