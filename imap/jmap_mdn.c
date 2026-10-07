@@ -190,7 +190,9 @@ static json_t *parse_mdn_props(json_t *jmdn, struct mdn_t *mdn)
             }
         }
         else if (!strcmp(key, "reportingUA")) {
-            if (json_is_string(arg)) {
+            if (json_is_string(arg)
+                && valid_field_value(json_string_value(arg)))
+            {
                 mdn->mua = json_string_value(arg);
             }
             else if (JNOTNULL(arg)) {
@@ -448,9 +450,12 @@ static json_t *generate_mdn(struct jmap_req *req,
     }
     else {
         buf_printf(msgbuf, "Subject: Return Receipt (%s)", mdn->dispo.type);
+        /* The cached subject is decoded, so it may hold CR/LF: re-encode */
         r = message_get_subject(msg, &buf);
         if (!r && buf_len(&buf)) {
-            buf_printf(msgbuf, " for\r\n\t%s", buf_cstring(&buf));
+            char *subj = charset_encode_mimeheader(buf_cstring(&buf), 0, 0);
+            buf_printf(msgbuf, " for\r\n\t%s", subj);
+            free(subj);
         }
         buf_appendcstr(msgbuf, "\r\n");
     }
@@ -481,12 +486,19 @@ static json_t *generate_mdn(struct jmap_req *req,
                    "Content-Type: message/disposition-notification\r\n\r\n");
     if (mdn->mua) buf_printf(msgbuf, "Reporting-UA: %s\r\n", mdn->mua);
 
-    /* The header and the MDN field share the "address-type; address" syntax */
+    /* The header and the MDN field share the "address-type; address" syntax,
+     * which has no encoded-words: unfold it, and drop it if a CR/LF remains */
     r = message_get_field(msg, "original-recipient",
-                          MESSAGE_DECODED | MESSAGE_TRIM | MESSAGE_FIRST, &buf);
+                          MESSAGE_RAW | MESSAGE_TRIM | MESSAGE_FIRST, &buf);
     if (!r && buf_len(&buf)) {
-        mdn->orig_rcpt = xstrdup(buf_cstring(&buf));
-        buf_printf(msgbuf, "Original-Recipient: %s\r\n", mdn->orig_rcpt);
+        char *rcpt = charset_unfold(buf_base(&buf), buf_len(&buf), 0);
+        if (rcpt && valid_field_value(rcpt)) {
+            mdn->orig_rcpt = rcpt;
+            buf_printf(msgbuf, "Original-Recipient: %s\r\n", mdn->orig_rcpt);
+        }
+        else {
+            free(rcpt);
+        }
     }
     buf_printf(msgbuf, "Final-Recipient: rfc822; %s\r\n", mdn->final_addr);
 
