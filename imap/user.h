@@ -51,7 +51,13 @@ int user_set_replicaonly(const char *userid, bool replicaonly);
 int user_foreach_replicaonly(int (*cb)(const char *userid, void *rock),
                              void *rock);
 
-/* path to user's sieve directory */
+/**
+ * Path to a sieve script directory.
+ *
+ * @param user  a userid for that user's scripts, "@domain" for the domain's
+ *              global scripts, or "" for the server-wide global scripts
+ * @return      a static buffer, overwritten by the next call
+ */
 const char *user_sieve_path(const char *user);
 
 /* Delete meta-data (seen state, subscriptions, ACLs, quotaroots,
