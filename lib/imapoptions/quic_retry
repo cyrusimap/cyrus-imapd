@@ -1,0 +1,15 @@
+Name: quic_retry
+Type: ENUM
+Allowed-Values: never load always
+Default-Value: load
+Last-Modified: UNRELEASED
+
+When master answers a new QUIC connection with a Retry packet, to make the
+client prove it can receive at its source address before a worker is given
+to it (RFC 9000 section 8.1).  This keeps a flood of Initial packets with
+forged source addresses from tying up workers, at the cost of one round trip
+on each connection it applies to.
+
+"load" sends a Retry only while the service has at least half of its maxchild
+workers running, so a service without a maxchild limit never sends one.
+"always" sends a Retry for every new connection, and "never" for none.

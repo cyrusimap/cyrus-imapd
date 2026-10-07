@@ -1321,11 +1321,12 @@ EXPORTED int http_proxy_h2_connect(struct backend *be, struct transaction_t *txn
  */
 EXPORTED int http_proxy_check_input(struct http_connection *conn,
                                     ptrarray_t *pipes,
-                                    unsigned long timeout_sec)
+                                    unsigned long timeout_usec)
 {
     struct protgroup *protin = conn->pgin;
     struct protgroup *protout = NULL;
-    struct timeval timeout = { timeout_sec, 0 };
+    struct timeval timeout = { timeout_usec / 1000000,
+                               timeout_usec % 1000000 };
     struct protstream *clientin = conn->pin;
     struct protstream *clientout = conn->pout;
     struct protstream *serverout = NULL;
@@ -1346,7 +1347,7 @@ EXPORTED int http_proxy_check_input(struct http_connection *conn,
     }
 
     n = prot_select(protin, PROT_NO_FD, &protout, NULL,
-                    timeout_sec ? &timeout : NULL);
+                    timeout_usec ? &timeout : NULL);
     if (n == -1 && errno != EINTR) {
         syslog(LOG_ERR, "prot_select() failed in proxy_check_input(): %m");
         fatal("prot_select() failed in proxy_check_input()", EX_TEMPFAIL);

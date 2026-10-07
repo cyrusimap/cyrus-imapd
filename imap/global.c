@@ -881,25 +881,70 @@ EXPORTED int capa_is_disabled(const char *str)
     return strarray_contains_case(suppressed_capabilities, str);
 }
 
-/*
- * Get name of client host on socket 's'.
- * Also returns local IP port and remote IP port on inet connections.
- */
-EXPORTED const char *get_clienthost(int s, const char **localip, const char **remoteip)
-{
 #define IPBUF_SIZE (NI_MAXHOST+NI_MAXSERV+2)
-    socklen_t salen;
-    struct sockaddr_storage localaddr = { 0 }, remoteaddr = { 0 };
-    struct sockaddr *localsock = (struct sockaddr *)&localaddr;
-    struct sockaddr *remotesock = (struct sockaddr *)&remoteaddr;
+
+EXPORTED const char *get_clienthost_from_addrs(struct sockaddr *localsock,
+                                               socklen_t locallen,
+                                               struct sockaddr *remotesock,
+                                               socklen_t remotelen,
+                                               const char **localip,
+                                               const char **remoteip,
+                                               bool resolve_name)
+{
     static struct buf clientbuf = BUF_INITIALIZER;
     static char lipbuf[IPBUF_SIZE], ripbuf[IPBUF_SIZE];
     char hbuf[NI_MAXHOST];
     int niflags;
-    int r = 0;
 
     buf_reset(&clientbuf);
     *localip = *remoteip = NULL;
+
+    if (remotesock->sa_family == AF_INET || remotesock->sa_family == AF_INET6) {
+        /* connected to an internet socket */
+        if (resolve_name &&
+            getnameinfo(remotesock, remotelen,
+                        hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
+            buf_printf(&clientbuf, "%s ", hbuf);
+        }
+
+        niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+        if (remotesock->sa_family == AF_INET6)
+            niflags |= NI_WITHSCOPEID;
+#endif
+        if (getnameinfo(remotesock, remotelen,
+                        hbuf, sizeof(hbuf), NULL, 0, niflags) != 0) {
+            strlcpy(hbuf, "unknown", sizeof(hbuf));
+        }
+        buf_printf(&clientbuf, "[%s]", hbuf);
+
+        /* set the ip addresses here */
+        if (iptostring(localsock, locallen, lipbuf, sizeof(lipbuf)) == 0) {
+            *localip = lipbuf;
+        }
+        if (iptostring(remotesock, remotelen, ripbuf, sizeof(ripbuf)) == 0) {
+            *remoteip = ripbuf;
+        }
+    } else {
+        /* we're not connected to an internet socket! */
+        buf_setcstr(&clientbuf, UNIX_SOCKET);
+    }
+
+    return buf_cstring(&clientbuf);
+}
+
+/*
+ * Get name of client host on socket 's'.
+ * Also returns local IP port and remote IP port on inet connections.
+ */
+EXPORTED const char *get_clienthost(int s,
+                                    const char **localip, const char **remoteip)
+{
+    socklen_t salen;
+    struct sockaddr_storage localaddr = { 0 }, remoteaddr = { 0 };
+    struct sockaddr *localsock = (struct sockaddr *)&localaddr;
+    struct sockaddr *remotesock = (struct sockaddr *)&remoteaddr;
+    int r = 0;
 
     /* determine who we're talking to */
 
@@ -916,48 +961,17 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
     if (r == 0 &&
         (remotesock->sa_family == AF_INET ||
          remotesock->sa_family == AF_INET6)) {
-        /* connected to an internet socket */
-        if (getnameinfo(remotesock, salen,
-                        hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-            buf_printf(&clientbuf, "%s ", hbuf);
-        }
-
-        niflags = NI_NUMERICHOST;
-#ifdef NI_WITHSCOPEID
-        if (remotesock->sa_family == AF_INET6)
-            niflags |= NI_WITHSCOPEID;
-#endif
-        if (getnameinfo(remotesock, salen,
-                        hbuf, sizeof(hbuf), NULL, 0, niflags) != 0) {
-            strlcpy(hbuf, "unknown", sizeof(hbuf));
-        }
-        buf_printf(&clientbuf, "[%s]", hbuf);
-
-        salen = sizeof(struct sockaddr_storage);
-
         if (localsock->sa_family == PF_UNSPEC) {
+            salen = sizeof(struct sockaddr_storage);
             r = getsockname(s, localsock, &salen);
         }
-
-        if (r == 0) {
-            /* set the ip addresses here */
-            if (iptostring(localsock, salen,
-                          lipbuf, sizeof(lipbuf)) == 0) {
-                *localip = lipbuf;
-            }
-            if (iptostring(remotesock, salen,
-                          ripbuf, sizeof(ripbuf)) == 0) {
-                *remoteip = ripbuf;
-            }
-        } else {
+        if (r != 0) {
             fatal("can't get local addr", EX_SOFTWARE);
         }
-    } else {
-        /* we're not connected to an internet socket! */
-        buf_setcstr(&clientbuf, UNIX_SOCKET);
     }
 
-    return buf_cstring(&clientbuf);
+    return get_clienthost_from_addrs(localsock, salen, remotesock, salen,
+                                     localip, remoteip, true);
 }
 
 EXPORTED int cmd_cancelled(int insearch)
