@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A catenate item may name an existing blob, so maxSizeBlobSet has to be
+# enforced against the running total.  Otherwise a chain of uploads, each
+# referencing the one before, yields a blob far larger than the cap from a
+# request that is itself tiny.
+#
+sub test_blob_upload_catenate_size_limit
+    :needs_component_jmap :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    $jmap->default_using([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:blob',
+    ]);
+
+    # jmap_max_size_blob_set defaults to 4M
+    my $seed = 'C' x 600;
+    my @refs_seed = map { +{ blobId => '#seed' } } (1 .. 100);
+    my @refs_level1 = map { +{ blobId => '#level1' } } (1 .. 100);
+
+    xlog $self, "60 KB of catenated blob is under the limit";
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', { create => {
+            seed => { data => [ { 'data:asText' => $seed } ] },
+        } }, 'R1'],
+        ['Blob/upload', { create => {
+            level1 => { data => \@refs_seed },
+        } }, 'R2'],
+        ['Blob/upload', { create => {
+            level2 => { data => \@refs_level1 },
+        } }, 'R3'],
+    ]);
+
+    $self->assert_num_equals(600, $res->[0][1]{created}{seed}{size});
+    $self->assert_num_equals(60_000, $res->[1][1]{created}{level1}{size});
+
+    xlog $self, "6 MB of catenated blob exceeds it";
+    $self->assert_null($res->[2][1]{created});
+    $self->assert_cmp_deeply(
+        { type => 'tooLarge' },
+        $res->[2][1]{notCreated}{level2},
+    );
+
+    xlog $self, "a single oversized literal is refused too";
+    $res = $jmap->CallMethods([
+        ['Blob/upload', { create => {
+            big => { data => [ { 'data:asText' => 'C' x (5 * 1024 * 1024) } ] },
+        } }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        { type => 'tooLarge' },
+        $res->[0][1]{notCreated}{big},
+    );
+}

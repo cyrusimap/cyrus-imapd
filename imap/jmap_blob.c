@@ -922,12 +922,20 @@ static int _upload_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg
             *errp = json_string("too many catenate items");
             return IMAP_QUOTA_EXCEEDED;
         }
+        int64_t maxsize = config_getbytesize(IMAPOPT_JMAP_MAX_SIZE_BLOB_SET);
         size_t i;
         json_t *val;
         json_array_foreach(arg, i, val) {
             struct buf subbuf = BUF_INITIALIZER;
             // NOTE: we'll have to remove catenate later
             int r = _set_arg_to_buf(req, &subbuf, val, 1, errp);
+            if (!r && maxsize > 0 &&
+                buf_len(&subbuf) > (size_t) maxsize - buf_len(buf)) {
+                /* Each item may name an existing blob, so cap the running
+                 * total rather than only the data supplied in this call. */
+                buf_free(&subbuf);
+                return IMAP_MESSAGE_TOO_LARGE;
+            }
             buf_appendmap(buf, buf_base(&subbuf), buf_len(&subbuf));
             buf_free(&subbuf);
             if (*errp) return r; // exact code doesn't matter, err will be checked
@@ -986,6 +994,8 @@ static int jmap_blob_upload(struct jmap_req *req)
                 err = json_string("Multiple properties provided");
             if (r == IMAP_NOTFOUND)
                 json_object_set_new(jerr, "type", json_string("blobNotFound"));
+            if (r == IMAP_MESSAGE_TOO_LARGE)
+                json_object_set_new(jerr, "type", json_string("tooLarge"));
             if (err) json_object_set_new(jerr, "description", err);
             json_object_set_new(set.not_created, key, jerr);
             buf_destroy(buf);
