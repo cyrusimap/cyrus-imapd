@@ -3858,8 +3858,8 @@ EXPORTED char *charset_b64encode_mimebody(const char *msg_base, size_t len,
         }
     }
 
-    if (wrap) {
-        /* add final CRLF */
+    if (wrap && b64_len) {
+        /* add final CRLF; empty input has no line to end */
         *d++ = '\r';
         *d++ = '\n';
     }
