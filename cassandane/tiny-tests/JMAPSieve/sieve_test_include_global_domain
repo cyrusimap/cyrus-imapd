@@ -1,0 +1,83 @@
+#!perl
+use Cassandane::Tiny;
+use Test::Deep ();
+
+sub test_sieve_test_include_global_domain
+    :JMAPExtensions :VirtDomains
+{
+    my ($self) = @_;
+
+    my $cmp_deeply = sub {
+        my ($want, $got) = @_;
+        my ($ok, $stack) = Test::Deep::cmp_details($got, $want);
+        $self->assert($ok, $ok ? '' : Test::Deep::deep_diag($stack));
+    };
+
+    $self->{instance}->create_user('foo@example.com');
+    my $http = $self->{instance}->get_service("http");
+    my $jmap = Mail::JMAPTalk->new(
+        user => 'foo@example.com',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $jmap->DefaultUsing($self->{jmap}->DefaultUsing());
+
+    my sub install {
+        my ($username, $name, $mailbox) = @_;
+        $self->{instance}->install_sieve_script(
+            "require \"fileinto\";\r\nfileinto \"$mailbox\";\r\n",
+            username => $username, name => $name);
+    }
+
+    xlog "install domain and server-wide global scripts";
+    install('@example.com', 'dscript', 'DOMAIN');
+    install('', 'dscript', 'SERVER');
+    install('', 'gscript', 'GLOBAL');
+
+    my $email = (<<'EOF' =~ s/\r?\n/\r\n/gr);
+From: "Some Example Sender" <example@example.com>
+To: foo@example.com
+Subject: test email
+Date: Wed, 7 Dec 2016 22:11:11 +1100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+
+This is a test email.
+EOF
+    my $emailid = $jmap->Upload($email, "message/rfc822")->{blobId};
+
+    my sub test_include {
+        my ($name) = @_;
+        my $script = (<<EOF =~ s/\r?\n/\r\n/gr);
+require ["include"];
+include :global "$name";
+EOF
+        my $scriptid = $jmap->Upload($script, "application/sieve")->{blobId};
+
+        my $res = $jmap->CallMethods([
+            ['SieveScript/test', {
+                scriptBlobId => $scriptid,
+                emailBlobIds => [ $emailid ],
+            }, "R1"]
+        ]);
+        return $res->[0][1];
+    }
+
+    my sub included {
+        my ($mailbox) = @_;
+        return {
+            accountId => 'foo@example.com',
+            completed => { $emailid => [ [ 'fileinto', { }, [ $mailbox ] ] ] },
+            notCompleted => undef,
+        };
+    }
+
+    xlog "a domain global script takes precedence over a server-wide one";
+    $cmp_deeply->(included('DOMAIN'), test_include('dscript'));
+
+    xlog "without a domain global script, the server-wide one is used";
+    $cmp_deeply->(included('GLOBAL'), test_include('gscript'));
+}
