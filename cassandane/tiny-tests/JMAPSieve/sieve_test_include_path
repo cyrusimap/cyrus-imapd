@@ -75,7 +75,7 @@ EOF
         notCompleted => {
             $emailid => {
                 type => 'serverFail',
-                description => ignore(),
+                description => 'Invalid script name',
             },
         },
     }, test_include($path));
