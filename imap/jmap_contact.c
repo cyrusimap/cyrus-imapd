@@ -2420,8 +2420,9 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
 
     db = carddav_open_userid(req->accountid);
     if (!db) {
-        xsyslog(LOG_ERR, "carddav_open_mailbox failed", "accountid=<%s>",
-                req->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.addressbook.dbopen.failed",
+                   lf_s("jmap.accountid", req->accountid));
+        r = IMAP_IOERROR;
         goto done;
     }
 
@@ -2439,20 +2440,6 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
     }
 
     /* Delete addressbook */
-    r = carddav_delmbox(db, mbentry);
-    if (r) {
-        xsyslog(LOG_ERR, "failed to delete mailbox from carddav_db",
-                "mboxname=<%s> mboxid=<%s> err=<%s>",
-                mbentry->name, mbentry->uniqueid, error_message(r));
-        goto done;
-    }
-    if (r) goto done;
-
-    jmap_myrights_delete(req, mbentry->name);
-
-    /* Remove from subscriptions db */
-    mboxlist_changesub(mbentry->name, req->userid, req->authstate, 0, 1, 0, 1);
-
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
     if (mboxlist_delayed_delete_isenabled()) {
         r = mboxlist_delayed_deletemailbox(mbentry->name,
@@ -2466,11 +2453,23 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
                 MBOXLIST_DELETE_CHECKACL|MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
     }
     mboxevent_free(&mboxevent);
+    if (r) goto done;
+
+    jmap_myrights_delete(req, mbentry->name);
+
+    /* Remove from subscriptions db */
+    mboxlist_changesub(mbentry->name, req->userid, req->authstate, 0, 1, 0, 1);
 
   done:
+    /* The mailbox is already gone by here: a close failure must not turn a
+     * completed destroy into notDestroyed. */
     if (db) {
-        int rr = carddav_close(db);
-        if (!r) r = rr;
+        int rc = carddav_close(db);
+        if (rc) {
+            xsyslog_ev(LOG_WARNING, "jmap.addressbook.dbclose.failed",
+                       lf_s("jmap.accountid", req->accountid),
+                       lf_err("error", rc));
+        }
     }
     if (r && *err == NULL) {
         if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -4792,6 +4791,7 @@ static int jmap_card_parse(jmap_req_t *req)
     if (!db) {
         syslog(LOG_ERR,
                "carddav_open_mailbox failed for user %s", req->accountid);
+        jmap_error(req, jmap_server_error(IMAP_IOERROR));
         goto done;
     }
 
