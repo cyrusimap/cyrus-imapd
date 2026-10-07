@@ -989,7 +989,6 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 
 EXPORTED char *strconcat(const char *s1, ...)
 {
-    int sz = 1; /* 1 byte for the trailing NUL */
     const char *s;
     char *buf;
     char *p;
@@ -998,8 +997,9 @@ EXPORTED char *strconcat(const char *s1, ...)
     if (s1 == NULL)
         return NULL;
 
+    size_t s1_len = strlen(s1);
     /* first pass: calculate length */
-    sz += strlen(s1);
+    size_t sz = s1_len + 1; /* 1 byte for the trailing NUL */
     va_start(args, s1);
     while ((s = va_arg(args, const char *)) != NULL)
         sz += strlen(s);
@@ -1009,14 +1009,16 @@ EXPORTED char *strconcat(const char *s1, ...)
     p = buf = xmalloc(sz);
 
     /* second pass: copy strings in */
-    strcpy(p, s1);
-    p += strlen(p);
+    memcpy(p, s1, s1_len);
+    p += s1_len;
     va_start(args, s1);
     while ((s = va_arg(args, const char *)) != NULL) {
-        strcpy(p, s);
-        p += strlen(p);
+        size_t len = strlen(s);
+        memcpy(p, s, len);
+        p += len;
     }
     va_end(args);
+    *p = '\0';
 
     return buf;
 }
