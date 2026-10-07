@@ -2354,6 +2354,53 @@ static const char *get_param(struct param *params, const char *attrib)
     return (p ? p->value : NULL);
 }
 
+/* Does the event hide its attendees? */
+static bool icalcomponent_get_hideattendees(icalcomponent *ical)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    icalproperty *prop = comp ?
+        icalcomponent_get_x_property_by_name(comp,
+                JMAPICAL_XPROP_HIDEATTENDEES) : NULL;
+
+    return prop &&
+        !strcasecmpsafe(icalproperty_get_value_as_string(prop), "true");
+}
+
+/* Strip the attendees that CalendarEvent/get would have hidden from userid.
+ * The organizer and userid's own attendees are kept, matching the reduced
+ * participants of the JSON representation.
+ */
+static void icalcomponent_strip_attendees(icalcomponent *ical,
+                                          const char *userid,
+                                          const strarray_t *schedule_addresses)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    if (!comp) return;
+
+    icalcomponent_kind kind = icalcomponent_isa(comp);
+
+    for ( ; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+        icalproperty *orgprop =
+            icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+        const char *organizer = orgprop ?
+            icalproperty_get_decoded_calendaraddress(orgprop) : NULL;
+
+        icalproperty *prop, *nextprop;
+        for (prop = icalcomponent_get_first_invitee(comp); prop; prop = nextprop) {
+            nextprop = icalcomponent_get_next_invitee(comp);
+
+            const char *addr = icalproperty_get_decoded_calendaraddress(prop);
+            if (!addr) continue;
+            if (organizer && !strcasecmp(addr, organizer)) continue;
+            if (!strcasecmp(addr, userid)) continue;
+            if (strarray_contains_case(schedule_addresses, addr)) continue;
+
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+        }
+    }
+}
+
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
 {
     struct mailbox *mailbox = NULL;
@@ -2477,6 +2524,17 @@ static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *c
         ctx->errstr = "failed to load record";
         res = HTTP_SERVER_ERROR;
         goto done;
+    }
+
+    if (!subpart && !jmap_hasrights_mbentry(req, mbentry, JACL_WRITEALL) &&
+            icalcomponent_get_hideattendees(ical)) {
+        /* A blobId handed out before hideAttendees was set must not keep
+         * working as a way to read the attendees. */
+        strarray_t schedule_addresses = STRARRAY_INITIALIZER;
+        get_schedule_addresses(mbentry->name, req->accountid,
+                               &schedule_addresses);
+        icalcomponent_strip_attendees(ical, req->userid, &schedule_addresses);
+        strarray_fini(&schedule_addresses);
     }
 
     if (subpart) {
@@ -7653,6 +7711,11 @@ static void _calendarevent_copy(jmap_req_t *req,
     context_begin_cdata(jmapctx, mbentry, cdata);
     json_t *src_event = jmapical_tojmap(src_ical, NULL, jmapctx);
     if (src_event) {
+        if (json_boolean_value(json_object_get(src_event, "hideAttendees")) &&
+                !jmap_hasrights_mbentry(req, mbentry, JACL_WRITEALL)) {
+            getcalendarevents_reduce_participants(src_event, req->userid,
+                    &schedule_addresses);
+        }
         dst_event = jmap_patchobject_apply(src_event, jevent, NULL, 0);
     }
     json_decref(src_event);
