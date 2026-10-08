@@ -1,0 +1,27 @@
+Description:
+
+Sharing a mailbox, calendar or addressbook through JMAP (or a WebDAV ACL
+request) now emits an AclChange event for each identifier whose rights
+changed, as IMAP SETACL always has.
+
+
+Documentation:
+
+docsrc/concepts/features/event-notifications.rst
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None.  Deployments that act on AclChange events will start seeing them for
+JMAP sharing changes.  Their "user" field is empty, since the acting user is
+not known at the point they are emitted.
+
+
+GitHub issue:
+
+None
