@@ -350,6 +350,16 @@ extern char *jmap_state_string_cstate(struct conversations_state *cstate,
                                       modseq_t modseq, int mbtype);
 extern char *jmap_state_string_prefixed(int prefixed_state, modseq_t modseq);
 
+/**
+ * Format the state string for @p modseq of data type @p mbtype.
+ *
+ * @param compact_ids  whether the account uses compact email ids, as
+ *                     USER_COMPACT_EMAILIDS() reports for its conversations.db
+ * @return a newly allocated string
+ */
+extern char *jmap_state_string_compact(bool compact_ids, modseq_t modseq,
+                                       int mbtype);
+
 /* Helpers for DAV-based JMAP types */
 extern char *jmap_xhref(const char *mboxname, const char *resource);
 
