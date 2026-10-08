@@ -1,0 +1,11 @@
+Name: jmap_base_url
+Type: STRING
+Default-Value: NULL
+Last-Modified: UNRELEASED
+
+The scheme and authority (e.g. "https://jmap.example.com") to prefix to
+the URLs advertised in the JMAP Session object (apiUrl, downloadUrl,
+uploadUrl and eventSourceUrl) and to the WebSocket capability URL, for
+clients that cannot resolve relative URLs against the Session URL.  The
+WebSocket URL uses "ws" or "wss" to match an "http" or "https" scheme.  Any
+trailing slashes are ignored.  If not set, relative URLs are advertised.

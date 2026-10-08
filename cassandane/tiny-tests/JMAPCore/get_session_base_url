@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_get_session_base_url
+    :JMAPExtensions :NoAltNameSpace :NoStartInstances
+    ($self)
+{
+    # trailing slashes are ignored
+    $self->{instance}->{config}->set(
+        'jmap_base_url' => 'https://jmap.example.com/'
+    );
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $session = $self->{jmap}->get_client_session->client_session;
+
+    my $base = 'https://jmap.example.com/jmap';
+    $self->assert_cmp_deeply(
+        superhashof({
+            apiUrl => "$base/",
+            downloadUrl =>
+                "$base/download/{accountId}/{blobId}/{name}?accept={type}",
+            uploadUrl => "$base/upload/{accountId}/",
+            eventSourceUrl => "$base/eventsource/"
+                . "?types={types}&closeafter={closeafter}&ping={ping}",
+        }),
+        $session
+    );
+
+    my $buildinfo = Cassandane::BuildInfo->new();
+    if ($buildinfo->get('dependency', 'wslay')) {
+        $self->assert_str_equals('wss://jmap.example.com/jmap/ws/',
+            $session->{capabilities}{'urn:ietf:params:jmap:websocket'}{url});
+    }
+}
