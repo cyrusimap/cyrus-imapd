@@ -38,7 +38,7 @@ jmap_data_type_t;
 # RFC 9007
 "MDN",                       JMAP_TYPE_MDN,                       MBTYPE_UNKNOWN,     0,                                        -1
 # RFC 9425
-"Quota",                     JMAP_TYPE_QUOTA,                     MBTYPE_UNKNOWN,     0,                                        -1
+"Quota",                     JMAP_TYPE_QUOTA,                     MBTYPE_UNKNOWN,     0,                                        offsetof(struct mboxname_counters, quotamodseq)
 # RFC 9661
 "SieveScript",               JMAP_TYPE_SIEVESCRIPT,               MBTYPE_SIEVE,       JMAP_TYPE_HAS_QUOTA,                      offsetof(struct mboxname_counters, sievemodseq)
 # RFC 9670
