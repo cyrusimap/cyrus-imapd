@@ -49,6 +49,7 @@ sub new
     return $class->SUPER::new({
         config => $config,
         deliver => 1,
+        adminstore => 1,
         services => ['imap', 'http'],
     }, @args);
 }

@@ -1,0 +1,26 @@
+Description:
+
+The Quota data type now has a JMAP state, backed by the per-user quota
+modseq counter.  It appears in the vnd.fastmail.jmapStates event
+parameter, in UserState/get, and in push (StateChange) notifications
+alongside the other stateful types.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

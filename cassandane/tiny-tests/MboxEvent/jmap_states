@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # data type.  It is built from the canonical jmap_data_types table, so it must
 # list the modern types (AddressBook, ContactCard) and must NOT list the types
 # that were superseded (Contact, ContactGroup) or that have no state counter
-# (Quota, Racl).  We also check that the state advances when its type changes.
+# (Racl).  We also check that a state advances when its type changes.
 
 # Returns the jmapStates hash from the (single) MessageNew event produced by
 # delivering one message.
@@ -39,6 +39,7 @@ sub test_jmap_states ($self) {
         Calendar CalendarEvent
         AddressBook ContactCard
         Note SieveScript VacationResponse
+        Quota
     )) {
         $self->assert_not_null($states->{$type}, "jmapStates has $type");
 
@@ -52,16 +53,33 @@ sub test_jmap_states ($self) {
     }
 
     # Superseded or stateless types must not appear.
-    for my $type (qw(Contact ContactGroup Quota Racl)) {
+    for my $type (qw(Contact ContactGroup Racl)) {
         $self->assert(! exists $states->{$type}, "jmapStates omits $type");
     }
+
+    my sub strip ($n) { $n =~ s/^J//; return $n + 0 }
 
     # Delivering another message must advance the Email/Mailbox state.
     my $states2 = $self->_deliver_and_states("second", 2);
 
-    my sub strip ($n) { $n =~ s/^J//; return $n + 0 }
     $self->assert(
         strip($states2->{Email}) > strip($states->{Email}),
         "Email state advanced after a new message ($states->{Email} -> $states2->{Email})"
+    );
+
+    # With no quota root, nothing has touched the quota counter.
+    $self->assert_str_equals($states->{Quota}, $states2->{Quota});
+
+    # Creating a quota root writes a quota record, which must advance the
+    # Quota state reported by the next event.
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->setquota('user.cassandane', [ 'STORAGE', 100000 ]);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $states3 = $self->_deliver_and_states("third", 3);
+
+    $self->assert(
+        strip($states3->{Quota}) > strip($states2->{Quota}),
+        "Quota state advanced after setquota ($states2->{Quota} -> $states3->{Quota})"
     );
 }
