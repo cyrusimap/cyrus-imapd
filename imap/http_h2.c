@@ -13,8 +13,9 @@
 #include <errno.h>
 #include <syslog.h>
 
-#include <sasl/saslutil.h>
 #include <openssl/ssl.h>
+
+#include "libsasl_min/saslutil.h"
 
 #include "http_ws.h"
 #include "prometheus.h"

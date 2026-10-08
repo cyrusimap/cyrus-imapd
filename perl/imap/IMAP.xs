@@ -12,7 +12,7 @@
 #include <pwd.h>
 #include <unistd.h>
 
-#include <sasl/sasl.h>
+#include "libsasl_min/sasl.h"
 
 #include "lib/imclient.h"
 #include "lib/imapurl.h"

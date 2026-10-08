@@ -8,8 +8,6 @@
 #include <string.h>
 #include <signal.h>
 #include <ctype.h>
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
 #include <sysexits.h>
 #include <syslog.h>
 #include <stdarg.h>
@@ -33,6 +31,9 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 static struct protocol_t mupdate_protocol =
 { "mupdate", "mupdate", NULL, TYPE_STD,

@@ -1821,10 +1821,12 @@ AS_IF([test "x$with_staticsasl" != "xno" -o "x$with_sasl" != "xno"],
         CMU_SASL2_CHECKAPOP_REQUIRED
       ],
       [ with_sasl="internal"
+        SASLFLAGS=""
         LIB_SASL=lib/libsasl_min.la ])
 AS_IF([test "x$with_sasl" = "xinternal"],
       [AC_DEFINE([USE_INTERNAL_SASL], [], [Build with libsasl_min])])
 AM_CONDITIONAL([USE_INTERNAL_SASL], [test "x$with_sasl" = "xinternal" ])
+AC_SUBST(SASLFLAGS)
 AC_SUBST(LIB_SASL)
 
 # find perl

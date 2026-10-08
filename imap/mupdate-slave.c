@@ -6,8 +6,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
 #include <sysexits.h>
 #include <syslog.h>
 #include <stdarg.h>
@@ -31,6 +29,9 @@
 #include "mpool.h"
 #include "mupdate.h"
 #include "xunlink.h"
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 /* Returns file descriptor of kick socket (or does not return) */
 static int open_kick_socket(void)

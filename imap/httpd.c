@@ -24,9 +24,10 @@
 #include <ctype.h>
 #include "prot.h"
 
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
 #include <jansson.h>
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 #include "httpd.h"
 #include "http_h2.h"
