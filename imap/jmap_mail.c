@@ -23,6 +23,7 @@
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
+#include "arrayu64.h"
 #include "bsearch.h"
 #include "carddav_db.h"
 #include "cyr_qsort_r.h"
@@ -10388,7 +10389,40 @@ struct email_append_detail {
     char email_id[JMAP_MAX_EMAILID_SIZE];
     char thread_id[JMAP_THREADID_SIZE];
     size_t size;
+    bool partial;       /* failed, and couldn't take back what it made */
 };
+
+/* Expunge the records an interrupted _email_append() made.  Returns
+ * nonzero if any of them couldn't be. */
+static int _email_append_undo(const strarray_t *mboxnames,
+                              const arrayu64_t *uids)
+{
+    int i, failed = 0;
+
+    for (i = 0; i < strarray_size(mboxnames); i++) {
+        const char *mboxname = strarray_nth(mboxnames, i);
+        uint32_t uid = arrayu64_nth(uids, i);
+        struct mailbox *mbox = NULL;
+        struct index_record record;
+
+        int r = mailbox_open_iwl(mboxname, &mbox);
+        if (!r) r = mailbox_find_index_record(mbox, uid, &record);
+        if (!r) {
+            record.system_flags |= FLAG_DELETED;
+            record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+            r = mailbox_rewrite_index_record(mbox, &record);
+        }
+        mailbox_close(&mbox);
+        if (r) {
+            xsyslog(LOG_ERR, "can't undo email create",
+                    "mboxname=<%s> uid=<%u> err=<%s>",
+                    mboxname, uid, error_message(r));
+            failed = 1;
+        }
+    }
+
+    return failed;
+}
 
 static void _email_append(jmap_req_t *req,
                           json_t *mailboxids,
@@ -10414,9 +10448,14 @@ static void _email_append(jmap_req_t *req,
     json_t *val, *mailboxes = NULL;
     size_t len;
     int r = 0;
+    int committed = 0;
+    strarray_t made_mboxes = STRARRAY_INITIALIZER; /* records we made, */
+    arrayu64_t made_uids = ARRAYU64_INITIALIZER;   /* to undo on failure */
     time_t savedate = 0;
     struct timespec now;
     char exist_id[JMAP_MAX_EMAILID_SIZE];
+
+    detail->partial = false;
 
     if (json_object_size(mailboxids) > JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL) {
         *err = json_pack("{s:s}", "type", "tooManyMailboxes");
@@ -10648,6 +10687,9 @@ static void _email_append(jmap_req_t *req,
 
     r = append_commit(&as);
     if (r) goto done;
+    committed = 1;
+    strarray_append(&made_mboxes, mboxname);
+    arrayu64_append(&made_uids, mbox->i.last_uid);
 
     /* Load message record */
     r = msgrecord_find(mbox, mbox->i.last_uid, &mr);
@@ -10685,6 +10727,10 @@ static void _email_append(jmap_req_t *req,
 
         r = _copy_msgrecord(httpd_authstate, req->userid, &jmap_namespace,
                             mbox, dst, mr);
+        if (!r) {
+            strarray_append(&made_mboxes, dstname);
+            arrayu64_append(&made_uids, dst->i.last_uid);
+        }
 
         mailbox_close(&dst);
         if (r) goto done;
@@ -10697,6 +10743,12 @@ done:
     mailbox_close(&mbox);
     free(mboxname);
     json_decref(mailboxes);
+    /* Take back what was made, so that notCreated is true */
+    if (r && committed && _email_append_undo(&made_mboxes, &made_uids)) {
+        detail->partial = true;
+    }
+    strarray_fini(&made_mboxes);
+    arrayu64_fini(&made_uids);
     if (r && *err == NULL) {
         switch (r) {
             case IMAP_PERMISSION_DENIED:
@@ -12787,7 +12839,8 @@ static void _append_validate_mboxids(jmap_req_t *req,
 static void _email_create(jmap_req_t *req,
                           json_t *jemail,
                           json_t **new_email,
-                          json_t **set_err)
+                          json_t **set_err,
+                          bool *partial)
 {
     strarray_t keywords = STRARRAY_INITIALIZER;
     int r = 0, have_snoozed_mboxid = 0;
@@ -12841,6 +12894,7 @@ static void _email_create(jmap_req_t *req,
                   config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT) ?
                   email.has_attachment : 0, NULL, _email_to_mime, &email,
                   &detail, set_err);
+    if (detail.partial) *partial = true;
     if (*set_err) goto done;
 
     /* Return newly created Email object */
@@ -15196,6 +15250,9 @@ static int jmap_email_set(jmap_req_t *req)
 
     set.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
 
+    /* Set if an email is left half-made, so no response would be true */
+    bool partial = false;
+
     _email_destroy_bulk(req, set.destroy, set.destroyed, set.not_destroyed);
 
     json_t *email;
@@ -15204,7 +15261,7 @@ static int jmap_email_set(jmap_req_t *req)
         json_t *set_err = NULL;
         json_t *new_email = NULL;
         /* Create message */
-        _email_create(req, email, &new_email, &set_err);
+        _email_create(req, email, &new_email, &set_err, &partial);
         if (set_err) {
             json_object_set_new(set.not_created, creation_id, set_err);
             continue;
@@ -15220,6 +15277,12 @@ static int jmap_email_set(jmap_req_t *req)
         debug_bulkupdate = json_object();
     }
     _email_update_bulk(req, set.update, set.updated, set.not_updated, debug_bulkupdate);
+
+    if (partial) {
+        json_decref(debug_bulkupdate);
+        jmap_error(req, json_pack("{s:s}", "type", "serverPartialFail"));
+        goto done;
+    }
 
     set.new_state = jmap_state_string(req, 0, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD);
 
@@ -15325,7 +15388,8 @@ done:
 static void _email_import(jmap_req_t *req,
                           json_t *jemail_import,
                           json_t **new_email,
-                          json_t **err)
+                          json_t **err,
+                          bool *partial)
 {
     const char *blob_id = jmap_id_string_value(req, json_object_get(jemail_import, "blobId"));
     json_t *jmailbox_ids = json_object_get(jemail_import, "mailboxIds");
@@ -15461,6 +15525,7 @@ gotrecord:
     /* Write the message to the file system */
     _email_append(req, jmailbox_ids, &keywords, &internaldate, snoozed,
             has_attachment, sourcefile, _email_import_cb, &content, &detail, err);
+    if (detail.partial) *partial = true;
 
     msgrecord_unref(&mr);
     mailbox_close(&mbox);
@@ -15492,6 +15557,8 @@ static int jmap_email_import(jmap_req_t *req)
     int have_snoozed_mboxid = 0;
     const char *if_in_state = NULL;
     char *old_state = NULL, *new_state = NULL;
+    /* Set if an email is left half-made, so no response would be true */
+    bool partial = false;
 
     /* Parse request */
     json_object_foreach(req->args, key, arg) {
@@ -15623,7 +15690,7 @@ static int jmap_email_import(jmap_req_t *req)
         json_object_set_new(jemail_import, "mailboxIds", jmailboxids);
         json_t *new_email = NULL;
         json_t *err = NULL;
-        _email_import(req, jemail_import, &new_email, &err);
+        _email_import(req, jemail_import, &new_email, &err, &partial);
         if (err) {
             json_object_set_new(not_created, id, err);
         }
@@ -15634,6 +15701,11 @@ static int jmap_email_import(jmap_req_t *req)
             jmap_add_id(req, id, newid);
         }
         json_object_set_new(jemail_import, "mailboxIds", orig_mailboxids);
+    }
+
+    if (partial) {
+        jmap_error(req, json_pack("{s:s}", "type", "serverPartialFail"));
+        goto done;
     }
 
     new_state = jmap_state_string(req, 0, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD);
