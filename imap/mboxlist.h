@@ -255,6 +255,21 @@ int mboxlist_renametree(const char *oldname, const char *newname,
 /* rename mailbox from sync */
 #define MBOXLIST_RENAME_SYNC                (1<<1)
 
+/**
+ * Check whether a non-admin may rename a mailbox of type @p mbtype from
+ * @p oldname to @p newname.  Only email mailboxes may move into another
+ * user's tree; calendars, address books, Sieve stores and the like stay
+ * with their owner.
+ *
+ * mboxlist_renamemailbox() applies this to the mailbox it renames when
+ * not called as admin.  A caller that renames a subtree by renaming the
+ * children as admin must apply it to every child first.
+ *
+ * @return 0 if allowed, IMAP_PERMISSION_DENIED otherwise.
+ */
+int mboxlist_rename_typecheck(uint32_t mbtype, const char *oldname,
+                              const char *newname);
+
 /* Rename/move a mailbox (hierarchical) */
 /* prepare MailboxRename notification if mboxevent is not NULL */
 int mboxlist_renamemailbox(const mbentry_t *mbentry, const char *newname,

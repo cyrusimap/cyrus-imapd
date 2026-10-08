@@ -3979,6 +3979,19 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
     /* conditions in which there's nothing to do */
     if (!new) return 0;
 
+    /* Only the owner's own Sieve mailbox holds their scripts */
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+    char *sievembox = userid ? sieve_mboxname(userid) : NULL;
+    bool canonical = !strcmpsafe(sievembox, mailbox_name(mailbox));
+
+    free(sievembox);
+    free(userid);
+    if (!canonical) {
+        xsyslog_ev(LOG_NOTICE, "sieve.mailbox.noncanonical",
+                   lf_s("mbox.name", mailbox_name(mailbox)));
+        return 0;
+    }
+
     /* phantom record - never really existed here */
     if (!old && isexpunged) return 0;
 
