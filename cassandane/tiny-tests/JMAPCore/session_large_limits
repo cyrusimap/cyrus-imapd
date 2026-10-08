@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+# Size limits in the session object are advertised in octets at full 64-bit
+# width, including values that don't fit in 32 bits.
+sub test_session_large_limits
+    :JMAPExtensions :NoStartInstances
+    ($self)
+{
+    $self->config_set(
+        jmap_max_size_upload => '200G',
+        jmap_max_size_request => '3G',
+        jmap_max_size_blob_set => '4M',
+        jmap_max_catenate_items => 64,
+        jmap_mail_max_size_attachments_per_email => '5G',
+    );
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    my $session = $jmap->get_client_session->client_session;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            maxSizeUpload  => 214_748_364_800,
+            maxSizeRequest => 3_221_225_472,
+        }),
+        $session->{capabilities}{'urn:ietf:params:jmap:core'},
+    );
+
+    my $acaps = $session->{accounts}{cassandane}{accountCapabilities};
+    $self->assert_cmp_deeply(
+        superhashof({
+            maxSizeBlobSet => 4_194_304,
+            maxDataSources => 64,
+        }),
+        $acaps->{'urn:ietf:params:jmap:blob'},
+    );
+    $self->assert_cmp_deeply(
+        superhashof({ maxSizeAttachmentsPerEmail => 5_368_709_120 }),
+        $acaps->{'urn:ietf:params:jmap:mail'},
+    );
+}

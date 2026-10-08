@@ -4230,8 +4230,8 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
     /* OK, report that update */
     if (dest)
         json_object_set_new(dest, mboxid,
-                            json_pack("{s:s s:i}", "id",
-                                mboxid, "modseq", mbmodseq));
+                            json_pack("{s:s s:I}", "id",
+                                mboxid, "modseq", (json_int_t) mbmodseq));
 
     return 0;
 }

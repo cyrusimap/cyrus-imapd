@@ -327,9 +327,10 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities,
         max_size_attachments_per_email = 0;
     }
 
-    json_t *email_capabilities = json_pack("{s:i s:i s:o}",
+    json_t *email_capabilities = json_pack("{s:i s:I s:o}",
             "maxMailboxesPerEmail", JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL,
-            "maxSizeAttachmentsPerEmail", max_size_attachments_per_email,
+            "maxSizeAttachmentsPerEmail",
+            (json_int_t) max_size_attachments_per_email,
             "emailQuerySortOptions", sortopts);
 
     json_object_set_new(account_capabilities, JMAP_URN_MAIL, email_capabilities);
@@ -3188,7 +3189,8 @@ static struct sortcrit *_email_buildsort(jmap_req_t *req,
 static void _email_querychanges_added(struct jmap_querychanges *query,
                                       const char *email_id)
 {
-    json_t *item = json_pack("{s:s,s:i}", "id", email_id, "index", query->total-1);
+    json_t *item = json_pack("{s:s,s:I}", "id", email_id,
+                             "index", (json_int_t) query->total-1);
     json_array_append_new(query->added, item);
 }
 
@@ -12989,7 +12991,7 @@ static void _email_mboxrecs_read(jmap_req_t *req,
                                            _email_mboxrecs_read_cb, &rock);
         if (r) {
             json_t *err = (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED) ?
-                json_pack("{s:s}", "notFound") : jmap_server_error(r);
+                json_pack("{s:s}", "type", "notFound") : jmap_server_error(r);
             json_object_set_new(set_errors, email_id, err);
             _email_mboxrecs_free(&mboxrecs);
             return;
@@ -14533,8 +14535,9 @@ static void _email_bulkupdate_dump(struct email_bulkupdate *bulk, json_t *jdump)
         int j;
         for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
             struct email_uidrec *uidrec = ptrarray_nth(&mboxrec->uidrecs, j);
-            json_array_append_new(jrecs, json_pack("{s:s s:i}",
-                        "emailId", uidrec->email_id, "uid", uidrec->uid));
+            json_array_append_new(jrecs, json_pack("{s:s s:I}",
+                        "emailId", uidrec->email_id,
+                        "uid", (json_int_t) uidrec->uid));
         }
         json_object_set_new(jcur_mboxrecs, mboxrec->mboxname, jrecs);
     }

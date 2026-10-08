@@ -104,20 +104,21 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_CORE,
-            json_pack("{s:i s:i s:i s:i s:i s:i s:i s:o}",
-                "maxSizeUpload",          limits[MAX_SIZE_UPLOAD],
-                "maxConcurrentUpload",    limits[MAX_CONCURRENT_UPLOAD],
-                "maxSizeRequest",         limits[MAX_SIZE_REQUEST],
-                "maxConcurrentRequests",  limits[MAX_CONCURRENT_REQUESTS],
-                "maxCallsInRequest",      limits[MAX_CALLS_IN_REQUEST],
-                "maxObjectsInGet",        limits[MAX_OBJECTS_IN_GET],
-                "maxObjectsInSet",        limits[MAX_OBJECTS_IN_SET],
+            json_pack("{s:I s:I s:I s:I s:I s:I s:I s:o}",
+                "maxSizeUpload",          (json_int_t) limits[MAX_SIZE_UPLOAD],
+                "maxConcurrentUpload",    (json_int_t) limits[MAX_CONCURRENT_UPLOAD],
+                "maxSizeRequest",         (json_int_t) limits[MAX_SIZE_REQUEST],
+                "maxConcurrentRequests",  (json_int_t) limits[MAX_CONCURRENT_REQUESTS],
+                "maxCallsInRequest",      (json_int_t) limits[MAX_CALLS_IN_REQUEST],
+                "maxObjectsInGet",        (json_int_t) limits[MAX_OBJECTS_IN_GET],
+                "maxObjectsInSet",        (json_int_t) limits[MAX_OBJECTS_IN_SET],
                 "collationAlgorithms",    json_array()));
 
     json_object_set_new(settings->server_capabilities,
             JMAP_CORE_EXTENSION,
-            json_pack("{s:i}",
-                "maxCreatedIdsInRequest", limits[MAX_CREATEDIDS_IN_REQUEST]));
+            json_pack("{s:I}",
+                "maxCreatedIdsInRequest",
+                (json_int_t) limits[MAX_CREATEDIDS_IN_REQUEST]));
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
         struct utsname buf;

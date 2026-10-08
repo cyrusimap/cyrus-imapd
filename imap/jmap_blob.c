@@ -75,11 +75,11 @@ HIDDEN void jmap_blob_init(jmap_settings_t *settings)
     json_array_append_new(algorithms, json_string("sha-256"));
 
     blob_capabilities =
-        json_pack("{s:i, s:i, s:o, s:o}",
+        json_pack("{s:I, s:I, s:o, s:o}",
                   "maxSizeBlobSet",
-                  settings->limits[MAX_SIZE_BLOB_SET] / 1024,
-                  "maxdataSources",
-                  settings->limits[MAX_CATENATE_ITEMS],
+                  (json_int_t) settings->limits[MAX_SIZE_BLOB_SET],
+                  "maxDataSources",
+                  (json_int_t) settings->limits[MAX_CATENATE_ITEMS],
                   "supportedTypeNames",
                   typenames,
                   "supportedDigestAlgorithms",
@@ -1014,10 +1014,10 @@ static int jmap_blob_upload(struct jmap_req *req)
         // safe to zerocopy these blobs!
         hash_insert(blob_id, buf, req->inmemory_blobs);
 
-        json_object_set_new(set.created, key, json_pack("{s:s, s:s, s:i, s:s, s:s}",
+        json_object_set_new(set.created, key, json_pack("{s:s, s:s, s:I, s:s, s:s}",
             "id", blob_id,
             "blobId", blob_id,
-            "size", buf_len(buf),
+            "size", (json_int_t) buf_len(buf),
             "expires", datestr,
             "type", type));
 

@@ -995,8 +995,8 @@ static void _emailsubmission_create(jmap_req_t *req,
 
         switch (r) {
         case IMAP_MESSAGE_TOO_LARGE:
-            *set_err = json_pack("{s:s s:i}", "type", "tooLarge",
-                                 "maxSize", smtpclient_get_maxsize(*sm));
+            *set_err = json_pack("{s:s s:I}", "type", "tooLarge", "maxSize",
+                                 (json_int_t) smtpclient_get_maxsize(*sm));
             break;
 
         case IMAP_MAILBOX_DISABLED:
@@ -1165,7 +1165,7 @@ static json_t *fetch_submission(jmap_req_t *req, message_t *msg)
             if (!r) {
                 json_object_set_new(sub, "emailId",
                                     json_pack("s%", guidrep,
-                                              JMAP_LEGACY_EMAILID_SIZE-1));
+                                              (size_t) JMAP_LEGACY_EMAILID_SIZE-1));
             }
 
             json_t *onsend = json_object_get(sub, "onSend");
