@@ -797,7 +797,11 @@ static int jmap_card_set(struct jmap_req *req)
             r = mailbox_open_iwl(mbentry->name, &mailbox);
         }
         mboxlist_entry_free(&mbentry);
-        if (r) goto done;
+        if (r) {
+            json_object_set_new(set.not_destroyed, id, jmap_server_error(r));
+            r = 0;
+            continue;
+        }
 
         syslog(LOG_NOTICE,
                "jmap: remove %s %s/%s",
@@ -809,7 +813,9 @@ static int jmap_card_set(struct jmap_req *req)
                              "kind=<%s> mailbox=<%s> olduid=<%u>",
                              cdata->kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                              mailbox_name(mailbox), olduid);
-            goto done;
+            json_object_set_new(set.not_destroyed, id, jmap_server_error(r));
+            r = 0;
+            continue;
         }
 
         json_array_append_new(set.destroyed, json_string(id));
