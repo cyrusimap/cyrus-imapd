@@ -916,7 +916,6 @@ static void imapd_log_client_behavior(void)
 
 static void maybe_autoexpunge(void)
 {
-    if (config_getswitch(IMAPOPT_REPLICAONLY)) return;
     if (!config_getswitch(IMAPOPT_AUTOEXPUNGE)) return;
     if (!index_hasrights(imapd_index, ACL_EXPUNGE)) return;
     index_expunge(imapd_index, NULL, 1);
@@ -4969,8 +4968,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     init.authstate = imapd_authstate;
     init.out = imapd_out;
     init.examine_mode = (cmd[0] == 'E')
-                     || config_getswitch(IMAPOPT_READONLY)
-                     || config_getswitch(IMAPOPT_REPLICAONLY);
+                     || config_getswitch(IMAPOPT_READONLY);
     init.select = 1;
     init.stay_locked = 1;
     if (imapd_userisadmin || imapd_want_dav()) init.want_dav = 1;

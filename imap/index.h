@@ -10,6 +10,7 @@
 
 #include <config.h>
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -85,6 +86,7 @@ struct index_state {
     int skipped_expunge;
     int seen_dirty;
     int examining;
+    bool replicaonly;   /* refuse writes, but don't advertise read-only */
     int myrights;
     unsigned numrecent;
     unsigned numunseen;
@@ -92,6 +94,7 @@ struct index_state {
     char *flagname[MAX_USER_FLAGS];
     char *userid;
     char *mboxname;
+    char *owner;        /* userid owning mboxname, or NULL */
     char *uniqueid;
     char *mailboxid;
     struct protstream *out;

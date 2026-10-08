@@ -52,6 +52,7 @@
 #include "proxy.h"
 #include "sync_support.h"
 #include "seen.h"
+#include "user.h"
 #include "userdeny.h"
 #include "prometheus.h"
 
@@ -820,6 +821,10 @@ static void cmdloop(void)
                 free(name);
                 if (r) goto done; // failed to open, doh
 
+                /* nothing changes on a replica */
+                if (user_isreplicaonlymb(mailbox_name(popd_mailbox)))
+                    goto done;
+
                 /* mark dirty in case everything else misses it - we're updating
                  * at least the last login */
                 mailbox_index_dirty(popd_mailbox);
@@ -947,6 +952,12 @@ done:
             else if (config_getswitch(IMAPOPT_READONLY)) {
                 prot_printf(popd_out, "-ERR [SYS/PERM] %s\r\n",
                             error_message(IMAP_CONNECTION_READONLY));
+            }
+            else if (popd_mailbox
+                     && user_isreplicaonlymb(mailbox_name(popd_mailbox))) {
+                /* QUIT checks again under the user lock */
+                prot_printf(popd_out, "-ERR [SYS/TEMP] "
+                            "Mailbox can't be changed right now\r\n");
             }
             else {
                 msgno = parse_msgno(&arg);

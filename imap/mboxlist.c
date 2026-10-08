@@ -1532,8 +1532,11 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
      * function if renaming */
     assert_namespacelocked(name);
 
-    if (!silent && !(mbentry && (mbentry->mbtype & MBTYPE_DELETED)))
-        mboxname_assert_canadd(mbname);
+    if (!silent && !(mbentry && (mbentry->mbtype & MBTYPE_DELETED))
+        && user_isreplicaonly(mbname_userid(mbname))) {
+        r = IMAP_MAILBOX_REPLICAONLY;
+        goto done;
+    }
 
     /* take a local transaction if there isn't one already - we definitely
      * want all these updates in a single transaction so the mboxlist is
@@ -2097,15 +2100,16 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
     char *partition = NULL;
     int r = 0;
 
-    // we don't run this on replicas
-    assert(!config_getswitch(IMAPOPT_REPLICAONLY));
-
     /* not for deleted namespace */
     if (mbname_isdeleted(mbname))
         goto out;
 
     /* only use intermediates for user mailboxes */
     if (!mbname_userid(mbname))
+        goto out;
+
+    /* replicas get intermediates from the master */
+    if (user_isreplicaonly(mbname_userid(mbname)))
         goto out;
 
     for (; strarray_size(mbname_boxes(mbname)); free(mbname_pop_boxes(mbname))) {
@@ -2261,6 +2265,11 @@ EXPORTED int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_
     if (r) goto done;
 
     assert_namespacelocked(mboxname);
+
+    if (!(flags & MBOXLIST_CREATE_SYNC) && user_isreplicaonlymb(mboxname)) {
+        r = IMAP_MAILBOX_REPLICAONLY;
+        goto done;
+    }
 
     if ((flags & MBOXLIST_CREATE_SYNC)) {
         jmapid = mbentry->jmapid;
@@ -2700,8 +2709,14 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
 
     assert_namespacelocked(name);
 
-    /* delete of a user.X folder */
     mbname_t *mbname = mbname_from_intname(name);
+
+    if (!silent && user_isreplicaonly(mbname_userid(mbname))) {
+        r = IMAP_MAILBOX_REPLICAONLY;
+        goto done;
+    }
+
+    /* delete of a user.X folder */
     if (mbname_userid(mbname) && !strarray_size(mbname_boxes(mbname))) {
         /* Can't DELETE INBOX (your own inbox) */
         if (!strcmpsafe(mbname_userid(mbname), userid)) {
@@ -3080,6 +3095,10 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
     assert_namespacelocked(mbentry->name);
     assert_namespacelocked(newname);
+
+    if (!silent && (user_isreplicaonlymb(mbentry->name)
+                    || user_isreplicaonlymb(newname)))
+        return IMAP_MAILBOX_REPLICAONLY;
 
     myrights = cyrus_acl_myrights(auth_state, mbentry->acl);
 
@@ -3615,6 +3634,12 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     // so we can just read away and know it won't change under us.
     user_nslock_t *user_nslock = user_nslock_lockmb_w(name);
 
+    /* before the mailbox header changes, so nothing is half-done */
+    if (user_isreplicaonlymb(name)) {
+        r = IMAP_MAILBOX_REPLICAONLY;
+        goto done;
+    }
+
     // not "anyone" or a group - do some username normalisation
     if (!isanyone && strncmp(identifier, "group:", 6)) {
         /* round trip identifier to potentially strip domain */
@@ -3800,7 +3825,8 @@ EXPORTED int mboxlist_updateacl_raw(const char *name, const char *newacl)
     struct mailbox *mailbox = NULL;
     modseq_t foldermodseq = 0;
 
-    int r = mailbox_open_iwl(name, &mailbox);
+    int r = user_isreplicaonlymb(name) ? IMAP_MAILBOX_REPLICAONLY
+                                       : mailbox_open_iwl(name, &mailbox);
     if (!r) {
         foldermodseq = mailbox_modseq_dirty(mailbox);
         mailbox_set_acl(mailbox, newacl);
@@ -3835,6 +3861,11 @@ mboxlist_setacls(const char *name, const char *newacl, modseq_t foldermodseq, in
     int r;
 
     init_internal();
+
+    if (!silent && user_isreplicaonlymb(name)) {
+        r = IMAP_MAILBOX_REPLICAONLY;
+        goto done;
+    }
 
     r = mboxlist_lookup_allow_all(name, &mbentry, NULL);
     if (r) goto done;
@@ -5085,6 +5116,9 @@ EXPORTED int mboxlist_setquotas(const char *root,
         return IMAP_MAILBOX_BADNAME;
     }
 
+    if (!silent && user_isreplicaonlymb(root))
+        return IMAP_MAILBOX_REPLICAONLY;
+
     quota_init(&q, root);
     r = quota_read(&q, &tid, 1);
 
@@ -5859,6 +5893,9 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
 
     init_internal();
 
+    if (!silent && user_isreplicaonly(userid))
+        return IMAP_MAILBOX_REPLICAONLY;
+
     if ((r = mboxlist_opensubs(userid, add, &subs)) != 0) {
         return (add || r != IMAP_NOTFOUND) ? r : 0;
     }
@@ -5905,12 +5942,13 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
     if (!silent && mbentry && !(mbentry->mbtype & MBTYPE_REMOTE)) {
         struct mailbox *mailbox = NULL;
         r = mailbox_open_iwl(name, &mailbox);
-        if (!r) {
+        /* the owner's folder gets its modseq from the master */
+        if (!r && !user_isreplicaonlymb(name)) {
             mailbox_modseq_dirty(mailbox);
             mboxlist_update_foldermodseq(name, mailbox->i.highestmodseq);
             r = mailbox_commit(mailbox);
-            mailbox_close(&mailbox);
         }
+        mailbox_close(&mailbox);
         if (r) goto done;
     }
 

@@ -5,6 +5,8 @@
 #ifndef INCLUDED_USER_H
 #define INCLUDED_USER_H
 
+#include <stdbool.h>
+
 #include "auth.h"
 #include "mboxname.h"
 #include "mboxlist.h"
@@ -22,9 +24,32 @@ struct usernamespacelocks {
 
 typedef struct usernamespacelocks user_nslock_t;
 
-/* check if this user should be treated as being on a replica (for user moves,
- * or for actual replicas */
-int user_isreplicaonly(const char *userid);
+/**
+ * @param userid  the user, or NULL for a non-user mailbox
+ * @return true if the user, or the whole server, is replicaonly
+ */
+bool user_isreplicaonly(const char *userid);
+
+/**
+ * user_isreplicaonly() for the owner of @p mboxname (an internal name).
+ */
+bool user_isreplicaonlymb(const char *mboxname);
+
+/**
+ * Mark or unmark a user as replicaonly.  Once marking returns, nothing
+ * else can write to the user.
+ *
+ * @return 0 (even if nothing changed), IMAP_INVALID_USER or IMAP_IOERROR
+ */
+int user_set_replicaonly(const char *userid, bool replicaonly);
+
+/**
+ * Call @p cb for each user marked replicaonly; the server-wide option
+ * isn't a mark.  A non-zero return from @p cb stops the walk and is
+ * returned.
+ */
+int user_foreach_replicaonly(int (*cb)(const char *userid, void *rock),
+                             void *rock);
 
 /* path to user's sieve directory */
 const char *user_sieve_path(const char *user);

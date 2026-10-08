@@ -818,12 +818,85 @@ EXPORTED int user_nslock_islockedmb(const char *mboxname)
     return r;
 }
 
-EXPORTED int user_isreplicaonly(const char *userid)
+static char *replicaonly_path(const char *userid)
 {
-    int file_exists = 0;
-    char *path = strconcat(config_dir, "/replicaonly/", userid, (char *)NULL);
+    return strconcat(config_dir, "/replicaonly/", userid, (char *)NULL);
+}
+
+EXPORTED bool user_isreplicaonly(const char *userid)
+{
+    if (config_getswitch(IMAPOPT_REPLICAONLY)) return true;
+    if (!userid) return false;
+    char *path = replicaonly_path(userid);
     struct stat sbuf;
-    file_exists = !stat(path, &sbuf);
+    bool file_exists = !stat(path, &sbuf);
     free(path);
     return file_exists;
+}
+
+EXPORTED bool user_isreplicaonlymb(const char *mboxname)
+{
+    char *userid = mboxname_to_userid(mboxname);
+    bool r = user_isreplicaonly(userid);
+    free(userid);
+    return r;
+}
+
+EXPORTED int user_set_replicaonly(const char *userid, bool replicaonly)
+{
+    if (!userid || !*userid || *userid == '.' || strchr(userid, '/'))
+        return IMAP_INVALID_USER;
+
+    char *path = replicaonly_path(userid);
+    user_nslock_t *user_nslock = user_nslock_lock_w(userid);
+    int r = 0;
+
+    if (replicaonly) {
+        int fd = -1;
+        if (cyrus_mkdir(path, 0755)
+            || (fd = open(path, O_WRONLY|O_CREAT, 0644)) < 0)
+        {
+            xsyslog_ev(LOG_ERR, "user.replicaonly.set.failed",
+                       lf_s("u.username", userid));
+            r = IMAP_IOERROR;
+        }
+        if (fd >= 0) close(fd);
+    }
+    else if (xunlink(path) < 0) {
+        r = IMAP_IOERROR;
+    }
+
+    user_nslock_release(&user_nslock);
+    free(path);
+    return r;
+}
+
+EXPORTED int user_foreach_replicaonly(int (*cb)(const char *userid, void *rock),
+                                      void *rock)
+{
+    char *dirpath = strconcat(config_dir, "/replicaonly", (char *)NULL);
+    DIR *dir = opendir(dirpath);
+    int r = 0;
+
+    if (!dir) {
+        if (errno != ENOENT) r = IMAP_IOERROR;
+        goto done;
+    }
+
+    for (;;) {
+        errno = 0;
+        struct dirent *dirent = readdir(dir);
+        if (!dirent) {
+            if (errno) r = IMAP_IOERROR;
+            break;
+        }
+        if (dirent->d_name[0] == '.') continue;
+        r = cb(dirent->d_name, rock);
+        if (r) break;
+    }
+    closedir(dir);
+
+done:
+    free(dirpath);
+    return r;
 }

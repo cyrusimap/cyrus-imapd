@@ -1,0 +1,23 @@
+#!perl
+use Cassandane::Tiny;
+use MIME::Base64 qw(encode_base64);
+
+sub test_auth_policy_proxy
+    :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set(auth_notreplicaonly => 'yes');
+    $self->_start_instances();
+
+    $self->{instance}->create_user('primary');
+    $self->{instance}->create_user('secondary');
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', '-r', 'secondary');
+
+    # a user who may not proxy learns nothing about the target account
+    my $talk = $self->{instance}->get_service('imap')
+        ->create_store()->get_client(NoLogin => 1);
+    $talk->_imap_cmd('AUTHENTICATE', 0, '', 'PLAIN',
+                     encode_base64("secondary\0primary\0testpw", ''));
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_does_not_match(qr/not available/, $talk->get_last_error());
+}

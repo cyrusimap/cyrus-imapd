@@ -291,11 +291,6 @@ static int noexpire_mailbox(const mbentry_t *mbentry)
             goto done;
         }
 
-        if (user_isreplicaonly(mbname_userid(mbname))) {
-            ret = 1;
-            goto done;
-        }
-
         // Determine user inbox name
         if (mbname_isdeleted(mbname)) {
             mbname_t *tmp = mbname_from_userid(mbname_userid(mbname));
@@ -483,6 +478,10 @@ restart:
     if (noexpire_mailbox(mbentry))
         goto done;
 
+    /* a replica takes expiry from the master, but still cleans up locally */
+    if (user_isreplicaonlymb(mbentry->name))
+        goto cleanup;
+
     /* see if we need to expire messages.
      * since mailboxes inherit /vendor/cmu/cyrus-imapd/expire,
      * we need to iterate all the way up to "" (server entry)
@@ -522,10 +521,11 @@ restart:
                    mbentry->name, error_message(r));
     }
 
-    erock->messages_seen += mailbox->i.num_records;
-
     if (erock->do_userflags)
         expunge_userflags(mailbox, erock);
+
+cleanup:
+    erock->messages_seen += mailbox->i.num_records;
 
     verbosep("cleaning up expunged messages in %s", mbentry->name);
 
@@ -837,11 +837,22 @@ static int do_delete(struct cyr_expire_ctx *ctx)
 
             signals_poll();
 
+            /* a replica takes deletes from the master */
+            char *userid = mboxname_to_userid(name);
+            user_nslock_t *user_nslock = user_nslock_lock_w(userid);
+            if (user_isreplicaonly(userid)) {
+                verbosep("Skipping replicaonly: %s", name);
+                user_nslock_release(&user_nslock);
+                free(userid);
+                continue;
+            }
+
             verbosep("Removing: %s", name);
 
             int flags = MBOXLIST_DELETE_KEEP_INTERMEDIARIES | MBOXLIST_DELETE_SILENT;
-
             ret = mboxlist_deletemailboxlock(name, 1, NULL, NULL, NULL, flags);
+            user_nslock_release(&user_nslock);
+            free(userid);
             libcyrus_run_delayed();
             /* XXX: Ignoring the return from mboxlist_deletemailbox() ??? */
             count++;

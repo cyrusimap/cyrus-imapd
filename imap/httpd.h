@@ -588,6 +588,20 @@ extern int process_request(struct transaction_t *txn);
 extern void transaction_free(struct transaction_t *txn);
 
 extern int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbentry);
+
+/**
+ * mailbox_open_iwl(), but refuse a replicaonly user's mailbox, checked
+ * under the user lock that the open takes.
+ *
+ * @return 0, IMAP_MAILBOX_REPLICAONLY, or an error from mailbox_open_iwl()
+ */
+extern int http_mailbox_open_w(const char *name, struct mailbox **mailboxp);
+
+/**
+ * @return 503 for IMAP_MAILBOX_REPLICAONLY, else 500
+ */
+extern long http_status_for_write_error(int r);
+
 extern int http_allow_noauth(struct transaction_t *txn);
 extern int http_allow_noauth_get(struct transaction_t *txn);
 extern int http_read_req_body(struct transaction_t *txn);

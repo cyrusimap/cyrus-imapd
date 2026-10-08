@@ -163,6 +163,7 @@ static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
     case IMAP_MAILBOX_MOVED:
     case IMAP_MAILBOX_RESERVED:
     case IMAP_MAILBOX_DISABLED:
+    case IMAP_MAILBOX_REPLICAONLY:
         code = LMTP_MAILBOX_DISABLED;
         break;
 

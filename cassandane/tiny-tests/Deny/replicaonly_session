@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_replicaonly_session ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $self->make_message('msg1');
+
+    $talk->select('INBOX');
+    $talk->store('1', '+flags', '(\\Flagged)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "a selected mailbox becomes read-only once its user is replicaonly";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', '-r', 'cassandane');
+
+    my $outfile = $self->{instance}->{basedir} . "/replicaonly-list.txt";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        'cyr_deny', '-r', '-l'
+    );
+    $self->assert_str_equals("cassandane\n", slurp_file($outfile));
+
+    $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    $talk->expunge();
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    my $res = $talk->fetch('1', '(FLAGS)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply(bag('\\Flagged'), $res->{1}{flags});
+
+    xlog $self, "writes outside the selected mailbox are refused too";
+    $talk->append('INBOX', "From: a\r\nSubject: b\r\n\r\nbody\r\n");
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $talk->create('INBOX.newfolder');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $talk->subscribe('INBOX');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_not_null($talk->noop());
+
+    xlog $self, "clearing replicaonly allows writes again, without a reselect";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', '-r', '-a', 'cassandane');
+
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        'cyr_deny', '-r', '-l'
+    );
+    $self->assert_str_equals('', slurp_file($outfile));
+
+    $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "a fresh SELECT of a replicaonly mailbox is not read-only";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', '-r', 'cassandane');
+    $talk->unselect();
+    $self->assert_str_equals('read-write', $talk->select('INBOX'));
+    $talk->store('1', '-flags', '(\\Seen)');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+}

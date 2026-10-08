@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_replicaonly_writes ($self)
+{
+    my $svc = $self->{instance}->get_service('imap');
+
+    $self->{instance}->create_user('sharer');
+    my $sharertalk = $svc->create_store(username => 'sharer')->get_client();
+    $sharertalk->setacl('INBOX', 'cassandane', 'lrswipkxtecd');
+
+    my $talk = $self->{store}->get_client();
+    $self->make_message('msg1');
+    $talk->select('INBOX');
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', '-r', 'cassandane');
+
+    $talk->setacl('INBOX', 'sharer', 'lr');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $talk->setmetadata('INBOX', '/private/comment', 'hello');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    # a MOVE must not copy out and then fail to expunge
+    $talk->move('1', 'Other Users.sharer');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    my $status = $sharertalk->status('INBOX', [ 'messages' ]);
+    $self->assert_num_equals(0, $status->{messages});
+
+    # an admin quota change is refused, not a crash
+    my $admintalk = $svc->create_store(username => 'admin')->get_client();
+    $admintalk->setquota('user.cassandane', [ 'STORAGE', 100000 ]);
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+    $self->assert_not_null($admintalk->noop());
+}

@@ -896,10 +896,11 @@ static int _create_upload_collection(const char *accountid,
         }
 
         /* Open mailbox for writing */
-        r = mailbox_open_iwl(mbentry->name, mailboxp);
+        r = http_mailbox_open_w(mbentry->name, mailboxp);
         if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   mbentry->name, error_message(r));
+            if (r != IMAP_MAILBOX_REPLICAONLY)
+                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                       mbentry->name, error_message(r));
             goto done;
         }
     }
@@ -985,8 +986,8 @@ HIDDEN int jmap_open_upload_collection(const char *accountid,
     }
 
     /* Open mailbox for writing */
-    r = mailbox_open_iwl(mbentry->name, mailboxp);
-    if (r) {
+    r = http_mailbox_open_w(mbentry->name, mailboxp);
+    if (r && r != IMAP_MAILBOX_REPLICAONLY) {
         syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
                mbentry->name, error_message(r));
     }
@@ -1077,8 +1078,14 @@ static int jmap_upload(struct transaction_t *txn)
     if (r) {
         syslog(LOG_ERR, "jmap_upload: can't open upload collection for %s: %s",
                accountid, error_message(r));
-        ret = HTTP_NOT_FOUND;
-        txn->error.desc = "can't open upload collection";
+        if (r == IMAP_MAILBOX_REPLICAONLY) {
+            ret = http_status_for_write_error(r);
+            txn->error.desc = error_message(r);
+        }
+        else {
+            ret = HTTP_NOT_FOUND;
+            txn->error.desc = "can't open upload collection";
+        }
         goto done;
     }
 

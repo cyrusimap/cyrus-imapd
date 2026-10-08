@@ -4,6 +4,7 @@
 
 #include <config.h>
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +37,7 @@
 #include "mutex.h"
 #include "prot.h" /* for PROT_BUFSIZE */
 #include "strarray.h"
+#include "user.h"
 #include "userdeny.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -693,6 +695,30 @@ EXPORTED const char *cyrus_sasl_errmsg(sasl_conn_t *conn, int sasl_err_code, int
     return sasl_errstring(sasl_err_code, NULL, NULL);
 }
 
+EXPORTED const char *global_login_policy_deny(const char *userid)
+{
+    // allowanonymouslogin governs anonymous access
+    if (is_userid_anonymous(userid)) {
+        return NULL;
+    }
+
+    if (config_getswitch(IMAPOPT_AUTH_NOTREPLICAONLY) && user_isreplicaonly(userid)) {
+        return "Account is not available on this server";
+    }
+
+    if (config_getswitch(IMAPOPT_AUTH_USEREXISTS)) {
+        char *inbox = mboxname_user_mbox(userid, NULL);
+        // deleted and intermediate entries are reported as nonexistent
+        int r = mboxlist_lookup(inbox, NULL, NULL);
+        free(inbox);
+        if (r) {
+            return "Account does not exist";
+        }
+    }
+
+    return NULL;
+}
+
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
@@ -787,6 +813,18 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
 
             return SASL_BADAUTH;
         }
+    }
+
+    /* after the proxy check, so it can't be used to probe accounts;
+     * authstate is now the identity being logged in as */
+    const char *policymsg = global_authisa(authstate, IMAPOPT_ADMINS)
+                            ? NULL : global_login_policy_deny(requested_user);
+    if (policymsg) {
+        sasl_seterror(conn, SASL_NOLOG, "%s", policymsg);
+
+        auth_freestate(authstate);
+
+        return SASL_DISABLED;
     }
 
     if (ctx->authstate)

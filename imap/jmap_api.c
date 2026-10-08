@@ -792,6 +792,15 @@ HIDDEN int jmap_api(struct transaction_t *txn,
             }
         }
 
+        /* temporary, so don't tell the client the account is read-only */
+        if (!readonly && user_isreplicaonly(accountid)) {
+            user_nslock_release(&user_nslock);
+            err = json_pack("{s:s}", "type", "serverUnavailable");
+            json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
+            json_decref(args);
+            continue;
+        }
+
         struct conversations_state *cstate = NULL;
         if (mp->flags & JMAP_NEED_CSTATE) {
             r = conversations_open_user(accountid, readonly, &cstate);

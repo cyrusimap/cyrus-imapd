@@ -1,8 +1,14 @@
 Name: replicaonly
 Type: SWITCH
 Default-Value: 0
-Last-Modified: 3.12.0
+Last-Modified: UNRELEASED
 
-If enabled, marks the server as only being a replica.  This will stop
-calalarmd from doing anything, and also deny any non-silent writes (nothing
-is allowed to increase modseq or uidvalidity).
+If enabled, marks the server as only being a replica: its data comes from
+replication, and local changes are refused as temporary failures.  IMAP
+writes get ``NO [UNAVAILABLE]``, JMAP writes get ``serverUnavailable``,
+DAV writes get a 503, and delivery gets a 4.2.1 tempfail.  calalarmd runs
+in dry-run mode, and cyr_expire only cleans up messages that are already
+expunged.
+
+A single user can be treated the same way on any server with ``cyr_deny -r``.
+See also ``auth_notreplicaonly``.

@@ -1,0 +1,7 @@
+Name: auth_userexists
+Type: SWITCH
+Default-Value: 0
+Last-Modified: UNRELEASED
+
+If enabled, a user may only log in if their INBOX exists and has not been
+deleted.  Admins and anonymous logins are exempt.

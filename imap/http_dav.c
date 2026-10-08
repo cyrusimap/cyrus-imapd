@@ -1817,7 +1817,7 @@ int proppatch_principalname(xmlNodePtr prop, unsigned set,
         int r = 0;
 
         if (!mailbox || strcmp(mboxname, mailbox_name(mailbox))) {
-            r = mailbox_open_iwl(mboxname, &calhomeset);
+            r = http_mailbox_open_w(mboxname, &calhomeset);
             if (!r) pctx->mailbox = calhomeset;
         }
         free(mboxname);
@@ -3942,12 +3942,13 @@ int meth_acl(struct transaction_t *txn, void *params)
     }
 
     /* Open mailbox for writing */
-    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
+    r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        if (r != IMAP_MAILBOX_REPLICAONLY)
+            syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+                   txn->req_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
-        ret = HTTP_SERVER_ERROR;
+        ret = http_status_for_write_error(r);
         goto done;
     }
 
@@ -4523,7 +4524,7 @@ static int dav_move_collection(struct transaction_t *txn,
 
     default:
         txn->error.desc = error_message(r);
-        return HTTP_SERVER_ERROR;
+        return http_status_for_write_error(r);
     }
 }
 
@@ -4714,12 +4715,13 @@ int meth_copy_move(struct transaction_t *txn, void *params)
                                          dest_tgt.mbentry->name, LOCK_EXCLUSIVE);
 
     /* Open dest mailbox for writing */
-    r = mailbox_open_iwl(dest_tgt.mbentry->name, &dest_mbox);
+    r = http_mailbox_open_w(dest_tgt.mbentry->name, &dest_mbox);
     if (r) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-               dest_tgt.mbentry->name, error_message(r));
+        if (r != IMAP_MAILBOX_REPLICAONLY)
+            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                   dest_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
-        ret = HTTP_SERVER_ERROR;
+        ret = http_status_for_write_error(r);
         goto done;
     }
 
@@ -4752,18 +4754,19 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     else {
         if (meth_move) {
             /* Open source mailbox for writing */
-            r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &src_mbox);
+            r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &src_mbox);
         }
         else {
             /* Open source mailbox for reading */
             r = mailbox_open_irl(txn->req_tgt.mbentry->name, &src_mbox);
         }
         if (r) {
-            syslog(LOG_ERR, "mailbox_open_i%cl(%s) failed: %s",
-                   meth_move  ? 'w' : 'r',
-                   txn->req_tgt.mbentry->name, error_message(r));
+            if (r != IMAP_MAILBOX_REPLICAONLY)
+                syslog(LOG_ERR, "mailbox_open_i%cl(%s) failed: %s",
+                       meth_move  ? 'w' : 'r',
+                       txn->req_tgt.mbentry->name, error_message(r));
             txn->error.desc = error_message(r);
-            ret = HTTP_SERVER_ERROR;
+            ret = http_status_for_write_error(r);
             goto done;
         }
 
@@ -4988,11 +4991,12 @@ static int meth_delete_collection(struct transaction_t *txn,
             else ret = HTTP_NO_CONTENT;
 
             /* Set invite status to declined */
-            r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
+            r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &mailbox);
             if (r) {
-                syslog(LOG_ERR,
-                       "IOERROR: failed to open mailbox %s for DELETE share",
-                       txn->req_tgt.mbentry->name);
+                if (r != IMAP_MAILBOX_REPLICAONLY)
+                    syslog(LOG_ERR,
+                           "IOERROR: failed to open mailbox %s for DELETE share",
+                           txn->req_tgt.mbentry->name);
             }
             else {
                 annotate_state_t *astate = NULL;
@@ -5116,7 +5120,7 @@ static int meth_delete_collection(struct transaction_t *txn,
     }
     if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
     else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
-    else if (r) ret = HTTP_SERVER_ERROR;
+    else if (r) ret = http_status_for_write_error(r);
     else mboxevent_notify(&mboxevent);
 
     mboxevent_free(&mboxevent);
@@ -5179,12 +5183,13 @@ static int meth_delete_resource(struct transaction_t *txn,
     /* Local Mailbox */
 
     /* Open mailbox for writing */
-    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
+    r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        if (r != IMAP_MAILBOX_REPLICAONLY)
+            syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+                   txn->req_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
-        return HTTP_SERVER_ERROR;
+        return http_status_for_write_error(r);
     }
 
     /* Open the DAV DB corresponding to the mailbox */
@@ -5910,7 +5915,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     }
     else {
         txn->error.desc = error_message(r);
-        ret = HTTP_SERVER_ERROR;
+        ret = http_status_for_write_error(r);
     }
 
   done:
@@ -6656,10 +6661,13 @@ int meth_proppatch(struct transaction_t *txn, void *params)
      * malformed request no longer takes the lock at all. */
     /* don't set r: the done: path aborts the mailbox when it is set, and we
      * have no mailbox to abort if this failed */
-    if (mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox)) {
-        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for proppatch",
-               txn->req_tgt.mbentry->name);
-        ret = HTTP_SERVER_ERROR;
+    r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &mailbox);
+    if (r) {
+        if (r != IMAP_MAILBOX_REPLICAONLY)
+            syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for proppatch",
+                   txn->req_tgt.mbentry->name);
+        txn->error.desc = error_message(r);
+        ret = http_status_for_write_error(r);
         goto done;
     }
 
@@ -6801,19 +6809,21 @@ static int dav_post_import(struct transaction_t *txn,
     qdiffs[QUOTA_MESSAGE] = 1;
     if ((r = append_check(txn->req_tgt.mbentry->name, httpd_authstate,
                           ACL_INSERT, ignorequota ? NULL : qdiffs))) {
-        syslog(LOG_ERR, "append_check(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        if (r != IMAP_MAILBOX_REPLICAONLY)
+            syslog(LOG_ERR, "append_check(%s) failed: %s",
+                   txn->req_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
-        return HTTP_SERVER_ERROR;
+        return http_status_for_write_error(r);
     }
 
     /* Open mailbox for writing */
-    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
+    r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        if (r != IMAP_MAILBOX_REPLICAONLY)
+            syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+                   txn->req_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
-        return HTTP_SERVER_ERROR;
+        return http_status_for_write_error(r);
     }
 
     /* Open the DAV DB corresponding to the mailbox */
@@ -7088,10 +7098,11 @@ int meth_put(struct transaction_t *txn, void *params)
         qdiffs[QUOTA_MESSAGE] = 1;
         if ((r = append_check(txn->req_tgt.mbentry->name, httpd_authstate,
                               ACL_INSERT, ignorequota ? NULL : qdiffs))) {
-            syslog(LOG_ERR, "append_check(%s) failed: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
+            if (r != IMAP_MAILBOX_REPLICAONLY)
+                syslog(LOG_ERR, "append_check(%s) failed: %s",
+                       txn->req_tgt.mbentry->name, error_message(r));
             txn->error.desc = error_message(r);
-            return HTTP_SERVER_ERROR;
+            return http_status_for_write_error(r);
         }
     }
 
@@ -7102,12 +7113,13 @@ int meth_put(struct transaction_t *txn, void *params)
     mbname_free(&mbname);
 
     /* Open mailbox for writing */
-    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
+    r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        if (r != IMAP_MAILBOX_REPLICAONLY)
+            syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+                   txn->req_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
-        ret = HTTP_SERVER_ERROR;
+        ret = http_status_for_write_error(r);
         goto done;
     }
 

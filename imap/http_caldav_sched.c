@@ -3158,7 +3158,7 @@ static void sched_record_status(struct deferred_sched *item)
 
     /* a full open, not a relock: the calendar may have been renamed or
        deleted while we were delivering, and this checks for that */
-    r = mailbox_open_iwl(item->mboxname, &mailbox);
+    r = http_mailbox_open_w(item->mboxname, &mailbox);
     if (r) {
         xsyslog(LOG_NOTICE, "can not record scheduling status, "
                             "calendar is gone",

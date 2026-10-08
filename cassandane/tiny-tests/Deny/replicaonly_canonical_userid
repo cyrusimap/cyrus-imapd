@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_replicaonly_canonical_userid
+    :VirtDomains
+    ($self)
+{
+    my $defaultdomain = $self->{instance}->{config}->get('defaultdomain');
+
+    $self->{instance}->run_command({ cyrus => 1 },
+        'cyr_deny', '-r', "cassandane\@$defaultdomain");
+
+    my $outfile = $self->{instance}->{basedir} . "/replicaonly-list.txt";
+    $self->{instance}->run_command(
+        { cyrus => 1, redirects => { stdout => $outfile } },
+        'cyr_deny', '-r', '-l'
+    );
+    $self->assert_str_equals("cassandane\n", slurp_file($outfile));
+}

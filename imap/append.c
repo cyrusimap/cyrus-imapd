@@ -36,6 +36,7 @@
 #include "seen.h"
 #include "retry.h"
 #include "quota.h"
+#include "user.h"
 #include "util.h"
 #include "xunlink.h"
 
@@ -83,6 +84,12 @@ EXPORTED int append_check(const char *name,
 
     r = mailbox_open_irl(name, &mailbox);
     if (r) return r;
+
+    /* refuse at RCPT, before Sieve runs */
+    if (user_isreplicaonlymb(name)) {
+        r = IMAP_MAILBOX_REPLICAONLY;
+        goto done;
+    }
 
     myrights = cyrus_acl_myrights(auth_state, mailbox_acl(mailbox));
 
@@ -154,6 +161,10 @@ EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
     int r;
 
     memset(as, 0, sizeof(*as));
+
+    /* only replication, which is silent, may write here */
+    if (!mailbox->silentchanges && user_isreplicaonlymb(mailbox_name(mailbox)))
+        return IMAP_MAILBOX_REPLICAONLY;
 
     as->myrights = cyrus_acl_myrights(auth_state, mailbox_acl(mailbox));
 

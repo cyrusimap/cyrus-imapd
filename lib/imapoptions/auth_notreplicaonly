@@ -1,0 +1,9 @@
+Name: auth_notreplicaonly
+Type: SWITCH
+Default-Value: 0
+Last-Modified: UNRELEASED
+
+If enabled, a user may not log in if ``replicaonly`` is set for the whole
+server, or if the user is marked replica-only with ``cyr_deny -r``.  Logins
+as an admin (including an admin identity reached by proxy authorization) and
+anonymous logins are exempt.

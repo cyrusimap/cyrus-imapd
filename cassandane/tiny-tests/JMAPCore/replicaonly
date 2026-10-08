@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_replicaonly ($self)
+{
+    my $jmap = $self->{jmap};
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', '-r', 'cassandane');
+
+    # the session doesn't change, so a client has nothing stale to cache
+    my $session = $jmap->get_client_session->client_session;
+    $self->assert_equals(JSON::false,
+        $session->{accounts}{cassandane}{isReadOnly});
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => undef }, 'R1'],
+        ['Mailbox/set', { create => { m1 => { name => 'foo' } } }, 'R2'],
+    ]);
+    $self->assert_str_equals('Mailbox/get', $res->[0][0]);
+    $self->assert_cmp_deeply(
+        ['error', { type => 'serverUnavailable' }, 'R2'], $res->[1]);
+}

@@ -104,6 +104,9 @@ ec IMAP_MAILBOX_LOCKED,
 ec IMAP_MAILBOX_DISABLED,
    "Delivery to mailbox is disabled"
 
+ec IMAP_MAILBOX_REPLICAONLY,
+   "[UNAVAILABLE] Mailbox can't be changed right now"
+
 ec IMAP_MAILBOX_SPECIALUSE,
    "SPECIAL-USE flag conflict"
 

@@ -24,6 +24,7 @@
 #include "mboxlist.h"
 #include "message.h"
 #include "util.h"
+#include "user.h"
 #include "xmalloc.h"
 #include "xunlink.h"
 
@@ -247,6 +248,9 @@ static int do_zeromodseq(const char *userid)
     struct conversations_state *state = NULL;
     struct quota q;
     struct txn *txn = NULL;
+
+    /* a replica's modseqs come from its master */
+    if (user_isreplicaonly(userid)) return IMAP_MAILBOX_REPLICAONLY;
 
     int r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;

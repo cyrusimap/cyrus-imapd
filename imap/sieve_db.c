@@ -493,7 +493,11 @@ static int lock_and_execute(struct mailbox *mailbox,
         unlock = 1;
     }
 
-    r = proc(mailbox, sdata, rock);
+    /* replication marks its changes silent */
+    if (!mailbox->silentchanges && user_isreplicaonlymb(mailbox_name(mailbox)))
+        r = IMAP_MAILBOX_REPLICAONLY;
+    else
+        r = proc(mailbox, sdata, rock);
 
     if (unlock) mailbox_unlock_index(mailbox, NULL);
 
