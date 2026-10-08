@@ -66,8 +66,23 @@ EOF
     $self->assert_not_null($res);
     $self->assert_not_null($res->[0][1]{completed});
 
+    xlog "empty emailBlobIds succeeds with nothing tested";
+    $res = $jmap->CallMethods([
+        ['SieveScript/test', {
+            scriptBlobId => "$scriptid",
+            emailBlobIds => [],
+         }, "R3"]
+    ]);
+    $self->assert_deep_equals([
+        [ 'SieveScript/test', {
+            accountId => 'cassandane',
+            completed => undef,
+            notCompleted => undef,
+          }, 'R3' ],
+    ], $res);
+
     xlog "test bad emailBlobIds form";
-    for my $val ({}, [], "string", 1, JSON::true, JSON::null) {
+    for my $val ({}, "string", 1, JSON::true, JSON::null) {
         $res = $jmap->CallMethods([
             ['SieveScript/test', {
                 scriptBlobId => "$scriptid",
