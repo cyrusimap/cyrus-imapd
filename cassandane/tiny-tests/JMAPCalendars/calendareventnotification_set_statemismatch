@@ -1,0 +1,24 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendareventnotification_set_statemismatch ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    xlog $self, "make sure the notification collection exists";
+    $jmap->request([ [ 'CalendarEvent/set' => {} ] ]);
+
+    xlog $self, "set with a stale ifInState";
+    my $res = $jmap->request([
+        [ 'CalendarEventNotification/set' => {
+            ifInState => '0',
+            destroy => ['nonexistent'],
+        } ],
+    ]);
+
+    xlog $self, "exactly one response, and it is the error";
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'stateMismatch' }),
+        $res->single_sentence('error')->arguments,
+    );
+}
