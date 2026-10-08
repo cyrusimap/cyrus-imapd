@@ -926,10 +926,6 @@ static int _create_upload_collection(const char *accountid,
             syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
                    mbentry->name, error_message(r));
         }
-        else {
-            /* ok, change the backup in cyrus.header */
-            mailbox_set_acl(*mailboxp, newacl);
-        }
         free(newacl);
     }
 

@@ -3189,10 +3189,6 @@ static int set_upload_rights(const char *accountid)
         syslog(LOG_ERR, "mboxlist_setacls(%s) failed: %s",
                mailbox_name(mbox), error_message(r));
     }
-    else {
-        /* ok, change the backup in cyrus.header */
-        mailbox_set_acl(mbox, newacl);
-    }
 
     mailbox_close(&mbox);
     free(newacl);
@@ -3296,8 +3292,6 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                mailbox_name(mbox), error_message(r));
     }
     else {
-        /* ok, change the backup in cyrus.header */
-        mailbox_set_acl(mbox, newacl);
         /* Set proper access rights on JMAP upload folder */
         r = set_upload_rights(owner);
     }
