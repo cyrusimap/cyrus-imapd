@@ -865,6 +865,7 @@ EXPORTED mbname_t *mbname_from_path(const char *path)
     int absolute = 0;
     mbname_t *mbname = NULL;
     mbentry_t *mbentry = NULL;
+    char cwd[MAX_MAILBOX_PATH+1];
     const char *uid;
 
     /* Is the mailbox argument absolute or relative to cwd? */
@@ -874,8 +875,6 @@ EXPORTED mbname_t *mbname_from_path(const char *path)
     }
     else {
         /* Construct a mailbox relative to cwd */
-        char cwd[MAX_MAILBOX_PATH+1];
-
         if (!getcwd(cwd, MAX_MAILBOX_PATH)) {
             syslog(LOG_ERR, "IOERROR: failed to getcwd in mbname_from_path %s: %m", path);
         }
