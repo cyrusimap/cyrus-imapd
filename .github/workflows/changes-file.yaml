@@ -1,0 +1,120 @@
+name: Changes file
+
+# Every PR should get at least a little thought as to whether it needs a
+# changes/next file.  Either the file should be there, or an indicator that we
+# don't need it (in the form of the changelog-not-needed label).
+#
+# SECURITY: this workflow runs on pull_request_target, so it holds a token
+# issued to the base repository even for pull requests from forks.  That is
+# safe only as long as we never *execute* anything from the PR: we don't check
+# the branch out at all, we only read its file list and label history through
+# the API.  ⚠️  Do not add steps that run PR code. ⚠️
+#
+# It runs on pull_request_target rather than pull_request because the
+# permission lookup below needs a token with push access to this repository,
+# and a fork's pull_request run gets a read-only one.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: changes-file-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changes-file:
+    name: Changes file
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Require a changes file or the changelog-not-needed label
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const LABEL    = 'changelog-not-needed';
+            const DIR      = 'changes/next/';
+            const TEMPLATE = 'changes/next/0000-TEMPLATE';
+
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const number = context.payload.pull_request.number;
+
+            // Ask the API rather than diffing a checkout: no PR content ever
+            // lands on the runner, and the answer reflects the branch as it
+            // is now, not as it was when this event fired.
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: number, per_page: 100,
+            });
+
+            const added = files
+              .filter(f => f.status === 'added')
+              .map(f => f.filename)
+              .filter(f => f.startsWith(DIR) && f !== TEMPLATE);
+
+            if (added.length > 0) {
+              core.info(`This PR adds ${added.join(', ')}.  Good.`);
+              return;
+            }
+
+            core.info(`This PR adds no file in ${DIR}; looking for the ${LABEL} label.`);
+
+            // The label's *presence* is in the event payload, but we want to
+            // know who put it there, and that only exists in the issue's event
+            // log.  Events come back oldest first, so the last labeled or
+            // unlabeled event for this label tells us both whether the label
+            // is on right now and who last touched it.
+            const events = await github.paginate(github.rest.issues.listEvents, {
+              owner, repo, issue_number: number, per_page: 100,
+            });
+
+            let latest = null;
+            for (const event of events) {
+              if (event.label && event.label.name !== LABEL) continue;
+              if (event.event === 'labeled' || event.event === 'unlabeled') latest = event;
+            }
+
+            if (latest === null || latest.event !== 'labeled') {
+              core.setFailed(
+                `This PR neither adds a file in ${DIR} nor carries the ${LABEL} label.`
+                + `  Add a changes file describing the change for the release notes,`
+                + ` or ask someone with push access to apply the ${LABEL} label.`
+              );
+              return;
+            }
+
+            const labeler = latest.actor && latest.actor.login;
+
+            if (!labeler) {
+              core.setFailed(`The ${LABEL} label was applied by an unidentifiable actor.`);
+              return;
+            }
+
+            // GitHub already refuses to let a drive-by contributor label a PR
+            // -- that takes triage access or better -- so this is a belt to
+            // GitHub's braces.  Note that getCollaboratorPermissionLevel
+            // reports triage as "read", so a triager's label won't pass here.
+            let permission;
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner, repo, username: labeler,
+              });
+              permission = data.permission;
+            } catch (e) {
+              core.setFailed(`Could not check @${labeler}'s permission on this repository: ${e.message}`);
+              return;
+            }
+
+            if (!['admin', 'write'].includes(permission)) {
+              core.setFailed(
+                `The ${LABEL} label was applied by @${labeler}, who does not have`
+                + ` push access to this repository.`
+              );
+              return;
+            }
+
+            core.info(`No changes file, but @${labeler} says one isn't needed.  Good enough.`);
