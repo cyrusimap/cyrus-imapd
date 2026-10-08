@@ -246,6 +246,15 @@ HIDDEN char *caldav_scheddefault(const char *userid, int fallback)
     return collname;
 }
 
+EXPORTED int caladdress_equal(const char *a, const char *b)
+{
+    if (!a || !b) return 0;
+    if (!strncasecmp(a, "mailto:", 7)) a += 7;
+    if (!strncasecmp(b, "mailto:", 7)) b += 7;
+
+    return !strcasecmp(a, b);
+}
+
 #ifdef HAVE_VPOLL_SUPPORT
 /*
  * deliver_merge_reply() helper function
@@ -418,7 +427,8 @@ HIDDEN icalcomponent *master_to_recurrence(icalcomponent *master,
 
 
 static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalendar
-                                       icalcomponent *reply) // iTIP reply
+                                       icalcomponent *reply,  // iTIP reply
+                                       const char *sender)    // its originator
 {
     struct hash_table override_table;
     icalcomponent *comp, *itip, *master = NULL;
@@ -500,6 +510,22 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
             icalcomponent_get_first_property(itip, ICAL_DTSTAMP_PROPERTY);
         icaltimetype recurid = icalcomponent_get_recurrenceid_with_zone(itip);
 
+        /* RFC 5546 mandates both ATTENDEE and DTSTAMP in a REPLY component.
+         * Skip any malformed component (rather than crash). */
+        if (!dtstamp ||
+            !icalcomponent_get_first_invitee(itip)) {
+            continue;
+        }
+
+        /* A REPLY is from the one attendee named in each of its components
+         * (RFC 5546 3.2.3): don't let its originator answer for another */
+        att = icalcomponent_get_first_invitee(itip);
+        if (!caladdress_equal(sender,
+                              icalproperty_get_decoded_calendaraddress(att))) {
+            attendee = NULL;
+            goto done;
+        }
+
         if (icaltime_is_null_time(recurid)) {
             comp = master;
         }
@@ -571,7 +597,6 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
         }
 
         /* Get the sending attendee */
-        att = icalcomponent_get_first_invitee(itip);
         attendee = icalproperty_get_decoded_calendaraddress(att);
         param = icalproperty_get_first_parameter(att, ICAL_PARTSTAT_PARAMETER);
         if (param) partstat = icalparameter_get_partstat(param);
@@ -619,6 +644,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
 #endif
     }
 
+  done:
     free_hash_table(&override_table, NULL);
     free_hash_table(&rdate_table, NULL);
 
@@ -1446,7 +1472,12 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     }
 
     case ICAL_METHOD_REPLY:
-        attendee = deliver_merge_reply(ical, itip);
+        attendee = deliver_merge_reply(ical, itip, sender);
+        if (!attendee) {
+            SCHED_STATUS(sched_data, REQSTAT_REJECTED, SCHEDSTAT_REJECTED);
+            goto inbox;
+        }
+
         if (attendeep) *attendeep = attendee;
         break;
 
