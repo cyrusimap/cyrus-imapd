@@ -2,7 +2,9 @@ Description:
 
 cyr_deny -r marks a user replica-only; use it rather than creating the
 file under replicaonly/ by hand, because it takes the user's lock, so no
-writer can proceed once it returns.
+writer can proceed once it returns.  On replicas, cyr_expire cleans up
+expunged messages but leaves expiry and the removal of deleted (DELETED.*)
+mailboxes to the master.
 
 
 Documentation:

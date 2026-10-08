@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cyr_expire_replicaonly
+    :DelayedExpunge :NoAltNameSpace
+    ($self)
+{
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    $talk->create('INBOX.A');
+    $talk->setmetadata('INBOX.A', '/shared/vendor/cmu/cyrus-imapd/expire', '1s');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response);
+    $store->set_folder('INBOX.A');
+    $self->make_message('expirable') or die;
+
+    $store->set_folder('INBOX');
+    $self->make_message('expunged') or die;
+    $talk->select('INBOX');
+    $talk->store('1', '+flags', '(\\Deleted)');
+    $talk->expunge();
+    $talk->unselect();
+
+    my $inbox_dir = $self->{instance}->folder_to_directory('INBOX');
+    $self->assert_file_test("$inbox_dir/1.", '-f');
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', '-r', 'cassandane');
+
+    sleep(2);
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-X' => '1s');
+
+    # already-expunged messages are cleaned up, but nothing new is expired
+    $self->assert_not_file_test("$inbox_dir/1.", '-e');
+    my $status = $talk->status('INBOX.A', [ 'messages' ]);
+    $self->assert_num_equals(1, $status->{messages});
+}
