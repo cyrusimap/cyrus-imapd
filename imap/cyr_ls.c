@@ -90,6 +90,7 @@ static int print_name(const char *name, int utf8)
     if (utf8) {
         charset_t imaputf7 = charset_lookupname("imap-mailbox-name");
         utf8name = charset_to_utf8cstr(name, strlen(name), imaputf7, ENCODING_NONE);
+        charset_free(&imaputf7);
         name = utf8name;
     }
 
@@ -403,6 +404,8 @@ int main(int argc, char **argv)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Are we in a mailbox directory? */
         const char *path = (optind == argc) ? "." : argv[optind];
+
+        mbname_free(&mbname);
 
         mbname = mbname_from_path(path);
     }
