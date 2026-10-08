@@ -1014,10 +1014,10 @@ static int jmap_blob_upload(struct jmap_req *req)
         // safe to zerocopy these blobs!
         hash_insert(blob_id, buf, req->inmemory_blobs);
 
-        json_object_set_new(set.created, key, json_pack("{s:s, s:s, s:i, s:s, s:s}",
+        json_object_set_new(set.created, key, json_pack("{s:s, s:s, s:I, s:s, s:s}",
             "id", blob_id,
             "blobId", blob_id,
-            "size", buf_len(buf),
+            "size", (json_int_t) buf_len(buf),
             "expires", datestr,
             "type", type));
 

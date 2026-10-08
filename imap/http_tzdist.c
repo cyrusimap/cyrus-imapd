@@ -945,8 +945,8 @@ static int action_leap(struct transaction_t *txn)
 
             leapsec = ptrarray_nth(leap_seconds, n);
             time_to_rfc3339(leapsec->t, buf, 11 /* clip time */);
-            leap = json_pack("{s:i s:s}",
-                             "utc-offset", leapsec->sec, "onset", buf);
+            leap = json_pack("{s:I s:s}", "utc-offset",
+                             (json_int_t) leapsec->sec, "onset", buf);
             json_array_append_new(leapseconds, leap);
         }
 

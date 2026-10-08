@@ -119,9 +119,10 @@ EXPORTED int idle_start(unsigned long events, time_t timeout,
     }
 
     pid_t pid = getpid();
-    json_t *msg = json_pack("{ s:s s:i s:i s:i s:i s:o }",
+    json_t *msg = json_pack("{ s:s s:i s:I s:I s:i s:o }",
                            "@type", "start", "pid", getpid(),
-                            "events", events, "timeout", timeout,
+                            "events", (json_int_t) events,
+                            "timeout", (json_int_t) timeout,
                             "filter", filter, "keys", array);
 
     /* Tell idled that we're idling.  It doesn't

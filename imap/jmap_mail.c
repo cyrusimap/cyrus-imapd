@@ -3189,7 +3189,8 @@ static struct sortcrit *_email_buildsort(jmap_req_t *req,
 static void _email_querychanges_added(struct jmap_querychanges *query,
                                       const char *email_id)
 {
-    json_t *item = json_pack("{s:s,s:i}", "id", email_id, "index", query->total-1);
+    json_t *item = json_pack("{s:s,s:I}", "id", email_id,
+                             "index", (json_int_t) query->total-1);
     json_array_append_new(query->added, item);
 }
 
@@ -14534,8 +14535,9 @@ static void _email_bulkupdate_dump(struct email_bulkupdate *bulk, json_t *jdump)
         int j;
         for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
             struct email_uidrec *uidrec = ptrarray_nth(&mboxrec->uidrecs, j);
-            json_array_append_new(jrecs, json_pack("{s:s s:i}",
-                        "emailId", uidrec->email_id, "uid", uidrec->uid));
+            json_array_append_new(jrecs, json_pack("{s:s s:I}",
+                        "emailId", uidrec->email_id,
+                        "uid", (json_int_t) uidrec->uid));
         }
         json_object_set_new(jcur_mboxrecs, mboxrec->mboxname, jrecs);
     }

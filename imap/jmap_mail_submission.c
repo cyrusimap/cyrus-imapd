@@ -995,8 +995,8 @@ static void _emailsubmission_create(jmap_req_t *req,
 
         switch (r) {
         case IMAP_MESSAGE_TOO_LARGE:
-            *set_err = json_pack("{s:s s:i}", "type", "tooLarge",
-                                 "maxSize", smtpclient_get_maxsize(*sm));
+            *set_err = json_pack("{s:s s:I}", "type", "tooLarge", "maxSize",
+                                 (json_int_t) smtpclient_get_maxsize(*sm));
             break;
 
         case IMAP_MAILBOX_DISABLED:
