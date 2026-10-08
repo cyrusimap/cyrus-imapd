@@ -3814,16 +3814,72 @@ EXPORTED int mboxlist_updateacl_raw(const char *name, const char *newacl)
     return r;
 }
 
+/* The rights granted to identifier in an ACL split on tabs into alternating
+ * identifier and rights strings, or NULL if it has no entry. */
+static const char *acl_pairs_rights(const strarray_t *pairs,
+                                    const char *identifier)
+{
+    for (int i = 0; i + 1 < strarray_size(pairs); i += 2) {
+        if (!strcmp(strarray_nth(pairs, i), identifier)) {
+            return strarray_nth(pairs, i + 1);
+        }
+    }
+    return NULL;
+}
+
+static void notify_acl_change(struct mailbox *mailbox,
+                              const char *identifier,
+                              const char *rights)
+{
+    struct mboxevent *mboxevent = mboxevent_new(EVENT_ACL_CHANGE);
+    mboxevent_extract_mailbox(mboxevent, mailbox);
+    mboxevent_set_acl(mboxevent, identifier, rights);
+    // The acting user is not known this far down, and "user" is mandatory
+    // for a mailbox event, so it is empty here, like it is for MailboxModseq.
+    mboxevent_set_access(mboxevent, NULL, NULL, "", mailbox_name(mailbox), 0);
+    mboxevent_notify(&mboxevent);
+    mboxevent_free(&mboxevent);
+}
+
+/* Emit one AclChange event per identifier whose rights differ between oldacl
+ * and newacl, carrying its new rights, or no rights if it was removed. */
+static void notify_acl_changes(struct mailbox *mailbox,
+                               const char *oldacl,
+                               const char *newacl)
+{
+    strarray_t *old = strarray_split(oldacl, "\t", 0);
+    strarray_t *new = strarray_split(newacl, "\t", 0);
+
+    for (int i = 0; i + 1 < strarray_size(new); i += 2) {
+        const char *identifier = strarray_nth(new, i);
+        const char *rights = strarray_nth(new, i + 1);
+        if (strcmpsafe(acl_pairs_rights(old, identifier), rights)) {
+            notify_acl_change(mailbox, identifier, rights);
+        }
+    }
+
+    for (int i = 0; i + 1 < strarray_size(old); i += 2) {
+        const char *identifier = strarray_nth(old, i);
+        if (!acl_pairs_rights(new, identifier)) {
+            notify_acl_change(mailbox, identifier, NULL);
+        }
+    }
+
+    strarray_free(old);
+    strarray_free(new);
+}
+
 /*
- * Change the ACL for mailbox 'name'.  We already have it locked
- * and have written the backup copy to the header, so there's
- * nothing left but to write the mailboxes.db.
+ * Change the ACL for mailbox 'name' to 'newacl', which must have been
+ * computed by the caller.
  *
- * 1. Start transaction
- * 2. Set db entry
- * 3. Commit transaction
- * 4. Change mupdate entry
+ * 1. Set the db entry
+ * 2. Unless 'silent', update the copy in the mailbox header and emit an
+ *    AclChange event per identifier whose rights changed
+ * 3. Change the mupdate entry
  *
+ * Replication passes 'silent': the replica keeps the header copy itself and
+ * must not generate events for changes made on the master.
  */
 EXPORTED int
 mboxlist_setacls(const char *name, const char *newacl, modseq_t foldermodseq, int silent)
@@ -3832,6 +3888,7 @@ mboxlist_setacls(const char *name, const char *newacl, modseq_t foldermodseq, in
     // so we can just read away and know it won't change under us.
     user_nslock_t *user_nslock = user_nslock_lockmb_w(name);
     mbentry_t *mbentry = NULL;
+    char *oldacl = NULL;
     int r;
 
     init_internal();
@@ -3849,8 +3906,8 @@ mboxlist_setacls(const char *name, const char *newacl, modseq_t foldermodseq, in
         goto done;
     }
 
-    /* 2. Set DB Entry */
-    free(mbentry->acl);
+    /* 1. Set DB Entry */
+    oldacl = mbentry->acl;
     mbentry->acl = xstrdupnull(newacl);
     if (mbentry->foldermodseq < foldermodseq)
         mbentry->foldermodseq = foldermodseq;
@@ -3865,7 +3922,22 @@ mboxlist_setacls(const char *name, const char *newacl, modseq_t foldermodseq, in
         goto done;
     }
 
-    /* 4. Change mupdate entry  */
+    /* 2. Update the header copy and notify */
+    if (!silent && !(mbentry->mbtype & MBTYPE_REMOTE)) {
+        struct mailbox *mailbox = NULL;
+        int r2 = mailbox_open_iwl(name, &mailbox);
+        if (r2) {
+            xsyslog_ev(LOG_WARNING, "mboxlist.aclchange.notify.failed",
+                       lf_mbentry(mbentry), lf_err("error", r2));
+        }
+        else {
+            mailbox_set_acl(mailbox, newacl);
+            notify_acl_changes(mailbox, oldacl, newacl);
+            mailbox_close(&mailbox);
+        }
+    }
+
+    /* 3. Change mupdate entry  */
     if (config_mupdate_server) {
         mupdate_handle *mupdate_h = NULL;
         /* commit the update to MUPDATE */
@@ -3889,6 +3961,7 @@ mboxlist_setacls(const char *name, const char *newacl, modseq_t foldermodseq, in
     }
 
 done:
+    free(oldacl);
     mboxlist_entry_free(&mbentry);
     user_nslock_release(&user_nslock);
 
