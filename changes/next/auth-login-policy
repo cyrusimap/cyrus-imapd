@@ -10,6 +10,11 @@ and delivery gets a 4.2.1 tempfail.  On replicas, cyr_expire cleans up
 expunged messages but leaves expiry and the removal of deleted (DELETED.*)
 mailboxes to the master.
 
+Two new login policies.  auth_userexists refuses a login when the user's
+INBOX does not exist or has been deleted.  auth_notreplicaonly refuses a
+login when the server, or the user, is replica-only.  Logins as an admin
+and anonymous logins are exempt from both.
+
 
 Documentation:
 
@@ -18,13 +23,14 @@ imapd.conf(5), cyr_deny(8)
 
 Config changes:
 
-None.
+auth_userexists, auth_notreplicaonly
 
 
 Upgrade instructions:
 
 On a server with replicaonly set, clients that could previously make local
 changes (which then diverged from the master) now get errors instead.
+auth_userexists and auth_notreplicaonly default to off.
 
 
 GitHub issue:

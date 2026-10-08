@@ -4474,6 +4474,22 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         httpd_extrafolder = NULL;
         httpd_extradomain = NULL;
         httpd_authstate = auth_newstate(user);
+
+        // no SASL exchange, so mysasl_proxy_policy() never checked this
+        const char *policymsg = global_authisa(httpd_authstate, IMAPOPT_ADMINS)
+                                    ? NULL
+                                    : global_login_policy_deny(user);
+        if (policymsg) {
+            auth_freestate(httpd_authstate);
+            httpd_authstate = NULL;
+            loginlog_bad(txn->conn->clienthost,
+                         user,
+                         NULL,
+                         "Bearer",
+                         policymsg);
+            sasl_seterror(httpd_saslconn, SASL_NOLOG, "%s", policymsg);
+            return SASL_DISABLED;
+        }
     }
     else {
         /* SASL-based authentication (SCRAM_*, Negotiate) */

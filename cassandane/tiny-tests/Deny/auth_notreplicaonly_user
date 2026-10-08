@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_auth_notreplicaonly_user
+    :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set(auth_notreplicaonly => 'yes');
+    $self->_start_instances();
+
+    $self->{instance}->create_user('primary');
+    $self->{instance}->create_user('secondary');
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', '-r', 'secondary');
+
+    my $svc = $self->{instance}->get_service('imap');
+    my sub login_error ($user) {
+        eval { $svc->create_store(username => $user)->get_client() };
+        return $@ || undef;
+    }
+
+    $self->assert_null(login_error('primary'));
+    $self->assert_null(login_error('admin'));
+
+    my $e = login_error('secondary');
+    $self->assert_matches(qr/login failed:/i, $e);
+    $self->assert_matches(qr/Account is not available on this server/, $e);
+}

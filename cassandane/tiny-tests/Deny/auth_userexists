@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_auth_userexists
+    :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set(auth_userexists => 'yes');
+    $self->_start_instances();
+
+    $self->{instance}->create_user('present');
+    $self->{instance}->create_user('gone');
+    my $admintalk = $self->{instance}->get_service('imap')
+        ->create_store(username => 'admin')->get_client();
+    $admintalk->delete('user.gone');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $svc = $self->{instance}->get_service('imap');
+    my sub login_error ($user) {
+        eval { $svc->create_store(username => $user)->get_client() };
+        return $@ || undef;
+    }
+
+    $self->assert_null(login_error('present'));
+    $self->assert_null(login_error('admin'));
+
+    foreach my $user (qw(absent gone)) {
+        my $e = login_error($user);
+        $self->assert_matches(qr/login failed:/i, $e);
+        $self->assert_matches(qr/Account does not exist/, $e);
+    }
+}

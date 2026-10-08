@@ -1,0 +1,24 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_auth_notreplicaonly_server
+    :Replication :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set(auth_notreplicaonly => 'yes');
+    $self->{replica}->{config}->set(auth_notreplicaonly => 'yes');
+    $self->_start_instances();
+
+    my sub login_error ($instance, $user) {
+        my $svc = $instance->get_service('imap');
+        eval { $svc->create_store(username => $user)->get_client() };
+        return $@ || undef;
+    }
+
+    $self->assert_null(login_error($self->{instance}, 'cassandane'));
+    $self->assert_null(login_error($self->{replica}, 'admin'));
+
+    my $e = login_error($self->{replica}, 'cassandane');
+    $self->assert_matches(qr/login failed:/i, $e);
+    $self->assert_matches(qr/Account is not available on this server/, $e);
+}

@@ -77,6 +77,14 @@ extern int mysasl_proxy_policy(sasl_conn_t *conn,
  * message from mysasl_proxy_policy); else generic catalog string for error code */
 extern const char *cyrus_sasl_errmsg(sasl_conn_t *conn, int sasl_err_code, int for_client);
 
+/**
+ * Check the auth_userexists and auth_notreplicaonly policies for a
+ * non-admin login as @p userid.  Anonymous logins always pass.
+ *
+ * @return NULL if the login may proceed, else a client-visible reason
+ */
+extern const char *global_login_policy_deny(const char *userid);
+
 /* check if `authstate' is a valid member of class */
 extern int global_authisa(struct auth_state *authstate,
                           enum imapopt opt);
