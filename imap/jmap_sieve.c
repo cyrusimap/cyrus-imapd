@@ -2044,11 +2044,7 @@ static int jmap_sieve_test(struct jmap_req *req)
 
         else if (!strcmp(key, "emailBlobIds")) {
             emailids = arg;
-            /* jmap_parse_strings() will catch any error except an empty array */
-            if (jmap_parse_strings(arg, &parser, "emailBlobIds") &&
-                !json_array_size(emailids)) {
-                jmap_parser_invalid(&parser, key);
-            }
+            jmap_parse_strings(arg, &parser, "emailBlobIds");
         }
 
         else if (!strcmp(key, "envelope")) {
