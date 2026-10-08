@@ -472,7 +472,7 @@ static void usage(void)
     fprintf(stderr, "A tool to reconstruct mailboxes.\n");
     fprintf(stderr, "\n");
 
-    fprintf(stderr, "-C <config-file>   use <config-file> instead of config from imapd.conf");
+    fprintf(stderr, "-C <config-file>   use <config-file> instead of config from imapd.conf\n");
     fprintf(stderr, "-p <partition>     use this indicated partition for search\n");
     fprintf(stderr, "-x                 do not import metadata, create new\n");
     fprintf(stderr, "-r                 recursively reconstruct\n");
@@ -480,7 +480,9 @@ static void usage(void)
     fprintf(stderr, "-s                 don't stat underlying files\n");
     fprintf(stderr, "-q                 run quietly\n");
     fprintf(stderr, "-n                 do not make changes\n");
+    fprintf(stderr, "-D                 mark every mailbox dirty, even if unchanged\n");
     fprintf(stderr, "-G                 force re-parsing (checks GUID correctness)\n");
+    fprintf(stderr, "-I                 give a new UNIQUEID to mailboxes with a clashing one\n");
     fprintf(stderr, "-R                 perform UID upgrade operation on GUID mismatched files\n");
     fprintf(stderr, "-U                 use this if there are corrupt message files in spool\n");
     fprintf(stderr, "                   WARNING: this option deletes corrupted message files permanently\n");
@@ -488,6 +490,7 @@ static void usage(void)
     fprintf(stderr, "-O                 delete odd files (unlike -o)\n");
     fprintf(stderr, "-M                 prefer mailboxes.db over cyrus.header\n");
     fprintf(stderr, "-V <version>       Change the cyrus.index minor version to the version specified\n");
+    fprintf(stderr, "-c                 keep the existing cache records (with -V)\n");
     fprintf(stderr, "-T                 recalculate nanosecond internaldates\n");
     fprintf(stderr, "                   (this option ONLY used with -V and -u)\n");
     fprintf(stderr, "-u                 give usernames instead of mailbox prefixes\n");

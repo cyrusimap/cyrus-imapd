@@ -16,18 +16,18 @@ Synopsis
 .. parsed-literal::
 
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-x** ] [ **-r** ]
-        [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-G** ] [ **-R** ] [ **-o** ]
-        [ **-O** ] [ **-M** ] *mailbox*...
+        [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-n** ] [ **-D** ] [ **-G** ]
+        [ **-I** ] [ **-R** ] [ **-o** ] [ **-O** ] [ **-M** ] *mailbox*...
 
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-x** ] [ **-r** ]
-        [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-G** ] [ **-R** ] [ **-o** ]
-        [ **-O** ] [ **-M** ] **-u** *user*...
+        [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-n** ] [ **-D** ] [ **-G** ]
+        [ **-I** ] [ **-R** ] [ **-o** ] [ **-O** ] [ **-M** ] **-u** *user*...
 
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-r** ]
-        [ **-q** ] **-V** *version* *mailbox*...
+        [ **-q** ] [ **-n** ] [ **-c** ] **-V** *version* *mailbox*...
 
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-r** ]
-        [ **-q** ] **-V** *version* **-u** *user*...
+        [ **-q** ] [ **-n** ] [ **-c** ] [ **-T** ] **-V** *version* **-u** *user*...
 
     **reconstruct** [ **-C** *config-file* ] **-P** *cyrus-header-paths*...
 
@@ -108,6 +108,11 @@ Options
 
     Don't make any changes.  Problems are reported, but not fixed.
 
+.. option:: -D, --always-dirty
+
+    Mark every mailbox visited as changed, bumping its modseq even if
+    nothing else needed fixing.
+
 .. option:: -G, --force-reparse
 
     Force re-parsing of the underlying message (checks GUID
@@ -161,6 +166,16 @@ Options
     This can be useful for upgrades or downgrades. Use a magical
     version of *max* to upgrade to the latest available database format
     version.
+
+.. option:: -c, --keep-cache
+
+    With **-V**, keep the existing ``cyrus.cache`` records instead of
+    regenerating them while repacking.
+
+.. option:: -T, --recalc-nanosec
+
+    Recalculate nanosecond internaldates.  Only valid with both **-V**
+    and **-u**, and only for mailboxes at index version 20 or later.
 
 .. option:: -u, --userids
 
