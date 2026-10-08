@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+
+# Each component of a REPLY must name the attendee who sent it (RFC 5546
+# 3.2.3).  One whose override answers for a different attendee is
+# rejected whole: neither attendee's status changes, and no override is
+# created.
+sub test_imip_reply_forged_attendee
+    :needs_component_sieve :want_service_http
+    ($self)
+{
+    my $CalDAV = $self->{caldav};
+    my $calhref =
+        $self->default_user->calendars->default->properties->{'x-href'};
+    my $uuid = "b0bf6a8e-7c2d-4a6e-9a3a-8f1b4f6d2c11";
+    my $href = "$calhref/$uuid.ics";
+
+    $self->{instance}->install_sieve_script(<<EOF);
+require ["body", "processcalendar"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processcalendar;
+}
+EOF
+
+    my $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+BEGIN:VEVENT
+UID:$uuid
+DTSTAMP:20210923T034327Z
+DTSTART:20210923T150000Z
+DURATION:PT1H
+RRULE:FREQ=WEEKLY
+SUMMARY:An Event
+SEQUENCE:0
+ORGANIZER:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:bar\@example.net
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:foo\@example.net
+END:VEVENT
+END:VCALENDAR
+EOF
+    $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "Deliver a reply from bar whose override answers for foo";
+    my $imip = <<EOF;
+Date: Thu, 23 Sep 2021 09:06:18 -0400
+From: Bar <bar\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid\@example.net>
+Content-Type: text/calendar; method=REPLY; component=VEVENT
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+METHOD:REPLY
+BEGIN:VEVENT
+UID:$uuid
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:bar\@example.net
+END:VEVENT
+BEGIN:VEVENT
+UID:$uuid
+RECURRENCE-ID:20210930T150000Z
+DTSTAMP:20210923T034327Z
+SEQUENCE:0
+ORGANIZER:MAILTO:cassandane\@example.com
+ATTENDEE;CN=Foo;PARTSTAT=DECLINED:MAILTO:foo\@example.net
+END:VEVENT
+END:VCALENDAR
+EOF
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $imip));
+
+    my $events = $CalDAV->GetEvents($calhref);
+    $self->assert_cmp_deeply([ superhashof({
+        uid => $uuid,
+        participants => hashbag(
+            ignore() => superhashof({ email => 'cassandane@example.com' }),
+            map {
+                ignore() => superhashof({
+                    email => "$_\@example.net",
+                    participationStatus => 'needs-action',
+                })
+            } qw(bar foo)
+        ),
+    }) ], $events);
+    $self->assert_null($events->[0]{recurrenceOverrides});
+}
