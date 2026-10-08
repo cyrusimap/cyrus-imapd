@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+# Before ContactCard/set enforced kind and value on every name component,
+# a component that also had an unknown property bypassed the checks and
+# the components were stored as is, in a JSPROP.  Reading such a card
+# drops the invalid ones, so it can be searched, and updated without the
+# client having to repair them first.
+sub test_card_name_component_missing_on_disk
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $carddav = $self->{carddav};
+
+    my $startState = $jmap->request([['ContactCard/get', { ids => [] }]])
+                          ->single_sentence->arguments->{state};
+
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $vcard = to_crlf(<<EOF);
+BEGIN:VCARD
+VERSION:4.0
+UID:$uid
+FN:Ex Ample
+JSPROP;JSPTR=name/components:[{"type":"given","value":"Ex"},{"kind":"surname","value":"Ample","foo":"bar"}]
+END:VCARD
+EOF
+    $carddav->Request('PUT', 'Default/legacy.vcf', $vcard,
+        'Content-Type' => 'text/vcard');
+
+    my $id = $jmap->request([
+        ['ContactCard/changes', { sinceState => $startState }],
+    ])->single_sentence->arguments->{created}[0];
+    $self->assert_not_null($id);
+
+    my $res = $jmap->request([
+        ['ContactCard/get', { ids => [$id], properties => ['name'] }, 'R1'],
+        ['ContactCard/query', { filter => { text => 'meh' } }, 'R2'],
+        ['ContactCard/set', {
+            update => { $id => { notes => { n1 => { note => 'hi' } } } },
+        }, 'R3'],
+    ]);
+
+    $self->assert_cmp_deeply({
+        full => 'Ex Ample',
+        components => [ { kind => 'surname', value => 'Ample', foo => 'bar' } ],
+    }, $res->sentence_named('ContactCard/get')->arguments->{list}[0]{name});
+
+    $self->assert_cmp_deeply([],
+        $res->sentence_named('ContactCard/query')->arguments->{ids});
+
+    my $set = $res->sentence_named('ContactCard/set')->as_set;
+    $self->assert_cmp_deeply({}, $set->update_errors);
+
+    # The invalid component is gone from the stored card too
+    $res = $carddav->Request('GET', 'Default/legacy.vcf', '',
+                             'Accept' => 'text/vcard; version=4.0');
+    my $stored = $res->{content};
+    $stored =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+    $self->assert_does_not_match(qr/"type":"given"/, $stored);
+}
