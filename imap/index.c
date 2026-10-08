@@ -14,6 +14,7 @@
 #include <sysexits.h>
 #include <syslog.h>
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 /* For iCalendar indexing */
@@ -65,6 +66,8 @@ EXPORTED unsigned client_capa;
 static void index_refresh_locked(struct index_state *state);
 static void index_tellexists(struct index_state *state);
 static int index_lock(struct index_state *state, int readonly);
+static int index_lock_write(struct index_state *state);
+static bool index_isreplicaonly(const struct index_state *state);
 
 struct index_modified_flags {
     int added_flags;
@@ -249,6 +252,7 @@ EXPORTED void index_close(struct index_state **stateptr)
 
     free(state->map);
     free(state->mboxname);
+    free(state->owner);
     free(state->uniqueid);
     free(state->mailboxid);
     free(state->userid);
@@ -274,6 +278,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
 
     state->mailbox = mailbox;
     state->mboxname = xstrdup(mailbox_name(mailbox));
+    state->owner = mboxname_to_userid(state->mboxname);
     state->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
     state->mailboxid = xzmalloc(JMAP_MAX_MAILBOXID_SIZE);
 
@@ -281,9 +286,10 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
 
     if (init) {
         state->authstate = init->authstate;
-        state->examining = init->examine_mode;
         state->out = init->out;
         state->userid = xstrdupnull(init->userid);
+        state->examining = init->examine_mode;
+        state->replicaonly = !state->examining && index_isreplicaonly(state);
         state->want_dav = init->want_dav;
         state->want_mbtype = init->want_mbtype;
         state->want_expunged = init->want_expunged;
@@ -333,6 +339,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
 
 fail:
     free(state->mboxname);
+    free(state->owner);
     free(state->uniqueid);
     free(state->mailboxid);
     free(state->userid);
@@ -372,7 +379,7 @@ EXPORTED int index_expunge(struct index_state *state, const char *sequence,
     struct mboxevent *mboxevent = NULL;
     modseq_t oldmodseq;
 
-    r = index_lock(state, /*readonly*/0);
+    r = index_lock_write(state);
     if (r) return r;
 
     /* Make sure there is something to expunge */
@@ -510,7 +517,7 @@ static int index_writeseen(struct index_state *state)
     state->seen_dirty = 0;
 
     /* only examining, can't write any changes */
-    if (state->examining)
+    if (state->examining || state->replicaonly)
         return 0;
 
     /* always dirty the mailbox, we may just be updating recent counts which doesn't bump the
@@ -1019,7 +1026,7 @@ static int _fetch_setseen(struct index_state *state,
         return 0;
 
     /* no rights to change it */
-    if (!(state->myrights & ACL_SETSEEN))
+    if (!(state->myrights & ACL_SETSEEN) || state->replicaonly)
         return 0;
 
     if (im->internal_flags & FLAG_INTERNAL_EXPUNGED) {
@@ -1334,7 +1341,7 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
         }
     }
 
-    r = index_lock(state, /*readonly*/0);
+    r = index_lock_write(state);
     if (r) return r;
 
     mailbox = state->mailbox;
@@ -1544,7 +1551,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
     if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
         return 0;
 
-    r = index_lock(state, /*readonly*/0);
+    r = index_lock_write(state);
     if (r) return r;
 
     r = append_setup_mbox(&as, state->mailbox,
@@ -1726,6 +1733,9 @@ static int index_lock(struct index_state *state, int readonly)
         return IMAP_MAILBOX_NONEXISTENT;
     }
 
+    if (!readonly && !state->examining)
+        state->replicaonly = index_isreplicaonly(state);
+
     /* if highestmodseq has changed or file is repacked, read updates */
     if (state->highestmodseq != state->mailbox->i.highestmodseq
         || state->generation != state->mailbox->i.generation_no)
@@ -1737,6 +1747,28 @@ static int index_lock(struct index_state *state, int readonly)
 EXPORTED int index_status(struct index_state *state, struct statusdata *sdata)
 {
     status_fill_seen(state->userid, sdata, state->numrecent, state->numunseen);
+    return 0;
+}
+
+/* also covers the session user's own data, e.g. their seen state on a
+ * shared mailbox */
+static bool index_isreplicaonly(const struct index_state *state)
+{
+    if (user_isreplicaonly(state->owner)) return true;
+    return state->userid && strcmpsafe(state->userid, state->owner)
+           && user_isreplicaonly(state->userid);
+}
+
+static int index_lock_write(struct index_state *state)
+{
+    int r = index_lock(state, /*readonly*/0);
+    if (r) return r;
+
+    if (state->replicaonly) {
+        index_unlock(state);
+        return IMAP_PERMISSION_DENIED;
+    }
+
     return 0;
 }
 

@@ -4,6 +4,7 @@
 
 #include <config.h>
 
+#include <stdbool.h>
 #include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
@@ -2273,12 +2274,6 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
 {
     int i;
 
-    // On a replica we still process records, but in dryrun mode — no
-    // side-effects. We notice lastalarm changes replicated from the master
-    // and keep our local nextcheck advanced (e.g. the 30-day push-off).
-    if (config_getswitch(IMAPOPT_REPLICAONLY))
-        dryrun = 1;
-
     // temporarily disable alarms
     const char *suppress_file = config_getstring(IMAPOPT_CALDAV_ALARM_SUPPRESS_FILE);
     if (suppress_file) {
@@ -2312,70 +2307,66 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
 
     caldav_alarm_close(alarmdb);
 
-    if (intervalp) {
-        // we want to restrict the number of records processed per user per run,
-        // and also take a non-blocking lock so we're never waiting while other
-        // things process
-        int skipped_some = 0;
-        int did_some = 0;
-        int num_user_records = 0;
-        int user_dryrun = dryrun;
-        char *userid = NULL;
-        user_nslock_t *user_nslock = NULL;
-        for (i = 0; i < rock.list.count; i++) {
-            struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
+    // the daemon caps records per user and never waits for a lock;
+    // without intervalp we're testing or reconstructing, so do everything
+    bool skipped_some = false;
+    bool did_some = false;
+    int num_user_records = 0;
+    bool mbox_dryrun = dryrun;
+    char *mboxname = NULL;
+    char *userid = NULL;
+    user_nslock_t *user_nslock = NULL;
+    for (i = 0; i < rock.list.count; i++) {
+        struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
 
-            // only alarms for mailboxes with userids
-            mbname_t *mbname = mbname_from_intname(data->mboxname);
-            if (!mbname_userid(mbname)) {
-                mbname_free(&mbname);
-                continue;
+        // sorted by mboxname, so a mailbox's records are adjacent, and so
+        // are a user's mailboxes
+        if (strcmpsafe(mboxname, data->mboxname)) {
+            user_nslock_release(&user_nslock);
+            free(mboxname);
+            mboxname = xstrdup(data->mboxname);
+
+            char *mbuserid = mboxname_to_userid(mboxname);
+            if (strcmpsafe(userid, mbuserid)) num_user_records = 0;
+            free(userid);
+            userid = mbuserid;
+
+            if (userid) {
+                user_nslock = user_nslock_lock(userid,
+                    intervalp ? LOCK_NONBLOCKING : LOCK_EXCLUSIVE);
             }
-
-            // we are sorted by mboxname, so all the mailboxes for the same
-            // userid will be next to each other
-            if (strcmpsafe(userid, mbname_userid(mbname))) {
-                num_user_records = 0;
-                free(userid);
-                user_nslock_release(&user_nslock);
-                userid = xstrdup(mbname_userid(mbname));
-                // replicaonly users are processed without side-effects, just
-                // like a fully replicaonly server: dryrun keeps their local
-                // nextcheck maintained instead of skipping them entirely.
-                user_dryrun = dryrun || user_isreplicaonly(userid);
-                user_nslock = user_nslock_lock(userid, LOCK_NONBLOCKING);
-            }
-            mbname_free(&mbname);
-
-            // if we failed to lock the user, or have done too many for this user, skip
-            if (!user_nslock || ++num_user_records > MAX_CONSECUTIVE_ALARMS_PER_USER) {
-                skipped_some++;
-                caldav_alarm_fini(data);
-                free(data);
-                continue;
-            }
-
-            did_some++;
-            process_one_record(data, runtime, user_dryrun);
-            caldav_alarm_fini(data);
-            free(data);
+            // dryrun rather than skip, so a replica keeps nextcheck current
+            if (!userid || user_nslock)
+                mbox_dryrun = dryrun || user_isreplicaonly(userid);
         }
 
-        user_nslock_release(&user_nslock);
-        free(userid);
+        // the daemon only handles alarms for mailboxes with userids
+        if (!userid && intervalp)
+            goto next;
 
+        // if we failed to lock the user, or have done too many for this user, skip
+        if ((userid && !user_nslock)
+            || (intervalp && ++num_user_records > MAX_CONSECUTIVE_ALARMS_PER_USER)) {
+            skipped_some = true;
+            goto next;
+        }
+
+        did_some = true;
+        process_one_record(data, runtime, mbox_dryrun);
+
+    next:
+        caldav_alarm_fini(data);
+        free(data);
+    }
+
+    user_nslock_release(&user_nslock);
+    free(mboxname);
+    free(userid);
+
+    if (intervalp) {
         // if we both made some progress AND skipped some, then retry again immediately
         if (did_some && skipped_some) *intervalp = 0;
         else *intervalp = rock.next - runtime;
-    }
-    else {
-        // we're testing or reconstructing, run everything!
-        for (i = 0; i < rock.list.count; i++) {
-            struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
-            process_one_record(data, runtime, dryrun);
-            caldav_alarm_fini(data);
-            free(data);
-        }
     }
 
     ptrarray_fini(&rock.list);

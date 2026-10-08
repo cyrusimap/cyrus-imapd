@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_replicaonly_sharee ($self)
+{
+    $self->{instance}->create_user('sharer');
+    my $svc = $self->{instance}->get_service('imap');
+    my $sharerstore = $svc->create_store(username => 'sharer');
+    $sharerstore->get_client()->setacl('INBOX', 'cassandane', 'lrswite');
+    $self->make_message('msg1', store => $sharerstore);
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', '-r', 'cassandane');
+
+    # the sharee's own seen state can't change while they are replicaonly
+    my $talk = $self->{store}->get_client();
+    $talk->select('Other Users.sharer');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+}
