@@ -7687,10 +7687,14 @@ static void combine_vavailability(struct freebusy_filter *fbfilter)
         comp = icalcomponent_get_first_component(vav->ical,
                                                  ICAL_VAVAILABILITY_COMPONENT);
 
-        for (range = ranges, prev = NULL; range; prev = range, range = next) {
+        /* prev stays put over a removed range */
+        bool removed = false;
+        for (range = ranges, prev = NULL; range;
+             prev = removed ? prev : range, range = next) {
             struct icalperiodtype period;
 
             next = range->next;
+            removed = false;
 
             if (icaltime_compare(vav->per.end, range->per.start) <= 0 ||
                 icaltime_compare(vav->per.start, range->per.end) >= 0) {
@@ -7710,10 +7714,10 @@ static void combine_vavailability(struct freebusy_filter *fbfilter)
 
                     /* Filling entire range - remove it */
                     if (prev) prev->next = next;
-                    else ranges = NULL;
+                    else ranges = next;
 
                     free(range);
-                    range = NULL;
+                    removed = true;
                 }
                 else {
                     /* VAV ends before range - filter using VAV end */
@@ -7748,7 +7752,8 @@ static void combine_vavailability(struct freebusy_filter *fbfilter)
                 range->per.end = vav->per.start;
             }
 
-            /* Expand available time occurrences */
+            /* Expand available time occurrences for just this range */
+            availfilter.freebusy.len = 0;
             expand_occurrences(comp, &availfilter);
 
             /* Calculate unavailable periods and add to busytime */
@@ -7764,7 +7769,10 @@ static void combine_vavailability(struct freebusy_filter *fbfilter)
                     add_freebusy_comp(comp, period.start, period.end,
                             icaltime_null_time(), 0, fbfilter);
                 }
-                period.start = fb->per.end;
+
+                /* An override can fall within another occurrence */
+                if (icaltime_compare(fb->per.end, period.start) > 0)
+                    period.start = fb->per.end;
             }
             period.end = availfilter.end;
             if (icaltime_compare(period.end, period.start) > 0) {
