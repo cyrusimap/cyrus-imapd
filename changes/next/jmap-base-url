@@ -1,0 +1,24 @@
+Description:
+
+New jmap_base_url option to advertise absolute URLs in the JMAP Session
+object, for clients that cannot resolve relative URLs.
+
+
+Documentation:
+
+lib/imapoptions/jmap_base_url
+
+
+Config changes:
+
+jmap_base_url
+
+
+Upgrade instructions:
+
+None.  If unset, the Session object advertises relative URLs, as before.
+
+
+GitHub issue:
+
+https://github.com/cyrusimap/cyrus-docker-test-server/issues/6

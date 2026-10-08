@@ -41,6 +41,9 @@ struct namespace jmap_namespace;
 
 static time_t compile_time;
 
+/* scheme and authority to prefix to advertised URLs, or "" */
+static char *jmap_base_url = NULL;
+
 
 /* Namespace callbacks */
 static void jmap_init(struct buf *serverinfo);
@@ -164,7 +167,25 @@ static void jmap_init(struct buf *serverinfo)
     jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL);
     if (jmap_push_poll < 0) jmap_push_poll = 0;
 
+    const char *base_url = config_getstring(IMAPOPT_JMAP_BASE_URL);
+    if (!base_url) base_url = "";
+    size_t base_len = strlen(base_url);
+    while (base_len && base_url[base_len-1] == '/') base_len--;
+    jmap_base_url = xstrndup(base_url, base_len);
+
     if (ws_enabled) {
+        struct buf ws_url = BUF_INITIALIZER;
+
+        if (!strncasecmp(jmap_base_url, "https://", 8))
+            buf_printf(&ws_url, "wss://%s", jmap_base_url + 8);
+        else if (!strncasecmp(jmap_base_url, "http://", 7))
+            buf_printf(&ws_url, "ws://%s", jmap_base_url + 7);
+        else if (*jmap_base_url)
+            buf_setcstr(&ws_url, jmap_base_url);
+        else
+            buf_setcstr(&ws_url, "wss:");
+        buf_appendcstr(&ws_url, JMAP_BASE_URL JMAP_WS_COL);
+
         ws_params.ws.max_msgsize =
             config_getbytesize(IMAPOPT_JMAP_MAX_SIZE_REQUEST);
         if (ws_params.ws.max_msgsize <= 0)
@@ -173,8 +194,9 @@ static void jmap_init(struct buf *serverinfo)
         json_object_set_new(my_jmap_settings.server_capabilities,
                 JMAP_URN_WEBSOCKET,
                 json_pack("{s:s s:b}",
-                          "url", "wss:" JMAP_BASE_URL JMAP_WS_COL,
+                          "url", buf_cstring(&ws_url),
                           "supportsPush", jmap_push_poll));
+        buf_free(&ws_url);
     }
 }
 
@@ -215,6 +237,7 @@ static void jmap_shutdown(void)
     free_hash_table(&my_jmap_settings.methods,
                     (void (*)(void *)) &ptrarray_free);
     json_decref(my_jmap_settings.server_capabilities);
+    xzfree(jmap_base_url);
     ptrarray_fini(&my_jmap_settings.getblob_handlers);
     int i;
     for (i = 0; i < ptrarray_size(&my_jmap_settings.event_handlers); i++) {
@@ -1288,6 +1311,15 @@ done:
     return json_response(ret, txn, resp);
 }
 
+static json_t *jmap_session_url(const char *path)
+{
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "%s%s", jmap_base_url, path);
+    json_t *url = json_string(buf_cstring(&buf));
+    buf_free(&buf);
+    return url;
+}
+
 /* Handle a GET on the session endpoint */
 static int jmap_get_session(struct transaction_t *txn)
 {
@@ -1295,15 +1327,15 @@ static int jmap_get_session(struct transaction_t *txn)
 
     /* URLs */
     json_object_set_new(jsession, "username", json_string(httpd_userid));
-    json_object_set_new(jsession, "apiUrl", json_string(JMAP_BASE_URL));
+    json_object_set_new(jsession, "apiUrl", jmap_session_url(JMAP_BASE_URL));
     json_object_set_new(jsession, "downloadUrl",
-            json_string(JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL));
+            jmap_session_url(JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL));
     json_object_set_new(jsession, "uploadUrl",
-            json_string(JMAP_BASE_URL JMAP_UPLOAD_COL JMAP_UPLOAD_TPL));
+            jmap_session_url(JMAP_BASE_URL JMAP_UPLOAD_COL JMAP_UPLOAD_TPL));
 
     if (jmap_push_poll) {
         json_object_set_new(jsession, "eventSourceUrl",
-                            json_string(JMAP_BASE_URL JMAP_EVENTSOURCE_COL JMAP_EVENTSOURCE_TPL));
+                jmap_session_url(JMAP_BASE_URL JMAP_EVENTSOURCE_COL JMAP_EVENTSOURCE_TPL));
     }
 
     /* state */
