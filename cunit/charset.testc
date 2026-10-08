@@ -1604,6 +1604,20 @@ static void test_encode_mimebody(void)
              1, 2);
 
 #undef TESTCASE
+
+    /* empty input encodes to nothing, even when wrapping */
+    for (int wrap = 0; wrap <= 1; wrap++) {
+        char guard[4] = "XXXX";
+        size_t outlen = 0x1234;
+
+        charset_b64encode_mimebody(NULL, 0, NULL, &outlen, NULL, wrap);
+        CU_ASSERT_EQUAL(0, outlen);
+
+        outlen = 0x1234;
+        charset_b64encode_mimebody("", 0, guard, &outlen, NULL, wrap);
+        CU_ASSERT_EQUAL(0, outlen);
+        CU_ASSERT_MEMEQUAL(guard, "XXXX", sizeof(guard));
+    }
 }
 
 static void test_decode_percent(void)

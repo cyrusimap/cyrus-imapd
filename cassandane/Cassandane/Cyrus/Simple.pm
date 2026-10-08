@@ -304,6 +304,58 @@ EOF
     $self->assert_str_equals("test\r\n", $res->{1}{binary});
 }
 
+sub test_append_binary_no_body
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+
+    my $mime = <<'EOF' =~ s/\n/\r\n/gr;
+Content-Transfer-Encoding: binary
+
+EOF
+
+    $imap->append("INBOX", { Binary => $mime });
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    $imap->select('INBOX');
+    my $res = $imap->fetch('1', '(BINARY[1])');
+    $self->assert_str_equals("", $res->{1}{binary});
+}
+
+sub test_append_binary_no_body_multipart
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+
+    my $mime = <<'EOF' =~ s/\n/\r\n/gr;
+To: to@local
+From: from@local
+Subject: test
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=XYZ
+
+--XYZ
+Content-Type: application/octet-stream
+Content-Transfer-Encoding: binary
+
+--XYZ
+Content-Type: text/plain
+
+second part
+--XYZ--
+EOF
+
+    $imap->append("INBOX", { Binary => $mime });
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    $imap->select('INBOX');
+    my $res = $imap->fetch('1', '(BINARY[1])');
+    $self->assert_str_equals("", $res->{1}{binary});
+
+    $res = $imap->fetch('1', '(BINARY[2])');
+    $self->assert_str_equals("second part", $res->{1}{binary});
+}
+
 sub test_fatals_abort_enabled
     :NoStartInstances
 {
