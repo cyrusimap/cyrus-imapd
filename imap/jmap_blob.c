@@ -75,11 +75,11 @@ HIDDEN void jmap_blob_init(jmap_settings_t *settings)
     json_array_append_new(algorithms, json_string("sha-256"));
 
     blob_capabilities =
-        json_pack("{s:i, s:i, s:o, s:o}",
+        json_pack("{s:I, s:I, s:o, s:o}",
                   "maxSizeBlobSet",
-                  settings->limits[MAX_SIZE_BLOB_SET] / 1024,
-                  "maxdataSources",
-                  settings->limits[MAX_CATENATE_ITEMS],
+                  (json_int_t) settings->limits[MAX_SIZE_BLOB_SET],
+                  "maxDataSources",
+                  (json_int_t) settings->limits[MAX_CATENATE_ITEMS],
                   "supportedTypeNames",
                   typenames,
                   "supportedDigestAlgorithms",

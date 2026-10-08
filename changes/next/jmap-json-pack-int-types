@@ -1,7 +1,10 @@
 Description:
 
 The JMAP session object now reports size limits of 2 GiB or more correctly;
-they were previously truncated to 32 bits, so 200G was reported as 0.
+they were previously truncated to 32 bits, so 200G was reported as 0.  The
+urn:ietf:params:jmap:blob account capability now reports maxSizeBlobSet in
+octets rather than kilobytes, and its maxDataSources property is now spelled
+as in RFC 9404 (it was "maxdataSources").
 
 
 Documentation:

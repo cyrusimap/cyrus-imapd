@@ -10,6 +10,8 @@ sub test_session_large_limits
     $self->config_set(
         jmap_max_size_upload => '200G',
         jmap_max_size_request => '3G',
+        jmap_max_size_blob_set => '4M',
+        jmap_max_catenate_items => 64,
         jmap_mail_max_size_attachments_per_email => '5G',
     );
     $self->_start_instances();
@@ -26,6 +28,13 @@ sub test_session_large_limits
     );
 
     my $acaps = $session->{accounts}{cassandane}{accountCapabilities};
+    $self->assert_cmp_deeply(
+        superhashof({
+            maxSizeBlobSet => 4_194_304,
+            maxDataSources => 64,
+        }),
+        $acaps->{'urn:ietf:params:jmap:blob'},
+    );
     $self->assert_cmp_deeply(
         superhashof({ maxSizeAttachmentsPerEmail => 5_368_709_120 }),
         $acaps->{'urn:ietf:params:jmap:mail'},
