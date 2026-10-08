@@ -53,6 +53,7 @@
 
 #include "annotate.h"
 #include "sync_log.h"
+#include "user.h"
 
 #define DEBUG 0
 
@@ -3842,6 +3843,13 @@ EXPORTED int annotate_state_store(annotate_state_t *state, struct entryattlist *
     int r = 0;
     struct entryattlist *e = l;
     struct attvaluelist *av;
+
+    /* replication's changes are silent */
+    const char *mboxname = state->mailbox ? mailbox_name(state->mailbox)
+                         : state->mbentry ? state->mbentry->name : NULL;
+    if (mboxname && !(state->mailbox && state->mailbox->silentchanges)
+        && user_isreplicaonlymb(mboxname))
+        return IMAP_MAILBOX_REPLICAONLY;
 
     annotate_state_start(state);
 

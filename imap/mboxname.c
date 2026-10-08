@@ -3273,7 +3273,7 @@ static modseq_t mboxname_domodseq(const char *fname,
     return counters.highestmodseq;
 }
 
-EXPORTED void mboxname_assert_canadd(const mbname_t *mbname)
+static void mboxname_assert_canadd(const mbname_t *mbname)
 {
     const char *userid = mbname_userid(mbname);
     assert(!user_isreplicaonly(userid));

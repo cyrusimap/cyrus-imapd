@@ -1766,7 +1766,7 @@ static int index_lock_write(struct index_state *state)
 
     if (state->replicaonly) {
         index_unlock(state);
-        return IMAP_PERMISSION_DENIED;
+        return IMAP_MAILBOX_REPLICAONLY;
     }
 
     return 0;
@@ -2328,6 +2328,9 @@ EXPORTED int index_copy(struct index_state *state,
 
     r = index_check(state, usinguid ? TELL_UID|TELL_EXPUNGED : 0);
     if (r) return r;
+
+    /* don't copy messages that the MOVE then can't expunge */
+    if (ismove && state->replicaonly) return IMAP_MAILBOX_REPLICAONLY;
 
     srcmailbox = state->mailbox;
 

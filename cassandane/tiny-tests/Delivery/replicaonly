@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_replicaonly ($self)
+{
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', '-r', 'cassandane');
+
+    # delivery to a replicaonly user is a temporary failure, not a crash
+    my $msg = $self->{gen}->generate(subject => 'replicaonly');
+    my $ret = $self->{instance}->deliver($msg);
+    $self->assert_num_equals(75, $ret);    # EX_TEMPFAIL
+
+    my $talk = $self->{store}->get_client();
+    my $status = $talk->status('INBOX', [ 'messages' ]);
+    $self->assert_num_equals(0, $status->{messages});
+}
