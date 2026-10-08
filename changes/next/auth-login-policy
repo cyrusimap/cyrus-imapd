@@ -5,14 +5,15 @@ file under replicaonly/ by hand, because it takes the user's lock, so no
 writer can proceed once it returns.  Local changes to replica-only data (a
 marked user, or anything on a server with replicaonly set) are now refused
 with an error rather than aborting the process: IMAP writes get NO
-[UNAVAILABLE] and delivery gets a 4.2.1 tempfail.  On replicas, cyr_expire
-cleans up expunged messages but leaves expiry and the removal of deleted
-(DELETED.*) mailboxes to the master.
+[UNAVAILABLE], JMAP writes get serverUnavailable, DAV writes get a 503,
+and delivery gets a 4.2.1 tempfail.  On replicas, cyr_expire cleans up
+expunged messages but leaves expiry and the removal of deleted (DELETED.*)
+mailboxes to the master.
 
 
 Documentation:
 
-cyr_deny(8)
+imapd.conf(5), cyr_deny(8)
 
 
 Config changes:

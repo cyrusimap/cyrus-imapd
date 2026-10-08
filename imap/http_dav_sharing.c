@@ -376,8 +376,8 @@ static int create_notify_collection(const char *userid, struct mailbox **mailbox
 
     if (!r && mailboxp) {
         /* Open mailbox for writing */
-        r = mailbox_open_iwl(mbentry->name, mailboxp);
-        if (r) xsyslog(LOG_ERR, "IOERROR: failed to open notify collection",
+        r = http_mailbox_open_w(mbentry->name, mailboxp);
+        if (r && r != IMAP_MAILBOX_REPLICAONLY) xsyslog(LOG_ERR, "IOERROR: failed to open notify collection",
                        "mailbox=<%s> error=<%s>",
                        mbentry->name, error_message(r));
     }
@@ -1097,10 +1097,11 @@ HIDDEN int notify_post(struct transaction_t *txn)
     user_nslock_release(&user_nslock);
 
     /* Set invite status */
-    r = mailbox_open_iwl(mboxname, &shared);
+    r = http_mailbox_open_w(mboxname, &shared);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: failed to open mailbox for share reply",
-                "mailbox=<%s> err=<%s>", mboxname, error_message(r));
+        if (r != IMAP_MAILBOX_REPLICAONLY)
+            xsyslog(LOG_ERR, "IOERROR: failed to open mailbox for share reply",
+                    "mailbox=<%s> err=<%s>", mboxname, error_message(r));
     }
     else {
         annotate_state_t *astate = NULL;

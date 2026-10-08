@@ -36,6 +36,7 @@
 
 #include "acl.h"
 #include "assert.h"
+#include "user.h"
 #include "util.h"
 #include "iptostring.h"
 #include "global.h"
@@ -5334,6 +5335,21 @@ EXPORTED int meth_trace(struct transaction_t *txn, void *params)
     write_body(HTTP_OK, txn, buf_cstring(msg), buf_len(msg));
 
     return 0;
+}
+
+EXPORTED int http_mailbox_open_w(const char *name, struct mailbox **mailboxp)
+{
+    int r = mailbox_open_iwl(name, mailboxp);
+    if (!r && user_isreplicaonlymb(name)) {
+        mailbox_close(mailboxp);
+        r = IMAP_MAILBOX_REPLICAONLY;
+    }
+    return r;
+}
+
+EXPORTED long http_status_for_write_error(int r)
+{
+    return r == IMAP_MAILBOX_REPLICAONLY ? HTTP_UNAVAILABLE : HTTP_SERVER_ERROR;
 }
 
 /* simple wrapper to implicity add READFB if we have the READ ACL */

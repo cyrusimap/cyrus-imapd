@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_replicaonly ($self)
+{
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    my $href = $CalDAV->NewEvent($CalendarId, {
+        start => '2026-10-01T10:00:00',
+        duration => 'PT1H',
+        summary => 'before',
+    });
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', '-r', 'cassandane');
+
+    # reads still work
+    my $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_num_equals(1, scalar @$events);
+
+    # every change is refused as temporarily unavailable
+    eval {
+        $CalDAV->NewEvent($CalendarId, {
+            start => '2026-10-02T10:00:00',
+            duration => 'PT1H',
+            summary => 'after',
+        });
+    };
+    $self->assert_matches(qr/503/, $@);
+
+    eval { $CalDAV->DeleteEvent($href) };
+    $self->assert_matches(qr/503/, $@);
+
+    $events = $CalDAV->GetEvents($CalendarId);
+    $self->assert_num_equals(1, scalar @$events);
+}

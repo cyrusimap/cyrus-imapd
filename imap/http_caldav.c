@@ -977,8 +977,8 @@ static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
         char *calhomename = caldav_mboxname(httpd_userid, NULL);
         struct mailbox *calhome = NULL;
         struct mailbox *mailbox = NULL;
-        int r = mailbox_open_iwl(calhomename, &calhome);
-        if (!r) r = mailbox_open_iwl(mbname_intname(mbname), &mailbox);
+        int r = http_mailbox_open_w(calhomename, &calhome);
+        if (!r) r = http_mailbox_open_w(mbname_intname(mbname), &mailbox);
         if (!r) {
             annotate_state_t *astate = NULL;
             r = mailbox_get_annotate_state(calhome, 0, &astate);
@@ -1287,11 +1287,12 @@ static int open_attachments(const char *userid, struct mailbox **attachments,
     int r, ret = 0;
 
     /* Open attachments collection for writing */
-    r = mailbox_open_iwl(mailboxname, attachments);
+    r = http_mailbox_open_w(mailboxname, attachments);
     if (r) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-               mailboxname, error_message(r));
-        ret = HTTP_SERVER_ERROR;
+        if (r != IMAP_MAILBOX_REPLICAONLY)
+            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                   mailboxname, error_message(r));
+        ret = http_status_for_write_error(r);
     }
     else {
         /* Open the WebDAV DB corresponding to the attachments collection */
@@ -2910,12 +2911,13 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     }
 
     /* Open calendar for writing */
-    r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &calendar);
+    r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &calendar);
     if (r) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        if (r != IMAP_MAILBOX_REPLICAONLY)
+            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                   txn->req_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
-        ret = HTTP_SERVER_ERROR;
+        ret = http_status_for_write_error(r);
         goto done;
     }
 
@@ -6218,7 +6220,7 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
         int r = 0;
 
         if (!mailbox || strcmp(mboxname, mailbox_name(mailbox))) {
-            r = mailbox_open_iwl(mboxname, &calhomeset);
+            r = http_mailbox_open_w(mboxname, &calhomeset);
             if (!r) pctx->mailbox = calhomeset;
         }
         free(mboxname);
