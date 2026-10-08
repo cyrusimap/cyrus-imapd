@@ -10,6 +10,7 @@
 
 #include "jmap_api.h"
 #include "jmap_push.h"
+#include "user.h"
 
 
 int jmap_push_poll = 0;
@@ -58,7 +59,7 @@ EXPORTED jmap_push_ctx_t *jmap_push_init(struct transaction_t *txn,
     if (!jpush) {
         struct conversations_state *cstate = NULL;
 
-        /* Need cstate for state string generation */
+        /* Closed right away: other requests for this user need the lock */
         if (conversations_open_user(accountid, 1/*shared*/, &cstate)) {
             /* Something went wrong */
             jmap_push_done(txn);
@@ -66,11 +67,11 @@ EXPORTED jmap_push_ctx_t *jmap_push_init(struct transaction_t *txn,
         }
 
         jpush = xzmalloc(sizeof(jmap_push_ctx_t));
+        jpush->compact_ids = USER_COMPACT_EMAILIDS(cstate);
+        conversations_abort(&cstate);
 
         jpush->accountid = xstrdup(accountid);
         jpush->inboxname = mboxname_user_mbox(jpush->accountid, NULL);
-        jpush->req.userid = jpush->req.accountid = jpush->accountid;
-        jpush->req.cstate = cstate;
     }
 
     if (lastmodseq == ULLONG_MAX) {
@@ -122,9 +123,6 @@ EXPORTED void jmap_push_done(struct transaction_t *txn)
     }
     ptrarray_fini(states);
 
-    /* Close cstate */
-    conversations_abort(&jpush->req.cstate);
-
     if (jpush->wait) prot_removewaitevent(txn->conn->pin, jpush->wait);
     free(jpush->accountid);
     free(jpush->inboxname);
@@ -157,8 +155,9 @@ EXPORTED json_t *jmap_push_get_state(jmap_push_ctx_t *jpush)
         if (tstate->lastmodseq < *cur_modseq) {
             tstate->lastmodseq = *cur_modseq;
 
-            char *newstate = jmap_state_string(&jpush->req, *cur_modseq,
-                                               tstate->data_type->mbtype, 0);
+            char *newstate =
+                jmap_state_string_compact(jpush->compact_ids, *cur_modseq,
+                                          tstate->data_type->mbtype);
             json_object_set_new(changed, tstate->data_type->name,
                                 json_string(newstate));
             free(newstate);

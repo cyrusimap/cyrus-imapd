@@ -6,6 +6,7 @@
 #define JMAP_PUSH_H
 
 #include <jansson.h>
+#include <stdbool.h>
 
 #include "httpd.h"
 #include "mboxname.h"
@@ -15,9 +16,9 @@
 extern int jmap_push_poll;
 
 typedef struct jmap_push_ctx {
-    jmap_req_t req;
     char *accountid;
     char *inboxname;
+    bool compact_ids;
     int ping;
     time_t next_ping;
     time_t next_poll;

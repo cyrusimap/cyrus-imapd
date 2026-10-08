@@ -1680,12 +1680,12 @@ EXPORTED char *jmap_state_string_prefixed(int prefixed_state, modseq_t modseq)
     return buf_release(&buf);
 }
 
-EXPORTED char *jmap_state_string_cstate(struct conversations_state *cstate,
-                                        modseq_t modseq, int mbtype)
+EXPORTED char *jmap_state_string_compact(bool compact_ids, modseq_t modseq,
+                                         int mbtype)
 {
     int prefixed_state = 0;
 
-    if (USER_COMPACT_EMAILIDS(cstate)) {
+    if (compact_ids) {
         switch (mbtype) {
         case MBTYPE_EMAIL:
         case MBTYPE_CALENDAR:
@@ -1698,4 +1698,11 @@ EXPORTED char *jmap_state_string_cstate(struct conversations_state *cstate,
     }
 
     return jmap_state_string_prefixed(prefixed_state, modseq);
+}
+
+EXPORTED char *jmap_state_string_cstate(struct conversations_state *cstate,
+                                        modseq_t modseq, int mbtype)
+{
+    return jmap_state_string_compact(USER_COMPACT_EMAILIDS(cstate), modseq,
+                                     mbtype);
 }
