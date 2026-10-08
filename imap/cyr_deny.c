@@ -8,6 +8,7 @@
 #include <unistd.h>
 #endif
 #include <getopt.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -20,6 +21,7 @@
 #include "global.h"
 #include "libcyr_cfg.h"
 #include "proc.h"
+#include "user.h"
 #include "userdeny.h"
 #include "util.h"
 #include "ptrarray.h"
@@ -28,12 +30,65 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
+enum deny_mode { DENY, ALLOW, LIST };
+
 static void usage(void)
 {
     fprintf(stderr, "Usage: cyr_deny [-C <altconfig>] [ -s services ] [ -m message ] user\n");
     fprintf(stderr, "       cyr_deny [-C <altconfig>] -a user\n");
     fprintf(stderr, "       cyr_deny [-C <altconfig>] -l\n");
+    fprintf(stderr, "       cyr_deny [-C <altconfig>] -r [ -a ] user\n");
+    fprintf(stderr, "       cyr_deny [-C <altconfig>] -r -l\n");
     exit(EX_USAGE);
+}
+
+static int list_replicaonly(const char *user, void *rock __attribute__((unused)))
+{
+    printf("%s\n", user);
+    return 0;
+}
+
+static int do_replicaonly(enum deny_mode mode, const char *user)
+{
+    char *userid = NULL;
+    int r = 0;
+
+    if (user) {
+        /* match the userid a login or mailbox name would produce */
+        char *raw = xstrdup(user);
+        const char *canon = canonify_userid(raw, NULL, NULL);
+        if (canon && !is_userid_anonymous(canon) && strcmp(canon, "anyone"))
+            userid = xstrdup(canon);
+        free(raw);
+        if (!userid) {
+            fprintf(stderr, "cyr_deny: invalid user %s\n", user);
+            return IMAP_INVALID_USER;
+        }
+    }
+
+    switch (mode) {
+    case ALLOW:
+        r = user_set_replicaonly(userid, false);
+        if (r)
+            fprintf(stderr, "cyr_deny: failed to clear replicaonly for %s: %s\n",
+                    userid, error_message(r));
+        break;
+    case DENY:
+        r = user_set_replicaonly(userid, true);
+        if (r)
+            fprintf(stderr, "cyr_deny: failed to set replicaonly for %s: %s\n",
+                    userid, error_message(r));
+        break;
+    case LIST:
+        r = user_foreach_replicaonly(list_replicaonly, NULL);
+        if (r)
+            fprintf(stderr, "cyr_deny: failed to list replicaonly users: %s\n",
+                    error_message(r));
+        break;
+    }
+
+    free(userid);
+    return r;
 }
 
 static int list_one(const char *user, const char *services,
@@ -141,7 +196,8 @@ static void kill_existing_services(const char *user)
 int main(int argc, char **argv)
 {
     int opt;
-    enum { DENY, ALLOW, LIST } mode = DENY;
+    enum deny_mode mode = DENY;
+    bool replicaonly = false;
     const char *alt_config = NULL;
     const char *user = NULL;
     const char *message = NULL;
@@ -149,13 +205,14 @@ int main(int argc, char **argv)
     int r;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:alm:s:";
+    static const char short_options[] = "C:alm:rs:";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
         { "allow", no_argument, NULL, 'a' },
         { "list", no_argument, NULL, 'l' },
         { "message", required_argument, NULL, 'm' },
+        { "replicaonly", no_argument, NULL, 'r' },
         { "services", required_argument, NULL, 's' },
         { 0, 0, 0, 0 },
     };
@@ -182,6 +239,10 @@ int main(int argc, char **argv)
             message = optarg;
             break;
 
+        case 'r':
+            replicaonly = true;
+            break;
+
         case 's':
             services = optarg;
             break;
@@ -191,7 +252,7 @@ int main(int argc, char **argv)
             break;
         }
     }
-    if (mode != DENY && (message || services))
+    if ((mode != DENY || replicaonly) && (message || services))
         usage();
 
     if (mode == LIST) {
@@ -205,6 +266,12 @@ int main(int argc, char **argv)
     }
 
     cyrus_init(alt_config, "cyr_deny", 0, 0);
+
+    if (replicaonly) {
+        r = do_replicaonly(mode, user);
+        cyrus_done();
+        return !!r;
+    }
 
     denydb_init();
 

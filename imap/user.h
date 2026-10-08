@@ -35,6 +35,22 @@ bool user_isreplicaonly(const char *userid);
  */
 bool user_isreplicaonlymb(const char *mboxname);
 
+/**
+ * Mark or unmark a user as replicaonly.  Once marking returns, nothing
+ * else can write to the user.
+ *
+ * @return 0 (even if nothing changed), IMAP_INVALID_USER or IMAP_IOERROR
+ */
+int user_set_replicaonly(const char *userid, bool replicaonly);
+
+/**
+ * Call @p cb for each user marked replicaonly; the server-wide option
+ * isn't a mark.  A non-zero return from @p cb stops the walk and is
+ * returned.
+ */
+int user_foreach_replicaonly(int (*cb)(const char *userid, void *rock),
+                             void *rock);
+
 /* path to user's sieve directory */
 const char *user_sieve_path(const char *user);
 

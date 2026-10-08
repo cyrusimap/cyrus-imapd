@@ -7,6 +7,7 @@ use warnings;
 
 use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 
 sub new
 {

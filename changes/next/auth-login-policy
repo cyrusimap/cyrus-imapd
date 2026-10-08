@@ -1,0 +1,25 @@
+Description:
+
+cyr_deny -r marks a user replica-only; use it rather than creating the
+file under replicaonly/ by hand, because it takes the user's lock, so no
+writer can proceed once it returns.
+
+
+Documentation:
+
+cyr_deny(8)
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
