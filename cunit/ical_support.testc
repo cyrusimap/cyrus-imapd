@@ -282,4 +282,99 @@ static void test_icalcomponent_apply_vpatch_byparam_double_free(void)
     buf_free(&buf);
 }
 
+/* Apply a VPATCH with one PATCH component holding |lines|, plus a
+ * property of |empty| kind with no value unless that's ICAL_NO_PROPERTY,
+ * to a calendar with one event, as caldav_patch() does, and return
+ * icalcomponent_apply_vpatch()'s result. */
+static int apply_patch_lines(const char *lines, icalproperty_kind empty,
+                             const char **errstr)
+{
+    struct buf buf = BUF_INITIALIZER;
+    int num_changes = 0;
+
+    buf_setcstr(&buf,
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:event\r\n"
+            "DTSTAMP:20260101T120000Z\r\n"
+            "DTSTART:20260901T150000Z\r\n"
+            "SUMMARY:an event\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n");
+    icalcomponent *ical = ical_string_as_icalcomponent(&buf);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(ical);
+
+    buf_setcstr(&buf,
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//EN\r\n"
+            "BEGIN:VPATCH\r\n"
+            "VERSION:1\r\n"
+            "PATCH-VERSION:1\r\n"
+            "UID:vpatch\r\n"
+            "DTSTAMP:20260101T120100Z\r\n"
+            "BEGIN:PATCH\r\n");
+    buf_appendcstr(&buf, lines);
+    buf_appendcstr(&buf,
+            "END:PATCH\r\n"
+            "END:VPATCH\r\n"
+            "END:VCALENDAR\r\n");
+    icalcomponent *pdoc = ical_string_as_icalcomponent(&buf);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(pdoc);
+    icalcomponent *vpatch = icalcomponent_get_first_real_component(pdoc);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(vpatch);
+
+    /* libical drops a value-less property line when parsing these */
+    if (empty != ICAL_NO_PROPERTY) {
+        icalcomponent *patch =
+            icalcomponent_get_first_component(vpatch, ICAL_XPATCH_COMPONENT);
+        CU_ASSERT_PTR_NOT_NULL_FATAL(patch);
+        icalcomponent_add_property(patch, icalproperty_new(empty));
+    }
+
+    *errstr = NULL;
+    int r = icalcomponent_apply_vpatch(ical, vpatch, &num_changes, errstr);
+
+    icalcomponent_free(ical);
+    icalcomponent_free(pdoc);
+    buf_free(&buf);
+
+    return r;
+}
+
+/* A patch property with no value, or a path with no segment, is rejected
+ * rather than dereferencing a NULL value or segment. */
+static void test_icalcomponent_apply_vpatch_bad_paths(void)
+{
+    static const struct {
+        const char *lines;
+        icalproperty_kind empty;
+    } patches[] = {
+        /* no value */
+        { "", ICAL_PATCHTARGET_PROPERTY },
+        { "PATCH-TARGET:/VCALENDAR\r\n", ICAL_PATCHDELETE_PROPERTY },
+        { "PATCH-TARGET:/VCALENDAR\r\n", ICAL_PATCHPARAMETER_PROPERTY },
+        /* "\" unescapes to an empty path */
+        { "PATCH-TARGET:\\\r\n", ICAL_NO_PROPERTY },
+        { "PATCH-TARGET:/VCALENDAR\r\n"
+          "PATCH-DELETE:\\\r\n", ICAL_NO_PROPERTY },
+        { "PATCH-TARGET:/VCALENDAR\r\n"
+          "PATCH-PARAMETER:\\\r\n", ICAL_NO_PROPERTY },
+        /* no leading segment */
+        { "PATCH-TARGET:VCALENDAR\r\n", ICAL_NO_PROPERTY },
+    };
+
+    init_caldav();
+
+    for (size_t i = 0; i < sizeof(patches) / sizeof(patches[0]); i++) {
+        const char *errstr = NULL;
+
+        CU_ASSERT_EQUAL(apply_patch_lines(patches[i].lines,
+                                          patches[i].empty, &errstr), -1);
+        CU_ASSERT_PTR_NOT_NULL(errstr);
+    }
+}
+
 /* vim: set ft=c: */

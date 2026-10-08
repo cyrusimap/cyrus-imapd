@@ -1783,6 +1783,11 @@ static int parse_target_path(char *path, struct path_segment_t **path_seg,
         return -1;
     }
 
+    if (!tail) {
+        *errstr = "Missing initial segment";
+        return -1;
+    }
+
     tail->action = action;
     if (!tail->data) tail->data = data;
 
@@ -2358,7 +2363,8 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
         }
 
         /* Parse PATCH-TARGET */
-        char *path = xstrdup(icalproperty_get_patchtarget(prop));
+        /* A property without a value gives an empty path */
+        char *path = xstrdupsafe(icalproperty_get_patchtarget(prop));
 
         icalcomponent_remove_property(patch, prop);
         icalproperty_free(prop);
@@ -2386,7 +2392,7 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
             nextprop = icalcomponent_get_next_property(patch, ICAL_ANY_PROPERTY);
 
             if (kind == ICAL_PATCHDELETE_PROPERTY) {
-                path = xstrdup(icalproperty_get_patchdelete(prop));
+                path = xstrdupsafe(icalproperty_get_patchdelete(prop));
 
                 icalcomponent_remove_property(patch, prop);
                 icalproperty_free(prop);
@@ -2410,7 +2416,7 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
                 }
             }
             else if (kind == ICAL_PATCHPARAMETER_PROPERTY) {
-                path = xstrdup(icalproperty_get_patchparameter(prop));
+                path = xstrdupsafe(icalproperty_get_patchparameter(prop));
 
                 icalcomponent_remove_property(patch, prop);
 
