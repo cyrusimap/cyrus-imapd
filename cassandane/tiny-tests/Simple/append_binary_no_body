@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_append_binary_no_body ($self)
+{
+    my $imap = $self->{store}->get_client();
+
+    my $mime = to_crlf(<<'EOF');
+Content-Transfer-Encoding: binary
+
+EOF
+
+    $imap->append("INBOX", { Binary => $mime });
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    $imap->select('INBOX');
+    my $res = $imap->fetch('1', '(BINARY[1])');
+    $self->assert_str_equals("", $res->{1}{binary});
+}
