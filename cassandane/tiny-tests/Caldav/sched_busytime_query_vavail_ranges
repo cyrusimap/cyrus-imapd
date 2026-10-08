@@ -1,0 +1,126 @@
+#!perl
+use Cassandane::Tiny;
+
+# Free/busy over several VAVAILABILITY components, each filling the parts
+# of the query range that higher priority ones left (RFC 7953 4.2): time a
+# component covers outside its AVAILABLE periods is BUSY-UNAVAILABLE.
+# The scenarios remove the first range, remove a range right after
+# removing another, and expand an AVAILABLE with one occurrence inside
+# another.
+sub test_sched_busytime_query_vavail_ranges
+    ($self)
+{
+    my $caldav = $self->default_user->caldav;
+    my $home = '/dav/calendars/user/cassandane/Default';
+
+    # One VAVAILABILITY: [priority, start, end,
+    #                     [available start, end, rrule, recurrence-id]...]
+    my $vavail = sub ($n, $prio, $start, $end, @avail) {
+        my $comps = join '', map {
+            my ($as, $ae, $rrule, $recurid) = @$_;
+            "BEGIN:AVAILABLE\r\nUID:available-$n\r\n"
+          . "DTSTART:${as}Z\r\nDTEND:${ae}Z\r\n"
+          . ($rrule ? "RRULE:$rrule\r\n" : '')
+          . ($recurid ? "RECURRENCE-ID:${recurid}Z\r\n" : '')
+          . "END:AVAILABLE\r\n";
+        } @avail;
+        return "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Cassandane//EN\r\n"
+             . "BEGIN:VAVAILABILITY\r\nUID:vavail-$n\r\n"
+             . "DTSTAMP:20300101T000000Z\r\nPRIORITY:$prio\r\n"
+             . "DTSTART:${start}Z\r\nDTEND:${end}Z\r\n"
+             . $comps
+             . "END:VAVAILABILITY\r\nEND:VCALENDAR\r\n";
+    };
+
+    # The BUSY-UNAVAILABLE periods a free/busy query reports
+    my $unavailable = sub ($start, $end) {
+        my $query = <<~"EOF" =~ s/\r?\n/\r\n/gr;
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//Cassandane//EN
+        METHOD:REQUEST
+        BEGIN:VFREEBUSY
+        UID:vavail-ranges
+        DTSTAMP:20300101T000000Z
+        DTSTART:${start}Z
+        DTEND:${end}Z
+        ATTENDEE:MAILTO:cassandane\@example.com
+        ORGANIZER:MAILTO:cassandane\@example.com
+        END:VFREEBUSY
+        END:VCALENDAR
+        EOF
+        my $res = $caldav->Request('POST', 'Outbox', $query,
+                                   'Content-Type' => 'text/calendar');
+        my $text = $res->{content} =~ s/\r?\n[ \t]//gr;
+        my @periods = map { split /,/ }
+            $text =~ m/^FREEBUSY;FBTYPE=BUSY-UNAVAILABLE:(\S+)/mg;
+        return [ sort @periods ];
+    };
+
+    my @scenarios = (
+        {
+            # 10-14 splits the day; 00-12 then fills all of the first
+            # range, which must leave the second one for 13-24
+            name => 'first range filled',
+            vavails => [
+                [ 1, '20300101T100000', '20300101T140000',
+                  [ '20300101T100000', '20300101T140000' ] ],
+                [ 2, '20300101T000000', '20300101T120000',
+                  [ '20300101T080000', '20300101T100000' ] ],
+                [ 3, '20300101T130000', '20300102T000000',
+                  [ '20300101T140000', '20300101T170000' ] ],
+            ],
+            want => [ '20300101T000000Z/20300101T080000Z',
+                      '20300101T170000Z/20300102T000000Z' ],
+        },
+        {
+            # 06-08 and 10-12 leave three ranges; 07-24 skips the first
+            # and fills the other two, which must leave the first for 00-06
+            name => 'second of two removals',
+            vavails => [
+                [ 1, '20300101T060000', '20300101T080000',
+                  [ '20300101T060000', '20300101T080000' ] ],
+                [ 1, '20300101T100000', '20300101T120000',
+                  [ '20300101T100000', '20300101T120000' ] ],
+                [ 2, '20300101T070000', '20300102T000000',
+                  [ '20300101T090000', '20300101T230000' ] ],
+                [ 3, '20300101T000000', '20300101T060000',
+                  [ '20300101T010000', '20300101T060000' ] ],
+            ],
+            want => [ '20300101T000000Z/20300101T010000Z',
+                      '20300101T080000Z/20300101T090000Z',
+                      '20300101T230000Z/20300102T000000Z' ],
+        },
+        {
+            # Daily 09-12, with the second day's instance moved inside the
+            # first day's: the gap after 09-12 must not restart at 11
+            name => 'overlapping available',
+            end => '20300103T000000',
+            vavails => [
+                [ 1, '20300101T000000', '20300103T000000',
+                  [ '20300101T090000', '20300101T120000', 'FREQ=DAILY' ],
+                  [ '20300101T100000', '20300101T110000', undef,
+                    '20300102T090000' ] ],
+            ],
+            want => [ '20300101T000000Z/20300101T090000Z',
+                      '20300101T120000Z/20300103T000000Z' ],
+        },
+    );
+
+    for my $s (@scenarios) {
+        my @hrefs;
+        my $n = 0;
+        for my $v ($s->{vavails}->@*) {
+            my $href = "$home/vavail-" . ++$n . '.ics';
+            $caldav->Request('PUT', $href, $vavail->($n, @$v),
+                             'Content-Type' => 'text/calendar');
+            push @hrefs, $href;
+        }
+
+        $self->assert_cmp_deeply($s->{want},
+            $unavailable->('20300101T000000', $s->{end} // '20300102T000000'),
+            $s->{name});
+
+        $caldav->Request('DELETE', $_) for @hrefs;
+    }
+}
