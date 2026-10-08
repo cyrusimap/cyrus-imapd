@@ -5,7 +5,7 @@
 #ifndef INCLUDED_MUPDATE_CLIENT_H
 #define INCLUDED_MUPDATE_CLIENT_H
 
-#include <sasl/sasl.h>
+#include "libsasl_min/sasl.h"
 
 #define FNAME_MUPDATE_TARGET_SOCK "/socket/mupdate.target"
 

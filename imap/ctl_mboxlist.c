@@ -33,7 +33,6 @@
 #include <syslog.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sasl/sasl.h>
 
 #include "assert.h"
 #include "annotate.h"
@@ -48,6 +47,8 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+
+#include "libsasl_min/sasl.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"

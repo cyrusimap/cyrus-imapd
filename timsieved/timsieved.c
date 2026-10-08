@@ -11,7 +11,6 @@
 #include <limits.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <sasl/sasl.h> /* yay! sasl */
 #include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -39,6 +38,8 @@
 #include "timsieved/codes.h"
 #include "timsieved/parser.h"
 #include "timsieved/lex.h"
+
+#include "libsasl_min/sasl.h"
 
 /* global state */
 const int config_need_data = 0;

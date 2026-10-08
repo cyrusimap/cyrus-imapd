@@ -21,14 +21,14 @@
 #include <sys/select.h>
 #endif
 
-#include <sasl/sasl.h>
-
 #include <openssl/lhash.h>
 #include <openssl/bn.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 #include <openssl/ssl.h>
+
+#include "libsasl_min/sasl.h"
 
 #include "assert.h"
 #include "xmalloc.h"

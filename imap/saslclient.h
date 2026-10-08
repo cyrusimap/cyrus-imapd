@@ -5,7 +5,7 @@
 #ifndef SASLCLIENT_H
 #define SASLCLIENT_H
 
-#include <sasl/sasl.h>
+#include "libsasl_min/sasl.h"
 
 #include "prot.h"
 

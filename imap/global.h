@@ -5,7 +5,7 @@
 #ifndef INCLUDED_GLOBAL_H
 #define INCLUDED_GLOBAL_H
 
-#include <sasl/sasl.h>
+#include "libsasl_min/sasl.h"
 #include "libconfig.h"
 #include "auth.h"
 #include "prot.h"

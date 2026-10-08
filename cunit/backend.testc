@@ -7,8 +7,8 @@
 #include <assert.h>
 #include "cunit/unit.h"
 #include "imap/saslclient.h"
-#include <sasl/saslutil.h>
-#include <sasl/saslplug.h>
+#include "libsasl_min/saslutil.h"
+#include "libsasl_min/saslplug.h"
 #include "xmalloc.h"
 #include "imap/mutex.h"
 #include "prot.h"
