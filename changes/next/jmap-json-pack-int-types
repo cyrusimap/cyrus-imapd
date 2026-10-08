@@ -1,0 +1,24 @@
+Description:
+
+The JMAP session object now reports size limits of 2 GiB or more correctly;
+they were previously truncated to 32 bits, so 200G was reported as 0.
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+None

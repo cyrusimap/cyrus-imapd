@@ -327,9 +327,10 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities,
         max_size_attachments_per_email = 0;
     }
 
-    json_t *email_capabilities = json_pack("{s:i s:i s:o}",
+    json_t *email_capabilities = json_pack("{s:i s:I s:o}",
             "maxMailboxesPerEmail", JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL,
-            "maxSizeAttachmentsPerEmail", max_size_attachments_per_email,
+            "maxSizeAttachmentsPerEmail",
+            (json_int_t) max_size_attachments_per_email,
             "emailQuerySortOptions", sortopts);
 
     json_object_set_new(account_capabilities, JMAP_URN_MAIL, email_capabilities);
