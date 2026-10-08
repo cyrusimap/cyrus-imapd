@@ -2602,7 +2602,22 @@ struct renmboxdata {
     int found;
     int keep_intermediaries;
     int move_subscription;
+    int isadmin;
 };
+
+EXPORTED int mboxlist_rename_typecheck(uint32_t mbtype, const char *oldname,
+                                       const char *newname)
+{
+    if (mbtype_isa(mbtype) == MBTYPE_EMAIL) return 0;
+
+    char *olduser = mboxname_to_userid(oldname);
+    char *newuser = mboxname_to_userid(newname);
+    bool crossuser = strcmpsafe(olduser, newuser);
+
+    free(olduser);
+    free(newuser);
+    return crossuser ? IMAP_PERMISSION_DENIED : 0;
+}
 
 static int renamecheck(const mbentry_t *mbentry, void *rock)
 {
@@ -2615,6 +2630,13 @@ static int renamecheck(const mbentry_t *mbentry, void *rock)
         return IMAP_MAILBOX_BADNAME;
 
     strcpy(text->newname + text->nl, mbentry->name + text->ol);
+
+    /* dorename() renames children as admin, so check their types here */
+    if (!text->isadmin) {
+        r = mboxlist_rename_typecheck(mbentry->mbtype, mbentry->name,
+                                      text->newname);
+        if (r) return r;
+    }
 
     /* force create, but don't ignore policy.  This is a filthy hack that
        will go away when we refactor this code */
@@ -2665,6 +2687,7 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
     rock.ignorequota = ignorequota;
     rock.keep_intermediaries = keep_intermediaries;
     rock.move_subscription = move_subscription;
+    rock.isadmin = isadmin;
     mbentry_t *mbentry = NULL;
     int r;
 
@@ -2833,6 +2856,10 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
     if (!isadmin) {
         r = _rename_check_specialuse(oldname, newname);
+        if (r) goto done;
+
+        r = mboxlist_rename_typecheck(mailbox_mbtype(oldmailbox),
+                                      oldname, newname);
         if (r) goto done;
     }
 
