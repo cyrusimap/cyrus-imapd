@@ -26,6 +26,17 @@ sub share_with {
     return;
 }
 
+sub unshare_with {
+    my ($self, @targets) = @_;
+
+    my %to_update = map {;
+        "shareWith/" . (ref $_ ? $_->username : $_) => undef
+    } @targets;
+
+    $self->factory->_update($self => \%to_update);
+    return;
+}
+
 sub unshare_entirely {
     my ($self) = @_;
 
