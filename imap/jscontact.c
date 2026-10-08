@@ -790,8 +790,10 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
 
                     /* Find the existing component by name */
                     json_array_foreach(comps, k, comp) {
-                        if (!strcmp(ckind->name,
-                                    json_string_value(json_object_get(comp, "kind")))) {
+                        const char *kind =
+                            json_string_value(json_object_get(comp, "kind"));
+
+                        if (!strcmpsafe(ckind->name, kind)) {
                             break;
                         }
                     }
@@ -1976,6 +1978,37 @@ static void props_by_name_cb(const char *name __attribute__((unused)),
     hash_enumerate((hash_table *) val, &props_by_altid_cb, rock);
 }
 
+/* Drop the components of |obj| (a Name or Address) that lack a kind or a
+ * value.  Both are mandatory (RFC 9553 2.2.1.1, 2.5.1.1), but a card
+ * stored before ContactCard/set enforced that may have such components,
+ * kept in a JSPROP.  |obj| may be NULL.  Returns true if any were
+ * dropped. */
+static bool _jscomps_drop_invalid(json_t *obj)
+{
+    json_t *comps = json_object_get(obj, "components");
+    bool dropped = false;
+
+    for (size_t i = 0; i < json_array_size(comps); ) {
+        json_t *comp = json_array_get(comps, i);
+
+        if (json_is_string(json_object_get(comp, "kind")) &&
+            json_is_string(json_object_get(comp, "value"))) {
+            i++;
+            continue;
+        }
+
+        json_array_remove(comps, i);
+        dropped = true;
+    }
+
+    if (comps && !json_array_size(comps)) {
+        json_object_del(obj, "components");
+        dropped = true;
+    }
+
+    return dropped;
+}
+
 /* Convert the vCard to JSContact Card properties */
 static json_t *jscard_from_vcard(jscontact_ctx_t *ctx, vcardcomponent *vcard)
 {
@@ -2150,6 +2183,7 @@ static json_t *jscard_from_vcard(jscontact_ctx_t *ctx, vcardcomponent *vcard)
 
     /* Sanity check some properties */
     json_t *jprop = json_object_get(jcard, "name");
+    bool dropped = _jscomps_drop_invalid(jprop);
     if (jprop &&
         /* Need at least one of the following, otherwise remove it */
         !json_object_get(jprop, "components") &&
@@ -2164,6 +2198,8 @@ static json_t *jscard_from_vcard(jscontact_ctx_t *ctx, vcardcomponent *vcard)
         void *tmp;
 
         json_object_foreach_safe(jprop, tmp, id, adr) {
+            if (_jscomps_drop_invalid(adr)) dropped = true;
+
             /* Need at least one of the following, otherwise remove it */
             if (!json_object_get(adr, "components") &&
                 !json_object_get(adr, "countryCode") &&
@@ -2178,6 +2214,15 @@ static json_t *jscard_from_vcard(jscontact_ctx_t *ctx, vcardcomponent *vcard)
             /* If no addresses, remove it */
             json_object_del(jcard, "addresses");
         }
+    }
+
+    if (dropped) {
+        /* Clients only ever see valid components, and the card is stored
+         * without the bad ones the next time it's updated */
+        xsyslog_ev(LOG_NOTICE, "jscontact.components.dropped",
+                   lf_s_opt("mbox.name",
+                            mailbox ? mailbox_name(mailbox) : NULL),
+                   lf_u("msg.imapuid", record ? record->uid : 0));
     }
 
   done:
@@ -2874,6 +2919,8 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
     json_t *jprop;
     int isordered = 0;
     bool needs_extended = false;
+    bool has_unknown = false;
+    const char *myprops[] = { "@type", "kind", "value", "phonetic", NULL };
 
     jprop = json_object_get(obj, "phoneticSystem");
     if (json_is_string(jprop)) {
@@ -2918,7 +2965,6 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
     for (i = 0; i < size; i++) {
         json_t *comp = json_array_get(comps, i);
         const char *key, *kind = NULL, *val = NULL, *phonetic = NULL;
-        const char *myprops[] = { "@type", "kind", "value", "phonetic", NULL };
         json_t *jsubprop;
 
         jmap_parser_push_index(parser, "components", i, NULL);
@@ -2945,9 +2991,8 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
                 phonetic = json_string_value(jsubprop);
             }
             else {
-                jmap_parser_pop(parser);
-                _jsunknown_to_vcard(parser, "components", comps, myprops, card);
-                goto fail;
+                /* Kept below, once every component is known to be valid */
+                has_unknown = true;
             }
         }
 
@@ -3040,6 +3085,13 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
 
     if (i != size) {
         jmap_parser_pop(parser);
+        goto fail;
+    }
+
+    if (has_unknown) {
+        /* A vCard can't represent the unknown properties, so keep the
+         * components as they are */
+        _jsunknown_to_vcard(parser, "components", comps, myprops, card);
         goto fail;
     }
 

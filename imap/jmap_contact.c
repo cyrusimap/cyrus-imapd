@@ -3443,6 +3443,10 @@ static const char *jsname_comp(json_t *name, const char *compname,
         const char *kind = json_string_value(json_object_get(jinfo, "kind"));
         const char *val = json_string_value(json_object_get(jinfo, "value"));
 
+        /* Both are mandatory, but a card stored before that was
+         * enforced may lack them */
+        if (!kind || !val) continue;
+
         if (!strcmp("separator", kind)) {
             sep = val;
             continue;
