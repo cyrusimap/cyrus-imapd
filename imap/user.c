@@ -818,12 +818,26 @@ EXPORTED int user_nslock_islockedmb(const char *mboxname)
     return r;
 }
 
-EXPORTED int user_isreplicaonly(const char *userid)
+static char *replicaonly_path(const char *userid)
 {
-    int file_exists = 0;
-    char *path = strconcat(config_dir, "/replicaonly/", userid, (char *)NULL);
+    return strconcat(config_dir, "/replicaonly/", userid, (char *)NULL);
+}
+
+EXPORTED bool user_isreplicaonly(const char *userid)
+{
+    if (config_getswitch(IMAPOPT_REPLICAONLY)) return true;
+    if (!userid) return false;
+    char *path = replicaonly_path(userid);
     struct stat sbuf;
-    file_exists = !stat(path, &sbuf);
+    bool file_exists = !stat(path, &sbuf);
     free(path);
     return file_exists;
+}
+
+EXPORTED bool user_isreplicaonlymb(const char *mboxname)
+{
+    char *userid = mboxname_to_userid(mboxname);
+    bool r = user_isreplicaonly(userid);
+    free(userid);
+    return r;
 }

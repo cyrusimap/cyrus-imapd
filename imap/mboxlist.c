@@ -2097,15 +2097,16 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
     char *partition = NULL;
     int r = 0;
 
-    // we don't run this on replicas
-    assert(!config_getswitch(IMAPOPT_REPLICAONLY));
-
     /* not for deleted namespace */
     if (mbname_isdeleted(mbname))
         goto out;
 
     /* only use intermediates for user mailboxes */
     if (!mbname_userid(mbname))
+        goto out;
+
+    /* replicas get intermediates from the master */
+    if (user_isreplicaonly(mbname_userid(mbname)))
         goto out;
 
     for (; strarray_size(mbname_boxes(mbname)); free(mbname_pop_boxes(mbname))) {

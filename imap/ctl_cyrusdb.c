@@ -44,6 +44,7 @@
 #include "seen.h"
 #include "statuscache.h"
 #include "tls.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -89,7 +90,6 @@ struct fix_rock {
     struct buf last_mboxname;
     modseq_t highestmodseq;
     uint64_t next_mboxnum;
-    int is_replica;
 };
 
 /* Callback for use by process_mboxlist */
@@ -97,6 +97,7 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
 {
     struct fix_rock *frock = (struct fix_rock *) rock;
     int r, r2;
+    char *userid = mboxname_to_userid(mbentry->name);
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
     if (mbentry->mbtype & MBTYPE_RESERVE) {
@@ -112,23 +113,21 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
                    "removed reserved mailbox '%s'",
                    mbentry->name);
         }
-        return 0;
+        goto done;
     }
 
-    if (frock->is_replica) {
+    if (user_isreplicaonly(userid)) {
         /* mailbox ids should be obtained from the master, NOT generated here */
-        return 0;
+        goto done;
     }
 
     /* clean out any legacy specialuse */
     if (mbentry->legacy_specialuse) {
-        char *userid = mboxname_to_userid(mbentry->name);
         if (userid) {
             struct buf buf = BUF_INITIALIZER;
             buf_setcstr(&buf, mbentry->legacy_specialuse);
             annotatemore_rawwrite(mbentry->name, "/specialuse", userid, &buf);
             buf_free(&buf);
-            free(userid);
         }
         mbentry_t *copy = mboxlist_entry_copy(mbentry);
         xzfree(copy->legacy_specialuse);
@@ -251,6 +250,9 @@ skip_uniqueid:
         ;   /* hush "label at end of compound statement" warning */
     }
 
+done:
+    free(userid);
+
     return 0;
 }
 
@@ -261,8 +263,7 @@ static void process_mboxlist(int *upgraded)
 
     /* run fixmbox across all mboxlist entries */
     struct fix_rock frock = { HASH_TABLE_INITIALIZER, BUF_INITIALIZER,
-                              BUF_INITIALIZER, BUF_INITIALIZER, UINT64_MAX, 1,
-                              config_getswitch(IMAPOPT_REPLICAONLY) };
+                              BUF_INITIALIZER, BUF_INITIALIZER, UINT64_MAX, 1 };
     construct_hash_table(&frock.next_mboxnum_by_userid, 4096, 0);
     mboxlist_allmbox(NULL, fixmbox, &frock, MBOXTREE_INTERMEDIATES);
     free_hash_table(&frock.next_mboxnum_by_userid, NULL);

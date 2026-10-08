@@ -690,9 +690,7 @@ static int reconstruct_mailboxid(struct mailbox *mailbox,
     }
 
     /* a replica takes its ids from the master, so it can only report */
-    if (config_getswitch(IMAPOPT_REPLICAONLY)
-        || (userid && user_isreplicaonly(userid)))
-    {
+    if (user_isreplicaonly(userid)) {
         make_changes = 0;
     }
 

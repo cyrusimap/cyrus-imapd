@@ -3275,10 +3275,7 @@ static modseq_t mboxname_domodseq(const char *fname,
 
 EXPORTED void mboxname_assert_canadd(const mbname_t *mbname)
 {
-    assert(!config_getswitch(IMAPOPT_REPLICAONLY));
-    // add code for suppressing particular users by filename
     const char *userid = mbname_userid(mbname);
-    if (!userid) return;
     assert(!user_isreplicaonly(userid));
 }
 
