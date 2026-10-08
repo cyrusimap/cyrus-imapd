@@ -7075,7 +7075,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
                 json_t *err = json_pack(
                     "{s:s, s:o}",
                     "type", "invalidProperties",
-                    "properties", json_pack("[s]"));
+                    "properties", json_pack("[s]", "uid"));
                 json_object_set_new(set.not_updated, eid->raw, err);
                 continue;
             }

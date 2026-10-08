@@ -12991,7 +12991,7 @@ static void _email_mboxrecs_read(jmap_req_t *req,
                                            _email_mboxrecs_read_cb, &rock);
         if (r) {
             json_t *err = (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED) ?
-                json_pack("{s:s}", "notFound") : jmap_server_error(r);
+                json_pack("{s:s}", "type", "notFound") : jmap_server_error(r);
             json_object_set_new(set_errors, email_id, err);
             _email_mboxrecs_free(&mboxrecs);
             return;

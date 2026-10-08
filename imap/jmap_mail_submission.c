@@ -1165,7 +1165,7 @@ static json_t *fetch_submission(jmap_req_t *req, message_t *msg)
             if (!r) {
                 json_object_set_new(sub, "emailId",
                                     json_pack("s%", guidrep,
-                                              JMAP_LEGACY_EMAILID_SIZE-1));
+                                              (size_t) JMAP_LEGACY_EMAILID_SIZE-1));
             }
 
             json_t *onsend = json_object_get(sub, "onSend");

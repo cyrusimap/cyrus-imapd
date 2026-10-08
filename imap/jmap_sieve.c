@@ -1803,7 +1803,7 @@ static int deleteheader(void *mc, const char *head, int index)
     }
 
     json_array_append_new(m->actions,
-                          json_pack("[s o]", "deleteheader", args, head));
+                          json_pack("[s o [s]]", "deleteheader", args, head));
 
     return SIEVE_OK;
 }
