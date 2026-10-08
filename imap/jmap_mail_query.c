@@ -45,14 +45,11 @@ HIDDEN void jmap_email_contactfilter_init(const char *accountid,
                                           const struct namespace *namespace,
                                           struct email_contactfilter *cfilter)
 {
-    /* This memset() effectively assigns HASH_TABLE_INITIALIZER to the member
-     * .contactgroups. The later lazy initialisation of this hash table works
-     * because that macro expands to all zeros, identical to this memset().
-     */
     memset(cfilter, 0, sizeof(struct email_contactfilter));
     cfilter->accountid = accountid;
     cfilter->authstate = authstate;
     cfilter->namespace = namespace;
+    cfilter->contactgroups = HASH_TABLE_INITIALIZER;
 }
 
 HIDDEN void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter)

@@ -3,7 +3,13 @@
 
 #include <stddef.h>           /* For size_t     */
 
-#define HASHU64_TABLE_INITIALIZER {NULL, NULL, 0, 0, 0}
+#define HASHU64_TABLE_INITIALIZER (hashu64_table) { \
+    .table = NULL, \
+    .pool = NULL, \
+    .count = 0, \
+    .chaff = 0, \
+    .size_log2 = 0, \
+}
 
 #ifndef EXPORTED
 #define EXPORTED __attribute__((visibility("default")))
