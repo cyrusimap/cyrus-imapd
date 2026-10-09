@@ -484,8 +484,9 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
         After ``ENABLE METADATA``, unsolicited METADATA responses report
         changes to server metadata and to the metadata of the user's
-        personal mailboxes, or of every mailbox they can see when
-        :imapdconf:`reverseacls` is set.  This needs idled.
+        personal mailboxes, or of every mailbox when
+        :imapdconf:`reverseacls` is set, limited to mailboxes on which
+        they have the ``l`` and ``r`` rights.  This needs idled.
 
 :rfc:`5465`
 
