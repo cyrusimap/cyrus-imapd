@@ -821,11 +821,17 @@ int service_init(int argc __attribute__((unused)),
     }
 
     /* Construct serverinfo string */
+#ifndef USE_INTERNAL_SASL
     buf_printf(&serverinfo,
                "Cyrus-HTTP/%s Cyrus-SASL/%u.%u.%u LibXML/%s Jansson/%s",
                CYRUS_VERSION,
                SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
                LIBXML_DOTTED_VERSION, JANSSON_VERSION);
+#else
+    buf_printf(&serverinfo,
+               "Cyrus-HTTP/%s LibXML/%s Jansson/%s",
+               CYRUS_VERSION, LIBXML_DOTTED_VERSION, JANSSON_VERSION);
+#endif /* USE_INTERNAL_SASL */
 
     r = tls_init(!https, &serverinfo);
     if (https) {
