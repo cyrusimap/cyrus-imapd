@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+# Every name or address component needs a kind and a value (RFC 9553
+# 2.2.1.1, 2.5.1.1), even one with properties a vCard can't represent,
+# which are otherwise kept as they are.  A card missing either is
+# rejected, so a text query never meets one.
+sub test_card_set_create_name_component_missing
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([
+        ['ContactCard/set', {
+            create => {
+                nokind => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => {
+                        components => [
+                            { type => 'given',   value => 'Ex'    },
+                            { type => 'surname', value => 'Ample' },
+                        ],
+                    },
+                },
+                novalue => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => {
+                        components => [
+                            { kind => 'given', foo => 'bar' },
+                        ],
+                    },
+                },
+                adrnokind => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    addresses => {
+                        a1 => {
+                            components => [
+                                { type => 'locality', value => 'Exampleton' },
+                            ],
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['ContactCard/query', { filter => { text => 'meh' } }, 'R2'],
+    ]);
+
+    my $set = $res->sentence_named('ContactCard/set')->as_set;
+    $self->assert_cmp_deeply({
+        nokind => {
+            type => 'invalidProperties',
+            properties => [ 'name/components[0]/kind' ],
+        },
+        novalue => {
+            type => 'invalidProperties',
+            properties => [ 'name/components[0]/value' ],
+        },
+        adrnokind => {
+            type => 'invalidProperties',
+            properties => [ 'addresses/a1/components[0]/kind' ],
+        },
+    }, $set->create_errors);
+
+    $self->assert_cmp_deeply([],
+        $res->sentence_named('ContactCard/query')->arguments->{ids});
+}

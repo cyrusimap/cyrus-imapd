@@ -1,0 +1,27 @@
+Description:
+
+ContactCard/set now rejects name and address components that lack a kind
+or a value, which a component with an unknown property used to bypass.
+Such components already stored are dropped when the card is read, so a
+text query no longer crashes on them.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.  Cards stored with such components are repaired the next time they
+are updated; the server logs jscontact.components.dropped for each one read.
+
+
+GitHub issue:
+
+None.
