@@ -11,6 +11,7 @@
 #include "xmalloc.h"
 
 EXPORTED extern inline size_t hashu64_count(const hashu64_table *table);
+EXPORTED extern inline bool hashu64_constructed(const hashu64_table *table);
 
 #include "hash_priv.h"
 
