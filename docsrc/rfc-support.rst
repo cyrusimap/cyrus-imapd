@@ -568,8 +568,10 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
         Cyrus restricts special-use attributes beyond the RFC:
 
         * Each attribute can be on only one of a user's mailboxes.
-        * Attributes outside the RFC 6154 list must be listed in
-          :imapdconf:`specialuse_extra`.
+        * Only ``\Archive``, ``\Drafts``, ``\Junk``, ``\Sent``, ``\Trash``,
+          ``\Important`` (:rfc:`8457`), ``\Snoozed`` and ``\Scheduled`` are
+          accepted by default; any other attribute, including ``\All`` and
+          ``\Flagged``, must be listed in :imapdconf:`specialuse_extra`.
         * CREATE with USE must target a direct child of a user's INBOX, unless
           :imapdconf:`allowspecialusesubfolder` is set, in which case it must
           still be in a user's namespace.

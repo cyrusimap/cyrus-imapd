@@ -4,6 +4,7 @@ Default-Value: NULL
 Last-Modified: 2.5.0
 
 Whitespace separated list of extra special-use attributes that can be set
-on a mailbox. :rfc:`6154` currently lists what special-use attributes can
-be set.  This allows extending that list in the future or adding your own
-if needed.
+on a mailbox, in addition to the built-in ``\Archive``, ``\Drafts``,
+``\Junk``, ``\Sent``, ``\Trash``, ``\Important``, ``\Snoozed`` and
+``\Scheduled``.  The :rfc:`6154` attributes ``\All`` and ``\Flagged`` are
+not built in.
