@@ -47,6 +47,10 @@ Examples
         idled                   cmd="/usr/lib/cyrus/bin/idled"
     }
 
+With **wait=y**, :cyrusman:`master(8)` starts services only once
+**idled** is ready to receive notifications.  See
+:cyrusman:`cyrus.conf(5)`.
+
 Files
 =====
 
