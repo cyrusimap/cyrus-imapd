@@ -1,0 +1,10 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_scram_plus_tls13_exporter
+    :TLS :needs_dependency_openssl :NoStartInstances
+    ($self)
+{
+    # RFC 9266: tls-unique isn't defined for TLS 1.3
+    $self->assert_str_equals('p=tls-exporter', $self->scram_plus_gs2_header());
+}

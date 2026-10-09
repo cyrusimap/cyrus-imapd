@@ -1424,19 +1424,45 @@ static int start_servertls(int readfd, int writefd, int timeout,
 
     saslprops->ssf = (sasl_ssf_t) tls_cipher_usebits;
 
-    if (SSL_session_reused(tls_conn)) {
-        saslprops->cbinding.len = SSL_get_finished(tls_conn,
-                                                   saslprops->tls_finished,
-                                                   MAX_FINISHED_LEN);
+    if (SSL_version(tls_conn) <= TLS1_2_VERSION) {
+        if (SSL_session_reused(tls_conn)) {
+            saslprops->cbinding.len = SSL_get_finished(tls_conn,
+                                                       saslprops->tls_finished,
+                                                       MAX_FINISHED_LEN);
+        }
+        else {
+            saslprops->cbinding.len =
+                SSL_get_peer_finished(tls_conn,
+                                      saslprops->tls_finished,
+                                      MAX_FINISHED_LEN);
+        }
+        saslprops->cbinding.name = "tls-unique";
+        saslprops->cbinding.data = saslprops->tls_finished;
     }
     else {
-        saslprops->cbinding.len = SSL_get_peer_finished(tls_conn,
-                                                        saslprops->tls_finished,
-                                                        MAX_FINISHED_LEN);
-    }
+        /* RFC 9266 Section 2: label, no context, 32 bytes */
+        static const char label[] = "EXPORTER-Channel-Binding";
+        const size_t key_len = 32;
 
-    saslprops->cbinding.name = "tls-unique";
-    saslprops->cbinding.data = saslprops->tls_finished;
+        if (SSL_export_keying_material(tls_conn,
+                                       saslprops->tls_finished,
+                                       key_len,
+                                       label,
+                                       sizeof(label) - 1,
+                                       NULL,
+                                       0,
+                                       0)
+            != 1)
+        {
+            xsyslog_ev(LOG_ERR, "tls.exporter.failed",
+                       lf_s("error", ERR_error_string(ERR_get_error(), NULL)));
+        }
+        else {
+            saslprops->cbinding.name = "tls-exporter";
+            saslprops->cbinding.data = saslprops->tls_finished;
+            saslprops->cbinding.len = key_len;
+        }
+    }
 
     SSL_get0_alpn_selected(tls_conn, &alpn, &alpn_len);
 

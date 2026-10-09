@@ -721,15 +721,36 @@ static void do_starttls(int ssl, const char *keyfile, unsigned *ssf)
     static unsigned char finished[EVP_MAX_MD_SIZE];
     static struct sasl_channel_binding cbinding;
 
-    if (SSL_session_reused(tls_conn)) {
-        cbinding.len = SSL_get_peer_finished(tls_conn,
-                                             finished, sizeof(finished));
+    if (SSL_version(tls_conn) <= TLS1_2_VERSION) {
+        if (SSL_session_reused(tls_conn)) {
+            cbinding.len =
+                SSL_get_peer_finished(tls_conn, finished, sizeof(finished));
+        }
+        else {
+            cbinding.len =
+                SSL_get_finished(tls_conn, finished, sizeof(finished));
+        }
+        cbinding.name = "tls-unique";
     }
     else {
-        cbinding.len = SSL_get_finished(tls_conn, finished, sizeof(finished));
-    }
+        /* RFC 9266 Section 2: label, no context, 32 bytes */
+        static const char label[] = "EXPORTER-Channel-Binding";
 
-    cbinding.name = "tls-unique";
+        cbinding.len = 32;
+        if (SSL_export_keying_material(tls_conn,
+                                       finished,
+                                       cbinding.len,
+                                       label,
+                                       sizeof(label) - 1,
+                                       NULL,
+                                       0,
+                                       0)
+            != 1)
+        {
+            imtest_fatal("Error reading EKM for channel binding");
+        }
+        cbinding.name = "tls-exporter";
+    }
     cbinding.critical = 0;
     cbinding.data = finished;
 
