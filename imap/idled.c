@@ -104,6 +104,20 @@ struct notify_rock {
     struct auth_state *authstate;
 };
 
+static int myrights(struct notify_rock *nrock,
+                    const mbentry_t *mbentry,
+                    const char *userid)
+{
+    if (strcmpsafe(nrock->authstate_userid, userid)) {
+        auth_freestate(nrock->authstate);
+        free(nrock->authstate_userid);
+        nrock->authstate = auth_newstate(userid);
+        nrock->authstate_userid = xstrdup(userid);
+    }
+
+    return cyrus_acl_myrights(nrock->authstate, mbentry->acl);
+}
+
 /* is userid subscribed to mbentry, counting the ACL_AUTOSUB grant?
  * mboxlist_issubscribed answers this, but it has to read the mbentry to
  * decide whether the right is in play and it can't hold an auth state
@@ -115,22 +129,19 @@ static int is_subscribed(struct notify_rock *nrock,
     if (mboxlist_checksub(mbentry->name, userid) == 0) return 1;
     if (!cyrus_acl_anygrants(mbentry->acl, ACL_AUTOSUB)) return 0;
 
-    if (strcmpsafe(nrock->authstate_userid, userid)) {
-        auth_freestate(nrock->authstate);
-        free(nrock->authstate_userid);
-        nrock->authstate = auth_newstate(userid);
-        nrock->authstate_userid = xstrdup(userid);
-    }
-
-    return cyrus_acl_myrights(nrock->authstate, mbentry->acl) & ACL_AUTOSUB;
+    return myrights(nrock, mbentry, userid) & ACL_AUTOSUB;
 }
 
 static int notify_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct notify_rock *nrock = rock;
     const char *mboxid = idle_msg_get_mboxid(nrock->msg);
+    const char *event = json_string_value(json_object_get(nrock->msg, "event"));
 
-    if (!mboxid) return 0;
+    /* only server metadata changes come without a mailbox */
+    if (!mboxid && name_to_mboxevent(event) != EVENT_SERVER_METADATA_CHANGE) {
+        return 0;
+    }
 
     pid_t pid = sqlite3_column_int(stmt, 0);
     unsigned long events = sqlite3_column_int(stmt, 1);
@@ -164,7 +175,11 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
     size_t i;
 
     /* Is it a mailbox in which the client has interest? */
-    if (filter == FILTER_SELECTED) {
+    if (!mboxid) {
+        /* any registration for the event will do */
+        notify = 1;
+    }
+    else if (filter == FILTER_SELECTED) {
         /* keyval is currently selected mailbox id */
         if (!strcmp(mboxid, keyval))
             notify = 1;
@@ -204,6 +219,17 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
         case FILTER_MAILBOXES:
             if (json_array_find(keys, mbentry->name) >= 0)
                 notify = 1;
+            break;
+
+        case FILTER_METADATA:
+            /* keyval is userid: personal mailboxes, and with reverse ACLs
+             * every mailbox the user can see */
+            if (mboxname_userownsmailbox(keyval, mbentry->name)
+                || (config_getswitch(IMAPOPT_REVERSEACLS)
+                    && (myrights(nrock, mbentry, keyval) & ACL_LOOKUP)))
+            {
+                notify = 1;
+            }
             break;
 
         default:

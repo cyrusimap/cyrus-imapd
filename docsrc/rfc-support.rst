@@ -412,6 +412,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Internet Message Access Protocol - ANNOTATE Extension
 
+    .. NOTE::
+
+        After ``SELECT`` or ``EXAMINE`` with the ANNOTATE parameter,
+        unsolicited FETCH responses name changed annotation entries.
+
 :rfc:`5258`
 
     Internet Message Access Protocol version 4 - LIST Command Extensions
@@ -475,9 +480,21 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     The IMAP METADATA Extension
 
+    .. NOTE::
+
+        After ``ENABLE METADATA``, unsolicited METADATA responses report
+        changes to server metadata and to the metadata of the user's
+        personal mailboxes, or of every mailbox they can see when
+        :imapdconf:`reverseacls` is set.  This needs idled.
+
 :rfc:`5465`
 
     The IMAP NOTIFY Extension
+
+    .. NOTE::
+
+        All event types are supported, including AnnotationChange,
+        MailboxMetadataChange and ServerMetadataChange.
 
 :rfc:`5490`
 

@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_annotation_personal
+    :needs_component_idled
+    ($self)
+{
+    $self->{instance}->add_start(name => 'idled', argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+    my $othertalk = $svc->create_store()->get_client();
+
+    $othertalk->create('INBOX.other') or die "create: $@";
+    $othertalk->append('INBOX.other', "()",
+                       $self->{gen}->generate(subject => "A")->as_string())
+        or die "append: $@";
+
+    $talk->_imap_cmd('ENABLE', 0, 'enabled', 'CONDSTORE');
+    $talk->_imap_cmd('NOTIFY', 0, "", "SET",
+                     "(PERSONAL (MessageNew MessageExpunge AnnotationChange))");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $othertalk->select('INBOX.other');
+    my $modseq = $othertalk->_imap_cmd('STATUS', 0, 'status', 'INBOX.other',
+                                       '(HIGHESTMODSEQ)')
+                           ->{'INBOX.other'}{highestmodseq};
+    $othertalk->store('1', 'annotation',
+                      ['/comment', ['value.shared', 'hello world']]);
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+
+    # RFC 5465 5.1: a STATUS with HIGHESTMODSEQ for another mailbox
+    $self->assert($store->idle_response('STATUS', 10), "got STATUS");
+    my $status = $talk->get_response_code('status')->{'INBOX.other'};
+    $self->assert_num_gt($modseq, $status->{highestmodseq});
+}

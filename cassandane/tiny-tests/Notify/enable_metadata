@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_enable_metadata
+    :needs_component_idled
+    ($self)
+{
+    $self->{instance}->add_start(name => 'idled', argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+    my $othertalk = $svc->create_store()->get_client();
+
+    my $res = $talk->_imap_cmd('ENABLE', 0, 'enabled', 'METADATA');
+    $self->assert_num_equals(1, $res->{metadata});
+
+    my @got;
+    my %handlers = (metadata => sub { push @got, $_[1] });
+
+    $othertalk->setmetadata('INBOX', '/private/comment', 'hello');
+    $self->assert($store->idle_response(\%handlers, 10), "got METADATA");
+
+    # NOTIFY replaces NOTIFY's own registrations, not ENABLE's
+    $talk->_imap_cmd('NOTIFY', 0, "", "NONE");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $othertalk->setmetadata('', '/private/comment', 'hello');
+    $self->assert($store->idle_response(\%handlers, 10), "got METADATA");
+
+    $self->assert_cmp_deeply([
+        [ 'INBOX', '/private/comment' ],
+        [ '', '/private/comment' ],
+    ], \@got);
+}

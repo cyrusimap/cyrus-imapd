@@ -19,7 +19,9 @@ typedef enum {
     FILTER_PERSONAL         = (1<<2),  // key is userid
     FILTER_SUBSCRIBED       = (1<<3),  // key is userid
     FILTER_SUBTREE          = (1<<4),  // key list of mailboxes
-    FILTER_MAILBOXES        = (1<<5)   // key list of mailboxes
+    FILTER_MAILBOXES        = (1<<5),  // key list of mailboxes
+    /* not RFC 5465: ENABLE METADATA, see idled's notify_cb() */
+    FILTER_METADATA         = (1<<6)   // key is userid
 } mailbox_filter_t;
 
 #define IMAP_NOTIFY_MESSAGE_NEW                                         \
@@ -34,7 +36,7 @@ typedef enum {
       EVENT_FLAGS_SET          | EVENT_FLAGS_CLEAR               )
 
 #define IMAP_NOTIFY_ANNOTATION_CHANGE                                   \
-    ( 0 ) // We don't currently have an EVENT for this
+    ( EVENT_ANNOTATION_CHANGE )
 
 #define IMAP_NOTIFY_MESSAGE                                             \
     ( IMAP_NOTIFY_MESSAGE_NEW  | IMAP_NOTIFY_MESSAGE_EXPUNGE   |        \
@@ -51,10 +53,14 @@ typedef enum {
     ( IMAP_NOTIFY_MAILBOX_NAME | IMAP_NOTIFY_SUBSCRIPTION_CHANGE )
 
 #define IMAP_NOTIFY_MAILBOX_METADATA_CHANGE                             \
-    ( 0 ) // We don't currently have an EVENT for this
+    ( EVENT_MAILBOX_METADATA_CHANGE )
 
 #define IMAP_NOTIFY_SERVER_METADATA_CHANGE                              \
-    ( 0 ) // We don't currently have an EVENT for this
+    ( EVENT_SERVER_METADATA_CHANGE )
+
+#define IMAP_NOTIFY_METADATA                                            \
+    ( IMAP_NOTIFY_MAILBOX_METADATA_CHANGE |                             \
+      IMAP_NOTIFY_SERVER_METADATA_CHANGE  )
 
 /* set up the link to the idled for notifications */
 int idle_init(void);

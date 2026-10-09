@@ -1,8 +1,10 @@
 Name: event_groups
 Type: BITFIELD
 Allowed-Values: message quota flags access mailbox subscription calendar
- applepushservice jmap
+ applepushservice jmap metadata
 Default-Value: message mailbox
-Last-Modified: 3.8.0
+Last-Modified: UNRELEASED
 
 Space-separated list of groups of related events to turn on notification.
+The metadata group covers MailboxMetadataChange, ServerMetadataChange and
+AnnotationChange.

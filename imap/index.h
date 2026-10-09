@@ -51,6 +51,7 @@ struct index_init {
     int want_dav;
     uint32_t want_mbtype;
     int want_expunged;
+    bool want_annotations;
     int stay_locked;
     struct vanished_params vanished;
     seqset_t *vanishedlist;
@@ -102,6 +103,7 @@ struct index_state {
     int want_dav;
     uint32_t want_mbtype;
     int want_expunged;
+    bool want_annotations; /* tell changed annotation entries */
     unsigned num_expunged;
     message_t *m;
     seqset_t *searchres; /* RFC 5182 SEARCH results */
@@ -263,6 +265,12 @@ enum {
 extern uint32_t index_finduid(struct index_state *state, uint32_t uid, int mode);
 extern uint32_t index_getuid(struct index_state *state, uint32_t msgno);
 extern void index_tellchanges(struct index_state *state, unsigned tell_flags);
+
+/**
+ * Report changed message annotations in unsolicited FETCH responses, as
+ * ANNOTATION with the entry names only (RFC 5257 4.4, RFC 5465 5.1).
+ */
+extern void index_set_want_annotations(struct index_state *state, bool want);
 extern modseq_t index_highestmodseq(struct index_state *state);
 extern int index_check(struct index_state *state, unsigned tell_flags);
 extern seqset_t *index_vanished(struct index_state *state,

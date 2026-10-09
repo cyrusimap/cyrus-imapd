@@ -4595,6 +4595,7 @@ static int sync_apply_annotation(struct dlist *kin, struct sync_state *sstate)
     appendentryatt(&entryatts, entry, attvalues);
 
     astate = annotate_state_new();
+    annotate_state_set_noevents(astate);
     if (*mboxname) {
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (r) goto done;
@@ -4654,6 +4655,7 @@ static int sync_apply_unannotation(struct dlist *kin, struct sync_state *sstate)
     appendentryatt(&entryatts, entry, attvalues);
 
     astate = annotate_state_new();
+    annotate_state_set_noevents(astate);
     if (*mboxname) {
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (r) goto done;

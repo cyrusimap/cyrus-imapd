@@ -353,6 +353,7 @@ enum {
     ENABLED_IMAP4REV2 =    (1<<2),  /* RFC 9051 */
     ENABLED_UIDONLY =      (1<<3),  /* RFC 9586 */
     ENABLED_UTF8_ACCEPT =  (1<<4),  /* RFC 6855 */
+    ENABLED_METADATA =     (1<<5),  /* RFC 5464 */
 };
 
 /* Bitmask for urlfetch params (RFC 5524) */
