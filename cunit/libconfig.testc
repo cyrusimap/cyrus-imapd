@@ -12,6 +12,7 @@
 #include "lib/libconfig.h"
 #include "lib/retry.h"
 #include "lib/xmalloc.h"
+#include "lib/xunlink.h"
 
 #define DBDIR "test-libconfig-dbdir"
 
@@ -22,14 +23,10 @@ static int set_up(void)
 
 static int tear_down(void)
 {
-    int r;
-
     /* all these tests will initialise some config, clean up after! */
     config_reset();
 
-    r = system("rm -rf " DBDIR);
-
-    return r;
+    return 0;
 }
 
 static void test_int(void)
@@ -1285,6 +1282,259 @@ static void test_partition_sanity_bad_dups(void)
     r = config_check_partitions(NULL);
     CU_ASSERT_EQUAL(r, -2);
     CU_ASSERT_SYSLOG(/*all*/0, 2);
+}
+
+static void test_missing_file(void)
+{
+    struct buf err = BUF_INITIALIZER;
+    int r = config_read("/nonexistent", 0, &err);
+
+    CU_ASSERT_EQUAL(r, EX_CONFIG);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&err),
+                           "can't open configuration file /nonexistent: No such file or directory\n");
+
+    buf_free(&err);
+}
+
+static void test_empty_option_key(void)
+{
+    struct buf err = BUF_INITIALIZER;
+    int r = config_read_string(DBDIR"/conf", &err, ": value\n");
+
+    CU_ASSERT_EQUAL(r, EX_CONFIG);
+    CU_ASSERT_STRING_CONTAINS(buf_cstring(&err), ":2: empty option\n");
+
+    buf_free(&err);
+}
+
+static void test_empty_option_value(void)
+{
+    struct buf err = BUF_INITIALIZER;
+    int r = config_read_string(DBDIR"/conf", &err, "key: \n");
+
+    CU_ASSERT_EQUAL(r, EX_CONFIG);
+    CU_ASSERT_STRING_CONTAINS(buf_cstring(&err), ":2: empty option value");
+
+    buf_free(&err);
+}
+
+static void test_invalid_option(void)
+{
+    struct buf err = BUF_INITIALIZER;
+    int r = config_read_string(DBDIR"/conf", &err, ";: value\n");
+
+    CU_ASSERT_EQUAL(r, EX_CONFIG);
+    CU_ASSERT_STRING_CONTAINS(buf_cstring(&err), ": invalid option\n");
+
+    buf_free(&err);
+}
+
+static void test_invalid_directive(void)
+{
+    struct buf err = BUF_INITIALIZER;
+    int r = config_read_string(DBDIR"/conf", &err, "@hoedown: dance!\n");
+
+    CU_ASSERT_EQUAL(r, EX_CONFIG);
+    CU_ASSERT_STRING_CONTAINS(buf_cstring(&err), ":2: invalid directive");
+
+    buf_free(&err);
+}
+
+static void test_parsing(void)
+{
+    const char *autocreate_sieve_folders = NULL;
+    const char *autocreate_sieve_script = NULL;
+    const char *addressbookprefix = NULL;
+    int r = config_read_string(DBDIR"/conf", NULL,
+        "\tautocreate_sieve_folders:   Leading Whitespace\n"
+        "autocreate_sieve_\\\n" "script: contin\\\n" "uation\n"
+        "addressbookprefix: Trailing Whitespace \v\t\f\r\n"
+    );
+    CU_ASSERT_EQUAL(r, 0);
+
+    autocreate_sieve_folders = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_FOLDERS);
+    CU_ASSERT_PTR_NOT_NULL(autocreate_sieve_folders);
+    CU_ASSERT_STRING_EQUAL(autocreate_sieve_folders, "Leading Whitespace");
+
+    autocreate_sieve_script = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_SCRIPT);
+    CU_ASSERT_PTR_NOT_NULL(autocreate_sieve_script);
+    CU_ASSERT_STRING_EQUAL(autocreate_sieve_script, "continuation");
+
+    addressbookprefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
+    CU_ASSERT_PTR_NOT_NULL(addressbookprefix);
+    CU_ASSERT_STRING_EQUAL(addressbookprefix, "Trailing Whitespace");
+}
+
+static void test_overlong_lines(void)
+{
+    struct buf leading_spaces = BUF_INITIALIZER;
+    int r;
+    buf_printf(&leading_spaces,
+               "%5000s\n", "autocreate_sieve_folders: Junk | Trash");
+    r = config_read_string(DBDIR"/conf", NULL, buf_cstring(&leading_spaces));
+    buf_free(&leading_spaces);
+    CU_ASSERT_EQUAL(r, 0);
+
+    const char *autocreate_sieve_folders = config_getstring(IMAPOPT_AUTOCREATE_SIEVE_FOLDERS);
+    CU_ASSERT_PTR_NOT_NULL(autocreate_sieve_folders);
+    CU_ASSERT_STRING_EQUAL(autocreate_sieve_folders, "Junk | Trash");
+}
+
+static void test_duplicate(void)
+{
+    struct buf err = BUF_INITIALIZER;
+    int r = config_read_string(DBDIR"/conf", &err,
+        "autocreate_sieve_folders: Junk | Trash\n"
+        "\n"
+        "autocreate_sieve_folders: Junk | Trash\n"
+    );
+    CU_ASSERT_EQUAL(r, EX_CONFIG);
+    CU_ASSERT_STRING_CONTAINS(buf_cstring(&err),
+        ":4: 'autocreate_sieve_folders' was already specified\n"
+    );
+
+    buf_free(&err);
+}
+
+static void test_duplicate_overflow(void)
+{
+    struct buf err = BUF_INITIALIZER;
+    int r = config_read_string(DBDIR"/conf", &err,
+        "BuT-FiRsT: coffee\n"
+        " bUt-fIrSt:coffee\n"
+    );
+    CU_ASSERT_EQUAL(r, EX_CONFIG);
+    CU_ASSERT_STRING_CONTAINS(buf_cstring(&err),
+        ":3: 'but-first' was already specified\n"
+    );
+    buf_free(&err);
+}
+
+static void test_include(void)
+{
+    char filename[PATH_MAX] = {0};
+    int fd = cunit_tmpfile(filename, sizeof(filename), "imapd.conf-XXXXXX");
+    CU_ASSERT_FATAL(fd >= 0);
+
+    char config[] = "But-First: Coffee\n";
+    retry_write(fd, config, strlen(config));
+    close(fd);
+
+    struct buf first = BUF_INITIALIZER;
+    buf_printf(&first, "@include: %s\n", filename);
+
+    int r = config_read_string(DBDIR"/conf", NULL, buf_cstring(&first));
+    CU_ASSERT_EQUAL(r, 0);
+
+    const char *directive = config_getoverflowstring("but-first", "Tea");
+    CU_ASSERT_PTR_NOT_NULL(directive);
+    CU_ASSERT_STRING_EQUAL(directive, "Coffee");
+
+    buf_free(&first);
+    xunlink(filename);
+}
+
+static void test_include_self(void)
+{
+    struct buf err = BUF_INITIALIZER;
+    char filename1[PATH_MAX] = {0};
+    char filename2[PATH_MAX] = {0};
+    char filename3[PATH_MAX] = {0};
+
+    int fd1 = cunit_tmpfile(filename1, sizeof(filename1), "imapd.conf-XXXXXX");
+    CU_ASSERT_FATAL(fd1 >= 0);
+    int fd2 = cunit_tmpfile(filename2, sizeof(filename2), "imapd.conf-XXXXXX");
+    CU_ASSERT_FATAL(fd2 >= 0);
+    int fd3 = cunit_tmpfile(filename3, sizeof(filename3), "imapd.conf-XXXXXX");
+    CU_ASSERT_FATAL(fd3 >= 0);
+
+    char want[PATH_MAX * 4 + 256];
+    snprintf(want, sizeof(want),
+             "%s: already included\n"
+             "\tincluded at %s:1\n"
+             "\tincluded at %s:1\n"
+             "\tincluded at %s:2\n",
+             filename2,
+             filename3,
+             filename2,
+             filename1);
+
+    cunit_write_configdirectory_directive(fd1, DBDIR "/conf");
+    FILE *fh = fdopen(fd1, "w");
+    fprintf(fh, "@include: %s\n", filename2);
+    fclose(fh);
+
+    fh = fdopen(fd2, "w");
+    fprintf(fh, "@INCLUDE: %s\n", filename3);
+    fclose(fh);
+
+    fh = fdopen(fd3, "w");
+    fprintf(fh, " @include: %s\n", filename2);
+    fclose(fh);
+
+    int r = config_read(filename1, 0, &err);
+    CU_ASSERT_EQUAL(r, EX_CONFIG);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&err), want);
+
+    buf_free(&err);
+    xunlink(filename1);
+    xunlink(filename2);
+    xunlink(filename3);
+}
+
+static void test_include_loop(void)
+{
+    struct buf err = BUF_INITIALIZER;
+    char filename[PATH_MAX] = {0};
+    int fd = cunit_tmpfile(filename, sizeof(filename), "imapd.conf-XXXXXX");
+    CU_ASSERT_FATAL(fd >= 0);
+    char want[PATH_MAX * 2 + 256];
+    snprintf(want, sizeof(want),
+             "%s: already included\n"
+             "\tincluded at %s:2\n",
+             filename,
+             filename);
+
+    cunit_write_configdirectory_directive(fd, DBDIR "/conf");
+    FILE *fh = fdopen(fd, "w");
+    fprintf(fh, "@include: %s\n", filename);
+    fclose(fh);
+
+    int r = config_read(filename, 0, &err);
+
+    CU_ASSERT_EQUAL(r, EX_CONFIG);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&err), want);
+
+    buf_free(&err);
+    xunlink(filename);
+}
+
+static void test_include_bogus(void)
+{
+    struct buf err = BUF_INITIALIZER;
+    char filename[PATH_MAX] = {0};
+    int fd = cunit_tmpfile(filename, sizeof(filename), "imapd.conf-XXXXXX");
+    CU_ASSERT_FATAL(fd >= 0);
+    char want[PATH_MAX + 256];
+    snprintf(want, sizeof(want),
+             "can't open configuration file /nonexistent: No such file or directory\n"
+             "\tincluded at %s:4\n",
+             filename);
+
+    /* Yes, the \ end of line folding *is* this crazy. Unclear if we really want
+     * to keep supporting it, but make sure we don't change it by accident: */
+    char config[] = "@inc\\\nlude:    /non\\\nexistent\n";
+    cunit_write_configdirectory_directive(fd, DBDIR "/conf");
+    retry_write(fd, config, strlen(config));
+    close(fd);
+
+    int r = config_read(filename, 0, &err);
+
+    CU_ASSERT_EQUAL(r, EX_CONFIG);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&err), want);
+
+    buf_free(&err);
+    xunlink(filename);
 }
 
 /* vim: set ft=c: */
