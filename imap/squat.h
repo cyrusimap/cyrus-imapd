@@ -91,7 +91,7 @@ typedef long long SquatInt64;
 typedef int       SquatInt32;
 
 /* All SQUAT index files start with this magic 8 bytes */
-extern char const squat_index_file_header[8]; /* "SQUAT 1\n" */
+extern char const squat_index_file_header[9]; /* "SQUAT 1\n" + NUL */
 
 /* SQUAT return values */
 #define SQUAT_OK           1

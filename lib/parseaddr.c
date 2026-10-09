@@ -404,7 +404,7 @@ EXPORTED char *address_get_user(const struct address *a)
     char *s = NULL;
 
     if (a->mailbox) {
-        char *p = strchr(a->mailbox, '+');
+        const char *p = strchr(a->mailbox, '+');
         int len = p ? p - a->mailbox : (int)strlen(a->mailbox);
         s = xstrndup(a->mailbox, len);
     }
@@ -417,7 +417,7 @@ EXPORTED char *address_get_detail(const struct address *a)
     char *s = NULL;
 
     if (a->mailbox) {
-        char *p = strchr(a->mailbox, '+');
+        const char *p = strchr(a->mailbox, '+');
         s = p ? xstrdup(p + 1) : NULL;
     }
 

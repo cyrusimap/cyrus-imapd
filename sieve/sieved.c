@@ -909,7 +909,7 @@ static void generate_string_capa(const char *tag, const char *s,
                                  struct buf *buf)
 {
     if (s && *s) {
-        char *has_lf = strrchr(s, '\n');
+        const char *has_lf = strrchr(s, '\n');
 
         if (requires) *requires |= capa;
 

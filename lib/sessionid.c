@@ -7,6 +7,7 @@
 #include "lib/sessionid.h"
 
 #include "lib/libconfig.h"
+#include "lib/xstrlcpy.h"
 
 #include <string.h>
 #include <unistd.h>
@@ -63,7 +64,7 @@ EXPORTED void session_clear_id(void)
 /* parse sessionid out of protocol answers */
 EXPORTED void parse_sessionid(const char *str, char *sessionid)
 {
-    char *sp, *ep;
+    const char *sp, *ep;
     int len;
 
     if ((str) && (sp = strstr(str, "SESSIONID=<")) && (ep = strchr(sp, '>')))
@@ -71,11 +72,7 @@ EXPORTED void parse_sessionid(const char *str, char *sessionid)
         sp += 11;
         len = ep - sp;
         if (len < MAX_SESSIONID_SIZE)
-        {
-            strncpy(sessionid, sp, len);
-            ep = sessionid + len;
-            *ep = '\0';
-        }
+            strlcpy(sessionid, sp, len+1);
         else
             strcpy(sessionid, "invalid");
     }

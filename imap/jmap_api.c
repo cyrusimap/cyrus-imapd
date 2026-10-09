@@ -3131,7 +3131,7 @@ static int sharedrights_cb(const mbentry_t *mbentry, void *vrock)
         char *rightstr;
         int access;
 
-        rightstr = strchr(userid, '\t');
+        rightstr = (char *) strchr(userid, '\t');
         if (!rightstr) break;
         *rightstr++ = '\0';
 
@@ -3234,7 +3234,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         char *rightstr;
         int access;
 
-        rightstr = strchr(userid, '\t');
+        rightstr = (char *) strchr(userid, '\t');
         if (!rightstr) break;
         *rightstr++ = '\0';
 

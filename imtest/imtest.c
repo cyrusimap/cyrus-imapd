@@ -1665,7 +1665,7 @@ static void imap_parse_mechlist(struct buf *ret, const char *str,
         prot->sasl_cmd.maxlen = USHRT_MAX;
     }
 
-    while ((tmp = strstr(str, " AUTH="))) {
+    while ((tmp = (char *) strstr(str, " AUTH="))) {
         char *end = (tmp += 6);
 
         while((*end != ' ') && (*end != '\0')) end++;
@@ -2398,7 +2398,7 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
                         in = NULL;
                         while (token && *token) {
                             size_t tok_len, val_len;
-                            char *value;
+                            const char *value;
 
                             /* Trim leading and trailing BWS */
                             while (strchr(", \t", *token)) token++;
@@ -2427,7 +2427,7 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
                                 }
                             }
                             else if (!strncmp("data", token, tok_len)) {
-                                in = value;
+                                in = (char *) value;
                                 inlen = val_len;
                             }
 
@@ -2975,7 +2975,8 @@ int main(int argc, char **argv)
                     uint8_t fam;
                     uint16_t len;
                 } v2hdr = {
-                    "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A",
+                    { 0x0D, 0x0A, 0x0D, 0x0A, 0x00, 0x0D,
+                      0x0A, 0x51, 0x55, 0x49, 0x54, 0x0A },
                     (0x02 << 4) /* VER2 */ | 0x00 /* LOCAL  */,
                     (0x01 << 4) /* INET */ | 0x01 /* STREAM */,
                     0
