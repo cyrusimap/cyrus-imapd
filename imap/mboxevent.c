@@ -2167,6 +2167,14 @@ static int filled_params(enum event_type type, struct mboxevent *event)
                     IMAP_ENUM_EVENT_CONTENT_INCLUSION_MODE_STANDARD)
                     buf_appendcstr(&missing, " messageContent");
                 break;
+            case EVENT_CONVEXISTS:
+            case EVENT_CONVUNSEEN:
+            case EVENT_COUNTERS:
+            case EVENT_JMAP_STATES:
+                /* best effort: only mboxevent_extract_mailbox() fills these,
+                 * so events without a mailbox (Login, quota, subscription,
+                 * metadata...) don't carry them */
+                break;
             case EVENT_MODSEQ:
                 /* modseq is not included if notification refers to several
                  * messages */
