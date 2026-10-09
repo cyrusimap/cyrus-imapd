@@ -45,7 +45,7 @@ sub test_rename_user_sharee
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
     my $newstore = $self->{instance}->get_service('imap')->create_store(
-                        username => "newuser");
+                        username => "newuser+dav");
     my $newtalk = $newstore->get_client();
 
     $list = $newtalk->list([qw( vendor.cmu-dav )], '', '*', 'return', ['subscribed']);

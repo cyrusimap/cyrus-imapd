@@ -13080,7 +13080,9 @@ static int getlistselopts(char *tag, struct listargs *args)
             args->sel |= LIST_SEL_SUBSCRIBED;
             args->ret |= LIST_RET_SUBSCRIBED;
         } else if (!strcmp(buf.s, "vendor.cmu-dav")) {
-            args->sel |= LIST_SEL_DAV;
+            /* as for every other command, non-IMAP mailboxes need +dav */
+            if (imapd_userisadmin || imapd_want_dav())
+                args->sel |= LIST_SEL_DAV;
         } else if (!strcmp(buf.s, "vendor.cmu-include-deleted") && allowdeleted) {
             args->sel |= LIST_SEL_DELETED;
         } else if (!strcmp(buf.s, "vendor.fm-include-nonexistent")) {
