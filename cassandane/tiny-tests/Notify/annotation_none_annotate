@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_annotation_none_annotate
+    :needs_component_idled
+    ($self)
+{
+    $self->{instance}->add_start(name => 'idled', argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $talk = $svc->create_store()->get_client();
+    my $othertalk = $svc->create_store()->get_client();
+
+    $othertalk->append('INBOX', "()",
+                       $self->{gen}->generate(subject => "A")->as_string())
+        or die "append: $@";
+    $othertalk->select('INBOX');
+
+    $talk->select('INBOX', '(ANNOTATE)' => 1);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->_imap_cmd('NOTIFY', 0, "", "SET",
+                     "(SELECTED (MessageNew MessageExpunge AnnotationChange))");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->_imap_cmd('NOTIFY', 0, "", "NONE");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # SELECT (ANNOTATE) still asks for them
+    $othertalk->store('1', 'annotation',
+                      ['/comment', ['value.shared', 'hello world']]);
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $self->assert_cmp_deeply(
+        { 1 => superhashof({ uid => 1, annotation => { '/comment' => undef } }) },
+        $talk->_imap_cmd('NOOP', 0, 'fetch'));
+}

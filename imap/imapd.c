@@ -5027,7 +5027,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
         idle_start(notify_event_groups->selected.events, 0, FILTER_SELECTED, &key);
 
         if (notify_event_groups->selected.events & IMAP_NOTIFY_ANNOTATION_CHANGE)
-            index_set_want_annotations(imapd_index, true);
+            index_set_notify_annotations(imapd_index, true);
     }
 
     prot_printf(imapd_out, "%s OK [READ-%s] %s\r\n", tag,
@@ -15426,8 +15426,9 @@ static void cmd_notify(char *tag, int set)
 
     notify_event_groups = new_egroups;
 
-    if (new_egroups->selected.events & IMAP_NOTIFY_ANNOTATION_CHANGE)
-        index_set_want_annotations(imapd_index, true);
+    index_set_notify_annotations(imapd_index,
+                                 new_egroups->selected.events
+                                     & IMAP_NOTIFY_ANNOTATION_CHANGE);
 
     buf_free(&arg);
 

@@ -3286,7 +3286,7 @@ EXPORTED void index_tellchanges(struct index_state *state, unsigned tell_flags)
         if (im->modseq > im->told_modseq) {
             strarray_t annots = STRARRAY_INITIALIZER;
 
-            if (state->want_annotations) {
+            if (state->want_annotations || state->notify_annotations) {
                 changed_annotations(state, im, &annots);
             }
 
@@ -3304,10 +3304,10 @@ EXPORTED void index_tellchanges(struct index_state *state, unsigned tell_flags)
     }
 }
 
-EXPORTED void index_set_want_annotations(struct index_state *state, bool want)
+EXPORTED void index_set_notify_annotations(struct index_state *state, bool want)
 {
     if (state) {
-        state->want_annotations = want;
+        state->notify_annotations = want;
     }
 }
 
