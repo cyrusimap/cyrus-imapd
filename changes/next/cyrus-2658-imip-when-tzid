@@ -1,0 +1,24 @@
+Description:
+
+iMIP messages sent without an ``imipnotifier`` now show "When" in the
+event's own time zone, named after the times, instead of always in UTC.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+#2658
