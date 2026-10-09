@@ -740,6 +740,7 @@ static int do_referral(isieve_t *obj, char *refer_to)
             ucase(mtr);
             tmp = strstr(mechlist,mtr);
             if (tmp) {
+                *tmp = '\0';
                 strcpy(newlist, mechlist);
                 tmp++;
                 tmp = strchr(tmp, ' ');
