@@ -1,0 +1,26 @@
+Description:
+
+The DAV:principal-property-search and DAV:principal-search-property-set
+REPORTs are now also accepted on calendar and addressbook collections and
+their home sets.  With DAV:apply-to-principal-collection-set they search
+the principals, as RFC 3744 describes; without it they find nothing.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+#2546

@@ -137,14 +137,6 @@ static int propfind_alturiset(const xmlChar *name, xmlNsPtr ns,
                               struct propstat propstat[], void *rock);
 
 static int principal_search(const char *userid, void *rock);
-static int report_prin_prop_search(struct transaction_t *txn,
-                                   struct meth_params *rparams,
-                                   xmlNodePtr inroot,
-                                   struct propfind_ctx *fctx);
-static int report_prin_search_prop_set(struct transaction_t *txn,
-                                       struct meth_params *rparams,
-                                       xmlNodePtr inroot,
-                                       struct propfind_ctx *fctx);
 
 static int allprop_cb(const char *mailbox __attribute__((unused)),
                       uint32_t uid __attribute__((unused)),
@@ -7954,15 +7946,16 @@ static const struct prop_entry prin_search_props[] = {
 
 
 /* DAV:principal-property-search REPORT */
-static int report_prin_prop_search(struct transaction_t *txn,
-                                   struct meth_params *rparams __attribute__((unused)),
-                                   xmlNodePtr inroot,
-                                   struct propfind_ctx *fctx)
+int report_prin_prop_search(struct transaction_t *txn,
+                            struct meth_params *rparams __attribute__((unused)),
+                            xmlNodePtr inroot,
+                            struct propfind_ctx *fctx)
 {
     int ret = 0;
     xmlNodePtr node;
     struct search_crit *search_crit, *next;
     unsigned apply_prin_set = 0;
+    xmlNodePtr props = NULL;
 
     /* Parse children element of report */
     fctx->filter_crit = NULL;
@@ -8042,6 +8035,7 @@ static int report_prin_prop_search(struct transaction_t *txn,
             }
             else if (!xmlStrcmp(node->name, BAD_CAST "prop")) {
                 /* Already parsed in meth_report() */
+                props = node->children;
             }
             else if (!xmlStrcmp(node->name,
                                 BAD_CAST "apply-to-principal-collection-set")) {
@@ -8061,8 +8055,51 @@ static int report_prin_prop_search(struct transaction_t *txn,
         goto done;
     }
 
+    if (fctx->req_tgt->namespace->id != URL_NS_PRINCIPAL) {
+        /* RFC 3744 9.4: elsewhere, principals are only found by searching
+         * the DAV:principal-collection-set */
+        if (apply_prin_set) {
+            struct request_target_t *req_tgt = fctx->req_tgt;
+            const struct prop_entry *lprops = fctx->lprops;
+            struct propfind_entry_list *elist = fctx->elist;
+            const mbentry_t *mbentry = fctx->mbentry;
+            struct mailbox *mailbox = fctx->mailbox;
+            struct request_target_t prin_tgt;
+
+            /* properties are for principals, NOT the request URL */
+            buf_reset(&fctx->buf);
+            buf_printf(&fctx->buf,
+                       "%s/%s/",
+                       namespace_principal.prefix,
+                       USER_COLLECTION_PREFIX);
+            memset(&prin_tgt, 0, sizeof(struct request_target_t));
+            principal_parse_path(buf_cstring(&fctx->buf),
+                                 &prin_tgt,
+                                 &txn->error.desc);
+            fctx->req_tgt = &prin_tgt;
+            fctx->lprops = principal_props;
+            fctx->mbentry = NULL;
+            fctx->mailbox = NULL;
+
+            /* meth_report() resolved the requested properties against the
+             * request's namespace, so resolve them again */
+            fctx->elist = NULL;
+            ret = props ? preload_proplist(props, fctx) : 0;
+            if (!ret) {
+                ret = mboxlist_alluser(principal_search, fctx);
+            }
+            free_entry_list(fctx);
+
+            free(prin_tgt.userid);
+            fctx->req_tgt = req_tgt;
+            fctx->lprops = lprops;
+            fctx->elist = elist;
+            fctx->mbentry = mbentry;
+            fctx->mailbox = mailbox;
+        }
+    }
     /* Only search DAV:principal-collection-set */
-    if (apply_prin_set || !fctx->req_tgt->userid) {
+    else if (apply_prin_set || !fctx->req_tgt->userid) {
         /* XXX  Do LDAP/SQL lookup of CN/email-address(es) here */
 
         ret = mboxlist_alluser(principal_search, fctx);
@@ -8082,10 +8119,11 @@ static int report_prin_prop_search(struct transaction_t *txn,
 
 
 /* DAV:principal-search-property-set REPORT */
-static int report_prin_search_prop_set(struct transaction_t *txn,
-                                       struct meth_params *rparams __attribute__((unused)),
-                                       xmlNodePtr inroot,
-                                       struct propfind_ctx *fctx)
+int report_prin_search_prop_set(struct transaction_t *txn,
+                                struct meth_params *rparams
+                                __attribute__((unused)),
+                                xmlNodePtr inroot,
+                                struct propfind_ctx *fctx)
 {
     xmlNodePtr node;
     const struct prop_entry *entry;

@@ -289,6 +289,10 @@ static const struct report_type_t caldav_reports[] = {
     /* WebDAV ACL (RFC 3744) REPORTs */
     { "acl-principal-prop-set", NS_DAV, "multistatus", &report_acl_prin_prop,
       DACL_ADMIN, REPORT_NEED_MBOX | REPORT_NEED_PROPS | REPORT_DEPTH_ZERO },
+    { "principal-property-search", NS_DAV, "multistatus",
+      &report_prin_prop_search, 0, REPORT_ALLOW_PROPS | REPORT_DEPTH_ZERO },
+    { "principal-search-property-set", NS_DAV, "principal-search-property-set",
+      &report_prin_search_prop_set, 0, REPORT_DEPTH_ZERO },
 
     /* WebDAV Sync (RFC 6578) REPORTs */
     { "sync-collection", NS_DAV, "multistatus", &report_sync_col,

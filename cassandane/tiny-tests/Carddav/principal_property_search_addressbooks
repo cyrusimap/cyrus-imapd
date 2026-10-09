@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_principal_property_search_addressbooks ($self)
+{
+    my $CardDAV = $self->{carddav};
+
+    my sub search ($path, $apply) {
+        my $applyxml = $apply ? '<B:apply-to-principal-collection-set/>' : '';
+        my $xml = <<"XML";
+<B:principal-property-search xmlns:B="DAV:">
+  <B:property-search>
+    <B:prop><E:calendar-user-type xmlns:E="urn:ietf:params:xml:ns:caldav"/></B:prop>
+    <B:match>INDIVIDUAL</B:match>
+  </B:property-search>
+  <B:prop>
+    <B:displayname/>
+    <B:principal-URL/>
+    <C:addressbook-home-set xmlns:C="urn:ietf:params:xml:ns:carddav"/>
+  </B:prop>
+  $applyxml
+</B:principal-property-search>
+XML
+        return $CardDAV->Request('REPORT', $path, $xml, Depth => 0,
+                                 'Content-Type' => 'text/xml');
+    }
+
+    my $expect = search('/dav/principals/', 0);
+    $self->assert_not_null($expect->{'{DAV:}response'});
+
+    for my $path ('/dav/addressbooks/user/cassandane/',
+                  '/dav/addressbooks/user/cassandane/Default/') {
+        $self->assert_cmp_deeply($expect, search($path, 1), $path);
+        $self->assert_null(search($path, 0)->{'{DAV:}response'}, $path);
+    }
+}
