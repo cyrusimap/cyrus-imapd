@@ -1,0 +1,119 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Slurp;
+use IO::Select;
+use IO::Socket::INET;
+use POSIX ();
+
+# A fake ManageSieve server, one role per listener:
+#   tls:   offers STARTTLS, accepts it, then hangs up
+#   refer: accepts any login, answers LISTSCRIPTS with a referral to "deny"
+#   deny:  rejects every login
+my sub fake_server ()
+{
+    my %listeners = map {
+        $_ => IO::Socket::INET->new(
+            LocalAddr => '127.0.0.1',
+            LocalPort => 0,
+            Listen => 16,
+        ) || die "listen: $!"
+    } qw(tls refer deny);
+    my %ports = map { $_ => $listeners{$_}->sockport() } keys %listeners;
+
+    my $pid = fork() // die "fork: $!";
+    if ($pid) {
+        close $_ for values %listeners;
+        return ($pid, %ports);
+    }
+
+    $SIG{CHLD} = 'IGNORE';
+    my %role = map { fileno($listeners{$_}) => $_ } keys %listeners;
+    my $select = IO::Select->new(values %listeners);
+    while (my @ready = $select->can_read()) {
+        for my $l (@ready) {
+            my $conn = $l->accept() or next;
+            my $role = $role{fileno($l)};
+            next if fork();
+            alarm 60;
+            close $_ for values %listeners;
+
+            my $caps = qq{"SASL" "PLAIN"\r\n"VERSION" "1.0"\r\n};
+            $caps .= qq{"STARTTLS"\r\n} if $role eq 'tls';
+            syswrite $conn, "${caps}OK\r\n";
+
+            while (defined(my $line = <$conn>)) {
+                if ($line =~ m/\{(\d+)\+?\}\r\n$/) {
+                    read($conn, my $literal, $1);
+                    <$conn>;
+                }
+                if ($line =~ m/^STARTTLS/i) {
+                    syswrite $conn, "OK\r\n";
+                    last;
+                }
+                elsif ($line =~ m/^AUTHENTICATE/i) {
+                    syswrite $conn,
+                        $role eq 'deny' ? qq{NO "denied"\r\n} : "OK\r\n";
+                }
+                elsif ($line =~ m/^LISTSCRIPTS/i) {
+                    syswrite $conn, qq{BYE (REFERRAL }
+                        . qq{"sieve://127.0.0.1:$ports{deny}") "moved"\r\n};
+                }
+                elsif ($line =~ m/^LOGOUT/i) {
+                    last;
+                }
+            }
+            POSIX::_exit(0);
+        }
+    }
+    POSIX::_exit(0);
+}
+
+sub test_managesieve_failure_fds
+    ($self)
+{
+    my ($pid, %ports) = fake_server();
+
+    my $basedir = $self->{instance}->get_basedir();
+    my $script = "$basedir/fds.pl";
+    open my $fh, '>', $script or die "$script: $!";
+    print $fh <<'EOF';
+use Cyrus::SIEVE::managesieve;
+$SIG{PIPE} = 'IGNORE';
+alarm 60;
+my ($tlsport, $referport) = @ARGV;
+sub cb { 'cassandane' }
+sub nfds { opendir my $d, '/proc/self/fd'; scalar grep { /^\d+$/ } readdir $d }
+
+sub tls_fail {
+    sieve_get_handle("127.0.0.1:$tlsport", "cb", "cb", "cb", "cb", 1)
+        and die "STARTTLS unexpectedly succeeded";
+}
+sub referral_fail {
+    my $h = sieve_get_handle("127.0.0.1:$referport", "cb", "cb", "cb", "cb")
+        or die "login failed: " . sieve_get_global_error();
+    sieve_list($h, sub {}) or die "referral unexpectedly succeeded";
+    sieve_logout($h);
+}
+
+tls_fail();
+referral_fail();
+my $before = nfds();
+for (1..10) { tls_fail(); referral_fail(); }
+print "before=$before after=" . nfds() . "\n";
+EOF
+    close $fh;
+
+    my $out = "$basedir/fds.out";
+    eval {
+        $self->{instance}->run_command({
+            redirects => { stdout => $out, stderr => $out },
+        }, $^X, $script, $ports{tls}, $ports{refer});
+    };
+    my $err = $@;
+    kill 'TERM', $pid;
+    waitpid $pid, 0;
+
+    my $result = slurp_file($out);
+    die "$err$result" if $err;
+    $self->assert_matches(qr/^before=(\d+) after=\1$/m, $result);
+}
