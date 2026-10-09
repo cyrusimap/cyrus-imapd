@@ -38,13 +38,22 @@ static void set_globalerr(char *err)
     globalerr = err;
 }
 
+/* the contexts are Perl callbacks owned by the array */
+static void free_callbacks(sasl_callback_t *callbacks)
+{
+    for (sasl_callback_t *cb = callbacks; cb->id != SASL_CB_LIST_END; cb++) {
+        SvREFCNT_dec((SV *) cb->context);
+    }
+    safefree(callbacks);
+}
+
 static void get_handle_failed(isieve_t *obj,
                               sasl_callback_t *callbacks,
                               char *err)
 {
     if (err) set_globalerr(err);
     sieve_free_net(obj);
-    safefree(callbacks);
+    free_callbacks(callbacks);
 }
 
 static int perlsieve_getpass(sasl_conn_t *conn, void *context,
@@ -172,16 +181,16 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
 
     callbacks[0].id = SASL_CB_USER;
     callbacks[0].proc = (int (*)(void))&perlsieve_simple;
-    callbacks[0].context = username_cb;
+    callbacks[0].context = newSVsv(username_cb);
     callbacks[1].id = SASL_CB_AUTHNAME;
     callbacks[1].proc = (int (*)(void))&perlsieve_simple;
-    callbacks[1].context = authname_cb;
+    callbacks[1].context = newSVsv(authname_cb);
     callbacks[2].id = SASL_CB_GETREALM;
     callbacks[2].proc = (int (*)(void))&perlsieve_simple;
-    callbacks[2].context = realm_cb;
+    callbacks[2].context = newSVsv(realm_cb);
     callbacks[3].id = SASL_CB_PASS;
     callbacks[3].proc = (int (*)(void))&perlsieve_getpass;
-    callbacks[3].context = password_cb;
+    callbacks[3].context = newSVsv(password_cb);
     callbacks[4].id = SASL_CB_LIST_END;
 
     /* see if we have server:port (or IPv6, etc)*/
@@ -391,7 +400,7 @@ DESTROY(Sieveobj obj)
   CODE:
     /* sieve_logout() already freed and cleared isieve */
     if (obj->isieve) sieve_free_net(obj->isieve);
-    safefree(obj->callbacks);
+    free_callbacks(obj->callbacks);
     safefree(obj->class);
     free(obj->errstr);
     free(obj);
