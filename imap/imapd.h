@@ -353,6 +353,7 @@ enum {
     CAPA_IMAP4REV2 =    (1<<2),  /* RFC 9051 */
     CAPA_UIDONLY =      (1<<3),  /* RFC 9586 */
     CAPA_UTF8_ACCEPT =  (1<<4),  /* RFC 6855 */
+    CAPA_ENABLE_METADATA = (1<<5), /* RFC 5464 */
 };
 
 /* Bitmask for urlfetch params (RFC 5524) */

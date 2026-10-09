@@ -120,7 +120,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                             const struct fetchargs *fetchargs,
                             struct buf *msg, struct buf *item);
 static void index_printflags(struct index_state *state, uint32_t msgno,
-                             unsigned tell_flags);
+                             unsigned tell_flags, const strarray_t *annots);
 static char *get_localpart_addr(const char *header);
 static char *get_displayname(const char *header);
 static char *index_extract_subject(const char *subj, size_t len, int *is_refwd);
@@ -293,6 +293,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
         state->want_dav = init->want_dav;
         state->want_mbtype = init->want_mbtype;
         state->want_expunged = init->want_expunged;
+        state->want_annotations = init->want_annotations;
 
         state->myrights = cyrus_acl_myrights(init->authstate,
                                              mailbox_acl(state->mailbox));
@@ -861,7 +862,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
                 continue;
             if (im->modseq <= init->vanished.modseq)
                 continue;
-            index_printflags(state, msgno, TELL_UID);
+            index_printflags(state, msgno, TELL_UID, NULL);
         }
         if (seq != state->searchres) seqset_free(&seq);
     }
@@ -1144,7 +1145,7 @@ static int index_fetchresponses(struct index_state *state,
         im = &state->map[msgno-1];
         if (seq && !seqset_ismember(seq, usinguid ? im->uid : msgno)) {
             if (im->told_modseq !=0 && im->modseq > im->told_modseq)
-                index_printflags(state, msgno, (usinguid ? TELL_UID : 0));
+                index_printflags(state, msgno, (usinguid ? TELL_UID : 0), NULL);
             continue;
         }
 
@@ -3203,6 +3204,52 @@ static void index_tellexists(struct index_state *state)
     state->oldexists = state->exists;
 }
 
+struct changed_annotations_rock
+{
+    const char *userid;
+    strarray_t *annots;
+};
+
+static int changed_annotations_cb(const char *mboxname __attribute__((unused)),
+                                  uint32_t uid __attribute__((unused)),
+                                  const char *entry,
+                                  const char *userid,
+                                  const struct buf *value
+                                  __attribute__((unused)),
+                                  const struct annotate_metadata *mdata
+                                  __attribute__((unused)),
+                                  void *rock)
+{
+    struct changed_annotations_rock *crock = rock;
+
+    /* other users' private values, and Cyrus's own entries, aren't news */
+    if (*userid && strcmpsafe(userid, crock->userid)) {
+        return 0;
+    }
+    if (!strncmp(entry, IMAP_ANNOT_NS, strlen(IMAP_ANNOT_NS))) {
+        return 0;
+    }
+
+    strarray_add(crock->annots, entry);
+    return 0;
+}
+
+/* Entry names of message annotations changed since the client was told */
+static void changed_annotations(struct index_state *state,
+                                const struct index_map *im,
+                                strarray_t *annots)
+{
+    struct changed_annotations_rock crock = { state->userid, annots };
+
+    annotatemore_findall_mailbox(state->mailbox,
+                                 im->uid,
+                                 "*",
+                                 im->told_modseq,
+                                 changed_annotations_cb,
+                                 &crock,
+                                 ANNOTATE_TOMBSTONES);
+}
+
 EXPORTED void index_tellchanges(struct index_state *state, unsigned tell_flags)
 {
     uint32_t msgno;
@@ -3237,13 +3284,30 @@ EXPORTED void index_tellchanges(struct index_state *state, unsigned tell_flags)
 
         /* report if it's changed since last told */
         if (im->modseq > im->told_modseq) {
+            strarray_t annots = STRARRAY_INITIALIZER;
+
+            if (state->want_annotations) {
+                changed_annotations(state, im, &annots);
+            }
+
             /* Per RFC 7162: MODSEQ overrides .SILENT */
-            if ((tell_flags & (TELL_SILENT | TELL_MODSEQ)) != TELL_SILENT)
-                index_printflags(state, msgno, tell_flags);
+            if ((tell_flags & (TELL_SILENT | TELL_MODSEQ)) != TELL_SILENT
+                || strarray_size(&annots))
+            {
+                index_printflags(state, msgno, tell_flags, &annots);
+            }
+            strarray_fini(&annots);
 
             /* Update reported MODSEQ even if we were .SILENT */
             im->told_modseq = im->modseq;
         }
+    }
+}
+
+EXPORTED void index_set_want_annotations(struct index_state *state, bool want)
+{
+    if (state) {
+        state->want_annotations = want;
     }
 }
 
@@ -3495,8 +3559,10 @@ static void index_fetchflags(struct index_state *state,
     im->told_modseq = im->modseq;
 }
 
-static void index_printflags(struct index_state *state, 
-                             uint32_t msgno, unsigned tell_flags)
+/* annots: names of changed annotation entries to report, or NULL */
+static void index_printflags(struct index_state *state,
+                             uint32_t msgno, unsigned tell_flags,
+                             const strarray_t *annots)
 {
     struct index_map *im = &state->map[msgno-1];
     int sepchar = '(';
@@ -3529,6 +3595,10 @@ static void index_printflags(struct index_state *state,
          * MUST send MODSEQ to all untagged [UID]FETCH unsolicited responses */
         tell_flags |= TELL_MODSEQ;
     }
+    if (annots && strarray_size(annots) && !(client_capa & CAPA_UIDONLY)) {
+        /* RFC 5465, Section 5.1: MUST include UID */
+        tell_flags |= TELL_UID;
+    }
 
     prot_printf(state->out, "* %u %s ", id, resp);
     if (!(tell_flags & TELL_SILENT)) {
@@ -3543,6 +3613,15 @@ static void index_printflags(struct index_state *state,
     if (tell_flags & TELL_MODSEQ) {
         prot_printf(state->out, "%cMODSEQ (" MODSEQ_FMT ")",
                     sepchar, im->modseq);
+        sepchar = ' ';
+    }
+    if (annots && strarray_size(annots)) {
+        prot_printf(state->out, "%cANNOTATION ", sepchar);
+        for (int i = 0; i < strarray_size(annots); i++) {
+            prot_putc(i ? ' ' : '(', state->out);
+            prot_printastring(state->out, strarray_nth(annots, i));
+        }
+        prot_putc(')', state->out);
         sepchar = ' ';
     }
     if (sepchar == '(') prot_putc('(', state->out);

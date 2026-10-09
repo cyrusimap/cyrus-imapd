@@ -1,0 +1,29 @@
+Description:
+
+Metadata and annotation changes are now reported: as MailboxMetadataChange,
+ServerMetadataChange and AnnotationChange event notifications, through the
+IMAP NOTIFY events of the same names (RFC 5465), as unsolicited METADATA
+responses after ENABLE METADATA (RFC 5464), and as ANNOTATION items in
+unsolicited FETCH responses after SELECT with the ANNOTATE parameter
+(RFC 5257).
+
+
+Documentation:
+
+docsrc/concepts/features/event-notifications.rst, docsrc/rfc-support.rst
+
+
+Config changes:
+
+event_groups has a new ``metadata`` group, off by default.
+
+
+Upgrade instructions:
+
+To send these events to notifyd, add ``metadata`` to ``event_groups``.
+The IMAP notifications need idled.
+
+
+GitHub issue:
+
+#1657

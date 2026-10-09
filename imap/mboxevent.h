@@ -52,6 +52,11 @@ enum event_type {
     EVENT_APPLEPUSHSERVICE_DAV = (1<<24),
     EVENT_MAILBOX_MODSEQ       = (1<<25),
     EVENT_MESSAGES_UNSCHEDULED = (1<<26),
+
+    /* RFC 5465 event names; the payload carries metadataEntries */
+    EVENT_MAILBOX_METADATA_CHANGE = (1<<27),
+    EVENT_SERVER_METADATA_CHANGE  = (1<<28),
+    EVENT_ANNOTATION_CHANGE       = (1<<29),
 };
 
 /*
@@ -143,6 +148,7 @@ enum event_param {
     EVENT_APPLEPUSHSERVICE_DAV_EXPIRY,
     EVENT_MESSAGES_UNSCHEDULED_USERID,
     EVENT_MESSAGES_UNSCHEDULED_COUNT,
+    EVENT_METADATA_ENTRIES,
     /* 31 */ EVENT_MESSAGE_CONTENT
 };
 
@@ -280,6 +286,15 @@ void mboxevent_set_access(struct mboxevent *event,
 /*
  * Shortcut to setting event notification parameters
  */
+/**
+ * Set the changed entries of a metadata or annotation change event.
+ *
+ * @param entries JSON array of {"entry": name, "user": userid} objects,
+ *                "user" present for private entries only.  The event takes
+ *                the reference.
+ */
+void mboxevent_set_metadata_entries(struct mboxevent *event, json_t *entries);
+
 void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
                            const char *rights);
 

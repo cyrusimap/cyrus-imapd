@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+# Every extra parameter is turned on, because mboxevent_notify() asserts that
+# each parameter an event is expected to carry has been filled.  Except
+# convExists, convUnseen and counters, which are expected of every event but
+# only filled for mailbox events, so they trip that assertion on Login.
+sub test_metadata_change
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(event_extra_params => join ' ', qw(
+        bodyStructure clientAddress diskUsed flagNames messageContent
+        messageSize messages modseq service timestamp uidnext
+        vnd.cmu.midset vnd.cmu.unseenMessages vnd.cmu.envelope
+        vnd.cmu.sessionId vnd.cmu.mailboxACL vnd.cmu.mbtype
+        vnd.cmu.davFilename vnd.cmu.davUid vnd.fastmail.clientId
+        vnd.fastmail.sessionId vnd.fastmail.cid vnd.fastmail.jmapEmail vnd.fastmail.jmapStates vnd.cmu.emailid
+        vnd.cmu.threadid vnd.cmu.visibleUsers vnd.fastmail.traceId
+    ));
+    $self->_start_instances();
+
+    my $talk = $self->{store}->get_client();
+    $self->make_message('Message A');
+    $talk->select('INBOX');
+
+    my sub events_of ($type) {
+        my @events = grep { $_->{event} eq $type }
+                     map { decode_json($_->{MESSAGE}) }
+                     $self->{instance}->getnotify->@*;
+        return \@events;
+    }
+
+    $self->{instance}->getnotify();
+    $talk->setmetadata('INBOX', '/shared/comment', 'shared value',
+                                '/private/comment', 'private value');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply([ superhashof({
+        mailboxID => ignore(),
+        metadataEntries => bag(
+            { entry => '/comment' },
+            { entry => '/comment', user => 'cassandane' },
+        ),
+    }) ], events_of('MailboxMetadataChange'));
+
+    $self->{instance}->getnotify();
+    $talk->setmetadata('', '/private/comment', 'server value');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply([ superhashof({
+        metadataEntries => [ { entry => '/comment', user => 'cassandane' } ],
+    }) ], events_of('ServerMetadataChange'));
+
+    $self->{instance}->getnotify();
+    $talk->store('1', 'annotation',
+                 ['/comment', ['value.shared', 'hello world']]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply([ superhashof({
+        uidset => '1',
+        metadataEntries => [ { entry => '/comment' } ],
+    }) ], events_of('AnnotationChange'));
+}
