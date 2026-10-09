@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_nonblock_skips_locked_user
+    :Replication
+    ($self)
+{
+    my $instance = $self->{instance};
+
+    $self->make_message("Message 1", store => $self->{master_store});
+
+    my sub sync_client {
+        $instance->run_command({ cyrus => 1 },
+                               'sync_client', '-v', '-v', '-o', '-N', @_);
+    }
+
+    # both exit 0 without waiting for the lock
+    $self->hold_user_lock('cassandane', sub {
+        $instance->getsyslog();
+        sync_client('-u', 'cassandane');
+        $self->assert_syslog_matches($instance,
+            qr/event=sync\.user\.locked u\.username=cassandane/);
+
+        sync_client('-m', 'user.cassandane');
+        $self->assert_syslog_matches($instance,
+            qr/event=sync\.mailbox\.locked mbox\.name=user\.cassandane/);
+    });
+
+    $self->run_replication(user => 'cassandane');
+    $self->check_replication('cassandane');
+}

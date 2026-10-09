@@ -1035,7 +1035,12 @@ static int mailbox_open_advanced(const char *name,
             r = IMAP_MAILBOX_LOCKED;
     }
     else {
-        user_nslock = user_nslock_lock(userid, index_locktype);
+        user_nslock =
+            user_nslock_lock(userid,
+                             index_locktype | (locktype & LOCK_NONBLOCK));
+        if (!user_nslock) {
+            r = IMAP_MAILBOX_LOCKED;
+        }
     }
     free(userid);
     if (r) return r;
@@ -1155,6 +1160,15 @@ EXPORTED int mailbox_open_irlnb(const char *name, struct mailbox **mailboxptr)
                                  /* cannot do nonblocking lock on index...why? */
                                  LOCK_SHARED,
                                  NULL, mailboxptr);
+}
+
+EXPORTED int mailbox_open_iwlnb(const char *name, struct mailbox **mailboxptr)
+{
+    return mailbox_open_advanced(name,
+                                 LOCK_SHARED | LOCK_NONBLOCK,
+                                 LOCK_EXCLUSIVE,
+                                 NULL,
+                                 mailboxptr);
 }
 
 EXPORTED int mailbox_open_exclusive(const char *name, struct mailbox **mailboxptr)
