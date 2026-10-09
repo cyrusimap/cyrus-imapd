@@ -385,7 +385,7 @@ static int user_renamesieve(const char *olduser, const char *newuser)
     /* oh well */
     if(config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
 
-    if (config_virtdomains && (domain = strchr(olduser, '@'))) {
+    if (config_virtdomains && (domain = (char *) strchr(olduser, '@'))) {
         char d = (char) dir_hash_c(domain+1, config_fulldirhash);
         *domain = '\0';  /* split user@domain */
         hash = (char) dir_hash_c(olduser, config_fulldirhash);
@@ -401,7 +401,7 @@ static int user_renamesieve(const char *olduser, const char *newuser)
                  config_getstring(IMAPOPT_SIEVEDIR), hash, olduser);
     }
 
-    if (config_virtdomains && (domain = strchr(newuser, '@'))) {
+    if (config_virtdomains && (domain = (char *) strchr(newuser, '@'))) {
         char d = (char) dir_hash_c(domain+1, config_fulldirhash);
         *domain = '\0';  /* split user@domain */
         hash = (char) dir_hash_c(newuser, config_fulldirhash);

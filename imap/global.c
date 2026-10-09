@@ -549,7 +549,7 @@ EXPORTED const char *canonify_userid(char *user, const char *loginid,
             }
         }
         else if (loginid) { /* used for LISTRIGHTS */
-            if ((domain = strrchr(loginid, '@'))) {
+            if ((domain = (char *) strrchr(loginid, '@'))) {
                 /* append the domain from the login id */
                 snprintf(buf, sizeof(buf), "%s@%s", user, domain+1);
                 user = buf;
@@ -704,7 +704,7 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
     char denymsg[4096];
     struct auth_state *authstate;
     int userisadmin = 0;
-    char *realm;
+    const char *realm;
 
     /* check if remote realm */
     if ((!config_virtdomains || *val) &&

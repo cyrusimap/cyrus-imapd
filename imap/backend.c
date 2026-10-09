@@ -986,11 +986,11 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
 
         /* Parse server string for possible port and options */
         strlcpy(host, server, sizeof(host));
-        if ((p = strchr(host, ':'))) {
+        if ((p = (char *) strchr(host, ':'))) {
             *p++ = '\0';
             service = p;
 
-            if ((p = strchr(service, '/'))) {
+            if ((p = (char *) strchr(service, '/'))) {
                 tok_t tok;
                 char *opt;
 

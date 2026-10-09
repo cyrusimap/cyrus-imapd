@@ -2028,7 +2028,7 @@ static int _guid_one(struct guid_foreach_rock *frock,
     /* part */
     rec.part = NULL;
     if (*p) {
-        char *end = strchr(p+1, ']');
+        char *end = (char *) strchr(p+1, ']');
         if (*p != '[' || !end || p+1 == end) {
             return IMAP_INTERNAL;
         }

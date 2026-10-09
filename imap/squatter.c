@@ -316,7 +316,7 @@ static int index_one(const char *name, int blocking)
         struct buf attrib = BUF_INITIALIZER;
         int domainlen = 0;
 
-        if (config_virtdomains && (p = strchr(name, '!')))
+        if (config_virtdomains && (p = (char *) strchr(name, '!')))
             domainlen = p - name + 1;
 
         strlcpy(buf, name, sizeof(buf));
@@ -333,7 +333,7 @@ static int index_one(const char *name, int blocking)
                 break;
             }
 
-            p = strrchr(buf, '.');              /* find parent mailbox */
+            p = (char *) strrchr(buf, '.');     /* find parent mailbox */
 
             if (p && (p - buf > domainlen))     /* don't split subdomain */
                 *p = '\0';

@@ -947,7 +947,7 @@ static bool eval_if(const char *hdr, struct meth_params *params,
             xmlURIPtr uri;
 
             tag = ++list;
-            list = strchr(tag, '>');
+            list = (char *) strchr(tag, '>');
             /* A tagged-list with no closing '>' is malformed; bail rather
              * than dereferencing NULL. */
             if (!list) break;
@@ -6100,7 +6100,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     if (mbtype_isa(mbentry->mbtype) !=
         fctx->req_tgt->namespace->mboxtype) goto done;
 
-    p = strrchr(mboxname, '.');
+    p = (char *) strrchr(mboxname, '.');
     if (!p) goto done;
     p++; /* skip dot */
 
@@ -6108,7 +6108,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     case URL_NS_DRIVE:
         if (fctx->req_tgt->flags == TGT_DRIVE_USER) {
             /* Special case of listing users with DAV #drives */
-            p = strchr(mboxname+5, '.') + 1;  /* skip "user.XXX." */
+            p = (char *) strchr(mboxname+5, '.') + 1;  /* skip "user.XXX." */
             if (strcmp(p, fctx->req_tgt->mboxprefix)) goto done;
         }
         else if (p - mboxname > 1 + (int) strlen(fctx->req_tgt->mbentry->name)) {

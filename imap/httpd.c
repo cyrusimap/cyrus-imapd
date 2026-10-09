@@ -4428,11 +4428,11 @@ static int http_auth(const char *creds, struct transaction_t *txn)
             return SASL_BADPARAM;
         }
         *pass++ = '\0';
-        domain = strchr(user, '@');
+        domain = (char *) strchr(user, '@');
         if (domain) *domain++ = '\0';
-        extra = strchr(user, '%');
+        extra = (char *) strchr(user, '%');
         if (extra) *extra++ = '\0';
-        plus = strchr(user, '+');
+        plus = (char *) strchr(user, '+');
         if (plus) *plus++ = '\0';
 
         /* Verify the password */

@@ -541,11 +541,11 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     /* get the name of the table and CREATE it if necessary */
 
     /* strip any path from the fname */
-    p = strrchr(fname, '/');
+    p = (char *) strrchr(fname, '/');
     table = xstrdup(p ? ++p : fname);
 
     /* convert '.' to '_' */
-    if ((p = strrchr(table, '.'))) *p = '_';
+    if ((p = (char *) strrchr(table, '.'))) *p = '_';
 
     /* check if the table exists */
     /* XXX is this the best way to do this? */

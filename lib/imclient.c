@@ -374,7 +374,8 @@ imclient_send(struct imclient *imclient, imclient_proc_t *finishproc,
     va_list pvar;
     struct imclient_cmdcallback *newcmdcallback;
     char buf[30];
-    char *percent, *str, **v;
+    const char *percent;
+    char *str, **v;
     int num;
     unsigned unum;
     int abortcommand = 0;

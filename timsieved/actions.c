@@ -74,7 +74,7 @@ int actions_setuser(const char *userid)
 
     if (sieved_userisadmin) {
         struct buf buf = BUF_INITIALIZER;
-        char *domain = NULL;
+        const char *domain = NULL;
 
         buf_setcstr(&buf, sieve_dir_config);
 

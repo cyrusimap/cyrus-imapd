@@ -2377,7 +2377,7 @@ EXPORTED char *mboxname_metapath(const char *partition,
 EXPORTED void mboxname_todeleted(const char *name, char *result, int withtime)
 {
     int domainlen = 0;
-    char *p;
+    const char *p;
     const char *deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
 
     xstrncpy(result, name, MAX_MAILBOX_BUFFER);
