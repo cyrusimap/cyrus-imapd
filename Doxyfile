@@ -34,3 +34,7 @@
   # Emit warnings when a documented function has undocmented parameters, but we
   # do not (yet) consider these warnings a makedoc failure.
   WARN_NO_PARAMDOC       = YES
+
+  # Most of our headers have no Doxygen comments yet, so warning about every
+  # undocumented member buries the warnings worth reading.
+  WARN_IF_UNDOCUMENTED   = NO
