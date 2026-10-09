@@ -21,6 +21,23 @@ int init_sasl(isieve_t *obj,
               sasl_callback_t *callbacks);
 
 char * read_capability(isieve_t *obj);
+
+/**
+ * Upgrade the connection with STARTTLS.
+ *
+ * The server certificate must chain to the default trust store, or to
+ * @p cafile or @p capath if given, and match the server name passed to
+ * init_net().  On success, *@p mechlist is the SASL mechanism list from
+ * the capabilities the server sends after TLS; call init_sasl() again
+ * before authenticating.  On failure, *@p errstr is set.
+ *
+ * @return 0 on success, -1 on failure.
+ */
+int isieve_starttls(isieve_t *obj,
+                    const char *cafile,
+                    const char *capath,
+                    char **mechlist,
+                    char **errstr);
 int detect_mitm(isieve_t *obj, char *mechlist);
 
 typedef enum {
