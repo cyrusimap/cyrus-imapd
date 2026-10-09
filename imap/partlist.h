@@ -122,6 +122,8 @@ const char *partlist_local_select(void);
 /**
  * \brief Finds partition with most freespace (bytes or percents).
  *
+ * @param[in]  percent     if nonzero, pick the partition with the largest
+ *                         percentage free, rather than the most KiB free
  * @param[out] available   number of KiB available on partition
  * @param[out] total       total number of KiB on partition
  * @param[out] tavailable  number of KiB available on server

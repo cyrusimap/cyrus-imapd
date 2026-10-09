@@ -355,6 +355,9 @@ extern char *jmap_state_string_prefixed(int prefixed_state, modseq_t modseq);
  *
  * @param compact_ids  whether the account uses compact email ids, as
  *                     USER_COMPACT_EMAILIDS() reports for its conversations.db
+ * @param modseq       the modseq the state represents
+ * @param mbtype       the MBTYPE_ of the data; with compact ids, email and
+ *                     calendar states get a prefix
  * @return a newly allocated string
  */
 extern char *jmap_state_string_compact(bool compact_ids, modseq_t modseq,
