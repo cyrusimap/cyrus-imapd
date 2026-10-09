@@ -20,7 +20,13 @@ int init_sasl(isieve_t *obj,
               int ssf,
               sasl_callback_t *callbacks);
 
-char * read_capability(isieve_t *obj);
+/**
+ * Read the server's capabilities.
+ *
+ * @return the SASL mechanism list, or NULL if there is none or the
+ * capabilities are malformed.  In the latter case *@p errstr is set.
+ */
+char *read_capability(isieve_t *obj, char **errstr);
 
 /**
  * Upgrade the connection with STARTTLS.
@@ -38,7 +44,13 @@ int isieve_starttls(isieve_t *obj,
                     const char *capath,
                     char **mechlist,
                     char **errstr);
-int detect_mitm(isieve_t *obj, char *mechlist);
+/**
+ * Check that the capabilities after a SASL security layer is
+ * established still offer @p mechlist.
+ *
+ * @return 0 if so; otherwise nonzero and *@p errstr is set.
+ */
+int detect_mitm(isieve_t *obj, char *mechlist, char **errstr);
 
 typedef enum {
     STAT_CONT = 0,

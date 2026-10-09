@@ -22,32 +22,42 @@
 
 #define BLOCKSIZE 1024
 
-__attribute__((noreturn))
-void parseerror(const char *str)
+int parseerror(struct protstream *pin, const char *str, char **errstr)
 {
-  printf("Bad protocol from MANAGESIEVE server: %s\n", str);
+    /* the rest of the response would be misread as the next one */
+    pin->cnt = 0;
+    pin->eof = 1;
+    yylex_reset();
 
-  exit(2);
+    if (errstr) {
+        *errstr = strconcat("Bad protocol from MANAGESIEVE server: ",
+                            str, (char *) NULL);
+    }
+    return -1;
 }
+
+#define BAD(s) do { bad = (s); goto fail; } while (0)
 
 int handle_response(int res, int version __attribute__((unused)),
                     struct protstream *pin,
                     char **refer_to, char **errstr)
 {
   lexstate_t state;
+  const char *bad = NULL;
+  char *text = NULL;
   int r = 0;
 
   *refer_to = NULL;
 
   if (res == -1)
-      parseerror("lost connection");
+      BAD("lost connection");
 
   if ((res!=TOKEN_OK) && (res!=TOKEN_NO) && (res!=TOKEN_BYE))
-      parseerror("ATOM");
+      BAD("ATOM");
 
   if(res == TOKEN_BYE) {
       if (yylex(&state, pin)!=' ')
-          parseerror("expected space");
+          BAD("expected space");
 
       res = yylex(&state, pin);
 
@@ -58,21 +68,21 @@ int handle_response(int res, int version __attribute__((unused)),
           /* we only support the REFERRAL response with BYE */
           if (yylex(&state, pin)==TOKEN_REFERRAL) {
               if (yylex(&state, pin)!=' ')
-                  parseerror("expected space");
+                  BAD("expected space");
               if (yylex(&state, pin)!=STRING)
-                  parseerror("expected string");
+                  BAD("expected string");
 
               *refer_to = state.str;
 
               if (yylex(&state, pin)!=')')
-                  parseerror("expected RPAREN");
+                  BAD("expected RPAREN");
           } else {
               res = 0;
               while(res != ')' && res != -1) {
                   res = yylex(&state, pin);
               }
               if(res != ')') {
-                  parseerror("expected RPAREN");
+                  BAD("expected RPAREN");
               }
           }
 
@@ -80,16 +90,15 @@ int handle_response(int res, int version __attribute__((unused)),
           if (res == ' ') res = yylex(&state, pin);
       }
 
-      if (res != STRING && res != EOL)
-          parseerror("expected string2");
-
-      if (errstr)
-          *errstr = state.str;
-
       r = -2;
+      if (res == EOL)
+          goto done;
+      if (res != STRING)
+          BAD("expected string2");
+      text = state.str;
   } else if (res==TOKEN_NO) {
       if (yylex(&state, pin)!=' ')
-          parseerror("expected space");
+          BAD("expected space");
 
       res = yylex(&state, pin);
 
@@ -102,7 +111,7 @@ int handle_response(int res, int version __attribute__((unused)),
               res = yylex(&state, pin);
           }
           if(res != ')') {
-              parseerror("expected RPAREN");
+              BAD("expected RPAREN");
           }
 
           res = yylex(&state, pin);
@@ -110,32 +119,27 @@ int handle_response(int res, int version __attribute__((unused)),
       }
 
       if (res != STRING)
-          parseerror("expected string");
-
-
-      if (errstr)
-          *errstr = state.str;
+          BAD("expected string");
+      text = state.str;
 
       r = -1;
   } else {
       /* "OK" [SP "(" resp-code ")"] [SP string] */
-      int res;
-
       res = yylex(&state, pin);
       if (res == ' ') {
           res = yylex(&state, pin);
           if (res == '(') {
               if (yylex(&state, pin) != TOKEN_SASL)
-                  parseerror("unexpected response code with OK response");
+                  BAD("unexpected response code with OK response");
               if (yylex(&state, pin)!=' ')
-                  parseerror("expected space");
+                  BAD("expected space");
               if (yylex(&state, pin)!=STRING)
-                  parseerror("expected string");
+                  BAD("expected string");
 
-              *refer_to = xstrdup(state.str);
+              *refer_to = state.str;
 
               if (yylex(&state, pin)!=')')
-                  parseerror("expected RPAREN");
+                  BAD("expected RPAREN");
 
               res = yylex(&state, pin);
               if (res == ' ') res = yylex(&state, pin);
@@ -144,15 +148,26 @@ int handle_response(int res, int version __attribute__((unused)),
       }
 
       if (res != EOL)
-          parseerror("expected EOL");
+          BAD("expected EOL");
 
-      return r;
+      goto done;
   }
 
   if (yylex(&state, pin)!=EOL)
-      parseerror("expected EOL");
+      BAD("expected EOL");
 
+done:
+  if (errstr)
+      *errstr = text;
+  else
+      free(text);
   return r;
+
+fail:
+  free(text);
+  free(*refer_to);
+  *refer_to = NULL;
+  return parseerror(pin, bad, errstr);
 }
 
 int deleteascript(int version, struct protstream *pout,
@@ -330,7 +345,7 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
 
 int list_wcb(int version, struct protstream *pout,
              struct protstream *pin,isieve_listcb_t *cb ,void *rock,
-             char **refer_to)
+             char **refer_to, char **errstr)
 {
   lexstate_t state;
   int end=0;
@@ -373,7 +388,7 @@ int list_wcb(int version, struct protstream *pout,
       }
 
     } else {
-        ret = handle_response(res,version,pin,refer_to,NULL);
+        ret = handle_response(res,version,pin,refer_to,errstr);
 
         end=1;
     }
@@ -430,8 +445,11 @@ int getscriptvalue(int version, struct protstream *pout,
   {
     *data=state.str;
 
-    if (yylex(&state, pin)!=EOL)
-      parseerror("EOL");
+    if (yylex(&state, pin)!=EOL) {
+      free(*data);
+      *data = NULL;
+      return parseerror(pin, "EOL", errstrp);
+    }
 
     res=yylex(&state,pin);
   }

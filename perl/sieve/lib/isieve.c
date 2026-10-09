@@ -213,7 +213,7 @@ int init_sasl(isieve_t *obj,
   return 0;
 }
 
-char * read_capability(isieve_t *obj)
+char *read_capability(isieve_t *obj, char **errstr)
 {
   lexstate_t state;
   char *cap = NULL;
@@ -232,12 +232,19 @@ char * read_capability(isieve_t *obj)
       {
           if (yylex(&state,obj->pin)!=STRING)
           {
-              parseerror("STRING");
+              parseerror(obj->pin, "STRING", errstr);
+              free(attr);
+              free(cap);
+              return NULL;
           }
           val = state.str;
           if (yylex(&state,obj->pin)!=EOL)
           {
-              parseerror("EOL1");
+              parseerror(obj->pin, "EOL1", errstr);
+              free(attr);
+              free(val);
+              free(cap);
+              return NULL;
           }
       }
 
@@ -255,17 +262,21 @@ char * read_capability(isieve_t *obj)
           obj->version = OLD_VERSION;
           free(cap);
           cap = xstrdup(val+5);
+          free(attr);
           free(val);
           return cap;
       } else {
           /* unknown capability */
       }
+      free(attr);
       free(val);
   }
 
   if (yylex(&state,obj->pin)!=EOL)
   {
-      parseerror("EOL2");
+      parseerror(obj->pin, "EOL2", errstr);
+      free(cap);
+      return NULL;
   }
 
   return cap;
@@ -357,7 +368,12 @@ int isieve_starttls(isieve_t *obj,
     }
 
     /* the server sends its capabilities again once TLS is up */
-    *mechlist = read_capability(obj);
+    char *caperr = NULL;
+    *mechlist = read_capability(obj, &caperr);
+    if (caperr) {
+        *errstr = caperr;
+        return -1;
+    }
     return 0;
 
 tlserr:
@@ -374,10 +390,10 @@ tlserr:
     return -1;
 }
 
-int detect_mitm(isieve_t *obj, char *mechlist)
+int detect_mitm(isieve_t *obj, char *mechlist, char **errstr)
 {
-    char *new_mechlist;
-    int ch, r = 0;
+    char *new_mechlist, *caperr = NULL;
+    int ch;
 
     /* wait and probe for possible automatic capability response */
     usleep(250000);
@@ -392,13 +408,20 @@ int detect_mitm(isieve_t *obj, char *mechlist)
     }
     prot_BLOCK(obj->pin);
 
-    if ((new_mechlist = read_capability(obj))) {
-        /* if the server still advertises SASL mechs, compare lists */
-        r = strcmp(new_mechlist, mechlist);
-        free(new_mechlist);
+    new_mechlist = read_capability(obj, &caperr);
+    if (caperr) {
+        *errstr = caperr;
+        return -1;
     }
-
-    return r;
+    /* if the server still advertises SASL mechs, compare lists */
+    if (new_mechlist && strcmp(new_mechlist, mechlist)) {
+        free(new_mechlist);
+        *errstr = xstrdup("possible MITM attack: "
+                          "list of available SASL mechanisms changed");
+        return -1;
+    }
+    free(new_mechlist);
+    return 0;
 }
 
 static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
@@ -416,10 +439,10 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
   *line = NULL;
   if (res!=STRING)
   {
-      (void)handle_response(res, obj->version,
-                            obj->pin, &last_send, &errstr);
+      r = handle_response(res, obj->version,
+                          obj->pin, &last_send, &errstr);
 
-      if (res==TOKEN_OK) {
+      if (res == TOKEN_OK && r == 0) {
           /* Was there a last send from the server? */
           if(last_send) {
               /* it's base64 encoded */
@@ -438,6 +461,7 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
           return STAT_OK;
       } else { /* server said no or bye*/
           /* XXX handle referrals */
+          free(last_send);
           *errstrp = errstr;
           return STAT_NO;
       }
@@ -709,7 +733,11 @@ static int do_referral(isieve_t *obj, char *refer_to)
         goto fail;
     }
 
-    mechlist = read_capability(obj_new);
+    mechlist = read_capability(obj_new, &errstr);
+    if (errstr) {
+        free(errstr);
+        goto fail;
+    }
 
     if (obj->usetls) {
         free(mechlist);
@@ -770,7 +798,8 @@ static int do_referral(isieve_t *obj, char *refer_to)
     if (ssf) {
         /* SASL security layer negotiated --
            check if SASL mech list changed */
-        if (detect_mitm(obj_new, mechlist)) {
+        if (detect_mitm(obj_new, mechlist, &errstr)) {
+            free(errstr);
             goto fail;
         }
     }
@@ -875,7 +904,8 @@ int isieve_delete(isieve_t *obj, char *name, char **errstr)
 int isieve_list(isieve_t *obj, isieve_listcb_t *cb,void *rock, char **errstr)
 {
     char *refer_to;
-    int ret = list_wcb(obj->version, obj->pout, obj->pin, cb, rock, &refer_to);
+    int ret = list_wcb(obj->version, obj->pout, obj->pin, cb, rock, &refer_to,
+                       errstr);
     if(ret == -2 && refer_to) {
         ret = do_referral(obj, refer_to);
         if(ret == STAT_OK) {
