@@ -1,0 +1,23 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_append_channel_without_sync_host
+    :NoStartInstances
+    ($self)
+{
+    # a rightnow channel with no sync_host must not break writes
+    $self->{instance}->{config}->set(sync_rightnow_channel => 'nosuch');
+    $self->_start_instances();
+
+    my $talk = $self->{store}->get_client();
+    $self->make_message("msg $_") for 1..2;
+    $talk->store('1:*', '+flags', '(\\Flagged)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my @lines = $self->{instance}->getsyslog(
+            qr/event=sync\.rightnow\.nohost/);
+        $self->assert_num_equals(1, scalar @lines);
+        $self->assert_matches(qr/sync\.channel=nosuch/, $lines[0]);
+    }
+}

@@ -9227,6 +9227,16 @@ EXPORTED int sync_checkpoint(struct protstream *clientin)
             rightnow_sync_cs.channel = conf;
         rightnow_sync_cs.servername = sync_get_config(rightnow_sync_cs.channel,
                                                       IMAPOPT_SYNC_HOST);
+        if (!rightnow_sync_cs.servername) {
+            static bool logged = false;
+            if (!logged) {
+                xsyslog_ev(LOG_ERR, "sync.rightnow.nohost",
+                           lf_s("sync.channel", conf));
+                logged = true;
+            }
+            buf_reset(buf);
+            return 0;
+        }
         rightnow_sync_cs.flags = SYNC_FLAG_LOGGING;
         syslog(LOG_DEBUG, "sync_rightnow_connect(%s)", rightnow_sync_cs.servername);
         sync_connect(&rightnow_sync_cs);
