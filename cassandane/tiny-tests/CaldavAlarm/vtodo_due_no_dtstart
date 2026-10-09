@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+use Data::UUID;
+
+sub test_vtodo_due_no_dtstart
+  : needs_component_calalarmd
+    ($self)
+{
+    my $caldav = $self->{caldav};
+
+    my $calendarId = $caldav->NewCalendar({ name => 'foo' });
+    $self->assert_not_null($calendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Etc/UTC');
+
+    # A task due in an hour, wanting ten minutes' notice. Per RFC 5545,
+    # Section 3.6.2, a VTODO may carry DUE and no DTSTART - a deadline with
+    # no moment at which it begins - and Section 3.8.6.3 says RELATED=END
+    # then refers to DUE.
+    my $due = $now->clone();
+    $due->add(DateTime::Duration->new(seconds => 3600));
+
+    my $dtstamp = $now->strftime('%Y%m%dT%H%M%SZ');
+    my $dueStr  = $due->strftime('%Y%m%dT%H%M%SZ');
+    my $uid     = (Data::UUID->new)->create_str;
+
+    $caldav->Request(
+        'PUT', "$calendarId/$uid.ics", <<EOF
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Foo//Bar//EN
+CALSCALE:GREGORIAN
+BEGIN:VTODO
+UID:$uid
+SUMMARY:renew the certificate
+DTSTAMP:$dtstamp
+DUE:$dueStr
+STATUS:NEEDS-ACTION
+SEQUENCE:0
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:alarm
+TRIGGER;RELATED=END:-PT10M
+END:VALARM
+END:VTODO
+END:VCALENDAR
+EOF
+        , 'Content-Type' => 'text/calendar'
+    );
+
+    # Nothing yet: the alarm is fifty minutes off.
+    $self->{instance}->getnotify();
+    $self->{instance}->run_command({ cyrus => 1 },
+        'calalarmd', '-t' => $now->epoch() + 60);
+    $self->assert_alarms();
+
+    # Ten minutes before it is due, it fires.
+    $self->{instance}->getnotify();
+    $self->{instance}->run_command({ cyrus => 1 },
+        'calalarmd', '-t' => $due->epoch() - 600 + 60);
+    $self->assert_alarms({ summary => 'renew the certificate' });
+}
