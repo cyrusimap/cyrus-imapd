@@ -29,9 +29,11 @@
  * - **cyrus.header**: mailbox-wide data that rarely changes
  * - **cyrus.index**: a fixed-size header, then a fixed-size record per
  *   message; the only copy of flags, modseqs and the like
- * - **cyrus.cache**: data parsed from the message files, so FETCH, SEARCH
- *   and SORT needn't reparse them
- * - **cyrus.annotations**: the mailbox's and its messages' annotations
+ * - **cyrus.cache**: data parsed from the message files, including some
+ *   header fields, so FETCH, SEARCH and SORT needn't reparse them
+ * - **cyrus.annotations**: the annotations on the mailbox's messages; the
+ *   mailbox's own annotations are in the global annotations.db, keyed by its
+ *   uniqueid
  * - **cyrus.dav**: the DAV database, only for a mailbox outside any user's
  *   tree; a user's DAV database is per-user (see dav_getpath())
  * - **cyrus.squat**: the search index, only when %search_engine is squat
@@ -88,18 +90,23 @@
  * **cyrus.cache**
  *
  * The first four bytes are the index_header::generation_no of the index the
- * file belongs to; a repack starts a new file with a new generation.  Then
- * come the cache records, each appended at the end of the file and found
- * through index_record::cache_offset.  A record is NUM_CACHE_FIELDS items, in
- * the order of the CACHE_* enum, each a 32-bit length followed by that many
- * bytes, padded to a multiple of four (see CACHE_ITEM_NEXT()).
+ * file belongs to.  Then come the cache records, each appended at the end of
+ * the file and found through index_record::cache_offset.  A record is
+ * NUM_CACHE_FIELDS items, in the order of the CACHE_* enum, each a 32-bit
+ * length followed by that many bytes, padded to a multiple of four (see
+ * CACHE_ITEM_NEXT()).
  *
  * index_record::cache_crc is the CRC32 of the whole cache record, and
  * index_record::cache_version says what's in it, notably which header fields
- * CACHE_HEADERS holds (see mailbox_cached_header()).  Replacing a record
- * leaves the old one behind, counted in index_header::leaked_cache_records,
- * until the next repack.  Everything here can be rebuilt from the message
- * files by reconstruct.
+ * CACHE_HEADERS holds: those imap/mailbox_header_cache.gperf lists with a
+ * minimum version no higher than it, plus any field it doesn't list whose
+ * name doesn't start with "X-" (see mailbox_cached_header()).  Replacing a
+ * record leaves the old one behind, counted in
+ * index_header::leaked_cache_records, until the next repack.  Everything here
+ * can be rebuilt from the message files by reconstruct.
+ *
+ * A repack writes cyrus.index.NEW, and a cyrus.cache.NEW stamped with the
+ * next generation, then renames the index into place and then the cache.
  *
  * **Locking and commit order**
  *
@@ -109,12 +116,18 @@
  * needs at least the shared index lock, so the CRCs can be checked, and
  * changing any of the metadata files needs the exclusive one.
  *
- * mailbox_commit() writes the cache records, then cyrus.header, then the
- * index records, and last the index header.  The cache and cyrus.header are
- * each synced before the index is written, and the index after.  The index
- * header is what makes a change visible: readers see only num_records
- * records, so records appended before a crash but not yet published by the
- * header are ignored, and later overwritten.
+ * Changes to cyrus.header and cyrus.index are held in memory until
+ * mailbox_commit(), so an error or crash before then leaves both untouched.
+ * New cache records are the exception: they're appended to cyrus.cache as
+ * they're made, but nothing refers to them until the index records naming
+ * them are written.
+ *
+ * mailbox_commit() syncs the cache, writes cyrus.header, then the index
+ * records, and last the index header.  cyrus.header is synced before the
+ * index is written, and the index after.  The index header is what makes a
+ * change visible: readers see only num_records records, so records appended
+ * before a crash but not yet published by the header are ignored, and later
+ * overwritten.
  */
 
 #ifndef INCLUDED_MAILBOX_H
@@ -307,13 +320,15 @@ struct index_header {
     uint32_t deleted;           /**< unexpunged messages with \\Deleted */
     uint32_t answered;          /**< unexpunged messages with \\Answered */
     uint32_t flagged;           /**< unexpunged messages with \\Flagged */
-    uint32_t unseen;            /**< unexpunged messages without \\Seen */
+    uint32_t unseen;            /**< unexpunged messages without FLAG_SEEN: the
+                                     owner's \\Seen, or everyone's with
+                                     OPT_IMAP_SHAREDSEEN */
 
     uint32_t options;           /**< OPT_* flags */
     uint32_t leaked_cache_records; /**< dead records in cyrus.cache */
     modseq_t highestmodseq;     /**< the IMAP HIGHESTMODSEQ */
     modseq_t deletedmodseq;     /**< modseq below which expunges may have been
-                                     forgotten, for QRESYNC */
+                                     forgotten, for QRESYNC and replication */
     uint32_t exists;            /**< unexpunged records: the IMAP EXISTS */
     struct timespec first_expunged; /**< last_updated of the oldest expunged
                                          record, to decide when to repack */
@@ -321,7 +336,9 @@ struct index_header {
     struct timespec changes_epoch; /**< time from which changes can be
                                         calculated; see deletedmodseq */
 
-    modseq_t createdmodseq;     /**< the modseq when the mailbox was created */
+    modseq_t createdmodseq;     /**< the modseq when the mailbox was
+                                     created; a new mailbox's JMAP id is made
+                                     from it (see mailbox_create()) */
 
     bit32 header_file_crc;      /**< CRC32 of cyrus.header */
     struct synccrcs synccrcs;   /**< for replication */
@@ -556,8 +573,10 @@ typedef enum _MsgInternalFlags {
     FLAG_INTERNAL_SNOOZED            = (1<<26), /**< snoozed, by JMAP */
     FLAG_INTERNAL_SPLITCONVERSATION  = (1<<27), /**< index_record::basecid
                                                      is meaningful */
-    FLAG_INTERNAL_NEEDS_CLEANUP      = (1<<28), /**< the message file awaits
-                                                     deletion */
+    FLAG_INTERNAL_NEEDS_CLEANUP      = (1<<28), /**< the message file must be
+                                                     moved to or from the
+                                                     archive partition, or
+                                                     deleted */
     FLAG_INTERNAL_ARCHIVED           = (1<<29), /**< the message file is on
                                                      the archive partition */
     FLAG_INTERNAL_UNLINKED           = (1<<30), /**< the message file is gone,
