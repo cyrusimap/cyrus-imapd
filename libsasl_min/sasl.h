@@ -129,15 +129,6 @@
 
 #include <stddef.h> /* For size_t */
 
-/* Keep in sync with win32/common.mak */
-#define SASL_VERSION_MAJOR 2
-#define SASL_VERSION_MINOR 1
-#define SASL_VERSION_STEP 28
-
-/* A convenience macro: same as was defined in the OpenLDAP LDAPDB */
-#define SASL_VERSION_FULL                                                      \
-    ((SASL_VERSION_MAJOR << 16) | (SASL_VERSION_MINOR << 8) | SASL_VERSION_STEP)
-
 #include "libsasl_min/prop.h"
 
 /*************
@@ -708,30 +699,6 @@ typedef int sasl_canon_user_t(sasl_conn_t *conn,
  * This function can be called before sasl_server_init/sasl_client_init.
  */
 LIBSASL_API int sasl_set_path(int path_type, char *path);
-
-/* get sasl library version information
- * implementation is a vendor-defined string
- * version is a vender-defined representation of the version #.
- *
- * This function is being deprecated in favor of sasl_version_info. */
-LIBSASL_API void sasl_version(const char **implementation, int *version);
-
-/* Extended version of sasl_version().
- *
- * This function is to be used
- *  for library version display and logging
- *  for bug workarounds in old library versions
- *
- * The sasl_version_info is not to be used for API feature detection.
- *
- * All parameters are optional. If NULL is specified, the value is not returned.
- */
-LIBSASL_API void sasl_version_info(const char **implementation,
-                                   const char **version_string,
-                                   int *version_major,
-                                   int *version_minor,
-                                   int *version_step,
-                                   int *version_patch);
 
 /* dispose of all SASL plugins.  Connection
  * states have to be disposed of before calling this.
