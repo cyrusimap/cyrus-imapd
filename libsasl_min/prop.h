@@ -24,7 +24,7 @@
 #include <config.h>
 
 #ifndef USE_INTERNAL_SASL
-#include <sasl/prop.h>
+# include <sasl/prop.h>
 #else
 
 /* The following ifdef block is the standard way of creating macros
@@ -37,48 +37,49 @@
  * exported.  */
 /* Under Unix, life is simpler: we just need to mark library functions
  * as extern.  (Technically, we don't even have to do that.) */
-#ifdef WIN32
-# ifdef LIBSASL_EXPORTS
-#  define LIBSASL_API  extern __declspec(dllexport)
-# else /* LIBSASL_EXPORTS */
-#  define LIBSASL_API  extern __declspec(dllimport)
-# endif /* LIBSASL_EXPORTS */
-#else /* WIN32 */
-# define LIBSASL_API extern
-#endif /* WIN32 */
+# ifdef WIN32
+#  ifdef LIBSASL_EXPORTS
+#   define LIBSASL_API extern __declspec(dllexport)
+#  else /* LIBSASL_EXPORTS */
+#   define LIBSASL_API extern __declspec(dllimport)
+#  endif /* LIBSASL_EXPORTS */
+# else   /* WIN32 */
+#  define LIBSASL_API extern
+# endif /* WIN32 */
 
 /* Same as above, but used during a variable declaration. */
-#ifdef WIN32
-# ifdef LIBSASL_EXPORTS
-#  define LIBSASL_VAR  extern __declspec(dllexport)
-# else /* LIBSASL_EXPORTS */
-#  define LIBSASL_VAR  extern __declspec(dllimport)
-# endif /* LIBSASL_EXPORTS */
-#else /* WIN32 */
-# define LIBSASL_VAR extern
-#endif /* WIN32 */
+# ifdef WIN32
+#  ifdef LIBSASL_EXPORTS
+#   define LIBSASL_VAR extern __declspec(dllexport)
+#  else /* LIBSASL_EXPORTS */
+#   define LIBSASL_VAR extern __declspec(dllimport)
+#  endif /* LIBSASL_EXPORTS */
+# else   /* WIN32 */
+#  define LIBSASL_VAR extern
+# endif                 /* WIN32 */
 
 /* the resulting structure for property values
  */
-struct propval {
-    const char *name;	 /* name of property; NULL = end of list */
+struct propval
+{
+    const char *name;    /* name of property; NULL = end of list */
                          /* same pointer used in request will be used here */
     const char **values; /* list of strings, values == NULL if property not
-			  * found, *values == NULL if property found with
-			  * no values */
+                          * found, *values == NULL if property found with
+                          * no values */
     unsigned nvalues;    /* total number of value strings */
-    unsigned valsize;	 /* total size in characters of all value strings */
+    unsigned valsize;    /* total size in characters of all value strings */
 };
 
 /*
  * private internal structure
  */
-#define PROP_DEFAULT 4		/* default number of propvals to assume */
+# define PROP_DEFAULT 4 /* default number of propvals to assume */
 struct propctx;
 
-#ifdef __cplusplus
+# ifdef __cplusplus
 extern "C" {
-#endif
+# endif
 
 /* create a property context
  *  estimate -- an estimate of the storage needed for requests & responses
@@ -125,8 +126,9 @@ LIBSASL_API const struct propval *prop_get(struct propctx *ctx);
  * returns # of matching properties on success
  * possible other return values include: SASL_BADPARAM
  */
-LIBSASL_API int prop_getnames(struct propctx *ctx, const char **names,
-		  struct propval *vals);
+LIBSASL_API int prop_getnames(struct propctx *ctx,
+                              const char **names,
+                              struct propval *vals);
 
 /* clear values and optionally requests from property context
  *  ctx      -- property context
@@ -143,7 +145,6 @@ LIBSASL_API void prop_erase(struct propctx *ctx, const char *name);
  */
 LIBSASL_API void prop_dispose(struct propctx **ctx);
 
-
 /****fetcher interfaces****/
 
 /* format the requested property names into a string
@@ -156,8 +157,12 @@ LIBSASL_API void prop_dispose(struct propctx **ctx);
  * returns SASL_OK on success
  * returns SASL_BADPARAM or amount of additional space needed on failure
  */
-LIBSASL_API int prop_format(struct propctx *ctx, const char *sep, int seplen,
-		char *outbuf, unsigned outmax, unsigned *outlen);
+LIBSASL_API int prop_format(struct propctx *ctx,
+                            const char *sep,
+                            int seplen,
+                            char *outbuf,
+                            unsigned outmax,
+                            unsigned *outlen);
 
 /* add a property value to the context
  *  ctx    -- context from prop_new()/prop_request()
@@ -169,8 +174,10 @@ LIBSASL_API int prop_format(struct propctx *ctx, const char *sep, int seplen,
  * returns SASL_OK on success
  * possible error return values include: SASL_BADPARAM, SASL_NOMEM
  */
-LIBSASL_API int prop_set(struct propctx *ctx, const char *name,
-	     const char *value, int vallen);
+LIBSASL_API int prop_set(struct propctx *ctx,
+                         const char *name,
+                         const char *value,
+                         int vallen);
 
 /* set the values for a property
  *  ctx    -- context from prop_new()/prop_request()
@@ -181,12 +188,13 @@ LIBSASL_API int prop_set(struct propctx *ctx, const char *name,
  * returns SASL_OK on success
  * possible error return values include: SASL_BADPARAM, SASL_NOMEM
  */
-LIBSASL_API int prop_setvals(struct propctx *ctx, const char *name,
-		 const char **values);
+LIBSASL_API int prop_setvals(struct propctx *ctx,
+                             const char *name,
+                             const char **values);
 
-#ifdef __cplusplus
+# ifdef __cplusplus
 }
-#endif
+# endif
 
 #endif /* USE_INTERNAL_SASL */
 #endif /* LIBSASL_MIN_PROP_H */
