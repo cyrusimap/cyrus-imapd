@@ -168,7 +168,6 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
 
   CODE:
 
-    /* xxx this gets leaked on success! */
     callbacks = safemalloc(5 * sizeof(sasl_callback_t));
 
     callbacks[0].id = SASL_CB_USER;
@@ -305,6 +304,7 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     ret->class = safemalloc(20);
     strcpy(ret->class,"managesieve");
     ret->isieve = obj;
+    ret->callbacks = callbacks;
     ret->errstr = NULL;
 
     ST(0) = sv_newmortal();
@@ -382,3 +382,16 @@ sieve_get(Sieveobj obj, char *name, char *output)
   OUTPUT:
     RETVAL
     output
+
+
+MODULE = Cyrus::SIEVE::managesieve              PACKAGE = managesieve
+
+void
+DESTROY(Sieveobj obj)
+  CODE:
+    /* sieve_logout() already freed and cleared isieve */
+    if (obj->isieve) sieve_free_net(obj->isieve);
+    safefree(obj->callbacks);
+    safefree(obj->class);
+    free(obj->errstr);
+    free(obj);
