@@ -7508,6 +7508,23 @@ out:
     return r;
 }
 
+/* Like mailbox_spool_fname, but uid 0 gives the path of a '0.' file
+ * rather than the directory */
+static const char *reconstruct_fname(struct mailbox *mailbox,
+                                     uint32_t uid,
+                                     int isarchive)
+{
+    if (uid) {
+        return isarchive ? mailbox_archive_fname(mailbox, uid)
+                         : mailbox_spool_fname(mailbox, uid);
+    }
+
+    /* filthy hack - copy the path to '1.' and replace 1 with 0 */
+    char *hack = (char *) (isarchive ? mailbox_archive_fname(mailbox, 1)
+                                     : mailbox_spool_fname(mailbox, 1));
+    hack[strlen(hack) - 2] = '0';
+    return hack;
+}
 
 static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int isarchive,
                                       int has_snoozedannot, int flags)
@@ -7523,22 +7540,7 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
 
     int remove_temp_spool_file = 0;
 
-    if (isarchive)
-        fname = mailbox_archive_fname(mailbox, uid);
-    else
-        fname = mailbox_spool_fname(mailbox, uid);
-
-    /* possible if '0.' file exists */
-    if (!uid) {
-        /* filthy hack - copy the path to '1.' and replace 1 with 0 */
-        char *hack;
-        if (isarchive)
-            fname = mailbox_archive_fname(mailbox, 1);
-        else
-            fname = mailbox_spool_fname(mailbox, 1);
-        hack = (char *)fname;
-        hack[strlen(fname)-2] = '0';
-    }
+    fname = reconstruct_fname(mailbox, uid, isarchive);
 
     if (stat(fname, &sbuf) == -1) r = IMAP_MAILBOX_NONEXISTENT;
     else if (sbuf.st_size == 0) r = IMAP_MAILBOX_NONEXISTENT;
@@ -7650,9 +7652,8 @@ static int reconstruct_stray(struct mailbox *mailbox,
                                           flags);
     }
 
-    if ((flags & RECONSTRUCT_STRAY_DISCARD) && uid) {
-        const char *fname = isarchive ? mailbox_archive_fname(mailbox, uid)
-                                      : mailbox_spool_fname(mailbox, uid);
+    if (flags & RECONSTRUCT_STRAY_DISCARD) {
+        const char *fname = reconstruct_fname(mailbox, uid, isarchive);
 
         printf("%s uid %u not in index - removing\n",
                mailbox_name(mailbox),
