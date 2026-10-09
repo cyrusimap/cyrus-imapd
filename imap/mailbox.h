@@ -624,6 +624,10 @@ typedef enum _MsgInternalFlags {
 #define RECONSTRUCT_RECALC_NANOSEC  (1<<10)
 #define RECONSTRUCT_KEEP_CACHE      (1<<11)
 #define RECONSTRUCT_ALWAYS_DIRTY    (1<<12)
+/* message files with a uid already handed out but missing from the index
+ * are only reported, unless one of these says what to do with them */
+#define RECONSTRUCT_STRAY_KEEP      (1<<13)
+#define RECONSTRUCT_STRAY_DISCARD   (1<<14)
 
 #define MAX_CACHED_HEADER_SIZE 32 /* Max size of a cached header name */
 

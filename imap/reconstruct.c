@@ -132,13 +132,14 @@ int main(int argc, char **argv)
     progname = basename(argv[0]);
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:DGIMOPRUV:Tcfnop:qrsux";
+    static const char short_options[] = "C:DGIKMOPRUV:Tcfknop:qrsux";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
         { "always-dirty", no_argument, NULL, 'D' },
         { "force-reparse", no_argument, NULL, 'G' },
         { "update-uniqueids", no_argument, NULL, 'I' },
+        { "stray-files-discard", no_argument, NULL, 'K' },
         { "prefer-mboxlist", no_argument, NULL, 'M' },
         { "delete-odd-files", no_argument, NULL, 'O' },
         { "header-paths", no_argument, NULL, 'P' },
@@ -148,6 +149,7 @@ int main(int argc, char **argv)
         { "recalc-nanosec", no_argument, NULL, 'T' },
         { "keep-cache", no_argument, NULL, 'c' },
         { "scan-filesystem", no_argument, NULL, 'f' },
+        { "stray-files-keep", no_argument, NULL, 'k' },
         { "dry-run", no_argument, NULL, 'n' },
         { "ignore-odd-files", no_argument, NULL, 'o' },
         { "partition", required_argument, NULL, 'p' },
@@ -220,6 +222,14 @@ int main(int argc, char **argv)
             reconstruct_flags |= RECONSTRUCT_GUID_UNLINK;
             break;
 
+        case 'k':
+            reconstruct_flags |= RECONSTRUCT_STRAY_KEEP;
+            break;
+
+        case 'K':
+            reconstruct_flags |= RECONSTRUCT_STRAY_DISCARD;
+            break;
+
         case 'o':
             reconstruct_flags |= RECONSTRUCT_IGNORE_ODDFILES;
             break;
@@ -271,6 +281,12 @@ int main(int argc, char **argv)
     signals_add_handlers(0);
 
     if (dousers && dopaths) {
+        cyrus_done();
+        usage();
+    }
+
+    if ((reconstruct_flags & RECONSTRUCT_STRAY_KEEP) &&
+        (reconstruct_flags & RECONSTRUCT_STRAY_DISCARD)) {
         cyrus_done();
         usage();
     }
@@ -486,6 +502,9 @@ static void usage(void)
     fprintf(stderr, "-R                 perform UID upgrade operation on GUID mismatched files\n");
     fprintf(stderr, "-U                 use this if there are corrupt message files in spool\n");
     fprintf(stderr, "                   WARNING: this option deletes corrupted message files permanently\n");
+    fprintf(stderr, "-k                 re-inject message files missing from the index\n");
+    fprintf(stderr, "-K                 delete message files missing from the index\n");
+    fprintf(stderr, "                   (with neither, they are only reported)\n");
     fprintf(stderr, "-o                 ignore odd files in mailbox disk directories\n");
     fprintf(stderr, "-O                 delete odd files (unlike -o)\n");
     fprintf(stderr, "-M                 prefer mailboxes.db over cyrus.header\n");

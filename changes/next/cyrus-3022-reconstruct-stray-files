@@ -1,0 +1,28 @@
+Description:
+
+reconstruct no longer re-injects message files that have a UID the mailbox
+already handed out but are missing from the index.  It reports them and
+leaves them alone; ``-k`` (``--stray-files-keep``) re-injects them under new
+UIDs as before, and ``-K`` (``--stray-files-discard``) deletes them.  Files
+above the mailbox's highest UID are still added, so lost indexes can be
+rebuilt as before.
+
+
+Documentation:
+
+reconstruct(8)
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Scripts that rely on reconstruct re-injecting such files must add ``-k``.
+
+
+GitHub issue:
+
+#3022
