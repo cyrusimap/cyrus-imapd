@@ -17,11 +17,11 @@ Synopsis
 
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-x** ] [ **-r** ]
         [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-n** ] [ **-D** ] [ **-G** ]
-        [ **-I** ] [ **-R** ] [ **-o** ] [ **-O** ] [ **-M** ] *mailbox*...
+        [ **-I** ] [ **-R** ] [ **-k** | **-K** ] [ **-o** ] [ **-O** ] [ **-M** ] *mailbox*...
 
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-x** ] [ **-r** ]
         [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-n** ] [ **-D** ] [ **-G** ]
-        [ **-I** ] [ **-R** ] [ **-o** ] [ **-O** ] [ **-M** ] **-u** *user*...
+        [ **-I** ] [ **-R** ] [ **-k** | **-K** ] [ **-o** ] [ **-O** ] [ **-M** ] **-u** *user*...
 
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-r** ]
         [ **-q** ] [ **-n** ] [ **-c** ] **-V** *version* *mailbox*...
@@ -143,6 +143,23 @@ Options
     WARNING:
     this deletes corrupt message files for ever - so make sure you've
     exhausted other options first!
+
+.. option:: -k, --stray-files-keep
+
+    Re-inject stray message files under new UIDs.  A stray file has a UID
+    the mailbox has already handed out, but isn't in the index: perhaps a
+    message whose append never committed, perhaps one that was expunged
+    and should have been removed.  Without **-k** or **-K**, reconstruct
+    only reports stray files and leaves them in place.  Files with UIDs
+    above the highest UID handed out are always added, which is how a lost
+    index is rebuilt.
+
+.. option:: -K, --stray-files-discard
+
+    Delete stray message files.  This is the opposite of **-k**.
+
+    WARNING:
+    this deletes the files for ever.
 
 .. option:: -o, --ignore-odd-files
 

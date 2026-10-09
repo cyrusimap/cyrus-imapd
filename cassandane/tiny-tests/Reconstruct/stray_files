@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Slurp;
+
+# A message file whose uid the mailbox has handed out but which isn't in the
+# index is only reported by default; -K removes it (-k is in reconstruct_zerouid)
+sub test_stray_files ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+
+    for (1..3) {
+        $self->{store}->write_message(
+            $self->{gen}->generate(subject => "subject $_"));
+    }
+    $self->{store}->write_end();
+    $imaptalk->select("INBOX") || die;
+
+    # zero out record 2, so the index no longer knows about uid 2
+    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
+    my $fh = IO::File->new("$dir/cyrus.index", "+<") or die "$dir: $!";
+    my $index = Cyrus::IndexFile->new($fh);
+    $fh->seek($index->header('StartOffset') + $index->header('RecordSize'), 0);
+    $fh->syswrite("\0\0\0\0\0\0\0\0", 8);
+    $fh->close();
+
+    my $basedir = $self->{instance}->get_basedir();
+    my sub reconstruct (@args) {
+        my $out = "$basedir/reconstruct.out";
+        $self->{instance}->run_command(
+            { cyrus => 1, redirects => { stdout => $out } },
+            'reconstruct', @args, 'user.cassandane');
+        return slurp_file($out);
+    }
+
+    $self->{instance}->getsyslog();
+    $self->assert_matches(qr/uid 2 not in index - leaving it/, reconstruct());
+    $self->assert_syslog_matches($self->{instance},
+        qr/event=reconstruct\.stray\.found mbox\.name=user\.cassandane msg\.imapuid=2/);
+    $self->assert_file_test("$dir/2.", '-f');
+    $self->assert_cmp_deeply([1, 3], [$imaptalk->search('all')->@*]);
+
+    # a dry run removes nothing
+    $self->assert_matches(qr/uid 2 not in index - removing/,
+                          reconstruct('-n', '-K'));
+    $self->assert_file_test("$dir/2.", '-f');
+
+    $self->assert_matches(qr/uid 2 not in index - removing/, reconstruct('-K'));
+    $self->assert_not_file_test("$dir/2.", '-e');
+    $self->assert_does_not_match(qr/not in index/, reconstruct());
+    $self->assert_cmp_deeply([1, 3], [$imaptalk->search('all')->@*]);
+}
