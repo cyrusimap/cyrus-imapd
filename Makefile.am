@@ -324,7 +324,13 @@ lib_libsasl_min_la_SOURCES = \
     libsasl_min/sasl.h \
     libsasl_min/saslplug.h \
     libsasl_min/saslutil.h \
-    libsasl_min/prop.h
+    libsasl_min/prop.h \
+    libsasl_min/client.c \
+    libsasl_min/plain.c \
+    libsasl_min/plugin_common.h \
+    libsasl_min/plugin_common.c \
+    libsasl_min/saslint.h
+
 lib_libsasl_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 lib_libsasl_min_la_LIBADD =
 endif # USE_INTERNAL_SASL

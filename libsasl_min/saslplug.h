@@ -69,6 +69,9 @@ typedef struct sasl_utils
     void (*MD5Init)(MD5_CTX *);
     void (*MD5Update)(MD5_CTX *, const unsigned char *text, unsigned int len);
     void (*MD5Final)(unsigned char[16], MD5_CTX *);
+
+# if 0
+    /* XXX don't think these are needed... */
     void (*hmac_md5)(const unsigned char *text,
                      int text_len,
                      const unsigned char *key,
@@ -81,6 +84,7 @@ typedef struct sasl_utils
                              const unsigned char *key,
                              int len);
     void (*hmac_md5_import)(HMAC_MD5_CTX *, HMAC_MD5_STATE *);
+# endif
 
     /* mechanism utility functions (same as above): */
     int (*mkchal)(sasl_conn_t *conn,
