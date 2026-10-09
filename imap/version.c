@@ -4,8 +4,9 @@
 
 #include <config.h>
 
-#include <sasl/sasl.h>
 #include <sys/utsname.h>
+
+#include "libsasl_min/sasl.h"
 
 #include <string.h>
 #include "version.h"
@@ -41,9 +42,11 @@ EXPORTED void id_getcmdline(int argc, char **argv)
 EXPORTED void id_response(struct protstream *pout)
 {
     struct utsname os;
+    char env_buf[MAXIDVALUELEN+1];
+#ifndef USE_INTERNAL_SASL
     const char *sasl_imp;
     int sasl_ver;
-    char env_buf[MAXIDVALUELEN+1];
+#endif
 
     prot_printf(pout, "* ID ("
                 "\"name\" \"Cyrus IMAPD\""
@@ -69,6 +72,7 @@ EXPORTED void id_response(struct protstream *pout)
     }
 #endif
 
+#ifndef USE_INTERNAL_SASL
     /* SASL information */
     snprintf(env_buf, MAXIDVALUELEN,"Built w/Cyrus SASL %d.%d.%d",
              SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
@@ -79,6 +83,7 @@ EXPORTED void id_response(struct protstream *pout)
              (sasl_ver & 0xFF000000) >> 24,
              (sasl_ver & 0x00FF0000) >> 16,
              (sasl_ver & 0x0000FFFF));
+#endif
 
     /* add the environment info */
 #ifdef DB_VERSION_STRING

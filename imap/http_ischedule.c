@@ -31,7 +31,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 
-#include <sasl/saslutil.h>
+#include "libsasl_min/saslutil.h"
 
 #define ISCHED_WELLKNOWN_URI "/.well-known/ischedule"
 

@@ -10,7 +10,7 @@
 #include <assert.h>
 #include <errno.h>
 
-#include <sasl/saslutil.h>
+#include "libsasl_min/saslutil.h"
 
 #include "annotate.h"
 #include "append.h"

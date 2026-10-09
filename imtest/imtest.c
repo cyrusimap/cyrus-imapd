@@ -26,8 +26,8 @@
 #include <unistd.h>
 #include <ctype.h>
 
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 #include "hash.h"
 #include "imparse.h"
