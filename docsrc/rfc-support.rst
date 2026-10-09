@@ -565,6 +565,20 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
         The unextended LIST and LSUB commands return the special-use flags, unless
         the ``specialusealways`` configuration variable is explicitly turned off.
 
+        Cyrus restricts special-use attributes beyond the RFC:
+
+        * Each attribute can be on only one of a user's mailboxes.
+        * Attributes outside the RFC 6154 list must be listed in
+          :imapdconf:`specialuse_extra`.
+        * CREATE with USE must target a direct child of a user's INBOX, unless
+          :imapdconf:`allowspecialusesubfolder` is set, in which case it must
+          still be in a user's namespace.
+        * A mailbox with an attribute in :imapdconf:`specialuse_protect` can
+          only be renamed within those same limits, and non-admins can't
+          delete it.
+        * Mailboxes with an attribute in :imapdconf:`specialuse_nochildren`
+          can't have children.
+
 :rfc:`6203`
 
     IMAP4 Extension for Fuzzy Search
