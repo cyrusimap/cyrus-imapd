@@ -950,6 +950,18 @@ draft-ietf-calext-jscalendar-icalendar
 
     JSCalendar: Converting from and to iCalendar
 
+draft-pot-webdav-resource-sharing
+
+    WebDAV Resource Sharing
+
+draft-pot-caldav-sharing
+
+    CalDAV Calendar Sharing
+
+draft-pot-webdav-notifications
+
+    WebDAV: User Notifications
+
 ..
 
     caldav-ctag     Calendar Collection Entity Tag (CTag) in CalDAV
