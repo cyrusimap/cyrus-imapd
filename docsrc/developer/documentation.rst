@@ -46,6 +46,13 @@ Most notably:
     published -- so adding Pod to a Cassandane module is all it takes to get
     it onto the site.
 
+``developer/c-api/``
+    One page per C header with a Doxygen ``@file`` block, plus the listing
+    that :ref:`the Developer APIs page <imap-developer-API>` includes.  As with
+    the Cassandane pages, the list is discovered at build time, so giving a
+    header under ``imap``, ``lib`` or ``sieve`` an ``@file`` block is all it
+    takes to publish it.
+
 Special Tags
 ============
 

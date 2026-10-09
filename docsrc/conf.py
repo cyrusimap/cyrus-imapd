@@ -60,8 +60,19 @@ breathe_default_project = "cyrus"
 # complains about name conflicts that aren't real in C.)
 breathe_domain_by_extension = {"h": "c", "c": "c"}
 
-# Default options for Breathe directives
-breathe_default_members = ('members', 'undoc-members')
+# Default options for Breathe directives.  Undocumented members are left out:
+# they add nothing over the header itself, and Sphinx would still have to parse
+# them, which can fail the build.
+breathe_default_members = ('members',)
+
+# doxygenfile ignores undoc-members and renders every member, so apply the same
+# filter the class directives use.  This patches Breathe 4's private filter API;
+# Breathe 5 rewrote it.
+from breathe.renderer.filter import FilterFactory as _FF
+_orig_file_filter = _FF.create_file_filter
+def _file_filter(self, filename, options):
+    return _orig_file_filter(self, filename, options) & self._create_undoc_members_filter(options)
+_FF.create_file_filter = _file_filter
 
 # Ignore missing reference targets from Breathe/Doxygen
 # Breathe generates cross-references that may not resolve when types are
