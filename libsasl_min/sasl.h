@@ -128,16 +128,6 @@
 
 # include <stddef.h> /* For size_t */
 
-/* Keep in sync with win32/common.mak */
-# define SASL_VERSION_MAJOR 2
-# define SASL_VERSION_MINOR 1
-# define SASL_VERSION_STEP 28
-
-/* A convenience macro: same as was defined in the OpenLDAP LDAPDB */
-# define SASL_VERSION_FULL                                                     \
-     ((SASL_VERSION_MAJOR << 16) | (SASL_VERSION_MINOR << 8)                   \
-      | SASL_VERSION_STEP)
-
 # include "prop.h"
 
 /*************
