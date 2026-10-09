@@ -302,6 +302,12 @@ int isieve_starttls(isieve_t *obj,
     }
     free(refer_to);
 
+    /* anything after the OK was sent before TLS, so can't be trusted */
+    if (obj->pin->cnt) {
+        *errstr = xstrdup("STARTTLS failed: data received before TLS");
+        return -1;
+    }
+
     obj->tls_ctx = SSL_CTX_new(TLS_client_method());
     if (!obj->tls_ctx
         || !SSL_CTX_set_min_proto_version(obj->tls_ctx, TLS1_2_VERSION)

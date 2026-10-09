@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Slurp;
+use IO::Socket::INET;
+use POSIX ();
+
+sub test_sieveshell_starttls_injection
+    ($self)
+{
+    my $listener = IO::Socket::INET->new(
+        LocalAddr => '127.0.0.1',
+        LocalPort => 0,
+        Listen => 1,
+    ) or die "listen: $!";
+    my $port = $listener->sockport();
+
+    # Plaintext capabilities follow the STARTTLS OK in a single write, so
+    # they land in the client's buffer along with it.
+    my $pid = fork() // die "fork: $!";
+    if (!$pid) {
+        alarm 60;
+        my $conn = $listener->accept() or POSIX::_exit(1);
+        syswrite $conn, qq{"IMPLEMENTATION" "fake"\r\n"SASL" "PLAIN"\r\n}
+                      . qq{"STARTTLS"\r\n"VERSION" "1.0"\r\nOK\r\n};
+        my $cmd = <$conn>;
+        syswrite $conn, qq{OK\r\n"SASL" "PLAIN"\r\n"VERSION" "1.0"\r\nOK\r\n};
+        sysread $conn, my $buf, 4096;
+        POSIX::_exit(0);
+    }
+    close $listener;
+
+    my $basedir = $self->{instance}->get_basedir();
+    my $out = "$basedir/sieveshell.out";
+    my $failed = 0;
+    $self->{instance}->run_command({
+        redirects => { stdout => $out, stderr => $out },
+        handlers => { exited_abnormally => sub { $failed = 1 } },
+    }, $self->{instance}->_find_binary('sieveshell'),
+       '-u', 'cassandane', '-a', 'cassandane', '-p', 'test',
+       '-e', "list\n", '--tls', "127.0.0.1:$port");
+    waitpid $pid, 0;
+
+    $self->assert_num_equals(1, $failed);
+    $self->assert_matches(qr/STARTTLS failed: data received before TLS/,
+                          slurp_file($out));
+}
