@@ -13,6 +13,7 @@ use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::CRLF;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
+use Cassandane::Util::Wait;
 use Cassandane::Service;
 use Cassandane::Config;
 
@@ -89,6 +90,39 @@ sub imap_getusergroup
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     return $usergroups;
+}
+
+# Run $code while another process holds $userid's namespace lock
+# exclusively.  IMAP clients stay disconnected until the lock is released,
+# because logging in would wait on it.  The holder gives up after a minute,
+# so that a sync_client which waits for the lock can't hang the test.
+sub hold_user_lock
+{
+    my ($self, $userid, $code) = @_;
+    my $instance = $self->{instance};
+    my $basedir = $instance->get_basedir();
+    my $ready = "$basedir/userlock.$userid.ready";
+    my $release = "$basedir/userlock.$userid.release";
+    unlink($ready, $release);
+
+    $self->_disconnect_all();
+    my $holder = $instance->run_command({ cyrus => 1, background => 1 },
+        'cyr_withlock_run', '-u', $userid, '--', '/bin/sh', '-c',
+        "touch $ready; i=0; while [ ! -e $release ] && [ \$i -lt 600 ];"
+        . " do sleep 0.1; i=\$((i+1)); done");
+    timed_wait(sub { -e $ready },
+               description => "lock on $userid to be held");
+
+    my @ret = eval { $code->() };
+    my $err = $@;
+
+    open my $fh, '>', $release or die "$release: $!";
+    close $fh;
+    $instance->reap_command($holder);
+    $self->_reconnect_all();
+
+    die $err if $err;
+    return @ret;
 }
 
 use Cassandane::Tiny::Loader;

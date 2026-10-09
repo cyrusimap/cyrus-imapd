@@ -94,8 +94,10 @@ Options
 
 .. option:: -N, --skip-locked
 
-    Use non-blocking sync_lock (combination of IP address and username)
-    to skip over any users who are currently syncing.
+    Don't wait for locks: skip any user who is currently syncing (the
+    sync_lock is the combination of IP address and username), and any
+    mailbox that another process has locked.  See **-r** for how rolling
+    mode retries what it skips.
 
 .. option:: -o, --connect-once
 
@@ -126,6 +128,10 @@ Options
     specified in ``sync_log_file``. Repeat until ``sync_shutdown_file``
     appears.  Alternative log and shutdown files can be specified with
     **-f** and **-F**.
+
+    Unless **-f** is given, rolling mode implies **-N**: work for a
+    locked user or mailbox is written back to the sync log and retried
+    on the next pass, rather than holding up everything behind it.
 
     In this invocation, sync_client will background itself to run as a
     daemon.

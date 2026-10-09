@@ -742,7 +742,13 @@ struct buf *cacheitem_buf(const struct index_record *record, int field);
 /* opening and closing */
 extern int mailbox_open_iwl(const char *name,
                             struct mailbox **mailboxptr);
+/**
+ * Open a mailbox like mailbox_open_irl() or mailbox_open_iwl(), but
+ * return IMAP_MAILBOX_LOCKED instead of waiting if another process holds
+ * the user's namespace lock or the mailbox's name lock exclusively.
+ */
 extern int mailbox_open_irlnb(const char *name, struct mailbox **);
+extern int mailbox_open_iwlnb(const char *name, struct mailbox **);
 extern int mailbox_open_irl(const char *name,
                             struct mailbox **mailboxptr);
 extern int mailbox_open_exclusive(const char *name,

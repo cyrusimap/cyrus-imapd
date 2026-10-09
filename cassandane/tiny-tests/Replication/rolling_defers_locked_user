@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Slurp;
+
+sub test_rolling_defers_locked_user
+    :Replication :SyncLog
+    ($self)
+{
+    my $instance = $self->{instance};
+    my $synclog = $instance->get_basedir() . "/conf/sync/log";
+
+    my %exp = (1 => $self->make_message("Message 1",
+                                        store => $self->{master_store}));
+    $self->assert_file_test($synclog, '-f');
+
+    my sub rolling_once {
+        $instance->run_command({ cyrus => 1 },
+                               'sync_client', '-v', '-v', '-o', '-R', '-1');
+    }
+
+    $self->hold_user_lock('cassandane', sub {
+        $instance->getsyslog();
+        rolling_once();
+        $self->assert_syslog_matches($instance,
+            qr/Deferred: (?:MAILBOX|USER) user\.cassandane/);
+        $self->assert_matches(qr/user\.cassandane/, slurp_file($synclog));
+    });
+
+    # the deferred work goes through on the next pass
+    $self->_disconnect_all();
+    rolling_once();
+    $self->_reconnect_all();
+    $self->check_replication('cassandane');
+    $self->check_messages(\%exp, store => $self->{replica_store});
+}

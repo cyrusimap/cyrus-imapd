@@ -739,7 +739,7 @@ EXPORTED user_nslock_t *user_nslock_lock(const char *userid, int locktype)
     user_nslock_t *locks = xzmalloc(sizeof(struct usernamespacelocks));
     const char *lockname = _namelock_name_from_userid(userid);
     if (mboxname_lock(lockname, &locks->l1, locktype)) {
-        assert(locktype == LOCK_NONBLOCKING);
+        assert(locktype & LOCK_NONBLOCK);
         user_nslock_release(&locks);
         return NULL;
     }
