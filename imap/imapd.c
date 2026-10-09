@@ -15557,10 +15557,13 @@ static void push_updates(int idling)
         if (!etype || !mboxid) goto done;
 
         if (etype == EVENT_MAILBOX_METADATA_CHANGE) {
+            /* the rights GETMETADATA needs, which also meet RFC 5465 5 */
+            const int needed = ACL_LOOKUP | ACL_READ;
+
             mboxlist_lookup_by_uniqueid(mboxid, &mbentry, NULL);
             if (mbentry
-                && (cyrus_acl_myrights(imapd_authstate, mbentry->acl)
-                    & ACL_LOOKUP))
+                && (cyrus_acl_myrights(imapd_authstate, mbentry->acl) & needed)
+                       == needed)
             {
                 char *extname = mboxname_to_external(mbentry->name,
                                                      &imapd_namespace,
