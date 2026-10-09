@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Slurp;
+use MIME::QuotedPrint qw(decode_qp);
+
+sub test_imip_when_timezone
+    :NoStartInstances :want_smtpdaemon
+    ($self)
+{
+    # the sendmail path, which renders "When" in the text and HTML parts
+    $self->{instance}->{config}->set('imipnotifier' => undef);
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my %expect = (
+        berlin => [ "DTSTART;TZID=Europe/Berlin:20240703T153000\n"
+                  . "DTEND;TZID=Europe/Berlin:20240703T163000",
+                    'Wed, 03 Jul 2024 15:30 - 16:30 Europe/Berlin' ],
+        utc    => [ "DTSTART:20240703T153000Z\nDTEND:20240703T163000Z",
+                    'Wed, 03 Jul 2024 15:30 - 16:30 UTC' ],
+        allday => [ "DTSTART;VALUE=DATE:20240703\nDTEND;VALUE=DATE:20240704",
+                    'Wed, 03 Jul 2024' ],
+    );
+
+    while (my ($uid, $tc) = each %expect) {
+        my $ical = <<"ICS";
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Foo//Bar//EN
+BEGIN:VEVENT
+UID:$uid
+SUMMARY:$uid
+$tc->[0]
+DTSTAMP:20240703T153000Z
+ORGANIZER:MAILTO:organizer\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+ICS
+        $self->{caldav}->Request('PUT', "Default/$uid.ics", $ical,
+                                 'Content-Type' => 'text/calendar');
+    }
+
+    my %when;
+    my $dir = $self->{instance}->get_basedir() . '/smtpd';
+    for my $file (glob "$dir/*.smtp") {
+        my $msg = decode_qp(slurp_file($file));
+        my ($summary) = $msg =~ /^Summary +: (\S+)\r?$/m;
+        my ($when) = $msg =~ /^When +: (.*?)\r?$/m;
+        $when{$summary} = $when if $summary;
+    }
+
+    $self->assert_cmp_deeply({ map { $_ => $expect{$_}[1] } keys %expect },
+                             \%when);
+}
