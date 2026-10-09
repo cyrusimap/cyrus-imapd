@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_annotation_replaced
+    :needs_component_idled
+    ($self)
+{
+    $self->{instance}->add_start(name => 'idled', argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $talk = $svc->create_store()->get_client();
+    my $othertalk = $svc->create_store()->get_client();
+
+    $othertalk->append('INBOX', "()",
+                       $self->{gen}->generate(subject => "A")->as_string())
+        or die "append: $@";
+    $othertalk->select('INBOX');
+    $talk->select('INBOX');
+
+    # each NOTIFY replaces the subscription (RFC 5465 3.1)
+    my $fetch_after = sub ($notify, $value) {
+        $talk->_imap_cmd('NOTIFY', 0, "", @$notify);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $othertalk->store('1', 'annotation',
+                          ['/comment', ['value.shared', "value $value"]]);
+        $self->assert_str_equals('ok',
+                                 $othertalk->get_last_completion_response());
+        # keyed by UID where the response has one, so just the values
+        return [ values %{$talk->_imap_cmd('NOOP', 0, 'fetch') || {}} ];
+    };
+
+    my $with = "(SELECTED (MessageNew MessageExpunge AnnotationChange))";
+    my $without = "(SELECTED (MessageNew MessageExpunge FlagChange))";
+
+    my $annotated = [ superhashof({ annotation => { '/comment' => undef } }) ];
+    # FlagChange makes the change visible, without ANNOTATION
+    my $flags_only = [ { flags => [] } ];
+
+    $self->assert_cmp_deeply($annotated, $fetch_after->([ 'SET', $with ], 'a'));
+    $self->assert_cmp_deeply($flags_only,
+                             $fetch_after->([ 'SET', $without ], 'b'));
+    $self->assert_cmp_deeply($annotated, $fetch_after->([ 'SET', $with ], 'c'));
+    # NONE makes flag changes silent, so nothing at all
+    $self->assert_cmp_deeply([], $fetch_after->([ 'NONE' ], 'd'));
+}
