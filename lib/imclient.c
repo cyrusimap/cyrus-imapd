@@ -1066,8 +1066,8 @@ static void interaction(struct imclient *context, sasl_interact_t *t, char *user
     strarray_appendm(&context->interact_results, str);
 }
 
-EXPORTED void fillin_interactions(struct imclient *context,
-                         sasl_interact_t *tlist, char *user)
+static void fillin_interactions(struct imclient *context,
+                                sasl_interact_t *tlist, char *user)
 {
     assert(context);
     assert(tlist);
