@@ -660,7 +660,7 @@ typedef union {
  * 0xff for none); the charset name, NUL-padded to that length; the content
  * GUID (20 bytes); and the decoded size and line count of the content.
  */
-enum {
+enum cache_item_index {
     CACHE_ENVELOPE = 0,     /**< the IMAP ENVELOPE */
     CACHE_BODYSTRUCTURE,    /**< the IMAP BODYSTRUCTURE */
     CACHE_BODY,             /**< the IMAP BODY */
