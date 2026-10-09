@@ -443,8 +443,8 @@ static void partlist_fill(const char *key, const char *value, void *rock)
 /**
  * \brief Fills partition data.
  *
- * @param inout part_list   items list structure
- * @param in    idx         item index
+ * @param[in,out] part_list  items list structure
+ * @param[in] idx            item index
  */
 static void partition_filldata(partlist_t *part_list, int idx)
 {
