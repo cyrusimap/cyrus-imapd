@@ -1,0 +1,24 @@
+Description:
+
+Email/set now rejects an update that changes an immutable property with
+invalidProperties, rather than ignoring the change.
+
+
+Documentation:
+
+RFC 8620 section 5.3.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
