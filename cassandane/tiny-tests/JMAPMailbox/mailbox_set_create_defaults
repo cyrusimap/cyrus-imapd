@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_create_defaults
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    # RFC 8620 5.3: created includes every property the client omitted
+    my @props = qw(
+        id parentId role sortOrder totalEmails unreadEmails
+        totalThreads unreadThreads myRights isSubscribed
+    );
+
+    for my $args ({ name => 'A' }, { name => 'B', sortOrder => 7 }) {
+        my $created = $jmap->request([[ 'Mailbox/set', {
+            create => { new => $args },
+        } ]])->single_sentence('Mailbox/set')->arguments->{created}{new};
+
+        my $got = $jmap->request([[ 'Mailbox/get', {
+            ids => [ $created->{id} ], properties => \@props,
+        } ]])->single_sentence('Mailbox/get')->arguments->{list}[0];
+
+        my %want = map { $_ => $got->{$_} } grep { !exists $args->{$_} } @props;
+        $self->assert_cmp_deeply(superhashof(\%want), $created,
+            "created $args->{name}");
+    }
+}
