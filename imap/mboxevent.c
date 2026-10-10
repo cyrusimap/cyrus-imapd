@@ -586,7 +586,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
         /* jmapStates is filled by mboxevent_extract_mailbox, so it is only
          * available for events that carry a mailbox. */
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPSTATES) &&
-               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS|SUBS_EVENTS));
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
     case EVENT_MESSAGES:
         if (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN))
             return 1;

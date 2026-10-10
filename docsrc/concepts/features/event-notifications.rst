@@ -53,8 +53,11 @@ Example Event Notifications
 AclChange
 ---------
 
-The ACL Change notification is emitted when a command ``SETACL`` is
-issued.
+The ACL Change notification is emitted once for each identifier whose
+rights on a mailbox change, whether through the IMAP ``SETACL`` and
+``DELETEACL`` commands, the ``shareWith`` property of a JMAP Mailbox,
+Calendar or AddressBook, or a WebDAV ``ACL`` request.  ``aclRights`` carries
+the identifier's new rights, and is absent when the identifier was removed.
 
 .. NOTE::
 

@@ -43,8 +43,9 @@ sub new
 
     # Enable enough HTTP to drive CalDAV requests from tests that want to
     # exercise the http engine's contribution to events (e.g. X-Trace-Id).
-    $config->set(httpmodules => 'caldav');
+    $config->set(httpmodules => 'caldav carddav jmap');
     $config->set(caldav_realm => 'Cassandane');
+    $config->set(jmap_nonstandard_extensions => 'yes');
 
     return $class->SUPER::new({
         config => $config,
