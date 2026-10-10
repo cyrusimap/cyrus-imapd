@@ -1,0 +1,27 @@
+Description:
+
+JMAP Email/get, Email/parse and SearchSnippet/get follow RFC 8621 more
+closely.  SearchSnippet attachments and the imageSize and isDeleted body
+properties now need https://cyrusimap.org/ns/jmap/mail in using.
+
+
+Documentation:
+
+RFC 8621 sections 4.1, 4.2, 4.9 and 5.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Clients requesting the imageSize or isDeleted body properties, or
+SearchSnippet attachments, must include https://cyrusimap.org/ns/jmap/mail
+in using.
+
+
+GitHub issue:
+
+None.
