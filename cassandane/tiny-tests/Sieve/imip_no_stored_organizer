@@ -1,0 +1,106 @@
+#!perl
+use Cassandane::Tiny;
+
+# An event with no stored ORGANIZER can't be replaced, cancelled or added
+# to by iMIP from someone who knows its UID.
+sub test_imip_no_stored_organizer
+    :needs_component_httpd :want_service_http
+{
+    my ($self) = @_;
+
+    my $IMAP = $self->{store}->get_client();
+    $self->{store}->_select();
+    $IMAP->uid(1);
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    my $CalDAV = $self->{caldav};
+    my $CalendarId = 'Default';
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+
+    xlog $self, "Install a sieve script to process iMIP";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "processcalendar"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processcalendar :deletecanceled;
+}
+EOF
+    );
+
+    xlog $self, "Create an event with no ORGANIZER";
+    $CalDAV->Request('PUT', "$CalendarId/$uuid.ics", <<EOF,
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Example//NONSGML v1.0//EN
+BEGIN:VEVENT
+UID:$uuid
+DTSTAMP:20210923T034327Z
+DTSTART;TZID=America/New_York:20210923T153000
+DURATION:PT3H
+SEQUENCE:0
+SUMMARY:Public Feed Event
+END:VEVENT
+END:VCALENDAR
+EOF
+        'Content-Type' => 'text/calendar');
+
+    my $check_unchanged = sub {
+        my $events = $CalDAV->GetEvents($CalendarId);
+        $self->assert_num_equals(1, scalar @$events);
+        $self->assert_str_equals($uuid, $events->[0]{uid});
+        $self->assert_str_equals('Public Feed Event', $events->[0]{title});
+        $self->assert_num_equals(0, $events->[0]{sequence});
+        $self->assert_null($events->[0]{participants});
+        $self->assert_null($events->[0]{recurrenceOverrides});
+    };
+    $check_unchanged->();
+
+    my $uid = 1;
+    my $deliver = sub {
+        my ($method, $vevent) = @_;
+        $uid++;
+        my $imip = <<EOF;
+Date: Thu, 24 Sep 2021 09:06:18 -0400
+From: Bar <bar\@example.net>
+To: Cassandane <cassandane\@example.com>
+Message-ID: <$uuid-$uid\@example.net>
+Content-Type: text/calendar; method=$method; component=VEVENT
+X-Cassandane-Unique: $uuid-$uid
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Example//NONSGML v1.0//EN
+METHOD:$method
+BEGIN:VEVENT
+UID:$uuid
+DTSTAMP:20210924T034327Z
+SEQUENCE:1
+ORGANIZER:MAILTO:bar\@example.net
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:bar\@example.net
+${vevent}END:VEVENT
+END:VCALENDAR
+EOF
+        my $msg = Cassandane::Message->new(raw => $imip);
+        $msg->set_attribute(uid => $uid);
+        $self->{instance}->deliver($msg);
+    };
+
+    xlog $self, "An iMIP REQUEST doesn't replace the event";
+    $deliver->('REQUEST', <<EOF);
+DTSTART:20210925T120000Z
+DURATION:PT1H
+SUMMARY:Replaced
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+EOF
+    $check_unchanged->();
+
+    xlog $self, "An iMIP CANCEL doesn't cancel or delete the event";
+    $deliver->('CANCEL', '');
+    $check_unchanged->();
+
+    xlog $self, "An iMIP ADD doesn't inject an occurrence";
+    $deliver->('ADD', <<EOF);
+DTSTART;TZID=America/New_York:20210924T153000
+SUMMARY:Injected Occurrence
+EOF
+    $check_unchanged->();
+}
