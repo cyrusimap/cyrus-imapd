@@ -9,8 +9,6 @@ sub test_emailsubmission_query
 
     xlog $self, "get email submission list (no arguments)";
     my $res = $jmap->CallMethods([['EmailSubmission/query', { calculateTotal => JSON::true }, "R1"]]);
-    $self->assert_null($res->[0][1]{filter});
-    $self->assert_null($res->[0][1]{sort});
     $self->assert_not_null($res->[0][1]{queryState});
     $self->assert_equals(JSON::false, $res->[0][1]{canCalculateChanges});
     $self->assert_num_equals(0, $res->[0][1]{position});

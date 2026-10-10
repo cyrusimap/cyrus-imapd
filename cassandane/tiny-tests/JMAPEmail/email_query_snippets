@@ -25,11 +25,7 @@ sub test_email_query_snippets
                 name => 'Email/query',
                 path => '/ids',
             },
-            '#filter' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/filter',
-            },
+            filter => { text => "email" },
         }, 'R2'],
     ]);
 
@@ -67,10 +63,9 @@ sub test_email_query_snippets
                 name => 'Email/query',
                 path => '/ids',
             },
-            '#filter' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/filter',
+            filter => {
+                operator => "OR",
+                conditions => [{minSize => 1}, {maxSize => 1}]
             },
         }, 'R2'],
     ]);

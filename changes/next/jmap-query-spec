@@ -1,0 +1,26 @@
+Description:
+
+JMAP /query, /queryChanges and SearchSnippet/get return only the
+arguments RFC 8620 defines, and `total` only when `calculateTotal` is set.
+
+
+Documentation:
+
+RFC 8620 sections 5.5 and 5.6.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Clients that read `total` must set `calculateTotal: true`.  Clients that
+read the echoed arguments, including result references to `/filter`,
+must use the values from their own request instead.
+
+
+GitHub issue:
+
+None.
