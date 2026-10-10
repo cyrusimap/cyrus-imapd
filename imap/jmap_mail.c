@@ -8362,7 +8362,32 @@ static void _email_init_default_props(hash_table *props)
     }
 }
 
-static int _email_getargs_parse(jmap_req_t *req __attribute__((unused)),
+/* RFC 8621 4.1.4 EmailBodyPart properties, plus Cyrus extensions */
+static bool _email_is_bodyprop(jmap_req_t *req, const char *name)
+{
+    static const char *const props[] = { "partId",   "blobId",      "size",
+                                         "headers",  "name",        "type",
+                                         "charset",  "disposition", "cid",
+                                         "language", "location",    "subParts",
+                                         NULL };
+    static const char *const ext_props[] = { "imageSize", "isDeleted", NULL };
+
+    for (const char *const *p = props; *p; p++) {
+        if (!strcmp(name, *p)) {
+            return true;
+        }
+    }
+    if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+        for (const char *const *p = ext_props; *p; p++) {
+            if (!strcmp(name, *p)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static int _email_getargs_parse(jmap_req_t *req,
                                 struct jmap_parser *parser,
                                 const char *key,
                                 json_t *arg,
@@ -8380,7 +8405,15 @@ static int _email_getargs_parse(jmap_req_t *req __attribute__((unused)),
             args->bodyprops = xzmalloc(sizeof(hash_table));
             construct_hash_table(args->bodyprops, json_array_size(arg) + 1, 0);
             json_array_foreach(arg, i, val) {
-                hash_insert(json_string_value(val), (void*)1, args->bodyprops);
+                const char *name = json_string_value(val);
+                if (strncmp(name, "header:", 7)
+                    && !_email_is_bodyprop(req, name))
+                {
+                    jmap_parser_push_index(parser, "bodyProperties", i, name);
+                    jmap_parser_invalid(parser, NULL);
+                    jmap_parser_pop(parser);
+                }
+                hash_insert(name, (void *) 1, args->bodyprops);
             }
         }
         /* header:Xxx properties */

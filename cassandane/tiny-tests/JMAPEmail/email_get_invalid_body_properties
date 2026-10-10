@@ -1,0 +1,37 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_invalid_body_properties
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my @with_ext = $jmap->default_using->@*;
+    $jmap->DefaultUsing([ grep { !m{cyrusimap.org/ns/jmap/mail} } @with_ext ]);
+
+    $self->make_message("foo") or die;
+    my $id = $jmap->request([[ 'Email/query', {} ]])
+                  ->single_sentence('Email/query')->arguments->{ids}[0];
+
+    # RFC 8620 5.1: an invalid property is invalidArguments, and
+    # bodyProperties names EmailBodyPart properties (RFC 8621 4.1.4)
+    for my $prop ('noSuchProperty', 'mailboxIds', 'imageSize') {
+        my $res = $jmap->request([[ 'Email/get', {
+            ids => [ $id ],
+            properties => [ 'textBody' ],
+            bodyProperties => [ 'partId', $prop ],
+        } ]]);
+        $self->assert_cmp_deeply(
+            { type => 'invalidArguments', arguments => [ "bodyProperties[1:$prop]" ] },
+            $res->single_sentence('error')->arguments,
+            "bodyProperties $prop",
+        );
+    }
+
+    # A Cyrus extension body property needs its capability in using
+    $jmap->DefaultUsing(\@with_ext);
+    $jmap->request([[ 'Email/get', {
+        ids => [ $id ],
+        properties => [ 'textBody' ],
+        bodyProperties => [ 'partId', 'imageSize', 'header:X-Foo' ],
+    } ]])->single_sentence('Email/get');
+}
