@@ -82,6 +82,8 @@ sub new
     # The JMAP-TestSuite checks RFC 8620 conformance, which includes
     # rejecting a call with no accountId.
     $config->set(jmap_require_accountid => 'yes');
+    # RFC 8621 4.8: Email/import MUST support EAI (RFC 6532) headers
+    $config->set(munge8bit => 'no');
 
     $config->set(search_engine => 'xapian');
     $config->set(search_index_headers => 'no');
