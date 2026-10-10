@@ -13067,6 +13067,7 @@ struct email_update {
     int patch_snoozed;        /* True if snoozed is a patch object */
     struct email_uidrec *snoozed_uidrec; /* Currently snoozed email */
     char *snooze_in_mboxid;   /* Snooze the email in this mailboxid */
+    json_t *immutable;        /* Immutable properties sent, by name */
 
     /* JMAP Email/copy specific fields */
     const char *creation_id;  /* Input: creation id of copied message */
@@ -13081,6 +13082,7 @@ static void _email_update_free(struct email_update *update)
     json_decref(update->full_keywords);
     json_decref(update->mailboxids);
     json_decref(update->snoozed);
+    json_decref(update->immutable);
     free(update->snooze_in_mboxid);
     free(update);
 }
@@ -13428,6 +13430,32 @@ static void _email_update_parse(jmap_req_t *req,
         jmap_parser_invalid(parser, "snoozed");
     }
     update->snoozed = snoozed;
+
+    /* Immutable properties may only be sent unchanged (RFC 8620 5.3) */
+    const char *path;
+    json_t *jval;
+    json_object_foreach (jemail, path, jval) {
+        const char *slash = strchr(path, '/');
+        buf_setmap(&buf, path, slash ? (size_t) (slash - path) : strlen(path));
+        const char *pname = buf_cstring(&buf);
+        const jmap_property_t *prop = jmap_property_find(pname, &email_props);
+        if (!prop || !(prop->flags & JMAP_PROP_IMMUTABLE)) {
+            continue;
+        }
+
+        if (slash) {
+            /* patching into an immutable value always changes it */
+            if (json_array_find(parser->invalid, pname) < 0) {
+                jmap_parser_invalid(parser, pname);
+            }
+        }
+        else {
+            if (!update->immutable) {
+                update->immutable = json_object();
+            }
+            json_object_set(update->immutable, pname, jval);
+        }
+    }
 
     buf_free(&buf);
 }
@@ -14394,6 +14422,90 @@ static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *upd
     return 0;
 }
 
+/* Reject an update that sends an immutable property with a value other
+ * than the email's current one.  Body-derived properties are compared
+ * as Email/get returns them with default arguments, so a client that
+ * fetched them with other bodyProperties or body value arguments can't
+ * send them back. */
+static void _email_bulkupdate_check_immutable(struct email_bulkupdate *bulk,
+                                              ptrarray_t *updates)
+{
+    for (int i = 0; i < ptrarray_size(updates); i++) {
+        struct email_update *update = ptrarray_nth(updates, i);
+        const char *email_id = update->email_id;
+        if (!update->immutable || json_object_get(bulk->set_errors, email_id)) {
+            continue;
+        }
+
+        ptrarray_t *uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
+        struct email_uidrec *uidrec = ptrarray_nth(uidrecs, 0);
+        struct email_updateplan *plan =
+            hash_lookup(uidrec->mboxrec->mbox_id, &bulk->plans_by_mbox_id);
+
+        hash_table props = HASH_TABLE_INITIALIZER;
+        struct email_getargs args = _EMAIL_GET_ARGS_INITIALIZER;
+        construct_hash_table(&props,
+                             json_object_size(update->immutable) + 1,
+                             0);
+        args.props = &props;
+        args.bodyprops = &_email_get_default_bodyprops;
+        if (!hash_constructed(args.bodyprops)) {
+            _email_init_default_props(args.bodyprops);
+        }
+
+        const char *name;
+        json_t *jval;
+        json_object_foreach (update->immutable, name, jval) {
+            hash_insert(name, (void *) 1, &props);
+            if (!strncmp(name, "header:", 7)) {
+                struct header_prop *hprop = _header_parseprop(name);
+                if (hprop) {
+                    ptrarray_append(&args.want_headers, hprop);
+                }
+            }
+        }
+
+        msgrecord_t *mr = NULL;
+        json_t *cur = NULL;
+        int r = msgrecord_find(plan->mbox, uidrec->uid, &mr);
+        if (!r) {
+            r = _email_from_record(bulk->req, &args, mr, &cur);
+        }
+
+        if (r) {
+            json_object_set_new(bulk->set_errors,
+                                email_id,
+                                r == IMAP_NOTFOUND
+                                    ? json_pack("{s:s}", "type", "notFound")
+                                    : jmap_server_error(r));
+        }
+        else {
+            json_t *invalid = json_array();
+            json_object_foreach (update->immutable, name, jval) {
+                if (!json_equal(jval, json_object_get(cur, name))) {
+                    json_array_append_new(invalid, json_string(name));
+                }
+            }
+            if (json_array_size(invalid)) {
+                json_object_set_new(bulk->set_errors,
+                                    email_id,
+                                    json_pack("{s:s s:O}",
+                                              "type",
+                                              "invalidProperties",
+                                              "properties",
+                                              invalid));
+            }
+            json_decref(invalid);
+        }
+
+        json_decref(cur);
+        msgrecord_unref(&mr);
+        args.props = NULL;
+        _email_getargs_fini(&args);
+        free_hash_table(&props, NULL);
+    }
+}
+
 static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
     int i;
@@ -14600,6 +14712,7 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
         }
     }
 
+    _email_bulkupdate_check_immutable(bulk, updates);
 
     /* Map updates to update plan */
     return _email_bulkupdate_plan(bulk, updates);
