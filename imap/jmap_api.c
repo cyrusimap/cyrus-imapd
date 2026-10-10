@@ -759,10 +759,11 @@ HIDDEN int jmap_api(struct transaction_t *txn,
                                 &capabilities_by_accountid);
                 }
                 if (json_is_null(from_capas)) {
-                    err = json_pack("{s:s}", "type", "accountNotFound");
+                    err = json_pack("{s:s}", "type", "fromAccountNotFound");
                 }
                 else if (!json_object_get(from_capas, mp->capability)) {
-                    err = json_pack("{s:s}", "type", "accountNotSupportedByMethod");
+                    err = json_pack("{s:s}", "type",
+                                    "fromAccountNotSupportedByMethod");
                 }
             }
             if (err) {
