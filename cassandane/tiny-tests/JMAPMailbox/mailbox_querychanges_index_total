@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_querychanges_index_total
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $sort = [{ property => 'name' }];
+
+    my $mbox_a = $user->mailboxes->create({ name => 'A' });
+    $user->mailboxes->create({ name => 'C' });
+
+    my $state = $jmap->request([[ 'Mailbox/query', { sort => $sort } ]])
+                     ->single_sentence('Mailbox/query')
+                     ->arguments->{queryState};
+
+    # A tombstone sorts before the added mailbox
+    $mbox_a->destroy;
+    my $mbox_b = $user->mailboxes->create({ name => 'B' });
+
+    my $ids = $jmap->request([[ 'Mailbox/query', { sort => $sort } ]])
+                   ->single_sentence('Mailbox/query')->arguments->{ids};
+    my ($index) = grep { $ids->[$_] eq $mbox_b->id } 0 .. $#$ids;
+
+    my $changes = $jmap->request([[ 'Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        sort            => $sort,
+        calculateTotal  => JSON::true,
+    } ]])->single_sentence('Mailbox/queryChanges')->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            added => [ { id => $mbox_b->id, index => $index } ],
+            total => scalar @$ids,
+        }),
+        $changes,
+    );
+}

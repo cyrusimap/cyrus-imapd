@@ -1,0 +1,18 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_query_anchor_not_found
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $mbox = $user->mailboxes->create({ name => 'A' });
+
+    my $res = $jmap->request([[ 'Mailbox/query', {
+        filter => { name => 'nomatch' },
+        anchor => $mbox->id,
+    } ]]);
+    $self->assert_str_equals('anchorNotFound',
+        $res->single_sentence('error')->arguments->{type});
+}
