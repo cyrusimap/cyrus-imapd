@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+use DateTime;
+
+sub test_emailsubmission_set_max_delayed_send
+    :needs_component_calalarmd :NoStartInstances
+    ($self)
+{
+    $self->config_set(jmap_max_delayed_send => '1h');
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([[ 'Identity/get', {} ]]);
+    my $identityid
+        = $res->single_sentence('Identity/get')->arguments->{list}[0]{id};
+    my $email = $self->default_user->mailboxes->inbox->new_email;
+
+    my $until = sub ($secs) {
+        DateTime->from_epoch(epoch => time + $secs)
+            ->strftime('%Y-%m-%dT%H:%M:%SZ');
+    };
+
+    my %params = (
+        holdfor_max      => { HOLDFOR   => '3600' },
+        holdfor_over     => { HOLDFOR   => '3601' },
+        holduntil_within => { HOLDUNTIL => $until->(3000) },
+        holduntil_over   => { HOLDUNTIL => $until->(7200) },
+    );
+
+    $res = $jmap->request([[ 'EmailSubmission/set', {
+        create => {
+            map {
+                $_ => {
+                    identityId => $identityid,
+                    emailId    => $email->id,
+                    envelope   => {
+                        mailFrom => {
+                            email      => 'from@localhost',
+                            parameters => $params{$_},
+                        },
+                        rcptTo => [ { email => 'rcpt@localhost' } ],
+                    },
+                },
+            } keys %params
+        },
+    } ]]);
+
+    my $set = $res->single_sentence('EmailSubmission/set')->arguments;
+    $self->assert_cmp_deeply(
+        {
+            created    => {
+                holdfor_max      => ignore(),
+                holduntil_within => ignore(),
+            },
+            notCreated => {
+                holdfor_over => {
+                    type       => 'invalidProperties',
+                    properties => [ 'envelope/mailFrom/parameters/HOLDFOR' ],
+                },
+                holduntil_over => {
+                    type       => 'invalidProperties',
+                    properties => [ 'envelope/mailFrom/parameters/HOLDUNTIL' ],
+                },
+            },
+        },
+        { map { $_ => $set->{$_} } qw(created notCreated) },
+    );
+}
