@@ -1033,10 +1033,9 @@ static void message_parse_address(const char *hdr, struct address **addrp)
     }
 
     /* Find end of header */
-    hdrend = (char *)hdr;
-    do {
+    hdrend = strchr(hdr, '\n');
+    while (hdrend && (hdrend[1] == ' ' || hdrend[1] == '\t'))
         hdrend = strchr(hdrend+1, '\n');
-    } while (hdrend && (hdrend[1] == ' ' || hdrend[1] == '\t'));
 
     /* Put a NUL character at the end of header */
     /* gnb:TODO this is evil and should be stopped */
@@ -1181,10 +1180,9 @@ EXPORTED void message_parse_string(const char *hdr, char **hdrp)
     while (*hdr == ' ' || *hdr == '\t') hdr++;
 
     /* Find end of header */
-    hdrend = hdr;
-    do {
+    hdrend = strchr(hdr, '\n');
+    while (hdrend && (hdrend[1] == ' ' || hdrend[1] == '\t'))
         hdrend = strchr(hdrend+1, '\n');
-    } while (hdrend && (hdrend[1] == ' ' || hdrend[1] == '\t'));
     if (hdrend) {
         if (hdrend > hdr && hdrend[-1] == '\r') hdrend--;
     }
@@ -1218,10 +1216,9 @@ message_parse_header(const char *hdr, struct buf *buf)
     const char *hdrend;
 
     /* Find end of header */
-    hdrend = hdr;
-    do {
+    hdrend = strchr(hdr, '\n');
+    while (hdrend && (hdrend[1] == ' ' || hdrend[1] == '\t'))
         hdrend = strchr(hdrend+1, '\n');
-    } while (hdrend && (hdrend[1] == ' ' || hdrend[1] == '\t'));
     if (hdrend) {
         if (hdrend > hdr && hdrend[-1] == '\r') hdrend--;
     }

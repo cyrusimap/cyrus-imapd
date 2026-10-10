@@ -1634,4 +1634,54 @@ static void test_rfc822_recursion_bounded(void)
     buf_free(&buf);
 }
 
+static void check_address_headers(const char *msg,
+                                  const char *want_from,
+                                  const char *want_to)
+{
+    struct body body;
+    memset(&body, 0x45, sizeof(body));
+    CU_ASSERT_EQUAL(message_parse_mapped(msg, strlen(msg), &body, NULL), 0);
+
+    if (want_from) {
+        CU_ASSERT_PTR_NOT_NULL_FATAL(body.from);
+        CU_ASSERT_STRING_EQUAL(body.from->mailbox, want_from);
+    }
+    else {
+        CU_ASSERT_PTR_NULL(body.from);
+    }
+
+    if (want_to) {
+        CU_ASSERT_PTR_NOT_NULL_FATAL(body.to);
+        CU_ASSERT_STRING_EQUAL(body.to->mailbox, want_to);
+    }
+    else {
+        CU_ASSERT_PTR_NULL(body.to);
+    }
+
+    message_free_body(&body);
+}
+
+static void check_received_date(const char *msg, const char *want)
+{
+    struct body body;
+    memset(&body, 0x45, sizeof(body));
+    CU_ASSERT_EQUAL(message_parse_mapped(msg, strlen(msg), &body, NULL), 0);
+    CU_ASSERT_STRING_EQUAL(body.received_date, want);
+    message_free_body(&body);
+}
+
+/* An empty header value must not start the search for the end of the
+ * header beyond the end of the value. */
+static void test_parse_empty_header_value(void)
+{
+    check_address_headers("F\nFrom:", NULL, NULL);
+    check_address_headers("From:", NULL, NULL);
+    check_address_headers("From:\nTo: bar@example.com\n\n", NULL, "bar");
+    check_address_headers("From:\r\nTo: bar@example.com\r\n\r\n", NULL, "bar");
+    check_address_headers("From:\r\n foo@example.com\r\n\r\n", "foo", NULL);
+
+    check_received_date("Received: x; \r\n\r\n", "");
+    check_received_date("Received: x;\t\r\n\r\n", "");
+}
+
 /* vim: set ft=c: */
