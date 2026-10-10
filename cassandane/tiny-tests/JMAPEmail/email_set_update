@@ -48,7 +48,9 @@ sub test_email_set_update
         '$seen' => JSON::true,
         '$answered' => JSON::true,
     };
-    $res = $jmap->CallMethods([['Email/set', { update => { $id => $draft }}, "R1"]]);
+    $res = $jmap->CallMethods([['Email/set', {
+        update => { $id => { keywords => $draft->{keywords} } },
+    }, "R1"]]);
 
     xlog $self, "Get draft $id";
     $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
