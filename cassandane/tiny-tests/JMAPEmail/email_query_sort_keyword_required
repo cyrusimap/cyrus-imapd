@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_sort_keyword_required
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $query_state = $jmap->request([
+        [ 'Email/query', { sort => [ { property => 'receivedAt' } ] }, 'R1' ],
+    ])->single_sentence('Email/query')->arguments->{queryState};
+
+    my $assert_invalid = sub ($sort, $want, $desc) {
+        my $res = $jmap->request([
+            [ 'Email/query', { sort => $sort }, 'query' ],
+            [ 'Email/queryChanges', { sort            => $sort,
+                                      sinceQueryState => $query_state },
+              'querychanges' ],
+        ]);
+
+        for my $method (qw( query querychanges )) {
+            my $args = $res->paragraph_by_client_id($method)
+                           ->single('error')->arguments;
+            $self->assert_cmp_deeply(
+                { type => 'invalidArguments', arguments => bag(@$want) },
+                $args,
+                "$method $desc",
+            );
+        }
+    };
+
+    # RFC 8621 4.4.2: these comparators MUST have a valid keyword
+    for my $property (qw( hasKeyword someInThreadHaveKeyword )) {
+        for my $keyword (undef, '', 'bad keyword', JSON::true) {
+            $assert_invalid->(
+                [
+                    { property => 'receivedAt' },
+                    { property => $property,
+                      defined $keyword ? (keyword => $keyword) : () },
+                ],
+                [ 'sort[1]/keyword' ],
+                "$property keyword " . ($keyword // 'missing'),
+            );
+        }
+    }
+
+    # The path is the comparator's index in the sort array, counting
+    # entries that are not Comparator objects
+    $assert_invalid->(
+        [ 'x', { property => 'hasKeyword' } ],
+        [ 'sort[0]', 'sort[1]/keyword' ],
+        'after non-object comparator',
+    );
+}

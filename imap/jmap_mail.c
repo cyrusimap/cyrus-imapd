@@ -3412,6 +3412,15 @@ static int _email_parse_comparator(jmap_req_t *req,
                    emailquery_groupby_validate(req, comp->jcomp,
                                                crock->contactfilter);
         }
+        if (!strcmp(sp->name, "hasKeyword")
+            || !strcmp(sp->name, "someInThreadHaveKeyword"))
+        {
+            const char *keyword =
+                json_string_value(json_object_get(comp->jcomp, "keyword"));
+            if (!keyword || !jmap_email_keyword_is_valid(keyword)) {
+                jmap_parser_invalid(comp->parser, "keyword");
+            }
+        }
         return 1;
     }
 
