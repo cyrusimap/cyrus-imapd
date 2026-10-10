@@ -226,15 +226,16 @@ sub test_cardgroup_query
 
     xlog $self, "filter by kind";
     $res = $jmap->CallMethods([ ['ContactCard/query', {
+                    calculateTotal => JSON::true,
                     filter => { kind => "group" }
                 }, "R1"] ]);
 
     $self->assert_num_equals(3, $res->[0][1]{total});
     $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals("group", $res->[0][1]{filter}{kind});
 
     xlog $self, "filter by group name (fullName)";
     $res = $jmap->CallMethods([ ['ContactCard/query', {
+                    calculateTotal => JSON::true,
                     filter => { kind => "group", name => "group1" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
@@ -243,6 +244,7 @@ sub test_cardgroup_query
 
     xlog $self, "filter by group name (fullName)";
     $res = $jmap->CallMethods([ ['ContactCard/query', {
+                    calculateTotal => JSON::true,
                     filter => { kind => "group", name => "group" }
                 }, "R1"] ]);
     $self->assert_num_equals(0, $res->[0][1]{total});
@@ -250,6 +252,7 @@ sub test_cardgroup_query
 
     xlog $self, "filter by member";
     $res = $jmap->CallMethods([ ['ContactCard/query', {
+                    calculateTotal => JSON::true,
                     filter => { kind => "group", hasMember => $id3 }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});

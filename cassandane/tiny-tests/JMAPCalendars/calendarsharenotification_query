@@ -58,9 +58,9 @@ sub test_calendarsharenotification_query
     $self->assert_not_null($res->[0][1]{created}{B});
 
     $res = $manjmap->CallMethods([
+        ['ShareNotification/query', { calculateTotal => JSON::true }, 'R1'],
         ['ShareNotification/query', {
-        }, 'R1'],
-        ['ShareNotification/query', {
+            calculateTotal => JSON::true,
             sort => [{
                 property => 'created',
                 isAscending => JSON::false,
@@ -88,19 +88,23 @@ sub test_calendarsharenotification_query
 
     $res = $manjmap->CallMethods([
         ['ShareNotification/query', {
+            calculateTotal => JSON::true,
             filter => {
                 before => $timestampT2,
             },
         }, 'R1'],
         ['ShareNotification/query', {
+            calculateTotal => JSON::true,
             filter => {
                 after => $timestampT2,
             },
         }, 'R2'],
         ['ShareNotification/query', {
+            calculateTotal => JSON::true,
             position => 1,
         }, 'R3'],
         ['ShareNotification/query', {
+            calculateTotal => JSON::true,
             anchor => $notifIdT2,
             anchorOffset => -1,
             limit => 1,

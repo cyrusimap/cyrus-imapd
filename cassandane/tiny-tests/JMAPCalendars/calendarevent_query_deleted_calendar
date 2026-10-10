@@ -61,6 +61,7 @@ sub test_calendarevent_query_deleted_calendar
 
     xlog $self, "get filtered calendar event list";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" => "2015-12-31T00:00:00",
                         "before" => "2016-12-31T23:59:59"
@@ -74,6 +75,7 @@ sub test_calendarevent_query_deleted_calendar
 
     xlog $self, "get filtered calendar event list";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" => "2015-12-31T00:00:00",
                         "before" => "2016-12-31T23:59:59"

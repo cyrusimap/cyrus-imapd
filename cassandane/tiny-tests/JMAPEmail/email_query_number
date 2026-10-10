@@ -102,10 +102,8 @@ EOF
                 findMatchingParts => JSON::true,
             }, 'R1'],
             [ 'SearchSnippet/get', {
-                '#filter' => {
-                    resultOf => 'R1',
-                    name => 'Email/query',
-                    path => '/filter',
+                filter => {
+                    $tc->{criteria} => $term,
                 },
                 '#emailIds' => {
                     resultOf => 'R1',

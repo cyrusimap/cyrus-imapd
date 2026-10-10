@@ -1,0 +1,73 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_response_arguments
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    $self->make_message("Email A", body => "snippet");
+
+    # Responses carry only the arguments RFC 8620 and RFC 8621 define
+    my %args = (
+        filter          => { text => 'snippet' },
+        sort            => [ { property => 'receivedAt' } ],
+        collapseThreads => JSON::true,
+    );
+
+    my $res = $jmap->request([
+        [ 'Email/query', { %args }, 'R1' ],
+    ])->single_sentence('Email/query')->arguments;
+    $self->assert_cmp_deeply(
+        bag(qw( accountId queryState canCalculateChanges position ids )),
+        [ keys %$res ],
+        'Email/query without calculateTotal',
+    );
+
+    $res = $jmap->request([
+        [ 'Email/query', { %args, calculateTotal => JSON::true }, 'R1' ],
+    ])->single_sentence('Email/query')->arguments;
+    $self->assert_cmp_deeply(
+        bag(qw( accountId queryState canCalculateChanges position ids total )),
+        [ keys %$res ],
+        'Email/query with calculateTotal',
+    );
+    my $state = $res->{queryState};
+
+    $res = $jmap->request([
+        [ 'Email/queryChanges', {
+            %args,
+            sinceQueryState => $state,
+        }, 'R1' ],
+    ])->single_sentence('Email/queryChanges')->arguments;
+    $self->assert_cmp_deeply(
+        bag(qw( accountId oldQueryState newQueryState removed added )),
+        [ keys %$res ],
+        'Email/queryChanges without calculateTotal',
+    );
+
+    $res = $jmap->request([
+        [ 'Email/queryChanges', {
+            %args,
+            sinceQueryState => $state,
+            calculateTotal  => JSON::true,
+        }, 'R1' ],
+    ])->single_sentence('Email/queryChanges')->arguments;
+    $self->assert_cmp_deeply(
+        bag(qw( accountId oldQueryState newQueryState removed added total )),
+        [ keys %$res ],
+        'Email/queryChanges with calculateTotal',
+    );
+
+    $res = $jmap->request([
+        [ 'SearchSnippet/get', {
+            filter   => $args{filter},
+            emailIds => [ 'nosuchemail' ],
+        }, 'R1' ],
+    ])->single_sentence('SearchSnippet/get')->arguments;
+    $self->assert_cmp_deeply(
+        bag(qw( accountId list notFound )),
+        [ keys %$res ],
+        'SearchSnippet/get',
+    );
+}

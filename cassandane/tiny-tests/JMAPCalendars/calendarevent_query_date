@@ -32,6 +32,7 @@ sub test_calendarevent_query_date
 
     # Match on start and end day
     $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" =>  "2016-01-01T00:00:00",
                         "before" => "2016-01-03T23:59:59",
@@ -41,6 +42,7 @@ sub test_calendarevent_query_date
 
     # Match after on the first second of the start day
     $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" =>  "2016-01-01T00:00:00",
                         "before" => "2016-01-03T00:00:00",
@@ -50,6 +52,7 @@ sub test_calendarevent_query_date
 
     # Match before on the last second of the end day
     $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" =>  "2016-01-03T23:59:59",
                         "before" => "2016-01-03T23:59:59",
@@ -59,6 +62,7 @@ sub test_calendarevent_query_date
 
     # Match on interim day
     $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" =>  "2016-01-02T00:00:00",
                         "before" => "2016-01-03T00:00:00",
@@ -68,6 +72,7 @@ sub test_calendarevent_query_date
 
     # Match on partially overlapping timerange
     $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" =>  "2015-12-31T12:00:00",
                         "before" => "2016-01-01T12:00:00",
@@ -75,6 +80,7 @@ sub test_calendarevent_query_date
                 }, "R1"]]);
     $self->assert_num_equals(1, $res->[0][1]{total});
     $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" =>  "2015-01-03T12:00:00",
                         "before" => "2016-01-04T12:00:00",
@@ -85,6 +91,7 @@ sub test_calendarevent_query_date
     # Difference from the spec: 'before' is defined to be exclusive, but
     # a full-day event starting on that day still matches.
     $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" =>  "2015-12-31T00:00:00",
                         "before" => "2016-01-01T00:00:00",
@@ -94,6 +101,7 @@ sub test_calendarevent_query_date
 
     # In DAV db the event ends at 20160104. Test that it isn't returned.
     $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" =>  "2016-01-04T00:00:00",
                         "before" => "2016-01-04T23:59:59",
@@ -122,6 +130,7 @@ sub test_calendarevent_query_date
                     }}, "R1"]]);
     # Assert both events are found
     $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" =>  "2016-01-01T00:00:00",
                     },
@@ -129,6 +138,7 @@ sub test_calendarevent_query_date
     $self->assert_num_equals(2, $res->[0][1]{total});
     # Search close to eternity
     $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" =>  "2038-01-01T00:00:00",
                     },

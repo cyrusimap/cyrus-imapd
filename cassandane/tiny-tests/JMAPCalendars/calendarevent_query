@@ -284,6 +284,8 @@ sub test_calendarevent_query
             }],
         };
 
+        $q->{calculateTotal} = JSON::true;
+
         if (defined $tc->{position}) {
             $q->{position} = $tc->{position};
         }
