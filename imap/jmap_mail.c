@@ -7701,18 +7701,23 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
         if (!r) r = index_getsearchtext(msg, jpartids ? &partids : NULL, srx,
                                         INDEX_GETSEARCHTEXT_SNIPPET);
         if (!r || r == IMAP_OK_COMPLETED) {
-            // prune attachments
             json_t *jattachments = json_object_get(snippet, "attachments");
-            json_t *jmatch;
-            const char *part_id;
-            void *tmp;
-            json_object_foreach_safe(jattachments, tmp, part_id, jmatch){
-                if (!strarray_contains(&partids, part_id)) {
-                    json_object_del(jattachments, part_id);
-                }
+            if (!jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+                json_object_del(snippet, "attachments");
             }
-            if (!json_object_size(jattachments)) {
-                json_object_set_new(snippet, "attachments", json_null());
+            else {
+                // prune attachments
+                json_t *jmatch;
+                const char *part_id;
+                void *tmp;
+                json_object_foreach_safe (jattachments, tmp, part_id, jmatch) {
+                    if (!strarray_contains(&partids, part_id)) {
+                        json_object_del(jattachments, part_id);
+                    }
+                }
+                if (!json_object_size(jattachments)) {
+                    json_object_set_new(snippet, "attachments", json_null());
+                }
             }
             json_array_append_new(*snippets, json_deep_copy(snippet));
             r = 0;

@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_searchsnippet_get_standard_properties
+    :needs_search_xapian
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my @with_ext = $jmap->default_using->@*;
+
+    $self->make_message("snippet", body => "snippet body") or die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+    my $id = $jmap->request([[ 'Email/query', {} ]])
+                  ->single_sentence('Email/query')->arguments->{ids}[0];
+
+    my $get = sub {
+        $jmap->request([[ 'SearchSnippet/get', {
+            filter => { text => 'snippet' }, emailIds => [ $id ],
+        } ]])->single_sentence('SearchSnippet/get')->arguments->{list}[0];
+    };
+
+    # RFC 8621 5: a SearchSnippet has emailId, subject and preview
+    $jmap->DefaultUsing([ grep { !m{cyrusimap.org/ns/jmap/mail} } @with_ext ]);
+    $self->assert_cmp_deeply(
+        bag(qw( emailId subject preview )), [ keys %{ $get->() } ]);
+
+    # attachments is a Cyrus extension
+    $jmap->DefaultUsing(\@with_ext);
+    $self->assert_cmp_deeply(
+        bag(qw( emailId subject preview attachments )), [ keys %{ $get->() } ]);
+}
