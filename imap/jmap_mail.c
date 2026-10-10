@@ -7299,6 +7299,68 @@ struct snippet_receiver {
     strarray_t *partids;
 };
 
+/* RFC 8621 5: preview MUST NOT be bigger than 255 octets.  Cut on a
+ * character, entity or markup boundary, and close any open <mark>. */
+static char *_snippet_clip_preview(const char *s)
+{
+    static const size_t max = 255;
+    static const char mark[] = "<mark>";
+    static const char endmark[] = "</mark>";
+    static const char omit[] = "...";
+
+    if (strlen(s) <= max) {
+        return xstrdup(s);
+    }
+
+    struct buf buf = BUF_INITIALIZER;
+    bool in_mark = false;
+    const char *p = s;
+
+    while (*p) {
+        size_t toklen = 1;
+        bool mark_after = in_mark;
+
+        if (!strncmp(p, mark, sizeof(mark) - 1)) {
+            toklen = sizeof(mark) - 1;
+            mark_after = true;
+        }
+        else if (!strncmp(p, endmark, sizeof(endmark) - 1)) {
+            toklen = sizeof(endmark) - 1;
+            mark_after = false;
+        }
+        else if (*p == '&') {
+            /* Entities from the snippet generator are short */
+            for (size_t i = 1; i <= 10 && p[i]; i++) {
+                if (p[i] == ';') {
+                    toklen = i + 1;
+                    break;
+                }
+            }
+        }
+        else {
+            while ((p[toklen] & 0xc0) == 0x80) {
+                toklen++;
+            }
+        }
+
+        size_t need = buf_len(&buf) + toklen + sizeof(omit) - 1
+                      + (mark_after ? sizeof(endmark) - 1 : 0);
+        if (need > max) {
+            break;
+        }
+
+        buf_appendmap(&buf, p, toklen);
+        in_mark = mark_after;
+        p += toklen;
+    }
+
+    if (in_mark) {
+        buf_appendcstr(&buf, endmark);
+    }
+    buf_appendcstr(&buf, omit);
+    return buf_release(&buf);
+}
+
 static int _snippet_get_cb(struct mailbox *mbox __attribute__((unused)),
                            uint32_t uid __attribute__((unused)),
                            int part, const char *part_id,
@@ -7311,7 +7373,9 @@ static int _snippet_get_cb(struct mailbox *mbox __attribute__((unused)),
     }
     else if (part == SEARCH_PART_BODY ||
                 part == SEARCH_PART_ATTACHMENTBODY) {
-        json_object_set_new(sr->snippet, "preview", json_string(s));
+        char *preview = _snippet_clip_preview(s);
+        json_object_set_new(sr->snippet, "preview", json_string(preview));
+        free(preview);
     }
     else if (sr->partids && part == SEARCH_PART_ATTACHMENTNAME && part_id) {
         json_t *jattachments = json_object_get(sr->snippet, "attachments");
