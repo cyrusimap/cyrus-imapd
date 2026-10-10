@@ -10165,6 +10165,25 @@ static int _email_parseargs_parse(jmap_req_t *req,
     return _email_getargs_parse(req, parser, key, arg, args->getargs);
 }
 
+/* RFC 8621 4.9: a parsed Email has null id, mailboxIds, keywords and
+ * receivedAt.  The rest are Cyrus extensions about the stored copies. */
+static const char *const _email_parse_nullprops[] = {
+    "id",         "mailboxIds",   "keywords", "receivedAt",
+    "addedDates", "removedDates", "snoozed",  NULL
+};
+
+static void _email_parse_copyprop(const char *name,
+                                  void *data __attribute__((unused)),
+                                  void *rock)
+{
+    for (const char *const *p = _email_parse_nullprops; *p; p++) {
+        if (!strcmp(name, *p)) {
+            return;
+        }
+    }
+    hash_insert(name, (void *) 1, (hash_table *) rock);
+}
+
 static int jmap_email_parse(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -10198,6 +10217,11 @@ static int jmap_email_parse(jmap_req_t *req)
             _email_init_default_props(getargs.bodyprops);
         }
     }
+
+    /* A stored message is parsed without its mailbox metadata */
+    hash_table blobprops = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&blobprops, getargs.props->count + 1, 0);
+    hash_enumerate(getargs.props, _email_parse_copyprop, &blobprops);
 
     /* Process request */
     json_t *jval;
@@ -10252,7 +10276,17 @@ static int jmap_email_parse(jmap_req_t *req)
             _email_from_rfc822body(req, &getargs, mr, part, &email);
         }
         else if (mr) {
+            hash_table *props = getargs.props;
+            getargs.props = &blobprops;
             _email_from_record(req, &getargs, mr, &email);
+            getargs.props = props;
+            for (const char *const *p = _email_parse_nullprops; email && *p;
+                 p++)
+            {
+                if (jmap_wantprop(props, *p)) {
+                    json_object_set_new(email, *p, json_null());
+                }
+            }
         }
 
         if (email) {
@@ -10266,6 +10300,8 @@ static int jmap_email_parse(jmap_req_t *req)
         message_free_body(body);
         free(body);
     }
+
+    free_hash_table(&blobprops, NULL);
 
     /* Build response */
     jmap_ok(req, jmap_parse_reply(&parse));
