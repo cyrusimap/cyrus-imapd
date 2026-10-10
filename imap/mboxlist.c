@@ -3006,6 +3006,11 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
                                  int local_only, int forceuser, int ignorequota,
                                  int keep_intermediaries, int move_subscription)
 {
+    /* a subtree can't move inside itself */
+    if (strcmp(oldname, newname) && mboxname_is_prefix(newname, oldname)) {
+        return IMAP_MAILBOX_BADNAME;
+    }
+
     struct renmboxdata rock;
     memset(&rock, 0, sizeof(struct renmboxdata));
     rock.ol = strlen(oldname);
