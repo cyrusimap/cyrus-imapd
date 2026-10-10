@@ -1,12 +1,9 @@
 #!perl
 use Cassandane::Tiny;
 
-# RFC 8620 Section 3.6.2: an accountId that does not correspond to a valid
-# account is accountNotFound. A /copy has two account ids, and fromAccountId
-# was only checked once there was something to copy -- so an empty copy from
-# an account the caller cannot see, or from no account at all, succeeded and
-# leaked that the account exists. Both ids must be checked before the method
-# runs, whatever the payload.
+# RFC 8620 Section 5.4: a fromAccountId that does not correspond to a valid
+# account is fromAccountNotFound, checked before the method runs, whatever
+# the payload.
 
 sub test_email_copy_from_inaccessible_account
     ($self)
@@ -24,7 +21,7 @@ sub test_email_copy_from_inaccessible_account
             create        => {},
         }, 'R1']]);
         $self->assert_cmp_deeply(
-            [['error', superhashof({ type => 'accountNotFound' }), 'R1']],
+            [['error', superhashof({ type => 'fromAccountNotFound' }), 'R1']],
             $res,
         );
 
@@ -35,7 +32,7 @@ sub test_email_copy_from_inaccessible_account
             blobIds       => [],
         }, 'R2']]);
         $self->assert_cmp_deeply(
-            [['error', superhashof({ type => 'accountNotFound' }), 'R2']],
+            [['error', superhashof({ type => 'fromAccountNotFound' }), 'R2']],
             $res,
         );
     }
