@@ -895,6 +895,7 @@ static void
 test_rfc5322_truncated(void)
 {
     char testcase[] = "Tue, 20 Jun 2017 00:49:38 +0200";
+    char testcase8[] = "Tue, 20 Jun 2017 00:49:38 +0200";
     size_t len = strlen(testcase);
 
     assert_rfc5322_result(testcase, len, 1497912578);
@@ -904,35 +905,72 @@ test_rfc5322_truncated(void)
     do {
         testcase[--len] = '\0';
         assert_rfc5322_result(testcase, len, 1497919778);
+
+        testcase8[len] ^= 0x80;
+        assert_rfc5322_result(testcase8, len, 1497919778);
+        testcase8[len] ^= 0x80;
     } while (--i);
 
     /* The trailing + ought to be a parse error, surely? */
     testcase[--len] = '\0';
     // assert_rfc5322_fail(testcase);
     assert_rfc5322_result(testcase, len, 1497919778);
+    testcase8[len] ^= 0x80;
+    // assert_rfc5322_fail(testcase8);
+    assert_rfc5322_result(testcase8, len, 1497919778);
+    testcase8[len] ^= 0x80;
 
     /* A trailing space is accepted */
     testcase[--len] = '\0';
     assert_rfc5322_result(testcase, len, 1497919778);
+    testcase8[len] ^= 0x80;
+    assert_rfc5322_result(testcase8, len, 1497919778);
+    testcase8[len] ^= 0x80;
     /* HH::MM::SS */
     testcase[--len] = '\0';
     assert_rfc5322_result(testcase, len, 1497919778);
+    testcase8[len] ^= 0x80;
+    assert_rfc5322_result(testcase8, len, 1497919778);
+    testcase8[len] ^= 0x80;
 
     /* HH::MM:S is an error, as is HH::MM: */
     testcase[--len] = '\0';
     assert_rfc5322_fail(testcase);
+    testcase8[len] ^= 0x80;
+    assert_rfc5322_fail(testcase8);
+    testcase8[len] ^= 0x80;
     testcase[--len] = '\0';
     assert_rfc5322_fail(testcase);
+    testcase8[len] ^= 0x80;
+    assert_rfc5322_fail(testcase8);
+    testcase8[len] ^= 0x80;
 
     /* HH:MM is valid */
     testcase[--len] = '\0';
     assert_rfc5322_result(testcase, len, 1497919740);
+    testcase8[len] ^= 0x80;
+    assert_rfc5322_result(testcase8, len, 1497919740);
+    testcase8[len] ^= 0x80;
 
     /* Everything shorter than this is a parse failure */
     do {
         testcase[--len] = '\0';
         assert_rfc5322_fail(testcase);
+        testcase8[len] ^= 0x80;
+        assert_rfc5322_fail(testcase8);
+        testcase8[len] ^= 0x80;
     } while (len);
+}
+
+static void
+test_rfc5322_nonascii(void)
+{
+    assert_rfc5322_fail("\xb8");
+    assert_rfc5322_fail("\xff\xfe\xfd, 01 Jan 1970 00:00:00 +0000");
+    assert_rfc5322_fail("Thu, \xb8" "1 Jan 1970 00:00:00 +0000");
+    assert_rfc5322_fail("Thu, 01 \xb8" "an 1970 00:00:00 +0000");
+    assert_rfc5322_fail("Thu, 01 Jan 1970 \xb8:00:00 +0000");
+    assert_rfc5322_result("Thu, 01 Jan 1970 00:00:00 \xb8", 26, 0);
 }
 
 /* vim: set ft=c: */

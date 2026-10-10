@@ -917,12 +917,9 @@ baddate:
  **/
 static inline int get_next_char(struct rfc5322dtbuf *buf)
 {
-    int c;
-
     if (buf->offset < buf->len) {
         buf->offset++;
-        c = buf->str[buf->offset];
-        return c;
+        return (unsigned char) buf->str[buf->offset];
     }
 
     return EOB;
@@ -933,7 +930,7 @@ static inline int get_current_char(struct rfc5322dtbuf *buf)
     int offset = buf->offset;
 
     if (offset < buf->len)
-        return buf->str[offset];
+        return (unsigned char) buf->str[offset];
     else
         return EOB;
 }
@@ -944,7 +941,7 @@ static inline int get_current_char(struct rfc5322dtbuf *buf)
 static int skip_ws(struct rfc5322dtbuf *buf,
                    int skipcomment __attribute__((unused)))
 {
-    int c = buf->str[buf->offset];
+    int c = (unsigned char) buf->str[buf->offset];
 
     while (c != EOB) {
         if (rfc5322_special[c]) {
