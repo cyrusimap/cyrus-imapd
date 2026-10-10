@@ -24,7 +24,7 @@ sub test_email_changes
     $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
     xlog $self, "get email updates (expect error)";
-    $res = $jmap->CallMethods([['Email/changes', { sinceState => 0 }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/changes', { sinceState => '0' }, "R1"]]);
     $self->assert_str_equals("cannotCalculateChanges", $res->[0][1]->{type});
 
     xlog $self, "get email state";

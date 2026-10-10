@@ -2278,6 +2278,9 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
                     changes->since_modseq = atomodseq_t(since_state);
                 }
             }
+            else {
+                jmap_parser_invalid(parser, "sinceState");
+            }
         }
 
         /* maxChanges */
@@ -2292,6 +2295,10 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
         else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
             jmap_parser_invalid(parser, key);
         }
+    }
+
+    if (!json_object_get(jargs, "sinceState")) {
+        jmap_parser_invalid(parser, "sinceState");
     }
 
     if (json_array_size(parser->invalid)) {

@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_changes_since_state_type ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    # RFC 8620 5.2: sinceState is a required String
+    for my $args ({ sinceState => 1 }, { sinceState => JSON::null }, {}) {
+        my $res = $jmap->request([[ 'Email/changes', $args ]]);
+        $self->assert_cmp_deeply(
+            { type => 'invalidArguments', arguments => [ 'sinceState' ] },
+            $res->single_sentence('error')->arguments,
+        );
+    }
+
+    # A well-formed String the server can't use is still cannotCalculateChanges
+    my $res = $jmap->request([[ 'Email/changes', { sinceState => 'bogus' } ]]);
+    $self->assert_str_equals('cannotCalculateChanges',
+        $res->single_sentence('error')->arguments->{type});
+}
