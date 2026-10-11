@@ -5,10 +5,9 @@
 #ifndef INCLUDED_IMCLIENT_H
 #define INCLUDED_IMCLIENT_H
 
-#include <sasl/sasl.h>
+typedef struct sasl_callback sasl_callback_t;
 
 struct imclient;
-struct sasl_client; /* to avoid having to include sasl sometimes */
 
 struct imclient_reply {
     char *keyword;              /* reply keyword */
