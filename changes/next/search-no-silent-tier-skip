@@ -1,0 +1,25 @@
+Description:
+
+A search tier whose directory cannot be stat'ed for any reason other
+than ENOENT is no longer silently dropped: queries and compaction now
+report the tier's open failure instead of proceeding without its data.
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+None
