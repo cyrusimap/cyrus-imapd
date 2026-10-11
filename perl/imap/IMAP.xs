@@ -12,6 +12,8 @@
 #include <pwd.h>
 #include <unistd.h>
 
+#include <sasl/sasl.h>
+
 #include "lib/imclient.h"
 #include "lib/imapurl.h"
 #include "lib/util.h"
