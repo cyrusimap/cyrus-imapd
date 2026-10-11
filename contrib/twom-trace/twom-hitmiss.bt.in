@@ -1,0 +1,58 @@
+#!/usr/bin/env bpftrace
+/*
+ * twom-hitmiss.bt - split twom lookups into hit / tombstone / never-existed.
+ *
+ * twom_db_fetch delegates to twom_txn_fetch (verified in the disassembly: two
+ * call sites, not inlined), so probing txn_fetch alone catches every lookup.
+ *
+ * The classification is only valid AFTER find_loc has run, so this needs a
+ * uretprobe - roughly double the per-call cost of the census. Fetch is the
+ * hottest twom entry point, so run this in shorter windows.
+ *
+ *   ret == TWOM_OK (0)                  -> key existed, live
+ *   ret == TWOM_NOTFOUND && offset != 0 -> tombstone: a record is present but
+ *                                          the version visible to this txn is
+ *                                          a DELETE
+ *   ret == TWOM_NOTFOUND && offset == 0 -> never existed
+ *                                          ("if there's no match, this key
+ *                                           never existed" - twom.c)
+ *
+ * Offsets (DWARF-verified against fm-20260730):
+ *   twom_txn.db      @ 0x0
+ *   twom_db.loc      @ 0x8
+ *   tm_loc.offset    @ 0x10   -> db + 0x18
+ *
+ * TWOM_FETCHNEXT is bucketed separately: it advances loc past the requested
+ * key, so offset no longer describes the key that was asked for.
+ */
+
+BEGIN { printf("twom-hitmiss: capturing for @SECS@s...\n"); }
+
+uprobe:@LIB@:twom_txn_fetch
+{
+  @txn[tid] = arg0;
+  @fnext[tid] = *(uint32 *)(reg("sp") + 16) & 8192;   /* TWOM_FETCHNEXT */
+}
+
+uretprobe:@LIB@:twom_txn_fetch
+/@txn[tid]/
+{
+  $db  = *(uint64 *)@txn[tid];
+  $off = *(uint64 *)($db + 0x18);
+  $ret = (int32)retval;
+
+  /* 1 hit, 2 tombstone, 3 never existed, 4 other error, 5 fetchnext */
+  $class = @fnext[tid] ? 5
+         : $ret == 0    ? 1
+         : $ret == -5   ? ($off ? 2 : 3)
+         : 4;
+
+  @result[str(*(uint64 *)$db), $class] = count();
+
+  delete(@txn[tid]);
+  delete(@fnext[tid]);
+}
+
+interval:s:@SECS@ { exit(); }
+
+END { clear(@txn); clear(@fnext); printf("twom-hitmiss: done\n"); }

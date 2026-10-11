@@ -1,0 +1,33 @@
+#!/bin/bash
+# dbbench-build [cyrus-prefix]
+# Builds dbbench against the cyrusdb API. Defaults to the cyrus package the
+# running master has mapped, so the benchmark measures the same library
+# production is running - headers and lib from the same build, no ABI drift.
+set -eu
+HERE=$(dirname "$(readlink -f "$0")")
+
+PREFIX=${1:-}
+if [ -z "$PREFIX" ]; then
+  . "$HERE/libcyrus.sh"
+  lib=$(find_libcyrus) || exit 1
+  # .../<prefix>/lib/libcyrus.so.0 -> <prefix>
+  PREFIX=$(cd "$(dirname "$lib")/.." && pwd)
+fi
+[ -n "$PREFIX" ] || { echo "cannot find a cyrus prefix; pass one" >&2; exit 1; }
+
+INC=$PREFIX/include/cyrus
+LIB=$PREFIX/lib
+[ -f "$INC/cyrusdb.h" ] || { echo "no cyrusdb.h under $INC" >&2; exit 1; }
+[ -f "$LIB/libcyrus.so.0" ] || { echo "no libcyrus.so.0 under $LIB" >&2; exit 1; }
+
+echo "cyrus prefix: $PREFIX"
+
+# EXPORTED/HIDDEN are cyrus's visibility macros, normally from its config.h;
+# we are not building inside the tree, so define them away.
+gcc -O2 -g -o "$HERE/dbbench" "$HERE/dbbench.c" \
+    -DEXPORTED= -DHIDDEN= \
+    -I"$INC" -I"$HERE" \
+    -L"$LIB" -lcyrus -lcyrus_min -Wl,-rpath,"$LIB"
+
+echo "built $HERE/dbbench"
+"$HERE/dbbench" --list-engines 2>/dev/null | sed 's/^/  engine: /' || true

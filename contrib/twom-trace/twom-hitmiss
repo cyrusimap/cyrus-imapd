@@ -1,0 +1,58 @@
+#!/bin/bash
+# twom-hitmiss [seconds] [outfile]
+# Split twom lookups into hit / tombstone / never-existed, per database type.
+# Uses a uretprobe, so it costs roughly double the census per call - keep the
+# window short on a busy server.
+set -u
+SECS=${1:-30}
+OUT=${2:-/var/tmp/twom-hitmiss.$(hostname -s).$(date +%Y%m%dT%H%M%S).txt}
+HERE=$(dirname "$(readlink -f "$0")")
+
+ . "$HERE/libcyrus.sh"
+LIB=$(find_libcyrus) || exit 1
+
+"$HERE/twom-offsets" "$LIB" || exit 1
+
+STRLEN=${STRLEN:-160}
+echo "lib:  $LIB"; echo "secs: $SECS"; echo "out:  $OUT"
+
+sed -e "s|@LIB@|$LIB|g" -e "s|@SECS@|$SECS|g" \
+    "$HERE/twom-hitmiss.bt.in" > /tmp/twom-hitmiss.bt
+
+BPFTRACE_STRLEN=$STRLEN \
+BPFTRACE_MAP_KEYS_MAX=${MAP_KEYS_MAX:-1048576} \
+  bpftrace /tmp/twom-hitmiss.bt > "$OUT" 2>"$OUT.err"
+rc=$?
+if [ $rc -ne 0 ] || ! grep -q '^@result' "$OUT"; then
+  echo "capture failed (rc=$rc):" >&2; head -20 "$OUT.err" >&2; exit 1
+fi
+echo "raw: $OUT"; echo
+
+awk '
+  /^@result\[/ {
+    line = $0
+    sub(/^@result\[/, "", line)
+    n = index(line, "]:")
+    inner = substr(line, 1, n-1)
+    cnt   = substr(line, n+2) + 0
+    c = inner; sub(/^.*, /, "", c)           # trailing class id
+    p = inner; sub(/, [0-9]+$/, "", p)       # leading path
+    b = p; sub(/^.*\//, "", b)               # basename = db type
+    tot[b] += cnt; cls[b, c] += cnt; grand += cnt
+  }
+  END {
+    printf "%-20s %10s %9s %9s %9s %9s %8s\n", \
+      "DB TYPE","LOOKUPS","hit","tombstone","never","other","fetchnext"
+    for (b in tot) {
+      printf "%-20s %10d %9d %9d %9d %9d %8d\n", b, tot[b], \
+        cls[b,1], cls[b,2], cls[b,3], cls[b,4], cls[b,5]
+      h += cls[b,1]; t += cls[b,2]; nv += cls[b,3]
+    }
+    printf "%-20s %10d %9d %9d %9d\n", "ALL", grand, h, t, nv
+    if (h+t+nv > 0) {
+      printf "\n  hit rate        %.1f%%\n", 100*h/(h+t+nv)
+      printf "  of the misses:  %.1f%% tombstone, %.1f%% never existed\n", \
+        (t+nv)?100*t/(t+nv):0, (t+nv)?100*nv/(t+nv):0
+    }
+  }
+' "$OUT"
