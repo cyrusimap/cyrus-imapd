@@ -1,0 +1,26 @@
+Description:
+
+CalDAV PUT of a scheduling object (one with an ORGANIZER) now returns an
+ETag response header alongside the Schedule-Tag header.  Previously only the
+Schedule-Tag was returned, which broke plain WebDAV-sync clients that are
+unaware of RFC 6638 and rely on the ETag to synchronise.
+
+
+Documentation:
+
+(none)
+
+
+Config changes:
+
+(none)
+
+
+Upgrade instructions:
+
+(none)
+
+
+GitHub issue:
+
+https://github.com/cyrusimap/cyrus-imapd/issues/2456
