@@ -127,7 +127,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
     buf += len;
     size -= len;
 
-    if (config_virtdomains && (p = strchr(qr, '!'))) {
+    if (config_virtdomains && (p = (char *) strchr(qr, '!'))) {
         *p = '\0';  /* split domain!qr */
         c = (char) dir_hash_c(qr, config_fulldirhash);
         if ((len = snprintf(buf, size, "%s%c/%s",
@@ -450,7 +450,7 @@ static int fetch(struct dbengine *db,
 static const char *path_to_qr(const char *path, char *buf)
 {
     const char *qr;
-    char *p;
+    const char *p;
 
     qr = strrchr(path, '/') + 1;
     if ((p = strstr(path, FNAME_DOMAINDIR))) {
@@ -539,7 +539,8 @@ static int foreach(struct dbengine *db,
     char quota_path[MAX_QUOTA_PATH+1];
     strarray_t pathbuf = STRARRAY_INITIALIZER;
     int i;
-    char *tmpprefix = NULL, *p = NULL;
+    char *tmpprefix = NULL;
+    const char *p = NULL;
 
     assert(cb);
 

@@ -1161,7 +1161,7 @@ envelope_err:
 
             /* timezone offset */
             if (zone == B_ORIGINALZONE) {
-                char *origzone = strrchr(header, ' ');
+                const char *origzone = strrchr(header, ' ');
                 if (!origzone || !parse_tzoffset(origzone + 1, &tzoffset)) {
                     res = 0;
                     goto date_err;
@@ -1489,7 +1489,7 @@ envelope_err:
 
             if (requires & BFE_VARIABLES) {
                 str = parse_string(str, variables);
-                char *p = strchr(str, ':');
+                char *p = (char *) strchr(str, ':');
                 if (p) p[1] = '\0';
             }
 

@@ -5508,7 +5508,7 @@ static void extract_one(struct buf *buf,
         /* Isolate the first (top-most) or last (bottom-most) header value */
         const char *q = raw->s;
         const char *last = raw->s;
-        while ((p = memchr(q, '\r', raw->s + raw->len - q))) {
+        while ((p = (char *) memchr(q, '\r', raw->s + raw->len - q))) {
             if (p >= raw->s + raw->len - 2)
                 break;
             if (*(p+1) == '\n' && *(p+2) && !isspace(*(p+2))) {

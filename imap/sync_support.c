@@ -4160,7 +4160,7 @@ static int sync_sieve_upload(const char *userid, const char *fname,
     const char *sieve_path = user_sieve_path(userid);
     user_nslock_t *user_nslock;
     char name[2048];
-    char *ext;
+    const char *ext;
     int r = 0;
     struct stat sbuf;
     struct sieve_db *db = NULL;

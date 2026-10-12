@@ -112,7 +112,7 @@ enum LockType {
 static struct activeitem *activeitem_parse(const char *input)
 {
     struct activeitem *res = NULL;
-    char *num = strrchr(input, ':');
+    const char *num = strrchr(input, ':');
 
     if (!num) return NULL;
 
