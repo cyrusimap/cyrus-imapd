@@ -3018,17 +3018,37 @@ void sched_reply(const char *cal_ownerid, const char *sched_userid,
 void caldav_get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
                                    const char *userid, strarray_t *addresses)
 {
-    /* allow override of schedule-address per-message (FM specific) */
+    get_schedule_addresses(mboxname, userid, addresses);
+
+    /* Allow a per-request override of which identity to schedule as (FM
+     * specific), but only to one the calendar's owner actually holds.  The
+     * header is client-supplied, so honoring an address that isn't the
+     * owner's would let any writer schedule, and send iMIP, as some other
+     * ORGANIZER/ATTENDEE.  Validate against the owner rather than userid,
+     * since a sharee writing a shared calendar legitimately schedules as
+     * the owner (e.g. a team calendar). */
     const char **hdr = req_hdrs ?
         spool_getheader(req_hdrs, "Schedule-Address") : NULL;
-
     if (hdr) {
-        if (!strncasecmp(hdr[0], "mailto:", 7))
-            strarray_add(addresses, hdr[0]+7);
-        else
-            strarray_add(addresses, hdr[0]);
-    }
-    else {
-        get_schedule_addresses(mboxname, userid, addresses);
+        const char *claimed = hdr[0];
+        if (!strncasecmp(claimed, "mailto:", 7)) claimed += 7;
+
+        char *owner = mboxname_to_userid(mboxname);
+        strarray_t owned = STRARRAY_INITIALIZER;
+        if (owner) get_schedule_addresses(mboxname, owner, &owned);
+
+        if (strarray_contains_case(&owned, claimed)) {
+            /* Narrow to the chosen identity */
+            strarray_truncate(addresses, 0);
+            strarray_add(addresses, claimed);
+        }
+        else {
+            xsyslog(LOG_NOTICE, "ignoring Schedule-Address not held by owner",
+                    "userid=<%s> mboxname=<%s> address=<%s>",
+                    userid, mboxname, hdr[0]);
+        }
+
+        strarray_fini(&owned);
+        free(owner);
     }
 }
