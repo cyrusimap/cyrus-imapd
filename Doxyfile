@@ -11,6 +11,11 @@
   RECURSIVE              = YES
   # EXCLUDE_PATTERNS       = */test/* *_test.c
 
+  # Vendored headers.  Its Doxygen is relative to its project, it'll just
+  # cause chaos if we include it here.  Keep in step with C_API_VENDORED in
+  # docsrc/c-api.mk.
+  EXCLUDE                = lib/xxhash.h
+
 ### What structures do we include?
 
   # Do include static members from processed files
@@ -31,6 +36,12 @@
   GENERATE_XML           = YES
   XML_PROGRAMLISTING     = NO
 
-  # Emit warnings when a documented function has undocmented parameters, but we
-  # do not (yet) consider these warnings a makedoc failure.
+  # Emit warnings when a documented function has undocumented parameters.
   WARN_NO_PARAMDOC       = YES
+
+  # Most of our headers have no Doxygen comments yet, so warning about every
+  # undocumented member buries the warnings worth reading.
+  WARN_IF_UNDOCUMENTED   = NO
+
+  # The build sets this to FAIL_ON_WARNINGS when Sphinx warnings are fatal, too.
+  WARN_AS_ERROR          = $(DOXYGEN_WARN_AS_ERROR)

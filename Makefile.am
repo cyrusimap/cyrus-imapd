@@ -2051,11 +2051,14 @@ DOXYGEN_INPUTS := $(shell find $(DOXYGEN_INPUT_DIRS) -name '*.h' 2>/dev/null)
 ## The pages that read Doxygen's output, so we can tell Sphinx they changed.
 DOXYGEN_PAGES := $(shell grep -rl '^\.\. doxygen' docsrc --include='*.rst' 2>/dev/null)
 
+## Doxygen warnings are fatal whenever Sphinx's are.
+DOXYGEN_WARN_AS_ERROR = $(if $(SPHINX_FAIL_ON_WARNINGS),FAIL_ON_WARNINGS,NO)
+
 ## breathe doesn't manage dependencies well enough to rebuild doxygen-centric
 ## pages just because a *.h file changed.  Touching the pages gets through to
 ## it.
 docsrc/_doxygen/.stamp: Doxyfile $(DOXYGEN_INPUTS)
-	$(AM_V_GEN)$(DOXYGEN) Doxyfile
+	$(AM_V_GEN)DOXYGEN_WARN_AS_ERROR=$(DOXYGEN_WARN_AS_ERROR) $(DOXYGEN) Doxyfile
 	@$(if $(DOXYGEN_PAGES),touch $(DOXYGEN_PAGES))
 	@$(MKDIR_P) $(@D)
 	@touch $@
