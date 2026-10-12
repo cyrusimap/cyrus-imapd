@@ -1,0 +1,105 @@
+#!perl
+use Cassandane::Tiny;
+
+# Sharing a collection through JMAP (Mailbox/set, Calendar/set, and
+# AddressBook/set all go through jmap_set_sharewith) must produce the same
+# AclChange events that IMAP SETACL does, so that a pusher can tell the sharee
+# about their new access without waiting for a poll.
+
+# Shares $arg->{collection} with $arg->{sharee}, granting the rights named in
+# $arg->{grant} (or revoking their access when it is undef), and returns the
+# AclChange events emitted for the collection itself, in order.  Events for
+# other mailboxes (the JMAP upload folder, the calendar home) are left out.
+sub _aclchange_events ($self, $arg) {
+    my ($collection, $sharee, $grant) = $arg->@{qw( collection sharee grant )};
+
+    $self->{instance}->getnotify();
+
+    if ($grant) { $collection->share_with($sharee => $grant) }
+    else        { $collection->unshare_with($sharee) }
+
+    my @events = map { decode_json($_->{MESSAGE}) }
+                 $self->{instance}->getnotify->@*;
+
+    # A compact Calendar or AddressBook id is the mailbox id under its own
+    # type prefix (see JMAP_MAILBOXID_PREFIX in imap/jmap_util.h).
+    my $mboxid = q{P} . substr($collection->id, 1);
+    return [
+        grep { $_->{event} eq q{AclChange} && $_->{mailboxID} eq $mboxid }
+        @events
+    ];
+}
+
+# Shares (or unshares) as _aclchange_events does, and asserts that exactly one
+# AclChange for the sharee results, carrying the rights string in
+# $arg->{rights}.  A revocation, rights undef, carries no aclRights at all, as
+# DELETEACL has always reported it.
+sub _assert_share_emits ($self, $desc, $arg) {
+    my $events = $self->_aclchange_events($arg);
+    my $rights = $arg->{rights};
+
+    $self->assert_cmp_deeply(
+        [ superhashof({
+            aclSubject => $arg->{sharee}->username,
+            (defined $rights ? (aclRights => $rights) : ()),
+        }) ],
+        $events,
+        $desc,
+    );
+
+    $self->assert(! exists $events->[0]{aclRights}, "$desc: no aclRights")
+        unless defined $rights;
+}
+
+sub test_jmap_sharewith_aclchange ($self) {
+    my $user   = $self->default_user;
+    my $sharee = $self->{instance}->create_user('sharee');
+
+    my $inbox = $user->mailboxes->inbox;
+    $self->_assert_share_emits('mailbox share', {
+        collection => $inbox,
+        sharee     => $sharee,
+        grant      => [ 'mayRead' ],
+        rights     => 'lr',
+    });
+    $self->_assert_share_emits('mailbox share widened', {
+        collection => $inbox,
+        sharee     => $sharee,
+        grant      => [ 'mayRead', 'mayWrite' ],
+        rights     => 'lrswitedn',
+    });
+    $self->_assert_share_emits('mailbox unshare', {
+        collection => $inbox,
+        sharee     => $sharee,
+        grant      => undef,
+        rights     => undef,
+    });
+
+    my $cal = $user->calendars->create;
+    $self->_assert_share_emits('calendar share', {
+        collection => $cal,
+        sharee     => $sharee,
+        grant      => [ 'mayReadItems' ],
+        rights     => 'lrw',
+    });
+    $self->_assert_share_emits('calendar unshare', {
+        collection => $cal,
+        sharee     => $sharee,
+        grant      => undef,
+        rights     => undef,
+    });
+
+    my $abook = $user->addressbooks->create;
+    $self->_assert_share_emits('addressbook share', {
+        collection => $abook,
+        sharee     => $sharee,
+        grant      => [ 'mayRead' ],
+        rights     => 'lrw',
+    });
+    $self->_assert_share_emits('addressbook unshare', {
+        collection => $abook,
+        sharee     => $sharee,
+        grant      => undef,
+        rights     => undef,
+    });
+}

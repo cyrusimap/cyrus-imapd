@@ -269,6 +269,24 @@ int mboxlist_setacl(const struct namespace *namespace, const char *name,
 
 /* Change all ACLs on mailbox */
 int mboxlist_updateacl_raw(const char *name, const char *acl);
+
+/**
+ * Replace the whole ACL of mailbox @p name with @p acl, a string in the
+ * tab-separated identifier/rights form the mailboxes database stores.
+ *
+ * The mailboxes database entry is updated, and @p foldermodseq is recorded
+ * there if it is newer than the entry has.  Unless @p silent, the copy of the
+ * ACL in the mailbox header is updated too, and an AclChange event is emitted
+ * for every identifier whose rights differ from the old ACL, so an IMAP
+ * SETACL and a JMAP shareWith change notify alike.  A caller that already
+ * holds the mailbox open must hold an index write lock.
+ *
+ * @p silent is for replication, which keeps the header copy itself and must
+ * not re-emit the master's events.
+ *
+ * @return 0, or an IMAP error code; a failure to emit the events is logged
+ *         and does not fail the call.
+ */
 int mboxlist_setacls(const char *name, const char *acl, modseq_t foldermodseq, int silent);
 int mboxlist_update_foldermodseq(const char *name, modseq_t foldermodseq);
 
