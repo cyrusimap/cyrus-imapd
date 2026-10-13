@@ -336,7 +336,12 @@ static int jmap_parse_path(const char *path, struct request_target_t *tgt,
         int r = proxy_mlookup(inbox, &tgt->mbentry, NULL, NULL);
 
         if (r) {
-            syslog(LOG_ERR, "mlookup(%s) failed: %s", inbox, error_message(r));
+            xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT
+                       ? LOG_WARNING : LOG_ERR,
+                       "dav.target.lookup.failed",
+                       lf_intname("mbox.name", inbox),
+                       lf_s("u.username", httpd_userid),
+                       lf_err("error", r));
         }
         free(inbox);
 

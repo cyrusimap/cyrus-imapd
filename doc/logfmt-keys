@@ -137,12 +137,25 @@ append.stage.source     the file a staged message was copied from
 cal.organizer           a calendar component's ORGANIZER
 cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID
+conv.guid.exists        how many non-expunged records share this guid
+conv.guid.folderexists  how many of those are in this folder
+conv.guid.numrecords    how many records of any kind share this guid
+dav.collection          the DAV collection a request named
+dav.owner               the user whose collection a request was for
+dav.resource            the DAV resource within the collection
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
 http.header.name        the name of an HTTP header
 http.header.value       the value of an HTTP header
+idle.mboxevent          the mailbox event being forwarded, e.g. MessageNew
+idle.message            which message to idled failed: notify, init or done
+idle.poll.interval      seconds between polls when idled can't be reached
 imip.error              why an iMIP operation failed
 imip.outcome            what an iMIP message did: added, updated, no_action, error
+jmap                    placeholder for "no JMAP request"; value is always ~null~
 jmap.accountid          the JMAP account the request was for
+jmap.method             the JMAP method call being processed, e.g. Email/get
+limit.name              which configured limit an operation broke
+limit.value             that limit's configured value
 lmtp.action             what delivery did with the message: implicit, keep, fileinto, ...
 lmtp.command            an LMTP command line as the client sent it
 lmtp.preauth            the preauth mode a connection arrived with
@@ -219,9 +232,12 @@ used.bytes.out          bytes written to the client this session
 ### failure detail
 
 error                   why the operation failed, as human-readable text
+error.column            the column a parse error was found at
 error.description       the human-readable detail paired with error.type
+error.line              the line a parse error was found at
 error.type              a machine-readable error type, e.g. a JMAP SetError type
 sys.error               strerror() of errno at the point of logging
+sys.exitcode            the exit code a process is dying with
 sys.filename            a file name within a directory
 sys.path                a filesystem path
 sys.pid                 a process id

@@ -471,8 +471,13 @@ static int principal_acl_check(const char *userid, struct auth_state *authstate)
 
         r = proxy_mlookup(mboxname, &mbentry, NULL, NULL);
         if (r) {
-            syslog(LOG_ERR, "mlookup(%s) failed: %s",
-                   mboxname, error_message(r));
+            xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT
+                       ? LOG_WARNING : LOG_ERR,
+                       "dav.target.lookup.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("u.username", httpd_userid),
+                       lf_s_opt("dav.owner", userid),
+                       lf_err("error", r));
             r = HTTP_NOT_FOUND;
         }
         else if (!(httpd_myrights(authstate, mbentry) & ACL_LOOKUP)) {
@@ -579,7 +584,14 @@ HIDDEN int principal_parse_path(const char *path, struct request_target_t *tgt,
         int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
         if (r) {
             *resultstr = error_message(r);
-            syslog(LOG_ERR, "mlookup(%s) failed: %s", mboxname, *resultstr);
+            xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT
+                       ? LOG_WARNING : LOG_ERR,
+                       "dav.target.lookup.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("u.username", httpd_userid),
+                       lf_s_opt("dav.owner", tgt->userid),
+                       lf_s_opt("dav.collection", tgt->collection),
+                       lf_err("error", r));
         }
         free(mboxname);
 
@@ -822,7 +834,15 @@ HIDDEN int calcarddav_parse_path(const char *path,
 
         if (r) {
             *resultstr = error_message(r);
-            syslog(LOG_ERR, "mlookup(%s) failed: %s", mboxname, *resultstr);
+            xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT
+                       ? LOG_WARNING : LOG_ERR,
+                       "dav.target.lookup.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("u.username", httpd_userid),
+                       lf_s_opt("dav.owner", tgt->userid),
+                       lf_s_opt("dav.collection", tgt->collection),
+                       lf_s_opt("dav.resource", tgt->resource),
+                       lf_err("error", r));
 
             switch (r) {
             case IMAP_PERMISSION_DENIED:
@@ -4959,8 +4979,14 @@ static int meth_delete_collection(struct transaction_t *txn,
 
         r = proxy_mlookup(inboxname, &mbentry, NULL, NULL);
         if (r) {
-            syslog(LOG_ERR, "mlookup(%s) failed: %s",
-                   inboxname, error_message(r));
+            xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT
+                       ? LOG_WARNING : LOG_ERR,
+                       "dav.target.lookup.failed",
+                       lf_intname("mbox.name", inboxname),
+                       lf_s("u.username", httpd_userid),
+                       lf_s_opt("dav.owner", txn->req_tgt.userid),
+                       lf_s_opt("dav.collection", txn->req_tgt.collection),
+                       lf_err("error", r));
             ret = HTTP_NOT_FOUND;
         }
         else if (mbentry->server) {

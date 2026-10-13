@@ -36,7 +36,7 @@ sub test_userflags_crash
 
     # should have got a syslog message about conversations GUID limit
     $self->assert_syslog_matches($self->{instance},
-                                 qr/IOERROR: conversations GUID limit/);
+                                 qr/event=conversations\.guid\.limit_reached/);
 
     # change some flags on the first message
     $talk->store('1', '-flags', qw(a b c d));
@@ -51,5 +51,5 @@ sub test_userflags_crash
 
     # should have got a syslog message about conversations GUID limit
     $self->assert_syslog_matches($self->{instance},
-                                 qr/IOERROR: conversations GUID limit/);
+                                 qr/event=conversations\.guid\.limit_reached/);
 }

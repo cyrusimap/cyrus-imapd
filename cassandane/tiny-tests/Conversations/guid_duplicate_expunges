@@ -34,5 +34,5 @@ sub test_guid_duplicate_expunges
     $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
 
     $self->assert_syslog_matches($self->{instance},
-                                 qr{IOERROR: conversations GUID limit});
+                                 qr{event=conversations\.guid\.limit_reached});
 }

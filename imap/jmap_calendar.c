@@ -6485,7 +6485,12 @@ static void setcalendarevents_update(jmap_req_t *req,
     };
     r = proxy_mlookup(mailbox_name(mbox), &txn.req_tgt.mbentry, NULL, NULL);
     if (r) {
-        syslog(LOG_ERR, "mlookup(%s) failed: %s", mailbox_name(mbox), error_message(r));
+        xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT
+                   ? LOG_WARNING : LOG_ERR,
+                   "dav.target.lookup.failed",
+                   lf_mailbox(mbox),
+                   lf_jmapreq(req),
+                   lf_err("error", r));
     }
     else {
         r = caldav_store_resource(&txn, update.newical,

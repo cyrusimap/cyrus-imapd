@@ -1423,7 +1423,11 @@ EXPORTED void fatal(const char *s, int code)
         ptrarray_fini(&stages);
     }
 
-    syslog(LOG_ERR, "Fatal error: %s", s);
+    xsyslog_ev(LOG_ERR, "imap.fatal",
+               lf_s("u.username", imapd_userid),
+               lf_s("r.clienthost", imapd_clienthost),
+               lf_s("error", s),
+               lf_d("sys.exitcode", code));
 
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
@@ -3869,12 +3873,24 @@ static int getliteralsize(const char *tag, const char *p, int c, size_t maxsize,
     if (*p == '+') {
         /* LITERAL- says maximum size is 4096! */
         if (lminus && num > 4096) {
+            /* fatal() reports who and from where; the size and the limit
+             * it broke only exist here */
+            xsyslog_ev(LOG_WARNING, "imap.literal.too_large",
+                       lf_s("u.username", imapd_userid),
+                       lf_u("msg.size", num),
+                       lf_s("limit.name", "literal-"),
+                       lf_u("limit.value", 4096));
             /* Fail per RFC 7888, Section 4, choice 2 */
             prot_printf(imapd_out, "%s NO %s\r\n", tag,
                         error_message(IMAP_LITERAL_MINUS_TOO_LARGE));
             fatal(error_message(IMAP_LITERAL_MINUS_TOO_LARGE), EX_PROTOCOL);
         }
         if (num > maxsize) {
+            xsyslog_ev(LOG_WARNING, "imap.literal.too_large",
+                       lf_s("u.username", imapd_userid),
+                       lf_u("msg.size", num),
+                       lf_s("limit.name", "maxmessagesize"),
+                       lf_zu("limit.value", maxsize));
             /* Fail per RFC 7888, Section 4, choice 2 */
             prot_printf(imapd_out, "%s NO %s\r\n", tag,
                         error_message(IMAP_MESSAGE_TOOBIG));

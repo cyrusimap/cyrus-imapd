@@ -19,6 +19,7 @@
 #include "http_dav_sharing.h"
 #include "http_jmap.h"
 #include "imparse.h"
+#include "logfmt.h"
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "proxy.h"
@@ -3773,4 +3774,24 @@ HIDDEN bool jmap_state_matches(struct conversations_state *cstate,
     }
 
     return atomodseq_t(if_in_state) == modseq;
+}
+
+EXPORTED void logfmt_push_jmapreq(struct logfmt *lf, const char *key,
+                                  const jmap_req_t *req)
+{
+    if (!req) {
+        /* logging shouldn't be the thing that crashes us */
+        logfmt_push(lf, key ? key : "jmap", NULL);
+        return;
+    }
+
+    logfmt_push(lf, "u.username", req->userid);
+    logfmt_push(lf, "jmap.accountid", req->accountid);
+    logfmt_push(lf, "jmap.method", req->method);
+}
+
+EXPORTED void logfmt_arg_jmapreq(struct logfmt *lf,
+                                 const char *key, const void *value)
+{
+    logfmt_push_jmapreq(lf, key, (const jmap_req_t *) value);
 }
