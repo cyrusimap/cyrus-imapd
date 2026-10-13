@@ -147,10 +147,10 @@ static void cyr_expire_init(const char *progname, struct cyr_expire_ctx *ctx)
 {
     signals_add_handlers(0);
 
-    construct_hash_table(&ctx->erock.table, 10000, 1);
+    construct_hash_table(&ctx->erock.table, 0, 0);
     strarray_init(&ctx->drock.to_delete);
     strarray_init(&ctx->erock.to_cleanup);
-    construct_hash_table(&ctx->crock.seen, 100, 1);
+    construct_hash_table(&ctx->crock.seen, 0, 0);
 
     cyrus_init(ctx->args.altconfig, progname, 0, 0);
     global_sasl_init(1, 0, NULL);
