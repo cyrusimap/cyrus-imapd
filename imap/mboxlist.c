@@ -459,9 +459,9 @@ static int mboxlist_read_name(const char *dbname,
     default:
     {
         char *intname = mboxname_from_dbname(dbname);
-        xsyslog(LOG_ERR, "DBERROR: error fetching mboxlist",
-                         "mailbox=<%s> error=<%s>",
-                         intname, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.read.failed",
+                   lf_intname("mbox.name", intname),
+                   lf_s("error", cyrusdb_strerror(r)));
         free(intname);
         r = IMAP_IOERROR;
         break;
@@ -895,8 +895,9 @@ static int mboxlist_read_uniqueid(const char *uniqueid,
         break;
 
     default:
-        syslog(LOG_ERR, "DBERROR: error fetching mboxlist %s: %s",
-               uniqueid, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.read.failed",
+                   lf_s("mbox.uniqueid", uniqueid),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
         break;
     }
@@ -1006,8 +1007,9 @@ static int mboxlist_read_jmapid(const char *inboxid, const char *jmapid,
         break;
 
     default:
-        syslog(LOG_ERR, "DBERROR: error fetching mboxlist %s: %s",
-               jmapid, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.read.failed",
+                   lf_s("mbox.mailboxid", jmapid),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
         break;
     }
@@ -1727,9 +1729,8 @@ EXPORTED int mboxlist_update_full(const mbentry_t *mbentry, int localonly, int s
 
         r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
         if (r) {
-            syslog(LOG_ERR,
-                   "cannot connect to mupdate server for update of '%s'",
-                   mbentry->name);
+            xsyslog_ev(LOG_ERR, "mboxlist.mupdate.unreachable",
+                       lf_intname("mbox.name", mbentry->name));
         } else {
             char *location = strconcat(config_servername, "!",
                                        mbentry->partition, (char *)NULL);
@@ -1737,9 +1738,8 @@ EXPORTED int mboxlist_update_full(const mbentry_t *mbentry, int localonly, int s
                                  location, mbentry->acl);
             free(location);
             if (r) {
-                syslog(LOG_ERR,
-                       "MUPDATE: can't update mailbox entry for '%s'",
-                       mbentry->name);
+                xsyslog_ev(LOG_ERR, "mboxlist.mupdate.update.failed",
+                           lf_intname("mbox.name", mbentry->name));
             }
         }
         mupdate_disconnect(&mupdate_h);
@@ -1749,13 +1749,13 @@ EXPORTED int mboxlist_update_full(const mbentry_t *mbentry, int localonly, int s
         if (r) {
             r2 = cyrusdb_abort(mbdb, tid);
             if (r2)
-                xsyslog(LOG_ERR, "DBERROR: error aborting transaction",
-                                 "error=<%s>", cyrusdb_strerror(r2));
+                xsyslog_ev(LOG_ERR, "mboxlist.txn.abort.failed",
+                           lf_s("error", cyrusdb_strerror(r2)));
         } else {
             r2 = cyrusdb_commit(mbdb, tid);
             if (r2)
-                xsyslog(LOG_ERR, "DBERROR: error committing transaction",
-                                 "error=<%s>", cyrusdb_strerror(r2));
+                xsyslog_ev(LOG_ERR, "mboxlist.txn.commit.failed",
+                           lf_s("error", cyrusdb_strerror(r2)));
         }
         if (!r)
             mboxname_setmodseq(mbentry->name, mbentry->foldermodseq, mbentry->mbtype,
@@ -2138,7 +2138,8 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
         if (!mboxlist_haschildren(mboxname))
             continue;
 
-        syslog(LOG_NOTICE, "mboxlist: intermediate fill-in mailbox: %s", mboxname);
+        xsyslog_ev(LOG_NOTICE, "mboxlist.intermediate.created",
+                   lf_intname("mbox.name", mboxname));
 
         if (!partition) {
             mboxlist_entry_free(&mbentry);
@@ -2370,9 +2371,9 @@ EXPORTED int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_
     }
 
     if (r) {
-        xsyslog(LOG_ERR, "DBERROR: failed to insert to mailboxes list",
-                         "mailbox=<%s> error=<%s>",
-                         mboxname, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.write.failed",
+                   lf_intname("mbox.name", mboxname),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
     }
 
@@ -2385,8 +2386,8 @@ EXPORTED int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_
         if (!r) r = mupdate_reserve(mupdate_h, mboxname, loc);
         if (!r) r = mupdate_activate(mupdate_h, mboxname, loc, acl);
         if (r) {
-            syslog(LOG_ERR, "MUPDATE: can't commit mailbox entry for '%s'",
-                   mboxname);
+            xsyslog_ev(LOG_ERR, "mboxlist.mupdate.update.failed",
+                       lf_intname("mbox.name", mboxname));
             mboxlist_update_entry_full(mboxname, NULL, 0, silent);
         }
         if (mupdate_h) mupdate_disconnect(&mupdate_h);
@@ -2465,9 +2466,9 @@ EXPORTED int mboxlist_insertremote(mbentry_t *mbentry,
         abort(); /* shouldn't happen ! */
         break;
     default:
-        xsyslog(LOG_ERR, "DBERROR: error updating database",
-                         "mailbox=<%s> error=<%s>",
-                         mbentry->name, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.write.failed",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
         break;
     }
@@ -2512,17 +2513,16 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     }
 
     if (mbentry && (mbentry->mbtype & MBTYPE_REMOTE) && !mbentry->server) {
-        syslog(LOG_ERR,
-               "mboxlist_deleteremote called on non-remote mailbox: %s",
-               name);
+        xsyslog_ev(LOG_ERR, "mboxlist.deleteremote.invalid",
+                   lf_intname("mbox.name", name));
         goto done;
     }
 
     r = mboxlist_update_entry(name, NULL, tid);
     if (r) {
-        xsyslog(LOG_ERR, "DBERROR: error deleting entry",
-                         "mailbox=<%s> error=<%s>",
-                         name, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.delete.failed",
+                   lf_intname("mbox.name", name),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
     }
 
@@ -2530,9 +2530,8 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     if (!in_tid) {
         r = cyrusdb_commit(mbdb, *tid);
         if (r) {
-            xsyslog(LOG_ERR, "DBERROR: failed on commit",
-                             "error=<%s>",
-                             cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "mboxlist.txn.commit.failed",
+                       lf_s("error", cyrusdb_strerror(r)));
             r = IMAP_IOERROR;
         }
         tid = NULL;
@@ -2763,17 +2762,17 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
             }
             r = mboxlist_update(newmbentry, /*localonly*/1);
             if (r) {
-                xsyslog(LOG_ERR, "DBERROR: error marking deleted",
-                                 "mailbox=<%s> error=<%s>",
-                                 name, cyrusdb_strerror(r));
+                xsyslog_ev(LOG_ERR, "mboxlist.delete.failed",
+                           lf_intname("mbox.name", name),
+                           lf_s("error", cyrusdb_strerror(r)));
             }
         }
         else {
             r = mboxlist_update_entry_full(name, NULL, 0, silent);
             if (r) {
-                xsyslog(LOG_ERR, "DBERROR: error deleting",
-                                 "mailbox=<%s> error=<%s>",
-                                 name, cyrusdb_strerror(r));
+                xsyslog_ev(LOG_ERR, "mboxlist.delete.failed",
+                           lf_intname("mbox.name", name),
+                           lf_s("error", cyrusdb_strerror(r)));
             }
         }
         goto done;
@@ -2815,15 +2814,14 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         /* delete the mailbox in MUPDATE */
         r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
         if (r) {
-            syslog(LOG_ERR,
-                   "cannot connect to mupdate server for delete of '%s'",
-                   name);
+            xsyslog_ev(LOG_ERR, "mboxlist.mupdate.unreachable",
+                       lf_intname("mbox.name", name));
             goto done;
         }
         r = mupdate_delete(mupdate_h, name);
         if(r) {
-            syslog(LOG_ERR,
-                   "MUPDATE: can't delete mailbox entry '%s'", name);
+            xsyslog_ev(LOG_ERR, "mboxlist.mupdate.update.failed",
+                       lf_intname("mbox.name", name));
         }
         if (mupdate_h) mupdate_disconnect(&mupdate_h);
     }
@@ -2870,9 +2868,9 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
          * to keep that rubbish around) */
         r = mboxlist_update_entry_full(name, NULL, 0, silent);
         if (r) {
-            xsyslog(LOG_ERR, "DBERROR: error deleting",
-                             "mailbox=<%s> error=<%s>",
-                             name, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "mboxlist.delete.failed",
+                       lf_intname("mbox.name", name),
+                       lf_s("error", cyrusdb_strerror(r)));
             r = IMAP_IOERROR;
             if (!force) goto done;
         }
@@ -3273,7 +3271,9 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->foldermodseq = oldmailbox->i.highestmodseq;
     }
 
-    syslog(LOG_INFO, "Rename: %s -> %s", oldname, newname);
+    xsyslog_ev(LOG_INFO, "mboxlist.rename.started",
+               lf_intname("old.mbox.name", oldname),
+               lf_intname("mbox.name", newname));
 
   dbupdate:
 
@@ -3306,9 +3306,10 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             tid = NULL;
             break;
         default:
-            xsyslog(LOG_ERR, "DBERROR: rename failed on store",
-                             "oldname=<%s> newname=<%s> error=<%s>",
-                             oldname, newname, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "mboxlist.rename.failed",
+                       lf_intname("old.mbox.name", oldname),
+                       lf_intname("mbox.name", newname),
+                       lf_s("error", cyrusdb_strerror(r)));
             r = IMAP_IOERROR;
             goto done;
             break;
@@ -3322,9 +3323,10 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
     tid = NULL;
     if (r) {
-        xsyslog(LOG_ERR, "DBERROR: rename failed on commit",
-                         "oldname=<%s> newname=<%s> error=<%s>",
-                         oldname, newname, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.rename.failed",
+                   lf_intname("old.mbox.name", oldname),
+                   lf_intname("mbox.name", newname),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -3334,14 +3336,16 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         int is_subscribed = mboxlist_checksub(oldname, userid) == 0;
         int r2 = mboxlist_changesub(oldname, userid, auth_state, 0, 0, 0, silent);
         if (r2) {
-            syslog(LOG_ERR, "CHANGESUB: can't unsubscribe %s: %s",
-                    oldname, error_message(r2));
+            xsyslog_ev(LOG_ERR, "mboxlist.subscription.update.failed",
+                       lf_intname("mbox.name", oldname),
+                       lf_err("error", r2));
         }
         if (is_subscribed) {
             r2 = mboxlist_changesub(newname, userid, auth_state, 1, 0, 0, silent);
             if (r2) {
-                syslog(LOG_ERR, "CHANGESUB: can't subscribe %s: %s",
-                        newname, error_message(r2));
+                xsyslog_ev(LOG_ERR, "mboxlist.subscription.update.failed",
+                           lf_intname("mbox.name", newname),
+                           lf_err("error", r2));
             }
         }
     }
@@ -3357,9 +3361,8 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         }
         if (!r) r = mupdate_activate(mupdate_h, newname, loc, newmbentry->acl);
         if (r) {
-            syslog(LOG_ERR,
-                   "MUPDATE: can't commit mailbox entry for '%s'",
-                   newname);
+            xsyslog_ev(LOG_ERR, "mboxlist.mupdate.update.failed",
+                       lf_intname("mbox.name", newname));
             mupdatecommiterror = r;
         }
         if (mupdate_h) mupdate_disconnect(&mupdate_h);
@@ -3392,13 +3395,13 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             tid = NULL;
             if (r) {
                 /* XXX HOWTO repair this mess! */
-                xsyslog(LOG_ERR, "DBERROR: failed DB rollback on mailboxrename",
-                                 "oldname=<%s> newname=<%s> error=<%s>",
-                                 oldname, newname, cyrusdb_strerror(r));
-                xsyslog(LOG_ERR, "DBERROR: mailboxdb on mupdate and backend"
-                                 " ARE NOT CONSISTENT",
-                                 "mupdate_entry=<%s> backend_entry=<%s>",
-                                 oldname, newname);
+                xsyslog_ev(LOG_ERR, "mboxlist.rename.rollback.failed",
+                           lf_intname("old.mbox.name", oldname),
+                           lf_intname("mbox.name", newname),
+                           lf_s("error", cyrusdb_strerror(r)));
+                xsyslog_ev(LOG_ERR, "mboxlist.mupdate.inconsistent",
+                           lf_intname("old.mbox.name", oldname),
+                           lf_intname("mbox.name", newname));
                 r = IMAP_IOERROR;
             } else {
                 r = mupdatecommiterror;
@@ -3710,9 +3713,11 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
             int has_admin_rights = mboxlist_have_admin_rights(rights);
             if ((has_admin_rights && mode == ACL_MODE_REMOVE) ||
                (!has_admin_rights && mode != ACL_MODE_REMOVE)) {
-                syslog(LOG_ERR, "Denied removal of admin rights on "
-                       "folder \"%s\" (owner: %s) by user \"%s\"", name,
-                       mailbox_owner, userid);
+                /* the server refused it, which is the point */
+                xsyslog_ev(LOG_WARNING, "mboxlist.acl.admin_removal.denied",
+                           lf_intname("mbox.name", name),
+                           lf_s("mbox.owner", mailbox_owner),
+                           lf_s("u.username", userid));
                 r = IMAP_PERMISSION_DENIED;
                 goto done;
             }
@@ -3729,9 +3734,10 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
     else {
         /* do not allow to remove the admin rights from mailbox owner */
         if (!isadmin && isidentifiermbox) {
-            syslog(LOG_ERR, "Denied removal of admin rights on "
-                   "folder \"%s\" (owner: %s) by user \"%s\"", name,
-                   mailbox_owner, userid);
+            xsyslog_ev(LOG_WARNING, "mboxlist.acl.admin_removal.denied",
+                       lf_intname("mbox.name", name),
+                       lf_s("mbox.owner", mailbox_owner),
+                       lf_s("u.username", userid));
             r = IMAP_PERMISSION_DENIED;
             goto done;
         }
@@ -3774,9 +3780,9 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
 
     r = mboxlist_update_entry(name, mbentry, NULL);
     if (r) {
-        xsyslog(LOG_ERR, "DBERROR: error updating acl",
-                         "mailbox=<%s> error=<%s>",
-                         name, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.acl.write.failed",
+                   lf_intname("mbox.name", name),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -3791,16 +3797,14 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
 
         r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
         if (r) {
-            syslog(LOG_ERR,
-                   "cannot connect to mupdate server for setacl on '%s'",
-                   name);
+            xsyslog_ev(LOG_ERR, "mboxlist.mupdate.unreachable",
+                       lf_intname("mbox.name", name));
         }
         else {
             r = mupdate_activate(mupdate_h, name, buf, newacl);
             if(r) {
-                syslog(LOG_ERR,
-                       "MUPDATE: can't update mailbox entry for '%s'",
-                       name);
+                xsyslog_ev(LOG_ERR, "mboxlist.mupdate.update.failed",
+                           lf_intname("mbox.name", name));
             }
         }
         mupdate_disconnect(&mupdate_h);
@@ -3946,9 +3950,9 @@ mboxlist_setacls(const char *name, const char *newacl, modseq_t foldermodseq, in
     r = mboxlist_update_entry_full(name, mbentry, NULL, silent);
 
     if (r) {
-        xsyslog(LOG_ERR, "DBERROR: error updating acl",
-                         "mailbox=<%s> error=<%s>",
-                         name, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.acl.write.failed",
+                   lf_intname("mbox.name", name),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -3977,15 +3981,13 @@ mboxlist_setacls(const char *name, const char *newacl, modseq_t foldermodseq, in
 
         r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
         if (r) {
-            syslog(LOG_ERR,
-                   "cannot connect to mupdate server for syncacl on '%s'",
-                   name);
+            xsyslog_ev(LOG_ERR, "mboxlist.mupdate.unreachable",
+                       lf_intname("mbox.name", name));
         } else {
             r = mupdate_activate(mupdate_h, name, buf, newacl);
             if (r) {
-                syslog(LOG_ERR,
-                       "MUPDATE: can't update mailbox entry for '%s'",
-                       name);
+                xsyslog_ev(LOG_ERR, "mboxlist.mupdate.update.failed",
+                           lf_intname("mbox.name", name));
             }
         }
         mupdate_disconnect(&mupdate_h);
@@ -4420,10 +4422,11 @@ EXPORTED int mboxlist_set_racls(int enabled)
     if (r) goto out;
 
     if (modified_mbdb)
-        syslog(LOG_NOTICE, "Rewrote J key separator %d times", modified_mbdb);
+        xsyslog_ev(LOG_NOTICE, "mboxlist.jmapid_key.rewritten",
+                   lf_d("mboxlist.rewritten", modified_mbdb));
 
     if (have_racl && !enabled) {
-        syslog(LOG_NOTICE, "removing reverse acl support");
+        xsyslog_ev(LOG_NOTICE, "mboxlist.racl.disabling");
         /* remove */
         r = cyrusdb_foreach(mbdb, buf_base(&key), buf_len(&key),
                             NULL, racls_del_cb, &tid, &tid);
@@ -4434,10 +4437,11 @@ EXPORTED int mboxlist_set_racls(int enabled)
         /* add */
         struct allmb_rock mbrock = { NULL, racls_add_cb, &tid, 0 };
         /* we can't use mboxlist_allmbox because it doesn't do transactions */
-        syslog(LOG_NOTICE, "adding reverse acl support");
+        xsyslog_ev(LOG_NOTICE, "mboxlist.racl.enabling");
         r = cyrusdb_foreach(mbdb, "", 0, allmbox_p, allmbox_cb, &mbrock, &tid);
         if (r) {
-            syslog(LOG_ERR, "ERROR: failed to add reverse acl support %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxlist.racl.enable.failed",
+                       lf_err("error", r));
         }
         modified_mbdb = 1;
         mboxlist_entry_free(&mbrock.mbentry);
@@ -5438,8 +5442,10 @@ static int mboxlist_rmquota(const mbentry_t *mbentry, void *rock)
     mailbox_close(&mailbox);
 
     if (r) {
-        syslog(LOG_ERR, "LOSTQUOTA: unable to remove quota root %s for %s: %s",
-               oldroot, mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.quota.remove.failed",
+                   lf_s("quota.root", oldroot),
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_err("error", r));
     }
 
     /* not a huge tragedy if we failed, so always return success */
@@ -5465,8 +5471,10 @@ static int mboxlist_changequota(const mbentry_t *mbentry, void *rock)
     mailbox_close(&mailbox);
 
     if (r) {
-        syslog(LOG_ERR, "LOSTQUOTA: unable to change quota root for %s to %s: %s",
-               mbentry->name, crock->root, error_message(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.quota.update.failed",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_s("quota.root", crock->root),
+                   lf_err("error", r));
     }
 
     /* Note, we're a callback, and it's not a huge tragedy if we
@@ -5539,9 +5547,9 @@ EXPORTED void mboxlist_open(const char *fname)
 
     ret = cyrusdb_open(DB, fname, flags, &mbdb);
     if (ret != 0) {
-        xsyslog(LOG_ERR, "DBERROR: error opening mailboxes list",
-                         "fname=<%s> error=<%s>",
-                         fname, cyrusdb_strerror(ret));
+        xsyslog_ev(LOG_ERR, "mboxlist.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(ret)));
             /* Exiting TEMPFAIL because Sendmail thinks this
                EX_OSFILE == permanent failure. */
         fatal("can't read mailboxes file", EX_TEMPFAIL);
@@ -5564,9 +5572,8 @@ EXPORTED void mboxlist_close(void)
     if (mboxlist_dbopen) {
         r = cyrusdb_close(mbdb);
         if (r) {
-            xsyslog(LOG_ERR, "DBERROR: error closing mailboxes",
-                             "error=<%s>",
-                             cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "mboxlist.close.failed",
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         mboxlist_dbopen = 0;
     }
@@ -5794,8 +5801,9 @@ static int usersubs_cb(void *rock, const char *key, size_t keylen,
     }
 
     if (r) {
-        syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-               mbname_intname(mbname), error_message(r));
+        xsyslog_ev(LOG_INFO, "mboxlist.lookup.failed",
+                   lf_mbname("mbox.name", mbname),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -6257,8 +6265,8 @@ static int _foreach_cb(void *rock,
 
     r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
     if (r) {
-        syslog(LOG_WARNING, "Failed to parse mailboxes.db entry for '%.*s'",
-               (int) keylen, key);
+        xsyslog_ev(LOG_WARNING, "mboxlist.entry.unparseable",
+                   lf_raw("mboxlist.key", "%.*s", (int) keylen, key));
         return 0;
     }
 
@@ -6270,7 +6278,8 @@ static int _foreach_cb(void *rock,
         struct mailbox *mailbox = NULL;
         int r = mailbox_open_from_mbe(mbentry, &mailbox);
         if (r) {
-            syslog(LOG_WARNING, "Failed to open mailbox '%s'", mbentry->name);
+            xsyslog_ev(LOG_WARNING, "mboxlist.mailbox.open.failed",
+                       lf_intname("mbox.name", mbentry->name));
             mboxlist_entry_free(&mbentry);
             return 0;
         }
@@ -6358,8 +6367,9 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     r = cyrusdb_open(DB, fname, 0, &old);
 
     if (r) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "mboxlist.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(r)));
         fatal("can't open mailboxes file", EX_TEMPFAIL);
     }
 
@@ -6373,8 +6383,9 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
 
     r2 = cyrusdb_close(old);
     if (r2) {
-        syslog(LOG_ERR, "DBERROR: error closing %s: %s", fname,
-               cyrusdb_strerror(r2));
+        xsyslog_ev(LOG_ERR, "mboxlist.close.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(r2)));
     }
 
     hash_enumerate(&ids, &_upgrade_cb, &urock);
@@ -6389,8 +6400,9 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
         }
 
         if (r2) {
-            syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_upgrade: %s",
-                   r ? "aborting" : "committing", cyrusdb_strerror(r2));
+            xsyslog_ev(LOG_ERR, r ? "mboxlist.txn.abort.failed"
+                                  : "mboxlist.txn.commit.failed",
+                       lf_s("error", cyrusdb_strerror(r2)));
         }
     }
 
@@ -6430,18 +6442,20 @@ static int subsdb_needs_upgrade(const char *userid,
         errno = 0;
         version = strtol(tmp, &endptr, 10);
         if (errno || !(*tmp && !*endptr)) {
-            xsyslog(LOG_ERR, "ERROR: bad subscriptions db version",
-                             "userid=<%s> subsfname=<%s> version=<%.*s>",
-                             userid, subsfname, (int) datalen, data);
+            xsyslog_ev(LOG_ERR, "mboxlist.subs.version.invalid",
+                       lf_s("u.username", userid),
+                       lf_s("sys.path", subsfname),
+                       lf_raw("mboxlist.subs.version", "%.*s",
+                              (int) datalen, data));
             fatal("bad subscriptions db version", EX_SOFTWARE);
         }
         free(tmp);
         break;
     default:
         /* XXX uh oh?? */
-        xsyslog(LOG_ERR, "ERROR: can't fetch subscriptions db version",
-                         "userid=<%s> subsfname=<%s>",
-                         userid, subsfname);
+        xsyslog_ev(LOG_ERR, "mboxlist.subs.version.unreadable",
+                   lf_s("u.username", userid),
+                   lf_s("sys.path", subsfname));
         fatal("can't fetch subscriptions db version", EX_SOFTWARE);
         break;
     }
@@ -6504,11 +6518,10 @@ static int _upgrade_subs_cb(void *rock, const char *key, size_t keylen,
             buf_appendcstr(namebuf, inbox);
             buf_appendmap(namebuf, key + 6, keylen - 6);
 
-            xsyslog(LOG_DEBUG, "fixing bad shared mailbox subscription",
-                               "userid=<%s> old_key=<%.*s> new_key=<%s>",
-                               urock->userid,
-                               (int) keylen, key,
-                               buf_cstring(namebuf));
+            xsyslog_ev(LOG_DEBUG, "mboxlist.subs.key.fixed",
+                       lf_s("u.username", urock->userid),
+                       lf_raw("old.mboxlist.key", "%.*s", (int) keylen, key),
+                       lf_buf("mboxlist.key", namebuf));
 
             mbname_free(&mbname);
             free(inbox);
@@ -6567,8 +6580,9 @@ static int mboxlist_upgrade_subs_work(const char *userid,
         db_r = cyrusdb_store(newsubs, key, keylen, data, datalen, &newtid);
     }
     if (db_r) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", newsubsfname,
-               cyrusdb_strerror(db_r));
+        xsyslog_ev(LOG_ERR, "mboxlist.open.failed",
+                   lf_s("sys.path", newsubsfname),
+                   lf_s("error", cyrusdb_strerror(db_r)));
         fatal("can't open new subscriptions file", EX_TEMPFAIL);
     }
 
@@ -6581,8 +6595,9 @@ static int mboxlist_upgrade_subs_work(const char *userid,
     r2 = cyrusdb_abort(oldsubs, oldtid);
     if (!r2) r2 = cyrusdb_close(oldsubs);
     if (r2) {
-        syslog(LOG_ERR, "DBERROR: error closing %s: %s", subsfname,
-               cyrusdb_strerror(r2));
+        xsyslog_ev(LOG_ERR, "mboxlist.close.failed",
+                   lf_s("sys.path", subsfname),
+                   lf_s("error", cyrusdb_strerror(r2)));
         if (!db_r) db_r = r2;
     }
     *subs = NULL;
@@ -6596,22 +6611,25 @@ static int mboxlist_upgrade_subs_work(const char *userid,
         }
 
         if (r2) {
-            syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_upgrade_subs: %s",
-                   db_r ? "aborting" : "committing", cyrusdb_strerror(r2));
+            xsyslog_ev(LOG_ERR, db_r ? "mboxlist.txn.abort.failed"
+                                     : "mboxlist.txn.commit.failed",
+                       lf_s("error", cyrusdb_strerror(r2)));
         }
     }
 
     r2 = cyrusdb_close(newsubs);
     if (r2) {
-        syslog(LOG_ERR, "DBERROR: error closing %s: %s", newsubsfname,
-               cyrusdb_strerror(r2));
+        xsyslog_ev(LOG_ERR, "mboxlist.close.failed",
+                   lf_s("sys.path", newsubsfname),
+                   lf_s("error", cyrusdb_strerror(r2)));
         if (!db_r) db_r = r2;
     }
 
     if (!db_r) {
         /* rename new db file */
         if (cyrus_rename(newsubsfname, subsfname) < 0) {
-            syslog(LOG_ERR, "DBERROR: renaming %s: %m", newsubsfname);
+            xsyslog_ev(LOG_ERR, "mboxlist.subs.rename.failed",
+                       lf_s("sys.path", newsubsfname));
             fatal("can't rename subscriptions file", EX_TEMPFAIL);
         }
         /* reopen upgraded db under regular name (not-create, we're sure it will
@@ -6640,11 +6658,11 @@ static int mboxlist_upgrade_subs(const char *userid,
     if (r) goto done;
 
     if (subsdb_needs_upgrade(userid, subsfname, *subs, &curr_version)) {
-        xsyslog(LOG_NOTICE, "upgrading user subscriptions",
-                            "userid=<%s> subsfname=<%s>"
-                            " from_version=<%d> to_version=<%d>",
-                            userid, subsfname,
-                            curr_version, SUBDB_VERSION_NUM);
+        xsyslog_ev(LOG_NOTICE, "mboxlist.subs.upgrading",
+                   lf_s("u.username", userid),
+                   lf_s("sys.path", subsfname),
+                   lf_d("old.mboxlist.subs.version", curr_version),
+                   lf_d("mboxlist.subs.version", SUBDB_VERSION_NUM));
         r = mboxlist_upgrade_subs_work(userid, subsfname, subs, curr_version);
     }
 

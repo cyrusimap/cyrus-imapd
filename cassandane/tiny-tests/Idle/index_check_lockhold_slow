@@ -55,7 +55,7 @@ use IO::Select;
 #   victim SELECT must complete within 2 seconds.
 #
 # Secondary assertion (requires syslog replacement):
-#   no "mailbox: longlock" message may appear.  mailbox_unlock_index()
+#   no mailbox.lock.slow event may appear.  mailbox_unlock_index()
 #   logs this when the exclusive lock is held for more than 1 second.
 #   With the fix the lock is held for microseconds; the message never fires.
 
@@ -222,7 +222,7 @@ sub test_index_check_lockhold_slow
     # _parse_response reads all remaining untagged FETCH responses (from
     # index_check() calls still in flight) before the server reads our
     # "DONE" and sends the tagged OK.
-    # If the bug is present, mailbox_unlock_index() logs "longlock" here.
+    # If the bug is present, mailbox_unlock_index() logs mailbox.lock.slow here.
     $staller_store->idle_end({});
 
     sleep(1);  # let any syslog writes land
@@ -236,11 +236,12 @@ sub test_index_check_lockhold_slow
         "index_check() held exclusive lock during blocking prot write: " .
         "victim SELECT on INBOX timed out after 2 s");
 
-    # SECONDARY (requires syslog replacement): no longlock must appear.
-    # With the fix the lock is held for microseconds and this message never
-    # fires.  With the bug it fires after the drain above releases the lock.
+    # SECONDARY (requires syslog replacement): no mailbox.lock.slow event
+    # must appear.  With the fix the lock is held for microseconds and this
+    # never fires.  With the bug it fires after the drain above releases the
+    # lock.
     $self->assert_syslog_does_not_match(
         $self->{instance},
-        qr/mailbox: longlock.*user\.cassandane/,
+        qr/event=mailbox\.lock\.slow.*mbox\.name=user\.cassandane/,
     );
 }

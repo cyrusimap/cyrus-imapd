@@ -577,7 +577,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     if (nfailed) {
         // The messages of those parts can not get indexed fully.
         xsyslog_ev(LOG_WARNING, "search.attachextract.incomplete",
-                lf_s("mbox.name", mboxname),
+                lf_intname("mbox.name", mboxname),
                 lf_d("part.count", dynarray_size(&attachparts)),
                 lf_zu("part.failed", nfailed));
     }
@@ -591,7 +591,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     if (strcmpsafe(uniqueid, mailbox_uniqueid(mailbox)) ||
             uidvalidity != mailbox->i.uidvalidity) {
         xsyslog_ev(LOG_NOTICE, "search.index.mailbox_changed",
-                lf_s("mbox.name", mboxname),
+                lf_intname("mbox.name", mboxname),
                 lf_s("old.mbox.uniqueid", uniqueid),
                 lf_s("mbox.uniqueid", mailbox_uniqueid(mailbox)),
                 lf_u("old.mbox.uidvalidity", uidvalidity),

@@ -1224,7 +1224,8 @@ static void test_msg_copy(void)
 static void test_missing_definitions_file(void)
 {
     set_annotation_definitions(NULL);
-    CU_SYSLOG_MATCH("annotations\\.def: could not open.*No such file");
+    CU_SYSLOG_MATCH("event=annot\\.def\\.open\\.failed"
+                    ".*annotations\\.def.*No such file");
 
     annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
@@ -1237,7 +1238,8 @@ static void test_broken_definitions_file_1(void)
 {
     set_annotation_definitions(
         EXENTRY",sXerver,string,backend,value.shared,\n");
-    CU_SYSLOG_MATCH("invalid annotation scope.*'sXerver'");
+    CU_SYSLOG_MATCH("error=\"invalid annotation scope\""
+                    ".*annot\\.context=sXerver");
 
     annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
@@ -1250,7 +1252,8 @@ static void test_broken_definitions_file_2(void)
 {
     set_annotation_definitions(
         EXENTRY",server,stXring,backend,value.shared,\n");
-    CU_SYSLOG_MATCH("invalid annotation type.*'stXring'");
+    CU_SYSLOG_MATCH("error=\"invalid annotation type\""
+                    ".*annot\\.context=stXring");
 
     annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
@@ -1263,7 +1266,8 @@ static void test_broken_definitions_file_3(void)
 {
     set_annotation_definitions(
         EXENTRY",server,string,bacXkend,value.shared,\n");
-    CU_SYSLOG_MATCH("invalid annotation proxy type.*'bacXkend'");
+    CU_SYSLOG_MATCH("error=\"invalid annotation proxy type\""
+                    ".*annot\\.context=bacXkend");
 
     annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
@@ -1276,7 +1280,8 @@ static void test_broken_definitions_file_4(void)
 {
     set_annotation_definitions(
         EXENTRY",server,string,backend,valuXe.shared,\n");
-    CU_SYSLOG_MATCH("invalid annotation attributes.*'valuXe.shared'");
+    CU_SYSLOG_MATCH("error=\"invalid annotation attributes\""
+                    ".*annot\\.context=valuXe\\.shared");
 
     annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
@@ -1344,7 +1349,8 @@ static void test_broken_definitions_file_9(void)
      * invalid name is reported in the error context */
     set_annotation_definitions(
         EXENTRY",server,string,backend,value valXue valYue,\n");
-    CU_SYSLOG_MATCH("invalid annotation attributes.*'valXue'");
+    CU_SYSLOG_MATCH("error=\"invalid annotation attributes\""
+                    ".*annot\\.context=valXue");
 
     annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
@@ -1357,7 +1363,8 @@ static void test_broken_definitions_file_10(void)
 {
     set_annotation_definitions(
         EXENTRY",ser@ver,string,backend,value.shared,\n");
-    CU_SYSLOG_MATCH("invalid character.*'@");
+    CU_SYSLOG_MATCH("error=\"invalid character\""
+                    ".*annot\\.context=@");
 
     annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */

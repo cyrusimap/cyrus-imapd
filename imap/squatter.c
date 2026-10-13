@@ -407,7 +407,7 @@ again:
     {
         if (prev_uniqueid) {
             xsyslog_ev(LOG_NOTICE, "search.index.restarted",
-                    lf_s("mbox.name", name),
+                    lf_intname("mbox.name", name),
                     lf_s("old.mbox.uniqueid", prev_uniqueid),
                     lf_s("mbox.uniqueid", mailbox_uniqueid(mailbox)),
                     lf_u("old.mbox.uidvalidity", uidvalidity),
@@ -417,7 +417,7 @@ again:
              * a mailbox that keeps changing could loop here forever. */
             if (++nrestarts > MAX_MAILBOX_RESTARTS) {
                 xsyslog_ev(LOG_ERR, "search.index.abandoned",
-                        lf_s("mbox.name", name),
+                        lf_intname("mbox.name", name),
                         lf_d("search.restarts", nrestarts));
                 mailbox_close(&mailbox);
                 r = IMAP_AGAIN;
@@ -447,7 +447,7 @@ again:
         }
         else if (++nunproductive > MAX_UNPRODUCTIVE_UPDATES) {
             xsyslog_ev(LOG_ERR, "search.index.abandoned",
-                    lf_s("mbox.name", name),
+                    lf_intname("mbox.name", name),
                     lf_d("search.updates", nunproductive));
             goto done;
         }

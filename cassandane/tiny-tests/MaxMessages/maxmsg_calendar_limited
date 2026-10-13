@@ -31,7 +31,7 @@ sub test_maxmsg_calendar_limited
 
     # should have syslogged about it too
     $self->assert_syslog_matches($self->{instance},
-                                 qr{client hit per-calendar exists limit});
+                                 qr{event=mailbox\.exists\.limit_reached.*mbox\.limit=calendar});
 
     # should be able to upload lots of contacts
     my $carddav = $self->{carddav};

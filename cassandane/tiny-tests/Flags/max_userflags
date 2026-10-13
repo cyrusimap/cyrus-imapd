@@ -59,7 +59,7 @@ sub test_max_userflags ($self)
 
     # We should have generated an IOERROR
     $self->assert_syslog_matches($self->{instance},
-                                 qr/IOERROR: out of flags/);
+                                 qr/event=mailbox\.userflag\.exhausted/);
 
     xlog $self, "Can set all the flags at once";
     my @flags = sort { $allflags{$a} <=> $allflags{$b} } (keys %allflags);

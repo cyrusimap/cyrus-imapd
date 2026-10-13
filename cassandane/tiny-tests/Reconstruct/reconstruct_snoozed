@@ -84,8 +84,12 @@ sub test_reconstruct_snoozed
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
     if ($self->{instance}->{have_syslog_replacement}) {
         my @lines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/uid 5 snoozed mismatch/, "@lines");
-        $self->assert_matches(qr/uid 6 snoozed mismatch/, "@lines");
+        # match within the snoozed-mismatch lines only, so that a uid from
+        # some other event can't satisfy the assertion
+        my @snoozed = grep { /event=mailbox\.reconstruct\.snoozed\.mismatch/ }
+                           @lines;
+        $self->assert_matches(qr/msg\.imapuid=5\b/, "@snoozed");
+        $self->assert_matches(qr/msg\.imapuid=6\b/, "@snoozed");
     }
 
     xlog $self, "check that the values are changed back";

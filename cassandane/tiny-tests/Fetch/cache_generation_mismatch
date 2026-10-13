@@ -40,8 +40,10 @@ sub test_cache_generation_mismatch
     syswrite($fh, $generation) == 4 || die "write $cache: $!";
     close($fh);
 
-    $self->assert(scalar(grep { m/cache generation mismatch/ } @log),
-                  "the mismatch was not reported");
-    $self->assert(!scalar(grep { m/invalid cache record/ } @log),
-                  "the mismatch was reported as corruption");
+    $self->assert(
+        scalar(grep { m/event=mailbox\.cache\.generation\.mismatch/ } @log),
+        "the mismatch was not reported");
+    $self->assert(
+        !scalar(grep { m/event=mailbox\.cache\.record\.invalid/ } @log),
+        "the mismatch was reported as corruption");
 }

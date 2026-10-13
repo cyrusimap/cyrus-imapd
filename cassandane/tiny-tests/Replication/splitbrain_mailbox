@@ -77,15 +77,20 @@ sub test_splitbrain_mailbox
             )
         }x;
 
+        # match within the rename lines only, so a name from an unrelated
+        # line can't satisfy the pattern once the log is joined together
+        my @renames = grep { /\bevent=mboxlist\.rename\.started\b/ }
+                           @replicasyslog;
         my $replica_pattern2 = qr{
-            \bRename:\suser.cassandane\.dest-name\s->\suser\.cassandane\.foo\b
+            \bold\.mbox\.name=user\.cassandane\.dest-name\s
+            mbox\.name=user\.cassandane\.foo\b
         }x;
 
         # initial failures
         $self->assert_matches($master_pattern, "@mastersyslog");
         $self->assert_matches($replica_pattern1, "@replicasyslog");
         # later success
-        $self->assert_matches($replica_pattern2, "@replicasyslog");
+        $self->assert_matches($replica_pattern2, "@renames");
     }
 
     # replication fixes itself

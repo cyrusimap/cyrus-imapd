@@ -412,6 +412,35 @@ static void test_lf_buf(void)
     buf_free(&buf);
 }
 
+/* A read-only buf owns no memory, and whoever made one frees none.  Logging
+ * it must leave it that way: a NUL-terminating buf_cstring() here would
+ * allocate behind the caller's back, and nobody would ever free it. */
+static void test_lf_buf_readonly(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    buf_init_ro_cstr(&buf, "two words");
+
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_buf_ro value=\"two words\"");
+    xsyslog_ev(LOG_ERR, "test.lf_buf_ro", lf_buf("value", &buf));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    CU_ASSERT_EQUAL(buf.alloc, 0);
+
+    buf_reset(&buf);
+}
+
+static void test_lf_buf_empty(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    CU_SYSLOG_MATCH_SUBSTR("event=test.lf_buf_empty value=\"\"");
+    xsyslog_ev(LOG_ERR, "test.lf_buf_empty", lf_buf("value", &buf));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    CU_ASSERT_EQUAL(buf.alloc, 0);
+}
+
 static void test_lf_err(void)
 {
     struct buf escaped = BUF_INITIALIZER;

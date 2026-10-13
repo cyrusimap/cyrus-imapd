@@ -523,8 +523,18 @@ enum xsyslog_ev_arg_type {
 #define lf_duration(key, secs)                                              \
     (xsyslog_ev_arg){ key, LF_DURATION, { .f = (secs) } }
 
-/* A struct buf.  Takes a pointer, calls buf_cstring on it. */
-#define lf_buf(key, bufp)   lf_s(key, buf_cstring(bufp))
+/* A struct buf.
+ *
+ * Deliberately not buf_cstring(): that NUL-terminates the buf in place,
+ * which allocates, and a caller that handed us a read-only buf has nothing
+ * it would think to free.  Logging a value must not change it.
+ */
+#define lf_buf(key, bufp) ({                                                \
+    const struct buf *_lf_bufp = (bufp);                                    \
+    buf_len(_lf_bufp)                                                       \
+        ? lf_raw(key, "%.*s", (int) buf_len(_lf_bufp), buf_base(_lf_bufp))  \
+        : lf_s(key, "");                                                    \
+})
 
 /* A Cyrus error code, as its error_message() text.  The caller needs an
  * *_err.h included for that, which anything with an `int r` will have.
