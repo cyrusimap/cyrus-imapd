@@ -43,11 +43,15 @@
  */
 
 #include <config.h>
-#include <sasl.h>
-#include <prop.h>
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/prop.h"
+#include "libsasl_min/saslint.h"
+
 #include <ctype.h>
 #include <stdio.h>
-#include "saslint.h"
+#include <stdlib.h>
+#include <string.h>
 
 struct proppool
 {
@@ -147,7 +151,7 @@ static int prop_init(struct propctx *ctx, unsigned estimate)
  *              0 will use module default
  * returns NULL on error
  */
-struct propctx *prop_new(unsigned estimate)
+EXPORTED struct propctx *prop_new(unsigned estimate)
 {
     struct propctx *new_ctx;
 
@@ -170,7 +174,7 @@ struct propctx *prop_new(unsigned estimate)
 /* create new propctx which duplicates the contents of an existing propctx
  * returns -1 on error
  */
-int prop_dup(struct propctx *src_ctx, struct propctx **dst_ctx)
+EXPORTED int prop_dup(struct propctx *src_ctx, struct propctx **dst_ctx)
 {
     struct proppool *pool;
     struct propctx *retval = NULL;
@@ -233,7 +237,7 @@ fail:
  * dispose of property context
  *  ctx      -- is disposed and set to NULL; noop if ctx or *ctx is NULL
  */
-void prop_dispose(struct propctx **ctx)
+EXPORTED void prop_dispose(struct propctx **ctx)
 {
     struct proppool *tmp;
 
@@ -261,7 +265,7 @@ void prop_dispose(struct propctx **ctx)
  * NOTE: may clear values from context as side-effect
  * returns -1 on error
  */
-int prop_request(struct propctx *ctx, const char **names)
+EXPORTED int prop_request(struct propctx *ctx, const char **names)
 {
     unsigned i, new_values, total_values;
 
@@ -366,7 +370,7 @@ int prop_request(struct propctx *ctx, const char **names)
  *  return value persists until next call to
  *   prop_request, prop_clear or prop_dispose on context
  */
-const struct propval *prop_get(struct propctx *ctx)
+EXPORTED const struct propval *prop_get(struct propctx *ctx)
 {
     if (!ctx) {
         return NULL;
@@ -383,7 +387,9 @@ const struct propval *prop_get(struct propctx *ctx)
  *  if a name requested here was never requested by a prop_request, then
  *  the name field of the associated vals entry will be set to NULL
  */
-int prop_getnames(struct propctx *ctx, const char **names, struct propval *vals)
+EXPORTED int prop_getnames(struct propctx *ctx,
+                           const char **names,
+                           struct propval *vals)
 {
     int found_names = 0;
 
@@ -418,7 +424,7 @@ int prop_getnames(struct propctx *ctx, const char **names, struct propval *vals)
  *  ctx      -- property context
  *  requests -- 0 = don't clear requests, 1 = clear requests
  */
-void prop_clear(struct propctx *ctx, int requests)
+EXPORTED void prop_clear(struct propctx *ctx, int requests)
 {
     struct proppool *new_pool, *tmp;
     unsigned i;
@@ -473,7 +479,7 @@ void prop_clear(struct propctx *ctx, int requests)
 /*
  * erase the value of a property
  */
-void prop_erase(struct propctx *ctx, const char *name)
+EXPORTED void prop_erase(struct propctx *ctx, const char *name)
 {
     struct propval *val;
     int i;
@@ -519,12 +525,12 @@ void prop_erase(struct propctx *ctx, const char *name)
  *  outlen -- set to length of output string excluding NUL terminator
  * returns 0 on success and amount of additional space needed on failure
  */
-int prop_format(struct propctx *ctx,
-                const char *sep,
-                int seplen,
-                char *outbuf,
-                unsigned outmax,
-                unsigned *outlen)
+EXPORTED int prop_format(struct propctx *ctx,
+                         const char *sep,
+                         int seplen,
+                         char *outbuf,
+                         unsigned outmax,
+                         unsigned *outlen)
 {
     unsigned needed, flag = 0;
     struct propval *val;
@@ -587,10 +593,10 @@ int prop_format(struct propctx *ctx,
  *            if NULL, remove existing values
  *  vallen -- length of value, if <= 0 then strlen(value) will be used
  */
-int prop_set(struct propctx *ctx,
-             const char *name,
-             const char *value,
-             int vallen)
+EXPORTED int prop_set(struct propctx *ctx,
+                      const char *name,
+                      const char *value,
+                      int vallen)
 {
     struct propval *cur;
 
@@ -812,7 +818,9 @@ int prop_set(struct propctx *ctx,
  *  values -- array of values, ending in NULL.  Each value is a NUL terminated
  *            string
  */
-int prop_setvals(struct propctx *ctx, const char *name, const char **values)
+EXPORTED int prop_setvals(struct propctx *ctx,
+                          const char *name,
+                          const char **values)
 {
     const char **val = values;
     int result = SASL_OK;
@@ -855,7 +863,7 @@ int prop_setvals(struct propctx *ctx, const char *name, const char **values)
  *  SASL_BADPARAM -- bad count/conn parameter
  *  SASL_NOMEM    -- out of memory
  */
-int sasl_auxprop_request(sasl_conn_t *conn, const char **propnames)
+EXPORTED int sasl_auxprop_request(sasl_conn_t *conn, const char **propnames)
 {
     int result;
     sasl_server_conn_t *sconn;
@@ -887,7 +895,7 @@ int sasl_auxprop_request(sasl_conn_t *conn, const char **propnames)
  *
  *  returns NULL if conn is invalid.
  */
-struct propctx *sasl_auxprop_getctx(sasl_conn_t *conn)
+EXPORTED struct propctx *sasl_auxprop_getctx(sasl_conn_t *conn)
 {
     sasl_server_conn_t *sconn;
 
@@ -901,8 +909,8 @@ struct propctx *sasl_auxprop_getctx(sasl_conn_t *conn)
 }
 
 /* add an auxiliary property plugin */
-int sasl_auxprop_add_plugin(const char *plugname,
-                            sasl_auxprop_init_t *auxpropfunc)
+EXPORTED int sasl_auxprop_add_plugin(const char *plugname,
+                                     sasl_auxprop_init_t *auxpropfunc)
 {
     int result, out_version;
     auxprop_plug_list_t *new_item;
@@ -946,7 +954,7 @@ int sasl_auxprop_add_plugin(const char *plugname,
     return SASL_OK;
 }
 
-void _sasl_auxprop_free()
+EXPORTED void _sasl_auxprop_free()
 {
     auxprop_plug_list_t *ptr, *ptr_next;
 
@@ -1007,10 +1015,10 @@ static int _sasl_account_status(int current_status, int specific_status)
 }
 
 /* Do the callbacks for auxprop lookups */
-int _sasl_auxprop_lookup(sasl_server_params_t *sparams,
-                         unsigned flags,
-                         const char *user,
-                         unsigned ulen)
+EXPORTED int _sasl_auxprop_lookup(sasl_server_params_t *sparams,
+                                  unsigned flags,
+                                  const char *user,
+                                  unsigned ulen)
 {
     sasl_getopt_t *getopt;
     int ret, found = 0;
@@ -1112,7 +1120,9 @@ int _sasl_auxprop_lookup(sasl_server_params_t *sparams,
 }
 
 /* Do the callbacks for auxprop stores */
-int sasl_auxprop_store(sasl_conn_t *conn, struct propctx *ctx, const char *user)
+EXPORTED int sasl_auxprop_store(sasl_conn_t *conn,
+                                struct propctx *ctx,
+                                const char *user)
 {
     sasl_getopt_t *getopt;
     int ret;
@@ -1290,7 +1300,7 @@ static void _sasl_print_mechanism(sasl_auxprop_plug_t *m,
 
 /* Dump information about available auxprop plugins (separate functions are
    used for canon and server authentication plugins) */
-int auxprop_plugin_info(
+EXPORTED int auxprop_plugin_info(
     const char
         *c_mech_list, /* space separated mechanism list or NULL for ALL */
     auxprop_info_callback_t *info_cb,
