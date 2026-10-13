@@ -721,4 +721,19 @@ extern void jmap_report_isdefault(jmap_req_t *req, struct jmap_set *set,
 extern bool jmap_state_matches(struct conversations_state *cstate,
                                const char *if_in_state, modseq_t modseq);
 
+struct logfmt;
+
+extern void logfmt_push_jmapreq(struct logfmt *lf, const char *key,
+                                const jmap_req_t *req);
+extern void logfmt_arg_jmapreq(struct logfmt *lf,
+                               const char *key, const void *value);
+
+/* Log who is asking and what they asked -- u.username, jmap.accountid,
+ * jmap.method -- or jmap=~null~ if there's no request.
+ *
+ * The username and the account are both logged even when they're the same,
+ * because when they differ the difference is usually the answer.
+ */
+#define lf_jmapreq(reqp) lf_fn("jmap", logfmt_arg_jmapreq, (reqp))
+
 #endif /* JMAP_API_H */

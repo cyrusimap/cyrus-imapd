@@ -142,7 +142,9 @@ http.header.name        the name of an HTTP header
 http.header.value       the value of an HTTP header
 imip.error              why an iMIP operation failed
 imip.outcome            what an iMIP message did: added, updated, no_action, error
+jmap                    placeholder for "no JMAP request"; value is always ~null~
 jmap.accountid          the JMAP account the request was for
+jmap.method             the JMAP method call being processed, e.g. Email/get
 lmtp.action             what delivery did with the message: implicit, keep, fileinto, ...
 lmtp.command            an LMTP command line as the client sent it
 lmtp.preauth            the preauth mode a connection arrived with

@@ -9903,7 +9903,12 @@ static void jmap_email_get_threadsonly(jmap_req_t *req, struct jmap_get *get)
             json_array_append_new(get->not_found, json_string(id));
         }
         if (r) {
-            syslog(LOG_ERR, "jmap: Email/get(%s): %s", id, error_message(r));
+            /* An unusable emailId is the client's doing, not ours */
+            xsyslog_ev(r == IMAP_NOTFOUND ? LOG_WARNING : LOG_ERR,
+                       "jmap.email.get.failed",
+                       lf_jmapreq(req),
+                       lf_s("msg.emailid", id),
+                       lf_err("error", r));
         }
     }
 }
@@ -9966,7 +9971,7 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
         json_t *msg = NULL;
         struct mailbox *mbox = NULL;
 
-        uint32_t uid;
+        uint32_t uid = 0;
         int r = jmap_email_find(req, NULL, id, &mboxname, &uid, NULL);
         if (!r) {
             r = mailbox_open_irl(mboxname, &mbox);
@@ -9985,7 +9990,17 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
             json_array_append_new(get->not_found, json_string(id));
         }
         if (r) {
-            syslog(LOG_ERR, "jmap: Email/get(%s): %s", id, error_message(r));
+            /* No mailbox means jmap_email_find() came up empty, which is
+             * only a client naming an email we don't have.  Once it has
+             * named a mailbox and uid, a failure means the index and
+             * conversations.db disagree, and that's a real error. */
+            xsyslog_ev(mboxname ? LOG_ERR : LOG_WARNING,
+                       "jmap.email.get.failed",
+                       lf_jmapreq(req),
+                       lf_s("msg.emailid", id),
+                       lf_intname("mbox.name", mboxname),
+                       lf_u("msg.imapuid", uid),
+                       lf_err("error", r));
         }
 
         free(mboxname);
