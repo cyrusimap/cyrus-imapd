@@ -219,7 +219,9 @@ used.bytes.out          bytes written to the client this session
 ### failure detail
 
 error                   why the operation failed, as human-readable text
+error.column            the column a parse error was found at
 error.description       the human-readable detail paired with error.type
+error.line              the line a parse error was found at
 error.type              a machine-readable error type, e.g. a JMAP SetError type
 sys.error               strerror() of errno at the point of logging
 sys.filename            a file name within a directory

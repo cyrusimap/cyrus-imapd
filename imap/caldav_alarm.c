@@ -1817,16 +1817,30 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         goto done;
     }
 
+    userid = mboxname_to_userid(mailbox_name(mailbox));
+
     /* Parse the submission object from the header field */
     r = message_get_field(m, JMAP_SUBMISSION_HDR, MESSAGE_RAW, &buf);
-    if (!r) {
-        json_error_t jerr;
-        submission = json_loadb(buf_base(&buf), buf_len(&buf),
-                                JSON_DISABLE_EOF_CHECK, &jerr);
+    if (r) {
+        xsyslog_ev(LOG_ERR, "calalarmd.futurerelease.header.missing",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("u.username", userid),
+                   lf_err("error", r));
+        goto done;
     }
+
+    json_error_t jerr;
+    submission = json_loadb(buf_base(&buf), buf_len(&buf),
+                            JSON_DISABLE_EOF_CHECK, &jerr);
     if (!submission) {
-        syslog(LOG_ERR,
-               "process_futurerelease: failed to parse submission obj");
+        xsyslog_ev(LOG_ERR, "calalarmd.futurerelease.header.unparseable",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("u.username", userid),
+                   lf_s("error.description", jerr.text),
+                   lf_d("error.line", jerr.line),
+                   lf_d("error.column", jerr.column));
         goto done;
     }
     envelope = json_object_get(submission, "envelope");
@@ -1838,7 +1852,6 @@ static int process_futurerelease(struct caldav_alarm_data *data,
     }
 
     /* Gather audit detail (valid whether or not the send succeeds) */
-    userid = mboxname_to_userid(mailbox_name(mailbox));
     message_get_subject(m, &subjbuf);
     message_get_messageid(m, &msgidbuf);
 
