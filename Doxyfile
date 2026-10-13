@@ -30,6 +30,9 @@
 
 ### What do we emit?
 
+  # Print warnings, but not a progress line for every file and structure
+  QUIET                  = YES
+
   # Only generate XML, it's all breathe needs
   GENERATE_HTML          = NO
   GENERATE_LATEX         = NO
