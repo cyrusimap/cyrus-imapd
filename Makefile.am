@@ -2324,11 +2324,6 @@ cyrus-makemaker-uninstall-workaround:
 	( podfiles=`find $(DESTDIR)$(libdir) -type f -name perllocal.pod` && \
 	  rm -f `echo $$podfiles` )
 
-install-binsymlinks:
-## Let's symlink everything else
-	for prog in $(sbin_PROGRAMS) $(sbin_SCRIPTS) $(dist_sbin_SCRIPTS); do $(LN_S) -f $(sbindir)/`basename $$prog` $(DESTDIR)$(bindir)/; done
-	for prog in $(libexec_PROGRAMS); do $(LN_S) -f $(libexecdir)/`basename $$prog` $(DESTDIR)$(bindir)/; done
-
 SUFFIXES = .fig.png
 
 .fig.png:
