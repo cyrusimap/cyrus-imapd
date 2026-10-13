@@ -137,6 +137,9 @@ append.stage.source     the file a staged message was copied from
 cal.organizer           a calendar component's ORGANIZER
 cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID
+conv.guid.exists        how many non-expunged records share this guid
+conv.guid.folderexists  how many of those are in this folder
+conv.guid.numrecords    how many records of any kind share this guid
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
 http.header.name        the name of an HTTP header
 http.header.value       the value of an HTTP header

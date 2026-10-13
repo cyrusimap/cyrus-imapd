@@ -2673,19 +2673,37 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     // check sanity limits
     if (!ignorelimits && ecounts.post.numrecords > ecounts.pre.numrecords) {
-        if (ecounts.post.numrecords > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDRECORDS))
+        size_t maxrecords = (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDRECORDS);
+        size_t maxexists = (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDEXISTS);
+        size_t maxinfolder = (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDINFOLDER);
+        const char *limit = NULL;
+        size_t limitval = 0;
+
+        if (ecounts.post.numrecords > maxrecords) {
+            limit = "conversations_max_guidrecords";
+            limitval = maxrecords;
+        }
+        else if (ecounts.post.exists > maxexists) {
+            limit = "conversations_max_guidexists";
+            limitval = maxexists;
+        }
+        else if (ecounts.post.folderexists > maxinfolder) {
+            limit = "conversations_max_guidinfolder";
+            limitval = maxinfolder;
+        }
+
+        if (limit) {
             r = IMAP_CONVERSATION_GUIDLIMIT;
-        if (ecounts.post.exists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDEXISTS))
-            r = IMAP_CONVERSATION_GUIDLIMIT;
-        if (ecounts.post.folderexists > (size_t)config_getint(IMAPOPT_CONVERSATIONS_MAX_GUIDINFOLDER))
-            r = IMAP_CONVERSATION_GUIDLIMIT;
-        if (r) {
-            syslog(LOG_ERR, "IOERROR: conversations GUID limit for %s/%u/%s (%llu %llu %llu)",
-                   mailbox_name(mailbox), record->uid,
-                   message_guid_encode(&record->guid),
-                   (long long unsigned)ecounts.post.numrecords,
-                   (long long unsigned)ecounts.post.exists,
-                   (long long unsigned)ecounts.post.folderexists);
+            xsyslog_ev(LOG_WARNING, "conversations.guid.limit_reached",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", record->uid),
+                       lf_s("msg.guid", message_guid_encode(&record->guid)),
+                       lf_s("u.username", cstate->userid),
+                       lf_s("limit.name", limit),
+                       lf_zu("limit.value", limitval),
+                       lf_zu("conv.guid.numrecords", ecounts.post.numrecords),
+                       lf_zu("conv.guid.exists", ecounts.post.exists),
+                       lf_zu("conv.guid.folderexists", ecounts.post.folderexists));
             goto done;
         }
     }
