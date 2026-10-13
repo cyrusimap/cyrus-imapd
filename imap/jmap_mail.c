@@ -3917,12 +3917,18 @@ guidsearch_expr_build(struct guidsearch_build_context *build_ctx,
             }
             break;
         case SEOP_TRUE:
-        case SEOP_FALSE:
             {
                 if (parent) {
                     ge = xzmalloc(sizeof(struct guidsearch_expr));
-                    ge->op = e->op == SEOP_TRUE ? GSEOP_TRUE : GSEOP_FALSE;
+                    ge->op = GSEOP_TRUE;
                 }
+            }
+            break;
+        case SEOP_FALSE:
+            {
+                /* Even at the root: a NULL expression matches everything */
+                ge = xzmalloc(sizeof(struct guidsearch_expr));
+                ge->op = GSEOP_FALSE;
             }
             break;
         case SEOP_LT:
