@@ -1318,8 +1318,14 @@ static int notify_parse_path(const char *path, struct request_target_t *tgt,
         /* Locate the mailbox */
         int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
         if (r) {
-            syslog(LOG_ERR, "mlookup(%s) failed: %s",
-                   mboxname, error_message(r));
+            xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT
+                       ? LOG_WARNING : LOG_ERR,
+                       "dav.target.lookup.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("u.username", httpd_userid),
+                       lf_s_opt("dav.owner", tgt->userid),
+                       lf_s_opt("dav.collection", tgt->collection),
+                       lf_err("error", r));
             *resultstr = error_message(r);
             mbname_free(&mbname);
 

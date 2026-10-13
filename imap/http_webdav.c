@@ -528,8 +528,15 @@ static int webdav_parse_path(const char *path, struct request_target_t *tgt,
             r = proxy_mlookup(mbname_intname(mbname), &tgt->mbentry, NULL, NULL);
         }
         if (r) {
-            syslog(LOG_ERR, "mlookup(%s) failed: %s",
-                   mboxname, error_message(r));
+            xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT
+                       ? LOG_WARNING : LOG_ERR,
+                       "dav.target.lookup.failed",
+                       lf_intname("mbox.name", mbname_intname(mbname)),
+                       lf_s("u.username", httpd_userid),
+                       lf_s_opt("dav.owner", tgt->userid),
+                       lf_s_opt("dav.collection", tgt->collection),
+                       lf_s_opt("dav.resource", tgt->resource),
+                       lf_err("error", r));
             *resultstr = error_message(r);
             mbname_free(&mbname);
 
