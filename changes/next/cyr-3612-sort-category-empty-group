@@ -1,0 +1,26 @@
+Description:
+
+Email/query sorted by "category" no longer puts every Email into a groupBy
+filter that can match nothing, such as a fromContactCardUid for a card or
+group with no email addresses, or an inMailbox for a mailbox that has never
+held mail.  Such a group is now empty.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
