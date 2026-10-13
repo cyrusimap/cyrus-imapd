@@ -47,9 +47,18 @@ static void idle_notify(json_t *msg)
          * through it's graceful shutdown path, so don't syslog. */
         pid_t pid = json_integer_value(json_object_get(msg, "pid"));
 
-        syslog(LOG_ERR, "IDLE: error sending message "
-                        "NOTIFY to idled for pid %d: %s.",
-                        pid, error_message(r));
+        /* idled's socket is non-blocking, so EAGAIN means its buffer is
+         * full and this notification is being dropped.  Say which one. */
+        xsyslog_ev(LOG_WARNING, "idle.send.failed",
+                   lf_s("idle.message", "notify"),
+                   lf_d("sys.pid", pid),
+                   lf_s_opt("idle.mboxevent",
+                            json_string_value(json_object_get(msg, "event"))),
+                   lf_s_opt("mbox.mailboxid",
+                            json_string_value(json_object_get(msg, "mailboxID"))),
+                   lf_s_opt("u.username",
+                            json_string_value(json_object_get(msg, "user"))),
+                   lf_err("error", r));
     }
     if (errno == ENOENT)
         errno = 0;
@@ -131,11 +140,12 @@ EXPORTED int idle_start(unsigned long events, time_t timeout,
     json_decref(msg);
 
     if (r) {
-        int idle_timeout = config_getduration(IMAPOPT_IMAPIDLEPOLL);
-        syslog(LOG_ERR, "IDLE: error sending message "
-                        "INIT to idled for pid %d: %s. "
-                        "Falling back to polling every %d seconds.",
-                        pid, error_message(r), idle_timeout);
+        xsyslog_ev(LOG_WARNING, "idle.send.failed",
+                   lf_s("idle.message", "init"),
+                   lf_d("sys.pid", pid),
+                   lf_d("idle.poll.interval",
+                        config_getduration(IMAPOPT_IMAPIDLEPOLL)),
+                   lf_err("error", r));
         return 0;
     }
 
@@ -167,9 +177,10 @@ EXPORTED void idle_stop(mailbox_filter_t filter)
 
     if (r && (r != ENOENT)) {
         /* See comment in idle_notify() about ENOENT */
-        syslog(LOG_ERR, "IDLE: error sending message "
-                        "DONE to idled for pid %d: %s.",
-                        pid, error_message(r));
+        xsyslog_ev(LOG_WARNING, "idle.send.failed",
+                   lf_s("idle.message", "done"),
+                   lf_d("sys.pid", pid),
+                   lf_err("error", r));
     }
 
     if (filter == FILTER_NONE)

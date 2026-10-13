@@ -143,6 +143,9 @@ conv.guid.numrecords    how many records of any kind share this guid
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
 http.header.name        the name of an HTTP header
 http.header.value       the value of an HTTP header
+idle.mboxevent          the mailbox event being forwarded, e.g. MessageNew
+idle.message            which message to idled failed: notify, init or done
+idle.poll.interval      seconds between polls when idled can't be reached
 imip.error              why an iMIP operation failed
 imip.outcome            what an iMIP message did: added, updated, no_action, error
 jmap                    placeholder for "no JMAP request"; value is always ~null~
