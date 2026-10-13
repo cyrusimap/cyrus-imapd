@@ -871,7 +871,7 @@ typedef struct sasl_canonuser
     void *glob_context;
 
     /* name of plugin */
-    char *name;
+    const char *name;
 
     /* free global state for plugin */
     void (*canon_user_free)(void *glob_context, const sasl_utils_t *utils);
