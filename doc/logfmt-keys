@@ -145,6 +145,8 @@ imip.outcome            what an iMIP message did: added, updated, no_action, err
 jmap                    placeholder for "no JMAP request"; value is always ~null~
 jmap.accountid          the JMAP account the request was for
 jmap.method             the JMAP method call being processed, e.g. Email/get
+limit.name              which configured limit an operation broke
+limit.value             that limit's configured value
 lmtp.action             what delivery did with the message: implicit, keep, fileinto, ...
 lmtp.command            an LMTP command line as the client sent it
 lmtp.preauth            the preauth mode a connection arrived with
@@ -226,6 +228,7 @@ error.description       the human-readable detail paired with error.type
 error.line              the line a parse error was found at
 error.type              a machine-readable error type, e.g. a JMAP SetError type
 sys.error               strerror() of errno at the point of logging
+sys.exitcode            the exit code a process is dying with
 sys.filename            a file name within a directory
 sys.path                a filesystem path
 sys.pid                 a process id

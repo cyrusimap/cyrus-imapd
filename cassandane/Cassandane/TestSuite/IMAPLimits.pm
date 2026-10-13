@@ -54,6 +54,11 @@ sub assert_bye_toobig
 
     $store->idle_response($handlers, 1);
     $self->assert_num_equals(1, $got_toobig);
+
+    # the BYE came from fatal(), which says so in the log.  Assert it both
+    # to pin the behaviour and to take the line out of the error check: the
+    # test asked for this error.
+    $self->assert_syslog_matches($self->{instance}, qr/event=imap\.fatal/);
 }
 
 # Send a command and expect an untagged BYE [TOOBIG] response
