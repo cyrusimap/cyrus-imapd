@@ -18,8 +18,6 @@ To check: the final output of the configure step will display where a ``make ins
 
     make install  # optional if you're just developing on this machine
 
-    make install-binsymlinks    # Only needed if you're testing older Cyrus versions
-
 
 Additional Configuration
 ========================
