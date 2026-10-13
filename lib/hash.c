@@ -641,11 +641,6 @@ EXPORTED void hash_iter_reset(hash_iter *iter)
     }
 }
 
-EXPORTED int hash_iter_has_next(hash_iter *iter)
-{
-    return iter->peek != NULL;
-}
-
 EXPORTED const char *hash_iter_next(hash_iter *iter)
 {
     hash_table *table = iter->table;

@@ -158,9 +158,6 @@ typedef struct hash_iter hash_iter;
  * *before* the first entry, if any. */
 hash_iter *hash_table_iter(hash_table *table);
 
-/* Returns non-zero if the iterator has more entries. */
-int hash_iter_has_next(hash_iter *iter);
-
 /* Forwards the iterator to the next entry and returns its key.
 ** If there is no more entry, the return value is NULL. */
 const char *hash_iter_next(hash_iter *iter);

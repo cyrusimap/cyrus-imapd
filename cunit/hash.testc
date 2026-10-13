@@ -336,7 +336,6 @@ static void test_iter(void)
     for (i = 0; i < 2; i++) {
         strarray_t seen = STRARRAY_INITIALIZER;
 
-        CU_ASSERT(hash_iter_has_next(iter));
         while (hash_iter_next(iter)) {
             const char *key = hash_iter_key(iter);
             CU_ASSERT_PTR_NOT_NULL(key);
@@ -353,12 +352,7 @@ static void test_iter(void)
                 CU_ASSERT_EQUAL(3, val);
             }
             else CU_ASSERT(0);
-
-            if (strarray_size(&seen) < 3) {
-                CU_ASSERT(hash_iter_has_next(iter));
-            }
         }
-        CU_ASSERT(!hash_iter_has_next(iter));
 
         CU_ASSERT_EQUAL(3, strarray_size(&seen));
         CU_ASSERT(strarray_find(&seen, "foo", 0) >= 0);
