@@ -495,13 +495,11 @@ sasl_string_list_t *_sasl_server_mechs(void);
 extern const char *sasl_config_getstring(const char *key, const char *def);
 
 /* checkpw.c */
-#ifdef DO_SASL_CHECKAPOP
 extern int _sasl_auxprop_verify_apop(sasl_conn_t *conn,
                                      const char *userstr,
                                      const char *challenge,
                                      const char *response,
                                      const char *user_realm);
-#endif /* DO_SASL_CHECKAPOP */
 
 /* Auxprop Plugin (sasldb.c) */
 extern int sasldb_auxprop_plug_init(const sasl_utils_t *utils,
