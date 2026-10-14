@@ -235,8 +235,8 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(json_t *filter,
     if (!carddavdb) {
         /* This code is reachable by lmtpd, tested by deliver_corrupt_dav_db */
 
-        syslog(LOG_ERR, "jmap: carddav_open_userid(%s) failed",
-               cfilter->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.carddav.open.failed",
+                   lf_s("jmap.accountid", cfilter->accountid));
         r = CYRUSDB_INTERNAL;
         goto done;
     }
@@ -1357,8 +1357,8 @@ static bool _matchmime_eval_convkeyword(matchmime_query_t *q,
         /* First conv keyword to match, initialize matcher */
         int r = message_extract_cids(m, convmatch->cstate, &convmatch->cids);
         if (r) {
-            xsyslog(LOG_ERR, "message_extract_cids", "err=<%s>",
-                    error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.matchmime.cids.unreadable",
+                       lf_err("error", r));
             convmatch->in_state = -1;
             return false;
         }
@@ -1371,9 +1371,8 @@ static bool _matchmime_eval_convkeyword(matchmime_query_t *q,
                 char threadid[JMAP_THREADID_SIZE];
 
                 jmap_set_threadid(convmatch->cstate, cid, threadid);
-                xsyslog(LOG_ERR, "conversation_load_advanced",
-                        "cid=<%s> err=<%s>",
-                        threadid, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.matchmime.conversation.unreadable",
+                           lf_s("msg.threadid", threadid), lf_err("error", r));
                 convmatch->in_state = -1;
                 return 0;
             }
@@ -1649,7 +1648,8 @@ HIDDEN matchmime_t *jmap_email_matchmime_new(const struct buf *mime, json_t **er
     /* Parse message into memory */
     matchmime->m = message_new_from_data(buf_base(mime), buf_len(mime));
     if (!matchmime->m) {
-        syslog(LOG_ERR, "jmap_matchmime: can't create Cyrus message");
+        xsyslog_ev(LOG_ERR, "jmap.matchmime.message.unparseable",
+                   lf_zu("msg.size", buf_len(mime)));
         *err = jmap_server_error(r);
         jmap_email_matchmime_free(&matchmime);
         return NULL;
@@ -1658,7 +1658,8 @@ HIDDEN matchmime_t *jmap_email_matchmime_new(const struct buf *mime, json_t **er
     /* Open temporary database */
     matchmime->dbpath = create_tempdir(config_getstring(IMAPOPT_TEMP_PATH), "matchmime");
     if (!matchmime->dbpath) {
-        syslog(LOG_ERR, "jmap_matchmime: can't create tempdir: %s", strerror(errno));
+        xsyslog_ev(LOG_ERR, "jmap.matchmime.tempdir.failed",
+                   lf_s("sys.path", config_getstring(IMAPOPT_TEMP_PATH)));
         *err = jmap_server_error(IMAP_INTERNAL);
         jmap_email_matchmime_free(&matchmime);
         return NULL;
@@ -1670,8 +1671,8 @@ HIDDEN matchmime_t *jmap_email_matchmime_new(const struct buf *mime, json_t **er
     paths[1] = NULL;
     r = xapian_dbw_open(paths, &matchmime->dbw, XAPIAN_DBW_NOSYNC);
     if (r) {
-        syslog(LOG_ERR, "jmap_matchmime: can't open search backend: %s",
-                error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.matchmime.index.open.failed",
+                   lf_s("sys.path", matchmime->dbpath), lf_err("error", r));
         *err = jmap_server_error(r);
         jmap_email_matchmime_free(&matchmime);
         return NULL;
@@ -1751,8 +1752,8 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
     }
     ptrarray_fini(&work);
     if (r) {
-        syslog(LOG_ERR, "jmap_matchmime: can't load contactgroups from filter: %s",
-                error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.matchmime.contactgroups.failed",
+                   lf_err("error", r));
         *err = jmap_server_error(r);
         goto done;
     }
@@ -1770,8 +1771,8 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
     /* Make sure the index is set up for this filter */
     r = _matchmime_index_message(matchmime, jfilter);
     if (r) {
-        syslog(LOG_ERR, "jmap_matchmime: can't index MIME message: %s",
-                error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.matchmime.index.failed",
+                   lf_err("error", r));
         *err = jmap_server_error(r);
         goto done;
     }
@@ -1780,8 +1781,8 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
     xapian_db_t *xdb = NULL;
     r = xapian_db_opendbw(matchmime->dbw, &xdb);
     if (r) {
-        syslog(LOG_ERR, "jmap_matchmime: can't open query backend: %s",
-                error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.matchmime.query.open.failed",
+                   lf_s("sys.path", matchmime->dbpath), lf_err("error", r));
         *err = jmap_server_error(r);
         goto done;
     }

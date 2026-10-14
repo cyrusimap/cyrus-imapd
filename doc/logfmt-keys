@@ -85,6 +85,7 @@ msg.modseq              the message's modseq
 msg.size                the message's size in bytes
 msg.subject             the message's subject, as UTF-8
 msg.sysflags            the message's system flags, as a string
+msg.threadid            the message's JMAP thread id
 msg.to                  the message's envelope recipient
 
 ### part. - a body part of a message
@@ -163,6 +164,7 @@ jmap.blob.accountid     the account a blob was looked for in, when not the reque
 jmap.blobid             a JMAP blob id
 jmap.capability         a JMAP capability URI the request asked to use
 jmap.method             the JMAP method call being processed, e.g. Email/get
+jmap.module             the JMAP module an event is about, e.g. sieve
 jmap.push.active        1 if a push subscription was already running
 jmap.push.datatypes     how many data types a push subscription asked for
 jmap.push.next_ping     when an eventSource connection is next due a ping

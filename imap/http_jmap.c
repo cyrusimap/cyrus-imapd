@@ -137,6 +137,7 @@ static void jmap_init(struct buf *serverinfo)
         /* proxy servers don't need conversations */
         (!config_mupdate_server || config_getstring(IMAPOPT_PROXYSERVERS))) {
         xsyslog_ev(LOG_ERR, "jmap.module.disabled",
+                   lf_s("jmap.module", namespace_jmap.name),
                    lf_s("config.option", "conversations"));
         namespace_jmap.enabled = 0;
     }
