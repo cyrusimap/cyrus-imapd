@@ -277,10 +277,12 @@ static int validate_request(struct transaction_t *txn, const json_t *req,
             return JMAP_NOT_REQUEST;
         }
         else if (!strcmp(s, "ietf:jmap")) {
-            syslog(LOG_DEBUG, "old capability %s used", s);
+            xsyslog_ev(LOG_DEBUG, "jmap.capability.deprecated",
+                       lf_s("jmap.capability", s));
         }
         else if (!strcmp(s, "ietf:jmapmail")) {
-            syslog(LOG_DEBUG, "old capability %s used", s);
+            xsyslog_ev(LOG_DEBUG, "jmap.capability.deprecated",
+                       lf_s("jmap.capability", s));
         }
         else if (!json_object_get(settings->server_capabilities, s))  {
             buf_printf(&txn->buf, "The Request object used capability '%s',"
@@ -1023,8 +1025,8 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     int r = mboxlist_findallmulti(&jmap_namespace, &patterns, 0, httpd_userid,
                                   httpd_authstate, findaccounts_cb, &rock);
     if (r) {
-        syslog(LOG_ERR, "Can't determine shared JMAP accounts for user %s: %s",
-                         httpd_userid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.accounts.lookup.failed",
+                   lf_s("u.username", httpd_userid), lf_err("error", r));
     }
     findaccounts_add(&rock);
 
@@ -1146,7 +1148,9 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
 
     r = conv_guidrec_mbentry(rec, &mbentry);
     if (r) {
-        syslog(LOG_ERR, "jmap_findblob: no mbentry for %s", conv_guidrec_mboxname(rec));
+        xsyslog_ev(LOG_ERR, "jmap.blob.mailbox.missing", lf_jmapreq(req),
+                   lf_intname("mbox.name", conv_guidrec_mboxname(rec)),
+                   lf_err("error", r));
         return r;
     }
 
@@ -1200,7 +1204,9 @@ static int _jmap_findblob(jmap_req_t *req, const char *from_accountid,
     int i, r;
     struct conversations_state *cstate, *mycstate = NULL;
 
-    syslog(LOG_DEBUG, "jmap_findblob (%s, %s)", from_accountid, blobid);
+    xsyslog_ev(LOG_DEBUG, "jmap.blob.find", lf_jmapreq(req),
+               lf_s("jmap.blobid", blobid),
+               lf_s_opt("jmap.blob.accountid", from_accountid));
 
     if (blob) {
         /* We check for an empty buf below, so we better start with one */
@@ -3196,8 +3202,8 @@ static int set_upload_rights(const char *accountid)
     /* ok, change the mailboxes database */
     r = mboxlist_setacls(mailbox_name(mbox), newacl, mailbox_modseq_dirty(mbox), /*silent*/0);
     if (r) {
-        syslog(LOG_ERR, "mboxlist_setacls(%s) failed: %s",
-               mailbox_name(mbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.sharewith.acl.update.failed",
+                   lf_mailbox(mbox), lf_err("error", r));
     }
 
     mailbox_close(&mbox);
@@ -3257,8 +3263,9 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
             r = cyrus_acl_set(&newacl, userid,
                               ACL_MODE_SET, access, NULL, NULL);
             if (r) {
-                syslog(LOG_ERR, "cyrus_acl_set(%s, %s) failed: %s",
-                       mailbox_name(mbox), userid, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.sharewith.acl.invalid",
+                           lf_mailbox(mbox), lf_s("u.username", userid),
+                           lf_s("acl.rights", rightstr), lf_err("error", r));
                 goto done;
             }
         }
@@ -3298,8 +3305,8 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
     /* ok, change the mailboxes database */
     r = mboxlist_setacls(mailbox_name(mbox), newacl, mailbox_modseq_dirty(mbox), /*silent*/0);
     if (r) {
-        syslog(LOG_ERR, "mboxlist_setacls(%s) failed: %s",
-               mailbox_name(mbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.sharewith.acl.update.failed",
+                   lf_mailbox(mbox), lf_err("error", r));
     }
     else {
         /* Set proper access rights on JMAP upload folder */

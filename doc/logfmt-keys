@@ -90,7 +90,9 @@ msg.to                  the message's envelope recipient
 ### part. - a body part of a message
 
 part.cachefile          path to the extracted-text cache file for this part
+part.charset            the charset a body part declared
 part.count              how many parts an operation covered
+part.encoding           the transfer encoding a body part declared
 part.failed             how many of them it could not handle
 part.subtype            the part's MIME subtype
 part.type               the part's MIME type
@@ -118,6 +120,7 @@ send.time               when the message was actually sent
 ### per-subsystem
 
 acl.needed              the ACL rights an operation needed but didn't have
+acl.rights              a set of ACL rights, in its stored string form
 annot.attrib            an annotation attribute name, e.g. value.shared
 annot.column            the column of a line in the annotation definition file
 annot.context           the text a definition-file parse error happened near
@@ -134,9 +137,12 @@ append.callout          the annotation callout program or socket
 append.stage.dir        the staging directory a message is spooled through
 append.stage.file       the staged copy of a message
 append.stage.source     the file a staged message was copied from
+cal.createdmodseq       the createdmodseq a JMAP calendar event id encodes
+cal.eventid             a JMAP CalendarEvent id
 cal.organizer           a calendar component's ORGANIZER
 cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID
+config.option           the name of an imapd.conf option
 conv.guid.exists        how many non-expunged records share this guid
 conv.guid.folderexists  how many of those are in this folder
 conv.guid.numrecords    how many records of any kind share this guid
@@ -153,6 +159,9 @@ imip.error              why an iMIP operation failed
 imip.outcome            what an iMIP message did: added, updated, no_action, error
 jmap                    placeholder for "no JMAP request"; value is always ~null~
 jmap.accountid          the JMAP account the request was for
+jmap.blob.accountid     the account a blob was looked for in, when not the request's
+jmap.blobid             a JMAP blob id
+jmap.capability         a JMAP capability URI the request asked to use
 jmap.method             the JMAP method call being processed, e.g. Email/get
 limit.name              which configured limit an operation broke
 limit.value             that limit's configured value
