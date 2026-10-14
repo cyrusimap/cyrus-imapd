@@ -95,6 +95,7 @@ part.charset            the charset a body part declared
 part.count              how many parts an operation covered
 part.encoding           the transfer encoding a body part declared
 part.failed             how many of them it could not handle
+part.id                 a JMAP body part id
 part.subtype            the part's MIME subtype
 part.type               the part's MIME type
 
@@ -160,15 +161,21 @@ imip.error              why an iMIP operation failed
 imip.outcome            what an iMIP message did: added, updated, no_action, error
 jmap                    placeholder for "no JMAP request"; value is always ~null~
 jmap.accountid          the JMAP account the request was for
-jmap.blob.accountid     the account a blob was looked for in, when not the request's
 jmap.blobid             a JMAP blob id
 jmap.capability         a JMAP capability URI the request asked to use
+jmap.from.accountid     the account a copy or lookup read from, when not the request's
+jmap.header.form        the internal form code of a JMAP header property
+jmap.mailboxids         a JMAP mailboxIds argument, serialised
 jmap.method             the JMAP method call being processed, e.g. Email/get
 jmap.module             the JMAP module an event is about, e.g. sieve
 jmap.push.active        1 if a push subscription was already running
 jmap.push.datatypes     how many data types a push subscription asked for
 jmap.push.next_ping     when an eventSource connection is next due a ping
 jmap.push.next_poll     when a push connection next checks for changes
+jmap.search.field       a field a cached search value was missing
+jmap.search.flag        a system flag mask guidsearch could not handle
+jmap.search.sortkey     the internal sort key code of a search sort
+jmap.seen.source        where $seen comes from for a mailbox: flags or seendb
 limit.name              which configured limit an operation broke
 limit.value             that limit's configured value
 lmtp.action             what delivery did with the message: implicit, keep, fileinto, ...

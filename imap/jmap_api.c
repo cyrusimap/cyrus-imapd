@@ -1206,7 +1206,7 @@ static int _jmap_findblob(jmap_req_t *req, const char *from_accountid,
 
     xsyslog_ev(LOG_DEBUG, "jmap.blob.find", lf_jmapreq(req),
                lf_s("jmap.blobid", blobid),
-               lf_s_opt("jmap.blob.accountid", from_accountid));
+               lf_s_opt("jmap.from.accountid", from_accountid));
 
     if (blob) {
         /* We check for an empty buf below, so we better start with one */
