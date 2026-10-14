@@ -47,31 +47,14 @@
  */
 
 #include <config.h>
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
+#include "libsasl_min/saslplug.h"
+#include "libsasl_min/saslint.h"
+
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
-#include <limits.h>
-#ifdef HAVE_SYSLOG
-# include <syslog.h>
-#endif
-#include <stdarg.h>
-#include <ctype.h>
-
-#include <sasl.h>
-#include <saslutil.h>
-#include <saslplug.h>
-#include "saslint.h"
-
-#ifdef WIN32
-/* need to handle the fact that errno has been defined as a function
-   in a dll, not an extern int */
-# ifdef errno
-#  undef errno
-# endif /* errno */
-#endif  /* WIN32 */
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
 
 /* this is apparently no longer a user function */
 static int _sasl_seterror_usererr(int saslerr)
@@ -101,7 +84,10 @@ static int _sasl_seterror_usererr(int saslerr)
  *
  * if conn is NULL, function does nothing
  */
-void sasl_seterror(sasl_conn_t *conn, unsigned flags, const char *fmt, ...)
+EXPORTED void sasl_seterror(sasl_conn_t *conn,
+                            unsigned flags,
+                            const char *fmt,
+                            ...)
 {
     size_t outlen = 0; /* current length of output buffer */
     size_t pos = 0;    /* current position in format string */
