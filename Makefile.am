@@ -332,6 +332,7 @@ LIBSASL_API = \
 lib_libsasl_min_la_SOURCES = \
     $(LIBSASL_API) \
     libsasl_min/client.c \
+    libsasl_min/common.c \
     libsasl_min/plain.c \
     libsasl_min/plugin_common.c \
     libsasl_min/plugin_common.h \
