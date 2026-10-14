@@ -502,6 +502,6 @@ int _sasl_canon_user_lookup(sasl_conn_t *conn,
 /*
  * saslutil.c
  */
-int get_fqhostname(char *name, int namelen, int abort_if_no_fqdn);
+int get_fqhostname(char *name, unsigned namelen, int abort_if_no_fqdn);
 
 #endif /* LIBSASL_MIN_SASLINT_H */
