@@ -25,6 +25,7 @@ jobs:
       cancel-in-progress: false
 
     permissions:
+      checks: read
       contents: write
       pull-requests: write
 
@@ -84,6 +85,23 @@ jobs:
             // race.
             const pr = context.payload.pull_request;
 
+            // Match "Do Not Merge", "do-not-merge", and anything else that
+            // differs only in case and punctuation, so that tidying up our
+            // label names later doesn't quietly disarm this.
+            const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            const blocker = pr.labels.map(l => l.name).find(n => slug(n) === 'do-not-merge');
+
+            if (blocker !== undefined) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `This PR is labelled "${blocker}", so I won't merge it.`,
+              });
+              core.setFailed('labelled do-not-merge');
+              return;
+            }
+
             const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
             const headRepo = pr.head.repo ? pr.head.repo.full_name : null;
 
@@ -106,6 +124,58 @@ jobs:
             // PR with a comment (see "Comment on success"), rather than
             // bouncing it back to the maintainer.
             const canPushHead = headRepo === baseRepo || pr.maintainer_can_modify;
+
+            // We're on master's bypass list, so branch protection won't hold
+            // a failing check against us.  Enforce the changes file ourselves
+            // instead; see changes-file.yaml.  The name is the job's `name:`,
+            // which is what GitHub calls the check run.
+            const CHECK_NAME = 'Changes file';
+
+            const { data: checks } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: pr.head.sha,
+              check_name: CHECK_NAME,
+              per_page: 100,
+            });
+
+            // Applying merge-this fires changes-file.yaml all over again, so
+            // there's very likely a fresh run of it in flight right now.  Its
+            // verdict on this same head can only match the one already on
+            // record, so consider the newest *finished* run and let the new
+            // one race along harmlessly behind us.
+            const finished = checks.check_runs
+              .filter(run => run.status === 'completed')
+              .sort((a, b) => (a.completed_at < b.completed_at ? -1 : 1));
+
+            const verdict = finished[finished.length - 1];
+
+            if (verdict === undefined) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `The "${CHECK_NAME}" check hasn't finished for ${pr.head.sha.slice(0, 12)}`
+                    + ` yet, so I can't tell whether this PR needs a changes file.`
+                    + `  Re-apply the label once it has.`,
+              });
+              core.setFailed(`no completed ${CHECK_NAME} check run`);
+              return;
+            }
+
+            if (!['success', 'neutral', 'skipped'].includes(verdict.conclusion)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `The [${CHECK_NAME} check](${verdict.html_url}) came back`
+                    + ` "${verdict.conclusion}", so I won't merge this PR.  Add a file`
+                    + ` in changes/next describing the change for the release notes,`
+                    + ` or apply the changelog-not-needed label.`,
+              });
+              core.setFailed(`${CHECK_NAME} check concluded ${verdict.conclusion}`);
+              return;
+            }
 
             core.setOutput('head_ref',      pr.head.ref);
             core.setOutput('head_sha',      pr.head.sha);
