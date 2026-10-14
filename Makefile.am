@@ -335,7 +335,8 @@ lib_libsasl_min_la_SOURCES = \
     libsasl_min/plain.c \
     libsasl_min/plugin_common.c \
     libsasl_min/plugin_common.h \
-    libsasl_min/saslint.h
+    libsasl_min/saslint.h \
+    libsasl_min/saslutil.c
 
 lib_libsasl_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 lib_libsasl_min_la_LIBADD =
