@@ -314,14 +314,16 @@ EXPORTED char *strarray_join(const strarray_t *sa, const char *sep)
 
     for (i = 0, j = 0 ; i < sa->count ; i++) {
         if (sa->data[i]) {
-            if (j++ && sep) {
-                strcpy(p, sep);
-                p += strlen(p);
+            if (j++ && seplen) {
+                memcpy(p, sep, seplen);
+                p += seplen;
             }
-            strcpy(p, sa->data[i]);
-            p += strlen(p);
+            size_t len = strlen(sa->data[i]);
+            memcpy(p, sa->data[i], len);
+            p += len;
         }
     }
+    *p = '\0';
 
     return buf;
 }
