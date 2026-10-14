@@ -339,7 +339,10 @@ lib_libsasl_min_la_SOURCES = \
     libsasl_min/saslint.h \
     libsasl_min/saslutil.c
 
-lib_libsasl_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+lib_libsasl_min_la_CFLAGS = \
+    $(AM_CFLAGS) $(CFLAG_VISIBILITY) \
+    -Wno-cast-function-type
+
 lib_libsasl_min_la_LIBADD =
 endif # USE_INTERNAL_SASL
 

@@ -44,32 +44,26 @@
  */
 
 #include <config.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <limits.h>
-#ifdef HAVE_SYSLOG
-# include <syslog.h>
-#endif
-#include <stdarg.h>
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
+#include "libsasl_min/saslplug.h"
+#include "libsasl_min/saslint.h"
+
+#include "lib/assert.h"
+
 #include <ctype.h>
-#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <syslog.h>
+#include <unistd.h>
 
-#include <sasl.h>
-#include <saslutil.h>
-#include <saslplug.h>
-#include "saslint.h"
-
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
-
-static const char *implementation_string = "Cyrus SASL";
-
-#define VSTR0(maj, min, step) #maj "." #min "." #step
-#define VSTR(maj, min, step) VSTR0(maj, min, step)
-#define SASL_VERSION_STRING                                                    \
-    VSTR(SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP)
+/* XXX defines that libsasl would've configured */
+#define SASL_PATH_ENV_VAR "SASL_PATH"
+#define SASL_CONF_PATH_ENV_VAR "SASL_CONF_PATH"
+#define PLUGINDIR "/nonexistent"
+#define CONFIGDIR "/nonexistent"
 
 static int _sasl_getpath(void *context __attribute__((unused)),
                          const char **path);
@@ -80,16 +74,10 @@ static int _sasl_getconfpath(void *context __attribute__((unused)),
 static int _sasl_getconfpath_simple(void *context __attribute__((unused)),
                                     const char **path);
 
-#if !defined(WIN32)
-static char *_sasl_get_default_unix_path(void *context __attribute__((unused)),
-                                         char *env_var_name,
-                                         char *default_value);
-#else
-/* NB: Always returned allocated value */
-static char *_sasl_get_default_win_path(void *context __attribute__((unused)),
-                                        TCHAR *reg_attr_name,
-                                        char *default_value);
-#endif
+static const char *_sasl_get_default_unix_path(
+    void *context __attribute__((unused)),
+    const char *env_var_name,
+    const char *default_value);
 
 /* It turns out to be convenient to have a shared sasl_utils_t */
 const sasl_utils_t *sasl_global_utils = NULL;
@@ -157,10 +145,10 @@ sasl_mutex_utils_t _sasl_mutex_utils = { &sasl_mutex_alloc,
                                          &sasl_mutex_unlock,
                                          &sasl_mutex_free };
 
-void sasl_set_mutex(sasl_mutex_alloc_t *n,
-                    sasl_mutex_lock_t *l,
-                    sasl_mutex_unlock_t *u,
-                    sasl_mutex_free_t *d)
+EXPORTED void sasl_set_mutex(sasl_mutex_alloc_t *n,
+                             sasl_mutex_lock_t *l,
+                             sasl_mutex_unlock_t *u,
+                             sasl_mutex_free_t *d)
 {
     /* Disallow mutex function changes once sasl_client_init
        and/or sasl_server_init is called */
@@ -175,7 +163,7 @@ void sasl_set_mutex(sasl_mutex_alloc_t *n,
 }
 
 /* copy a string to malloced memory */
-int _sasl_strdup(const char *in, char **out, size_t *outlen)
+EXPORTED int _sasl_strdup(const char *in, char **out, size_t *outlen)
 {
     size_t len = strlen(in);
     if (outlen) {
@@ -190,10 +178,10 @@ int _sasl_strdup(const char *in, char **out, size_t *outlen)
 }
 
 /* adds a string to the buffer; reallocing if need be */
-int _sasl_add_string(char **out,
-                     size_t *alloclen,
-                     size_t *outlen,
-                     const char *add)
+EXPORTED int _sasl_add_string(char **out,
+                              size_t *alloclen,
+                              size_t *outlen,
+                              const char *add)
 {
     size_t addlen;
 
@@ -219,7 +207,7 @@ int _sasl_add_string(char **out,
  *
  * Don't call this function without locking in a multithreaded application.
  */
-int sasl_set_path(int path_type, char *path)
+EXPORTED int sasl_set_path(int path_type, char *path)
 {
     int result;
 
@@ -264,60 +252,13 @@ int sasl_set_path(int path_type, char *path)
     return (SASL_OK);
 }
 
-/* return the version of the cyrus sasl library as compiled,
- * using 32 bits: high byte is major version, second byte is minor version,
- * low 16 bits are step #.
- * Patch version is not available using this function,
- * use sasl_version_info() instead.
- */
-void sasl_version(const char **implementation, int *version)
-{
-    if (implementation) {
-        *implementation = implementation_string;
-    }
-    /* NB: the format is not the same as in SASL_VERSION_FULL */
-    if (version) {
-        *version = (SASL_VERSION_MAJOR << 24) | (SASL_VERSION_MINOR << 16)
-                   | (SASL_VERSION_STEP);
-    }
-}
-
-/* Extended version of sasl_version above */
-void sasl_version_info(const char **implementation,
-                       const char **version_string,
-                       int *version_major,
-                       int *version_minor,
-                       int *version_step,
-                       int *version_patch)
-{
-    if (implementation) {
-        *implementation = implementation_string;
-    }
-    if (version_string) {
-        *version_string = SASL_VERSION_STRING;
-    }
-    if (version_major) {
-        *version_major = SASL_VERSION_MAJOR;
-    }
-    if (version_minor) {
-        *version_minor = SASL_VERSION_MINOR;
-    }
-    if (version_step) {
-        *version_step = SASL_VERSION_STEP;
-    }
-    /* Version patch is always 0 for CMU SASL */
-    if (version_patch) {
-        *version_patch = 0;
-    }
-}
-
 /* security-encode a regular string.  Mostly a wrapper for sasl_encodev */
 /* output is only valid until next call to sasl_encode or sasl_encodev */
-int sasl_encode(sasl_conn_t *conn,
-                const char *input,
-                unsigned inputlen,
-                const char **output,
-                unsigned *outputlen)
+EXPORTED int sasl_encode(sasl_conn_t *conn,
+                         const char *input,
+                         unsigned inputlen,
+                         const char **output,
+                         unsigned *outputlen)
 {
     int result;
     struct iovec tmp;
@@ -429,11 +370,11 @@ static int _sasl_encodev(
 
 /* security-encode an iovec */
 /* output is only valid until the next call to sasl_encode or sasl_encodev */
-int sasl_encodev(sasl_conn_t *conn,
-                 const struct iovec *invec,
-                 unsigned numiov,
-                 const char **output,
-                 unsigned *outputlen)
+EXPORTED int sasl_encodev(sasl_conn_t *conn,
+                          const struct iovec *invec,
+                          unsigned numiov,
+                          const char **output,
+                          unsigned *outputlen)
 {
     int result = SASL_OK;
     unsigned i;
@@ -637,11 +578,11 @@ cleanup:
 }
 
 /* output is only valid until next call to sasl_decode */
-int sasl_decode(sasl_conn_t *conn,
-                const char *input,
-                unsigned inputlen,
-                const char **output,
-                unsigned *outputlen)
+EXPORTED int sasl_decode(sasl_conn_t *conn,
+                         const char *input,
+                         unsigned inputlen,
+                         const char **output,
+                         unsigned *outputlen)
 {
     int result;
 
@@ -704,10 +645,10 @@ int sasl_decode(sasl_conn_t *conn,
     INTERROR(conn, SASL_FAIL);
 }
 
-void sasl_set_alloc(sasl_malloc_t *m,
-                    sasl_calloc_t *c,
-                    sasl_realloc_t *r,
-                    sasl_free_t *f)
+EXPORTED void sasl_set_alloc(sasl_malloc_t *m,
+                             sasl_calloc_t *c,
+                             sasl_realloc_t *r,
+                             sasl_free_t *f)
 {
     if (_sasl_allocation_locked++) {
         return;
@@ -719,7 +660,7 @@ void sasl_set_alloc(sasl_malloc_t *m,
     _sasl_allocation_utils.free = f;
 }
 
-void sasl_common_done(void)
+EXPORTED void sasl_common_done(void)
 {
     /* NOTE - the caller will need to reinitialize the values,
        if it is going to call sasl_client_init/sasl_server_init again. */
@@ -747,7 +688,7 @@ void sasl_common_done(void)
 }
 
 /* This function is for backward compatibility */
-void sasl_done(void)
+EXPORTED void sasl_done(void)
 {
     if (_sasl_server_cleanup_hook && _sasl_server_cleanup_hook() == SASL_OK) {
         _sasl_server_idle_hook = NULL;
@@ -767,16 +708,16 @@ void sasl_done(void)
 }
 
 /* fills in the base sasl_conn_t info */
-int _sasl_conn_init(sasl_conn_t *conn,
-                    const char *service,
-                    unsigned int flags,
-                    enum Sasl_conn_type type,
-                    int (*idle_hook)(sasl_conn_t *conn),
-                    const char *serverFQDN,
-                    const char *iplocalport,
-                    const char *ipremoteport,
-                    const sasl_callback_t *callbacks,
-                    const sasl_global_callbacks_t *global_callbacks)
+EXPORTED int _sasl_conn_init(sasl_conn_t *conn,
+                             const char *service,
+                             unsigned int flags,
+                             enum Sasl_conn_type type,
+                             int (*idle_hook)(sasl_conn_t *conn),
+                             const char *serverFQDN,
+                             const char *iplocalport,
+                             const char *ipremoteport,
+                             const sasl_callback_t *callbacks,
+                             const sasl_global_callbacks_t *global_callbacks)
 {
     int result = SASL_OK;
 
@@ -855,7 +796,7 @@ int _sasl_conn_init(sasl_conn_t *conn,
     RETURN(conn, SASL_OK);
 }
 
-int _sasl_common_init(sasl_global_callbacks_t *global_callbacks)
+EXPORTED int _sasl_common_init(sasl_global_callbacks_t *global_callbacks)
 {
     int result;
 
@@ -898,7 +839,7 @@ int _sasl_common_init(sasl_global_callbacks_t *global_callbacks)
 /* dispose connection state, sets it to NULL
  *  checks for pointer to NULL
  */
-void sasl_dispose(sasl_conn_t **pconn)
+EXPORTED void sasl_dispose(sasl_conn_t **pconn)
 {
     int result;
 
@@ -933,7 +874,7 @@ void sasl_dispose(sasl_conn_t **pconn)
     sasl_MUTEX_UNLOCK(free_mutex);
 }
 
-void _sasl_conn_dispose(sasl_conn_t *conn)
+EXPORTED void _sasl_conn_dispose(sasl_conn_t *conn)
 {
     if (conn->serverFQDN) {
         sasl_FREE(conn->serverFQDN);
@@ -986,7 +927,7 @@ void _sasl_conn_dispose(sasl_conn_t *conn)
  *  SASL_NOTDONE  -- property not available yet
  *  SASL_BADPARAM -- bad property number or SASL context is NULL
  */
-int sasl_getprop(sasl_conn_t *conn, int propnum, const void **pvalue)
+EXPORTED int sasl_getprop(sasl_conn_t *conn, int propnum, const void **pvalue)
 {
     int result = SASL_OK;
     sasl_getopt_t *getopt;
@@ -1211,7 +1152,7 @@ int sasl_getprop(sasl_conn_t *conn, int propnum, const void **pvalue)
  *  SASL_OK       -- value set
  *  SASL_BADPARAM -- invalid property or value
  */
-int sasl_setprop(sasl_conn_t *conn, int propnum, const void *value)
+EXPORTED int sasl_setprop(sasl_conn_t *conn, int propnum, const void *value)
 {
     int result = SASL_OK;
     char *str;
@@ -1477,9 +1418,9 @@ static int sasl_usererr(int saslerr)
     return saslerr;
 }
 
-const char *sasl_errstring(int saslerr,
-                           const char *langlist __attribute__((unused)),
-                           const char **outlang)
+EXPORTED const char *sasl_errstring(int saslerr,
+                                    const char *langlist __attribute__((unused)),
+                                    const char **outlang)
 {
     if (outlang) {
         *outlang = "en-us";
@@ -1567,7 +1508,7 @@ const char *sasl_errstring(int saslerr,
 
 /* Return the sanitized error detail about the last error that occured for
  * a connection */
-const char *sasl_errdetail(sasl_conn_t *conn)
+EXPORTED const char *sasl_errdetail(sasl_conn_t *conn)
 {
     unsigned need_len;
     const char *errstr;
@@ -1687,7 +1628,6 @@ static int _sasl_conn_getopt(void *context,
                                len);
 }
 
-#ifdef HAVE_SYSLOG
 /* this is the default logging */
 static int _sasl_syslog(void *context, int priority, const char *message)
 {
@@ -1731,7 +1671,6 @@ static int _sasl_syslog(void *context, int priority, const char *message)
 
     return SASL_OK;
 }
-#endif /* HAVE_SYSLOG */
 
 static int _sasl_getsimple(void *context,
                            int id,
@@ -1798,9 +1737,6 @@ static int _sasl_getsimple(void *context,
 static int _sasl_getpath(void *context __attribute__((unused)),
                          const char **path_dest)
 {
-#if !defined(WIN32)
-    char *path;
-#endif
     int res = SASL_OK;
 
     if (!path_dest) {
@@ -1809,19 +1745,13 @@ static int _sasl_getpath(void *context __attribute__((unused)),
 
     /* Only calculate the path once. */
     if (default_plugin_path == NULL) {
+        const char *path;
 
-#if defined(WIN32)
-        /* NB: On Windows platforms this value is always allocated */
-        default_plugin_path = _sasl_get_default_win_path(context,
-                                                         SASL_PLUGIN_PATH_ATTR,
-                                                         PLUGINDIR);
-#else
-        /* NB: On Unix platforms this value is never allocated */
-        path =
-            _sasl_get_default_unix_path(context, SASL_PATH_ENV_VAR, PLUGINDIR);
+        path = _sasl_get_default_unix_path(context,
+                                           SASL_PATH_ENV_VAR,
+                                           PLUGINDIR);
 
         res = _sasl_strdup(path, &default_plugin_path, NULL);
-#endif
     }
 
     if (res == SASL_OK) {
@@ -1850,9 +1780,6 @@ static int _sasl_getpath_simple(void *context __attribute__((unused)),
 static int _sasl_getconfpath(void *context __attribute__((unused)),
                              char **path_dest)
 {
-#if !defined(WIN32)
-    char *path;
-#endif
     int res = SASL_OK;
 
     if (!path_dest) {
@@ -1861,19 +1788,13 @@ static int _sasl_getconfpath(void *context __attribute__((unused)),
 
     /* Only calculate the path once. */
     if (default_conf_path == NULL) {
+        const char *path;
 
-#if defined(WIN32)
-        /* NB: On Windows platforms this value is always allocated */
-        default_conf_path =
-            _sasl_get_default_win_path(context, SASL_CONF_PATH_ATTR, CONFIGDIR);
-#else
-        /* NB: On Unix platforms this value is never allocated */
         path = _sasl_get_default_unix_path(context,
                                            SASL_CONF_PATH_ENV_VAR,
                                            CONFIGDIR);
 
         res = _sasl_strdup(path, &default_conf_path, NULL);
-#endif
     }
 
     if (res == SASL_OK) {
@@ -1935,10 +1856,10 @@ static int _sasl_proxy_policy(sasl_conn_t *conn,
     return SASL_OK;
 }
 
-int _sasl_getcallback(sasl_conn_t *conn,
-                      unsigned long callbackid,
-                      sasl_callback_ft *pproc,
-                      void **pcontext)
+EXPORTED int _sasl_getcallback(sasl_conn_t *conn,
+                               unsigned long callbackid,
+                               sasl_callback_ft *pproc,
+                               void **pcontext)
 {
     const sasl_callback_t *callback;
 
@@ -2004,12 +1925,10 @@ int _sasl_getcallback(sasl_conn_t *conn,
 
     /* Otherwise, see if the library provides a default callback. */
     switch (callbackid) {
-#ifdef HAVE_SYSLOG
     case SASL_CB_LOG:
         *pproc = (sasl_callback_ft) &_sasl_syslog;
         *pcontext = conn;
         return SASL_OK;
-#endif /* HAVE_SYSLOG */
     case SASL_CB_GETPATH:
         *pproc = default_getpath_cb.proc;
         *pcontext = default_getpath_cb.context;
@@ -2051,7 +1970,7 @@ int _sasl_getcallback(sasl_conn_t *conn,
  * %z will parse the next argument as a SASL error code.
  */
 
-void _sasl_log(sasl_conn_t *conn, int level, const char *fmt, ...)
+EXPORTED void _sasl_log(sasl_conn_t *conn, int level, const char *fmt, ...)
 {
     char *out = NULL;
     size_t alloclen = 100; /* current allocated length */
@@ -2250,8 +2169,9 @@ done:
 }
 
 /* Allocate and Init a sasl_utils_t structure */
-sasl_utils_t *_sasl_alloc_utils(sasl_conn_t *conn,
-                                sasl_global_callbacks_t *global_callbacks)
+EXPORTED sasl_utils_t *_sasl_alloc_utils(
+    sasl_conn_t *conn,
+    sasl_global_callbacks_t *global_callbacks)
 {
     sasl_utils_t *utils;
     /* set util functions - need to do rest*/
@@ -2283,14 +2203,6 @@ sasl_utils_t *_sasl_alloc_utils(sasl_conn_t *conn,
     utils->mutex_unlock = _sasl_mutex_utils.unlock;
     utils->mutex_free = _sasl_mutex_utils.free;
 
-    utils->MD5Init = &_sasl_MD5Init;
-    utils->MD5Update = &_sasl_MD5Update;
-    utils->MD5Final = &_sasl_MD5Final;
-    utils->hmac_md5 = &_sasl_hmac_md5;
-    utils->hmac_md5_init = &_sasl_hmac_md5_init;
-    utils->hmac_md5_final = &_sasl_hmac_md5_final;
-    utils->hmac_md5_precalc = &_sasl_hmac_md5_precalc;
-    utils->hmac_md5_import = &_sasl_hmac_md5_import;
     utils->mkchal = &sasl_mkchal;
     utils->utf8verify = &sasl_utf8verify;
     utils->rand = &sasl_rand;
@@ -2334,7 +2246,7 @@ sasl_utils_t *_sasl_alloc_utils(sasl_conn_t *conn,
     return utils;
 }
 
-int _sasl_free_utils(const sasl_utils_t **utils)
+EXPORTED int _sasl_free_utils(const sasl_utils_t **utils)
 {
     sasl_utils_t *nonconst;
 
@@ -2356,7 +2268,7 @@ int _sasl_free_utils(const sasl_utils_t **utils)
     return SASL_OK;
 }
 
-int sasl_idle(sasl_conn_t *conn)
+EXPORTED int sasl_idle(sasl_conn_t *conn)
 {
     if (!conn) {
         if (_sasl_server_idle_hook && _sasl_server_idle_hook(NULL)) {
@@ -2392,7 +2304,7 @@ static const sasl_callback_t *_sasl_find_callback_by_type(
     return NULL;
 }
 
-const sasl_callback_t *_sasl_find_getpath_callback(
+EXPORTED const sasl_callback_t *_sasl_find_getpath_callback(
     const sasl_callback_t *callbacks)
 {
     callbacks = _sasl_find_callback_by_type(callbacks, SASL_CB_GETPATH);
@@ -2404,7 +2316,7 @@ const sasl_callback_t *_sasl_find_getpath_callback(
     }
 }
 
-const sasl_callback_t *_sasl_find_getconfpath_callback(
+EXPORTED const sasl_callback_t *_sasl_find_getconfpath_callback(
     const sasl_callback_t *callbacks)
 {
     callbacks = _sasl_find_callback_by_type(callbacks, SASL_CB_GETCONFPATH);
@@ -2416,7 +2328,7 @@ const sasl_callback_t *_sasl_find_getconfpath_callback(
     }
 }
 
-const sasl_callback_t *_sasl_find_verifyfile_callback(
+EXPORTED const sasl_callback_t *_sasl_find_verifyfile_callback(
     const sasl_callback_t *callbacks)
 {
     static const sasl_callback_t default_verifyfile_cb = {
@@ -2435,7 +2347,7 @@ const sasl_callback_t *_sasl_find_verifyfile_callback(
 }
 
 /* Basically a conditional call to realloc(), if we need more */
-int _buf_alloc(char **rwbuf, size_t *curlen, size_t newlen)
+EXPORTED int _buf_alloc(char **rwbuf, size_t *curlen, size_t newlen)
 {
     if (!(*rwbuf)) {
         *rwbuf = sasl_ALLOC((unsigned) newlen);
@@ -2467,16 +2379,18 @@ int _buf_alloc(char **rwbuf, size_t *curlen, size_t newlen)
 
 /* for the mac os x cfm glue: this lets the calling function
    get pointers to the error buffer without having to touch the sasl_conn_t struct */
-void _sasl_get_errorbuf(sasl_conn_t *conn, char ***bufhdl, size_t **lenhdl)
+EXPORTED void _sasl_get_errorbuf(sasl_conn_t *conn,
+                                 char ***bufhdl,
+                                 size_t **lenhdl)
 {
     *bufhdl = &conn->error_buf;
     *lenhdl = &conn->error_buf_len;
 }
 
 /* convert an iovec to a single buffer */
-int _iovec_to_buf(const struct iovec *vec,
-                  unsigned numiov,
-                  buffer_info_t **output)
+EXPORTED int _iovec_to_buf(const struct iovec *vec,
+                           unsigned numiov,
+                           buffer_info_t **output)
 {
     unsigned i;
     int ret;
@@ -2546,7 +2460,9 @@ int _sasl_iptostring(const struct sockaddr *addr, socklen_t addrlen,
 }
 #endif
 
-int _sasl_ipfromstring(const char *addr, struct sockaddr *out, socklen_t outlen)
+EXPORTED int _sasl_ipfromstring(const char *addr,
+                                struct sockaddr *out,
+                                socklen_t outlen)
 {
     int i, j;
     struct addrinfo hints, *ai = NULL;
@@ -2598,7 +2514,7 @@ int _sasl_ipfromstring(const char *addr, struct sockaddr *out, socklen_t outlen)
     return SASL_OK;
 }
 
-int _sasl_build_mechlist(void)
+EXPORTED int _sasl_build_mechlist(void)
 {
     int count = 0;
     sasl_string_list_t *clist = NULL, *slist = NULL, *olist = NULL;
@@ -2674,19 +2590,19 @@ int _sasl_build_mechlist(void)
     return SASL_OK;
 }
 
-const char **sasl_global_listmech(void)
+EXPORTED const char **sasl_global_listmech(void)
 {
     return (const char **) global_mech_list;
 }
 
-int sasl_listmech(sasl_conn_t *conn,
-                  const char *user,
-                  const char *prefix,
-                  const char *sep,
-                  const char *suffix,
-                  const char **result,
-                  unsigned *plen,
-                  int *pcount)
+EXPORTED int sasl_listmech(sasl_conn_t *conn,
+                           const char *user,
+                           const char *prefix,
+                           const char *sep,
+                           const char *suffix,
+                           const char **result,
+                           unsigned *plen,
+                           int *pcount)
 {
     if (!conn) {
         return SASL_BADPARAM;
@@ -2716,10 +2632,10 @@ int sasl_listmech(sasl_conn_t *conn,
     PARAMERROR(conn);
 }
 
-int _sasl_is_equal_mech(const char *req_mech,
-                        const char *plug_mech,
-                        size_t req_mech_len,
-                        int *plus)
+EXPORTED int _sasl_is_equal_mech(const char *req_mech,
+                                 const char *plug_mech,
+                                 size_t req_mech_len,
+                                 int *plus)
 {
     size_t n;
 
@@ -2742,243 +2658,15 @@ int _sasl_is_equal_mech(const char *req_mech,
     return (strncasecmp(req_mech, plug_mech, n) == 0);
 }
 
-#ifndef WIN32
-static char *_sasl_get_default_unix_path(void *context __attribute__((unused)),
-                                         char *env_var_name,
-                                         char *default_value)
+static const char *_sasl_get_default_unix_path(
+    void *context __attribute__((unused)),
+    const char *env_var_name,
+    const char *default_value)
 {
-    char *path = NULL;
-
     /* Honor external variable only in a safe environment */
     if (getuid() == geteuid() && getgid() == getegid()) {
-        path = getenv(env_var_name);
-    }
-    if (!path) {
-        path = default_value;
+        return getenv(env_var_name);
     }
 
-    return path;
+    return default_value;
 }
-
-#else /*WIN32*/
-/* Return NULL on failure */
-static char *_sasl_get_default_win_path(void *context __attribute__((unused)),
-                                        TCHAR *reg_attr_name,
-                                        char *default_value)
-{
-    /* Open registry entry, and find all registered SASL libraries.
-     *
-     * Registry location:
-     *
-     *     SOFTWARE\\Carnegie Mellon\\Project Cyrus\\SASL Library
-     *
-     * Key - value:
-     *
-     *     "SearchPath" - value: PATH like (';' delimited) list
-     *                    of directories where to search for plugins
-     *                    The list may contain references to environment
-     *                    variables (e.g. %PATH%).
-     *
-     */
-    HKEY hKey;
-    DWORD ret;
-    DWORD ValueType;      /* value type */
-    DWORD cbData;         /* value size in bytes and later number of wchars */
-    TCHAR *ValueData;     /* value */
-    DWORD cbExpandedData; /* "expanded" value size in wchars */
-    TCHAR *ExpandedValueData; /* "expanded" value */
-    TCHAR *return_value;      /* function return value */
-    TCHAR *tmp;
-
-    /* Initialization */
-    ExpandedValueData = NULL;
-    ValueData = NULL;
-    return_value = NULL;
-
-    /* Open the registry */
-    ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, SASL_ROOT_KEY, 0, KEY_READ, &hKey);
-
-    if (ret != ERROR_SUCCESS) {
-        /* no registry entry */
-        char *ret;
-        (void) _sasl_strdup(default_value, &ret, NULL);
-        return ret;
-    }
-
-    /* figure out value type and required buffer size */
-    /* the size will include space for terminating NUL if required */
-    RegQueryValueEx(hKey,
-                    reg_attr_name,
-                    NULL, /* reserved */
-                    &ValueType,
-                    NULL,
-                    &cbData);
-
-    /* Only accept string related types */
-    if (ValueType != REG_EXPAND_SZ && ValueType != REG_MULTI_SZ
-        && ValueType != REG_SZ)
-    {
-        return_value = NULL;
-        goto CLEANUP;
-    }
-
-    /* Any high water mark? */
-    ValueData = sasl_ALLOC(
-        cbData
-        + 2
-              * sizeof(
-                  TCHAR)); /* extra bytes to insert null-terminator if it's missed */
-    if (ValueData == NULL) {
-        return_value = NULL;
-        goto CLEANUP;
-    };
-
-    if (RegQueryValueEx(hKey,
-                        reg_attr_name,
-                        NULL, /* reserved */
-                        &ValueType,
-                        (LPBYTE) ValueData,
-                        &cbData)
-        != ERROR_SUCCESS)
-    {
-        return_value = NULL;
-        goto CLEANUP;
-    }
-    cbData /= sizeof(TCHAR);      /* covert to number of symbols */
-    ValueData[cbData] = '\0';     /* MS docs say we have to to that */
-    ValueData[cbData + 1] = '\0'; /* for MULTI */
-
-    switch (ValueType) {
-    case REG_EXPAND_SZ:
-        /* : A random starting guess */
-        cbExpandedData = cbData + 1024;
-        ExpandedValueData =
-            (TCHAR *) sasl_ALLOC(cbExpandedData * sizeof(TCHAR));
-        if (ExpandedValueData == NULL) {
-            return_value = NULL;
-            goto CLEANUP;
-        };
-
-        cbExpandedData = ExpandEnvironmentStrings(ValueData,
-                                                  ExpandedValueData,
-                                                  cbExpandedData);
-
-        if (cbExpandedData == 0) {
-            /* : GetLastError() contains the reason for failure */
-            return_value = NULL;
-            goto CLEANUP;
-        }
-
-        /* : Must retry expansion with the bigger buffer */
-        if (cbExpandedData > cbData + 1024) {
-            /* : Memory leak here if can't realloc */
-            ExpandedValueData =
-                sasl_REALLOC(ExpandedValueData, cbExpandedData * sizeof(TCHAR));
-            if (ExpandedValueData == NULL) {
-                return_value = NULL;
-                goto CLEANUP;
-            };
-
-            cbExpandedData = ExpandEnvironmentStrings(ValueData,
-                                                      ExpandedValueData,
-                                                      cbExpandedData);
-
-            /* : This should not happen */
-            if (cbExpandedData == 0) {
-                /* : GetLastError() contains the reason for failure */
-                return_value = NULL;
-                goto CLEANUP;
-            }
-        }
-
-        sasl_FREE(ValueData);
-        ValueData = ExpandedValueData;
-        /* : This is to prevent automatical freeing of this block on cleanup */
-        ExpandedValueData = NULL;
-
-        break;
-
-    case REG_MULTI_SZ:
-        tmp = ValueData;
-
-        /* : We shouldn't overflow here, as the buffer is guarantied
-           : to contain at least two consequent NULs */
-        while (1) {
-            if (tmp[0] == '\0') {
-                /* : Stop the process if we found the end of the string (two consequent NULs) */
-                if (tmp[1] == '\0') {
-                    break;
-                }
-
-                /* : Replace delimiting NUL with our delimiter characted */
-                tmp[0] = PATHS_DELIMITER;
-            }
-            tmp += (_tcslen(tmp));
-        }
-        break;
-
-    case REG_SZ:
-        /* Do nothing, it is good as is */
-        break;
-
-    default:
-        return_value = NULL;
-        goto CLEANUP;
-    }
-
-    return_value = ValueData; /* just to flag we have a result */
-
-CLEANUP:
-    RegCloseKey(hKey);
-    if (ExpandedValueData != NULL) {
-        sasl_FREE(ExpandedValueData);
-    }
-    if (return_value == NULL) {
-        if (ValueData != NULL) {
-            sasl_FREE(ValueData);
-        }
-        return NULL;
-    }
-    if (sizeof(TCHAR) == sizeof(char)) {
-        return (char *) return_value;
-    }
-
-    /* convert to utf-8 for compatibility with other OS' */
-    {
-        char *tmp = _sasl_wchar_to_utf8(return_value);
-        sasl_FREE(return_value);
-        return tmp;
-    }
-}
-
-char *_sasl_wchar_to_utf8(WCHAR *str)
-{
-    size_t bufLen =
-        WideCharToMultiByte(CP_UTF8, 0, str, -1, NULL, 0, NULL, NULL);
-    char *buf = sasl_ALLOC(bufLen);
-    if (buf) {
-        if (WideCharToMultiByte(CP_UTF8, 0, str, -1, buf, bufLen, NULL, NULL)
-            == 0)
-        { /* -1 ensures null-terminated utf8 */
-            sasl_FREE(buf);
-            buf = NULL;
-        }
-    }
-    return buf;
-}
-
-WCHAR *_sasl_utf8_to_wchar(const char *str)
-{
-    size_t bufLen = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
-    WCHAR *buf = sasl_ALLOC(bufLen * sizeof(WCHAR));
-    if (buf) {
-        if (MultiByteToWideChar(CP_UTF8, 0, str, -1, buf, bufLen) == 0)
-        { /* -1 ensures null-terminated utf8 */
-            sasl_FREE(buf);
-            buf = NULL;
-        }
-    }
-    return buf;
-}
-
-#endif /*WIN32*/
