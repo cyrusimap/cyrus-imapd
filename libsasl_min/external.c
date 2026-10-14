@@ -50,6 +50,7 @@
 #include "libsasl_min/saslint.h"
 
 #include "libsasl_min/plugin_common.h"
+#include "libsasl_min/external.h"
 
 #include <string.h>
 

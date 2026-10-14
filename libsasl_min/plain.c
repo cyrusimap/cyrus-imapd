@@ -48,6 +48,7 @@
 #include "libsasl_min/sasl.h"
 #include "libsasl_min/saslplug.h"
 #include "libsasl_min/plugin_common.h"
+#include "libsasl_min/plain.h"
 
 #include <string.h>
 
@@ -508,7 +509,7 @@ static sasl_client_plug_t plain_client_plugins[] = {
     }
 };
 
-EXPORTED int plain_client_plug_init(sasl_utils_t *utils,
+EXPORTED int plain_client_plug_init(const sasl_utils_t *utils,
                                     int maxversion,
                                     int *out_version,
                                     sasl_client_plug_t **pluglist,

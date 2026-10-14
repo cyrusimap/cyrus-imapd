@@ -49,6 +49,7 @@
 #include "libsasl_min/saslplug.h"
 #include "libsasl_min/saslutil.h"
 #include "libsasl_min/saslint.h"
+#include "libsasl_min/external.h"
 
 #include <ctype.h>
 #include <stdio.h>

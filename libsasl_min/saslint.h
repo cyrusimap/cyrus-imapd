@@ -388,7 +388,7 @@ extern int _sasl_get_plugin(const char *file,
 extern int _sasl_locate_entry(void *library,
                               const char *entryname,
                               void **entry_point);
-extern int _sasl_done_with_plugins();
+extern int _sasl_done_with_plugins(void);
 
 /*
  * common.c
@@ -453,20 +453,6 @@ int _sasl_iptostring(const struct sockaddr *addr,
 int _sasl_ipfromstring(const char *addr,
                        struct sockaddr *out,
                        socklen_t outlen);
-
-/*
- * external plugin (external.c)
- */
-int external_client_plug_init(const sasl_utils_t *utils,
-                              int max_version,
-                              int *out_version,
-                              sasl_client_plug_t **pluglist,
-                              int *plugcount);
-int external_server_plug_init(const sasl_utils_t *utils,
-                              int max_version,
-                              int *out_version,
-                              sasl_server_plug_t **pluglist,
-                              int *plugcount);
 
 /* Mech Listing Functions */
 int _sasl_build_mechlist(void);
