@@ -38,6 +38,7 @@ sub new
     my $config = Cassandane::Config->default()->clone();
     $config->set(tls_server_cert => '@basedir@/conf/certs/cert.pem',
                  tls_server_key => '@basedir@/conf/certs/key.pem',
+                 http_h3_altsvc => '127.0.0.1:8443',
                  http_h2_altsvc => '127.0.0.1:8443',
                  caldav_realm => 'Cassandane',
                  httpmodules => 'caldav',

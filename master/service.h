@@ -5,9 +5,18 @@
 #ifndef SERVICE_H
 #define SERVICE_H
 
+#include <stdbool.h>
+
+#include "master/quic/quic_handoff.h"
+
 enum {
     STATUS_FD = 3,
-    LISTEN_FD = 4
+    LISTEN_FD = 4,
+
+    /* An AF_UNIX/SOCK_SEQPACKET socket master uses to hand this worker
+     * a new QUIC connection.
+     * (see docsrc/concepts/features/quic-dispatch.rst) */
+    QUIC_HANDOFF_FD = 5
 };
 
 enum {
@@ -16,6 +25,18 @@ enum {
     MASTER_SERVICE_CONNECTION = 0x03,
     MASTER_SERVICE_CONNECTION_MULTI = 0x04
 };
+
+/* Whether this worker belongs to a proto="quic" service. */
+extern bool service_is_quic(void);
+
+/* The handoff for the QUIC connection this worker is serving,
+ * or NULL if it has none.
+ * Refilled per connection: don't keep the pointer. */
+extern const struct quic_handoff *service_quic_handoff(void);
+
+/* The socket to send the current QUIC connection's packets on, or -1
+ * to send on the connection fd itself (see quic_send_handoff()). */
+extern int service_quic_send_fd(void);
 
 extern int service_init(int argc, char **argv, char **envp);
 extern int service_main(int argc, char **argv, char **envp);

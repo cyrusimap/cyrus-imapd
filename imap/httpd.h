@@ -272,7 +272,7 @@ struct resp_body_t {
 
 /* Transaction flags */
 struct txn_flags_t {
-    unsigned long ver      : 2;         /* HTTP version of request */
+    unsigned long ver      : 3;         /* HTTP version of request */
     unsigned long conn     : 3;         /* Connection opts on req/resp */
     unsigned long upgrade  : 3;         /* Upgrade protocols */
     unsigned long override : 1;         /* HTTP method override */
@@ -382,6 +382,7 @@ enum {
     VER_1_0 =           1,
     VER_1_1 =           2,
     VER_2 =             3,
+    VER_3 =             4,
 };
 
 /* Connection token flags */
@@ -518,6 +519,7 @@ extern ptrarray_t backend_cached;
 extern struct protstream *httpd_in;
 extern bool https;
 extern sasl_conn_t *httpd_saslconn;
+extern struct saslprops_t saslprops;    /* needed by h3_handshake_completed() */
 extern int httpd_timeout;
 extern int httpd_userisadmin;
 extern int httpd_userisproxyadmin;
@@ -537,6 +539,26 @@ extern int apns_enabled;
 extern bool ws_enabled;
 
 extern struct proc_handle *httpd_proc_handle;
+
+/**
+ * Set the connection's clienthost to "name [ip]" (see
+ * get_clienthost_from_addrs()), then register the process under it and
+ * set the process title.
+ *
+ * service_main() calls this with @p http3_resolve false, so that a
+ * reverse lookup doesn't delay the QUIC handshake, and the HTTP/3 code
+ * calls it again with true once the handshake has completed.
+ *
+ * @param http3_resolve  for HTTP/3, whether to look up the client's
+ *                       name; if false, clienthost is just "[ip]".
+ *                       Ignored for HTTP/1.x and HTTP/2, which always
+ *                       look it up, and for which this must be called
+ *                       only once: a HAProxy protocol header is read
+ *                       from the connection along the way.
+ *
+ * Failing to register the process is fatal.
+ */
+extern void httpd_get_clienthost(bool http3_resolve);
 
 extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
                            const char **errstr);

@@ -166,6 +166,17 @@ mboxlist.key            a raw mailboxes.db key
 mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
 pop.subfolder           the subfolder a POP session was restricted to
+quic.bpf_obj            path to the compiled cyr_quic_steer eBPF object
+quic.close.code         a QUIC CONNECTION_CLOSE error code, in hex
+quic.close.reason       the reason phrase of a QUIC CONNECTION_CLOSE
+quic.close.type         whether a QUIC close code is a transport or an application one
+quic.dropped            how many datagrams a QUIC connection lost to a full queue
+quic.family             an address family, as a string: ipv4, ipv6 or unix
+quic.nofile.hard        master's hard RLIMIT_NOFILE, the ceiling it may raise to
+quic.nofile.soft        master's soft RLIMIT_NOFILE after it was raised to the hard limit
+quic.rcvbuf.granted     a socket receive buffer size the kernel granted, in bytes
+quic.rcvbuf.requested   a socket receive buffer size asked of the kernel, in bytes
+quic.worker_pid         the pid of a QUIC worker process (master)
 quota.root              the quota root a quota applies to
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
 sched.addresses         the scheduling addresses considered, one per indexed subkey
@@ -184,12 +195,14 @@ search.op               a search operator, e.g. OR
 search.restarts         how many times indexing restarted from the first message
 search.uncommitted      how many documents were pending when a commit failed
 search.updates          how many update passes indexed nothing
+service.name            a service's name, as configured in cyrus.conf
 sieve.lineno            the line of a Sieve script an error was found on
 sieve.result            a SIEVE_* result code
 sieve.script            the name of a Sieve script
 sieve.srs.domain        the domain SRS rewrites a return path into
 sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
+tls.engine              which TLS server engine this event is about
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
 

@@ -32,6 +32,8 @@ sub new
                             name => $params{name},
                             host => $host,
                             port => $port,
+                            protocol => ($params{proto} // '') =~ m/^quic/
+                                        ? 'udp' : 'tcp',
                             config => $listener_config);
     $self->{type} = $type;
 
