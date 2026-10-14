@@ -163,6 +163,10 @@ jmap.blob.accountid     the account a blob was looked for in, when not the reque
 jmap.blobid             a JMAP blob id
 jmap.capability         a JMAP capability URI the request asked to use
 jmap.method             the JMAP method call being processed, e.g. Email/get
+jmap.push.active        1 if a push subscription was already running
+jmap.push.datatypes     how many data types a push subscription asked for
+jmap.push.next_ping     when an eventSource connection is next due a ping
+jmap.push.next_poll     when a push connection next checks for changes
 limit.name              which configured limit an operation broke
 limit.value             that limit's configured value
 lmtp.action             what delivery did with the message: implicit, keep, fileinto, ...
