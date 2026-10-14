@@ -8404,8 +8404,9 @@ static int _email_getargs_parse(jmap_req_t *req __attribute__((unused)),
     }
 
     /* maxBodyValueBytes */
-    else if (!strcmp(key, "maxBodyValueBytes") &&
-             json_is_integer(arg) && json_integer_value(arg) > 0) {
+    else if (!strcmp(key, "maxBodyValueBytes") && json_is_integer(arg)
+             && json_integer_value(arg) >= 0)
+    {
         args->max_body_bytes = json_integer_value(arg);
     }
 
