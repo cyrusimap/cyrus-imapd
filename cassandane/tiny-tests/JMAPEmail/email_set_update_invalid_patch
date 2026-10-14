@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_update_invalid_patch ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    $self->make_message("foo") or die;
+    my $emailid = $jmap->request([[ 'Email/query', {} ]])
+                       ->single_sentence('Email/query')->arguments->{ids}[0];
+
+    # RFC 8620 5.3: one pointer can't be a prefix of another, and a
+    # pointer's parent must exist
+    for my $patch (
+        { keywords => { '$flagged' => JSON::true },
+          'keywords/$seen' => JSON::true },
+        { 'keywords/$absent/x' => JSON::true },
+        { 'mailboxIds/nosuchmailbox/x' => JSON::true },
+    ) {
+        my $res = $jmap->request([[ 'Email/set', {
+            update => { $emailid => $patch },
+        } ]]);
+        $self->assert_cmp_deeply(
+            { $emailid => { type => 'invalidPatch' } },
+            $res->single_sentence('Email/set')->arguments->{notUpdated},
+        );
+    }
+
+    my $email = $jmap->request([[ 'Email/get', {
+        ids => [ $emailid ], properties => [ 'keywords' ],
+    } ]])->single_sentence('Email/get')->arguments->{list}[0];
+    $self->assert_cmp_deeply({}, $email->{keywords});
+}
