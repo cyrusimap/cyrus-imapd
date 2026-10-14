@@ -227,7 +227,7 @@ AC_SEARCH_LIBS([strlcpy], [bsd], [
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdalign.h stdarg.h)
 AC_REPLACE_FUNCS(strcasecmp posix_fadvise strsep memmem memrchr)
-AC_CHECK_FUNCS(getgrouplist fmemopen pselect futimens futimes getline)
+AC_CHECK_FUNCS(getgrouplist fmemopen pselect futimens futimes getline jrand48)
 AC_HEADER_DIRENT
 CFLAGS="$saved_CFLAGS"
 CXXFLAGS="$saved_CXXFLAGS"

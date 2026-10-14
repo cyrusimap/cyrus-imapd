@@ -95,14 +95,6 @@ LIBSASL_API int sasl_config_init(const char *filename);
 
 LIBSASL_API void sasl_config_done(void);
 
-# ifdef WIN32
-/* Just in case a different DLL defines this as well */
-#  if defined(NEED_GETOPT)
-LIBSASL_API int getopt(int argc, char **argv, char *optstring);
-#  endif
-LIBSASL_API char *getpass(const char *prompt);
-# endif /* WIN32 */
-
 # ifdef __cplusplus
 }
 # endif
