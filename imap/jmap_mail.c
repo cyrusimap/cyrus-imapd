@@ -322,8 +322,9 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities,
         config_getbytesize(IMAPOPT_JMAP_MAIL_MAX_SIZE_ATTACHMENTS_PER_EMAIL);
 
     if (max_size_attachments_per_email <= 0) {
-        syslog(LOG_ERR, "jmap: invalid property value: %s",
-                imapopts[IMAPOPT_JMAP_MAIL_MAX_SIZE_ATTACHMENTS_PER_EMAIL].name);
+        xsyslog_ev(LOG_ERR, "jmap.config.invalid",
+                   lf_s("config.option",
+                        imapopts[IMAPOPT_JMAP_MAIL_MAX_SIZE_ATTACHMENTS_PER_EMAIL].name));
         max_size_attachments_per_email = 0;
     }
 
@@ -1106,7 +1107,8 @@ static json_t *_email_read_jannot(const jmap_req_t *req, msgrecord_t *mr,
         }
 
         if (!annotvalue) {
-            syslog(LOG_ERR, "jmap: annotation %s has bogus value", annot);
+            xsyslog_ev(LOG_ERR, "jmap.annotation.value.invalid",
+                       lf_s("annot.entry", annot));
         }
     }
     buf_free(&buf);
@@ -1143,8 +1145,8 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
     r = mailbox_open_irl(mbentry->name, &mbox);
     if (r) {
         // we want to keep looking and see if we can find a mailbox we can open
-        syslog(LOG_ERR, "IOERROR: email_find_cb failed to open %s: %s",
-               mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.email.find.mailbox.open.failed",
+                   lf_jmapreq(req), lf_mbentry(mbentry), lf_err("error", r));
         goto done;
     }
 
@@ -1575,8 +1577,8 @@ static void emailsearch_jmapseen_internalise(struct index_state *state,
     if (state && v) {
         struct conversations_state *cstate = mailbox_get_cstate(state->mailbox);
         if (!cstate) {
-            xsyslog(LOG_ERR, "could not read conversations state",
-                    "mboxid=<%s>", mailbox_uniqueid(state->mailbox));
+            xsyslog_ev(LOG_ERR, "jmap.seen.cstate.missing",
+                       lf_mailbox(state->mailbox));
             return;
         }
 
@@ -1608,10 +1610,10 @@ static void emailsearch_jmapseen_internalise(struct index_state *state,
             }
             ad->folders[md->foldernum].seen_source = seen_source;
 
-            xsyslog(LOG_DEBUG, "determined $seen source for mailbox",
-                    "seen_source=<%s> mboxname=<%s>",
-                    jmapseen_source_as_string(seen_source),
-                    mailbox_name(state->mailbox));
+            xsyslog_ev(LOG_DEBUG, "jmap.seen.source.chosen",
+                       lf_mailbox(state->mailbox),
+                       lf_s("jmap.seen.source",
+                            jmapseen_source_as_string(seen_source)));
         }
     }
 }
@@ -1647,17 +1649,18 @@ static enum jmapseen_source jmapseen_folder_source(struct jmapseen_attrdata *ad,
         else {
             // could try later for locked mailboxes, but
             // let's not amplify mailbox open attempts
-            xsyslog(LOG_ERR, "can not open mailbox, fall back to system flags",
-                    "mboxname=<%s> err=<%s>", mboxname, error_message(r));
+            /* a locked mailbox is an ordinary reason to fall back */
+            xsyslog_ev(LOG_WARNING, "jmap.seen.mailbox.open.failed",
+                       lf_intname("mbox.name", mboxname), lf_err("error", r));
             seen_source = jmapseen_flags;
         }
     }
 
     ad->folders[foldernum].seen_source = seen_source;
 
-    xsyslog(LOG_DEBUG, "determined $seen source for mailbox",
-            "seen_source=<%s> mboxname=<%s>",
-            jmapseen_source_as_string(seen_source), mboxname);
+    xsyslog_ev(LOG_DEBUG, "jmap.seen.source.chosen",
+               lf_intname("mbox.name", mboxname),
+               lf_s("jmap.seen.source", jmapseen_source_as_string(seen_source)));
 
     return seen_source;
 }
@@ -1683,8 +1686,8 @@ static int jmapseen_copy_seen(struct jmapseen_attrdata *ad,
         if (!ad->seendb) {
             int r = seen_open(ad->userid, SEEN_SILENT, &ad->seendb);
             if (r) {
-                xsyslog(LOG_ERR, "can not open seendb, fall back to system flags",
-                        "userid=<%s> err=<%s>", ad->userid, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.seen.db.open.failed",
+                           lf_s("u.username", ad->userid), lf_err("error", r));
                 for (int i = 0; i < ad->numfolders; i++) {
                     // don't try to open seendb for any mailbox
                     ad->folders[i].seen_source = jmapseen_flags;
@@ -1703,9 +1706,9 @@ static int jmapseen_copy_seen(struct jmapseen_attrdata *ad,
                 seen_freedata(&sd);
             }
             else {
-                xsyslog(LOG_ERR, "can not read seen data. fall back to system flags",
-                        "userid=<%s> mboxid=<%s> err=<%s>",
-                        ad->userid, mboxid, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.seen.read.failed",
+                           lf_s("u.username", ad->userid),
+                           lf_s("mbox.uniqueid", mboxid), lf_err("error", r));
                 // don't try to read seen db for this mailbox
                 ad->folders[foldernum].seen_source = jmapseen_flags;
             }
@@ -2349,7 +2352,7 @@ static int emailsearch_folders_unserialise(struct protstream* prot,
 
     struct dlist_print_iter *iter = dlist_print_iter_new(dl, 0);
     if (!iter) {
-        xsyslog(LOG_ERR, "bogus value", NULL);
+        xsyslog_ev(LOG_ERR, "jmap.emailsearch.cache.unparseable");
         return c;
     }
 
@@ -2363,7 +2366,8 @@ static int emailsearch_folders_unserialise(struct protstream* prot,
         buf_reset(&buf);
     }
     else {
-        xsyslog(LOG_ERR, "expected is_otherthan", NULL);
+        xsyslog_ev(LOG_ERR, "jmap.emailsearch.cache.unparseable",
+                   lf_s("jmap.search.field", "inMailboxOtherThan"));
         emailsearch_folders_value_free(&val);
         goto done;
     }
@@ -2373,7 +2377,8 @@ static int emailsearch_folders_unserialise(struct protstream* prot,
         buf_reset(&buf);
     }
     else {
-        xsyslog(LOG_ERR, "expected want_expunged", NULL);
+        xsyslog_ev(LOG_ERR, "jmap.emailsearch.cache.unparseable",
+                   lf_s("jmap.search.field", "wantExpunged"));
         emailsearch_folders_value_free(&val);
         goto done;
     }
@@ -3293,8 +3298,9 @@ static int emailsearch_run_uidsearch(jmap_req_t *req, struct emailsearch *search
     if (!mboxname) mboxname = mboxname_user_mbox(req->accountid, NULL);
     r = index_open(mboxname, &search->init, &search->state);
     if (r) {
-        syslog(LOG_ERR, "jmap: %s: (%s) %s", __func__,
-               mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.emailsearch.index.open.failed",
+                   lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
         free(mboxname);
         goto done;
     }
@@ -3314,7 +3320,8 @@ static int emailsearch_run_uidsearch(jmap_req_t *req, struct emailsearch *search
     search->query->want_partids = search->want_partids;
     r = search_query_run(search->query);
     if (r) {
-        syslog(LOG_ERR, "jmap: %s: %s", __func__, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.emailsearch.query.failed",
+                   lf_jmapreq(req), lf_err("error", r));
         return r;
     }
 
@@ -3612,7 +3619,8 @@ static int guidsearch_match_cmp QSORT_R_COMPAR_ARGS(const void *va,
                 break;
             }
             default:
-                syslog(LOG_ERR, "%s: ignoring unexpected sort %d", __func__, sort->key);
+                xsyslog_ev(LOG_ERR, "jmap.emailsearch.sort.unsupported",
+                           lf_d("jmap.search.sortkey", sort->key));
                 ret = 0;
         }
         if (ret) {
@@ -3990,8 +3998,8 @@ guidsearch_expr_build(struct guidsearch_build_context *build_ctx,
                     else {
                         // most likely guidsearch_rank_clause must be
                         // updated to reject this unsupported flag
-                        syslog(LOG_ERR, "%s: ignoring unsupported flag: %0" PRIx64,
-                                __func__, e->value.u);
+                        xsyslog_ev(LOG_ERR, "jmap.guidsearch.flag.unsupported",
+                                   lf_llx("jmap.search.flag", e->value.u));
                     }
                 }
                 else if (e->attr == search_attr_find("allconvflags") ||
@@ -4023,8 +4031,9 @@ guidsearch_expr_build(struct guidsearch_build_context *build_ctx,
                             ge->v.convflag.num = (uint32_t) idx + 1;
                         }
                         else {
-                            syslog(LOG_ERR, "%s: ignoring unsupported convflag: %s",
-                                    __func__, e->value.s);
+                            xsyslog_ev(LOG_ERR,
+                                       "jmap.guidsearch.convflag.unsupported",
+                                       lf_s("msg.flag", e->value.s));
                             free(ge);
                             ge = NULL;
                         }
@@ -4190,8 +4199,9 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
                 conversation_t conv = CONVERSATION_INIT;
                 int flags = e->v.convflag.include_trash ? CONV_WITHFOLDERS : 0;
                 if (conversation_load_advanced(cstate, match->cid, &conv, flags)) {
-                    syslog(LOG_ERR, "%s: can't load cid " CONV_FMT,
-                            __func__, match->cid);
+                    xsyslog_ev(LOG_ERR,
+                               "jmap.guidsearch.conversation.unreadable",
+                               lf_raw("msg.cid", CONV_FMT, match->cid));
                     return 1;
                 }
                 int ret = 0;
@@ -4551,8 +4561,10 @@ static int guidsearch_run_xapian_cb(const conv_guidrec_t *rec, void *rock)
 {
     if (rec->version < 1) {
         /* Legacy conversations.db. Guid search was just a waste of time. */
-        syslog(LOG_ERR, "jmap: %s: G record for %s:%d has legacy version 0. "
-                "Aborting guidsearch.", __func__, conv_guidrec_mboxname(rec), rec->uid);
+        /* nothing is broken; the search just falls back to uidsearch */
+        xsyslog_ev(LOG_WARNING, "jmap.guidsearch.record.legacy",
+                   lf_intname("mbox.name", conv_guidrec_mboxname(rec)),
+                   lf_u("msg.imapuid", rec->uid));
         return IMAP_SEARCH_NOT_SUPPORTED;
     }
 
@@ -5132,8 +5144,8 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
     /* Prepare query */
     bx = search_begin_search(ss->session);
     if (!bx) {
-        syslog(LOG_ERR, "jmap: %s: can't begin search for %s",
-                __func__,  mailbox_name(ss->mbox));
+        xsyslog_ev(LOG_ERR, "jmap.guidsearch.begin.failed",
+                   lf_mailbox(ss->mbox));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -5142,11 +5154,9 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
     if (need_xapian_index_version > 0) {
         if (!bx->min_index_version ||
             bx->min_index_version(bx) < need_xapian_index_version) {
-            xsyslog(LOG_DEBUG,
-                    "xapian index version is less than required minimum"
-                    "for this query - falling back to uidsearch",
-                    "need_xapian_index_version=<%d>",
-                    need_xapian_index_version);
+            xsyslog_ev(LOG_DEBUG, "jmap.guidsearch.index.too_old",
+                       lf_d("search.min_index_version",
+                            need_xapian_index_version));
             r = IMAP_SEARCH_NOT_SUPPORTED;
             goto done;
         }
@@ -5271,7 +5281,7 @@ static int emailquery_guidsearch(jmap_req_t *req,
     qr->partid = NULL;
 
     if (q->want_partids) {
-        xsyslog(LOG_ERR, "guidsearch does not support partid search", NULL);
+        xsyslog_ev(LOG_ERR, "jmap.guidsearch.partid.unsupported");
     }
 
     guidsearch_query_fini(&gsq);
@@ -7962,7 +7972,8 @@ static int jmap_thread_get(jmap_req_t *req)
     /* Find threads */
     int r = _thread_get(req, get.ids, get.list, get.not_found);
     if (r) {
-        syslog(LOG_ERR, "jmap: Thread/get: %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.thread.get.failed", lf_jmapreq(req),
+                   lf_err("error", r));
         jmap_error(req, jmap_server_error(r));
         goto done;
     }
@@ -8116,9 +8127,8 @@ static int _email_keywords_add_msgrecord(struct email_keywords *keywords,
 
     int read_seendb = !mailbox_internal_seen(mbox, keywords->userid);
     if (read_seendb && !keywords->seendb) {
-        xsyslog(LOG_ERR, "mailbox requires seen.db but no database found",
-                "userid=<%s> mailbox_uniqueid=<%s> mailbox_name=<%s>",
-                keywords->userid, mailbox_uniqueid(mbox), mailbox_name(mbox));
+        xsyslog_ev(LOG_ERR, "jmap.seen.db.missing",
+                   lf_s("u.username", keywords->userid), lf_mailbox(mbox));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -8156,8 +8166,9 @@ static int _email_keywords_add_msgrecord(struct email_keywords *keywords,
                 seen_freedata(&sd);
             }
             else {
-                syslog(LOG_ERR, "Could not read seen state for %s (%s)",
-                        keywords->userid, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.seen.read.failed",
+                           lf_s("u.username", keywords->userid),
+                           lf_mailbox(mbox), lf_err("error", r));
             }
         }
 
@@ -9958,7 +9969,9 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
                                            _warmup_mboxcache_cb, &rock);
         if (r) {
             /* Ignore errors, they'll be handled in email_find */
-            syslog(LOG_WARNING, "__warmup_mboxcache_cb(%s): %s", email_id, error_message(r));
+            xsyslog_ev(LOG_WARNING, "jmap.email.mboxcache.warmup.failed",
+                       lf_jmapreq(req), lf_s("msg.emailid", email_id),
+                       lf_err("error", r));
             continue;
         }
     }
@@ -10163,7 +10176,10 @@ static int jmap_email_parse(jmap_req_t *req)
         if (inmem) {
             r = _email_from_buf(req, &getargs, inmem, NULL, &email);
             if (r) {
-                syslog(LOG_ERR, "jmap: Email/parse(%s): %s", blobid, error_message(r));
+                /* notParsable is an ordinary answer to Email/parse */
+                xsyslog_ev(LOG_WARNING, "jmap.email.parse.failed",
+                           lf_jmapreq(req), lf_s("jmap.blobid", blobid),
+                           lf_err("error", r));
             }
             if (email) {
                 json_object_set_new(parse.parsed, blobid, email);
@@ -10193,7 +10209,9 @@ static int jmap_email_parse(jmap_req_t *req)
             }
             buf_free(&msg_buf);
             if (r) {
-                syslog(LOG_ERR, "jmap: Email/parse(%s): %s", blobid, error_message(r));
+                xsyslog_ev(LOG_WARNING, "jmap.email.parse.failed",
+                           lf_jmapreq(req), lf_s("jmap.blobid", blobid),
+                           lf_err("error", r));
             }
         }
         else if (part) {
@@ -10538,7 +10556,8 @@ static void _email_append(jmap_req_t *req,
     if (!mboxname) mboxname = last;
     if (!mboxname) {
         char *s = json_dumps(mailboxids, 0);
-        syslog(LOG_ERR, "_email_append: invalid mailboxids: %s", s);
+        xsyslog_ev(LOG_ERR, "jmap.email.append.mailboxids.invalid",
+                   lf_jmapreq(req), lf_s("jmap.mailboxids", s));
         free(s);
         r = IMAP_INTERNAL;
         goto done;
@@ -10550,7 +10569,8 @@ static void _email_append(jmap_req_t *req,
 
     if (sourcefile) {
         if (!(f = append_newstage_full(mailbox_name(mbox), internaldate->tv_sec, 0, &stage, sourcefile))) {
-            syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mbox));
+            xsyslog_ev(LOG_ERR, "jmap.email.stage.failed", lf_jmapreq(req),
+                       lf_mailbox(mbox), lf_s("sys.path", sourcefile));
             r = HTTP_SERVER_ERROR;
             goto done;
         }
@@ -10558,7 +10578,8 @@ static void _email_append(jmap_req_t *req,
     else {
         /* Write the message to the filesystem */
         if (!(f = append_newstage(mailbox_name(mbox), internaldate->tv_sec, 0, &stage))) {
-            syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mbox));
+            xsyslog_ev(LOG_ERR, "jmap.email.stage.failed", lf_jmapreq(req),
+                       lf_mailbox(mbox));
             r = HTTP_SERVER_ERROR;
             goto done;
         }
@@ -11288,7 +11309,8 @@ static void _headers_parseprops(json_t *jobject,
                 cb = _header_from_urls;
                 break;
             default:
-                syslog(LOG_ERR, "jmap: unknown header form: %d", hprop->form);
+                xsyslog_ev(LOG_ERR, "jmap.email.header.form.unknown",
+                           lf_d("jmap.header.form", hprop->form));
                 jmap_parser_invalid(parser, field);
         }
         if (!jval || jval == json_null()) {
@@ -12419,9 +12441,10 @@ static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
         src_len = buf_len(&blob.blob);
         src_encoding = encoding_lookupname(buf_cstring(&blob.encoding));
         if (src_encoding == ENCODING_UNKNOWN) {
-            xsyslog(LOG_ERR, "blob has unknown encoding",
-                    "blob_id=<%s> encoding=<%s>", part->blob_id,
-                    buf_cstring(&blob.encoding));
+            /* the client named the blob; missingBlobs is its answer */
+            xsyslog_ev(LOG_WARNING, "jmap.email.blob.encoding.unknown",
+                       lf_jmapreq(req), lf_s("jmap.blobid", part->blob_id),
+                       lf_buf("part.encoding", &blob.encoding));
             json_array_append_new(missing_blobs, json_string(part->blob_id));
             goto done;
         }
@@ -12433,10 +12456,9 @@ static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
     }
 
     if (src_encoding == ENCODING_UNKNOWN || !src_body) {
-        xsyslog(LOG_ERR, "could not load body",
-                "blob_id=<%s> part_id=<%s>",
-                part->blob_id ? part->blob_id : "null",
-                part->part_id ? part->part_id : "null");
+        xsyslog_ev(LOG_WARNING, "jmap.email.body.unloadable",
+                   lf_jmapreq(req), lf_s_opt("jmap.blobid", part->blob_id),
+                   lf_s_opt("part.id", part->part_id));
         jmap_parser_invalid(parser, NULL);
         goto done;
     }
@@ -12583,10 +12605,9 @@ static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
         dst_encoding = encoding_lookupname(content_transfer_encoding);
 
     if (dst_encoding == ENCODING_UNKNOWN) {
-        xsyslog(LOG_ERR, "could not determine transfer encoding",
-                "blob_id=<%s> part_id=<%s>",
-                part->blob_id ? part->blob_id : "null",
-                part->part_id ? part->part_id : "null");
+        xsyslog_ev(LOG_WARNING, "jmap.email.encoding.undetermined",
+                   lf_jmapreq(req), lf_s_opt("jmap.blobid", part->blob_id),
+                   lf_s_opt("part.id", part->part_id));
         jmap_parser_invalid(parser, NULL);
         goto done;
     }
@@ -12901,7 +12922,10 @@ static void _email_create(jmap_req_t *req,
 
 done:
     if (r && *set_err == NULL) {
-        syslog(LOG_ERR, "jmap: email_create: %s", error_message(r));
+        /* over quota is the user's state, and overQuota is its answer */
+        xsyslog_ev(r == IMAP_QUOTA_EXCEEDED ? LOG_WARNING : LOG_ERR,
+                   "jmap.email.create.failed", lf_jmapreq(req),
+                   lf_err("error", r));
         if (r == IMAP_QUOTA_EXCEEDED)
             *set_err = json_pack("{s:s}", "type", "overQuota");
         else
@@ -13941,8 +13965,8 @@ static int _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarr
         int r = seen_open(bulk->req->userid, SEEN_CREATE, &bulk->seendb);
         if (r) {
             /* There's something terribly wrong. Abort all updates. */
-            syslog(LOG_ERR, "_email_bulkupdate_plan_keywords: can't open seen.db: %s",
-                            error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.seen.db.open.failed",
+                       lf_jmapreq(bulk->req), lf_err("error", r));
             return r;
         }
     }
@@ -16085,9 +16109,10 @@ static int jmap_email_copy(jmap_req_t *req)
 
     int r = conversations_open_user(copy.from_account_id, 0, &from_cstate);
     if (r) {
-        xsyslog(LOG_ERR, "can't open conversations",
-                "fromAccountId=<%s> error=<%s>",
-                copy.from_account_id, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.email.copy.conversations.open.failed",
+                   lf_jmapreq(req),
+                   lf_s("jmap.from.accountid", copy.from_account_id),
+                   lf_err("error", r));
         jmap_error(req, jmap_server_error(r));
         goto done;
     }
