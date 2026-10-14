@@ -1249,7 +1249,10 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
                     xzfree(groupname);
                 }
                 free(groupname);
-                groupname = xstrdup(mailbox);
+                groupname = decode_and_normalize_mimeheader(addr->mailbox);
+                if (!groupname) {
+                    groupname = xstrdup(mailbox);
+                }
             }
         }
         else if (!name && !mailbox) {

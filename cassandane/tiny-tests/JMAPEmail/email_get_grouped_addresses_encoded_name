@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_grouped_addresses_encoded_name
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    $self->make_message("foo",
+        extra_headers => [
+            [ 'X-To' => '=?UTF-8?B?R3LDvHBwZQ==?=: ann@example.com;' ],
+        ],
+    ) or die;
+    my $id = $jmap->request([[ 'Email/query', {} ]])
+                  ->single_sentence('Email/query')->arguments->{ids}[0];
+
+    # RFC 8621 4.1.2.4: encoded words in a group name are decoded
+    my $email = $jmap->request([[ 'Email/get', {
+        ids => [ $id ],
+        properties => [ 'header:X-To:asGroupedAddresses' ],
+    } ]])->single_sentence('Email/get')->arguments->{list}[0];
+
+    $self->assert_cmp_deeply([ {
+        name => "Gr\N{U+00FC}ppe",
+        addresses => [ { name => undef, email => 'ann@example.com' } ],
+    } ], $email->{'header:X-To:asGroupedAddresses'});
+}
