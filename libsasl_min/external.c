@@ -44,16 +44,14 @@
  */
 
 #include <config.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <limits.h>
-#include <ctype.h>
-#include <string.h>
-#include <sasl.h>
-#include <saslplug.h>
-#include "saslint.h"
 
-#include "../common/plugin_common.h"
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslplug.h"
+#include "libsasl_min/saslint.h"
+
+#include "libsasl_min/plugin_common.h"
+
+#include <string.h>
 
 /*****************************  Common Section  *****************************/
 
@@ -200,11 +198,11 @@ static sasl_server_plug_t external_server_plugins[] = {
     }
 };
 
-int external_server_plug_init(const sasl_utils_t *utils,
-                              int max_version,
-                              int *out_version,
-                              sasl_server_plug_t **pluglist,
-                              int *plugcount)
+EXPORTED int external_server_plug_init(const sasl_utils_t *utils,
+                                       int max_version,
+                                       int *out_version,
+                                       sasl_server_plug_t **pluglist,
+                                       int *plugcount)
 {
     if (!out_version || !pluglist || !plugcount) {
         return SASL_BADPARAM;
@@ -422,11 +420,11 @@ static sasl_client_plug_t external_client_plugins[] = {
     }
 };
 
-int external_client_plug_init(const sasl_utils_t *utils,
-                              int max_version,
-                              int *out_version,
-                              sasl_client_plug_t **pluglist,
-                              int *plugcount)
+EXPORTED int external_client_plug_init(const sasl_utils_t *utils,
+                                       int max_version,
+                                       int *out_version,
+                                       sasl_client_plug_t **pluglist,
+                                       int *plugcount)
 {
     if (!utils || !out_version || !pluglist || !plugcount) {
         return SASL_BADPARAM;
