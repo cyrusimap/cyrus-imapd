@@ -9440,6 +9440,24 @@ static json_t * _email_get_bodyvalue(struct body *part,
             &is_encoding_problem);
     if (!raw) goto done;
 
+    /* An unknown charset falls back to us-ascii in the body structure,
+     * while a known one is recorded as named in the charset parameter */
+    for (const struct param *param = part->params; param; param = param->next) {
+        if (!strcasecmpsafe(param->attribute, "charset") && param->value
+            && *param->value)
+        {
+            if (!strcasecmpsafe(param->value, part->charset_id)) {
+                break;
+            }
+            charset_t cs = charset_lookupname(param->value);
+            if (cs == CHARSET_UNKNOWN_CHARSET) {
+                is_encoding_problem = 1;
+            }
+            charset_free(&cs);
+            break;
+        }
+    }
+
     /* In-place remove CR characters from buffer */
     size_t i, j, rawlen = strlen(raw);
     for (i = 0, j = 0; j < rawlen; j++) {

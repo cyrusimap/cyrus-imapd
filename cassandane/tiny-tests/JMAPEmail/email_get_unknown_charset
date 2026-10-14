@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_unknown_charset
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $imap = $self->{store}->get_client();
+
+    my $raw = <<'EOF';
+From: sender@example.com
+Subject: charset
+Date: Mon, 13 Apr 2026 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=b
+
+--b
+Content-Type: text/plain; charset=us-ascii
+
+good
+--b
+Content-Type: text/plain; charset=x-jmts-unknown
+
+unknown charset
+--b--
+EOF
+    $raw =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $raw) || die $@;
+
+    my $id = $jmap->request([[ 'Email/query', {} ]])
+                  ->single_sentence('Email/query')->arguments->{ids}[0];
+
+    # RFC 8621 4.1.4: an unknown charset is an encoding problem
+    my $email = $jmap->request([[ 'Email/get', {
+        ids => [ $id ],
+        properties => [ 'bodyValues' ],
+        fetchAllBodyValues => JSON::true,
+    } ]])->single_sentence('Email/get')->arguments->{list}[0];
+
+    $self->assert_cmp_deeply({
+        1 => superhashof({ value => "good",
+                           isEncodingProblem => JSON::false }),
+        2 => superhashof({ isEncodingProblem => JSON::true }),
+    }, $email->{bodyValues});
+}
