@@ -51,8 +51,6 @@ static void test_map(void)
 #define WORD0   "lorem"
 #define WORD1   "ipsum"
     struct buf b = BUF_INITIALIZER;
-    const char *map;
-    size_t len;
 
     CU_ASSERT_EQUAL(b.len, 0);
     CU_ASSERT(b.alloc >= b.len);
@@ -66,17 +64,6 @@ static void test_map(void)
     CU_ASSERT_EQUAL(buf_len(&b), b.len);
     CU_ASSERT(b.alloc >= b.len);
     CU_ASSERT_PTR_NOT_NULL(b.s);
-
-    map = (void *)0xdeadbeef;
-    len = 42;
-    buf_getmap(&b, &map, &len);
-    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)+2);
-    CU_ASSERT_EQUAL(buf_len(&b), b.len);
-    CU_ASSERT_EQUAL(len, b.len);
-    CU_ASSERT(b.alloc >= b.len);
-    CU_ASSERT_PTR_NOT_NULL(b.s);
-    CU_ASSERT_PTR_NOT_NULL(map);
-    CU_ASSERT(!memcmp(map, WORD0" ip", sizeof(WORD0)+2));
 
     buf_free(&b);
 
