@@ -1515,6 +1515,8 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query = JMAP_QUERYCHANGES_INITIALIZER;
     mboxquery_args_t args = { 0, 0 };
+    mboxquery_t *mbquery = NULL;
+    hash_table removed = HASH_TABLE_INITIALIZER;
     int r = 0;
 
     /* Parse arguments */
@@ -1541,7 +1543,7 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
     }
 
     /* Prepare query */
-    mboxquery_t *mbquery = _mboxquery_new(req, query.filter, query.sort);
+    mbquery = _mboxquery_new(req, query.filter, query.sort);
     if (!_mboxquery_can_calculate_changes(mbquery)) {
         jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
         goto done;
@@ -1555,7 +1557,6 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
     if (r) goto done;
 
     modseq_t highestmodseq = sincemodseq;
-    hash_table removed = HASH_TABLE_INITIALIZER;
     construct_hash_table(&removed, mbquery->result.count + 1, 0);
     if (mbquery->need_role) {
         /* The filter includes a condition on role (or hasAnyRole).
@@ -1608,8 +1609,6 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
         json_array_append_new(query.removed, json_string(hash_iter_key(iter)));
     }
     hash_iter_free(&iter);
-    free_hash_table(&removed, NULL);
-    _mboxquery_free(&mbquery);
 
     /* Build response */
     query.new_querystate = jmap_state_string(req, highestmodseq, MBTYPE_EMAIL, 0);
@@ -1619,6 +1618,10 @@ done:
     if (r) {
         jmap_error(req, jmap_server_error(r));
     }
+    if (mbquery) {
+        _mboxquery_free(&mbquery);
+    }
+    free_hash_table(&removed, NULL);
     jmap_querychanges_fini(&query);
     jmap_parser_fini(&parser);
     return 0;
