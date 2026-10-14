@@ -2067,8 +2067,9 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                     jmap_set_validate_props(req, id, val, valid_props, &err);
             }
 
-            // TODO We could report the following set errors here:
-            // - invalidPatch
+            if (!err && jmap_patch_has_prefix_overlap(val)) {
+                err = json_pack("{s:s}", "type", "invalidPatch");
+            }
 
             if (err)
                 json_object_set_new(set->not_updated, id, err);
