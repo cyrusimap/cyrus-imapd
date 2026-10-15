@@ -43,31 +43,16 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef _PLUGIN_COMMON_H_
-#define _PLUGIN_COMMON_H_
+#ifndef LIBSASL_MIN_PLUGIN_COMMON_H
+#define LIBSASL_MIN_PLUGIN_COMMON_H
 
 #include <config.h>
 
-#ifndef macintosh
-# ifdef WIN32
-#  include <winsock2.h>
-# else
-#  include <sys/socket.h>
-#  include <netinet/in.h>
-#  include <arpa/inet.h>
-#  include <netdb.h>
-# endif /* WIN32 */
-#endif  /* macintosh */
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
+#include "libsasl_min/saslplug.h"
 
-#include <sasl.h>
-#include <saslutil.h>
-#include <saslplug.h>
-
-#ifdef WIN32
-# define PLUG_API __declspec(dllexport)
-#else
-# define PLUG_API extern
-#endif
+#define PLUG_API extern
 
 #define SASL_CLIENT_PLUG_INIT(x)                                               \
     extern sasl_client_plug_init_t x##_client_plug_init;                       \
@@ -149,7 +134,7 @@
                        __LINE__)
 #endif
 
-#ifndef SASLINT_H
+#ifndef LIBSASL_MIN_SASLINT_H
 typedef struct buffer_info
 {
     char *data;
@@ -157,14 +142,7 @@ typedef struct buffer_info
     unsigned reallen; /* total length of buffer (>= curlen) */
 } buffer_info_t;
 
-# ifndef HAVE_GETHOSTNAME
-#  ifdef sun
-/* gotta define gethostname ourselves on suns */
-extern int gethostname(char *, int);
-#  endif
-# endif /* HAVE_GETHOSTNAME */
-
-#endif /* SASLINT_H */
+#endif /* LIBSASL_MIN_SASLINT_H */
 
 #ifdef __cplusplus
 extern "C" {
@@ -274,17 +252,11 @@ int _plug_make_fulluser(const sasl_utils_t *utils,
                         const char *useronly,
                         const char *realm);
 
-char *_plug_get_error_message(const sasl_utils_t *utils,
-#ifdef WIN32
-                              DWORD error
-#else
-                              int error
-#endif
-);
+char *_plug_get_error_message(const sasl_utils_t *utils, int error);
 void _plug_snprintf_os_info(char *osbuf, int osbuf_len);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* _PLUGIN_COMMON_H_ */
+#endif /* LIBSASL_MIN_PLUGIN_COMMON_H */
