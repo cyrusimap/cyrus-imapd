@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_set_update_readonly
+    :JMAPExtensions :NoAltNamespace
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => { "B" => { data => [{ 'data:asText' => "keep;" }] } },
+        }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => { name => 'active', blobId => '#B' },
+                "2" => { name => 'inactive', blobId => '#B' },
+            },
+            onSuccessActivateScript => '#1',
+        }, "R1"],
+    ]);
+    my $id1 = $res->[1][1]{created}{"1"}{id};
+    my $id2 = $res->[1][1]{created}{"2"}{id};
+    $self->assert_not_null($id1);
+    $self->assert_not_null($id2);
+
+    my $get = sub {
+        my $res = $jmap->CallMethods([['SieveScript/get', {
+            ids => [ $id1, $id2 ],
+        }, "R1"]]);
+        return { map { $_->{id} => $_ } $res->[0][1]{list}->@* };
+    };
+    my $orig = $get->();
+    $self->assert_equals(JSON::true, $orig->{$id1}{isActive});
+    $self->assert_equals(JSON::false, $orig->{$id2}{isActive});
+
+    # RFC 9661 2.1: isActive is server-set, changed only by
+    # onSuccessActivateScript and onSuccessDeactivateScript
+    for my $update (
+        { $id1 => { isActive => JSON::false } },
+        { $id2 => { isActive => JSON::true } },
+        { $id2 => { isActive => 'yes' } },
+        { $id2 => { 'isActive/x' => JSON::true } },
+    ) {
+        my ($id) = keys %$update;
+        $res = $jmap->CallMethods([
+            ['SieveScript/set', { update => $update }, "R1"],
+        ]);
+        $self->assert_cmp_deeply(
+            { $id => { type => 'invalidProperties', properties => [ 'isActive' ] } },
+            $res->[0][1]{notUpdated},
+        );
+        $self->assert_cmp_deeply($orig, $get->());
+    }
+
+    # RFC 8620 5.3: it may be sent unchanged
+    $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => { "C" => { data => [{ 'data:asText' => "discard;" }] } },
+        }, "R0"],
+        ['SieveScript/set', {
+            update => {
+                $id1 => { isActive => JSON::true },
+                $id2 => { isActive => JSON::false, blobId => '#C' },
+            },
+        }, "R1"],
+    ]);
+    $self->assert_cmp_deeply(
+        { $id1 => undef, $id2 => { blobId => ignore() } },
+        $res->[1][1]{updated},
+    );
+    $self->assert_str_not_equals($orig->{$id2}{blobId},
+                                 $get->()->{$id2}{blobId});
+
+    # ... including the whole object as SieveScript/get returns it
+    my $cur = $get->();
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', { update => $cur }, "R1"],
+    ]);
+    $self->assert_cmp_deeply(
+        bag($id1, $id2),
+        [ keys $res->[0][1]{updated}->%* ],
+    );
+    $self->assert_cmp_deeply($cur, $get->());
+}
