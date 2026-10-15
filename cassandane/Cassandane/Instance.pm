@@ -3378,7 +3378,7 @@ sub _new_jmaptester_for_user($self, $tester_class, $tester_arg, $user, $new_arg 
     my %overrides;
     if ($new_arg) {
         %overrides  = ref $new_arg eq 'HASH'  ? %$new_arg
-                    : ref $new_arg eq 'ARRAY' ? (using => $new_arg)
+                    : ref $new_arg eq 'ARRAY' ? (default_using => $new_arg)
                     : Carp::confess("expected hash or array reference to ->new_jmaptester, got neither");
     }
 
