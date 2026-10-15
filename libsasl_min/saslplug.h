@@ -8,7 +8,6 @@
 # include <sasl/saslplug.h>
 #else
 
-# include "md5.h"
 # include "libsasl_min/prop.h"
 
 # ifdef __cplusplus
@@ -65,6 +64,8 @@ typedef struct sasl_utils
     sasl_mutex_unlock_t *mutex_unlock;
     sasl_mutex_free_t *mutex_free;
 
+#if 0
+    /* XXX cyrus-imapd uses the md5/hmac functions from openssl */
     /* MD5 hash and HMAC functions */
     void (*MD5Init)(MD5_CTX *);
     void (*MD5Update)(MD5_CTX *, const unsigned char *text, unsigned int len);
@@ -81,6 +82,7 @@ typedef struct sasl_utils
                              const unsigned char *key,
                              int len);
     void (*hmac_md5_import)(HMAC_MD5_CTX *, HMAC_MD5_STATE *);
+#endif
 
     /* mechanism utility functions (same as above): */
     int (*mkchal)(sasl_conn_t *conn,
