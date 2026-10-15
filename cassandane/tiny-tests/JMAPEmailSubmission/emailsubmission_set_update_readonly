@@ -1,0 +1,99 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_set_update_readonly
+    :needs_component_calalarmd
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my @using = (
+        @{ $self->jmap_default_using },
+        'https://cyrusimap.org/ns/jmap/mail',
+    );
+    my $call = sub ($method, $args) {
+        $jmap->request({ using => \@using, methodCalls => [[ $method, $args, 'R1' ]] })
+             ->single_sentence($method)->arguments;
+    };
+
+    my $identityid = $call->('Identity/get', {})->{list}[0]{id};
+    $self->make_message("foo", body => "an email") or die;
+    my $emailid = $call->('Email/query', {})->{ids}[0];
+
+    my $id = $call->('EmailSubmission/set', {
+        create => {
+            1 => {
+                identityId => $identityid,
+                emailId    => $emailid,
+                envelope   => {
+                    mailFrom => {
+                        email      => 'from@localhost',
+                        parameters => { holdfor => '30' },
+                    },
+                    rcptTo => [ { email => 'rcpt1@localhost' } ],
+                },
+            },
+        },
+    })->{created}{1}{id};
+    $self->assert_not_null($id);
+
+    my $get = sub {
+        $call->('EmailSubmission/get', { ids => [ $id ] })->{list}[0];
+    };
+    my $orig = $get->();
+    $self->assert_str_equals('pending', $orig->{undoStatus});
+
+    my $set = sub ($patch) {
+        $call->('EmailSubmission/set', { update => { $id => $patch } });
+    };
+
+    # RFC 8620 5.3: immutable and server-set values must not change
+    for my $patch (
+        { identityId => 'nosuchidentity' },
+        { emailId    => 'Mnosuchemail' },
+        { threadId   => 'Tnosuchthread' },
+        { envelope   => {
+            mailFrom => { email => 'other@localhost', parameters => undef },
+            rcptTo   => [ { email => 'rcpt1@localhost', parameters => undef } ],
+        } },
+        { 'envelope/mailFrom/email' => 'other@localhost' },
+        { sendAt     => '2021-01-02T03:04:05Z' },
+        { created    => '2021-01-02T03:04:05Z' },
+        { onSend     => { moveToMailboxId => 'Mnosuchmailbox' } },
+        { deliveryStatus => { 'rcpt1@localhost' => {
+            smtpReply => '250 2.0.0 OK',
+            delivered => 'yes',
+            displayed => 'unknown',
+        } } },
+        { dsnBlobIds => [ 'Gnotablob' ] },
+        { mdnBlobIds => [ 'Gnotablob' ] },
+        { undoStatus => 'final' },
+    ) {
+        my ($prop) = map { s{/.*}{}r } keys %$patch;
+        $self->assert_cmp_deeply(
+            { $id => { type => 'invalidProperties', properties => [ $prop ] } },
+            $set->($patch)->{notUpdated},
+            "patch $prop",
+        );
+        $self->assert_cmp_deeply($orig, $get->(), "unchanged after $prop");
+    }
+
+    # ... but may be sent unchanged, as EmailSubmission/get returns them
+    my $res = $set->($orig);
+    $self->assert_cmp_deeply({ $id => ignore() }, $res->{updated});
+    $self->assert_cmp_deeply($orig, $get->());
+
+    # RFC 8621 7.5: undoStatus may change from pending to canceled
+    $res = $set->({ %$orig, undoStatus => 'canceled' });
+    $self->assert_cmp_deeply({ $id => ignore() }, $res->{updated});
+    my $canceled = $get->();
+    $self->assert_cmp_deeply({ %$orig, undoStatus => 'canceled' }, $canceled);
+
+    $res = $set->($canceled);
+    $self->assert_cmp_deeply({ $id => ignore() }, $res->{updated});
+
+    $self->assert_cmp_deeply(
+        { $id => { type => 'invalidProperties', properties => [ 'undoStatus' ] } },
+        $set->({ undoStatus => 'pending' })->{notUpdated},
+    );
+    $self->assert_cmp_deeply($canceled, $get->());
+}
