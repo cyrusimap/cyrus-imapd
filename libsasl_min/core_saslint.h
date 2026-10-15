@@ -2,22 +2,18 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
-#ifndef SASLINT_H
-#define SASLINT_H
+#ifndef LIBSASL_MIN_SASLINT_H
+#define LIBSASL_MIN_SASLINT_H
 
 #include <config.h>
-#include "sasl.h"
-#include "saslplug.h"
-#include "saslutil.h"
-#include "prop.h"
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslplug.h"
+#include "libsasl_min/saslutil.h"
+#include "libsasl_min/prop.h"
 
 #ifndef INLINE
-# if defined(WIN32)
-/* Visual Studio: "inline" keyword is not available in C, only in C++ */
-#  define INLINE __inline
-# else
-#  define INLINE inline
-# endif
+# define INLINE inline
 #endif
 
 /* #define'd constants */
@@ -68,26 +64,18 @@
     }
 
 #ifndef PATH_MAX
-# ifdef WIN32
-#  define PATH_MAX MAX_PATH
+# ifdef _POSIX_PATH_MAX
+#  define PATH_MAX _POSIX_PATH_MAX
 # else
-#  ifdef _POSIX_PATH_MAX
-#   define PATH_MAX _POSIX_PATH_MAX
-#  else
-#   define PATH_MAX                                                            \
-       1024 /* arbitrary; probably big enough.                                 \
-             * will probably only be 256+64 on                                 \
-             * pre-posix machines */
-#  endif    /* _POSIX_PATH_MAX */
-# endif     /* WIN32 */
+#  define PATH_MAX                                                             \
+      1024 /* arbitrary; probably big enough.                                  \
+            * will probably only be 256+64 on                                  \
+            * pre-posix machines */
+# endif    /* _POSIX_PATH_MAX */
 #endif
 
 /* : Define directory delimiter in SASL_PATH/SASL_CONF_PATH variables */
-#ifdef WIN32
-# define PATHS_DELIMITER ';'
-#else
-# define PATHS_DELIMITER ':'
-#endif
+#define PATHS_DELIMITER ':'
 
 /* A FQDN max len is 255 per RFC 1035,
  * this means 253 chars max, we add one more for zero terminator */
@@ -281,7 +269,7 @@ typedef int sasl_plaintext_verifier(sasl_conn_t *conn,
 
 struct sasl_verify_password_s
 {
-    char *name;
+    const char *name;
     sasl_plaintext_verifier *verify;
 };
 
@@ -359,7 +347,7 @@ extern int _sasl_get_plugin(const char *file,
 extern int _sasl_locate_entry(void *library,
                               const char *entryname,
                               void **entry_point);
-extern int _sasl_done_with_plugins();
+extern int _sasl_done_with_plugins(void);
 
 /*
  * common.c
@@ -466,13 +454,11 @@ sasl_string_list_t *_sasl_server_mechs(void);
 extern const char *sasl_config_getstring(const char *key, const char *def);
 
 /* checkpw.c */
-#ifdef DO_SASL_CHECKAPOP
 extern int _sasl_auxprop_verify_apop(sasl_conn_t *conn,
                                      const char *userstr,
                                      const char *challenge,
                                      const char *response,
                                      const char *user_realm);
-#endif /* DO_SASL_CHECKAPOP */
 
 /* Auxprop Plugin (sasldb.c) */
 extern int sasldb_auxprop_plug_init(const sasl_utils_t *utils,
@@ -494,7 +480,7 @@ extern int _sasl_auxprop_lookup(sasl_server_params_t *sparams,
 /*
  * canonusr.c
  */
-void _sasl_canonuser_free();
+void _sasl_canonuser_free(void);
 extern int internal_canonuser_init(const sasl_utils_t *utils,
                                    int max_version,
                                    int *out_version,
@@ -514,18 +500,6 @@ int _sasl_canon_user_lookup(sasl_conn_t *conn,
 /*
  * saslutil.c
  */
-int get_fqhostname(char *name, int namelen, int abort_if_no_fqdn);
+int get_fqhostname(char *name, unsigned namelen, int abort_if_no_fqdn);
 
-#ifndef HAVE_GETHOSTNAME
-# ifdef sun
-/* gotta define gethostname ourselves on suns */
-extern int gethostname(char *, int);
-# endif
-#endif /* HAVE_GETHOSTNAME */
-
-#ifdef WIN32
-char *_sasl_wchar_to_utf8(WCHAR *str);
-WCHAR *_sasl_utf8_to_wchar(const char *str);
-#endif
-
-#endif /* SASLINT_H */
+#endif /* LIBSASL_MIN_SASLINT_H */
