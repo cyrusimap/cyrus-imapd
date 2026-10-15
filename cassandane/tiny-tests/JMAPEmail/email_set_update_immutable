@@ -10,7 +10,7 @@ sub test_email_set_update_immutable
     my $id = $jmap->request([[ 'Email/query', {} ]])
                   ->single_sentence('Email/query')->arguments->{ids}[0];
 
-    my @props = qw( blobId threadId subject from receivedAt header:Subject );
+    my @props = qw( blobId threadId size subject from receivedAt header:Subject );
     my $get = sub (@props) {
         $jmap->request([[ 'Email/get', {
             ids => [ $id ],
@@ -25,6 +25,7 @@ sub test_email_set_update_immutable
         { from             => [ { name => 'X', email => 'x@example.com' } ] },
         { receivedAt       => '2021-01-02T03:04:05Z' },
         { blobId           => 'Gnotablob' },
+        { size             => 1 },
         { 'header:Subject' => ' changed' },
         { 'subject/x'      => 'changed' },
     ) {

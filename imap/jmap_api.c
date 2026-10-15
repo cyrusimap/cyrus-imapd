@@ -1804,8 +1804,11 @@ HIDDEN json_t *jmap_get_reply(struct jmap_get *get)
 
 /* Foo/set */
 
-static bool jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *jobj,
+static bool jmap_set_validate_props(jmap_req_t *req,
+                                    const char *id,
+                                    json_t *jobj,
                                     const jmap_property_set_t *valid_props,
+                                    json_t **readonly,
                                     json_t **err)
 {
     json_t *invalid = json_array();
@@ -1846,11 +1849,18 @@ static bool jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
                 /* can NEVER change id */
                 json_array_append_new(invalid, json_string(path));
             }
-            else if (prop->flags & JMAP_PROP_EXTERNAL) {
+            else if ((prop->flags
+                      & (JMAP_PROP_IMMUTABLE | JMAP_PROP_SERVER_SET))
+                     && strcmp("id", prop->name))
+            {
+                if (!*readonly) {
+                    *readonly = json_object();
+                }
+                json_object_set(*readonly, path, jval);
+            }
+            if (prop->flags & JMAP_PROP_EXTERNAL) {
                 update_external = true;
             }
-            /* XXX could check IMMUTABLE and SERVER_SET here, but we can't
-             * reject such properties if they match the current value */
         }
         else {
             /* create */
@@ -1938,6 +1948,7 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
     set->update = json_object();
     set->destroy = json_array();
     set->update_external = json_object();
+    set->update_readonly = json_object();
     set->created = json_object();
     set->updated = json_object();
     set->destroyed = json_array();
@@ -2048,6 +2059,7 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
     if (update) {
         json_object_foreach(update, id, val) {
             json_t *err = NULL;
+            json_t *readonly = NULL;
             bool update_external = false;
 
             if (!json_is_object(val)) {
@@ -2062,21 +2074,30 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
             }
             else if (valid_props) {
                 /* Make sure no property is set without its capability */
-                update_external =
-                    jmap_set_validate_props(req, id, val, valid_props, &err);
+                update_external = jmap_set_validate_props(req,
+                                                          id,
+                                                          val,
+                                                          valid_props,
+                                                          &readonly,
+                                                          &err);
             }
 
             // TODO We could report the following set errors here:
             // - invalidPatch
 
-            if (err)
+            if (err) {
                 json_object_set_new(set->not_updated, id, err);
+                json_decref(readonly);
+            }
             else {
                 json_object_set(set->update, id, val);
 
                 /* Record whether this update has externally-stored props */
                 json_object_set(set->update_external, id,
                                 json_boolean(update_external));
+                if (readonly) {
+                    json_object_set_new(set->update_readonly, id, readonly);
+                }
             }
         }
     }
@@ -2094,7 +2115,12 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
 
             if (valid_props) {
                 /* Make sure no property is set without its capability */
-                jmap_set_validate_props(req, NULL, val, valid_props, &err);
+                jmap_set_validate_props(req,
+                                        NULL,
+                                        val,
+                                        valid_props,
+                                        NULL,
+                                        &err);
             }
 
             if (err)
@@ -2112,6 +2138,71 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
     }
 }
 
+HIDDEN json_t *jmap_set_readonly(struct jmap_set *set, const char *id)
+{
+    return json_object_get(set->update_readonly, id);
+}
+
+static char *readonly_pname(const char *path)
+{
+    const char *slash = strchr(path, '/');
+    char *pname = slash ? jmap_pointer_decode(path, slash - path) : NULL;
+    return pname ? pname : xstrdup(path);
+}
+
+HIDDEN void jmap_set_readonly_props(json_t *readonly, hash_table *props)
+{
+    const char *path;
+    json_t *jval;
+
+    json_object_foreach (readonly, path, jval) {
+        char *pname = readonly_pname(path);
+        hash_insert(pname, (void *) 1, props);
+        free(pname);
+    }
+}
+
+HIDDEN json_t *jmap_set_check_readonly(json_t *readonly, json_t *current)
+{
+    json_t *invalid = json_array();
+    json_t *bad = json_array();
+    json_t *new = jmap_patchobject_apply(current, readonly, bad, 0);
+    const char *path;
+    json_t *jval;
+
+    json_object_foreach (readonly, path, jval) {
+        char *pname = readonly_pname(path);
+        if (new) {
+            json_t *was = json_object_get(current, pname);
+            json_t *now = json_object_get(new, pname);
+            if (!json_equal(was ? was : json_null(), now ? now : json_null())
+                && json_array_find(invalid, pname) < 0)
+            {
+                json_array_append_new(invalid, json_string(pname));
+            }
+        }
+        else if (json_array_find(bad, path) >= 0
+                 && json_array_find(invalid, pname) < 0)
+        {
+            json_array_append_new(invalid, json_string(pname));
+        }
+        free(pname);
+    }
+
+    json_decref(new);
+    json_decref(bad);
+
+    if (!json_array_size(invalid)) {
+        json_decref(invalid);
+        return NULL;
+    }
+
+    return json_pack("{s:s s:o}",
+                     "type",
+                     "invalidProperties",
+                     "properties",
+                     invalid);
+}
 
 HIDDEN void jmap_set_fini(struct jmap_set *set)
 {
@@ -2121,6 +2212,7 @@ HIDDEN void jmap_set_fini(struct jmap_set *set)
     json_decref(set->update);
     json_decref(set->destroy);
     json_decref(set->update_external);
+    json_decref(set->update_readonly);
     json_decref(set->created);
     json_decref(set->updated);
     json_decref(set->destroyed);
