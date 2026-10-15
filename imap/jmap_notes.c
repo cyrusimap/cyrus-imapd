@@ -175,8 +175,10 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
                                    1/*isadmin*/, accountid, httpd_authstate,
                                    0/*flags*/, NULL/*mailboxptr*/);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                   mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.note.collection.create.failed",
+                       lf_s("jmap.accountid", accountid),
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_err("error", r));
         }
         else {
             /* Add special-use flag */
@@ -189,8 +191,10 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
             free(userid);
             buf_reset(&buf);
             if (r) {
-                syslog(LOG_ERR, "failed to write annotation %s: %s",
-                       annot, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.note.annotation.write.failed",
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_s("annot.entry", annot),
+                           lf_err("error", r));
                 goto done;
             }
 
@@ -322,7 +326,8 @@ static void _notes_get_cb(const char *id, message_t *msg,
         json_array_append_new(get->list, note);
     }
     else {
-        syslog(LOG_ERR, "jmap: Notes/get(%s): %s", id, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.note.get.failed",
+                   lf_s("jmap.noteid", id), lf_err("error", r));
         json_array_append_new(get->not_found, json_string(id));
         json_decref(note);
     }
@@ -410,9 +415,8 @@ static int jmap_note_get(jmap_req_t *req)
             jmap_ok(req, jmap_get_reply(&get));
         }
         else {
-            syslog(LOG_ERR,
-                   "jmap_note_get: lookup_notes_collection(%s): %s",
-                   req->accountid, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.note.collection.lookup.failed",
+                       lf_jmapreq(req), lf_err("error", r));
         }
         goto done;
     }
@@ -532,7 +536,7 @@ static int _note_create(struct mailbox *mailbox, json_t *note,
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox_name(mailbox), now.tv_sec, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "jmap.note.stage.failed", lf_mailbox(mailbox));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -632,8 +636,8 @@ static int _note_create(struct mailbox *mailbox, json_t *note,
     r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate,
                           0, /*quota*/NULL, 0, 0, /*event*/0);
     if (r) {
-        syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.note.append.setup.failed",
+                   lf_mailbox(mailbox), lf_err("error", r));
         goto done;
     }
 
@@ -644,15 +648,15 @@ static int _note_create(struct mailbox *mailbox, json_t *note,
 
     if (r) {
         append_abort(&as);
-        syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.note.append.failed",
+                   lf_mailbox(mailbox), lf_err("error", r));
         goto done;
     }
 
     r = append_commit(&as);
     if (r) {
-        syslog(LOG_ERR, "append_commit(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.note.append.commit.failed",
+                   lf_mailbox(mailbox), lf_err("error", r));
         goto done;
     }
 
@@ -703,8 +707,8 @@ static void _notes_update_cb(const char *id, message_t *msg,
         r = _note_get(msg, note, NULL, 1/*want_created*/, srock->buf);
 
         if (r) {
-            syslog(LOG_ERR, "jmap: Notes/update(%s) fetch: %s",
-                   id, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.note.update.fetch.failed",
+                       lf_s("jmap.noteid", id), lf_err("error", r));
         }
         else {
           json_t *new_note = jmap_patchobject_apply(note, patch, NULL, 0);
@@ -716,8 +720,8 @@ static void _notes_update_cb(const char *id, message_t *msg,
             }
             else {
                 r = IMAP_INTERNAL;
-                syslog(LOG_ERR, "jmap: Notes/update(%s) patch: %s",
-                       id, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.note.update.patch.failed",
+                           lf_s("jmap.noteid", id), lf_err("error", r));
             }
         }
         json_decref(note);
@@ -815,9 +819,8 @@ static int jmap_note_set(jmap_req_t *req)
 
     r = ensure_notes_collection(req->accountid, &mbentry);
     if (r) {
-        syslog(LOG_ERR,
-               "jmap_note_set: ensure_notes_collection(%s): %s",
-               req->accountid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.note.collection.setup.failed",
+                   lf_jmapreq(req), lf_err("error", r));
         goto done;
     }
 
@@ -825,8 +828,10 @@ static int jmap_note_set(jmap_req_t *req)
 
     r = mailbox_open_iwl(mbentry->name, &mbox);
     if (r) {
-        syslog(LOG_ERR, "jmap_note_set: mailbox_open_iwl(%s): %s",
-               mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.note.collection.open.failed",
+                   lf_jmapreq(req),
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_err("error", r));
         mboxlist_entry_free(&mbentry);
         jmap_error(req, jmap_server_error(r));
         goto done;
@@ -957,9 +962,8 @@ static int jmap_note_changes(jmap_req_t *req)
             jmap_ok(req, jmap_changes_reply(&changes));
         }
         else {
-            syslog(LOG_ERR,
-                   "jmap_note_changes: lookup_submission_collection(%s): %s",
-                   req->accountid, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.note.collection.lookup.failed",
+                       lf_jmapreq(req), lf_err("error", r));
         }
         goto done;
     }
