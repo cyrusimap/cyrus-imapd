@@ -1371,8 +1371,23 @@ static bool _matchmime_eval_convkeyword(matchmime_query_t *q,
                 char threadid[JMAP_THREADID_SIZE];
 
                 jmap_set_threadid(convmatch->cstate, cid, threadid);
-                xsyslog_ev(LOG_ERR, "jmap.matchmime.conversation.unreadable",
-                           lf_s("msg.threadid", threadid), lf_err("error", r));
+
+                if (r == IMAP_MAILBOX_NONEXISTENT) {
+                    /* conversation_load_advanced() reports a missing B
+                     * record this way.  The msgid records outlive it --
+                     * the B record goes when a conversation's last
+                     * message does -- so a reply to a thread the user
+                     * has emptied lands here, with nothing wrong. */
+                    xsyslog_ev(LOG_DEBUG,
+                               "jmap.matchmime.conversation.missing",
+                               lf_s("msg.threadid", threadid));
+                }
+                else {
+                    xsyslog_ev(LOG_ERR,
+                               "jmap.matchmime.conversation.unreadable",
+                               lf_s("msg.threadid", threadid),
+                               lf_err("error", r));
+                }
                 convmatch->in_state = -1;
                 return 0;
             }
