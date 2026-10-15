@@ -1923,9 +1923,10 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
             if (t < INT_MAX) {
                 sort_order = (int) t;
             } else {
-                xsyslog_ev(LOG_ERR, "jmap.mailbox.sortorder.invalid",
+                xsyslog_ev(LOG_WARNING, "jmap.mailbox.annotation.invalid",
                            lf_jmapreq(req),
                            lf_intname("mbox.name", mbentry->name),
+                           lf_s("annot.entry", sortorder_annot),
                            lf_buf("annot.value", &attrib));
             }
         }

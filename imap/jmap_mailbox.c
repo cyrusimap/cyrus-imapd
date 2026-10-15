@@ -379,9 +379,10 @@ static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
         if (t < INT_MAX) {
             sort_order = (int) t;
         } else {
-            xsyslog_ev(LOG_ERR, "jmap.mailbox.sortorder.invalid",
+            xsyslog_ev(LOG_WARNING, "jmap.mailbox.annotation.invalid",
                        lf_jmapreq(req),
                        lf_mbname("mbox.name", mbname),
+                       lf_s("annot.entry", annot),
                        lf_buf("annot.value", &attrib));
         }
     }
