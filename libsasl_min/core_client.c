@@ -3,20 +3,17 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
+
+#include "libsasl_min/core_saslint.h"
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslplug.h"
+#include "libsasl_min/saslutil.h"
+
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <limits.h>
-#include <ctype.h>
 #include <string.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
-
-/* SASL Headers */
-#include "sasl.h"
-#include "saslplug.h"
-#include "saslutil.h"
-#include "saslint.h"
 
 static cmech_list_t *cmechlist; /* global var which holds the list */
 static sasl_global_callbacks_t global_callbacks_client;
@@ -35,7 +32,7 @@ static int init_mechlist()
     return SASL_OK;
 }
 
-int sasl_client_done(void)
+EXPORTED int sasl_client_done(void)
 {
     int result = SASL_CONTINUE;
 
@@ -190,8 +187,8 @@ static int mech_compare(const sasl_client_plug_t *a,
     return 0;
 }
 
-int sasl_client_add_plugin(const char *plugname,
-                           sasl_client_plug_init_t *entry_point)
+EXPORTED int sasl_client_add_plugin(const char *plugname,
+                                    sasl_client_plug_init_t *entry_point)
 {
     int plugcount;
     sasl_client_plug_t *pluglist;
@@ -294,7 +291,7 @@ static int client_idle(sasl_conn_t *conn)
  *  ...
  */
 
-int sasl_client_init(const sasl_callback_t *callbacks)
+EXPORTED int sasl_client_init(const sasl_callback_t *callbacks)
 {
     int ret;
     const add_plugin_list_t ep_list[] = {
@@ -412,13 +409,13 @@ static void client_dispose(sasl_conn_t *pconn)
  *  SASL_NOMECH   -- no mechanism meets requested properties
  *  SASL_NOMEM    -- not enough memory
  */
-int sasl_client_new(const char *service,
-                    const char *serverFQDN,
-                    const char *iplocalport,
-                    const char *ipremoteport,
-                    const sasl_callback_t *prompt_supp,
-                    unsigned flags,
-                    sasl_conn_t **pconn)
+EXPORTED int sasl_client_new(const char *service,
+                             const char *serverFQDN,
+                             const char *iplocalport,
+                             const char *ipremoteport,
+                             const sasl_callback_t *prompt_supp,
+                             unsigned flags,
+                             sasl_conn_t **pconn)
 {
     int result;
     char name[MAXFQDNLEN];
@@ -746,12 +743,12 @@ static INLINE int _sasl_cbinding_disp(sasl_client_params_t *cparams,
  * Apps should be encouraged to simply use space or comma space
  * though
  */
-int sasl_client_start(sasl_conn_t *conn,
-                      const char *mechlist,
-                      sasl_interact_t **prompt_need,
-                      const char **clientout,
-                      unsigned *clientoutlen,
-                      const char **mech)
+EXPORTED int sasl_client_start(sasl_conn_t *conn,
+                               const char *mechlist,
+                               sasl_interact_t **prompt_need,
+                               const char **clientout,
+                               unsigned *clientoutlen,
+                               const char **mech)
 {
     sasl_client_conn_t *c_conn = (sasl_client_conn_t *) conn;
     char *ordered_mechs = NULL, *name;
@@ -980,12 +977,12 @@ done:
  *  SASL_BADSERV   -- server failed mutual auth
  */
 
-int sasl_client_step(sasl_conn_t *conn,
-                     const char *serverin,
-                     unsigned serverinlen,
-                     sasl_interact_t **prompt_need,
-                     const char **clientout,
-                     unsigned *clientoutlen)
+EXPORTED int sasl_client_step(sasl_conn_t *conn,
+                              const char *serverin,
+                              unsigned serverinlen,
+                              sasl_interact_t **prompt_need,
+                              const char **clientout,
+                              unsigned *clientoutlen)
 {
     sasl_client_conn_t *c_conn = (sasl_client_conn_t *) conn;
     int result;
@@ -1067,13 +1064,13 @@ static unsigned mech_names_len(cmechanism_t *mech_list)
     return result;
 }
 
-int _sasl_client_listmech(sasl_conn_t *conn,
-                          const char *prefix,
-                          const char *sep,
-                          const char *suffix,
-                          const char **result,
-                          unsigned *plen,
-                          int *pcount)
+EXPORTED int _sasl_client_listmech(sasl_conn_t *conn,
+                                   const char *prefix,
+                                   const char *sep,
+                                   const char *suffix,
+                                   const char **result,
+                                   unsigned *plen,
+                                   int *pcount)
 {
     sasl_client_conn_t *c_conn = (sasl_client_conn_t *) conn;
     cmechanism_t *m = NULL;
@@ -1203,7 +1200,7 @@ int _sasl_client_listmech(sasl_conn_t *conn,
     return SASL_OK;
 }
 
-sasl_string_list_t *_sasl_client_mechs(void)
+EXPORTED sasl_string_list_t *_sasl_client_mechs(void)
 {
     cmechanism_t *listptr;
     sasl_string_list_t *retval = NULL, *next = NULL;
@@ -1359,7 +1356,7 @@ static void _sasl_print_mechanism(client_sasl_mechanism_t *m,
 }
 
 /* Dump information about available client plugins */
-int sasl_client_plugin_info(
+EXPORTED int sasl_client_plugin_info(
     const char
         *c_mech_list, /* space separated mechanism list or NULL for ALL */
     sasl_client_info_callback_t *info_cb,
