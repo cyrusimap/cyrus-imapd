@@ -172,6 +172,7 @@ jmap.mailbox.name       a mailbox name as the client gave it, in UTF-8
 jmap.mailboxids         a JMAP mailboxIds argument, serialised
 jmap.method             the JMAP method call being processed, e.g. Email/get
 jmap.module             the JMAP module an event is about, e.g. sieve
+jmap.noteid             a JMAP Note id
 jmap.push.active        1 if a push subscription was already running
 jmap.push.datatypes     how many data types a push subscription asked for
 jmap.push.next_ping     when an eventSource connection is next due a ping
@@ -180,6 +181,7 @@ jmap.search.field       a field a cached search value was missing
 jmap.search.flag        a system flag mask guidsearch could not handle
 jmap.search.sortkey     the internal sort key code of a search sort
 jmap.seen.source        where $seen comes from for a mailbox: flags or seendb
+jmap.submissionid       a JMAP EmailSubmission id
 limit.name              which configured limit an operation broke
 limit.value             that limit's configured value
 lmtp.action             what delivery did with the message: implicit, keep, fileinto, ...
