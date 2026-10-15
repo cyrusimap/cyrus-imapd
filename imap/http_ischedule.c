@@ -31,14 +31,9 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 
-#define ISCHED_WELLKNOWN_URI "/.well-known/ischedule"
-
 static void isched_init(struct buf *serverinfo);
 
-static int meth_get_isched(struct transaction_t *txn, void *params);
-static int meth_options_isched(struct transaction_t *txn, void *params);
 static int meth_post_isched(struct transaction_t *txn, void *params);
-static time_t compile_time;
 
 // clang-format off
 static struct mime_type_t isched_mime_types[] = {
@@ -59,10 +54,10 @@ static struct mime_type_t isched_mime_types[] = {
 
 // clang-format off
 struct namespace_t namespace_ischedule = {
-    URL_NS_ISCHEDULE, 0, "ischedule", "/ischedule", ISCHED_WELLKNOWN_URI,
+    URL_NS_ISCHEDULE, 0, "ischedule", "/ischedule", NULL,
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
-    (ALLOW_READ | ALLOW_POST | ALLOW_ISCHEDULE),
+    (ALLOW_POST | ALLOW_ISCHEDULE),
     isched_init, NULL, NULL, NULL, NULL,
     {
         { NULL,                 NULL }, /* ACL          */
@@ -70,13 +65,13 @@ struct namespace_t namespace_ischedule = {
         { NULL,                 NULL }, /* CONNECT      */
         { NULL,                 NULL }, /* COPY         */
         { NULL,                 NULL }, /* DELETE       */
-        { &meth_get_isched,     NULL }, /* GET          */
-        { &meth_get_isched,     NULL }, /* HEAD         */
+        { NULL,                 NULL }, /* GET          */
+        { NULL,                 NULL }, /* HEAD         */
         { NULL,                 NULL }, /* LOCK         */
         { NULL,                 NULL }, /* MKCALENDAR   */
         { NULL,                 NULL }, /* MKCOL        */
         { NULL,                 NULL }, /* MOVE         */
-        { &meth_options_isched, NULL }, /* OPTIONS      */
+        { &meth_options,        NULL }, /* OPTIONS      */
         { NULL,                 NULL }, /* PATCH        */
         { &meth_post_isched,    NULL }, /* POST         */
         { NULL,                 NULL }, /* PROPFIND     */
@@ -90,222 +85,6 @@ struct namespace_t namespace_ischedule = {
     }
 };
 // clang-format on
-
-
-void isched_capa_hdr(struct transaction_t *txn, time_t *lastmod, struct stat *sb)
-{
-    struct stat sbuf;
-    time_t mtime;
-
-    stat(config_filename, &sbuf);
-    mtime = MAX(compile_time, sbuf.st_mtime);
-    txn->resp_body.iserial = mtime +
-        (rscale_calendars ? rscale_calendars->num_elements : 0);
-    if (lastmod) *lastmod = mtime;
-    if (sb) *sb = sbuf;
-}
-
-
-/* iSchedule Receiver Capabilities */
-static int meth_get_isched(struct transaction_t *txn,
-                           void *params __attribute__((unused)))
-{
-    int precond;
-    struct strlist *action;
-    static struct message_guid prev_guid;
-    struct message_guid guid;
-    const char *etag;
-    static time_t lastmod = 0;
-    struct stat sbuf;
-    static xmlChar *buf = NULL;
-    static int bufsiz = 0;
-
-    /* Initialize */
-    if (!lastmod) message_guid_set_null(&prev_guid);
-
-    /* Fill in iSchedule-Capabilities */
-    isched_capa_hdr(txn, &lastmod, &sbuf);
-
-    /* We don't handle GET on anything other than ?action=capabilities */
-    action = hash_lookup("action", &txn->req_qparams);
-    if (!action || action->next || strcmp(action->s, "capabilities")) {
-        txn->error.desc = "Invalid action";
-        return HTTP_BAD_REQUEST;
-    }
-
-    /* Generate ETag based on compile date/time of this source file,
-       the number of available RSCALEs and the config file size/mtime */
-    assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, TIME_T_FMT "-%zu-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
-               rscale_calendars ? (size_t)rscale_calendars->num_elements : 0,
-               sbuf.st_mtime, sbuf.st_size);
-
-    message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
-    etag = message_guid_encode(&guid);
-
-    /* Check any preconditions, including range request */
-    txn->flags.ranges = 1;
-    precond = check_precond(txn, etag, lastmod);
-
-    switch (precond) {
-    case HTTP_OK:
-    case HTTP_PARTIAL:
-    case HTTP_NOT_MODIFIED:
-        /* Fill in Etag,  Last-Modified, and Expires */
-        txn->resp_body.etag = etag;
-        txn->resp_body.lastmod = lastmod;
-        txn->resp_body.maxage = 86400;  /* 24 hrs */
-        txn->flags.cc |= CC_MAXAGE;
-
-        if (precond != HTTP_NOT_MODIFIED) break;
-
-        GCC_FALLTHROUGH
-
-    default:
-        /* We failed a precondition - don't perform the request */
-        return precond;
-    }
-
-    if (!message_guid_equal(&prev_guid, &guid)) {
-        xmlNodePtr root, capa, node, comp, meth;
-        xmlNsPtr ns[NUM_NAMESPACE];
-        struct mime_type_t *mime;
-        struct icaltimetype date;
-        icaltimezone *utc = icaltimezone_get_utc_timezone();
-        int i, n;
-        int64_t maxlen;
-
-        /* Start construction of our query-result */
-        if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
-            txn->error.desc = "Unable to create XML response";
-            return HTTP_SERVER_ERROR;
-        }
-
-        capa = xmlNewChild(root, NULL, BAD_CAST "capabilities", NULL);
-
-        buf_reset(&txn->buf);
-        buf_printf(&txn->buf, TIME_T_FMT, txn->resp_body.iserial);
-        xmlNewChild(capa, NULL, BAD_CAST "serial-number",
-                           BAD_CAST buf_cstring(&txn->buf));
-
-        node = xmlNewChild(capa, NULL, BAD_CAST "versions", NULL);
-        xmlNewChild(node, NULL, BAD_CAST "version", BAD_CAST "1.0");
-
-        node = xmlNewChild(capa, NULL,
-                           BAD_CAST "scheduling-messages", NULL);
-        comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
-        xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VEVENT");
-        meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-        xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
-        meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-        xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
-        meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-        xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
-
-        comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
-        xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VTODO");
-        meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-        xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
-        meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-        xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
-        meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-        xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
-
-        comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
-        xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VPOLL");
-        meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-        xmlNewProp(meth, BAD_CAST "name", BAD_CAST "POLLSTATUS");
-        meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-        xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
-        meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-        xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REPLY");
-        meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-        xmlNewProp(meth, BAD_CAST "name", BAD_CAST "CANCEL");
-
-        comp = xmlNewChild(node, NULL, BAD_CAST "component", NULL);
-        xmlNewProp(comp, BAD_CAST "name", BAD_CAST "VFREEBUSY");
-        meth = xmlNewChild(comp, NULL, BAD_CAST "method", NULL);
-        xmlNewProp(meth, BAD_CAST "name", BAD_CAST "REQUEST");
-
-        node = xmlNewChild(capa, NULL,
-                           BAD_CAST "calendar-data-types", NULL);
-        for (mime = isched_mime_types; mime->content_type; mime++) {
-            xmlNodePtr type = xmlNewChild(node, NULL,
-                                          BAD_CAST "calendar-data-type", NULL);
-
-            /* Trim any charset from content-type */
-            buf_reset(&txn->buf);
-            buf_printf(&txn->buf, "%.*s",
-                       (int) strcspn(mime->content_type, ";"),
-                       mime->content_type);
-
-            xmlNewProp(type, BAD_CAST "content-type",
-                       BAD_CAST buf_cstring(&txn->buf));
-
-            if (mime->version)
-                xmlNewProp(type, BAD_CAST "version", BAD_CAST mime->version);
-        }
-
-        node = xmlNewChild(capa, NULL, BAD_CAST "attachments", NULL);
-        xmlNewChild(node, NULL, BAD_CAST "inline", NULL);
-
-        node = xmlNewChild(capa, NULL, BAD_CAST "rscales", NULL);
-        if (rscale_calendars) {
-            for (i = 0, n = rscale_calendars->num_elements; i < n; i++) {
-                const char **rscale = icalarray_element_at(rscale_calendars, i);
-
-                xmlNewChild(node, NULL, BAD_CAST "rscale", BAD_CAST *rscale);
-            }
-        }
-
-        maxlen = config_getbytesize(IMAPOPT_MAXMESSAGESIZE);
-        if (maxlen <= 0) maxlen = BYTESIZE_UNLIMITED;
-        buf_reset(&txn->buf);
-        buf_printf(&txn->buf, "%" PRIi64, maxlen);
-        xmlNewChild(capa, NULL, BAD_CAST "max-content-length",
-                    BAD_CAST buf_cstring(&txn->buf));
-
-        date = icaltime_from_timet_with_zone(caldav_epoch, 0, utc);
-        xmlNewChild(capa, NULL, BAD_CAST "min-date-time",
-                    BAD_CAST icaltime_as_ical_string(date));
-
-        date = icaltime_from_timet_with_zone(caldav_eternity, 0, utc);
-        xmlNewChild(capa, NULL, BAD_CAST "max-date-time",
-                    BAD_CAST icaltime_as_ical_string(date));
-
-        /* XXX  need to fill these with values */
-        xmlNewChild(capa, NULL, BAD_CAST "max-recipients", NULL);
-        xmlNewChild(capa, NULL, BAD_CAST "administrator", NULL);
-
-        /* Dump XML response tree into a text buffer */
-        xmlDocDumpFormatMemoryEnc(root->doc, &buf, &bufsiz, "utf-8", 1);
-        xmlFreeDoc(root->doc);
-
-        if (!buf) {
-            txn->error.desc = "Error dumping XML tree";
-            return HTTP_SERVER_ERROR;
-        }
-
-        message_guid_copy(&prev_guid, &guid);
-    }
-
-    /* Output the XML response */
-    txn->resp_body.type = "application/xml; charset=utf-8";
-    write_body(precond, txn, (char *) buf, bufsiz);
-
-    xmlFree(buf);
-
-    return 0;
-}
-
-
-static int meth_options_isched(struct transaction_t *txn, void *params)
-{
-    /* Fill in iSchedule-Capabilities */
-    isched_capa_hdr(txn, NULL, NULL);
-
-    return meth_options(txn, params);
-}
 
 
 static int caladdress_equal(const char *a, const char *b)
@@ -345,7 +124,7 @@ static int originator_matches(const char *originator, icalcomponent *comp,
 static int meth_post_isched(struct transaction_t *txn,
                             void *params __attribute__((unused)))
 {
-    int ret = 0, r, authd = 0;
+    int ret = 0, r;
     const char **hdr, **recipients;
     struct mime_type_t *mime = NULL;
     icalcomponent *ical = NULL, *comp;
@@ -353,9 +132,6 @@ static int meth_post_isched(struct transaction_t *txn,
     icalproperty_method meth = 0;
     icalproperty *prop = NULL;
     const char *uid = NULL, *originator = NULL;
-
-    /* Fill in iSchedule-Capabilities */
-    isched_capa_hdr(txn, NULL, NULL);
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -410,20 +186,8 @@ static int meth_post_isched(struct transaction_t *txn,
         return HTTP_BAD_REQUEST;
     }
 
-    /* Check authorization */
-    if (httpd_userid &&
-        config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
-        /* Allow frontends to HTTP auth to backends and use iSchedule */
-        authd = 1;
-    }
-    else if (!config_getswitch(IMAPOPT_ISCHEDULE_DKIM_REQUIRED)) {
-        authd = 1;
-    }
-    else {
-        txn->error.desc = "DKIM verification is not supported";
-    }
-
-    if (!authd) {
+    /* Require an authenticated sender */
+    if (!httpd_userid) {
         ret = HTTP_FORBIDDEN;
         txn->error.precond = ISCHED_VERIFICATION_FAILED;
         goto done;
@@ -580,18 +344,10 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
     *xml = NULL;
     memset(&txn, 0, sizeof(struct transaction_t));
 
-    if (sparam->flags & SCHEDTYPE_REMOTE) uri = ISCHED_WELLKNOWN_URI;
-    else uri = namespace_ischedule.prefix;
+    uri = namespace_ischedule.prefix;
 
-    /* Open connection to iSchedule receiver.
-       Use header buffer to construct remote server[:port][/tls][/noauth] */
+    /* Open connection to the backend holding the recipient */
     buf_setcstr(&txn.buf, sparam->server);
-    if (sparam->port) buf_printf(&txn.buf, ":%u", sparam->port);
-    if (sparam->flags & SCHEDTYPE_SSL) buf_appendcstr(&txn.buf, "/tls");
-    if (sparam->flags & SCHEDTYPE_REMOTE) {
-        /* Using DKIM rather than HTTP Auth */
-        buf_appendcstr(&txn.buf, "/noauth");
-    }
     be = proxy_findserver(buf_cstring(&txn.buf), &http_protocol, httpd_userid,
                           &backend_cached, NULL, NULL, httpd_in);
     if (!be) return HTTP_UNAVAILABLE;
@@ -746,14 +502,8 @@ static void isched_init(struct buf *serverinfo __attribute__((unused)))
         return;
     }
 
-    compile_time = calc_compile_time(__TIME__, __DATE__);
-
+    /* iSchedule carries scheduling messages between Murder backends */
     if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
-        /* If backend server, we require iSchedule */
         namespace_ischedule.enabled = -1;
-    }
-    else {
-        namespace_ischedule.enabled =
-            config_httpmodules & IMAP_ENUM_HTTPMODULES_ISCHEDULE;
     }
 }

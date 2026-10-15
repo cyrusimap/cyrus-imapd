@@ -501,33 +501,11 @@ Either route ends here, whether the data came from the build or from your own
 iSchedule
 =========
 
-About iSchedule
----------------
-
-
-.. note::
-
-    iSchedule support in Cyrus is a work in progress.
-
+In a :ref:`Cyrus Murder <murder>` with the CalDAV module and
+:imapdconf:`caldav_allowscheduling` enabled, backends deliver scheduling
+messages to users on other backends using the
 `iSchedule <https://tools.ietf.org/id/draft-desruisseaux-ischedule>`_
-allows CalDAV servers to:
+protocol.
 
-* query an event participant's free/busy status prior to invitation in order
-  to set up a good meeting time, which cannot be done over email.
-* keep participant's local event current by updating the status of other
-  participants automatically. This is not done when scheduling over email as it
-  would result in too much mail traffic and extra manual overhead for the users.
-
-iSchedule is automatically enabled in Cyrus if both the CalDAV module and the
-:imapdconf:`caldav_allowscheduling` options are enabled in a
-:ref:`Cyrus Murder <murder>`. In this instance, Cyrus uses iSchedule to move
-scheduling messages from frontend to backend servers.
-
-Support for scheduling with external servers is currently under development
-as there is the burden of authorization to verify the authenticity and
-integrity of these messages to prevent inadvertent or malicious data leaks
-or corruption.
-
-What mechanism to use for authorization is under discussion with the `CalConnect
-<https://www.calconnect.org/>`_ standards body, whether this is `DKIM
-<http://www.dkim.org/>`_ or some other type of message signature.
+Cyrus does not exchange iSchedule messages with servers outside its Murder.
+Scheduling with users elsewhere uses iMIP (email).
