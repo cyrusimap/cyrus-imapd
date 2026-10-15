@@ -587,6 +587,16 @@ extern void transaction_free(struct transaction_t *txn);
 extern int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbentry);
 
 /**
+ * Whether the client authenticated as one of the servers named by the
+ * proxyservers option.
+ *
+ * This tests the authentication identity, not the user it may be acting for
+ * with Authorize-As, so it is true for a frontend proxying a user's request.
+ * httpd_userisproxyadmin is unrelated: it says whether that user is an admin.
+ */
+extern bool httpd_authid_is_proxyserver(void);
+
+/**
  * mailbox_open_iwl(), but refuse a replicaonly user's mailbox, checked
  * under the user lock that the open takes.
  *

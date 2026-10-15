@@ -5392,6 +5392,17 @@ EXPORTED int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbent
     return rights;
 }
 
+EXPORTED bool httpd_authid_is_proxyserver(void)
+{
+    if (!httpd_authid) return false;
+
+    struct auth_state *authstate = auth_newstate(httpd_authid);
+    bool is_proxyserver = global_authisa(authstate, IMAPOPT_PROXYSERVERS);
+    auth_freestate(authstate);
+
+    return is_proxyserver;
+}
+
 /* Allow unauthenticated GET/HEAD, deny all other unauthenticated requests */
 EXPORTED int http_allow_noauth_get(struct transaction_t *txn)
 {
