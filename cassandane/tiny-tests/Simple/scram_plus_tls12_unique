@@ -1,0 +1,10 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_scram_plus_tls12_unique
+    :TLS :needs_dependency_openssl :NoStartInstances
+    ($self)
+{
+    $self->assert_str_equals('p=tls-unique',
+        $self->scram_plus_gs2_header(tls_versions => 'tls1_2'));
+}

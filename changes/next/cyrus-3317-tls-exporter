@@ -1,0 +1,29 @@
+Description:
+
+On TLS 1.3 connections, the channel binding for SCRAM-*-PLUS and other
+channel-binding SASL mechanisms is now ``tls-exporter`` (RFC 9266) instead of
+``tls-unique``, which TLS 1.3 doesn't define.  TLS 1.2 connections still use
+``tls-unique``.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Clients that send ``tls-unique`` channel binding over TLS 1.3 will fail to
+authenticate with -PLUS mechanisms, and must switch to ``tls-exporter`` as
+RFC 9266 requires.  Such clients were getting no channel binding protection
+on TLS 1.3 before.  Clients that don't use channel binding are unaffected.
+
+
+GitHub issue:
+
+#3317
