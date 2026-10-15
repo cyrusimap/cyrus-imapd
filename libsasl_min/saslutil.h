@@ -1,5 +1,6 @@
-/* saslutil.h -- various utility functions in SASL library
- */
+/* saslutil.h - SASL utilities */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
 
 #ifndef LIBSASL_MIN_SASLUTIL_H
 #define LIBSASL_MIN_SASLUTIL_H 1
