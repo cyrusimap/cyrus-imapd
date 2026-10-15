@@ -473,17 +473,8 @@ static int _notes_setargs_check(const char *id, json_t *args, json_t **err)
     json_t *arg;
     int r = 0;
 
-    /* Reject read-only properties */
-    if (json_object_get(args, "lastSaved")) {
-        jmap_parser_invalid(&parser, "lastSaved");
-    }
-
-    arg = json_object_get(args, "id");
-    if (arg && (is_create || strcmpnull(id, json_string_value(arg)))) {
-        jmap_parser_invalid(&parser, "id");
-    }
-
-    /* Type-check other properties */
+    /* jmap_set_parse() and _notes_check_readonly() handle server-set
+     * properties */
     arg = json_object_get(args, "isFlagged");
     if (arg && !json_is_boolean(arg)) {
         jmap_parser_invalid(&parser, "isFlagged");
@@ -686,6 +677,29 @@ struct set_rock {
     int rights;
 };
 
+static json_t *_notes_check_readonly(json_t *readonly,
+                                     message_t *msg,
+                                     struct buf *buf)
+{
+    hash_table props = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&props, json_object_size(readonly) + 1, 0);
+    jmap_set_readonly_props(readonly, &props);
+
+    json_t *cur = json_object();
+    json_t *err = NULL;
+    int r = _note_get(msg, cur, &props, 0 /*want_created*/, buf);
+    if (r) {
+        err = jmap_server_error(r);
+    }
+    else {
+        err = jmap_set_check_readonly(readonly, cur);
+    }
+
+    json_decref(cur);
+    free_hash_table(&props, NULL);
+    return err;
+}
+
 static void _notes_update_cb(const char *id, message_t *msg,
                              void *data, void *rock)
 {
@@ -693,6 +707,7 @@ static void _notes_update_cb(const char *id, message_t *msg,
     struct set_rock *srock = (struct set_rock *) rock;
     struct jmap_set *set = srock->set;
     json_t *err = NULL, *updated_note = NULL;
+    json_t *readonly = jmap_set_readonly(set, id);
     int r;
 
     if ((srock->rights & JACL_UPDATEITEMS) != JACL_UPDATEITEMS) {
@@ -700,6 +715,11 @@ static void _notes_update_cb(const char *id, message_t *msg,
 
         err = json_pack("{s:s}", "type",
                             read_only ? "notFound" : "forbidden");
+    }
+    else if (readonly
+             && (err = _notes_check_readonly(readonly, msg, srock->buf)))
+    {
+        /* reported below */
     }
     else if (!_notes_setargs_check(id, patch, &err)) {
         json_t *note = json_pack("{s:s}", "id", id);
