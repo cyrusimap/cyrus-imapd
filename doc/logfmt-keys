@@ -53,8 +53,10 @@ mbox.highestmodseq      the mailbox's highest modseq
 mbox.limit              which exists limit was hit: addressbook, calendar or mailbox
 mbox.lock.duration      how long a mailbox index lock was held, in seconds
 mbox.mailboxid          the mailbox's JMAP id
+mbox.msgcount           how many messages a mailbox holds
 mbox.name               the mailbox name, in the admin namespace
 mbox.owner              the userid that owns the mailbox
+mbox.parent             the parent mailbox name, in the admin namespace
 mbox.part               the partition the mailbox is on
 mbox.readonly           whether the mailbox was opened read-only
 mbox.recno              the physical record number in the index file
@@ -62,6 +64,7 @@ mbox.reconstruct.reason why reconstruct unlinked a record
 mbox.refcount           how many open handles a mailbox struct has
 mbox.repack.dryrun      a repack that reports what it would do, without doing it
 mbox.repack.recalc_nanosec  a repack that recalculates nanosecond internaldates
+mbox.tmpname            the temporary name a mailbox is parked under mid-rename
 mbox.type               the mailbox type, as a string
 mbox.uidvalidity        the mailbox's uidvalidity
 mbox.uniqueid           the mailbox's uniqueid
@@ -165,6 +168,7 @@ jmap.blobid             a JMAP blob id
 jmap.capability         a JMAP capability URI the request asked to use
 jmap.from.accountid     the account a copy or lookup read from, when not the request's
 jmap.header.form        the internal form code of a JMAP header property
+jmap.mailbox.name       a mailbox name as the client gave it, in UTF-8
 jmap.mailboxids         a JMAP mailboxIds argument, serialised
 jmap.method             the JMAP method call being processed, e.g. Email/get
 jmap.module             the JMAP module an event is about, e.g. sieve
