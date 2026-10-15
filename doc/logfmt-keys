@@ -167,6 +167,8 @@ jmap.accountid          the JMAP account the request was for
 jmap.addressbook.idform  whether an addressbook id was read as an id or a name
 jmap.addressbookid      a JMAP AddressBook id
 jmap.blobid             a JMAP blob id
+jmap.calendar.idform    whether a calendar id was read as a JMAP id or a name
+jmap.calendarid         a JMAP Calendar id
 jmap.capability         a JMAP capability URI the request asked to use
 jmap.contact.kind       which kind of card an event is about: contact or group
 jmap.contact.name       a contact's full name, as the client sent it

@@ -375,9 +375,13 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
     mbentry_t *mbentry = NULL;
     int r = mboxlist_lookup(calhomename, &mbentry, NULL);
     if (r) {
-        xsyslog(LOG_ERR, "can't lookup calendar home",
-                "calhomename=%s error=%s",
-                calhomename, error_message(r));
+        /* An account that has never used calendars has no calendar home,
+         * and the capability is simply left out. */
+        xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT ? LOG_DEBUG : LOG_ERR,
+                   "jmap.calendar.home.lookup.failed",
+                   lf_s("jmap.accountid", accountid),
+                   lf_intname("mbox.name", calhomename),
+                   lf_err("error", r));
         goto done;
     }
     int rights = httpd_myrights(authstate, mbentry);
@@ -796,8 +800,11 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             }
             else {
                 /* Ignore, but report non-numeric calendar-order values */
-                syslog(LOG_WARNING, "sortOrder: strtol(%s) failed",
-                       buf_cstring(&attrib));
+                xsyslog_ev(LOG_WARNING, "jmap.mailbox.annotation.invalid",
+                           lf_jmapreq(req),
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_s("annot.entry", order_annot),
+                           lf_buf("annot.value", &attrib));
             }
         }
         json_object_set_new(obj, "sortOrder", json_integer(sort_order));
@@ -819,8 +826,11 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
                 is_visible = 0;
             } else {
                 /* Report invalid value and fall back to default. */
-                syslog(LOG_WARNING,
-                       "isVisible: invalid annotation value: %s", val);
+                xsyslog_ev(LOG_WARNING, "jmap.mailbox.annotation.invalid",
+                           lf_jmapreq(req),
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_s("annot.entry", visible_annot),
+                           lf_buf("annot.value", &attrib));
                 is_visible = 1;
             }
         }
@@ -1016,10 +1026,13 @@ static void calid_to_mbentry(jmap_req_t *req, const char *id,
 
     if (r) {
         if (r != IMAP_NOTFOUND) {
-            syslog(LOG_ERR,
-                   "Error reading mbentry for addressbook via %s %s: %s",
-                   USER_COMPACT_EMAILIDS(req->cstate) ? "jmapid" : "name",
-                   id, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.lookup.failed",
+                       lf_jmapreq(req),
+                       lf_s("jmap.calendarid", id),
+                       lf_s("jmap.calendar.idform",
+                            USER_COMPACT_EMAILIDS(req->cstate)
+                                ? "jmapid" : "name"),
+                       lf_err("error", r));
         }
 
         *mbentry = NULL;
@@ -1651,9 +1664,8 @@ static void setcalendar_parseprops(jmap_req_t *req,
                 json_decref(cur_alerts);
             }
             else {
-                xsyslog(LOG_ERR,
-                        "could not load default alerts - ignoring arguments",
-                        "err=<%s>", error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.calendar.defaultalerts.unreadable",
+                           lf_err("error", r));
             }
         }
 
@@ -1679,8 +1691,8 @@ static int setcalendar_writeprops(jmap_req_t *req,
 
     r = mailbox_get_annotate_state(mbox, 0, &astate);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
-                mailbox_name(mbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendar.annotations.open.failed",
+                   lf_jmapreq(req), lf_mailbox(mbox), lf_err("error", r));
     }
 
     /* name */
@@ -1690,8 +1702,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
         r = annotate_state_writemask(astate, displayname_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    displayname_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", displayname_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1703,8 +1717,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_DAV ">description";
         r = annotate_state_writemask(astate, description_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    description_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", description_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1716,8 +1732,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
         r = annotate_state_writemask(astate, color_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    color_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", color_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1729,8 +1747,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
         r = annotate_state_writemask(astate, sortOrder_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    sortOrder_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", sortOrder_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1742,8 +1762,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
         r = annotate_state_writemask(astate, visible_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    visible_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", visible_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1754,8 +1776,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
         buf_setcstr(&val, props->schedulingEnabled ? "" : "F");
         r = annotate_state_writemask(astate, sched_enabled_annot, "", &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    sched_enabled_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", sched_enabled_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1778,8 +1802,8 @@ static int setcalendar_writeprops(jmap_req_t *req,
 
         r = caldav_caluseraddr_write(mbox, req->userid, &new);
         if (r) {
-            xsyslog(LOG_ERR, "failed to write participant identities",
-                    "err=<%s>", error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.participants.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox), lf_err("error", r));
         }
 
         strarray_fini(&new);
@@ -1799,8 +1823,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
         r = annotate_state_writemask(astate, invite_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    invite_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", invite_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1823,8 +1849,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
         r = annotate_state_writemask(astate, transp_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                   transp_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", transp_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1837,8 +1865,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
         r = annotate_state_writemask(astate, tzid_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    tzid_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", tzid_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1863,8 +1893,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
         buf_printf(&val, "%lu", (unsigned long) props->comp_types);
         r = annotate_state_writemask(astate, comp_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    comp_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", comp_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1877,17 +1909,16 @@ static int setcalendar_writeprops(jmap_req_t *req,
                 props->defaultalarms_with_time,
                 props->defaultalarms_with_date);
         if (r) {
-            xsyslog(LOG_ERR, "failed to write defaultalarms",
-                    "mboxid=<%s> mboxname=<%s> userid=<%s> err=<%s>",
-                    mailbox_uniqueid(mbox), mailbox_name(mbox),
-                    req->userid, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.defaultalarms.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox), lf_err("error", r));
         }
 
         if (!r) {
             r = caldav_bump_defaultalarms(mbox);
             if (r) {
-                syslog(LOG_ERR, "failed to bump default alarms for %s: %s",
-                        mailbox_name(mbox), error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.calendar.defaultalarms.bump.failed",
+                           lf_jmapreq(req), lf_mailbox(mbox),
+                           lf_err("error", r));
             }
         }
         bump_modseq = false;
@@ -2048,8 +2079,9 @@ static char *setcalendars_create_rewriteacl(jmap_req_t *req, const char *parenta
             int r = cyrus_acl_set(&newacl, userid,
                     ACL_MODE_SET, access, NULL, NULL);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to set_acl for calendar create (%s, %s) %s",
-                        userid, req->accountid, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.sharewith.acl.invalid",
+                           lf_jmapreq(req), lf_s("u.username", userid),
+                           lf_s("acl.rights", rightstr), lf_err("error", r));
                 free(newacl);
                 newacl = NULL;
                 goto done;
@@ -2117,40 +2149,40 @@ static void setcalendars_create(struct jmap_req *req,
             0/*flags*/, &mbox);
     free(acl);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendar.create.failed", lf_jmapreq(req),
+                   lf_intname("mbox.name", mboxname), lf_err("error", r));
         goto done;
     }
 
     // Initialize JMAP calendar
     r = caldav_init_jmapcalendar(req->userid, mbox);
     if (r) {
-        xsyslog(LOG_ERR, "jmap_init_calendar_mailbox failed",
-                "mboxname=<%s> err=<%s>",
-                mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendar.init.failed", lf_jmapreq(req),
+                   lf_intname("mbox.name", mboxname), lf_err("error", r));
         goto done;
     }
 
     // Reset JMAP mboxlist cache for the new mailbox
     r = jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r) {
-        xsyslog(LOG_ERR, "jmap_mboxlist_lookup failed",
-                "mboxname=<%s> err=<%s>",
-                mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendar.create.lookup.failed",
+                   lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
         goto done;
     }
 
     r = setcalendar_writeprops(req, mbox, &props);
     if (r) {
-        xsyslog(LOG_ERR, "setcalendar_writeprops failed",
-                "mboxname=<%s> err=<%s>",
-                mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendar.props.write.failed",
+                   lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
         mailbox_abort(mbox);
         mailbox_close(&mbox);
         int rr = mboxlist_deletemailbox(mboxname, 1, "", NULL, NULL, 0);
         if (rr) {
-            syslog(LOG_ERR, "could not delete mailbox %s: %s",
-                    mboxname, error_message(rr));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.create.rollback.failed",
+                       lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                       lf_err("error", rr));
         }
         goto done;
     }
@@ -2257,9 +2289,9 @@ static void setcalendars_update(jmap_req_t *req,
     if (!r) {
         r = setcalendar_writeprops(req, mbox, &props);
         if (r) {
-            xsyslog(LOG_ERR, "setcalendar_writeprops failed",
-                    "mboxname=<%s> err=<%s>",
-                    mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.props.write.failed",
+                       lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                       lf_err("error", r));
             mailbox_abort(mbox);
             mailbox_close(&mbox);
         }
