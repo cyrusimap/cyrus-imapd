@@ -1,0 +1,83 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_update_readonly
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $calid = $self->default_user->calendars->default->id;
+
+    my $id = $jmap->request([[ 'CalendarEvent/set', {
+        create => {
+            1 => {
+                version => '2.0',
+                calendarIds => { $calid => JSON::true },
+                title => 'event',
+                start => '2023-01-01T09:00:00',
+                timeZone => 'Europe/Vienna',
+                duration => 'PT1H',
+                recurrenceRule => { frequency => 'daily', count => 3 },
+            },
+        },
+    } ]])->single_sentence('CalendarEvent/set')->arguments->{created}{1}{id};
+    $self->assert_not_null($id);
+    my $instid = encode_eventid($id, '20230102T090000');
+
+    my @props = qw( blobId debugBlobId iCalendar );
+    my $get = sub ($id, @props) {
+        $jmap->request([[ 'CalendarEvent/get', {
+            ids => [ $id ],
+            (@props ? (properties => \@props) : ()),
+        } ]])->single_sentence('CalendarEvent/get')->arguments->{list}[0];
+    };
+    my $orig = $get->($id);
+    my $originst = $get->($instid);
+    $self->assert_str_equals($id, $originst->{baseEventId});
+
+    # RFC 8620 1.1: a server-set value MUST NOT change
+    for my $t (
+        [ $id,     { blobId      => 'Gchanged' } ],
+        [ $id,     { debugBlobId => 'Gchanged' } ],
+        [ $id,     { iCalendar   => { name => 'changed' } } ],
+        [ $id,     { baseEventId => $id } ],
+        [ $instid, { baseEventId => $instid } ],
+    ) {
+        my ($eid, $patch) = @$t;
+        my ($prop) = keys %$patch;
+        my $res = $jmap->request([[ 'CalendarEvent/set', {
+            update => { $eid => $patch },
+        } ]]);
+        $self->assert_cmp_deeply(
+            { $eid => { type => 'invalidProperties', properties => [ $prop ] } },
+            $res->single_sentence('CalendarEvent/set')->arguments->{notUpdated},
+            "patch $prop",
+        );
+        $self->assert_cmp_deeply($orig, $get->($id), "unchanged after $prop");
+        $self->assert_cmp_deeply($originst, $get->($instid), "unchanged after $prop");
+    }
+
+    # RFC 8620 5.3: they may be sent unchanged
+    my $cur = $get->($id, @props);
+    my %same = map { $_ => $cur->{$_} } grep { exists $cur->{$_} } @props;
+    my $res = $jmap->request([[ 'CalendarEvent/set', {
+        update => {
+            $id => { %same, title => 'changed' },
+            $instid => { baseEventId => $id, title => 'instance' },
+        },
+    } ]]);
+    $self->assert_cmp_deeply(
+        { $id => ignore(), $instid => ignore() },
+        $res->single_sentence('CalendarEvent/set')->arguments->{updated},
+    );
+    $self->assert_str_equals('changed', $get->($id)->{title});
+    $self->assert_str_equals('instance', $get->($instid)->{title});
+
+    # ... including the whole object as CalendarEvent/get returns it by default
+    $res = $jmap->request([[ 'CalendarEvent/set', {
+        update => { $id => $get->($id) },
+    } ]]);
+    $self->assert_cmp_deeply(
+        { $id => ignore() },
+        $res->single_sentence('CalendarEvent/set')->arguments->{updated},
+    );
+}
