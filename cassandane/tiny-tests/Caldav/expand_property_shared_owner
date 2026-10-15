@@ -1,0 +1,136 @@
+#!perl
+use Cassandane::Tiny;
+use Test::Deep ();
+
+sub test_expand_property_shared_owner
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $cmp_deeply = sub {
+        my ($want, $got) = @_;
+        my ($ok, $stack) = Test::Deep::cmp_details($got, $want);
+        $self->assert($ok, $ok ? '' : Test::Deep::deep_diag($stack));
+    };
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $caldav = $self->{caldav};
+
+    xlog $self, "Create a second user and share their calendar";
+    $admintalk->create("user.other");
+    my $service = $self->{instance}->get_service("http");
+    my $othertalk = Net::CalDAVTalk->new(
+        user      => "other",
+        password  => 'pass',
+        host      => $service->host(),
+        port      => $service->port(),
+        scheme    => 'http',
+        url       => '/',
+        expandurl => 1,
+    );
+    $admintalk->setacl("user.other.#calendars.Default",
+                       "cassandane" => 'lrs');
+
+    xlog $self, "The sharee can read only the sharer's displayname";
+    my $res = $caldav->SafeRequest('PROPFIND',
+        '/dav/principals/user/other/', <<EOF,
+<?xml version="1.0" encoding="utf-8" ?>
+<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop><D:displayname/><C:calendar-user-address-set/></D:prop>
+</D:propfind>
+EOF
+        'Content-Type' => 'application/xml', Depth => 0);
+    $self->assert_num_equals(207, $res->{http_response}{status});
+    my $propstats = $res->{payload}{'{DAV:}response'}[0]{'{DAV:}propstat'};
+    my $name = $propstats->[0]{'{DAV:}prop'}{'{DAV:}displayname'}{content};
+    $self->assert_not_null($name);
+    $cmp_deeply->(Test::Deep::bag({
+        '{DAV:}prop' => {
+            '{DAV:}displayname' => { content => $name },
+        },
+        '{DAV:}status' => { content => 'HTTP/1.1 200 OK' },
+    }, {
+        '{DAV:}prop' => {
+            '{urn:ietf:params:xml:ns:caldav}calendar-user-address-set' => Test::Deep::ignore(),
+        },
+        '{DAV:}status' => { content => 'HTTP/1.1 403 Forbidden' },
+    }), $propstats);
+
+    xlog $self, "An allprop PROPFIND returns only the displayname";
+    $res = $caldav->SafeRequest('PROPFIND',
+        '/dav/principals/user/other/', <<EOF,
+<?xml version="1.0" encoding="utf-8" ?>
+<D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>
+EOF
+        'Content-Type' => 'application/xml', Depth => 0);
+    $self->assert_num_equals(207, $res->{http_response}{status});
+    $cmp_deeply->([{
+        '{DAV:}prop' => {
+            '{DAV:}displayname' => { content => $name },
+        },
+        '{DAV:}status' => { content => 'HTTP/1.1 200 OK' },
+    }], $res->{payload}{'{DAV:}response'}[0]{'{DAV:}propstat'});
+
+    xlog $self, "Expand the owner of the shared calendar";
+    $res = $caldav->SafeRequest('REPORT',
+        '/dav/calendars/user/cassandane/other.Default/', <<EOF,
+<?xml version="1.0" encoding="utf-8" ?>
+<D:expand-property xmlns:D="DAV:">
+  <D:property name="owner">
+    <D:property name="displayname"/>
+    <D:property name="principal-URL"/>
+  </D:property>
+</D:expand-property>
+EOF
+        'Content-Type' => 'application/xml', Depth => 0);
+    $self->assert_num_equals(207, $res->{http_response}{status});
+
+    my $owner = $res->{payload}{'{DAV:}response'}[0]
+                    {'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{DAV:}owner'};
+    $cmp_deeply->({
+        '{DAV:}href' => { content => '/dav/principals/user/other/' },
+        '{DAV:}propstat' => Test::Deep::bag({
+            '{DAV:}prop' => {
+                '{DAV:}displayname' => { content => $name },
+            },
+            '{DAV:}status' => { content => 'HTTP/1.1 200 OK' },
+        }, {
+            '{DAV:}prop' => { '{DAV:}principal-URL' => Test::Deep::ignore() },
+            '{DAV:}status' => { content => 'HTTP/1.1 403 Forbidden' },
+        }),
+    }, $owner->{'{DAV:}response'});
+
+    xlog $self, "Set a dead property on the sharer's calendar home";
+    $othertalk->Request('PROPPATCH', '/dav/calendars/user/other/', <<EOF,
+<?xml version="1.0" encoding="utf-8" ?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:X="urn:example:cassandane">
+  <D:set><D:prop><X:homeprop>home-only</X:homeprop></D:prop></D:set>
+</D:propertyupdate>
+EOF
+        'Content-Type' => 'application/xml');
+
+    xlog $self, "Expanding the owner doesn't reach the home's dead properties";
+    $res = $caldav->SafeRequest('REPORT',
+        '/dav/calendars/user/cassandane/other.Default/', <<EOF,
+<?xml version="1.0" encoding="utf-8" ?>
+<D:expand-property xmlns:D="DAV:">
+  <D:property name="owner">
+    <D:property name="homeprop" namespace="urn:example:cassandane"/>
+  </D:property>
+</D:expand-property>
+EOF
+        'Content-Type' => 'application/xml', Depth => 0);
+    $self->assert_num_equals(207, $res->{http_response}{status});
+    $self->assert_does_not_match(qr/home-only/,
+        $res->{http_response}{content});
+
+    xlog $self, "Unsharing the calendar hides the principal again";
+    $admintalk->setacl("user.other.#calendars.Default", "cassandane" => '');
+    $res = $caldav->SafeRequest('PROPFIND',
+        '/dav/principals/user/other/', <<EOF,
+<?xml version="1.0" encoding="utf-8" ?>
+<D:propfind xmlns:D="DAV:"><D:prop><D:displayname/></D:prop></D:propfind>
+EOF
+        'Content-Type' => 'application/xml', Depth => 0);
+    $self->assert_num_equals(403, $res->{http_response}{status});
+}

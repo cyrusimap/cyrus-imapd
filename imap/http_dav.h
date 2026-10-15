@@ -271,6 +271,8 @@ struct propfind_ctx {
     unsigned prefix_count;              /* Count of new ns added to resp */
     int *ret;                           /* Return code to pass up to caller */
     struct fctx_flags_t flags;          /* Return flags for this propfind */
+    bool displayname_only;              /* principal readable via a share:
+                                           serve only DAV:displayname */
     struct buf buf;                     /* Working buffer */
     xmlBufferPtr xmlbuf;                /* Buffer for dumping XML nodes */
     hash_table per_prop_data;           /* Callback data by prop name */
