@@ -331,6 +331,7 @@ LIBSASL_API = \
 
 lib_libsasl_min_la_SOURCES = \
     $(LIBSASL_API) \
+    libsasl_min/client.c \
     libsasl_min/saslint.h
 
 lib_libsasl_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
