@@ -43,6 +43,7 @@
 #include "xstrlcat.h"
 #include "strarray.h"
 #include "ptrarray.h"
+#include "arrayu64.h"
 #include "sievedir.h"
 #include "xunlink.h"
 #include "conversations.h"
@@ -5374,6 +5375,11 @@ int sync_find_reserve_messages(struct mailbox *mailbox,
     return 0;
 }
 
+/* Choose a partial state covering the oldest batchsize changes since
+ * frommodseq.  Every record left out has modseq > *tomodseqp, so the next
+ * run's since-modseq scan picks it up.  New records up to *touidp are all
+ * sent; sync_prepare_dlists() lowers the modseq of any above *tomodseqp,
+ * and the next run sends them again with their real modseq. */
 static int calculate_intermediate_state(struct mailbox *mailbox,
                                         modseq_t frommodseq,
                                         uint32_t fromuid,
@@ -5381,39 +5387,46 @@ static int calculate_intermediate_state(struct mailbox *mailbox,
                                         uint32_t *touidp,
                                         modseq_t *tomodseqp)
 {
-    modseq_t tomodseq = mailbox->i.highestmodseq;
-    uint32_t touid = fromuid;
-    uint32_t seen = 0;
-
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    mailbox_iter_startuid(iter, fromuid+1); /* only read new records */
+    arrayu64_t modseqs = ARRAYU64_INITIALIZER;
+    struct mailbox_iter *iter;
     const message_t *msg;
+    int ispartial = 0;
+
+    iter = mailbox_iter_init(mailbox, frommodseq, 0);
     while ((msg = mailbox_iter_step(iter))) {
-        const struct index_record *record = msg_record(msg);
-        if (seen < batchsize) {
-            touid = record->uid;
-        }
-        else if (record->modseq <= tomodseq)
-            tomodseq = record->modseq - 1;
-        seen++;
+        arrayu64_append(&modseqs, msg_record(msg)->modseq);
     }
     mailbox_iter_done(&iter);
 
-    /* no need to batch if there are fewer than batchsize records */
-    if (seen <= batchsize)
-        return 0;
-
-    /* must have found at least one record past the end to do a partial batch,
-     * and we need a highestmodseq at least one less than that records so that
-     * it can successfully sync */
-    if (tomodseq > frommodseq && tomodseq < mailbox->i.highestmodseq) {
-        *tomodseqp = tomodseq;
-        *touidp = touid;
-        return 1;
+    if (arrayu64_size(&modseqs) <= batchsize) {
+        goto done;
     }
 
-    /* can't find an intermediate modseq */
-    return 0;
+    arrayu64_sort(&modseqs, NULL);
+    modseq_t tomodseq = arrayu64_nth(&modseqs, batchsize - 1);
+    if (tomodseq >= mailbox->i.highestmodseq) {
+        goto done;
+    }
+
+    /* no new record past touid may have a modseq at or below tomodseq */
+    uint32_t touid = fromuid;
+    iter = mailbox_iter_init(mailbox, frommodseq, 0);
+    mailbox_iter_startuid(iter, fromuid + 1);
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        if (record->modseq <= tomodseq) {
+            touid = record->uid;
+        }
+    }
+    mailbox_iter_done(&iter);
+
+    *touidp = touid;
+    *tomodseqp = tomodseq;
+    ispartial = 1;
+
+done:
+    arrayu64_fini(&modseqs);
+    return ispartial;
 }
 
 static int find_reserve_all(struct sync_name_list *mboxname_list,
@@ -5493,7 +5506,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
         char *groups = NULL;
 
-        if (batchsize && touid - fromuid > batchsize) {
+        if (batchsize && mailbox->i.num_records > batchsize) {
             /* see if we actually need to calculate an intermediate state */
             modseq_t frommodseq = rfolder ? rfolder->highestmodseq : 0;
             /* is there an intermediate modseq available and enough records to make a batch? */
