@@ -285,6 +285,36 @@ static int has_addressbooks(jmap_req_t *req)
 
 static int getcards_cb(void *rock, struct carddav_data *cdata);
 
+/* Add the card with ContactCard id @id to rock->get->list, if visible */
+static int getcards_byid(struct cards_rock *rock, const char *id)
+{
+    int r = 0;
+
+    rock->rows = 0;
+    if (USER_COMPACT_EMAILIDS(rock->req->cstate)) {
+        if (id[0] == JMAP_CONTACTID_PREFIX && strlen(id) < JMAP_CONTACTID_SIZE)
+        {
+            struct carddav_data *cdata = NULL;
+
+            r = carddav_lookup_jmapid(rock->db, id + 1, &cdata); // strip prefix
+            if (!r && cdata) {
+                r = getcards_cb(rock, cdata);
+            }
+        }
+    }
+    else {
+        r = carddav_get_cards(rock->db,
+                              NULL,
+                              rock->req->userid,
+                              id,
+                              CARDDAV_KIND_ANY,
+                              &getcards_cb,
+                              rock);
+    }
+
+    return r;
+}
+
 static int jmap_card_get(struct jmap_req *req)
 {
     if (!has_addressbooks(req)) {
@@ -330,24 +360,7 @@ static int jmap_card_get(struct jmap_req *req)
         size_t i;
         json_t *jval;
         json_array_foreach(get.ids, i, jval) {
-            rock.rows = 0;
-            const char *id = json_string_value(jval);
-
-            if (USER_COMPACT_EMAILIDS(req->cstate)) {
-                if (id[0] == JMAP_CONTACTID_PREFIX &&
-                    strlen(id) < JMAP_CONTACTID_SIZE) {
-                    struct carddav_data *cdata = NULL;
-
-                    r = carddav_lookup_jmapid(db, id+1, &cdata);  // strip prefix
-                    if (!r && cdata) {
-                        r = getcards_cb(&rock, cdata);
-                    }
-                }
-            }
-            else {
-                r = carddav_get_cards(db, mbentry, req->userid,
-                                      id, CARDDAV_KIND_ANY, &getcards_cb, &rock);
-            }
+            r = getcards_byid(&rock, json_string_value(jval));
             if (r || !rock.rows) {
                 json_array_append(get.not_found, jval);
             }
@@ -708,6 +721,45 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
                             struct carddav_db *db, struct mailbox **mailbox,
                             json_t **item, jmap_contact_errors_t *errors);
 
+/* Check the immutable and server-set properties sent in update @id
+ * against the card as ContactCard/get returns it.  A card that isn't
+ * visible passes, for the update to report. */
+static json_t *_card_check_readonly(jmap_req_t *req,
+                                    struct carddav_db *db,
+                                    const char *id,
+                                    json_t *readonly)
+{
+    hash_table props = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&props, json_object_size(readonly) + 1, 0);
+    jmap_set_readonly_props(readonly, &props);
+
+    struct jmap_get get = { .props = &props, .list = json_array() };
+    struct cards_rock rock = {
+        .db = db,
+        .req = req,
+        .get = &get,
+        .jmapcache = HASHU64_TABLE_INITIALIZER,
+        .cid = BUF_INITIALIZER,
+    };
+    construct_hashu64_table(&rock.jmapcache, 1, 0);
+
+    json_t *err = NULL;
+    int r = getcards_byid(&rock, id);
+    if (!r && rock.rows) {
+        err = jmap_set_check_readonly(readonly, json_array_get(get.list, 0));
+    }
+
+    /* release the read lock before the update locks the mailbox */
+    mailbox_close(&rock.mailbox);
+    mboxlist_entry_free(&rock.mbentry);
+    buf_free(&rock.cid);
+    free_hashu64_table(&rock.jmapcache, free);
+    json_decref(get.list);
+    free_hash_table(&props, NULL);
+
+    return err;
+}
+
 static int jmap_card_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -882,6 +934,23 @@ static int jmap_card_set(struct jmap_req *req)
     /* update */
     const char *uid;
     json_object_foreach(set.update, uid, arg) {
+        json_t *readonly = jmap_set_readonly(&set, uid);
+        if (readonly) {
+            json_t *err = _card_check_readonly(req, db, uid, readonly);
+            if (err) {
+                json_object_set_new(set.not_updated, uid, err);
+                continue;
+            }
+            /* unchanged, so nothing to write */
+            const char *path;
+            json_t *jval;
+            json_object_foreach (readonly, path, jval) {
+                json_object_del(arg, path);
+            }
+        }
+        /* jmap_set_parse() checked it matches */
+        json_object_del(arg, "id");
+
         json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
         json_t *item = NULL;
@@ -2280,13 +2349,6 @@ static void setaddressbook_readprops(jmap_req_t *req,
         jmap_parser_invalid(parser, "shareWith");
     }
     props->share.With = jprop;
-
-    /* myRights */
-    jprop = json_object_get(arg, "myRights");
-    if (JNOTNULL(jprop)) {
-        /* The myRights property is server-set and MUST NOT be set. */
-        jmap_parser_invalid(parser, "myRights");
-    }
 }
 
 /* Write the addressbook properties in the addressbook mailbox named mboxname.
@@ -2634,8 +2696,46 @@ done:
     free(uid);
 }
 
+/* Check the immutable and server-set properties sent in an update
+ * against the addressbook as AddressBook/get returns it. */
+static json_t *setaddressbooks_check_readonly(jmap_req_t *req,
+                                              const mbentry_t *mbentry,
+                                              const char *default_addrbookname,
+                                              json_t *readonly)
+{
+    hash_table props = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&props, json_object_size(readonly) + 1, 0);
+    jmap_set_readonly_props(readonly, &props);
+
+    struct jmap_get get = { .props = &props, .list = json_array() };
+    struct getaddressbooks_rock rock = {
+        .req = req,
+        .get = &get,
+        .default_addrbookname = default_addrbookname,
+    };
+
+    json_t *err = NULL;
+    int r = getaddressbooks_cb(mbentry, &rock);
+    if (r == IMAP_PERMISSION_DENIED) {
+        err = json_pack("{s:s}", "type", "notFound");
+    }
+    else if (r) {
+        err = jmap_server_error(r);
+    }
+    else {
+        err = jmap_set_check_readonly(readonly, json_array_get(get.list, 0));
+    }
+
+    json_decref(get.list);
+    free_hash_table(&props, NULL);
+
+    return err;
+}
+
 static void setaddressbooks_update(jmap_req_t *req,
                                    const char *abookid,
+                                   const char *default_addrbookname,
+                                   json_t *readonly,
                                    json_t *arg,
                                    json_t **record,
                                    json_t **err)
@@ -2648,6 +2748,16 @@ static void setaddressbooks_update(jmap_req_t *req,
     if (!mbentry) {
         *err = json_pack("{s:s}", "type", "notFound");
         goto done;
+    }
+
+    if (readonly) {
+        *err = setaddressbooks_check_readonly(req,
+                                              mbentry,
+                                              default_addrbookname,
+                                              readonly);
+        if (*err) {
+            goto done;
+        }
     }
 
     /* Parse and validate properties. */
@@ -2832,7 +2942,13 @@ static int jmap_addressbook_set(struct jmap_req *req)
             abookid = newabookid;
         }
         json_t *record = NULL, *err = NULL;
-        setaddressbooks_update(req, abookid, arg, &record, &err);
+        setaddressbooks_update(req,
+                               abookid,
+                               default_addrbookname,
+                               jmap_set_readonly(&set, id),
+                               arg,
+                               &record,
+                               &err);
         if (!err) {
             json_object_set_new(set.updated, id, record);
         }
@@ -2995,7 +3111,11 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     /* Cache contact */
     hashu64_insert(cdata->dav.rowid, json_dumps(obj, 0), &crock->jmapcache);
 
-    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
+  gotvalue:
+
+    jmap_filterprops(obj, crock->get->props);
+
+    if (jmap_wantprop(crock->get->props, "cyrusimap.org:vCardVersion")) {
         /* Set vCard version for debugging. */
         struct buf buf = BUF_INITIALIZER;
         buf_printf(&buf, "%d.0", cdata->version);
@@ -3003,10 +3123,6 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
                 json_string(buf_cstring(&buf)));
         buf_free(&buf);
     }
-
-  gotvalue:
-
-    jmap_filterprops(obj, crock->get->props);
 
     if (href) {
         json_object_set_new(obj, "cyrusimap.org:href", json_string(href));
@@ -4373,22 +4489,6 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
     annots = mailbox_extract_annots(*mailbox, &record);
 
-    /* Check for changes on immutable id property */
-    json_t *jid = json_object_get(jcard, "id");
-    if (jid && strcmpsafe(json_string_value(jid), id)) {
-        json_array_append_new(invalid, json_string("id"));
-        goto done;
-    }
-
-    /* Check other immutable properties, ignore value changes. */
-    {
-        const char *pname;
-        json_t *jval;
-        json_object_foreach(jcard, pname, jval) {
-            if (_card_prop_is_immutable(pname)) num_props--;
-        }
-    }
-
     const char *key = "cyrusimap.org:importance";
     json_t *jval;
 
@@ -4531,37 +4631,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
             json_object_set_new(*item, "updated", json_string(datestr));
         }
 
-        /* A client may echo back the immutable properties, but only with
-           their current value. They convey no vCard content, so take them
-           out before converting. */
-        json_t *jid = json_object_get(new_obj, "id");
-
-        if (jid) {
-            struct buf cid = BUF_INITIALIZER;
-
-            jmap_set_contactid(req->cstate, cdata, &cid);
-            if (strcmpnull(buf_cstring(&cid), json_string_value(jid))) {
-                json_array_append_new(invalid, json_string("id"));
-            }
-            buf_free(&cid);
-            json_object_del(new_obj, "id");
-        }
-
-        json_t *jhref = json_object_get(new_obj, "cyrusimap.org:href");
-
-        if (jhref) {
-            char *xhref = jmap_xhref(mailbox_name(*mailbox),
-                                     cdata->dav.resource);
-
-            if (strcmpnull(json_string_value(jhref), xhref)) {
-                json_array_append_new(invalid,
-                                      json_string("cyrusimap.org:href"));
-            }
-            free(xhref);
-            json_object_del(new_obj, "cyrusimap.org:href");
-        }
-
-        /* Likewise for cyrusimap.org:importance, which is an annotation */
+        /* cyrusimap.org:importance is an annotation, not vCard content */
         json_t *jimportance = json_object_get(new_obj, key);
 
         if (jimportance) {
