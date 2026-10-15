@@ -342,7 +342,10 @@ lib_libsasl_min_la_SOURCES = \
     libsasl_min/core_server.c \
     libsasl_min/core_seterror.c
 
-lib_libsasl_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+lib_libsasl_min_la_CFLAGS = \
+    $(AM_CFLAGS) $(CFLAG_VISIBILITY) \
+    -Wno-cast-function-type
+
 lib_libsasl_min_la_LIBADD =
 
 EXTRA_DIST = \

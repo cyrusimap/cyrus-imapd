@@ -3,13 +3,14 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
-#include <sasl.h>
-#include <string.h>
-#include <ctype.h>
-#include <prop.h>
-#include <stdio.h>
 
-#include "saslint.h"
+#include "libsasl_min/core_saslint.h"
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/prop.h"
+
+#include <ctype.h>
+#include <string.h>
 
 typedef struct canonuser_plug_list
 {
@@ -25,11 +26,11 @@ static canonuser_plug_list_t *canonuser_head = NULL;
  *                   null-terminate, and get into the outparams
  *                   (handled by INTERNAL plugin) */
 /* a zero ulen or alen indicates that it is strlen(value) */
-int _sasl_canon_user(sasl_conn_t *conn,
-                     const char *user,
-                     unsigned ulen,
-                     unsigned flags,
-                     sasl_out_params_t *oparams)
+EXPORTED int _sasl_canon_user(sasl_conn_t *conn,
+                              const char *user,
+                              unsigned ulen,
+                              unsigned flags,
+                              sasl_out_params_t *oparams)
 {
     canonuser_plug_list_t *ptr;
     sasl_server_conn_t *sconn = NULL;
@@ -261,11 +262,11 @@ static int _sasl_auxprop_lookup_user_props(sasl_conn_t *conn,
  *
  *                   Server only: Also does auxprop lookups once username
  *                   is canonicalized. */
-int _sasl_canon_user_lookup(sasl_conn_t *conn,
-                            const char *user,
-                            unsigned ulen,
-                            unsigned flags,
-                            sasl_out_params_t *oparams)
+EXPORTED int _sasl_canon_user_lookup(sasl_conn_t *conn,
+                                     const char *user,
+                                     unsigned ulen,
+                                     unsigned flags,
+                                     sasl_out_params_t *oparams)
 {
     int result;
 
@@ -277,7 +278,7 @@ int _sasl_canon_user_lookup(sasl_conn_t *conn,
     RETURN(conn, result);
 }
 
-void _sasl_canonuser_free()
+EXPORTED void _sasl_canonuser_free(void)
 {
     canonuser_plug_list_t *ptr, *ptr_next;
 
@@ -293,8 +294,8 @@ void _sasl_canonuser_free()
     canonuser_head = NULL;
 }
 
-int sasl_canonuser_add_plugin(const char *plugname,
-                              sasl_canonuser_init_t *canonuserfunc)
+EXPORTED int sasl_canonuser_add_plugin(const char *plugname,
+                                       sasl_canonuser_init_t *canonuserfunc)
 {
     int result, out_version;
     canonuser_plug_list_t *new_item;
@@ -479,11 +480,11 @@ static sasl_canonuser_plug_t canonuser_internal_plugin = {
     NULL
 };
 
-int internal_canonuser_init(const sasl_utils_t *utils __attribute__((unused)),
-                            int max_version,
-                            int *out_version,
-                            sasl_canonuser_plug_t **plug,
-                            const char *plugname __attribute__((unused)))
+EXPORTED int internal_canonuser_init(const sasl_utils_t *utils __attribute__((unused)),
+                                     int max_version,
+                                     int *out_version,
+                                     sasl_canonuser_plug_t **plug,
+                                     const char *plugname __attribute__((unused)))
 {
     if (!out_version || !plug) {
         return SASL_BADPARAM;
