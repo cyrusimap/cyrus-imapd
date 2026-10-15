@@ -41,6 +41,10 @@ sub test_calendarevent_set_update_readonly
         [ $id,     { iCalendar   => { name => 'changed' } } ],
         [ $id,     { baseEventId => $id } ],
         [ $instid, { baseEventId => $instid } ],
+        [ $id,     { uid => 'changed' } ],
+        [ $instid, { uid => 'changed' } ],
+        [ $instid, { recurrenceId => '2023-01-03T09:00:00' } ],
+        [ $instid, { recurrenceIdTimeZone => 'Europe/London' } ],
     ) {
         my ($eid, $patch) = @$t;
         my ($prop) = keys %$patch;
@@ -73,11 +77,14 @@ sub test_calendarevent_set_update_readonly
     $self->assert_str_equals('instance', $get->($instid)->{title});
 
     # ... including the whole object as CalendarEvent/get returns it by default
-    $res = $jmap->request([[ 'CalendarEvent/set', {
-        update => { $id => $get->($id) },
-    } ]]);
-    $self->assert_cmp_deeply(
-        { $id => ignore() },
-        $res->single_sentence('CalendarEvent/set')->arguments->{updated},
-    );
+    for my $eid ($id, $instid) {
+        $res = $jmap->request([[ 'CalendarEvent/set', {
+            update => { $eid => $get->($eid) },
+        } ]]);
+        $self->assert_cmp_deeply(
+            { $eid => ignore() },
+            $res->single_sentence('CalendarEvent/set')->arguments->{updated},
+            "whole $eid",
+        );
+    }
 }
