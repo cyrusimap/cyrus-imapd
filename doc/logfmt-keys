@@ -164,8 +164,13 @@ imip.error              why an iMIP operation failed
 imip.outcome            what an iMIP message did: added, updated, no_action, error
 jmap                    placeholder for "no JMAP request"; value is always ~null~
 jmap.accountid          the JMAP account the request was for
+jmap.addressbook.idform  whether an addressbook id was read as an id or a name
+jmap.addressbookid      a JMAP AddressBook id
 jmap.blobid             a JMAP blob id
 jmap.capability         a JMAP capability URI the request asked to use
+jmap.contact.kind       which kind of card an event is about: contact or group
+jmap.contact.name       a contact's full name, as the client sent it
+jmap.contactid          a JMAP Contact, ContactGroup or ContactCard id
 jmap.from.accountid     the account a copy or lookup read from, when not the request's
 jmap.header.form        the internal form code of a JMAP header property
 jmap.mailbox.name       a mailbox name as the client gave it, in UTF-8
@@ -182,6 +187,7 @@ jmap.search.flag        a system flag mask guidsearch could not handle
 jmap.search.sortkey     the internal sort key code of a search sort
 jmap.seen.source        where $seen comes from for a mailbox: flags or seendb
 jmap.submissionid       a JMAP EmailSubmission id
+jmap.uid.attempts       how many candidate vCard UIDs were tried
 limit.name              which configured limit an operation broke
 limit.value             that limit's configured value
 lmtp.action             what delivery did with the message: implicit, keep, fileinto, ...
