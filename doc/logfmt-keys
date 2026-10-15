@@ -152,6 +152,8 @@ conv.guid.exists        how many non-expunged records share this guid
 conv.guid.folderexists  how many of those are in this folder
 conv.guid.numrecords    how many records of any kind share this guid
 dav.collection          the DAV collection a request named
+dav.mailbox             the mailbox a DAV row names, as a name or a uniqueid
+dav.mailbox.byname      1 if dav.mailbox is a name rather than a uniqueid
 dav.owner               the user whose collection a request was for
 dav.resource            the DAV resource within the collection
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
