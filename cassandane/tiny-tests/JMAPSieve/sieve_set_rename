@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_set_rename
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $blobId = $jmap->Upload("keep;\r\n", "application/sieve")->{blobId};
+    my $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            create => { 1 => { name => 'foo', blobId => $blobId } },
+        }, 'R1'],
+    ]);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    my $get = sub {
+        $jmap->CallMethods([
+            ['SieveScript/get', { ids => [ $id ] }, 'R1'],
+        ])->[0][1]{list}[0];
+    };
+    my $orig = $get->();
+
+    # renaming without new content keeps the content
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', { update => { $id => { name => 'bar' } } }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply({ $id => undef }, $res->[0][1]{updated});
+    $self->assert_cmp_deeply({ %$orig, name => 'bar' }, $get->());
+}
