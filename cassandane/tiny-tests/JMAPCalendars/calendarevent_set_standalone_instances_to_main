@@ -50,9 +50,8 @@ sub test_calendarevent_set_standalone_instances_to_main
     ]);
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notUpdated}{$instance1Id}{type});
-    $self->assert_cmp_deeply([
-            'recurrenceId', 'recurrenceIdTimeZone'
-    ], $res->[0][1]{notUpdated}{$instance1Id}{properties});
+    $self->assert_cmp_deeply(['recurrenceId'],
+        $res->[0][1]{notUpdated}{$instance1Id}{properties});
 
     $self->assert_str_equals($state, $res->[1][1]{newState});
     $self->assert_cmp_deeply([], $res->[1][1]{created});

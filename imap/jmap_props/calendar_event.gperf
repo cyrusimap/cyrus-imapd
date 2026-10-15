@@ -31,7 +31,7 @@ jmap_property_t;
 #
 # JSCalendar common properties
 "@type",                   NULL, 0
-"uid",                     NULL, 0
+"uid",                     NULL, JMAP_PROP_IMMUTABLE
 "relatedTo",               NULL, 0
 "prodId",                  NULL, 0
 "created",                 NULL, 0
@@ -48,8 +48,8 @@ jmap_property_t;
 "keywords",                NULL, 0
 "categories",              NULL, 0
 "color",                   NULL, 0
-"recurrenceId",            NULL, 0
-"recurrenceIdTimeZone",    NULL, 0
+"recurrenceId",            NULL, JMAP_PROP_IMMUTABLE
+"recurrenceIdTimeZone",    NULL, JMAP_PROP_IMMUTABLE
 "recurrenceOverrides",     NULL, 0
 "excluded",                NULL, 0
 "priority",                NULL, 0

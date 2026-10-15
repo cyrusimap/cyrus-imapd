@@ -5652,22 +5652,6 @@ static int eventpatch_updates_utctimes(json_t *event_patch)
     return 0;
 }
 
-static void updateevent_validate_ids(json_t *old, json_t *new, json_t *invalid)
-{
-    if (strcmpsafe(json_string_value(json_object_get(old, "uid")),
-                json_string_value(json_object_get(new, "uid")))) {
-        json_array_append_new(invalid, json_string("uid"));
-    }
-    if (strcmpsafe(json_string_value(json_object_get(old, "recurrenceId")),
-                json_string_value(json_object_get(new, "recurrenceId")))) {
-        json_array_append_new(invalid, json_string("recurrenceId"));
-    }
-    if (strcmpsafe(json_string_value(json_object_get(old, "recurrenceIdTimeZone")),
-                json_string_value(json_object_get(new, "recurrenceIdTimeZone")))) {
-        json_array_append_new(invalid, json_string("recurrenceIdTimeZone"));
-    }
-}
-
 static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
                                              json_t *old_event,
                                              json_t *event_patch,
@@ -5698,13 +5682,11 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
         /* Patch an existing override */
         json_t *old_instance = jmap_patchobject_apply(old_event, old_override, NULL, 0);
         new_instance = jmap_patchobject_apply(old_instance, event_patch, invalid, 0);
-        updateevent_validate_ids(old_instance, new_instance, invalid);
         json_decref(old_instance);
     }
     else {
         /* Create a new override */
         new_instance = jmap_patchobject_apply(old_event, event_patch, invalid, 0);
-        updateevent_validate_ids(old_event, new_instance, invalid);
     }
     if (!new_instance) {
         *err = json_pack("{s:s}", "type", "invalidPatch");
@@ -6138,8 +6120,6 @@ static int updateevent_apply_patch(jmap_req_t *req,
                 floatingtz, &new_event, invalid, err);
         if (!new_event) goto done;
     }
-
-    updateevent_validate_ids(update->old_event, new_event, invalid);
 
     bool updates_shared_prop =
         updateevent_patch_updates_shared_prop(update->old_event, new_event);
@@ -7189,19 +7169,6 @@ static int jmap_calendarevent_set(struct jmap_req *req)
             json_object_set_new(set.not_updated, id,
                     json_pack("{s:s}", "type", "notFound"));
             continue;
-        }
-
-        const char *uidval = NULL;
-        if ((uidval = json_string_value(json_object_get(arg, "uid")))) {
-            /* The uid property must match the current iCalendar UID */
-            if (strcmp(uidval, eid->ical_uid)) {
-                json_t *err = json_pack(
-                    "{s:s, s:o}",
-                    "type", "invalidProperties",
-                    "properties", json_pack("[s]", "uid"));
-                json_object_set_new(set.not_updated, eid->raw, err);
-                continue;
-            }
         }
 
         json_t *readonly = jmap_set_readonly(&set, id);
