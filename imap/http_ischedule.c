@@ -186,8 +186,8 @@ static int meth_post_isched(struct transaction_t *txn,
         return HTTP_BAD_REQUEST;
     }
 
-    /* Require an authenticated sender */
-    if (!httpd_userid) {
+    /* Only servers in our Murder may send to us */
+    if (!httpd_authid_is_proxyserver()) {
         ret = HTTP_FORBIDDEN;
         txn->error.precond = ISCHED_VERIFICATION_FAILED;
         goto done;

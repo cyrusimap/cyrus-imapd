@@ -502,10 +502,12 @@ iSchedule
 =========
 
 In a :ref:`Cyrus Murder <murder>` with the CalDAV module and
-:imapdconf:`caldav_allowscheduling` enabled, backends deliver scheduling
-messages to users on other backends using the
+:imapdconf:`caldav_allowscheduling` enabled, a backend delivers a scheduling
+message to a user on another backend using the
 `iSchedule <https://tools.ietf.org/id/draft-desruisseaux-ischedule>`_
-protocol.
+protocol, if its mailbox list includes that user (as in a unified Murder).
+Each backend accepts these messages only from servers listed in
+:imapdconf:`proxyservers`.
 
 Cyrus does not exchange iSchedule messages with servers outside its Murder.
 Scheduling with users elsewhere uses iMIP (email).

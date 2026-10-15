@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+use HTTP::Tiny;
+use MIME::Base64 qw(encode_base64);
+
+# A backend's iSchedule receiver exists for other servers in the Murder.  It
+# must refuse a user who authenticates to the backend directly, or that user
+# can deliver an invitation from any ORGANIZER to anyone on the backend.
+sub test_ischedule_needs_proxyserver ($self)
+{
+    my $backend_svc = $self->{instance}->get_service("http");
+
+    my $caldav = Net::CalDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $backend_svc->host(),
+        port => $backend_svc->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    $caldav->GetCalendars();
+
+    my sub isched_post_ok ($arg) {
+        my $url = sprintf('http://%s:%s/ischedule',
+                          $backend_svc->host(), $backend_svc->port());
+
+        my %headers = (
+            'iSchedule-Version' => '1.0',
+            'Content-Type'      => 'text/calendar; charset=utf-8',
+            'Originator'        => 'mailto:organizer@example.com',
+            'Recipient'         => 'mailto:cassandane@defdomain',
+            'Authorization'     => 'Basic '
+                . encode_base64("$arg->{user}:$arg->{password}", ''),
+        );
+        my $res = HTTP::Tiny->new(max_redirect => 0)->request('POST', $url, {
+            headers => \%headers,
+            content => <<~"EOF",
+              BEGIN:VCALENDAR
+              VERSION:2.0
+              PRODID:-//Cassandane//EN
+              METHOD:REQUEST
+              BEGIN:VEVENT
+              UID:$arg->{uid}
+              SEQUENCE:0
+              DTSTAMP:20260901T120000Z
+              DTSTART:20260915T090000Z
+              DTEND:20260915T100000Z
+              SUMMARY:Budget review
+              ORGANIZER:mailto:organizer\@example.com
+              ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:cassandane\@defdomain
+              END:VEVENT
+              END:VCALENDAR
+              EOF
+        });
+
+        $self->assert_num_equals($arg->{status}, $res->{status},
+            "$arg->{desc}: status");
+    }
+
+    isched_post_ok({
+        desc     => 'a user authenticated to the backend',
+        user     => 'cassandane',
+        password => 'pass',
+        uid      => 'from-a-user',
+        status   => 403,
+    });
+
+    isched_post_ok({
+        desc     => 'a proxy server',
+        user     => 'mailproxy',
+        password => 'mailproxy',
+        uid      => 'from-a-proxy',
+        status   => 200,
+    });
+
+    my $events = $caldav->GetEvents('Default');
+    $self->assert_cmp_deeply([ 'from-a-proxy' ], [ map { $_->{uid} } @$events ]);
+}
