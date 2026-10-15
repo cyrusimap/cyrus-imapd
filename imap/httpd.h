@@ -85,7 +85,6 @@ enum {
     URL_NS_ADDRESSBOOK,
     URL_NS_DRIVE,
     URL_NS_ISCHEDULE,
-    URL_NS_DOMAINKEY,
     URL_NS_TZDIST,
     URL_NS_DBLOOKUP,
 #ifdef WITH_JMAP
@@ -500,7 +499,6 @@ extern struct namespace_t namespace_freebusy;
 extern struct namespace_t namespace_addressbook;
 extern struct namespace_t namespace_drive;
 extern struct namespace_t namespace_ischedule;
-extern struct namespace_t namespace_domainkey;
 extern struct namespace_t namespace_tzdist;
 #ifdef WITH_JMAP
 extern struct namespace_t namespace_jmap;
