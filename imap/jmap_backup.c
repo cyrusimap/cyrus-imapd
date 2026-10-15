@@ -266,13 +266,17 @@ static int restore_resource_cb(const char *resource __attribute__((unused)),
 
     switch (restore->type) {
     case DESTROYS:
-        syslog(log_level, "undo destroy %s", resource);
+        xsyslog_ev(log_level, "jmap.backup.resource.undo",
+                   lf_s("backup.undo", "destroy"),
+                   lf_s("dav.resource", resource));
         break;
 
     case UPDATES:
         if (!(rrock->jrestore->mode & UNDO_ALL)) goto done;
 
-        syslog(log_level, "undo update %s", resource);
+        xsyslog_ev(log_level, "jmap.backup.resource.undo",
+                   lf_s("backup.undo", "update"),
+                   lf_s("dav.resource", resource));
         break;
 
     case CREATES:
@@ -285,7 +289,9 @@ static int restore_resource_cb(const char *resource __attribute__((unused)),
             goto done;
         }
 
-        syslog(log_level, "undo create %s", resource);
+        xsyslog_ev(log_level, "jmap.backup.resource.undo",
+                   lf_s("backup.undo", "create"),
+                   lf_s("dav.resource", resource));
         break;
 
     default:
@@ -342,29 +348,33 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     char *resource = NULL;
     int recno, r;
 
-    syslog(log_level, "restore_collection_cb: processing '%s'  (type = 0x%03x)",
-           mbentry->name, mbentry->mbtype);
+    xsyslog_ev(log_level, "jmap.backup.collection.scan",
+               lf_intname("mbox.name", mbentry->name),
+               lf_s("mbox.type", mboxlist_mbtype_to_string(mbentry->mbtype)));
 
     if (mbtype_isa(mbentry->mbtype) != rrock->mbtype) {
-        syslog(log_level, "skipping '%s': not type 0x%03x",
-               mbentry->name, rrock->mbtype);
+        xsyslog_ev(log_level, "jmap.backup.collection.skipped",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_s("backup.reason", "wrong_type"));
 
         return 0;
     }
 
     r = mailbox_open_irl(mbentry->name, &rrock->mailbox);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for reading",
-               mbentry->name);
+        xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
+                   lf_intname("mbox.name", mbentry->name), lf_err("error", r));
         return r;
     }
 
     if ((rrock->jrestore->mode & UNDO_ALL) &&
         rrock->jrestore->cutoff < rrock->mailbox->i.changes_epoch.tv_sec) {
-        syslog(log_level,
-               "skipping '%s': cutoff (" TIME_T_FMT ") prior to mailbox history (" TIME_T_FMT")",
-               mailbox_name(rrock->mailbox), rrock->jrestore->cutoff,
-               rrock->mailbox->i.changes_epoch.tv_sec);
+        xsyslog_ev(log_level, "jmap.backup.collection.skipped",
+                   lf_mailbox(rrock->mailbox),
+                   lf_s("backup.reason", "cutoff_before_history"),
+                   lf_time("backup.cutoff", rrock->jrestore->cutoff),
+                   lf_time("mbox.changes_epoch",
+                           rrock->mailbox->i.changes_epoch.tv_sec));
 
         mailbox_close(&rrock->mailbox);
         return HTTP_UNPROCESSABLE;
@@ -379,16 +389,18 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         const struct index_record *record = msg_record(msg);
 
         resource = rrock->resource_name_cb(msg, rrock->rock);
-        syslog(log_level,
-               "UID %u: expunged: %x, savedate: " TIME_T_FMT ","
-               " updated: " TIME_T_FMT ", name: %s",
-               record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
-               record->savedate.tv_sec, record->last_updated.tv_sec,
-               resource ? resource : "NULL");
+        xsyslog_ev(log_level, "jmap.backup.record.scan",
+                   lf_u("msg.imapuid", record->uid),
+                   lf_flag("msg.expunged",
+                           record->internal_flags & FLAG_INTERNAL_EXPUNGED),
+                   lf_time("msg.savedate", record->savedate.tv_sec),
+                   lf_time("msg.lastupdated", record->last_updated.tv_sec),
+                   lf_s("dav.resource", resource));
 
         if (!resource) {
-            syslog(log_level, "skipping UID %u: no resource name",
-                   record->uid);
+            xsyslog_ev(log_level, "jmap.backup.record.skipped",
+                       lf_u("msg.imapuid", record->uid),
+                       lf_s("backup.reason", "no_resource_name"));
             continue;
         }
 
@@ -398,8 +410,9 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             restore = hash_lookup(resource, &resources);
 
             if (restore && restore->uid_torecreate) {
-                syslog(log_level, "skipping UID %u: found a newer version",
-                       record->uid);
+                xsyslog_ev(log_level, "jmap.backup.record.skipped",
+                           lf_u("msg.imapuid", record->uid),
+                           lf_s("backup.reason", "newer_version_found"));
 
                 free(resource);
                 continue;
@@ -419,13 +432,15 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
                     restore->uid_todestroy = record->uid;
                     restore->currently_destroyed = true;
 
-                    syslog(log_level,
-                           "UID %u: created/updated after cutoff (tombstone)",
-                           record->uid);
+                    xsyslog_ev(log_level, "jmap.backup.record.selected",
+                               lf_u("msg.imapuid", record->uid),
+                               lf_s("backup.reason",
+                                    "tombstone_after_cutoff"));
                 }
                 else {
-                    syslog(log_level, "skipping UID %u: created AND deleted",
-                           record->uid);
+                    xsyslog_ev(log_level, "jmap.backup.record.skipped",
+                               lf_u("msg.imapuid", record->uid),
+                               lf_s("backup.reason", "created_and_deleted"));
                 }
 
                 free(resource);
@@ -450,18 +465,22 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
                     /* Tombstone is before cutoff so this is an update */
                     restore->type = UPDATES;
 
-                    syslog(log_level, "UID %u: updated after cutoff",
-                           record->uid);
+                    xsyslog_ev(log_level, "jmap.backup.record.selected",
+                               lf_u("msg.imapuid", record->uid),
+                               lf_s("backup.reason", "updated_after_cutoff"));
                 }
                 else {
-                    syslog(log_level, "UID %u: destroyed after cutoff",
-                           record->uid);
+                    xsyslog_ev(log_level, "jmap.backup.record.selected",
+                               lf_u("msg.imapuid", record->uid),
+                               lf_s("backup.reason",
+                                    "destroyed_after_cutoff"));
                 }
             }
             else {
                 /* Resource was destroyed before cutoff - not interested */
-                syslog(log_level, "skipping UID %u: destroyed before cutoff",
-                       record->uid);
+                xsyslog_ev(log_level, "jmap.backup.record.skipped",
+                           lf_u("msg.imapuid", record->uid),
+                           lf_s("backup.reason", "destroyed_before_cutoff"));
             }
         }
         else if (record->savedate.tv_sec > rrock->jrestore->cutoff) {
@@ -473,13 +492,15 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             restore->type = CREATES;
             restore->uid_todestroy = record->uid;
 
-            syslog(log_level, "UID %u: created/updated after cutoff",
-                   record->uid);
+            xsyslog_ev(log_level, "jmap.backup.record.selected",
+                       lf_u("msg.imapuid", record->uid),
+                       lf_s("backup.reason", "created_after_cutoff"));
         }
         else {
             /* Resource was not modified after cutoff - not interested */
-            syslog(log_level, "skipping UID %u: not modified after cutoff",
-                   record->uid);
+            xsyslog_ev(log_level, "jmap.backup.record.skipped",
+                       lf_u("msg.imapuid", record->uid),
+                       lf_s("backup.reason", "not_modified_after_cutoff"));
         }
 
         free(resource);
@@ -496,8 +517,9 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             mailbox_close(&rrock->mailbox);
             r = mailbox_open_iwl(mbentry->name, &rrock->mailbox);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for writing",
-                       mbentry->name);
+                xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_err("error", r));
                 break;
             }
         }
@@ -548,8 +570,9 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
 
     if (!tomailbox) tomailbox = mailbox;
 
-    syslog(log_level, "recreating UID: %u (%s); is_update: %d",
-           record->uid, mailbox_name(tomailbox), is_update);
+    xsyslog_ev(log_level, "jmap.backup.record.recreate",
+               lf_u("msg.imapuid", record->uid), lf_mailbox(tomailbox),
+               lf_flag("backup.update", is_update));
 
     /* use latest version of the resource as the source for our append stage */
     r = message_get_fname(msg, &fname);
@@ -627,8 +650,9 @@ static int destroy_resource(message_t *msg, jmap_req_t *req,
     struct index_record newrecord;
     int r = 0;
 
-    syslog(log_level,
-           "destroying UID: %u; is_replaced: %d", record->uid, is_replaced);
+    xsyslog_ev(log_level, "jmap.backup.record.destroy",
+               lf_u("msg.imapuid", record->uid),
+               lf_flag("backup.replaced", is_replaced));
 
     /* copy the existing index_record */
     memcpy(&newrecord, record, sizeof(struct index_record));
@@ -861,8 +885,10 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
 
     char *addrhomeset = carddav_mboxname(req->accountid, NULL);
 
-    syslog(restore.log_level, "jmap_backup_restore_contacts(%s, " TIME_T_FMT ")",
-           addrhomeset, restore.cutoff);
+    xsyslog_ev(restore.log_level, "jmap.backup.restore.start",
+               lf_jmapreq(req), lf_s("backup.type", "contacts"),
+               lf_intname("mbox.name", addrhomeset),
+               lf_time("backup.cutoff", restore.cutoff));
 
     struct contact_rock crock =
         { carddav_open_userid(req->accountid), BUF_INITIALIZER, NULL };
@@ -1165,8 +1191,9 @@ static int recreate_calendar(const mbentry_t *mbentry,
             r = mailbox_open_iwl(crock.mboxname, newmailbox);
 
             if (r) {
-                syslog(LOG_ERR,
-                       "IOERROR: failed to open mailbox %s", crock.mboxname);
+                xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
+                           lf_intname("mbox.name", crock.mboxname),
+                           lf_err("error", r));
             }
             free(crock.mboxname);
         }
@@ -1184,8 +1211,9 @@ static int recreate_calendar(const mbentry_t *mbentry,
                                    0/*flags*/, newmailbox);
 
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to create mailbox %s: %s",
-                   newmboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.create.failed",
+                       lf_intname("mbox.name", newmboxname),
+                       lf_err("error", r));
         }
         else {
             /* Set the displayname */
@@ -1213,10 +1241,10 @@ static int recreate_calendar(const mbentry_t *mbentry,
                 if (!r)
                     r = annotate_state_commit(&astate);
                 else {
-                    syslog(LOG_ERR,
-                           "IOERROR: failed to create displayname/color"
-                           " for mailbox %s: %s",
-                           newmboxname, error_message(r));
+                    xsyslog_ev(LOG_ERR, "jmap.backup.annotation.write.failed",
+                               lf_intname("mbox.name", newmboxname),
+                               lf_s("annot.entry", disp_annot),
+                               lf_err("error", r));
                     annotate_state_abort(&astate);
                 }
             }
@@ -1240,7 +1268,8 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
 
     r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
+        xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
+                   lf_intname("mbox.name", mbentry->name), lf_err("error", r));
         return r;
     }
 
@@ -1270,8 +1299,9 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
             mailbox_close(&mailbox);
             r = mailbox_open_iwl(mbentry->name, &mailbox);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for writing",
-                       mbentry->name);
+                xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_err("error", r));
                 break;
             }
 
@@ -1354,8 +1384,10 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
 
     char *calhomeset = caldav_mboxname(req->accountid, NULL);
 
-    syslog(restore.log_level, "jmap_backup_restore_calendars(%s, " TIME_T_FMT ")",
-           calhomeset, restore.cutoff);
+    xsyslog_ev(restore.log_level, "jmap.backup.restore.start",
+               lf_jmapreq(req), lf_s("backup.type", "calendars"),
+               lf_intname("mbox.name", calhomeset),
+               lf_time("backup.cutoff", restore.cutoff));
 
     struct calendar_rock crock =
         { caldav_open_userid(req->accountid),
@@ -1445,8 +1477,10 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
 
     const char *subfolder = config_getstring(IMAPOPT_NOTESMAILBOX);
 
-    syslog(restore.log_level, "jmap_backup_restore_notes(%s, " TIME_T_FMT ")",
-           subfolder ? subfolder : "NULL", restore.cutoff);
+    xsyslog_ev(restore.log_level, "jmap.backup.restore.start",
+               lf_jmapreq(req), lf_s("backup.type", "notes"),
+               lf_s("mbox.subfolder", subfolder),
+               lf_time("backup.cutoff", restore.cutoff));
 
     if (subfolder) {
         char *notes = mboxname_user_mbox(req->accountid, subfolder);
@@ -1544,23 +1578,30 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     int userflag = -1, isdestroyed_mbox = 0;
     int r;
 
-    syslog(log_level, "restore_message_list_cb: processing '%s'  (type = 0x%03x)",
-           mbentry->name, mbentry->mbtype);
+    xsyslog_ev(log_level, "jmap.backup.collection.scan",
+               lf_intname("mbox.name", mbentry->name),
+               lf_s("mbox.type", mboxlist_mbtype_to_string(mbentry->mbtype)));
 
     if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
-        syslog(log_level, "skipping '%s': not type EMAIL", mbentry->name);
+        xsyslog_ev(log_level, "jmap.backup.collection.skipped",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_s("backup.reason", "wrong_type"));
 
         return 0;
     }
 
     if (mboxname_isnotesmailbox(mbentry->name, MBTYPE_EMAIL)) {
-        syslog(log_level, "skipping '%s': Notes mailbox", mbentry->name);
+        xsyslog_ev(log_level, "jmap.backup.collection.skipped",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_s("backup.reason", "notes_mailbox"));
 
         return 0;
     }
 
     if (!strcmpnull(mbentry->name, sched_mboxname)) {
-        syslog(log_level, "skipping '%s': \\Scheduled mailbox", mbentry->name);
+        xsyslog_ev(log_level, "jmap.backup.collection.skipped",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_s("backup.reason", "scheduled_mailbox"));
 
         return 0;
     }
@@ -1568,8 +1609,11 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     if (mboxname_isdeletedmailbox(mbentry->name, &timestamp)) {
         if (timestamp <= rrock->jrestore->cutoff) {
             /* Mailbox was destroyed before cutoff - not interested */
-            syslog(log_level, "skipping '%s': destroyed (" TIME_T_FMT ") before cutoff",
-                   mbentry->name, timestamp);
+            xsyslog_ev(log_level, "jmap.backup.collection.skipped",
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_s("backup.reason", "destroyed_before_cutoff"),
+                       lf_time("mbox.destroyed", timestamp),
+                       lf_time("backup.cutoff", rrock->jrestore->cutoff));
 
             return 0;
         }
@@ -1579,7 +1623,8 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
+        xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
+                   lf_intname("mbox.name", mbentry->name), lf_err("error", r));
         return r;
     }
 
@@ -1595,12 +1640,13 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         int isdestroyed_msg = isdestroyed_mbox;
         int ignore_draft = 0;
 
-        syslog(log_level,
-               "UID %u: expunged: %x, draft: %x,"
-               " intdate: " TIME_T_FMT ", updated: " TIME_T_FMT,
-               record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
-               (record->system_flags & FLAG_DRAFT),
-               record->internaldate.tv_sec, record->last_updated.tv_sec);
+        xsyslog_ev(log_level, "jmap.backup.record.scan",
+                   lf_u("msg.imapuid", record->uid),
+                   lf_flag("msg.expunged",
+                           record->internal_flags & FLAG_INTERNAL_EXPUNGED),
+                   lf_flag("msg.draft", record->system_flags & FLAG_DRAFT),
+                   lf_time("msg.internaldate", record->internaldate.tv_sec),
+                   lf_time("msg.lastupdated", record->last_updated.tv_sec));
 
         /* Suppress fetching of Message-ID if not restoring drafts */
         if (rrock->jrestore->mode & UNDO_DRAFTS) {
@@ -1613,8 +1659,9 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 msgid = buf_cstring(&mrock->buf);
             }
 
-            syslog(log_level, "UID: %u, msgid = '%s'",
-                   record->uid, msgid ? msgid : "");
+            xsyslog_ev(log_level, "jmap.backup.record.msgid",
+                       lf_u("msg.imapuid", record->uid),
+                       lf_s("msg.id", msgid));
         }
 
         /* Add message to plan for mailbox */
@@ -1637,8 +1684,9 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 
         if (message && message->ignore) {
             /* An undeleted copy of this message exists */
-            syslog(log_level, "skipping UID %u: undeleted copy exists",
-                   record->uid);
+            xsyslog_ev(log_level, "jmap.backup.record.skipped",
+                       lf_u("msg.imapuid", record->uid),
+                       lf_s("backup.reason", "undeleted_copy_exists"));
 
             continue;
         }
@@ -1649,8 +1697,9 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
 
             if (record->last_updated.tv_sec <= rrock->jrestore->cutoff) {
                 /* Message has been destroyed before cutoff - ignore */
-                syslog(log_level, "skipping UID %u: destroyed before cutoff",
-                       record->uid);
+                xsyslog_ev(log_level, "jmap.backup.record.skipped",
+                           lf_u("msg.imapuid", record->uid),
+                           lf_s("backup.reason", "destroyed_before_cutoff"));
 
                 continue;
             }
@@ -1663,7 +1712,9 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 /* Destroyed draft */
                 if (!msgid) {
                     /* No way to track this message */
-                    syslog(log_level, "skipping UID %u: no msgid", record->uid);
+                    xsyslog_ev(log_level, "jmap.backup.record.skipped",
+                               lf_u("msg.imapuid", record->uid),
+                               lf_s("backup.reason", "no_msgid"));
 
                     continue;
                 }
@@ -1678,9 +1729,10 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 else if (message->ignore) {
                     /* An undeleted copy of this draft exists OR
                        this Message-Id exists as a non-draft */
-                    syslog(log_level,
-                           "skipping UID %u: non-draft / undeleted draft exists",
-                           record->uid);
+                    xsyslog_ev(log_level, "jmap.backup.record.skipped",
+                               lf_u("msg.imapuid", record->uid),
+                               lf_s("backup.reason",
+                                    "undeleted_draft_exists"));
 
                     continue;
                 }
@@ -1857,8 +1909,9 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
             r = mailbox_open_iwl(newmboxname, &newmailbox);
 
             if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to open mailbox %s: %s",
-                       newmboxname, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
+                           lf_intname("mbox.name", newmboxname),
+                           lf_err("error", r));
             }
         }
         else {
@@ -1906,9 +1959,10 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                                                    0/*flags*/,
                                                    NULL/*mailboxptr*/);
                         if (r) {
-                            syslog(LOG_ERR,
-                                   "IOERROR: failed to create mailbox %s: %s",
-                                   mbname_intname(ancestor), error_message(r));
+                            xsyslog_ev(LOG_ERR,
+                                       "jmap.backup.mailbox.create.failed",
+                                       lf_mbname("mbox.name", ancestor),
+                                       lf_err("error", r));
                             break;
                         }
                     }
@@ -1933,8 +1987,9 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
             }
 
             if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to create mailbox %s: %s",
-                       newmboxname, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.create.failed",
+                           lf_intname("mbox.name", newmboxname),
+                           lf_err("error", r));
             }
             else {
                 /* Copy over any role (/specialuse) */
@@ -1948,9 +2003,11 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                     r = annotatemore_write(newmboxname, annot,
                                            req->accountid, &attrib);
                     if (r) {
-                        syslog(LOG_ERR,
-                               "IOERROR: failed to write annotation %s: %s",
-                               annot, error_message(r));
+                        xsyslog_ev(LOG_ERR,
+                                   "jmap.backup.annotation.write.failed",
+                                   lf_intname("mbox.name", newmboxname),
+                                   lf_s("annot.entry", annot),
+                                   lf_err("error", r));
                     }
                 }
                 buf_reset(&attrib);
@@ -1962,8 +2019,8 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
         int rw = (newmailbox == NULL || num_unflag);
         r = rw ? mailbox_open_iwl(mboxname, &mailbox) : mailbox_open_irl(mboxname, &mailbox);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to open mailbox %s: %s",
-                   mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
+                       lf_intname("mbox.name", mboxname), lf_err("error", r));
         }
     }
     if (r) goto done;
@@ -2004,8 +2061,9 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                 r = mailbox_open_iwl(newmboxname, &newmailbox);
 
                 if (r) {
-                    syslog(LOG_ERR, "IOERROR: failed to open mailbox %s: %s",
-                           newmboxname, error_message(r));
+                    xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
+                               lf_intname("mbox.name", newmboxname),
+                               lf_err("error", r));
                     break;
                 }
             }
@@ -2014,8 +2072,9 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
             r = rw ? mailbox_open_iwl(mboxname, &mailbox)
                    : mailbox_open_irl(mboxname, &mailbox);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to open mailbox %s: %s",
-                       mboxname, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
+                           lf_intname("mbox.name", mboxname),
+                           lf_err("error", r));
                 break;
             }
         }
@@ -2027,17 +2086,19 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
         message_set_from_record(mailbox, &record, msg);
         if (!(rrock->jrestore->mode & DRY_RUN)) {
             if (record.user_flags[userflag/32] & (1U<<(userflag&31))) {
-                syslog(log_level,
-                       "UID %u: removing $restored flag (%d)", record.uid, userflag);
+                xsyslog_ev(log_level, "jmap.backup.flag.removed",
+                           lf_u("msg.imapuid", record.uid),
+                           lf_d("mbox.userflag", userflag));
                 struct index_record newrecord;
                 /* copy the existing index_record */
                 memcpy(&newrecord, &record, sizeof(struct index_record));
                 newrecord.user_flags[userflag/32] &= ~(1U<<(userflag&31));
                 r = mailbox_rewrite_index_record(mailbox, &newrecord);
                 if (r) {
-                    syslog(LOG_ERR,
-                           "IOERROR: failed to rewrite index record for %s:%u",
-                           mailbox_name(mailbox), record.uid);
+                    xsyslog_ev(LOG_ERR, "jmap.backup.record.rewrite.failed",
+                               lf_mailbox(mailbox),
+                               lf_u("msg.imapuid", record.uid),
+                               lf_err("error", r));
                 }
             }
             if (restore) {
@@ -2096,8 +2157,10 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     hash_table msgids = HASH_TABLE_INITIALIZER;
     char *inbox = mboxname_user_mbox(req->accountid, NULL);
 
-    syslog(restore.log_level, "jmap_backup_restore_mail(%s, " TIME_T_FMT ")",
-           inbox, restore.cutoff);
+    xsyslog_ev(restore.log_level, "jmap.backup.restore.start",
+               lf_jmapreq(req), lf_s("backup.type", "mail"),
+               lf_intname("mbox.name", inbox),
+               lf_time("backup.cutoff", restore.cutoff));
 
     struct mail_rock mrock = {
         construct_hash_table(&emailids, 1024, 0),  // every message GUID

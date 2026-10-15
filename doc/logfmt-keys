@@ -41,10 +41,12 @@ mbox.cache.item         which item within a cache record
 mbox.cache.length       the length of a cache entry, in bytes
 mbox.cache.offset       a byte offset into the cache file
 mbox.cache.size         the size of the mapped cache, in bytes
+mbox.changes_epoch      the start of the mailbox's recorded history
 mbox.crcs.annot         annotation sync CRC
 mbox.crcs.basic         basic sync CRC
 mbox.crcs.header        the CRC of the cyrus.header file as read
 mbox.deletedmodseq      highest modseq of a deletion in this mailbox
+mbox.destroyed          when a mailbox was destroyed
 mbox.expunged           how many messages an expunge removed
 mbox.field              which field or annotation reconstruct corrected
 mbox.foldermodseq       the mailbox's folder modseq
@@ -64,6 +66,7 @@ mbox.reconstruct.reason why reconstruct unlinked a record
 mbox.refcount           how many open handles a mailbox struct has
 mbox.repack.dryrun      a repack that reports what it would do, without doing it
 mbox.repack.recalc_nanosec  a repack that recalculates nanosecond internaldates
+mbox.subfolder          the configured subfolder a feature stores things in
 mbox.tmpname            the temporary name a mailbox is parked under mid-rename
 mbox.type               the mailbox type, as a string
 mbox.uidvalidity        the mailbox's uidvalidity
@@ -77,14 +80,19 @@ mbox.version            the mailbox index format version
 msg                     placeholder for "no message"; value is always ~null~
 msg.cid                 the message's conversation id
 msg.date                the message's date, as sent
+msg.draft               1 if the record is a draft
 msg.emailid             the message's JMAP id
+msg.expunged            1 if the record is expunged
 msg.flag                a single message flag name
 msg.from                the message's envelope sender
 msg.guid                the message's guid
 msg.id                  the message's RFC 5322 Message-ID
 msg.imapuid             the message's IMAP uid within its mailbox
+msg.internaldate        the message's internaldate
+msg.lastupdated         when the record was last updated
 msg.memofor             the blobId a memo names in its X-ME-Memo-For header
 msg.modseq              the message's modseq
+msg.savedate            the message's savedate
 msg.size                the message's size in bytes
 msg.subject             the message's subject, as UTF-8
 msg.sysflags            the message's system flags, as a string
@@ -142,6 +150,12 @@ append.callout          the annotation callout program or socket
 append.stage.dir        the staging directory a message is spooled through
 append.stage.file       the staged copy of a message
 append.stage.source     the file a staged message was copied from
+backup.cutoff           the point in time a restore is undoing back to
+backup.reason           why a record or collection was skipped or selected
+backup.replaced         1 if the destroyed resource is replaced by another version
+backup.type             which data a restore covers: contacts, calendars, notes or mail
+backup.undo             what a restore is undoing: create, update or destroy
+backup.update           1 if a resource is recreated as an update, not an undelete
 cal.attendee            a calendar component's ATTENDEE
 cal.createdmodseq       the createdmodseq a JMAP calendar event id encodes
 cal.eventid             a JMAP CalendarEvent id
