@@ -1,0 +1,33 @@
+
+Description:
+
+iSchedule is now used only between the backends of a Cyrus Murder, and a
+backend accepts it only from servers listed in proxyservers.  Standalone
+servers and frontends no longer offer an iSchedule receiver, and the
+never-built DKIM support and /domainkeys resource are gone.
+
+
+Documentation:
+
+docsrc/download/installation/http/caldav.rst
+
+
+Config changes:
+
+The "ischedule" and "domainkey" values are no longer valid in the
+httpmodules option.
+
+The ischedule_dkim_domain, ischedule_dkim_key_file,
+ischedule_dkim_required and ischedule_dkim_selector options have been
+deprecated.
+
+
+Upgrade instructions:
+
+Remove "ischedule" and "domainkey" from httpmodules, if present.  httpd
+will refuse to start with either of them.
+
+
+GitHub issue:
+
+None.
