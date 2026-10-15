@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_update_readonly
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $id = $jmap->request([[ 'ContactCard/set', {
+        create => { 1 => {
+            '@type' => 'Card',
+            version => '1.0',
+            uid     => '0d8e1b0a-5e1b-4d4b-9a4b-8e6f0f6c2f11',
+            name    => { full => 'John Doe' },
+        } },
+    } ]])->single_sentence('ContactCard/set')->arguments->{created}{1}{id};
+    $self->assert_not_null($id);
+
+    my @props = qw( name uid cyrusimap.org:blobId cyrusimap.org:size
+                    cyrusimap.org:href cyrusimap.org:vCardVersion );
+    my $get = sub (@props) {
+        $jmap->request([[ 'ContactCard/get', {
+            ids => [ $id ],
+            (@props ? (properties => \@props) : ()),
+        } ]])->single_sentence('ContactCard/get')->arguments->{list}[0];
+    };
+    my $orig = $get->(@props);
+
+    # RFC 8620 5.3: an immutable or server-set value MUST NOT change
+    for my $patch (
+        { uid                          => 'urn:uuid:changed' },
+        { 'uid/x'                      => 'changed' },
+        { 'cyrusimap.org:blobId'       => 'Vnotablob' },
+        { 'cyrusimap.org:size'         => 1 },
+        { 'cyrusimap.org:href'         => '/dav/notacard.vcf' },
+        { 'cyrusimap.org:vCardVersion' => '3.0' },
+    ) {
+        my ($prop) = map { s{/.*}{}r } keys %$patch;
+        my $res = $jmap->request([[ 'ContactCard/set', {
+            update => { $id => $patch },
+        } ]]);
+        $self->assert_cmp_deeply(
+            { $id => { type => 'invalidProperties', properties => [ $prop ] } },
+            $res->single_sentence('ContactCard/set')->arguments->{notUpdated},
+            "patch $prop",
+        );
+        $self->assert_cmp_deeply($orig, $get->(@props), "unchanged after $prop");
+    }
+
+    # ... but may be sent unchanged
+    my %same = map { $_ => $orig->{$_} } @props;
+    my $res = $jmap->request([[ 'ContactCard/set', {
+        update => { $id => { %same, name => { full => 'Jane Doe' } } },
+    } ]])->single_sentence('ContactCard/set')->arguments;
+    $self->assert_cmp_deeply({}, $res->{notUpdated} // {});
+    $self->assert(exists $res->{updated}{$id});
+    $self->assert_str_equals('Jane Doe', $get->('name')->{name}{full});
+
+    # ... including the whole object as ContactCard/get returns it
+    $res = $jmap->request([[ 'ContactCard/set', {
+        update => { $id => $get->(), },
+    } ]])->single_sentence('ContactCard/set')->arguments;
+    $self->assert_cmp_deeply({}, $res->{notUpdated} // {});
+    $self->assert(exists $res->{updated}{$id});
+}
