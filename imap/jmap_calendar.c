@@ -1981,8 +1981,7 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
 
     db = caldav_open_userid(req->accountid);
     if (!db) {
-        xsyslog_ev(LOG_ERR, "jmap.calendar.dbopen.failed",
-                   lf_s("jmap.accountid", req->accountid));
+        xsyslog_ev(LOG_ERR, "jmap.caldav.open.failed", lf_jmapreq(req));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -2034,9 +2033,8 @@ done:
     if (db) {
         int rc = caldav_close(db);
         if (rc) {
-            xsyslog_ev(LOG_WARNING, "jmap.calendar.dbclose.failed",
-                       lf_s("jmap.accountid", req->accountid),
-                       lf_err("error", rc));
+            xsyslog_ev(LOG_WARNING, "jmap.caldav.close.failed",
+                       lf_jmapreq(req), lf_err("error", rc));
         }
     }
     if (r && *err == NULL) {
