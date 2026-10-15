@@ -340,7 +340,11 @@ lib_libsasl_min_la_SOURCES = \
     libsasl_min/core_saslint.h \
     libsasl_min/core_saslutil.c \
     libsasl_min/core_server.c \
-    libsasl_min/core_seterror.c
+    libsasl_min/core_seterror.c \
+    libsasl_min/mech_external.c \
+    libsasl_min/mech_plain.c \
+    libsasl_min/plugin_common.c \
+    libsasl_min/plugin_common.h
 
 lib_libsasl_min_la_CFLAGS = \
     $(AM_CFLAGS) $(CFLAG_VISIBILITY) \
