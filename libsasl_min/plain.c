@@ -44,16 +44,12 @@
  */
 
 #include <config.h>
-#include <stdio.h>
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslplug.h"
+#include "libsasl_min/plugin_common.h"
+
 #include <string.h>
-#include <sasl.h>
-#include <saslplug.h>
-
-#include "plugin_common.h"
-
-#ifdef macintosh
-# include <sasl_plain_plugin_decl.h>
-#endif
 
 /*****************************  Common Section  *****************************/
 
@@ -203,8 +199,8 @@ static int plain_server_mech_step(void *conn_context __attribute__((unused)),
             return SASL_FAIL;
         }
 
-        /* params->utils->checkpass() might have fetched authorization identity related properties
-           for the wrong user name. Free these values. */
+        /* params->utils->checkpass() might have fetched authorization identity
+         * related properties for the wrong user name. Free these values. */
         for (i = 0; pr[i].name; i++) {
             if (pr[i].name[0] == '*') {
                 continue;
@@ -257,11 +253,11 @@ static sasl_server_plug_t plain_server_plugins[] = {
     }
 };
 
-int plain_server_plug_init(const sasl_utils_t *utils,
-                           int maxversion,
-                           int *out_version,
-                           sasl_server_plug_t **pluglist,
-                           int *plugcount)
+EXPORTED int plain_server_plug_init(const sasl_utils_t *utils,
+                                    int maxversion,
+                                    int *out_version,
+                                    sasl_server_plug_t **pluglist,
+                                    int *plugcount)
 {
     if (maxversion < SASL_SERVER_PLUG_VERSION) {
         SETERROR(utils, "PLAIN version mismatch");
@@ -512,11 +508,11 @@ static sasl_client_plug_t plain_client_plugins[] = {
     }
 };
 
-int plain_client_plug_init(sasl_utils_t *utils,
-                           int maxversion,
-                           int *out_version,
-                           sasl_client_plug_t **pluglist,
-                           int *plugcount)
+EXPORTED int plain_client_plug_init(sasl_utils_t *utils,
+                                    int maxversion,
+                                    int *out_version,
+                                    sasl_client_plug_t **pluglist,
+                                    int *plugcount)
 {
     if (maxversion < SASL_CLIENT_PLUG_VERSION) {
         SETERROR(utils, "PLAIN version mismatch");
