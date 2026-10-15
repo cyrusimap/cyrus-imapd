@@ -1,0 +1,27 @@
+Description:
+
+EmailSubmission/set now supplies an onSend for a scheduled submission when
+the client's onSuccessUpdateEmail puts the email in the "scheduled" mailbox
+without one: on send, the email moves to the "sent" mailbox and loses
+$draft.  Before, a client that didn't know about the onSend extension left
+its scheduled email in the "scheduled" mailbox forever.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

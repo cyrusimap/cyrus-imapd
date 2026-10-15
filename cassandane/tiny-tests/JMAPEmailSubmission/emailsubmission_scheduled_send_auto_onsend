@@ -1,0 +1,129 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_scheduled_send_auto_onsend
+    :needs_component_calalarmd :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+
+    # onSend is only visible with the Cyrus mail extension
+    my $jmap = $user->new_jmaptester([
+        $self->jmap_default_using->@*,
+        'https://cyrusimap.org/ns/jmap/mail',
+    ]);
+
+    xlog $self, "Create Drafts, Scheduled, and Sent mailboxes";
+    my $drafts    = $user->mailboxes->create({ role => 'drafts' });
+    my $scheduled = $user->mailboxes->create({ role => 'scheduled' });
+    my $sent      = $user->mailboxes->create({ role => 'sent' });
+
+    my $res = $jmap->request([[ 'Identity/get' ]]);
+    my $identityid = $res->single_sentence('Identity/get')
+                         ->arguments->{list}[0]{id};
+
+    my sub draft ($subject) {
+        return $user->emails->create({
+            mailboxIds => { $drafts->id => JSON::true },
+            keywords => { '$draft' => JSON::true },
+            from => [{ name => '', email => 'cassandane@local' }],
+            to => [{ name => '', email => 'foo@local' }],
+            subject => $subject,
+        });
+    }
+
+    xlog $self, "Create draft emails";
+    my %email = map { $_ => draft($_) } qw(patch replace role sent);
+
+    # a scheduled submission with no onSend, as a client unaware of the
+    # extension would create it
+    my sub submission ($email) {
+        return {
+            identityId => $identityid,
+            emailId => $email->id,
+            envelope => {
+                mailFrom => {
+                    email => 'from@localhost',
+                    parameters => { holdfor => "30" },
+                },
+                rcptTo => [ { email => 'rcpt1@localhost' } ],
+            },
+        };
+    }
+
+    xlog $self, "Create submissions, moving into Scheduled three ways";
+    $res = $jmap->request([[
+        'EmailSubmission/set', {
+            create => { map { $_ => submission($email{$_}) } keys %email },
+            onSuccessUpdateEmail => {
+                '#patch' => {
+                    'mailboxIds/' . $drafts->id => JSON::null,
+                    'mailboxIds/' . $scheduled->id => JSON::true,
+                },
+                '#replace' => {
+                    mailboxIds => { $scheduled->id => JSON::true },
+                },
+                '#role' => {
+                    'mailboxIds/' . $drafts->id => JSON::null,
+                    'mailboxIds/$scheduled' => JSON::true,
+                },
+                '#sent' => {
+                    'mailboxIds/' . $drafts->id => JSON::null,
+                    'mailboxIds/' . $sent->id => JSON::true,
+                    'keywords/$draft' => JSON::null,
+                },
+            },
+        },
+    ]]);
+
+    my $expect_onsend = {
+        moveToMailboxId => $sent->id,
+        setKeywords => { '$draft' => JSON::false },
+    };
+
+    xlog $self, "Check created responses report the onSend supplied";
+    my $set = $res->sentence_named('EmailSubmission/set')->as_set;
+    $set->assert_no_errors;
+    for my $cid (qw(patch replace role)) {
+        $self->assert_cmp_deeply($expect_onsend,
+                                 $set->created->{$cid}{onSend});
+    }
+    $self->assert_null($set->created->{sent}{onSend});
+
+    my @updated = $res->sentence_named('Email/set')->as_set->updated_ids;
+    $self->assert_num_equals(4, scalar @updated);
+
+    xlog $self, "Check stored submissions";
+    my %subid = map { $_ => $set->created_id($_) } keys %email;
+    $res = $jmap->request([[
+        'EmailSubmission/get', {
+            ids => [ values %subid ],
+            properties => [ 'onSend' ],
+        },
+    ]]);
+    my %sub_by_id = map { $_->{id} => $_ }
+                    $res->single_sentence('EmailSubmission/get')
+                        ->arguments->{list}->@*;
+    for my $cid (qw(patch replace role)) {
+        $self->assert_cmp_deeply($expect_onsend,
+                                 $sub_by_id{ $subid{$cid} }{onSend});
+    }
+    $self->assert_null($sub_by_id{ $subid{sent} }{onSend});
+
+    xlog $self, "Trigger delivery of email submissions";
+    my $now = DateTime->now();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $now->epoch() + 60 );
+
+    xlog $self, "Check every email ended up in Sent without \$draft";
+    for my $cid (sort keys %email) {
+        my $got = $user->emails->get($email{$cid}->id);
+        $self->assert_cmp_deeply({ $sent->id => JSON::true },
+                                 $got->mailboxIds, "$cid: mailboxIds");
+        $self->assert_null($got->keywords->{'$draft'}, "$cid: \$draft");
+    }
+
+    xlog $self, "Verify no events left in the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
+}
