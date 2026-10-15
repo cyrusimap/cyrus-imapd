@@ -1794,6 +1794,7 @@ struct mboxset_args {
     int show_as_label;
     bool has_ext_props; // request is setting externally-stored properties
     json_t *jargs; // original JSON arguments
+    json_t *readonly; // see jmap_set_readonly()
 };
 
 static void _mbox_setargs_fini(struct mboxset_args *args)
@@ -1805,6 +1806,7 @@ static void _mbox_setargs_fini(struct mboxset_args *args)
     free(args->specialuse);
     free(args->color);
     json_decref(args->jargs);
+    json_decref(args->readonly);
 }
 
 static void _mboxset_args_parse(json_t *jargs,
@@ -1990,35 +1992,6 @@ static void _mboxset_args_parse(json_t *jargs,
             }
         }
     }
-
-    /* All of these are server-set. */
-    json_t *jrights = json_object_get(jargs, "myRights");
-    if (json_is_object(jrights) && !is_create) {
-        /* Update allows clients to set myRights, as long as
-         * it doesn't change their values. Don't bother with
-         * that during parsing, just make sure that it is
-         * syntactically valid. */
-        const char *right;
-        json_t *jval;
-        jmap_parser_push(parser, "myRights");
-        json_object_foreach(jrights, right, jval) {
-            if (!json_is_boolean(jval))
-                jmap_parser_invalid(parser, right);
-        }
-        jmap_parser_pop(parser);
-    }
-    else if (JNOTNULL(jrights)) {
-        jmap_parser_invalid(parser, "myRights");
-    }
-
-    if (json_object_get(jargs, "totalEmails") && is_create)
-        jmap_parser_invalid(parser, "totalEmails");
-    if (json_object_get(jargs, "unreadEmails") && is_create)
-        jmap_parser_invalid(parser, "unreadEmails");
-    if (json_object_get(jargs, "totalThreads") && is_create)
-        jmap_parser_invalid(parser, "totalThreads");
-    if (json_object_get(jargs, "unreadThreads") && is_create)
-        jmap_parser_invalid(parser, "unreadThreads");
 
     /* color */
     json_t *jcolor = json_object_get(jargs, "color");
@@ -2404,71 +2377,32 @@ done:
     jmap_parser_fini(&parser);
 }
 
-static int _mbox_update_validate_serverset(jmap_req_t *req,
+/* Return an invalidProperties SetError if args->readonly would change
+ * the current value of mbentry, or NULL. */
+static json_t *_mbox_update_check_readonly(jmap_req_t *req,
                                            struct mboxset_args *args,
-                                           struct jmap_parser *parser,
-                                           mbentry_t *mbentry)
+                                           const mbentry_t *mbentry)
 {
-    /* Validate read counts */
-    if (json_object_get(args->jargs, "totalEmails") ||
-        json_object_get(args->jargs, "unreadEmails") ||
-        json_object_get(args->jargs, "totalThreads") ||
-        json_object_get(args->jargs, "unreadThreads")) {
-
-        mbname_t *mbname = mbname_from_intname(mbentry->name);
-        json_t *tmp = json_object();
-        int r = _mbox_get_readcounts(req, mbname, mbentry, NULL, tmp);
-        if (!r) {
-            json_t *jval = json_object_get(args->jargs, "totalEmails");
-            if (jval && !json_equal(jval, json_object_get(tmp, "totalEmails"))) {
-                jmap_parser_invalid(parser, "totalEmails");
-            }
-            jval = json_object_get(args->jargs, "unreadEmails");
-            if (jval && !json_equal(jval, json_object_get(tmp, "unreadEmails"))) {
-                jmap_parser_invalid(parser, "unreadEmails");
-            }
-            jval = json_object_get(args->jargs, "totalThreads");
-            if (jval && !json_equal(jval, json_object_get(tmp, "totalThreads"))) {
-                jmap_parser_invalid(parser, "totalThreads");
-            }
-            jval = json_object_get(args->jargs, "unreadThreads");
-            if (jval && !json_equal(jval, json_object_get(tmp, "unreadThreads"))) {
-                jmap_parser_invalid(parser, "unreadThreads");
-            }
-        }
-        json_decref(tmp);
-        mbname_free(&mbname);
-        if (r) return r;
+    if (!args->readonly) {
+        return NULL;
     }
 
-    /* Validate myRights */
-    json_t *jpatch = json_copy(args->jargs);
-    const char *propname;
-    json_t *jval;
-    void *vtmp;
-    json_object_foreach_safe(jpatch, vtmp, propname, jval) {
-        if (strcmp(propname, "myRights") && strncmp(propname, "myRights/", 9)) {
-            json_object_del(jpatch, propname);
-        }
-    }
-    json_t *jcurRights = _mbox_get_myrights(req, mbentry);
-    json_t *jold = json_pack("{s:o}", "myRights", json_copy(jcurRights));
-    json_t *invalid = json_array();
-    json_t *jnew = jmap_patchobject_apply(jold, jpatch, invalid, 0);
-    if (json_array_size(invalid) == 0) {
-        json_t *jnewRights = json_object_get(jnew, "myRights");
-        if (!json_equal(jcurRights, jnewRights)) {
-            jmap_parser_invalid(parser, "myRights");
-        }
-    }
-    else json_array_extend(parser->invalid, invalid);
-    json_decref(jnew);
-    json_decref(jold);
-    json_decref(invalid);
-    json_decref(jpatch);
-    json_decref(jcurRights);
+    hash_table props = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&props, json_object_size(args->readonly) + 1, 0);
+    jmap_set_readonly_props(args->readonly, &props);
 
-    return 0;
+    /* As _shared_mbox_type() would; the caller has checked JACL_LOOKUP */
+    enum shared_mbox_type share_type =
+        (!strcmp(req->userid, req->accountid)
+         || jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS))
+            ? _SHAREDMBOX_SHARED
+            : _SHAREDMBOX_PARENT;
+    json_t *cur = _mbox_get(req, mbentry, NULL, &props, share_type, NULL);
+    json_t *err = jmap_set_check_readonly(args->readonly, cur);
+
+    json_decref(cur);
+    free_hash_table(&props, NULL);
+    return err;
 }
 
 static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
@@ -2510,8 +2444,10 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         goto done;
     }
 
-    /* Validate server-set properties */
-    _mbox_update_validate_serverset(req, args, &parser, mbentry);
+    result->err = _mbox_update_check_readonly(req, args, mbentry);
+    if (result->err) {
+        goto done;
+    }
 
     /* Determine current mailbox and parent names */
     char *oldmboxname = NULL;
@@ -4202,6 +4138,7 @@ static void _mboxset_parse(jmap_req_t *req,
         /* Any externally-stored properties? */
         args->has_ext_props =
             json_is_true(json_object_get(set->super.update_external, mbox_id));
+        args->readonly = json_incref(jmap_set_readonly(&set->super, mbox_id));
 
         ptrarray_append(&set->update, args);
         jmap_parser_fini(&myparser);

@@ -106,5 +106,77 @@ sub test_mailbox_set_update_serverset_props
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notUpdated}{$mboxIdA}{type});
     $self->assert_cmp_deeply(['myRights'],
-        $res->[0][1]{notUpdated}{$mboxIdA}{properties})
+        $res->[0][1]{notUpdated}{$mboxIdA}{properties});
+
+    xlog "rejected update leaves the mailbox unchanged";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxIdA => {
+                    name => 'YA',
+                    totalEmails => 1,
+                },
+            },
+        }, 'R1'],
+        ['Mailbox/get', {
+            ids => [$mboxIdA],
+            properties => ['name'],
+        }, 'R2'],
+    ]);
+    $self->assert_cmp_deeply(['totalEmails'],
+        $res->[0][1]{notUpdated}{$mboxIdA}{properties});
+    $self->assert_str_equals('XA', $res->[1][1]{list}[0]{name});
+
+    xlog "matching myRights patch is accepted";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxIdA => {
+                    'myRights/mayAdmin' => JSON::true,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxIdA});
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
+    xlog "changing Cyrus extension server-set properties is rejected";
+    for my $patch (
+        { storageUsed => 12345 },
+        { uniqueId => 'notTheUniqueId' },
+    ) {
+        my ($prop) = keys %$patch;
+        $res = $jmap->CallMethods([
+            ['Mailbox/set', {
+                update => { $mboxIdA => $patch },
+            }, 'R1'],
+        ], $using);
+        $self->assert_cmp_deeply(
+            { $mboxIdA => { type => 'invalidProperties', properties => [ $prop ] } },
+            $res->[0][1]{notUpdated},
+        );
+    }
+
+    xlog "whole object with Cyrus extension properties is accepted";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            ids => [$mboxIdA],
+        }, 'R1'],
+    ], $using);
+    $mboxA = $res->[0][1]{list}[0];
+    $self->assert_not_null($mboxA->{uniqueId});
+    $self->assert_not_null($mboxA->{storageUsed});
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxIdA => $mboxA,
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]{updated}{$mboxIdA});
 }
