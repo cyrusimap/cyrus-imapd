@@ -264,7 +264,6 @@ struct resp_body_t {
     time_t maxage;                      /* Expires          */
     const char *stag;                   /* Schedule-Tag     */
     const char *cmid;                   /* Cal-Managed-ID   */
-    time_t iserial;                     /* iSched serial#   */
     hdrcache_t extra_hdrs;              /* Extra headers    */
     struct buf payload;                 /* Payload          */
 };

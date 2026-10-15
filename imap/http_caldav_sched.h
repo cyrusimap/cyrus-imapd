@@ -5,8 +5,6 @@
 #ifndef HTTP_CALDAV_SCHED_H
 #define HTTP_CALDAV_SCHED_H
 
-//#define IOPTEST
-
 #include <config.h>
 
 #include <libical/ical.h>

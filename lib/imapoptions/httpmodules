@@ -1,7 +1,7 @@
 Name: httpmodules
 Type: BITFIELD
-Allowed-Values: admin caldav carddav convert freebusy ischedule
- jmap prometheus tzdist webdav
+Allowed-Values: admin caldav carddav convert freebusy jmap prometheus tzdist
+ webdav
 Default-Value:
 Last-Modified: UNRELEASED
 
@@ -9,6 +9,6 @@ Space-separated list of HTTP modules that will be enabled in
 :cyrusman:`httpd(8)`.  Running multiple httpd instances, each with a
 different :imapdconf:`httpmodules` value, is supported.
 
-Note that both "freebusy" and "ischedule" depend on "caldav" being enabled.
+Note that "freebusy" depends on "caldav" being enabled.
 
 The "convert" module is experimental and is not meant for production use.

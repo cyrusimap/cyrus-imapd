@@ -3308,10 +3308,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     /* Response Context */
     if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
         simple_hdr(txn, "iSchedule-Version", "1.0");
-
-        if (resp_body->iserial) {
-            simple_hdr(txn, "iSchedule-Capabilities", TIME_T_FMT, resp_body->iserial);
-        }
     }
     if (resp_body->patch) {
         accept_patch_hdr(txn, resp_body->patch);
