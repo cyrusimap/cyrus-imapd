@@ -3,35 +3,17 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
-#ifndef macintosh
-# ifdef WIN32
-#  include <winsock2.h>
-#  include <versionhelpers.h>
-# else
-#  include <sys/socket.h>
-#  include <netinet/in.h>
-#  include <arpa/inet.h>
-#  include <netdb.h>
-#  include <sys/utsname.h>
-# endif /* WIN32 */
-#endif  /* macintosh */
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
-#include <fcntl.h>
-#include <sasl.h>
-#include <saslutil.h>
-#include <saslplug.h>
 
-#include <errno.h>
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
+#include "libsasl_min/saslplug.h"
+#include "libsasl_min/plugin_common.h"
+
 #include <ctype.h>
 #include <stdio.h>
+#include <string.h>
 
-#ifdef HAVE_INTTYPES_H
-# include <inttypes.h>
-#endif
-
-#include "plugin_common.h"
+#include <sys/utsname.h>
 
 /* translate IPv4 mapped IPv6 address to IPv4 address */
 static void sockaddr_unmapped(
@@ -77,10 +59,10 @@ static void sockaddr_unmapped(
 #endif
 }
 
-int _plug_ipfromstring(const sasl_utils_t *utils,
-                       const char *addr,
-                       struct sockaddr *out,
-                       socklen_t outlen)
+EXPORTED int _plug_ipfromstring(const sasl_utils_t *utils,
+                                const char *addr,
+                                struct sockaddr *out,
+                                socklen_t outlen)
 {
     int i, j;
     socklen_t len;
@@ -142,10 +124,10 @@ int _plug_ipfromstring(const sasl_utils_t *utils,
     return SASL_OK;
 }
 
-int _plug_iovec_to_buf(const sasl_utils_t *utils,
-                       const struct iovec *vec,
-                       unsigned numiov,
-                       buffer_info_t **output)
+EXPORTED int _plug_iovec_to_buf(const sasl_utils_t *utils,
+                                const struct iovec *vec,
+                                unsigned numiov,
+                                buffer_info_t **output)
 {
     unsigned i;
     int ret;
@@ -194,10 +176,10 @@ int _plug_iovec_to_buf(const sasl_utils_t *utils,
 }
 
 /* Basically a conditional call to realloc(), if we need more */
-int _plug_buf_alloc(const sasl_utils_t *utils,
-                    char **rwbuf,
-                    unsigned *curlen,
-                    unsigned newlen)
+EXPORTED int _plug_buf_alloc(const sasl_utils_t *utils,
+                             char **rwbuf,
+                             unsigned *curlen,
+                             unsigned newlen)
 {
     if (!utils || !rwbuf || !curlen) {
         if (utils) {
@@ -235,10 +217,10 @@ int _plug_buf_alloc(const sasl_utils_t *utils,
 }
 
 /* copy a string */
-int _plug_strdup(const sasl_utils_t *utils,
-                 const char *in,
-                 char **out,
-                 int *outlen)
+EXPORTED int _plug_strdup(const sasl_utils_t *utils,
+                          const char *in,
+                          char **out,
+                          int *outlen)
 {
     size_t len = 0;
 
@@ -266,7 +248,7 @@ int _plug_strdup(const sasl_utils_t *utils,
     return SASL_OK;
 }
 
-void _plug_free_string(const sasl_utils_t *utils, char **str)
+EXPORTED void _plug_free_string(const sasl_utils_t *utils, char **str)
 {
     size_t len;
 
@@ -282,7 +264,8 @@ void _plug_free_string(const sasl_utils_t *utils, char **str)
     *str = NULL;
 }
 
-void _plug_free_secret(const sasl_utils_t *utils, sasl_secret_t **secret)
+EXPORTED void _plug_free_secret(const sasl_utils_t *utils,
+                                sasl_secret_t **secret)
 {
     if (!utils || !secret || !(*secret)) {
         return;
@@ -297,8 +280,8 @@ void _plug_free_secret(const sasl_utils_t *utils, sasl_secret_t **secret)
  * Trys to find the prompt with the lookingfor id in the prompt list
  * Returns it if found. NULL otherwise
  */
-sasl_interact_t *_plug_find_prompt(sasl_interact_t **promptlist,
-                                   unsigned int lookingfor)
+EXPORTED sasl_interact_t *_plug_find_prompt(sasl_interact_t **promptlist,
+                                            unsigned int lookingfor)
 {
     sasl_interact_t *prompt;
 
@@ -316,11 +299,11 @@ sasl_interact_t *_plug_find_prompt(sasl_interact_t **promptlist,
 /*
  * Retrieve the simple string given by the callback id.
  */
-int _plug_get_simple(const sasl_utils_t *utils,
-                     unsigned int id,
-                     int required,
-                     const char **result,
-                     sasl_interact_t **prompt_need)
+EXPORTED int _plug_get_simple(const sasl_utils_t *utils,
+                              unsigned int id,
+                              int required,
+                              const char **result,
+                              sasl_interact_t **prompt_need)
 {
 
     int ret = SASL_FAIL;
@@ -374,10 +357,10 @@ int _plug_get_simple(const sasl_utils_t *utils,
 /*
  * Retrieve the user password.
  */
-int _plug_get_password(const sasl_utils_t *utils,
-                       sasl_secret_t **password,
-                       unsigned int *iscopy,
-                       sasl_interact_t **prompt_need)
+EXPORTED int _plug_get_password(const sasl_utils_t *utils,
+                                sasl_secret_t **password,
+                                unsigned int *iscopy,
+                                sasl_interact_t **prompt_need)
 {
     int ret = SASL_FAIL;
     sasl_getsecret_t *pass_cb;
@@ -440,12 +423,12 @@ int _plug_get_password(const sasl_utils_t *utils,
 /*
  * Retrieve the string given by the challenge prompt id.
  */
-int _plug_challenge_prompt(const sasl_utils_t *utils,
-                           unsigned int id,
-                           const char *challenge,
-                           const char *promptstr,
-                           const char **result,
-                           sasl_interact_t **prompt_need)
+EXPORTED int _plug_challenge_prompt(const sasl_utils_t *utils,
+                                    unsigned int id,
+                                    const char *challenge,
+                                    const char *promptstr,
+                                    const char **result,
+                                    sasl_interact_t **prompt_need)
 {
     int ret = SASL_FAIL;
     sasl_chalprompt_t *chalprompt_cb;
@@ -500,10 +483,10 @@ int _plug_challenge_prompt(const sasl_utils_t *utils,
 /*
  * Retrieve the client realm.
  */
-int _plug_get_realm(const sasl_utils_t *utils,
-                    const char **availrealms,
-                    const char **realm,
-                    sasl_interact_t **prompt_need)
+EXPORTED int _plug_get_realm(const sasl_utils_t *utils,
+                             const char **availrealms,
+                             const char **realm,
+                             sasl_interact_t **prompt_need)
 {
     int ret = SASL_FAIL;
     sasl_getrealm_t *realm_cb;
@@ -551,20 +534,20 @@ int _plug_get_realm(const sasl_utils_t *utils,
 /*
  * Make the requested prompts. (prompt==NULL means we don't want it)
  */
-int _plug_make_prompts(const sasl_utils_t *utils,
-                       sasl_interact_t **prompts_res,
-                       const char *user_prompt,
-                       const char *user_def,
-                       const char *auth_prompt,
-                       const char *auth_def,
-                       const char *pass_prompt,
-                       const char *pass_def,
-                       const char *echo_chal,
-                       const char *echo_prompt,
-                       const char *echo_def,
-                       const char *realm_chal,
-                       const char *realm_prompt,
-                       const char *realm_def)
+EXPORTED int _plug_make_prompts(const sasl_utils_t *utils,
+                                sasl_interact_t **prompts_res,
+                                const char *user_prompt,
+                                const char *user_def,
+                                const char *auth_prompt,
+                                const char *auth_def,
+                                const char *pass_prompt,
+                                const char *pass_def,
+                                const char *echo_chal,
+                                const char *echo_prompt,
+                                const char *echo_def,
+                                const char *realm_chal,
+                                const char *realm_prompt,
+                                const char *realm_def)
 {
     int num = 1;
     int alloc_size;
@@ -655,9 +638,9 @@ int _plug_make_prompts(const sasl_utils_t *utils,
     return SASL_OK;
 }
 
-void _plug_decode_init(decode_context_t *text,
-                       const sasl_utils_t *utils,
-                       unsigned int in_maxbuf)
+EXPORTED void _plug_decode_init(decode_context_t *text,
+                                const sasl_utils_t *utils,
+                                unsigned int in_maxbuf)
 {
     memset(text, 0, sizeof(decode_context_t));
 
@@ -670,18 +653,19 @@ void _plug_decode_init(decode_context_t *text,
  * Decode as much of the input as possible (possibly none),
  * using decode_pkt() to decode individual packets.
  */
-int _plug_decode(decode_context_t *text,
-                 const char *input,
-                 unsigned inputlen,
-                 char **output,        /* output buffer */
-                 unsigned *outputsize, /* current size of output buffer */
-                 unsigned *outputlen,  /* length of data in output buffer */
-                 int (*decode_pkt)(void *rock,
-                                   const char *input,
-                                   unsigned inputlen,
-                                   char **output,
-                                   unsigned *outputlen),
-                 void *rock)
+EXPORTED int _plug_decode(
+    decode_context_t *text,
+    const char *input,
+    unsigned inputlen,
+    char **output,        /* output buffer */
+    unsigned *outputsize, /* current size of output buffer */
+    unsigned *outputlen,  /* length of data in output buffer */
+    int (*decode_pkt)(void *rock,
+                      const char *input,
+                      unsigned inputlen,
+                      char **output,
+                      unsigned *outputlen),
+    void *rock)
 {
     unsigned int tocopy;
     unsigned diff;
@@ -775,7 +759,7 @@ int _plug_decode(decode_context_t *text,
     return SASL_OK;
 }
 
-void _plug_decode_free(decode_context_t *text)
+EXPORTED void _plug_decode_free(decode_context_t *text)
 {
     if (text->buffer) {
         text->utils->free(text->buffer);
@@ -783,12 +767,12 @@ void _plug_decode_free(decode_context_t *text)
 }
 
 /* returns the realm we should pretend to be in */
-int _plug_parseuser(const sasl_utils_t *utils,
-                    char **user,
-                    char **realm,
-                    const char *user_realm,
-                    const char *serverFQDN,
-                    const char *input)
+EXPORTED int _plug_parseuser(const sasl_utils_t *utils,
+                             char **user,
+                             char **realm,
+                             const char *user_realm,
+                             const char *serverFQDN,
+                             const char *input)
 {
     int ret;
     char *r;
@@ -831,10 +815,10 @@ int _plug_parseuser(const sasl_utils_t *utils,
     return ret;
 }
 
-int _plug_make_fulluser(const sasl_utils_t *utils,
-                        char **fulluser,
-                        const char *useronly,
-                        const char *realm)
+EXPORTED int _plug_make_fulluser(const sasl_utils_t *utils,
+                                 char **fulluser,
+                                 const char *useronly,
+                                 const char *realm)
 {
     if (!fulluser || !useronly || !realm) {
         PARAMERROR(utils);
@@ -854,168 +838,19 @@ int _plug_make_fulluser(const sasl_utils_t *utils,
     return (SASL_OK);
 }
 
-char *_plug_get_error_message(const sasl_utils_t *utils,
-#ifdef WIN32
-                              DWORD error
-#else
-                              int error
-#endif
-)
+EXPORTED char *_plug_get_error_message(const sasl_utils_t *utils, int error)
 {
     char *return_value;
-#ifdef WIN32
-    LPVOID lpMsgBuf;
-
-    FormatMessage(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM
-            | FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL,
-        error,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), /* Default language */
-        (LPTSTR) &lpMsgBuf,
-        0,
-        NULL);
-
-    if (_plug_strdup(utils, lpMsgBuf, &return_value, NULL) != SASL_OK) {
-        return_value = NULL;
-    }
-
-    LocalFree(lpMsgBuf);
-#else  /* !WIN32 */
     if (_plug_strdup(utils, strerror(error), &return_value, NULL) != SASL_OK) {
         return_value = NULL;
     }
-#endif /* WIN32 */
     return (return_value);
 }
 
-void _plug_snprintf_os_info(char *osbuf, int osbuf_len)
+EXPORTED void _plug_snprintf_os_info(char *osbuf, int osbuf_len)
 {
-#ifdef WIN32
-    char *sysname;
-    sysname = "Unknown Windows";
-
-/* Let's suppose it's still compilable with win2k sdk. So define everythig missing */
-# ifndef _WIN32_WINNT_WINXP
-#  define _WIN32_WINNT_WINXP 0x0501
-# endif
-# ifndef _WIN32_WINNT_WS03
-#  define _WIN32_WINNT_WS03 0x0502
-# endif
-# ifndef _WIN32_WINNT_WIN6
-#  define _WIN32_WINNT_WIN6 0x0600
-# endif
-# ifndef _WIN32_WINNT_VISTA
-#  define _WIN32_WINNT_VISTA 0x0600
-# endif
-# ifndef _WIN32_WINNT_WS08
-#  define _WIN32_WINNT_WS08 0x0600
-# endif
-# ifndef _WIN32_WINNT_LONGHORN
-#  define _WIN32_WINNT_LONGHORN 0x0600
-# endif
-# ifndef _WIN32_WINNT_WIN7
-#  define _WIN32_WINNT_WIN7 0x0601
-# endif
-# ifndef _WIN32_WINNT_WIN8
-#  define _WIN32_WINNT_WIN8 0x0602
-# endif
-# ifndef _WIN32_WINNT_WINBLUE
-#  define _WIN32_WINNT_WINBLUE 0x0603
-# endif
-# ifndef _WIN32_WINNT_WIN10
-#  define _WIN32_WINNT_WIN10 0x0A00
-# endif
-
-    /* and use IsWindowsVersionOrGreater instead of convenient wrappers by the same reason */
-    if (IsWindowsVersionOrGreater(HIBYTE(_WIN32_WINNT_WIN10),
-                                  LOBYTE(_WIN32_WINNT_WIN10),
-                                  0))
-    {
-        sysname = "Windows 10 or greater";
-    }
-    else if (IsWindowsVersionOrGreater(HIBYTE(_WIN32_WINNT_WINBLUE),
-                                       LOBYTE(_WIN32_WINNT_WINBLUE),
-                                       0))
-    {
-        sysname = "Windows 8.1";
-    }
-    else if (IsWindowsVersionOrGreater(HIBYTE(_WIN32_WINNT_WIN8),
-                                       LOBYTE(_WIN32_WINNT_WIN8),
-                                       0))
-    {
-        sysname = "Windows 8";
-    }
-    else if (IsWindowsVersionOrGreater(HIBYTE(_WIN32_WINNT_WIN7),
-                                       LOBYTE(_WIN32_WINNT_WIN7),
-                                       1))
-    {
-        sysname = "Windows 7 SP1";
-    }
-    else if (IsWindowsVersionOrGreater(HIBYTE(_WIN32_WINNT_WIN7),
-                                       LOBYTE(_WIN32_WINNT_WIN7),
-                                       0))
-    {
-        sysname = "Windows 7";
-    }
-    else if (IsWindowsVersionOrGreater(HIBYTE(_WIN32_WINNT_VISTA),
-                                       LOBYTE(_WIN32_WINNT_VISTA),
-                                       2))
-    {
-        sysname = "Windows Vista SP2";
-    }
-    else if (IsWindowsVersionOrGreater(HIBYTE(_WIN32_WINNT_VISTA),
-                                       LOBYTE(_WIN32_WINNT_VISTA),
-                                       1))
-    {
-        sysname = "Windows Vista SP1";
-    }
-    else if (IsWindowsVersionOrGreater(HIBYTE(_WIN32_WINNT_VISTA),
-                                       LOBYTE(_WIN32_WINNT_VISTA),
-                                       0))
-    {
-        sysname = "Windows Vista";
-    }
-    else if (IsWindowsVersionOrGreater(HIBYTE(_WIN32_WINNT_WINXP),
-                                       LOBYTE(_WIN32_WINNT_WINXP),
-                                       3))
-    {
-        sysname = "Windows XP SP3";
-    }
-    else if (IsWindowsVersionOrGreater(HIBYTE(_WIN32_WINNT_WINXP),
-                                       LOBYTE(_WIN32_WINNT_WINXP),
-                                       2))
-    {
-        sysname = "Windows XP SP2";
-    }
-    else if (IsWindowsVersionOrGreater(HIBYTE(_WIN32_WINNT_WINXP),
-                                       LOBYTE(_WIN32_WINNT_WINXP),
-                                       1))
-    {
-        sysname = "Windows XP SP1";
-    }
-    else if (IsWindowsVersionOrGreater(HIBYTE(_WIN32_WINNT_WINXP),
-                                       LOBYTE(_WIN32_WINNT_WINXP),
-                                       0))
-    {
-        sysname = "Windows XP";
-    }
-
-    snprintf(osbuf, osbuf_len, "%s", sysname);
-
-#else  /* !WIN32 */
     struct utsname os;
 
     uname(&os);
     snprintf(osbuf, osbuf_len, "%s %s", os.sysname, os.release);
-#endif /* WIN32 */
 }
-
-#if defined(WIN32)
-unsigned int plug_sleep(unsigned int seconds)
-{
-    long dwSec = seconds * 1000;
-    Sleep(dwSec);
-    return 0;
-}
-#endif
