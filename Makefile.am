@@ -330,7 +330,8 @@ LIBSASL_API = \
     libsasl_min/prop.h
 
 lib_libsasl_min_la_SOURCES = \
-    $(LIBSASL_API)
+    $(LIBSASL_API) \
+    libsasl_min/saslint.h
 
 lib_libsasl_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 lib_libsasl_min_la_LIBADD =
