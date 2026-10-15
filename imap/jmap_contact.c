@@ -2437,8 +2437,7 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
 
     db = carddav_open_userid(req->accountid);
     if (!db) {
-        xsyslog_ev(LOG_ERR, "jmap.addressbook.dbopen.failed",
-                   lf_s("jmap.accountid", req->accountid));
+        xsyslog_ev(LOG_ERR, "jmap.carddav.open.failed", lf_jmapreq(req));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -2483,9 +2482,8 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
     if (db) {
         int rc = carddav_close(db);
         if (rc) {
-            xsyslog_ev(LOG_WARNING, "jmap.addressbook.dbclose.failed",
-                       lf_s("jmap.accountid", req->accountid),
-                       lf_err("error", rc));
+            xsyslog_ev(LOG_WARNING, "jmap.carddav.close.failed",
+                       lf_jmapreq(req), lf_err("error", rc));
         }
     }
     if (r && *err == NULL) {
