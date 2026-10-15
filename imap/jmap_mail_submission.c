@@ -1189,16 +1189,22 @@ static json_t *fetch_submission(jmap_req_t *req, message_t *msg)
     return sub;
 }
 
+static int getsubmission(jmap_req_t *req,
+                         struct jmap_get *get,
+                         const char *id,
+                         message_t *msg);
+
 static void _emailsubmission_update(jmap_req_t *req,
                                     struct mailbox *submbox,
                                     const char *id,
                                     json_t *emailsubmission,
+                                    json_t *readonly,
                                     json_t **set_err,
                                     char **emailid)
 {
     message_t *msg = msg_from_subid(submbox, id);
-    const struct index_record *record;
-    json_t *sub = NULL;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
+    json_t *checkro = NULL;
     int r = 0;
 
     if (!msg) {
@@ -1206,90 +1212,71 @@ static void _emailsubmission_update(jmap_req_t *req,
         *set_err = json_pack("{s:s}", "type", "notFound");
         return;
     }
-    record = msg_record(msg);
 
-    sub = fetch_submission(req, msg);
-    if (!sub) {
-        if (!r) r = IMAP_IOERROR;
+    get.props = xzmalloc(sizeof(hash_table));
+    construct_hash_table(get.props, json_object_size(readonly) + 3, 0);
+    hash_insert("emailId", (void *) 1, get.props);
+    hash_insert("undoStatus", (void *) 1, get.props);
+    if (readonly) {
+        jmap_set_readonly_props(readonly, get.props);
+    }
+    get.list = json_array();
+    get.not_found = json_array();
 
-        *set_err = json_pack("{s:s, s:s}", "type", "serverFail", "description", error_message(r));
+    r = getsubmission(req, &get, id, msg);
+    json_t *cur = json_array_get(get.list, 0);
+    if (r || !cur) {
+        if (!r) {
+            r = IMAP_IOERROR;
+        }
+        *set_err = jmap_server_error(r);
         goto done;
     }
 
-    *emailid = xstrdupnull(json_string_value(json_object_get(sub, "emailId")));
+    *emailid = xstrdupnull(json_string_value(json_object_get(cur, "emailId")));
 
-    const char *arg;
-    json_t *val;
-    int do_cancel = 0;
-    json_object_foreach(emailsubmission, arg, val) {
-        /* Make sure values in update match */
-        if (!json_equal(val, json_object_get(sub, arg))) {
-            /* Check the values that /get adds to the object */
-            switch (json_typeof(val)) {
-            case JSON_STRING:
-            {
-                const char *strval = json_string_value(val);
-
-                if (!strcmp(arg, "id") && !strcmp(strval, id)) {
-                    continue;
-                }
-                else if (!strcmp(arg, "sendAt")) {
-                    time_t t = 0;
-                    if (time_from_iso8601(strval, &t) == (int) strlen(strval) &&
-                        t == record->internaldate.tv_sec) {
-                        continue;
-                    }
-                }
-                else if (!strcmp(arg, "undoStatus")) {
-                    if (record->system_flags & FLAG_ANSWERED) {
-                        if (!strcmp(strval, "final")) continue;
-
-                        /* Already sent */
-                        *set_err = json_pack("{s:s}", "type", "cannotUnsend");
-                    }
-                    else if (record->system_flags & FLAG_FLAGGED) {
-                        if (!strcmp(strval, "canceled")) continue;
-                    }
-                    else if (!strcmp(strval, "pending")) {
-                        continue;
-                    }
-                    else if (!strcmp(strval, "canceled")) {
-                        do_cancel = 1;
-                        continue;
-                    }
-                }
-                break;
-            }
-
-            case JSON_NULL:
-                if (!strcmp(arg, "deliveryStatus")) continue;
-                break;
-
-            case JSON_ARRAY:
-                if (json_array_size(val) == 0 &&
-                    (!strcmp(arg, "dsnBlobIds") ||
-                     !strcmp(arg, "mdnBlobIds"))) {
-                    continue;
-                }
-                break;
-
-            default:
-                break;
-            }
-
-            if (!*set_err)
-                *set_err = json_pack("{s:s}", "type", "invalidProperties");
-            break;
+    /* undoStatus is client-settable: only "canceled", only while pending */
+    const char *cur_status =
+        json_string_value(json_object_get(cur, "undoStatus"));
+    json_t *jstatus = json_object_get(emailsubmission, "undoStatus");
+    bool do_cancel = false;
+    bool bad_status = false;
+    if (jstatus && !json_equal(jstatus, json_object_get(cur, "undoStatus"))) {
+        if (!strcmp(cur_status, "final")) {
+            *set_err = json_pack("{s:s}", "type", "cannotUnsend");
+            goto done;
+        }
+        else if (!strcmp(cur_status, "pending")
+                 && !strcmpsafe(json_string_value(jstatus), "canceled"))
+        {
+            do_cancel = true;
+        }
+        else {
+            bad_status = true;
         }
     }
-    json_decref(sub);
 
+    if (readonly) {
+        checkro = json_deep_copy(readonly);
+        json_object_del(checkro, "undoStatus");
+        *set_err = jmap_set_check_readonly(checkro, cur);
+    }
+    if (bad_status) {
+        if (!*set_err) {
+            *set_err = json_pack("{s:s s:[]}",
+                                 "type",
+                                 "invalidProperties",
+                                 "properties");
+        }
+        json_array_append_new(json_object_get(*set_err, "properties"),
+                              json_string("undoStatus"));
+    }
     if (*set_err) goto done;
 
     if (do_cancel) {
         struct index_record newrecord;
 
-        memcpy(&newrecord, record, sizeof(struct index_record));
+        memcpy(&newrecord, msg_record(msg), sizeof(struct index_record));
         newrecord.system_flags |= FLAG_FLAGGED;
         if (config_getswitch(IMAPOPT_JMAPSUBMISSION_DELETEONSEND)) {
             newrecord.system_flags |= FLAG_DELETED;
@@ -1300,7 +1287,9 @@ static void _emailsubmission_update(jmap_req_t *req,
         if (r) *set_err = json_pack("{s:s, s:s}", "type", "serverFail", "description", error_message(r));
     }
 
-  done:
+done:
+    json_decref(checkro);
+    jmap_get_fini(&get);
     message_unref(&msg);
 }
 
@@ -1737,8 +1726,13 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     json_object_foreach(set.update, id, jsubmission) {
         json_t *set_err = NULL;
         char *emailid = NULL;
-        _emailsubmission_update(req, submbox, id,
-                                jsubmission, &set_err, &emailid);
+        _emailsubmission_update(req,
+                                submbox,
+                                id,
+                                jsubmission,
+                                jmap_set_readonly(&set, id),
+                                &set_err,
+                                &emailid);
         if (set_err) {
             json_object_set_new(set.not_updated, id, set_err);
             free(emailid);
