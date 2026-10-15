@@ -1,0 +1,77 @@
+#!perl
+use Cassandane::Tiny;
+
+# The client this is for doesn't know about the onSend extension, so this
+# test never asks for it: the default must apply all the same, and the
+# client must not be shown a property it didn't ask for.
+sub test_emailsubmission_scheduled_send_auto_onsend_no_extension
+    :needs_component_calalarmd :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    xlog $self, "Create Drafts, Scheduled, and Sent mailboxes";
+    my $drafts    = $user->mailboxes->create({ role => 'drafts' });
+    my $scheduled = $user->mailboxes->create({ role => 'scheduled' });
+    my $sent      = $user->mailboxes->create({ role => 'sent' });
+
+    my $res = $jmap->request([[ 'Identity/get' ]]);
+    my $identityid = $res->single_sentence('Identity/get')
+                         ->arguments->{list}[0]{id};
+
+    xlog $self, "Create draft email";
+    my $email = $user->emails->create({
+        mailboxIds => { $drafts->id => JSON::true },
+        keywords => { '$draft' => JSON::true },
+        from => [{ name => '', email => 'cassandane@local' }],
+        to => [{ name => '', email => 'foo@local' }],
+        subject => 'foo',
+    });
+
+    xlog $self, "Create a scheduled submission with no onSend";
+    $res = $jmap->request([[
+        'EmailSubmission/set', {
+            create => {
+                sub => {
+                    identityId => $identityid,
+                    emailId => $email->id,
+                    envelope => {
+                        mailFrom => {
+                            email => 'from@localhost',
+                            parameters => { holdfor => "30" },
+                        },
+                        rcptTo => [ { email => 'rcpt1@localhost' } ],
+                    },
+                },
+            },
+            onSuccessUpdateEmail => {
+                '#sub' => {
+                    'mailboxIds/' . $drafts->id => JSON::null,
+                    'mailboxIds/' . $scheduled->id => JSON::true,
+                },
+            },
+        },
+    ]]);
+    my $set = $res->sentence_named('EmailSubmission/set')->as_set;
+    $set->assert_no_errors;
+    my $subid = $set->created_id('sub');
+    $self->assert_null($set->created->{sub}{onSend});
+    $res->sentence_named('Email/set')->as_set->assert_no_errors;
+
+    xlog $self, "Confirm the submission exposes no onSend without the extension";
+    $res = $jmap->request([[ 'EmailSubmission/get', { ids => [ $subid ] } ]]);
+    $self->assert_null(
+        $res->single_sentence('EmailSubmission/get')->arguments->{list}[0]{onSend}
+    );
+
+    xlog $self, "Trigger delivery of email submission";
+    my $now = DateTime->now();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $now->epoch() + 60 );
+
+    xlog $self, "Check the email moved to Sent and lost \$draft";
+    my $got = $user->emails->get($email->id);
+    $self->assert_cmp_deeply({ $sent->id => JSON::true }, $got->mailboxIds);
+    $self->assert_null($got->keywords->{'$draft'});
+}
