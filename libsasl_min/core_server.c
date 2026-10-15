@@ -3,22 +3,17 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
-#include <errno.h>
+
+#include "libsasl_min/core_saslint.h"
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslplug.h"
+#include "libsasl_min/saslutil.h"
+
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <limits.h>
-#ifndef macintosh
-# include <sys/types.h>
-# include <sys/stat.h>
-#endif
-#include <fcntl.h>
 #include <string.h>
-#include <ctype.h>
-
-#include "sasl.h"
-#include "saslint.h"
-#include "saslplug.h"
-#include "saslutil.h"
 
 #define DEFAULT_CHECKPASS_MECH "auxprop"
 
@@ -39,7 +34,7 @@
 static int _sasl_server_active = 0;
 
 /* For access by other modules */
-int _is_sasl_server_active(void)
+EXPORTED int _is_sasl_server_active(void)
 {
     return _sasl_server_active;
 }
@@ -76,13 +71,13 @@ static sasl_global_callbacks_t global_callbacks;
  *  SASL_OK        -- successful
  */
 
-int sasl_setpass(sasl_conn_t *conn,
-                 const char *user,
-                 const char *pass,
-                 unsigned passlen,
-                 const char *oldpass,
-                 unsigned oldpasslen,
-                 unsigned flags)
+EXPORTED int sasl_setpass(sasl_conn_t *conn,
+                          const char *user,
+                          const char *pass,
+                          unsigned passlen,
+                          const char *oldpass,
+                          unsigned oldpasslen,
+                          unsigned flags)
 {
     int result = SASL_OK, tmpresult;
     sasl_server_conn_t *s_conn = (sasl_server_conn_t *) conn;
@@ -469,7 +464,8 @@ static int mech_compare(const sasl_server_plug_t *a,
  * parameters:
  *  p - entry point
  */
-int sasl_server_add_plugin(const char *plugname, sasl_server_plug_init_t *p)
+EXPORTED int sasl_server_add_plugin(const char *plugname,
+                                    sasl_server_plug_init_t *p)
 {
     int plugcount;
     sasl_server_plug_t *pluglist = NULL;
@@ -558,7 +554,7 @@ int sasl_server_add_plugin(const char *plugname, sasl_server_plug_init_t *p)
     return SASL_OK;
 }
 
-int sasl_server_done(void)
+EXPORTED int sasl_server_done(void)
 {
     int result = SASL_CONTINUE;
 
@@ -731,7 +727,7 @@ static int load_config(const sasl_callback_t *verifyfile_cb)
                  "%.*s%c%s.conf",
                  (int) path_len,
                  path_to_config,
-                 HIER_DELIMITER,
+                 '/',
                  global_callbacks.appname);
 
         /* Ask the application if it's safe to use this file */
@@ -812,7 +808,7 @@ static char *grab_field(char *line, char **eofield)
 
 struct secflag_map_s
 {
-    char *name;
+    const char *name;
     int value;
 };
 
@@ -919,7 +915,8 @@ static int parse_mechlist_file(const char *mechlistfile)
  *  SASL_BADVERS   -- Mechanism version mismatch
  */
 
-int sasl_server_init(const sasl_callback_t *callbacks, const char *appname)
+EXPORTED int sasl_server_init(const sasl_callback_t *callbacks,
+                              const char *appname)
 {
     int ret;
     const sasl_callback_t *vf;
@@ -1136,14 +1133,14 @@ static int _sasl_transition(sasl_conn_t *conn,
  *  SASL_NOMEM     -- not enough memory
  */
 
-int sasl_server_new(const char *service,
-                    const char *serverFQDN,
-                    const char *user_realm,
-                    const char *iplocalport,
-                    const char *ipremoteport,
-                    const sasl_callback_t *callbacks,
-                    unsigned flags,
-                    sasl_conn_t **pconn)
+EXPORTED int sasl_server_new(const char *service,
+                             const char *serverFQDN,
+                             const char *user_realm,
+                             const char *iplocalport,
+                             const char *ipremoteport,
+                             const sasl_callback_t *callbacks,
+                             unsigned flags,
+                             sasl_conn_t **pconn)
 {
     int result;
     sasl_server_conn_t *serverconn;
@@ -1555,12 +1552,12 @@ static int do_authorization(sasl_server_conn_t *s_conn)
  * Same returns as sasl_server_step() or
  * SASL_NOMECH if mechanism not available.
  */
-int sasl_server_start(sasl_conn_t *conn,
-                      const char *mech,
-                      const char *clientin,
-                      unsigned clientinlen,
-                      const char **serverout,
-                      unsigned *serveroutlen)
+EXPORTED int sasl_server_start(sasl_conn_t *conn,
+                               const char *mech,
+                               const char *clientin,
+                               unsigned clientinlen,
+                               const char **serverout,
+                               unsigned *serveroutlen)
 {
     sasl_server_conn_t *s_conn = (sasl_server_conn_t *) conn;
     int result;
@@ -1791,11 +1788,11 @@ done:
  *  ...
  */
 
-int sasl_server_step(sasl_conn_t *conn,
-                     const char *clientin,
-                     unsigned clientinlen,
-                     const char **serverout,
-                     unsigned *serveroutlen)
+EXPORTED int sasl_server_step(sasl_conn_t *conn,
+                              const char *clientin,
+                              unsigned clientinlen,
+                              const char **serverout,
+                              unsigned *serveroutlen)
 {
     int ret;
     sasl_server_conn_t *s_conn = (sasl_server_conn_t *) conn; /* cast */
@@ -1942,14 +1939,14 @@ static unsigned mech_names_len(mechanism_t *mech_list)
  *
  * The default behavior is to separate with spaces if sep == NULL
  */
-int _sasl_server_listmech(sasl_conn_t *conn,
-                          const char *user __attribute__((unused)),
-                          const char *prefix,
-                          const char *sep,
-                          const char *suffix,
-                          const char **result,
-                          unsigned *plen,
-                          int *pcount)
+EXPORTED int _sasl_server_listmech(sasl_conn_t *conn,
+                                   const char *user __attribute__((unused)),
+                                   const char *prefix,
+                                   const char *sep,
+                                   const char *suffix,
+                                   const char **result,
+                                   unsigned *plen,
+                                   int *pcount)
 {
     sasl_server_conn_t *s_conn = (sasl_server_conn_t *) conn; /* cast */
     int lup;
@@ -2078,7 +2075,7 @@ int _sasl_server_listmech(sasl_conn_t *conn,
     return SASL_OK;
 }
 
-sasl_string_list_t *_sasl_server_mechs(void)
+EXPORTED sasl_string_list_t *_sasl_server_mechs(void)
 {
     mechanism_t *listptr;
     sasl_string_list_t *retval = NULL, *next = NULL;
@@ -2230,11 +2227,11 @@ static int _sasl_checkpass(sasl_conn_t *conn,
  *  SASL_NOVERIFY -- user found, but no verifier
  *  SASL_NOUSER   -- user not found
  */
-int sasl_checkpass(sasl_conn_t *conn,
-                   const char *user,
-                   unsigned userlen,
-                   const char *pass,
-                   unsigned passlen)
+EXPORTED int sasl_checkpass(sasl_conn_t *conn,
+                            const char *user,
+                            unsigned userlen,
+                            const char *pass,
+                            unsigned passlen)
 {
     int result;
 
@@ -2286,16 +2283,16 @@ int sasl_checkpass(sasl_conn_t *conn,
  *
  * returns:
  *  SASL_OK       -- success
- *  SASL_DISABLED -- account disabled [FIXME: currently not detected]
+ *  SASL_DISABLED -- account disabled [XXX: currently not detected]
  *  SASL_NOUSER   -- user not found
- *  SASL_NOVERIFY -- user found, but no usable mechanism [FIXME: not supported]
+ *  SASL_NOVERIFY -- user found, but no usable mechanism [XXX: not supported]
  *  SASL_NOMECH   -- no mechanisms enabled
  *  SASL_UNAVAIL  -- remote authentication server unavailable, try again later
  */
-int sasl_user_exists(sasl_conn_t *conn,
-                     const char *service,
-                     const char *user_realm,
-                     const char *user)
+EXPORTED int sasl_user_exists(sasl_conn_t *conn,
+                              const char *service,
+                              const char *user_realm,
+                              const char *user)
 {
     int result = SASL_NOMECH;
     const char *mlist = NULL, *mech = NULL;
@@ -2385,20 +2382,12 @@ int sasl_user_exists(sasl_conn_t *conn,
  *  SASL_NOMECH   -- mechanism not supported
  *  SASL_NOUSER   -- user not found
  */
-int sasl_checkapop(sasl_conn_t *conn,
-#ifdef DO_SASL_CHECKAPOP
-                   const char *challenge,
-                   unsigned challen __attribute__((unused)),
-                   const char *response,
-                   unsigned resplen __attribute__((unused)))
-#else
-                   const char *challenge __attribute__((unused)),
-                   unsigned challen __attribute__((unused)),
-                   const char *response __attribute__((unused)),
-                   unsigned resplen __attribute__((unused)))
-#endif
+EXPORTED int sasl_checkapop(sasl_conn_t *conn,
+                            const char *challenge,
+                            unsigned challen __attribute__((unused)),
+                            const char *response,
+                            unsigned resplen __attribute__((unused)))
 {
-#ifdef DO_SASL_CHECKAPOP
     sasl_server_conn_t *s_conn = (sasl_server_conn_t *) conn;
     char *user, *user_end;
     const char *password_request[] = { SASL_AUX_PASSWORD, NULL };
@@ -2479,12 +2468,6 @@ int sasl_checkapop(sasl_conn_t *conn,
     }
 
     RETURN(conn, result);
-#else  /* sasl_checkapop was disabled at compile time */
-    sasl_seterror(conn,
-                  SASL_NOLOG,
-                  "sasl_checkapop called, but was disabled at compile time");
-    RETURN(conn, SASL_NOMECH);
-#endif /* DO_SASL_CHECKAPOP */
 }
 
 /* It would be nice if we can show other information like Author, Company, Year, plugin version */
@@ -2633,7 +2616,7 @@ static void _sasl_print_mechanism(server_sasl_mechanism_t *m,
 
 /* Dump information about available server plugins (separate functions should be
    used for canon and auxprop plugins */
-int sasl_server_plugin_info(
+EXPORTED int sasl_server_plugin_info(
     const char
         *c_mech_list, /* space separated mechanism list or NULL for ALL */
     sasl_server_info_callback_t *info_cb,

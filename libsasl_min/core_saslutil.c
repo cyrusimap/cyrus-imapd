@@ -2,27 +2,16 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
-#if defined(WIN32)
-# define _CRT_RAND_S
-#endif
-
 #include <config.h>
+
+#include "libsasl_min/core_saslint.h"
+
+#include "libsasl_min/saslutil.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <errno.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
-#ifdef HAVE_TIME_H
-# include <time.h>
-#endif
-#include "saslint.h"
-#include <saslutil.h>
+#include <unistd.h>
 
 /*  Contains:
  *
@@ -77,11 +66,11 @@ static signed char index_64[128] = {
  * Returns SASL_OK on success, SASL_BUFOVER if result won't fit
  */
 
-int sasl_encode64(const char *_in,
-                  unsigned inlen,
-                  char *_out,
-                  unsigned outmax,
-                  unsigned *outlen)
+EXPORTED int sasl_encode64(const char *_in,
+                           unsigned inlen,
+                           char *_out,
+                           unsigned outmax,
+                           unsigned *outlen)
 {
     const unsigned char *in = (const unsigned char *) _in;
     unsigned char *out = (unsigned char *) _out;
@@ -144,7 +133,7 @@ int sasl_encode64(const char *_in,
  * SASL_OK on success
  */
 
-int sasl_decode64(
+EXPORTED int sasl_decode64(
     const char *in,
     unsigned inlen,
     char *out,
@@ -238,10 +227,10 @@ int sasl_decode64(
  * returns final length or 0 if not enough space
  */
 
-int sasl_mkchal(sasl_conn_t *conn,
-                char *buf,
-                unsigned maxlen,
-                unsigned hostflag)
+EXPORTED int sasl_mkchal(sasl_conn_t *conn,
+                         char *buf,
+                         unsigned maxlen,
+                         unsigned hostflag)
 {
     sasl_rand_t *pool = NULL;
     unsigned long randnum;
@@ -289,7 +278,7 @@ int sasl_mkchal(sasl_conn_t *conn,
 /* borrowed from larry. probably works :)
  * probably is also in acap server somewhere
  */
-int sasl_utf8verify(const char *str, unsigned len)
+EXPORTED int sasl_utf8verify(const char *str, unsigned len)
 {
     unsigned i;
     for (i = 0; i < len; i++) {
@@ -324,7 +313,7 @@ int sasl_utf8verify(const char *str, unsigned len)
  * without specialized hardware etc...
  * thus, this is for nonce use only
  */
-void getranddata(unsigned short ret[RPOOL_SIZE])
+EXPORTED void getranddata(unsigned short ret[RPOOL_SIZE])
 {
     long curtime;
 
@@ -393,7 +382,7 @@ void getranddata(unsigned short ret[RPOOL_SIZE])
     return;
 }
 
-int sasl_randcreate(sasl_rand_t **rpool)
+EXPORTED int sasl_randcreate(sasl_rand_t **rpool)
 {
     (*rpool) = sasl_ALLOC(sizeof(sasl_rand_t));
     if ((*rpool) == NULL) {
@@ -406,12 +395,12 @@ int sasl_randcreate(sasl_rand_t **rpool)
     return SASL_OK;
 }
 
-void sasl_randfree(sasl_rand_t **rpool)
+EXPORTED void sasl_randfree(sasl_rand_t **rpool)
 {
     sasl_FREE(*rpool);
 }
 
-void sasl_randseed(sasl_rand_t *rpool, const char *seed, unsigned len)
+EXPORTED void sasl_randseed(sasl_rand_t *rpool, const char *seed, unsigned len)
 {
     /* is it acceptable to just use the 1st 3 char's given??? */
     unsigned int lup;
@@ -444,7 +433,6 @@ static void randinit(sasl_rand_t *rpool)
     if (!rpool->initialized) {
         getranddata(rpool->pool);
         rpool->initialized = 1;
-#if !(defined(WIN32) || defined(macintosh))
 # ifndef HAVE_JRAND48
         {
             /* xxx varies by platform */
@@ -452,21 +440,12 @@ static void randinit(sasl_rand_t *rpool)
             srandom(*foo);
         }
 # endif /* HAVE_JRAND48 */
-#elif defined(WIN32)
-        {
-            unsigned int *foo = (unsigned int *) rpool->pool;
-            srand(*foo);
-        }
-#endif /* WIN32 */
     }
 }
 
-void sasl_rand(sasl_rand_t *rpool, char *buf, unsigned len)
+EXPORTED void sasl_rand(sasl_rand_t *rpool, char *buf, unsigned len)
 {
     unsigned int lup;
-#if defined(WIN32) && !defined(__MINGW32__)
-    unsigned int randomValue;
-#endif
 
     /* check params */
     if (!rpool || !buf) {
@@ -477,29 +456,17 @@ void sasl_rand(sasl_rand_t *rpool, char *buf, unsigned len)
     randinit(rpool);
 
     for (lup = 0; lup < len; lup++) {
-#if defined(__MINGW32__)
-        buf[lup] = (char) (rand() >> 8);
-#elif defined(WIN32)
-        if (rand_s(&randomValue) != 0) {
-            randomValue = rand();
-        }
-
-        buf[lup] = (char) (randomValue >> 8);
-#elif defined(macintosh)
-        buf[lup] = (char) (rand() >> 8);
-#else /* !WIN32 && !macintosh */
 # ifdef HAVE_JRAND48
         buf[lup] = (char) (jrand48(rpool->pool) >> 8);
 # else
         buf[lup] = (char) (random() >> 8);
 # endif /* HAVE_JRAND48 */
-#endif  /* WIN32 */
     }
 }
 
 /* this function is just a bad idea all around, since we're not trying to
    implement a true random number generator */
-void sasl_churn(sasl_rand_t *rpool, const char *data, unsigned len)
+EXPORTED void sasl_churn(sasl_rand_t *rpool, const char *data, unsigned len)
 {
     unsigned int lup;
 
@@ -516,13 +483,13 @@ void sasl_churn(sasl_rand_t *rpool, const char *data, unsigned len)
     }
 }
 
-void sasl_erasebuffer(char *buf, unsigned len)
+EXPORTED void sasl_erasebuffer(char *buf, unsigned len)
 {
     memset(buf, 0, len);
 }
 
 /* Lowercase string in place */
-char *sasl_strlower(char *val)
+EXPORTED char *sasl_strlower(char *val)
 {
     int i;
 
@@ -542,7 +509,7 @@ char *sasl_strlower(char *val)
 }
 
 /* A version of gethostname that tries hard to return a FQDN */
-int get_fqhostname(char *name, int namelen, int abort_if_no_fqdn)
+EXPORTED int get_fqhostname(char *name, unsigned namelen, int abort_if_no_fqdn)
 {
     int return_value;
     struct addrinfo hints;
@@ -590,9 +557,7 @@ int get_fqhostname(char *name, int namelen, int abort_if_no_fqdn)
     {
         freeaddrinfo(result);
         if (abort_if_no_fqdn) {
-#ifdef WIN32
-            WSASetLastError(WSANO_DATA);
-#elif defined(ENODATA)
+#if defined(ENODATA)
             errno = ENODATA;
 #elif defined(EADDRNOTAVAIL)
             errno = EADDRNOTAVAIL;
@@ -612,208 +577,3 @@ LOWERCASE:
     sasl_strlower(name);
     return (0);
 }
-
-#if defined(WIN32) && !defined(__MINGW64_VERSION_MAJOR)
-/*****************************************************************************
- *
- *  MODULE NAME : GETOPT.C
- *
- *  COPYRIGHTS:
- *             This module contains code made available by IBM
- *             Corporation on an AS IS basis.  Any one receiving the
- *             module is considered to be licensed under IBM copyrights
- *             to use the IBM-provided source code in any way he or she
- *             deems fit, including copying it, compiling it, modifying
- *             it, and redistributing it, with or without
- *             modifications.  No license under any IBM patents or
- *             patent applications is to be implied from this copyright
- *             license.
- *
- *             A user of the module should understand that IBM cannot
- *             provide technical support for the module and will not be
- *             responsible for any consequences of use of the program.
- *
- *             Any notices, including this one, are not to be removed
- *             from the module without the prior written consent of
- *             IBM.
- *
- *  AUTHOR:   Original author:
- *                 G. R. Blair (BOBBLAIR at AUSVM1)
- *                 Internet: bobblair@bobblair.austin.ibm.com
- *
- *            Extensively revised by:
- *                 John Q. Walker II, Ph.D. (JOHHQ at RALVM6)
- *                 Internet: johnq@ralvm6.vnet.ibm.com
- *
- *****************************************************************************/
-
-/******************************************************************************
- * getopt()
- *
- * The getopt() function is a command line parser.  It returns the next
- * option character in argv that matches an option character in opstring.
- *
- * The argv argument points to an array of argc+1 elements containing argc
- * pointers to character strings followed by a null pointer.
- *
- * The opstring argument points to a string of option characters; if an
- * option character is followed by a colon, the option is expected to have
- * an argument that may or may not be separated from it by white space.
- * The external variable optarg is set to point to the start of the option
- * argument on return from getopt().
- *
- * The getopt() function places in optind the argv index of the next argument
- * to be processed.  The system initializes the external variable optind to
- * 1 before the first call to getopt().
- *
- * When all options have been processed (that is, up to the first nonoption
- * argument), getopt() returns EOF.  The special option "--" may be used to
- * delimit the end of the options; EOF will be returned, and "--" will be
- * skipped.
- *
- * The getopt() function returns a question mark (?) when it encounters an
- * option character not included in opstring.  This error message can be
- * disabled by setting opterr to zero.  Otherwise, it returns the option
- * character that was detected.
- *
- * If the special option "--" is detected, or all options have been
- * processed, EOF is returned.
- *
- * Options are marked by either a minus sign (-) or a slash (/).
- *
- * No errors are defined.
- *****************************************************************************/
-
-# include <string.h> /* for strchr() */
-
-/* static (global) variables that are specified as exported by getopt() */
-__declspec(dllexport) char *optarg =
-    NULL; /* pointer to the start of the option argument  */
-__declspec(dllexport) int optind =
-    1; /* number of the next argv[] to be evaluated    */
-__declspec(dllexport) int opterr =
-    1; /* non-zero if a question mark should be returned */
-
-/* handle possible future character set concerns by putting this in a macro */
-# define _next_char(string) (char) (*(string + 1))
-
-int getopt(int argc, char *argv[], char *opstring)
-{
-    static char *pIndexPosition = NULL; /* place inside current argv string */
-    char *pArgString = NULL;            /* where to start from next */
-    char *pOptString;                   /* the string in our program */
-
-    if (pIndexPosition != NULL) {
-        /* we last left off inside an argv string */
-        if (*(++pIndexPosition)) {
-            /* there is more to come in the most recent argv */
-            pArgString = pIndexPosition;
-        }
-    }
-
-    if (pArgString == NULL) {
-        /* we didn't leave off in the middle of an argv string */
-        if (optind >= argc) {
-            /* more command-line arguments than the argument count */
-            pIndexPosition = NULL; /* not in the middle of anything */
-            return EOF;            /* used up all command-line arguments */
-        }
-
-        /*---------------------------------------------------------------------
-         * If the next argv[] is not an option, there can be no more options.
-         *-------------------------------------------------------------------*/
-        pArgString = argv[optind++]; /* set this to the next argument ptr */
-
-        if (('/' != *pArgString) && /* doesn't start with a slash or a dash? */
-            ('-' != *pArgString))
-        {
-            --optind;              /* point to current arg once we're done */
-            optarg = NULL;         /* no argument follows the option */
-            pIndexPosition = NULL; /* not in the middle of anything */
-            return EOF;            /* used up all the command-line flags */
-        }
-
-        /* check for special end-of-flags markers */
-        if ((strcmp(pArgString, "-") == 0) || (strcmp(pArgString, "--") == 0)) {
-            optarg = NULL;         /* no argument follows the option */
-            pIndexPosition = NULL; /* not in the middle of anything */
-            return EOF;            /* encountered the special flag */
-        }
-
-        pArgString++; /* look past the / or - */
-    }
-
-    if (':' == *pArgString) { /* is it a colon? */
-        /*---------------------------------------------------------------------
-         * Rare case: if opterr is non-zero, return a question mark;
-         * otherwise, just return the colon we're on.
-         *-------------------------------------------------------------------*/
-        return (opterr ? (int) '?' : (int) ':');
-    }
-    else if ((pOptString = strchr(opstring, *pArgString)) == 0) {
-        /*---------------------------------------------------------------------
-         * The letter on the command-line wasn't any good.
-         *-------------------------------------------------------------------*/
-        optarg = NULL;         /* no argument follows the option */
-        pIndexPosition = NULL; /* not in the middle of anything */
-        return (opterr ? (int) '?' : (int) *pArgString);
-    }
-    else {
-        /*---------------------------------------------------------------------
-         * The letter on the command-line matches one we expect to see
-         *-------------------------------------------------------------------*/
-        if (':' == _next_char(pOptString)) { /* is the next letter a colon? */
-            /* It is a colon.  Look for an argument string. */
-            if ('\0' != _next_char(pArgString)) { /* argument in this argv? */
-                optarg = &pArgString[1];          /* Yes, it is */
-            }
-            else {
-                /*-------------------------------------------------------------
-                 * The argument string must be in the next argv.
-                 * But, what if there is none (bad input from the user)?
-                 * In that case, return the letter, and optarg as NULL.
-                 *-----------------------------------------------------------*/
-                if (optind < argc) {
-                    optarg = argv[optind++];
-                }
-                else {
-                    optarg = NULL;
-                    return (opterr ? (int) '?' : (int) *pArgString);
-                }
-            }
-            pIndexPosition = NULL; /* not in the middle of anything */
-        }
-        else {
-            /* it's not a colon, so just return the letter */
-            optarg = NULL;               /* no argument follows the option */
-            pIndexPosition = pArgString; /* point to the letter we're on */
-        }
-        return (int) *pArgString; /* return the letter that matched */
-    }
-}
-
-# ifndef PASSWORD_MAX
-#  define PASSWORD_MAX 255
-# endif
-
-# include <conio.h>
-char *getpass(prompt) const char *prompt;
-{
-    register char *p;
-    register int c;
-    static char pbuf[PASSWORD_MAX];
-
-    fprintf(stderr, "%s", prompt);
-    (void) fflush(stderr);
-    for (p = pbuf; (c = _getch()) != 13 && c != EOF;) {
-        if (p < &pbuf[sizeof(pbuf) - 1]) {
-            *p++ = (char) c;
-        }
-    }
-    *p = '\0';
-    fprintf(stderr, "\n");
-    (void) fflush(stderr);
-    return (pbuf);
-}
-
-#endif /* WIN32 */
