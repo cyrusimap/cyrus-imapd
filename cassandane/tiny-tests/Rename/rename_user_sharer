@@ -51,7 +51,8 @@ sub test_rename_user_sharer
     $self->run_replication(user => 'cassandane');
     $self->run_replication(user => 'foo');
 
-    my $replicatalk = $self->{replica_store}->get_client();
+    my $replicatalk = $self->{replica}->get_service('imap')->create_store(
+                        username => "cassandane+dav")->get_client();
     $list = $replicatalk->list(['vendor.cmu-dav'], '', '*',
                                'return', ['subscribed']);
 
@@ -66,7 +67,7 @@ sub test_rename_user_sharer
         delete $structure->{$_} for keys %$structure;
 
     xlog $self, "Verify shares and subscriptions have been renamed";
-    $imaptalk = $self->{store}->get_client();
+    $imaptalk = $plusstore->get_client();
     $list = $imaptalk->list(['vendor.cmu-dav'], '', '*',
                             'return', ['subscribed']);
 
@@ -75,7 +76,7 @@ sub test_rename_user_sharer
     delete $structure->{'INBOX'};
     delete $structure->{'user.bar'};
 
-    $imaptalk = $self->{store}->get_client();
+    $imaptalk = $plusstore->get_client();
     $list = $imaptalk->list(['vendor.cmu-dav', 'subscribed'], '', '*');
 
     $self->assert_mailbox_structure($list, '.', $structure);
@@ -84,7 +85,8 @@ sub test_rename_user_sharer
     $self->run_replication(user => 'cassandane');
     $self->run_replication(user => 'bar');
 
-    $replicatalk = $self->{replica_store}->get_client();
+    $replicatalk = $self->{replica}->get_service('imap')->create_store(
+                        username => "cassandane+dav")->get_client();
     $list = $replicatalk->list(['vendor.cmu-dav', 'subscribed'], '', '*');
 
     $self->assert_mailbox_structure($list, '.', $structure);

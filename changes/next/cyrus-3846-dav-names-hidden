@@ -1,0 +1,27 @@
+Description:
+
+The ``VENDOR.CMU-DAV`` LIST selection option now only lists DAV mailboxes
+(``#calendars``, ``#addressbooks`` and the like) for admins and sessions
+logged in with the ``+dav`` suffix, as every other command that touches
+them already required.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Clients that list DAV mailboxes with ``VENDOR.CMU-DAV`` must log in as
+``user+dav`` or as an admin.
+
+
+GitHub issue:
+
+#3846

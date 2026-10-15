@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_imap_dav_hidden_plain
+    :MagicPlus :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.cassandane.#calendars.Hidden",
+                       ['TYPE', 'CALENDAR']) || die $@;
+
+    my $davtalk = $self->{instance}->get_service('imap')
+                       ->create_store(username => "cassandane+dav")
+                       ->get_client();
+    $davtalk->subscribe("INBOX.#calendars.Hidden");
+    $self->assert_str_equals('ok', $davtalk->get_last_completion_response());
+
+    my sub names ($list) { [ map { $_->[2] } @$list ] }
+    my $visible = array_each(re(qr/\A[^#]*\z/));
+
+    # a +dav session sees it
+    $self->assert_cmp_deeply(supersetof("INBOX.#calendars.Hidden"),
+        names(scalar $davtalk->list([qw( vendor.cmu-dav )], '', '*')));
+
+    # a plain session doesn't, however it asks
+    my $talk = $self->{store}->get_client();
+    for my $cmd (
+        sub { $talk->list('', '*') },
+        sub { $talk->list([qw( vendor.cmu-dav )], '', '*') },
+        sub { $talk->list('', '*', 'return', ['subscribed']) },
+        sub { $talk->lsub('', '*') },
+    ) {
+        my $list = $cmd->();
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $self->assert_cmp_deeply($visible, names($list));
+    }
+
+    # and can't use it by name
+    for my $cmd (
+        sub { $talk->select("INBOX.#calendars.Hidden") },
+        sub { $talk->examine("INBOX.#calendars.Hidden") },
+        sub { $talk->getmetadata("INBOX.#calendars.Hidden", '/shared/comment') },
+        sub { $talk->rename("INBOX.#calendars.Hidden", "INBOX.Visible") },
+        sub { $talk->rename("INBOX.Visible", "INBOX.#calendars.Other") },
+        sub { $talk->delete("INBOX.#calendars.Hidden") },
+    ) {
+        $cmd->();
+        $self->assert_str_equals('no', $talk->get_last_completion_response());
+    }
+}
