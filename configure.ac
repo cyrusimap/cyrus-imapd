@@ -1477,14 +1477,6 @@ AC_CHECK_LIB(icalvcard, vcardparser_set_xprop_value_kind,
         AC_DEFINE(HAVE_LIBICALVCARD_XPROP_VALUE,[],
                 [Do we have support for custom x-property value types?]))
 
-dnl  Don't bother checking for DKIM until iSchedule gains traction
-dnl PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
-dnl         AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,
-dnl                 AC_DEFINE(WITH_DKIM,[],
-dnl                         [Build DKIM support into iSchedule?]),
-dnl                 AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider patching OpenDKIM with contrib/dkim_canon_ischedule.patch])),
-dnl         AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider upgrading to OpenDKIM >= 2.7.0]))
-
 AC_ARG_WITH(nghttp2, [AS_HELP_STRING([--without-nghttp2], [disable HTTP/2 support (check)])],,[with_nghttp2="check"])
 if test "x$with_nghttp2" = "xyes" -o "x$with_nghttp2" = "xcheck"; then
         PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.34.0], [

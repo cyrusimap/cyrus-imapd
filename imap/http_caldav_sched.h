@@ -11,15 +11,6 @@
 
 #include <libical/ical.h>
 
-#ifdef WITH_DKIM
-#include <dkim.h>
-
-#ifndef DKIM_CANON_ISCHEDULE
-#undef WITH_DKIM
-#endif
-
-#endif /* WITH_DKIM */
-
 #include "calsched_support.h"
 #include "http_dav.h"
 #include "ical_support.h"
