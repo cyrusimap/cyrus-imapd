@@ -7508,6 +7508,23 @@ out:
     return r;
 }
 
+/* Like mailbox_spool_fname, but uid 0 gives the path of a '0.' file
+ * rather than the directory */
+static const char *reconstruct_fname(struct mailbox *mailbox,
+                                     uint32_t uid,
+                                     int isarchive)
+{
+    if (uid) {
+        return isarchive ? mailbox_archive_fname(mailbox, uid)
+                         : mailbox_spool_fname(mailbox, uid);
+    }
+
+    /* filthy hack - copy the path to '1.' and replace 1 with 0 */
+    char *hack = (char *) (isarchive ? mailbox_archive_fname(mailbox, 1)
+                                     : mailbox_spool_fname(mailbox, 1));
+    hack[strlen(hack) - 2] = '0';
+    return hack;
+}
 
 static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int isarchive,
                                       int has_snoozedannot, int flags)
@@ -7523,22 +7540,7 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
 
     int remove_temp_spool_file = 0;
 
-    if (isarchive)
-        fname = mailbox_archive_fname(mailbox, uid);
-    else
-        fname = mailbox_spool_fname(mailbox, uid);
-
-    /* possible if '0.' file exists */
-    if (!uid) {
-        /* filthy hack - copy the path to '1.' and replace 1 with 0 */
-        char *hack;
-        if (isarchive)
-            fname = mailbox_archive_fname(mailbox, 1);
-        else
-            fname = mailbox_spool_fname(mailbox, 1);
-        hack = (char *)fname;
-        hack[strlen(fname)-2] = '0';
-    }
+    fname = reconstruct_fname(mailbox, uid, isarchive);
 
     if (stat(fname, &sbuf) == -1) r = IMAP_MAILBOX_NONEXISTENT;
     else if (sbuf.st_size == 0) r = IMAP_MAILBOX_NONEXISTENT;
@@ -7633,6 +7635,45 @@ out:
     return r;
 }
 
+/* A message file the index doesn't know about, with a uid at or below
+ * last_uid: re-inject it under a new uid, remove it, or just report it */
+static int reconstruct_stray(struct mailbox *mailbox,
+                             uint32_t uid,
+                             int isarchive,
+                             int flags)
+{
+    int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
+
+    if (flags & RECONSTRUCT_STRAY_KEEP) {
+        return mailbox_reconstruct_append(mailbox,
+                                          uid,
+                                          isarchive,
+                                          /*has_snoozedannot*/ 0,
+                                          flags);
+    }
+
+    if (flags & RECONSTRUCT_STRAY_DISCARD) {
+        const char *fname = reconstruct_fname(mailbox, uid, isarchive);
+
+        printf("%s uid %u not in index - removing\n",
+               mailbox_name(mailbox),
+               uid);
+        xsyslog_ev(LOG_NOTICE, "reconstruct.stray.removed",
+                   lf_s("mbox.name", mailbox_name(mailbox)),
+                   lf_u("msg.imapuid", uid),
+                   lf_d("reconstruct.dryrun", !make_changes));
+        if (make_changes) {
+            xunlink(fname);
+        }
+        return 0;
+    }
+
+    printf("%s uid %u not in index - leaving it\n", mailbox_name(mailbox), uid);
+    xsyslog_ev(LOG_WARNING, "reconstruct.stray.found",
+               lf_s("mbox.name", mailbox_name(mailbox)),
+               lf_u("msg.imapuid", uid));
+    return 0;
+}
 
 /* reconstruct found a header field that didn't match what it recomputed, and
  * is about to correct it.  All ten comparisons log the same event; mbox.field
@@ -7859,6 +7900,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
     struct mailbox *mailbox = NULL;
     struct found_uids files = FOUND_UIDS_INITIALIZER;
     struct found_uids discovered = FOUND_UIDS_INITIALIZER;
+    struct found_uids strays = FOUND_UIDS_INITIALIZER;
     struct found_uids annots = FOUND_UIDS_INITIALIZER;
     struct found_uids delannots = FOUND_UIDS_INITIALIZER;
     struct index_header old_header;
@@ -7960,7 +8002,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
 
         /* lower UID file exists */
         while (files.pos < files.nused && files.found[files.pos].uid < record.uid) {
-            add_found(&discovered, files.found[files.pos].uid, files.found[files.pos].isarchive);
+            add_found(&strays, files.found[files.pos].uid, files.found[files.pos].isarchive);
             files.pos++;
         }
 
@@ -8076,9 +8118,9 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
         mailbox->i.last_uid = last_seen_uid;
     }
 
-    /* add discovered messages before last_uid to the list in order */
+    /* files before last_uid that the index doesn't know about */
     while (files.pos < files.nused && files.found[files.pos].uid <= mailbox->i.last_uid) {
-        add_found(&discovered, files.found[files.pos].uid, files.found[files.pos].isarchive);
+        add_found(&strays, files.found[files.pos].uid, files.found[files.pos].isarchive);
         files.pos++;
     }
 
@@ -8122,6 +8164,13 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
                                        /*has_snoozedannot*/0, flags);
         if (r) goto close;
         discovered.pos++;
+    }
+
+    while (strays.pos < strays.nused) {
+        r = reconstruct_stray(mailbox, strays.found[strays.pos].uid,
+                              strays.found[strays.pos].isarchive, flags);
+        if (r) goto close;
+        strays.pos++;
     }
 
     if (delannots.nused) {
@@ -8186,6 +8235,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
 close:
     free_found(&files);
     free_found(&discovered);
+    free_found(&strays);
     free_found(&annots);
     free_found(&delannots);
     mailbox_close(&mailbox);

@@ -40,7 +40,8 @@ sub test_reconstruct_zerouid ($self)
     $fh->close();
 
     # this time, the reconstruct will fix up the broken record and re-insert later
-    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-k',
+                                   'user.cassandane');
 
     @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
