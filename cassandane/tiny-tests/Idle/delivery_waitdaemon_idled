@@ -1,0 +1,15 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_delivery_waitdaemon_idled
+    :needs_component_idled
+    ($self)
+{
+    # master only starts services once a wait=y idled reports ready
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_daemon(name => 'idled',
+                                  argv => [ 'idled' ],
+                                  wait => 'y');
+    $self->{instance}->start();
+    $self->common_delivery();
+}

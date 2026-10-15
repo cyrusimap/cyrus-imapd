@@ -1,0 +1,25 @@
+Description:
+
+idled can run as a ``wait=y`` daemon, so master starts services only once
+idled is ready to receive notifications.
+
+
+Documentation:
+
+idled(8), cyrus.conf(5)
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+To use it, add ``wait=y`` to the idled entry in the DAEMON section of
+cyrus.conf.
+
+
+GitHub issue:
+
+#2973

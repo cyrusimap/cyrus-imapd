@@ -23,6 +23,7 @@
 #include "idle.h"
 #include "idlemsg.h"
 #include "global.h"
+#include "master/service.h" /* for STATUS_FD only */
 #include "json_support.h"
 #include "mboxevent.h"
 #include "mboxlist.h"
@@ -381,6 +382,7 @@ int main(int argc, char **argv)
     struct timeval timeout;
     pid_t pid;
     char *alt_config = NULL;
+    FILE *waitdaemon_status = NULL;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
@@ -398,6 +400,13 @@ int main(int argc, char **argv)
             exit(EX_USAGE);
             break;
         }
+    }
+
+    /* As a wait=y daemon, STATUS_FD is open for writing; check before
+     * cyrus_init() can open something else on fd 3. */
+    if (getenv("CYRUS_ISDAEMON")) {
+        waitdaemon_status = fdopen(STATUS_FD, "w");
+        if (!waitdaemon_status) errno = 0;
     }
 
     cyrus_init(alt_config, "idled", 0, 0);
@@ -430,6 +439,12 @@ int main(int argc, char **argv)
 
     sqldb_init();
     db = sqldb_open(":memory:", CMD_CREATE, 1, NULL, SQLDB_DEFAULT_TIMEOUT);
+
+    if (waitdaemon_status) {
+        fputs("ok\r\n", waitdaemon_status);
+        fclose(waitdaemon_status);
+        waitdaemon_status = NULL;
+    }
 
     /* get ready for select() */
     FD_ZERO(&read_set);
