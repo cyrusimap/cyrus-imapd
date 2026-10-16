@@ -1744,7 +1744,7 @@ struct mboxset_args {
     int show_as_label;
     bool has_ext_props; // request is setting externally-stored properties
     json_t *jargs; // original JSON arguments
-    json_t *readonly; // see jmap_set_readonly()
+    json_t *readonly; // see jmap_set.update_readonly
 };
 
 static void _mbox_setargs_fini(struct mboxset_args *args)
@@ -2314,9 +2314,7 @@ static json_t *_mbox_update_check_readonly(jmap_req_t *req,
         return NULL;
     }
 
-    hash_table props = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&props, json_object_size(args->readonly) + 1, 0);
-    jmap_set_readonly_props(args->readonly, &props);
+    hash_table *props = jmap_set_readonly_props(args->readonly);
 
     /* As _shared_mbox_type() would; the caller has checked JACL_LOOKUP */
     enum shared_mbox_type share_type =
@@ -2324,11 +2322,12 @@ static json_t *_mbox_update_check_readonly(jmap_req_t *req,
          || jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS))
             ? _SHAREDMBOX_SHARED
             : _SHAREDMBOX_PARENT;
-    json_t *cur = _mbox_get(req, mbentry, NULL, &props, share_type, NULL);
+    json_t *cur = _mbox_get(req, mbentry, NULL, props, share_type, NULL);
     json_t *err = jmap_set_check_readonly(args->readonly, cur);
 
     json_decref(cur);
-    free_hash_table(&props, NULL);
+    free_hash_table(props, NULL);
+    free(props);
     return err;
 }
 
@@ -4038,7 +4037,8 @@ static void _mboxset_parse(jmap_req_t *req,
         /* Any externally-stored properties? */
         args->has_ext_props =
             json_is_true(json_object_get(set->super.update_external, mbox_id));
-        args->readonly = json_incref(jmap_set_readonly(&set->super, mbox_id));
+        args->readonly =
+            json_incref(json_object_get(set->super.update_readonly, mbox_id));
 
         ptrarray_append(&set->update, args);
         jmap_parser_fini(&myparser);

@@ -459,7 +459,12 @@ struct jmap_set {
 
     /* Internal Use */
     json_t *update_external;
-    json_t *update_readonly; /* see jmap_set_readonly() */
+    /* Immutable and server-set properties sent in each update, keyed by
+     * the update id as sent.  Clients may send these only if they leave
+     * the current value unchanged (RFC 8620 5.3).  jmap_set_parse()
+     * gathers them as objects of property name or patch path to value;
+     * the method checks them with jmap_set_check_readonly(). */
+    json_t *update_readonly;
 
     /* Response fields */
     char *old_state;
@@ -486,26 +491,17 @@ extern void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            struct jmap_set *set, json_t **err);
 
 /**
- * Immutable and server-set properties sent in update @p id.
+ * The property names in @p readonly, to fetch the current values for
+ * jmap_set_check_readonly().
  *
- * Clients may send these only if they leave the current value unchanged
- * (RFC 8620 5.3).  jmap_set_parse() gathers them, whole or as patches, and
- * the method checks them with jmap_set_check_readonly().
- *
- * @param id the update id as sent, before resolving any creation id
- * @return an object of property name or patch path to value, or NULL if
- *         none were sent.  Owned by @p set.
+ * @return a newly allocated table, for the caller to free with
+ *         free_hash_table() and free(), or as jmap_get_fini() frees
+ *         jmap_get.props.
  */
-extern json_t *jmap_set_readonly(struct jmap_set *set, const char *id);
+extern hash_table *jmap_set_readonly_props(json_t *readonly);
 
 /**
- * Add the property names in @p readonly to @p props, to fetch the
- * current values for jmap_set_check_readonly().
- */
-extern void jmap_set_readonly_props(json_t *readonly, hash_table *props);
-
-/**
- * Check that @p readonly, as jmap_set_readonly() returns it, leaves
+ * Check that @p readonly, an entry of jmap_set.update_readonly, leaves
  * @p current unchanged.  @p current is the object as Foo/get returns it
  * with at least the properties jmap_set_readonly_props() names; a
  * property missing from it is null.

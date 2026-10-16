@@ -2137,11 +2137,6 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
     }
 }
 
-HIDDEN json_t *jmap_set_readonly(struct jmap_set *set, const char *id)
-{
-    return json_object_get(set->update_readonly, id);
-}
-
 static char *readonly_pname(const char *path)
 {
     const char *slash = strchr(path, '/');
@@ -2149,16 +2144,20 @@ static char *readonly_pname(const char *path)
     return pname ? pname : xstrdup(path);
 }
 
-HIDDEN void jmap_set_readonly_props(json_t *readonly, hash_table *props)
+HIDDEN hash_table *jmap_set_readonly_props(json_t *readonly)
 {
+    hash_table *props = xzmalloc(sizeof(hash_table));
     const char *path;
     json_t *jval;
 
+    construct_hash_table(props, json_object_size(readonly) + 1, 0);
     json_object_foreach (readonly, path, jval) {
         char *pname = readonly_pname(path);
         hash_insert(pname, (void *) 1, props);
         free(pname);
     }
+
+    return props;
 }
 
 HIDDEN json_t *jmap_set_check_readonly(json_t *readonly, json_t *current)

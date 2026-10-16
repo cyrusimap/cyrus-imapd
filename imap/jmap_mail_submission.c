@@ -1213,13 +1213,9 @@ static void _emailsubmission_update(jmap_req_t *req,
         return;
     }
 
-    get.props = xzmalloc(sizeof(hash_table));
-    construct_hash_table(get.props, json_object_size(readonly) + 3, 0);
+    get.props = jmap_set_readonly_props(readonly);
     hash_insert("emailId", (void *) 1, get.props);
     hash_insert("undoStatus", (void *) 1, get.props);
-    if (readonly) {
-        jmap_set_readonly_props(readonly, get.props);
-    }
     get.list = json_array();
     get.not_found = json_array();
 
@@ -1730,7 +1726,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
                                 submbox,
                                 id,
                                 jsubmission,
-                                jmap_set_readonly(&set, id),
+                                json_object_get(set.update_readonly, id),
                                 &set_err,
                                 &emailid);
         if (set_err) {

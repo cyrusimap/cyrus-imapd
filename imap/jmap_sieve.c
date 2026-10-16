@@ -540,16 +540,12 @@ static void set_update(struct jmap_req *req,
     }
 
     if (readonly) {
-        hash_table props = HASH_TABLE_INITIALIZER;
         struct jmap_get get = JMAP_GET_INITIALIZER;
-        construct_hash_table(&props, json_object_size(readonly) + 1, 0);
-        jmap_set_readonly_props(readonly, &props);
-        get.props = &props;
+        get.props = jmap_set_readonly_props(readonly);
         get.list = json_array();
         getscript(&get, sdata);
         err = jmap_set_check_readonly(readonly, json_array_get(get.list, 0));
-        json_decref(get.list);
-        free_hash_table(&props, NULL);
+        jmap_get_fini(&get);
         if (err) {
             goto done;
         }
@@ -850,7 +846,7 @@ static int jmap_sieve_set(struct jmap_req *req)
         set_update(req,
                    script_id,
                    val,
-                   jmap_set_readonly(&set, id),
+                   json_object_get(set.update_readonly, id),
                    mailbox,
                    db,
                    &set);
