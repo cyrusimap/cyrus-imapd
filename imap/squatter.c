@@ -944,7 +944,7 @@ static void do_rolling(const char *channel)
         mboxnames = NULL;
 
         // handle any delayed compaction runs
-        libcyrus_run_delayed();
+        libcyrus_checkpoint();
     }
 
     /* XXX - we don't really get here... */

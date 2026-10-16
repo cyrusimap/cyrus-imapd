@@ -103,7 +103,21 @@ void libcyrus_config_setint(enum cyrus_opt opt, int32_t val);
 void libcyrus_config_setswitch(enum cyrus_opt opt, bool val);
 
 extern void libcyrus_delayed_action(const char *key, void (*cb)(void *), void (*free)(void *), void *rock);
+
+/**
+ * Run the actions queued by libcyrus_delayed_action().
+ */
 extern void libcyrus_run_delayed(void);
+
+/**
+ * Do idle-point housekeeping: libcyrus_run_delayed(), then return free heap
+ * memory to the OS if enough has built up (see maybe_trim_memory()).
+ *
+ * Long-running processes call this after replying to each command, and
+ * other loops call it at their idle points.  Exit paths call
+ * libcyrus_run_delayed() instead, since trimming is wasted there.
+ */
+extern void libcyrus_checkpoint(void);
 
 /* Start/Stop the Library */
 /* Should be done AFTER setting configuration options */

@@ -684,7 +684,7 @@ static void cmdloop(void)
         if (r) fatal("unable to register process", EX_IOERR);
         proc_settitle(config_ident, bcd_clienthost, NULL, NULL, NULL);
 
-        libcyrus_run_delayed();
+        libcyrus_checkpoint();
 
         /* check for shutdown file */
         if (shutdown_file(NULL, 0)) {

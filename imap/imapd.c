@@ -1534,7 +1534,7 @@ static void cmdloop(void)
                       index_mboxname(imapd_index), NULL);
 
         /* run any delayed cleanup while a user isn't waiting on a reply */
-        libcyrus_run_delayed();
+        libcyrus_checkpoint();
 
         /* Check for shutdown file */
         if ( !imapd_userisadmin && imapd_userid &&

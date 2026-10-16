@@ -29,6 +29,7 @@
 
 #include "service.h"
 #include "libconfig.h"
+#include "libcyr_cfg.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "strarray.h"
@@ -610,6 +611,8 @@ int main(int argc, char **argv, char **envp)
             /* caught SIGHUP or exceeded max use count */
             break;
         }
+
+        libcyrus_checkpoint();
 
         notify_master(STATUS_FD, MASTER_SERVICE_AVAILABLE);
     }

@@ -2257,7 +2257,7 @@ static void cmdloop(struct http_connection *conn)
             if (txn.be) prot_flush(txn.be->out);
 
             /* Run delayed actions from this command */
-            libcyrus_run_delayed();
+            libcyrus_checkpoint();
 
             /* Check for shutdown file */
             if (shutdown_file(txn.buf.s, txn.buf.alloc) ||

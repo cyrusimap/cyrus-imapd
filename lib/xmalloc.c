@@ -9,6 +9,11 @@
 #include <sysexits.h>
 #include "xmalloc.h"
 
+#ifdef HAVE_MALLOC_H
+# include <malloc.h>
+#endif
+
+#define TRIM_THRESHOLD (64 * 1024 * 1024)
 
 EXPORTED void *xmalloc(size_t size)
 {
@@ -90,4 +95,14 @@ EXPORTED void *xmemdup(const void *ptr, size_t size)
     void *p = xmalloc(size);
     memcpy(p, ptr, size);
     return p;
+}
+
+EXPORTED void maybe_trim_memory(void)
+{
+#if defined(HAVE_MALLOC_TRIM) && defined(HAVE_MALLINFO2)
+    struct mallinfo2 mi = mallinfo2();
+    if (mi.fordblks >= TRIM_THRESHOLD) {
+        malloc_trim(0);
+    }
+#endif
 }
