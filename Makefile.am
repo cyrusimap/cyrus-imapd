@@ -337,6 +337,7 @@ lib_libsasl_min_la_SOURCES = \
     libsasl_min/core_checkpw.c \
     libsasl_min/core_client.c \
     libsasl_min/core_common.c \
+    libsasl_min/core_config.c \
     libsasl_min/core_saslint.h \
     libsasl_min/core_saslutil.c \
     libsasl_min/core_server.c \
