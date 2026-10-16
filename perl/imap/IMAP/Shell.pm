@@ -2165,6 +2165,9 @@ Note, too, that "private" annotations are private to the user currently
 authenticated as, not necessarily the owner of the mailbox.  To set
 annotations for another user you must authorize as that user.
 
+Cyrus restricts where I<specialuse> can be set: see the RFC 6154 entry in
+the RFC support list, and the specialuse options in imapd.conf(5).
+
 In addition to the use of optional flag B<--private>, one may use a more
 explicit syntax, prefixing the annotation with '/shared/' or '/private/'
 as in this example:
