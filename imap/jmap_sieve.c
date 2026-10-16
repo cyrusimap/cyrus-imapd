@@ -437,7 +437,7 @@ static void putscript(struct mailbox *mailbox, const char *script,
     if (!script) {
         /* fetch existing script content (just a rename) */
         r = sieve_script_fetch(mailbox, sdata, &buf);
-        goto done;
+        if (r) goto done;
     }
     else {
         /* check script size */
