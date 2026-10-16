@@ -7300,33 +7300,48 @@ struct snippet_receiver {
 };
 
 /* RFC 8621 5: preview MUST NOT be bigger than 255 octets.  Cut on a
- * character, entity or markup boundary, and close any open <mark>. */
+ * character, entity or markup boundary, close any open <mark>, and
+ * drop leading text rather than lose the first match. */
 static char *_snippet_clip_preview(const char *s)
 {
     static const size_t max = 255;
     static const char mark[] = "<mark>";
     static const char endmark[] = "</mark>";
     static const char omit[] = "...";
+    const size_t marklen = sizeof(mark) - 1;
+    const size_t endmarklen = sizeof(endmark) - 1;
+    const size_t omitlen = sizeof(omit) - 1;
 
-    if (strlen(s) <= max) {
+    size_t len = strlen(s);
+    if (len <= max) {
         return xstrdup(s);
     }
 
-    struct buf buf = BUF_INITIALIZER;
-    bool in_mark = false;
-    const char *p = s;
+    /* Token i spans off[i]..off[i+1]; in_mark[i] is the state before it */
+    size_t *off = xmalloc((len + 1) * sizeof(size_t));
+    bool *in_mark = xmalloc((len + 1) * sizeof(bool));
+    size_t n = 0;
+    size_t first_mark = SIZE_MAX, first_endmark = SIZE_MAX;
 
-    while (*p) {
+    off[0] = 0;
+    in_mark[0] = false;
+    for (const char *p = s; *p; n++) {
         size_t toklen = 1;
-        bool mark_after = in_mark;
+        bool mark_after = in_mark[n];
 
-        if (!strncmp(p, mark, sizeof(mark) - 1)) {
-            toklen = sizeof(mark) - 1;
+        if (!strncmp(p, mark, marklen)) {
+            toklen = marklen;
             mark_after = true;
+            if (first_mark == SIZE_MAX) {
+                first_mark = n;
+            }
         }
-        else if (!strncmp(p, endmark, sizeof(endmark) - 1)) {
-            toklen = sizeof(endmark) - 1;
+        else if (!strncmp(p, endmark, endmarklen)) {
+            toklen = endmarklen;
             mark_after = false;
+            if (first_mark != SIZE_MAX && first_endmark == SIZE_MAX) {
+                first_endmark = n;
+            }
         }
         else if (*p == '&') {
             /* Entities from the snippet generator are short */
@@ -7343,21 +7358,47 @@ static char *_snippet_clip_preview(const char *s)
             }
         }
 
-        size_t need = buf_len(&buf) + toklen + sizeof(omit) - 1
-                      + (mark_after ? sizeof(endmark) - 1 : 0);
-        if (need > max) {
+        p += toklen;
+        off[n + 1] = p - s;
+        in_mark[n + 1] = mark_after;
+    }
+
+    /* Tokens before this index must be in the preview */
+    size_t keep = first_endmark != SIZE_MAX ? first_endmark + 1
+                  : first_mark != SIZE_MAX  ? first_mark + 1
+                                            : 0;
+
+    /* The window starts at or before first_mark, so never inside a mark */
+    size_t start, end;
+    for (start = 0;; start++) {
+        size_t pre = start ? omitlen : 0;
+        for (end = start; end < n; end++) {
+            size_t need = pre + off[end + 1] - off[start]
+                          + (in_mark[end + 1] ? endmarklen : 0)
+                          + (end + 1 < n ? omitlen : 0);
+            if (need > max) {
+                break;
+            }
+        }
+        if (end >= keep || start >= first_mark) {
             break;
         }
-
-        buf_appendmap(&buf, p, toklen);
-        in_mark = mark_after;
-        p += toklen;
     }
 
-    if (in_mark) {
+    struct buf buf = BUF_INITIALIZER;
+    if (start) {
+        buf_appendcstr(&buf, omit);
+    }
+    buf_appendmap(&buf, s + off[start], off[end] - off[start]);
+    if (in_mark[end]) {
         buf_appendcstr(&buf, endmark);
     }
-    buf_appendcstr(&buf, omit);
+    if (end < n) {
+        buf_appendcstr(&buf, omit);
+    }
+
+    free(off);
+    free(in_mark);
     return buf_release(&buf);
 }
 
