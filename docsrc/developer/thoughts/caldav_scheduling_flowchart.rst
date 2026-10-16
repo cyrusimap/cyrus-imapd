@@ -362,8 +362,8 @@ sched\_deliver\_remote() - deliver an iTIP message to a remote user
    `imip\_send() <#imip_send>`__.
 #. Retrieve status of iTIP message delivery.
 
-isched\_send() - deliver an iTIP message to a remote user via iSchedule (HTTP)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+isched\_send() - deliver an iTIP message to another Murder backend via iSchedule (HTTP)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 imip\_send() - deliver an iTIP message to a remote user via iMIP (SMTP)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

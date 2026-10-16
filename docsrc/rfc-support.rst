@@ -578,10 +578,6 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
     CardDAV: vCard Extensions to Web Distributed Authoring and
     Versioning (WebDAV)
 
-:rfc:`6376`
-
-    DomainKeys Identified Mail (DKIM) Signatures
-
 :rfc:`6455`
 
     The WebSocket Protocol

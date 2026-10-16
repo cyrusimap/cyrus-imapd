@@ -110,32 +110,8 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
         }
     }
 
-    /* User is outside of our domain(s) -
-       Do remote scheduling (default = iMIP) */
+    /* User is outside of our domain(s) - use iMIP */
     param->flags |= SCHEDTYPE_REMOTE;
-
-    /* Do iSchedule DNS SRV lookup */
-
-    /* XXX  If success, set server, port,
-       and flags |= SCHEDTYPE_ISCHEDULE [ | SCHEDTYPE_SSL ] */
-
-#ifdef IOPTEST  /* CalConnect ioptest */
-    if (!strcmp(p, "example.com")) {
-        param->server = xstrdup("ischedule.example.com");
-        param->port = 8008;
-        param->flags |= SCHEDTYPE_ISCHEDULE;
-    }
-    else if (!strcmp(p, "mysite.edu")) {
-        param->server = xstrdup("ischedule.mysite.edu");
-        param->port = 8080;
-        param->flags |= SCHEDTYPE_ISCHEDULE;
-    }
-    else if (!strcmp(p, "bedework.org")) {
-        param->server = xstrdup("www.bedework.org");
-        param->port = 80;
-        param->flags |= SCHEDTYPE_ISCHEDULE;
-    }
-#endif /* IOPTEST */
 
     return 0;
 }

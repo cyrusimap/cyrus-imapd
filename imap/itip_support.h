@@ -86,7 +86,6 @@ struct sched_data {
 /* Scheduling protocol flags */
 #define SCHEDTYPE_REMOTE        (1<<0)
 #define SCHEDTYPE_ISCHEDULE     (1<<1)
-#define SCHEDTYPE_SSL           (1<<2)
 
 enum sched_deliver_outcome {
     SCHED_DELIVER_ERROR    = -1,
