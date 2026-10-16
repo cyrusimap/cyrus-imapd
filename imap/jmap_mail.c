@@ -1638,15 +1638,13 @@ static enum jmapseen_source jmapseen_folder_source(struct jmapseen_attrdata *ad,
     else {
         // need to open mailbox to read OPT_SHAREDSEEN
         struct mailbox *mbox = NULL;
-        int r = mailbox_open_irlnb(mboxname, &mbox); // non-blocking
+        int r = mailbox_open_irl(mboxname, &mbox);
         if (!r) {
             seen_source = mailbox_internal_seen(mbox, ad->userid) ?
                 jmapseen_flags : jmapseen_db;
             mailbox_close(&mbox);
         }
         else {
-            // could try later for locked mailboxes, but
-            // let's not amplify mailbox open attempts
             xsyslog(LOG_ERR, "can not open mailbox, fall back to system flags",
                     "mboxname=<%s> err=<%s>", mboxname, error_message(r));
             seen_source = jmapseen_flags;

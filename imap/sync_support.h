@@ -303,6 +303,7 @@ const char *sync_restore(struct dlist *kin,
 #define SYNC_FLAG_USECACHE (1<<9)
 #define SYNC_FLAG_NOCACHE (1<<10)
 #define SYNC_FLAG_UNMAILBOX_ID (1<<11)
+#define SYNC_FLAG_ROLLING (1<<12)
 
 int sync_do_annotation(struct sync_client_state *sync_cs, const char *mboxname);
 int sync_do_mailboxes(struct sync_client_state *sync_cs,

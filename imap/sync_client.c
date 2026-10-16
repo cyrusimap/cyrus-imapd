@@ -329,6 +329,31 @@ static int do_mailbox(const char *mboxname)
     return r;
 }
 
+/* With -N, a locked user or mailbox is skipped rather than an error */
+static int skip_locked_user(int r, const char *userid)
+{
+    if (r != IMAP_MAILBOX_LOCKED) {
+        return r;
+    }
+    if (verbose) {
+        fprintf(stderr, "Skipping locked user %s\n", userid);
+    }
+    xsyslog_ev(LOG_NOTICE, "sync.user.locked", lf_s("u.username", userid));
+    return 0;
+}
+
+static int skip_locked_mailbox(int r, const char *mboxname)
+{
+    if (r != IMAP_MAILBOX_LOCKED) {
+        return r;
+    }
+    if (verbose) {
+        fprintf(stderr, "Skipping locked mailbox %s\n", mboxname);
+    }
+    xsyslog_ev(LOG_NOTICE, "sync.mailbox.locked", lf_s("mbox.name", mboxname));
+    return 0;
+}
+
 static int cb_allmbox(const mbentry_t *mbentry, void *rock)
 {
     int r = 0;
@@ -352,12 +377,7 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
         xzfree(prev_userid);
         prev_userid = xstrdup(userid);
 
-        r = sync_do_user(&sync_cs, userid, NULL);
-        if (r == IMAP_MAILBOX_LOCKED) {
-            if (verbose)
-                fprintf(stderr, "Skipping locked user %s\n", userid);
-            r = 0;
-        }
+        r = skip_locked_user(sync_do_user(&sync_cs, userid, NULL), userid);
         if (r) {
             if (verbose)
                 fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
@@ -368,12 +388,7 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
     else {
         /* all shared mailboxes, including DELETED ones, sync alone */
         /* XXX: batch in hundreds? */
-        r = do_mailbox(mbentry->name);
-        if (r == IMAP_MAILBOX_LOCKED) {
-            if (verbose)
-                fprintf(stderr, "Skipping locked mailbox %s\n", mbentry->name);
-            r = 0;
-        }
+        r = skip_locked_mailbox(do_mailbox(mbentry->name), mbentry->name);
         if (r) {
             if (verbose)
                 fprintf(stderr, "Error from do_user(%s): bailing out!\n", mbentry->name);
@@ -644,6 +659,12 @@ int main(int argc, char **argv)
      * it repair a replica that's been changed behind our back */
     if (mode == MODE_REPEAT) sync_cs.flags |= SYNC_FLAG_USECACHE;
 
+    /* rolling replication from the sync log defers anything locked to the
+     * next pass, rather than holding up everything behind it */
+    if (mode == MODE_REPEAT && !input_filename) {
+        sync_cs.flags |= SYNC_FLAG_ROLLING | SYNC_FLAG_NONBLOCK;
+    }
+
     switch (mode) {
     case MODE_USER:
         /* Open up connection to server */
@@ -662,7 +683,8 @@ int main(int argc, char **argv)
                 if ((len == 0) || (buf[0] == '#'))
                     continue;
 
-                if (sync_do_user(&sync_cs, buf, partition)) {
+                r = sync_do_user(&sync_cs, buf, partition);
+                if (skip_locked_user(r, buf)) {
                     if (verbose)
                         fprintf(stderr,
                                 "Error from sync_do_user(%s): bailing out!\n",
@@ -673,13 +695,19 @@ int main(int argc, char **argv)
                 }
             }
             fclose(file);
-        } else for (i = optind; !r && i < argc; i++) {
-            if (sync_do_user(&sync_cs, argv[i], partition)) {
-                if (verbose)
-                    fprintf(stderr, "Error from sync_do_user(%s): bailing out!\n",
-                            argv[i]);
-                syslog(LOG_ERR, "Error in sync_do_user(%s): bailing out!", argv[i]);
-                exit_rc = 1;
+        }
+        else {
+            for (i = optind; i < argc; i++) {
+                r = sync_do_user(&sync_cs, argv[i], partition);
+                if (skip_locked_user(r, argv[i])) {
+                    if (verbose)
+                        fprintf(stderr,
+                                "Error from sync_do_user(%s): bailing out!\n",
+                                argv[i]);
+                    syslog(LOG_ERR, "Error in sync_do_user(%s): bailing out!",
+                           argv[i]);
+                    exit_rc = 1;
+                }
             }
         }
 
@@ -727,7 +755,27 @@ int main(int argc, char **argv)
             free(intname);
         }
 
-        if (sync_do_mailboxes(&sync_cs, mboxname_list, partition, flags)) {
+        r = sync_do_mailboxes(&sync_cs, mboxname_list, partition, flags);
+        if (r == IMAP_MAILBOX_LOCKED) {
+            /* sync the rest one at a time, to skip just the locked ones */
+            r = 0;
+            for (struct sync_name *mbox = mboxname_list->head; mbox;
+                 mbox = mbox->next)
+            {
+                if (mbox->mark) {
+                    continue;
+                }
+                struct sync_name_list *one = sync_name_list_create();
+                sync_name_list_add(one, mbox->name);
+                int r2 = sync_do_mailboxes(&sync_cs, one, partition, flags);
+                sync_name_list_free(&one);
+                r2 = skip_locked_mailbox(r2, mbox->name);
+                if (!r) {
+                    r = r2;
+                }
+            }
+        }
+        if (r) {
             if (verbose) {
                 fprintf(stderr,
                         "Error from sync_do_mailboxes(): bailing out!\n");

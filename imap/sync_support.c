@@ -281,6 +281,26 @@ static struct mboxlock *sync_lock(struct sync_client_state *sync_cs,
     return r ? NULL : lock;
 }
 
+/* With SYNC_FLAG_NONBLOCK, return IMAP_MAILBOX_LOCKED rather than wait */
+static int sync_open_mailbox(unsigned flags,
+                             const char *name,
+                             bool write,
+                             struct mailbox **mailboxp)
+{
+    if (flags & SYNC_FLAG_NONBLOCK) {
+        return write ? mailbox_open_iwlnb(name, mailboxp)
+                     : mailbox_open_irlnb(name, mailboxp);
+    }
+    return write ? mailbox_open_iwl(name, mailboxp)
+                 : mailbox_open_irl(name, mailboxp);
+}
+
+/* Can a locked item be logged again for a later run to retry? */
+static bool sync_can_defer(const struct sync_client_state *sync_cs)
+{
+    return sync_cs->channel || (sync_cs->flags & SYNC_FLAG_ROLLING);
+}
+
 /* channel-based configuration */
 
 EXPORTED const char *sync_get_config(const char *channel, enum imapopt opt)
@@ -5421,7 +5441,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                             struct sync_folder_list *master_folders,
                             struct sync_folder_list *replica_folders,
                             struct sync_reserve_list *reserve_list,
-                            uint32_t batchsize)
+                            uint32_t batchsize,
+                            unsigned flags)
 {
     struct sync_name *mbox;
     struct sync_folder *rfolder;
@@ -5454,7 +5475,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
         mboxlist_entry_free(&mbentry);
 
-        r = mailbox_open_irl(mbox->name, &mailbox);
+        r = sync_open_mailbox(flags, mbox->name, false, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
 
         /* Quietly skip over folders which have been deleted since we
@@ -5462,6 +5483,9 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             r = 0;
             continue;
+        }
+        if (r == IMAP_MAILBOX_LOCKED) {
+            goto bail;
         }
 
         if (r) {
@@ -5633,8 +5657,13 @@ static int reserve_messages(struct sync_client_state *sync_cs,
     struct sync_reserve *reserve;
     int r;
 
-    r = find_reserve_all(mboxname_list, topartition, master_folders,
-                         replica_folders, reserve_list, batchsize);
+    r = find_reserve_all(mboxname_list,
+                         topartition,
+                         master_folders,
+                         replica_folders,
+                         reserve_list,
+                         batchsize,
+                         sync_cs->flags);
     if (r) return r;
 
     for (reserve = reserve_list->head; reserve; reserve = reserve->next) {
@@ -6831,7 +6860,7 @@ static int mailbox_full_update(struct sync_client_state *sync_cs,
         mailbox = local->mailbox;
     }
     else {
-        r = mailbox_open_iwl(local->name, &mailbox);
+        r = sync_open_mailbox(sync_cs->flags, local->name, true, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
     }
     if (r) goto done;
@@ -7086,12 +7115,11 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     if (local->mailbox) {
         mailbox = local->mailbox;
     }
-    else if (is_repeat) {
-        r = mailbox_open_iwl(local->name, &mailbox);
-        if (!r) r = sync_mailbox_version_check(&mailbox);
-    }
     else {
-        r = mailbox_open_irl(local->name, &mailbox);
+        r = sync_open_mailbox(sync_cs->flags, local->name, is_repeat, &mailbox);
+        if (!r && is_repeat) {
+            r = sync_mailbox_version_check(&mailbox);
+        }
     }
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -7955,7 +7983,7 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
 
     sync_name_list_add(info->mboxlist, mbentry->name);
 
-    r = mailbox_open_irl(mbentry->name, &mailbox);
+    r = sync_open_mailbox(info->flags, mbentry->name, false, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
     /* doesn't exist?  Probably not finished creating or removing yet */
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -8275,7 +8303,7 @@ redo:
 
     /* check that the inbox exists locally to be allowed to sync this user at all */
     char *inbox = mboxname_user_mbox(userid, NULL);
-    r = mailbox_open_irl(inbox, &mailbox);
+    r = sync_open_mailbox(sync_cs->flags, inbox, false, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
     free(inbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -8521,7 +8549,7 @@ static int do_unuser(struct sync_client_state *sync_cs, const char *userid)
 
     /* check local mailbox first */
     char *inbox = mboxname_user_mbox(userid, NULL);
-    r = mailbox_open_irl(inbox, &mailbox);
+    r = sync_open_mailbox(sync_cs->flags, inbox, false, &mailbox);
 
     /* only remove from server if there's no local mailbox */
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -8565,7 +8593,7 @@ static int do_unmailbox(struct sync_client_state *sync_cs, const char *mboxname)
     struct mailbox *mailbox = NULL;
     int r;
 
-    r = mailbox_open_irl(mboxname, &mailbox);
+    r = sync_open_mailbox(sync_cs->flags, mboxname, false, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* make sure there's an explicit local tombstone */
         mbentry_t *tombstone = NULL;
@@ -8629,7 +8657,7 @@ static int do_mailboxes(struct sync_client_state *sync_cs,
 
     if (mboxname_list->count) {
         r = sync_do_mailboxes(sync_cs, mboxname_list, NULL, flags);
-        if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
+        if (r == IMAP_MAILBOX_LOCKED && sync_can_defer(sync_cs)) {
             for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
                 if (mbox->mark) continue;
                 sync_log_channel_mailbox(sync_cs->channel, mbox->name);
@@ -8880,7 +8908,7 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
             continue;
 
         r = sync_do_quota(sync_cs, action->name);
-        if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
+        if (r == IMAP_MAILBOX_LOCKED && sync_can_defer(sync_cs)) {
             sync_log_channel_quota(sync_cs->channel, action->name);
             report_verbose("  Deferred: QUOTA %s\n", action->name);
         }
@@ -8904,7 +8932,7 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         r = sync_do_annotation(sync_cs, action->name);
         if (!*action->name) continue;
 
-        if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
+        if (r == IMAP_MAILBOX_LOCKED && sync_can_defer(sync_cs)) {
             sync_log_channel_annotation(sync_cs->channel, action->name);
             report_verbose("  Deferred: ANNOTATION %s\n", action->name);
         }
@@ -8923,7 +8951,7 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
             continue;
 
         r = sync_do_seen(sync_cs, action->user, action->name);
-        if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
+        if (r == IMAP_MAILBOX_LOCKED && sync_can_defer(sync_cs)) {
             sync_log_channel_seen(sync_cs->channel, action->user, action->name);
             report_verbose("  Deferred: SEEN %s %s\n",
                            action->user, action->name);
@@ -8951,7 +8979,7 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
             continue;
 
         r = user_sub(sync_cs, action->user, action->name);
-        if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
+        if (r == IMAP_MAILBOX_LOCKED && sync_can_defer(sync_cs)) {
             sync_log_channel_subscribe(sync_cs->channel, action->user, action->name);
             report_verbose("  Deferred: SUB %s %s\n",
                            action->user, action->name);
@@ -8979,7 +9007,7 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         if (!action->active)
             continue;
         r = do_unmailbox(sync_cs, action->name);
-        if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
+        if (r == IMAP_MAILBOX_LOCKED && sync_can_defer(sync_cs)) {
             sync_log_channel_unmailbox(sync_cs->channel, action->name);
             report_verbose("  Deferred: UNMAILBOX %s\n", action->name);
         }
@@ -8991,7 +9019,7 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
             continue;
 
         r = sync_do_meta(sync_cs, action->user);
-        if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
+        if (r == IMAP_MAILBOX_LOCKED && sync_can_defer(sync_cs)) {
             sync_log_channel_sieve(sync_cs->channel, action->user);
             report_verbose("  Deferred: META %s\n", action->user);
         }
@@ -9009,7 +9037,7 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         if (!action->active)
             continue;
         r = sync_do_user(sync_cs, action->user, NULL);
-        if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
+        if (r == IMAP_MAILBOX_LOCKED && sync_can_defer(sync_cs)) {
             sync_log_channel_user(sync_cs->channel, action->user);
             report_verbose("  Deferred: USER %s\n", action->user);
         }
@@ -9022,7 +9050,7 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         if (!action->active)
             continue;
         r = do_unuser(sync_cs, action->user);
-        if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
+        if (r == IMAP_MAILBOX_LOCKED && sync_can_defer(sync_cs)) {
             sync_log_channel_unuser(sync_cs->channel, action->user);
             report_verbose("  Deferred: UNUSER %s\n", action->user);
         }
