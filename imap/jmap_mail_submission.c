@@ -12,6 +12,7 @@
 #include <syslog.h>
 #include <assert.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <errno.h>
 
 #include "acl.h"
@@ -295,6 +296,15 @@ static int _emailsubmission_address_parse(json_t *addr,
         jmap_parser_invalid(parser, "email");
     }
 
+    time_t now = 0, max_delay = 0;
+    if (holduntil) {
+        now = time(0);
+        max_delay = config_getduration(IMAPOPT_JMAP_MAX_DELAYED_SEND);
+        if (max_delay < 0) {
+            max_delay = 0;
+        }
+    }
+
     const char *key;
     json_t *jval;
     json_t *parameters = json_object_get(addr, "parameters");
@@ -314,19 +324,27 @@ static int _emailsubmission_address_parse(json_t *addr,
                 *identity = val;
             }
             if (holduntil) {
-                if (!strcasecmp(key, "HOLDFOR")) {
+                bool holdfor = !strcasecmp(key, "HOLDFOR");
+
+                if ((holdfor || !strcasecmp(key, "HOLDUNTIL")) && !max_delay) {
+                    /* maxDelayedSend 0 means delayed send is unsupported */
+                    jmap_parser_invalid(parser, key);
+                }
+                else if (holdfor) {
                     char *endptr = (char *) val;
-                    unsigned long interval = val ? strtoul(val, &endptr, 10) : ULONG_MAX;
-                    time_t now = time(0);
+                    unsigned long interval =
+                        val ? strtoul(val, &endptr, 10) : ULONG_MAX;
 
                     if (endptr == val || *endptr != '\0' ||
-                        interval > 99999999 /* per RFC 4865 */) {
+                        interval > 99999999 /* per RFC 4865 */ ||
+                        (time_t) interval > max_delay) {
                         jmap_parser_invalid(parser, key);
                     }
                     else *holduntil = now + interval;
                 }
                 else if (!strcasecmp(key, "HOLDUNTIL")) {
-                    if (!val || time_from_iso8601(val, holduntil) < 0) {
+                    if (!val || time_from_iso8601(val, holduntil) < 0 ||
+                        *holduntil - now > max_delay) {
                         jmap_parser_invalid(parser, key);
                     }
                 }
