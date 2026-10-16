@@ -269,7 +269,7 @@ typedef int sasl_plaintext_verifier(sasl_conn_t *conn,
 
 struct sasl_verify_password_s
 {
-    char *name;
+    const char *name;
     sasl_plaintext_verifier *verify;
 };
 
