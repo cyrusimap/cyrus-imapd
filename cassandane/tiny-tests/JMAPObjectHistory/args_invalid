@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_args_invalid ($self)
+{
+    my $jmap = $self->{jmap};
+
+    for my $args (
+        { includeReplaced => 'yes' },
+        { includeDestroyed => 1 },
+        { historyAfter => 'yesterday' },
+        { historyAfter => '2026-01-01T00:00:00+01:00' },
+        { historyLimit => -1 },
+        { historyLimit => 'ten' },
+    ) {
+        my ($arg) = keys %$args;
+        my $res = $jmap->CallMethods([['Mailbox/get', $args, 'R1']]);
+        $self->assert_cmp_deeply(
+            [ 'error', { type => 'invalidArguments', arguments => [$arg] },
+              'R1' ],
+            $res->[0],
+        );
+    }
+
+    # null means "no filter" for historyAfter and historyLimit
+    my $res = $jmap->CallMethods([['Mailbox/get', {
+        includeReplaced => JSON::true,
+        historyAfter => undef,
+        historyLimit => undef,
+    }, 'R1']]);
+    $self->assert_str_equals('Mailbox/get', $res->[0][0]);
+}
