@@ -926,6 +926,11 @@ draft-ietf-jmap-calendars
 
     JMAP for Calendars
 
+draft-ietf-jmap-conditional
+
+    JMAP Conditional Set.  "ifUnchangedBy" is supported on every Foo/set;
+    "atomic" is always rejected with "cannotApplyAtomically".
+
 draft-murchison-lmtp-ignorequota
 
     LMTP Service Extension for Ignoring Recipient Quotas

@@ -1,0 +1,29 @@
+Description:
+
+Added the JMAP `urn:ietf:params:jmap:conditional` capability
+(draft-ietf-jmap-conditional).  Every Foo/set accepts `ifUnchangedBy`,
+a map of object id to a PatchObject the object must currently match.
+If any precondition does not hold, the whole method is rejected with
+`stateMismatch` and nothing changes.  `atomic: true` is rejected with
+`cannotApplyAtomically`.
+
+
+Documentation:
+
+https://datatracker.ietf.org/doc/draft-ietf-jmap-conditional/
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None.  The capability is advertised automatically, and clients that
+don't name it in `using` see no change.
+
+
+GitHub issue:
+
+None

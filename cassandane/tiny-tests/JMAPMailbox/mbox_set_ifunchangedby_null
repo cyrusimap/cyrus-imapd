@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mbox_set_ifunchangedby_null
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $inbox = $user->mailboxes->inbox;
+    my $top   = $user->mailboxes->create({ name => 'top' });
+    my $child = $user->mailboxes->create({
+        name     => 'child',
+        parentId => $top->id,
+    });
+
+    my sub rename_with ($precondition) {
+        return $jmap->request([
+            [ 'Mailbox/set', {
+                ifUnchangedBy => $precondition,
+                update => { $top->id => { name => 'renamed' } },
+            } ],
+        ]);
+    }
+
+    xlog $self, "null matches the null parentId of a top-level mailbox";
+    my $res = rename_with({ $top->id => { parentId => undef } });
+    $res->assert_single_successful_set('Mailbox/set');
+
+    xlog $self, "null matches the null role of a mailbox without one";
+    $res = rename_with({ $top->id => { role => undef } });
+    $res->assert_single_successful_set('Mailbox/set');
+
+    xlog $self, "null does not match a parentId or role that is set";
+    $res = rename_with({
+        $child->id => { parentId => undef },
+        $inbox->id => { role => undef },
+    });
+    $self->assert_cmp_deeply(
+        {
+            type   => 'stateMismatch',
+            failed => bag($child->id, $inbox->id),
+        },
+        $res->single_sentence('error')->arguments,
+    );
+}

@@ -1,0 +1,67 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_ifunchangedby_invalid
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $id = $user->emails->create({
+        mailboxIds    => { $user->mailboxes->inbox->id => JSON::true },
+        subject       => 'subject',
+        bodyStructure => { type => 'text/plain', partId => 'p' },
+        bodyValues    => { p => { value => 'body' } },
+    })->id;
+
+    my sub flag_if ($args) {
+        return $jmap->request([
+            [ 'Email/set', {
+                %$args,
+                update => { $id => { 'keywords/$flagged' => JSON::true } },
+            } ],
+        ]);
+    }
+
+    xlog $self, "ifUnchangedBy needs the conditional capability";
+    my $res = flag_if({ ifUnchangedBy => { $id => { subject => 'subject' } } });
+    $self->assert_cmp_deeply(
+        { type => 'invalidArguments', arguments => [ 'ifUnchangedBy' ] },
+        $res->single_sentence('error')->arguments,
+    );
+
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    xlog $self, "a property the type does not define is invalid";
+    $res = flag_if({ ifUnchangedBy => { $id => { 'bogus/x' => undef } } });
+    $self->assert_cmp_deeply(
+        { type => 'invalidArguments',
+          arguments => [ "ifUnchangedBy/$id/bogus~1x" ] },
+        $res->single_sentence('error')->arguments,
+    );
+
+    xlog $self, "a pointer whose parent is missing is never satisfied";
+    for my $value (undef, 'body') {
+        $res = flag_if({
+            ifUnchangedBy => { $id => { 'bodyValues/nopart/value' => $value } },
+        });
+        $self->assert_cmp_deeply(
+            { type => 'stateMismatch', failed => [ $id ] },
+            $res->single_sentence('error')->arguments,
+        );
+    }
+
+    xlog $self, "atomic is rejected rather than applied in part";
+    $res = flag_if({ atomic => JSON::true });
+    $self->assert_str_equals('cannotApplyAtomically',
+                             $res->single_sentence('error')->arguments->{type});
+
+    $res = flag_if({ atomic => 'yes' });
+    $self->assert_cmp_deeply(
+        { type => 'invalidArguments', arguments => [ 'atomic' ] },
+        $res->single_sentence('error')->arguments,
+    );
+
+    $res = flag_if({ atomic => JSON::false });
+    $res->assert_single_successful_set('Email/set');
+}

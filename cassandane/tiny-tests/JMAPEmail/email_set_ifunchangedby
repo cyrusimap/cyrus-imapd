@@ -1,0 +1,74 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_ifunchangedby
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $inbox = $user->mailboxes->inbox;
+    my %email;
+    for my $name (qw(a b)) {
+        $email{$name} = $user->emails->create({
+            mailboxIds    => { $inbox->id => JSON::true },
+            subject       => $name,
+            keywords      => { '$flagged' => JSON::true },
+            bodyStructure => { type => 'text/plain', partId => 'p' },
+            bodyValues    => { p => { value => 'body' } },
+        })->id;
+    }
+
+    my sub keywords ($id) {
+        my $res = $jmap->request([
+            [ 'Email/get', { ids => [$id], properties => ['keywords'] } ],
+        ]);
+        return $res->single_sentence('Email/get')->arguments->{list}[0]{keywords};
+    }
+
+    xlog $self, "a satisfied precondition lets the update proceed";
+    my $res = $jmap->request([
+        [ 'Email/set', {
+            ifUnchangedBy => { $email{a} => { 'keywords/$flagged' => JSON::true } },
+            update        => { $email{a} => { 'keywords/$answered' => JSON::true } },
+        } ],
+    ]);
+    $res->assert_single_successful_set('Email/set');
+    $self->assert_cmp_deeply(
+        { '$flagged' => JSON::true, '$answered' => JSON::true },
+        keywords($email{a}),
+    );
+
+    xlog $self, "an unsatisfied precondition rejects the whole method";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            ifUnchangedBy => { $email{a} => { 'keywords/$seen' => JSON::true } },
+            update        => {
+                $email{a} => { 'keywords/$draft' => JSON::true },
+                $email{b} => { 'keywords/$draft' => JSON::true },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { type => 'stateMismatch', failed => [ $email{a} ] },
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_cmp_deeply(
+        { '$flagged' => JSON::true, '$answered' => JSON::true },
+        keywords($email{a}),
+    );
+    $self->assert_cmp_deeply({ '$flagged' => JSON::true }, keywords($email{b}));
+
+    xlog $self, "null asserts an absent keyword, guarding a destroy";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            ifUnchangedBy => { $email{a} => { 'keywords/$seen' => undef } },
+            destroy       => [ $email{a} ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ $email{a} ],
+        $res->single_sentence('Email/set')->arguments->{destroyed},
+    );
+}

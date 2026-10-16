@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_ifunchangedby_other_objects
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $inbox = $user->mailboxes->inbox;
+    my sub new_email ($subject) {
+        return $user->emails->create({
+            mailboxIds    => { $inbox->id => JSON::true },
+            subject       => $subject,
+            receivedAt    => '2026-01-01T00:00:00Z',
+            bodyStructure => { type => 'text/plain', partId => 'p' },
+            bodyValues    => { p => { value => 'body' } },
+        })->id;
+    }
+    my $changed = new_email('changed');
+    my $guard   = new_email('guard');
+
+    my sub flag_with_guard ($precondition) {
+        return $jmap->request([
+            [ 'Email/set', {
+                ifUnchangedBy => $precondition,
+                update => { $changed => { 'keywords/$flagged' => JSON::true } },
+            } ],
+        ]);
+    }
+
+    xlog $self, "a precondition may name an object the method does not change";
+    my $res = flag_with_guard({ $guard => { subject => 'other' } });
+    $self->assert_cmp_deeply(
+        { type => 'stateMismatch', failed => [ $guard ] },
+        $res->single_sentence('error')->arguments,
+    );
+
+    xlog $self, "a precondition may reference a server-set property";
+    $res = flag_with_guard({
+        $guard => { subject => 'guard', receivedAt => '2026-01-01T00:00:00Z' },
+    });
+    $res->assert_single_successful_set('Email/set');
+
+    xlog $self, "a precondition on a missing object is not satisfied";
+    $res = flag_with_guard({ 'Mnonexistent' => { subject => undef } });
+    $self->assert_cmp_deeply(
+        { type => 'stateMismatch', failed => [ 'Mnonexistent' ] },
+        $res->single_sentence('error')->arguments,
+    );
+
+    xlog $self, "null requires that the object not exist";
+    $res = flag_with_guard({ $guard => undef });
+    $self->assert_cmp_deeply(
+        { type => 'stateMismatch', failed => [ $guard ] },
+        $res->single_sentence('error')->arguments,
+    );
+    $res = $jmap->request([ [ 'Email/set', { destroy => [ $guard ] } ] ]);
+    $res->assert_single_successful_set('Email/set');
+    $res = flag_with_guard({ $guard => undef });
+    $res->assert_single_successful_set('Email/set');
+
+    xlog $self, "a creation id refers to an object created earlier";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            create => { new => {
+                mailboxIds    => { $inbox->id => JSON::true },
+                subject       => 'new',
+                bodyStructure => { type => 'text/plain', partId => 'p' },
+                bodyValues    => { p => { value => 'body' } },
+            } },
+        }, 'R1' ],
+        [ 'Email/set', {
+            ifUnchangedBy => { '#new' => { subject => 'new' } },
+            update => { $changed => { 'keywords/$seen' => JSON::true } },
+        }, 'R2' ],
+        [ 'Email/set', {
+            ifUnchangedBy => { '#new' => { subject => 'old' } },
+            update => { $changed => { 'keywords/$draft' => JSON::true } },
+        }, 'R3' ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $changed => undef },
+        $res->sentence(1)->arguments->{updated},
+    );
+    $self->assert_cmp_deeply(
+        { type => 'stateMismatch', failed => [ '#new' ] },
+        $res->sentence(2)->arguments,
+    );
+}

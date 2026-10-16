@@ -36,6 +36,7 @@
 #define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
 #define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
 #define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
+#define JMAP_URN_CONDITIONAL "urn:ietf:params:jmap:conditional"
 
 #define JMAP_CORE_EXTENSION          "https://cyrusimap.org/ns/jmap/core"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
@@ -479,6 +480,18 @@ struct jmap_set {
 extern void jmap_set_default_failed(struct jmap_set *set, const char *id,
                                     const char *type, const char *desc);
 
+/**
+ * Parse the arguments of a Foo/set (or Blob/upload) call into @p set.
+ *
+ * When the request is using urn:ietf:params:jmap:conditional, this also
+ * evaluates "ifUnchangedBy" by running Foo/get for the referenced objects,
+ * and rejects "atomic": true.  Either can set @p err, so a caller must
+ * check @p err before making any change.
+ *
+ * @param valid_props  the type's properties, used to validate patches and
+ *                     precondition pointers; NULL skips that validation
+ * @param err          set to a method-level error object on failure
+ */
 extern void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            const jmap_property_set_t *valid_props,
                            jmap_args_parse_cb args_parse, void *args_rock,
