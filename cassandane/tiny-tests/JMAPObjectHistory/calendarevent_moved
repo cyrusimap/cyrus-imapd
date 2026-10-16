@@ -1,0 +1,74 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_moved ($self)
+{
+    my $jmap = $self->{jmap};
+    my $calA = $self->default_user->calendars->default->id;
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', { create => { c1 => { name => 'B' } } }, 'R1'],
+        ['CalendarEvent/set', { create => { e1 => {
+            calendarIds => { $calA => JSON::true },
+            version => '2.0',
+            title => 'one',
+            start => '2026-10-01T09:00:00',
+            timeZone => 'Europe/Vienna',
+            duration => 'PT1H',
+        } } }, 'R2'],
+    ]);
+    my $calB = $res->[0][1]{created}{c1}{id};
+    my $eventId = $res->[1][1]{created}{e1}{id};
+    $self->assert_not_null($calB);
+    $self->assert_not_null($eventId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', { update => { $eventId => {
+            calendarIds => { $calB => JSON::true },
+        } } }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    # The copy left behind by the move is a replaced version
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeReplaced => JSON::true,
+            includeDestroyed => JSON::true,
+            properties => ['calendarIds'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        superhashof({
+            id => $eventId,
+            calendarIds => { $calA => JSON::true },
+            objectHistory => {
+                version => code(sub { $_[0] > 0 }),
+                replaced => re(qr/^\d{4}-\d\d-\d\dT/),
+            },
+        }),
+        superhashof({
+            id => $eventId,
+            calendarIds => { $calB => JSON::true },
+            objectHistory => {
+                version => code(sub { $_[0] > 0 }),
+                replaced => undef,
+            },
+        }),
+    ], $res->[0][1]{list});
+
+    # It is not mistaken for a destroyed event
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeDestroyed => JSON::true,
+            properties => ['calendarIds'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        superhashof({
+            id => $eventId,
+            calendarIds => { $calB => JSON::true },
+        }),
+    ], $res->[0][1]{list});
+}
