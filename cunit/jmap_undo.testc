@@ -1,0 +1,110 @@
+#include "config.h"
+#include "cunit/unit.h"
+#include "imap/imap_err.h"
+#include "imap/jmap_undo.h"
+#include "libconfig.h"
+
+static int order[8];
+static int norder;
+static int nfreed;
+
+static int cb_record(void *rock)
+{
+    order[norder++] = (int) (long) rock;
+    return 0;
+}
+
+static int cb_record_fail(void *rock)
+{
+    order[norder++] = (int) (long) rock;
+    return IMAP_IOERROR;
+}
+
+static void count_free(void *rock)
+{
+    (void) rock;
+    nfreed++;
+}
+
+static int setup(void)
+{
+    norder = 0;
+    nfreed = 0;
+    imapopts[IMAPOPT_DEBUG_JMAP_ATOMIC_FAILSTEP].val.i32 = 0;
+    return 0;
+}
+
+static void test_reverse_order(void)
+{
+    struct jmap_undo u = JMAP_UNDO_INITIALIZER;
+    setup();
+
+    jmap_undo_push(&u, cb_record, (void *) 1L, NULL);
+    jmap_undo_push(&u, cb_record, (void *) 2L, NULL);
+    jmap_undo_push(&u, cb_record, (void *) 3L, NULL);
+
+    CU_ASSERT_EQUAL(jmap_undo_run(&u), 0);
+    CU_ASSERT_EQUAL(norder, 3);
+    CU_ASSERT_EQUAL(order[0], 3);
+    CU_ASSERT_EQUAL(order[1], 2);
+    CU_ASSERT_EQUAL(order[2], 1);
+
+    /* The log is empty after a run */
+    CU_ASSERT_EQUAL(jmap_undo_run(&u), 0);
+    CU_ASSERT_EQUAL(norder, 3);
+    jmap_undo_fini(&u);
+}
+
+static void test_failure_continues(void)
+{
+    struct jmap_undo u = JMAP_UNDO_INITIALIZER;
+    setup();
+
+    jmap_undo_push(&u, cb_record, (void *) 1L, count_free);
+    jmap_undo_push(&u, cb_record_fail, (void *) 2L, count_free);
+    jmap_undo_push(&u, cb_record, (void *) 3L, count_free);
+
+    CU_ASSERT_EQUAL(jmap_undo_run(&u), 1);
+    CU_ASSERT_EQUAL(norder, 3);
+    CU_ASSERT_EQUAL(order[0], 3);
+    CU_ASSERT_EQUAL(order[1], 2);
+    CU_ASSERT_EQUAL(order[2], 1);
+    CU_ASSERT_EQUAL(nfreed, 3);
+
+    jmap_undo_fini(&u);
+    CU_ASSERT_EQUAL(nfreed, 3);
+}
+
+static void test_failpoint(void)
+{
+    struct jmap_undo u = JMAP_UNDO_INITIALIZER;
+    setup();
+
+    imapopts[IMAPOPT_DEBUG_JMAP_ATOMIC_FAILSTEP].val.i32 = 2;
+    CU_ASSERT_EQUAL(jmap_undo_failpoint(&u), 0);
+    CU_ASSERT_EQUAL(jmap_undo_failpoint(&u), IMAP_IOERROR);
+    CU_ASSERT_EQUAL(jmap_undo_failpoint(&u), 0);
+
+    /* A fresh log counts from 1 again */
+    struct jmap_undo u2 = JMAP_UNDO_INITIALIZER;
+    CU_ASSERT_EQUAL(jmap_undo_failpoint(&u2), 0);
+    CU_ASSERT_EQUAL(jmap_undo_failpoint(&u2), IMAP_IOERROR);
+
+    imapopts[IMAPOPT_DEBUG_JMAP_ATOMIC_FAILSTEP].val.i32 = 0;
+    jmap_undo_fini(&u);
+    jmap_undo_fini(&u2);
+}
+
+static void test_fini_frees(void)
+{
+    struct jmap_undo u = JMAP_UNDO_INITIALIZER;
+    setup();
+
+    jmap_undo_push(&u, cb_record, (void *) 1L, count_free);
+    jmap_undo_push(&u, cb_record, (void *) 2L, count_free);
+    jmap_undo_push(&u, cb_record, (void *) 3L, NULL);
+
+    jmap_undo_fini(&u);
+    CU_ASSERT_EQUAL(nfreed, 2);
+    CU_ASSERT_EQUAL(norder, 0);
+}

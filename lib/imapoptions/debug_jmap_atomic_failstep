@@ -1,0 +1,9 @@
+Name: debug_jmap_atomic_failstep
+Type: INT
+Default-Value: 0
+Last-Modified: UNRELEASED
+
+If nonzero, the Nth failure point reached while applying an atomic JMAP
+Foo/set method fails with an I/O error, so that the undo path runs.  The
+count starts again at 1 for each method call.  0 disables the injection.
+This is for regression tests only.
