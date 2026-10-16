@@ -182,9 +182,13 @@ HIDDEN void jmap_contact_capabilities(json_t *account_capabilities,
     mbentry_t *mbentry = NULL;
     int r = mboxlist_lookup(cardhomename, &mbentry, NULL);
     if (r) {
-        xsyslog(LOG_ERR, "can't lookup addressbook home",
-                "cardhomename=%s error=%s",
-                cardhomename, error_message(r));
+        /* An account that has never used contacts has no addressbook
+         * home, and the capability is simply left out. */
+        xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT ? LOG_DEBUG : LOG_ERR,
+                   "jmap.addressbook.home.lookup.failed",
+                   lf_s("jmap.accountid", accountid),
+                   lf_intname("mbox.name", cardhomename),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -320,8 +324,7 @@ static int jmap_card_get(struct jmap_req *req)
     /* Does the client request specific events? */
     rock.db = db = carddav_open_userid(req->accountid);
     if (!db) {
-        syslog(LOG_ERR,
-               "carddav_open_mailbox failed for user %s", req->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.carddav.open.failed", lf_jmapreq(req));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -462,8 +465,7 @@ static int jmap_card_changes(struct jmap_req *req)
     /* Lookup updates. */
     db = carddav_open_userid(req->accountid);
     if (!db) {
-        syslog(LOG_ERR,
-               "carddav_open_userid failed for user %s", req->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.carddav.open.failed", lf_jmapreq(req));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -720,8 +722,7 @@ static int jmap_card_set(struct jmap_req *req)
 
     struct carddav_db *db = carddav_open_userid(req->accountid);
     if (!db) {
-        xsyslog(LOG_ERR, "can not open carddav db", "accountid=<%s>",
-                req->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.carddav.open.failed", lf_jmapreq(req));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -799,16 +800,17 @@ static int jmap_card_set(struct jmap_req *req)
         mboxlist_entry_free(&mbentry);
         if (r) goto done;
 
-        syslog(LOG_NOTICE,
-               "jmap: remove %s %s/%s",
-               cdata->kind == CARDDAV_KIND_GROUP ? "group" : "contact",
-               req->accountid, id);
+        xsyslog_ev(LOG_NOTICE, "jmap.contact.destroyed", lf_jmapreq(req),
+                   lf_s("jmap.contact.kind",
+                        cdata->kind == CARDDAV_KIND_GROUP ? "group" : "contact"),
+                   lf_s("jmap.contactid", id));
         r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->userid);
         if (r) {
-            xsyslog(LOG_ERR, "IOERROR: carddav remove failed",
-                             "kind=<%s> mailbox=<%s> olduid=<%u>",
-                             cdata->kind == CARDDAV_KIND_GROUP ? "group" : "contact",
-                             mailbox_name(mailbox), olduid);
+            xsyslog_ev(LOG_ERR, "jmap.contact.destroy.failed", lf_jmapreq(req),
+                       lf_s("jmap.contact.kind",
+                            cdata->kind == CARDDAV_KIND_GROUP ? "group" : "contact"),
+                       lf_mailbox(mailbox), lf_u("msg.imapuid", olduid),
+                       lf_err("error", r));
             goto done;
         }
 
@@ -1297,8 +1299,7 @@ static int jmap_card_query(struct jmap_req *req)
 
     db = carddav_open_userid(req->accountid);
     if (!db) {
-        syslog(LOG_ERR,
-               "carddav_open_userid failed for user %s", req->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.carddav.open.failed", lf_jmapreq(req));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -1570,8 +1571,8 @@ static void _contact_copy(jmap_req_t *req,
         r = carddav_lookup_uid(src_db, NULL, src_id, &cdata);
     }
     if (r && r != CYRUSDB_NOTFOUND) {
-        syslog(LOG_ERR, "carddav_lookup_uid(%s) failed: %s",
-               src_id, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.contact.lookup.failed", lf_jmapreq(req),
+                   lf_s("jmap.contactid", src_id), lf_err("error", r));
         goto done;
     }
     if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive ||
@@ -1594,7 +1595,10 @@ static void _contact_copy(jmap_req_t *req,
     r = mailbox_find_index_record(src_mbox, cdata->dav.imap_uid, &record);
     if (!r) src_card = _card_from_record(req, src_mbox, &record);
     if (!src_card) {
-        syslog(LOG_ERR, "contact_copy: can't convert %s to JMAP", src_id);
+        /* A stored card we can't render is the user's data, not a fault
+         * of ours, and there is nothing to do about it here. */
+        xsyslog_ev(LOG_WARNING, "jmap.contact.convert.failed", lf_jmapreq(req),
+                   lf_s("jmap.contactid", src_id));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -1823,9 +1827,11 @@ static void abookid_to_mbentry(jmap_req_t *req, const char *id,
 
     if (r) {
         if (r != IMAP_NOTFOUND) {
-            syslog(LOG_ERR,
-                   "Error reading mbentry for addressbook via %s %s: %s",
-                   idtype, id, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.addressbook.lookup.failed",
+                       lf_jmapreq(req),
+                       lf_s("jmap.addressbookid", id),
+                       lf_s("jmap.addressbook.idform", idtype),
+                       lf_err("error", r));
         }
 
         *mbentry = NULL;
@@ -1917,8 +1923,11 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
             if (t < INT_MAX) {
                 sort_order = (int) t;
             } else {
-                syslog(LOG_ERR, "%s: bogus sortorder annotation value for %s",
-                       mbentry->name, httpd_userid);
+                xsyslog_ev(LOG_WARNING, "jmap.mailbox.annotation.invalid",
+                           lf_jmapreq(req),
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_s("annot.entry", sortorder_annot),
+                           lf_buf("annot.value", &attrib));
             }
         }
         json_object_set_new(obj, "sortOrder", json_integer(sort_order));
@@ -2309,8 +2318,8 @@ static int setaddressbook_writeprops(jmap_req_t *req,
 
     r = mailbox_get_annotate_state(mbox, 0, &astate);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
-                mailbox_name(mbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.addressbook.annotations.open.failed",
+                   lf_jmapreq(req), lf_mailbox(mbox), lf_err("error", r));
     }
 
     /* name */
@@ -2320,8 +2329,10 @@ static int setaddressbook_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
         r = annotate_state_writemask(astate, displayname_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    displayname_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.addressbook.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", displayname_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
     }
@@ -2333,8 +2344,10 @@ static int setaddressbook_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_DAV ">addressbook-description";
         r = annotate_state_writemask(astate, description_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                   description_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.addressbook.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", description_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
     }
@@ -2346,8 +2359,10 @@ static int setaddressbook_writeprops(jmap_req_t *req,
         static const char *sortorder_annot = IMAP_ANNOT_NS "sortorder";
         r = annotatemore_writemask(mboxname, sortorder_annot, httpd_userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    sortorder_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.addressbook.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", sortorder_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
     }
@@ -2364,8 +2379,10 @@ static int setaddressbook_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
         r = annotate_state_writemask(astate, invite_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    invite_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.addressbook.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", invite_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
     }
@@ -2420,8 +2437,7 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
 
     db = carddav_open_userid(req->accountid);
     if (!db) {
-        xsyslog_ev(LOG_ERR, "jmap.addressbook.dbopen.failed",
-                   lf_s("jmap.accountid", req->accountid));
+        xsyslog_ev(LOG_ERR, "jmap.carddav.open.failed", lf_jmapreq(req));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -2466,9 +2482,8 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
     if (db) {
         int rc = carddav_close(db);
         if (rc) {
-            xsyslog_ev(LOG_WARNING, "jmap.addressbook.dbclose.failed",
-                       lf_s("jmap.accountid", req->accountid),
-                       lf_err("error", rc));
+            xsyslog_ev(LOG_WARNING, "jmap.carddav.close.failed",
+                       lf_jmapreq(req), lf_err("error", rc));
         }
     }
     if (r && *err == NULL) {
@@ -2510,8 +2525,9 @@ static char *setaddressbooks_create_rewriteacl(jmap_req_t *req,
             int r = cyrus_acl_set(&newacl, userid,
                     ACL_MODE_SET, access, NULL, NULL);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to set_acl for addressbook create (%s, %s) %s",
-                        userid, req->accountid, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.sharewith.acl.invalid",
+                           lf_jmapreq(req), lf_s("u.username", userid),
+                           lf_s("acl.rights", rightstr), lf_err("error", r));
                 free(newacl);
                 newacl = NULL;
                 goto done;
@@ -2575,16 +2591,17 @@ static void setaddressbooks_create(struct jmap_req *req,
             0/*flags*/, NULL/*mailboxptr*/);
     free(acl);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.addressbook.create.failed", lf_jmapreq(req),
+                   lf_intname("mbox.name", mboxname), lf_err("error", r));
         goto done;
     }
     r = setaddressbook_writeprops(req, mboxname, &props, /*ignore_acl*/1);
     if (r) {
         int rr = mboxlist_deletemailbox(mboxname, 1, "", NULL, NULL, 0);
         if (rr) {
-            syslog(LOG_ERR, "could not delete mailbox %s: %s",
-                    mboxname, error_message(rr));
+            xsyslog_ev(LOG_ERR, "jmap.addressbook.create.rollback.failed",
+                       lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                       lf_err("error", rr));
         }
         goto done;
     }
@@ -2593,8 +2610,9 @@ static void setaddressbooks_create(struct jmap_req *req,
     mbentry_t *newmbentry = NULL;
     r = jmap_mboxlist_lookup(mboxname, &newmbentry, NULL);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to lookup %s after create (%s)",
-                mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.addressbook.create.lookup.failed",
+                   lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -2964,8 +2982,9 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     /* Load message containing the resource and parse vcard data */
     vcardcomponent *vcard = record_to_vcard(crock->mailbox, &record);
     if (!vcard) {
-        syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
-                cdata->dav.imap_uid, mailbox_name(crock->mailbox));
+        xsyslog_ev(LOG_ERR, "jmap.contact.vcard.unparseable", lf_jmapreq(req),
+                   lf_mailbox(crock->mailbox),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -2986,8 +3005,9 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     vcardcomponent_free(vcard);
 
     if (!obj) {
-        syslog(LOG_ERR, "_card_from_vcard returned NULL for %u:%s",
-                cdata->dav.imap_uid, mailbox_name(crock->mailbox));
+        xsyslog_ev(LOG_WARNING, "jmap.contact.convert.failed", lf_jmapreq(req),
+                   lf_mailbox(crock->mailbox),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -3673,9 +3693,8 @@ static int card_filter_match(void *vf, void *rock)
          * support lookup contacts by group ids. */
         strarray_t *gids = carddav_getuid_groups(db, cdata->vcard_uid);
         if (!gids) {
-            syslog(LOG_INFO,
-                   "carddav_getuid_groups(%s) returned NULL group array",
-                   cdata->vcard_uid);
+            xsyslog_ev(LOG_INFO, "jmap.contact.groups.unreadable",
+                       lf_s("jmap.contactid", cdata->vcard_uid));
             return 0;
         }
         int i, m = 0;
@@ -3748,8 +3767,9 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
     /* Load contact from record. */
     entry = _card_from_record(crock->req, crock->mailbox, &record);
     if (!entry) {
-        syslog(LOG_ERR, "_card_from_record failed for record %u:%s",
-                mycdata.dav.imap_uid, mailbox_name(crock->mailbox));
+        xsyslog_ev(LOG_WARNING, "jmap.contact.convert.failed",
+                   lf_jmapreq(crock->req), lf_mailbox(crock->mailbox),
+                   lf_u("msg.imapuid", mycdata.dav.imap_uid));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -3978,8 +3998,7 @@ static int _card_set_create(jmap_req_t *req,
     /* Validate uid */
     struct carddav_db *db = carddav_open_userid(req->accountid);
     if (!db) {
-        xsyslog(LOG_ERR, "can not open carddav db", "accountid=<%s>",
-                req->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.carddav.open.failed", lf_jmapreq(req));
         r = IMAP_INTERNAL;
     }
     if (!r) {
@@ -4010,7 +4029,8 @@ static int _card_set_create(jmap_req_t *req,
             }
             if (i == maxattempts) {
                 errno = 0;
-                xsyslog(LOG_ERR, "can not create unique uid", "attempts=<%d>", i);
+                xsyslog_ev(LOG_ERR, "jmap.contact.uid.unavailable",
+                           lf_jmapreq(req), lf_d("jmap.uid.attempts", i));
                 r = IMAP_INTERNAL;
             }
         }
@@ -4132,8 +4152,10 @@ static int _card_set_create(jmap_req_t *req,
     jmap_readprop(json_object_get(jcard, "name"),
                   "full", 0, invalid, "s", &name);
 
-    syslog(LOG_NOTICE, "jmap: create card %s/%s/%s (%s)",
-           req->accountid, mbentry->name, uid, name ? name : "");
+    xsyslog_ev(LOG_NOTICE, "jmap.contact.created", lf_jmapreq(req),
+               lf_intname("mbox.name", mbentry->name),
+               lf_s("jmap.contactid", uid),
+               name ? lf_utf8("jmap.contact.name", name) : lf_skip());
 
     /* Store cyrusimap.org:importance as an annotation. It is not a vCard
        property, so take it out before converting. */
@@ -4174,8 +4196,12 @@ static int _card_set_create(jmap_req_t *req,
     r = carddav_store(*mailbox, card, resourcename, cmodseq, &annots,
                       req->userid, req->authstate, ignorequota, /*oldsize*/ 0);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-        syslog(LOG_ERR, "carddav_store failed for user %s: %s",
-               req->userid, error_message(r));
+        /* A card over the size limit, or an account that's full, is the
+         * client's own state and its answer. */
+        xsyslog_ev(r == IMAP_MESSAGE_TOO_LARGE || r == IMAP_QUOTA_EXCEEDED
+                       ? LOG_WARNING : LOG_ERR,
+                   "jmap.contact.store.failed", lf_jmapreq(req),
+                   lf_err("error", r));
         goto done;
     }
     r = 0;
@@ -4359,8 +4385,8 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
         r = mailbox_open_iwl(mbentry->name, mailbox);
     }
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open %s",
-               mbentry->name);
+        xsyslog_ev(LOG_ERR, "jmap.addressbook.open.failed", lf_jmapreq(req),
+                   lf_intname("mbox.name", mbentry->name), lf_err("error", r));
         goto done;
     }
 
@@ -4404,8 +4430,8 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
            if in the same mailbox and no data change */
         annotate_state_t *state = NULL;
 
-        syslog(LOG_NOTICE, "jmap: touch contact %s/%s",
-               req->accountid, resource);
+        xsyslog_ev(LOG_NOTICE, "jmap.contact.touched", lf_jmapreq(req),
+                   lf_s("dav.resource", resource));
         r = mailbox_get_annotate_state(*mailbox, record.uid, &state);
         annotate_state_set_auth(state, 0,
                                     req->userid, req->authstate);
@@ -4424,8 +4450,9 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     /* Load message containing the resource and parse vcard data */
     vcard = record_to_vcard(*mailbox, &record);
     if (!vcard) {
-        syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
-               cdata->dav.imap_uid, mailbox_name(*mailbox));
+        xsyslog_ev(LOG_ERR, "jmap.contact.vcard.unparseable", lf_jmapreq(req),
+                   lf_mailbox(*mailbox),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         r = HTTP_UNPROCESSABLE;
         goto done;
     }
@@ -4504,7 +4531,10 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
                 r = HTTP_FORBIDDEN;
             }
             else if ((r = mailbox_open_iwl(newmbentry->name, &newmailbox))) {
-                syslog(LOG_ERR, "IOERROR: failed to open %s", newmbentry->name);
+                xsyslog_ev(LOG_ERR, "jmap.addressbook.open.failed",
+                           lf_jmapreq(req),
+                           lf_intname("mbox.name", newmbentry->name),
+                           lf_err("error", r));
             }
         }
         mboxlist_entry_free(&newmbentry);
@@ -4600,9 +4630,10 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     if (!json_array_size(invalid) && !errors->blobNotFound) {
         struct mailbox *this_mailbox = newmailbox ? newmailbox : *mailbox;
 
-        syslog(LOG_NOTICE, "jmap: update %s %s/%s",
-               kind == CARDDAV_KIND_GROUP ? "group" : "contact",
-               req->accountid, resource);
+        xsyslog_ev(LOG_NOTICE, "jmap.contact.updated", lf_jmapreq(req),
+                   lf_s("jmap.contact.kind",
+                        kind == CARDDAV_KIND_GROUP ? "group" : "contact"),
+                   lf_s("dav.resource", resource));
         r = carddav_store(this_mailbox, vcard, resource,
                           record.createdmodseq, &annots, req->userid,
                           req->authstate, ignorequota,
@@ -4793,8 +4824,7 @@ static int jmap_card_parse(jmap_req_t *req)
 
     db = carddav_open_userid(req->accountid);
     if (!db) {
-        syslog(LOG_ERR,
-               "carddav_open_mailbox failed for user %s", req->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.carddav.open.failed", lf_jmapreq(req));
         jmap_error(req, jmap_server_error(IMAP_IOERROR));
         goto done;
     }

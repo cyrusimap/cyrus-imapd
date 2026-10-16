@@ -115,8 +115,11 @@ EOF
     # Cassandane::Instance::_check_syslog() faults these if it sees them:
     my @dberror = grep /: DBERROR: get user version failed: sessionid=<[^>]+> fname=<\Q$found[0]\E> error=<file is not a database>/, @lines;
     $self->assert_num_equals(2, scalar @dberror, '2 expected fatal log lines found');
-    # The actual error we're trying to reach doesn't default to a test failure:
-    my @carddav_error = grep /: jmap: carddav_open_userid\(cassandane\) failed$/, @lines;
+    # The getsyslog() above drained this line, which is why it doesn't also
+    # reach _check_syslog() and fault the test on its severity:
+    my @carddav_error = grep {
+        /event=jmap\.carddav\.open\.failed .*jmap\.accountid=cassandane/
+    } @lines;
     $self->assert_num_equals(1, scalar @carddav_error, 'carddav_open_userid logged failure');
 
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);

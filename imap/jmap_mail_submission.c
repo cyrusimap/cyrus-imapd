@@ -473,8 +473,10 @@ static int ensure_submission_collection(const char *accountid,
                                    1/*isadmin*/, accountid, httpd_authstate,
                                    0/*flags*/, NULL/*mailboxptr*/);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                   mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.submission.collection.create.failed",
+                       lf_s("jmap.accountid", accountid),
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_err("error", r));
         }
     }
 
@@ -520,7 +522,8 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox_name(mailbox), internaldate.tv_sec, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "jmap.submission.stage.failed",
+                   lf_jmapreq(req), lf_mailbox(mailbox));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -567,8 +570,8 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     if (msglen) fwrite(buf_base(msg), msglen, 1, f);
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
-        syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
-               mailbox_name(mailbox), strerror(errno));
+        xsyslog_ev(LOG_ERR, "jmap.submission.stage.write.failed",
+                   lf_jmapreq(req), lf_mailbox(mailbox));
         fclose(f);
         r = IMAP_IOERROR;
         goto done;
@@ -591,8 +594,11 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate,
                           0, qptr, 0, 0, /*event*/0);
     if (r) {
-        syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        /* A futurerelease submission is charged to the user's quota, and
+         * running out of it is their state, not a failure of ours. */
+        xsyslog_ev(r == IMAP_QUOTA_EXCEEDED ? LOG_WARNING : LOG_ERR,
+                   "jmap.submission.append.setup.failed",
+                   lf_jmapreq(req), lf_mailbox(mailbox), lf_err("error", r));
         goto done;
     }
 
@@ -605,15 +611,15 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
 
     if (r) {
         append_abort(&as);
-        syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.submission.append.failed",
+                   lf_jmapreq(req), lf_mailbox(mailbox), lf_err("error", r));
         goto done;
     }
 
     r = append_commit(&as);
     if (r) {
-        syslog(LOG_ERR, "append_commit(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.submission.append.commit.failed",
+                   lf_jmapreq(req), lf_mailbox(mailbox), lf_err("error", r));
         goto done;
     }
 
@@ -804,8 +810,8 @@ static void _emailsubmission_create(jmap_req_t *req,
     mr = msgrecord_from_uid(mbox, uid);
     if (!mr) {
         /* That's a never-should-happen error */
-        syslog(LOG_ERR, "Unexpected null msgrecord at %s:%d",
-               __FILE__, __LINE__);
+        xsyslog_ev(LOG_ERR, "jmap.submission.msgrecord.missing",
+                   lf_jmapreq(req), lf_mailbox(mbox), lf_u("msg.imapuid", uid));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -916,20 +922,23 @@ static void _emailsubmission_create(jmap_req_t *req,
 
     fd_msg = open(fname, 0);
     if (fd_msg == -1) {
-        syslog(LOG_ERR, "_email_submissioncreate: can't open %s: %m", fname);
+        xsyslog_ev(LOG_ERR, "jmap.submission.message.open.failed",
+                   lf_jmapreq(req), lf_s("sys.path", fname));
         r = IMAP_IOERROR;
         goto done;
     }
 
     struct stat sbuf;
     if (fstat(fd_msg, &sbuf) == -1) {
-        syslog(LOG_ERR, "_email_submissioncreate: can't fstat %s: %m", fname);
+        xsyslog_ev(LOG_ERR, "jmap.submission.message.stat.failed",
+                   lf_jmapreq(req), lf_s("sys.path", fname));
         goto done;
     }
 
     buf_refresh_mmap(&buf, 1, fd_msg, fname, sbuf.st_size, mailbox_name(mbox));
     if (!buf_len(&buf)) {
-        syslog(LOG_ERR, "_email_submissioncreate: can't mmap %s: %m", fname);
+        xsyslog_ev(LOG_ERR, "jmap.submission.message.map.failed",
+                   lf_jmapreq(req), lf_s("sys.path", fname));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -990,8 +999,19 @@ static void _emailsubmission_create(jmap_req_t *req,
         json_t *invalid = NULL;
         const char *desc = smtpclient_get_resp_text(*sm);
 
-        syslog(LOG_ERR, "jmap: can't create message submission: %s",
-               desc ? desc : error_message(r));
+        /* Only a transport failure is ours.  The rest is the answer the
+         * client gets: tooLarge, invalidRecipients, forbiddenToSend.  A
+         * protocol error belongs with them, because it is the envelope the
+         * client supplied that either our own validation or the submission
+         * server refused. */
+        xsyslog_ev(r == IMAP_MESSAGE_TOO_LARGE || r == IMAP_MAILBOX_DISABLED ||
+                   r == IMAP_MAILBOX_NONEXISTENT || r == IMAP_REMOTE_DENIED ||
+                   r == IMAP_PROTOCOL_ERROR
+                       ? LOG_WARNING : LOG_ERR,
+                   "jmap.submission.send.failed",
+                   lf_jmapreq(req),
+                   lf_s_opt("error.description", desc),
+                   lf_err("error", r));
 
         switch (r) {
         case IMAP_MESSAGE_TOO_LARGE:
@@ -1452,8 +1472,10 @@ static int getsubmission(jmap_req_t *req, struct jmap_get *get,
         if (sub) json_decref(sub);
 
         if (r) {
-            syslog(LOG_ERR,
-                   "jmap: EmailSubmission/get(%s): %s", id, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.submission.get.failed",
+                       lf_jmapreq(req),
+                       lf_s("jmap.submissionid", id),
+                       lf_err("error", r));
         }
     }
 
@@ -1482,9 +1504,8 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         r = 0; // that's OK, we'll skip trying to open the mailbox
     }
     else if (r) {
-        syslog(LOG_ERR,
-               "jmap_emailsubmission_get: lookup_submission_collection(%s): %s",
-               req->accountid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.submission.collection.lookup.failed",
+                   lf_jmapreq(req), lf_err("error", r));
         goto done;
     }
     else {
@@ -1662,17 +1683,17 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
     int r = ensure_submission_collection(req->accountid, &mbentry, NULL);
     if (r) {
-        syslog(LOG_ERR,
-               "jmap_emailsubmission_set: ensure_submission_collection(%s): %s",
-               req->accountid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.submission.collection.setup.failed",
+                   lf_jmapreq(req), lf_err("error", r));
         goto done;
     }
 
     r = mailbox_open_iwl(mbentry->name, &submbox);
     if (r) {
-        syslog(LOG_ERR,
-               "jmap_emailsubmission_set: mailbox_open_iwl(%s): %s",
-               mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.submission.collection.open.failed",
+                   lf_jmapreq(req),
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_err("error", r));
         mboxlist_entry_free(&mbentry);
         jmap_error(req, jmap_server_error(r));
         goto done;
@@ -1841,9 +1862,8 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
         goto done;
     }
     if (r) {
-        syslog(LOG_ERR,
-               "jmap_emailsubmission_changes: lookup_submission_collection(%s): %s",
-               req->accountid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.submission.collection.lookup.failed",
+                   lf_jmapreq(req), lf_err("error", r));
         goto done;
     }
 
@@ -2309,9 +2329,8 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         goto done;
     }
     if (r) {
-        syslog(LOG_ERR,
-               "jmap_emailsubmission_changes: lookup_submission_collection(%s): %s",
-               req->accountid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.submission.collection.lookup.failed",
+                   lf_jmapreq(req), lf_err("error", r));
         goto done;
     }
 

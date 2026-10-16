@@ -375,9 +375,13 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
     mbentry_t *mbentry = NULL;
     int r = mboxlist_lookup(calhomename, &mbentry, NULL);
     if (r) {
-        xsyslog(LOG_ERR, "can't lookup calendar home",
-                "calhomename=%s error=%s",
-                calhomename, error_message(r));
+        /* An account that has never used calendars has no calendar home,
+         * and the capability is simply left out. */
+        xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT ? LOG_DEBUG : LOG_ERR,
+                   "jmap.calendar.home.lookup.failed",
+                   lf_s("jmap.accountid", accountid),
+                   lf_intname("mbox.name", calhomename),
+                   lf_err("error", r));
         goto done;
     }
     int rights = httpd_myrights(authstate, mbentry);
@@ -796,8 +800,11 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             }
             else {
                 /* Ignore, but report non-numeric calendar-order values */
-                syslog(LOG_WARNING, "sortOrder: strtol(%s) failed",
-                       buf_cstring(&attrib));
+                xsyslog_ev(LOG_WARNING, "jmap.mailbox.annotation.invalid",
+                           lf_jmapreq(req),
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_s("annot.entry", order_annot),
+                           lf_buf("annot.value", &attrib));
             }
         }
         json_object_set_new(obj, "sortOrder", json_integer(sort_order));
@@ -819,8 +826,11 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
                 is_visible = 0;
             } else {
                 /* Report invalid value and fall back to default. */
-                syslog(LOG_WARNING,
-                       "isVisible: invalid annotation value: %s", val);
+                xsyslog_ev(LOG_WARNING, "jmap.mailbox.annotation.invalid",
+                           lf_jmapreq(req),
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_s("annot.entry", visible_annot),
+                           lf_buf("annot.value", &attrib));
                 is_visible = 1;
             }
         }
@@ -1016,10 +1026,13 @@ static void calid_to_mbentry(jmap_req_t *req, const char *id,
 
     if (r) {
         if (r != IMAP_NOTFOUND) {
-            syslog(LOG_ERR,
-                   "Error reading mbentry for addressbook via %s %s: %s",
-                   USER_COMPACT_EMAILIDS(req->cstate) ? "jmapid" : "name",
-                   id, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.lookup.failed",
+                       lf_jmapreq(req),
+                       lf_s("jmap.calendarid", id),
+                       lf_s("jmap.calendar.idform",
+                            USER_COMPACT_EMAILIDS(req->cstate)
+                                ? "jmapid" : "name"),
+                       lf_err("error", r));
         }
 
         *mbentry = NULL;
@@ -1651,9 +1664,8 @@ static void setcalendar_parseprops(jmap_req_t *req,
                 json_decref(cur_alerts);
             }
             else {
-                xsyslog(LOG_ERR,
-                        "could not load default alerts - ignoring arguments",
-                        "err=<%s>", error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.calendar.defaultalerts.unreadable",
+                           lf_err("error", r));
             }
         }
 
@@ -1679,8 +1691,8 @@ static int setcalendar_writeprops(jmap_req_t *req,
 
     r = mailbox_get_annotate_state(mbox, 0, &astate);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
-                mailbox_name(mbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendar.annotations.open.failed",
+                   lf_jmapreq(req), lf_mailbox(mbox), lf_err("error", r));
     }
 
     /* name */
@@ -1690,8 +1702,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
         r = annotate_state_writemask(astate, displayname_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    displayname_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", displayname_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1703,8 +1717,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_DAV ">description";
         r = annotate_state_writemask(astate, description_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    description_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", description_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1716,8 +1732,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
         r = annotate_state_writemask(astate, color_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    color_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", color_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1729,8 +1747,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
         r = annotate_state_writemask(astate, sortOrder_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    sortOrder_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", sortOrder_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1742,8 +1762,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
         r = annotate_state_writemask(astate, visible_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    visible_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", visible_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1754,8 +1776,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
         buf_setcstr(&val, props->schedulingEnabled ? "" : "F");
         r = annotate_state_writemask(astate, sched_enabled_annot, "", &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    sched_enabled_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", sched_enabled_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1778,8 +1802,8 @@ static int setcalendar_writeprops(jmap_req_t *req,
 
         r = caldav_caluseraddr_write(mbox, req->userid, &new);
         if (r) {
-            xsyslog(LOG_ERR, "failed to write participant identities",
-                    "err=<%s>", error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.participants.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox), lf_err("error", r));
         }
 
         strarray_fini(&new);
@@ -1799,8 +1823,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
         r = annotate_state_writemask(astate, invite_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    invite_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", invite_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1823,8 +1849,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
         r = annotate_state_writemask(astate, transp_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                   transp_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", transp_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1837,8 +1865,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
         r = annotate_state_writemask(astate, tzid_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    tzid_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", tzid_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1863,8 +1893,10 @@ static int setcalendar_writeprops(jmap_req_t *req,
         buf_printf(&val, "%lu", (unsigned long) props->comp_types);
         r = annotate_state_writemask(astate, comp_annot, req->userid, &val);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    comp_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.annotation.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_s("annot.entry", comp_annot),
+                       lf_err("error", r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -1877,17 +1909,16 @@ static int setcalendar_writeprops(jmap_req_t *req,
                 props->defaultalarms_with_time,
                 props->defaultalarms_with_date);
         if (r) {
-            xsyslog(LOG_ERR, "failed to write defaultalarms",
-                    "mboxid=<%s> mboxname=<%s> userid=<%s> err=<%s>",
-                    mailbox_uniqueid(mbox), mailbox_name(mbox),
-                    req->userid, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.defaultalarms.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox), lf_err("error", r));
         }
 
         if (!r) {
             r = caldav_bump_defaultalarms(mbox);
             if (r) {
-                syslog(LOG_ERR, "failed to bump default alarms for %s: %s",
-                        mailbox_name(mbox), error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.calendar.defaultalarms.bump.failed",
+                           lf_jmapreq(req), lf_mailbox(mbox),
+                           lf_err("error", r));
             }
         }
         bump_modseq = false;
@@ -1950,8 +1981,7 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
 
     db = caldav_open_userid(req->accountid);
     if (!db) {
-        xsyslog_ev(LOG_ERR, "jmap.calendar.dbopen.failed",
-                   lf_s("jmap.accountid", req->accountid));
+        xsyslog_ev(LOG_ERR, "jmap.caldav.open.failed", lf_jmapreq(req));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -2003,9 +2033,8 @@ done:
     if (db) {
         int rc = caldav_close(db);
         if (rc) {
-            xsyslog_ev(LOG_WARNING, "jmap.calendar.dbclose.failed",
-                       lf_s("jmap.accountid", req->accountid),
-                       lf_err("error", rc));
+            xsyslog_ev(LOG_WARNING, "jmap.caldav.close.failed",
+                       lf_jmapreq(req), lf_err("error", rc));
         }
     }
     if (r && *err == NULL) {
@@ -2048,8 +2077,9 @@ static char *setcalendars_create_rewriteacl(jmap_req_t *req, const char *parenta
             int r = cyrus_acl_set(&newacl, userid,
                     ACL_MODE_SET, access, NULL, NULL);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to set_acl for calendar create (%s, %s) %s",
-                        userid, req->accountid, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.sharewith.acl.invalid",
+                           lf_jmapreq(req), lf_s("u.username", userid),
+                           lf_s("acl.rights", rightstr), lf_err("error", r));
                 free(newacl);
                 newacl = NULL;
                 goto done;
@@ -2117,40 +2147,40 @@ static void setcalendars_create(struct jmap_req *req,
             0/*flags*/, &mbox);
     free(acl);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendar.create.failed", lf_jmapreq(req),
+                   lf_intname("mbox.name", mboxname), lf_err("error", r));
         goto done;
     }
 
     // Initialize JMAP calendar
     r = caldav_init_jmapcalendar(req->userid, mbox);
     if (r) {
-        xsyslog(LOG_ERR, "jmap_init_calendar_mailbox failed",
-                "mboxname=<%s> err=<%s>",
-                mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendar.init.failed", lf_jmapreq(req),
+                   lf_intname("mbox.name", mboxname), lf_err("error", r));
         goto done;
     }
 
     // Reset JMAP mboxlist cache for the new mailbox
     r = jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r) {
-        xsyslog(LOG_ERR, "jmap_mboxlist_lookup failed",
-                "mboxname=<%s> err=<%s>",
-                mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendar.create.lookup.failed",
+                   lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
         goto done;
     }
 
     r = setcalendar_writeprops(req, mbox, &props);
     if (r) {
-        xsyslog(LOG_ERR, "setcalendar_writeprops failed",
-                "mboxname=<%s> err=<%s>",
-                mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendar.props.write.failed",
+                   lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
         mailbox_abort(mbox);
         mailbox_close(&mbox);
         int rr = mboxlist_deletemailbox(mboxname, 1, "", NULL, NULL, 0);
         if (rr) {
-            syslog(LOG_ERR, "could not delete mailbox %s: %s",
-                    mboxname, error_message(rr));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.create.rollback.failed",
+                       lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                       lf_err("error", rr));
         }
         goto done;
     }
@@ -2257,9 +2287,9 @@ static void setcalendars_update(jmap_req_t *req,
     if (!r) {
         r = setcalendar_writeprops(req, mbox, &props);
         if (r) {
-            xsyslog(LOG_ERR, "setcalendar_writeprops failed",
-                    "mboxname=<%s> err=<%s>",
-                    mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendar.props.write.failed",
+                       lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                       lf_err("error", r));
             mailbox_abort(mbox);
             mailbox_close(&mbox);
         }
@@ -3554,8 +3584,9 @@ static int getcalendarevents_getinstances(json_t *jsevent,
                 }
                 myical = caldav_record_to_ical(rock->mailbox, cdata, req->userid, NULL);
                 if (!myical) {
-                    syslog(LOG_ERR, "caldav_record_to_ical failed for record %u:%s",
-                            cdata->dav.imap_uid, mailbox_name(rock->mailbox));
+                    xsyslog_ev(LOG_ERR, "jmap.calendarevent.ical.unparseable",
+                               lf_jmapreq(req), lf_mailbox(rock->mailbox),
+                               lf_u("msg.imapuid", cdata->dav.imap_uid));
                     json_array_append_new(rock->get->not_found, json_string(eid->raw));
                     continue;
                 }
@@ -4079,18 +4110,17 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         mboxlist_entry_free(&rock->mbentry);
         rock->mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
         if (!rock->mbentry) {
-            xsyslog(LOG_ERR, "no mbentry for mailbox",
-                    "dav.mailbox=<%s> dav.mailbox_byname=<%d>",
-                    cdata->dav.mailbox, cdata->dav.mailbox_byname);
+            xsyslog_ev(LOG_ERR, "jmap.caldav.mailbox.missing",
+                       lf_s("dav.mailbox", cdata->dav.mailbox),
+                       lf_b("dav.mailbox.byname", cdata->dav.mailbox_byname));
             return 0;
         }
         mbname_free(&rock->mbname);
         rock->mbname = mbname_from_intname(rock->mbentry->name);
         if (mbname_isdeleted(rock->mbname)) {
-            xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
-                    "mailbox is deleted, but ical_objs row exists",
-                    "mboxid=<%s> imap_uid=<%d>",
-                    rock->mbentry->uniqueid, cdata->dav.imap_uid);
+            xsyslog_ev(LOG_ERR, "jmap.caldav.icalobjs.orphaned",
+                       lf_s("mbox.uniqueid", rock->mbentry->uniqueid),
+                       lf_u("msg.imapuid", cdata->dav.imap_uid));
             return 0;
         }
 
@@ -4150,8 +4180,9 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         /* Load message containing the resource and parse iCal data */
         rock->ical = caldav_record_to_ical(rock->mailbox, cdata, req->userid, NULL);
         if (!rock->ical) {
-            syslog(LOG_ERR, "caldav_record_to_ical failed for record %u:%s",
-                    cdata->dav.imap_uid, mailbox_name(rock->mailbox));
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.ical.unparseable",
+                       lf_jmapreq(req), lf_mailbox(rock->mailbox),
+                       lf_u("msg.imapuid", cdata->dav.imap_uid));
             r = IMAP_INTERNAL;
             rock->imap_uid = 0;
             goto done;
@@ -4160,26 +4191,29 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         /* Determine is event is a draft */
         mr = msgrecord_from_uid(rock->mailbox, cdata->dav.imap_uid);
         if (!mr) {
-            syslog(LOG_ERR, "msgrecord_from_uid failed for %s:%d",
-                    mailbox_name(rock->mailbox), cdata->dav.imap_uid);
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.msgrecord.missing",
+                       lf_jmapreq(req), lf_mailbox(rock->mailbox),
+                       lf_u("msg.imapuid", cdata->dav.imap_uid));
             r = IMAP_INTERNAL;
             goto done;
         }
         uint32_t system_flags = 0;
         r = msgrecord_get_systemflags(mr, &system_flags);
         if (r) {
-            syslog(LOG_ERR, "msgrecord_get_systemflags failed for %s:%d: %s",
-                    mailbox_name(rock->mailbox), cdata->dav.imap_uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.flags.unreadable",
+                       lf_jmapreq(req), lf_mailbox(rock->mailbox),
+                       lf_u("msg.imapuid", cdata->dav.imap_uid),
+                       lf_err("error", r));
             goto done;
         }
         rock->is_draft = system_flags & FLAG_DRAFT;
 
         r = msgrecord_get_guid(mr, &rock->guid);
         if (r) {
-            xsyslog(LOG_ERR, "could not read message guid",
-                    "mboxname=<%s> uid=<%d> err=<%s>",
-                    mailbox_uniqueid(rock->mailbox), rock->imap_uid,
-                    error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.guid.unreadable",
+                       lf_jmapreq(req), lf_mailbox(rock->mailbox),
+                       lf_u("msg.imapuid", rock->imap_uid),
+                       lf_err("error", r));
             message_guid_set_null(&rock->guid);
             r = 0;
         }
@@ -4236,8 +4270,9 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
     /* Convert to JMAP */
     jsevent = ical_to_jsevent(rock->ical, &rock->jscal_cfg);
     if (!jsevent) {
-        syslog(LOG_ERR, "jmapical_tojson: can't convert %u:%s",
-                cdata->dav.imap_uid, mailbox_name(rock->mailbox));
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.convert.failed",
+                   lf_jmapreq(req), lf_mailbox(rock->mailbox),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -4509,8 +4544,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
 
     rock.db = db = caldav_open_userid(req->accountid);
     if (!db) {
-        syslog(LOG_ERR,
-               "caldav_open_mailbox failed for user %s", req->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.caldav.open.failed", lf_jmapreq(req));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -4598,9 +4632,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
             r = caldav_commit(db);
         }
         if (r) {
-            xsyslog(LOG_ERR, "failed to cache calendar events, ignoring error",
-                    "userid=<%s> accountid=<%s> err=<%s>",
-                    req->userid, req->accountid, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.cache.failed",
+                       lf_jmapreq(req), lf_err("error", r));
             r = 0;
         }
     }
@@ -4646,9 +4679,9 @@ static int setcalendarevents_schedule(const struct mailbox *mailbox,
     if (!strcasecmp(buf_cstring(&buf), "F") ||
         // http_caldav.c: has been accepting "no" so we do here as well
         !strcasecmp(buf_cstring(&buf), "no")) {
-        syslog(LOG_WARNING, "Scheduling disabled for user %s on mailbox %s"
-               " by CY:scheduling-enabled annotation",
-               httpd_userid, mailbox_name(mailbox));
+        xsyslog_ev(LOG_WARNING, "jmap.calendarevent.schedule.disabled",
+                   lf_s("u.username", httpd_userid), lf_mailbox(mailbox),
+                   lf_s("annot.entry", sched_enabled_annot));
         buf_free(&buf);
         return 0;
     }
@@ -4987,7 +5020,8 @@ static int createevent_toical(jmap_req_t *req,
         }
         if (i == maxattempts) {
             errno = 0;
-            xsyslog(LOG_ERR, "can not create unique uid", "attempts=<%d>", i);
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.uid.unavailable",
+                       lf_jmapreq(req), lf_d("jmap.uid.attempts", i));
             r = IMAP_INTERNAL;
             goto done;
         }
@@ -5201,6 +5235,15 @@ done:
     return r;
 }
 
+/* Which store failures are the client's answer rather than our fault: a
+ * refusal, a full account, a resource over the size limit.
+ */
+static bool calendarevent_store_refused(int r)
+{
+    return r == HTTP_FORBIDDEN || r == HTTP_NO_STORAGE ||
+           r == IMAP_QUOTA_EXCEEDED || r == IMAP_MESSAGE_TOO_LARGE;
+}
+
 static int createevent_store(jmap_req_t *req,
                              struct jmap_parser *parser,
                              struct createevent *create,
@@ -5232,8 +5275,12 @@ static int createevent_store(jmap_req_t *req,
     // Open calendar mailbox.
     r = jmap_openmbox_by_uniqueid(req, create->mbentry->uniqueid, &mbox, 1);
     if (r) {
-        xsyslog(LOG_ERR, "jmap_openmbox failed", "mboxname=<%s> err=<%s>",
-                create->mbentry->name, error_message(r));
+        /* A calendar the client named that isn't there is answered with
+         * invalidProperties on calendarIds. */
+        xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT ? LOG_WARNING : LOG_ERR,
+                   "jmap.calendar.open.failed", lf_jmapreq(req),
+                   lf_intname("mbox.name", create->mbentry->name),
+                   lf_err("error", r));
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             jmap_parser_invalid(parser, "calendarIds");
             r = 0;
@@ -5295,9 +5342,9 @@ static int createevent_store(jmap_req_t *req,
             req->userid, &add_imapflags, NULL, &create->schedule_addresses);
     strarray_fini(&add_imapflags);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-        xsyslog(LOG_ERR, "caldav_store_resource failed",
-                "accountid=<%s> err=<%s>",
-                req->accountid, error_message(r));
+        xsyslog_ev(calendarevent_store_refused(r) ? LOG_WARNING : LOG_ERR,
+                   "jmap.calendarevent.store.failed",
+                   lf_jmapreq(req), lf_err("error", r));
         goto done;
     }
     r = 0;
@@ -5346,8 +5393,9 @@ static int createevent_store(jmap_req_t *req,
                 &create->schedule_addresses, NULL,
                 is_draft, myevent, NULL);
         if (r2) {
-            xsyslog(LOG_WARNING, "could not create notification",
-                    "uid=%s error=%s", create->ical_uid, error_message(r2));
+            xsyslog_ev(LOG_WARNING, "jmap.calendarevent.notification.failed",
+                       lf_jmapreq(req), lf_s("cal.uid", create->ical_uid),
+                       lf_err("error", r2));
         }
         json_decref(myevent);
     }
@@ -6110,9 +6158,10 @@ static int remove_itip_cb(void *rock, struct caldav_jscal *jscal)
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
         int r = mailbox_rewrite_index_record(inbox, &record);
         if (r) {
-            syslog(LOG_ERR, "mailbox_rewrite_index_record (%s:%u) failed: %s",
-                   mailbox_name(inbox), jscal->cdata.dav.imap_uid,
-                   error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.expunge.failed",
+                       lf_mailbox(inbox),
+                       lf_u("msg.imapuid", jscal->cdata.dav.imap_uid),
+                       lf_err("error", r));
         }
     }
 
@@ -6206,9 +6255,9 @@ static void setcalendarevents_update(jmap_req_t *req,
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
     if (!mbentry) {
-        xsyslog(LOG_WARNING, "no mbentry for mailbox",
-                "dav.mailbox=<%s> dav.mailbox_byname=<%d>",
-                cdata->dav.mailbox, cdata->dav.mailbox_byname);
+        xsyslog_ev(LOG_WARNING, "jmap.caldav.mailbox.missing",
+                   lf_s("dav.mailbox", cdata->dav.mailbox),
+                   lf_b("dav.mailbox.byname", cdata->dav.mailbox_byname));
         r = IMAP_NOTFOUND;
         goto done;
     }
@@ -6216,10 +6265,9 @@ static void setcalendarevents_update(jmap_req_t *req,
     resource = xstrdup(cdata->dav.resource);
 
     if (mboxname_isdeletedmailbox(mbentry->name, NULL)) {
-        xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
-                "mailbox is deleted, but ical_objs row exists",
-                "mboxid=<%s> imap_uid=<%d>",
-                mbentry->uniqueid, cdata->dav.imap_uid);
+        xsyslog_ev(LOG_ERR, "jmap.caldav.icalobjs.orphaned",
+                   lf_s("mbox.uniqueid", mbentry->uniqueid),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         r = IMAP_NOTFOUND;
         goto done;
     }
@@ -6268,8 +6316,8 @@ static void setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
     else if (r) {
-        syslog(LOG_ERR, "jmap_openmbox_by_uniqueid(req, %s) failed: %s",
-                mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendar.open.failed", lf_jmapreq(req),
+                   lf_intname("mbox.name", mbentry->name), lf_err("error", r));
         goto done;
     }
     /* Determine target mailbox */
@@ -6312,8 +6360,10 @@ static void setcalendarevents_update(jmap_req_t *req,
         r = 0;
         goto done;
     } else if (r) {
-        syslog(LOG_ERR, "mailbox_index_record(0x%x) failed: %s",
-                cdata->dav.imap_uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.record.unreadable",
+                   lf_jmapreq(req), lf_mailbox(mbox),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -6396,8 +6446,9 @@ static void setcalendarevents_update(jmap_req_t *req,
     /* Load VEVENT from record, personalizing as needed. */
     update.oldical = caldav_record_to_ical(mbox, cdata, req->userid, NULL);
     if (!update.oldical) {
-        syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
-                cdata->dav.imap_uid, mailbox_name(mbox));
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.ical.unparseable",
+                   lf_jmapreq(req), lf_mailbox(mbox),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -6454,8 +6505,10 @@ static void setcalendarevents_update(jmap_req_t *req,
         mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
         r = mailbox_rewrite_index_record(mbox, &record);
         if (r) {
-            syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
-                    cdata->dav.mailbox, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.expunge.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_u("msg.imapuid", cdata->dav.imap_uid),
+                       lf_err("error", r));
             mailbox_close(&mbox);
             goto done;
         }
@@ -6510,8 +6563,11 @@ static void setcalendarevents_update(jmap_req_t *req,
                             record.system_flags & FLAG_DRAFT,
                             update.old_event, patch_copy);
                     if (r2) {
-                        xsyslog(LOG_WARNING, "could not create notification",
-                                "uid=%s error=%s", eid->ical_uid, error_message(r2));
+                        xsyslog_ev(LOG_WARNING,
+                                   "jmap.calendarevent.notification.failed",
+                                   lf_jmapreq(req),
+                                   lf_s("cal.uid", eid->ical_uid),
+                                   lf_err("error", r2));
                     }
                 }
                 json_decref(patch_copy);
@@ -6520,8 +6576,9 @@ static void setcalendarevents_update(jmap_req_t *req,
     }
     transaction_free(&txn);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-        syslog(LOG_ERR, "caldav_store_resource failed for user %s: %s",
-               req->accountid, error_message(r));
+        xsyslog_ev(calendarevent_store_refused(r) ? LOG_WARNING : LOG_ERR,
+                   "jmap.calendarevent.store.failed",
+                   lf_jmapreq(req), lf_err("error", r));
         goto done;
     }
     r = 0;
@@ -6709,9 +6766,9 @@ static int setcalendarevents_destroy(jmap_req_t *req,
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
     if (!mbentry) {
-        xsyslog(LOG_WARNING, "no mbentry for mailbox",
-                "dav.mailbox=<%s> dav.mailbox_byname=<%d>",
-                cdata->dav.mailbox, cdata->dav.mailbox_byname);
+        xsyslog_ev(LOG_WARNING, "jmap.caldav.mailbox.missing",
+                   lf_s("dav.mailbox", cdata->dav.mailbox),
+                   lf_b("dav.mailbox.byname", cdata->dav.mailbox_byname));
         r = IMAP_NOTFOUND;
         goto done;
     }
@@ -6719,10 +6776,9 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     resource = xstrdup(cdata->dav.resource);
 
     if (mboxname_isdeletedmailbox(mbentry->name, NULL)) {
-        xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
-                "mailbox is deleted, but ical_objs row exists",
-                "mboxid=<%s> imap_uid=<%d>",
-                mbentry->uniqueid, cdata->dav.imap_uid);
+        xsyslog_ev(LOG_ERR, "jmap.caldav.icalobjs.orphaned",
+                   lf_s("mbox.uniqueid", mbentry->uniqueid),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         r = IMAP_NOTFOUND;
         goto done;
     }
@@ -6761,15 +6817,18 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     memset(&record, 0, sizeof(struct index_record));
     r = mailbox_find_index_record(mbox, cdata->dav.imap_uid, &record);
     if (r) {
-        syslog(LOG_ERR, "mailbox_index_record(0x%x) failed: %s",
-                cdata->dav.imap_uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.record.unreadable",
+                   lf_jmapreq(req), lf_mailbox(mbox),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid),
+                   lf_err("error", r));
         goto done;
     }
     /* Load VEVENT from record. */
     oldical = record_to_ical(mbox, &record, &schedule_addresses);
     if (!oldical) {
-        syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
-                cdata->dav.imap_uid, mailbox_name(mbox));
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.ical.unparseable",
+                   lf_jmapreq(req), lf_mailbox(mbox),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -6801,8 +6860,10 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
         r = mailbox_rewrite_index_record(mbox, &record);
         if (r) {
-            syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
-                    cdata->dav.mailbox, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.expunge.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_u("msg.imapuid", cdata->dav.imap_uid),
+                       lf_err("error", r));
             mailbox_close(&mbox);
             goto done;
         }
@@ -6819,8 +6880,9 @@ static int setcalendarevents_destroy(jmap_req_t *req,
                 NULL, NULL, &schedule_addresses);
         transaction_free(&txn);
         if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-            xsyslog(LOG_ERR, "caldav_store_resource", "err=<%s>",
-                    error_message(r));
+            xsyslog_ev(calendarevent_store_refused(r) ? LOG_WARNING : LOG_ERR,
+                       "jmap.calendarevent.store.failed",
+                       lf_jmapreq(req), lf_err("error", r));
             goto done;
         }
         r = 0;
@@ -6856,8 +6918,9 @@ static int setcalendarevents_destroy(jmap_req_t *req,
                 eid, &schedule_addresses, NULL,
                 record.system_flags & FLAG_DRAFT, old_event, NULL);
         if (r2) {
-            xsyslog(LOG_WARNING, "could not create notification",
-                    "uid=%s error=%s", eid->ical_uid, error_message(r2));
+            xsyslog_ev(LOG_WARNING, "jmap.calendarevent.notification.failed",
+                       lf_jmapreq(req), lf_s("cal.uid", eid->ical_uid),
+                       lf_err("error", r2));
         }
     }
 
@@ -6970,7 +7033,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
     db = caldav_open_userid(req->accountid);
     if (!db) {
-        syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
+        xsyslog_ev(LOG_ERR, "jmap.caldav.open.failed", lf_jmapreq(req));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -6979,8 +7042,9 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     char *inboxname = caldav_mboxname(req->accountid, SCHED_INBOX);
     r = mailbox_open_iwl(inboxname, &schedinbox);
     if (r) {
-        xsyslog(LOG_WARNING, "can not open CalDAV Scheduling Inbox",
-                "accountid=%s error=%s", req->accountid, error_message(r));
+        xsyslog_ev(LOG_WARNING, "jmap.calendar.schedinbox.open.failed",
+                   lf_jmapreq(req), lf_intname("mbox.name", inboxname),
+                   lf_err("error", r));
         r = 0;
     }
     free(inboxname);
@@ -6989,8 +7053,8 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     r = jmap_create_notify_collection(req->accountid, &notifmb);
     if (!r) r = mailbox_open_iwl(notifmb->name, &notifmbox);
     if (r) {
-        xsyslog(LOG_WARNING, "can not open jmapnotify collection",
-                "accountid=%s error=%s", req->accountid, error_message(r));
+        xsyslog_ev(LOG_WARNING, "jmap.notify.collection.open.failed",
+                   lf_jmapreq(req), lf_err("error", r));
         r = 0;
     }
 
@@ -7248,7 +7312,7 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
 
     db = caldav_open_userid(req->accountid);
     if (!db) {
-        syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.caldav.open.failed", lf_jmapreq(req));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -7481,16 +7545,19 @@ static int eventquery_cb(void *vrock, struct caldav_jscal *jscal)
             mailbox_close(&rock->mailbox);
             r = mailbox_open_irl(mbentry->name, &rock->mailbox);
             if (r) {
-                syslog(LOG_ERR, "%s: can't open mailbox %s",
-                       __func__, mbentry->name);
+                xsyslog_ev(LOG_ERR, "jmap.calendar.open.failed",
+                           lf_jmapreq(req),
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_err("error", r));
                 eventquery_match_free(&match);
                 goto done;
             }
         }
         match->ical = caldav_record_to_ical(rock->mailbox, &jscal->cdata, req->userid, NULL);
         if (!match->ical) {
-            syslog(LOG_ERR, "%s: can't load ical for ical uid %s",
-                    __func__, jscal->cdata.ical_uid);
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.ical.unparseable",
+                       lf_jmapreq(req), lf_mailbox(rock->mailbox),
+                       lf_s("cal.uid", jscal->cdata.ical_uid));
             eventquery_match_free(&match);
             r = IMAP_INTERNAL;
         }
@@ -7625,8 +7692,9 @@ static int eventquery_textsearch_cb(void *vrock, struct caldav_jscal *jscal)
         match->ical = caldav_record_to_ical(rock->mailbox,
                 &jscal->cdata, rock->req->userid, NULL);
         if (!match->ical) {
-            xsyslog(LOG_ERR, "can't load ical", "ical_uid=<%s>",
-                    jscal->cdata.ical_uid);
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.ical.unparseable",
+                       lf_mailbox(rock->mailbox),
+                       lf_s("cal.uid", jscal->cdata.ical_uid));
             free(match->ical_uid);
             free(match->utcstart);
             free(match);
@@ -7795,10 +7863,9 @@ static int eventquery_fastpath_cb(void *vrock, struct caldav_jscal *jscal)
     if (!mbentry) goto done;
 
     if (mboxname_isdeletedmailbox(mbentry->name, NULL)) {
-        xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
-                "mailbox is deleted, but ical_objs row exists",
-                "mboxid=<%s> imap_uid=<%d>",
-                mbentry->uniqueid, jscal->cdata.dav.imap_uid);
+        xsyslog_ev(LOG_ERR, "jmap.caldav.icalobjs.orphaned",
+                   lf_s("mbox.uniqueid", mbentry->uniqueid),
+                   lf_u("msg.imapuid", jscal->cdata.dav.imap_uid));
         goto done;
     }
 
@@ -7931,8 +7998,8 @@ static struct caldav_jscal_filter *build_jscal_filter(jmap_req_t *req,
             caldav_jscal_filter_by_mbentrym(filter, mbentry);
         }
         else if (!mbentry) {
-            xsyslog(LOG_WARNING, "could not lookup calendar",
-                    "calendarId=<%s>", s);
+            xsyslog_ev(LOG_WARNING, "jmap.calendar.lookup.failed",
+                       lf_jmapreq(req), lf_s("jmap.calendarid", s));
         }
 
         if (!ptrarray_size(&filter->mbentries))
@@ -8044,8 +8111,7 @@ static int eventquery_run(jmap_req_t *req,
     /* Open Caldav DB */
     struct caldav_db *db = caldav_open_userid(req->accountid);
     if (!db) {
-        syslog(LOG_ERR, "%s:%s: can't open caldav db for %s",
-                        __FILE__, __func__, req->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.caldav.open.failed", lf_jmapreq(req));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -8416,8 +8482,10 @@ static void _calendarevent_copy(jmap_req_t *req,
     struct caldav_data *cdata = NULL;
     struct jmap_caleventid *eid = jmap_caleventid_lookup(src_id, src_db, &cdata);
     if (!eid->ical_uid) {
-        syslog(LOG_ERR, "caldav_lookup(%s) failed: %s",
-               src_id, error_message(r));
+        /* The client named an event the source account doesn't have,
+          * and notFound is the answer. */
+        xsyslog_ev(LOG_WARNING, "jmap.calendarevent.lookup.failed",
+                   lf_jmapreq(req), lf_s("cal.eventid", src_id));
         *set_err = json_pack("{s:s}", "type", "notFound");
         jmap_caleventid_free(&eid);
         goto done;
@@ -8452,10 +8520,9 @@ static void _calendarevent_copy(jmap_req_t *req,
     }
 
     if (mboxname_isdeletedmailbox(mbentry->name, NULL)) {
-        xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
-                "mailbox is deleted, but ical_objs row exists",
-                "mboxid=<%s> imap_uid=<%d>",
-                mbentry->uniqueid, cdata->dav.imap_uid);
+        xsyslog_ev(LOG_ERR, "jmap.caldav.icalobjs.orphaned",
+                   lf_s("mbox.uniqueid", mbentry->uniqueid),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         r = CYRUSDB_NOTFOUND;
         goto done;
     }
@@ -8465,7 +8532,9 @@ static void _calendarevent_copy(jmap_req_t *req,
     if (r) goto done;
     src_ical = caldav_record_to_ical(src_mbox, cdata, req->userid, &schedule_addresses);
     if (!src_ical) {
-        syslog(LOG_ERR, "calendarevent_copy: can't convert %s to JMAP", src_id);
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.ical.unparseable",
+                   lf_jmapreq(req), lf_mailbox(src_mbox),
+                   lf_s("cal.eventid", src_id));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -8481,9 +8550,18 @@ static void _calendarevent_copy(jmap_req_t *req,
         }
         dst_event = jmap_patchobject_apply(src_event, jevent, NULL, 0);
     }
+    bool converted = src_event != NULL;
     json_decref(src_event);
     if (!dst_event) {
-        syslog(LOG_ERR, "calendarevent_copy: can't convert to ical: %s", src_id);
+        if (!converted) {
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.convert.failed",
+                       lf_jmapreq(req), lf_s("cal.eventid", src_id));
+        }
+        else {
+            /* The patch the client sent doesn't apply to the event. */
+            xsyslog_ev(LOG_WARNING, "jmap.calendarevent.patch.invalid",
+                       lf_jmapreq(req), lf_s("cal.eventid", src_id));
+        }
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -8533,9 +8611,10 @@ static int jmap_calendarevent_copy(struct jmap_req *req)
 
     int r = conversations_open_user(copy.from_account_id, 0, &from_cstate);
     if (r) {
-        xsyslog(LOG_ERR, "can't open conversations",
-                "fromAccountId=<%s> error=<%s>",
-                copy.from_account_id, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.conversations.open.failed",
+                   lf_jmapreq(req),
+                   lf_s("jmap.from.accountid", copy.from_account_id),
+                   lf_err("error", r));
         jmap_error(req, jmap_server_error(r));
         goto done;
     }
@@ -8577,8 +8656,8 @@ static int jmap_calendarevent_copy(struct jmap_req *req)
     r = jmap_create_notify_collection(req->accountid, &notifmb);
     if (!r) r = mailbox_open_iwl(notifmb->name, &notifmbox);
     if (r) {
-        xsyslog(LOG_WARNING, "can not open jmapnotify collection",
-                "accountid=%s error=%s", req->accountid, error_message(r));
+        xsyslog_ev(LOG_WARNING, "jmap.notify.collection.open.failed",
+                   lf_jmapreq(req), lf_err("error", r));
     }
 
     /* Process request */
@@ -8787,8 +8866,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
 
     db = caldav_open_userid(req->accountid);
     if (!db) {
-        syslog(LOG_ERR,
-               "caldav_open_mailbox failed for user %s", req->accountid);
+        xsyslog_ev(LOG_ERR, "jmap.caldav.open.failed", lf_jmapreq(req));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -8842,15 +8920,16 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     }
 
     if (json_array_size(parser.invalid)) {
-        syslog(LOG_NOTICE, "failed to parse RSVP");
+        xsyslog_ev(LOG_NOTICE, "jmap.calendarevent.rsvp.invalid",
+                   lf_jmapreq(req));
         goto done;
     }
 
     if (!cdata || !cdata->dav.alive ||
         !cdata->dav.rowid || !cdata->dav.imap_uid ||
         cdata->comp_type != CAL_COMP_VEVENT) {
-        syslog(LOG_NOTICE, "can't find DAV event record for ID: %s",
-               update.eid->raw);
+        xsyslog_ev(LOG_NOTICE, "jmap.calendarevent.notfound",
+                   lf_jmapreq(req), lf_s("cal.eventid", update.eid->raw));
         r = IMAP_NOTFOUND;
         goto done;
     }
@@ -8859,34 +8938,35 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     if (update.eid->ical_recurid) {
         r = check_eventid_exists(update.eid, db, &update.is_standalone);
         if (r) {
-            syslog(LOG_NOTICE, "can't find event with UID: %s %s",
-                   update.eid->ical_uid,
-                   update.eid->ical_recurid ? update.eid->ical_recurid : "");
+            xsyslog_ev(LOG_NOTICE, "jmap.calendarevent.notfound",
+                       lf_jmapreq(req),
+                       lf_s("cal.uid", update.eid->ical_uid),
+                       lf_s_opt("cal.recurid", update.eid->ical_recurid));
             goto done;
         }
     }
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
     if (!mbentry) {
-        xsyslog(LOG_WARNING, "no mbentry for mailbox",
-                "dav.mailbox=<%s> dav.mailbox_byname=<%d>",
-                cdata->dav.mailbox, cdata->dav.mailbox_byname);
+        xsyslog_ev(LOG_WARNING, "jmap.caldav.mailbox.missing",
+                   lf_s("dav.mailbox", cdata->dav.mailbox),
+                   lf_b("dav.mailbox.byname", cdata->dav.mailbox_byname));
         r = IMAP_NOTFOUND;
         goto done;
     }
 
     if (mboxname_isdeletedmailbox(mbentry->name, NULL)) {
-        xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
-                "mailbox is deleted, but ical_objs row exists",
-                "mboxid=<%s> imap_uid=<%d>",
-                mbentry->uniqueid, cdata->dav.imap_uid);
+        xsyslog_ev(LOG_ERR, "jmap.caldav.icalobjs.orphaned",
+                   lf_s("mbox.uniqueid", mbentry->uniqueid),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         r = IMAP_NOTFOUND;
         goto done;
     }
 
     /* Check permissions. */
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
-        syslog(LOG_NOTICE, "no permissions to read event");
+        xsyslog_ev(LOG_NOTICE, "jmap.calendarevent.access.denied",
+                   lf_jmapreq(req), lf_s("cal.eventid", update.eid->raw));
         r = IMAP_NOTFOUND;
         goto done;
     }
@@ -8894,7 +8974,9 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     /* Check privacy for sharees */
     if (strcmp(req->accountid, req->userid)) {
         if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
-            syslog(LOG_NOTICE, "no permissions for sharee to read event");
+            xsyslog_ev(LOG_NOTICE, "jmap.calendarevent.access.denied",
+                       lf_jmapreq(req), lf_b("jmap.sharee", 1),
+                       lf_s("cal.eventid", update.eid->raw));
             r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
                 IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
             goto done;
@@ -8909,15 +8991,18 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     struct index_record record = { };
     r = mailbox_find_index_record(mbox, cdata->dav.imap_uid, &record);
     if (r) {
-        syslog(LOG_ERR, "mailbox_index_record(0x%x) failed: %s",
-                cdata->dav.imap_uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.record.unreadable",
+                   lf_jmapreq(req), lf_mailbox(mbox),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid),
+                   lf_err("error", r));
         goto done;
     }
     /* Load VEVENT from record. */
     update.oldical = record_to_ical(mbox, &record, NULL);
     if (!update.oldical) {
-        syslog(LOG_ERR, "record_to_ical failed for record %u:%s",
-                cdata->dav.imap_uid, mbentry->name);
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.ical.unparseable",
+                   lf_jmapreq(req), lf_intname("mbox.name", mbentry->name),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -8989,12 +9074,14 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
                 icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
             if (ical_part_stat == icalparameter_get_partstat(param)) {
                 errno = 0;
-                xsyslog(LOG_ERR, "ignoring redundant RSVP (same partStat)",
-                        "eventid=<%s> recurid=<%s>"
-                        " attendee=<%s> participationStatus=<%s>",
-                        update.eid->ical_uid,
-                        update.eid->ical_recurid ? update.eid->ical_recurid : "",
-                        part_email, part_stat);
+                /* A client repeating an RSVP it has already made is
+                 * ordinary; nothing has gone wrong. */
+                xsyslog_ev(LOG_NOTICE, "jmap.calendarevent.rsvp.redundant",
+                           lf_jmapreq(req),
+                           lf_s("cal.uid", update.eid->ical_uid),
+                           lf_s_opt("cal.recurid", update.eid->ical_recurid),
+                           lf_s("cal.attendee", part_email),
+                           lf_s("cal.partstat", part_stat));
                 json_object_set_new(res, "scheduleStatus",
                                     json_string(SCHEDSTAT_SUCCESS));
                 goto no_op;
@@ -9006,7 +9093,8 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     }
 
     if (!part_id) {
-        syslog(LOG_NOTICE, "failed to find participantId in event");
+        xsyslog_ev(LOG_NOTICE, "jmap.calendarevent.rsvp.participant.missing",
+                   lf_jmapreq(req), lf_s("cal.eventid", update.eid->raw));
         r = HTTP_NOT_FOUND;
         goto done;
     }
@@ -9041,7 +9129,8 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     /* Apply patch */
     r = updateevent_apply_patch(req, &update, parser.invalid, NULL, &err);
     if (err || r || json_array_size(parser.invalid)) {
-        syslog(LOG_NOTICE, "failed to patch RSVP into event");
+        xsyslog_ev(LOG_NOTICE, "jmap.calendarevent.rsvp.patch.failed",
+                   lf_jmapreq(req), lf_s("cal.eventid", update.eid->raw));
         goto done;
     }
 
@@ -9124,7 +9213,8 @@ done:
     }
     if (err) {
         char *errstr = json_dumps(err, JSON_COMPACT);
-        syslog(LOG_NOTICE, "RSVP failed: %s", errstr);
+        xsyslog_ev(LOG_NOTICE, "jmap.calendarevent.rsvp.failed",
+                   lf_jmapreq(req), lf_s("error.description", errstr));
         free(errstr);
 
         jmap_error(req, err);
@@ -10294,9 +10384,9 @@ static int principal_getavailability_cb(void *vrock, struct caldav_jscal *jscal)
         mboxlist_entry_free(&rock->mbentry);
         rock->mbentry = jmap_mbentry_from_dav(rock->req, &cdata->dav);
         if (!rock->mbentry) {
-            xsyslog(LOG_ERR, "no mbentry for mailbox",
-                    "dav.mailbox=<%s> dav.mailbox_byname=<%d>",
-                    cdata->dav.mailbox, cdata->dav.mailbox_byname);
+            xsyslog_ev(LOG_ERR, "jmap.caldav.mailbox.missing",
+                       lf_s("dav.mailbox", cdata->dav.mailbox),
+                       lf_b("dav.mailbox.byname", cdata->dav.mailbox_byname));
             return 0;
         }
     }
@@ -10717,8 +10807,12 @@ static seqset_t *_readseen(struct mailbox *mbox, const char *userid)
         seenuids = seqset_init(1, SEQ_MERGE);
     }
     if (r) {
-        xsyslog(LOG_ERR, "can not read seen state",
-                "userid=%s error=%s", userid, error_message(r));
+        /* A user who has never had a seen state is the ordinary case,
+         * and an empty one is what the caller gets. */
+        xsyslog_ev(r == IMAP_NOTFOUND ? LOG_DEBUG : LOG_ERR,
+                   "jmap.calendar.seen.unreadable",
+                   lf_s("u.username", userid), lf_mailbox(mbox),
+                   lf_err("error", r));
     }
 
     seen_close(&seendb);
@@ -11230,14 +11324,14 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
     const struct body *body;
     int r = message_get_cachebody(msg, &body);
     if (r) {
-        xsyslog(LOG_ERR, "can't open cachebody", "uid=%d error=%s",
-                uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.notification.cachebody.unreadable",
+                   lf_u("msg.imapuid", uid), lf_err("error", r));
         goto done;
     }
     r = dlist_parsemap(&dl, 1, body->description, strlen(body->description));
     if (r) {
-        xsyslog(LOG_ERR, "can't parse description", "uid=%d error=%s",
-                uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.notification.description.unparseable",
+                   lf_u("msg.imapuid", uid), lf_err("error", r));
         goto done;
     }
 
@@ -11416,9 +11510,9 @@ static int jmap_sharenotification_get(struct jmap_req *req)
         }
     }
     else if (r) {
-        xsyslog(r == IMAP_MAILBOX_NONEXISTENT ? LOG_WARNING : LOG_ERR,
-                "no DAV notification mailbox found",
-                "accountid=<%s>", req->accountid);
+        xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT ? LOG_WARNING : LOG_ERR,
+                   "jmap.dav.notification.mailbox.missing",
+                   lf_jmapreq(req), lf_err("error", r));
         if (r != IMAP_MAILBOX_NONEXISTENT) {
             jmap_error(req, jmap_server_error(r));
             goto done;
@@ -11826,8 +11920,8 @@ static json_t *eventnotif_tojmap(jmap_req_t *req,
     if (r) {
         uint32_t msguid;
         message_get_uid(msg, &msguid);
-        xsyslog(LOG_ERR, "can't read notification", "uid=%d error=%s",
-                msguid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.notification.unreadable",
+                   lf_u("msg.imapuid", msguid), lf_err("error", r));
         goto done;
     }
 
@@ -11836,8 +11930,9 @@ static json_t *eventnotif_tojmap(jmap_req_t *req,
     if (!jn) {
         uint32_t msguid;
         message_get_uid(msg, &msguid);
-        xsyslog(LOG_ERR, "can't parse notification", "uid=%d error=%s",
-                msguid, jerr.text);
+        xsyslog_ev(LOG_ERR, "jmap.notification.unparseable",
+                   lf_u("msg.imapuid", msguid),
+                   lf_s("error", jerr.text));
         goto done;
     }
     jmap_filterprops(jn, props);
@@ -11876,9 +11971,9 @@ static int jmap_calendareventnotification_get(struct jmap_req *req)
         }
     }
     else if (r) {
-        xsyslog(r == IMAP_MAILBOX_NONEXISTENT ? LOG_WARNING : LOG_ERR,
-                "no JMAP notification mailbox found",
-                "accountid=<%s>", req->accountid);
+        xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT ? LOG_WARNING : LOG_ERR,
+                   "jmap.notification.mailbox.missing",
+                   lf_jmapreq(req), lf_err("error", r));
         if (r != IMAP_MAILBOX_NONEXISTENT) {
             jmap_error(req, jmap_server_error(r));
             goto done;

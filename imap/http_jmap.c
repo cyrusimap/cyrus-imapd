@@ -136,9 +136,9 @@ static void jmap_init(struct buf *serverinfo)
     if (namespace_jmap.enabled && !config_getswitch(IMAPOPT_CONVERSATIONS) &&
         /* proxy servers don't need conversations */
         (!config_mupdate_server || config_getstring(IMAPOPT_PROXYSERVERS))) {
-        syslog(LOG_ERR,
-               "ERROR: cannot enable %s module with conversations disabled",
-               namespace_jmap.name);
+        xsyslog_ev(LOG_ERR, "jmap.module.disabled",
+                   lf_s("jmap.module", namespace_jmap.name),
+                   lf_s("config.option", "conversations"));
         namespace_jmap.enabled = 0;
     }
 
@@ -544,7 +544,7 @@ static int meth_post(struct transaction_t *txn,
         ret = json_response(ret ? ret : HTTP_OK, txn, res);
     }
 
-    syslog(LOG_DEBUG, ">>>> jmap_post: Exit");
+    xsyslog_ev(LOG_DEBUG, "jmap.request.done");
     return ret;
 }
 
@@ -904,8 +904,11 @@ static int _create_upload_collection(const char *accountid,
         r = http_mailbox_open_w(mbentry->name, mailboxp);
         if (r) {
             if (r != IMAP_MAILBOX_REPLICAONLY)
-                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                       mbentry->name, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.upload.collection.open.failed",
+                           lf_s("u.username", httpd_userid),
+                           lf_s("jmap.accountid", accountid),
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_err("error", r));
             goto done;
         }
     }
@@ -929,8 +932,11 @@ static int _create_upload_collection(const char *accountid,
                                    1/*isadmin*/, accountid, httpd_authstate,
                                    0/*flags*/, mailboxp);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                   mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.upload.collection.create.failed",
+                       lf_s("u.username", httpd_userid),
+                       lf_s("jmap.accountid", accountid),
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_err("error", r));
             goto done;
         }
     }
@@ -946,14 +952,21 @@ static int _create_upload_collection(const char *accountid,
         cyrus_acl_set(&newacl, httpd_userid, ACL_MODE_SET,
                       JACL_READITEMS | JACL_WRITE, NULL, NULL);
 
-        xsyslog(LOG_NOTICE, "reset ACL", "userid=<%s> oldacl=<%s> newacl=<%s>",
-                httpd_userid, mailbox_acl(*mailboxp), newacl);
+        xsyslog_ev(LOG_NOTICE, "jmap.upload.acl.reset",
+                   lf_s("u.username", httpd_userid),
+                   lf_s("jmap.accountid", accountid),
+                   lf_mailbox(*mailboxp),
+                   lf_s("old.mbox.acl", mailbox_acl(*mailboxp)),
+                   lf_s("mbox.acl", newacl));
 
         /* ok, change the mailboxes database */
         r = mboxlist_setacls(mbentry->name, newacl, mailbox_modseq_dirty(*mailboxp), /*silent*/0);
         if (r) {
-            syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
-                   mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.upload.acl.update.failed",
+                       lf_s("u.username", httpd_userid),
+                       lf_s("jmap.accountid", accountid),
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_err("error", r));
         }
         free(newacl);
     }
@@ -989,8 +1002,11 @@ HIDDEN int jmap_open_upload_collection(const char *accountid,
     /* Open mailbox for writing */
     r = http_mailbox_open_w(mbentry->name, mailboxp);
     if (r && r != IMAP_MAILBOX_REPLICAONLY) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-               mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.upload.collection.open.failed",
+                   lf_s("u.username", httpd_userid),
+                   lf_s("jmap.accountid", accountid),
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_err("error", r));
     }
 
     mboxlist_entry_free(&mbentry);
@@ -1068,8 +1084,9 @@ static int jmap_upload(struct transaction_t *txn)
 
     r = conversations_open_user(accountid, 0, &cstate);
     if (r) {
-        syslog(LOG_ERR, "jmap_upload: can't open conversations db for %s: %s",
-               accountid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.upload.conversations.open.failed",
+                   lf_s("u.username", httpd_userid),
+                   lf_s("jmap.accountid", accountid), lf_err("error", r));
         ret = HTTP_SERVER_ERROR;
         txn->error.desc = "can't open upload conversations db";
         goto done;
@@ -1077,8 +1094,14 @@ static int jmap_upload(struct transaction_t *txn)
 
     r = jmap_open_upload_collection(accountid, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "jmap_upload: can't open upload collection for %s: %s",
-               accountid, error_message(r));
+        /* A sharee without write access, or a replica, is an ordinary
+         * answer to an upload request.  Anything else means the upload
+         * collection itself is in trouble. */
+        xsyslog_ev(r == IMAP_PERMISSION_DENIED || r == IMAP_MAILBOX_REPLICAONLY
+                   ? LOG_WARNING : LOG_ERR,
+                   "jmap.upload.collection.unavailable",
+                   lf_s("u.username", httpd_userid),
+                   lf_s("jmap.accountid", accountid), lf_err("error", r));
         if (r == IMAP_MAILBOX_REPLICAONLY) {
             ret = http_status_for_write_error(r);
             txn->error.desc = error_message(r);
@@ -1094,7 +1117,9 @@ static int jmap_upload(struct transaction_t *txn)
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox_name(mailbox), now.tv_sec, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "jmap.upload.stage.failed",
+                   lf_s("u.username", httpd_userid),
+                   lf_s("jmap.accountid", accountid), lf_mailbox(mailbox));
         txn->error.desc = "append_newstage() failed";
         ret = HTTP_SERVER_ERROR;
         goto done;
@@ -1127,7 +1152,10 @@ static int jmap_upload(struct transaction_t *txn)
         }
         // otherwise we gotta clean up and make it an attachment
         if (ftruncate(fileno(f), 0L) < 0 || fseek(f, 0L, SEEK_SET) < 0) {
-            syslog(LOG_ERR, "IOERROR: failed to reset file in JMAP upload");
+            xsyslog_ev(LOG_ERR, "jmap.upload.stage.reset.failed",
+                       lf_s("u.username", httpd_userid),
+                       lf_s("jmap.accountid", accountid),
+                       lf_mailbox(mailbox));
             ret = HTTP_SERVER_ERROR;
             goto done;
         }
@@ -1199,8 +1227,9 @@ static int jmap_upload(struct transaction_t *txn)
     fwrite(data, datalen, 1, f);
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
-        syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
-               mailbox_name(mailbox), strerror(errno));
+        xsyslog_ev(LOG_ERR, "jmap.upload.write.failed",
+                   lf_s("u.username", httpd_userid),
+                   lf_s("jmap.accountid", accountid), lf_mailbox(mailbox));
         fclose(f);
         r = IMAP_IOERROR;
         txn->error.desc = "append_setup() failed";
@@ -1216,8 +1245,10 @@ wrotebody:
     r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate,
                           0, /*quota*/NULL, 0, 0, /*event*/0);
     if (r) {
-        syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.upload.append.setup.failed",
+                   lf_s("u.username", httpd_userid),
+                   lf_s("jmap.accountid", accountid), lf_mailbox(mailbox),
+                   lf_err("error", r));
         ret = HTTP_SERVER_ERROR;
         txn->error.desc = "append_setup() failed";
         goto done;
@@ -1230,8 +1261,10 @@ wrotebody:
 
     if (r) {
         append_abort(&as);
-        syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.upload.append.failed",
+                   lf_s("u.username", httpd_userid),
+                   lf_s("jmap.accountid", accountid), lf_mailbox(mailbox),
+                   lf_err("error", r));
         if (r == IMAP_QUOTA_EXCEEDED || r == IMAP_NO_OVERQUOTA) {
             /* XXX  Should never happen, but DTRT anyways */
             ret = HTTP_NO_STORAGE;
@@ -1246,8 +1279,10 @@ wrotebody:
 
     r = append_commit(&as);
     if (r) {
-        syslog(LOG_ERR, "append_commit(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.upload.append.commit.failed",
+                   lf_s("u.username", httpd_userid),
+                   lf_s("jmap.accountid", accountid), lf_mailbox(mailbox),
+                   lf_err("error", r));
         ret = HTTP_SERVER_ERROR;
         txn->error.desc = "append_commit() failed";
         goto done;
@@ -1394,7 +1429,8 @@ static struct prot_waitevent *ws_push(struct protstream *s __attribute__((unused
     json_t *jstate = jmap_push_get_state(jpush);
     struct buf *buf = &jpush->buf;
 
-    xsyslog(LOG_DEBUG, "JMAP WS push", "accountid=<%s>", jpush->accountid);
+    xsyslog_ev(LOG_DEBUG, "jmap.push.ws.poll",
+               lf_s("jmap.accountid", jpush->accountid));
 
     if (jstate) {
         /* Add pushState */
@@ -1429,8 +1465,9 @@ static void ws_push_enable(struct transaction_t *txn, json_t *req)
     strarray_t types = STRARRAY_INITIALIZER;
     modseq_t lastmodseq = ULLONG_MAX;
 
-    xsyslog(LOG_DEBUG, "JMAP WS push enable",
-            "jpush=<%p>, jtypes=<%p>", jpush, jtypes);
+    xsyslog_ev(LOG_DEBUG, "jmap.push.ws.enable",
+               lf_b("jmap.push.active", jpush != NULL),
+               lf_zu("jmap.push.datatypes", json_array_size(jtypes)));
 
     if (!json_array_size(jtypes)) {
         jmap_push_done(txn);
@@ -1619,10 +1656,10 @@ static struct prot_waitevent *es_push(struct protstream *s __attribute__((unused
     time_t now = time(NULL);
     int do_close = 0;
 
-    xsyslog(LOG_DEBUG, "JMAP eventSource push",
-            "accountid=<%s>, now=<" TIME_T_FMT ">,"
-            " next_poll=<" TIME_T_FMT ">, next_ping=<" TIME_T_FMT ">",
-            jpush->accountid, now, jpush->next_poll, jpush->next_ping);
+    xsyslog_ev(LOG_DEBUG, "jmap.push.eventsource.poll",
+               lf_s("jmap.accountid", jpush->accountid),
+               lf_time("jmap.push.next_poll", jpush->next_poll),
+               lf_time("jmap.push.next_ping", jpush->next_ping));
 
     buf_reset(buf);
 

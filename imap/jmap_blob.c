@@ -117,8 +117,9 @@ static int jmap_copyblob(jmap_req_t *req,
     /* Create staging file */
     time_t internaldate = time(NULL);
     if (!(to_fp = append_newstage(mailbox_name(to_mbox), internaldate, 0, &stage))) {
-        syslog(LOG_ERR, "jmap_copyblob(%s): append_newstage(%s) failed",
-                blobid, mailbox_name(mbox));
+        xsyslog_ev(LOG_ERR, "jmap.blob.copy.stage.failed", lf_jmapreq(req),
+                   lf_s("jmap.blobid", blobid), lf_mailbox(to_mbox),
+                   lf_intname("other.mbox.name", mailbox_name(mbox)));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -133,8 +134,9 @@ static int jmap_copyblob(jmap_req_t *req,
         fwrite(buf_base(&msg_buf), buf_len(&msg_buf), 1, to_fp);
     }
     if (fflush(to_fp) || ferror(to_fp) || fdatasync(fileno(to_fp))) {
-        syslog(LOG_ERR, "jmap_copyblob(%s): tofp=%s: %s",
-               blobid, append_stagefname(stage), strerror(errno));
+        xsyslog_ev(LOG_ERR, "jmap.blob.copy.write.failed", lf_jmapreq(req),
+                   lf_s("jmap.blobid", blobid), lf_mailbox(to_mbox),
+                   lf_s("append.stage.file", append_stagefname(stage)));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -147,8 +149,9 @@ static int jmap_copyblob(jmap_req_t *req,
     r = append_setup_mbox(&as, to_mbox, httpd_userid, httpd_authstate,
             0, /*quota*/NULL, 0, 0, /*event*/0);
     if (r) {
-        syslog(LOG_ERR, "jmap_copyblob(%s): append_setup_mbox: %s",
-                blobid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.blob.copy.append.setup.failed",
+                   lf_jmapreq(req), lf_s("jmap.blobid", blobid),
+                   lf_mailbox(to_mbox), lf_err("error", r));
         goto done;
     }
     strarray_t flags = STRARRAY_INITIALIZER;
@@ -158,8 +161,9 @@ static int jmap_copyblob(jmap_req_t *req,
                              /*createdmodseq*/0, &flags, 0, NULL);
     strarray_fini(&flags);
         if (r) {
-        syslog(LOG_ERR, "jmap_copyblob(%s): append_fromstage: %s",
-                blobid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.blob.copy.append.failed",
+                   lf_jmapreq(req), lf_s("jmap.blobid", blobid),
+                   lf_mailbox(to_mbox), lf_err("error", r));
                 append_abort(&as);
                 goto done;
         }
@@ -167,8 +171,9 @@ static int jmap_copyblob(jmap_req_t *req,
         free(to_body);
         r = append_commit(&as);
         if (r) {
-        syslog(LOG_ERR, "jmap_copyblob(%s): append_commit: %s",
-                blobid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.blob.copy.append.commit.failed",
+                   lf_jmapreq(req), lf_s("jmap.blobid", blobid),
+                   lf_mailbox(to_mbox), lf_err("error", r));
         goto done;
     }
 
@@ -209,8 +214,8 @@ static int jmap_blob_copy(jmap_req_t *req)
         }
         goto done;
     } else if (r) {
-        syslog(LOG_ERR, "jmap_blob_copy: jmap_create_upload_collection(%s): %s",
-               req->accountid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.blob.copy.collection.unavailable",
+                   lf_jmapreq(req), lf_err("error", r));
         goto cleanup;
     }
 
@@ -684,8 +689,9 @@ static int jmap_blob_lookup(jmap_req_t *req)
             struct getblob_cb_rock rock = { req, blob_id, &getblobs_by_uniqueid };
             int r = conversations_guid_foreach(req->cstate, blob_id + 1, getblob_cb, &rock);
             if (r) {
-                syslog(LOG_ERR, "jmap_blob_get: can't lookup guid %s: %s",
-                        blob_id, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.blob.get.guid.lookup.failed",
+                           lf_jmapreq(req), lf_s("jmap.blobid", blob_id),
+                           lf_err("error", r));
             }
         }
         else if (*blob_id == 'I' || *blob_id == 'V') {
@@ -728,8 +734,9 @@ static int jmap_blob_lookup(jmap_req_t *req)
         else {
             r = mailbox_open_irl(mbentry->name, &mbox);
             if (r) {
-                syslog(LOG_ERR, "jmap_blob_get: can't open mailbox %s: %s",
-                       mbentry->name, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.blob.get.mailbox.open.failed",
+                           lf_jmapreq(req), lf_mbentry(mbentry),
+                           lf_err("error", r));
             }
         }
         if (r) continue;
@@ -774,8 +781,10 @@ static int jmap_blob_lookup(jmap_req_t *req)
             if (!r) r = msgrecord_get_cid(mr, &lrock.cid);
             msgrecord_unref(&mr);
             if (r) {
-                syslog(LOG_ERR, "jmap_blob_get: can't read msgrecord %s:%d: %s",
-                        mailbox_name(mbox), getblob->uid, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.blob.get.record.unreadable",
+                           lf_jmapreq(req), lf_mailbox(mbox),
+                           lf_u("msg.imapuid", getblob->uid),
+                           lf_err("error", r));
                 continue;
             }
 

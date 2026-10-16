@@ -133,8 +133,11 @@ static int jmap_legacy_quota_get(jmap_req_t *req)
             json_array_append_new(get.list, jquota);
         }
         else {
-            syslog(LOG_ERR, "jmap_quota_get: can't read quota for %s: %s",
-                    inboxname, error_message(r));
+            /* No quota root is the ordinary case for an unquota'd user,
+              * and the client is told so in notFound either way. */
+            xsyslog_ev(r == IMAP_QUOTAROOT_NONEXISTENT ? LOG_DEBUG : LOG_ERR,
+                       "jmap.quota.read.failed", lf_jmapreq(req),
+                       lf_intname("mbox.name", inboxname), lf_err("error", r));
             json_array_append_new(get.not_found, json_string("mail"));
         }
         quota_free(&quota);

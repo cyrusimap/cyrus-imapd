@@ -101,5 +101,8 @@ sub test_calendar_scheduling_enabled
 
     xlog $self, "We should have generated a syslog message about annotation";
     $self->assert_syslog_matches($self->{instance},
-        qr/Scheduling disabled for user cassandane on mailbox user.cassandane.#calendars.Default by CY:scheduling-enabled annotation/);
+        qr{event=jmap\.calendarevent\.schedule\.disabled
+           .*\su\.username=cassandane
+           .*\smbox\.name=user\.cassandane\.\#calendars\.Default
+        }x);
 }
