@@ -530,6 +530,7 @@ int deliver_mailbox(FILE *f,
         mailbox_close(&mailbox);
         return r;
     }
+    as.drop_excess_flags = true;
 
     /* check for duplicate message */
     uuid = xstrdup(mailbox_uniqueid(as.mailbox));

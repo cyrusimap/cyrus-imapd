@@ -44,6 +44,8 @@ struct appendstate {
     const struct auth_state *auth_state;
     bool isadmin;
     bool disable_annotator;
+    /** skip user flags the mailbox has no room for, rather than failing */
+    bool drop_excess_flags;
 
     /* one event notification to send per appended message */
     enum event_type event_type;

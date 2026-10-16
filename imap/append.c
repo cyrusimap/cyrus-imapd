@@ -853,6 +853,13 @@ static int append_apply_flags(struct appendstate *as,
             if (callout_flags && strarray_contains_case(callout_flags, flag))
                 create = 2;
             r = mailbox_user_flag(as->mailbox, flag, &userflag, create);
+            if (r == IMAP_USERFLAG_EXHAUSTED && as->drop_excess_flags) {
+                xsyslog_ev(LOG_WARNING, "append.flag.dropped",
+                           lf_s("msg.flag", flag),
+                           lf_mailbox(as->mailbox));
+                r = 0;
+                continue;
+            }
             if (r) goto out;
             r = msgrecord_set_userflag(msgrec, userflag, 1);
             if (r) goto out;
