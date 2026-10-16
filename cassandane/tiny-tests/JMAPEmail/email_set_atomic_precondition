@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_atomic_precondition
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $id = $user->emails->create({
+        mailboxIds    => { $user->mailboxes->inbox->id => JSON::true },
+        subject       => 'subject',
+        bodyStructure => { type => 'text/plain', partId => 'p' },
+        bodyValues    => { p => { value => 'body' } },
+    })->id;
+
+    xlog $self, "a failed precondition wins over atomic";
+    my $res = $jmap->request([
+        [ 'Email/set', {
+            atomic        => JSON::true,
+            ifUnchangedBy => { $id => { subject => 'wrong' } },
+            update => { $id => { 'keywords/$flagged' => JSON::true } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { type => 'stateMismatch', failed => [ $id ] },
+        $res->single_sentence('error')->arguments,
+    );
+}

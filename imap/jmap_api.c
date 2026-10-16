@@ -881,7 +881,10 @@ HIDDEN int jmap_api(struct transaction_t *txn,
             json_decref(args);
             goto done;
         }
-        conversations_commit(&req.cstate);
+        if (req.abort_cstate)
+            conversations_abort(&req.cstate);
+        else
+            conversations_commit(&req.cstate);
         user_nslock_release(&user_nslock);
 
         jmap_finireq(&req);
@@ -2325,12 +2328,35 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                 "arguments", parser->invalid);
     }
-    else if (atomic) {
-        *err = json_pack("{s:s}", "type", "cannotApplyAtomically");
+    else {
+        if (json_object_size(if_unchanged_by))
+            *err = set_check_preconditions(req, if_unchanged_by);
+
+        if (!*err && atomic) {
+            const jmap_method_t *mp =
+                find_methodproc(req->method, &req->settings->methods,
+                                (strarray_t *) req->using_capabilities);
+            if (mp && (mp->flags & JMAP_SET_ATOMIC))
+                set->atomic = true;
+            else
+                *err = json_pack("{s:s}", "type", "cannotApplyAtomically");
+        }
     }
-    else if (json_object_size(if_unchanged_by)) {
-        *err = set_check_preconditions(req, if_unchanged_by);
+}
+
+HIDDEN json_t *jmap_set_atomic_failure(const struct jmap_set *set)
+{
+    static const char *names[] = { "notCreated", "notUpdated", "notDestroyed" };
+    const json_t *maps[] = { set->not_created, set->not_updated,
+                             set->not_destroyed };
+    json_t *res = NULL;
+
+    for (size_t i = 0; i < 3; i++) {
+        if (!json_object_size(maps[i])) continue;
+        if (!res) res = json_pack("{s:s}", "type", "atomicFailure");
+        json_object_set(res, names[i], (json_t *) maps[i]);
     }
+    return res;
 }
 
 
