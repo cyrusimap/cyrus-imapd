@@ -333,6 +333,7 @@ lib_libsasl_min_la_SOURCES = \
     $(LIBSASL_API) \
     libsasl_min/auxprop.c \
     libsasl_min/canonusr.c \
+    libsasl_min/checkpw.c \
     libsasl_min/client.c \
     libsasl_min/common.c \
     libsasl_min/config.c \
