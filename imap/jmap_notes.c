@@ -681,13 +681,11 @@ static json_t *_notes_check_readonly(json_t *readonly,
                                      message_t *msg,
                                      struct buf *buf)
 {
-    hash_table props = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&props, json_object_size(readonly) + 1, 0);
-    jmap_set_readonly_props(readonly, &props);
+    hash_table *props = jmap_set_readonly_props(readonly);
 
     json_t *cur = json_object();
     json_t *err = NULL;
-    int r = _note_get(msg, cur, &props, 0 /*want_created*/, buf);
+    int r = _note_get(msg, cur, props, 0 /*want_created*/, buf);
     if (r) {
         err = jmap_server_error(r);
     }
@@ -696,7 +694,8 @@ static json_t *_notes_check_readonly(json_t *readonly,
     }
 
     json_decref(cur);
-    free_hash_table(&props, NULL);
+    free_hash_table(props, NULL);
+    free(props);
     return err;
 }
 
@@ -707,7 +706,7 @@ static void _notes_update_cb(const char *id, message_t *msg,
     struct set_rock *srock = (struct set_rock *) rock;
     struct jmap_set *set = srock->set;
     json_t *err = NULL, *updated_note = NULL;
-    json_t *readonly = jmap_set_readonly(set, id);
+    json_t *readonly = json_object_get(set->update_readonly, id);
     int r;
 
     if ((srock->rights & JACL_UPDATEITEMS) != JACL_UPDATEITEMS) {

@@ -731,11 +731,8 @@ static json_t *_card_check_readonly(jmap_req_t *req,
                                     const char *id,
                                     json_t *readonly)
 {
-    hash_table props = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&props, json_object_size(readonly) + 1, 0);
-    jmap_set_readonly_props(readonly, &props);
-
-    struct jmap_get get = { .props = &props, .list = json_array() };
+    struct jmap_get get = { .props = jmap_set_readonly_props(readonly),
+                            .list = json_array() };
     struct cards_rock rock = {
         .db = db,
         .req = req,
@@ -756,8 +753,7 @@ static json_t *_card_check_readonly(jmap_req_t *req,
     mboxlist_entry_free(&rock.mbentry);
     buf_free(&rock.cid);
     free_hashu64_table(&rock.jmapcache, free);
-    json_decref(get.list);
-    free_hash_table(&props, NULL);
+    jmap_get_fini(&get);
 
     return err;
 }
@@ -936,7 +932,7 @@ static int jmap_card_set(struct jmap_req *req)
     /* update */
     const char *uid;
     json_object_foreach(set.update, uid, arg) {
-        json_t *readonly = jmap_set_readonly(&set, uid);
+        json_t *readonly = json_object_get(set.update_readonly, uid);
         if (readonly) {
             json_t *err = _card_check_readonly(req, db, uid, readonly);
             if (err) {
@@ -2699,11 +2695,8 @@ static json_t *setaddressbooks_check_readonly(jmap_req_t *req,
                                               const char *default_addrbookname,
                                               json_t *readonly)
 {
-    hash_table props = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&props, json_object_size(readonly) + 1, 0);
-    jmap_set_readonly_props(readonly, &props);
-
-    struct jmap_get get = { .props = &props, .list = json_array() };
+    struct jmap_get get = { .props = jmap_set_readonly_props(readonly),
+                            .list = json_array() };
     struct getaddressbooks_rock rock = {
         .req = req,
         .get = &get,
@@ -2722,8 +2715,7 @@ static json_t *setaddressbooks_check_readonly(jmap_req_t *req,
         err = jmap_set_check_readonly(readonly, json_array_get(get.list, 0));
     }
 
-    json_decref(get.list);
-    free_hash_table(&props, NULL);
+    jmap_get_fini(&get);
 
     return err;
 }
@@ -2941,7 +2933,7 @@ static int jmap_addressbook_set(struct jmap_req *req)
         setaddressbooks_update(req,
                                abookid,
                                default_addrbookname,
-                               jmap_set_readonly(&set, id),
+                               json_object_get(set.update_readonly, id),
                                arg,
                                &record,
                                &err);

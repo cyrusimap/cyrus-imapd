@@ -13294,7 +13294,7 @@ struct email_update {
     int patch_snoozed;        /* True if snoozed is a patch object */
     struct email_uidrec *snoozed_uidrec; /* Currently snoozed email */
     char *snooze_in_mboxid;   /* Snooze the email in this mailboxid */
-    json_t *readonly;         /* See jmap_set_readonly() */
+    json_t *readonly;         /* See jmap_set.update_readonly */
 
     /* JMAP Email/copy specific fields */
     const char *creation_id;  /* Input: creation id of copied message */
@@ -14643,17 +14643,14 @@ static void _email_bulkupdate_check_readonly(struct email_bulkupdate *bulk,
         struct email_updateplan *plan =
             hash_lookup(uidrec->mboxrec->mbox_id, &bulk->plans_by_mbox_id);
 
-        hash_table props = HASH_TABLE_INITIALIZER;
         struct email_getargs args = _EMAIL_GET_ARGS_INITIALIZER;
-        construct_hash_table(&props, json_object_size(update->readonly) + 1, 0);
-        args.props = &props;
+        args.props = jmap_set_readonly_props(update->readonly);
         args.bodyprops = &_email_get_default_bodyprops;
         if (!hash_constructed(args.bodyprops)) {
             _email_init_default_props(args.bodyprops);
         }
 
-        jmap_set_readonly_props(update->readonly, &props);
-        hash_iter *iter = hash_table_iter(&props);
+        hash_iter *iter = hash_table_iter(args.props);
         while (hash_iter_next(iter)) {
             const char *name = hash_iter_key(iter);
             if (!strncmp(name, "header:", 7)) {
@@ -14688,9 +14685,9 @@ static void _email_bulkupdate_check_readonly(struct email_bulkupdate *bulk,
 
         json_decref(cur);
         msgrecord_unref(&mr);
-        args.props = NULL;
+        free_hash_table(args.props, NULL);
+        free(args.props);
         _email_getargs_fini(&args);
-        free_hash_table(&props, NULL);
     }
 }
 
@@ -15420,7 +15417,8 @@ static void _email_update_bulk(jmap_req_t *req,
         struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
         struct email_update *update = xzmalloc(sizeof(struct email_update));
         update->email_id = email_id;
-        update->readonly = json_incref(jmap_set_readonly(set, email_id));
+        update->readonly =
+            json_incref(json_object_get(set->update_readonly, email_id));
         _email_update_parse(req, jval, &parser, update);
 
         /* Validate patched mailbox ids */

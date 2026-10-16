@@ -2351,9 +2351,7 @@ static json_t *setcalendars_check_readonly(jmap_req_t *req,
     }
     if (mbentry) {
         struct jmap_get get = JMAP_GET_INITIALIZER;
-        get.props = xzmalloc(sizeof(hash_table));
-        construct_hash_table(get.props, json_object_size(check) + 1, 0);
-        jmap_set_readonly_props(check, get.props);
+        get.props = jmap_set_readonly_props(check);
         get.list = json_array();
 
         struct getcalendars_rock rock = {
@@ -2517,7 +2515,7 @@ static int jmap_calendar_set(struct jmap_req *req)
             calid = newcalid;
         }
 
-        json_t *readonly = jmap_set_readonly(&set, id);
+        json_t *readonly = json_object_get(set.update_readonly, id);
         if (readonly) {
             json_t *err = setcalendars_check_readonly(req,
                                                       calid,
@@ -4776,9 +4774,7 @@ static json_t *setcalendarevents_check_readonly(jmap_req_t *req,
                                                 json_t *readonly)
 {
     struct jmap_get get = JMAP_GET_INITIALIZER;
-    get.props = xzmalloc(sizeof(hash_table));
-    construct_hash_table(get.props, json_object_size(readonly) + 1, 0);
-    jmap_set_readonly_props(readonly, get.props);
+    get.props = jmap_set_readonly_props(readonly);
     get.ids = json_pack("[s]", eid->raw);
     get.list = json_array();
     get.not_found = json_array();
@@ -7235,7 +7231,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
             continue;
         }
 
-        json_t *readonly = jmap_set_readonly(&set, id);
+        json_t *readonly = json_object_get(set.update_readonly, id);
         json_t *patch = json_incref(arg);
         if (readonly) {
             json_t *err =
@@ -10210,9 +10206,7 @@ static json_t *principal_check_readonly(jmap_req_t *req,
                                         json_t *readonly)
 {
     struct jmap_get get = JMAP_GET_INITIALIZER;
-    get.props = xzmalloc(sizeof(hash_table));
-    construct_hash_table(get.props, json_object_size(readonly) + 1, 0);
-    jmap_set_readonly_props(readonly, get.props);
+    get.props = jmap_set_readonly_props(readonly);
     get.list = json_array();
     get.not_found = json_array();
 
@@ -10290,7 +10284,7 @@ static int jmap_principal_set(struct jmap_req *req)
                     json_pack("{s:s}", "type", "forbidden"));
             continue;
         }
-        json_t *readonly = jmap_set_readonly(&set, id);
+        json_t *readonly = json_object_get(set.update_readonly, id);
         if (readonly) {
             json_t *err = principal_check_readonly(req, id, readonly);
             if (err) {
