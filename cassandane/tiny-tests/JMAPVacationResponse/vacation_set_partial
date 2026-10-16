@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_vacation_set_partial ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['VacationResponse/set', { update => { singleton => {
+            isEnabled => JSON::true, subject => 'Away',
+            textBody => 'Gone fishing',
+        } } }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{singleton});
+
+    # A patch need not repeat isEnabled; unpatched properties are kept
+    $res = $jmap->CallMethods([
+        ['VacationResponse/set', { update => { singleton => {
+            textBody => 'Gone sailing',
+        } } }, 'R1'],
+        ['VacationResponse/get', {
+            properties => [ qw(isEnabled subject textBody) ],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{singleton});
+    $self->assert_cmp_deeply(
+        [ { id => 'singleton', isEnabled => jtrue, subject => 'Away',
+            textBody => 'Gone sailing' } ],
+        $res->[1][1]{list},
+    );
+
+    # isEnabled, if present, must still be a boolean
+    $res = $jmap->CallMethods([
+        ['VacationResponse/set', { update => { singleton => {
+            isEnabled => 'yes',
+        } } }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        { type => 'invalidProperties', properties => ['isEnabled'] },
+        $res->[0][1]{notUpdated}{singleton},
+    );
+}
