@@ -542,6 +542,22 @@ int report_expand_prop(struct transaction_t *txn, struct meth_params *rparams,
                        xmlNodePtr inroot, struct propfind_ctx *fctx);
 int report_acl_prin_prop(struct transaction_t *txn, struct meth_params *rparams,
                          xmlNodePtr inroot, struct propfind_ctx *fctx);
+
+/**
+ * DAV:principal-property-search REPORT (RFC 3744 9.4).  Outside the
+ * principals namespace, only searches with
+ * DAV:apply-to-principal-collection-set find anything.
+ */
+int report_prin_prop_search(struct transaction_t *txn,
+                            struct meth_params *rparams,
+                            xmlNodePtr inroot,
+                            struct propfind_ctx *fctx);
+
+/** DAV:principal-search-property-set REPORT (RFC 3744 9.5) */
+int report_prin_search_prop_set(struct transaction_t *txn,
+                                struct meth_params *rparams,
+                                xmlNodePtr inroot,
+                                struct propfind_ctx *fctx);
 int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
                     xmlNodePtr inroot, struct propfind_ctx *fctx);
 int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
