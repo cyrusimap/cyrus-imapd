@@ -1,0 +1,67 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_recurring ($self)
+{
+    my $jmap = $self->{jmap};
+    my $calId = $self->default_user->calendars->default->id;
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', { create => { e1 => {
+            calendarIds => { $calId => JSON::true },
+            version => '2.0',
+            title => 'weekly',
+            start => '2026-10-01T09:00:00',
+            timeZone => 'Europe/Vienna',
+            duration => 'PT1H',
+            recurrenceRule => { frequency => 'weekly' },
+            recurrenceOverrides => {
+                '2026-10-08T09:00:00' => { title => 'override one' },
+            },
+        } } }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{e1}{id};
+    $self->assert_not_null($eventId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', { update => { $eventId => {
+            'recurrenceOverrides/2026-10-08T09:00:00/title' => 'override two',
+        } } }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    # The main event and its overrides are versioned together
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeReplaced => JSON::true,
+            properties => ['title', 'recurrenceOverrides'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        superhashof({
+            id => $eventId,
+            title => 'weekly',
+            recurrenceOverrides => {
+                '2026-10-08T09:00:00' =>
+                    superhashof({ title => 'override one' }),
+            },
+            objectHistory => {
+                version => code(sub { $_[0] > 0 }),
+                replaced => re(qr/^\d{4}-\d\d-\d\dT/),
+            },
+        }),
+        superhashof({
+            id => $eventId,
+            title => 'weekly',
+            recurrenceOverrides => {
+                '2026-10-08T09:00:00' =>
+                    superhashof({ title => 'override two' }),
+            },
+            objectHistory => {
+                version => code(sub { $_[0] > 0 }),
+                replaced => undef,
+            },
+        }),
+    ], $res->[0][1]{list});
+}

@@ -496,6 +496,164 @@ static int jmap_calendar_isspecial(mbname_t *mbname) {
     return 0;
 }
 
+/* A retained version of a calendar object found outside the live pass.
+ * See calhistory_merge(). */
+struct calhistory_version
+{
+    json_t *obj;        /* has id and objectHistory */
+    const char *raw_id; /* the requested id this version matched, if any */
+    bool is_final;      /* last version of a record in a deleted calendar */
+};
+
+struct calhistory_group
+{
+    bool live;
+    bool hidden;
+    json_int_t max_all;
+    json_int_t max_nonfinal;
+    struct calhistory_version *newest;
+};
+
+static json_int_t calhistory_get_version(json_t *obj)
+{
+    json_t *info = json_object_get(obj, "objectHistory");
+    return json_integer_value(json_object_get(info, "version"));
+}
+
+static void calhistory_raise_version(json_t *obj, json_int_t floor)
+{
+    json_t *info = json_object_get(obj, "objectHistory");
+    if (!info) {
+        jmap_get_history_set(obj, floor, 0);
+    }
+    else if (json_integer_value(json_object_get(info, "version")) < floor) {
+        json_object_set_new(info, "version", json_integer(floor));
+    }
+}
+
+typedef bool calhistory_hidden_cb(json_t *obj, void *rock);
+
+/* Add the retained versions to get->list, as requested by the history
+ * arguments of get.  A version belongs to a live object if its id is in
+ * get->list, otherwise to a destroyed object, unless @p hidden says that
+ * object is live but not visible to the user, which drops it.  Raises
+ * versions so that the live version, or else the final version of a
+ * destroyed object, is the highest.  Takes ownership of no version. */
+static void calhistory_merge(struct jmap_get *get,
+                             ptrarray_t *versions,
+                             calhistory_hidden_cb *hidden,
+                             void *rock)
+{
+    hash_table live = HASH_TABLE_INITIALIZER;
+    hash_table groups = HASH_TABLE_INITIALIZER;
+    strarray_t found = STRARRAY_INITIALIZER;
+    int nversions = ptrarray_size(versions);
+
+    construct_hash_table(&live, json_array_size(get->list) + 1, 0);
+    construct_hash_table(&groups, nversions + 1, 0);
+
+    size_t j;
+    json_t *obj;
+    json_array_foreach (get->list, j, obj) {
+        const char *id = json_string_value(json_object_get(obj, "id"));
+        if (id) {
+            hash_insert(id, obj, &live);
+        }
+    }
+
+    for (int i = 0; i < nversions; i++) {
+        struct calhistory_version *v = ptrarray_nth(versions, i);
+        const char *id = json_string_value(json_object_get(v->obj, "id"));
+        struct calhistory_group *g = hash_lookup(id, &groups);
+        if (!g) {
+            g = xzmalloc(sizeof(struct calhistory_group));
+            g->live = hash_lookup(id, &live) != NULL;
+            g->hidden = !g->live && hidden && hidden(v->obj, rock);
+            hash_insert(id, g, &groups);
+        }
+        if (g->hidden) {
+            continue;
+        }
+
+        json_int_t version = calhistory_get_version(v->obj);
+        if (version > g->max_all) {
+            g->max_all = version;
+        }
+        if (!v->is_final && version > g->max_nonfinal) {
+            g->max_nonfinal = version;
+        }
+    }
+
+    for (int i = 0; i < nversions; i++) {
+        struct calhistory_version *v = ptrarray_nth(versions, i);
+        const char *id = json_string_value(json_object_get(v->obj, "id"));
+        struct calhistory_group *g = hash_lookup(id, &groups);
+        if (g->hidden) {
+            continue;
+        }
+
+        if (g->live) {
+            calhistory_raise_version(hash_lookup(id, &live), g->max_all + 1);
+        }
+        else if (v->is_final) {
+            calhistory_raise_version(v->obj, g->max_nonfinal + 1);
+        }
+        if (!g->newest
+            || calhistory_get_version(v->obj)
+                   > calhistory_get_version(g->newest->obj))
+        {
+            g->newest = v;
+        }
+    }
+
+    for (int i = 0; i < nversions; i++) {
+        struct calhistory_version *v = ptrarray_nth(versions, i);
+        const char *id = json_string_value(json_object_get(v->obj, "id"));
+        struct calhistory_group *g = hash_lookup(id, &groups);
+        if (g->hidden) {
+            continue;
+        }
+
+        bool include =
+            g->live ? get->history.include_replaced
+                    : (get->history.include_destroyed
+                       && (get->history.include_replaced || v == g->newest));
+        if (!include) {
+            continue;
+        }
+
+        json_array_append(get->list, v->obj);
+        if (!g->live && v->raw_id) {
+            strarray_add(&found, v->raw_id);
+        }
+    }
+
+    if (strarray_size(&found)) {
+        json_t *not_found = json_array();
+        json_array_foreach (get->not_found, j, obj) {
+            if (strarray_find(&found, json_string_value(obj), 0) < 0) {
+                json_array_append(not_found, obj);
+            }
+        }
+        json_decref(get->not_found);
+        get->not_found = not_found;
+    }
+
+    strarray_fini(&found);
+    free_hash_table(&groups, free);
+    free_hash_table(&live, NULL);
+}
+
+static void calhistory_versions_fini(ptrarray_t *versions)
+{
+    struct calhistory_version *v;
+    while ((v = ptrarray_pop(versions))) {
+        json_decref(v->obj);
+        free(v);
+    }
+    ptrarray_fini(versions);
+}
+
 struct getcalendars_rock {
     struct jmap_req *req;
     struct jmap_get *get;
@@ -967,6 +1125,12 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
                             json_string(mbentry->uniqueid));
     }
 
+    if (rock->get->history.enabled) {
+        time_t deleted = 0;
+        mboxname_isdeletedmailbox(mbentry->name, &deleted);
+        jmap_get_history_set(obj, mbentry->foldermodseq, deleted);
+    }
+
     json_array_append_new(rock->get->list, obj);
 
 done:
@@ -1032,6 +1196,77 @@ static void calid_to_mbentry(jmap_req_t *req, const char *id,
     }
 }
 
+static int getcalendars_deleted_cb(const mbentry_t *mbentry, void *rock)
+{
+    if (!mboxname_isdeletedmailbox(mbentry->name, NULL)) {
+        return 0;
+    }
+    return getcalendars_cb(mbentry, rock);
+}
+
+/* Add the calendars of the account that were deleted but are still
+ * retained in the DELETED namespace. */
+static int getcalendars_history(struct getcalendars_rock *rock)
+{
+    struct jmap_get *get = rock->get;
+    ptrarray_t versions = PTRARRAY_INITIALIZER;
+
+    if (JNOTNULL(get->ids) && !json_array_size(get->ids)) {
+        return 0;
+    }
+
+    json_t *live = get->list;
+    get->list = json_array();
+    rock->skip_hidden = 1;
+
+    char *calhomename = caldav_mboxname(rock->req->accountid, NULL);
+    int r = mboxlist_mboxtree(calhomename,
+                              getcalendars_deleted_cb,
+                              rock,
+                              MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
+    free(calhomename);
+
+    json_t *deleted = get->list;
+    get->list = live;
+    if (r) {
+        goto done;
+    }
+
+    size_t i;
+    json_t *obj;
+    json_array_foreach (deleted, i, obj) {
+        const char *id = json_string_value(json_object_get(obj, "id"));
+        const char *raw_id = NULL;
+
+        if (JNOTNULL(get->ids)) {
+            size_t k;
+            json_t *jid;
+            json_array_foreach (get->ids, k, jid) {
+                if (!strcmpsafe(id, json_string_value(jid))) {
+                    raw_id = json_string_value(jid);
+                    break;
+                }
+            }
+            if (!raw_id) {
+                continue;
+            }
+        }
+
+        struct calhistory_version *v =
+            xzmalloc(sizeof(struct calhistory_version));
+        v->obj = json_incref(obj);
+        v->raw_id = raw_id;
+        ptrarray_append(&versions, v);
+    }
+
+    calhistory_merge(get, &versions, NULL, NULL);
+
+done:
+    calhistory_versions_fini(&versions);
+    json_decref(deleted);
+    return r;
+}
+
 static int jmap_calendar_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -1095,6 +1330,11 @@ static int jmap_calendar_get(struct jmap_req *req)
         r = mboxlist_mboxtree(calhomename,
                               &getcalendars_cb, &rock, MBOXTREE_SKIP_ROOT);
         free(calhomename);
+        if (r) goto done;
+    }
+
+    if (get.history.enabled) {
+        r = getcalendars_history(&rock);
         if (r) goto done;
     }
 
@@ -4046,6 +4286,150 @@ static void getcalendarevents_reset_ical(struct getcalendarevents_rock *rock)
     free_hash_table(&rock->ical_instances_by_recurid, _icalcomponent_free_cb);
 }
 
+static void getcalendarevents_set_id(struct getcalendarevents_rock *rock,
+                                     json_t *jsevent,
+                                     modseq_t createdmodseq,
+                                     const char *ical_uid,
+                                     const char *ical_recurid)
+{
+    struct jmap_caleventid eid = {
+        .createdmodseq = createdmodseq,
+        .ical_uid = ical_uid,
+        .ical_recurid = ical_recurid,
+    };
+    const char *id = jmap_caleventid_encode(&eid, &rock->buf);
+    json_object_set_new(jsevent, "id", json_string(id));
+    json_object_set_new(jsevent, "uid", json_string(ical_uid));
+    json_object_set_new(jsevent, "@type", json_string("Event"));
+    buf_reset(&rock->buf);
+}
+
+/* Return the fall-back time zone of the calendar in rock->mbentry. */
+static icaltimezone *getcalendarevents_floatingtz(
+    struct getcalendarevents_rock *rock)
+{
+    icaltimezone *floatingtz =
+        hash_lookup(rock->mbentry->uniqueid, &rock->floatingtz_by_mboxid);
+    if (!floatingtz) {
+        int is_malloced = 0;
+        floatingtz = calendarevent_get_floatingtz(rock->mbentry,
+                                                  rock->req->userid,
+                                                  &is_malloced);
+        hash_insert(rock->mbentry->uniqueid,
+                    floatingtz,
+                    &rock->floatingtz_by_mboxid);
+        if (is_malloced) {
+            ptrarray_append(&rock->malloced_fallbacktzs, floatingtz);
+        }
+    }
+    return floatingtz;
+}
+
+/* Add the request-dependent properties to a converted event. */
+static void getcalendarevents_finish(struct getcalendarevents_rock *rock,
+                                     json_t *jsevent,
+                                     const char *resource,
+                                     int privacy,
+                                     icaltimezone *floatingtz)
+{
+    jmap_req_t *req = rock->req;
+    hash_table *props = rock->get->props;
+
+    /* Add JMAP-only fields. */
+    if (jmap_wantprop(rock->get->props, "x-href")) {
+        char *xhref = jmap_xhref(rock->mbentry->name, resource);
+        json_object_set_new(jsevent, "x-href", json_string(xhref));
+        free(xhref);
+    }
+
+    /* The calendarIds and isOrigin properties MUST be set */
+    char id[JMAP_MAX_CALENDARID_SIZE];
+    jmap_set_calendarid(rock->req->cstate, rock->mbentry, id);
+    json_object_set_new(jsevent, "calendarIds",
+            json_pack("{s:b}", id, true));
+
+    json_object_set_new(jsevent, "isOrigin",
+            json_boolean(jsevent_is_origin(jsevent,
+                    &rock->schedule_addresses)));
+
+    /* Update event properties based on JMAP request capabilities */
+    const char *linkid;
+    json_t *jlink;
+    json_object_foreach(json_object_get(jsevent, "links"), linkid, jlink) {
+        if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
+            if (json_object_get(jlink, "blobId"))
+                json_object_del(jlink, "href");
+        }
+        else json_object_del(jlink, "blobId");
+    }
+
+    if (!jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
+        json_object_del(jsevent, "blobId");
+        json_object_del(jsevent, "debugBlobId");
+        remove_jsicalprops(jsevent, NULL, "iCalendar");
+    }
+
+    /* Process recurrenceOverrides[Before,After] */
+    if (!jmapical_datetime_has_zero_time(&rock->overrides_before) ||
+        !jmapical_datetime_has_zero_time(&rock->overrides_after)) {
+
+        json_t *joverrides = json_object_get(jsevent, "recurrenceOverrides");
+
+        if (json_object_size(joverrides)) {
+            const char *tzid = json_string_value(json_object_get(jsevent, "timeZone"));
+            icaltimezone *utc = icaltimezone_get_utc_timezone();
+            icaltimezone *tz = NULL;
+            if (tzid) tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+            if (!tz) tz = floatingtz;
+            if (!tz) tz = utc;
+
+            /* Filter overrides */
+            const char *rid;
+            json_t *jval;
+            void *tmp;
+            json_object_foreach_safe(joverrides, tmp, rid, jval) {
+                struct jmapical_datetime ridt = JMAPICAL_DATETIME_INITIALIZER;
+                if (jmapical_localdatetime_from_string(rid, &ridt) < 0) {
+                    continue;
+                }
+                if (tz != utc) {
+                    /* Convert recurid to UTC */
+                    icaltimetype icalrid = jmapical_datetime_to_icaltime(&ridt, tz);
+                    icalrid = icaltime_convert_to_zone(icalrid, utc);
+                    jmapical_datetime_from_icaltime(icalrid, &ridt);
+                }
+                if (!jmapical_datetime_has_zero_time(&rock->overrides_before) &&
+                        jmapical_datetime_compare(&ridt, &rock->overrides_before) >= 0) {
+                    /* Remove override */
+                    json_object_del(joverrides, rid);
+                }
+                if (!jmapical_datetime_has_zero_time(&rock->overrides_after) &&
+                        jmapical_datetime_compare(&ridt, &rock->overrides_after) < 0) {
+                    /* Remove override */
+                    json_object_del(joverrides, rid);
+                }
+            }
+        }
+    }
+
+    /* Remove UTC start/end if client didn't ask for it */
+    getcalendarevents_del_utctimes(req, props, jsevent);
+
+
+    /* reduceParticipants and hideAttendees */
+    if (rock->reduce_participants ||
+            (json_boolean_value(json_object_get(jsevent, "hideAttendees")) &&
+             !jmap_hasrights_mbentry(rock->req, rock->mbentry, JACL_WRITEALL))) {
+
+        getcalendarevents_reduce_participants(jsevent, req->userid, &rock->schedule_addresses);
+    }
+
+    /* Filter shared event by privacy */
+    if (rock->is_sharee && privacy != CAL_PRIVACY_PUBLIC) {
+        getcalendarevents_del_privateprops(jsevent);
+    }
+}
+
 static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 {
     struct getcalendarevents_rock *rock = vrock;
@@ -4111,18 +4495,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
     }
 
     /* Lookup fall-back time zone on calendar collection */
-    icaltimezone *floatingtz = hash_lookup(rock->mbentry->uniqueid,
-            &rock->floatingtz_by_mboxid);
-    if (!floatingtz) {
-        int is_malloced = 0;
-        floatingtz =
-            calendarevent_get_floatingtz(rock->mbentry,
-                    req->userid, &is_malloced);
-        hash_insert(rock->mbentry->uniqueid, floatingtz,
-                &rock->floatingtz_by_mboxid);
-        if (is_malloced)
-            ptrarray_append(&rock->malloced_fallbacktzs, floatingtz);
-    }
+    icaltimezone *floatingtz = getcalendarevents_floatingtz(rock);
 
     /* Try to read from cache, but force conversion from iCalendar
      * if the conversion properties are requested. */
@@ -4269,112 +4642,16 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 
 gotevent:
 
-    /* Add JMAP-only fields. */
-    if (jmap_wantprop(rock->get->props, "x-href")) {
-        char *xhref = jmap_xhref(rock->mbentry->name, cdata->dav.resource);
-        json_object_set_new(jsevent, "x-href", json_string(xhref));
-        free(xhref);
-    }
-
-    /* The calendarIds and isOrigin properties MUST be set */
-    char id[JMAP_MAX_CALENDARID_SIZE];
-    jmap_set_calendarid(rock->req->cstate, rock->mbentry, id);
-    json_object_set_new(jsevent, "calendarIds",
-            json_pack("{s:b}", id, true));
-
-    json_object_set_new(jsevent, "isOrigin",
-            json_boolean(jsevent_is_origin(jsevent,
-                    &rock->schedule_addresses)));
-
-    /* Update event properties based on JMAP request capabilities */
-    const char *linkid;
-    json_t *jlink;
-    json_object_foreach(json_object_get(jsevent, "links"), linkid, jlink) {
-        if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
-            if (json_object_get(jlink, "blobId"))
-                json_object_del(jlink, "href");
-        }
-        else json_object_del(jlink, "blobId");
-    }
-
-    if (!jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
-        json_object_del(jsevent, "blobId");
-        json_object_del(jsevent, "debugBlobId");
-        remove_jsicalprops(jsevent, NULL, "iCalendar");
-    }
-
-    /* Process recurrenceOverrides[Before,After] */
-    if (!jmapical_datetime_has_zero_time(&rock->overrides_before) ||
-        !jmapical_datetime_has_zero_time(&rock->overrides_after)) {
-
-        json_t *joverrides = json_object_get(jsevent, "recurrenceOverrides");
-
-        if (json_object_size(joverrides)) {
-            const char *tzid = json_string_value(json_object_get(jsevent, "timeZone"));
-            icaltimezone *utc = icaltimezone_get_utc_timezone();
-            icaltimezone *tz = NULL;
-            if (tzid) tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
-            if (!tz) tz = floatingtz;
-            if (!tz) tz = utc;
-
-            /* Filter overrides */
-            const char *rid;
-            json_t *jval;
-            void *tmp;
-            json_object_foreach_safe(joverrides, tmp, rid, jval) {
-                struct jmapical_datetime ridt = JMAPICAL_DATETIME_INITIALIZER;
-                if (jmapical_localdatetime_from_string(rid, &ridt) < 0) {
-                    continue;
-                }
-                if (tz != utc) {
-                    /* Convert recurid to UTC */
-                    icaltimetype icalrid = jmapical_datetime_to_icaltime(&ridt, tz);
-                    icalrid = icaltime_convert_to_zone(icalrid, utc);
-                    jmapical_datetime_from_icaltime(icalrid, &ridt);
-                }
-                if (!jmapical_datetime_has_zero_time(&rock->overrides_before) &&
-                        jmapical_datetime_compare(&ridt, &rock->overrides_before) >= 0) {
-                    /* Remove override */
-                    json_object_del(joverrides, rid);
-                }
-                if (!jmapical_datetime_has_zero_time(&rock->overrides_after) &&
-                        jmapical_datetime_compare(&ridt, &rock->overrides_after) < 0) {
-                    /* Remove override */
-                    json_object_del(joverrides, rid);
-                }
-            }
-        }
-    }
-
-    /* Remove UTC start/end if client didn't ask for it */
-    getcalendarevents_del_utctimes(req, props, jsevent);
-
-
-    /* reduceParticipants and hideAttendees */
-    if (rock->reduce_participants ||
-            (json_boolean_value(json_object_get(jsevent, "hideAttendees")) &&
-             !jmap_hasrights_mbentry(rock->req, rock->mbentry, JACL_WRITEALL))) {
-
-        getcalendarevents_reduce_participants(jsevent, req->userid, &rock->schedule_addresses);
-    }
-
-    /* Filter shared event by privacy */
-    if (rock->is_sharee && cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
-        getcalendarevents_del_privateprops(jsevent);
-    }
+    getcalendarevents_finish(rock, jsevent, cdata->dav.resource,
+                             cdata->comp_flags.privacy, floatingtz);
 
     if (rock->want_eventids == NULL) {
         /* Client requested all events */
         jmap_filterprops(jsevent, props);
-        struct jmap_caleventid eid = {
-            .createdmodseq = cdata->dav.createdmodseq,
-            .ical_uid = cdata->ical_uid,
-            .ical_recurid = jscal->ical_recurid,
-        };
-        const char *id = jmap_caleventid_encode(&eid, &rock->buf);
-        json_object_set_new(jsevent, "id", json_string(id));
-        json_object_set_new(jsevent, "uid", json_string(cdata->ical_uid));
-        json_object_set_new(jsevent, "@type", json_string("Event"));
+        getcalendarevents_set_id(rock, jsevent, cdata->dav.createdmodseq,
+                                 cdata->ical_uid, jscal->ical_recurid);
+        if (rock->get->history.enabled)
+            jmap_get_history_set(jsevent, cdata->dav.modseq, 0);
         json_array_append(rock->get->list, jsevent);
     }
     else {
@@ -4385,17 +4662,11 @@ gotevent:
             if (!strcmpsafe(eid->ical_recurid, jscal->ical_recurid)) {
                 json_t *myevent = json_deep_copy(jsevent);
                 jmap_filterprops(myevent, props);
-                struct jmap_caleventid eid = {
-                    .createdmodseq = cdata->dav.createdmodseq,
-                    .ical_uid = cdata->ical_uid,
-                    .ical_recurid = jscal->ical_recurid,
-                };
-                const char *id = jmap_caleventid_encode(&eid, &rock->buf);
-                json_object_set_new(myevent, "id", json_string(id));
-                json_object_set_new(myevent, "uid", json_string(cdata->ical_uid));
-                json_object_set_new(myevent, "@type", json_string("Event"));
+                getcalendarevents_set_id(rock, myevent, cdata->dav.createdmodseq,
+                                         cdata->ical_uid, jscal->ical_recurid);
+                if (rock->get->history.enabled)
+                    jmap_get_history_set(myevent, cdata->dav.modseq, 0);
                 json_array_append_new(rock->get->list, myevent);
-                buf_reset(&rock->buf);
             }
         }
         if (!jscal->ical_recurid[0]) {
@@ -4431,6 +4702,387 @@ static void cachecalendarevents_cb(uint64_t rowid, void *payload, void *vrock)
         json_decref(jsevent);
         free(data);
     }
+}
+
+struct calevent_history_rock
+{
+    struct getcalendarevents_rock *grock;
+    ptrarray_t *targets; /* jmap_caleventid of requested ids, NULL for all */
+    ptrarray_t versions; /* calhistory_version */
+};
+
+static bool calevent_history_want_record(struct calevent_history_rock *hrock,
+                                         const struct index_record *record)
+{
+    if (!hrock->targets) {
+        return true;
+    }
+
+    for (int i = 0; i < ptrarray_size(hrock->targets); i++) {
+        struct jmap_caleventid *eid = ptrarray_nth(hrock->targets, i);
+        /* ids naming the iCalendar UID need the record parsed */
+        if (!eid->createdmodseq || eid->createdmodseq == record->createdmodseq)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool calevent_history_match(struct calevent_history_rock *hrock,
+                                   modseq_t createdmodseq,
+                                   const char *ical_uid,
+                                   const char *ical_recurid,
+                                   const char **raw_id)
+{
+    *raw_id = NULL;
+    if (!hrock->targets) {
+        return true;
+    }
+
+    for (int i = 0; i < ptrarray_size(hrock->targets); i++) {
+        struct jmap_caleventid *eid = ptrarray_nth(hrock->targets, i);
+        if (eid->createdmodseq ? eid->createdmodseq != createdmodseq
+                               : strcmpsafe(eid->ical_uid, ical_uid))
+        {
+            continue;
+        }
+        if (strcmpsafe(eid->ical_recurid, ical_recurid)) {
+            continue;
+        }
+        *raw_id = eid->raw;
+        return true;
+    }
+    return false;
+}
+
+static int calevent_ical_privacy(icalcomponent *comp)
+{
+    icalproperty *prop =
+        icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+    if (!prop) {
+        return CAL_PRIVACY_PUBLIC;
+    }
+
+    switch (icalproperty_get_class(prop)) {
+    case ICAL_CLASS_CONFIDENTIAL:
+        return CAL_PRIVACY_SECRET;
+    case ICAL_CLASS_PUBLIC:
+        return CAL_PRIVACY_PUBLIC;
+    default:
+        return CAL_PRIVACY_PRIVATE;
+    }
+}
+
+/* Convert one event of an old version and add it to the versions. */
+static void calevent_history_add(struct calevent_history_rock *hrock,
+                                 struct mailbox *mailbox,
+                                 const struct index_record *record,
+                                 icalcomponent *ical,
+                                 const char *ical_uid,
+                                 const char *ical_recurid,
+                                 const char *resource,
+                                 int privacy,
+                                 time_t replaced,
+                                 bool is_final)
+{
+    struct getcalendarevents_rock *rock = hrock->grock;
+    const char *raw_id = NULL;
+
+    if (!calevent_history_match(hrock,
+                                record->createdmodseq,
+                                ical_uid,
+                                ical_recurid,
+                                &raw_id))
+    {
+        return;
+    }
+
+    json_t *jsevent = ical_to_jsevent(ical, &rock->jscal_cfg);
+    if (!jsevent) {
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.history.unconvertible",
+                   lf_mailbox(mailbox), lf_u("msg.imapuid", record->uid));
+        return;
+    }
+
+    json_object_set_new(jsevent,
+                        "isDraft",
+                        json_boolean(record->system_flags & FLAG_DRAFT));
+
+    icaltimezone *floatingtz = getcalendarevents_floatingtz(rock);
+    getcalendarevents_get_utctimes(jsevent, floatingtz);
+    add_calendarevent_blobids(jsevent,
+                              mailbox_uniqueid(mailbox),
+                              record->uid,
+                              rock->req->userid,
+                              &record->guid);
+    getcalendarevents_finish(rock, jsevent, resource, privacy, floatingtz);
+    jmap_filterprops(jsevent, rock->get->props);
+    getcalendarevents_set_id(rock,
+                             jsevent,
+                             record->createdmodseq,
+                             ical_uid,
+                             ical_recurid);
+    jmap_get_history_set(jsevent, record->modseq, replaced);
+
+    struct calhistory_version *v = xzmalloc(sizeof(struct calhistory_version));
+    v->obj = jsevent;
+    v->raw_id = raw_id;
+    v->is_final = is_final;
+    ptrarray_append(&hrock->versions, v);
+}
+
+/* Convert the events of an old version of a calendar resource. */
+static void calevent_history_record(struct calevent_history_rock *hrock,
+                                    struct mailbox *mailbox,
+                                    const struct index_record *record,
+                                    time_t replaced,
+                                    bool is_final)
+{
+    struct getcalendarevents_rock *rock = hrock->grock;
+    struct index_record myrecord = *record;
+    struct body *body = NULL;
+    icalcomponent *ical = NULL;
+    char *ical_uid = NULL;
+
+    if (mailbox_cacherecord(mailbox, &myrecord)) {
+        goto done;
+    }
+    message_read_bodystructure(&myrecord, &body);
+    if (!body) {
+        goto done;
+    }
+
+    struct caldav_data cdata = {
+        .dav.imap_uid = record->uid,
+        .comp_flags.shared = !strcasecmpsafe(
+            get_param(body->disposition_params, "PER-USER-DATA"),
+            "TRUE"),
+    };
+    ical = caldav_record_to_ical(mailbox, &cdata, rock->req->userid, NULL);
+    if (!ical) {
+        goto done;
+    }
+
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    if (!comp || icalcomponent_isa(comp) != ICAL_VEVENT_COMPONENT) {
+        goto done;
+    }
+
+    /* outlives the component it is read from */
+    ical_uid = xstrdupnull(icalcomponent_get_uid(comp));
+    if (!ical_uid) {
+        goto done;
+    }
+
+    int privacy = calevent_ical_privacy(comp);
+    if (rock->is_sharee && privacy == CAL_PRIVACY_SECRET) {
+        goto done;
+    }
+
+    const char *resource = get_param(body->disposition_params, "FILENAME");
+
+    bool has_main = false;
+    for (; comp;
+         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT))
+    {
+        if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY))
+        {
+            has_main = true;
+        }
+    }
+
+    if (has_main) {
+        calevent_history_add(hrock,
+                             mailbox,
+                             record,
+                             ical,
+                             ical_uid,
+                             "",
+                             resource,
+                             privacy,
+                             replaced,
+                             is_final);
+        goto done;
+    }
+
+    /* Standalone instances: each one is an event of its own */
+    ptrarray_t instances = PTRARRAY_INITIALIZER;
+    while (
+        (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT)))
+    {
+        icalcomponent_remove_component(ical, comp);
+        ptrarray_append(&instances, comp);
+    }
+    for (int i = 0; i < ptrarray_size(&instances); i++) {
+        comp = ptrarray_nth(&instances, i);
+        icalproperty *prop =
+            icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        icalcomponent_add_component(ical, comp);
+        calevent_history_add(hrock,
+                             mailbox,
+                             record,
+                             ical,
+                             ical_uid,
+                             icalproperty_get_value_as_string(prop),
+                             resource,
+                             privacy,
+                             replaced,
+                             is_final);
+        icalcomponent_remove_component(ical, comp);
+        icalcomponent_free(comp);
+    }
+    ptrarray_fini(&instances);
+
+done:
+    free(ical_uid);
+    if (ical) {
+        icalcomponent_free(ical);
+    }
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+}
+
+static int calevent_history_mbox_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct calevent_history_rock *hrock = vrock;
+    struct getcalendarevents_rock *rock = hrock->grock;
+    jmap_req_t *req = rock->req;
+    struct mailbox *mailbox = NULL;
+
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_CALENDAR) {
+        return 0;
+    }
+
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    bool special = jmap_calendar_isspecial(mbname);
+    mbname_free(&mbname);
+    if (special) {
+        return 0;
+    }
+
+    if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+        return 0;
+    }
+
+    int r = mailbox_open_irl(mbentry->name, &mailbox);
+    if (r) {
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.history.open.failed",
+                   lf_s("mbox.name", mbentry->name),
+                   lf_s("error", error_message(r)));
+        return 0;
+    }
+
+    mboxlist_entry_free(&rock->mbentry);
+    rock->mbentry = mboxlist_entry_copy(mbentry);
+    strarray_truncate(&rock->schedule_addresses, 0);
+    get_schedule_addresses(mbentry->name,
+                           req->accountid,
+                           &rock->schedule_addresses);
+
+    /* All records of a deleted calendar are retained versions,
+     * of a live calendar only the expunged ones. */
+    time_t deleted = 0;
+    bool isdeleted = mboxname_isdeletedmailbox(mbentry->name, &deleted);
+
+    struct mailbox_iter *iter =
+        mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        bool expunged = record->internal_flags & FLAG_INTERNAL_EXPUNGED;
+        if (!expunged && !isdeleted) {
+            continue;
+        }
+
+        time_t replaced = expunged ? record->last_updated.tv_sec : deleted;
+        if (!jmap_get_history_wanted(rock->get, replaced)) {
+            continue;
+        }
+        if (!calevent_history_want_record(hrock, record)) {
+            continue;
+        }
+
+        calevent_history_record(hrock, mailbox, record, replaced, !expunged);
+    }
+    mailbox_iter_done(&iter);
+    mailbox_close(&mailbox);
+
+    return 0;
+}
+
+/* Return true if the event with the id of @p jsevent is alive in a
+ * calendar or with a privacy the user may not see. */
+static bool calevent_history_hidden(json_t *jsevent, void *vrock)
+{
+    struct getcalendarevents_rock *rock = vrock;
+    const char *id = json_string_value(json_object_get(jsevent, "id"));
+    struct jmap_caleventid *eid = jmap_caleventid_lookup(id, NULL, NULL);
+    struct caldav_data *cdata = NULL;
+    bool hidden = false;
+
+    if (eid->createdmodseq
+        && !caldav_lookup_by_cmodseq(rock->db, eid->createdmodseq, &cdata))
+    {
+        mbentry_t *mbentry = jmap_mbentry_from_dav(rock->req, &cdata->dav);
+        hidden = !mbentry
+                 || !jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS)
+                 || (rock->is_sharee
+                     && cdata->comp_flags.privacy == CAL_PRIVACY_SECRET);
+        mboxlist_entry_free(&mbentry);
+    }
+
+    jmap_caleventid_free(&eid);
+    return hidden;
+}
+
+/* Add the retained old versions of the requested events: expunged
+ * records of the calendars the user can read, and all records of
+ * deleted calendars. */
+static int getcalendarevents_history(struct getcalendarevents_rock *rock)
+{
+    struct jmap_get *get = rock->get;
+    struct calevent_history_rock hrock = { .grock = rock };
+    ptrarray_t targets = PTRARRAY_INITIALIZER;
+
+    if (JNOTNULL(get->ids)) {
+        if (!json_array_size(get->ids)) {
+            return 0;
+        }
+
+        size_t i;
+        json_t *jval;
+        json_array_foreach (get->ids, i, jval) {
+            ptrarray_append(
+                &targets,
+                jmap_caleventid_lookup(json_string_value(jval), NULL, NULL));
+        }
+        hrock.targets = &targets;
+    }
+
+    mailbox_close(&rock->mailbox);
+    getcalendarevents_reset_ical(rock);
+
+    char *calhomename = caldav_mboxname(rock->req->accountid, NULL);
+    int r = mboxlist_mboxtree(calhomename,
+                              calevent_history_mbox_cb,
+                              &hrock,
+                              MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
+    free(calhomename);
+
+    if (!r) {
+        calhistory_merge(get, &hrock.versions, calevent_history_hidden, rock);
+    }
+
+    calhistory_versions_fini(&hrock.versions);
+    struct jmap_caleventid *eid;
+    while ((eid = ptrarray_pop(&targets))) {
+        jmap_caleventid_free(&eid);
+    }
+    ptrarray_fini(&targets);
+    return r;
 }
 
 struct getcalendarevents_args {
@@ -4603,6 +5255,11 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                     req->userid, req->accountid, error_message(r));
             r = 0;
         }
+    }
+
+    if (get.history.enabled) {
+        r = getcalendarevents_history(&rock);
+        if (r) goto done;
     }
 
     /* Build response */
