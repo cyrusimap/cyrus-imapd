@@ -1,0 +1,29 @@
+Description:
+
+Support draft-ietf-jmap-object-history: Foo/get can return previous
+versions of objects and destroyed objects, from the expunged messages and
+deleted mailboxes that delayed expunge and delayed delete retain until
+cyr_expire removes them.
+
+
+Documentation:
+
+docsrc/rfc-support.rst
+lib/imapoptions/jmap_history_duration
+
+
+Config changes:
+
+jmap_history_duration
+
+
+Upgrade instructions:
+
+None.  History is only available with expunge_mode and delete_mode set to
+delayed.  Set jmap_history_duration to match the cyr_expire -X and -D
+durations so that clients see an accurate maxHistoryDuration.
+
+
+GitHub issue:
+
+None.

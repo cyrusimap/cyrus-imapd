@@ -982,6 +982,10 @@ draft-ietf-jmap-calendars
 
     JMAP for Calendars
 
+draft-ietf-jmap-object-history
+
+    JMAP Object History
+
 draft-ietf-mailmaint-imap-objectid-bis
 
     IMAP Extension for Object Identifiers (OBJECTID+)
