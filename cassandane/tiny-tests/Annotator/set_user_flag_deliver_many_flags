@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_set_user_flag_deliver_many_flags ($self)
+{
+    $self->start_my_instances();
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select('INBOX');
+
+    # Clients may only create the first 100 user flags
+    $self->make_message("Flag holder");
+    for my $i (0 .. 99) {
+        $imaptalk->store('1', '+flags', "\$flag$i");
+        $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    }
+    $imaptalk->store('1', '+flags', '$OneTooMany');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_syslog_matches($self->{instance},
+        qr{mailbox\.userflag\.exhausted.*msg\.flag=\$OneTooMany});
+
+    # The annotator can still use the remaining slots
+    my $msg = $self->{gen}->generate(subject => "Annotated");
+    $msg->set_body("set_flag \$Annotated\r\n");
+    $self->{instance}->deliver($msg);
+
+    my $res = $imaptalk->fetch('2', 'flags');
+    $self->assert_cmp_deeply(
+        superbagof('$Annotated'),
+        $res->{2}{flags},
+    );
+}

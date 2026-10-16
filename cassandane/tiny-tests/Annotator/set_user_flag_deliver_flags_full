@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_set_user_flag_deliver_flags_full ($self)
+{
+    $self->start_my_instances();
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select('INBOX');
+
+    $self->make_message("Flag holder");
+    for my $i (0 .. 99) {
+        $imaptalk->store('1', '+flags', "\$flag$i");
+        $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    }
+
+    # Only 28 slots remain, so one of these flags has nowhere to go,
+    # but delivery still succeeds
+    my @want = map { "\$annot$_" } (0 .. 28);
+    my $msg = $self->{gen}->generate(subject => "Annotated");
+    $msg->set_body(join('', map { "set_flag $_\r\n" } @want));
+    $self->{instance}->deliver($msg);
+
+    my $res = $imaptalk->fetch('2', 'flags');
+    my @got = grep { /^\$annot/ } $res->{2}{flags}->@*;
+    $self->assert_num_equals(28, scalar @got);
+    $self->assert_cmp_deeply(subbagof(@want), \@got);
+
+    $self->assert_syslog_matches($self->{instance},
+        qr{append\.flag\.dropped.*msg\.flag=\$annot});
+}
