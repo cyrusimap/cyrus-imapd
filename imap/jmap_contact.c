@@ -25,6 +25,7 @@
 #include "json_support.h"
 #include "mailbox.h"
 #include "mboxname.h"
+#include "message.h"
 #include "stristr.h"
 #include "times.h"
 #include "user.h"
@@ -250,6 +251,8 @@ struct cards_rock {
     hashu64_table jmapcache;
     struct buf cid;          // buffer for constructing ContactCard ids
     int rows;
+    hash_table *history;     // id -> struct card_history, if history wanted
+    hash_table *wanted;      // requested ids, or NULL for all
 };
 
 static void cachecards_cb(uint64_t rowid, void *payload, void *vrock)
@@ -284,6 +287,8 @@ static int has_addressbooks(jmap_req_t *req)
 }
 
 static int getcards_cb(void *rock, struct carddav_data *cdata);
+static void card_history_get(struct cards_rock *crock);
+static void card_history_free(void *data);
 
 static int jmap_card_get(struct jmap_req *req)
 {
@@ -309,12 +314,31 @@ static int jmap_card_get(struct jmap_req *req)
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
 
+    hash_table history = HASH_TABLE_INITIALIZER;
+    hash_table wanted = HASH_TABLE_INITIALIZER;
+
     /* Parse request */
     jmap_get_parse(req, &parser, &card_props, /* allow_null_ids */ 1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
+    }
+
+    if (get.history.enabled) {
+        construct_hash_table(&history, 64, 0);
+        rock.history = &history;
+
+        if (JNOTNULL(get.ids)) {
+            size_t i;
+            json_t *jval;
+
+            construct_hash_table(&wanted, json_array_size(get.ids) + 1, 0);
+            json_array_foreach (get.ids, i, jval) {
+                hash_insert(json_string_value(jval), (void *) 1, &wanted);
+            }
+            rock.wanted = &wanted;
+        }
     }
 
     /* Does the client request specific events? */
@@ -361,6 +385,10 @@ static int jmap_card_get(struct jmap_req *req)
         if (r) goto done;
     }
 
+    if (rock.history) {
+        card_history_get(&rock);
+    }
+
     if (hashu64_count(&rock.jmapcache)) {
         r = carddav_begin(db);
         if (!r) hashu64_enumerate(&rock.jmapcache, cachecards_cb, &rock);
@@ -381,6 +409,12 @@ static int jmap_card_get(struct jmap_req *req)
     mboxlist_entry_free(&rock.mbentry);
     buf_free(&rock.cid);
     free_hashu64_table(&rock.jmapcache, free);
+    if (rock.history) {
+        free_hash_table(rock.history, card_history_free);
+    }
+    if (rock.wanted) {
+        free_hash_table(rock.wanted, NULL);
+    }
     if (db) carddav_close(db);
     return r;
 }
@@ -1965,10 +1999,216 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "mailboxUniqueId", json_string(mbentry->uniqueid));
     }
 
+    if (rock->get->history.enabled) {
+        jmap_get_history_set(obj, mbentry->foldermodseq, 0);
+    }
+
     json_array_append_new(rock->get->list, obj);
 
     buf_free(&attrib);
     return r;
+}
+
+/* A deleted AddressBook, retained under the deleted mailbox prefix. */
+struct abook_version
+{
+    mbentry_t *mbentry;
+    time_t replaced;
+    modseq_t version;
+};
+
+struct abook_history_rock
+{
+    jmap_req_t *req;
+    hash_table *wanted;  /* requested ids, or NULL for all */
+    hash_table versions; /* id -> ptrarray_t of struct abook_version */
+};
+
+static void abook_versions_free(void *data)
+{
+    ptrarray_t *versions = data;
+    struct abook_version *v;
+
+    while ((v = ptrarray_pop(versions))) {
+        mboxlist_entry_free(&v->mbentry);
+        free(v);
+    }
+    ptrarray_free(versions);
+}
+
+static int abook_history_scan_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct abook_history_rock *hrock = rock;
+    time_t deleted = 0;
+
+    if (mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_RESERVE)) {
+        return 0;
+    }
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_ADDRESSBOOK) {
+        return 0;
+    }
+    if (!mboxname_isdeletedmailbox(mbentry->name, &deleted)) {
+        return 0;
+    }
+    if (!jmap_hasrights_mbentry(hrock->req, mbentry, JACL_READITEMS)) {
+        return 0;
+    }
+
+    char id[JMAP_MAX_ADDRBOOKID_SIZE];
+    jmap_set_addrbookid(hrock->req->cstate, mbentry, id);
+    if (hrock->wanted && !hash_lookup(id, hrock->wanted)) {
+        return 0;
+    }
+
+    ptrarray_t *versions = hash_lookup(id, &hrock->versions);
+    if (!versions) {
+        versions = ptrarray_new();
+        hash_insert(id, versions, &hrock->versions);
+    }
+
+    struct abook_version *v = xzmalloc(sizeof(*v));
+    v->mbentry = mboxlist_entry_copy(mbentry);
+    v->replaced = deleted;
+    ptrarray_append(versions, v);
+
+    return 0;
+}
+
+static int abook_version_cmp(const void **va, const void **vb)
+{
+    const struct abook_version *a = *va, *b = *vb;
+
+    if (a->replaced != b->replaced) {
+        return a->replaced < b->replaced ? -1 : 1;
+    }
+    if (a->mbentry->foldermodseq != b->mbentry->foldermodseq) {
+        return a->mbentry->foldermodseq < b->mbentry->foldermodseq ? -1 : 1;
+    }
+    return 0;
+}
+
+struct abook_select_rock
+{
+    struct getaddressbooks_rock *grock;
+    hash_table live; /* id -> live json_t entry */
+};
+
+static void abook_history_select_cb(const char *id, void *data, void *rock)
+{
+    struct abook_select_rock *srock = rock;
+    struct getaddressbooks_rock *grock = srock->grock;
+    struct jmap_get *get = grock->get;
+    ptrarray_t *versions = data;
+    int nversions = ptrarray_size(versions);
+    int first = 0;
+    modseq_t version = 0;
+
+    /* versions must increase with deletion time */
+    ptrarray_sort(versions, abook_version_cmp);
+    for (int i = 0; i < nversions; i++) {
+        struct abook_version *v = ptrarray_nth(versions, i);
+        v->version = MAX(v->mbentry->foldermodseq, version + 1);
+        version = v->version;
+    }
+
+    json_t *live = hash_lookup(id, &srock->live);
+    if (live) {
+        json_t *info = json_object_get(live, "objectHistory");
+        modseq_t live_version =
+            json_integer_value(json_object_get(info, "version"));
+        jmap_get_history_set(live, MAX(live_version, version + 1), 0);
+
+        if (!get->history.include_replaced) {
+            return;
+        }
+    }
+    else {
+        if (!get->history.include_destroyed) {
+            return;
+        }
+
+        /* Skip live addressbooks the user can't read */
+        mbentry_t *mbentry = NULL;
+        abookid_to_mbentry(grock->req, id, &mbentry);
+        if (mbentry) {
+            mboxlist_entry_free(&mbentry);
+            return;
+        }
+
+        if (!get->history.include_replaced) {
+            first = nversions - 1;
+        }
+
+        for (size_t i = json_array_size(get->not_found); i-- > 0;) {
+            json_t *jval = json_array_get(get->not_found, i);
+            if (!strcmpsafe(id, json_string_value(jval))) {
+                json_array_remove(get->not_found, i);
+            }
+        }
+    }
+
+    for (int i = first; i < nversions; i++) {
+        struct abook_version *v = ptrarray_nth(versions, i);
+
+        if (!jmap_get_history_wanted(get, v->replaced)) {
+            continue;
+        }
+
+        size_t n = json_array_size(get->list);
+        getaddressbooks_cb(v->mbentry, grock);
+        if (json_array_size(get->list) > n) {
+            jmap_get_history_set(json_array_get(get->list, n),
+                                 v->version,
+                                 v->replaced);
+        }
+    }
+}
+
+/* Add the deleted AddressBooks that grock->get asks for, from the deleted
+ * addressbooks the user can currently read.  Live entries must be in
+ * grock->get->list already, with their objectHistory set. */
+static void addressbook_history_get(struct getaddressbooks_rock *grock,
+                                    const char *cardhomename)
+{
+    struct jmap_get *get = grock->get;
+    struct abook_history_rock hrock = { grock->req,
+                                        NULL,
+                                        HASH_TABLE_INITIALIZER };
+    struct abook_select_rock srock = { grock, HASH_TABLE_INITIALIZER };
+    hash_table wanted = HASH_TABLE_INITIALIZER;
+    size_t i;
+    json_t *jval;
+
+    if (JNOTNULL(get->ids)) {
+        construct_hash_table(&wanted, json_array_size(get->ids) + 1, 0);
+        json_array_foreach (get->ids, i, jval) {
+            hash_insert(json_string_value(jval), (void *) 1, &wanted);
+        }
+        hrock.wanted = &wanted;
+    }
+
+    construct_hash_table(&hrock.versions, 16, 0);
+    mboxlist_mboxtree(cardhomename,
+                      abook_history_scan_cb,
+                      &hrock,
+                      MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
+
+    /* only the live entries are in the list so far */
+    construct_hash_table(&srock.live, json_array_size(get->list) + 1, 0);
+    json_array_foreach (get->list, i, jval) {
+        const char *id = json_string_value(json_object_get(jval, "id"));
+        if (id) {
+            hash_insert(id, jval, &srock.live);
+        }
+    }
+
+    hash_enumerate(&hrock.versions, abook_history_select_cb, &srock);
+
+    free_hash_table(&srock.live, NULL);
+    free_hash_table(&hrock.versions, abook_versions_free);
+    if (hrock.wanted) {
+        free_hash_table(&wanted, NULL);
+    }
 }
 
 static const char *default_addrbookname_annot =
@@ -2047,6 +2287,10 @@ static int jmap_addressbook_get(struct jmap_req *req)
         r = mboxlist_mboxtree(cardhomename,
                               &getaddressbooks_cb, &rock, MBOXTREE_SKIP_ROOT);
         if (r) goto done;
+    }
+
+    if (get.history.enabled) {
+        addressbook_history_get(&rock, cardhomename);
     }
 
     /* Build response */
@@ -2921,6 +3165,94 @@ done:
  * ContactCard/get
  */
 
+/* A superseded version of a ContactCard: an expunged record, or a record
+ * that was live when its addressbook was deleted. */
+struct card_version
+{
+    char *mboxname;
+    uint32_t uid;
+    modseq_t modseq;
+    time_t replaced;
+    modseq_t version;
+    const char *id;
+};
+
+struct card_history
+{
+    ptrarray_t versions; /* struct card_version * */
+    ptrarray_t live;     /* json_t *, owned by get->list */
+    modseq_t live_modseq;
+};
+
+static struct card_history *card_history_lookup(hash_table *history,
+                                                const char *id)
+{
+    struct card_history *hist = hash_lookup(id, history);
+
+    if (!hist) {
+        hist = xzmalloc(sizeof(*hist));
+        hash_insert(id, hist, history);
+    }
+
+    return hist;
+}
+
+static void card_history_free(void *data)
+{
+    struct card_history *hist = data;
+    struct card_version *v;
+
+    while ((v = ptrarray_pop(&hist->versions))) {
+        free(v->mboxname);
+        free(v);
+    }
+    ptrarray_fini(&hist->versions);
+    ptrarray_fini(&hist->live);
+    free(hist);
+}
+
+/* Set the properties of ContactCard @obj that come from its index record,
+ * its resource name and its addressbook, and its @id. */
+static void card_set_record_props(struct cards_rock *crock,
+                                  json_t *obj,
+                                  const mbentry_t *mbentry,
+                                  const struct index_record *record,
+                                  const char *href,
+                                  const char *id)
+{
+    if (href) {
+        json_object_set_new(obj, "cyrusimap.org:href", json_string(href));
+    }
+    if (jmap_wantprop(crock->get->props, "cyrusimap.org:blobId")) {
+        struct buf blobid = BUF_INITIALIZER;
+
+        jmap_encode_rawdata_blobid('V',
+                                   mbentry->uniqueid,
+                                   record->uid,
+                                   NULL,
+                                   NULL,
+                                   "G",
+                                   &record->guid,
+                                   &blobid);
+        json_object_set_new(obj,
+                            "cyrusimap.org:blobId",
+                            json_string(buf_cstring(&blobid)));
+        buf_free(&blobid);
+    }
+    if (jmap_wantprop(crock->get->props, "cyrusimap.org:size")) {
+        json_object_set_new(obj,
+                            "cyrusimap.org:size",
+                            json_integer(record->size - record->header_size));
+    }
+
+    json_object_set_new(obj, "id", json_string(id));
+
+    char abookid[JMAP_MAX_ADDRBOOKID_SIZE];
+    jmap_set_addrbookid(crock->req->cstate, mbentry, abookid);
+    json_object_set_new(obj,
+                        "addressBookIds",
+                        json_pack("{s:b}", abookid, true));
+}
 
 static int getcards_cb(void *rock, struct carddav_data *cdata)
 {
@@ -3008,38 +3340,399 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 
     jmap_filterprops(obj, crock->get->props);
 
-    if (href) {
-        json_object_set_new(obj, "cyrusimap.org:href", json_string(href));
-    }
-    if (jmap_wantprop(crock->get->props, "cyrusimap.org:blobId")) {
-        struct buf blobid = BUF_INITIALIZER;
-
-        jmap_encode_rawdata_blobid('V', mbentry->uniqueid, record.uid,
-                                   NULL, NULL, "G", &record.guid, &blobid);
-        json_object_set_new(obj, "cyrusimap.org:blobId",
-                            json_string(buf_cstring(&blobid)));
-        buf_free(&blobid);
-    }
-    if (jmap_wantprop(crock->get->props, "cyrusimap.org:size")) {
-        json_object_set_new(obj, "cyrusimap.org:size",
-                            json_integer(record.size - record.header_size));
-    }
-
     jmap_set_contactid(req->cstate, cdata, &crock->cid);
-    json_object_set_new(obj, "id", json_string(buf_cstring(&crock->cid)));
-
-    char id[JMAP_MAX_ADDRBOOKID_SIZE];
-    jmap_set_addrbookid(req->cstate, mbentry, id);
-    json_object_set_new(obj, "addressBookIds", json_pack("{s:b}", id, true));
+    card_set_record_props(crock,
+                          obj,
+                          mbentry,
+                          &record,
+                          href,
+                          buf_cstring(&crock->cid));
 
     json_array_append_new(crock->get->list, obj);
     crock->rows++;
+
+    if (crock->history) {
+        struct card_history *hist =
+            card_history_lookup(crock->history, buf_cstring(&crock->cid));
+        ptrarray_append(&hist->live, obj);
+        if (record.modseq > hist->live_modseq) {
+            hist->live_modseq = record.modseq;
+        }
+    }
 
  done:
     mboxlist_entry_free(&mbentry);
     free(href);
 
     return 0;
+}
+
+static int card_history_open(struct cards_rock *crock, const char *mboxname)
+{
+    if (crock->mailbox && !strcmp(mailbox_name(crock->mailbox), mboxname)) {
+        return 0;
+    }
+
+    mailbox_close(&crock->mailbox);
+    return mailbox_open_irl(mboxname, &crock->mailbox);
+}
+
+/* Set @id to the ContactCard id of @record in crock->mailbox. */
+static bool card_record_id(struct cards_rock *crock,
+                           const struct index_record *record,
+                           struct buf *id)
+{
+    struct carddav_data cdata = { .dav.createdmodseq = record->createdmodseq };
+
+    if (USER_COMPACT_EMAILIDS(crock->req->cstate)) {
+        if (!record->createdmodseq) {
+            return false;
+        }
+        jmap_set_contactid(crock->req->cstate, &cdata, id);
+        return true;
+    }
+
+    vcardcomponent *vcard = record_to_vcard(crock->mailbox, record);
+    if (!vcard) {
+        return false;
+    }
+
+    cdata.vcard_uid = vcardcomponent_get_uid(vcard);
+    if (cdata.vcard_uid) {
+        jmap_set_contactid(crock->req->cstate, &cdata, id);
+    }
+    bool found = cdata.vcard_uid != NULL;
+    vcardcomponent_free(vcard);
+
+    return found;
+}
+
+static int card_history_scan_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct cards_rock *crock = rock;
+    time_t deleted = 0;
+
+    if (mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_RESERVE)) {
+        return 0;
+    }
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_ADDRESSBOOK) {
+        return 0;
+    }
+    if (!jmap_hasrights_mbentry(crock->req, mbentry, JACL_READITEMS)) {
+        return 0;
+    }
+
+    mboxname_isdeletedmailbox(mbentry->name, &deleted);
+
+    int r = card_history_open(crock, mbentry->name);
+    if (r) {
+        xsyslog_ev(LOG_ERR, "jmap.contactcard.history.open.failed",
+                   lf_s("mbox.name", mbentry->name),
+                   lf_s("error", error_message(r)));
+        return 0;
+    }
+
+    struct buf id = BUF_INITIALIZER;
+    struct mailbox_iter *iter =
+        mailbox_iter_init(crock->mailbox, 0, ITER_SKIP_UNLINKED);
+    const message_t *msg;
+
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        time_t replaced;
+
+        if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+            replaced = record->last_updated.tv_sec;
+        }
+        else if (deleted) {
+            replaced = deleted;
+        }
+        else {
+            continue;
+        }
+
+        if (!card_record_id(crock, record, &id)) {
+            continue;
+        }
+        if (crock->wanted && !hash_lookup(buf_cstring(&id), crock->wanted)) {
+            continue;
+        }
+
+        struct card_version *v = xzmalloc(sizeof(*v));
+        v->mboxname = xstrdup(mbentry->name);
+        v->uid = record->uid;
+        v->modseq = record->modseq;
+        v->replaced = replaced;
+        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+            /* the deletion came after every expunge in this mailbox */
+            v->modseq =
+                MAX(mbentry->foldermodseq, crock->mailbox->i.highestmodseq);
+        }
+
+        struct card_history *hist =
+            card_history_lookup(crock->history, buf_cstring(&id));
+        ptrarray_append(&hist->versions, v);
+    }
+
+    mailbox_iter_done(&iter);
+    mailbox_close(&crock->mailbox);
+    buf_free(&id);
+
+    return 0;
+}
+
+static int card_version_cmp(const void **va, const void **vb)
+{
+    const struct card_version *a = *va, *b = *vb;
+
+    if (a->replaced != b->replaced) {
+        return a->replaced < b->replaced ? -1 : 1;
+    }
+    if (a->modseq != b->modseq) {
+        return a->modseq < b->modseq ? -1 : 1;
+    }
+    return 0;
+}
+
+static int card_render_cmp(const void **va, const void **vb)
+{
+    const struct card_version *a = *va, *b = *vb;
+    int r = strcmp(a->mboxname, b->mboxname);
+
+    if (r) {
+        return r;
+    }
+    if (a->uid != b->uid) {
+        return a->uid < b->uid ? -1 : 1;
+    }
+    return 0;
+}
+
+/* Return true if a live vCard row exists for ContactCard @id,
+ * whether or not the user may read it. */
+static bool card_id_is_live(struct cards_rock *crock, const char *id)
+{
+    struct carddav_data *cdata = NULL;
+
+    if (USER_COMPACT_EMAILIDS(crock->req->cstate)) {
+        if (id[0] != JMAP_CONTACTID_PREFIX || strlen(id) >= JMAP_CONTACTID_SIZE)
+        {
+            return false;
+        }
+        return !carddav_lookup_jmapid(crock->db, id + 1, &cdata);
+    }
+
+    return !carddav_lookup_uid(crock->db, NULL, id, &cdata);
+}
+
+struct card_select_rock
+{
+    struct cards_rock *crock;
+    ptrarray_t render; /* struct card_version * */
+    strarray_t found;  /* destroyed ids with versions to return */
+};
+
+/* Number the versions of one ContactCard, set objectHistory on its live
+ * entries and pick the superseded versions to return. */
+static void card_history_select_cb(const char *id, void *data, void *rock)
+{
+    struct card_select_rock *srock = rock;
+    struct cards_rock *crock = srock->crock;
+    struct jmap_get *get = crock->get;
+    struct card_history *hist = data;
+    int nversions = ptrarray_size(&hist->versions);
+    int first = 0;
+    modseq_t version = 0;
+
+    /* versions must increase with replacement time, whatever their modseq */
+    ptrarray_sort(&hist->versions, card_version_cmp);
+    for (int i = 0; i < nversions; i++) {
+        struct card_version *v = ptrarray_nth(&hist->versions, i);
+        v->version = MAX(v->modseq, version + 1);
+        v->id = id;
+        version = v->version;
+    }
+
+    if (ptrarray_size(&hist->live)) {
+        modseq_t live_version = MAX(hist->live_modseq, version + 1);
+
+        for (int i = 0; i < ptrarray_size(&hist->live); i++) {
+            jmap_get_history_set(ptrarray_nth(&hist->live, i), live_version, 0);
+        }
+
+        if (!get->history.include_replaced) {
+            return;
+        }
+    }
+    else {
+        /* Skip live cards in addressbooks the user can't read */
+        if (!nversions || !get->history.include_destroyed
+            || card_id_is_live(crock, id))
+        {
+            return;
+        }
+
+        if (!get->history.include_replaced) {
+            first = nversions - 1;
+        }
+        strarray_append(&srock->found, id);
+    }
+
+    for (int i = first; i < nversions; i++) {
+        struct card_version *v = ptrarray_nth(&hist->versions, i);
+        if (jmap_get_history_wanted(get, v->replaced)) {
+            ptrarray_append(&srock->render, v);
+        }
+    }
+}
+
+/* Return the resource name of @record in crock->mailbox. */
+static char *card_record_resource(struct cards_rock *crock,
+                                  const mbentry_t *mbentry,
+                                  const struct index_record *record)
+{
+    struct carddav_data *cdata = NULL;
+
+    if (!carddav_lookup_imapuid(crock->db, mbentry, record->uid, &cdata, 1)) {
+        return xstrdupnull(cdata->dav.resource);
+    }
+
+    /* superseded record: use the filename it was stored with */
+    if (mailbox_cacherecord(crock->mailbox, record)) {
+        return NULL;
+    }
+
+    struct body *body = NULL;
+    char *resource = NULL;
+
+    message_read_bodystructure(record, &body);
+    for (struct param *param = body ? body->disposition_params : NULL; param;
+         param = param->next)
+    {
+        if (!strcmp(param->attribute, "FILENAME")) {
+            resource = xstrdupnull(param->value);
+            break;
+        }
+    }
+    message_free_body(body);
+    free(body);
+
+    return resource;
+}
+
+static json_t *card_version_to_json(struct cards_rock *crock,
+                                    const mbentry_t *mbentry,
+                                    struct index_record *record,
+                                    const char *id)
+{
+    jmap_req_t *req = crock->req;
+
+    vcardcomponent *vcard = record_to_vcard(crock->mailbox, record);
+    if (!vcard) {
+        return NULL;
+    }
+
+    vcardproperty_version vcard_version = vcardcomponent_get_version(vcard);
+    if (vcard_version != VCARD_VERSION_40) {
+        vcardcomponent_transform(vcard, VCARD_VERSION_40);
+    }
+
+    jscontact_ctx_t ctx = {
+        .mailbox = crock->mailbox,
+        .record = record,
+        .ignore_derived_props = true,
+    };
+
+    json_t *obj = _card_from_vcard(req, &ctx, vcard);
+    vcardcomponent_free(vcard);
+    if (!obj) {
+        return NULL;
+    }
+
+    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
+        json_object_set_new(
+            obj,
+            "cyrusimap.org:vCardVersion",
+            json_string(vcard_version == VCARD_VERSION_40 ? "4.0" : "3.0"));
+    }
+
+    jmap_filterprops(obj, crock->get->props);
+
+    char *href = NULL;
+    if (jmap_wantprop(crock->get->props, "cyrusimap.org:href")) {
+        char *resource = card_record_resource(crock, mbentry, record);
+        if (resource) {
+            href = jmap_xhref(mbentry->name, resource);
+        }
+        free(resource);
+    }
+
+    card_set_record_props(crock, obj, mbentry, record, href, id);
+    free(href);
+
+    return obj;
+}
+
+/* Add the superseded versions of ContactCards that crock->get asks for,
+ * from all addressbooks the user can currently read, including deleted
+ * ones.  Live entries must be in crock->history already. */
+static void card_history_get(struct cards_rock *crock)
+{
+    struct jmap_get *get = crock->get;
+    struct card_select_rock srock = { crock,
+                                      PTRARRAY_INITIALIZER,
+                                      STRARRAY_INITIALIZER };
+    mbentry_t *mbentry = NULL;
+
+    char *cardhomename = carddav_mboxname(crock->req->accountid, NULL);
+    mboxlist_mboxtree(cardhomename,
+                      card_history_scan_cb,
+                      crock,
+                      MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
+    free(cardhomename);
+
+    hash_enumerate(crock->history, card_history_select_cb, &srock);
+
+    ptrarray_sort(&srock.render, card_render_cmp);
+    for (int i = 0; i < ptrarray_size(&srock.render); i++) {
+        struct card_version *v = ptrarray_nth(&srock.render, i);
+        struct index_record record;
+
+        if (!mbentry || strcmp(mbentry->name, v->mboxname)) {
+            mboxlist_entry_free(&mbentry);
+            if (mboxlist_lookup(v->mboxname, &mbentry, NULL)) {
+                continue;
+            }
+        }
+        if (card_history_open(crock, v->mboxname)) {
+            continue;
+        }
+        if (mailbox_find_index_record(crock->mailbox, v->uid, &record)) {
+            continue;
+        }
+
+        json_t *obj = card_version_to_json(crock, mbentry, &record, v->id);
+        if (!obj) {
+            xsyslog_ev(LOG_ERR, "jmap.contactcard.history.convert.failed",
+                       lf_s("mbox.name", v->mboxname),
+                       lf_u("msg.imapuid", v->uid));
+            continue;
+        }
+
+        jmap_get_history_set(obj, v->version, v->replaced);
+        json_array_append_new(get->list, obj);
+    }
+    mboxlist_entry_free(&mbentry);
+
+    for (size_t i = json_array_size(get->not_found); i-- > 0;) {
+        const char *id = json_string_value(json_array_get(get->not_found, i));
+        if (strarray_find(&srock.found, id, 0) >= 0) {
+            json_array_remove(get->not_found, i);
+        }
+    }
+
+    ptrarray_fini(&srock.render);
+    strarray_fini(&srock.found);
 }
 
 /*

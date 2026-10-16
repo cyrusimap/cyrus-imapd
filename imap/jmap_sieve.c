@@ -199,9 +199,8 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
     }
 }
 
-static int getscript(void *rock, struct sieve_data *sdata)
+static json_t *script_tojson(struct jmap_get *get, struct sieve_data *sdata)
 {
-    struct jmap_get *get = (struct jmap_get *) rock;
     json_t *sieve = json_pack("{s:s}", "id", sdata->id);
 
     if (jmap_wantprop(get->props, "name")) {
@@ -220,16 +219,117 @@ static int getscript(void *rock, struct sieve_data *sdata)
         buf_free(&buf);
     }
 
+    return sieve;
+}
+
+/* Retained old versions of one script */
+struct script_history
+{
+    modseq_t maxmodseq;
+    json_t *versions; /* those wanted by historyAfter */
+    json_t *final;    /* borrowed from versions: the one with maxmodseq */
+    bool live;
+};
+
+static void script_history_free(void *data)
+{
+    struct script_history *hist = data;
+
+    json_decref(hist->versions);
+    free(hist);
+}
+
+struct sieve_get_rock
+{
+    struct jmap_get *get;
+    hash_table history; /* script id -> struct script_history */
+};
+
+static int script_version_cb(void *rock, struct sieve_data *sdata)
+{
+    struct sieve_get_rock *grock = rock;
+    struct script_history *hist = hash_lookup(sdata->id, &grock->history);
+    bool newest = false;
+
+    if (!hist) {
+        hist = xzmalloc(sizeof(struct script_history));
+        hist->versions = json_array();
+        hash_insert(sdata->id, hist, &grock->history);
+    }
+
+    if (sdata->modseq > hist->maxmodseq) {
+        hist->maxmodseq = sdata->modseq;
+        hist->final = NULL;
+        newest = true;
+    }
+
+    if (!jmap_get_history_wanted(grock->get, sdata->lastupdated)) {
+        return 0;
+    }
+
+    json_t *sieve = script_tojson(grock->get, sdata);
+    jmap_get_history_set(sieve, sdata->modseq, sdata->lastupdated);
+    json_array_append_new(hist->versions, sieve);
+    if (newest) {
+        hist->final = sieve;
+    }
+
+    return 0;
+}
+
+/* Destroyed scripts return only their final version unless includeReplaced */
+static void script_history_append(struct jmap_get *get,
+                                  struct script_history *hist,
+                                  bool destroyed)
+{
+    if (get->history.include_replaced) {
+        json_array_extend(get->list, hist->versions);
+    }
+    else if (destroyed && hist->final) {
+        json_array_append(get->list, hist->final);
+    }
+}
+
+static int getscript(void *rock, struct sieve_data *sdata)
+{
+    struct sieve_get_rock *grock = rock;
+    struct jmap_get *get = grock->get;
+    json_t *sieve = script_tojson(get, sdata);
+
     /* Add object to list */
     json_array_append_new(get->list, sieve);
 
+    if (get->history.enabled) {
+        struct script_history *hist = hash_lookup(sdata->id, &grock->history);
+        modseq_t version = sdata->modseq;
+
+        if (hist) {
+            hist->live = true;
+            version = MAX(version, hist->maxmodseq + 1);
+            script_history_append(get, hist, /*destroyed*/ false);
+        }
+        jmap_get_history_set(sieve, version, 0);
+    }
+
     return 0;
+}
+
+static void getdestroyed(const char *id __attribute__((unused)),
+                         void *data,
+                         void *rock)
+{
+    struct script_history *hist = data;
+
+    if (!hist->live) {
+        script_history_append(rock, hist, /*destroyed*/ true);
+    }
 }
 
 static int jmap_sieve_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get = JMAP_GET_INITIALIZER;
+    struct sieve_get_rock grock = { &get, HASH_TABLE_INITIALIZER };
     json_t *err = NULL;
     struct mailbox *mailbox = NULL;
     struct sieve_db *db = NULL;
@@ -262,6 +362,17 @@ static int jmap_sieve_get(jmap_req_t *req)
         goto done;
     }
 
+    if (get.history.enabled) {
+        construct_hash_table(&grock.history, 32, 0);
+        r = sieve_script_foreach_version(mailbox,
+                                         NULL,
+                                         &script_version_cb,
+                                         &grock);
+        if (r) {
+            goto done;
+        }
+    }
+
     /* Does the client request specific responses? */
     if (JNOTNULL(get.ids)) {
         json_t *jval;
@@ -273,16 +384,30 @@ static int jmap_sieve_get(jmap_req_t *req)
 
             r = sievedb_lookup_id(db, id, &sdata, 0);
             if (r || !sdata->imap_uid) {
-                json_array_append_new(get.not_found, json_string(id));
+                struct script_history *hist =
+                    get.history.include_destroyed
+                        ? hash_lookup(id, &grock.history)
+                        : NULL;
+
+                if (hist) {
+                    script_history_append(&get, hist, /*destroyed*/ true);
+                }
+                else {
+                    json_array_append_new(get.not_found, json_string(id));
+                }
                 r = 0;
             }
             else {
-                getscript(&get, sdata);
+                getscript(&grock, sdata);
             }
         }
     }
     else {
-        sievedb_foreach(db, &getscript, &get);
+        sievedb_foreach(db, &getscript, &grock);
+
+        if (get.history.include_destroyed) {
+            hash_enumerate(&grock.history, &getdestroyed, &get);
+        }
     }
 
     /* Build response */
@@ -295,6 +420,7 @@ done:
     if (r) jmap_error(req, jmap_server_error(r));
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
+    free_hash_table(&grock.history, &script_history_free);
 
     mailbox_close(&mailbox);
     sievedb_close(db);
@@ -311,7 +437,7 @@ static void putscript(struct mailbox *mailbox, const char *script,
     if (!script) {
         /* fetch existing script content (just a rename) */
         r = sieve_script_fetch(mailbox, sdata, &buf);
-        goto done;
+        if (r) goto done;
     }
     else {
         /* check script size */

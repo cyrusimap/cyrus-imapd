@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_deleted_addressbook ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create a card in an addressbook, then delete both";
+    my $res = $jmap->CallMethods([
+        ['AddressBook/set', { create => { b => { name => 'B' } } }, 'R1'],
+    ]);
+    my $abookId = $res->[0][1]{created}{b}{id};
+    $self->assert_not_null($abookId);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', { create => {
+            c1 => { '@type' => 'Card', version => '1.0',
+                    addressBookIds => { $abookId => JSON::true },
+                    name => { full => 'v1' } },
+        } }, 'R1'],
+    ]);
+    my $id = $res->[0][1]{created}{c1}{id};
+    $self->assert_not_null($id);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => { $id => { name => { full => 'v2' } } },
+        }, 'R1'],
+        ['AddressBook/set', {
+            destroy => [$abookId],
+            onDestroyRemoveContents => JSON::true,
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+    $self->assert_cmp_deeply([$abookId], $res->[1][1]{destroyed});
+
+    my $replaced = { version => ignore(), replaced => re(qr/^\d{4}-/) };
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', { ids => [$id], properties => ['name'] }, 'R1'],
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeDestroyed => JSON::true,
+        }, 'R2'],
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeDestroyed => JSON::true,
+            includeReplaced => JSON::true,
+        }, 'R3'],
+    ]);
+    $self->assert_cmp_deeply([$id], $res->[0][1]{notFound});
+
+    xlog $self, "cards in a deleted addressbook are destroyed";
+    $self->assert_cmp_deeply([
+        { id => $id, name => superhashof({ full => 'v2' }),
+          addressBookIds => { $abookId => JSON::true },
+          objectHistory => $replaced },
+    ], $res->[1][1]{list});
+    $self->assert_cmp_deeply([], $res->[1][1]{notFound});
+
+    $self->assert_cmp_deeply([
+        { id => $id, name => superhashof({ full => 'v1' }),
+          addressBookIds => { $abookId => JSON::true },
+          objectHistory => $replaced },
+        { id => $id, name => superhashof({ full => 'v2' }),
+          addressBookIds => { $abookId => JSON::true },
+          objectHistory => $replaced },
+    ], $res->[2][1]{list});
+    my @versions = map { $_->{objectHistory}{version} } $res->[2][1]{list}->@*;
+    $self->assert($versions[0] < $versions[1]);
+
+    xlog $self, "removing the deleted addressbook removes its history";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0');
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeDestroyed => JSON::true,
+            includeReplaced => JSON::true,
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$id], $res->[0][1]{notFound});
+}

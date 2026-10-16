@@ -1,0 +1,88 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_note_destroyed ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $old = {
+        version => ignore(),
+        replaced => re(qr/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/),
+    };
+    my $live = { version => ignore(), replaced => undef };
+
+    my $res = $jmap->CallMethods([
+        ['Note/set', { create => {
+            gone => { title => 'gone' },
+            kept => { title => 'kept' },
+        } }, 'R1'],
+    ]);
+    my $gone = $res->[0][1]{created}{gone}{id};
+    my $kept = $res->[0][1]{created}{kept}{id};
+    $self->assert_not_null($gone);
+    $self->assert_not_null($kept);
+
+    $res = $jmap->CallMethods([
+        ['Note/set', { update => { $gone => { title => 'gone2' } } }, 'R1'],
+        ['Note/set', { destroy => [$gone] }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$gone});
+    $self->assert_cmp_deeply([$gone], $res->[1][1]{destroyed});
+
+    $res = $jmap->CallMethods([
+        ['Note/get', { ids => [$gone], properties => ['title'] }, 'R1'],
+        ['Note/get', { ids => [$gone], includeDestroyed => JSON::true,
+                       properties => ['title'] }, 'R2'],
+        ['Note/get', { ids => [$gone], includeDestroyed => JSON::true,
+                       includeReplaced => JSON::true,
+                       properties => ['title'] }, 'R3'],
+        ['Note/get', { ids => [$gone], includeReplaced => JSON::true,
+                       properties => ['title'] }, 'R4'],
+        ['Note/get', { ids => undef, includeDestroyed => JSON::true,
+                       properties => ['title'] }, 'R5'],
+    ]);
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$gone], $res->[0][1]{notFound});
+
+    xlog $self, "includeDestroyed returns the final version only";
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => ignore(),
+        list => [ { id => $gone, title => 'gone2', objectHistory => $old } ],
+        notFound => [],
+        hasMoreHistory => JSON::false,
+    }, $res->[1][1]);
+
+    xlog $self, "with includeReplaced every retained version";
+    $self->assert_cmp_deeply([
+        { id => $gone, title => 'gone', objectHistory => $old },
+        { id => $gone, title => 'gone2', objectHistory => $old },
+    ], $res->[2][1]{list});
+    $self->assert($res->[2][1]{list}[0]{objectHistory}{version}
+                  < $res->[2][1]{list}[1]{objectHistory}{version});
+    $self->assert_cmp_deeply([], $res->[2][1]{notFound});
+
+    xlog $self, "includeReplaced alone does not find destroyed notes";
+    $self->assert_cmp_deeply([], $res->[3][1]{list});
+    $self->assert_cmp_deeply([$gone], $res->[3][1]{notFound});
+
+    xlog $self, "ids null with includeDestroyed lists live and destroyed";
+    $self->assert_cmp_deeply(bag(
+        { id => $gone, title => 'gone2', objectHistory => $old },
+        { id => $kept, title => 'kept', objectHistory => $live },
+    ), $res->[4][1]{list});
+
+    xlog $self, "unlinked destroyed notes are gone";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'cyr_expire', '-X' => '0', '-D' => '0');
+    $res = $jmap->CallMethods([
+        ['Note/get', { ids => [$gone, $kept],
+                       includeDestroyed => JSON::true,
+                       includeReplaced => JSON::true,
+                       properties => ['title'] }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        { id => $kept, title => 'kept', objectHistory => $live },
+    ], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$gone], $res->[0][1]{notFound});
+}

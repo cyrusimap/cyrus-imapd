@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_moved ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['AddressBook/set', { create => { b => { name => 'B' } } }, 'R1'],
+        ['ContactCard/set', { create => {
+            c1 => { '@type' => 'Card', version => '1.0',
+                    name => { full => 'moved' } },
+        } }, 'R2'],
+    ]);
+    my $abookB = $res->[0][1]{created}{b}{id};
+    my $id = $res->[1][1]{created}{c1}{id};
+    $self->assert_not_null($abookB);
+    $self->assert_not_null($id);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', { ids => [$id], properties => ['id'] }, 'R1'],
+    ]);
+    my $abookA = (keys $res->[0][1]{list}[0]{addressBookIds}->%*)[0];
+
+    xlog $self, "move the card to another addressbook";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => { $id => { addressBookIds => { $abookB => JSON::true } } },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    xlog $self, "the copy left in the old addressbook is a replaced version";
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeReplaced => JSON::true,
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        { id => $id, name => superhashof({ full => 'moved' }),
+          addressBookIds => { $abookA => JSON::true },
+          objectHistory => { version => ignore(),
+                             replaced => re(qr/^\d{4}-/) } },
+        { id => $id, name => superhashof({ full => 'moved' }),
+          addressBookIds => { $abookB => JSON::true },
+          objectHistory => { version => ignore(), replaced => undef } },
+    ], $res->[0][1]{list});
+}

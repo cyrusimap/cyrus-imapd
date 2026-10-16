@@ -1,0 +1,104 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sievescript_replaced ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $blob1 = "" . $jmap->Upload("keep;\r\n", 'application/sieve')->{blobId};
+    my $blob2 = "" . $jmap->Upload("discard;\r\n", 'application/sieve')->{blobId};
+    my $blob3 = "" . $jmap->Upload("stop;\r\n", 'application/sieve')->{blobId};
+
+    my $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            create => { 1 => { name => 'foo', blobId => $blob1 } },
+            onSuccessActivateScript => '#1',
+        }, 'R1'],
+    ]);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    xlog $self, "rename with new content, then replace the content";
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            update => { $id => { name => 'bar', blobId => $blob2 } },
+        }, 'R1'],
+        ['SieveScript/set', { update => { $id => { blobId => $blob3 } } }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+    $self->assert(exists $res->[1][1]{updated}{$id});
+
+    my $old = {
+        version => ignore(),
+        replaced => re(qr/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/),
+    };
+    my $live = { version => ignore(), replaced => undef };
+
+    $res = $jmap->CallMethods([
+        ['SieveScript/get', { ids => [$id], includeReplaced => JSON::true },
+         'R1'],
+    ]);
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => ignore(),
+        list => [
+            { id => $id, name => 'foo', isActive => JSON::true,
+              blobId => $blob1, objectHistory => $old },
+            { id => $id, name => 'bar', isActive => JSON::true,
+              blobId => $blob2, objectHistory => $old },
+            { id => $id, name => 'bar', isActive => JSON::true,
+              blobId => $blob3, objectHistory => $live },
+        ],
+        notFound => [],
+        hasMoreHistory => JSON::false,
+    }, $res->[0][1]);
+    my @versions = map { $_->{objectHistory}{version} }
+                   $res->[0][1]{list}->@*;
+    $self->assert($versions[0] < $versions[1]);
+    $self->assert($versions[1] < $versions[2]);
+
+    xlog $self, "properties apply to old versions; ids null lists all";
+    $res = $jmap->CallMethods([
+        ['SieveScript/get', { ids => undef, includeReplaced => JSON::true,
+                              properties => ['name'] }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        { id => $id, name => 'foo', objectHistory => $old },
+        { id => $id, name => 'bar', objectHistory => $old },
+        { id => $id, name => 'bar', objectHistory => $live },
+    ], $res->[0][1]{list});
+
+    xlog $self, "historyAfter drops versions replaced before it";
+    $res = $jmap->CallMethods([
+        ['SieveScript/get', { ids => [$id], includeReplaced => JSON::true,
+                              historyAfter => '2000-01-01T00:00:00Z',
+                              properties => ['name'] }, 'R1'],
+        ['SieveScript/get', { ids => [$id], includeReplaced => JSON::true,
+                              historyAfter => '2100-01-01T00:00:00Z',
+                              properties => ['name'] }, 'R2'],
+    ]);
+    $self->assert_num_equals(3, scalar $res->[0][1]{list}->@*);
+    $self->assert_cmp_deeply([
+        { id => $id, name => 'bar', objectHistory => $live },
+    ], $res->[1][1]{list});
+
+    xlog $self, "without the history arguments only the live version";
+    $res = $jmap->CallMethods([
+        ['SieveScript/get', { ids => [$id] }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        { id => $id, name => 'bar', isActive => JSON::true,
+          blobId => $blob3 },
+    ], $res->[0][1]{list});
+
+    xlog $self, "unlinked versions are gone";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'cyr_expire', '-X' => '0', '-D' => '0');
+    $res = $jmap->CallMethods([
+        ['SieveScript/get', { ids => [$id], includeReplaced => JSON::true,
+                              properties => ['name'] }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        { id => $id, name => 'bar', objectHistory => $live },
+    ], $res->[0][1]{list});
+}

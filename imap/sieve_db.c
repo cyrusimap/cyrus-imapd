@@ -21,6 +21,7 @@
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
 #include "xunlink.h"
 
 #include "sieve/bytecode.h"
@@ -781,6 +782,89 @@ EXPORTED int sieve_script_fetch(struct mailbox *mailbox,
         syslog(LOG_ERR, "fetching message (%s:%u) failed: %s",
                mailbox_name(mailbox), sdata->imap_uid, error_message(r));
     }
+
+    return r;
+}
+
+/* Script id from the "<id>.sieve" Content-Disposition filename */
+static char *script_id_from_body(const struct body *body)
+{
+    for (const struct param *param = body->disposition_params; param;
+         param = param->next)
+    {
+        if (strcmp(param->attribute, "FILENAME")) {
+            continue;
+        }
+
+        size_t len = strlen(param->value);
+        size_t extlen = strlen(SIEVE_EXTENSION);
+        if (len > extlen
+            && !strcmp(param->value + len - extlen, SIEVE_EXTENSION))
+        {
+            return xstrndup(param->value, len - extlen);
+        }
+    }
+
+    return NULL;
+}
+
+EXPORTED int sieve_script_foreach_version(struct mailbox *mailbox,
+                                          const char *id,
+                                          sieve_cb_t *cb,
+                                          void *rock)
+{
+    struct mailbox_iter *iter =
+        mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    const message_t *msg;
+    int r = 0;
+
+    while (!r && (msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+
+        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+            continue;
+        }
+        if (mailbox_cacherecord(mailbox, record)) {
+            continue;
+        }
+
+        struct body *body = NULL;
+        message_read_bodystructure(record, &body);
+
+        char *myid = script_id_from_body(body);
+        if (myid && (!id || !strcmp(id, myid))) {
+            char contentid[MESSAGE_GUID_SIZE * 2 + 1];
+            strlcpy(contentid,
+                    message_guid_encode(&body->content_guid),
+                    sizeof(contentid));
+            char *name =
+                charset_decode_mimeheader(body->subject,
+                                          CHARSET_KEEPCASE | CHARSET_MIME_UTF8);
+
+            struct sieve_data sdata = {
+                .creationdate = record->internaldate.tv_sec,
+                .lastupdated = record->last_updated.tv_sec,
+                .mailbox = mailbox_uniqueid(mailbox),
+                .imap_uid = record->uid,
+                .modseq = record->modseq,
+                .createdmodseq = record->createdmodseq,
+                .id = myid,
+                .name = name,
+                .contentid = contentid,
+                .isactive = !!(record->system_flags & FLAG_FLAGGED),
+                .alive = 0,
+            };
+            r = cb(rock, &sdata);
+
+            free(name);
+        }
+
+        free(myid);
+        message_free_body(body);
+        free(body);
+    }
+
+    mailbox_iter_done(&iter);
 
     return r;
 }

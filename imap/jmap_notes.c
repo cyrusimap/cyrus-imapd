@@ -15,6 +15,7 @@
 
 #include "acl.h"
 #include "append.h"
+#include "bsearch.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
 #include "jmap_mail.h"
@@ -329,10 +330,11 @@ static void _notes_get_cb(const char *id, message_t *msg,
 }
 
 static void foreach_note(struct mailbox *mbox, hash_table *ids,
+                         unsigned iterflags,
                          void (*proc)(const char *, message_t *, void *, void *),
                          void *rock)
 {
-    struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
+    struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, iterflags);
     struct buf buf = BUF_INITIALIZER;
     message_t *msg;
 
@@ -379,6 +381,121 @@ static void not_found_cb(const char *id,
     }
     else {
         json_array_append_new(json, json_string(id));
+    }
+}
+
+/* Live and retained old versions of one note */
+struct note_history
+{
+    json_t *live;
+    modseq_t livemodseq;
+    modseq_t maxmodseq;
+    json_t *versions; /* old versions wanted by historyAfter */
+    json_t *final;    /* borrowed from versions: the one with maxmodseq */
+};
+
+static void note_history_free(void *data)
+{
+    struct note_history *hist = data;
+
+    json_decref(hist->live);
+    json_decref(hist->versions);
+    free(hist);
+}
+
+struct history_rock
+{
+    struct jmap_get *get;
+    struct buf *buf;
+    hash_table *ids;  /* requested ids, or NULL for all */
+    hash_table notes; /* id -> struct note_history */
+};
+
+static void _notes_history_cb(const char *id,
+                              message_t *msg,
+                              void *data __attribute__((unused)),
+                              void *rock)
+{
+    struct history_rock *hrock = rock;
+    struct jmap_get *get = hrock->get;
+    const struct index_record *record = msg_record(msg);
+    bool expunged = record->internal_flags & FLAG_INTERNAL_EXPUNGED;
+    bool newest = false;
+
+    if (hrock->ids && !hash_lookup(id, hrock->ids)) {
+        return;
+    }
+
+    struct note_history *hist = hash_lookup(id, &hrock->notes);
+    if (!hist) {
+        hist = xzmalloc(sizeof(struct note_history));
+        hist->versions = json_array();
+        hash_insert(id, hist, &hrock->notes);
+    }
+
+    if (expunged) {
+        if (record->modseq > hist->maxmodseq) {
+            hist->maxmodseq = record->modseq;
+            hist->final = NULL;
+            newest = true;
+        }
+        if (!jmap_get_history_wanted(get, record->last_updated.tv_sec)) {
+            return;
+        }
+    }
+
+    json_t *note = json_pack("{s:s}", "id", id);
+    int r = _note_get(msg, note, get->props, 0 /*want_created*/, hrock->buf);
+    if (r) {
+        syslog(LOG_ERR, "jmap: Notes/get(%s): %s", id, error_message(r));
+        json_decref(note);
+        return;
+    }
+
+    if (expunged) {
+        jmap_get_history_set(note, record->modseq, record->last_updated.tv_sec);
+        json_array_append_new(hist->versions, note);
+        if (newest) {
+            hist->final = note;
+        }
+    }
+    else {
+        json_decref(hist->live);
+        hist->live = note;
+        hist->livemodseq = record->modseq;
+    }
+}
+
+/* A note without a live record is destroyed; it returns only its final
+ * version unless includeReplaced */
+static void _notes_history_emit(const char *id, void *data, void *rock)
+{
+    struct history_rock *hrock = rock;
+    struct note_history *hist = data;
+    struct jmap_get *get = hrock->get;
+
+    if (hist->live) {
+        modseq_t version = hist->livemodseq;
+
+        if (hist->maxmodseq) {
+            version = MAX(version, hist->maxmodseq + 1);
+        }
+        jmap_get_history_set(hist->live, version, 0);
+        json_array_append(get->list, hist->live);
+    }
+    else if (!get->history.include_destroyed || !hist->maxmodseq) {
+        return;
+    }
+
+    if (get->history.include_replaced) {
+        json_array_extend(get->list, hist->versions);
+    }
+    else if (!hist->live && hist->final) {
+        json_array_append(get->list, hist->final);
+    }
+
+    if (hrock->ids) {
+        hash_del(id, hrock->ids);
     }
 }
 
@@ -435,9 +552,33 @@ static int jmap_note_get(jmap_req_t *req)
         }
     }
 
-    if ((rights & JACL_READITEMS) == JACL_READITEMS) {
+    bool can_read = (rights & JACL_READITEMS) == JACL_READITEMS;
+
+    if (can_read && get.history.enabled) {
+        struct history_rock hrock = { &get,
+                                      &buf,
+                                      specific_ids ? &ids : NULL,
+                                      HASH_TABLE_INITIALIZER };
+
+        construct_hash_table(&hrock.notes, 32, 0);
+        foreach_note(mbox,
+                     NULL,
+                     ITER_SKIP_UNLINKED,
+                     &_notes_history_cb,
+                     &hrock);
+        hash_enumerate_sorted(&hrock.notes,
+                              &_notes_history_emit,
+                              &hrock,
+                              cmpstringp_raw);
+        free_hash_table(&hrock.notes, &note_history_free);
+    }
+    else if (can_read) {
         struct get_rock grock = { &get, &buf };
-        foreach_note(mbox, specific_ids ? &ids : NULL, &_notes_get_cb, &grock);
+        foreach_note(mbox,
+                     specific_ids ? &ids : NULL,
+                     ITER_SKIP_EXPUNGED,
+                     &_notes_get_cb,
+                     &grock);
     }
 
     if (specific_ids) {
@@ -857,7 +998,7 @@ static int jmap_note_set(jmap_req_t *req)
     }
 
     /* Iterate through each message and destroy matching ids */
-    foreach_note(mbox, &ids, &_notes_destroy_cb, &srock);
+    foreach_note(mbox, &ids, ITER_SKIP_EXPUNGED, &_notes_destroy_cb, &srock);
 
     /* Any remaining ids are not destroyed */
     hash_enumerate(&ids, &not_found_cb, set.not_destroyed);
@@ -896,7 +1037,7 @@ static int jmap_note_set(jmap_req_t *req)
     }
 
     /* Iterate through each message and update matching ids */
-    foreach_note(mbox, &ids, &_notes_update_cb, &srock);
+    foreach_note(mbox, &ids, ITER_SKIP_EXPUNGED, &_notes_update_cb, &srock);
 
     /* Any remaining ids are not updated */
     hash_enumerate(&ids, &not_found_cb, set.not_updated);

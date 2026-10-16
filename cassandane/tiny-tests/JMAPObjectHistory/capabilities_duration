@@ -1,0 +1,18 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_capabilities_duration
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(jmap_history_duration => '7d');
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $session = $self->{jmap}->get_client_session->client_session;
+    $self->assert_cmp_deeply(
+        { maxHistoryDuration => 7 * 86400 },
+        $session->{accounts}{cassandane}{accountCapabilities}
+                  {'urn:ietf:params:jmap:object-history'},
+    );
+}

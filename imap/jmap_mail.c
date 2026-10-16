@@ -8061,9 +8061,10 @@ struct email_keywords {
     size_t totalmsgs;
     hash_table *seenseq_by_mbox_id;
     struct seen *seendb;
+    bool include_removed; /* also count deleted and expunged records */
 };
 
-#define _EMAIL_KEYWORDS_INITIALIZER { NULL, HASH_TABLE_INITIALIZER, 0, NULL, NULL }
+#define _EMAIL_KEYWORDS_INITIALIZER { NULL, HASH_TABLE_INITIALIZER, 0, NULL, NULL, false }
 
 /* Initialize the keyword aggregator for the authenticated userid.
  *
@@ -8110,7 +8111,8 @@ static int _email_keywords_add_msgrecord(struct email_keywords *keywords,
     if (r) goto done;
     r = msgrecord_get_internalflags(mr, &internal_flags);
     if (r) goto done;
-    if (system_flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED) goto done;
+    if (!keywords->include_removed &&
+        (system_flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED)) goto done;
     r = msgrecord_get_userflags(mr, user_flags);
     if (r) goto done;
 
@@ -9939,6 +9941,330 @@ static int _warmup_mboxcache_cb(const conv_guidrec_t *rec, void* vrock)
     return r;
 }
 
+/* A removed copy of a destroyed email */
+struct email_removed_copy
+{
+    char *mboxname;
+    char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+    uint32_t uid;
+    time_t removed;
+    modseq_t modseq;
+};
+
+/* A requested email that has no live copy */
+struct email_destroyed
+{
+    const char *id;
+    ptrarray_t copies; /* of struct email_removed_copy */
+};
+
+/* Return when a copy was removed from its mailbox, or 0 if it wasn't.
+ * @p deleted is the deletion time of a delayed-deleted mailbox. */
+static time_t _email_removed_at(const struct index_record *record,
+                                time_t deleted)
+{
+    if (record->internal_flags & FLAG_INTERNAL_UNLINKED) {
+        return 0;
+    }
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+        return record->last_updated.tv_sec;
+    }
+    if (deleted && !(record->system_flags & FLAG_DELETED)) {
+        return deleted;
+    }
+    return 0;
+}
+
+static void _email_removed_add(struct email_destroyed *destroyed,
+                               jmap_req_t *req,
+                               struct mailbox *mbox,
+                               const struct index_record *record,
+                               time_t removed)
+{
+    struct email_removed_copy *copy = xzmalloc(sizeof(*copy));
+    copy->mboxname = xstrdup(mailbox_name(mbox));
+    jmap_set_mailboxid(req->cstate, mbox->mbentry, copy->mboxid);
+    copy->uid = record->uid;
+    copy->removed = removed;
+    copy->modseq = record->modseq;
+    ptrarray_append(&destroyed->copies, copy);
+}
+
+struct email_removed_rock
+{
+    jmap_req_t *req;
+    struct email_destroyed *destroyed;
+};
+
+static int _email_removed_copies_cb(const conv_guidrec_t *rec, void *vrock)
+{
+    struct email_removed_rock *rock = vrock;
+    mbentry_t *mbentry = NULL;
+    struct mailbox *mbox = NULL;
+    struct index_record record;
+
+    if (rec->part) {
+        return 0;
+    }
+
+    conv_guidrec_mbentry(rec, &mbentry);
+    if (mbentry
+        && !mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)
+        && jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS)
+        && !mailbox_open_irl(mbentry->name, &mbox)
+        && !mailbox_find_index_record(mbox, rec->uid, &record))
+    {
+        time_t removed = _email_removed_at(&record, 0);
+        if (removed) {
+            _email_removed_add(rock->destroyed,
+                               rock->req,
+                               mbox,
+                               &record,
+                               removed);
+        }
+    }
+
+    mailbox_close(&mbox);
+    mboxlist_entry_free(&mbentry);
+    return 0;
+}
+
+struct email_deleted_mailbox_rock
+{
+    jmap_req_t *req;
+    hash_table *destroyed; /* email id -> struct email_destroyed */
+};
+
+/* Find copies in delayed-deleted mailboxes, which have no entries in
+ * conversations.db, so their records are matched by email id. */
+static int _email_deleted_mailbox_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct email_deleted_mailbox_rock *rock = vrock;
+    time_t deleted = 0;
+
+    if (!mboxname_isdeletedmailbox(mbentry->name, &deleted)) {
+        return 0;
+    }
+
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    mbname_set_isdeleted(mbname, 0);
+    bool skip =
+        mboxname_isnondeliverymailbox(mbname_intname(mbname), mbentry->mbtype)
+        || !jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS);
+    mbname_free(&mbname);
+    if (skip) {
+        return 0;
+    }
+
+    struct mailbox *mbox = NULL;
+    if (mailbox_open_irl(mbentry->name, &mbox)) {
+        return 0;
+    }
+
+    struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, ITER_SKIP_UNLINKED);
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        time_t removed = _email_removed_at(record, deleted);
+        if (!removed) {
+            continue;
+        }
+
+        char email_id[JMAP_MAX_EMAILID_SIZE];
+        jmap_set_emailid(rock->req->cstate,
+                         &record->guid,
+                         0,
+                         &record->internaldate,
+                         email_id);
+        struct email_destroyed *destroyed =
+            hash_lookup(email_id, rock->destroyed);
+        if (destroyed) {
+            _email_removed_add(destroyed, rock->req, mbox, record, removed);
+        }
+    }
+    mailbox_iter_done(&iter);
+    mailbox_close(&mbox);
+    return 0;
+}
+
+/* Render the final version of a destroyed email.  It has the
+ * mailboxIds and keywords of the copies removed last. */
+static int _email_from_removed_copies(jmap_req_t *req,
+                                      struct email_getargs *args,
+                                      struct email_destroyed *destroyed,
+                                      json_t **emailptr)
+{
+    ptrarray_t *copies = &destroyed->copies;
+    struct email_removed_copy *last = NULL;
+    for (int i = 0; i < ptrarray_size(copies); i++) {
+        struct email_removed_copy *copy = ptrarray_nth(copies, i);
+        if (!last || copy->removed > last->removed
+            || (copy->removed == last->removed && copy->modseq > last->modseq))
+        {
+            last = copy;
+        }
+    }
+    if (!last) {
+        return IMAP_NOTFOUND;
+    }
+
+    struct email_keywords keywords = _EMAIL_KEYWORDS_INITIALIZER;
+    json_t *mboxids = json_object();
+    json_t *email = NULL;
+    int r = 0;
+
+    if (args->ctx.seendb == NULL && strcmp(req->accountid, req->userid)) {
+        r = seen_open(req->userid, SEEN_CREATE, &args->ctx.seendb);
+        if (r) {
+            goto done;
+        }
+    }
+    if (!hash_constructed(&args->ctx.seenseq_by_mbox_id)) {
+        construct_hash_table(&args->ctx.seenseq_by_mbox_id, 128, 0);
+    }
+    _email_keywords_init(&keywords,
+                         req->userid,
+                         args->ctx.seendb,
+                         &args->ctx.seenseq_by_mbox_id);
+    keywords.include_removed = true;
+
+    for (int i = 0; !r && i < ptrarray_size(copies); i++) {
+        struct email_removed_copy *copy = ptrarray_nth(copies, i);
+        if (copy->removed != last->removed) {
+            continue;
+        }
+
+        struct mailbox *mbox = NULL;
+        msgrecord_t *mr = NULL;
+        json_object_set_new(mboxids, copy->mboxid, json_true());
+        r = mailbox_open_irl(copy->mboxname, &mbox);
+        if (!r) {
+            r = msgrecord_find(mbox, copy->uid, &mr);
+        }
+        if (!r) {
+            r = _email_keywords_add_msgrecord(&keywords, mr);
+        }
+        if (!r && copy == last) {
+            r = _email_from_record(req, args, mr, &email);
+        }
+        msgrecord_unref(&mr);
+        mailbox_close(&mbox);
+    }
+    if (r) {
+        goto done;
+    }
+
+    if (jmap_wantprop(args->props, "mailboxIds")) {
+        json_object_set(email, "mailboxIds", mboxids);
+    }
+    if (jmap_wantprop(args->props, "keywords")) {
+        json_object_set_new(email,
+                            "keywords",
+                            _email_keywords_to_jmap(&keywords));
+    }
+    jmap_get_history_set(email, last->modseq, last->removed);
+    *emailptr = email;
+    email = NULL;
+
+done:
+    json_decref(email);
+    json_decref(mboxids);
+    if (hash_constructed(&keywords.counts)) {
+        _email_keywords_fini(&keywords);
+    }
+    return r;
+}
+
+static void _email_destroyed_free(void *vdestroyed)
+{
+    struct email_destroyed *destroyed = vdestroyed;
+    struct email_removed_copy *copy;
+    while ((copy = ptrarray_pop(&destroyed->copies))) {
+        free(copy->mboxname);
+        free(copy);
+    }
+    ptrarray_fini(&destroyed->copies);
+    free(destroyed);
+}
+
+/* Look up the final versions of the emails in @p notfound, and move
+ * those found from @p notfound to @p list. */
+static void _email_get_destroyed(jmap_req_t *req,
+                                 struct email_getargs *args,
+                                 json_t *notfound,
+                                 json_t *list)
+{
+    hash_table destroyed_by_id = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&destroyed_by_id, json_array_size(notfound) + 1, 0);
+
+    /* ids that can't be email ids don't justify scanning deleted mailboxes */
+    bool want_deleted_mailboxes = false;
+    size_t i;
+    json_t *val;
+    json_array_foreach (notfound, i, val) {
+        if (hash_lookup(json_string_value(val), &destroyed_by_id)) {
+            continue;
+        }
+
+        struct email_destroyed *destroyed = xzmalloc(sizeof(*destroyed));
+        destroyed->id = json_string_value(val);
+        hash_insert(destroyed->id, destroyed, &destroyed_by_id);
+
+        size_t idlen = strlen(destroyed->id);
+        if ((destroyed->id[0] == JMAP_EMAILID_PREFIX
+             && idlen == JMAP_EMAILID_SIZE - 1)
+            || (destroyed->id[0] == JMAP_LEGACY_EMAILID_PREFIX
+                && idlen == JMAP_LEGACY_EMAILID_SIZE - 1))
+        {
+            want_deleted_mailboxes = true;
+        }
+
+        const char *guidrep = _guid_from_id(req->cstate, destroyed->id);
+        if (!guidrep) {
+            continue;
+        }
+        struct email_removed_rock rock = { req, destroyed };
+        conversations_guid_foreach(req->cstate,
+                                   guidrep,
+                                   _email_removed_copies_cb,
+                                   &rock);
+    }
+
+    if (want_deleted_mailboxes) {
+        struct email_deleted_mailbox_rock rock = { req, &destroyed_by_id };
+        mboxlist_usermboxtree(req->accountid,
+                              req->authstate,
+                              _email_deleted_mailbox_cb,
+                              &rock,
+                              MBOXTREE_DELETED);
+    }
+
+    json_t *stillnotfound = json_array();
+    json_array_foreach (notfound, i, val) {
+        const char *id = json_string_value(val);
+        struct email_destroyed *destroyed = hash_lookup(id, &destroyed_by_id);
+        json_t *email = NULL;
+        int r = _email_from_removed_copies(req, args, destroyed, &email);
+        if (!r) {
+            json_array_append_new(list, email);
+        }
+        else {
+            json_array_append(stillnotfound, val);
+        }
+        if (r && r != IMAP_NOTFOUND) {
+            xsyslog_ev(LOG_ERR, "jmap.email.get.failed",
+                       lf_jmapreq(req),
+                       lf_s("msg.emailid", id),
+                       lf_err("error", r));
+        }
+    }
+    json_array_clear(notfound);
+    json_array_extend(notfound, stillnotfound);
+    json_decref(stillnotfound);
+
+    free_hash_table(&destroyed_by_id, _email_destroyed_free);
+}
+
 static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct email_getargs *args)
 {
     size_t i;
@@ -10013,6 +10339,9 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
         mailbox_close(&mbox);
     }
     ptrarray_fini(&rock.mboxes);
+
+    if (get->history.include_destroyed && json_array_size(get->not_found))
+        _email_get_destroyed(req, args, get->not_found, get->list);
 }
 
 static int jmap_email_get(jmap_req_t *req)
@@ -10055,7 +10384,7 @@ static int jmap_email_get(jmap_req_t *req)
         }
     }
 
-    if (_isthreadsonly(req->args))
+    if (_isthreadsonly(req->args) && !get.history.include_destroyed)
         jmap_email_get_threadsonly(req, &get);
     else
         jmap_email_get_full(req, &get, &args);
