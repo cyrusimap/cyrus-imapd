@@ -11,7 +11,7 @@
 #include <string.h>
 #include <syslog.h>
 
-#include <sasl/saslutil.h>
+#include "libsasl_min/saslutil.h"
 
 #include "assert.h"
 #include "global.h"

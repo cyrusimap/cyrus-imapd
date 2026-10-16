@@ -317,6 +317,43 @@ endif # SERVER
 
 endif # SIEVE
 
+if USE_INTERNAL_SASL
+noinst_LTLIBRARIES += lib/libsasl_min.la
+
+# These headers correspond to the public SASL API.  They must be kept
+# compatible with any external SASL implementation we want to be able
+# to link with.
+LIBSASL_API = \
+    libsasl_min/sasl.h \
+    libsasl_min/saslplug.h \
+    libsasl_min/saslutil.h \
+    libsasl_min/prop.h
+
+lib_libsasl_min_la_SOURCES = \
+    $(LIBSASL_API) \
+    libsasl_min/auxprop.c \
+    libsasl_min/canonusr.c \
+    libsasl_min/checkpw.c \
+    libsasl_min/client.c \
+    libsasl_min/common.c \
+    libsasl_min/config.c \
+    libsasl_min/external.c \
+    libsasl_min/plain.c \
+    libsasl_min/plugin_common.c \
+    libsasl_min/plugin_common.h \
+    libsasl_min/saslint.h \
+    libsasl_min/saslutil.c \
+    libsasl_min/server.c \
+    libsasl_min/seterror.c \
+    libsasl_min/staticopen.c
+
+lib_libsasl_min_la_CFLAGS = \
+    $(AM_CFLAGS) $(CFLAG_VISIBILITY) \
+    -Wno-cast-function-type
+
+lib_libsasl_min_la_LIBADD =
+endif # USE_INTERNAL_SASL
+
 EXTRA_DIST = \
     COPYING \
     Doxyfile \

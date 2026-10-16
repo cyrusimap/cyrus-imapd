@@ -7,7 +7,6 @@
 
 #include <stdbool.h>
 
-#include <sasl/sasl.h>
 #include <libxml/tree.h>
 #include <libxml/uri.h>
 #include <libical/ical.h>
@@ -20,6 +19,8 @@
 #include "md5.h"
 #include "prometheus.h"
 #include "spool.h"
+
+#include "libsasl_min/sasl.h"
 
 #define MAX_REQ_LINE    8000  /* minimum size per RFC 7230 */
 #define MARKUP_INDENT   2     /* # spaces to indent each line of markup */

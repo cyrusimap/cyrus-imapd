@@ -22,8 +22,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 #include "acl.h"
 #include "annotate.h"

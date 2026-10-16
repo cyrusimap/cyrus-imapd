@@ -14,8 +14,6 @@
 #include <unistd.h>
 #endif
 #include <string.h>
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
 
 #include "assert.h"
 #include "libconfig.h"
@@ -34,6 +32,9 @@
 #include "timsieved/actions.h"
 #include "timsieved/codes.h"
 #include "timsieved/lex.h"
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 extern const char *sieved_clienthost;
 extern int sieved_domainfromip;

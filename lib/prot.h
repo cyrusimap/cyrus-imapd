@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <sasl/sasl.h>
 #include <config.h>
 
 #include <openssl/ssl.h>
@@ -17,6 +16,8 @@
 #ifdef HAVE_ZLIB
 #include <zlib.h>
 #endif /* HAVE_ZLIB */
+
+#include "libsasl_min/sasl.h"
 
 #include "util.h"
 
