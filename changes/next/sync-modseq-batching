@@ -1,0 +1,28 @@
+Description:
+
+Rolling replication splits large mailbox updates into batches of
+sync_batchsize records, oldest changes first.  This now covers flag and
+annotation changes as well as appends, and works again: since 3.4 the
+batching setting never reached the code that applied it.  Large bulk
+changes no longer have to be held in memory all at once by sync_client
+and sync_server.
+
+
+Documentation:
+
+sync_batchsize in imapd.conf(5).
+
+
+Config changes:
+
+sync_batchsize
+
+
+Upgrade instructions:
+
+None.  A replica receiving a partial batch needs no new support.
+
+
+GitHub issue:
+
+None.

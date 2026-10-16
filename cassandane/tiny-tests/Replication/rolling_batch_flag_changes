@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Invariant: rolling replication sends changes to existing records in
+# batches of sync_batchsize, oldest modseq first.
+#
+sub test_rolling_batch_flag_changes
+    :NoStartInstances
+    ($self)
+{
+    my $channel = 'batch';
+    $self->{instance}->{config}->set(
+        sync_log => 'yes',
+        sync_log_channels => $channel,
+        sync_batchsize => 10,
+    );
+    $self->_start_instances();
+
+    my $synclog = $self->{instance}->get_basedir() . "/conf/sync/$channel/log";
+
+    $self->make_message("msg $_") for 1..50;
+    $self->run_replication();
+    unlink($synclog);
+
+    my $talk = $self->{master_store}->get_client();
+    $talk->select('INBOX');
+    $talk->store('1:*', '+flags', '(\\Flagged)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    for my $pass (1..5) {
+        $self->run_replication(rolling => 1, once => 1, channel => $channel);
+
+        my $replicatalk = $self->{replica_store}->get_client();
+        $replicatalk->select('INBOX');
+        my $flagged = $replicatalk->search('flagged');
+        $self->assert_cmp_deeply([1 .. 10 * $pass], $flagged);
+    }
+
+    $self->check_replication('cassandane');
+}
