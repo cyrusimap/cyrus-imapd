@@ -2866,7 +2866,6 @@ static int _mbox_on_destroy_move(jmap_req_t *req,
     /* Move messages */
     if (ptrarray_size(&move_msgrecs)) {
         struct appendstate as;
-        int r;
         int nolink = !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
 
         r = append_setup_mbox(&as, dst_mbox, req->userid, req->authstate,
