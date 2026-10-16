@@ -19,6 +19,7 @@
 #include "http_proxy.h"
 #include "jmap_mail.h"
 #include "jmap_util.h"
+#include "jmap_undo.h"
 #include "json_support.h"
 #include "proxy.h"
 #include "sync_support.h"
@@ -55,7 +56,7 @@ static jmap_method_t jmap_notes_methods_nonstandard[] = {
         "Note/set",
         JMAP_NOTES_EXTENSION,
         &jmap_note_set,
-        JMAP_NEED_CSTATE|JMAP_READ_WRITE
+        JMAP_NEED_CSTATE|JMAP_READ_WRITE|JMAP_SET_ATOMIC
     },
     {
         "Note/changes",
@@ -151,7 +152,9 @@ static int lookup_notes_collection(const char *accountid, mbentry_t **mbentry)
 }
 
 
-static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
+/* Sets *createdp if this call created the collection. */
+static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp,
+                                   bool *createdp)
 {
     mbentry_t *mbentry = NULL;
 
@@ -179,6 +182,8 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
                    mbentry->name, error_message(r));
         }
         else {
+            *createdp = true;
+
             /* Add special-use flag */
             char *userid = mboxname_to_userid(mbentry->name);
             static const char *annot = "/specialuse";
@@ -513,11 +518,14 @@ static int _notes_setargs_check(const char *id, json_t *args, json_t **err)
     return r;
 }
 
+/* With @batch, append into that open appendstate and leave committing or
+ * aborting it, and the mailbox, to the caller. */
 static int _note_create(struct mailbox *mailbox, json_t *note,
-                        modseq_t cmodseq, json_t **new_note)
+                        modseq_t cmodseq, struct appendstate *batch,
+                        json_t **new_note)
 {
     struct stagemsg *stage = NULL;
-    struct appendstate as;
+    struct appendstate own_as, *as = batch ? batch : &own_as;
     strarray_t flags = STRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     struct body *bodypart = NULL;
@@ -629,8 +637,9 @@ static int _note_create(struct mailbox *mailbox, json_t *note,
     if (r) goto done;
 
     /* Prepare to append the message to the mailbox */
-    r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate,
-                          0, /*quota*/NULL, 0, 0, /*event*/0);
+    if (!batch)
+        r = append_setup_mbox(as, mailbox, httpd_userid, httpd_authstate,
+                              0, /*quota*/NULL, 0, 0, /*event*/0);
     if (r) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
                mailbox_name(mailbox), error_message(r));
@@ -639,17 +648,19 @@ static int _note_create(struct mailbox *mailbox, json_t *note,
 
     /* Append the message to the mailbox */
     if (isFlagged) strarray_append(&flags, "\\Flagged");
-    r = append_fromstage(&as, &bodypart, stage, &now, cmodseq,
+    r = append_fromstage(as, &bodypart, stage, &now, cmodseq,
                          &flags, 0, /*annots*/NULL);
 
     if (r) {
-        append_abort(&as);
+        if (!batch) append_abort(as);
         syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
                mailbox_name(mailbox), error_message(r));
         goto done;
     }
 
-    r = append_commit(&as);
+    if (batch) goto done;
+
+    r = append_commit(as);
     if (r) {
         syslog(LOG_ERR, "append_commit(%s) failed: %s",
                mailbox_name(mailbox), error_message(r));
@@ -664,7 +675,7 @@ static int _note_create(struct mailbox *mailbox, json_t *note,
     }
     strarray_fini(&flags);
     append_removestage(stage);
-    if (mailbox) {
+    if (mailbox && !batch) {
         if (r) mailbox_abort(mailbox);
         else r = mailbox_commit(mailbox);
     }
@@ -680,7 +691,29 @@ struct set_rock {
     struct jmap_set *set;
     struct buf *buf;
     int rights;
+    ptrarray_t *ops; /* atomic plan: struct note_op */
 };
+
+/* Mark a note's record expunged; @unbind tags it as replaced by an update. */
+static int _note_expunge(struct mailbox *mailbox,
+                         const struct index_record *record,
+                         bool unbind)
+{
+    struct index_record newrecord;
+
+    memcpy(&newrecord, record, sizeof(struct index_record));
+    if (unbind) {
+        int userflag;
+        int r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
+        if (r) {
+            return r;
+        }
+        newrecord.user_flags[userflag / 32] |= 1 << (userflag & 31);
+    }
+    newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+
+    return mailbox_rewrite_index_record(mailbox, &newrecord);
+}
 
 static void _notes_update_cb(const char *id, message_t *msg,
                              void *data, void *rock)
@@ -711,7 +744,7 @@ static void _notes_update_cb(const char *id, message_t *msg,
 
             if (new_note) {
                 r = _note_create(msg_mailbox(msg), new_note,
-                                 msg_createdmodseq(msg), &updated_note);
+                                 msg_createdmodseq(msg), NULL, &updated_note);
                 json_decref(new_note);
             }
             else {
@@ -722,21 +755,7 @@ static void _notes_update_cb(const char *id, message_t *msg,
         }
         json_decref(note);
 
-        if (!r) {
-            const struct index_record *record = msg_record(msg);
-            struct mailbox *mailbox = msg_mailbox(msg);
-            struct index_record newrecord;
-            int userflag;
-
-            memcpy(&newrecord, record, sizeof(struct index_record));
-            r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
-            if (!r) {
-                newrecord.user_flags[userflag/32] |= 1 << (userflag & 31);
-                newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-
-                r = mailbox_rewrite_index_record(mailbox, &newrecord);
-            }
-        }
+        if (!r) r = _note_expunge(msg_mailbox(msg), msg_record(msg), true);
 
         if (r) {
             err = json_pack("{s:s, s:s}", "type", "serverFail",
@@ -766,13 +785,7 @@ static void _notes_destroy_cb(const char *id, message_t *msg,
                             read_only ? "notFound" : "forbidden");
     }
     else {
-        const struct index_record *record = msg_record(msg);
-        struct index_record newrecord;
-
-        memcpy(&newrecord, record, sizeof(struct index_record));
-        newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-
-        int r = mailbox_rewrite_index_record(msg_mailbox(msg), &newrecord);
+        int r = _note_expunge(msg_mailbox(msg), msg_record(msg), false);
         if (r) {
             err = json_pack("{s:s, s:s}", "type", "serverFail",
                                 "description", error_message(r));
@@ -785,6 +798,268 @@ static void _notes_destroy_cb(const char *id, message_t *msg,
     else {
         json_array_append_new(set->destroyed, json_string(id));
     }
+}
+
+/* A destroy or update found by the atomic plan. */
+struct note_op
+{
+    char *id;
+    uint32_t uid;
+    modseq_t cmodseq;
+    json_t *note; /* update: the patched note to append */
+};
+
+static void note_ops_fini(ptrarray_t *ops)
+{
+    struct note_op *op;
+
+    while ((op = ptrarray_pop(ops))) {
+        free(op->id);
+        json_decref(op->note);
+        free(op);
+    }
+    ptrarray_fini(ops);
+}
+
+static json_t *_notes_rights_err(int rights, int need)
+{
+    if ((rights & need) == need) {
+        return NULL;
+    }
+
+    return json_pack("{s:s}",
+                     "type",
+                     (rights & JACL_READITEMS) ? "forbidden" : "notFound");
+}
+
+static void _notes_plan_destroy_cb(const char *id,
+                                   message_t *msg,
+                                   void *data __attribute__((unused)),
+                                   void *rock)
+{
+    struct set_rock *srock = rock;
+    json_t *err = _notes_rights_err(srock->rights, JACL_REMOVEITEMS);
+
+    if (err) {
+        json_object_set_new(srock->set->not_destroyed, id, err);
+        return;
+    }
+
+    struct note_op *op = xzmalloc(sizeof(struct note_op));
+    op->id = xstrdup(id);
+    op->uid = msg_record(msg)->uid;
+    ptrarray_append(srock->ops, op);
+}
+
+static void _notes_plan_update_cb(const char *id,
+                                  message_t *msg,
+                                  void *data,
+                                  void *rock)
+{
+    json_t *patch = data;
+    struct set_rock *srock = rock;
+    json_t *err = _notes_rights_err(srock->rights, JACL_UPDATEITEMS);
+    json_t *new_note = NULL;
+
+    if (!err && !_notes_setargs_check(id, patch, &err)) {
+        json_t *note = json_pack("{s:s}", "id", id);
+        int r = _note_get(msg, note, NULL, 1 /*want_created*/, srock->buf);
+
+        if (!r) {
+            new_note = jmap_patchobject_apply(note, patch, NULL, 0);
+            if (!new_note) {
+                r = IMAP_INTERNAL;
+            }
+        }
+        json_decref(note);
+
+        if (r) {
+            err = json_pack("{s:s, s:s}",
+                            "type",
+                            "serverFail",
+                            "description",
+                            error_message(r));
+        }
+    }
+
+    if (err) {
+        json_object_set_new(srock->set->not_updated, id, err);
+        return;
+    }
+
+    struct note_op *op = xzmalloc(sizeof(struct note_op));
+    op->id = xstrdup(id);
+    op->uid = msg_record(msg)->uid;
+    op->cmodseq = msg_createdmodseq(msg);
+    op->note = new_note;
+    ptrarray_append(srock->ops, op);
+}
+
+static int _notes_expunge_uid(struct mailbox *mbox, uint32_t uid, bool unbind)
+{
+    struct index_record record;
+    int r = mailbox_find_index_record(mbox, uid, &record);
+
+    return r ? r : _note_expunge(mbox, &record, unbind);
+}
+
+/* Apply a fully planned atomic Note/set as one mailbox transaction.  On
+ * error nothing in @mbox is committed. */
+static int _notes_atomic_apply(jmap_req_t *req,
+                               struct mailbox *mbox,
+                               struct jmap_set *set,
+                               ptrarray_t *destroys,
+                               ptrarray_t *updates)
+{
+    struct jmap_undo undo = JMAP_UNDO_INITIALIZER;
+    struct appendstate as;
+    const char *creation_id;
+    json_t *val;
+
+    int r = append_setup_mbox(&as,
+                              mbox,
+                              httpd_userid,
+                              httpd_authstate,
+                              0,
+                              /*quota*/ NULL,
+                              0,
+                              0,
+                              /*event*/ 0);
+    if (r) {
+        return r;
+    }
+
+    for (int i = 0; !r && i < ptrarray_size(destroys); i++) {
+        struct note_op *op = ptrarray_nth(destroys, i);
+
+        r = jmap_undo_failpoint(&undo);
+        if (!r) {
+            r = _notes_expunge_uid(mbox, op->uid, false);
+        }
+        if (!r) {
+            json_array_append_new(set->destroyed, json_string(op->id));
+        }
+    }
+
+    json_object_foreach (set->create, creation_id, val) {
+        json_t *new_note = NULL;
+
+        if (r) {
+            break;
+        }
+        r = jmap_undo_failpoint(&undo);
+        if (!r) {
+            r = _note_create(mbox, val, 0 /*cmodseq*/, &as, &new_note);
+        }
+        if (!r) {
+            json_object_set_new(set->created, creation_id, new_note);
+        }
+    }
+
+    for (int i = 0; !r && i < ptrarray_size(updates); i++) {
+        struct note_op *op = ptrarray_nth(updates, i);
+        json_t *new_note = NULL;
+
+        r = jmap_undo_failpoint(&undo);
+        if (!r) {
+            r = _note_create(mbox, op->note, op->cmodseq, &as, &new_note);
+        }
+        if (!r) {
+            json_object_set_new(set->updated, op->id, new_note);
+            r = jmap_undo_failpoint(&undo);
+        }
+        if (!r) {
+            r = _notes_expunge_uid(mbox, op->uid, true);
+        }
+    }
+
+    if (!r) {
+        r = append_commit(&as);
+    }
+    jmap_undo_fini(&undo);
+
+    if (r) {
+        int r2 = append_abort(&as);
+        if (r2) {
+            xsyslog_ev(LOG_ERR, "jmap.note.set.abort.failed",
+                       lf_mailbox(mbox),
+                       lf_err("error", r2));
+        }
+        return r;
+    }
+
+    json_object_foreach (set->created, creation_id, val) {
+        jmap_add_id(req,
+                    creation_id,
+                    json_string_value(json_object_get(val, "id")));
+    }
+
+    return 0;
+}
+
+/* Atomic Note/set: plan every change without writing, then apply them all
+ * or none.  Returns the method error, or NULL on success. */
+static json_t *_notes_set_atomic(jmap_req_t *req,
+                                 struct mailbox *mbox,
+                                 struct jmap_set *set,
+                                 int rights,
+                                 struct buf *buf)
+{
+    ptrarray_t destroys = PTRARRAY_INITIALIZER;
+    ptrarray_t updates = PTRARRAY_INITIALIZER;
+    struct set_rock srock = { set, buf, rights, NULL };
+    hash_table ids = HASH_TABLE_INITIALIZER;
+    const char *creation_id, *id;
+    json_t *val, *err = NULL;
+    size_t i;
+
+    construct_hash_table(&ids, 32, 0);
+    json_array_foreach (set->destroy, i, val) {
+        hash_insert(json_string_value(val), (void *) 1, &ids);
+    }
+    srock.ops = &destroys;
+    foreach_note(mbox, &ids, &_notes_plan_destroy_cb, &srock);
+    hash_enumerate(&ids, &not_found_cb, set->not_destroyed);
+    free_hash_table(&ids, NULL);
+
+    json_object_foreach (set->create, creation_id, val) {
+        json_t *cerr = NULL;
+
+        if ((rights & JACL_ADDITEMS) != JACL_ADDITEMS) {
+            cerr = json_pack("{s:s}", "type", "forbidden");
+        }
+        else {
+            _notes_setargs_check(NULL /*id*/, val, &cerr);
+        }
+        if (cerr) {
+            json_object_set_new(set->not_created, creation_id, cerr);
+        }
+    }
+
+    construct_hash_table(&ids, 32, 0);
+    json_object_foreach (set->update, id, val) {
+        hash_insert(id, val, &ids);
+    }
+    srock.ops = &updates;
+    foreach_note(mbox, &ids, &_notes_plan_update_cb, &srock);
+    hash_enumerate(&ids, &not_found_cb, set->not_updated);
+    free_hash_table(&ids, NULL);
+
+    err = jmap_set_atomic_failure(set);
+    if (!err) {
+        int r = _notes_atomic_apply(req, mbox, set, &destroys, &updates);
+        if (r) {
+            xsyslog_ev(LOG_ERR, "jmap.note.set.failed",
+                       lf_mailbox(mbox),
+                       lf_err("error", r));
+            req->abort_cstate = true;
+            err = jmap_server_error(r);
+        }
+    }
+
+    note_ops_fini(&destroys);
+    note_ops_fini(&updates);
+    return err;
 }
 
 static int jmap_note_set(jmap_req_t *req)
@@ -813,12 +1088,28 @@ static int jmap_note_set(jmap_req_t *req)
 
     /* Process request */
 
-    r = ensure_notes_collection(req->accountid, &mbentry);
+    bool created = false;
+    r = ensure_notes_collection(req->accountid, &mbentry, &created);
     if (r) {
         syslog(LOG_ERR,
                "jmap_note_set: ensure_notes_collection(%s): %s",
                req->accountid, error_message(r));
         goto done;
+    }
+
+    /* An atomic failure aborts req->cstate, which must not take the new
+     * collection's conversations records with it. */
+    if (set.atomic && created) {
+        r = conversations_commit(&req->cstate);
+        if (!r) r = conversations_open_user(req->accountid, 0, &req->cstate);
+        if (r) {
+            xsyslog_ev(LOG_ERR, "jmap.note.set.failed",
+                       lf_s("jmap.accountid", req->accountid),
+                       lf_err("error", r));
+            mboxlist_entry_free(&mbentry);
+            jmap_error(req, jmap_server_error(r));
+            goto done;
+        }
     }
 
     rights = jmap_myrights_mbentry(req, mbentry);
@@ -841,13 +1132,21 @@ static int jmap_note_set(jmap_req_t *req)
         goto done;
     }
 
-    
+    if (set.atomic) {
+        err = _notes_set_atomic(req, mbox, &set, rights, &buf);
+        if (err) {
+            jmap_error(req, err);
+            goto done;
+        }
+        goto reply;
+    }
+
     /* destroy */
     const char *creation_id, *id;
     json_t *val;
     size_t i;
     hash_table ids = HASH_TABLE_INITIALIZER;
-    struct set_rock srock = { &set, &buf, rights };
+    struct set_rock srock = { &set, &buf, rights, NULL };
 
     construct_hash_table(&ids, 32, 0);
 
@@ -871,7 +1170,7 @@ static int jmap_note_set(jmap_req_t *req)
             err = json_pack("{s:s}", "type", "forbidden");
         }
         else if (!_notes_setargs_check(NULL/*id*/, val, &err)) {
-            r = _note_create(mbox, val, 0/*cmodseq*/, &new_note);
+            r = _note_create(mbox, val, 0/*cmodseq*/, NULL, &new_note);
             if (r) err = jmap_server_error(r);
         }
         if (err) {
@@ -903,6 +1202,7 @@ static int jmap_note_set(jmap_req_t *req)
     free_hash_table(&ids, NULL);
 
 
+reply:
     /* force modseq to stable */
     mailbox_unlock_index(mbox, NULL);
 

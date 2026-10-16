@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+# A failed first atomic Note/set, which creates the notes collection,
+# must leave the collection and the conversations db usable and consistent.
+sub test_note_set_atomic_undo_new_collection
+    :JMAPExtensions :NoAltNameSpace :NoStartInstances
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 1);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'Note/set', {
+            atomic => JSON::true,
+            create => {
+                n1 => { title => 'N1', body => 'n1', isHTML => JSON::false },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.note\.set\.failed});
+    $self->check_conversations();
+
+    $res = $jmap->request([
+        [ 'Note/set', {
+            create => {
+                n2 => { title => 'N2', body => 'n2', isHTML => JSON::false },
+            },
+        } ],
+    ]);
+    my $id = $res->single_sentence('Note/set')->arguments->{created}{n2}{id};
+    $self->assert_not_null($id);
+
+    $res = $jmap->request([ [ 'Note/get', { properties => ['title'] } ] ]);
+    $self->assert_cmp_deeply(
+        [ { id => $id, title => 'N2' } ],
+        $res->single_sentence('Note/get')->arguments->{list},
+    );
+
+    $self->check_conversations();
+}

@@ -1,0 +1,110 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_note_set_atomic
+    :JMAPExtensions :NoAltNameSpace
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'Note/set', {
+            create => {
+                b => { title => 'B', body => 'b', isHTML => JSON::false },
+                c => { title => 'C', body => 'c', isHTML => JSON::false },
+            },
+        } ],
+    ]);
+    my $created = $res->single_sentence('Note/set')->arguments->{created};
+    my $idB = $created->{b}{id};
+    my $idC = $created->{c}{id};
+    $self->assert_not_null($idB);
+    $self->assert_not_null($idC);
+
+    xlog $self, "an atomic create, update and destroy all apply";
+    $res = $jmap->request([
+        [ 'Note/set', {
+            atomic  => JSON::true,
+            create  => {
+                a => { title => 'A', body => 'a', isHTML => JSON::false },
+            },
+            update  => { $idB => { title => 'B2' } },
+            destroy => [ $idC ],
+        } ],
+    ]);
+    my $set = $res->single_sentence('Note/set')->arguments;
+    my $idA = $set->{created}{a}{id};
+    $self->assert_not_null($idA);
+    $self->assert_cmp_deeply(
+        {
+            created   => { a => superhashof({ id => $idA }) },
+            updated   => { $idB => ignore() },
+            destroyed => [ $idC ],
+        },
+        {
+            created   => $set->{created},
+            updated   => $set->{updated},
+            destroyed => $set->{destroyed},
+        },
+    );
+
+    $res = $jmap->request([ [ 'Note/get', { properties => ['title'] } ] ]);
+    my $get = $res->single_sentence('Note/get')->arguments;
+    $self->assert_cmp_deeply(
+        bag({ id => $idA, title => 'A' }, { id => $idB, title => 'B2' }),
+        $get->{list},
+    );
+    my $state = $get->{state};
+
+    xlog $self, "one failing update rejects the whole atomic method";
+    my $unknown = 'unknown-note-id';
+    $res = $jmap->request([
+        [ 'Note/set', {
+            atomic => JSON::true,
+            update => {
+                $idB     => { title => 'B3' },
+                $unknown => { title => 'X' },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => { $unknown => { type => 'notFound' } },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+
+    $res = $jmap->request([ [ 'Note/get', { properties => ['title'] } ] ]);
+    $get = $res->single_sentence('Note/get')->arguments;
+    $self->assert_cmp_deeply(
+        bag({ id => $idA, title => 'A' }, { id => $idB, title => 'B2' }),
+        $get->{list},
+    );
+    $self->assert_str_equals($state, $get->{state});
+
+    xlog $self, "an id in both destroy and update is not updated";
+    $res = $jmap->request([
+        [ 'Note/set', {
+            atomic  => JSON::true,
+            destroy => [ $idB ],
+            update  => { $idB => { title => 'B4' } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => { $idB => { type => 'willDestroy' } },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+
+    $res = $jmap->request([ [ 'Note/get', { properties => ['title'] } ] ]);
+    $get = $res->single_sentence('Note/get')->arguments;
+    $self->assert_cmp_deeply(
+        bag({ id => $idA, title => 'A' }, { id => $idB, title => 'B2' }),
+        $get->{list},
+    );
+    $self->assert_str_equals($state, $get->{state});
+}
