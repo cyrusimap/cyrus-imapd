@@ -2344,6 +2344,9 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
     if (!r) {
         r = append_setup(&as, intname, userid, sdata->authstate,
                          ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_APPEND);
+        if (!r) {
+            as.drop_excess_flags = true;
+        }
     }
     if (!r) {
         struct stagemsg *stage;

@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_vacation_with_fcc_flags_full
+    :NoAltNameSpace
+    :want_smtpdaemon
+    ($self)
+{
+    my $target = "INBOX.Sent";
+
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["vacation", "fcc", "imap4flags"];
+
+vacation :fcc "INBOX.Sent" :flags "$autoreply" :days 1 :addresses ["cassandane@example.com"] text:
+I am out of the office today.
+.
+;
+EOF
+    );
+
+    my $talk = $self->{store}->get_client();
+    $talk->create($target, "(USE (\\Sent))");
+
+    xlog $self, "Use up the 100 user flags clients may create in $target";
+    $self->{store}->set_folder($target);
+    $self->make_message("Flag holder");
+    $talk->select($target);
+    for my $i (0 .. 99) {
+        $talk->store('1', '+flags', "\$flag$i");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+
+    my $msg1 = $self->{gen}->generate(subject => "Message 1",
+        to => Cassandane::Address->new(localpart => 'cassandane',
+                                       domain => 'example.com'));
+    $self->{instance}->deliver($msg1);
+
+    # The copy is filed without the flag there is no room for
+    $talk->unselect();
+    $talk->select($target);
+    $self->assert_num_equals(2, $talk->get_response_code('exists'));
+    my $res = $talk->fetch(2, '(flags rfc822)');
+    $self->assert_matches(qr/Subject: Auto:(?:\r\n)? Message 1\r\n/ms,
+                          $res->{2}{rfc822});
+    $self->assert_cmp_deeply(array_each(none('$autoreply')), $res->{2}{flags});
+
+    $self->assert_syslog_matches($self->{instance},
+        qr{append\.flag\.dropped.*msg\.flag=\$autoreply});
+}
