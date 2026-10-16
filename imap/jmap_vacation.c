@@ -454,7 +454,7 @@ static void vacation_update(struct jmap_req *req,
     vacation = vacation_read(req, mailbox, sdata, &status);
 
     prop = json_object_get(patch, "isEnabled");
-    if (!json_is_boolean(prop))
+    if (prop && !json_is_boolean(prop))
         json_array_append_new(invalid, json_string("isEnabled"));
     else if (json_is_true(prop) &&
              !json_equal(prop, json_object_get(vacation, "isEnabled"))) {
