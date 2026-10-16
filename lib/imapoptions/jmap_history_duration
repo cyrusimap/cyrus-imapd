@@ -1,0 +1,10 @@
+Name: jmap_history_duration
+Type: DURATION
+Default-Value: 0
+Last-Modified: UNRELEASED
+
+The value advertised as maxHistoryDuration in the
+urn:ietf:params:jmap:object-history account capability.  JMAP object
+history comes from expunged messages and deleted mailboxes, which
+**cyr_expire(8)** removes, so set this to the shorter of its **-X** and
+**-D** durations.  A value of 0 advertises null: no time-based limit.

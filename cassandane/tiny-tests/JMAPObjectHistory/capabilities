@@ -1,0 +1,14 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_capabilities ($self)
+{
+    my $session = $self->{jmap}->get_client_session->client_session;
+    my $urn = 'urn:ietf:params:jmap:object-history';
+
+    $self->assert_cmp_deeply({}, $session->{capabilities}{$urn});
+    $self->assert_cmp_deeply(
+        { maxHistoryDuration => undef },
+        $session->{accounts}{cassandane}{accountCapabilities}{$urn},
+    );
+}
