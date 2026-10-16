@@ -633,6 +633,7 @@ static void callout_encode_args(struct buf *args,
  * (+FLAGS \Flagged ANNOTATION (/comment (value.shared "Hello")))
  *
  * The result is merged into @user_annots, @system_annots, and @flags.
+ * Flags the callout adds are also recorded in @added.
  * User-set annotations are kept separate from system-set annotations
  * for two reasons: a) system-set annotations need to bypass the ACL
  * check to allow them to work during local delivery, and b) failure
@@ -643,7 +644,8 @@ static void callout_decode_results(const char *callout,
                                    const struct dlist *results,
                                    struct entryattlist **user_annots,
                                    struct entryattlist **system_annots,
-                                   strarray_t *flags)
+                                   strarray_t *flags,
+                                   strarray_t *added)
 {
     struct dlist *dd;
 
@@ -657,24 +659,31 @@ static void callout_decode_results(const char *callout,
         if (!strcasecmp(key, "+FLAGS")) {
             if (dd->head) {
                 struct dlist *dflag;
-                for (dflag = dd->head ; dflag ; dflag = dflag->next)
-                    if ((val = dlist_cstring(dflag)))
+                for (dflag = dd->head ; dflag ; dflag = dflag->next) {
+                    if ((val = dlist_cstring(dflag))) {
                         strarray_add_case(flags, val);
+                        strarray_add_case(added, val);
+                    }
+                }
             }
             else if ((val = dlist_cstring(dd))) {
                 strarray_add_case(flags, val);
+                strarray_add_case(added, val);
             }
         }
         else if (!strcasecmp(key, "-FLAGS")) {
             if (dd->head) {
                 struct dlist *dflag;
                 for (dflag = dd->head ; dflag ; dflag = dflag->next) {
-                    if ((val = dlist_cstring(dflag)))
+                    if ((val = dlist_cstring(dflag))) {
                         strarray_remove_all_case(flags, val);
+                        strarray_remove_all_case(added, val);
+                    }
                 }
             }
             else if ((val = dlist_cstring(dd))) {
                 strarray_remove_all_case(flags, val);
+                strarray_remove_all_case(added, val);
             }
         }
         else if (!strcasecmp(key, "ANNOTATION")) {
@@ -723,7 +732,8 @@ static int callout_run(const char *fname,
                        const struct body *body,
                        struct entryattlist **user_annots,
                        struct entryattlist **system_annots,
-                       strarray_t *flags)
+                       strarray_t *flags,
+                       strarray_t *added)
 {
     const char *callout;
     struct stat sb;
@@ -767,7 +777,7 @@ static int callout_run(const char *fname,
         /* We have some results, parse them and merge them back into
          * the annotations and flags we were given */
         callout_decode_results(callout, results,
-                               user_annots, system_annots, flags);
+                               user_annots, system_annots, flags, added);
     }
 
 out:
@@ -777,10 +787,13 @@ out:
     return r;
 }
 
+/* Flags in @callout_flags (may be NULL) may use every user flag slot,
+ * not just the first 100 that clients are limited to. */
 static int append_apply_flags(struct appendstate *as,
                               struct mboxevent *mboxevent,
                               msgrecord_t *msgrec,
-                              const strarray_t *flags)
+                              const strarray_t *flags,
+                              const strarray_t *callout_flags)
 {
     int userflag;
     uint32_t system_flags = 0, internal_flags = 0;
@@ -836,7 +849,10 @@ static int append_apply_flags(struct appendstate *as,
             }
         }
         else if (as->myrights & (need_rights = ACL_WRITE)) {
-            r = mailbox_user_flag(as->mailbox, flag, &userflag, 1);
+            int create = 1;
+            if (callout_flags && strarray_contains_case(callout_flags, flag))
+                create = 2;
+            r = mailbox_user_flag(as->mailbox, flag, &userflag, create);
             if (r) goto out;
             r = msgrecord_set_userflag(msgrec, userflag, 1);
             if (r) goto out;
@@ -937,6 +953,7 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     const char *fname;
     int i, r;
     strarray_t *newflags = NULL;
+    strarray_t callout_flags = STRARRAY_INITIALIZER;
     struct entryattlist *user_annots = user_annotsp ? *user_annotsp : NULL;
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
@@ -1100,7 +1117,8 @@ havefile:
             newflags = strarray_dup(flags);
         else
             newflags = strarray_new();
-        r = callout_run(fname, *body, &user_annots, &system_annots, newflags);
+        r = callout_run(fname, *body, &user_annots, &system_annots, newflags,
+                        &callout_flags);
         if (r) {
             /* deliberately not fatal: the append goes ahead without
              * whatever the callout would have contributed */
@@ -1114,7 +1132,7 @@ havefile:
 
     /* Handle flags the user wants to set in the message */
     if (flags) {
-        r = append_apply_flags(as, mboxevent, msgrec, flags);
+        r = append_apply_flags(as, mboxevent, msgrec, flags, &callout_flags);
         if (r) {
             xsyslog_ev(LOG_ERR, "append.callout.apply.failed",
                        lf_err("error", r));
@@ -1153,6 +1171,7 @@ havefile:
 out:
     if (newflags)
         strarray_free(newflags);
+    strarray_fini(&callout_flags);
     freeentryatts(system_annots);
     free(linkfile);
     if (r) {
@@ -1286,7 +1305,7 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
 
     /* Handle flags the user wants to set in the message */
     if (flags) {
-        r = append_apply_flags(as, mboxevent, msgrec, flags);
+        r = append_apply_flags(as, mboxevent, msgrec, flags, NULL);
         if (r) goto out;
     }
 
@@ -1320,6 +1339,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     struct entryattlist *user_annots = NULL;
     struct entryattlist *system_annots = NULL;
     strarray_t *flags = NULL;
+    strarray_t callout_flags = STRARRAY_INITIALIZER;
     struct body *body = NULL;
     int r = 0;
     struct mailbox *mailbox = NULL;
@@ -1359,7 +1379,8 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     fclose(f);
     f = NULL;
 
-    r = callout_run(fname, body, &user_annots, &system_annots, flags);
+    r = callout_run(fname, body, &user_annots, &system_annots, flags,
+                    &callout_flags);
     if (r) goto out;
 
     /* Reset system flags */
@@ -1378,7 +1399,7 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     if (r) goto out;
 
     /* Apply annotator flags */
-    r = append_apply_flags(as, NULL, msgrec, flags);
+    r = append_apply_flags(as, NULL, msgrec, flags, &callout_flags);
     if (r) {
         xsyslog_ev(LOG_ERR, "append.annotator.apply.failed",
                    lf_err("error", r));
@@ -1407,6 +1428,7 @@ out:
     freeentryatts(user_annots);
     freeentryatts(system_annots);
     strarray_free(flags);
+    strarray_fini(&callout_flags);
     if (body) {
         message_free_body(body);
         free(body);
