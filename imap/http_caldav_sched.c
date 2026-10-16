@@ -245,10 +245,11 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
     const char *msg_type, *filename;
     struct address_t *recipients = NULL, *originator = NULL, *recip;
     struct icaltimetype start, end;
-    char *cp, when[2*RFC5322_DATETIME_MAX+4], datestr[RFC5322_DATETIME_MAX+1];
+    char datestr[RFC5322_DATETIME_MAX+1];
     char boundary[100], *mimebody, *ical_str;
     size_t outlen;
     struct buf plainbuf = BUF_INITIALIZER, tmpbuf = BUF_INITIALIZER, msgbuf = BUF_INITIALIZER;
+    struct buf when = BUF_INITIALIZER;
     pid_t p = getpid();
     time_t t = time(NULL);
     static unsigned send_count = 0;
@@ -305,34 +306,42 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
     }
     else status = NULL;
 
-    start = icaltime_convert_to_zone(icalcomponent_get_dtstart(comp), utc_zone);
-    end = icaltime_convert_to_zone(icalcomponent_get_dtend(comp), utc_zone);
+    /* show the times in DTSTART's own zone, so they read as the organizer
+     * wrote them; UTC and floating times show as UTC */
+    start = icalcomponent_get_dtstart(comp);
+    icaltimezone *zone = (icaltimezone *) icaltime_get_timezone(start);
+    const char *zonename = "UTC";
+    if (zone && zone != utc_zone) {
+        zonename = icaltimezone_get_location(zone);
+        if (!zonename) zonename = icaltimezone_get_tzid(zone);
+    }
+    else zone = utc_zone;
 
-    cp = when;
-    cp += sprintf(cp, "%s, %02u %s %04u",
-                  wday[icaltime_day_of_week(start)-1],
-                  start.day, monthname[start.month-1], start.year);
+    start = icaltime_convert_to_zone(start, zone);
+    end = icaltime_convert_to_zone(icalcomponent_get_dtend(comp), zone);
+
+    buf_printf(&when, "%s, %02u %s %04u",
+               wday[icaltime_day_of_week(start)-1],
+               start.day, monthname[start.month-1], start.year);
     if (!icaltime_is_date(start)) {
-        cp += sprintf(cp, " %02u:%02u", start.hour, start.minute);
-        if (start.second) cp += sprintf(cp, ":%02u", start.second);
-        strcpy(cp, " UTC");
+        buf_printf(&when, " %02u:%02u", start.hour, start.minute);
+        if (start.second) buf_printf(&when, ":%02u", start.second);
     }
     else icaltime_adjust(&end, -1, 0, 0, 0);
 
     if (icaltime_compare(end, start)) {
-        strcpy(cp, " -");
-        cp += 2;
+        buf_appendcstr(&when, " -");
         if (icaltime_compare_date_only(end, start)) {
-            cp += sprintf(cp, " %s, %02u %s %04u",
-                          wday[icaltime_day_of_week(end)-1],
-                          end.day, monthname[end.month-1], end.year);
+            buf_printf(&when, " %s, %02u %s %04u",
+                       wday[icaltime_day_of_week(end)-1],
+                       end.day, monthname[end.month-1], end.year);
         }
         if (!icaltime_is_date(end)) {
-            cp += sprintf(cp, " %02u:%02u", end.hour, end.minute);
-            if (end.second) cp += sprintf(cp, ":%02u", end.second);
-            strcpy(cp, " UTC");
+            buf_printf(&when, " %02u:%02u", end.hour, end.minute);
+            if (end.second) buf_printf(&when, ":%02u", end.second);
         }
     }
+    if (!icaltime_is_date(start)) buf_printf(&when, " %s", zonename);
 
     /* Create multipart/mixed + multipart/alternative iMIP message */
     buf_printf(&msgbuf, "From: %s\r\n",
@@ -407,7 +416,7 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
         buf_replace_all(&tmpbuf, "\n", "\r\n" TEXT_INDENT);
         buf_printf(&plainbuf, "Location   : %s\r\n", buf_cstring(&tmpbuf));
     }
-    buf_printf(&plainbuf, "When       : %s\r\n", when);
+    buf_printf(&plainbuf, "When       : %s\r\n", buf_cstring(&when));
     if (meth == ICAL_METHOD_REPLY) {
         if (originator->partstat)
             buf_printf(&plainbuf, "RSVP       : %s\r\n", originator->partstat);
@@ -482,7 +491,8 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
         HTMLencode(&tmpbuf, location);
         buf_printf(&msgbuf, HTML_ROW, "Location", buf_cstring(&tmpbuf));
     }
-    buf_printf(&msgbuf, HTML_ROW, "When", when);
+    HTMLencode(&tmpbuf, buf_cstring(&when));
+    buf_printf(&msgbuf, HTML_ROW, "When", buf_cstring(&tmpbuf));
     if (meth == ICAL_METHOD_REPLY) {
         if (originator->partstat)
             buf_printf(&msgbuf, HTML_ROW, "RSVP", originator->partstat);
@@ -599,6 +609,7 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
   done:
     buf_free(&msgbuf);
     buf_free(&tmpbuf);
+    buf_free(&when);
     free(originator);
     do {
         struct address_t *freeme = recipients;
