@@ -1,0 +1,101 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_vacation_replaced ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $old = {
+        version => ignore(),
+        replaced => re(qr/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/),
+    };
+    my $live = { version => ignore(), replaced => undef };
+
+    for my $update (
+        { isEnabled => JSON::true, textBody => 'Gone fishing' },
+        { isEnabled => JSON::true, textBody => 'Gone hunting' },
+        { isEnabled => JSON::false },
+    ) {
+        my $res = $jmap->CallMethods([
+            ['VacationResponse/set', { update => { singleton => $update } },
+             'R1'],
+        ]);
+        $self->assert(exists $res->[0][1]{updated}{singleton});
+    }
+
+    my $res = $jmap->CallMethods([
+        ['VacationResponse/get', { includeReplaced => JSON::true,
+                                   properties => ['isEnabled', 'textBody'] },
+         'R1'],
+        ['VacationResponse/get', { ids => ['singleton'],
+                                   includeDestroyed => JSON::true,
+                                   properties => ['textBody'] }, 'R2'],
+        ['VacationResponse/get', { properties => ['textBody'] }, 'R3'],
+    ]);
+
+    xlog $self, "each old version has the isEnabled it was stored with";
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => ignore(),
+        list => [
+            { id => 'singleton', isEnabled => JSON::true,
+              textBody => 'Gone fishing', objectHistory => $old },
+            { id => 'singleton', isEnabled => JSON::true,
+              textBody => 'Gone hunting', objectHistory => $old },
+            { id => 'singleton', isEnabled => JSON::false,
+              textBody => 'Gone hunting', objectHistory => $live },
+        ],
+        notFound => [],
+        hasMoreHistory => JSON::false,
+    }, $res->[0][1]);
+    my @versions = map { $_->{objectHistory}{version} }
+                   $res->[0][1]{list}->@*;
+    $self->assert($versions[0] < $versions[1]);
+    $self->assert($versions[1] < $versions[2]);
+
+    xlog $self, "the singleton is never destroyed";
+    $self->assert_cmp_deeply([
+        { id => 'singleton', textBody => 'Gone hunting',
+          objectHistory => { version => $versions[2], replaced => undef } },
+    ], $res->[1][1]{list});
+
+    xlog $self, "without the history arguments only the live version";
+    $self->assert_cmp_deeply([
+        { id => 'singleton', textBody => 'Gone hunting' },
+    ], $res->[2][1]{list});
+
+    xlog $self, "historyAfter drops versions replaced before it";
+    $res = $jmap->CallMethods([
+        ['VacationResponse/get', { includeReplaced => JSON::true,
+                                   historyAfter => '2100-01-01T00:00:00Z',
+                                   properties => ['textBody'] }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        { id => 'singleton', textBody => 'Gone hunting',
+          objectHistory => $live },
+    ], $res->[0][1]{list});
+
+    xlog $self, "an old version of the script is downloadable";
+    $res = $jmap->CallMethods([
+        ['SieveScript/get', { ids => ['urn:ietf:params:jmap:vacationresponse'],
+                              includeReplaced => JSON::true,
+                              properties => ['blobId'] }, 'R1'],
+    ]);
+    $self->assert_num_equals(3, scalar $res->[0][1]{list}->@*);
+    my $blob = $jmap->Download('cassandane',
+                               $res->[0][1]{list}[0]{blobId});
+    $self->assert_str_equals('200', $blob->{status});
+    $self->assert_matches(qr/Gone fishing/, $blob->{content});
+
+    xlog $self, "unlinked versions are gone";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'cyr_expire', '-X' => '0', '-D' => '0');
+    $res = $jmap->CallMethods([
+        ['VacationResponse/get', { includeReplaced => JSON::true,
+                                   properties => ['textBody'] }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        { id => 'singleton', textBody => 'Gone hunting',
+          objectHistory => $live },
+    ], $res->[0][1]{list});
+}
