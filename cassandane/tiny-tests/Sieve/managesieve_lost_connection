@@ -52,6 +52,7 @@ EOF
     my $shellout = $self->{instance}->get_basedir() . "/sieveshell.out";
     my $failed = 0;
     $self->{instance}->run_command({
+        perl_xs => 1,
         redirects => { stdout => $shellout, stderr => $shellout },
         handlers => { exited_abnormally => sub { $failed = 1 } },
     }, $self->{instance}->_find_binary('sieveshell'),

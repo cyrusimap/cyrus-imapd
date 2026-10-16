@@ -168,6 +168,7 @@ sub run_client ($self, $instance, $code, @args)
 
     my $status = 'ok';
     $instance->run_command({
+        perl_xs => 1,
         redirects => { stdout => $out, stderr => $out },
         handlers => {
             exited_abnormally => sub ($child, $code) { $status = "exit $code" },

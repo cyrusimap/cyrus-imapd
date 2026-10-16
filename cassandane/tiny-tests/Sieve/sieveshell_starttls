@@ -38,6 +38,7 @@ sub test_sieveshell_starttls
         my $out = "$basedir/sieveshell.$n.out";
         my $failed = 0;
         $self->{instance}->run_command({
+            perl_xs => 1,
             redirects => { stdout => $out, stderr => $out },
             handlers => { exited_abnormally => sub { $failed = 1 } },
         }, $sieveshell, '-u', 'cassandane', '-a', 'cassandane',

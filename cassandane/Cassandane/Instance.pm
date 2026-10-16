@@ -2146,6 +2146,28 @@ sub deliver
     return $ret;
 }
 
+# The shared ASan runtime matching the Cyrus build, or undef if Cyrus
+# wasn't built with ASan.  gcc builds link it statically, so ask gcc.
+sub _asan_runtime
+{
+    my ($self) = @_;
+
+    if (!exists $self->{asan_runtime}) {
+        my $imapd = $self->_find_binary('imapd');
+        my $lib;
+        if (`ldd $imapd 2>/dev/null` =~ m{^\s*libasan\S* => (\S+)}m) {
+            $lib = $1;
+        }
+        elsif (system('grep', '-qF', '__asan_init', $imapd) == 0) {
+            chomp($lib = `gcc -print-file-name=libasan.so 2>/dev/null`);
+            $lib = undef if !$lib || !-e $lib || $lib !~ m{^/};
+        }
+        $self->{asan_runtime} = $lib;
+    }
+
+    return $self->{asan_runtime};
+}
+
 # Runs a command with the given arguments.  The first argument is an
 # options hash:
 #
@@ -2172,6 +2194,10 @@ sub deliver
 #                   if xlog is in verbose mode)
 #
 # workingdir  path to launch the command from
+#
+# perl_xs   whether the command is perl loading Cyrus XS modules; if
+#           Cyrus was built with ASan, preload its runtime (perl itself
+#           isn't instrumented) and skip leak checks of perl's own heap
 #
 sub run_command
 {
@@ -2227,6 +2253,9 @@ sub run_command
 
     local $ENV{UBSAN_OPTIONS} = ($ENV{UBSAN_OPTIONS} // "")
         . ":log_path=" . $self->_sanitizer_log_dir("ubsan") . "ubsan";
+
+    local $ENV{ASAN_OPTIONS} = "$ENV{ASAN_OPTIONS}:detect_leaks=0"
+        if $options->{perl_xs} && $self->_asan_runtime();
 
     my ($pid, $got_exit) = $self->_fork_command($options, @args);
 
@@ -2496,10 +2525,15 @@ sub _fork_command
     $ENV{CASSANDANE_BASEDIR} = $self->{basedir};
     $ENV{CASSANDANE_VERBOSE} = 1 if get_verbose();
     $ENV{PERL5LIB} = join(':', ($cassroot, $self->_cyrus_perl_search_path()));
+    my @preload;
+    # ASan insists its runtime comes first
+    push @preload, $self->_asan_runtime()
+        if $options->{perl_xs} && $self->_asan_runtime();
     if ($self->{have_syslog_replacement}) {
         $ENV{CASSANDANE_SYSLOG_FNAME} = abs_path($self->{syslog_fname});
-        $ENV{LD_PRELOAD} = abs_path('utils/syslog.so')
+        push @preload, abs_path('utils/syslog.so');
     }
+    $ENV{LD_PRELOAD} = join(':', @preload) if @preload;
     $ENV{PKG_CONFIG_PATH} = $self->{cyrus_destdir}
                           . $self->{cyrus_prefix}
                           . "/lib/pkgconfig";

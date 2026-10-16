@@ -106,6 +106,7 @@ EOF
     my $out = "$basedir/fds.out";
     eval {
         $self->{instance}->run_command({
+            perl_xs => 1,
             redirects => { stdout => $out, stderr => $out },
         }, $^X, $script, $ports{tls}, $ports{refer});
     };
