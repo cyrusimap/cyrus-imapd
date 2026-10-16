@@ -10232,6 +10232,10 @@ static json_t *principal_check_readonly(jmap_req_t *req,
     struct principal_get_rock rock = { &get, jaccounts, &wantids, &sha1 };
     int r = principal_foreach(req, principal_get_cb, &rock);
 
+    /* The state isn't needed, but SHA1Final frees the context */
+    unsigned char digest[SHA1_DIGEST_LENGTH];
+    SHA1Final(digest, &sha1);
+
     json_t *err = NULL;
     json_t *cur = json_array_get(get.list, 0);
     if (r) {
