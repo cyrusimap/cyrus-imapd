@@ -13065,6 +13065,7 @@ struct email_update {
     int patch_mailboxids;     /* True if mailboxids is a patch object */
     json_t *snoozed;          /* JMAP Email/set snoozed argument */
     int patch_snoozed;        /* True if snoozed is a patch object */
+    bool invalid_patch;       /* True if a patch path has no parent */
     struct email_uidrec *snoozed_uidrec; /* Currently snoozed email */
     char *snooze_in_mboxid;   /* Snooze the email in this mailboxid */
 
@@ -13269,6 +13270,10 @@ static void _email_update_parse(jmap_req_t *req,
                 continue;
             }
             const char *keyword = field + 9;
+            if (strchr(keyword, '/')) {
+                update->invalid_patch = true;
+                continue;
+            }
             if (!jmap_email_keyword_is_valid(keyword) || (jval != json_true() && jval != json_null())) {
                 jmap_parser_push(parser, "keywords");
                 jmap_parser_invalid(parser, keyword);
@@ -13329,6 +13334,10 @@ static void _email_update_parse(jmap_req_t *req,
                 continue;
             }
             const char *mailboxid = field + 11;
+            if (strchr(mailboxid, '/')) {
+                update->invalid_patch = true;
+                continue;
+            }
             update->patch_mailboxids = 1;
             if (jval == json_true() || jval == json_null()) {
                 json_object_set(mailboxids, mailboxid, jval);
@@ -15142,7 +15151,11 @@ static void _email_update_bulk(jmap_req_t *req,
         }
 
         /* Report invalid properties */
-        if (json_array_size(parser.invalid)) {
+        if (update->invalid_patch) {
+            json_object_set_new(not_updated, email_id,
+                    json_pack("{s:s}", "type", "invalidPatch"));
+        }
+        else if (json_array_size(parser.invalid)) {
             json_object_set_new(not_updated, email_id,
                     json_pack("{s:s s:O}", "type", "invalidProperties",
                         "properties", parser.invalid));

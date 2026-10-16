@@ -1,0 +1,28 @@
+Description:
+
+JMAP requests are validated more strictly per RFC 8620: duplicate JSON
+member names are notJSON; /copy reports fromAccountNotFound, not
+accountNotFound, for an unusable fromAccountId; a missing or non-string
+sinceState is invalidArguments; and every /set type, including
+CalendarEvent and ContactCard, rejects overlapping patch paths (and
+Email/set paths below a keyword or mailboxId) with invalidPatch.
+
+
+Documentation:
+
+RFC 8620 sections 3.6, 5.2, 5.3 and 5.4.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

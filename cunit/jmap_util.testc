@@ -498,4 +498,45 @@ static void test_caleventid(void)
     TESTCASE("ER20211207-EM-yV", NULL, "20211207", 1000);
 }
 
+static void test_patch_has_prefix_overlap(void)
+{
+    static const struct {
+        const char *patch;
+        bool want;
+    } tcs[] = {
+        { "{}", false },
+        { "{\"a\":1}", false },
+        { "{\"a\":1,\"ab\":1}", false },
+        { "{\"a/b\":1,\"a/c\":1}", false },
+        { "{\"a\":1,\"a/b\":1}", true },
+        { "{\"a/b/c\":1,\"a\":1}", true },
+        { "{\"a/b\":1,\"a/b/c\":1}", true },
+        /* '!' sorts between "a" and "a/b" in byte order */
+        { "{\"a\":1,\"a!x\":1,\"a/b\":1}", true },
+        { "{\"a!x\":1,\"a/b\":1}", false },
+        { "{\"a\":1,\"a.\":1,\"a.b\":1,\"a0/b\":1}", false },
+    };
+
+    for (size_t i = 0; i < sizeof(tcs) / sizeof(tcs[0]); i++) {
+        json_t *patch = json_loads(tcs[i].patch, 0, NULL);
+        CU_ASSERT_PTR_NOT_NULL_FATAL(patch);
+        CU_ASSERT_EQUAL(tcs[i].want, jmap_patch_has_prefix_overlap(patch));
+        json_decref(patch);
+    }
+
+    /* Many paths sharing long prefixes */
+    struct buf key = BUF_INITIALIZER;
+    json_t *patch = json_object();
+    for (int i = 0; i < 50000; i++) {
+        buf_reset(&key);
+        buf_printf(&key, "keywords/%d/x", i);
+        json_object_set_new(patch, buf_cstring(&key), json_true());
+    }
+    CU_ASSERT_EQUAL(false, jmap_patch_has_prefix_overlap(patch));
+    json_object_set_new(patch, "keywords/49999", json_true());
+    CU_ASSERT_EQUAL(true, jmap_patch_has_prefix_overlap(patch));
+    json_decref(patch);
+    buf_free(&key);
+}
+
 /* vim: set ft=c: */
