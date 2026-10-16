@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_deleted_mailbox ($self)
+{
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', { create => { a => { name => 'A' } } }, 'R1'],
+    ]);
+    my $mboxA = $res->[0][1]{created}{a}{id};
+    $self->assert_not_null($mboxA);
+
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { m1 => {
+            mailboxIds => { $mboxA => JSON::true },
+            keywords => { '$answered' => JSON::true },
+            from => [{ email => 'from@example.com' }],
+            subject => 'in a deleted mailbox',
+            textBody => [{ partId => '1' }],
+            bodyValues => { 1 => { value => 'body' } },
+        } } }, 'R1'],
+    ]);
+    my $emailId = $res->[0][1]{created}{m1}{id};
+    $self->assert_not_null($emailId);
+
+    # Deleting a mailbox destroys emails that were only in it
+    $imap->delete('A') or die $imap->get_last_error();
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    $res = $jmap->CallMethods([
+        ['Email/get', { ids => [$emailId], properties => ['subject'] }, 'R1'],
+        ['Email/get', {
+            ids => [$emailId],
+            includeDestroyed => JSON::true,
+            properties => ['subject', 'mailboxIds', 'keywords'],
+        }, 'R2'],
+    ]);
+    $self->assert_cmp_deeply([$emailId], $res->[0][1]{notFound});
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => ignore(),
+        list => [{
+            id => $emailId,
+            subject => 'in a deleted mailbox',
+            mailboxIds => { $mboxA => JSON::true },
+            keywords => { '$answered' => JSON::true },
+            objectHistory => {
+                version => code(sub { $_[0] > 0 }),
+                replaced => re(qr/^\d{4}-\d\d-\d\dT/),
+            },
+        }],
+        notFound => [],
+        hasMoreHistory => jfalse,
+    }, $res->[1][1]);
+
+    # Once the deleted mailbox is removed the history is gone
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0');
+    $res = $jmap->CallMethods([
+        ['Email/get', { ids => [$emailId], includeDestroyed => JSON::true,
+                        properties => ['subject'] }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$emailId], $res->[0][1]{notFound});
+}

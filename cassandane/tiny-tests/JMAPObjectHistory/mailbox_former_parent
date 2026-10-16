@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_former_parent ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', { create => {
+            p => { name => 'P' },
+            x => { name => 'X', parentId => '#p' },
+        } }, 'R1'],
+    ]);
+    my $parentId = $res->[0][1]{created}{p}{id};
+    my $childId = $res->[0][1]{created}{x}{id};
+    $self->assert_not_null($childId);
+
+    # Renaming the parent renames the child; its former name's parent
+    # name is now a former name of the parent
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', { update => { $parentId => { name => 'Q' } } }, 'R1'],
+        ['Mailbox/set', { update => { $childId => { parentId => undef } } },
+         'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$parentId});
+    $self->assert(exists $res->[1][1]{updated}{$childId});
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => [$childId],
+                          properties => ['name', 'parentId'],
+                          includeReplaced => JSON::true }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        { id => $childId, name => 'X', parentId => $parentId,
+          objectHistory => ignore() },
+        { id => $childId, name => 'X', parentId => $parentId,
+          objectHistory => ignore() },
+        { id => $childId, name => 'X', parentId => undef,
+          objectHistory => { version => ignore(), replaced => undef } },
+    ], $res->[0][1]{list});
+}

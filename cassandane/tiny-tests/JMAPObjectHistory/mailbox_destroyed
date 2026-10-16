@@ -1,0 +1,86 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_destroyed ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', { create => {
+            a => { name => 'A' },
+            k => { name => 'Kept' },
+        } }, 'R1'],
+    ]);
+    my $mboxId = $res->[0][1]{created}{a}{id};
+    my $keptId = $res->[0][1]{created}{k}{id};
+    $self->assert_not_null($mboxId);
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', { update => { $mboxId => { name => 'B' } } }, 'R1'],
+        ['Mailbox/set', { destroy => [$mboxId] }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxId});
+    $self->assert_cmp_deeply([$mboxId], $res->[1][1]{destroyed});
+
+    # Without includeDestroyed a destroyed mailbox is not found
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => [$mboxId], properties => ['name'],
+                          includeReplaced => JSON::true }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$mboxId], $res->[0][1]{notFound});
+
+    # Its final version has its last name
+    my $replaced = re(qr/^\d{4}-\d\d-\d\dT/);
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => [$mboxId, $keptId],
+                          properties => ['name', 'parentId'],
+                          includeDestroyed => JSON::true }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => ignore(),
+        list => bag(
+            { id => $mboxId, name => 'B', parentId => undef,
+              objectHistory => { version => ignore(), replaced => $replaced } },
+            { id => $keptId, name => 'Kept', parentId => undef,
+              objectHistory => { version => ignore(), replaced => undef } },
+        ),
+        notFound => [],
+        hasMoreHistory => jfalse,
+    }, $res->[0][1]);
+
+    # includeReplaced adds its former names
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => [$mboxId], properties => ['name'],
+                          includeDestroyed => JSON::true,
+                          includeReplaced => JSON::true }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        { id => $mboxId, name => 'A',
+          objectHistory => { version => ignore(), replaced => $replaced } },
+        { id => $mboxId, name => 'B',
+          objectHistory => { version => ignore(), replaced => $replaced } },
+    ], $res->[0][1]{list});
+    my @versions = map { $_->{objectHistory}{version} } $res->[0][1]{list}->@*;
+    $self->assert($versions[0] < $versions[1]);
+
+    # ids null with includeDestroyed returns destroyed mailboxes too
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => undef, properties => ['name'],
+                          includeDestroyed => JSON::true }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        bag(map {; superhashof({ name => $_ }) } qw(Inbox Kept B)),
+        $res->[0][1]{list});
+
+    # Once the deleted mailbox is removed its history is gone
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0');
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => [$mboxId], properties => ['name'],
+                          includeDestroyed => JSON::true,
+                          includeReplaced => JSON::true }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$mboxId], $res->[0][1]{notFound});
+}

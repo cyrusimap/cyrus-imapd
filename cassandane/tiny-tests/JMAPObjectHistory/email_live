@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_live ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', { create => {
+            a => { name => 'A' },
+            b => { name => 'B' },
+        } }, 'R1'],
+    ]);
+    my $mboxA = $res->[0][1]{created}{a}{id};
+    my $mboxB = $res->[0][1]{created}{b}{id};
+
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { m1 => {
+            mailboxIds => { $mboxA => JSON::true },
+            from => [{ email => 'from@example.com' }],
+            subject => 'moved',
+            textBody => [{ partId => '1' }],
+            bodyValues => { 1 => { value => 'body' } },
+        } } }, 'R1'],
+    ]);
+    my $emailId = $res->[0][1]{created}{m1}{id};
+    $self->assert_not_null($emailId);
+
+    # Moving leaves an expunged copy behind, but the email is live
+    $res = $jmap->CallMethods([
+        ['Email/set', { update => { $emailId => {
+            mailboxIds => { $mboxB => JSON::true },
+            keywords => { '$flagged' => JSON::true },
+        } } }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$emailId});
+
+    my $plain = $jmap->CallMethods([
+        ['Email/get', { ids => [$emailId],
+                        properties => ['mailboxIds', 'keywords'] }, 'R1'],
+    ]);
+    $self->assert_null($plain->[0][1]{hasMoreHistory});
+    $self->assert_cmp_deeply([{
+        id => $emailId,
+        mailboxIds => { $mboxB => JSON::true },
+        keywords => { '$flagged' => JSON::true },
+    }], $plain->[0][1]{list});
+
+    # Only the live version is returned, with the same properties
+    $res = $jmap->CallMethods([
+        ['Email/get', {
+            ids => [$emailId],
+            includeReplaced => JSON::true,
+            includeDestroyed => JSON::true,
+            properties => ['mailboxIds', 'keywords'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => $plain->[0][1]{state},
+        list => [{
+            $plain->[0][1]{list}[0]->%*,
+            objectHistory => { version => code(sub { $_[0] > 0 }),
+                               replaced => undef },
+        }],
+        notFound => [],
+        hasMoreHistory => jfalse,
+    }, $res->[0][1]);
+}
