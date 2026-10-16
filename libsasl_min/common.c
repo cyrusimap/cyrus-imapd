@@ -1751,7 +1751,10 @@ static int _sasl_getpath(void *context __attribute__((unused)),
                                            SASL_PATH_ENV_VAR,
                                            PLUGINDIR);
 
-        res = _sasl_strdup(path, &default_plugin_path, NULL);
+        if (path)
+            res = _sasl_strdup(path, &default_plugin_path, NULL);
+        else
+            res = SASL_FAIL;
     }
 
     if (res == SASL_OK) {
@@ -1794,7 +1797,10 @@ static int _sasl_getconfpath(void *context __attribute__((unused)),
                                            SASL_CONF_PATH_ENV_VAR,
                                            CONFIGDIR);
 
-        res = _sasl_strdup(path, &default_conf_path, NULL);
+        if (path)
+            res = _sasl_strdup(path, &default_conf_path, NULL);
+        else
+            res = SASL_FAIL;
     }
 
     if (res == SASL_OK) {
@@ -2663,10 +2669,12 @@ static const char *_sasl_get_default_unix_path(
     const char *env_var_name,
     const char *default_value)
 {
+    const char *path = NULL;
+
     /* Honor external variable only in a safe environment */
     if (getuid() == geteuid() && getgid() == getegid()) {
-        return getenv(env_var_name);
+        path = getenv(env_var_name);
     }
 
-    return default_value;
+    return path ? path : default_value;
 }
