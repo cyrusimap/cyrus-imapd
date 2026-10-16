@@ -1,0 +1,121 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mbox_set_atomic_undo
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 2);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    my $res = $jmap->request([
+        [ 'Mailbox/set', {
+            create => {
+                a => { name => 'A' },
+                b => { name => 'B' },
+            },
+        } ],
+    ]);
+    my $created = $res->single_sentence('Mailbox/set')->arguments->{created};
+    my $idA = $created->{a}{id};
+    my $idB = $created->{b}{id};
+    $self->assert_not_null($idA);
+    $self->assert_not_null($idB);
+
+    xlog $self, "a write failure in an atomic swap undoes its earlier renames";
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            atomic => JSON::true,
+            update => {
+                $idA => { name => 'B' },
+                $idB => { name => 'A' },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.mailbox\.set\.failed});
+
+    $res = $jmap->request([
+        [ 'Mailbox/get', { ids => [ $idA, $idB ], properties => ['name'] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        bag({ id => $idA, name => 'A' }, { id => $idB, name => 'B' }),
+        $res->single_sentence('Mailbox/get')->arguments->{list},
+    );
+
+    $res = $jmap->request([
+        [ 'Mailbox/set', { update => { $idA => { isSubscribed => JSON::true } } } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $idA => ignore() },
+        $res->single_sentence('Mailbox/set')->arguments->{updated},
+    );
+
+    xlog $self, "a write failure restores a destroyed mailbox with its id";
+    $res = $jmap->request([
+        [ 'Mailbox/set', { atomic => JSON::true, destroy => [ $idA, $idB ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $res = $jmap->request([
+        [ 'Mailbox/get', {
+            ids        => [ $idA, $idB ],
+            properties => [ 'name', 'isSubscribed' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        bag(
+            { id => $idA, name => 'A', isSubscribed => JSON::true },
+            { id => $idB, name => 'B', isSubscribed => JSON::false },
+        ),
+        $res->single_sentence('Mailbox/get')->arguments->{list},
+    );
+
+    xlog $self, "a write failure expunges what onDestroyMove copied";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            create => {
+                m => {
+                    mailboxIds    => { $idA => JSON::true },
+                    subject       => 'hello',
+                    bodyStructure => { type => 'text/plain', partId => '1' },
+                    bodyValues    => { 1 => { value => 'hello' } },
+                },
+            },
+        } ],
+    ]);
+    my $emailId = $res->single_sentence('Email/set')->arguments->{created}{m}{id};
+    $self->assert_not_null($emailId);
+
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            atomic  => JSON::true,
+            destroy => [ $idA ],
+            onDestroyMoveToMailboxIfNoMailbox => $idB,
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $res = $jmap->request([
+        [ 'Email/query', { filter => { inMailbox => $idA } } ],
+        [ 'Email/query', { filter => { inMailbox => $idB } } ],
+    ]);
+    $self->assert_cmp_deeply([ $emailId ], $res->sentence(0)->arguments->{ids});
+    $self->assert_cmp_deeply([], $res->sentence(1)->arguments->{ids});
+
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr{undo\.failed});
+    $self->check_conversations();
+}

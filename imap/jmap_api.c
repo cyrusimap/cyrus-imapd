@@ -3418,7 +3418,7 @@ static void add_shareacls(const char *userid, void *val, void *rock)
         cyrus_acl_remove(aclptr, userid, NULL, NULL);
 }
 
-static int set_upload_rights(const char *accountid)
+HIDDEN int jmap_set_upload_rights(const char *accountid)
 {
     /* XXX  This is currently done by brute force.
             We could be smarter by only doing a full scan
@@ -3550,7 +3550,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
     }
     else {
         /* Set proper access rights on JMAP upload folder */
-        r = set_upload_rights(owner);
+        r = jmap_set_upload_rights(owner);
     }
 
     if (!r && isdav) {

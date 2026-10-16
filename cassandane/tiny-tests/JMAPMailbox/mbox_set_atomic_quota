@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mbox_set_atomic_quota
+    :NoAltNameSpace
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setquota('user.cassandane', '(MAILBOX 1000)');
+    $self->assert_str_equals('ok', $admin->get_last_completion_response());
+    my @quota = map { ref $_ ? @$_ : $_ } $admin->getquota('user.cassandane');
+    my ($i) = grep { uc $quota[$_] eq 'MAILBOX' } 0 .. $#quota;
+    $self->assert_not_null($i);
+    my %used = (MAILBOX => $quota[$i + 1]);
+
+    xlog $self, "allow one more folder: an atomic create of two is over quota";
+    $admin->setquota('user.cassandane', '(MAILBOX ' . ($used{MAILBOX} + 1) . ')');
+    $self->assert_str_equals('ok', $admin->get_last_completion_response());
+
+    my $get = $jmap->request([
+        [ 'Mailbox/get', { properties => ['name'] } ],
+    ])->single_sentence('Mailbox/get')->arguments;
+
+    my $res = $jmap->request([
+        [ 'Mailbox/set', {
+            atomic => JSON::true,
+            create => {
+                a => { name => 'A' },
+                b => { name => 'B' },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notCreated => {
+                a => { type => 'overQuota' },
+                b => { type => 'overQuota' },
+            },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+
+    my $after = $jmap->request([
+        [ 'Mailbox/get', { properties => ['name'] } ],
+    ])->single_sentence('Mailbox/get')->arguments;
+    $self->assert_cmp_deeply($get, $after);
+}

@@ -728,6 +728,16 @@ extern json_t *jmap_parse_reply(struct jmap_parse *parse);
 
 
 extern json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights));
+
+/**
+ * Recompute the ACL of @p accountid's JMAP upload collection from the
+ * rights shared on the account's mailboxes.  jmap_set_sharewith() calls
+ * this; call it after changing a mailbox ACL any other way.
+ *
+ * @return 0 or an IMAP_* error code.
+ */
+extern int jmap_set_upload_rights(const char *accountid);
+
 extern int jmap_set_sharewith(struct mailbox *mbox,
                               json_t *shareWith, int overwrite,
                               int (*patchrights)(int, json_t*));

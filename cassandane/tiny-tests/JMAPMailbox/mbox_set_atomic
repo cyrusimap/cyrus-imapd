@@ -1,0 +1,155 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mbox_set_atomic
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'Mailbox/set', {
+            create => {
+                a => { name => 'A' },
+                b => { name => 'B' },
+                x => { name => 'X' },
+                p => { name => 'P' },
+            },
+        } ],
+    ]);
+    my $created = $res->single_sentence('Mailbox/set')->arguments->{created};
+    my ($idA, $idB, $idX, $idP) = map { $created->{$_}{id} } qw(a b x p);
+    $self->assert_not_null($_) for ($idA, $idB, $idX, $idP);
+
+    my $names = sub {
+        my $get = $jmap->request([
+            [ 'Mailbox/get', { properties => ['name', 'parentId'] } ],
+        ])->single_sentence('Mailbox/get')->arguments;
+        return ({ map { $_->{id} => $_->{name} } @{$get->{list}} },
+                $get->{state});
+    };
+
+    xlog $self, "an atomic swap exchanges the names";
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            atomic => JSON::true,
+            update => {
+                $idA => { name => 'B' },
+                $idB => { name => 'A' },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $idA => ignore(), $idB => ignore() },
+        $res->single_sentence('Mailbox/set')->arguments->{updated},
+    );
+    my ($byid) = $names->();
+    $self->assert_cmp_deeply(
+        superhashof({ $idA => 'B', $idB => 'A' }),
+        $byid,
+    );
+
+    xlog $self, "an atomic method can replace a destroyed mailbox by name";
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            atomic  => JSON::true,
+            create  => { x2 => { name => 'X' } },
+            destroy => [ $idX ],
+        } ],
+    ]);
+    my $set = $res->single_sentence('Mailbox/set')->arguments;
+    my $idX2 = $set->{created}{x2}{id};
+    $self->assert_not_null($idX2);
+    $self->assert_cmp_deeply([ $idX ], $set->{destroyed});
+    ($byid) = $names->();
+    $self->assert_str_equals('X', $byid->{$idX2});
+    $self->assert_null($byid->{$idX});
+
+    xlog $self, "a create under a destroyed parent fails the whole method";
+    my $state;
+    ($byid, $state) = $names->();
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            atomic  => JSON::true,
+            update  => { $idA => { name => 'A2' } },
+            create  => { c => { name => 'C', parentId => $idP } },
+            destroy => [ $idP ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notCreated => {
+                c => superhashof({
+                    type       => 'invalidProperties',
+                    properties => [ 'parentId' ],
+                }),
+            },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+    my ($after, $state2) = $names->();
+    $self->assert_cmp_deeply($byid, $after);
+    $self->assert_str_equals($state, $state2);
+
+    xlog $self, "a rename that makes a child's name too long fails the method";
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            create => {
+                q => { name => 'Q' },
+                l => { name => ('c' x 250), parentId => '#q' },
+            },
+        } ],
+    ]);
+    my $idQ = $res->single_sentence('Mailbox/set')->arguments->{created}{q}{id};
+    $self->assert_not_null($idQ);
+    ($byid, $state) = $names->();
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            atomic => JSON::true,
+            update => { $idQ => { name => ('q' x 250) } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => {
+                $idQ => superhashof({
+                    type       => 'invalidProperties',
+                    properties => [ 'name' ],
+                }),
+            },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+    ($after, $state2) = $names->();
+    $self->assert_cmp_deeply($byid, $after);
+    $self->assert_str_equals($state, $state2);
+
+    xlog $self, "an atomic create can reference a parent created alongside it";
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            atomic => JSON::true,
+            create => {
+                parent => { name => 'Parent' },
+                child  => { name => 'Child', parentId => '#parent' },
+            },
+        } ],
+    ]);
+    $created = $res->single_sentence('Mailbox/set')->arguments->{created};
+    my $idParent = $created->{parent}{id};
+    my $idChild = $created->{child}{id};
+    $self->assert_not_null($idParent);
+    $self->assert_not_null($idChild);
+
+    my $get = $jmap->request([
+        [ 'Mailbox/get', {
+            ids        => [ $idChild ],
+            properties => [ 'name', 'parentId' ],
+        } ],
+    ])->single_sentence('Mailbox/get')->arguments;
+    $self->assert_cmp_deeply(
+        [ { id => $idChild, name => 'Child', parentId => $idParent } ],
+        $get->{list},
+    );
+}
