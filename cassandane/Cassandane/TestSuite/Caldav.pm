@@ -264,27 +264,6 @@ EOF
     $self->{caldav}->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 }
 
-sub bogus_test_rfc6638_3_2_1_setpartstat_agentserver
-{
-    my ($self) = @_;
-    my $CalDAV = $self->{caldav};
-
-    my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
-    $self->assert_not_null($CalendarId);
-
-    xlog $self, "attempt to set the partstat to something other than NEEDS-ACTION";
-    # XXX - the server should reject this
-    $self->_put_event($CalendarId, lines => <<EOF);
-ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
-ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test1\@example.com
-ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test2\@example.com
-ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
-EOF
-    $self->assert_caldav_notifications(
-        { recipient => "test2\@example.com", is_update => JSON::false, method => 'REQUEST' },
-    );
-}
-
 ############ REPLIES #############
 
 sub _safeeq {
