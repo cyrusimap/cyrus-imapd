@@ -1844,14 +1844,13 @@ static bool jmap_set_validate_props(jmap_req_t *req,
         }
         else if (id) {
             /* update */
-            if (!strcmp("id", prop->name) &&
-                strcmpnull(id, json_string_value(jval))) {
+            if (!strcmp("id", prop->name)) {
                 /* can NEVER change id */
-                json_array_append_new(invalid, json_string(path));
+                if (strcmpnull(id, json_string_value(jval))) {
+                    json_array_append_new(invalid, json_string(path));
+                }
             }
-            else if ((prop->flags
-                      & (JMAP_PROP_IMMUTABLE | JMAP_PROP_SERVER_SET))
-                     && strcmp("id", prop->name))
+            else if (prop->flags & (JMAP_PROP_IMMUTABLE | JMAP_PROP_SERVER_SET))
             {
                 if (!*readonly) {
                     *readonly = json_object();
