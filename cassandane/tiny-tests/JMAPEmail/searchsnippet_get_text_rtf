@@ -120,10 +120,8 @@ EOF
                 name => 'Email/query',
                 path => '/ids',
             },
-            '#filter' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/filter',
+            filter => {
+                text => 'formatting',
             },
             '#partIds' => {
                 resultOf => 'R1',
