@@ -472,7 +472,7 @@ static void cmdloop(void)
     for (;;) {
         prot_flush(sync_out);
 
-        libcyrus_run_delayed();
+        libcyrus_checkpoint();
 
         /* Parse command name */
         if ((c = getword(sync_in, &cmd)) == EOF)

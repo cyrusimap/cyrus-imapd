@@ -23,6 +23,20 @@ extern char *xstrdupsafe(const char *str);
 extern char *xstrndup(const char *str, size_t len);
 extern void *xmemdup(const void *ptr, size_t size);
 
+/**
+ * Return free heap memory to the operating system if enough has built up.
+ *
+ * libcyrus_checkpoint() calls this, so loops that run delayed actions at
+ * their idle points get it for free.  Without it, a burst of allocations
+ * that has since been freed can stay resident until the process exits,
+ * because the allocator only shrinks its heap from the top.
+ *
+ * Does nothing without glibc's malloc_trim() and mallinfo2() (2.33 and
+ * later).  Under a preloaded allocator such as jemalloc, glibc's arenas are
+ * empty, so this also does nothing; that allocator returns memory itself.
+ */
+extern void maybe_trim_memory(void);
+
 /* free a pointer and also zero it
  *
  * CAUTION: ptr argument is evaluated multiple times, beware side effects!

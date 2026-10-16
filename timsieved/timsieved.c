@@ -135,6 +135,9 @@ static void cmdloop(void)
             return;
         }
 
+        prot_flush(sieved_out);
+        libcyrus_checkpoint();
+
         ret = parser(sieved_out, sieved_in, &saslprops);
     }
 

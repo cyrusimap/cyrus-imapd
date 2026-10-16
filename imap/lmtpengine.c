@@ -974,6 +974,9 @@ void lmtpmode(struct lmtp_func *func,
     nextcmd:
       signals_poll();
 
+      prot_flush(pout);
+      libcyrus_checkpoint();
+
       if (!prot_fgets(buf, sizeof(buf), pin)) {
           const char *err = prot_error(pin);
 

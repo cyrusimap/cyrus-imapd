@@ -203,6 +203,8 @@ static int do_daemon_work(const char *sync_shutdown_file,
         // if we're only ever supposed to process the file once, break now
         if (sync_once) break;
 
+        libcyrus_checkpoint();
+
         delta = time(NULL) - single_start;
 
         if (((unsigned) delta < min_delta) && ((min_delta-delta) > 0))

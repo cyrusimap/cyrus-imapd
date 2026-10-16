@@ -386,7 +386,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
 
 done:
     mailbox_close(&mailbox);
-    libcyrus_run_delayed();
+    libcyrus_checkpoint();
 
     /* move on to the next mailbox regardless of errors */
     return 0;
@@ -546,7 +546,7 @@ cleanup:
 
 done:
     mailbox_close(&mailbox);
-    libcyrus_run_delayed();
+    libcyrus_checkpoint();
     /* Even if we had a problem with one mailbox, continue with the others */
     return 0;
 }
@@ -615,7 +615,7 @@ static int expire_conversations_user(const char *userid, void *rock)
 
     conversations_prune_user(userid, crock->expire_mark, crock->batchsize,
                              &nseen, &ndeleted);
-    libcyrus_run_delayed();
+    libcyrus_checkpoint();
 
     crock->databases_seen++;
     crock->msgids_seen += nseen;
@@ -853,7 +853,7 @@ static int do_delete(struct cyr_expire_ctx *ctx)
             ret = mboxlist_deletemailboxlock(name, 1, NULL, NULL, NULL, flags);
             user_nslock_release(&user_nslock);
             free(userid);
-            libcyrus_run_delayed();
+            libcyrus_checkpoint();
             /* XXX: Ignoring the return from mboxlist_deletemailbox() ??? */
             count++;
         }

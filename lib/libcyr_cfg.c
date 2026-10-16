@@ -229,6 +229,12 @@ EXPORTED void libcyrus_run_delayed(void)
     }
 }
 
+EXPORTED void libcyrus_checkpoint(void)
+{
+    libcyrus_run_delayed();
+    maybe_trim_memory();
+}
+
 EXPORTED void libcyrus_init(void)
 {
     charset_lib_init();
