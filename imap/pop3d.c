@@ -721,7 +721,8 @@ static void cmdloop(void)
          * been answered yet: send the notifications it queued. */
         mboxevent_flush_notifications();
 
-        libcyrus_run_delayed();
+        prot_flush(popd_out);
+        libcyrus_checkpoint();
 
         if (backend) {
             /* create a pipe from client to backend */
