@@ -1121,51 +1121,89 @@ EXPORTED json_t *jmap_header_as_urls(const char *raw)
     return urls;
 }
 
+/* Skip an RFC 5322 comment at p, which starts with '('.
+ * Return a pointer past it, or NULL if it is unterminated. */
+static const char *_skip_comment(const char *p)
+{
+    int depth = 0;
+
+    for (; *p; p++) {
+        if (*p == '\\' && p[1]) {
+            p++;
+        }
+        else if (*p == '(') {
+            depth++;
+        }
+        else if (*p == ')' && !--depth) {
+            return p + 1;
+        }
+    }
+
+    return NULL;
+}
+
+/* RFC 8621 4.1.2.5: parse a list of msg-id, separated by CFWS.  If
+ * parsing fails, the value is null.  Like message_iter_msgid, accept ids
+ * without '@', and an id without angle brackets when it is the only one. */
 EXPORTED json_t *jmap_header_as_messageids(const char *raw)
 {
     if (!raw) return json_null();
     json_t *msgids = json_array();
     char *unfolded = charset_unfold(raw, strlen(raw), CHARSET_UNFOLD_SKIPWS);
+    bool valid = true;
+    bool have_bare = false;
+    size_t ntokens = 0;
 
     const char *p = unfolded;
 
-    while (*p) {
-        /* Skip preamble */
-        while (isspace(*p) || *p == ',') p++;
-        if (!*p) break;
+    while (valid && *p) {
+        /* Skip CFWS, and the commas some senders put between ids */
+        if (isspace(*p) || *p == ',') {
+            p++;
+            continue;
+        }
+        if (*p == '(') {
+            if (!(p = _skip_comment(p))) {
+                valid = false;
+            }
+            continue;
+        }
 
-        /* Find end of id */
-        const char *q = p;
+        const char *q;
+        char *val;
         if (*p == '<') {
-            while (*q && *q != '>') q++;
+            if (!(q = strchr(p, '>'))) {
+                valid = false;
+                break;
+            }
+            val = xstrndup(p + 1, q - p - 1);
+            _remove_ws(val);
+            p = q + 1;
         }
         else {
-            while (*q && !isspace(*q)) q++;
+            for (q = p; *q && !isspace(*q) && *q != ',' && *q != '('; q++)
+                ;
+            val = xstrndup(p, q - p);
+            have_bare = true;
+            p = q;
         }
+        ntokens++;
 
-        /* Read id */
-        char *val = xstrndup(*p == '<' ? p + 1 : p,
-                             *q == '>' ? q - p - 1 : q - p);
-        if (*p == '<') {
-            _remove_ws(val);
+        /* calculate the value that would be created if this was
+         * fed back into an Email/set and make sure it would
+         * validate */
+        char *msgid = strconcat("<", val, ">", NULL);
+        if (!*val || conversations_check_msgid(msgid, strlen(msgid))) {
+            valid = false;
         }
-        if (*val) {
-            /* calculate the value that would be created if this was
-             * fed back into an Email/set and make sure it would
-             * validate */
-            char *msgid = strconcat("<", val, ">", NULL);
-            int r = conversations_check_msgid(msgid, strlen(msgid));
-            if (!r) json_array_append_new(msgids, json_string(val));
-            free(msgid);
+        else {
+            json_array_append_new(msgids, json_string(val));
         }
+        free(msgid);
         free(val);
-
-        /* Reset iterator */
-        p = *q ? q + 1 : q;
     }
 
-
-    if (!json_array_size(msgids)) {
+    if (!valid || (have_bare && ntokens > 1) || !json_array_size(msgids)) {
         json_decref(msgids);
         msgids = json_null();
     }
@@ -1249,7 +1287,10 @@ EXPORTED json_t *jmap_emailaddresses_from_addr(struct address *addr,
                     xzfree(groupname);
                 }
                 free(groupname);
-                groupname = xstrdup(mailbox);
+                groupname = decode_and_normalize_mimeheader(addr->mailbox);
+                if (!groupname) {
+                    groupname = xstrdup(mailbox);
+                }
             }
         }
         else if (!name && !mailbox) {

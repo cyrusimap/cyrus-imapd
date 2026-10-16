@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_message_ids_parse
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    $self->make_message("foo",
+        extra_headers => [
+            [ 'X-Bad'  => 'not a message id' ],
+            [ 'X-Refs' => '<a@example.com> (comment) <b@example.com>' ],
+            [ 'X-Bare' => 'c@example.com' ],
+        ],
+    ) or die;
+    my $id = $jmap->request([[ 'Email/query', {} ]])
+                  ->single_sentence('Email/query')->arguments->{ids}[0];
+
+    my $email = $jmap->request([[ 'Email/get', {
+        ids => [ $id ],
+        properties => [ map { "header:$_:asMessageIds" } qw(X-Bad X-Refs X-Bare) ],
+    } ]])->single_sentence('Email/get')->arguments->{list}[0];
+
+    # RFC 8621 4.1.2.5: null if parsing fails, and CFWS may separate
+    # msg-ids.  A lone id may lack angle brackets.
+    $self->assert_cmp_deeply({
+        id => $id,
+        'header:X-Bad:asMessageIds'  => undef,
+        'header:X-Refs:asMessageIds' => [ 'a@example.com', 'b@example.com' ],
+        'header:X-Bare:asMessageIds' => [ 'c@example.com' ],
+    }, $email);
+}
