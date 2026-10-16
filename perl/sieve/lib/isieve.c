@@ -6,9 +6,13 @@
 #include <config.h>
 #endif
 
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <sasl/saslutil.h>
+#include <stdbool.h>
 #include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -35,6 +39,15 @@ struct iseive_s {
     sasl_callback_t *refer_callbacks;
 
     int version;
+    bool starttls_offered;
+
+    SSL_CTX *tls_ctx;
+    SSL *tls_conn;
+    sasl_ssf_t tls_ssf;
+    /* kept so that referrals also use TLS */
+    bool usetls;
+    char *cafile;
+    char *capath;
 
     struct protstream *pin;
     struct protstream *pout;
@@ -55,6 +68,13 @@ static void sieve_dispose(isieve_t *obj)
 
     prot_free(obj->pin);
     prot_free(obj->pout);
+
+    SSL_free(obj->tls_conn);
+    SSL_CTX_free(obj->tls_ctx);
+    free(obj->cafile);
+    free(obj->capath);
+
+    close(obj->sock);
 }
 
 void sieve_free_net(isieve_t *obj)
@@ -178,6 +198,10 @@ int init_sasl(isieve_t *obj,
 
   if (saslresult!=SASL_OK) return -1;
 
+  if (obj->tls_ssf) {
+      sasl_setprop(obj->conn, SASL_SSF_EXTERNAL, &obj->tls_ssf);
+  }
+
   /* create a security structure and give it to sasl */
   secprops = make_secprops(0, ssf);
   if (secprops != NULL)
@@ -189,12 +213,13 @@ int init_sasl(isieve_t *obj,
   return 0;
 }
 
-char * read_capability(isieve_t *obj)
+char *read_capability(isieve_t *obj, char **errstr)
 {
   lexstate_t state;
   char *cap = NULL;
 
   obj->version = NEW_VERSION;
+  obj->starttls_offered = false;
 
   while (yylex(&state,obj->pin)==STRING)
   {
@@ -207,12 +232,19 @@ char * read_capability(isieve_t *obj)
       {
           if (yylex(&state,obj->pin)!=STRING)
           {
-              parseerror("STRING");
+              parseerror(obj->pin, "STRING", errstr);
+              free(attr);
+              free(cap);
+              return NULL;
           }
           val = state.str;
           if (yylex(&state,obj->pin)!=EOL)
           {
-              parseerror("EOL1");
+              parseerror(obj->pin, "EOL1", errstr);
+              free(attr);
+              free(val);
+              free(cap);
+              return NULL;
           }
       }
 
@@ -225,31 +257,143 @@ char * read_capability(isieve_t *obj)
       } else if (strcasecmp(attr,"IMPLEMENTATION")==0) {
 
       } else if (strcasecmp(attr,"STARTTLS")==0) {
-          /* TODO */
+          obj->starttls_offered = true;
       } else if (val && strncmp(val,"SASL=",5)==0) {
           obj->version = OLD_VERSION;
           free(cap);
           cap = xstrdup(val+5);
+          free(attr);
           free(val);
           return cap;
       } else {
           /* unknown capability */
       }
+      free(attr);
       free(val);
   }
 
   if (yylex(&state,obj->pin)!=EOL)
   {
-      parseerror("EOL2");
+      parseerror(obj->pin, "EOL2", errstr);
+      free(cap);
+      return NULL;
   }
 
   return cap;
 }
 
-int detect_mitm(isieve_t *obj, char *mechlist)
+int isieve_starttls(isieve_t *obj,
+                    const char *cafile,
+                    const char *capath,
+                    char **mechlist,
+                    char **errstr)
 {
-    char *new_mechlist;
-    int ch, r = 0;
+    lexstate_t state;
+    char *refer_to = NULL, *resp = NULL;
+    struct in6_addr addr;
+    char errbuf[256];
+    long verify;
+
+    if (!obj->starttls_offered) {
+        *errstr = xstrdup("server does not offer STARTTLS");
+        return -1;
+    }
+
+    prot_printf(obj->pout, "STARTTLS\r\n");
+    prot_flush(obj->pout);
+    if (handle_response(yylex(&state, obj->pin),
+                        obj->version,
+                        obj->pin,
+                        &refer_to,
+                        &resp))
+    {
+        *errstr =
+            strconcat("STARTTLS failed: ", resp ? resp : "", (char *) NULL);
+        free(resp);
+        free(refer_to);
+        return -1;
+    }
+    free(refer_to);
+
+    /* anything after the OK was sent before TLS, so can't be trusted */
+    if (obj->pin->cnt) {
+        *errstr = xstrdup("STARTTLS failed: data received before TLS");
+        return -1;
+    }
+
+    ERR_clear_error();
+    obj->tls_ctx = SSL_CTX_new(TLS_client_method());
+    if (!obj->tls_ctx
+        || !SSL_CTX_set_min_proto_version(obj->tls_ctx, TLS1_2_VERSION)
+        || !SSL_CTX_set_default_verify_paths(obj->tls_ctx))
+    {
+        goto tlserr;
+    }
+    if ((cafile || capath)
+        && !SSL_CTX_load_verify_locations(obj->tls_ctx, cafile, capath))
+    {
+        goto tlserr;
+    }
+    SSL_CTX_set_verify(obj->tls_ctx, SSL_VERIFY_PEER, NULL);
+
+    obj->tls_conn = SSL_new(obj->tls_ctx);
+    if (!obj->tls_conn || !SSL_set1_host(obj->tls_conn, obj->serverFQDN)
+        || !SSL_set_fd(obj->tls_conn, obj->sock))
+    {
+        goto tlserr;
+    }
+    /* SNI takes a hostname, never an address literal */
+    if (inet_pton(AF_INET, obj->serverFQDN, &addr) != 1
+        && inet_pton(AF_INET6, obj->serverFQDN, &addr) != 1
+        && !SSL_set_tlsext_host_name(obj->tls_conn, obj->serverFQDN))
+    {
+        goto tlserr;
+    }
+    if (SSL_connect(obj->tls_conn) <= 0) {
+        goto tlserr;
+    }
+
+    obj->tls_ssf = SSL_get_cipher_bits(obj->tls_conn, NULL);
+    prot_settls(obj->pin, obj->tls_conn);
+    prot_settls(obj->pout, obj->tls_conn);
+
+    obj->usetls = true;
+    if (obj->cafile != cafile) {
+        free(obj->cafile);
+        obj->cafile = xstrdupnull(cafile);
+    }
+    if (obj->capath != capath) {
+        free(obj->capath);
+        obj->capath = xstrdupnull(capath);
+    }
+
+    /* the server sends its capabilities again once TLS is up */
+    char *caperr = NULL;
+    *mechlist = read_capability(obj, &caperr);
+    if (caperr) {
+        *errstr = caperr;
+        return -1;
+    }
+    return 0;
+
+tlserr:
+    verify = obj->tls_conn ? SSL_get_verify_result(obj->tls_conn) : X509_V_OK;
+    if (verify != X509_V_OK) {
+        *errstr = strconcat("TLS negotiation failed: ",
+                            X509_verify_cert_error_string(verify),
+                            (char *) NULL);
+    }
+    else {
+        ERR_error_string_n(ERR_get_error(), errbuf, sizeof(errbuf));
+        *errstr = strconcat("TLS negotiation failed: ", errbuf, (char *) NULL);
+    }
+    return -1;
+}
+
+int detect_mitm(isieve_t *obj, char *mechlist, char **errstr)
+{
+    char *new_mechlist, *caperr = NULL;
+    int ch;
 
     /* wait and probe for possible automatic capability response */
     usleep(250000);
@@ -264,13 +408,20 @@ int detect_mitm(isieve_t *obj, char *mechlist)
     }
     prot_BLOCK(obj->pin);
 
-    if ((new_mechlist = read_capability(obj))) {
-        /* if the server still advertises SASL mechs, compare lists */
-        r = strcmp(new_mechlist, mechlist);
-        free(new_mechlist);
+    new_mechlist = read_capability(obj, &caperr);
+    if (caperr) {
+        *errstr = caperr;
+        return -1;
     }
-
-    return r;
+    /* if the server still advertises SASL mechs, compare lists */
+    if (new_mechlist && strcmp(new_mechlist, mechlist)) {
+        free(new_mechlist);
+        *errstr = xstrdup("possible MITM attack: "
+                          "list of available SASL mechanisms changed");
+        return -1;
+    }
+    free(new_mechlist);
+    return 0;
 }
 
 static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
@@ -288,10 +439,10 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
   *line = NULL;
   if (res!=STRING)
   {
-      (void)handle_response(res, obj->version,
-                            obj->pin, &last_send, &errstr);
+      r = handle_response(res, obj->version,
+                          obj->pin, &last_send, &errstr);
 
-      if (res==TOKEN_OK) {
+      if (res == TOKEN_OK && r == 0) {
           /* Was there a last send from the server? */
           if(last_send) {
               /* it's base64 encoded */
@@ -310,6 +461,7 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
           return STAT_OK;
       } else { /* server said no or bye*/
           /* XXX handle referrals */
+          free(last_send);
           *errstrp = errstr;
           return STAT_NO;
       }
@@ -489,14 +641,16 @@ static int do_referral(isieve_t *obj, char *refer_to)
 {
     int ret;
     struct servent *serv;
-    isieve_t *obj_new;
-    char *mechlist;
+    isieve_t *obj_new = NULL;
+    char *mechlist = NULL;
     int port;
     char *errstr = NULL;
     const char *mtried;
     const char *scheme = "sieve://";
     char *host, *p;
     sasl_callback_t *callbacks;
+    char *refer_authinfo = NULL;
+    sasl_callback_t *refer_callbacks = NULL;
     sasl_ssf_t ssf;
 
     /* check scheme */
@@ -511,7 +665,7 @@ static int do_referral(isieve_t *obj, char *refer_to)
         *host++ = '\0';
 
         /* get authid - make a copy so it persists for the callbacks */
-        authid = obj->refer_authinfo = xstrdup(refer_to + strlen(scheme));
+        authid = refer_authinfo = xstrdup(refer_to + strlen(scheme));
 
         /* get userid */
         if ((userid = strrchr(authid, ';')))
@@ -521,7 +675,7 @@ static int do_referral(isieve_t *obj, char *refer_to)
         for (n = 0; obj->callbacks[n++].id != SASL_CB_LIST_END;);
 
         /* copy the callbacks, substituting some of our own */
-        callbacks = obj->refer_callbacks = xmalloc(n*sizeof(sasl_callback_t));
+        callbacks = refer_callbacks = xmalloc(n*sizeof(sasl_callback_t));
 
         while (--n >= 0) {
             callbacks[n].id = obj->callbacks[n].id;
@@ -569,14 +723,41 @@ static int do_referral(isieve_t *obj, char *refer_to)
     }
 
     ret = init_net(host, port, &obj_new);
-    if(ret) return STAT_NO;
+    if (ret) {
+        goto fail;
+    }
 
     /* Start up SASL */
     ret = init_sasl(obj_new, 128, callbacks);
-    if(ret) return STAT_NO;
+    if (ret) {
+        goto fail;
+    }
+
+    mechlist = read_capability(obj_new, &errstr);
+    if (errstr) {
+        free(errstr);
+        goto fail;
+    }
+
+    if (obj->usetls) {
+        free(mechlist);
+        mechlist = NULL;
+        if (isieve_starttls(obj_new,
+                            obj->cafile,
+                            obj->capath,
+                            &mechlist,
+                            &errstr))
+        {
+            free(errstr);
+            goto fail;
+        }
+        ret = init_sasl(obj_new, 128, callbacks);
+        if (ret) {
+            goto fail;
+        }
+    }
 
     /* Authenticate */
-    mechlist = read_capability(obj_new);
 
     do {
         mtried = NULL;
@@ -595,6 +776,7 @@ static int do_referral(isieve_t *obj, char *refer_to)
             ucase(mtr);
             tmp = strstr(mechlist,mtr);
             if (tmp) {
+                *tmp = '\0';
                 strcpy(newlist, mechlist);
                 tmp++;
                 tmp = strchr(tmp, ' ');
@@ -609,18 +791,31 @@ static int do_referral(isieve_t *obj, char *refer_to)
         }
     } while(ret && mtried);
 
-    /* XXX leak? */
-    if(ret) return STAT_NO;
+    if (ret) {
+        goto fail;
+    }
 
     if (ssf) {
         /* SASL security layer negotiated --
            check if SASL mech list changed */
-        if (detect_mitm(obj_new, mechlist)) {
-            free(mechlist);
-            return STAT_NO;
+        if (detect_mitm(obj_new, mechlist, &errstr)) {
+            free(errstr);
+            goto fail;
         }
     }
     free(mechlist);
+
+    /* the new connection's SASL context points into these */
+    if (refer_callbacks) {
+        obj_new->refer_authinfo = refer_authinfo;
+        obj_new->refer_callbacks = refer_callbacks;
+    }
+    else {
+        obj_new->refer_authinfo = obj->refer_authinfo;
+        obj_new->refer_callbacks = obj->refer_callbacks;
+        obj->refer_authinfo = NULL;
+        obj->refer_callbacks = NULL;
+    }
 
     /* free old isieve_t */
     sieve_dispose(obj);
@@ -633,14 +828,19 @@ static int do_referral(isieve_t *obj, char *refer_to)
     free(refer_to);
 
     return STAT_OK;
+
+fail:
+    free(mechlist);
+    sieve_free_net(obj_new);
+    free(refer_authinfo);
+    free(refer_callbacks);
+    return STAT_NO;
 }
 
 int isieve_logout(isieve_t **obj)
 {
     prot_printf((*obj)->pout, "LOGOUT");
     prot_flush((*obj)->pout);
-
-    close((*obj)->sock);
 
     sieve_free_net(*obj);
     *obj = NULL;
@@ -704,7 +904,8 @@ int isieve_delete(isieve_t *obj, char *name, char **errstr)
 int isieve_list(isieve_t *obj, isieve_listcb_t *cb,void *rock, char **errstr)
 {
     char *refer_to;
-    int ret = list_wcb(obj->version, obj->pout, obj->pin, cb, rock, &refer_to);
+    int ret = list_wcb(obj->version, obj->pout, obj->pin, cb, rock, &refer_to,
+                       errstr);
     if(ret == -2 && refer_to) {
         ret = do_referral(obj, refer_to);
         if(ret == STAT_OK) {

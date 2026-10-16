@@ -48,6 +48,9 @@ my $realm = "";
 my $password;
 my $ex = "";
 my $exfile = "";
+my $usetls = 0;
+my $cafile = "";
+my $capath = "";
 my $help = 0;
 my $man = 0;
 my $ret;
@@ -58,6 +61,9 @@ GetOptions("a|authname:s" => \$authname,
     "p|password:s" => \$password,
     "e|exec:s" => \$ex,
     "f|execfile:s" => \$exfile,
+    "t|tls" => \$usetls,
+    "cafile=s" => \$cafile,
+    "capath=s" => \$capath,
     "help|?" => \$help,
     man => \$man) or pod2usage(2);
 pod2usage(1) if $help;
@@ -159,7 +165,8 @@ sub check_sieve_error {
 print "connecting to $acapserver\n";
 
 my $obj = sieve_get_handle($acapserver,
-                           "prompt", "prompt", "prompt", "prompt");
+                           "prompt", "prompt", "prompt", "prompt",
+                           $usetls, $cafile, $capath);
 
 if (!defined $obj) {
     my $errstr = sieve_get_global_error() // "unknown error";
@@ -289,7 +296,8 @@ sieveshell - remotely manipulate sieve scripts
 
 sieveshell [B<--user>=I<user>] [B<--authname>=I<authname>]
 [B<--realm>=I<realm>] [B<--password>=I<password>]
-[B<--exec>=I<script>] [B<--execfile>=I<file>] I<server>[B<:>I<port>]
+[B<--exec>=I<script>] [B<--execfile>=I<file>]
+[B<--tls> [B<--cafile>=I<file>] [B<--capath>=I<dir>]] I<server>[B<:>I<port>]
 
 sieveshell B<--help>
 
@@ -348,6 +356,20 @@ exit when done.
 
 Instead of working interactively, run commands from file I<file> and
 exit when done.
+
+=item B<-t>, B<--tls>
+
+Use STARTTLS before authenticating, and fail if the server doesn't offer
+it.  The server certificate must be valid for I<server>.
+
+=item B<--cafile>=I<file>
+
+With B<--tls>, also trust the CA certificates in I<file>.
+
+=item B<--capath>=I<dir>
+
+With B<--tls>, also trust the CA certificates in I<dir>, which must be
+in the format OpenSSL's B<c_rehash> creates.
 
 =back
 

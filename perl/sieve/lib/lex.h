@@ -15,6 +15,12 @@ typedef struct lexstate_s {
 
 int yylex(lexstate_t * lvalp, void * client);
 
+/**
+ * Forget any partly read token.  The lexer state is global, so call this
+ * before reading from a different stream after an error.
+ */
+void yylex_reset(void);
+
 enum {
     TAG = 258,
     EOL = 259,

@@ -31,6 +31,31 @@ void fatal(const char *s, int t)
     exit(-1);
 }
 
+/* takes ownership of err */
+static void set_globalerr(char *err)
+{
+    free(globalerr);
+    globalerr = err;
+}
+
+/* the contexts are Perl callbacks owned by the array */
+static void free_callbacks(sasl_callback_t *callbacks)
+{
+    for (sasl_callback_t *cb = callbacks; cb->id != SASL_CB_LIST_END; cb++) {
+        SvREFCNT_dec((SV *) cb->context);
+    }
+    safefree(callbacks);
+}
+
+static void get_handle_failed(isieve_t *obj,
+                              sasl_callback_t *callbacks,
+                              char *err)
+{
+    if (err) set_globalerr(err);
+    sieve_free_net(obj);
+    free_callbacks(callbacks);
+}
+
 static int perlsieve_getpass(sasl_conn_t *conn, void *context,
                              int id, sasl_secret_t **psecret)
 {
@@ -135,7 +160,7 @@ PROTOTYPES: ENABLE
 
 
 Sieveobj
-sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *password_cb, SV *realm_cb)
+sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *password_cb, SV *realm_cb, int usetls = 0, char *cafile = NULL, char *capath = NULL)
 
   PREINIT:
     Sieveobj ret = NULL;
@@ -146,26 +171,28 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     char *mechlist=NULL,*mlist=NULL;
     const char *mtried;
     isieve_t *obj;
+    char *autherr;
+    char *caperr = NULL;
+    char *mitmerr = NULL;
     char *p;
     sasl_ssf_t ssf;
 
   CODE:
 
-    /* xxx this gets leaked! */
     callbacks = safemalloc(5 * sizeof(sasl_callback_t));
 
     callbacks[0].id = SASL_CB_USER;
     callbacks[0].proc = (int (*)(void))&perlsieve_simple;
-    callbacks[0].context = username_cb;
+    callbacks[0].context = newSVsv(username_cb);
     callbacks[1].id = SASL_CB_AUTHNAME;
     callbacks[1].proc = (int (*)(void))&perlsieve_simple;
-    callbacks[1].context = authname_cb;
+    callbacks[1].context = newSVsv(authname_cb);
     callbacks[2].id = SASL_CB_GETREALM;
     callbacks[2].proc = (int (*)(void))&perlsieve_simple;
-    callbacks[2].context = realm_cb;
+    callbacks[2].context = newSVsv(realm_cb);
     callbacks[3].id = SASL_CB_PASS;
     callbacks[3].proc = (int (*)(void))&perlsieve_getpass;
-    callbacks[3].context = password_cb;
+    callbacks[3].context = newSVsv(password_cb);
     callbacks[4].id = SASL_CB_LIST_END;
 
     /* see if we have server:port (or IPv6, etc)*/
@@ -191,26 +218,45 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     }
 
     if (init_net(servername, port, &obj)) {
-        globalerr = "network initialization failed";
+        get_handle_failed(NULL, callbacks,
+                          xstrdup("network initialization failed"));
         XSRETURN_UNDEF;
     }
 
     if (init_sasl(obj, 128, callbacks)) {
-        globalerr = "sasl initialization failed";
-        sieve_free_net(obj);
+        get_handle_failed(obj, callbacks,
+                          xstrdup("sasl initialization failed"));
         XSRETURN_UNDEF;
     }
 
-    ret = xmalloc(sizeof(struct xscyrus));
-    ret->class = safemalloc(20);
-    strcpy(ret->class,"managesieve");
-    ret->isieve = obj;
-    ret->errstr = NULL;
+    mechlist = read_capability(obj, &caperr);
+    if (caperr) {
+        get_handle_failed(obj, callbacks, caperr);
+        XSRETURN_UNDEF;
+    }
 
-    mechlist=read_capability(obj);
+    if (usetls) {
+        char *tlserr = NULL;
+
+        if (cafile && !*cafile) cafile = NULL;
+        if (capath && !*capath) capath = NULL;
+
+        free(mechlist);
+        mechlist = NULL;
+        if (isieve_starttls(obj, cafile, capath, &mechlist, &tlserr)) {
+            get_handle_failed(obj, callbacks, tlserr);
+            XSRETURN_UNDEF;
+        }
+        if (init_sasl(obj, 128, callbacks)) {
+            free(mechlist);
+            get_handle_failed(obj, callbacks,
+                              xstrdup("sasl initialization failed"));
+            XSRETURN_UNDEF;
+        }
+    }
+
     if (!mechlist) {
-        globalerr = "sasl mech list empty";
-        free(ret);
+        get_handle_failed(obj, callbacks, xstrdup("sasl mech list empty"));
         XSRETURN_UNDEF;
     }
 
@@ -219,7 +265,9 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     /* loop through all the mechanisms */
     do {
         mtried = NULL;
-        r = auth_sasl(mlist, obj, &mtried, &ssf, &globalerr);
+        autherr = NULL;
+        r = auth_sasl(mlist, obj, &mtried, &ssf, &autherr);
+        if (autherr) set_globalerr(autherr);
 
         if (r) init_sasl(obj, 128, callbacks);
 
@@ -245,26 +293,32 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
         }
     } while (r && mtried);
 
+    free(mlist);
+
     if (r) {
         /* we failed */
-        safefree(ret->class);
-        free(ret);
         free(mechlist);
+        get_handle_failed(obj, callbacks, NULL);
         XSRETURN_UNDEF;
     }
 
     if (ssf) {
         /* SASL security layer negotiated --
            check if SASL mech list changed */
-        if (detect_mitm(obj, mechlist)) {
-            globalerr = "possible MITM attack: "
-                "list of available SASL mechanisms changed";
-            free(ret);
+        if (detect_mitm(obj, mechlist, &mitmerr)) {
             free(mechlist);
+            get_handle_failed(obj, callbacks, mitmerr);
             XSRETURN_UNDEF;
         }
     }
     free(mechlist);
+
+    ret = xmalloc(sizeof(struct xscyrus));
+    ret->class = safemalloc(20);
+    strcpy(ret->class,"managesieve");
+    ret->isieve = obj;
+    ret->callbacks = callbacks;
+    ret->errstr = NULL;
 
     ST(0) = sv_newmortal();
     sv_setref_pv(ST(0), ret->class, (void *) ret);
@@ -341,3 +395,16 @@ sieve_get(Sieveobj obj, char *name, char *output)
   OUTPUT:
     RETVAL
     output
+
+
+MODULE = Cyrus::SIEVE::managesieve              PACKAGE = managesieve
+
+void
+DESTROY(Sieveobj obj)
+  CODE:
+    /* sieve_logout() already freed and cleared isieve */
+    if (obj->isieve) sieve_free_net(obj->isieve);
+    free_callbacks(obj->callbacks);
+    safefree(obj->class);
+    free(obj->errstr);
+    free(obj);
