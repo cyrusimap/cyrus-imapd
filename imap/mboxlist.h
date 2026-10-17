@@ -238,7 +238,11 @@ int mboxlist_deletemailboxlock(const char *name, int isadmin, const char *userid
                            const struct auth_state *auth_state,
                            struct mboxevent *mboxevent, int flags);
 
-/* rename a tree of mailboxes - renames mailbox plus any children */
+/**
+ * Rename a mailbox and all its children.
+ *
+ * @return IMAP_MAILBOX_BADNAME if @p newname is inside the @p oldname tree.
+ */
 int mboxlist_renametree(const char *oldname, const char *newname,
                         const char *partition, unsigned uidvalidity,
                         int isadmin, const char *userid,
