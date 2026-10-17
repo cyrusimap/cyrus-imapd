@@ -1,0 +1,76 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_atomic_components ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+    my $caldav = $self->{caldav};
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "create a calendar for tasks only";
+    $caldav->Request('MKCALENDAR', '/dav/calendars/user/cassandane/todos',
+        <<'EOX', 'Content-Type' => 'application/xml');
+<?xml version="1.0" encoding="utf-8" ?>
+<C:mkcalendar xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:supported-calendar-component-set>
+        <C:comp name="VTODO"/>
+      </C:supported-calendar-component-set>
+    </D:prop>
+  </D:set>
+</C:mkcalendar>
+EOX
+    my $stat = $admin->status('user.cassandane.#calendars.todos',
+                              '(mailboxid)');
+    my $todosId = 'C' . substr($stat->{mailboxid}[0], 1);
+
+    my $res = $jmap->request([
+        [ 'Calendar/get', { properties => [ 'isDefault' ] } ],
+    ]);
+    my ($default) = grep { $_->{isDefault} }
+                    $res->single_sentence('Calendar/get')->arguments->{list}->@*;
+
+    my sub event ($uid, $calId) {
+        return {
+            '@type'     => 'Event',
+            version     => '2.0',
+            calendarIds => { $calId => JSON::true },
+            uid         => $uid,
+            title       => $uid,
+            start       => '2026-07-01T09:00:00',
+            duration    => 'PT1H',
+            timeZone    => 'Europe/Vienna',
+        };
+    }
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            create => { e => event('comp-e', $default->{id}) },
+        } ],
+    ]);
+    my $id = $res->single_sentence('CalendarEvent/set')
+                 ->arguments->{created}{e}{id};
+    $self->assert_not_null($id);
+
+    xlog $self, "events can't be created in or moved to it";
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            atomic => JSON::true,
+            create => { n => event('comp-n', $todosId) },
+            update => { $id => {
+                calendarIds => { $todosId => JSON::true },
+                title       => 'moved',
+            } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notCreated => { n => { type => 'forbidden' } },
+            notUpdated => { $id => { type => 'forbidden' } },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+}

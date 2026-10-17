@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_atomic_quota ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+    my $admin = $self->{adminstore}->get_client();
+
+    my $res = $jmap->request([
+        [ 'Calendar/get', { properties => [ 'id' ] } ],
+    ]);
+    my $calId = $res->single_sentence('Calendar/get')->arguments->{list}[0]{id};
+
+    my sub event ($uid) {
+        return {
+            '@type'     => 'Event',
+            version     => '2.0',
+            calendarIds => { $calId => JSON::true },
+            uid         => $uid,
+            title       => $uid,
+            start       => '2026-07-01T09:00:00',
+            duration    => 'PT1H',
+            timeZone    => 'Europe/Vienna',
+        };
+    }
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', { create => { e => event('quota-e') } } ],
+    ]);
+    my $id = $res->single_sentence('CalendarEvent/set')
+                 ->arguments->{created}{e}{id};
+    $self->assert_not_null($id);
+
+    xlog $self, "set the message limit to what the account uses";
+    $admin->setquota('user.cassandane', '(MESSAGE 100000)');
+    my @quota = map { ref $_ ? @$_ : $_ } $admin->getquota('user.cassandane');
+    my ($i) = grep { uc $quota[$_] eq 'MESSAGE' } 0 .. $#quota;
+    $self->assert_not_null($i);
+    $admin->setquota('user.cassandane', '(MESSAGE ' . $quota[$i + 1] . ')');
+    $self->assert_str_equals('ok', $admin->get_last_completion_response());
+
+    xlog $self, "an update replaces the event, so it fits";
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            atomic => JSON::true,
+            update => { $id => { title => 'changed' } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $id => ignore() },
+        $res->single_sentence('CalendarEvent/set')->arguments->{updated},
+    );
+
+    xlog $self, "a create doesn't fit";
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            atomic => JSON::true,
+            create => { n => event('quota-n') },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notCreated => { n => { type => 'overQuota' } },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+}

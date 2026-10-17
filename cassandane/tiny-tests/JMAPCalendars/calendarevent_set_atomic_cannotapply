@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_atomic_cannotapply
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(expunge_mode => 'semidelayed');
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'Calendar/get', { properties => [ 'id' ] } ],
+    ]);
+    my $calId = $res->single_sentence('Calendar/get')->arguments->{list}[0]{id};
+
+    my sub event ($uid) {
+        return {
+            '@type'     => 'Event',
+            version     => '2.0',
+            calendarIds => { $calId => JSON::true },
+            uid         => $uid,
+            title       => $uid,
+            start       => '2026-07-01T09:00:00',
+            duration    => 'PT1H',
+            timeZone    => 'Europe/Vienna',
+        };
+    }
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', { create => { e => event('cannot-e') } } ],
+    ]);
+    my $id = $res->single_sentence('CalendarEvent/set')
+                 ->arguments->{created}{e}{id};
+    $self->assert_not_null($id);
+
+    xlog $self, "updates and destroys expunge, so they are refused";
+    for my $args (
+        { destroy => [ $id ] },
+        { update  => { $id => { title => 'changed' } } },
+    ) {
+        $res = $jmap->request([
+            [ 'CalendarEvent/set', { atomic => JSON::true, %$args } ],
+        ]);
+        $self->assert_cmp_deeply(
+            superhashof({ type => 'cannotApplyAtomically' }),
+            $res->single_sentence('error')->arguments,
+        );
+    }
+
+    xlog $self, "a create expunges nothing and still applies";
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            atomic => JSON::true,
+            create => { n => event('cannot-n') },
+        } ],
+        [ 'CalendarEvent/get', {
+            ids        => [ $id ],
+            properties => [ 'title' ],
+        } ],
+    ]);
+    $self->assert_not_null(
+        $res->sentence(0)->arguments->{created}{n}{id});
+    $self->assert_cmp_deeply(
+        [ superhashof({ id => $id, title => 'cannot-e' }) ],
+        $res->sentence(1)->arguments->{list},
+    );
+}

@@ -1,0 +1,75 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_atomic_quota_update_created ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+    my $admin = $self->{adminstore}->get_client();
+
+    my $res = $jmap->request([
+        [ 'Calendar/get', { properties => [ 'id' ] } ],
+    ]);
+    my $calId = $res->single_sentence('Calendar/get')->arguments->{list}[0]{id};
+
+    my $event = {
+        '@type'     => 'Event',
+        version     => '2.0',
+        calendarIds => { $calId => JSON::true },
+        uid         => 'quota-grow',
+        title       => 'small',
+        start       => '2026-07-01T09:00:00',
+        duration    => 'PT1H',
+        timeZone    => 'Europe/Vienna',
+    };
+
+    xlog $self, "leave room for a small event, not a large one";
+    $admin->setquota('user.cassandane', '(STORAGE 100000)');
+    my @quota = map { ref $_ ? @$_ : $_ } $admin->getquota('user.cassandane');
+    my ($i) = grep { uc $quota[$_] eq 'STORAGE' } 0 .. $#quota;
+    $self->assert_not_null($i);
+    $admin->setquota('user.cassandane',
+                     '(STORAGE ' . ($quota[$i + 1] + 8) . ')');
+    $self->assert_str_equals('ok', $admin->get_last_completion_response());
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/get', { ids => undef, properties => [ 'id' ] } ],
+    ]);
+    my $state = $res->single_sentence('CalendarEvent/get')->arguments->{state};
+
+    xlog $self, "an update of a created event is charged for its growth";
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            atomic => JSON::true,
+            create => { c => $event },
+            update => { '#c' => { description => 'x' x 20000 } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notCreated => { c => { type => 'overQuota' } },
+            notUpdated => { '#c' => { type => 'overQuota' } },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/get', { ids => undef, properties => [ 'id' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ state => $state, list => [] }),
+        $res->single_sentence('CalendarEvent/get')->arguments,
+    );
+
+    xlog $self, "the small event alone fits";
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            atomic => JSON::true,
+            create => { c => $event },
+        } ],
+    ]);
+    $self->assert_not_null(
+        $res->single_sentence('CalendarEvent/set')->arguments->{created}{c}{id}
+    );
+}

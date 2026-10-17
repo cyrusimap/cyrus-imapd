@@ -33,6 +33,7 @@
 #include "http_proxy.h"
 #include "ical_support.h"
 #include "mboxname.h"
+#include "quota.h"
 #include "json_support.h"
 #include "jscalendar.h"
 #include "jmap_notif.h"
@@ -190,7 +191,7 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         "CalendarEvent/set",
         JMAP_URN_CALENDARS,
         &jmap_calendarevent_set,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE | JMAP_SET_ATOMIC
     },
     {
         "CalendarEvent/copy",
@@ -5562,6 +5563,390 @@ static void merge_missing_vevents(icalcomponent *dstical, icalcomponent *srcical
     free_hash_table(&have, NULL);
 }
 
+/* An atomic CalendarEvent/set runs each change twice: a plan pass that
+ * only checks, then an apply pass that logs the inverse of each write. */
+struct calevent_atomic
+{
+    bool plan;
+    struct jmap_undo undo;
+    hash_table destroyed; /* plan: iCal UIDs whose resources are destroyed */
+    hash_table created;   /* plan: "uid recurid" of each create */
+    hash_table quota;     /* plan: quota root -> struct calevent_quota */
+    bool unlinks;         /* plan: some change expunges a stored event */
+    const char *op_id;    /* plan: the id of the change in hand */
+    json_t *op_errors;    /* plan: where its SetErrors go */
+    const char *recheck;  /* plan: the create being checked again */
+    hash_table planned;   /* plan: creation id -> struct calevent_planned */
+    ptrarray_t later;     /* apply: struct calevent_later, run on success */
+};
+
+/* Where a planned create stores its event, and the quota it charged. */
+struct calevent_planned
+{
+    char *mboxname;
+    quota_t messages;
+    quota_t storage;
+};
+
+static void _calevent_planned_free(void *rock)
+{
+    struct calevent_planned *p = rock;
+
+    free(p->mboxname);
+    free(p);
+}
+
+/* The quota a planned atomic CalendarEvent/set uses under one root, and
+ * the changes that add to it: pairs of SetError map and id. */
+struct calevent_quota
+{
+    quota_t diffs[QUOTA_NUMRESOURCES];
+    ptrarray_t charged;
+};
+
+static void _calevent_quota_free(void *rock)
+{
+    struct calevent_quota *q = rock;
+
+    for (int i = 1; i < ptrarray_size(&q->charged); i += 2) {
+        free(ptrarray_nth(&q->charged, i));
+    }
+    ptrarray_fini(&q->charged);
+    free(q);
+}
+
+/* Charge the change in hand to @mboxname's quota root. */
+static void _calevent_plan_quota(struct calevent_atomic *atomic,
+                                 const char *mboxname,
+                                 quota_t messages,
+                                 quota_t storage)
+{
+    char root[MAX_MAILBOX_NAME + 1];
+
+    if (!quota_findroot(root, sizeof(root), mboxname)) {
+        return;
+    }
+
+    struct calevent_quota *q = hash_lookup(root, &atomic->quota);
+    if (!q) {
+        q = xzmalloc(sizeof(struct calevent_quota));
+        hash_insert(root, q, &atomic->quota);
+    }
+    q->diffs[QUOTA_MESSAGE] += messages;
+    q->diffs[QUOTA_STORAGE] += storage;
+    if (messages > 0 || storage > 0) {
+        ptrarray_append(&q->charged, atomic->op_errors);
+        ptrarray_append(&q->charged, xstrdup(atomic->op_id));
+    }
+}
+
+/* Report overQuota for every change that adds to a quota root the whole
+ * plan would take over its limit.  A root may stay over quota, but not
+ * grow. */
+static void _calevent_plan_check_quota(struct calevent_atomic *atomic)
+{
+    hash_iter *iter = hash_table_iter(&atomic->quota);
+
+    while (hash_iter_next(iter)) {
+        struct calevent_quota *q = hash_iter_val(iter);
+        quota_t diffs[QUOTA_NUMRESOURCES];
+        bool grows = false;
+
+        for (int res = 0; res < QUOTA_NUMRESOURCES; res++) {
+            diffs[res] = q->diffs[res] > 0 ? q->diffs[res] : -1;
+            grows = grows || q->diffs[res] > 0;
+        }
+        if (!grows || !quota_check_useds(hash_iter_key(iter), diffs)) {
+            continue;
+        }
+        for (int i = 0; i + 1 < ptrarray_size(&q->charged); i += 2) {
+            json_t *errors = ptrarray_nth(&q->charged, i);
+            const char *id = ptrarray_nth(&q->charged, i + 1);
+            if (!json_object_get(errors, id)) {
+                json_object_set_new(errors,
+                                    id,
+                                    json_pack("{s:s}", "type", "overQuota"));
+            }
+        }
+    }
+    hash_iter_free(&iter);
+}
+
+/* Undo record for a CalendarEvent/set write to one calendar. */
+struct calevent_undo
+{
+    char *mboxname;
+    uint32_t olduid; /* the record it expunged, to restore */
+    uint32_t newuid; /* the record it appended, to expunge */
+    char *userid;
+    icalcomponent *ical;    /* attachments: the event they were added for */
+    icalcomponent *oldical; /* attachments: the event before */
+};
+
+static void _calevent_undo_free(void *rock)
+{
+    struct calevent_undo *u = rock;
+
+    free(u->mboxname);
+    free(u->userid);
+    if (u->ical) {
+        icalcomponent_free(u->ical);
+    }
+    if (u->oldical) {
+        icalcomponent_free(u->oldical);
+    }
+    free(u);
+}
+
+static int _calevent_undo_failed(const struct calevent_undo *u, int r)
+{
+    if (r) {
+        xsyslog_ev(LOG_ERR,
+                   "jmap.calendarevent.undo.failed",
+                   lf_s_opt("mbox.name", u->mboxname),
+                   lf_u("old.msg.imapuid", u->olduid),
+                   lf_u("msg.imapuid", u->newuid),
+                   lf_err("error", r));
+    }
+    return r;
+}
+
+/* Expunge the record a write appended and restore the one it expunged.
+ * The restored record keeps its createdmodseq, so its event id. */
+static int _calevent_undo_record(void *rock)
+{
+    struct calevent_undo *u = rock;
+    struct mailbox *mbox = NULL;
+    struct index_record record;
+    int r = mailbox_open_iwl(u->mboxname, &mbox);
+
+    if (!r && u->newuid) {
+        r = mailbox_find_index_record(mbox, u->newuid, &record);
+        if (!r && !(record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+            record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+            r = mailbox_rewrite_index_record(mbox, &record);
+        }
+    }
+    if (!r && u->olduid) {
+        r = mailbox_find_index_record(mbox, u->olduid, &record);
+        if (!r && (record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+            /* caldav_store_resource tags a record it replaces with
+             * DAV:unbind, which marks it gone from the collection, not
+             * just changed; the restored record is live again */
+            int userflag;
+            if (!mailbox_user_flag(mbox, DFLAG_UNBIND, &userflag, 0)) {
+                record.user_flags[userflag / 32] &= ~(1U << (userflag & 31));
+            }
+            r = mailbox_restore_record(mbox, &record, false, NULL, NULL);
+        }
+    }
+    if (mbox) {
+        if (r) {
+            mailbox_abort(mbox);
+        }
+        else {
+            r = mailbox_commit(mbox);
+        }
+    }
+    mailbox_close(&mbox);
+    return _calevent_undo_failed(u, r);
+}
+
+/* Release the managed attachment references a write added. */
+static int _calevent_undo_attachments(void *rock)
+{
+    struct calevent_undo *u = rock;
+    int r = caldav_manage_attachments(u->userid,
+                                      u->oldical,
+                                      u->ical,
+                                      CALDAV_MATTACH_REMOVED);
+
+    return _calevent_undo_failed(u, r == HTTP_NOT_FOUND ? 0 : r);
+}
+
+/* Push the undo of a write to @mbox that expunged @olduid and appended
+ * @newuid (either may be 0). */
+static void _calevent_push_record(struct calevent_atomic *atomic,
+                                  struct mailbox *mbox,
+                                  uint32_t olduid,
+                                  uint32_t newuid)
+{
+    struct calevent_undo *u = xzmalloc(sizeof(struct calevent_undo));
+
+    u->mboxname = xstrdup(mailbox_name(mbox));
+    u->olduid = olduid;
+    u->newuid = newuid;
+    jmap_undo_push(&atomic->undo,
+                   _calevent_undo_record,
+                   u,
+                   _calevent_undo_free);
+}
+
+/* Push the undo of caldav_manage_attachments(CALDAV_MATTACH_ADDED). */
+static void _calevent_push_attachments(struct calevent_atomic *atomic,
+                                       const char *userid,
+                                       icalcomponent *ical,
+                                       icalcomponent *oldical)
+{
+    struct calevent_undo *u = xzmalloc(sizeof(struct calevent_undo));
+
+    u->userid = xstrdup(userid);
+    u->ical = ical ? icalcomponent_clone(ical) : NULL;
+    u->oldical = oldical ? icalcomponent_clone(oldical) : NULL;
+    jmap_undo_push(&atomic->undo,
+                   _calevent_undo_attachments,
+                   u,
+                   _calevent_undo_free);
+}
+
+/* The live record of @resource in @mbox, or 0. */
+static uint32_t _calevent_resource_uid(struct caldav_db *db,
+                                       struct mailbox *mbox,
+                                       const char *resource)
+{
+    const mbentry_t mbentry = { .name = (char *) mailbox_name(mbox),
+                                .uniqueid = (char *) mailbox_uniqueid(mbox) };
+    struct caldav_data *cdata = NULL;
+
+    caldav_lookup_resource(db, &mbentry, resource, &cdata, 0);
+    return cdata && cdata->dav.alive ? cdata->dav.imap_uid : 0;
+}
+
+/* An upper bound on what caldav_store_resource stores for @ical: its
+ * iCalendar data and the RFC 5322 header around it. */
+static quota_t _calevent_stored_size(icalcomponent *ical,
+                                     const strarray_t *addresses)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    const char *summary = comp ? icalcomponent_get_summary(comp) : NULL;
+    icalproperty *prop =
+        comp ? icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY)
+             : NULL;
+    const char *organizer =
+        prop ? icalproperty_get_decoded_calendaraddress(prop) : NULL;
+    quota_t size = strlen(icalcomponent_as_ical_string(ical));
+
+    /* MIME encoding at most triples the Subject (1k of SUMMARY), From
+     * and X-Schedule-User-Address */
+    size += 3 * MIN(summary ? strlen(summary) : 0, 1024);
+    size += 3 * (organizer ? strlen(organizer) : 0);
+    for (int i = 0; i < strarray_size(addresses); i++) {
+        size += 3 * (strlen(strarray_nth(addresses, i)) + 1);
+    }
+    /* Date, Message-ID, Content-* and MIME-Version */
+    return size + 1024;
+}
+
+/* Whether caldav_store_resource accepts a VEVENT in @mbox. */
+static bool _calevent_supports_vevent(struct mailbox *mbox, const char *userid)
+{
+    static const char annot[] =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
+    struct buf buf = BUF_INITIALIZER;
+    bool supported = true;
+
+    if (!annotatemore_lookupmask_mbox(mbox, annot, userid, &buf)
+        && buf_len(&buf))
+    {
+        supported = strtoul(buf_cstring(&buf), NULL, 10) & CAL_COMP_VEVENT;
+    }
+    buf_free(&buf);
+    return supported;
+}
+
+/* A side effect an atomic apply defers until every write has succeeded.
+ * None of them fails the method in a non-atomic CalendarEvent/set either. */
+enum calevent_later_kind {
+    CALEVENT_LATER_NOTIF,  /* jmap_create_caleventnotif() */
+    CALEVENT_LATER_ITIP,   /* remove_itip_messages() */
+    CALEVENT_LATER_ATTACH, /* release attachments, CALDAV_MATTACH_REMOVED */
+};
+
+struct calevent_later
+{
+    enum calevent_later_kind kind;
+    char *mboxname;
+    const char *type;
+    char *ical_uid;
+    char *ical_recurid;
+    modseq_t createdmodseq;
+    strarray_t addresses;
+    int is_draft;
+    json_t *jevent;
+    json_t *jpatch;
+    icalcomponent *ical;
+    icalcomponent *oldical;
+};
+
+static void _calevent_later_free(void *rock)
+{
+    struct calevent_later *l = rock;
+
+    free(l->mboxname);
+    free(l->ical_uid);
+    free(l->ical_recurid);
+    strarray_fini(&l->addresses);
+    json_decref(l->jevent);
+    json_decref(l->jpatch);
+    if (l->ical) {
+        icalcomponent_free(l->ical);
+    }
+    if (l->oldical) {
+        icalcomponent_free(l->oldical);
+    }
+    free(l);
+}
+
+static struct calevent_later *_calevent_later(struct calevent_atomic *atomic,
+                                              enum calevent_later_kind kind,
+                                              const char *ical_uid,
+                                              const char *ical_recurid)
+{
+    struct calevent_later *l = xzmalloc(sizeof(struct calevent_later));
+
+    l->kind = kind;
+    l->ical_uid = xstrdupnull(ical_uid);
+    l->ical_recurid = xstrdupnull(ical_recurid);
+    ptrarray_append(&atomic->later, l);
+    return l;
+}
+
+static void _calevent_later_notif(struct calevent_atomic *atomic,
+                                  const char *mboxname,
+                                  const char *type,
+                                  const struct jmap_caleventid *eid,
+                                  const strarray_t *addresses,
+                                  int is_draft,
+                                  json_t *jevent,
+                                  json_t *jpatch)
+{
+    struct calevent_later *l = _calevent_later(atomic,
+                                               CALEVENT_LATER_NOTIF,
+                                               eid->ical_uid,
+                                               eid->ical_recurid);
+
+    l->mboxname = xstrdup(mboxname);
+    l->type = type;
+    l->createdmodseq = eid->createdmodseq;
+    if (addresses) {
+        strarray_cat(&l->addresses, addresses);
+    }
+    l->is_draft = is_draft;
+    l->jevent = json_deep_copy(jevent);
+    l->jpatch = json_deep_copy(jpatch);
+}
+
+static void _calevent_later_attach(struct calevent_atomic *atomic,
+                                   icalcomponent *ical,
+                                   icalcomponent *oldical)
+{
+    struct calevent_later *l =
+        _calevent_later(atomic, CALEVENT_LATER_ATTACH, NULL, NULL);
+
+    l->ical = ical ? icalcomponent_clone(ical) : NULL;
+    l->oldical = oldical ? icalcomponent_clone(oldical) : NULL;
+}
+
 struct createevent {
     mbentry_t *mbentry;
     json_t *jsevent;
@@ -5578,6 +5963,7 @@ struct createevent {
     modseq_t deletedmodseq;
     bool is_copy;
     modseq_t createdmodseq;
+    struct calevent_atomic *atomic;
 };
 
 static int createevent_lookup_calendar(jmap_req_t *req,
@@ -5943,15 +6329,82 @@ static int createevent_store(jmap_req_t *req,
         goto done;
     }
 
+    // An atomic plan checks the UID against the events the method leaves.
+    struct calevent_atomic *atomic = create->atomic;
+    bool replaces_destroyed = false;
+    if (atomic && atomic->plan && !atomic->recheck) {
+        buf_printf(&buf, "%s\t%s", create->ical_uid,
+                   create->ical_recurid ? create->ical_recurid : "");
+        if (hash_lookup(buf_cstring(&buf), &atomic->created)) {
+            jmap_parser_invalid(parser, "uid");
+            if (create->ical_recurid)
+                jmap_parser_invalid(parser, "recurrenceId");
+            goto done;
+        }
+        hash_insert(buf_cstring(&buf), (void *) 1, &atomic->created);
+        buf_reset(&buf);
+    }
+    if (atomic && atomic->plan) {
+        replaces_destroyed =
+            hash_lookup(create->ical_uid, &atomic->destroyed) != NULL;
+    }
+
     // Handle existing iCalendar data for this UID.
-    r = createevent_load_ical(req, parser, create);
-    if (r || json_array_size(parser->invalid)) goto done;
+    if (!replaces_destroyed) {
+        r = createevent_load_ical(req, parser, create);
+        if (r || json_array_size(parser->invalid)) goto done;
+    }
 
     // Sanity-check iCalendar data
     size_t ical_len = strlen(icalcomponent_as_ical_string(create->ical));
     if (ical_len > (size_t) icalendar_max_size) {
         r = IMAP_MESSAGE_TOO_LARGE;
         goto done;
+    }
+
+    if (atomic && atomic->plan) {
+        if (!_calevent_supports_vevent(mbox, req->userid)) {
+            r = HTTP_FORBIDDEN;
+            goto done;
+        }
+
+        /* Adding to an existing UID may replace its resource */
+        quota_t size = _calevent_stored_size(create->ical,
+                                             &create->schedule_addresses);
+        quota_t messages = 1;
+        uint32_t olduid = create->resourcename ?
+            _calevent_resource_uid(create->db, mbox, create->resourcename) : 0;
+        struct index_record oldrecord;
+        if (olduid && !mailbox_find_index_record(mbox, olduid, &oldrecord)) {
+            atomic->unlinks = true;
+            messages = 0;
+            size -= oldrecord.size;
+        }
+
+        struct calevent_planned *p =
+            atomic->recheck ? hash_lookup(atomic->recheck, &atomic->planned)
+                            : NULL;
+        if (p) {
+            /* the update replaces the event the create planned */
+            atomic->unlinks = true;
+            _calevent_plan_quota(atomic,
+                                 p->mboxname,
+                                 -p->messages,
+                                 -p->storage);
+        }
+        else if (!atomic->recheck) {
+            p = xzmalloc(sizeof(struct calevent_planned));
+            p->mboxname = xstrdup(mailbox_name(mbox));
+            p->messages = messages;
+            p->storage = size;
+            hash_insert(atomic->op_id, p, &atomic->planned);
+        }
+        _calevent_plan_quota(atomic, mailbox_name(mbox), messages, size);
+        goto done;
+    }
+    if (atomic) {
+        r = jmap_undo_failpoint(&atomic->undo);
+        if (r) goto done;
     }
 
     // Process managed attachments
@@ -5963,6 +6416,9 @@ static int createevent_store(jmap_req_t *req,
                    lf_err("error", r2));
         r = IMAP_INTERNAL;
         goto done;
+    }
+    if (atomic) {
+        _calevent_push_attachments(atomic, req->accountid, create->ical, NULL);
     }
 
     // Use UID as DAV resource name, or generate name.
@@ -5992,10 +6448,18 @@ static int createevent_store(jmap_req_t *req,
         json_boolean_value(json_object_get(create->jsevent, "isDraft"));
     strarray_t add_imapflags = STRARRAY_INITIALIZER;
     if (is_draft) strarray_append(&add_imapflags, "\\draft");
+    uint32_t last_uid = mbox->i.last_uid;
+    uint32_t olduid = atomic ?
+        _calevent_resource_uid(create->db, mbox, create->resourcename) : 0;
+    /* the atomic plan checked quota against the final state */
+    txn.flags.noquotacheck = atomic != NULL;
     r = caldav_store_resource(&txn, create->ical, mbox,
             create->resourcename, create->createdmodseq, create->db, PERMS_NOKEEP,
             req->userid, &add_imapflags, NULL, &create->schedule_addresses);
     strarray_fini(&add_imapflags);
+    if (atomic && mbox->i.last_uid != last_uid) {
+        _calevent_push_record(atomic, mbox, olduid, mbox->i.last_uid);
+    }
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         xsyslog(LOG_ERR, "caldav_store_resource failed",
                 "accountid=<%s> err=<%s>",
@@ -6043,8 +6507,14 @@ static int createevent_store(jmap_req_t *req,
         // Create notification
         json_t *myevent = json_deep_copy(create->jsevent);
         jmap_calendarevent_remove_peruserprops(myevent);
-        r2 = jmap_create_caleventnotif(notifmbox, req->userid, req->authstate,
-                mailbox_name(mbox), "created", &eid,
+        if (atomic) {
+            _calevent_later_notif(atomic, mailbox_name(mbox), "created", &eid,
+                                  &create->schedule_addresses, is_draft,
+                                  myevent, NULL);
+            r2 = 0;
+        }
+        else r2 = jmap_create_caleventnotif(notifmbox, req->userid,
+                req->authstate, mailbox_name(mbox), "created", &eid,
                 &create->schedule_addresses, NULL,
                 is_draft, myevent, NULL);
         if (r2) {
@@ -6089,6 +6559,7 @@ static void setcalendarevents_create(jmap_req_t *req,
                                      struct mailbox *notifmbox,
                                      int send_itip,
                                      bool is_copy,
+                                     struct calevent_atomic *atomic,
                                      json_t *serverset,
                                      json_t **errptr)
 {
@@ -6100,6 +6571,7 @@ static void setcalendarevents_create(jmap_req_t *req,
         .db = db,
         .serverset = serverset,
         .is_copy = is_copy,
+        .atomic = atomic,
     };
 
     if (!is_copy) {
@@ -6870,6 +7342,7 @@ static void setcalendarevents_update(jmap_req_t *req,
                                      struct caldav_data *cdata,
                                      struct caldav_db *db,
                                      int send_scheduling_messages,
+                                     struct calevent_atomic *atomic,
                                      json_t *serverset,
                                      json_t **err)
 {
@@ -7025,6 +7498,17 @@ static void setcalendarevents_update(jmap_req_t *req,
             json_object_size(update.event_patch) == 1 &&
             json_object_get(update.event_patch, "calendarIds")) {
 
+        if (atomic && atomic->plan) {
+            atomic->unlinks = true;
+            _calevent_plan_quota(atomic, mailbox_name(dstmbox), 1, record.size);
+            _calevent_plan_quota(atomic, mailbox_name(mbox), -1, -record.size);
+            goto done;
+        }
+        if (atomic) {
+            r = jmap_undo_failpoint(&atomic->undo);
+            if (r) goto done;
+        }
+
         /* Setup append state */
         struct appendstate as;
         r = append_setup_mbox(&as, dstmbox, req->userid, req->authstate,
@@ -7062,6 +7546,11 @@ static void setcalendarevents_update(jmap_req_t *req,
                     lf_err("error", r));
             goto done;
         }
+        if (atomic) {
+            _calevent_push_record(atomic, dstmbox, 0, dstmbox->i.last_uid);
+            r = jmap_undo_failpoint(&atomic->undo);
+            if (r) goto done;
+        }
 
         /* Expunge record from source mailbox. */
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
@@ -7075,6 +7564,7 @@ static void setcalendarevents_update(jmap_req_t *req,
             mailbox_close(&mbox);
             goto done;
         }
+        if (atomic) _calevent_push_record(atomic, mbox, record.uid, 0);
         mboxevent_extract_record(mboxevent, mbox, &record);
         mboxevent_extract_mailbox(mboxevent, mbox);
         mboxevent_set_numunseen(mboxevent, mbox, -1);
@@ -7138,6 +7628,29 @@ static void setcalendarevents_update(jmap_req_t *req,
     }
     else if (r) goto done;
 
+    if (atomic && atomic->plan) {
+        if (!_calevent_supports_vevent(dstmbox ? dstmbox : mbox, req->userid)) {
+            r = HTTP_FORBIDDEN;
+            goto done;
+        }
+        quota_t size = update.newical ?
+            _calevent_stored_size(update.newical, &schedule_addresses) : 0;
+        atomic->unlinks = true;
+        if (dstmbox) {
+            _calevent_plan_quota(atomic, mailbox_name(dstmbox), 1, size);
+            _calevent_plan_quota(atomic, mailbox_name(mbox), -1, -record.size);
+        }
+        else {
+            _calevent_plan_quota(atomic, mailbox_name(mbox), 0,
+                                 size - record.size);
+        }
+        goto done;
+    }
+    if (atomic) {
+        r = jmap_undo_failpoint(&atomic->undo);
+        if (r) goto done;
+    }
+
     /* Attachments this drops are released only once it's stored */
     int ret = caldav_manage_attachments(req->accountid,
                                         update.newical, update.oldical,
@@ -7149,6 +7662,10 @@ static void setcalendarevents_update(jmap_req_t *req,
         r = IMAP_INTERNAL;
         goto done;
     }
+    if (atomic) {
+        _calevent_push_attachments(atomic, req->accountid, update.newical,
+                                   update.oldical);
+    }
 
     /* Remove METHOD property */
     remove_itip_properties(update.newical);
@@ -7158,7 +7675,9 @@ static void setcalendarevents_update(jmap_req_t *req,
     struct transaction_t txn = {
         .req_hdrs = spool_new_hdrcache(),
         .userid = req->userid,
-        .authstate = req->authstate
+        .authstate = req->authstate,
+        /* the atomic plan checked quota against the final state */
+        .flags.noquotacheck = atomic != NULL,
     };
     r = proxy_mlookup(mailbox_name(tgtmbox), &txn.req_tgt.mbentry, NULL, NULL);
     if (r) {
@@ -7170,17 +7689,29 @@ static void setcalendarevents_update(jmap_req_t *req,
                    lf_err("error", r));
     }
     else {
+        uint32_t last_uid = tgtmbox->i.last_uid;
+        uint32_t olduid = atomic ?
+            _calevent_resource_uid(db, tgtmbox, resource) : 0;
         r = caldav_store_resource(&txn, update.newical,
                 tgtmbox, resource, record.createdmodseq,
                 db, PERMS_NOKEEP, req->userid,
                 NULL, &del_imapflags, &schedule_addresses);
+        if (atomic && tgtmbox->i.last_uid != last_uid) {
+            _calevent_push_record(atomic, tgtmbox, olduid, tgtmbox->i.last_uid);
+        }
         if (calendar_has_sharees(tgtmbox->mbentry)) {
             // Create notification
             if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
                 json_t *patch_copy = json_deep_copy(event_patch);
                 jmap_calendarevent_remove_peruserprops(patch_copy);
                 jmap_calendarevent_remove_peruserprops(update.old_event);
-                if (json_object_size(patch_copy)) {
+                if (json_object_size(patch_copy) && atomic) {
+                    _calevent_later_notif(atomic, mailbox_name(tgtmbox),
+                            "updated", eid, &schedule_addresses,
+                            record.system_flags & FLAG_DRAFT,
+                            update.old_event, patch_copy);
+                }
+                else if (json_object_size(patch_copy)) {
                     int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
                             req->authstate, mailbox_name(tgtmbox), "updated",
                             eid, &schedule_addresses, NULL,
@@ -7205,6 +7736,10 @@ static void setcalendarevents_update(jmap_req_t *req,
 
     if (dstmbox) {
         /* Only now that it's stored, expunge it from the old calendar. */
+        if (atomic) {
+            r = jmap_undo_failpoint(&atomic->undo);
+            if (r) goto done;
+        }
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
         mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
         r = mailbox_rewrite_index_record(mbox, &record);
@@ -7214,6 +7749,7 @@ static void setcalendarevents_update(jmap_req_t *req,
             mailbox_close(&mbox);
             goto done;
         }
+        if (atomic) _calevent_push_record(atomic, mbox, record.uid, 0);
         mboxevent_extract_record(mboxevent, mbox, &record);
         mboxevent_extract_mailbox(mboxevent, mbox);
         mboxevent_set_numunseen(mboxevent, mbox, -1);
@@ -7230,9 +7766,10 @@ static void setcalendarevents_update(jmap_req_t *req,
 
     /* The event is stored, so a failure here only leaves attachment
      * refcounts off; it mustn't fail the item */
-    ret = caldav_manage_attachments(req->accountid,
-                                    update.newical, update.oldical,
-                                    CALDAV_MATTACH_REMOVED);
+    if (atomic) _calevent_later_attach(atomic, update.newical, update.oldical);
+    else ret = caldav_manage_attachments(req->accountid,
+                                         update.newical, update.oldical,
+                                         CALDAV_MATTACH_REMOVED);
     if (ret && ret != HTTP_NOT_FOUND) {
         xsyslog_ev(LOG_ERR, "jmap.calendarevent.attachments.failed",
                    lf_s("cal.uid", eid->ical_uid),
@@ -7240,8 +7777,10 @@ static void setcalendarevents_update(jmap_req_t *req,
     }
 
     /* Remove related iTIP messages from CalDAV Scheduling Inbox */
-    remove_itip_messages(db, schedinbox, eid->ical_uid,
-                         update.is_standalone ? eid->ical_recurid : NULL);
+    const char *itip_recurid = update.is_standalone ? eid->ical_recurid : NULL;
+    if (atomic) _calevent_later(atomic, CALEVENT_LATER_ITIP, eid->ical_uid,
+                                itip_recurid);
+    else remove_itip_messages(db, schedinbox, eid->ical_uid, itip_recurid);
 
     /* Handle scheduling. */
     if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
@@ -7349,7 +7888,8 @@ static int setcalendarevents_destroy(jmap_req_t *req,
                                      struct jmap_caleventid *eid,
                                      struct caldav_data *cdata,
                                      struct caldav_db *db,
-                                     int send_scheduling_messages)
+                                     int send_scheduling_messages,
+                                     struct calevent_atomic *atomic)
 {
     int r = 0;
 
@@ -7399,7 +7939,8 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         json_t *err = NULL;
         setcalendarevents_update(req, notifmbox, schedinbox, event_patch,
                                  eid, cdata, db,
-                                 send_scheduling_messages, update, &err);
+                                 send_scheduling_messages, atomic,
+                                 update, &err);
         json_decref(event_patch);
         json_decref(update);
         if (err) {
@@ -7497,6 +8038,23 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         newical = NULL;
     }
 
+    if (atomic && atomic->plan) {
+        atomic->unlinks = true;
+        if (newical) {
+            quota_t size = _calevent_stored_size(newical, &schedule_addresses);
+            _calevent_plan_quota(atomic, mboxname, 0, size - record.size);
+        }
+        else {
+            hash_insert(eid->ical_uid, (void *) 1, &atomic->destroyed);
+            _calevent_plan_quota(atomic, mboxname, -1, -record.size);
+        }
+        goto done;
+    }
+    if (atomic) {
+        r = jmap_undo_failpoint(&atomic->undo);
+        if (r) goto done;
+    }
+
     if (!newical) {
         /* Expunge the resource from mailbox. */
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
@@ -7508,18 +8066,25 @@ static int setcalendarevents_destroy(jmap_req_t *req,
             mailbox_close(&mbox);
             goto done;
         }
+        if (atomic) _calevent_push_record(atomic, mbox, record.uid, 0);
     }
     else {
         /* Update resource */
         struct transaction_t txn = {
             .req_hdrs = spool_new_hdrcache(),
             .userid = req->userid,
-            .authstate = req->authstate
+            .authstate = req->authstate,
+            /* the atomic plan checked quota against the final state */
+            .flags.noquotacheck = atomic != NULL,
         };
+        uint32_t last_uid = mbox->i.last_uid;
         r = caldav_store_resource(&txn, newical, mbox,
                 resource, record.createdmodseq, db, PERMS_NOKEEP, req->userid,
                 NULL, NULL, &schedule_addresses);
         transaction_free(&txn);
+        if (atomic && mbox->i.last_uid != last_uid) {
+            _calevent_push_record(atomic, mbox, record.uid, mbox->i.last_uid);
+        }
         if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
             xsyslog(LOG_ERR, "caldav_store_resource", "err=<%s>",
                     error_message(r));
@@ -7530,8 +8095,10 @@ static int setcalendarevents_destroy(jmap_req_t *req,
 
     /* Release attachments only once the event is gone, since that can
      * expunge them; a failure here only leaves refcounts off */
-    int ret = caldav_manage_attachments(req->accountid, newical, oldical,
-                                        CALDAV_MATTACH_REMOVED);
+    int ret = 0;
+    if (atomic) _calevent_later_attach(atomic, newical, oldical);
+    else ret = caldav_manage_attachments(req->accountid, newical, oldical,
+                                         CALDAV_MATTACH_REMOVED);
     if (ret && ret != HTTP_NOT_FOUND) {
         xsyslog_ev(LOG_ERR, "jmap.calendarevent.attachments.failed",
                    lf_s("cal.uid", eid->ical_uid),
@@ -7553,7 +8120,14 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     if (calendar_has_sharees(mbox->mbentry)) {
         /* Create notification */
         jmap_calendarevent_remove_peruserprops(old_event);
-        int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
+        int r2 = 0;
+        if (atomic) {
+            _calevent_later_notif(atomic, mailbox_name(mbox), "destroyed",
+                                  eid, &schedule_addresses,
+                                  record.system_flags & FLAG_DRAFT,
+                                  old_event, NULL);
+        }
+        else r2 = jmap_create_caleventnotif(notifmbox, req->userid,
                 req->authstate, mailbox_name(mbox), "destroyed",
                 eid, &schedule_addresses, NULL,
                 record.system_flags & FLAG_DRAFT, old_event, NULL);
@@ -7573,8 +8147,11 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     mboxevent_free(&mboxevent);
 
     /* Remove related iTIP messages from CalDAV Scheduling Inbox */
-    remove_itip_messages(db, schedinbox, eid->ical_uid,
-                         is_standalone_instance ? eid->ical_recurid : NULL);
+    const char *itip_recurid =
+        is_standalone_instance ? eid->ical_recurid : NULL;
+    if (atomic) _calevent_later(atomic, CALEVENT_LATER_ITIP, eid->ical_uid,
+                                itip_recurid);
+    else remove_itip_messages(db, schedinbox, eid->ical_uid, itip_recurid);
 
 done:
     mailbox_close(&mbox);
@@ -7627,6 +8204,419 @@ static int setcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
     }
 
     return 0;
+}
+
+/* Run the side effects an atomic CalendarEvent/set deferred. */
+static void _calevent_run_later(jmap_req_t *req,
+                                struct calevent_atomic *atomic,
+                                struct caldav_db *db,
+                                struct mailbox *schedinbox,
+                                struct mailbox *notifmbox)
+{
+    for (int i = 0; i < ptrarray_size(&atomic->later); i++) {
+        struct calevent_later *l = ptrarray_nth(&atomic->later, i);
+        struct jmap_caleventid eid = {
+            .createdmodseq = l->createdmodseq,
+            .ical_uid = l->ical_uid,
+            .ical_recurid = l->ical_recurid,
+        };
+        int r = 0;
+
+        switch (l->kind) {
+        case CALEVENT_LATER_NOTIF:
+            r = jmap_create_caleventnotif(notifmbox,
+                                          req->userid,
+                                          req->authstate,
+                                          l->mboxname,
+                                          l->type,
+                                          &eid,
+                                          &l->addresses,
+                                          NULL,
+                                          l->is_draft,
+                                          l->jevent,
+                                          l->jpatch);
+            if (r) {
+                xsyslog_ev(LOG_WARNING,
+                           "jmap.calendarevent.notification.failed",
+                           lf_s("cal.uid", l->ical_uid),
+                           lf_err("error", r));
+            }
+            break;
+        case CALEVENT_LATER_ITIP:
+            remove_itip_messages(db, schedinbox, l->ical_uid, l->ical_recurid);
+            break;
+        case CALEVENT_LATER_ATTACH:
+            r = caldav_manage_attachments(req->accountid,
+                                          l->ical,
+                                          l->oldical,
+                                          CALDAV_MATTACH_REMOVED);
+            if (r && r != HTTP_NOT_FOUND) {
+                xsyslog_ev(LOG_ERR,
+                           "jmap.calendarevent.attachments.failed",
+                           lf_err("error", r));
+            }
+            break;
+        }
+    }
+}
+
+/* Resolve a CalendarEvent/set id for an atomic apply, whose creates aren't
+ * registered with the request until it has succeeded. */
+static const char *_calevent_resolve_id(jmap_req_t *req,
+                                        hash_table *created_ids,
+                                        const char *id)
+{
+    if (id && id[0] == '#') {
+        const char *eventid = hash_lookup(id + 1, created_ids);
+        return eventid ? eventid : jmap_lookup_id(req, id + 1);
+    }
+    return id;
+}
+
+static json_t *_calevent_destroy_error(int r)
+{
+    switch (r) {
+    case IMAP_NOTFOUND:
+        return json_pack("{s:s}", "type", "notFound");
+    case IMAP_PERMISSION_DENIED:
+        return json_pack("{s:s}", "type", "forbidden");
+    default:
+        return jmap_server_error(r);
+    }
+}
+
+/* Plan an update of an event this method creates, by checking the create
+ * of the patched event. */
+static json_t *_calevent_plan_update_created(jmap_req_t *req,
+                                             struct calevent_atomic *atomic,
+                                             struct jmap_set *set,
+                                             struct caldav_db *db,
+                                             struct mailbox *notifmbox,
+                                             const char *update_id,
+                                             json_t *patch)
+{
+    const char *creation_id = update_id + 1;
+
+    if (json_object_get(set->not_created, creation_id)) {
+        /* the create already fails the method */
+        return NULL;
+    }
+
+    json_t *base = json_object_get(set->create, creation_id);
+    json_t *invalid = json_array();
+    json_t *event = jmap_patchobject_apply(base, patch, invalid, 0);
+    const char *uid = json_string_value(json_object_get(patch, "uid"));
+    json_t *err = NULL;
+
+    if (!event) {
+        err = json_pack("{s:s}", "type", "invalidPatch");
+    }
+    else if (json_array_size(invalid)) {
+        err = json_pack("{s:s s:O}",
+                        "type",
+                        "invalidProperties",
+                        "properties",
+                        invalid);
+    }
+    else if (uid
+             && strcmpsafe(uid,
+                           json_string_value(json_object_get(base, "uid"))))
+    {
+        err = json_pack("{s:s s:[s]}",
+                        "type",
+                        "invalidProperties",
+                        "properties",
+                        "uid");
+    }
+    else {
+        json_t *serverset = json_object();
+        atomic->recheck = creation_id;
+        atomic->op_id = update_id;
+        atomic->op_errors = set->not_updated;
+        setcalendarevents_create(req,
+                                 event,
+                                 db,
+                                 notifmbox,
+                                 0,
+                                 false,
+                                 atomic,
+                                 serverset,
+                                 &err);
+        atomic->recheck = NULL;
+        json_decref(serverset);
+    }
+
+    json_decref(event);
+    json_decref(invalid);
+    return err;
+}
+
+/* Atomic CalendarEvent/set: check every change against the events the
+ * method leaves, writing nothing, then apply them all, undoing what was
+ * written if any write fails.  Returns the method error, or NULL. */
+static json_t *_calendarevent_set_atomic(jmap_req_t *req,
+                                         struct jmap_set *set,
+                                         struct caldav_db *db,
+                                         struct mailbox *schedinbox,
+                                         struct mailbox *notifmbox,
+                                         int send_itip)
+{
+    /* Unless expunged records are kept, an expunge can't be undone */
+    bool unlinks =
+        config_getenum(IMAPOPT_EXPUNGE_MODE) != IMAP_ENUM_EXPUNGE_MODE_DELAYED;
+    if (unlinks
+        && (json_array_size(set->destroy) || json_object_size(set->update)))
+    {
+        return json_pack("{s:s s:s}",
+                         "type",
+                         "cannotApplyAtomically",
+                         "description",
+                         "expunge_mode does not keep expunged events");
+    }
+
+    struct calevent_atomic atomic = { .plan = true,
+                                      .undo = JMAP_UNDO_INITIALIZER,
+                                      .later = PTRARRAY_INITIALIZER };
+    hash_table created_ids = HASH_TABLE_INITIALIZER;
+    struct jmap_caleventid *eid = NULL;
+    json_t *cause = NULL;
+    json_t *err = NULL;
+    void *sched_mark = NULL;
+    const char *id;
+    json_t *arg;
+    size_t i;
+
+    construct_hash_table(&atomic.destroyed, 64, 0);
+    construct_hash_table(&atomic.created, 64, 0);
+    construct_hash_table(&atomic.quota, 16, 0);
+    construct_hash_table(&atomic.planned, json_object_size(set->create) + 1, 0);
+    construct_hash_table(&created_ids, json_object_size(set->create) + 1, 0);
+
+    /* Plan, then apply.  The plan pass stops each change before its first
+     * write, so a failure in the apply pass is unexpected. */
+    for (int pass = 0; pass < 2; pass++) {
+        if (pass) {
+            _calevent_plan_check_quota(&atomic);
+            if (unlinks && atomic.unlinks) {
+                err = json_pack("{s:s s:s}",
+                                "type",
+                                "cannotApplyAtomically",
+                                "description",
+                                "expunge_mode does not keep expunged events");
+                goto done;
+            }
+            err = jmap_set_atomic_failure(set);
+            if (err) {
+                goto done;
+            }
+            atomic.plan = false;
+            sched_mark = sched_deferred_mark();
+        }
+
+        json_array_foreach (set->destroy, i, arg) {
+            id = json_string_value(arg);
+            if (!id || cause || json_object_get(set->not_destroyed, id)) {
+                continue;
+            }
+
+            struct caldav_data *cdata = NULL;
+            json_t *serr = NULL;
+            const char *errid = id;
+
+            jmap_caleventid_free(&eid);
+            eid = setcalendarevents_lookup_id(
+                req,
+                _calevent_resolve_id(req, &created_ids, id),
+                db,
+                &cdata);
+            if (!eid || !eid->ical_uid
+                || (atomic.plan
+                    && hash_lookup(eid->ical_uid, &atomic.destroyed)))
+            {
+                serr = json_pack("{s:s}", "type", "notFound");
+            }
+            else {
+                errid = eid->raw;
+                atomic.op_id = errid;
+                atomic.op_errors = set->not_destroyed;
+                int r = setcalendarevents_destroy(req,
+                                                  notifmbox,
+                                                  schedinbox,
+                                                  eid,
+                                                  cdata,
+                                                  db,
+                                                  send_itip,
+                                                  &atomic);
+                if (r) {
+                    serr = _calevent_destroy_error(r);
+                }
+            }
+            if (serr && atomic.plan) {
+                json_object_set_new(set->not_destroyed, errid, serr);
+            }
+            else if (serr) {
+                cause = serr;
+            }
+            else if (!atomic.plan) {
+                json_array_append_new(set->destroyed, json_string(eid->raw));
+            }
+        }
+
+        json_object_foreach (set->create, id, arg) {
+            if (cause || json_object_get(set->not_created, id)) {
+                continue;
+            }
+
+            json_t *create = json_object();
+            json_t *serr = NULL;
+
+            if (!strlen(id)) {
+                serr = json_pack("{s:s}", "type", "invalidArguments");
+            }
+            else {
+                atomic.op_id = id;
+                atomic.op_errors = set->not_created;
+                setcalendarevents_create(req,
+                                         arg,
+                                         db,
+                                         notifmbox,
+                                         send_itip,
+                                         false,
+                                         &atomic,
+                                         create,
+                                         &serr);
+            }
+            if (serr && atomic.plan) {
+                json_object_set_new(set->not_created, id, serr);
+            }
+            else if (serr) {
+                cause = serr;
+            }
+            else if (!atomic.plan) {
+                const char *eventid =
+                    json_string_value(json_object_get(create, "id"));
+                hash_insert(id, xstrdup(eventid), &created_ids);
+                json_object_set(set->created, id, create);
+            }
+            json_decref(create);
+        }
+
+        json_object_foreach (set->update, id, arg) {
+            if (cause || json_object_get(set->not_updated, id)) {
+                continue;
+            }
+            if (atomic.plan && id[0] == '#'
+                && json_object_get(set->create, id + 1))
+            {
+                json_t *serr = _calevent_plan_update_created(req,
+                                                             &atomic,
+                                                             set,
+                                                             db,
+                                                             notifmbox,
+                                                             id,
+                                                             arg);
+                if (serr) {
+                    json_object_set_new(set->not_updated, id, serr);
+                }
+                continue;
+            }
+
+            struct caldav_data *cdata = NULL;
+            json_t *update = json_object();
+            json_t *serr = NULL;
+            const char *errid = id;
+            const char *uidval = json_string_value(json_object_get(arg, "uid"));
+
+            jmap_caleventid_free(&eid);
+            eid = setcalendarevents_lookup_id(
+                req,
+                _calevent_resolve_id(req, &created_ids, id),
+                db,
+                &cdata);
+            if (!eid || !eid->ical_uid
+                || (atomic.plan
+                    && hash_lookup(eid->ical_uid, &atomic.destroyed)))
+            {
+                serr = json_pack("{s:s}", "type", "notFound");
+            }
+            else if (uidval && strcmp(uidval, eid->ical_uid)) {
+                /* The uid property must match the current iCalendar UID */
+                errid = eid->raw;
+                serr = json_pack("{s:s s:[s]}",
+                                 "type",
+                                 "invalidProperties",
+                                 "properties",
+                                 "uid");
+            }
+            else {
+                errid = eid->raw;
+                atomic.op_id = errid;
+                atomic.op_errors = set->not_updated;
+                setcalendarevents_update(req,
+                                         notifmbox,
+                                         schedinbox,
+                                         arg,
+                                         eid,
+                                         cdata,
+                                         db,
+                                         send_itip,
+                                         &atomic,
+                                         update,
+                                         &serr);
+            }
+            if (serr && atomic.plan) {
+                json_object_set_new(set->not_updated, errid, serr);
+            }
+            else if (serr) {
+                cause = serr;
+            }
+            else if (!atomic.plan) {
+                json_object_set(set->updated,
+                                eid->raw,
+                                json_object_size(update) ? update
+                                                         : json_null());
+            }
+            json_decref(update);
+        }
+    }
+
+    if (cause) {
+        xsyslog_ev(LOG_ERR,
+                   "jmap.calendarevent.set.failed",
+                   lf_s("jmap.accountid", req->accountid),
+                   lf_s_opt("error.type",
+                            json_string_value(json_object_get(cause, "type"))),
+                   lf_s_opt("error.description",
+                            json_string_value(
+                                json_object_get(cause, "description"))));
+        jmap_undo_run(&atomic.undo);
+        sched_deferred_discard(sched_mark);
+        json_decref(cause);
+        err = json_pack("{s:s}", "type", "serverFail");
+        goto done;
+    }
+
+    _calevent_run_later(req, &atomic, db, schedinbox, notifmbox);
+
+    hash_iter *iter = hash_table_iter(&created_ids);
+    while (hash_iter_next(iter)) {
+        jmap_add_id(req, hash_iter_key(iter), hash_iter_val(iter));
+    }
+    hash_iter_free(&iter);
+
+done:
+    jmap_caleventid_free(&eid);
+    jmap_undo_fini(&atomic.undo);
+    for (int j = 0; j < ptrarray_size(&atomic.later); j++) {
+        _calevent_later_free(ptrarray_nth(&atomic.later, j));
+    }
+    ptrarray_fini(&atomic.later);
+    free_hash_table(&atomic.destroyed, NULL);
+    free_hash_table(&atomic.created, NULL);
+    free_hash_table(&atomic.quota, _calevent_quota_free);
+    free_hash_table(&atomic.planned, _calevent_planned_free);
+    free_hash_table(&created_ids, free);
+    return err;
 }
 
 static int jmap_calendarevent_set(struct jmap_req *req)
@@ -7696,6 +8686,16 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         r = 0;
     }
 
+    if (set.atomic) {
+        err = _calendarevent_set_atomic(req, &set, db, schedinbox, notifmbox,
+                                        send_itip);
+        if (err) {
+            jmap_error(req, err);
+            goto done;
+        }
+        goto reply;
+    }
+
     /* destroy */
     size_t index;
     json_t *juid;
@@ -7716,7 +8716,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
         /* Destroy the calendar event. */
         r = setcalendarevents_destroy(req, notifmbox, schedinbox,
-                                      eid, cdata, db, send_itip);
+                                      eid, cdata, db, send_itip, NULL);
         if (r == IMAP_NOTFOUND) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
             json_object_set_new(set.not_destroyed, eid->raw, err);
@@ -7751,7 +8751,8 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
         json_t *create = json_object();
         json_t *err = NULL;
-        setcalendarevents_create(req, arg, db, notifmbox, send_itip, false, create, &err);
+        setcalendarevents_create(req, arg, db, notifmbox, send_itip, false,
+                                 NULL, create, &err);
         if (err) {
             json_object_set_new(set.not_created, key, err);
         }
@@ -7792,7 +8793,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         json_t *update = json_object();
         json_t *err = NULL;
         setcalendarevents_update(req, notifmbox, schedinbox, arg,
-                                 eid, cdata, db, send_itip, update, &err);
+                                 eid, cdata, db, send_itip, NULL, update, &err);
         if (err) {
             json_object_set_new(set.not_updated, eid->raw, err);
             json_decref(update);
@@ -7811,6 +8812,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     jmap_caleventid_free(&eid);
 
 
+reply:
     set.new_state =
         jmap_state_string(req, 0, MBTYPE_CALENDAR, JMAP_MODSEQ_RELOAD);
 
@@ -9192,7 +10194,8 @@ static void _calendarevent_copy(jmap_req_t *req,
 
     /* Create event */
     *new_event = json_object();
-    setcalendarevents_create(req, dst_event, dst_db, notifmbox, 0, true, *new_event, set_err);
+    setcalendarevents_create(req, dst_event, dst_db, notifmbox, 0, true, NULL,
+                             *new_event, set_err);
     if (*set_err) goto done;
 
 done:
