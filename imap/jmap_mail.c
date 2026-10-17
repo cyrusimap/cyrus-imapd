@@ -33,6 +33,7 @@
 #include "jmap_calendar.h"
 #include "jmap_mail.h"
 #include "jmap_mail_query.h"
+#include "jmap_undo.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mappedfile.h"
@@ -10427,6 +10428,69 @@ static bool _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
     return partial;
 }
 
+/* Undo record for a write to one message record. */
+struct email_undo
+{
+    char *mboxname;
+    uint32_t uid;
+    uint32_t last_uid; /* expunge: uid..last_uid */
+};
+
+static struct email_undo *_email_undo_new(const char *mboxname, uint32_t uid)
+{
+    struct email_undo *u = xzmalloc(sizeof(struct email_undo));
+    u->mboxname = xstrdup(mboxname);
+    u->uid = uid;
+    u->last_uid = uid;
+    return u;
+}
+
+static void _email_undo_free(void *rock)
+{
+    struct email_undo *u = rock;
+    free(u->mboxname);
+    free(u);
+}
+
+static int _email_undo_failed(struct email_undo *u, int r)
+{
+    if (r) {
+        xsyslog_ev(LOG_ERR, "jmap.email.undo.failed",
+                   lf_intname("mbox.name", u->mboxname),
+                   lf_u("msg.imapuid", u->uid),
+                   lf_err("error", r));
+    }
+    return r;
+}
+
+/* Expunge the records an undone write appended. */
+static int _email_undo_expunge(void *rock)
+{
+    struct email_undo *u = rock;
+    struct mailbox *mbox = NULL;
+    int r = mailbox_open_iwl(u->mboxname, &mbox);
+
+    for (uint32_t uid = u->uid; !r && uid <= u->last_uid; uid++) {
+        struct index_record record;
+        r = mailbox_find_index_record(mbox, uid, &record);
+        if (r == IMAP_NOTFOUND) {
+            r = 0;
+            continue;
+        }
+        if (r || (record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+            continue;
+        }
+        record.system_flags |= FLAG_DELETED;
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+        r = mailbox_rewrite_index_record(mbox, &record);
+    }
+    if (!r) {
+        r = mailbox_commit(mbox);
+    }
+    mailbox_close(&mbox);
+    return _email_undo_failed(u, r);
+}
+
 struct email_append_detail {
     char blob_id[JMAP_BLOBID_SIZE];
     char email_id[JMAP_MAX_EMAILID_SIZE];
@@ -10461,6 +10525,8 @@ static void _email_append(jmap_req_t *req,
     time_t savedate = 0;
     struct timespec now;
     char exist_id[JMAP_MAX_EMAILID_SIZE];
+    /* Expunges what this create appended, if a later copy fails */
+    struct jmap_undo rollback = JMAP_UNDO_INITIALIZER;
 
     /* Past conversations_max_guidexists, copying the email to another
      * mailbox would fail part way through */
@@ -10696,6 +10762,10 @@ static void _email_append(jmap_req_t *req,
 
     r = append_commit(&as);
     if (r) goto done;
+    jmap_undo_push(&rollback,
+                   _email_undo_expunge,
+                   _email_undo_new(mailbox_name(mbox), mbox->i.last_uid),
+                   _email_undo_free);
 
     /* Load message record */
     r = msgrecord_find(mbox, mbox->i.last_uid, &mr);
@@ -10733,12 +10803,20 @@ static void _email_append(jmap_req_t *req,
 
         r = _copy_msgrecord(httpd_authstate, req->userid, &jmap_namespace,
                             mbox, dst, mr);
+        if (!r) {
+            jmap_undo_push(&rollback,
+                           _email_undo_expunge,
+                           _email_undo_new(dstname, dst->i.last_uid),
+                           _email_undo_free);
+        }
 
         mailbox_close(&dst);
         if (r) goto done;
     }
 
 done:
+    if (r) jmap_undo_run(&rollback);
+    jmap_undo_fini(&rollback);
     if (f) fclose(f);
     append_removestage(stage);
     msgrecord_unref(&mr);
