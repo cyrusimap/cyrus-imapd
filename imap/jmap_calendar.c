@@ -6693,58 +6693,32 @@ static void setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
 
-    if (dstmbox) {
-        /* Expunge the resource from mailbox. */
-        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-        mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
-        r = mailbox_rewrite_index_record(mbox, &record);
-        if (r) {
-            xsyslog_ev(LOG_ERR, "jmap.calendarevent.expunge.failed",
-                       lf_jmapreq(req), lf_mailbox(mbox),
-                       lf_u("msg.imapuid", cdata->dav.imap_uid),
-                       lf_err("error", r));
-            mailbox_close(&mbox);
-            goto done;
-        }
-        mboxevent_extract_record(mboxevent, mbox, &record);
-        mboxevent_extract_mailbox(mboxevent, mbox);
-        mboxevent_set_numunseen(mboxevent, mbox, -1);
-        mboxevent_set_access(mboxevent, NULL, NULL,
-                             req->userid, cdata->dav.mailbox, 0);
-        mboxevent_notify(&mboxevent);
-        mboxevent_free(&mboxevent);
-
-        /* Close the mailbox we moved the event from. */
-        mailbox_close(&mbox);
-        mbox = dstmbox;
-        dstmbox = NULL;
-    }
-
-
     /* Remove METHOD property */
     remove_itip_properties(update.newical);
 
-    /* Store the updated VEVENT. */
+    /* Store the updated VEVENT, in its new calendar if it moves. */
+    struct mailbox *tgtmbox = dstmbox ? dstmbox : mbox;
+    uint32_t tgt_last_uid = tgtmbox->i.last_uid;
     struct transaction_t txn = {
         .req_hdrs = spool_new_hdrcache(),
         .userid = req->userid,
         .authstate = req->authstate
     };
-    r = proxy_mlookup(mailbox_name(mbox), &txn.req_tgt.mbentry, NULL, NULL);
+    r = proxy_mlookup(mailbox_name(tgtmbox), &txn.req_tgt.mbentry, NULL, NULL);
     if (r) {
         xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT
                    ? LOG_WARNING : LOG_ERR,
                    "dav.target.lookup.failed",
-                   lf_mailbox(mbox),
+                   lf_mailbox(tgtmbox),
                    lf_jmapreq(req),
                    lf_err("error", r));
     }
     else {
         r = caldav_store_resource(&txn, update.newical,
-                mbox, resource, record.createdmodseq,
+                tgtmbox, resource, record.createdmodseq,
                 db, PERMS_NOKEEP, req->userid,
                 NULL, &del_imapflags, &schedule_addresses);
-        if (calendar_has_sharees(mbox->mbentry)) {
+        if (calendar_has_sharees(tgtmbox->mbentry)) {
             // Create notification
             if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
                 json_t *patch_copy = json_deep_copy(event_patch);
@@ -6752,7 +6726,7 @@ static void setcalendarevents_update(jmap_req_t *req,
                 jmap_calendarevent_remove_peruserprops(update.old_event);
                 if (json_object_size(patch_copy)) {
                     int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
-                            req->authstate, mailbox_name(mbox), "updated",
+                            req->authstate, mailbox_name(tgtmbox), "updated",
                             eid, &schedule_addresses, NULL,
                             record.system_flags & FLAG_DRAFT,
                             update.old_event, patch_copy);
@@ -6776,6 +6750,50 @@ static void setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
     r = 0;
+
+    if (dstmbox) {
+        /* Only now that it's stored, expunge it from the old calendar. */
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+        mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+        r = mailbox_rewrite_index_record(mbox, &record);
+        if (r) {
+            xsyslog_ev(LOG_ERR, "jmap.calendarevent.expunge.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox),
+                       lf_u("msg.imapuid", cdata->dav.imap_uid),
+                       lf_err("error", r));
+            /* Don't leave the event in both calendars */
+            struct index_record newrecord;
+            int r2 = dstmbox->i.last_uid == tgt_last_uid
+                         ? IMAP_NOTFOUND
+                         : mailbox_find_index_record(dstmbox,
+                                                     dstmbox->i.last_uid,
+                                                     &newrecord);
+            if (!r2) {
+                newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+                r2 = mailbox_rewrite_index_record(dstmbox, &newrecord);
+            }
+            if (r2) {
+                xsyslog_ev(LOG_ERR, "jmap.calendarevent.move.undo.failed",
+                           lf_jmapreq(req), lf_mailbox(dstmbox),
+                           lf_err("error", r2));
+            }
+            mboxevent_free(&mboxevent);
+            mailbox_close(&mbox);
+            goto done;
+        }
+        mboxevent_extract_record(mboxevent, mbox, &record);
+        mboxevent_extract_mailbox(mboxevent, mbox);
+        mboxevent_set_numunseen(mboxevent, mbox, -1);
+        mboxevent_set_access(mboxevent, NULL, NULL,
+                             req->userid, cdata->dav.mailbox, 0);
+        mboxevent_notify(&mboxevent);
+        mboxevent_free(&mboxevent);
+
+        /* Close the mailbox we moved the event from. */
+        mailbox_close(&mbox);
+        mbox = dstmbox;
+        dstmbox = NULL;
+    }
 
     /* The event is stored, so a failure here only leaves attachment
      * refcounts off; it mustn't fail the item */
