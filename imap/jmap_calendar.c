@@ -6448,8 +6448,61 @@ static void setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
 
+    /* Remove METHOD property */
+    remove_itip_properties(update.newical);
+
+    /* Store the updated VEVENT, in its new calendar if it moves. */
+    struct mailbox *tgtmbox = dstmbox ? dstmbox : mbox;
+    struct transaction_t txn = {
+        .req_hdrs = spool_new_hdrcache(),
+        .userid = req->userid,
+        .authstate = req->authstate
+    };
+    r = proxy_mlookup(mailbox_name(tgtmbox), &txn.req_tgt.mbentry, NULL, NULL);
+    if (r) {
+        xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT
+                   ? LOG_WARNING : LOG_ERR,
+                   "dav.target.lookup.failed",
+                   lf_mailbox(tgtmbox),
+                   lf_jmapreq(req),
+                   lf_err("error", r));
+    }
+    else {
+        r = caldav_store_resource(&txn, update.newical,
+                tgtmbox, resource, record.createdmodseq,
+                db, PERMS_NOKEEP, req->userid,
+                NULL, &del_imapflags, &schedule_addresses);
+        if (calendar_has_sharees(tgtmbox->mbentry)) {
+            // Create notification
+            if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
+                json_t *patch_copy = json_deep_copy(event_patch);
+                jmap_calendarevent_remove_peruserprops(patch_copy);
+                jmap_calendarevent_remove_peruserprops(update.old_event);
+                if (json_object_size(patch_copy)) {
+                    int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
+                            req->authstate, mailbox_name(tgtmbox), "updated",
+                            eid, &schedule_addresses, NULL,
+                            record.system_flags & FLAG_DRAFT,
+                            update.old_event, patch_copy);
+                    if (r2) {
+                        xsyslog(LOG_WARNING, "could not create notification",
+                                "uid=%s error=%s", eid->ical_uid, error_message(r2));
+                    }
+                }
+                json_decref(patch_copy);
+            }
+        }
+    }
+    transaction_free(&txn);
+    if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
+        syslog(LOG_ERR, "caldav_store_resource failed for user %s: %s",
+               req->accountid, error_message(r));
+        goto done;
+    }
+    r = 0;
+
     if (dstmbox) {
-        /* Expunge the resource from mailbox. */
+        /* Only now that it's stored, expunge it from the old calendar. */
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
         mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
         r = mailbox_rewrite_index_record(mbox, &record);
@@ -6472,59 +6525,6 @@ static void setcalendarevents_update(jmap_req_t *req,
         mbox = dstmbox;
         dstmbox = NULL;
     }
-
-
-    /* Remove METHOD property */
-    remove_itip_properties(update.newical);
-
-    /* Store the updated VEVENT. */
-    struct transaction_t txn = {
-        .req_hdrs = spool_new_hdrcache(),
-        .userid = req->userid,
-        .authstate = req->authstate
-    };
-    r = proxy_mlookup(mailbox_name(mbox), &txn.req_tgt.mbentry, NULL, NULL);
-    if (r) {
-        xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT
-                   ? LOG_WARNING : LOG_ERR,
-                   "dav.target.lookup.failed",
-                   lf_mailbox(mbox),
-                   lf_jmapreq(req),
-                   lf_err("error", r));
-    }
-    else {
-        r = caldav_store_resource(&txn, update.newical,
-                mbox, resource, record.createdmodseq,
-                db, PERMS_NOKEEP, req->userid,
-                NULL, &del_imapflags, &schedule_addresses);
-        if (calendar_has_sharees(mbox->mbentry)) {
-            // Create notification
-            if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
-                json_t *patch_copy = json_deep_copy(event_patch);
-                jmap_calendarevent_remove_peruserprops(patch_copy);
-                jmap_calendarevent_remove_peruserprops(update.old_event);
-                if (json_object_size(patch_copy)) {
-                    int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
-                            req->authstate, mailbox_name(mbox), "updated",
-                            eid, &schedule_addresses, NULL,
-                            record.system_flags & FLAG_DRAFT,
-                            update.old_event, patch_copy);
-                    if (r2) {
-                        xsyslog(LOG_WARNING, "could not create notification",
-                                "uid=%s error=%s", eid->ical_uid, error_message(r2));
-                    }
-                }
-                json_decref(patch_copy);
-            }
-        }
-    }
-    transaction_free(&txn);
-    if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-        syslog(LOG_ERR, "caldav_store_resource failed for user %s: %s",
-               req->accountid, error_message(r));
-        goto done;
-    }
-    r = 0;
 
     /* The event is stored, so a failure here only leaves attachment
      * refcounts off; it mustn't fail the item */
