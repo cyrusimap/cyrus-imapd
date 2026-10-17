@@ -563,6 +563,7 @@ static void cmd_xmeid(const char *tag, const char *id);
 static void cmd_replace(char *tag, char *seqno, char *name, int usinguid);
 static void cmd_notify(char *tag, int set);
 static void push_updates(int idling);
+static void start_metadata_notify(void);
 
 static void cmd_getjmapaccess(char* tag);
 static void cmd_uidbatches(char *tag, uint32_t size,
@@ -1555,7 +1556,8 @@ static void cmdloop(void)
             int r, idle_fd = PROT_NO_FD, idle_fd_flag = 0;
 
             if ((notify_event_groups && notify_event_groups->filters) ||
-                (!notify_event_groups && (client_capa & CAPA_IMAP4REV2))) {
+                (!notify_event_groups && (client_capa & CAPA_IMAP4REV2)) ||
+                (client_capa & CAPA_ENABLE_METADATA)) {
                 idle_fd = idle_sock;
             }
 
@@ -4784,13 +4786,9 @@ static int parse_select_params(char *tag, char *cmd, int allowdeleted,
                 c = prot_getc(imapd_in);
             }
             else if (!strcmp(arg.s, "ANNOTATE")) {
-                /*
-                 * RFC 5257 requires us to parse this keyword, which
-                 * indicates that the client wants unsolicited
-                 * ANNOTATION responses in this session, but we don't
-                 * actually have to do anything with it, so we won't.
-                 */
+                /* RFC 5257: unsolicited ANNOTATION responses wanted */
                 client_behavior_mask |= CB_ANNOTATE;
+                init->want_annotations = true;
             }
             else if (allowdeleted &&
                      !strcmp(arg.s, "VENDOR.CMU-INCLUDE-EXPUNGED")) {
@@ -5027,6 +5025,9 @@ static void cmd_select(char *tag, char *cmd, char *name)
         strarray_t key = { 1, 0, (char **) &mboxid }; // avoid memory alloc
 
         idle_start(notify_event_groups->selected.events, 0, FILTER_SELECTED, &key);
+
+        if (notify_event_groups->selected.events & IMAP_NOTIFY_ANNOTATION_CHANGE)
+            index_set_notify_annotations(imapd_index, true);
     }
 
     prot_printf(imapd_out, "%s OK [READ-%s] %s\r\n", tag,
@@ -14477,6 +14478,10 @@ static void cmd_enable(char *tag)
             client_behavior_mask |= CB_UTF8ACCEPT;
             new_capa |= CAPA_UTF8_ACCEPT;
         }
+        else if (imapd_notify_enabled && !strcasecmp(arg.s, "metadata")) {
+            client_behavior_mask |= CB_METADATA;
+            new_capa |= CAPA_ENABLE_METADATA;
+        }
     } while (c == ' ');
 
     /* check for CRLF */
@@ -14499,6 +14504,10 @@ static void cmd_enable(char *tag)
 
             idle_start(IMAP_NOTIFY_MAILBOX, 0, FILTER_PERSONAL, &key);
         }
+    }
+
+    if (new_capa & CAPA_ENABLE_METADATA) {
+        start_metadata_notify();
     }
 
     if (new_capa) {
@@ -14999,11 +15008,11 @@ static const struct notify_event notify_events[] = {
     { "MessageNew",            IMAP_NOTIFY_MESSAGE_NEW,             1 },
     { "MessageExpunge",        IMAP_NOTIFY_MESSAGE_EXPUNGE,         1 },
     { "FlagChange",            IMAP_NOTIFY_FLAG_CHANGE,             1 },
-//    { "AnnotationChange",      IMAP_NOTIFY_ANNOTATION_CHANGE,       1 },
+    { "AnnotationChange",      IMAP_NOTIFY_ANNOTATION_CHANGE,       1 },
     { "MailboxName",           IMAP_NOTIFY_MAILBOX_NAME,            0 },
     { "SubscriptionChange",    IMAP_NOTIFY_SUBSCRIPTION_CHANGE,     0 },
-//    { "MailboxMetadataChange", IMAP_NOTIFY_MAILBOX_METADATA_CHANGE, 0 },
-//    { "ServerMetadataChange",  IMAP_NOTIFY_SERVER_METADATA_CHANGE,  0 },
+    { "MailboxMetadataChange", IMAP_NOTIFY_MAILBOX_METADATA_CHANGE, 0 },
+    { "ServerMetadataChange",  IMAP_NOTIFY_SERVER_METADATA_CHANGE,  0 },
     { NULL,                    0,                                   0 }
 };
 
@@ -15319,6 +15328,7 @@ static void cmd_notify(char *tag, int set)
 
     /* Stop idled listening for old events */
     idle_stop(FILTER_NONE);
+    if (client_capa & CAPA_ENABLE_METADATA) start_metadata_notify();
 
     /* Cancel all registered notification events */
     event_groups_free(&notify_event_groups);
@@ -15417,6 +15427,11 @@ static void cmd_notify(char *tag, int set)
     }
 
     notify_event_groups = new_egroups;
+
+    index_set_notify_annotations(imapd_index,
+                                 new_egroups->selected.events
+                                     & IMAP_NOTIFY_ANNOTATION_CHANGE);
+
     buf_free(&arg);
 
     prot_printf(imapd_out,
@@ -15464,6 +15479,49 @@ static void cmd_notify(char *tag, int set)
     eatline(imapd_in, c);
 }
 
+/* Ask idled for metadata changes on behalf of ENABLE METADATA */
+static void start_metadata_notify(void)
+{
+    strarray_t key = { 1, 0, &imapd_userid }; // avoid memory alloc
+
+    idle_start(IMAP_NOTIFY_METADATA, 0, FILTER_METADATA, &key);
+}
+
+/* RFC 5464 4.4.2: unsolicited METADATA with entry names only.  Private
+ * entries are only of interest to their owner. */
+static void print_metadata_change(const char *extname, json_t *msg)
+{
+    json_t *entries = json_object_get(msg, "metadataEntries");
+    struct buf name = BUF_INITIALIZER;
+    bool printed = false;
+    size_t i;
+    json_t *jentry;
+
+    json_array_foreach (entries, i, jentry) {
+        const char *entry = json_string_value(json_object_get(jentry, "entry"));
+        const char *user = json_string_value(json_object_get(jentry, "user"));
+
+        if (!entry || (user && strcmpsafe(user, imapd_userid))) {
+            continue;
+        }
+
+        if (!printed) {
+            prot_puts(imapd_out, "* METADATA ");
+            prot_printastring(imapd_out, extname);
+            printed = true;
+        }
+        buf_setcstr(&name, user ? "/private" : "/shared");
+        buf_appendcstr(&name, entry);
+        prot_putc(' ', imapd_out);
+        prot_printastring(imapd_out, buf_cstring(&name));
+    }
+
+    if (printed) {
+        prot_puts(imapd_out, "\r\n");
+    }
+    buf_free(&name);
+}
+
 static void push_updates(int idling)
 {
     json_t *msg;
@@ -15490,12 +15548,33 @@ static void push_updates(int idling)
         }
 
         mboxid = idle_msg_get_mboxid(msg);
-        if (!mboxid) goto done;
-
         event = json_string_value(json_object_get(msg, "event"));
         etype = name_to_mboxevent(event);
 
+        if (etype == EVENT_SERVER_METADATA_CHANGE) {
+            print_metadata_change("", msg);
+            goto done;
+        }
+
         if (!etype || !mboxid) goto done;
+
+        if (etype == EVENT_MAILBOX_METADATA_CHANGE) {
+            /* the rights GETMETADATA needs, which also meet RFC 5465 5 */
+            const int needed = ACL_LOOKUP | ACL_READ;
+
+            mboxlist_lookup_by_uniqueid(mboxid, &mbentry, NULL);
+            if (mbentry
+                && (cyrus_acl_myrights(imapd_authstate, mbentry->acl) & needed)
+                       == needed)
+            {
+                char *extname = mboxname_to_external(mbentry->name,
+                                                     &imapd_namespace,
+                                                     imapd_userid);
+                print_metadata_change(extname, msg);
+                free(extname);
+            }
+            goto done;
+        }
 
         if (imapd_index && !strcmp(mboxid, index_uniqueid(imapd_index))) {
             /* Notification for currently selected mailbox */
@@ -15563,6 +15642,8 @@ static void push_updates(int idling)
                 statusitems |= (STATUS_MESSAGES | STATUS_UIDNEXT);
             else if (etype & IMAP_NOTIFY_FLAG_CHANGE)
                 statusitems |= STATUS_UNSEEN;
+            else if (!(client_capa & CAPA_CONDSTORE))
+                goto done; /* RFC 5465 5.1: nothing to tell for AnnotationChange */
 
             if (client_capa & CAPA_CONDSTORE)
                 statusitems |= STATUS_HIGHESTMODSEQ;

@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_annotate_unsolicited ($self)
+{
+    $self->make_message('Message A');
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $talk = $self->{store}->get_client();
+    $talk->select('INBOX', '(ANNOTATE)' => 1);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $plaintalk = $svc->create_store()->get_client();
+    $plaintalk->select('INBOX');
+
+    my $othertalk = $svc->create_store()->get_client();
+    $othertalk->select('INBOX');
+    $othertalk->store('1', 'annotation',
+                      ['/comment', ['value.shared', 'hello world']]);
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+
+    # RFC 5257 4.4: entry names only, for sessions that asked
+    $self->assert_cmp_deeply(
+        { 1 => { uid => 1, flags => [], annotation => { '/comment' => undef } } },
+        $talk->_imap_cmd('NOOP', 0, 'fetch'));
+    my $plain = $plaintalk->_imap_cmd('NOOP', 0, 'fetch');
+    $self->assert_num_equals(1, scalar keys %$plain);
+    $self->assert(!grep { exists $_->{annotation} } values %$plain);
+}

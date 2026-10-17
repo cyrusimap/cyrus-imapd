@@ -27,6 +27,7 @@ sub new
         subscription
         calendar
         applepushservice
+        metadata
     );
 
     my $config = Cassandane::Config->default()->clone();
