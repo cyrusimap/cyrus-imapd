@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test OBJECTID compound FETCH (EMAILID + THREADID)
+#
+sub test_objectidplus_fetch
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # append a message
+    $self->make_message("Test message A");
+
+    $talk->select('INBOX');
+
+    # individual EMAILID/THREADID should work without activation (RFC 8474)
+    my $fetch1 = $talk->fetch('1', '(emailid threadid)');
+    $self->assert_not_null($fetch1->{1}{emailid});
+
+    # compound OBJECTID FETCH should activate OBJECTID+ and return
+    # OBJECTID (EMAILID x THREADID y)
+    my $fetch2 = $talk->fetch('1', '(objectid)');
+    $self->assert_not_null($fetch2->{1}{objectid});
+}

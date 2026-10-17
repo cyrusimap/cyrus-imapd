@@ -188,6 +188,22 @@ extern void jmap_set_emailid(struct conversations_state *cstate,
 extern void jmap_set_mailboxid(struct conversations_state *cstate,
                                const mbentry_t *mbentry, char *mboxid);
 
+/**
+ * Fill the OBJECTID identifiers of a mailbox from its mbentry.
+ *
+ * @param mbentry    the mailbox
+ * @param mailboxid  receives the MAILBOXID
+ * @param accountid  receives the ACCOUNTID, or is left empty for a mailbox
+ *                   with no owning user (a shared mailbox)
+ *
+ * Opens the owner's conversations db if it isn't already open.  Every
+ * place that reports a mailbox's identifiers must use this, so that LIST,
+ * STATUS and the response codes agree.
+ */
+extern void jmap_get_mailbox_objectids(const mbentry_t *mbentry,
+                                       struct buf *mailboxid,
+                                       struct buf *accountid);
+
 #define JMAP_LEGACY_THREADID_PREFIX 'T'
 #define JMAP_THREADID_PREFIX 'A'
 #define JMAP_THREADID_SIZE 18

@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test SELECT by OBJECTID with non-existent MAILBOXID falls back to name
+#
+sub test_objectidplus_select_by_id_fallback
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('testbox');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # select with a bogus MAILBOXID and ACCOUNTID - should fall back to name
+    $talk->select('testbox',
+        "(OBJECTID (MAILBOXID Fnonexistent99 ACCOUNTID cassandane))");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # verify we selected the right mailbox (by name fallback)
+    my $status = $talk->status('testbox', "(mailboxid)");
+    $self->assert_not_null($status->{mailboxid});
+}

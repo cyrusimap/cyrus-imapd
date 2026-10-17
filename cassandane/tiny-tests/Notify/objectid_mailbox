@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# With OBJECTID+ active, NOTIFY MailboxName LIST responses carry the
+# OBJECTID extended data item, so a deleted mailbox can be identified.
+#
+sub test_objectid_mailbox
+    :needs_component_idled :Conversations
+    ($self)
+{
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled', argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+
+    my $otherstore = $svc->create_store();
+    my $othertalk = $otherstore->get_client();
+
+    $talk->enable('objectid+');
+    $talk->_imap_cmd('NOTIFY', 0, "", "SET", "(PERSONAL (MailboxName))");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $list;
+    my %handlers = (
+        list => sub ($, $data) { $list = $data },
+    );
+
+    xlog $self, "Create mailbox in other session";
+    $othertalk->create("INBOX.rename-me");
+    $self->assert($store->idle_response(\%handlers, 3), "got LIST");
+    $self->assert(!$store->idle_response({}, 1), "no more responses");
+
+    $self->assert_str_equals('INBOX.rename-me', $list->[2]);
+    my %ext = @{$list->[3]};
+    my %ids = @{$ext{OBJECTID}};
+    $self->assert_matches(qr/\S/, $ids{MAILBOXID});
+    $self->assert_matches(qr/\S/, $ids{ACCOUNTID});
+
+    my $status = $othertalk->status("INBOX.rename-me", '(objectid)');
+    $self->assert_cmp_deeply({ @{$status->{objectid}} }, \%ids);
+
+    xlog $self, "Rename mailbox in other session";
+    $othertalk->rename("INBOX.rename-me", "INBOX.delete-me");
+    $self->assert($store->idle_response(\%handlers, 3), "got LIST");
+    $self->assert(!$store->idle_response({}, 1), "no more responses");
+
+    $self->assert_str_equals('INBOX.delete-me', $list->[2]);
+    %ext = @{$list->[3]};
+    $self->assert_cmp_deeply(['INBOX.rename-me'], $ext{OLDNAME});
+    $self->assert_cmp_deeply(\%ids, { @{$ext{OBJECTID}} });
+
+    xlog $self, "Delete mailbox in other session";
+    $othertalk->delete("INBOX.delete-me");
+    $self->assert($store->idle_response(\%handlers, 3), "got LIST");
+    $self->assert(!$store->idle_response({}, 1), "no more responses");
+
+    $self->assert_str_equals('\\NonExistent', $list->[0][0]);
+    $self->assert_str_equals('INBOX.delete-me', $list->[2]);
+    %ext = @{$list->[3]};
+    $self->assert_cmp_deeply(\%ids, { @{$ext{OBJECTID}} });
+}

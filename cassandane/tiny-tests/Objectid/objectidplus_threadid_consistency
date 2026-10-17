@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that THREADID is consistent for related messages across mailboxes,
+# and that messages in the same thread share the same THREADID whether
+# fetched via individual items or compound OBJECTID.
+#
+sub test_objectidplus_threadid_consistency
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('other');
+
+    # create a thread: message A and reply B
+    my $msgA = $self->make_message("Thread subject");
+    $self->make_message("Re: Thread subject",
+                        references => [ $msgA ]);
+
+    # and an unrelated message C
+    $self->make_message("Unrelated message");
+
+    $talk->select('INBOX');
+
+    # fetch individual THREADID
+    my $fetch1 = $talk->fetch('1:3', '(emailid threadid)');
+    my $threadid_a = $fetch1->{1}{threadid}[0];
+    my $threadid_b = $fetch1->{2}{threadid}[0];
+    my $threadid_c = $fetch1->{3}{threadid}[0];
+
+    $self->assert_not_null($threadid_a);
+    $self->assert_not_null($threadid_b);
+    $self->assert_not_null($threadid_c);
+
+    # A and B should share a threadid (same thread)
+    $self->assert_str_equals($threadid_a, $threadid_b);
+
+    # C should have a different threadid
+    $self->assert_str_not_equals($threadid_a, $threadid_c);
+
+    # now fetch via compound OBJECTID and verify consistency
+    $talk->enable('objectid+');
+    my $fetch2 = $talk->fetch('1:3', '(objectid)');
+    $self->assert_not_null($fetch2->{1}{objectid});
+    $self->assert_not_null($fetch2->{2}{objectid});
+    $self->assert_not_null($fetch2->{3}{objectid});
+
+    # move message B to another folder and verify EMAILID/THREADID preserved
+    my $emailid_b = $fetch1->{2}{emailid}[0];
+    $talk->move('2', 'other');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->select('other');
+    my $fetch3 = $talk->fetch('1', '(emailid threadid)');
+    $self->assert_str_equals($emailid_b, $fetch3->{1}{emailid}[0]);
+    $self->assert_str_equals($threadid_b, $fetch3->{1}{threadid}[0]);
+}

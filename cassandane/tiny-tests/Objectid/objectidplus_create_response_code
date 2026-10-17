@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that CREATE returns OBJECTID response code when OBJECTID+
+# is activated, and MAILBOXID response code when it is not.
+#
+sub test_objectidplus_create_response_code
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # create before activation - should get MAILBOXID response code
+    $talk->create('before');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # activate OBJECTID+
+    $talk->enable('objectid+');
+
+    # create after activation - should get OBJECTID response code
+    $talk->create('after');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # verify both mailboxes have valid MAILBOXIDs via STATUS
+    my $status1 = $talk->status('before', "(mailboxid)");
+    my $status2 = $talk->status('after', "(mailboxid)");
+    $self->assert_not_null($status1->{mailboxid});
+    $self->assert_not_null($status2->{mailboxid});
+
+    # they should have different MAILBOXIDs
+    $self->assert_str_not_equals($status1->{mailboxid}[0],
+                                 $status2->{mailboxid}[0]);
+}

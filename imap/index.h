@@ -329,4 +329,8 @@ extern int insert_into_mailbox_allowed(struct mailbox *mailbox);
 
 extern int index_want_attachextract(const char *type, const char *subtype);
 
+extern void prot_print_objectids(struct protstream *pout,
+                                 bool compound, const char *sep,
+                                 const char *mailboxid, const char *accountid);
+
 #endif /* INDEX_H */
