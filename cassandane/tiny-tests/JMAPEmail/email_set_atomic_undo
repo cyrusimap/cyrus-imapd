@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_atomic_undo
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 2);
+    $self->_start_instances();
+
+    my $user = $self->default_user;
+    my $jmap = $user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $inbox = $user->mailboxes->inbox;
+    my $a     = $user->mailboxes->create({ name => 'A' });
+
+    my %email;
+    for my $name (qw(e1 e2 e3)) {
+        $email{$name} = $user->emails->create({
+            mailboxIds    => { $inbox->id => JSON::true },
+            keywords      => { '$seen' => JSON::true, '$flagged' => JSON::true },
+            subject       => $name,
+            bodyStructure => { type => 'text/plain', partId => 'p' },
+            bodyValues    => { p => { value => $name } },
+        })->id;
+    }
+    my @ids = values %email;
+
+    my sub snapshot {
+        my $res = $jmap->request([
+            [ 'Email/get', {
+                ids        => \@ids,
+                properties => [ 'mailboxIds', 'keywords', 'threadId' ],
+            } ],
+        ]);
+        return $res->single_sentence('Email/get')->arguments->{list};
+    }
+    my $before = snapshot();
+    $self->assert_num_equals(3, scalar @$before);
+
+    my sub assert_undone ($set) {
+        my $res = $jmap->request([ [ 'Email/set', { atomic => JSON::true, %$set } ] ]);
+        $self->assert_cmp_deeply(
+            superhashof({ type => 'serverFail' }),
+            $res->single_sentence('error')->arguments,
+        );
+        $self->assert_cmp_deeply(bag(@$before), snapshot());
+    }
+
+    xlog $self, "a failed two-email move leaves both where they were";
+    assert_undone({
+        update => {
+            $email{e1} => { mailboxIds => { $a->id => JSON::true } },
+            $email{e2} => { mailboxIds => { $a->id => JSON::true } },
+        },
+    });
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.email\.set\.failed});
+
+    xlog $self, "a failure after a destroy restores the email with its id";
+    assert_undone({
+        update  => { $email{e1} => { 'keywords/$answered' => JSON::true } },
+        destroy => [ $email{e3} ],
+    });
+
+    xlog $self, "a failure after a keyword write restores the old keywords";
+    assert_undone({
+        update => {
+            $email{e1} => { 'keywords/$flagged' => JSON::null },
+            $email{e2} => { 'keywords/$flagged' => JSON::null },
+        },
+    });
+
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr{undo\.failed});
+    $self->check_conversations();
+}

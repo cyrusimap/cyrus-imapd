@@ -1,0 +1,73 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_atomic_undo_shared
+    :NoAltNameSpace :NoStartInstances
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 2);
+    $self->_start_instances();
+
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.other");
+    $admin->setacl("user.other", admin => 'lrswipkxtecdan') or die;
+    $admin->setacl("user.other", cassandane => 'lrswitedn') or die;
+
+    my $other = $self->{instance}->create_user_without_setup('other');
+    my $otherJmap = $other->new_jmaptester;
+    my $inbox = $other->mailboxes->inbox;
+
+    my %email;
+    for my $name (qw(e1 e2)) {
+        $email{$name} = $other->emails->create({
+            mailboxIds    => { $inbox->id => JSON::true },
+            subject       => $name,
+            bodyStructure => { type => 'text/plain', partId => 'p' },
+            bodyValues    => { p => { value => $name } },
+        })->id;
+    }
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    xlog $self, "the sharee's seen state is kept outside the index";
+    my $res = $jmap->request([
+        [ 'Email/set', {
+            accountId => 'other',
+            update    => {
+                map {; $_ => { 'keywords/$seen' => JSON::true } } values %email
+            },
+        } ],
+    ]);
+    $self->assert_num_equals(2,
+        scalar keys $res->single_sentence('Email/set')->arguments->{updated}->%*);
+
+    my sub snapshot {
+        my $res = $jmap->request([
+            [ 'Email/get', {
+                accountId  => 'other',
+                ids        => [ values %email ],
+                properties => [ 'mailboxIds', 'keywords' ],
+            } ],
+        ]);
+        return $res->single_sentence('Email/get')->arguments->{list};
+    }
+    my $before = snapshot();
+
+    xlog $self, "a failure after a destroy restores the sharee's seen state";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            accountId => 'other',
+            atomic    => JSON::true,
+            update    => { $email{e2} => { 'keywords/$flagged' => JSON::true } },
+            destroy   => [ $email{e1} ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_cmp_deeply(bag(@$before), snapshot());
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr{undo\.failed});
+}

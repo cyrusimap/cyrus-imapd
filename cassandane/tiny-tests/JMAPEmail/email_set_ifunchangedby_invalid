@@ -51,10 +51,9 @@ sub test_email_set_ifunchangedby_invalid
         );
     }
 
-    xlog $self, "atomic is rejected rather than applied in part";
+    xlog $self, "atomic: true applies; a non-boolean atomic is invalid";
     $res = flag_if({ atomic => JSON::true });
-    $self->assert_str_equals('cannotApplyAtomically',
-                             $res->single_sentence('error')->arguments->{type});
+    $res->assert_single_successful_set('Email/set');
 
     $res = flag_if({ atomic => 'yes' });
     $self->assert_cmp_deeply(
