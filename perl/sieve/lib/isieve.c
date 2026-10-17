@@ -40,8 +40,6 @@ struct iseive_s {
     struct protstream *pout;
 };
 
-void fillin_interactions(sasl_interact_t *tlist);
-
 /* we need this separate from the free() call so that we can reuse
  * the same memory for referrals */
 static void sieve_dispose(isieve_t *obj)
@@ -333,8 +331,9 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
 int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
               sasl_ssf_t *ssf, char **errstr)
 {
+  /* all input comes from the callbacks, so SASL_INTERACT fails the mech */
   sasl_interact_t *client_interact=NULL;
-  int saslresult=SASL_INTERACT;
+  int saslresult;
   const char *out = NULL;
   unsigned int outlen = 0;
   char *in;
@@ -347,15 +346,10 @@ int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
   if(!mechlist || !obj || !mechusing) return -1;
 
   /* call sasl client start */
-  while (saslresult==SASL_INTERACT)
-  {
-    saslresult=sasl_client_start(obj->conn, mechlist,
-                                 &client_interact,
-                                 &out, &outlen,
-                                 mechusing);
-    if (saslresult==SASL_INTERACT)
-      fillin_interactions(client_interact); /* fill in prompts */
-  }
+  saslresult=sasl_client_start(obj->conn, mechlist,
+                               &client_interact,
+                               &out, &outlen,
+                               mechusing);
 
   if ((saslresult!=SASL_OK) && (saslresult!=SASL_CONTINUE)) return saslresult;
 
@@ -381,21 +375,14 @@ int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
 
   while (status==STAT_CONT)
   {
-    saslresult=SASL_INTERACT;
-    while (saslresult==SASL_INTERACT)
-    {
-      saslresult=sasl_client_step(obj->conn,
-                                  in,
-                                  inlen,
-                                  &client_interact,
-                                  &out,&outlen);
-
-      if (saslresult==SASL_INTERACT)
-        fillin_interactions(client_interact); /* fill in prompts */
-    }
+    saslresult=sasl_client_step(obj->conn,
+                                in,
+                                inlen,
+                                &client_interact,
+                                &out,&outlen);
 
     /* check if sasl succeeded */
-    if (saslresult<SASL_OK)
+    if (saslresult!=SASL_OK && saslresult!=SASL_CONTINUE)
     {
         /* send cancel notice */
         prot_printf(obj->pout, "*\r\n");
