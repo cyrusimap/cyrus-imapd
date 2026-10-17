@@ -2553,21 +2553,11 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         }
         ptrarray_append(&strpool, newparentname);
 
-        /* Reject cycles in mailbox tree. */
-        char *pname = xstrdup(newparentname);
-        while (_findparent(pname, &pmbentry) == 0) {
-            if (!strcmp(mbentry->uniqueid, pmbentry->uniqueid)) {
-                jmap_parser_invalid(&parser, "parentId");
-                free(pname);
-                mboxlist_entry_free(&pmbentry);
-                goto done;
-            }
-            free(pname);
-            pname = xstrdup(pmbentry->name);
-            mboxlist_entry_free(&pmbentry);
+        /* Reject moving a mailbox under itself or its descendants */
+        if (mboxname_is_prefix(newparentname, mbentry->name)) {
+            jmap_parser_invalid(&parser, "parentId");
+            goto done;
         }
-        mboxlist_entry_free(&pmbentry);
-        free(pname);
 
         /* Is this a move to a new parent? */
         if (strcmpsafe(oldparentname, newparentname) || was_toplevel != new_toplevel) {

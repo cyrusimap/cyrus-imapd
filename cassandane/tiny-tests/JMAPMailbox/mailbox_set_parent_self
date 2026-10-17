@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+# A mailbox can't be moved under itself or any of its descendants
+sub test_mailbox_set_parent_self ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $imap = $self->{store}->get_client();
+
+    $imap->create("INBOX.A") or die "create: $@";
+    $imap->create("INBOX.A.B") or die "create: $@";
+    $imap->create("INBOX.A.B.C") or die "create: $@";
+
+    my $get_tree = sub {
+        my $res = $jmap->request([
+            [ 'Mailbox/get', { properties => [ 'name', 'parentId' ] } ],
+        ]);
+        return { map {; $_->{id} => $_ }
+                 $res->single_sentence('Mailbox/get')->arguments->{list}->@* };
+    };
+
+    my $before = $get_tree->();
+    my %id = map {; $_->{name} => $_->{id} } values %$before;
+
+    for my $parent (qw( A B C )) {
+        my $res = $jmap->request([
+            [ 'Mailbox/set', {
+                update => { $id{A} => { parentId => $id{$parent} } },
+            } ],
+        ]);
+        $self->assert_cmp_deeply(
+            { $id{A} => { type => 'invalidProperties',
+                          properties => [ 'parentId' ] } },
+            $res->single_sentence('Mailbox/set')->as_set->update_errors,
+            "parentId $parent",
+        );
+        $self->assert_cmp_deeply($before, $get_tree->(),
+            "tree unchanged after parentId $parent");
+    }
+}
