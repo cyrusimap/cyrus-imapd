@@ -1873,7 +1873,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
     /* defaultAlertsWithTime */
     /* defaultAlertsWithoutTime */
     if (!r && (props->defaultalarms_with_time || props->defaultalarms_with_date)) {
-        int r = defaultalarms_save(mbox, req->userid,
+        r = defaultalarms_save(mbox, req->userid,
                 props->defaultalarms_with_time,
                 props->defaultalarms_with_date);
         if (r) {
