@@ -5395,7 +5395,8 @@ EXPORTED int mboxlist_update_foldermodseq(const char *name, modseq_t foldermodse
 
     if (mbentry->foldermodseq < foldermodseq) {
         mbentry->foldermodseq = foldermodseq;
-        r = mboxlist_update(mbentry, 0);
+        /* mupdate doesn't track foldermodseq, so don't push it */
+        r = mboxlist_update(mbentry, /*localonly*/1);
     }
 
     mboxlist_entry_free(&mbentry);

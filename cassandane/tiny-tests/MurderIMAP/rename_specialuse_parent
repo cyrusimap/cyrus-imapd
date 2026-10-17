@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Slurp;
+use JSON;
+
+sub test_rename_specialuse_parent
+    :NoStartInstances :NoAltNamespace
+    ($self)
+{
+    for my $instance ($self->{frontend}, $self->{instance}) {
+        $instance->{config}->set(allowspecialusesubfolder => 'yes');
+    }
+    $self->_start_instances();
+
+    my $frontend = $self->{frontend_store}->get_client();
+    $frontend->create("INBOX.Mail") or die "create: $@";
+    $frontend->create("INBOX.Mail.sent") or die "create: $@";
+    $frontend->setmetadata("INBOX.Mail.sent", '/private/specialuse', '\\Sent');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    $frontend->rename("INBOX.Mail", "INBOX.Test");
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # the special-use annotation moved with the child
+    my $md = $frontend->getmetadata("INBOX.Test.sent", '/private/specialuse');
+    $self->assert_str_equals('\\Sent',
+                             $md->{'INBOX.Test.sent'}{'/private/specialuse'});
+
+    # the mupdate master's list must have no trace of the old names
+    my $out = $self->{frontend}->get_basedir() . "/mboxlist.out";
+    $self->{frontend}->run_command({ cyrus => 1,
+                                     redirects => { stdout => $out } },
+                                   'ctl_mboxlist', '-d');
+    my @names = sort keys decode_json(slurp_file($out))->%*;
+    xlog $self, "mupdate master: @names";
+    $self->assert_cmp_deeply(
+        superbagof('user.cassandane.Test', 'user.cassandane.Test.sent'),
+        \@names);
+    $self->assert_cmp_deeply(array_each(re(qr/\A(?!user\.cassandane\.Mail)/)),
+                             \@names);
+}
