@@ -1,0 +1,25 @@
+Description:
+
+JMAP /set methods now reject an update that changes an immutable or
+server-set property with invalidProperties, rather than ignoring the
+change.  Sending such a property with its current value is still allowed.
+
+
+Documentation:
+
+RFC 8620 section 5.3.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

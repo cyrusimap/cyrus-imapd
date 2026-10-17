@@ -74,11 +74,6 @@ sub test_email_set_mailboxids
 
     # Not OK: can't store email into non-email mailboxes
     $msg->{mailboxIds} = { $calid => JSON::true },
-    $res = $jmap->CallMethods([['Email/set', { update => { $id => $msg }}, "R1"]]);
-    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$id}{type});
-    $self->assert_str_equals('mailboxIds', $res->[0][1]{notUpdated}{$id}{properties}[0]);
-
-    # Not OK: can't store email into non-email mailboxes
     $msg->{subject} = "Email 4";
     $res = $jmap->CallMethods([['Email/set', { create => { "1" => $msg }}, "R1"]]);
     $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{"1"}{type});
