@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_create_drafts_first
+    ($self)
+{
+    my $user = $self->default_user;
+    my $talk = $self->{store}->get_client();
+
+    my $drafts = $user->mailboxes->create({ name => 'Dr', role => 'drafts' });
+    my $sent = $user->mailboxes->create({ name => 'Se', role => 'sent' });
+
+    # Whichever mailbox the new message is appended to first is written
+    # first, so its record has the lower modseq.
+    my sub modseq ($name) {
+        $talk->select($name);
+        my $res = $talk->fetch('1', '(modseq)');
+        return $res->{1}{modseq}[0];
+    }
+
+    $talk->enable('condstore');
+    $user->emails->create({
+        mailboxIds    => { $drafts->id => JSON::true, $sent->id => JSON::true },
+        subject       => 'draft',
+        bodyStructure => { type => 'text/plain', partId => 'p' },
+        bodyValues    => { p => { value => 'body' } },
+    });
+
+    $self->assert(modseq('Dr') < modseq('Se'));
+}

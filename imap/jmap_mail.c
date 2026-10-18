@@ -10844,7 +10844,7 @@ static int _email_append_prepare(
             if (buf.len) {
                 strarray_t *uses =
                     strarray_split(buf_cstring(&buf), " ", STRARRAY_TRIM);
-                if (strarray_find_case(uses, "\\Drafts", 0)) {
+                if (strarray_find_case(uses, "\\Drafts", 0) >= 0) {
                     free(prep->mboxname);
                     prep->mboxname = xstrdup(mbentry->name);
                 }
