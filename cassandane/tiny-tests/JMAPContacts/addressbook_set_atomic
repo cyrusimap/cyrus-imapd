@@ -1,0 +1,147 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_set_atomic ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'AddressBook/get', { properties => [ 'isDefault' ] } ],
+    ]);
+    my ($default) = grep { $_->{isDefault} }
+                    $res->single_sentence('AddressBook/get')->arguments->{list}->@*;
+    my $idX = $default->{id};
+    $self->assert_not_null($idX);
+
+    $res = $jmap->request([
+        [ 'AddressBook/set', { create => {
+            y => { name => 'Y' },
+            v => { name => 'V' },
+        } } ],
+    ]);
+    my $created = $res->single_sentence('AddressBook/set')->arguments->{created};
+    my $idY = $created->{y}{id};
+    my $idV = $created->{v}{id};
+    $self->assert_not_null($idY);
+    $self->assert_not_null($idV);
+
+    $res = $jmap->request([
+        [ 'ContactCard/set', { create => { c => {
+            '@type'        => 'Card',
+            version        => '1.0',
+            addressBookIds => { $idV => JSON::true },
+            name           => { full => 'in V' },
+        } } } ],
+    ]);
+    $self->assert_not_null(
+        $res->single_sentence('ContactCard/set')->arguments->{created}{c}{id});
+
+    xlog $self, "the default can't be destroyed on its own";
+    $res = $jmap->request([
+        [ 'AddressBook/get', { ids => [], properties => [ 'id' ] } ],
+        [ 'AddressBook/set', { atomic => JSON::true, destroy => [ $idX ] } ],
+        [ 'AddressBook/get', { ids => [], properties => [ 'id' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type         => 'atomicFailure',
+            notDestroyed => { $idX => { type => 'forbidden' } },
+        },
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_str_equals(
+        $res->sentence(0)->arguments->{state},
+        $res->sentence(2)->arguments->{state},
+    );
+
+    xlog $self, "one invalid change rejects the whole method";
+    $res = $jmap->request([
+        [ 'AddressBook/get', { ids => [], properties => [ 'id' ] } ],
+        [ 'AddressBook/set', {
+            atomic  => JSON::true,
+            create  => { z => { name => 'Z' } },
+            update  => { $idY => { name => 'Y2' } },
+            destroy => [ $idV ],
+        } ],
+        [ 'AddressBook/get', { properties => [ 'name' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type         => 'atomicFailure',
+            notDestroyed => { $idV => { type => 'addressBookHasContents' } },
+        },
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_str_equals(
+        $res->sentence(0)->arguments->{state},
+        $res->sentence(2)->arguments->{state},
+    );
+    $self->assert_cmp_deeply(
+        [],
+        [ grep { $_->{name} =~ /^(?:Z|Y2)$/ }
+               $res->sentence(2)->arguments->{list}->@* ],
+    );
+
+    xlog $self, "an update of a create in the same method is checked too";
+    $res = $jmap->request([
+        [ 'AddressBook/get', { ids => [], properties => [ 'id' ] } ],
+        [ 'AddressBook/set', {
+            atomic => JSON::true,
+            create => { w => { name => 'W' } },
+            update => { '#w' => { name => 1 } },
+        } ],
+        [ 'AddressBook/get', { ids => [], properties => [ 'id' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => {
+                '#w' => superhashof({ type => 'invalidProperties' }),
+            },
+        },
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_str_equals(
+        $res->sentence(0)->arguments->{state},
+        $res->sentence(2)->arguments->{state},
+    );
+
+    xlog $self, "destroying the default works once another becomes default";
+    $res = $jmap->request([
+        [ 'AddressBook/set', {
+            atomic                => JSON::true,
+            destroy               => [ $idX ],
+            create                => { n => { name => 'N' } },
+            update                => { '#n' => { description => 'new' } },
+            onSuccessSetIsDefault => $idY,
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            destroyed => [ $idX ],
+            created   => { n => superhashof({ id => ignore() }) },
+            updated   => superhashof({ $idY => { isDefault => JSON::true } }),
+        }),
+        $res->single_sentence('AddressBook/set')->arguments,
+    );
+    my $idN = $res->single_sentence('AddressBook/set')
+                  ->arguments->{created}{n}{id};
+
+    $res = $jmap->request([
+        [ 'AddressBook/get', {
+            ids        => [ $idX, $idY, $idN ],
+            properties => [ 'isDefault', 'description' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            list => bag(
+                superhashof({ id => $idY, isDefault => JSON::true }),
+                { id => $idN, isDefault => JSON::false, description => 'new' },
+            ),
+            notFound => [ $idX ],
+        }),
+        $res->single_sentence('AddressBook/get')->arguments,
+    );
+}

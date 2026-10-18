@@ -1,0 +1,117 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_set_atomic_undo
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 10);
+    $self->_start_instances();
+    $self->{instance}->create_user('sharee');
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'AddressBook/set', { create => {
+            x => { name => 'X' },
+            y => { name => 'Y', description => 'why' },
+            e => { name => 'E' },
+        } } ],
+    ]);
+    my $created = $res->single_sentence('AddressBook/set')->arguments->{created};
+    my $idX = $created->{x}{id};
+    my $idY = $created->{y}{id};
+    my $idE = $created->{e}{id};
+    $self->assert_not_null($idX);
+    $self->assert_not_null($idY);
+
+    $res = $jmap->request([
+        [ 'ContactCard/set', { create => { c => {
+            '@type'        => 'Card',
+            version        => '1.0',
+            addressBookIds => { $idX => JSON::true },
+            name           => { full => 'in X' },
+        } } } ],
+    ]);
+    my $cardId = $res->single_sentence('ContactCard/set')
+                     ->arguments->{created}{c}{id};
+    $self->assert_not_null($cardId);
+
+    my $props = [ 'name', 'description', 'sortOrder', 'isDefault',
+                  'isSubscribed', 'shareWith' ];
+    $res = $jmap->request([
+        [ 'AddressBook/get', { properties => $props } ],
+    ]);
+    my $before = $res->single_sentence('AddressBook/get')->arguments;
+
+    xlog $self, "a failure at the last write undoes everything before it";
+    $res = $jmap->request([
+        [ 'AddressBook/set', {
+            atomic  => JSON::true,
+            destroy => [ $idX ],
+            onDestroyRemoveContents => JSON::true,
+            create  => { z => { name => 'Z' } },
+            update  => { $idY => {
+                name      => 'renamed',
+                shareWith => { sharee => { mayRead => JSON::true } },
+            } },
+            onSuccessSetIsDefault => $idY,
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.addressbook\.set\.failed});
+
+    $res = $jmap->request([
+        [ 'AddressBook/get', { properties => $props } ],
+    ]);
+    $self->assert_cmp_deeply(
+        bag($before->{list}->@*),
+        $res->single_sentence('AddressBook/get')->arguments->{list},
+    );
+
+    xlog $self, "a failure partway through one addressbook's properties";
+    $res = $jmap->request([
+        [ 'AddressBook/set', {
+            atomic  => JSON::true,
+            destroy => [ $idE ],
+            create  => { q => { name => 'Q' } },
+            update  => { $idY => {
+                name        => 'renamed',
+                description => 'because',
+                shareWith   => { sharee => { mayRead => JSON::true } },
+            } },
+        } ],
+        [ 'AddressBook/get', { properties => $props } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->sentence(0)->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.addressbook\.set\.failed});
+    $self->assert_cmp_deeply(
+        bag($before->{list}->@*),
+        $res->sentence_named('AddressBook/get')->arguments->{list},
+    );
+
+    xlog $self, "the restored addressbook's card keeps its id";
+    $res = $jmap->request([
+        [ 'ContactCard/get', {
+            ids        => [ $cardId ],
+            properties => [ 'addressBookIds', 'name' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ {
+            id             => $cardId,
+            addressBookIds => { $idX => JSON::true },
+            name           => superhashof({ full => 'in X' }),
+        } ],
+        $res->single_sentence('ContactCard/get')->arguments->{list},
+    );
+}

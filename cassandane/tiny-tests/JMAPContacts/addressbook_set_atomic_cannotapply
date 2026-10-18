@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_set_atomic_cannotapply
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(delete_mode => 'immediate');
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'AddressBook/set', { create => { x => { name => 'X' } } } ],
+    ]);
+    my $idX = $res->single_sentence('AddressBook/set')->arguments->{created}{x}{id};
+    $self->assert_not_null($idX);
+
+    xlog $self, "an atomic destroy is refused when delete_mode is immediate";
+    $res = $jmap->request([
+        [ 'AddressBook/set', { atomic => JSON::true, destroy => [ $idX ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'cannotApplyAtomically' }),
+        $res->single_sentence('error')->arguments,
+    );
+
+    $res = $jmap->request([
+        [ 'AddressBook/get', { ids => [ $idX ], properties => [ 'name' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ { id => $idX, name => 'X' } ],
+        $res->single_sentence('AddressBook/get')->arguments->{list},
+    );
+}
