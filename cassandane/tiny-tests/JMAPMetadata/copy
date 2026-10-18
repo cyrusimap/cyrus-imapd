@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_copy
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    my $owner = $self->{instance}->create_user('owner');
+    my $ojmap = $owner->jmap;
+    $ojmap->{default_using} = $self->jmap_default_using;
+
+    my $res = $ojmap->request([
+        ['Mailbox/query', { filter => { role => 'inbox' } }],
+    ]);
+    my $owner_inbox = $res->single_sentence->arguments->{ids}[0];
+
+    $res = $ojmap->request([
+        ['Email/set', {
+            create => {
+                m1 => {
+                    mailboxIds => { $owner_inbox => JSON::true },
+                    subject => 'copy me',
+                    bodyStructure => { type => 'text/plain', partId => '1' },
+                    bodyValues => { 1 => { value => 'hi' } },
+                    metadata => { 'acme.example.com' => { shared => 1 } },
+                    privateMetadata => { 'acme.example.com' => { owner => 1 } },
+                },
+            },
+        }],
+    ]);
+    my $emailid = $res->single_sentence->as_set->created_id('m1');
+    $admin->setacl('user.owner', cassandane => 'lrswipkxtecdn') or die;
+
+    xlog $self, "the copying user adds private metadata to the source";
+    $res = $jmap->request([
+        ['Email/set', {
+            accountId => 'owner',
+            update => { $emailid => {
+                'privateMetadata/acme.example.com' => { copier => 1 },
+            } },
+        }],
+        ['Mailbox/query', { filter => { role => 'inbox' } }],
+    ]);
+    $self->assert_cmp_deeply({ $emailid => undef },
+        $res->sentence(0)->arguments->{updated});
+    my $inbox = $res->sentence(1)->arguments->{ids}[0];
+
+    $res = $jmap->request([
+        ['Email/copy', {
+            fromAccountId => 'owner',
+            create => { c1 => {
+                id => $emailid,
+                mailboxIds => { $inbox => JSON::true },
+            } },
+        }],
+    ]);
+    my $copyid = $res->single_sentence->arguments->{created}{c1}{id};
+    $self->assert_not_null($copyid);
+
+    $res = $jmap->request([
+        ['Email/get', { ids => [$copyid], properties => ['metadata', 'privateMetadata'] }],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            id => $copyid,
+            metadata => { 'acme.example.com' => { shared => 1 } },
+            privateMetadata => { 'acme.example.com' => { copier => 1 } },
+        },
+        $res->single_sentence->arguments->{list}[0],
+    );
+
+    xlog $self, "the owner's private metadata was not copied";
+    $admin->setacl('user.cassandane', owner => 'lr') or die;
+    $ojmap->{default_using} = $self->jmap_default_using;
+    $res = $ojmap->request([
+        ['Email/get', {
+            accountId => 'cassandane', ids => [$copyid],
+            properties => ['privateMetadata'],
+        }],
+    ]);
+    $self->assert_cmp_deeply({},
+        $res->single_sentence->arguments->{list}[0]{privateMetadata});
+}
