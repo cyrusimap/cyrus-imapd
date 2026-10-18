@@ -231,8 +231,10 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     " FROM sieve_scripts"
 
 
+/* A name can match deleted rows as well as the live one, which must come
+ * last so that it wins. */
 #define CMD_SELNAME CMD_GETFIELDS                                           \
-    " WHERE name = :name;"
+    " WHERE name = :name ORDER BY alive;"
 
 EXPORTED int sievedb_lookup_name(struct sieve_db *sievedb, const char *name,
                                  struct sieve_data **result, int tombstones)
