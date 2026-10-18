@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+# A failed first atomic EmailSubmission/set, which creates the submission
+# collection, must leave the collection and the conversations db usable
+# and consistent.
+sub test_emailsubmission_set_atomic_undo_new_collection
+    :needs_component_calalarmd :NoStartInstances
+    ($self)
+{
+    # The atomic method below fails at its second write, the commit.
+    $self->config_set(debug_jmap_atomic_failstep => 2);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:mail');
+    $jmap->AddUsing('urn:ietf:params:jmap:submission');
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([ [ 'Identity/get' ] ]);
+    my $identityid =
+        $res->single_sentence('Identity/get')->arguments->{list}[0]{id};
+    $self->assert_not_null($identityid);
+
+    $self->make_message('foo', body => "an email\r\n") or die;
+    $res = $jmap->request([ [ 'Email/query' ] ]);
+    my $emailid = $res->single_sentence('Email/query')->arguments->{ids}[0];
+    $self->assert_not_null($emailid);
+
+    my $submission = {
+        identityId => $identityid,
+        emailId    => $emailid,
+        envelope   => {
+            mailFrom => { email => 'from@localhost',
+                          parameters => { holdfor => '300' } },
+            rcptTo   => [ { email => 'rcpt@localhost' } ],
+        },
+    };
+
+    $res = $jmap->request([
+        [ 'EmailSubmission/set', {
+            atomic => JSON::true,
+            create => { d1 => $submission },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.emailsubmission\.set\.failed});
+    $self->assert_cmp_deeply([], $self->{instance}->getalarmdb());
+    $self->check_conversations();
+
+    $res = $jmap->request([
+        [ 'EmailSubmission/set', { create => { d2 => $submission } } ],
+    ]);
+    my $id = $res->single_sentence('EmailSubmission/set')
+                 ->arguments->{created}{d2}{id};
+    $self->assert_not_null($id);
+
+    $res = $jmap->request([
+        [ 'EmailSubmission/get', { properties => ['undoStatus'] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ { id => $id, undoStatus => 'pending' } ],
+        $res->single_sentence('EmailSubmission/get')->arguments->{list},
+    );
+    $self->assert_num_equals(1, scalar $self->{instance}->getalarmdb()->@*);
+    $self->check_conversations();
+}
