@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_vacation_set_atomic_undo
+    :needs_component_sieve :NoStartInstances
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 2);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:vacationresponse');
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'VacationResponse/set', { update => { singleton => {
+            isEnabled => JSON::false,
+            subject   => 'Away',
+        } } } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { singleton => undef },
+        $res->single_sentence('VacationResponse/set')->arguments->{updated},
+    );
+
+    $res = $jmap->request([ [ 'VacationResponse/get', {} ] ]);
+    my $before = $res->single_sentence('VacationResponse/get')->arguments;
+
+    my $sievedir = $self->{instance}->get_sieve_script_dir('cassandane');
+    my $bc = "$sievedir/urn:ietf:params:jmap:vacationresponse.bc";
+    $self->assert(-f $bc);
+    my $bcsize = -s $bc;
+
+    xlog $self, "a failed activation undoes the stored script";
+    $res = $jmap->request([
+        [ 'VacationResponse/set', {
+            atomic => JSON::true,
+            update => { singleton => {
+                isEnabled => JSON::true,
+                subject   => 'Gone for a long while',
+            } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.vacationresponse\.set\.failed});
+
+    $res = $jmap->request([ [ 'VacationResponse/get', {} ] ]);
+    $self->assert_cmp_deeply(
+        $before,
+        $res->single_sentence('VacationResponse/get')->arguments,
+    );
+    $self->assert_num_equals($bcsize, -s $bc);
+    $self->assert(!-e "$sievedir/defaultbc");
+}

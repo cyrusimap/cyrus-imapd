@@ -1,0 +1,73 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_set_atomic_undo
+    :JMAPExtensions :NoStartInstances
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 2);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:sieve');
+    $jmap->AddUsing('urn:ietf:params:jmap:blob');
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'Blob/upload', { create => {
+            k => { data => [ { 'data:asText' => "keep;\r\n" } ] },
+        } } ],
+        [ 'SieveScript/set', {
+            create => {
+                a => { name => 'A', blobId => '#k' },
+                b => { name => 'B', blobId => '#k' },
+            },
+            onSuccessActivateScript => '#a',
+        } ],
+    ]);
+    my $created = $res->sentence_named('SieveScript/set')->arguments->{created};
+    my $idA = $created->{a}{id};
+    my $idB = $created->{b}{id};
+    $self->assert_not_null($idA);
+    $self->assert_not_null($idB);
+
+    $res = $jmap->request([ [ 'SieveScript/get', {} ] ]);
+    my $before = $res->single_sentence('SieveScript/get')->arguments->{list};
+
+    xlog $self, "a write failure undoes a rename to the id, content and activation";
+    $res = $jmap->request([
+        [ 'Blob/upload', { create => {
+            d => { data => [ { 'data:asText' => "discard;\r\n" } ] },
+        } } ],
+        [ 'SieveScript/set', {
+            atomic                  => JSON::true,
+            update                  => {
+                $idA => { name => JSON::null, blobId => '#d' },
+            },
+            onSuccessActivateScript => $idB,
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.sievescript\.set\.failed});
+
+    $res = $jmap->request([ [ 'SieveScript/get', {} ] ]);
+    $self->assert_cmp_deeply(
+        bag(@$before),
+        $res->single_sentence('SieveScript/get')->arguments->{list},
+    );
+
+    my $sievedir = $self->{instance}->get_sieve_script_dir('cassandane');
+    $self->assert_str_equals('A.bc', readlink("$sievedir/defaultbc"));
+    $self->assert(-f "$sievedir/A.bc");
+    $self->assert(-f "$sievedir/B.bc");
+    $self->assert(!-e "$sievedir/$idA.bc");
+
+    $self->assert_cmp_deeply(
+        [ '"A" ACTIVE', '"B"' ],
+        $self->managesieve_listscripts(),
+    );
+}

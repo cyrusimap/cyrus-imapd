@@ -12,6 +12,8 @@ use Storable 'dclone';
 use File::Basename;
 use IO::File;
 use Cwd qw(abs_path getcwd);
+use IO::Socket::IP;
+use MIME::Base64 qw(encode_base64);
 
 use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::CRLF;
@@ -86,6 +88,37 @@ sub download
 {
     my ($self, $accountid, $blobid) = @_;
     $self->{jmap}->Download($accountid, $blobid);
+}
+
+# ManageSieve LISTSCRIPTS for cassandane, as sorted lines without the OK
+sub managesieve_listscripts
+{
+    my ($self) = @_;
+
+    my $srv = $self->{instance}->get_service('sieve');
+    my $sock = IO::Socket::IP->new(
+        PeerHost => $srv->host(),
+        PeerPort => $srv->port(),
+        Type     => SOCK_STREAM,
+    ) or die "Can't connect to timsieved: $@";
+    my $read = sub {
+        my $buf = '';
+        while (defined(my $line = $sock->getline())) {
+            $buf .= $line;
+            last if $line =~ m/^(OK|NO|BYE)/;
+        }
+        return $buf;
+    };
+
+    $read->();
+    my $plain = encode_base64("\0cassandane\0test", '');
+    $sock->print("AUTHENTICATE \"PLAIN\" \"$plain\"\r\n");
+    $self->assert_matches(qr/^OK/m, $read->());
+    $sock->print("LISTSCRIPTS\r\n");
+    my $res = $read->();
+    $self->assert_matches(qr/^OK/m, $res);
+
+    return [ sort grep { !/^OK/ } split /\r\n/, $res ];
 }
 
 use Cassandane::Tiny::Loader;
