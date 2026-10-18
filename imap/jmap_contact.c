@@ -4257,6 +4257,30 @@ done:
     return r;
 }
 
+/* Expunge the record @newuid that carddav_store appended to @mbox.  If it
+ * replaced @olduid in the same mailbox, that card comes back as a copy
+ * appended after the new one: the resource's DAV row follows the newest
+ * record, and expunging or unlinking the new record drops it. */
+static int _card_unstore(struct mailbox *mbox, uint32_t newuid, uint32_t olduid)
+{
+    struct index_record record;
+    int r = mailbox_find_index_record(mbox, newuid, &record);
+
+    if (!r) {
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+        r = mailbox_rewrite_index_record(mbox, &record);
+    }
+    if (!r && olduid) {
+        r = mailbox_find_index_record(mbox, olduid, &record);
+    }
+    if (!r && olduid) {
+        /* restoring keeps createdmodseq and vCard UID, so the card id */
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+        r = mailbox_restore_record(mbox, &record, false, NULL, NULL);
+    }
+    return r;
+}
+
 static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
                             const char *id, json_t *jcard,
                             struct carddav_db *db, struct mailbox **mailbox,
@@ -4659,6 +4683,17 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
             r = carddav_remove(*mailbox, olduid,
                                /*isreplace*/!newmailbox, req->userid);
+            if (r) {
+                /* Don't leave the card stored twice */
+                int r2 = _card_unstore(this_mailbox, record.uid,
+                                       newmailbox ? 0 : olduid);
+                if (r2) {
+                    xsyslog_ev(LOG_ERR, "jmap.card.unstore.failed",
+                               lf_s("mbox.name", mailbox_name(this_mailbox)),
+                               lf_u("msg.imapuid", record.uid),
+                               lf_err("error", r2));
+                }
+            }
         }
     }
 

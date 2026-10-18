@@ -1,0 +1,99 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_update_remove_failure_semidelayed
+    :MagicPlus :NoStartInstances
+    ($self)
+{
+    $self->config_set(expunge_mode => 'semidelayed');
+    $self->_start_instances();
+
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $abookB = $user->addressbooks->create({ name => 'B' })->id;
+
+    my $res = $jmap->request([
+        [ 'ContactCard/set', { create => {
+            c1 => {
+                '@type' => 'Card',
+                version => '1.0',
+                uid     => 'remove-failure-card-1',
+                name    => { full => 'One' },
+            },
+            c2 => {
+                '@type' => 'Card',
+                version => '1.0',
+                uid     => 'remove-failure-card-2',
+                name    => { full => 'Two' },
+            },
+        } } ],
+    ]);
+    my $created = $res->single_sentence('ContactCard/set')->arguments->{created};
+    my $id1 = $created->{c1}{id};
+    my $id2 = $created->{c2}{id};
+    $self->assert_not_null($id1);
+    $self->assert_not_null($id2);
+
+    $res = $jmap->request([
+        [ 'ContactCard/get', {
+            ids        => [ $id1, $id2 ],
+            properties => [ 'addressBookIds', 'name' ],
+        } ],
+    ]);
+    my $before = $res->single_sentence('ContactCard/get')->arguments->{list};
+
+    xlog $self, "use up the user flags, so expunging a replaced card fails";
+    my $store = $self->{instance}->get_service('imap')
+                     ->create_store(username => 'cassandane+dav');
+    my $imap = $store->get_client();
+    my @books = map { $_->[2] } $imap->list('', '*#addressbooks.%')->@*;
+    my ($bookA) = grep { m{#addressbooks\.Default$} } @books;
+    my ($bookB) = grep { !m{#addressbooks\.Default$} } @books;
+    $self->assert_not_null($bookA);
+    $self->assert_not_null($bookB);
+    $imap->select($bookA);
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+    $imap->store('1:*', '+flags', '(' . join(' ', map { "f$_" } 0..99) . ')');
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+    $imap->unselect();
+
+    $res = $jmap->request([
+        [ 'ContactCard/set', { update => {
+            $id1 => { name => { full => 'One changed' } },
+            $id2 => {
+                addressBookIds => { $abookB => JSON::true },
+                name           => { full => 'Two moved' },
+            },
+        } } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            $id1 => superhashof({ type => 'serverFail' }),
+            $id2 => superhashof({ type => 'serverFail' }),
+        },
+        $res->single_sentence('ContactCard/set')->arguments->{notUpdated},
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=mailbox\.userflag\.exhausted});
+
+    xlog $self, "neither card has a second copy";
+    $self->assert_num_equals(2, $imap->status($bookA, '(messages)')->{messages});
+    $self->assert_num_equals(0, $imap->status($bookB, '(messages)')->{messages});
+
+    $res = $jmap->request([
+        [ 'ContactCard/get', {
+            ids        => [ $id1, $id2 ],
+            properties => [ 'addressBookIds', 'name' ],
+        } ],
+        [ 'ContactCard/query', {} ],
+    ]);
+    $self->assert_cmp_deeply(
+        bag($before->@*),
+        $res->sentence_named('ContactCard/get')->arguments->{list},
+    );
+    $self->assert_cmp_deeply(
+        bag($id1, $id2),
+        $res->sentence_named('ContactCard/query')->arguments->{ids},
+    );
+}
