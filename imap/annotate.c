@@ -3292,6 +3292,17 @@ EXPORTED int annotate_state_write(annotate_state_t *state,
                        state->silent, NULL, /*maywrite*/1);
 }
 
+EXPORTED int annotate_state_writequota(annotate_state_t *state,
+                                       const char *entry,
+                                       const char *userid,
+                                       const struct buf *value,
+                                       const struct annotate_metadata *mdata)
+{
+    return write_entry(state->mailbox, state->uid,
+                       entry, userid, value, /*ignorequota*/0,
+                       /*silent*/1, mdata, /*maywrite*/1);
+}
+
 HIDDEN int annotate_state_writesilent(annotate_state_t *state,
                                         const char *entry,
                                         const char *userid,
@@ -4173,6 +4184,36 @@ out:
     annotate_putdb(&d);
     free(fname);
     return r;
+}
+
+struct copy_entry_rock {
+    struct mailbox *newmailbox;
+    uint32_t newuid;
+};
+
+static int copy_entry_cb(const char *mboxname __attribute__((unused)),
+                         uint32_t uid __attribute__((unused)),
+                         const char *entry, const char *userid,
+                         const struct buf *value,
+                         const struct annotate_metadata *mdata __attribute__((unused)),
+                         void *rock)
+{
+    struct copy_entry_rock *crock = rock;
+    return write_entry(crock->newmailbox, crock->newuid, entry, userid, value,
+                       /*ignorequota*/1, /*silent*/1, NULL, /*maywrite*/1);
+}
+
+EXPORTED int annotate_msg_copy_entry(const struct mailbox *oldmailbox,
+                                     uint32_t olduid,
+                                     struct mailbox *newmailbox,
+                                     uint32_t newuid,
+                                     const char *entry)
+{
+    struct copy_entry_rock crock = { newmailbox, newuid };
+    int r = mailbox_get_annotate_state(newmailbox, newuid, NULL);
+    if (r) return r;
+    return annotatemore_findall_mailbox(oldmailbox, olduid, entry, 0,
+                                        copy_entry_cb, &crock, 0);
 }
 
 EXPORTED int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
