@@ -845,7 +845,7 @@ static int jmap_sieve_set(struct jmap_req *req)
 
     if (!json_object_size(set.not_created) &&
         !json_object_size(set.not_updated) &&
-        !json_array_size(set.not_destroyed)) {
+        !json_object_size(set.not_destroyed)) {
 
         if (sub_args.onSuccessActivate)
             set_activate(sub_args.onSuccessActivate, mailbox, db, &set);
