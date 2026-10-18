@@ -1,0 +1,167 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    xlog $self, "create a calendar with metadata";
+    my $res = $jmap->request([
+        ['Calendar/set', {
+            create => {
+                c1 => {
+                    name => 'meta',
+                    metadata => { 'acme.example.com' => { a => 1 } },
+                    privateMetadata => { 'acme.example.com' => { b => 2 } },
+                },
+            },
+        }],
+    ]);
+    my $calid = $res->single_sentence->as_set->created_id('c1');
+    $self->assert_not_null($calid);
+
+    $res = $jmap->request([['Calendar/get', { ids => [$calid] }]]);
+    my $cal = $res->single_sentence->arguments->{list}[0];
+    $self->assert_cmp_deeply({ 'acme.example.com' => { a => 1 } },
+                             $cal->{metadata});
+    $self->assert_cmp_deeply({ 'acme.example.com' => { b => 2 } },
+                             $cal->{privateMetadata});
+    my $state = $res->single_sentence->arguments->{state};
+
+    xlog $self, "a metadata-only update is reported as such";
+    $res = $jmap->request([
+        ['Calendar/set', {
+            update => { $calid => { 'metadata/acme.example.com/a' => 2 } },
+        }],
+        ['Calendar/changes', { sinceState => $state }],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            updated => [$calid],
+            updatedProperties => ['metadata'],
+        }),
+        $res->sentence(1)->arguments,
+    );
+}
+
+sub test_calendarevent
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([['Calendar/get', { properties => ['id'] }]]);
+    my $calid = $res->single_sentence->arguments->{list}[0]{id};
+
+    xlog $self, "create an event with metadata";
+    $res = $jmap->request([
+        ['CalendarEvent/set', {
+            create => {
+                e1 => {
+                    calendarIds => { $calid => JSON::true },
+                    version => '2.0',
+                    title => 'meeting',
+                    start => '2026-10-20T10:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    metadata => { 'acme.example.com' => { status => 'new' } },
+                    privateMetadata => {
+                        'acme.example.com' => { note => 'Bring Coffee' },
+                    },
+                },
+            },
+        }],
+    ]);
+    my $id = $res->single_sentence->as_set->created_id("e1");
+    $self->assert_not_null($id);
+
+    $res = $jmap->request([
+        ['CalendarEvent/get', {
+            ids => [$id],
+            properties => ['title', 'updated', 'metadata',
+                           'privateMetadata/acme.example.com'],
+        }],
+    ]);
+    my $args = $res->single_sentence->arguments;
+    my $event = $args->{list}[0];
+    $self->assert_cmp_deeply(
+        { 'acme.example.com' => { status => 'new' } }, $event->{metadata});
+    $self->assert_cmp_deeply(
+        { 'acme.example.com' => { note => 'Bring Coffee' } },
+        $event->{privateMetadata});
+    my $updated = $event->{updated};
+    my $state = $args->{state};
+
+    xlog $self, "metadata-only changes leave updated alone";
+    sleep 1;
+    $res = $jmap->request([
+        ['CalendarEvent/set', {
+            update => {
+                $id => { 'metadata/acme.example.com/status' => 'seen' },
+            },
+        }],
+        ['CalendarEvent/changes', { sinceState => $state }],
+        ['CalendarEvent/get', {
+            ids => [$id], properties => ['updated', 'metadata'],
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            updated => [$id],
+            updatedProperties => ['metadata'],
+        }),
+        $res->sentence(1)->arguments,
+    );
+    $event = $res->sentence(2)->arguments->{list}[0];
+    $self->assert_str_equals($updated, $event->{updated});
+    $self->assert_cmp_deeply(
+        { 'acme.example.com' => { status => 'seen' } }, $event->{metadata});
+
+    xlog $self, "changing the event keeps its metadata";
+    $res = $jmap->request([
+        ['CalendarEvent/set', {
+            update => {
+                $id => {
+                    title => 'renamed',
+                    'privateMetadata/acme.example.com/note' => 'no coffee',
+                },
+            },
+        }],
+        ['CalendarEvent/get', {
+            ids => [$id],
+            properties => ['title', 'metadata', 'privateMetadata'],
+        }],
+    ]);
+    $self->assert_cmp_deeply({ $id => ignore() },
+        $res->sentence(0)->arguments->{updated});
+    $self->assert_cmp_deeply(
+        superhashof({
+            id => $id,
+            title => 'renamed',
+            metadata => { 'acme.example.com' => { status => 'seen' } },
+            privateMetadata => { 'acme.example.com' => { note => 'no coffee' } },
+        }),
+        $res->sentence(1)->arguments->{list}[0],
+    );
+
+    xlog $self, "query by metadata";
+    $res = $jmap->request([
+        ['CalendarEvent/query', {
+            filter => { metadataTextEquals => {
+                path => 'acme.example.com/status', value => 'seen' } },
+        }],
+        ['CalendarEvent/query', {
+            filter => { operator => 'NOT', conditions => [
+                { privateMetadataTextContains => {
+                    path => 'acme.example.com/note', value => 'COFFEE' } },
+            ] },
+        }],
+        ['CalendarEvent/query', {
+            filter => { privateMetadataExists => 'acme.example.com/nope' },
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        [[$id], [], []],
+        [ map { $_->arguments->{ids} } $res->sentences ],
+    );
+}

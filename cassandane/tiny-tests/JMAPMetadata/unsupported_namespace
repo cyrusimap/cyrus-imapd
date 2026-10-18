@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_unsupported_namespace
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    my $res = $jmap->request([
+        ['Calendar/set', { create => { c1 => { name => 'legacy' } } }],
+    ]);
+    my $calid = $res->single_sentence->as_set->created_id('c1');
+    $res = $jmap->request([
+        ['Calendar/get', { ids => [$calid], properties => ['mailboxUniqueId'] }],
+    ]);
+    my $uniqueid = $res->single_sentence->arguments->{list}[0]{mailboxUniqueId};
+
+    my $mboxname;
+    for my $item (@{ $admin->list('', 'user.cassandane.#calendars.*') }) {
+        my $name = $item->[2];
+        my $md = $admin->getmetadata($name, '/shared/vendor/cmu/cyrus-imapd/uniqueid');
+        $mboxname = $name if $md->{$name}{'/shared/vendor/cmu/cyrus-imapd/uniqueid'} eq $uniqueid;
+    }
+    $self->assert_not_null($mboxname);
+
+    xlog $self, "store data under a namespace the server doesn't support";
+    my $stored = { photography => { iso => 400 }, 'acme.example.com' => { a => 1 } };
+    $admin->setmetadata($mboxname, '/shared/vendor/cmu/cyrus-jmap/metadata',
+        JSON::XS->new->canonical->encode({ value => $stored }));
+    $self->assert_str_equals('ok', $admin->get_last_completion_response());
+
+    $res = $jmap->request([
+        ['Calendar/get', {
+            ids => [$calid],
+            properties => ['metadata/photography', 'metadata/absent'],
+        }],
+    ]);
+    $self->assert_cmp_deeply({ photography => { iso => 400 } },
+        $res->single_sentence->arguments->{list}[0]{metadata});
+
+    my sub update ($patch) {
+        my $res = $jmap->request([
+            ['Calendar/set', { update => { $calid => $patch } }],
+        ]);
+        return $res->single_sentence->arguments->{notUpdated}{$calid};
+    }
+
+    xlog $self, "it can't be extended";
+    $self->assert_cmp_deeply(
+        { type => 'invalidProperties', properties => ['metadata/photography/iso'] },
+        update({ 'metadata/photography/iso' => 800 }),
+    );
+    $self->assert_cmp_deeply(
+        { type => 'invalidProperties', properties => ['metadata/photography'] },
+        update({ metadata => { photography => { iso => 800 } } }),
+    );
+
+    xlog $self, "a complete replacement may keep it unchanged";
+    $self->assert_null(update({
+        metadata => { photography => { iso => 400 }, 'acme.example.com' => { a => 2 } },
+    }));
+
+    xlog $self, "and it can be removed";
+    $self->assert_null(update({ 'metadata/photography' => undef }));
+    $res = $jmap->request([
+        ['Calendar/get', { ids => [$calid], properties => ['metadata'] }],
+    ]);
+    $self->assert_cmp_deeply({ 'acme.example.com' => { a => 2 } },
+        $res->single_sentence->arguments->{list}[0]{metadata});
+}
