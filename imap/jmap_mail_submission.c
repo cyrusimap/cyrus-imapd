@@ -1660,6 +1660,17 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
     /* Process request */
 
+    if (set.if_in_state) {
+        if (atomodseq_t(set.if_in_state) != jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0)) {
+            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+            goto done;
+        }
+        set.old_state = xstrdup(set.if_in_state);
+    }
+    else {
+        set.old_state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0));
+    }
+
     int r = ensure_submission_collection(req->accountid, &mbentry, NULL);
     if (r) {
         syslog(LOG_ERR,
@@ -1678,17 +1689,6 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         goto done;
     }
     mboxlist_entry_free(&mbentry);
-
-    if (set.if_in_state) {
-        if (atomodseq_t(set.if_in_state) != jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0)) {
-            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
-            goto done;
-        }
-        set.old_state = xstrdup(set.if_in_state);
-    }
-    else {
-        set.old_state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0));
-    }
 
     /* destroy */
     json_t *jsubmission;
