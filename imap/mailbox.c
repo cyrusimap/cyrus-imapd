@@ -3938,6 +3938,25 @@ EXPORTED int mailbox_add_email_alarms(struct mailbox *mailbox,
 
     return r;
 }
+
+EXPORTED int mailbox_reset_email_alarm(struct mailbox *mailbox, uint32_t uid)
+{
+    struct index_record record;
+    int r = mailbox_find_index_record(mailbox, uid, &record);
+
+    if (r == IMAP_NOTFOUND) {
+        if (!(mailbox->i.options & OPT_IMAP_HAS_ALARMS)) {
+            return 0;
+        }
+        r = caldav_alarm_delete_record(mailbox_name(mailbox), uid);
+    }
+    else if (!r) {
+        r = mailbox_update_email_alarms(mailbox, NULL, &record);
+    }
+
+    /* the alarm db reports its own failures as -1 */
+    return r < 0 ? IMAP_IOERROR : r;
+}
 #endif // WITH_JMAP
 
 #ifdef USE_SIEVE

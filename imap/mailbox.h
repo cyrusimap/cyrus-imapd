@@ -943,6 +943,14 @@ extern int mailbox_add_sieve(struct mailbox *mailbox, hashu64_table *cmodseqs);
 extern int mailbox_add_email_alarms(struct mailbox *mailbox,
                                     hashu64_table *cmodseqs);
 
+/**
+ * Set the alarm db entry for @p uid from its committed index record in
+ * @p mailbox, deleting it if there is no such record.  Use it after
+ * mailbox_abort to undo the alarm writes of the aborted records, which are
+ * made outside the mailbox transaction.  Returns 0 or an IMAP_* error.
+ */
+extern int mailbox_reset_email_alarm(struct mailbox *mailbox, uint32_t uid);
+
 extern int mailbox_add_conversations(struct mailbox *mailbox, int silent);
 __attribute__((nonnull))
 extern int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
