@@ -1,0 +1,137 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_notifications_set_atomic ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    $self->{adminstore}->get_client()->create('user.manifold');
+    my $manjmap = $self->{instance}->create_user_without_setup('manifold')
+                                   ->new_jmaptester;
+    $manjmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $rights = { mayReadItems => JSON::true, mayWriteAll => JSON::true };
+    my $res = $jmap->request([
+        [ 'Calendar/set', { create => {
+            a => { name => 'A', shareWith => { manifold => $rights } },
+            b => { name => 'B', shareWith => { manifold => $rights } },
+        } } ],
+    ]);
+    my $calId = $res->single_sentence('Calendar/set')
+                    ->arguments->{created}{a}{id};
+    $self->assert_not_null($calId);
+
+    my sub event ($title) {
+        return {
+            version     => '2.0',
+            calendarIds => { $calId => JSON::true },
+            title       => $title,
+            start       => '2026-01-01T09:00:00',
+            duration    => 'PT1H',
+        };
+    }
+
+    xlog $self, "each user's events notify the other";
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', { create => {
+            e1 => event('by owner 1'), e2 => event('by owner 2'),
+        } } ],
+    ]);
+    $self->assert_num_equals(2, scalar keys
+        $res->single_sentence('CalendarEvent/set')->arguments->{created}->%*);
+    $res = $manjmap->request([
+        [ 'CalendarEvent/set', {
+            accountId => 'cassandane',
+            create    => {
+                e1 => event('by sharee 1'), e2 => event('by sharee 2'),
+            },
+        } ],
+    ]);
+    $self->assert_num_equals(2, scalar keys
+        $res->single_sentence('CalendarEvent/set')->arguments->{created}->%*);
+
+    # Each case is [ client, method, accountId ]: the sharee's own share
+    # notifications (expunged), the owner's event notifications (\Seen), and
+    # the owner's event notifications as seen by the sharee (seen.db).
+    my @cases = (
+        [ $manjmap, 'ShareNotification',         'manifold' ],
+        [ $jmap,    'CalendarEventNotification', 'cassandane' ],
+        [ $manjmap, 'CalendarEventNotification', 'cassandane' ],
+    );
+
+    for my $case (@cases) {
+        my ($client, $type, $accountId) = @$case;
+
+        $res = $client->request([
+            [ "$type/get", { accountId => $accountId } ],
+        ]);
+        my @ids = sort map { $_->{id} }
+                  $res->single_sentence("$type/get")->arguments->{list}->@*;
+        $self->assert_num_equals(2, scalar @ids);
+
+        xlog $self, "$type as $accountId: one unknown id fails the method";
+        $res = $client->request([
+            [ "$type/get", { accountId => $accountId, ids => [] } ],
+            [ "$type/set", {
+                accountId => $accountId,
+                atomic    => JSON::true,
+                destroy   => [ $ids[0], 'unknown' ],
+            } ],
+            [ "$type/get", { accountId => $accountId } ],
+        ]);
+        $self->assert_cmp_deeply(
+            {
+                type         => 'atomicFailure',
+                notDestroyed => { unknown => { type => 'notFound' } },
+            },
+            $res->sentence(1)->arguments,
+        );
+        $self->assert_str_equals(
+            $res->sentence(0)->arguments->{state},
+            $res->sentence(2)->arguments->{state},
+        );
+        $self->assert_cmp_deeply(
+            bag(@ids),
+            [ map { $_->{id} } $res->sentence(2)->arguments->{list}->@* ],
+        );
+
+        xlog $self, "$type as $accountId: a create fails the method";
+        $res = $client->request([
+            [ "$type/set", {
+                accountId => $accountId,
+                atomic    => JSON::true,
+                create    => { n => {} },
+                destroy   => [ @ids ],
+            } ],
+            [ "$type/get", { accountId => $accountId } ],
+        ]);
+        $self->assert_cmp_deeply(
+            {
+                type       => 'atomicFailure',
+                notCreated => { n => { type => 'forbidden' } },
+            },
+            $res->sentence(0)->arguments,
+        );
+        $self->assert_num_equals(2,
+            scalar $res->sentence(1)->arguments->{list}->@*);
+
+        xlog $self, "$type as $accountId: both destroys apply";
+        $res = $client->request([
+            [ "$type/set", {
+                accountId => $accountId,
+                atomic    => JSON::true,
+                destroy   => [ @ids ],
+            } ],
+            [ "$type/get", { accountId => $accountId } ],
+        ]);
+        $self->assert_cmp_deeply(
+            bag(@ids),
+            $res->sentence(0)->arguments->{destroyed},
+        );
+        $self->assert_cmp_deeply([], $res->sentence(1)->arguments->{list});
+    }
+
+    # reading another user's seen.db for the first time logs a DBERROR
+    $self->{instance}->getsyslog();
+}
