@@ -183,6 +183,10 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     struct sieve_data *sdata = rrock->sdata;
     int r = 0;
 
+    /* a name can match a deleted row as well as the live one */
+    if (!rrock->tombstones && sdata->rowid && !sqlite3_column_int(stmt, 11))
+        return 0;
+
     memset(sdata, 0, sizeof(struct sieve_data));
 
     sdata->modseq = sqlite3_column_int64(stmt, 5);
