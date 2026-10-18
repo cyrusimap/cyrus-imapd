@@ -14282,6 +14282,12 @@ static int jmap_participantidentity_set(struct jmap_req *req)
         goto done;
     }
 
+    set.old_state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, 0));
+    if (set.if_in_state && strcmp(set.old_state, set.if_in_state)) {
+        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        goto done;
+    }
+
     const char *key;
     json_t *jarg;
     json_object_foreach(set.create, key, jarg) {
@@ -14307,7 +14313,7 @@ static int jmap_participantidentity_set(struct jmap_req *req)
         }
     }
 
-    set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, JMAP_MODSEQ_RELOAD));
+    set.new_state = xstrdup(set.old_state);
 
     jmap_ok(req, jmap_set_reply(&set));
 
