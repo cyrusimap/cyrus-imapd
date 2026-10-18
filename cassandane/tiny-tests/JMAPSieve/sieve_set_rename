@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_set_rename
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:sieve');
+    $jmap->AddUsing('urn:ietf:params:jmap:blob');
+
+    my $res = $jmap->request([
+        [ 'Blob/upload', { create => {
+            k => { data => [ { 'data:asText' => "keep;\r\n" } ] },
+        } } ],
+        [ 'SieveScript/set', {
+            create                  => { a => { name => 'A', blobId => '#k' } },
+            onSuccessActivateScript => '#a',
+        } ],
+    ]);
+    my $set = $res->sentence_named('SieveScript/set')->arguments;
+    my $id = $set->{created}{a}{id};
+    $self->assert_not_null($id);
+
+    xlog $self, "a name-only update renames the script";
+    $res = $jmap->request([
+        [ 'SieveScript/set', { update => { $id => { name => 'R' } } } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $id => undef },
+        $res->single_sentence('SieveScript/set')->arguments->{updated},
+    );
+
+    $res = $jmap->request([ [ 'SieveScript/get', {} ] ]);
+    $self->assert_cmp_deeply(
+        [ superhashof({ id => $id, name => 'R', isActive => JSON::true }) ],
+        $res->single_sentence('SieveScript/get')->arguments->{list},
+    );
+
+    my $sievedir = $self->{instance}->get_sieve_script_dir('cassandane');
+    $self->assert_str_equals('R.bc', readlink("$sievedir/defaultbc"));
+    $self->assert(-f "$sievedir/R.bc");
+    $self->assert(!-e "$sievedir/A.bc");
+}

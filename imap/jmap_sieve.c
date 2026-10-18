@@ -311,7 +311,7 @@ static void putscript(struct mailbox *mailbox, const char *script,
     if (!script) {
         /* fetch existing script content (just a rename) */
         r = sieve_script_fetch(mailbox, sdata, &buf);
-        goto done;
+        if (r) goto done;
     }
     else {
         /* check script size */
@@ -565,8 +565,10 @@ static void set_update(struct jmap_req *req,
 
     if (name) sdata->name = name;
 
-    putscript(mailbox, content, sdata, &err);
-    if (err) goto done;
+    if (name || content) {
+        putscript(mailbox, content, sdata, &err);
+        if (err) goto done;
+    }
 
     /* Report script as updated, with server-set properties */
     json_t *new_sieve = NULL;

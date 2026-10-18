@@ -4094,6 +4094,11 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
             }
         }
 
+        /* a rename leaves the old name's bytecode behind */
+        if (sdata->imap_uid && sdata->alive && strcmp(sdata->name, name)) {
+            sievedir_delete_script(mailbox->sievedir, sdata->name);
+        }
+
         sdata->lastupdated = new->internaldate.tv_sec;
         sdata->mailbox = mailbox_uniqueid(mailbox);
         sdata->imap_uid = new->uid;
