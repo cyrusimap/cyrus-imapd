@@ -2344,7 +2344,7 @@ static int setaddressbook_writeprops(jmap_req_t *req,
         buf_reset(&val);
         buf_printf(&val, "%d", props->sortOrder);
         static const char *sortorder_annot = IMAP_ANNOT_NS "sortorder";
-        r = annotatemore_writemask(mboxname, sortorder_annot, httpd_userid, &val);
+        r = annotate_state_writemask(astate, sortorder_annot, httpd_userid, &val);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     sortorder_annot, error_message(r));
