@@ -1,0 +1,161 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_atomic ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+    my $admin = $self->{adminstore}->get_client();
+
+    my sub card ($uid, $name) {
+        return {
+            '@type' => 'Card',
+            version => '1.0',
+            uid     => $uid,
+            name    => { full => $name },
+        };
+    }
+
+    my $res = $jmap->request([
+        [ 'ContactCard/set', { create => {
+            c1 => card('atomic-u1', 'One'),
+            c2 => card('atomic-u2', 'Two'),
+        } } ],
+    ]);
+    my $created = $res->single_sentence('ContactCard/set')->arguments->{created};
+    my $id1 = $created->{c1}{id};
+    my $id2 = $created->{c2}{id};
+    $self->assert_not_null($id1);
+    $self->assert_not_null($id2);
+
+    xlog $self, "a card can be replaced by a new one with its UID";
+    $res = $jmap->request([
+        [ 'ContactCard/set', {
+            atomic  => JSON::true,
+            destroy => [ $id1 ],
+            create  => { n => card('atomic-u1', 'One again') },
+        } ],
+    ]);
+    my $set = $res->single_sentence('ContactCard/set')->arguments;
+    $self->assert_cmp_deeply([ $id1 ], $set->{destroyed});
+    my $idN = $set->{created}{n}{id};
+    $self->assert_not_null($idN);
+
+    $res = $jmap->request([
+        [ 'ContactCard/get', {
+            ids        => [ $idN ],
+            properties => [ 'uid', 'name' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ superhashof({
+            id   => $idN,
+            uid  => 'atomic-u1',
+            name => superhashof({ full => 'One again' }),
+        }) ],
+        $res->single_sentence('ContactCard/get')->arguments->{list},
+    );
+
+    xlog $self, "two creates of one UID fail together";
+    $res = $jmap->request([
+        [ 'ContactCard/get', { ids => [], properties => [ 'id' ] } ],
+        [ 'ContactCard/set', {
+            atomic => JSON::true,
+            create => {
+                a => card('atomic-u3', 'A'),
+                b => card('atomic-u3', 'B'),
+            },
+        } ],
+        [ 'ContactCard/query', {} ],
+        [ 'ContactCard/get', { ids => [], properties => [ 'id' ] } ],
+    ]);
+    my $failure = $res->sentence(1)->arguments;
+    $self->assert_str_equals('atomicFailure', $failure->{type});
+    $self->assert_num_equals(1, scalar keys $failure->{notCreated}->%*);
+    $self->assert_cmp_deeply(
+        [ { type => 'invalidProperties', properties => [ 'uid' ] } ],
+        [ values $failure->{notCreated}->%* ],
+    );
+    $self->assert_cmp_deeply(
+        bag($idN, $id2),
+        $res->sentence_named('ContactCard/query')->arguments->{ids},
+    );
+    $self->assert_str_equals(
+        $res->sentence(0)->arguments->{state},
+        $res->sentence(3)->arguments->{state},
+    );
+
+    xlog $self, "one invalid change rejects the whole method";
+    $res = $jmap->request([
+        [ 'ContactCard/get', { ids => [], properties => [ 'id' ] } ],
+        [ 'ContactCard/set', {
+            atomic  => JSON::true,
+            create  => { z => card('atomic-u4', 'Z') },
+            update  => { $id2 => { kind => 'group' } },
+            destroy => [ $idN ],
+        } ],
+        [ 'ContactCard/query', {} ],
+        [ 'ContactCard/get', { ids => [], properties => [ 'id' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => {
+                $id2 => { type => 'invalidProperties', properties => [ 'kind' ] },
+            },
+        },
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_cmp_deeply(
+        bag($idN, $id2),
+        $res->sentence_named('ContactCard/query')->arguments->{ids},
+    );
+    $self->assert_str_equals(
+        $res->sentence(0)->arguments->{state},
+        $res->sentence(3)->arguments->{state},
+    );
+
+    xlog $self, "set the message limit to what the account uses";
+    $admin->setquota('user.cassandane', '(MESSAGE 100000)');
+    my @quota = map { ref $_ ? @$_ : $_ } $admin->getquota('user.cassandane');
+    my ($i) = grep { uc $quota[$_] eq 'MESSAGE' } 0 .. $#quota;
+    $self->assert_not_null($i);
+    $admin->setquota('user.cassandane', '(MESSAGE ' . $quota[$i + 1] . ')');
+    $self->assert_str_equals('ok', $admin->get_last_completion_response());
+
+    xlog $self, "an update replaces the card, so it fits";
+    $res = $jmap->request([
+        [ 'ContactCard/set', {
+            atomic => JSON::true,
+            update => { $id2 => { name => { full => 'Two changed' } } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $id2 => ignore() },
+        $res->single_sentence('ContactCard/set')->arguments->{updated},
+    );
+
+    xlog $self, "a create doesn't fit, unless a destroy makes room";
+    $res = $jmap->request([
+        [ 'ContactCard/set', {
+            atomic => JSON::true,
+            create => { q => card('atomic-u5', 'Q') },
+        } ],
+        [ 'ContactCard/set', {
+            atomic  => JSON::true,
+            create  => { r => card('atomic-u6', 'R') },
+            destroy => [ $idN ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notCreated => { q => { type => 'overQuota' } },
+        },
+        $res->sentence(0)->arguments,
+    );
+    $self->assert_cmp_deeply(
+        [ $idN ],
+        $res->sentence(1)->arguments->{destroyed},
+    );
+}

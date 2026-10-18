@@ -107,6 +107,25 @@ sub test_addressbook_set_atomic ($self)
         $res->sentence(2)->arguments->{state},
     );
 
+    xlog $self, "the new default can't be one the method destroys";
+    $res = $jmap->request([
+        [ 'AddressBook/set', { create => { d => { name => 'D' } } } ],
+        [ 'AddressBook/set', {
+            atomic                => JSON::true,
+            destroy               => [ '#d' ],
+            onSuccessSetIsDefault => '#d',
+        } ],
+    ]);
+    my $idD = $res->sentence(0)->arguments->{created}{d}{id};
+    $self->assert_not_null($idD);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => { $idD => { type => 'notFound' } },
+        },
+        $res->sentence(1)->arguments,
+    );
+
     xlog $self, "destroying the default works once another becomes default";
     $res = $jmap->request([
         [ 'AddressBook/set', {

@@ -1,0 +1,89 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_atomic_uid_ids
+    :OldJMAPIds
+    ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my sub card ($uid, $name) {
+        return {
+            '@type' => 'Card',
+            version => '1.0',
+            uid     => $uid,
+            name    => { full => $name },
+        };
+    }
+
+    xlog $self, "a card created in the method can be updated by its UID";
+    my $res = $jmap->request([
+        [ 'ContactCard/set', {
+            atomic => JSON::true,
+            create => { a => card('uid-ids-a', 'A') },
+            update => { 'uid-ids-a' => { name => { full => 'A changed' } } },
+        } ],
+        [ 'ContactCard/get', {
+            ids        => [ 'uid-ids-a' ],
+            properties => [ 'name' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { 'uid-ids-a' => ignore() },
+        $res->sentence_named('ContactCard/set')->arguments->{updated},
+    );
+    $self->assert_cmp_deeply(
+        [ superhashof({ id => 'uid-ids-a', name => superhashof({ full => 'A changed' }) }) ],
+        $res->sentence_named('ContactCard/get')->arguments->{list},
+    );
+
+    xlog $self, "and so can the first of several cards created in one addressbook";
+    $res = $jmap->request([
+        [ 'ContactCard/set', {
+            atomic => JSON::true,
+            create => {
+                d => card('uid-ids-d', 'D'),
+                e => card('uid-ids-e', 'E'),
+            },
+            update => {
+                'uid-ids-d' => { name => { full => 'D changed' } },
+                'uid-ids-e' => { name => { full => 'E changed' } },
+            },
+        } ],
+        [ 'ContactCard/get', {
+            ids        => [ 'uid-ids-d', 'uid-ids-e' ],
+            properties => [ 'name' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { 'uid-ids-d' => ignore(), 'uid-ids-e' => ignore() },
+        $res->sentence_named('ContactCard/set')->arguments->{updated},
+    );
+    $self->assert_cmp_deeply(
+        bag(
+            superhashof({ id => 'uid-ids-d', name => superhashof({ full => 'D changed' }) }),
+            superhashof({ id => 'uid-ids-e', name => superhashof({ full => 'E changed' }) }),
+        ),
+        $res->sentence_named('ContactCard/get')->arguments->{list},
+    );
+
+    xlog $self, "that update is checked as an update";
+    $res = $jmap->request([
+        [ 'ContactCard/set', {
+            atomic => JSON::true,
+            create => { b => card('uid-ids-b', 'B') },
+            update => { 'uid-ids-b' => { kind => 'group' } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => { 'uid-ids-b' => {
+                type       => 'invalidProperties',
+                properties => [ 'kind' ],
+            } },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+}

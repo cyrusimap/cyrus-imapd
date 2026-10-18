@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_atomic_cannotapply
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(expunge_mode => 'semidelayed');
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my sub card ($name) {
+        return {
+            '@type' => 'Card',
+            version => '1.0',
+            name    => { full => $name },
+        };
+    }
+
+    my $res = $jmap->request([
+        [ 'AddressBook/set', { create => { b => { name => 'B' } } } ],
+        [ 'ContactCard/set', { create => {
+            c1 => card('One'),
+            c2 => card('Two'),
+        } } ],
+    ]);
+    my $abookB = $res->sentence_named('AddressBook/set')
+                     ->arguments->{created}{b}{id};
+    my $created = $res->sentence_named('ContactCard/set')
+                      ->arguments->{created};
+    my $id1 = $created->{c1}{id};
+    my $id2 = $created->{c2}{id};
+    $self->assert_not_null($abookB);
+    $self->assert_not_null($id1);
+    $self->assert_not_null($id2);
+
+    xlog $self, "expunging from two addressbooks is refused";
+    $res = $jmap->request([
+        [ 'ContactCard/set', {
+            atomic => JSON::true,
+            update => { $id1 => {
+                addressBookIds => { $abookB => JSON::true },
+            } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'cannotApplyAtomically' }),
+        $res->single_sentence('error')->arguments,
+    );
+
+    xlog $self, "within one addressbook, nothing is expunged until commit";
+    $res = $jmap->request([
+        [ 'ContactCard/set', {
+            atomic  => JSON::true,
+            destroy => [ $id1 ],
+            update  => { $id2 => { name => { full => 'Two changed' } } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            destroyed => [ $id1 ],
+            updated   => { $id2 => ignore() },
+        }),
+        $res->single_sentence('ContactCard/set')->arguments,
+    );
+}
