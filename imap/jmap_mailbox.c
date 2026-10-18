@@ -21,6 +21,7 @@
 #include "http_dav.h"
 #include "http_dav_sharing.h"
 #include "jmap_mail.h"
+#include "jmap_metadata.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mappedfile.h"
@@ -499,6 +500,23 @@ static json_t *_mbox_get_myrights(jmap_req_t *req, const mbentry_t *mbentry)
     return jrights;
 }
 
+/* Write access to Mailbox metadata is mayRename, but INBOX can't be
+ * renamed: there it takes the right to delete the mailbox instead. */
+static bool _mbox_may_setmetadata(jmap_req_t *req, const mbentry_t *mbentry)
+{
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    int is_inbox = 0;
+    _mbox_is_inbox(mbname, &is_inbox, NULL);
+    mbname_free(&mbname);
+
+    if (is_inbox) return jmap_hasrights_mbentry(req, mbentry, JACL_DELETE);
+
+    json_t *jrights = _mbox_get_myrights(req, mbentry);
+    bool may = json_is_true(json_object_get(jrights, "mayRename"));
+    json_decref(jrights);
+    return may;
+}
+
 static json_t *_json_has(int rights, int need)
 {
   return (((rights & need) == need) ? json_true() : json_false());
@@ -651,6 +669,24 @@ static json_t *_mbox_get(jmap_req_t *req,
         int is_subscribed = strarray_contains(sublist, mbentry->name) ||
             (jmap_myrights_mbentry(req, mbentry) & ACL_AUTOSUB);
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
+    }
+
+    if (jmap_metadata_wanted(props)) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        if (share_type == _SHAREDMBOX_SHARED &&
+            !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+            r = jmap_metadata_lookup(req, NULL, mbentry, 0, &md);
+            if (r) {
+                jmap_metadata_fini(&md);
+                goto done;
+            }
+        }
+        else {
+            md.shared = json_object();
+            md.private = json_object();
+        }
+        jmap_metadata_get(props, obj, &md);
+        jmap_metadata_fini(&md);
     }
 
 done:
@@ -841,6 +877,7 @@ typedef struct {
     json_t *role;
     json_t *has_any_role;
     json_t *is_subscribed;
+    json_t *jcond;  /* the condition, if it uses metadata */
 } mboxquery_filter_t;
 
 typedef struct {
@@ -999,6 +1036,21 @@ static int _mboxquery_eval_filter(mboxquery_t *query,
             if (want_subscribed && !is_subscribed) return 0;
             if (!want_subscribed && is_subscribed) return 0;
         }
+        if (filter->jcond) {
+            struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+            mbentry_t *mbentry = NULL;
+            if (rec->shared_mbtype == _SHAREDMBOX_SHARED &&
+                !(rec->mbtype & (MBTYPE_INTERMEDIATE|MBTYPE_DELETED)) &&
+                !jmap_mboxlist_lookup(rec->mboxname, &mbentry, NULL)) {
+                jmap_metadata_lookup(query->req, NULL, mbentry, 0, &md);
+            }
+            if (!md.shared) md.shared = json_object();
+            if (!md.private) md.private = json_object();
+            int is_match = jmap_metadata_filter_match(filter->jcond, &md);
+            jmap_metadata_fini(&md);
+            mboxlist_entry_free(&mbentry);
+            if (!is_match) return 0;
+        }
         return 1;
     }
 }
@@ -1029,6 +1081,9 @@ static mboxquery_filter_t *_mboxquery_build_filter(mboxquery_t *query, json_t *j
         filter->role = json_object_get(jfilter, "role");
         filter->has_any_role = json_object_get(jfilter, "hasAnyRole");
         filter->is_subscribed = json_object_get(jfilter, "isSubscribed");
+        if (jmap_metadata_filter_uses(jfilter)) {
+            filter->jcond = jfilter;
+        }
         if (filter->role || filter->has_any_role) {
             query->need_role = 1;
         }
@@ -1401,7 +1456,7 @@ static int _mboxquery_parse_comparator(jmap_req_t *req __attribute__((unused)),
     return 1;
 }
 
-static void _mboxquery_parse_filter(jmap_req_t *req __attribute__((unused)),
+static void _mboxquery_parse_filter(jmap_req_t *req,
                                     struct jmap_parser *parser,
                                     json_t *filter,
                                     json_t *unsupported __attribute__((unused)),
@@ -1429,10 +1484,11 @@ static void _mboxquery_parse_filter(jmap_req_t *req __attribute__((unused)),
                 jmap_parser_invalid(parser, field);
             }
         }
-        else {
+        else if (!jmap_metadata_is_filter(field)) {
             jmap_parser_invalid(parser, field);
         }
     }
+    jmap_metadata_filter_validate(req, parser, filter);
 }
 
 static int _mboxquery_parse_args(jmap_req_t *req __attribute__((unused)),
@@ -1743,6 +1799,8 @@ struct mboxset_args {
     char *color;
     int show_as_label;
     bool has_ext_props; // request is setting externally-stored properties
+    struct jmap_metadata_set md;
+    json_t *md_err;
     json_t *jargs; // original JSON arguments
 };
 
@@ -1754,6 +1812,8 @@ static void _mbox_setargs_fini(struct mboxset_args *args)
     free(args->name);
     free(args->specialuse);
     free(args->color);
+    jmap_metadata_set_fini(&args->md);
+    json_decref(args->md_err);
     json_decref(args->jargs);
 }
 
@@ -1768,6 +1828,7 @@ static void _mboxset_args_parse(json_t *jargs,
     args->sortorder = -1;
     args->overwrite_acl = 1;
     args->jargs = json_incref(jargs);
+    args->md_err = jmap_metadata_set_parse(req, jargs, is_create, &args->md);
 
     /* id */
     json_t *jid = json_object_get(jargs, "id");
@@ -2125,6 +2186,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     mbentry_t *mbinbox = NULL, *mbentry = NULL;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct mailbox *mailbox = NULL;
+    json_t *md_shared = NULL, *md_private = NULL;
 
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
     jmap_mboxlist_lookup(inboxname, &mbinbox, NULL);
@@ -2215,6 +2277,13 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     }
     r = 0;
 
+    if (!jmap_metadata_set_isempty(&args->md)) {
+        struct jmap_metadata nomd = JMAP_METADATA_INITIALIZER;
+        result->err = jmap_metadata_set_apply(req, &args->md, true, &nomd,
+                                              &md_shared, &md_private);
+        if (result->err) goto done;
+    }
+
     /* Create mailbox */
     mbentry_t newmbentry = MBENTRY_INITIALIZER;
     newmbentry.name = mboxname;
@@ -2271,6 +2340,24 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     /* Lookup and return the new mailbox id and other server-set properties */
     r = jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r) goto done;
+
+    if (md_shared || md_private) {
+        if (md_shared && !_mbox_may_setmetadata(req, mbentry)) {
+            result->err = json_pack("{s:s}", "type", "forbidden");
+            r = IMAP_PERMISSION_DENIED;
+            goto done;
+        }
+        r = mailbox_open_iwl(mboxname, &mailbox);
+        if (!r) {
+            r = jmap_metadata_write(req, mailbox, 0, md_shared, md_private,
+                                    /*content_changed*/true);
+            mailbox_close(&mailbox);
+        }
+        if (r) {
+            result->err = jmap_metadata_set_error(r);
+            goto done;
+        }
+    }
     char mboxid[JMAP_MAX_MAILBOXID_SIZE];
     jmap_set_mailboxid(req->cstate, mbentry, mboxid);
     *mbox = json_pack("{s:s s:o s:i s:i s:i s:i}",
@@ -2320,6 +2407,8 @@ done:
         result->err = jmap_server_error(r);
     }
     free(mboxname);
+    json_decref(md_shared);
+    json_decref(md_private);
     mboxlist_entry_free(&mbinbox);
     mboxlist_entry_free(&mbentry);
     jmap_parser_fini(&parser);
@@ -2403,6 +2492,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     bool renamed = false;
     mbentry_t *mbinbox = NULL, *mbparent = NULL, *mbentry = NULL;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    json_t *md_shared = NULL, *md_private = NULL;
 
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
     jmap_mboxlist_lookup(inboxname, &mbinbox, NULL);
@@ -2433,6 +2523,28 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
     /* Validate server-set properties */
     _mbox_update_validate_serverset(req, args, &parser, mbentry);
+
+    /* Validate metadata before changing anything */
+    if (!jmap_metadata_set_isempty(&args->md)) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        if (!(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+            r = jmap_metadata_lookup(req, NULL, mbentry, 0, &md);
+            if (r) {
+                jmap_metadata_fini(&md);
+                goto done;
+            }
+        }
+        else {
+            md.shared = json_object();
+            md.private = json_object();
+        }
+        bool may_write = !jmap_metadata_set_isshared(&args->md) ||
+                         _mbox_may_setmetadata(req, mbentry);
+        result->err = jmap_metadata_set_apply(req, &args->md, may_write, &md,
+                                              &md_shared, &md_private);
+        jmap_metadata_fini(&md);
+        if (result->err) goto done;
+    }
 
     /* Determine current mailbox and parent names */
     char *oldmboxname = NULL;
@@ -2709,6 +2821,29 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         r = mboxlist_changesub(mboxname, req->userid, httpd_authstate,
                                args->is_subscribed, 0, 0, 0);
     }
+    if (!r && (md_shared || md_private)) {
+        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+            r = mboxlist_promote_intermediary(mbentry->name);
+            if (r) goto done;
+        }
+        struct mailbox *mbox = NULL;
+        r = mailbox_open_iwl(mboxname, &mbox);
+        if (r) goto done;
+
+        bool content_changed = args->name || args->parent_id ||
+            args->is_toplevel || args->specialuse || args->sortorder >= 0 ||
+            args->color || args->show_as_label >= 0 ||
+            args->is_subscribed >= 0 || args->shareWith ||
+            args->is_seenshared >= 0 || args->has_ext_props;
+        r = jmap_metadata_write(req, mbox, 0, md_shared, md_private,
+                                content_changed);
+        mailbox_close(&mbox);
+        if (r == IMAP_QUOTA_EXCEEDED) {
+            result->err = jmap_metadata_set_error(r);
+            if (renamed) result->partial = 1;
+            goto done;
+        }
+    }
     if (!r && (args->shareWith || args->is_seenshared >= 0 || args->has_ext_props)) {
         struct mailbox *mbox = NULL;
         uint32_t newopts;
@@ -2765,6 +2900,8 @@ done:
         if (renamed) result->partial = 1;
     }
     jmap_parser_fini(&parser);
+    json_decref(md_shared);
+    json_decref(md_private);
     while (strpool.count) free(ptrarray_pop(&strpool));
     ptrarray_fini(&strpool);
     mboxlist_entry_free(&mbinbox);
@@ -4033,9 +4170,12 @@ static void _mboxset_parse(jmap_req_t *req,
 
         _mboxset_args_parse(jarg, &myparser, args, req, /*is_create*/1);
         args->creation_id = xstrdup(creation_id);
-        if (json_array_size(myparser.invalid)) {
-            set_err = json_pack("{s:s}", "type", "invalidProperties");
-            json_object_set(set_err, "properties", myparser.invalid);
+        if (json_array_size(myparser.invalid) || args->md_err) {
+            if (json_array_size(myparser.invalid)) {
+                set_err = json_pack("{s:s}", "type", "invalidProperties");
+                json_object_set(set_err, "properties", myparser.invalid);
+            }
+            else set_err = json_incref(args->md_err);
             json_object_set_new(set->super.not_created, creation_id, set_err);
             jmap_parser_fini(&myparser);
             _mbox_setargs_fini(args);
@@ -4065,9 +4205,13 @@ static void _mboxset_parse(jmap_req_t *req,
             jmap_parser_invalid(&myparser, "id");
         }
         if (!args->mbox_id) args->mbox_id = xstrdup(mbox_id);
-        if (json_array_size(myparser.invalid)) {
-            json_t *err = json_pack("{s:s}", "type", "invalidProperties");
-            json_object_set(err, "properties", myparser.invalid);
+        if (json_array_size(myparser.invalid) || args->md_err) {
+            json_t *err;
+            if (json_array_size(myparser.invalid)) {
+                err = json_pack("{s:s}", "type", "invalidProperties");
+                json_object_set(err, "properties", myparser.invalid);
+            }
+            else err = json_incref(args->md_err);
             json_object_set_new(set->super.not_updated, mbox_id, err);
             jmap_parser_fini(&myparser);
             _mbox_setargs_fini(args);
@@ -4155,7 +4299,48 @@ struct _mbox_changes_data {
     modseq_t since_modseq;
     int *only_counts_changed;
     jmap_req_t *req;
+    struct jmap_changes *changes;
+    bool counts_changed;    /* some updated mailbox changed its counts */
 };
+
+/* Work out whether an updated mailbox changed in a way the user can see.
+ * Return false if it must not be reported. */
+static bool _mbox_changes_visible(struct _mbox_changes_data *data,
+                                  const mbentry_t *mbentry,
+                                  const struct statusdata *sdata)
+{
+    struct jmap_changes *changes = data->changes;
+    modseq_t since = data->since_modseq;
+    struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+    unsigned changed = 0;
+
+    jmap_metadata_lookup(data->req, NULL, mbentry, 0, &md);
+    bool chained = md.chain_modseq &&
+                   md.chain_modseq == mbentry->foldermodseq;
+
+    /* a metadata write bumps highestmodseq without changing any count */
+    bool counts = sdata->xconv.threadmodseq > since ||
+        (sdata->highestmodseq > since &&
+         !(chained && sdata->highestmodseq == md.chain_modseq &&
+           md.items_base_modseq <= since));
+
+    if (mbentry->foldermodseq > since)
+        changed = jmap_metadata_changed(&md, mbentry->foldermodseq, since);
+    jmap_metadata_fini(&md);
+
+    if (!counts && !changed) return false;
+    if (!counts && changes->ignore_metadata_only &&
+        !(changed & JMAP_METADATA_CHANGED_OTHER))
+        return false;
+
+    if (changed & JMAP_METADATA_CHANGED_OTHER)
+        *(data->only_counts_changed) = 0;
+    else if (!changes->ignore_metadata_only)
+        changes->metadata_changed |= changed;
+    if (counts) data->counts_changed = true;
+
+    return true;
+}
 
 static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
 {
@@ -4169,8 +4354,9 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
     }
 
     /* Lookup status. */
+    struct statusdata sdata = STATUSDATA_INIT;
+    bool has_status = false;
     if (!(mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_INTERMEDIATE))) {
-        struct statusdata sdata = STATUSDATA_INIT;
         int r = status_lookup_mbentry(mbentry, data->req->userid,
                                       STATUS_HIGHESTMODSEQ, &sdata);
         if (r) return r;
@@ -4181,6 +4367,7 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
         mbmodseq = sdata.highestmodseq;
         if (sdata.xconv.threadmodseq > mbmodseq)
             mbmodseq = sdata.xconv.threadmodseq;
+        has_status = true;
     } else {
         mbmodseq = mbentry->foldermodseq;
     }
@@ -4210,8 +4397,12 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
         else dest = data->created;
     }
 
-    /* Did any of the mailbox metadata change? */
-    if (mbentry->foldermodseq > data->since_modseq) {
+    /* Did any of the mailbox properties change? */
+    if (dest == data->updated && has_status) {
+        if (!_mbox_changes_visible(data, mbentry, &sdata))
+            return 0;
+    }
+    else if (mbentry->foldermodseq > data->since_modseq) {
         *(data->only_counts_changed) = 0;
     }
 
@@ -4284,7 +4475,9 @@ static int _mbox_changes(jmap_req_t *req,
         json_object(),
         changes->since_modseq,
         only_counts_changed,
-        req
+        req,
+        changes,
+        false
     };
     modseq_t windowmodseq;
     modseq_t prev_modseq = 0;
@@ -4367,6 +4560,10 @@ static int _mbox_changes(jmap_req_t *req,
         (json_array_size(changes->destroyed) > 0)) {
         *only_counts_changed = 0;
     }
+    if (*only_counts_changed && !data.counts_changed) {
+        /* only metadata changed */
+        *only_counts_changed = -1;
+    }
 
     changes->new_modseq = changes->has_more_changes ?
         windowmodseq : jmap_modseq(req, MBTYPE_EMAIL, 0);
@@ -4407,12 +4604,28 @@ static int jmap_mailbox_changes(jmap_req_t *req)
         goto done;
     }
 
-    /* Build response */
+    /* Build response: the count properties, if they may have changed,
+     * and the metadata properties that did */
     json_t *res = jmap_changes_reply(&changes);
     json_t *changed_props = json_null();
     if (only_counts_changed) {
-        changed_props = json_pack("[s,s,s,s]",
-                "totalEmails", "unreadEmails", "totalThreads", "unreadThreads");
+        changed_props = json_array();
+        if (only_counts_changed > 0) {
+            json_t *counts = json_pack("[s,s,s,s]",
+                    "totalEmails", "unreadEmails",
+                    "totalThreads", "unreadThreads");
+            json_array_extend(changed_props, counts);
+            json_decref(counts);
+        }
+        if (changes.metadata) {
+            json_t *mdprops = jmap_changes_metadata_props(&changes);
+            if (mdprops) json_array_extend(changed_props, mdprops);
+            json_decref(mdprops);
+        }
+        if (!json_array_size(changed_props)) {
+            json_decref(changed_props);
+            changed_props = json_null();
+        }
     }
     json_object_set_new(res, "updatedProperties", changed_props);
     jmap_ok(req, res);

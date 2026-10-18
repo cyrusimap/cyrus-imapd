@@ -1,0 +1,141 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_validation
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([
+        ['Mailbox/set', {
+            create => {
+                mb => {
+                    name => 'v',
+                    metadata => {
+                        'acme.example.com' => { list => [1, 2], s => 'x' },
+                    },
+                },
+            },
+        }],
+    ]);
+    my $id = $res->single_sentence->as_set->created_id('mb');
+    $self->assert_not_null($id);
+
+    my sub update_error ($patch) {
+        my $res = $jmap->request([
+            ['Mailbox/set', { update => { $id => $patch } }],
+        ]);
+        return $res->single_sentence->arguments->{notUpdated}{$id};
+    }
+
+    xlog $self, "namespace identifiers";
+    for my $ns ('Acme.example.com', 'bad..example', '-x.example',
+                'photography', 'with space', '') {
+        $self->assert_cmp_deeply(
+            { type => 'invalidProperties', properties => ["metadata/$ns"] },
+            update_error({ "metadata/$ns" => { a => 1 } }),
+            "namespace '$ns'",
+        );
+    }
+    $self->assert_cmp_deeply(
+        { type => 'invalidProperties', properties => ['metadata/acme.example.com'] },
+        update_error({ 'metadata/acme.example.com' => 'not an object' }),
+    );
+    $self->assert_cmp_deeply(
+        { type => 'invalidProperties', properties => ['metadata/x.example'] },
+        update_error({ metadata => { 'x.example' => [] } }),
+    );
+
+    xlog $self, "patch errors known from the request";
+    $self->assert_cmp_deeply(
+        { type => 'invalidPatch', properties => ['metadata/acme.example.com/s'] },
+        update_error({
+            'metadata/acme.example.com' => { s => 'y' },
+            'metadata/acme.example.com/s' => 'z',
+        }),
+    );
+    $self->assert_cmp_deeply(
+        { type => 'invalidPatch', properties => ['metadata/acme.example.com'] },
+        update_error({
+            metadata => {},
+            'metadata/acme.example.com' => { a => 1 },
+        }),
+    );
+    $self->assert_cmp_deeply(
+        { type => 'invalidPatch', properties => ['metadata/acme.example.com/~2'] },
+        update_error({ 'metadata/acme.example.com/~2' => 1 }),
+    );
+
+    xlog $self, "patch errors that depend on the stored value";
+    $self->assert_cmp_deeply(
+        { type => 'invalidPatch',
+          properties => ['metadata/acme.example.com/missing/leaf'] },
+        update_error({ 'metadata/acme.example.com/missing/leaf' => 1 }),
+    );
+    $self->assert_cmp_deeply(
+        { type => 'invalidPatch', properties => ['metadata/acme.example.com/list/0'] },
+        update_error({ 'metadata/acme.example.com/list/0' => 3 }),
+    );
+    $self->assert_cmp_deeply(
+        { type => 'invalidPatch', properties => ['metadata/acme.example.com/s/x'] },
+        update_error({ 'metadata/acme.example.com/s/x' => 3 }),
+    );
+
+    xlog $self, "maxDepth";
+    my $deep = 1;
+    $deep = { d => $deep } for 1..8;
+    $self->assert_null(update_error({ 'metadata/deep.example' => $deep }));
+    $self->assert_cmp_deeply(
+        { type => 'invalidProperties', properties => ['metadata/deep.example'] },
+        update_error({ 'metadata/deep.example' => { d => $deep } }),
+    );
+
+    xlog $self, "null is {} in an update but invalid in a create";
+    $self->assert_null(update_error({ privateMetadata => undef }));
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            create => { m2 => { name => 'v2', metadata => undef } },
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        { type => 'invalidProperties', properties => ['metadata'] },
+        $res->single_sentence->arguments->{notCreated}{m2},
+    );
+
+    xlog $self, "subselectors";
+    $res = $jmap->request([
+        ['Mailbox/get', {
+            ids => [$id], properties => ['metadata/Bad.example'],
+        }],
+    ]);
+    $self->assert_str_equals('invalidArguments',
+        $res->single_sentence->arguments->{type});
+    $res = $jmap->request([
+        ['Mailbox/get', {
+            ids => [$id],
+            properties => ['metadata/deep.example', 'metadata/photography',
+                           'metadata/absent.example'],
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        { id => $id, metadata => { 'deep.example' => $deep } },
+        $res->single_sentence->arguments->{list}[0],
+    );
+
+    xlog $self, "filter paths";
+    $res = $jmap->request([
+        ['Mailbox/query', { filter => { metadataExists => 'acme.example.com/~9' } }],
+        ['Mailbox/query', { filter => { metadataTextEquals => { path => 'x' } } }],
+        ['Mailbox/query', { filter => { metadataExists => 'Not A Namespace' } }],
+        ['Mailbox/query', { filter => { metadataExists => 'acme.example.com/list' } }],
+        ['Mailbox/query', { filter => { metadataTextEquals => {
+            path => 'acme.example.com/list/0', value => '1' } } }],
+    ]);
+    $self->assert_str_equals('invalidArguments', $res->sentence(0)->name eq 'error'
+        ? $res->sentence(0)->arguments->{type} : 'none');
+    $self->assert_str_equals('invalidArguments', $res->sentence(1)->name eq 'error'
+        ? $res->sentence(1)->arguments->{type} : 'none');
+    $self->assert_cmp_deeply([], $res->sentence(2)->arguments->{ids});
+    $self->assert_cmp_deeply([$id], $res->sentence(3)->arguments->{ids});
+    $self->assert_cmp_deeply([], $res->sentence(4)->arguments->{ids});
+}

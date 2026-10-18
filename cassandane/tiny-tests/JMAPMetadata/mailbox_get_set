@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_get_set
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    xlog $self, "create a mailbox with metadata and private metadata";
+    my $res = $jmap->request([
+        ['Mailbox/set', {
+            create => {
+                mb => {
+                    name => 'meta',
+                    metadata => {
+                        'acme.example.com' => { color => 'blue', n => 1 },
+                    },
+                    privateMetadata => {
+                        'acme.example.com' => { state => 'pending' },
+                    },
+                },
+            },
+        }],
+    ]);
+    my $id = $res->single_sentence('Mailbox/set')->as_set->created_id('mb');
+    $self->assert_not_null($id);
+
+    xlog $self, "metadata is a default property";
+    $res = $jmap->request([
+        ['Mailbox/get', { ids => [$id] }],
+    ]);
+    my $mbox = $res->single_sentence('Mailbox/get')->arguments->{list}[0];
+    $self->assert_cmp_deeply(
+        { 'acme.example.com' => { color => 'blue', n => 1 } },
+        $mbox->{metadata},
+    );
+    $self->assert_cmp_deeply(
+        { 'acme.example.com' => { state => 'pending' } },
+        $mbox->{privateMetadata},
+    );
+
+    xlog $self, "patch one key, leave the others";
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            update => {
+                $id => {
+                    'metadata/acme.example.com/color' => 'green',
+                    'metadata/other.example/x' => 1,
+                },
+            },
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type => 'invalidPatch',
+            properties => ['metadata/other.example/x'],
+        },
+        $res->single_sentence('Mailbox/set')->arguments
+            ->{notUpdated}{$id},
+    );
+
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            update => {
+                $id => {
+                    'metadata/acme.example.com/color' => 'green',
+                    'metadata/other.example' => { x => 1 },
+                    'privateMetadata/acme.example.com' => undef,
+                },
+            },
+        }],
+        ['Mailbox/get', {
+            ids => [$id],
+            properties => ['metadata/acme.example.com', 'privateMetadata'],
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        { $id => undef },
+        $res->sentence_named('Mailbox/set')->arguments->{updated},
+    );
+    $self->assert_cmp_deeply(
+        {
+            id => $id,
+            metadata => {
+                'acme.example.com' => { color => 'green', n => 1 },
+            },
+            privateMetadata => {},
+        },
+        $res->sentence_named('Mailbox/get')->arguments->{list}[0],
+    );
+}
