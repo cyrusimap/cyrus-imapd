@@ -7,6 +7,7 @@
 
 #include <config.h>
 
+#include "append.h"
 #include "mailbox.h"
 #include "sqldb.h"
 
@@ -102,6 +103,19 @@ int sievedb_count(struct sieve_db *sievedb, int *count);
 int sieve_script_store(struct mailbox *mailbox, struct sieve_data *sdata,
                        const struct buf *content);
 
+/**
+ * Append @p content as a new version of @p sdata through the open
+ * appendstate @p as, and expunge the version it replaces, without
+ * committing.  The caller commits or aborts @p as.  The mailbox must be
+ * write-locked.  The sievedir bytecode is still written at once; see
+ * sieve_sievedir_resync() for putting it back after an abort.
+ *
+ * @return 0 or an IMAP_* error code
+ */
+int sieve_script_store_batch(struct appendstate *as,
+                             struct sieve_data *sdata,
+                             const struct buf *content);
+
 int sieve_script_activate(struct mailbox *mailbox, struct sieve_data *sdata);
 
 int sieve_script_remove(struct mailbox *mailbox, struct sieve_data *sdata);
@@ -111,6 +125,18 @@ int sieve_script_rename(struct mailbox *mailbox,
 
 int sieve_script_fetch(struct mailbox *mailbox,
                        const struct sieve_data *sdata, struct buf *content);
+
+/**
+ * Rewrite the sievedir bytecode of each script in @p names, and the active
+ * script link, to match the committed sieve db: a name with no live script
+ * loses its bytecode.  Used after aborting a #sieve mailbox transaction,
+ * which leaves sievedir files behind.  Every name and the link are tried
+ * even if one fails; failures are logged.
+ *
+ * @param mailbox the user's #sieve mailbox, open and locked
+ * @return 0 or the first IMAP_* error code
+ */
+int sieve_sievedir_resync(struct mailbox *mailbox, const strarray_t *names);
 
 int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr,
                         int silent);

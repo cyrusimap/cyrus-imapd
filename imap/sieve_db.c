@@ -4,6 +4,7 @@
 
 #include <config.h>
 
+#include <assert.h>
 #include <syslog.h>
 #include <string.h>
 
@@ -524,10 +525,17 @@ static int remove_uid(struct mailbox *mailbox, uint32_t uid)
     return r;
 }
 
+struct store_rock
+{
+    const struct buf *content;
+    struct appendstate *batch; /* NULL: append and commit on our own */
+};
+
 static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
                         void *rock)
 {
-    const struct buf *databuf = (const struct buf *) rock;
+    struct store_rock *srock = (struct store_rock *) rock;
+    const struct buf *databuf = srock->content;
     strarray_t flags = STRARRAY_INITIALIZER;
     struct auth_state *authstate = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -604,8 +612,25 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
         strarray_append(&flags, "\\Flagged");
     }
 
-    if ((r = append_setup_mbox(&as, mailbox, userid, authstate,
-                               0, NULL, NULL, 0, 0))) {
+    if (srock->batch) {
+        struct body *body = NULL;
+
+        r = append_fromstage(srock->batch, &body, stage, NULL,
+                             sdata->createdmodseq, &flags, 0, NULL);
+        if (body) {
+            message_free_body(body);
+            free(body);
+        }
+
+        if (r) {
+            syslog(LOG_ERR, "append_fromstage() failed: %s", error_message(r));
+        }
+        else if (old_uid) {
+            r = remove_uid(mailbox, old_uid);
+        }
+    }
+    else if ((r = append_setup_mbox(&as, mailbox, userid, authstate,
+                                    0, NULL, NULL, 0, 0))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
                mailbox_name(mailbox), error_message(r));
     }
@@ -651,7 +676,20 @@ EXPORTED int sieve_script_store(struct mailbox *mailbox,
                                 struct sieve_data *sdata,
                                 const struct buf *content)
 {
-    return lock_and_execute(mailbox, sdata, (void *) content, &store_script);
+    struct store_rock srock = { content, NULL };
+
+    return lock_and_execute(mailbox, sdata, &srock, &store_script);
+}
+
+EXPORTED int sieve_script_store_batch(struct appendstate *as,
+                                      struct sieve_data *sdata,
+                                      const struct buf *content)
+{
+    struct store_rock srock = { content, as };
+
+    assert(mailbox_index_islocked(as->mailbox, 1 /*write*/));
+
+    return lock_and_execute(as->mailbox, sdata, &srock, &store_script);
 }
 
 static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata,
@@ -785,6 +823,95 @@ EXPORTED int sieve_script_fetch(struct mailbox *mailbox,
     return r;
 }
 
+static int resync_script(struct mailbox *mailbox,
+                         struct sieve_db *db,
+                         const char *sievedir,
+                         const char *name)
+{
+    struct sieve_data *sdata = NULL;
+    int r = sievedb_lookup_name(db, name, &sdata, 0);
+
+    if (r == CYRUSDB_NOTFOUND) {
+        return sievedir_delete_script(sievedir, name) ? IMAP_IOERROR : 0;
+    }
+    if (r) {
+        return IMAP_INTERNAL;
+    }
+
+    struct buf content = BUF_INITIALIZER;
+
+    r = sieve_script_fetch(mailbox, sdata, &content);
+    if (!r && sievedir_put_script(sievedir, name, buf_cstring(&content), NULL))
+    {
+        r = IMAP_IOERROR;
+    }
+    buf_free(&content);
+
+    return r;
+}
+
+static int resync_active(struct sieve_db *db, const char *sievedir)
+{
+    struct sieve_data *sdata = NULL;
+    int r = sievedb_lookup_active(db, &sdata);
+
+    if (r == CYRUSDB_NOTFOUND) {
+        r = sievedir_deactivate_script(sievedir);
+    }
+    else if (!r) {
+        r = sievedir_activate_script(sievedir, sdata->name);
+    }
+    else {
+        return IMAP_INTERNAL;
+    }
+
+    return r ? IMAP_IOERROR : 0;
+}
+
+EXPORTED int sieve_sievedir_resync(struct mailbox *mailbox,
+                                   const strarray_t *names)
+{
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+    const char *sievedir = user_sieve_path(userid);
+    struct sieve_db *db = sievedb_open_mailbox(mailbox);
+    int r = 0;
+
+    if (!db) {
+        free(userid);
+        return IMAP_INTERNAL;
+    }
+
+    for (int i = 0; i < strarray_size(names); i++) {
+        const char *name = strarray_nth(names, i);
+        int r2 = resync_script(mailbox, db, sievedir, name);
+
+        if (r2) {
+            xsyslog_ev(LOG_ERR, "sieve.script.resync.failed",
+                       lf_mailbox(mailbox),
+                       lf_s("sieve.script", name),
+                       lf_err("error", r2));
+            if (!r) {
+                r = r2;
+            }
+        }
+    }
+
+    int r2 = resync_active(db, sievedir);
+    if (r2) {
+        xsyslog_ev(LOG_ERR, "sieve.script.resync.failed",
+                   lf_mailbox(mailbox),
+                   lf_err("error", r2));
+        if (!r) {
+            r = r2;
+        }
+    }
+
+    sievedb_close(db);
+    free(userid);
+
+    return r;
+}
+
 struct migrate_rock {
     struct mailbox *mailbox;
     char *active;
@@ -815,7 +942,9 @@ static int migrate_cb(const char *sievedir,
         sdata.lastupdated = sbuf->st_mtime;
         sdata.isactive = !strcmpnull(myname, mrock->active);
 
-        if (!store_script(mrock->mailbox, &sdata, content)) {
+        struct store_rock srock = { content, NULL };
+
+        if (!store_script(mrock->mailbox, &sdata, &srock)) {
             char path[PATH_MAX];
 
             /* delete script */
