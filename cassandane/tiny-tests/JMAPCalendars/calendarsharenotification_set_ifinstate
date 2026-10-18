@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarsharenotification_set_ifinstate
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.manifold");
+    my $manifold_user = $self->{instance}->create_user_without_setup('manifold');
+    my $manjmap = $manifold_user->jmap;
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $default_cal_id => {
+                    "shareWith/manifold" => {
+                        mayReadFreeBusy => JSON::true,
+                        mayReadItems => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
+
+    $res = $manjmap->CallMethods([['ShareNotification/get', {}, 'R1']]);
+    my $state = $res->[0][1]{state};
+    my $notifId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($notifId);
+
+    $res = $manjmap->request([
+        ['ShareNotification/set', {
+            ifInState => 'wrongstate',
+            destroy => [$notifId],
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(1, scalar(() = $res->sentences));
+    $self->assert_cmp_deeply({ type => 'stateMismatch' },
+                             $res->single_sentence('error')->arguments);
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/get', { ids => [$notifId] }, 'R3'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals($state, $res->[0][1]{state});
+}
