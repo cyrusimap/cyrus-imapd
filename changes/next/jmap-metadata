@@ -1,0 +1,28 @@
+Description:
+
+Implements JMAP Object Metadata (draft-ietf-jmap-metadata-03): the
+metadata and privateMetadata properties on Mailbox, Email, Calendar,
+CalendarEvent, AddressBook, ContactCard and SieveScript, with their /get,
+/set, /copy, /changes and /query extensions.
+
+
+Documentation:
+
+docsrc/rfc-support.rst
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None.  Metadata is stored in the annotation
+/vendor/cmu/cyrus-jmap/metadata, and counts against the
+ANNOTATION-STORAGE quota.
+
+
+GitHub issue:
+
+None

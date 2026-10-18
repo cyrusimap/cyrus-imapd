@@ -55,6 +55,7 @@ In development
 --------------
 
 * JMAP for Calendars (:draft:`draft-ietf-jmap-calendars`)
+* JMAP Object Metadata (:draft:`draft-ietf-jmap-metadata`)
 * Handling MDN with JMAP (:rfc:`9007`)
 
 Not implemented

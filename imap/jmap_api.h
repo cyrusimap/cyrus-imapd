@@ -36,6 +36,7 @@
 #define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
 #define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
 #define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
+#define JMAP_URN_METADATA   "urn:ietf:params:jmap:metadata"
 
 #define JMAP_CORE_EXTENSION          "https://cyrusimap.org/ns/jmap/core"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
@@ -497,6 +498,12 @@ struct jmap_changes {
     /* Behavior control flags */
     int prefixed_state;
 
+    /* draft-ietf-jmap-metadata: set if the request uses the capability
+     * and the data type carries metadata */
+    bool metadata;
+    bool ignore_metadata_only;
+    unsigned metadata_changed;  /* JMAP_METADATA_CHANGED_* of updated ids */
+
     /* Response fields */
     modseq_t new_modseq;
     short has_more_changes;
@@ -523,6 +530,23 @@ extern void jmap_changes_set_mark(const struct jmap_changes *changes,
 /** @brief Truncates the created, updated and destroyed ids back to the mark. */
 extern void jmap_changes_truncate(struct jmap_changes *changes,
                                   const size_t mark[3]);
+
+/**
+ * @brief Records what changed on an updated id and tells whether to report
+ * it.
+ *
+ * @param changed  the JMAP_METADATA_CHANGED_* mask of the id; 0 means the
+ *                 only change is invisible to the user
+ * @return false if the id must be left out of the updated list
+ */
+extern bool jmap_changes_metadata_include(struct jmap_changes *changes,
+                                          unsigned changed);
+
+/**
+ * @brief Returns the updatedProperties that the reported metadata changes
+ * allow, or NULL if other properties may have changed.
+ */
+extern json_t *jmap_changes_metadata_props(const struct jmap_changes *changes);
 
 extern json_t *jmap_changes_reply(struct jmap_changes *changes);
 

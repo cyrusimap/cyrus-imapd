@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_capability
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $session = $jmap->get_client_session->client_session;
+
+    $self->assert_cmp_deeply({},
+        $session->{capabilities}{'urn:ietf:params:jmap:metadata'});
+
+    my $info = {
+        namespaces => [],
+        supportsVendorNamespaces => JSON::true,
+        supportsPrivate => JSON::true,
+        maxDepth => 8,
+    };
+
+    my $accountid = $session->{primaryAccounts}{'urn:ietf:params:jmap:metadata'};
+    $self->assert_cmp_deeply(
+        {
+            dataTypes => {
+                map {; $_ => $info } qw(
+                    Mailbox Email Calendar CalendarEvent
+                    AddressBook ContactCard SieveScript
+                )
+            },
+        },
+        $session->{accounts}{$accountid}{accountCapabilities}
+                {'urn:ietf:params:jmap:metadata'},
+    );
+}

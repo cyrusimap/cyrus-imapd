@@ -1341,6 +1341,8 @@ imap_httpd_SOURCES += \
     imap/jmap_mail_submission.c \
     imap/jmap_mailbox.c \
     imap/jmap_mdn.c \
+    imap/jmap_metadata.c \
+    imap/jmap_metadata.h \
     imap/jmap_notes.c \
     imap/jmap_notif.c \
     imap/jmap_notif.h \
