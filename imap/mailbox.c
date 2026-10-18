@@ -2070,6 +2070,10 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
 
     /* finally always copy the data into place */
     change->record = *record;
+    /* The parsed cache can point at a shared buffer, such as
+     * message_write_cache's, which the next message parsed overwrites.
+     * Readers reparse it from the cache file, which already holds it. */
+    memset(&change->record.crec, 0, sizeof(change->record.crec));
     /* rewrite might set extra flags, keep all of them */
     change->flags |= flags;
 
