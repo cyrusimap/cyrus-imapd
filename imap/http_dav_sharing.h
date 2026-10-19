@@ -58,6 +58,18 @@ int dav_schedule_notification(xmlDocPtr doc, struct dlist *extradata,
                           const char *userid, const char *resource);
 void dav_run_notifications();
 
+/**
+ * Opaque position in the scheduled notification queue, for
+ * dav_notifications_discard().  Only valid until the queue is next run.
+ * Discard marks in the reverse order they were taken: discarding a mark
+ * frees the notifications scheduled after it, and so invalidates any mark
+ * taken since.
+ */
+void *dav_notifications_mark(void);
+
+/** Free, unsent, every notification scheduled since @a mark was taken. */
+void dav_notifications_discard(void *mark);
+
 int dav_lookup_notify_collection(const char *userid, mbentry_t **mbentry);
 
 int notify_post(struct transaction_t *txn);

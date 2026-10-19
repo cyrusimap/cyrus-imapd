@@ -932,6 +932,14 @@ HIDDEN int dav_schedule_notification(xmlDocPtr doc, struct dlist *extradata,
     return 0;
 }
 
+static void dav_free_notification(struct scheduled_notification *item)
+{
+    xmlFreeDoc(item->doc);
+    free(item->userid);
+    free(item->resource);
+    free(item);
+}
+
 HIDDEN void dav_run_notifications()
 {
     struct scheduled_notification *next = NULL;
@@ -939,14 +947,27 @@ HIDDEN void dav_run_notifications()
     for (item = scheduled_notifications; item; item = next) {
         next = item->next;
         dav_send_notification(item->doc, item->extradata, item->userid, item->resource);
-        xmlFreeDoc(item->doc);
-        free(item->userid);
-        free(item->resource);
-        free(item);
+        dav_free_notification(item);
     }
     scheduled_notifications = NULL;
 }
 
+HIDDEN void *dav_notifications_mark(void)
+{
+    return scheduled_notifications;
+}
+
+HIDDEN void dav_notifications_discard(void *mark)
+{
+    struct scheduled_notification *stop = mark;
+
+    while (scheduled_notifications && scheduled_notifications != stop) {
+        struct scheduled_notification *item = scheduled_notifications;
+        scheduled_notifications = item->next;
+        dlist_free(&item->extradata);
+        dav_free_notification(item);
+    }
+}
 
 /* Perform a POST request on a WebDAV notification resource */
 HIDDEN int notify_post(struct transaction_t *txn)
