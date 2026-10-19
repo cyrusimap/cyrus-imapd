@@ -11887,12 +11887,14 @@ retry:
         r = mupdate_deactivate(mupdate_h, mboxname, buf);
 
     if (r && !retry) {
-        syslog(LOG_INFO, "MUPDATE: lost connection, retrying");
+        xsyslog_ev(LOG_INFO, "imap.mupdate.reconnecting",
+                   lf_s("proxy.server", config_mupdate_server));
         mupdate_disconnect(&mupdate_h);
         r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
         if (r) {
-            syslog(LOG_INFO, "Failed to connect to mupdate '%s'",
-                   config_mupdate_server);
+            xsyslog_ev(LOG_INFO, "imap.mupdate.connect.failed",
+                       lf_s("proxy.server", config_mupdate_server),
+                       lf_err("error", r));
         }
         else {
             retry = 1;
@@ -11930,7 +11932,8 @@ static void xfer_done(struct xfer_header **xferptr)
 {
     struct xfer_header *xfer = *xferptr;
 
-    syslog(LOG_INFO, "XFER: disconnecting from servers");
+    xsyslog_ev(LOG_INFO, "imap.xfer.step",
+               lf_s("xfer.step", "disconnecting"));
 
     /* The sync_cs.backend connection is in backend_cached[],
        so it will be disconnected and freed in imapd_reset() */
@@ -11950,7 +11953,9 @@ static int xfer_init(const char *toserver, struct xfer_header **xferptr)
     struct xfer_header *xfer = xzmalloc(sizeof(struct xfer_header));
     int r;
 
-    syslog(LOG_INFO, "XFER: connecting to server '%s'", toserver);
+    xsyslog_ev(LOG_INFO, "imap.xfer.step",
+               lf_s("xfer.step", "connecting"),
+               lf_s("proxy.server", toserver));
 
     xfer->sync_cs.servername = toserver;
     xfer->sync_cs.flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY
@@ -11960,7 +11965,8 @@ static int xfer_init(const char *toserver, struct xfer_header **xferptr)
     xfer->sync_cs.backend = proxy_findserver(toserver, &imap_protocol, "", &backend_cached,
                                              NULL, NULL, imapd_in);
     if (!xfer->sync_cs.backend) {
-        syslog(LOG_ERR, "Failed to connect to server '%s'", toserver);
+        xsyslog_ev(LOG_ERR, "imap.xfer.connect.failed",
+                   lf_s("proxy.server", toserver));
         r = IMAP_SERVER_UNAVAILABLE;
         goto fail;
     }
@@ -11969,12 +11975,16 @@ static int xfer_init(const char *toserver, struct xfer_header **xferptr)
     xfer->sync_cs.clientin = be->in;
     xfer->remoteversion = backend_version(be);
     if (CAPA(be, CAPA_REPLICATION)) {
-        syslog(LOG_INFO, "XFER: destination supports replication");
+        xsyslog_ev(LOG_INFO, "imap.xfer.capability",
+                   lf_s("proxy.server", toserver),
+                   lf_s("xfer.capability", "replication"));
         xfer->use_replication = 1;
         be->in->userdata = be->out->userdata = &xfer->sync_cs.tagbuf;
 
         if (CAPA(be, CAPA_SIEVE_MAILBOX)) {
-            syslog(LOG_INFO, "XFER: destination supports #sieve mailbox");
+            xsyslog_ev(LOG_INFO, "imap.xfer.capability",
+                       lf_s("proxy.server", toserver),
+                       lf_s("xfer.capability", "sieve_mailbox"));
             sync_do_enable(&xfer->sync_cs, CAPA_SIEVE_MAILBOX);
         }
     }
@@ -11985,13 +11995,15 @@ static int xfer_init(const char *toserver, struct xfer_header **xferptr)
 
     /* connect to mupdate server if configured */
     if (config_mupdate_server && !mupdate_h) {
-        syslog(LOG_INFO, "XFER: connecting to mupdate '%s'",
-               config_mupdate_server);
+        xsyslog_ev(LOG_INFO, "imap.xfer.step",
+                   lf_s("xfer.step", "connecting_mupdate"),
+                   lf_s("proxy.server", config_mupdate_server));
 
         r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
         if (r) {
-            syslog(LOG_INFO, "Failed to connect to mupdate '%s'",
-                   config_mupdate_server);
+            xsyslog_ev(LOG_INFO, "imap.mupdate.connect.failed",
+                       lf_s("proxy.server", config_mupdate_server),
+                       lf_err("error", r));
             goto fail;
         }
     }
@@ -12009,7 +12021,9 @@ static int xfer_localcreate(struct xfer_header *xfer)
     struct xfer_item *item;
     int r;
 
-    syslog(LOG_INFO, "XFER: creating mailboxes on destination");
+    xsyslog_ev(LOG_INFO, "imap.xfer.step",
+               lf_s("xfer.step", "creating"),
+               lf_s("proxy.server", xfer->toserver));
 
     for (item = xfer->items; item; item = item->next) {
         struct backend *be = xfer->sync_cs.backend;
@@ -12023,8 +12037,10 @@ static int xfer_localcreate(struct xfer_header *xfer)
         }
         r = getresult(be->in, "LC1");
         if (r) {
-            syslog(LOG_ERR, "Could not move mailbox: %s, LOCALCREATE failed",
-                   item->mbentry->name);
+            xsyslog_ev(LOG_ERR, "imap.xfer.create.failed",
+                       lf_intname("mbox.name", item->mbentry->name),
+                       lf_s("proxy.server", xfer->toserver),
+                       lf_err("error", r));
             return r;
         }
 
@@ -12076,16 +12092,17 @@ static int xfer_deactivate(struct xfer_header *xfer)
     struct xfer_item *item;
     int r;
 
-    syslog(LOG_INFO, "XFER: deactivating mailboxes");
+    xsyslog_ev(LOG_INFO, "imap.xfer.step",
+               lf_s("xfer.step", "deactivating"));
 
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
     for (item = xfer->items; item; item = item->next) {
         r = xfer_mupdate(MUPDATE_DEACTIVATE, item->mbentry->name,
                          item->mbentry->partition, config_servername, NULL);
         if (r) {
-            syslog(LOG_ERR,
-                   "Could not move mailbox: %s, MUPDATE DEACTIVATE failed",
-                   item->mbentry->name);
+            xsyslog_ev(LOG_ERR, "imap.xfer.deactivate.failed",
+                       lf_intname("mbox.name", item->mbentry->name),
+                       lf_err("error", r));
             return r;
         }
 
@@ -12102,14 +12119,16 @@ static int xfer_undump(struct xfer_header *xfer)
     mbentry_t *newentry;
     struct mailbox *mailbox = NULL;
 
-    syslog(LOG_INFO, "XFER: dumping mailboxes to destination");
+    xsyslog_ev(LOG_INFO, "imap.xfer.step",
+               lf_s("xfer.step", "dumping"),
+               lf_s("proxy.server", xfer->toserver));
 
     for (item = xfer->items; item; item = item->next) {
         r = mailbox_open_irl(item->mbentry->name, &mailbox);
         if (r) {
-            syslog(LOG_ERR,
-                   "Failed to open mailbox %s for dump_mailbox() %s",
-                   item->mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "imap.xfer.mailbox.open.failed",
+                       lf_intname("mbox.name", item->mbentry->name),
+                       lf_err("error", r));
             return r;
         }
 
@@ -12125,9 +12144,9 @@ static int xfer_undump(struct xfer_header *xfer)
         mboxlist_entry_free(&newentry);
 
         if (r) {
-            syslog(LOG_ERR,
-                   "Could not move mailbox: %s, mboxlist_update() failed %s",
-                   item->mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "imap.xfer.moving.failed",
+                       lf_intname("mbox.name", item->mbentry->name),
+                       lf_err("error", r));
         }
         else item->state = XFER_LOCAL_MOVING;
 
@@ -12135,9 +12154,9 @@ static int xfer_undump(struct xfer_header *xfer)
             /* Backport the user's seendb on-the-fly */
             item->mailbox = mailbox;
             r = xfer_backport_seen_item(item, xfer->seendb);
-            if (r) syslog(LOG_WARNING,
-                          "Failed to backport seen state for mailbox '%s'",
-                          item->mbentry->name);
+            if (r) xsyslog_ev(LOG_WARNING, "imap.xfer.seen.backport.failed",
+                              lf_intname("mbox.name", item->mbentry->name),
+                              lf_err("error", r));
 
             /* Need to close seendb before dumping Inbox (last item) */
             if (!item->next) seen_close(&xfer->seendb);
@@ -12152,9 +12171,9 @@ static int xfer_undump(struct xfer_header *xfer)
             r = dump_mailbox(NULL, mailbox, 0, xfer->remoteversion,
                              be->in, be->out, imapd_authstate);
             if (r) {
-                syslog(LOG_ERR,
-                       "Could not move mailbox: %s, dump_mailbox() failed %s",
-                       item->mbentry->name, error_message(r));
+                xsyslog_ev(LOG_ERR, "imap.xfer.dump.failed",
+                           lf_intname("mbox.name", item->mbentry->name),
+                           lf_err("error", r));
             }
         }
 
@@ -12165,23 +12184,29 @@ static int xfer_undump(struct xfer_header *xfer)
         struct backend *be = xfer->sync_cs.backend;
         r = getresult(be->in, "D01");
         if (r) {
-            syslog(LOG_ERR, "Could not move mailbox: %s, UNDUMP failed %s",
-                   item->mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "imap.xfer.undump.failed",
+                       lf_intname("mbox.name", item->mbentry->name),
+                       lf_s("proxy.server", xfer->toserver),
+                       lf_err("error", r));
             return r;
         }
 
         /* Step 5: Set ACL on remote */
         r = trashacl(be->in, be->out, item->extname);
         if (r) {
-            syslog(LOG_ERR, "Could not clear remote acl on %s",
-                   item->mbentry->name);
+            xsyslog_ev(LOG_ERR, "imap.xfer.acl.clear.failed",
+                       lf_intname("mbox.name", item->mbentry->name),
+                       lf_s("proxy.server", xfer->toserver),
+                       lf_err("error", r));
             return r;
         }
 
         r = dumpacl(be->in, be->out, item->extname, item->mbentry->acl);
         if (r) {
-            syslog(LOG_ERR, "Could not set remote acl on %s",
-                   item->mbentry->name);
+            xsyslog_ev(LOG_ERR, "imap.xfer.acl.set.failed",
+                       lf_intname("mbox.name", item->mbentry->name),
+                       lf_s("proxy.server", xfer->toserver),
+                       lf_err("error", r));
             return r;
         }
 
@@ -12462,9 +12487,9 @@ static int xfer_finalsync(struct xfer_header *xfer)
         mboxlist_entry_free(&newmbentry);
 
         if (r) {
-            syslog(LOG_ERR,
-                   "Could not move mailbox: %s, mboxlist_update() failed %s",
-                   item->mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "imap.xfer.moving.failed",
+                       lf_intname("mbox.name", item->mbentry->name),
+                       lf_err("error", r));
         }
         else item->state = XFER_LOCAL_MOVING;
 
@@ -14437,12 +14462,14 @@ static void cmd_mupdatepush(char *tag, char *name)
     r = mupdate_activate(mupdate_h, intname, buf, mbentry->acl);
 
     if (r && !retry) {
-        syslog(LOG_INFO, "MUPDATE: lost connection, retrying");
+        xsyslog_ev(LOG_INFO, "imap.mupdate.reconnecting",
+                   lf_s("proxy.server", config_mupdate_server));
         mupdate_disconnect(&mupdate_h);
         r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
         if (r) {
-            syslog(LOG_INFO, "Failed to connect to mupdate '%s'",
-                   config_mupdate_server);
+            xsyslog_ev(LOG_INFO, "imap.mupdate.connect.failed",
+                       lf_s("proxy.server", config_mupdate_server),
+                       lf_err("error", r));
         }
         else {
             retry = 1;
