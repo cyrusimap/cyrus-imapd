@@ -334,9 +334,7 @@ EXPORTED int sasl_client_init(const sasl_callback_t *callbacks)
     ret = _sasl_common_init(&global_callbacks_client);
 
     if (ret == SASL_OK) {
-        ret = _sasl_load_plugins(ep_list,
-                                 _sasl_find_getpath_callback(callbacks),
-                                 _sasl_find_verifyfile_callback(callbacks));
+        ret = _sasl_load_plugins(ep_list);
     }
 
     if (ret == SASL_OK) {
