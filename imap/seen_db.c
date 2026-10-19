@@ -73,7 +73,8 @@ EXPORTED int seen_open(const char *user,
     seendb = (struct seen *) xmalloc(sizeof(struct seen));
 
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_open(%s)", user);
+        xsyslog_ev(LOG_DEBUG, "seen.op",
+                   lf_s("seen.op", "open"), lf_s("u.username", user));
     }
 
     /* open the seendb corresponding to user */
@@ -83,15 +84,17 @@ EXPORTED int seen_open(const char *user,
     if (r) {
         if (!(flags & SEEN_SILENT)) {
             int level = (flags & SEEN_CREATE) ? LOG_ERR : LOG_DEBUG;
-            syslog(level, "DBERROR: opening %s: %s", fname,
-                   cyrusdb_strerror(r));
+            xsyslog_ev(level, "seen.db.open.failed",
+                       lf_s("u.username", user), lf_s("sys.path", fname),
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         r = r == CYRUSDB_NOTFOUND ? IMAP_NOTFOUND : IMAP_IOERROR;
         free(seendb);
         free(fname);
         return r;
     }
-    syslog(LOG_DEBUG, "seen_db: user %s opened %s", user, fname);
+    xsyslog_ev(LOG_DEBUG, "seen.db.opened",
+               lf_s("u.username", user), lf_s("sys.path", fname));
     free(fname);
 
     seendb->tid = NULL;
@@ -182,8 +185,9 @@ static int seen_readit(struct seen *seendb, const char *uniqueid,
     case 0:
         break;
     case CYRUSDB_AGAIN:
-        syslog(LOG_DEBUG, "deadlock in seen database for '%s/%s'",
-               seendb->user, uniqueid);
+        xsyslog_ev(LOG_DEBUG, "seen.db.deadlock",
+                   lf_s("u.username", seendb->user),
+                   lf_s("mbox.uniqueid", uniqueid));
         return IMAP_AGAIN;
         break;
     case CYRUSDB_NOTFOUND:
@@ -192,16 +196,20 @@ static int seen_readit(struct seen *seendb, const char *uniqueid,
         return 0;
         break;
     default:
-        syslog(LOG_ERR, "DBERROR: error fetching txn %s",
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "seen.db.fetch.failed",
+                   lf_s("u.username", seendb->user),
+                   lf_s("mbox.uniqueid", uniqueid),
+                   lf_s("error", cyrusdb_strerror(r)));
         return IMAP_IOERROR;
         break;
     }
 
     parse_data(data, datalen, sd);
     if (sd->seenuids[0] && !imparse_issequence(sd->seenuids)) {
-        syslog(LOG_ERR, "DBERROR: invalid sequence <%s> for %s %s - nuking",
-               sd->seenuids, seendb->user, uniqueid);
+        xsyslog_ev(LOG_ERR, "seen.seenuids.invalid",
+                   lf_s("u.username", seendb->user),
+                   lf_s("mbox.uniqueid", uniqueid),
+                   lf_s("seen.uids", sd->seenuids));
         free(sd->seenuids);
         sd->seenuids = xstrdup("");
     }
@@ -212,8 +220,10 @@ static int seen_readit(struct seen *seendb, const char *uniqueid,
 EXPORTED int seen_read(struct seen *seendb, const char *uniqueid, struct seendata *sd)
 {
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_read %s (%s)",
-               seendb->user, uniqueid);
+        xsyslog_ev(LOG_DEBUG, "seen.op",
+                   lf_s("seen.op", "read"),
+                   lf_s("u.username", seendb->user),
+                   lf_s("mbox.uniqueid", uniqueid));
     }
 
     return seen_readit(seendb, uniqueid, sd, 0);
@@ -222,8 +232,10 @@ EXPORTED int seen_read(struct seen *seendb, const char *uniqueid, struct seendat
 EXPORTED int seen_lockread(struct seen *seendb, const char *uniqueid, struct seendata *sd)
 {
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_lockread %s (%s)",
-               seendb->user, uniqueid);
+        xsyslog_ev(LOG_DEBUG, "seen.op",
+                   lf_s("seen.op", "lockread"),
+                   lf_s("u.username", seendb->user),
+                   lf_s("mbox.uniqueid", uniqueid));
     }
 
     return seen_readit(seendb, uniqueid, sd, 1);
@@ -239,8 +251,10 @@ EXPORTED int seen_write(struct seen *seendb, const char *uniqueid, struct seenda
     assert(seendb && uniqueid);
 
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_write %s (%s)",
-               seendb->user, uniqueid);
+        xsyslog_ev(LOG_DEBUG, "seen.op",
+                   lf_s("seen.op", "write"),
+                   lf_s("u.username", seendb->user),
+                   lf_s("mbox.uniqueid", uniqueid));
     }
 
     snprintf(data, sz, "%d " TIME_T_FMT " %u " TIME_T_FMT " %s", SEEN_VERSION,
@@ -257,8 +271,10 @@ EXPORTED int seen_write(struct seen *seendb, const char *uniqueid, struct seenda
         r = IMAP_AGAIN;
         break;
     default:
-        syslog(LOG_ERR, "DBERROR: error updating database: %s",
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "seen.db.store.failed",
+                   lf_s("u.username", seendb->user),
+                   lf_s("mbox.uniqueid", uniqueid),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
         break;
     }
@@ -278,25 +294,31 @@ EXPORTED int seen_close(struct seen **seendbptr)
     if (!seendb) return 0;
 
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_close(%s)", seendb->user);
+        xsyslog_ev(LOG_DEBUG, "seen.op",
+                   lf_s("seen.op", "close"),
+                   lf_s("u.username", seendb->user));
     }
 
     if (seendb->tid) {
         if (SEEN_DEBUG) {
-            syslog(LOG_DEBUG, "seen_db: committing changes for %s", seendb->user);
+            xsyslog_ev(LOG_DEBUG, "seen.op",
+                       lf_s("seen.op", "commit"),
+                       lf_s("u.username", seendb->user));
         }
         r = cyrusdb_commit(seendb->db, seendb->tid);
         if (r != CYRUSDB_OK) {
-            syslog(LOG_ERR, "DBERROR: error committing seen txn; "
-                   "seen state lost: %s", cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "seen.db.commit.failed",
+                       lf_s("u.username", seendb->user),
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         seendb->tid = NULL;
     }
 
     r = cyrusdb_close(seendb->db);
     if (r) {
-        syslog(LOG_ERR, "DBERROR: error closing: %s",
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "seen.db.close.failed",
+                   lf_s("u.username", seendb->user),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
     }
     free(seendb->user);
@@ -310,8 +332,9 @@ EXPORTED int seen_close(struct seen **seendbptr)
 HIDDEN int seen_create_mailbox(const char *userid, struct mailbox *mailbox)
 {
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_create_mailbox(%s, %s)",
-               userid, mailbox_uniqueid(mailbox));
+        xsyslog_ev(LOG_DEBUG, "seen.op",
+                   lf_s("seen.op", "create_mailbox"),
+                   lf_s("u.username", userid), lf_mailbox(mailbox));
     }
 
     /* noop */
@@ -325,8 +348,10 @@ EXPORTED int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
     const char *uniqueid = mailbox_uniqueid(mailbox);
 
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_delete_mailbox(%s, %s)",
-               userid, uniqueid);
+        xsyslog_ev(LOG_DEBUG, "seen.op",
+                   lf_s("seen.op", "delete_mailbox"),
+                   lf_s("u.username", userid),
+                   lf_s("mbox.uniqueid", uniqueid));
     }
 
     /* noop */
@@ -344,8 +369,8 @@ EXPORTED int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
 int seen_create_user(const char *user)
 {
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_create_user(%s)",
-               user);
+        xsyslog_ev(LOG_DEBUG, "seen.op",
+                   lf_s("seen.op", "create_user"), lf_s("u.username", user));
     }
 
     /* we'll be lazy here and create this when needed */
@@ -358,8 +383,8 @@ HIDDEN int seen_delete_user(const char *user)
     int r = 0;
 
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_delete_user(%s)",
-               user);
+        xsyslog_ev(LOG_DEBUG, "seen.op",
+                   lf_s("seen.op", "delete_user"), lf_s("u.username", user));
     }
 
     if (xunlink(fname) == -1)
@@ -376,13 +401,17 @@ HIDDEN int seen_rename_user(const char *olduser, const char *newuser)
     int r = 0;
 
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_rename_user(%s, %s)",
-               olduser, newuser);
+        xsyslog_ev(LOG_DEBUG, "seen.op",
+                   lf_s("seen.op", "rename_user"),
+                   lf_s("old.u.username", olduser),
+                   lf_s("u.username", newuser));
     }
 
     cyrus_mkdir(newfname, 0755);
     if (cyrus_rename(oldfname, newfname) && errno != ENOENT) {
-        syslog(LOG_ERR, "error renaming %s to %s: %m", oldfname, newfname);
+        xsyslog_ev(LOG_ERR, "seen.db.rename.failed",
+                   lf_s("old.sys.path", oldfname),
+                   lf_s("sys.path", newfname));
         r = IMAP_IOERROR;
     }
 
@@ -396,8 +425,10 @@ HIDDEN int seen_copy(const char *userid, struct mailbox *oldmailbox,
               struct mailbox *newmailbox)
 {
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_copy %s (%s => %s)",
-               userid ? userid : "", mailbox_uniqueid(oldmailbox), mailbox_uniqueid(newmailbox));
+        xsyslog_ev(LOG_DEBUG, "seen.op",
+                   lf_s("seen.op", "copy"), lf_s("u.username", userid),
+                   lf_s("old.mbox.uniqueid", mailbox_uniqueid(oldmailbox)),
+                   lf_mailbox(newmailbox));
     }
 
     if (userid && strcmp(mailbox_uniqueid(oldmailbox), mailbox_uniqueid(newmailbox))) {
@@ -422,7 +453,7 @@ HIDDEN int seen_copy(const char *userid, struct mailbox *oldmailbox,
 EXPORTED int seen_done(void)
 {
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_done()");
+        xsyslog_ev(LOG_DEBUG, "seen.op", lf_s("seen.op", "done"));
     }
 
     return 0;
