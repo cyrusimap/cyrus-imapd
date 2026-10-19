@@ -150,6 +150,7 @@ append.callout          the annotation callout program or socket
 append.stage.dir        the staging directory a message is spooled through
 append.stage.file       the staged copy of a message
 append.stage.source     the file a staged message was copied from
+backend.banner          the greeting banner a backend sent
 backup.cutoff           the point in time a restore is undoing back to
 backup.reason           why a record or collection was skipped or selected
 backup.replaced         1 if the destroyed resource is replaced by another version
@@ -369,6 +370,7 @@ error.type              a machine-readable error type, e.g. a JMAP SetError type
 sys.error               strerror() of errno at the point of logging
 sys.exitcode            the exit code a process is dying with
 sys.filename            a file name within a directory
+sys.host                a host name or address
 sys.path                a filesystem path
 sys.pid                 a process id
 

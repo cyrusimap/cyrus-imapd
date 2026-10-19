@@ -504,7 +504,7 @@ static void unrecognised_backend_version_common(void)
         CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
         CU_ASSERT_EQUAL(server_state->is_tls, 0);
 
-        CU_SYSLOG_MATCH("Assuming index version [0-9]+!");
+        CU_SYSLOG_MATCH("event=backend\\.version\\.unrecognised");
         got_version = backend_version(be);
         CU_ASSERT_EQUAL(got_version, data[i].version);
         CU_ASSERT_SYSLOG(/*all*/0, 1);
