@@ -146,6 +146,6 @@ sub test_message
     undef $talk;
 
     # we enabled NOTIFY, so we should see it in client behaviors
-    my $pat = qr/session ended.*notify=<1>/;
+    my $pat = qr/event=imap\.session\.ended.*\simap\.behavior\.notify=1/;
     $self->assert_syslog_matches($self->{instance}, $pat);
 }

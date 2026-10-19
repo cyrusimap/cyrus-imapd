@@ -724,8 +724,12 @@ static int imapd_sasl_log(void *context __attribute__((unused)),
 
     switch (level) {
     case SASL_LOG_ERR:
-    case SASL_LOG_FAIL:
         syslog_level = LOG_ERR;
+        break;
+    case SASL_LOG_FAIL:
+        /* an authentication that didn't succeed: the client's business,
+         * not a failure of ours */
+        syslog_level = LOG_WARNING;
         break;
     case SASL_LOG_WARN:
         syslog_level = LOG_WARNING;
@@ -737,7 +741,7 @@ static int imapd_sasl_log(void *context __attribute__((unused)),
         break;
     }
 
-    syslog(syslog_level, "SASL %s", message);
+    xsyslog_ev(syslog_level, "imap.sasl.message", lf_s("sasl.text", message));
     return SASL_OK;
 }
 
@@ -883,36 +887,48 @@ static const struct client_behavior {
     { 0,              NULL          }
 };
 
+/* Push imap.behavior.<name>=1 for each behavior the session exhibited.
+ *
+ * The keys come from client_behavior_registry, so tools/lint-logfmt-keys
+ * can't see them; they are registered in doc/logfmt-keys by hand, and a
+ * new entry in the table needs a new line there.
+ */
+static void logfmt_arg_client_behaviors(struct logfmt *lf,
+                                        const char *key __attribute__((unused)),
+                                        const void *value)
+{
+    uint32_t mask = *(const uint32_t *) value;
+    struct buf keybuf = BUF_INITIALIZER;
+
+    const struct client_behavior *cb;
+    for (cb = client_behavior_registry; cb->flag; cb++) {
+        if (!(mask & cb->flag)) continue;
+
+        buf_reset(&keybuf);
+        buf_printf(&keybuf, "imap.behavior.%s", cb->name);
+        logfmt_push(lf, buf_cstring(&keybuf), "1");
+    }
+
+    buf_free(&keybuf);
+}
+
 static void imapd_log_client_behavior(void)
 {
-    static struct buf buf  = BUF_INITIALIZER;
     const char *id_name    = hash_lookup("name", &imapd_id.params);
     const char *id_vendor  = hash_lookup("vendor", &imapd_id.params);
     const char *id_version = hash_lookup("version", &imapd_id.params);
 
-    /* log the client behaviors
-     *
-     * We only log the hits, not the misses, which should mean that the logs 
-     * are a bit easier to skim and a bit smaller.
+    /* We only log the behaviors the client exhibited, not the ones it
+     * didn't, which should mean that the logs are a bit easier to skim
+     * and a bit smaller.
      */
-    const struct client_behavior *cb;
-    for (cb = client_behavior_registry; cb->flag; cb++) {
-        if (client_behavior_mask & cb->flag) {
-            buf_printf(&buf, " %s=<1>", cb->name);
-        }
-    }
-
-    xsyslog(LOG_NOTICE, "session ended",
-                        "userid=<%s>"
-                        " id.vendor=<%s> id.name=<%s> id.version=<%s>"
-                        "%s",
-
-                        imapd_userid ? imapd_userid : "",
-                        id_vendor    ? id_vendor    : "",
-                        id_name      ? id_name      : "",
-                        id_version   ? id_version   : "",
-                        buf_cstring(&buf));
-    buf_reset(&buf);
+    xsyslog_ev(LOG_NOTICE, "imap.session.ended",
+               lf_s("u.username", imapd_userid),
+               lf_utf8("imap.client.id.vendor", id_vendor),
+               lf_utf8("imap.client.id.name", id_name),
+               lf_utf8("imap.client.id.version", id_version),
+               lf_fn("imap.behavior", logfmt_arg_client_behaviors,
+                     &client_behavior_mask));
 }
 
 static void maybe_autoexpunge(void)
@@ -1090,7 +1106,7 @@ int service_init(int argc, char **argv, char **envp)
         case 's': /* imaps (do starttls right away) */
             imaps = 1;
             if (!tls_enabled()) {
-                syslog(LOG_ERR, "imaps: required OpenSSL options not present");
+                xsyslog_ev(LOG_ERR, "imap.starttls.unavailable");
                 fatal("imaps: required OpenSSL options not present",
                       EX_CONFIG);
             }
@@ -1251,10 +1267,13 @@ int service_main(int argc __attribute__((unused)),
 
     if (config_iolog) {
         read_io_count(io_count_stop);
-        syslog(LOG_INFO,
-               "IMAP session stats : I/O read : %d bytes : I/O write : %d bytes",
-                io_count_stop->io_read_count - io_count_start->io_read_count,
-                io_count_stop->io_write_count - io_count_start->io_write_count);
+        xsyslog_ev(LOG_INFO, "imap.session.io",
+                   lf_d("used.bytes.in",
+                        io_count_stop->io_read_count -
+                            io_count_start->io_read_count),
+                   lf_d("used.bytes.out",
+                        io_count_stop->io_write_count -
+                            io_count_start->io_write_count));
         free (io_count_start);
         free (io_count_stop);
     }
@@ -1588,7 +1607,8 @@ static void cmdloop(void)
         if (c == EOF) {
             if ((err = prot_error(imapd_in))!=NULL
                 && strcmp(err, PROT_EOF_STRING)) {
-                syslog(LOG_WARNING, "%s, closing connection", err);
+                xsyslog_ev(LOG_WARNING, "imap.connection.aborted",
+                           lf_s("error", err));
                 prot_printf(imapd_out, "* BYE %s\r\n", err);
             }
             goto done;
@@ -1624,7 +1644,8 @@ static void cmdloop(void)
             command_count ++;
 
         if (config_getswitch(IMAPOPT_CHATTY))
-            syslog(LOG_NOTICE, "command: %s %s", tag.s, cmd.s);
+            xsyslog_ev(LOG_NOTICE, "imap.command.received",
+                       lf_s("imap.tag", tag.s), lf_s("imap.command", cmd.s));
 
         r = proc_register(&proc_handle, 0,
                           config_ident, imapd_clienthost, imapd_userid,
@@ -2809,14 +2830,13 @@ static void cmdloop(void)
             const char *mboxname = index_mboxname(imapd_index);
             cmdtime_endtimer(&cmdtime, &nettime);
             if (cmdtime >= commandmintimerd) {
-                xsyslog(LOG_NOTICE, "cmdtimer",
-                                    "userid=<%s> command=<%s>"
-                                    " mailbox=<%s> cmdtime=<%f> nettime=<%f>"
-                                    " total=<%f>",
-                                    imapd_userid ? imapd_userid : "",
-                                    cmdname,
-                                    mboxname ? mboxname : "",
-                                    cmdtime, nettime, cmdtime + nettime);
+                xsyslog_ev(LOG_NOTICE, "imap.command.slow",
+                           lf_s("u.username", imapd_userid),
+                           lf_s("imap.command", cmdname),
+                           lf_intname("mbox.name", mboxname),
+                           lf_duration("cmd.duration", cmdtime),
+                           lf_duration("cmd.nettime", nettime),
+                           lf_duration("cmd.total", cmdtime + nettime));
             }
         }
 
@@ -2901,8 +2921,11 @@ static void cmdloop(void)
 
     adminsonly:
         /* administrators only please */
-        syslog(LOG_ERR, "Unauthorized user %s trying to use %s command",
-               imapd_userid, cmd.s);
+        /* The client asking for a command it may not use is its own
+         * doing, and it is told NO. */
+        xsyslog_ev(LOG_WARNING, "imap.command.denied",
+                   lf_s("u.username", imapd_userid),
+                   lf_s("imap.command", cmd.s));
         prot_printf(imapd_out,
                     "%s NO only administrators may use %s command\r\n",
                     tag.s, cmd.s);
@@ -2962,7 +2985,7 @@ static void authentication_success(const char *tag, int ssf, const char *reply)
     mboxevent_setnamespace(&imapd_namespace);
 
     if (r) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "imap.namespace.init.failed", lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -3012,7 +3035,13 @@ static int checklimits(const char *tag)
                         limits.user, limits.maxuser, imapd_userid);
         }
         prot_printf(imapd_out, ")\r\n");
-        syslog(LOG_ERR, "Too many open connections (%s%s)", part1, part2);
+        xsyslog_ev(LOG_ERR, "imap.connection.limit_reached",
+                   lf_s("u.username", imapd_userid),
+                   lf_s("r.clienthost", imapd_clienthost),
+                   lf_d("conn.host", limits.host),
+                   lf_d("conn.host.max", limits.maxhost),
+                   lf_d("conn.user", limits.user),
+                   lf_d("conn.user.max", limits.maxuser));
         free(imapd_userid);
         imapd_userid = NULL;
         auth_freestate(imapd_authstate);
@@ -3254,8 +3283,8 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
     if (sasl_result != SASL_OK) {
         prot_printf(imapd_out, "%s NO weird SASL error %d SASL_USERNAME\r\n",
                     tag, sasl_result);
-        syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME",
-               sasl_result);
+        xsyslog_ev(LOG_ERR, "imap.sasl.username.failed",
+                   lf_d("sasl.result", sasl_result));
         reset_saslconn(&imapd_saslconn);
         return;
     }
@@ -3428,17 +3457,49 @@ static void clear_id() {
     construct_hash_table(&imapd_id.params, 32, 1);
 }
 
-static void log_id_param(const char *key, void *data, void *rock)
-{
-    struct buf *logbuf = (struct buf *) rock;
-    const char *val = (const char *) data;
+/* The fields RFC 2971 section 3.3 defines, and the key each is logged
+ * under.  A client may send any field name it likes, but only these are
+ * logged: the rest are its own invention, and a key has to be ours.
+ */
+static const struct client_id_field {
+    const char *field;
+    const char *key;
+} client_id_fields[] = {
+    { "address",     "imap.client.id.address"     },
+    { "arguments",   "imap.client.id.arguments"   },
+    { "command",     "imap.client.id.command"     },
+    { "date",        "imap.client.id.date"        },
+    { "environment", "imap.client.id.environment" },
+    { "name",        "imap.client.id.name"        },
+    { "os",          "imap.client.id.os"          },
+    { "os-version",  "imap.client.id.os_version"  },
+    { "support-url", "imap.client.id.support_url" },
+    { "vendor",      "imap.client.id.vendor"      },
+    { "version",     "imap.client.id.version"     },
+    { NULL,          NULL                         }
+};
 
-    /* should we check for and format literals here ??? */
-    buf_printf(logbuf, " \"%s\" ", key);
-    if (!val || !strcmp(val, "NIL"))
-        buf_printf(logbuf, "NIL");
-    else
-        buf_printf(logbuf, "\"%s\"", val);
+static void log_id_param(const char *field, void *data, void *rock)
+{
+    struct logfmt *lf = (struct logfmt *) rock;
+    const struct client_id_field *known;
+
+    for (known = client_id_fields; known->field; known++) {
+        if (strcmp(field, known->field)) continue;
+
+        /* a field sent as NIL is logged as ~null~, which is not the same
+         * thing as a field sent empty */
+        logfmt_push_utf8(lf, known->key, (const char *) data);
+        return;
+    }
+}
+
+static void logfmt_arg_client_id(struct logfmt *lf,
+                                 const char *key __attribute__((unused)),
+                                 const void *value)
+{
+    hash_enumerate_sorted((hash_table *) value, &log_id_param, lf,
+                          cmpstringp_raw);
 }
 
 /*
@@ -3550,15 +3611,10 @@ static void cmd_id(char *tag)
     /* log the client's ID string.
        eventually this should be a callback or something. */
     if (npair) {
-        struct buf logbuf = BUF_INITIALIZER;
-
-        hash_enumerate(&imapd_id.params, &log_id_param, &logbuf);
-
-        syslog(LOG_INFO, "client id sessionid=<%s> userid=<%s>:%s",
-                         session_id(),
-                         imapd_userid ? imapd_userid : "",
-                         buf_cstring(&logbuf));
-        buf_free(&logbuf);
+        xsyslog_ev(LOG_INFO, "imap.client.identified",
+                   lf_s("u.username", imapd_userid),
+                   lf_fn("imap.client.id", logfmt_arg_client_id,
+                         &imapd_id.params));
     }
 
     /* spit out our ID string.
@@ -3949,8 +4005,7 @@ static int catenate_text(const char *tag, FILE *f, size_t maxsize,
     while (size) {
         n = prot_read(imapd_in, buf, size > 4096 ? 4096 : size);
         if (!n) {
-            syslog(LOG_ERR,
-                   "DISCONNECT: client disconnected during upload of literal");
+            xsyslog_ev(LOG_WARNING, "imap.literal.upload.aborted");
             return IMAP_IOERROR;
         }
 
@@ -4166,7 +4221,7 @@ static int append_catenate(const char *tag, FILE *f, const char *cur_name,
     }
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
-        syslog(LOG_ERR, "IOERROR: writing message: %m");
+        xsyslog_ev(LOG_ERR, "imap.message.write.failed");
         return IMAP_IOERROR;
     }
 
@@ -9677,7 +9732,7 @@ static void cmd_starttls(char *tag, int imaps)
 
     if (result == -1) {
 
-        syslog(LOG_ERR, "error initializing TLS");
+        xsyslog_ev(LOG_ERR, "imap.starttls.init.failed");
 
         if (imaps == 0) {
             prot_printf(imapd_out, "%s NO Error initializing TLS\r\n", tag);
@@ -9715,7 +9770,8 @@ static void cmd_starttls(char *tag, int imaps)
 
     /* if error */
     if (result==-1) {
-        syslog(LOG_NOTICE, "TLS negotiation failed: %s", imapd_clienthost);
+        xsyslog_ev(LOG_NOTICE, "imap.starttls.failed",
+                   lf_s("r.clienthost", imapd_clienthost));
         shut_down(EX_PROTOCOL);
     }
 
@@ -9723,7 +9779,8 @@ static void cmd_starttls(char *tag, int imaps)
     result = saslprops_set_tls(&saslprops, imapd_saslconn);
 
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
+        xsyslog_ev(LOG_NOTICE, "imap.starttls.saslprops.failed",
+                   lf_s("r.clienthost", imapd_clienthost));
         shut_down(EX_TEMPFAIL);
     }
 
@@ -14425,10 +14482,9 @@ static void cmd_compress(char *tag, char *alg)
         prot_printf(imapd_out,
                     "%s OK %s active\r\n", tag, alg);
 
-        xsyslog(LOG_INFO, "compression enabled",
-                          "userid=<%s> algorithm=<%s>",
-                          imapd_userid ? imapd_userid : "",
-                          alg);
+        xsyslog_ev(LOG_INFO, "imap.compress.enabled",
+                   lf_s("u.username", imapd_userid),
+                   lf_s("compress.algorithm", alg));
 
         /* enable (de)compression for the prot layer */
         prot_setcompress(imapd_in);
@@ -14743,8 +14799,8 @@ static void cmd_xapplepushservice(const char *tag,
 
     const char *aps_topic = config_getstring(IMAPOPT_APS_TOPIC);
     if (!aps_topic) {
-        syslog(LOG_ERR,
-               "aps_topic not configured, can't complete XAPPLEPUSHSERVICE response");
+        xsyslog_ev(LOG_ERR, "imap.applepush.unconfigured",
+                   lf_s("config.option", "aps_topic"));
         prot_printf(imapd_out, "%s NO Server configuration error\r\n", tag);
         return;
     }
