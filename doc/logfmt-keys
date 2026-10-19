@@ -224,11 +224,11 @@ imap.client.id.address   the client's contact address
 imap.client.id.arguments the arguments the client was started with
 imap.client.id.command   the command line the client was started from
 imap.client.id.date      the client's build date
-imap.client.id.environment the client's deployment environment
+imap.client.id.environment  the client's deployment environment
 imap.client.id.name      the client's name
 imap.client.id.os        the client's operating system
-imap.client.id.os_version the client's operating system version
-imap.client.id.support_url the client's support URL
+imap.client.id.os-version  the client's operating system version
+imap.client.id.support-url  the client's support URL
 imap.client.id.vendor    the client's vendor
 imap.client.id.version   the client's version
 imap.command            the IMAP command being processed
