@@ -9,6 +9,7 @@
 #endif
 #include <ctype.h>
 #include <string.h>
+#include <stdbool.h>
 #include <syslog.h>
 #include <assert.h>
 #include <limits.h>
@@ -1609,6 +1610,87 @@ static int _submission_setargs_parse(jmap_req_t *req,
     return r;
 }
 
+/* Report whether a mailbox id, as an Email/set update may spell it (a JMAP
+ * mailbox id or uniqueid, a "#creationid" reference, or a "$role" alias),
+ * names the mailbox in target. */
+static bool _update_mboxid_is(jmap_req_t *req,
+                              const char *mboxid,
+                              const mbentry_t *target)
+{
+    const mbentry_t *mbentry = NULL;
+
+    if (*mboxid == '$') {
+        jmap_findmbox_role(req, mboxid + 1, &mbentry);
+    }
+    else if (*mboxid == '#') {
+        const char *resolved = jmap_lookup_id(req, mboxid + 1);
+        if (resolved) {
+            mbentry = jmap_mbentry_by_mboxid(req, resolved);
+        }
+    }
+    else {
+        mbentry = jmap_mbentry_by_mboxid(req, mboxid);
+    }
+
+    return mbentry && !strcmpsafe(mbentry->uniqueid, target->uniqueid);
+}
+
+/* Report whether an onSuccessUpdateEmail entry adds the email to the
+ * "scheduled" mailbox, in either the whole-object form of mailboxIds or
+ * the "mailboxIds/<id>" patch form. */
+static bool _update_targets_scheduled(jmap_req_t *req, json_t *jemail)
+{
+    const mbentry_t *scheduled = NULL;
+    jmap_findmbox_role(req, "scheduled", &scheduled);
+    if (!scheduled) {
+        return false;
+    }
+
+    const char *key;
+    json_t *jval;
+    json_t *mailboxids = json_object_get(jemail, "mailboxIds");
+
+    if (json_is_object(mailboxids)) {
+        json_object_foreach (mailboxids, key, jval) {
+            if (json_is_true(jval) && _update_mboxid_is(req, key, scheduled)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    json_object_foreach (jemail, key, jval) {
+        if (!strncmp(key, "mailboxIds/", 11) && json_is_true(jval)
+            && _update_mboxid_is(req, key + 11, scheduled))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* The onSend a submission gets when the client parks the email in the
+ * "scheduled" mailbox without saying what to do with it once sent: move it
+ * to the "sent" mailbox and drop $draft.  NULL if there's no sent mailbox. */
+static json_t *_default_onsend(jmap_req_t *req)
+{
+    const mbentry_t *sent = NULL;
+    jmap_findmbox_role(req, "sent", &sent);
+    if (!sent) {
+        return NULL;
+    }
+
+    char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+    jmap_set_mailboxid(req->cstate, sent, mboxid);
+
+    return json_pack("{s:s s:{s:b}}",
+                     "moveToMailboxId",
+                     mboxid,
+                     "setKeywords",
+                     "$draft",
+                     false);
+}
+
 static int jmap_emailsubmission_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -1737,13 +1819,36 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         json_t *set_err = NULL;
         json_t *new_submission = NULL;
         char *emailid = NULL;
+        json_t *auto_onsend = NULL;
+
+        /* An email only enters the scheduled mailbox by way of
+         * onSuccessUpdateEmail, and only onSend ever takes it out again.
+         * Supply one when the client didn't, or the email would stay in
+         * the scheduled mailbox after it was sent. */
+        if (!JNOTNULL(json_object_get(jsubmission, "onSend"))) {
+            char *ref = strconcat("#", creation_id, (char *) NULL);
+            json_t *jemail = json_object_get(sub_args.onSuccessUpdate, ref);
+            free(ref);
+            if (jemail && _update_targets_scheduled(req, jemail)) {
+                auto_onsend = _default_onsend(req);
+                if (auto_onsend) {
+                    json_object_set(jsubmission, "onSend", auto_onsend);
+                }
+            }
+        }
+
         _emailsubmission_create(req, submbox, jsubmission,
                                 &new_submission, &set_err, &sm, &emailid);
         if (set_err) {
             json_object_set_new(set.not_created, creation_id, set_err);
+            json_decref(auto_onsend);
             free(emailid);
             continue;
         }
+        if (auto_onsend && jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+            json_object_set(new_submission, "onSend", auto_onsend);
+        }
+        json_decref(auto_onsend);
         id = json_string_value(json_object_get(new_submission, "id"));
         json_object_set_new(set.created, creation_id, new_submission);
         json_object_set_new(success_emailids, id, json_string(emailid));
