@@ -660,6 +660,9 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     return r;
 }
 
+static void unstore_submission(jmap_req_t *req, struct mailbox *submbox,
+                               json_t *submission);
+
 static void _emailsubmission_create(jmap_req_t *req,
                                     struct mailbox *submbox,
                                     json_t *emailsubmission,
@@ -961,6 +964,17 @@ static void _emailsubmission_create(jmap_req_t *req,
     msgrecord_unref(&mr);
     mailbox_close(&mbox);
 
+    /* Replace any creation id with actual emailId */
+    json_object_set_new(emailsubmission, "emailId", json_string(msgid));
+
+    if (!holduntil) {
+        /* Store before sending, so that a message never goes out unrecorded.
+         * If the send then fails, the record is removed again in done. */
+        r = store_submission(req, submbox, &buf, holduntil,
+                             emailsubmission, new_submission);
+        if (r) goto done;
+    }
+
     if (!*sm) {
         /* Open the SMTP connection */
         r = smtpclient_open(sm);
@@ -1088,15 +1102,19 @@ static void _emailsubmission_create(jmap_req_t *req,
 
     if (r) goto done;
 
-    /* Replace any creation id with actual emailId */
-    json_object_set_new(emailsubmission, "emailId", json_string(msgid));
-
-    r = store_submission(req, submbox, &buf, holduntil,
-                         emailsubmission, new_submission);
+    if (holduntil) {
+        r = store_submission(req, submbox, &buf, holduntil,
+                             emailsubmission, new_submission);
+    }
 
 done:
     if (r && *set_err == NULL) {
        *set_err = jmap_server_error(r);
+    }
+    if ((r || *set_err) && *new_submission) {
+        unstore_submission(req, submbox, *new_submission);
+        json_decref(*new_submission);
+        *new_submission = NULL;
     }
     if (fd_msg != -1) close(fd_msg);
     if (msg) json_decref(msg);
@@ -1130,6 +1148,31 @@ static message_t *msg_from_subid(struct mailbox *submbox, const char *id)
     }
 
     return msg;
+}
+
+/* Expunge a stored submission that was never reported to the client */
+static void unstore_submission(jmap_req_t *req,
+                               struct mailbox *submbox,
+                               json_t *submission)
+{
+    const char *id = json_string_value(json_object_get(submission, "id"));
+    message_t *msg = id ? msg_from_subid(submbox, id) : NULL;
+
+    /* Already expunged, e.g. by jmapsubmission_deleteonsend */
+    if (!msg) {
+        return;
+    }
+
+    struct index_record newrecord = *msg_record(msg);
+    newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+
+    int r = mailbox_rewrite_index_record(submbox, &newrecord);
+    if (r) {
+        xsyslog_ev(LOG_ERR, "jmap.submission.unstore.failed", lf_jmapreq(req),
+                   lf_mailbox(submbox), lf_u("msg.imapuid", newrecord.uid),
+                   lf_err("error", r));
+    }
+    message_unref(&msg);
 }
 
 static json_t *fetch_submission(jmap_req_t *req, message_t *msg)
