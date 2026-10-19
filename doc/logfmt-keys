@@ -232,6 +232,7 @@ imap.client.id.support-url  the client's support URL
 imap.client.id.vendor    the client's vendor
 imap.client.id.version   the client's version
 imap.command            the IMAP command being processed
+imap.recursive          1 if the operation covers submailboxes too
 imap.tag                the client's tag for the command
 imip.error              why an iMIP operation failed
 imip.outcome            what an iMIP message did: added, updated, no_action, error
@@ -276,6 +277,7 @@ mboxlist.key            a raw mailboxes.db key
 mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
 pop.subfolder           the subfolder a POP session was restricted to
+proxy.server            the backend server a request was proxied to
 quota.root              the quota root a quota applies to
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
 sasl.result             a SASL result code
@@ -294,6 +296,8 @@ search.index_version    the format version of the search index
 search.min_index_version  the lowest search index version an operation needs
 search.op               a search operator, e.g. OR
 search.restarts         how many times indexing restarted from the first message
+search.results          how many messages a search or sort returned
+search.sortcrit         the sort criteria, serialised
 search.uncommitted      how many documents were pending when a commit failed
 search.updates          how many update passes indexed nothing
 sieve.lineno            the line of a Sieve script an error was found on
