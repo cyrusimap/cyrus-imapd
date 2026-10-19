@@ -309,6 +309,8 @@ sieve.text              text a Sieve script logged with the log action
 sync.channel            a replication channel name
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
+xfer.capability         a capability the transfer destination advertises
+xfer.step               which step of a mailbox transfer is being logged
 
 ### out. - the outbound half of an event that has two halves
 
