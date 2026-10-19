@@ -1712,6 +1712,29 @@ static AUXPROP_RTYPE server_auxprop_lookup(void *glob_context __attribute__((unu
     return AUXPROP_RET;
 }
 
+/* Mock SASL_CB_GETOPT callback.
+ *
+ * cyrus-sasl uses this to request configuration parameters from the
+ * application, or falls back to reading a global config file if the
+ * callback wasn't provided.
+ *
+ * The internal libsasl_min does NOT fall back to reading any global
+ * config file; a SASL_CB_GETOPT callback MUST always be provided.
+ *
+ * In these tests we don't (currently) care about SASL configuration,
+ * so this callback can be a stub.
+ */
+static int server_getopt(void *context __attribute__((unused)),
+                         const char *plugin_name __attribute__((unused)),
+                         const char *option __attribute__((unused)),
+                         const char **result,
+                         unsigned *len)
+{
+    *result = NULL;
+    if (len) *len = 0;
+    return SASL_FAIL;
+}
+
 /*
  * Helps create a fake "auxiliary property plugin" for the SASL library,
  * which is how we hook into the DIGEST-MD5? mechanism when it wants to
@@ -1773,6 +1796,7 @@ static int init_sasl(int isclient)
     } else {
         static const struct sasl_callback server_cb[] = {
             { SASL_CB_SERVER_USERDB_CHECKPASS, (void *)&server_checkpass, NULL },
+            { SASL_CB_GETOPT, (void *) &server_getopt, NULL },
             { SASL_CB_LIST_END, NULL, NULL }
         };
 
