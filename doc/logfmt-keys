@@ -164,7 +164,15 @@ cal.partstat            an attendee's PARTSTAT
 cal.recurid             a calendar component's RECURRENCE-ID
 cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID
+cmd.duration            how long a command took, in seconds
+cmd.nettime             how long a command spent on the network, in seconds
+cmd.total               cmd.duration and cmd.nettime added together
+compress.algorithm      the compression algorithm a connection negotiated
 config.option           the name of an imapd.conf option
+conn.host               open connections from this client host
+conn.host.max           how many are allowed from one host
+conn.user               open connections for this user
+conn.user.max           how many are allowed for one user
 conv.guid.exists        how many non-expunged records share this guid
 conv.guid.folderexists  how many of those are in this folder
 conv.guid.numrecords    how many records of any kind share this guid
@@ -179,6 +187,52 @@ http.header.value       the value of an HTTP header
 idle.mboxevent          the mailbox event being forwarded, e.g. MessageNew
 idle.message            which message to idled failed: notify, init or done
 idle.poll.interval      seconds between polls when idled can't be reached
+imap.behavior           prefix for the keys below; never logged on its own
+# imap.behavior.* -- one per entry in imapd.c's client_behavior_registry,
+# pushed by key name, so the lint can't see them.  Value is always 1:
+# only the behaviors a session exhibited are logged.
+imap.behavior.annotate     the session used the annotate capability or command
+imap.behavior.annotatembox the session used the annotatembox capability or command
+imap.behavior.binary       the session used the binary capability or command
+imap.behavior.catenate     the session used the catenate capability or command
+imap.behavior.compress     the session used the compress capability or command
+imap.behavior.condstore    the session used the condstore capability or command
+imap.behavior.idle         the session used the idle capability or command
+imap.behavior.imap4rev2    the session used the imap4rev2 capability or command
+imap.behavior.metadata     the session used the metadata capability or command
+imap.behavior.move         the session used the move capability or command
+imap.behavior.multisearch  the session used the multisearch capability or command
+imap.behavior.notify       the session used the notify capability or command
+imap.behavior.objectid     the session used the objectid capability or command
+imap.behavior.partial      the session used the partial capability or command
+imap.behavior.preview      the session used the preview capability or command
+imap.behavior.qresync      the session used the qresync capability or command
+imap.behavior.replace      the session used the replace capability or command
+imap.behavior.savedate     the session used the savedate capability or command
+imap.behavior.searchfuzzy  the session used the searchfuzzy capability or command
+imap.behavior.searchres    the session used the searchres capability or command
+imap.behavior.uidbatches   the session used the uidbatches capability or command
+imap.behavior.uidonly      the session used the uidonly capability or command
+imap.behavior.unselect     the session used the unselect capability or command
+imap.behavior.utf8_accept  the session used the utf8_accept capability or command
+imap.behavior.xlist        the session used the xlist capability or command
+# imap.client.id.* -- the RFC 2971 section 3.3 fields, as the client sent
+# them in its ID command.  Pushed by key name from the table in imapd.c,
+# so the lint can't see most of them.  A field sent as NIL logs ~null~.
+imap.client.id          prefix for the keys below; never logged on its own
+imap.client.id.address   the client's contact address
+imap.client.id.arguments the arguments the client was started with
+imap.client.id.command   the command line the client was started from
+imap.client.id.date      the client's build date
+imap.client.id.environment the client's deployment environment
+imap.client.id.name      the client's name
+imap.client.id.os        the client's operating system
+imap.client.id.os_version the client's operating system version
+imap.client.id.support_url the client's support URL
+imap.client.id.vendor    the client's vendor
+imap.client.id.version   the client's version
+imap.command            the IMAP command being processed
+imap.tag                the client's tag for the command
 imip.error              why an iMIP operation failed
 imip.outcome            what an iMIP message did: added, updated, no_action, error
 jmap                    placeholder for "no JMAP request"; value is always ~null~
@@ -224,6 +278,8 @@ mboxlist.subs.version   the version of a user's subscriptions db
 pop.subfolder           the subfolder a POP session was restricted to
 quota.root              the quota root a quota applies to
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
+sasl.result             a SASL result code
+sasl.text               a message logged by the SASL library
 sched.addresses         the scheduling addresses considered, one per indexed subkey
 sched.userid            the userid whose scheduling addresses were used
 scope                   the scope a duplicate-delivery check applied to

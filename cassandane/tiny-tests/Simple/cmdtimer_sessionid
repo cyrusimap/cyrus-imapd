@@ -35,13 +35,13 @@ sub test_cmdtimer_sessionid
 
         my @lines = $self->{instance}->getsyslog();
 
-        my @timer_lines = grep { m/\bcmdtimer:/ } @lines;
+        my @timer_lines = grep { m/event=imap\.command\.slow/ } @lines;
         $self->assert_num_gte(1, scalar @timer_lines);
         foreach my $line (@timer_lines) {
-            $self->assert_matches(qr/sessionid=<[^ >]+>/, $line);
+            $self->assert_matches(qr/\sr\.sessionid=\S+/, $line);
         }
 
-        my (@behavior_lines) = grep { /session ended/ } @lines;
+        my (@behavior_lines) = grep { /event=imap\.session\.ended/ } @lines;
 
         $self->assert_num_gte(1, scalar @behavior_lines);
     }

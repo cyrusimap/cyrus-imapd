@@ -21,11 +21,15 @@ sub test_cmd_id_nil_os ($self)
         $imaptalk->logout();
         undef $imaptalk;
 
-        my @behavior_lines = $self->{instance}->getsyslog(qr/client id/);
+        my @behavior_lines =
+            $self->{instance}->getsyslog(qr/event=imap\.client\.identified/);
 
         $self->assert_num_gte(2, scalar @behavior_lines);
 
-        $self->assert_matches(qr/"os" NIL/, $behavior_lines[0]);
-        $self->assert_matches(qr/"os" ""/,  $behavior_lines[1]);
+        # a field sent as NIL is not the same as a field sent empty
+        $self->assert_matches(qr/\simap\.client\.id\.os=~null~/,
+                              $behavior_lines[0]);
+        $self->assert_matches(qr/\simap\.client\.id\.os=""/,
+                              $behavior_lines[1]);
     }
 }
