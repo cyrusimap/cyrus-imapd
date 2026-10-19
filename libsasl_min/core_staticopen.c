@@ -50,10 +50,7 @@ static const struct plugin server_plugins[] =
 static const size_t n_server_plugins = sizeof(server_plugins)
                                        / sizeof(server_plugins[0]);
 
-EXPORTED int _sasl_load_plugins(
-    const add_plugin_list_t *entrypoints,
-    const sasl_callback_t *getpath_callback __attribute__((unused)),
-    const sasl_callback_t *verifyfile_callback __attribute__((unused)))
+EXPORTED int _sasl_load_plugins(const add_plugin_list_t *entrypoints)
 {
     const add_plugin_list_t *ep;
     int r = SASL_OK;
