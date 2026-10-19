@@ -5999,6 +5999,35 @@ static void emailquery_fingerprint(struct buf *fingerprint,
 
 static struct emailquery_cache emailquery_cache = { 0 };
 
+/* Returns whether the cached result was built from an older index snapshot
+ * than the one a fresh search would see now. The cache is keyed on the mailbox
+ * modseq, which indexing never changes, so this is the only way to notice that
+ * the index caught up on emails the cached result had to leave out. A result
+ * that never used the index has no snapshot to compare. We treat failure to
+ * open the cache as another kind of moved-ness. */
+static bool emailquery_cache_index_moved(jmap_req_t *req,
+                                         struct emailquery_cache *qc)
+{
+    if (!qc->qr.highest_createdmodseq) {
+        return false;
+    }
+
+    struct emailquery_searchsession ss = EMAILQUERY_SEARCHSESSION_INITIALIZER;
+    bool moved = true;
+
+    if (!emailquery_searchsession_open(req, &ss)) {
+        uint64_t index_generation = 0;
+        modseq_t highest_createdmodseq =
+            search_session_get_highest_createdmodseq(ss.session,
+                                                     &index_generation);
+        moved = highest_createdmodseq != qc->qr.highest_createdmodseq
+                || index_generation != qc->qr.index_generation;
+    }
+    emailquery_searchsession_close(&ss);
+
+    return moved;
+}
+
 static void emailquery_handler(enum jmap_handler_event event, jmap_req_t *req,
                                void *rock __attribute__((unused)))
 {
@@ -6039,7 +6068,9 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
 
     /* Try to reuse cached query result */
     int is_cached;
-    if (strcmpsafe(emailquery_cache.fingerprint, buf_cstring(&fingerprint))) {
+    if (strcmpsafe(emailquery_cache.fingerprint, buf_cstring(&fingerprint))
+        || emailquery_cache_index_moved(req, &emailquery_cache))
+    {
         /* Build new result */
         emailquery_cache_reset(&emailquery_cache);
         is_cached = 0;

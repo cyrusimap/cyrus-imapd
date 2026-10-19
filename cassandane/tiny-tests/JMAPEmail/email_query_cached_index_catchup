@@ -1,0 +1,102 @@
+#!perl
+use Cassandane::Tiny;
+use LWP::ConnCache;
+
+# The Email/query result cache is keyed on the mailbox modseq, which squatter
+# does not change. When the index catches up on unindexed emails after a
+# query, a later Email/query must not serve the stale cached result, because
+# Email/queryChanges reads the index afresh and the two methods would then
+# disagree on the query state and on which emails are in the result.
+
+sub test_email_query_cached_index_catchup
+    :JMAPExtensions :JMAPQueryCacheMaxAge1s
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing(
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/performance',
+    );
+
+    # The cache is per httpd process, so every request must reach the same
+    # one: keep the connection open, as a real client would.
+    $jmap->ua->lwp->conn_cache(LWP::ConnCache->new);
+
+    my $mbox = $user->mailboxes->create({ name => 'A' });
+
+    my sub create_email ($subject, $from, $received_at) {
+        my $email = $user->emails->create({
+            mailboxIds    => { $mbox->id => JSON::true },
+            subject       => $subject,
+            from          => [ { email => $from } ],
+            receivedAt    => $received_at,
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+        });
+        return q{} . $email->id;
+    }
+
+    my $alpha = create_email('alpha', 'ann@example.com', '2020-01-01T00:00:00Z');
+    my $bravo = create_email('bravo', 'bob@example.com', '2021-01-01T00:00:00Z');
+
+    xlog $self, 'run squatter';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, 'create an email that squatter has not indexed';
+    my $charlie = create_email('charlie', 'ann@example.com', '2022-01-01T00:00:00Z');
+
+    # The filter needs no Xapian, but the groupBy condition does, so the
+    # query state carries the index snapshot it was evaluated at.
+    my %query_args = (
+        filter => { inMailbox => $mbox->id },
+        sort   => [
+            { property    => 'category',
+              isAscending => JSON::true,
+              groupBy     => [ { from => 'ann@example.com' } ] },
+            { property    => 'receivedAt',
+              isAscending => JSON::false },
+        ],
+    );
+
+    my sub query {
+        my $res = $jmap->request([ [ 'Email/query', \%query_args, 'R1' ] ]);
+        $res->assert_successful;
+        return $res->single_sentence('Email/query')->arguments;
+    }
+
+    my $args = query();
+    $self->assert_cmp_deeply([ $alpha, $bravo ], $args->{ids},
+        'unindexed email is not in the result');
+    my $since_query_state = $args->{queryState};
+
+    xlog $self, 'repeat the query, which must come from the cache';
+    $args = query();
+    $self->assert_cmp_deeply(jtrue(), $args->{performance}{details}{isCached},
+        'repeated query is cached');
+    $self->assert_str_equals($since_query_state, $args->{queryState});
+
+    xlog $self, 'run squatter, which leaves the mailbox modseq unchanged';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    my $res = $jmap->request([
+        [ 'Email/query', \%query_args, 'R2' ],
+        [ 'Email/queryChanges', {
+            %query_args,
+            sinceQueryState => $since_query_state,
+        }, 'R1' ],
+    ]);
+    $res->assert_successful;
+
+    my $changes = $res->sentence_named('Email/queryChanges')->arguments;
+    $args = $res->sentence_named('Email/query')->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({ added => superbagof({ id => $charlie, index => 0 }) }),
+        $changes,
+        'queryChanges reports the newly indexed email',
+    );
+    $self->assert_cmp_deeply([ $charlie, $alpha, $bravo ], $args->{ids},
+        'Email/query includes the newly indexed email');
+    $self->assert_str_equals($changes->{newQueryState}, $args->{queryState});
+}
