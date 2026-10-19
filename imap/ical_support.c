@@ -2387,7 +2387,11 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
                 r = parse_target_path(path, &ppath, ACTION_DELETE, NULL, errstr);
                 free(path);
 
-                if (r) goto done;
+                if (r) {
+                    /* A failed parse leaves a partial path, with no data */
+                    path_segment_free(ppath);
+                    goto done;
+                }
                 else if (!ppath ||
                          (ppath->type == SEGMENT_COMP &&
                           ppath->kind == ICAL_VCALENDAR_COMPONENT)) {
@@ -2411,7 +2415,12 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
                                       ACTION_SETPARAM, prop, errstr);
                 free(path);
 
-                if (r) goto done;
+                if (r) {
+                    /* prop is attached to ppath only on success */
+                    path_segment_free(ppath);
+                    icalproperty_free(prop);
+                    goto done;
+                }
                 else if (!ppath || ppath->type != SEGMENT_PROP) {
                     *errstr = "Initial segment of PATCH-PARAMETER"
                         " MUST be a property";
