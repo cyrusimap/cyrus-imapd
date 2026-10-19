@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Invariant: a batch that includes a new message also includes every new
+# message with a lower UID, even one whose modseq is past the batch, and
+# the replica converges on the master's state.
+#
+sub test_rolling_batch_append_then_flag
+    :NoStartInstances
+    ($self)
+{
+    my $channel = 'batch';
+    $self->{instance}->{config}->set(
+        sync_log => 'yes',
+        sync_log_channels => $channel,
+        sync_batchsize => 10,
+    );
+    $self->_start_instances();
+
+    my $synclog = $self->{instance}->get_basedir() . "/conf/sync/$channel/log";
+
+    $self->make_message("old $_") for 1..30;
+    $self->run_replication();
+    unlink($synclog);
+
+    # uid 31 is appended first and flagged last, so its modseq is past
+    # the first batch while uid 32 falls inside it
+    $self->make_message("early");
+    $self->make_message("late");
+    my $talk = $self->{master_store}->get_client();
+    $talk->select('INBOX');
+    $talk->store('1:30', '+flags', '(\\Flagged)');
+    $talk->store('31', '+flags', '(\\Flagged)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->run_replication(rolling => 1, once => 1, channel => $channel);
+
+    my $replicatalk = $self->{replica_store}->get_client();
+    $replicatalk->select('INBOX');
+    my $all = $replicatalk->search('all');
+    $self->assert_cmp_deeply([1..32], $all);
+    my $flagged = $replicatalk->search('flagged');
+    $self->assert_cmp_deeply([1..9, 31], $flagged);
+
+    for (1..3) {
+        $self->run_replication(rolling => 1, once => 1, channel => $channel);
+    }
+
+    $self->check_replication('cassandane');
+}

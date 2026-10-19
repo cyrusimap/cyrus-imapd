@@ -1454,6 +1454,7 @@ sub run_replication
     my $nosyncback = delete $opts{nosyncback};
     my $allusers = delete $opts{allusers};
     my $stagetoarchive = delete $opts{stagetoarchive};
+    my $once = delete $opts{once};
     $nmodes++ if $user;
     $nmodes++ if $rolling;
     $nmodes++ if $mailbox;
@@ -1483,6 +1484,7 @@ sub run_replication
     push(@cmd, '-n', $channel) if defined $channel;
     push(@cmd, '-f', $inputfile) if defined $inputfile;
     push(@cmd, '-R') if defined $rolling;
+    push(@cmd, '-1') if $once;  # n.b. boolean
     push(@cmd, '-s') if defined $meta;
     push(@cmd, '-O') if defined $nosyncback;
     push(@cmd, '-u', $user) if defined $user;

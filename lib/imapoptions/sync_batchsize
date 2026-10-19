@@ -1,8 +1,9 @@
 Name: sync_batchsize
 Type: INT
 Default-Value: 8192
-Last-Modified: 3.0.0
+Last-Modified: UNRELEASED
 
-the number of messages to upload in a single mailbox replication.  Default
-is 8192.  If there are more than this many messages appended to the
-mailbox, generate a synthetic partial state and send that.
+The number of changed records to send in a single mailbox replication by
+rolling sync_client.  If more records than this have been appended or
+changed since the replica's last sync, send the oldest changes first as a
+partial state, and queue the mailbox to send the rest.
