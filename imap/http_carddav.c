@@ -489,6 +489,26 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
     return r;
 }
 
+EXPORTED char *carddav_defaultaddressbook_mboxname(const char *userid)
+{
+    struct buf buf = BUF_INITIALIZER;
+    char *cardhomename = carddav_mboxname(userid, NULL);
+
+    int r = annotatemore_lookupmask(cardhomename,
+                                    DEFAULT_ADDRBOOK_ANNOT, "", &buf);
+
+    if (r || !buf.len) {
+        mbname_t *mbname = mbname_from_intname(cardhomename);
+
+        mbname_push_boxes(mbname, DEFAULT_ADDRBOOK);
+        buf_setcstr(&buf, mbname_intname(mbname));
+        mbname_free(&mbname);
+    }
+
+    free(cardhomename);
+    return buf_release(&buf);
+}
+
 static int my_carddav_auth(const char *userid)
 {
     if (httpd_userisadmin || httpd_userisanonymous ||

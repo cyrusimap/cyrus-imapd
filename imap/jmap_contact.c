@@ -1980,28 +1980,6 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
     return r;
 }
 
-static const char *default_addrbookname_annot =
-    DAV_ANNOT_NS "<" XML_NS_CYRUS ">jmap-default-addressbook";
-
-static char *lookup_default_addrbookname(char *cardhomename)
-{
-    struct buf buf = BUF_INITIALIZER;
-
-    int r = annotatemore_lookupmask(cardhomename,
-                                    default_addrbookname_annot, "", &buf);
-
-    if (r || !buf.len) {
-        /* fallback to specifically-named default created at provisioning */
-        mbname_t *mbname = mbname_from_intname(cardhomename);
-
-        mbname_push_boxes(mbname, DEFAULT_ADDRBOOK);
-        buf_setcstr(&buf, mbname_intname(mbname));
-        mbname_free(&mbname);
-    }
-
-    return buf_release(&buf);
-}
-
 static int jmap_addressbook_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -2020,7 +1998,7 @@ static int jmap_addressbook_get(struct jmap_req *req)
     }
 
     cardhomename = carddav_mboxname(req->accountid, NULL);
-    default_addrbookname = lookup_default_addrbookname(cardhomename);
+    default_addrbookname = carddav_defaultaddressbook_mboxname(req->accountid);
 
     /* Build callback data */
     struct getaddressbooks_rock rock =
@@ -2774,7 +2752,7 @@ static int jmap_addressbook_set(struct jmap_req *req)
     }
 
     cardhomename = carddav_mboxname(req->accountid, NULL);
-    default_addrbookname = lookup_default_addrbookname(cardhomename);
+    default_addrbookname = carddav_defaultaddressbook_mboxname(req->accountid);
 
     if (!has_addressbooks(req)) {
         r = carddav_create_defaultaddressbook(req->accountid);
@@ -2884,7 +2862,7 @@ static int jmap_addressbook_set(struct jmap_req *req)
             /* set jmap-default-addressbook annotation */
             struct buf buf = BUF_INITIALIZER;
             buf_init_ro_cstr(&buf, mbentry->name);
-            r = annotatemore_writemask(cardhomename, default_addrbookname_annot,
+            r = annotatemore_writemask(cardhomename, DEFAULT_ADDRBOOK_ANNOT,
                                        req->accountid, &buf);
             buf_free(&buf);
 
