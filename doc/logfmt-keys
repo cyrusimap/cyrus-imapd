@@ -185,8 +185,12 @@ dav.resource            the DAV resource within the collection
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
 http.header.name        the name of an HTTP header
 http.header.value       the value of an HTTP header
+idle.client             the imapd an idled message is to or from
+idle.events             the mailbox events a client asked to hear about, as a mask
+idle.filter             the mailbox filter a client idles with
+idle.keys               the filter keys a client idles with, serialised
 idle.mboxevent          the mailbox event being forwarded, e.g. MessageNew
-idle.message            which message to idled failed: notify, init or done
+idle.message            which message to idled: notify, init or done
 idle.poll.interval      seconds between polls when idled can't be reached
 imap.behavior           prefix for the keys below; never logged on its own
 # imap.behavior.* -- one per entry in imapd.c's client_behavior_registry,
