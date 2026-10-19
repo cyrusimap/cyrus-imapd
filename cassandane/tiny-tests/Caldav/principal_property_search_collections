@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_principal_property_search_collections ($self)
+{
+    my $CalDAV = $self->{caldav};
+
+    my sub search ($path, $apply) {
+        my $applyxml = $apply ? '<B:apply-to-principal-collection-set/>' : '';
+        my $xml = <<"XML";
+<B:principal-property-search xmlns:B="DAV:">
+  <B:property-search>
+    <B:prop><E:calendar-user-type xmlns:E="urn:ietf:params:xml:ns:caldav"/></B:prop>
+    <B:match>INDIVIDUAL</B:match>
+  </B:property-search>
+  <B:prop>
+    <B:displayname/>
+    <B:principal-URL/>
+    <E:calendar-home-set xmlns:E="urn:ietf:params:xml:ns:caldav"/>
+  </B:prop>
+  $applyxml
+</B:principal-property-search>
+XML
+        return $CalDAV->Request('REPORT', $path, $xml, Depth => 0,
+                                'Content-Type' => 'text/xml');
+    }
+
+    my $expect = search('/dav/principals/', 0);
+    $self->assert_cmp_deeply(
+        superhashof({ '{DAV:}response' => [ superhashof({
+            '{DAV:}href' => superhashof({
+                content => '/dav/principals/user/cassandane/' }),
+        }) ] }),
+        $expect);
+
+    # RFC 3744 9.4: elsewhere, the DAV:principal-collection-set is searched
+    # on request, and the answer is the same as asking it directly
+    for my $path ('/dav/calendars/', '/dav/calendars/user/cassandane/',
+                  '/dav/calendars/user/cassandane/Default/') {
+        $self->assert_cmp_deeply($expect, search($path, 1), $path);
+
+        # without it, the scope is the collection, which has no principals
+        $self->assert_null(search($path, 0)->{'{DAV:}response'}, $path);
+    }
+
+    my $set = $CalDAV->Request('REPORT', '/dav/calendars/',
+        '<B:principal-search-property-set xmlns:B="DAV:"/>',
+        Depth => 0, 'Content-Type' => 'text/xml');
+    $self->assert_matches(
+        qr{<B:principal-search-property>\s*<B:prop>\s*<B:displayname/>},
+        $set->{content});
+}
