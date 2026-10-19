@@ -3,19 +3,14 @@
 /* See COPYING file at the root of the distribution for more details. */
 
 #include <config.h>
-#include <stdio.h>
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslplug.h"
+
+#include "libsasl_min/plugin_common.h"
+
 #include <string.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h>
-#endif
-#include <sasl.h>
-#include <saslplug.h>
-
-#include "plugin_common.h"
-
-#ifdef macintosh
-# include <sasl_anonymous_plugin_decl.h>
-#endif
+#include <unistd.h>
 
 /*****************************  Common Section  *****************************/
 
