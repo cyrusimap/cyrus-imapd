@@ -891,7 +891,7 @@ EXPORTED int index_check(struct index_state *state, unsigned tell_flags)
             fatal("Mailbox has been (re)moved", EX_IOERR);
         }
 
-        if (state->exists && (client_capa & CAPA_QRESYNC)) {
+        if (state->exists && (client_capa & ENABLED_QRESYNC)) {
             /* XXX - is it OK to just expand to entire possible range? */
             prot_printf(state->out, "* VANISHED 1:%lu\r\n", state->last_uid);
         }
@@ -3167,7 +3167,7 @@ static void index_tellexpunge(struct index_state *state)
             if (msgno > state->oldexists)
                 continue;
             state->oldexists--;
-            if (client_capa & (CAPA_QRESYNC|CAPA_UIDONLY))
+            if (client_capa & (ENABLED_QRESYNC|ENABLED_UIDONLY))
                 seqset_add(vanishedlist, im->uid, 1);
             else
                 prot_printf(state->out, "* %u EXPUNGE\r\n", msgno);
@@ -3224,12 +3224,12 @@ EXPORTED void index_tellchanges(struct index_state *state, unsigned tell_flags)
      * Once a client issues a CONDSTORE enabling command, it has announced
      * itself as a "CONDSTORE-aware client".  The server MUST then include
      * mod-sequence data in all subsequent untagged FETCH responses */
-    if (client_capa & CAPA_CONDSTORE) tell_flags |= TELL_MODSEQ;
+    if (client_capa & ENABLED_CONDSTORE) tell_flags |= TELL_MODSEQ;
 
     /* RFC 9051, 7.5.2:
      * If the server chooses to send unsolicited FETCH responses,
      * they MUST include UID FETCH item */
-    if (client_capa & CAPA_IMAP4REV2) tell_flags |= TELL_UID;
+    if (client_capa & ENABLED_IMAP4REV2) tell_flags |= TELL_UID;
 
     /* print any changed message flags */
     for (msgno = 1; msgno <= state->exists; msgno++) {
@@ -3503,7 +3503,7 @@ static void index_printflags(struct index_state *state,
     const char *resp;
     unsigned id;
 
-    if (client_capa & CAPA_UIDONLY) {
+    if (client_capa & ENABLED_UIDONLY) {
         /* RFC 9586, Section 3.3:
          * UID msg-att is redundant.
          * It is replaced by the uniqueid at the beginning
@@ -3515,7 +3515,7 @@ static void index_printflags(struct index_state *state,
         id = im->uid;
     }
     else {
-        if (client_capa & CAPA_QRESYNC) {
+        if (client_capa & ENABLED_QRESYNC) {
             /* RFC 7162, Section 3.2.4:
              * MUST send UID to all untagged FETCH unsolicited responses */
             tell_flags |= TELL_UID;
@@ -3524,7 +3524,7 @@ static void index_printflags(struct index_state *state,
         resp = "FETCH";
         id = msgno;
     }
-    if (client_capa & CAPA_CONDSTORE) {
+    if (client_capa & ENABLED_CONDSTORE) {
         /* RFC 7162, Section 3.1 & RFC 9586, Section 3.7:
          * MUST send MODSEQ to all untagged [UID]FETCH unsolicited responses */
         tell_flags |= TELL_MODSEQ;
@@ -3631,7 +3631,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     const char *resp;
     unsigned id;
 
-    if (client_capa & CAPA_UIDONLY) {
+    if (client_capa & ENABLED_UIDONLY) {
         resp = "UIDFETCH";
         id = record.uid;
     }
@@ -3652,7 +3652,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         prot_printf(state->out, "* %u %s ", id, resp);
         started = 1;
     }
-    if (fetchitems & FETCH_UID || (ischanged && (client_capa & CAPA_QRESYNC))) {
+    if (fetchitems & FETCH_UID || (ischanged && (client_capa & ENABLED_QRESYNC))) {
         prot_printf(state->out, "%cUID %u", sepchar, record.uid);
         sepchar = ' ';
     }
@@ -3684,7 +3684,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
 
-    if (fetchitems & FETCH_MODSEQ || (ischanged && (client_capa & CAPA_CONDSTORE))) {
+    if (fetchitems & FETCH_MODSEQ || (ischanged && (client_capa & ENABLED_CONDSTORE))) {
         prot_printf(state->out, "%cMODSEQ (" MODSEQ_FMT ")",
                     sepchar, record.modseq);
         sepchar = ' ';
@@ -4440,7 +4440,7 @@ static int index_storeflag(struct index_state *state,
      * must always been told, and we prefer just to tell flags
      * as well in this case, it's simpler and not much more
      * bandwidth */
-    if (!(client_capa & CAPA_CONDSTORE) && storeargs->silent && im->told_modseq == oldmodseq)
+    if (!(client_capa & ENABLED_CONDSTORE) && storeargs->silent && im->told_modseq == oldmodseq)
         im->told_modseq = im->modseq;
 
     return 0;
@@ -4484,7 +4484,7 @@ static int index_store_annotation(struct index_state *state,
     if (r) goto out;
 
     /* if it's silent and unchanged, update the seen value */
-    if (!(client_capa & CAPA_CONDSTORE) && storeargs->silent && im->told_modseq == oldmodseq)
+    if (!(client_capa & ENABLED_CONDSTORE) && storeargs->silent && im->told_modseq == oldmodseq)
         im->told_modseq = im->modseq;
 
 out:

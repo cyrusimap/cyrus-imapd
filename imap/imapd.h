@@ -348,11 +348,11 @@ extern const struct mbox_name_attribute mbox_name_childinfo[];
 
 /* Bitmask for client capabilities */
 enum {
-    CAPA_CONDSTORE =    (1<<0),  /* RFC 7162 */
-    CAPA_QRESYNC =      (1<<1),  /* RFC 7162 */
-    CAPA_IMAP4REV2 =    (1<<2),  /* RFC 9051 */
-    CAPA_UIDONLY =      (1<<3),  /* RFC 9586 */
-    CAPA_UTF8_ACCEPT =  (1<<4),  /* RFC 6855 */
+    ENABLED_CONDSTORE =    (1<<0),  /* RFC 7162 */
+    ENABLED_QRESYNC =      (1<<1),  /* RFC 7162 */
+    ENABLED_IMAP4REV2 =    (1<<2),  /* RFC 9051 */
+    ENABLED_UIDONLY =      (1<<3),  /* RFC 9586 */
+    ENABLED_UTF8_ACCEPT =  (1<<4),  /* RFC 6855 */
 };
 
 /* Bitmask for urlfetch params (RFC 5524) */

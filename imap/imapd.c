@@ -1555,7 +1555,7 @@ static void cmdloop(void)
             int r, idle_fd = PROT_NO_FD, idle_fd_flag = 0;
 
             if ((notify_event_groups && notify_event_groups->filters) ||
-                (!notify_event_groups && (client_capa & CAPA_IMAP4REV2))) {
+                (!notify_event_groups && (client_capa & ENABLED_IMAP4REV2))) {
                 idle_fd = idle_sock;
             }
 
@@ -1728,7 +1728,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Copy")) {
                 if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
-                if (client_capa & CAPA_UIDONLY) goto uidonly;
+                if (client_capa & ENABLED_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             copy:
@@ -1855,7 +1855,7 @@ static void cmdloop(void)
         case 'F':
             if (!strcmp(cmd.s, "Fetch")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
-                if (client_capa & CAPA_UIDONLY) goto uidonly;
+                if (client_capa & ENABLED_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             fetch:
@@ -2090,7 +2090,7 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Move")) {
                 if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
-                if (client_capa & CAPA_UIDONLY) goto uidonly;
+                if (client_capa & ENABLED_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             move:
@@ -2298,7 +2298,7 @@ static void cmdloop(void)
             } else if (!strcmp(cmd.s, "Store")) {
                 if (readonly) goto noreadonly;
                 if (!imapd_index && !backend_current) goto nomailbox;
-                if (client_capa & CAPA_UIDONLY) goto uidonly;
+                if (client_capa & ENABLED_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             store:
@@ -2323,7 +2323,7 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Search")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
-                if (client_capa & CAPA_UIDONLY) goto uidonly;
+                if (client_capa & ENABLED_UIDONLY) goto uidonly;
                 if (c != ' ') goto missingargs;
             search:
 
@@ -2406,7 +2406,7 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Sort")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
-                if (client_capa & CAPA_UIDONLY) goto uidonly;
+                if (client_capa & ENABLED_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             sort:
@@ -2475,7 +2475,7 @@ static void cmdloop(void)
         case 'T':
             if (!strcmp(cmd.s, "Thread")) {
                 if (!imapd_index && !backend_current) goto nomailbox;
-                if (client_capa & CAPA_UIDONLY) goto uidonly;
+                if (client_capa & ENABLED_UIDONLY) goto uidonly;
                 usinguid = 0;
                 if (c != ' ') goto missingargs;
             thread:
@@ -4111,7 +4111,7 @@ static int append_catenate(const char *tag, FILE *f, const char *cur_name,
             /* Parse newline terminating command */
             c = prot_getc(imapd_in);
         }
-        else if ((client_capa & CAPA_UTF8_ACCEPT) && !strcasecmp(arg.s, "UTF8")) {
+        else if ((client_capa & ENABLED_UTF8_ACCEPT) && !strcasecmp(arg.s, "UTF8")) {
             int r1;
 
             if (c != ' ' || (c = prot_getc(imapd_in) != '(')) {
@@ -4215,10 +4215,10 @@ static int cmd_append(char *tag, char *name, const char *cur_name,
         "", STRARRAY_INITIALIZER, 0, {0}, STRARRAY_INITIALIZER, NULL
     };
 
-    if (client_capa & CAPA_IMAP4REV2) {
+    if (client_capa & ENABLED_IMAP4REV2) {
         name = normalize_mboxname(name, &listargs);
     }
-    else if (client_capa & CAPA_UTF8_ACCEPT) {
+    else if (client_capa & ENABLED_UTF8_ACCEPT) {
         name = normalize_mboxname(name, NULL);
     }
 
@@ -4426,7 +4426,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name,
             int is_utf8 = 0;
 
             if (!strcasecmp(arg.s, "UTF8")) {
-                if (!(client_capa & CAPA_UTF8_ACCEPT)) {
+                if (!(client_capa & ENABLED_UTF8_ACCEPT)) {
                     parseerr = "Invalid argument in Append command";
                     r = IMAP_PROTOCOL_ERROR;
                     goto done;
@@ -4740,10 +4740,10 @@ static int parse_select_params(char *tag, char *cmd, int allowdeleted,
 
             ucase(arg.s);
             if (!strcmp(arg.s, "CONDSTORE")) {
-                client_capa |= CAPA_CONDSTORE;
+                client_capa |= ENABLED_CONDSTORE;
                 client_behavior_mask |= CB_CONDSTORE;
             }
-            else if ((client_capa & CAPA_QRESYNC) &&
+            else if ((client_capa & ENABLED_QRESYNC) &&
                      !strcmp(arg.s, "QRESYNC")) {
                 client_behavior_mask |= CB_QRESYNC;
 
@@ -4767,7 +4767,7 @@ static int parse_select_params(char *tag, char *cmd, int allowdeleted,
                             if (c != '(') goto badqresync;
                         }
                     }
-                    if (c == '(' && !(client_capa & CAPA_UIDONLY)) {
+                    if (c == '(' && !(client_capa & ENABLED_UIDONLY)) {
                         /* optional sequence match data */
                         c = getword(imapd_in, &parm1);
                         if (!imparse_issequence(parm1.s)) goto badqresync;
@@ -4878,14 +4878,14 @@ static void cmd_select(char *tag, char *cmd, char *name)
         wasopen = 1;
     }
 
-    if (client_capa & CAPA_IMAP4REV2) {
+    if (client_capa & ENABLED_IMAP4REV2) {
         name = normalize_mboxname(name, &listargs);
         if (name == origname) {
             /* Always want LIST response even if name was in normal form */
             strarray_append(&listargs.pat, name);
         }
     }
-    else if (client_capa & CAPA_UTF8_ACCEPT) {
+    else if (client_capa & ENABLED_UTF8_ACCEPT) {
         name = normalize_mboxname(name, NULL);
     }
 
@@ -5092,8 +5092,8 @@ static void cmd_close(char *tag, char *cmd)
 
 static void condstore_enabled(const char *cmd)
 {
-    if (!(client_capa & CAPA_CONDSTORE)) {
-        client_capa |= CAPA_CONDSTORE;
+    if (!(client_capa & ENABLED_CONDSTORE)) {
+        client_capa |= ENABLED_CONDSTORE;
         if (imapd_index) {
             prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]"
                         " CONDSTORE enabled by %s\r\n",
@@ -5797,10 +5797,10 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     memset(&fetchargs, 0, sizeof(struct fetchargs));
 
     if (usinguid) {
-        if (client_capa & CAPA_QRESYNC)
+        if (client_capa & ENABLED_QRESYNC)
             flags |= FETCH_ALLOW_VANISHED;
 
-        if (!(client_capa & CAPA_UIDONLY))
+        if (!(client_capa & ENABLED_UIDONLY))
             fetchargs.fetchitems |= FETCH_UID;
     }
 
@@ -6265,7 +6265,7 @@ static void cmd_search(const char *tag, const char *cmd)
     }
 
     /* RFC 9755, Section 3: MUST reject SEARCH with a charset specification */
-    if (!(client_capa & CAPA_UTF8_ACCEPT)) {
+    if (!(client_capa & ENABLED_UTF8_ACCEPT)) {
         state |= GETSEARCH_CHARSET_KEYWORD;
     }
 
@@ -6276,7 +6276,7 @@ static void cmd_search(const char *tag, const char *cmd)
 
     /* RFC 9755, Section 3 and RFC 9051, Section 6.4.4: the default charset
        is UTF-8, rather than US-ASCII */
-    if (client_capa & (CAPA_UTF8_ACCEPT | CAPA_IMAP4REV2)) {
+    if (client_capa & (ENABLED_UTF8_ACCEPT | ENABLED_IMAP4REV2)) {
         charset_free(&searchargs->charset);
         searchargs->charset = charset_lookupname("utf-8");
     }
@@ -6456,7 +6456,7 @@ static void cmd_search(const char *tag, const char *cmd)
     else {
         struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
 
-        if ((client_capa & CAPA_IMAP4REV2) && !searchargs->returnopts) {
+        if ((client_capa & ENABLED_IMAP4REV2) && !searchargs->returnopts) {
             /* RFC 9051: Appendix E.4
              * SEARCH command now requires to return the ESEARCH response
              * (SEARCH response is now deprecated).
@@ -6987,10 +6987,10 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
         name[strlen(name)-1] = '\0';
     }
 
-    if (client_capa & CAPA_IMAP4REV2) {
+    if (client_capa & ENABLED_IMAP4REV2) {
         name = normalize_mboxname(name, &listargs);
     }
-    else if (client_capa & CAPA_UTF8_ACCEPT) {
+    else if (client_capa & ENABLED_UTF8_ACCEPT) {
         name = normalize_mboxname(name, NULL);
     }
 
@@ -7492,7 +7492,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     int delete_user = 0;
     const char *origname = name;
 
-    if (client_capa & (CAPA_IMAP4REV2 | CAPA_UTF8_ACCEPT)) {
+    if (client_capa & (ENABLED_IMAP4REV2 | ENABLED_UTF8_ACCEPT)) {
         name = normalize_mboxname(name, NULL);
     }
 
@@ -7633,7 +7633,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
-        if (name != origname && (client_capa & CAPA_IMAP4REV2)) {
+        if (name != origname && (client_capa & ENABLED_IMAP4REV2)) {
             /* Emit LIST response for name with OLDNAME */
             print_listresponse(LIST_CMD_EXTENDED, name, origname,
                                imapd_namespace.hier_sep,
@@ -7879,11 +7879,11 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
         return;
     }
 
-    if (client_capa & CAPA_IMAP4REV2) {
+    if (client_capa & ENABLED_IMAP4REV2) {
         oldname = normalize_mboxname(oldname, NULL);
         newname = normalize_mboxname(newname, &listargs);
     }
-    else if (client_capa & CAPA_UTF8_ACCEPT) {
+    else if (client_capa & ENABLED_UTF8_ACCEPT) {
         oldname = normalize_mboxname(oldname, NULL);
         newname = normalize_mboxname(newname, NULL);
     }
@@ -8366,7 +8366,7 @@ respond:
         index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
-        if (client_capa & CAPA_IMAP4REV2) {
+        if (client_capa & ENABLED_IMAP4REV2) {
             if (oldname != orig_oldname) {
                 /* Emit LIST response for oldname with OLDNAME */
                 print_listresponse(listargs.cmd, oldname, orig_oldname,
@@ -13502,7 +13502,7 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
         /* IMAP4rev2 client used a denormalized mailbox name */
         oldname = xstrdup(listargs->denormalized);
     }
-    else if (client_capa & CAPA_IMAP4REV2) {
+    else if (client_capa & ENABLED_IMAP4REV2) {
         /* Has this mailbox been renamed?
            XXX  We store the name history in the I record. */
         mbentry_t *id_mbe = NULL;
@@ -14459,23 +14459,23 @@ static void cmd_enable(char *tag)
         }
         if (!strcasecmp(arg.s, "condstore")) {
             client_behavior_mask |= CB_CONDSTORE;
-            new_capa |= CAPA_CONDSTORE;
+            new_capa |= ENABLED_CONDSTORE;
         }
         else if (!strcasecmp(arg.s, "qresync")) {
             client_behavior_mask |= CB_QRESYNC;
-            new_capa |= CAPA_QRESYNC | CAPA_CONDSTORE;
+            new_capa |= ENABLED_QRESYNC | ENABLED_CONDSTORE;
         }
         else if (!strcasecmp(arg.s, "imap4rev2")) {
             client_behavior_mask |= CB_IMAP4REV2;
-            new_capa |= CAPA_IMAP4REV2;
+            new_capa |= ENABLED_IMAP4REV2;
         }
         else if (!strcasecmp(arg.s, "uidonly")) {
             client_behavior_mask |= CB_UIDONLY;
-            new_capa |= CAPA_UIDONLY;
+            new_capa |= ENABLED_UIDONLY;
         }
         else if (imapd_utf8_allowed && !strcasecmp(arg.s, "utf8=accept")) {
             client_behavior_mask |= CB_UTF8ACCEPT;
-            new_capa |= CAPA_UTF8_ACCEPT;
+            new_capa |= ENABLED_UTF8_ACCEPT;
         }
     } while (c == ' ');
 
@@ -14490,10 +14490,10 @@ static void cmd_enable(char *tag)
     /* filter out already enabled extensions */
     new_capa &= ~client_capa;
 
-    if (new_capa & (CAPA_UTF8_ACCEPT | CAPA_IMAP4REV2)) {
+    if (new_capa & (ENABLED_UTF8_ACCEPT | ENABLED_IMAP4REV2)) {
         imapd_namespace.isutf8 = 1;
 
-        if (new_capa & CAPA_IMAP4REV2) {
+        if (new_capa & ENABLED_IMAP4REV2) {
             /* Tell idled to start sending mailbox updates */
             strarray_t key = { 1, 0, &imapd_userid }; // avoid memory alloc
 
@@ -15237,7 +15237,7 @@ static void cmd_notify(char *tag, int set)
                                     &new_egroups->selected.fetchargs;
                                 unsigned flags = 0;
 
-                                if (client_capa & CAPA_QRESYNC)
+                                if (client_capa & ENABLED_QRESYNC)
                                     flags |= FETCH_ALLOW_VANISHED;
 
                                 if (parse_fetch_args(tag, "Notify",
@@ -15564,7 +15564,7 @@ static void push_updates(int idling)
             else if (etype & IMAP_NOTIFY_FLAG_CHANGE)
                 statusitems |= STATUS_UNSEEN;
 
-            if (client_capa & CAPA_CONDSTORE)
+            if (client_capa & ENABLED_CONDSTORE)
                 statusitems |= STATUS_HIGHESTMODSEQ;
 
             r = imapd_statusdata(mbentry, statusitems, &sdata);
