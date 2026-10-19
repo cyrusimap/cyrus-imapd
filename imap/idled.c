@@ -71,8 +71,8 @@ static sqldb_t *db = NULL;
 EXPORTED void fatal(const char *msg, int err)
 {
     if (debugmode) fprintf(stderr, "dying with %s %d\n",msg,err);
-    syslog(LOG_CRIT, "%s", msg);
-    syslog(LOG_NOTICE, "exiting");
+    xsyslog_ev(LOG_CRIT, "idled.fatal",
+               lf_s("error", msg), lf_d("sys.exitcode", err));
 
     cyrus_done();
 
@@ -154,7 +154,8 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
         /* This process has been idling for longer than the timeout
          * period, so it probably died.  Remove it from the list. */
         if (verbose || debugmode)
-            syslog(LOG_DEBUG, "    TIMEOUT %s", idle_id_from_addr(client));
+            xsyslog_ev(LOG_DEBUG, "idled.client.timeout",
+                       lf_s("idle.client", idle_id_from_addr(client)));
 
         arrayu64_add(nrock->failed_pids, pid);
         return 0;
@@ -242,7 +243,8 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
     nrock->last_pid = pid;
 
     if (verbose || debugmode)
-        syslog(LOG_DEBUG, "    fwd NOTIFY %s", idle_id_from_addr(client));
+        xsyslog_ev(LOG_DEBUG, "idled.notify.forwarding",
+                   lf_s("idle.client", idle_id_from_addr(client)));
 
     /* forward the received msg onto our clients */
     int r = idle_send(client, nrock->msg);
@@ -253,12 +255,15 @@ static int notify_cb(sqlite3_stmt *stmt, void *rock)
          * through it's graceful shutdown path, so don't syslog.
          * Either way, remove it from the list. */
         if (r != ENOENT)
-            syslog(LOG_ERR, "IDLE: error sending message "
-                   "NOTIFY to imapd %s events=<%lu> filter=<%u>: %s, forgetting.",
-                   idle_id_from_addr(client), events, filter, error_message(r));
+            xsyslog_ev(LOG_ERR, "idled.notify.send.failed",
+                       lf_s("idle.client", idle_id_from_addr(client)),
+                       lf_lu("idle.events", events),
+                       lf_u("idle.filter", filter),
+                       lf_err("error", r));
 
         if (verbose || debugmode)
-            syslog(LOG_DEBUG, "    forgetting %s", idle_id_from_addr(client));
+            xsyslog_ev(LOG_DEBUG, "idled.client.forgotten",
+                       lf_s("idle.client", idle_id_from_addr(client)));
 
         arrayu64_add(nrock->failed_pids, pid);
     }
@@ -291,9 +296,12 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
         char *keys = json_dumps(json_object_get(msg, "keys"), JSON_COMPACT);
 
         if (verbose || debugmode) {
-            syslog(LOG_DEBUG, "imapd[%s]: idle start"
-                   " pid=<%d> events=<%lu> filter=<%u> keys=%s",
-                   idle_id_from_addr(remote), pid, events, filter, keys);
+            xsyslog_ev(LOG_DEBUG, "idled.client.started",
+                       lf_s("idle.client", idle_id_from_addr(remote)),
+                       lf_d("sys.pid", pid),
+                       lf_lu("idle.events", events),
+                       lf_u("idle.filter", filter),
+                       lf_s("idle.keys", keys));
         }
 
         /* add client and events to db */
@@ -317,9 +325,10 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
             json_integer_value(json_object_get(msg, "filter"));
 
         if (verbose || debugmode) {
-            syslog(LOG_DEBUG, "imapd[%s]: idle stop"
-                   " pid=<%d> filter=<%u>",
-                   idle_id_from_addr(remote), pid, filter);
+            xsyslog_ev(LOG_DEBUG, "idled.client.stopped",
+                       lf_s("idle.client", idle_id_from_addr(remote)),
+                       lf_d("sys.pid", pid),
+                       lf_u("idle.filter", filter));
         }
 
         /* remove client from db */
@@ -340,7 +349,8 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
         struct notify_rock nrock = { msg, 0, &failed_pids, NULL, NULL };
 
         if (verbose || debugmode) {
-            syslog(LOG_DEBUG, "idle notify '%s'", jevent);
+            xsyslog_ev(LOG_DEBUG, "idled.notify.received",
+                       lf_s("idle.mboxevent", jevent));
         }
 
         /* notify clients that are interested in this event */
@@ -374,7 +384,8 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
         free(nrock.authstate_userid);
     }
     else {
-        syslog(LOG_ERR, "unrecognized message: %s", type);
+        xsyslog_ev(LOG_ERR, "idled.message.unrecognized",
+                   lf_s("idle.message", type));
     }
 }
 
@@ -484,7 +495,7 @@ int main(int argc, char **argv)
         sig = signals_poll();
         if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
             /* XXX maybe don't restart if we have clients? */
-            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully");
+            xsyslog_ev(LOG_DEBUG, "idled.sighup");
             shut_down(0);
         }
 
@@ -492,7 +503,7 @@ int main(int argc, char **argv)
         if (shutdown_file(NULL, 0)) {
             /* signal all processes to shutdown */
             if (verbose || debugmode)
-                syslog(LOG_DEBUG, "Detected shutdown file");
+                xsyslog_ev(LOG_DEBUG, "idled.shutdownfile.seen");
             shut_down(1);
         }
 
@@ -507,7 +518,7 @@ int main(int argc, char **argv)
         if (n < 0 && errno == EINTR) continue;
         if (n == -1) {
             /* uh oh */
-            syslog(LOG_ERR, "select(): %m");
+            xsyslog_ev(LOG_ERR, "idled.select.failed");
             close(s);
             fatal("select error",-1);
         }
