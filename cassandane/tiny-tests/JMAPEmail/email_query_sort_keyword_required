@@ -10,7 +10,7 @@ sub test_email_query_sort_keyword_required
         [ 'Email/query', { sort => [ { property => 'receivedAt' } ] }, 'R1' ],
     ])->single_sentence('Email/query')->arguments->{queryState};
 
-    my $assert_invalid = sub ($sort, $want, $desc) {
+    my sub assert_invalid ($sort, $want, $desc) {
         my $res = $jmap->request([
             [ 'Email/query', { sort => $sort }, 'query' ],
             [ 'Email/queryChanges', { sort            => $sort,
@@ -27,12 +27,12 @@ sub test_email_query_sort_keyword_required
                 "$method $desc",
             );
         }
-    };
+    }
 
     # RFC 8621 4.4.2: these comparators MUST have a valid keyword
     for my $property (qw( hasKeyword someInThreadHaveKeyword )) {
         for my $keyword (undef, '', 'bad keyword', JSON::true) {
-            $assert_invalid->(
+            assert_invalid(
                 [
                     { property => 'receivedAt' },
                     { property => $property,
@@ -46,7 +46,7 @@ sub test_email_query_sort_keyword_required
 
     # The path is the comparator's index in the sort array, counting
     # entries that are not Comparator objects
-    $assert_invalid->(
+    assert_invalid(
         [ 'x', { property => 'hasKeyword' } ],
         [ 'sort[0]', 'sort[1]/keyword' ],
         'after non-object comparator',
