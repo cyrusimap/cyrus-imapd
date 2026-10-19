@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_atomic_undo_create
+    :NoStartInstances
+    ($self)
+{
+    # The third write is in the middle of the create's properties
+    $self->config_set(debug_jmap_atomic_failstep => 3);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $props = [ 'name', 'isSubscribed' ];
+    my $res = $jmap->request([
+        [ 'Calendar/get', { properties => $props } ],
+    ]);
+    my $before = $res->single_sentence('Calendar/get')->arguments;
+
+    xlog $self, "a failure while writing a new calendar's properties";
+    $res = $jmap->request([
+        [ 'Calendar/set', {
+            atomic => JSON::true,
+            create => { z => { name => 'Z', color => 'red' } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.calendar\.set\.failed});
+
+    $res = $jmap->request([
+        [ 'Calendar/get', { properties => $props } ],
+    ]);
+    $self->assert_cmp_deeply(
+        bag($before->{list}->@*),
+        $res->single_sentence('Calendar/get')->arguments->{list},
+    );
+}

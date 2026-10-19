@@ -36,6 +36,7 @@
 #define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
 #define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
 #define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
+#define JMAP_URN_CONDITIONAL "urn:ietf:params:jmap:conditional"
 
 #define JMAP_CORE_EXTENSION          "https://cyrusimap.org/ns/jmap/core"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
@@ -187,6 +188,10 @@ typedef struct jmap_req {
     ptrarray_t *method_calls;
     strarray_t *scheduled_emails;
     const strarray_t *using_capabilities;
+
+    /** Set by a method to make the dispatcher abort the conversations
+     *  transaction instead of committing it.  The response is still sent. */
+    bool abort_cstate;
 } jmap_req_t;
 
 /* Fetch the contents of the blob identified by blobid,
@@ -238,8 +243,11 @@ enum jmap_method_flags {
     JMAP_NEED_CSTATE = (1 << 1),  /* conv.db is required for this method
                                      (lock type determined by r/w flag) */
     JMAP_NO_USERLOCK = (1 << 2),  /* action touches many users, it will do its own locking */
-    JMAP_NO_ACCOUNTID = (1 << 3)  /* method is not account-scoped and takes no
+    JMAP_NO_ACCOUNTID = (1 << 3), /* method is not account-scoped and takes no
                                      accountId argument (Core/echo) */
+    /** Foo/set handles "atomic": true; without it, atomic is refused with
+     *  cannotApplyAtomically. */
+    JMAP_SET_ATOMIC  = (1 << 4)
 };
 
 typedef struct {
@@ -453,6 +461,7 @@ struct jmap_set {
     /* Request arguments */
     const char *if_in_state;
     bool apply_empty_updates;
+    bool atomic;  /* "atomic": true, on a method with JMAP_SET_ATOMIC */
     json_t *create;
     json_t *update;
     json_t *destroy;
@@ -479,12 +488,35 @@ struct jmap_set {
 extern void jmap_set_default_failed(struct jmap_set *set, const char *id,
                                     const char *type, const char *desc);
 
+/**
+ * Parse the arguments of a Foo/set (or Blob/upload) call into @p set.
+ *
+ * When the request is using urn:ietf:params:jmap:conditional, this also
+ * evaluates "ifUnchangedBy" by running Foo/get for the referenced objects,
+ * and handles "atomic".  Preconditions are checked first.  "atomic": true
+ * sets @p set->atomic if the method has JMAP_SET_ATOMIC, and otherwise
+ * fails with cannotApplyAtomically.  Either can set @p err, so a caller must
+ * check @p err before making any change.
+ *
+ * @param valid_props  the type's properties, used to validate patches and
+ *                     precondition pointers; NULL skips that validation
+ * @param err          set to a method-level error object on failure
+ */
 extern void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            const jmap_property_set_t *valid_props,
                            jmap_args_parse_cb args_parse, void *args_rock,
                            struct jmap_set *set, json_t **err);
 extern void jmap_set_fini(struct jmap_set *set);
 extern json_t *jmap_set_reply(struct jmap_set *set);
+
+/**
+ * Build the method-level atomicFailure error for an atomic Foo/set that
+ * found a problem while planning.  Returns NULL if @p set has no entries in
+ * notCreated, notUpdated or notDestroyed.  Otherwise returns
+ * {"type":"atomicFailure"} plus a copy of each non-empty map.  The caller
+ * owns the result.
+ */
+extern json_t *jmap_set_atomic_failure(const struct jmap_set *set);
 
 
 /* Foo/changes */
@@ -696,6 +728,16 @@ extern json_t *jmap_parse_reply(struct jmap_parse *parse);
 
 
 extern json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights));
+
+/**
+ * Recompute the ACL of @p accountid's JMAP upload collection from the
+ * rights shared on the account's mailboxes.  jmap_set_sharewith() calls
+ * this; call it after changing a mailbox ACL any other way.
+ *
+ * @return 0 or an IMAP_* error code.
+ */
+extern int jmap_set_upload_rights(const char *accountid);
+
 extern int jmap_set_sharewith(struct mailbox *mbox,
                               json_t *shareWith, int overwrite,
                               int (*patchrights)(int, json_t*));

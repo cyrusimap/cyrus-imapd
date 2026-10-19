@@ -1,0 +1,153 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_atomic ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'Calendar/get', { properties => [ 'id' ] } ],
+    ]);
+    my $calId = $res->single_sentence('Calendar/get')->arguments->{list}[0]{id};
+
+    my sub event ($uid, %props) {
+        return {
+            '@type'     => 'Event',
+            version     => '2.0',
+            calendarIds => { $calId => JSON::true },
+            uid         => $uid,
+            title       => $uid,
+            start       => '2026-07-01T09:00:00',
+            duration    => 'PT1H',
+            timeZone    => 'Europe/Vienna',
+            %props,
+        };
+    }
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', { create => {
+            e => event('atomic-u1'),
+            r => event('atomic-recur',
+                       recurrenceRule => { frequency => 'daily', count => 3 }),
+        } } ],
+    ]);
+    my $created = $res->single_sentence('CalendarEvent/set')
+                      ->arguments->{created};
+    my $idE = $created->{e}{id};
+    my $idR = $created->{r}{id};
+    $self->assert_not_null($idE);
+    $self->assert_not_null($idR);
+
+    xlog $self, "an event can be replaced by a new one with the same UID";
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            atomic  => JSON::true,
+            destroy => [ $idE ],
+            create  => { n => event('atomic-u1', title => 'new') },
+        } ],
+    ]);
+    my $args = $res->single_sentence('CalendarEvent/set')->arguments;
+    $self->assert_cmp_deeply([ $idE ], $args->{destroyed});
+    my $idN = $args->{created}{n}{id};
+    $self->assert_not_null($idN);
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/get', {
+            ids        => [ $idE, $idN ],
+            properties => [ 'uid', 'title' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            list     => [
+                superhashof({ id => $idN, uid => 'atomic-u1', title => 'new' }),
+            ],
+            notFound => [ $idE ],
+        }),
+        $res->single_sentence('CalendarEvent/get')->arguments,
+    );
+
+    xlog $self, "two creates of one UID fail together";
+    $res = $jmap->request([
+        [ 'CalendarEvent/get', { ids => [], properties => [ 'id' ] } ],
+        [ 'CalendarEvent/set', {
+            atomic => JSON::true,
+            create => {
+                a => event('atomic-dup'),
+                b => event('atomic-dup'),
+            },
+        } ],
+        [ 'CalendarEvent/get', { properties => [ 'uid' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notCreated => {
+                b => {
+                    type       => 'invalidProperties',
+                    properties => [ 'uid' ],
+                },
+            },
+        },
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_str_equals(
+        $res->sentence(0)->arguments->{state},
+        $res->sentence(2)->arguments->{state},
+    );
+    $self->assert_cmp_deeply(
+        [],
+        [ grep { $_->{uid} eq 'atomic-dup' }
+               $res->sentence(2)->arguments->{list}->@* ],
+    );
+
+    xlog $self, "an update of a create in the same method is checked too";
+    $res = $jmap->request([
+        [ 'CalendarEvent/get', { ids => [], properties => [ 'id' ] } ],
+        [ 'CalendarEvent/set', {
+            atomic => JSON::true,
+            create => { c => event('atomic-patched') },
+            update => { '#c' => { start => 'bogus' } },
+        } ],
+        [ 'CalendarEvent/get', { ids => [], properties => [ 'id' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => {
+                '#c' => superhashof({ type => 'invalidProperties' }),
+            },
+        },
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_str_equals(
+        $res->sentence(0)->arguments->{state},
+        $res->sentence(2)->arguments->{state},
+    );
+
+    xlog $self, "a recurrence instance can be destroyed atomically";
+    my $instanceId = encode_eventid($idR, '20260702T090000');
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            atomic  => JSON::true,
+            destroy => [ $instanceId ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ $instanceId ],
+        $res->single_sentence('CalendarEvent/set')->arguments->{destroyed},
+    );
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/get', {
+            ids        => [ $idR ],
+            properties => [ 'recurrenceOverrides' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { '2026-07-02T09:00:00' => { excluded => JSON::true } },
+        $res->single_sentence('CalendarEvent/get')
+            ->arguments->{list}[0]{recurrenceOverrides},
+    );
+}

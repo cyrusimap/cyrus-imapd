@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_set_name_after_destroy
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:sieve');
+    $jmap->AddUsing('urn:ietf:params:jmap:blob');
+
+    my $res = $jmap->request([
+        [ 'Blob/upload', { create => {
+            k => { data => [ { 'data:asText' => "keep;\r\n" } ] },
+        } } ],
+        [ 'SieveScript/set', { create => {
+            a => { name => 'A', blobId => '#k' },
+            b => { name => 'B', blobId => '#k' },
+        } } ],
+    ]);
+    my $created = $res->sentence_named('SieveScript/set')->arguments->{created};
+    my $idA = $created->{a}{id};
+    my $idB = $created->{b}{id};
+
+    $res = $jmap->request([
+        [ 'SieveScript/set', { destroy => [ $idB ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ $idB ],
+        $res->single_sentence('SieveScript/set')->arguments->{destroyed},
+    );
+
+    $res = $jmap->request([
+        [ 'SieveScript/set', { update => { $idA => { name => 'B' } } } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $idA => undef },
+        $res->single_sentence('SieveScript/set')->arguments->{updated},
+    );
+
+    xlog $self, "the destroyed script's row doesn't hide the live name";
+    $res = $jmap->request([
+        [ 'Blob/upload', { create => {
+            k => { data => [ { 'data:asText' => "keep;\r\n" } ] },
+        } } ],
+        [ 'SieveScript/set', { create => {
+            c => { name => 'B', blobId => '#k' },
+        } } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { c => { type => 'alreadyExists' } },
+        $res->sentence_named('SieveScript/set')->arguments->{notCreated},
+    );
+}

@@ -184,7 +184,8 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
 
     /* Prepare to append the message to the mailbox */
     if ((r = append_setup_mbox(&as, mailbox, txn->userid, txn->authstate,
-                          0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
+                          0, txn->flags.noquotacheck ? NULL : qdiffs, 0, 0,
+                          EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
                mailbox_name(mailbox), error_message(r));
         if (r == IMAP_QUOTA_EXCEEDED || r == IMAP_NO_OVERQUOTA) {

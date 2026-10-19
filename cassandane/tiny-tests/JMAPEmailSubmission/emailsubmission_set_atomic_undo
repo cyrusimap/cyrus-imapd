@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_set_atomic_undo
+    :needs_component_calalarmd :NoStartInstances
+    ($self)
+{
+    # The method below fails at its fourth write, the mailbox commit.
+    $self->config_set(debug_jmap_atomic_failstep => 4);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:mail');
+    $jmap->AddUsing('urn:ietf:params:jmap:submission');
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([ [ 'Identity/get' ] ]);
+    my $identityid =
+        $res->single_sentence('Identity/get')->arguments->{list}[0]{id};
+    $self->assert_not_null($identityid);
+
+    $self->make_message('foo', body => "an email\r\n") or die;
+    $res = $jmap->request([ [ 'Email/query' ] ]);
+    my $emailid = $res->single_sentence('Email/query')->arguments->{ids}[0];
+    $self->assert_not_null($emailid);
+
+    my sub submission ($holdfor) {
+        return {
+            identityId => $identityid,
+            emailId    => $emailid,
+            envelope   => {
+                mailFrom => { email => 'from@localhost',
+                              parameters => { holdfor => "$holdfor" } },
+                rcptTo   => [ { email => 'rcpt@localhost' } ],
+            },
+        };
+    }
+
+    my sub get_submissions () {
+        my $res = $jmap->request([
+            [ 'EmailSubmission/get', { properties => ['undoStatus'] } ],
+        ]);
+        my $args = $res->single_sentence('EmailSubmission/get')->arguments;
+        return ($args->{state},
+                { map { $_->{id} => $_->{undoStatus} } $args->{list}->@* });
+    }
+
+    $res = $jmap->request([
+        [ 'EmailSubmission/set', {
+            create => { p1 => submission(300), p2 => submission(400) },
+        } ],
+    ]);
+    my $created = $res->single_sentence('EmailSubmission/set')
+                      ->arguments->{created};
+    my ($p1, $p2) = map { $created->{$_}{id} } qw(p1 p2);
+    $self->assert_not_null($p1);
+    $self->assert_not_null($p2);
+
+    my ($state, $subs) = get_submissions();
+    $self->assert_cmp_deeply({ $p1 => 'pending', $p2 => 'pending' }, $subs);
+    my $alarms = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(2, scalar @$alarms);
+
+    xlog $self, "a failed commit undoes the destroy, create and cancel";
+    $res = $jmap->request([
+        [ 'EmailSubmission/set', {
+            atomic  => JSON::true,
+            destroy => [ $p2 ],
+            create  => { d1 => submission(600) },
+            update  => { $p1 => { undoStatus => 'canceled' } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.emailsubmission\.set\.failed});
+
+    $self->assert_cmp_deeply([ $state, $subs ], [ get_submissions() ]);
+    $self->assert_cmp_deeply($alarms, $self->{instance}->getalarmdb());
+    $self->assert_num_equals(0, scalar $self->smtpd_messages());
+    $self->check_conversations();
+
+    xlog $self, "an atomic cancel short of the failing write commits";
+    $res = $jmap->request([
+        [ 'EmailSubmission/set', {
+            atomic => JSON::true,
+            update => { $p1 => { undoStatus => 'canceled' } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $p1 => ignore() },
+        $res->single_sentence('EmailSubmission/set')->arguments->{updated},
+    );
+    (undef, $subs) = get_submissions();
+    $self->assert_cmp_deeply({ $p1 => 'canceled', $p2 => 'pending' }, $subs);
+    $self->assert_cmp_deeply(
+        [ substr($p2, 1) ],
+        [ map { $_->{imap_uid} } $self->{instance}->getalarmdb()->@* ],
+    );
+    $self->check_conversations();
+}

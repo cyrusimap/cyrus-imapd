@@ -1,0 +1,32 @@
+Description:
+
+Added the JMAP `urn:ietf:params:jmap:conditional` capability
+(draft-ietf-jmap-conditional).  Every Foo/set accepts `ifUnchangedBy`,
+a map of object id to a PatchObject the object must currently match.
+If any precondition does not hold, the whole method is rejected with
+`stateMismatch` and nothing changes.  `atomic: true` is supported on
+every Foo/set: if any change fails, nothing is applied and the method
+returns `atomicFailure`.  Immediate sends, and destroys that would remove
+data at once under the configured `delete_mode` or `expunge_mode`, return
+`cannotApplyAtomically`; docsrc/rfc-support.rst lists the exact cases.
+
+
+Documentation:
+
+https://datatracker.ietf.org/doc/draft-ietf-jmap-conditional/
+
+
+Config changes:
+
+New option debug_jmap_atomic_failstep, for regression tests only.
+
+
+Upgrade instructions:
+
+None.  The capability is advertised automatically, and clients that
+don't name it in `using` see no change.
+
+
+GitHub issue:
+
+None

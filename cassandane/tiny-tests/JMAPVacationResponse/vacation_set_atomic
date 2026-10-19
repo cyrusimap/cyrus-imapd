@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_vacation_set_atomic
+    :needs_component_sieve
+    ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:vacationresponse');
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    xlog $self, "an atomic update stores and enables the response";
+    my $res = $jmap->request([
+        [ 'VacationResponse/set', {
+            atomic => JSON::true,
+            update => { singleton => {
+                isEnabled => JSON::true,
+                subject   => 'Away',
+                textBody  => 'Gone fishing',
+            } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { singleton => undef },
+        $res->single_sentence('VacationResponse/set')->arguments->{updated},
+    );
+
+    $res = $jmap->request([ [ 'VacationResponse/get', {} ] ]);
+    my $get = $res->single_sentence('VacationResponse/get')->arguments;
+    $self->assert_cmp_deeply(
+        [ superhashof({
+            id        => 'singleton',
+            isEnabled => JSON::true,
+            subject   => 'Away',
+            textBody  => 'Gone fishing',
+        }) ],
+        $get->{list},
+    );
+    my $state = $get->{state};
+
+    xlog $self, "an invalid property fails the whole method";
+    $res = $jmap->request([
+        [ 'VacationResponse/set', {
+            atomic => JSON::true,
+            update => { singleton => {
+                isEnabled => JSON::true,
+                subject   => 5,
+            } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => { singleton => {
+                type       => 'invalidProperties',
+                properties => [ 'subject' ],
+            } },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+
+    $res = $jmap->request([ [ 'VacationResponse/get', {} ] ]);
+    $get = $res->single_sentence('VacationResponse/get')->arguments;
+    $self->assert_str_equals($state, $get->{state});
+    $self->assert_str_equals('Away', $get->{list}[0]{subject});
+}

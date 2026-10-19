@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_atomic_undo_importance
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 2);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/contacts');
+
+    my $res = $jmap->request([
+        [ 'AddressBook/set', { create => { b => { name => 'B' } } } ],
+        [ 'ContactCard/set', { create => {
+            c1 => {
+                '@type' => 'Card',
+                version => '1.0',
+                name    => { full => 'One' },
+                'cyrusimap.org:importance' => 1,
+            },
+            c2 => {
+                '@type'        => 'Card',
+                version        => '1.0',
+                addressBookIds => { '#b' => JSON::true },
+                name           => { full => 'Two' },
+            },
+        } } ],
+    ]);
+    my $created = $res->sentence_named('ContactCard/set')
+                      ->arguments->{created};
+    my $id1 = $created->{c1}{id};
+    my $id2 = $created->{c2}{id};
+    $self->assert_not_null($id1);
+    $self->assert_not_null($id2);
+
+    my $get = [ 'ContactCard/get', {
+        ids        => [ $id1, $id2 ],
+        properties => [ 'cyrusimap.org:importance' ],
+    } ];
+    $res = $jmap->request([ $get ]);
+    my $before = $res->single_sentence('ContactCard/get')->arguments->{list};
+
+    xlog $self, "a change of importance in one addressbook is undone";
+    $res = $jmap->request([
+        [ 'ContactCard/set', {
+            atomic => JSON::true,
+            update => {
+                $id1 => { 'cyrusimap.org:importance' => 5 },
+                $id2 => { 'cyrusimap.org:importance' => 7 },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.card\.set\.failed});
+
+    $res = $jmap->request([ $get ]);
+    $self->assert_cmp_deeply(
+        bag($before->@*),
+        $res->single_sentence('ContactCard/get')->arguments->{list},
+    );
+}

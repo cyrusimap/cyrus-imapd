@@ -1,0 +1,134 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_atomic_undo
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 2);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'Calendar/get', { properties => [ 'id' ] } ],
+        [ 'Calendar/set', { create => { other => { name => 'Other' } } } ],
+    ]);
+    my $calId = $res->sentence(0)->arguments->{list}[0]{id};
+    my $otherId = $res->sentence(1)->arguments->{created}{other}{id};
+    $self->assert_not_null($otherId);
+
+    my sub event ($uid, %props) {
+        return {
+            '@type'     => 'Event',
+            version     => '2.0',
+            calendarIds => { $calId => JSON::true },
+            uid         => $uid,
+            title       => $uid,
+            start       => '2026-07-01T09:00:00',
+            duration    => 'PT1H',
+            timeZone    => 'Europe/Vienna',
+            %props,
+        };
+    }
+
+    my %scheduled = (
+        organizerCalendarAddress => 'mailto:cassandane@example.com',
+        participants => {
+            org => {
+                roles => { owner => JSON::true },
+                calendarAddress => 'mailto:cassandane@example.com',
+            },
+            att => {
+                roles => { attendee => JSON::true },
+                calendarAddress => 'mailto:bugs@example.com',
+            },
+        },
+    );
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', { create => {
+            a => event('undo-a', %scheduled),
+            b => event('undo-b', %scheduled),
+            c => event('undo-c'),
+        } } ],
+    ]);
+    my $created = $res->single_sentence('CalendarEvent/set')
+                      ->arguments->{created};
+    my %id = map { $_ => $created->{$_}{id} } qw(a b c);
+    $self->assert_not_null($id{$_}) for qw(a b c);
+
+    my $props = [ 'uid', 'title', 'calendarIds' ];
+    $res = $jmap->request([
+        [ 'CalendarEvent/get', { properties => $props } ],
+    ]);
+    my $before = $res->single_sentence('CalendarEvent/get')->arguments->{list};
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "a failed update undoes the other and discards its iTIP";
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            atomic => JSON::true,
+            update => {
+                $id{a} => { title => 'changed a' },
+                $id{b} => { title => 'changed b' },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.calendarevent\.set\.failed});
+
+    xlog $self, "a failed create undoes a destroy";
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            atomic  => JSON::true,
+            destroy => [ $id{c} ],
+            create  => { d => event('undo-d') },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.calendarevent\.set\.failed});
+
+    xlog $self, "a move that fails to expunge its source undoes its copy";
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            atomic => JSON::true,
+            update => {
+                $id{b} => { calendarIds => { $otherId => JSON::true } },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.calendarevent\.set\.failed});
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/get', { properties => $props } ],
+    ]);
+    $self->assert_cmp_deeply(
+        bag($before->@*),
+        $res->single_sentence('CalendarEvent/get')->arguments->{list},
+    );
+
+    my $data = $self->{instance}->getnotify();
+    $self->assert_cmp_deeply(
+        [],
+        [ grep { $_->{METHOD} eq 'imip' } @$data ],
+    );
+
+    $self->check_conversations();
+}

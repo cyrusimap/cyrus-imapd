@@ -1,0 +1,123 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_atomic ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'Calendar/get', { properties => [ 'isDefault' ] } ],
+    ]);
+    my ($default) = grep { $_->{isDefault} }
+                    $res->single_sentence('Calendar/get')->arguments->{list}->@*;
+    my $idX = $default->{id};
+    $self->assert_not_null($idX);
+
+    $res = $jmap->request([
+        [ 'Calendar/set', { create => { y => { name => 'Y' } } } ],
+    ]);
+    my $idY = $res->single_sentence('Calendar/set')->arguments->{created}{y}{id};
+    $self->assert_not_null($idY);
+
+    xlog $self, "the default can't be destroyed on its own";
+    $res = $jmap->request([
+        [ 'Calendar/get', { ids => [], properties => [ 'id' ] } ],
+        [ 'Calendar/set', { atomic => JSON::true, destroy => [ $idX ] } ],
+        [ 'Calendar/get', { ids => [], properties => [ 'id' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type         => 'atomicFailure',
+            notDestroyed => { $idX => { type => 'forbidden' } },
+        },
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_str_equals(
+        $res->sentence(0)->arguments->{state},
+        $res->sentence(2)->arguments->{state},
+    );
+
+    xlog $self, "one invalid change rejects the whole method";
+    $res = $jmap->request([
+        [ 'Calendar/get', { ids => [], properties => [ 'id' ] } ],
+        [ 'Calendar/set', {
+            atomic => JSON::true,
+            create => { z => { name => 'Z' } },
+            update => { $idY => { name => 1 } },
+        } ],
+        [ 'Calendar/get', { properties => [ 'name' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => {
+                $idY => superhashof({ type => 'invalidProperties' }),
+            },
+        },
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_str_equals(
+        $res->sentence(0)->arguments->{state},
+        $res->sentence(2)->arguments->{state},
+    );
+    $self->assert_cmp_deeply(
+        [],
+        [ grep { $_->{name} eq 'Z' }
+               $res->sentence(2)->arguments->{list}->@* ],
+    );
+
+    xlog $self, "an update of a create in the same method is checked too";
+    $res = $jmap->request([
+        [ 'Calendar/get', { ids => [], properties => [ 'id' ] } ],
+        [ 'Calendar/set', {
+            atomic => JSON::true,
+            create => { w => { name => 'W' } },
+            update => { '#w' => { name => 1 } },
+        } ],
+        [ 'Calendar/get', { ids => [], properties => [ 'id' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => {
+                '#w' => superhashof({ type => 'invalidProperties' }),
+            },
+        },
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_str_equals(
+        $res->sentence(0)->arguments->{state},
+        $res->sentence(2)->arguments->{state},
+    );
+
+    xlog $self, "destroying the default works once another becomes default";
+    $res = $jmap->request([
+        [ 'Calendar/set', {
+            atomic                => JSON::true,
+            destroy               => [ $idX ],
+            onSuccessSetIsDefault => $idY,
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            destroyed => [ $idX ],
+            updated   => { $idY => { isDefault => JSON::true } },
+        }),
+        $res->single_sentence('Calendar/set')->arguments,
+    );
+
+    $res = $jmap->request([
+        [ 'Calendar/get', {
+            ids        => [ $idX, $idY ],
+            properties => [ 'isDefault' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            list     => [ { id => $idY, isDefault => JSON::true } ],
+            notFound => [ $idX ],
+        }),
+        $res->single_sentence('Calendar/get')->arguments,
+    );
+}

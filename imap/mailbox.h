@@ -136,6 +136,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <config.h>
 
 #include "byteorder.h"
@@ -784,6 +785,26 @@ extern int mailbox_rewrite_index_record(struct mailbox *mailbox,
                                         struct index_record *record);
 extern int mailbox_append_index_record(struct mailbox *mailbox,
                                        struct index_record *record);
+/**
+ * Restore an expunged record as a new message in the same mailbox.
+ *
+ * Copies the spool file to the next UID, clears FLAG_INTERNAL_EXPUNGED
+ * (and \\Deleted if @a unset_deleted), keeps internaldate, createdmodseq
+ * and GUID, copies annotations, and marks @a record UNLINKED|NEEDS_CLEANUP.
+ * The mailbox must be locked for writing.
+ *
+ * @param mailbox       the mailbox holding @a record
+ * @param record        the expunged record to restore
+ * @param unset_deleted whether to clear \\Deleted on the new record
+ * @param addflag       user flag to set on the new record, or NULL
+ * @param newuidp       receives the new UID if non-NULL
+ * @return              0 or an IMAP error code
+ */
+extern int mailbox_restore_record(struct mailbox *mailbox,
+                                  const struct index_record *record,
+                                  bool unset_deleted,
+                                  const char *addflag,
+                                  uint32_t *newuidp);
 extern int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
                                      struct index_record *record);
 extern int mailbox_read_basecid(struct mailbox *mailbox,
@@ -921,6 +942,14 @@ extern int mailbox_delete_dav(struct mailbox *mailbox);
 extern int mailbox_add_sieve(struct mailbox *mailbox, hashu64_table *cmodseqs);
 extern int mailbox_add_email_alarms(struct mailbox *mailbox,
                                     hashu64_table *cmodseqs);
+
+/**
+ * Set the alarm db entry for @p uid from its committed index record in
+ * @p mailbox, deleting it if there is no such record.  Use it after
+ * mailbox_abort to undo the alarm writes of the aborted records, which are
+ * made outside the mailbox transaction.  Returns 0 or an IMAP_* error.
+ */
+extern int mailbox_reset_email_alarm(struct mailbox *mailbox, uint32_t uid);
 
 extern int mailbox_add_conversations(struct mailbox *mailbox, int silent);
 __attribute__((nonnull))

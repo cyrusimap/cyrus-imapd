@@ -216,6 +216,65 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
     return dst;
 }
 
+/* Check one ifUnchangedBy pointer against @current. */
+static enum jmap_precondition precondition_check_pointer(json_t *current,
+                                                         const char *path,
+                                                         json_t *want)
+{
+    json_t *it = current;
+    const char *base = path;
+    const char *top;
+
+    while ((top = strchr(base, '/'))) {
+        if (!json_is_object(it)) {
+            return JMAP_PRECOND_INVALID;
+        }
+        char *ref = jmap_pointer_decode(base, top - base);
+        it = json_object_get(it, ref);
+        free(ref);
+        base = top + 1;
+    }
+    if (!json_is_object(it)) {
+        return JMAP_PRECOND_INVALID;
+    }
+
+    char *ref = jmap_pointer_decode(base, strlen(base));
+    json_t *val = json_object_get(it, ref);
+    free(ref);
+
+    /* Foo/get reports a property with no value as null */
+    if (json_is_null(want)) {
+        return (!val || json_is_null(val)) ? JMAP_PRECOND_MATCH
+                                           : JMAP_PRECOND_MISMATCH;
+    }
+    return (val && json_equal(val, want)) ? JMAP_PRECOND_MATCH
+                                          : JMAP_PRECOND_MISMATCH;
+}
+
+EXPORTED enum jmap_precondition jmap_precondition_check(json_t *current,
+                                                        json_t *patch)
+{
+    if (!json_is_object(patch)) {
+        return JMAP_PRECOND_INVALID;
+    }
+
+    enum jmap_precondition res = JMAP_PRECOND_MATCH;
+    const char *path;
+    json_t *want;
+
+    json_object_foreach (patch, path, want) {
+        enum jmap_precondition r =
+            precondition_check_pointer(current, path, want);
+        if (r == JMAP_PRECOND_INVALID) {
+            return r;
+        }
+        if (r == JMAP_PRECOND_MISMATCH) {
+            res = r;
+        }
+    }
+    return res;
+}
+
 static void jmap_patchobject_set(json_t *diff, struct buf *path,
                                  const char *key, json_t *val)
 {

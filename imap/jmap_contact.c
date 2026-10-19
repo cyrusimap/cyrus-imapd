@@ -13,6 +13,7 @@
 #include <errno.h>
 
 #include "annotate.h"
+#include "append.h"
 #include "carddav_db.h"
 #include "cyr_qsort_r.h"
 #include "global.h"
@@ -21,10 +22,12 @@
 #include "http_dav.h"
 #include "http_dav_sharing.h"
 #include "http_jmap.h"
+#include "jmap_undo.h"
 #include "jscontact.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mboxname.h"
+#include "quota.h"
 #include "stristr.h"
 #include "times.h"
 #include "user.h"
@@ -87,7 +90,7 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         "AddressBook/set",
         JMAP_URN_CONTACTS,
         &jmap_addressbook_set,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE | JMAP_SET_ATOMIC
     },
     {
         "ContactCard/get",
@@ -117,7 +120,7 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         "ContactCard/set",
         JMAP_URN_CONTACTS,
         &jmap_card_set,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE | JMAP_SET_ATOMIC
     },
     {
         "ContactCard/copy",
@@ -699,14 +702,34 @@ static void reject_or_remove_convprops(json_t *jpatch, json_t *invalid,
     jmap_parser_fini(&parser);
 }
 
+struct card_atomic;
+
 static int _card_set_create(jmap_req_t *req,
                             json_t *jcard, struct mailbox **mailbox,
+                            struct card_atomic *atomic,
                             json_t *item, jmap_contact_errors_t *errors);
 
 static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
                             const char *id, json_t *jcard,
                             struct carddav_db *db, struct mailbox **mailbox,
+                            struct card_atomic *atomic,
                             json_t **item, jmap_contact_errors_t *errors);
+
+static int _card_set_destroy(jmap_req_t *req,
+                             const char *id,
+                             struct carddav_db *db,
+                             struct mailbox **mailbox,
+                             struct card_atomic *atomic,
+                             json_t **err);
+
+static json_t *_card_set_error(int r,
+                               bool update,
+                               jmap_contact_errors_t *errors);
+
+static json_t *_card_set_atomic(jmap_req_t *req,
+                                struct jmap_set *set,
+                                struct carddav_db *db,
+                                struct mailbox **mailbox);
 
 static int jmap_card_set(struct jmap_req *req)
 {
@@ -747,6 +770,24 @@ static int jmap_card_set(struct jmap_req *req)
     if (!has_addressbooks(req)) {
         r = carddav_create_defaultaddressbook(req->accountid);
         if (r) goto done;
+
+        /* An atomic failure aborts req->cstate, which must not take the
+         * new addressbook's conversations records with it. */
+        if (set.atomic) {
+            r = conversations_commit(&req->cstate);
+            if (!r) r = conversations_open_user(req->accountid, 0,
+                                                &req->cstate);
+            if (r) goto done;
+        }
+    }
+
+    if (set.atomic) {
+        err = _card_set_atomic(req, &set, db, &mailbox);
+        if (err) {
+            jmap_error(req, err);
+            goto done;
+        }
+        goto reply;
     }
 
     /* destroy */
@@ -758,58 +799,12 @@ static int jmap_card_set(struct jmap_req *req)
             json_object_set_new(set.not_destroyed, id, err);
             continue;
         }
-        mbentry_t *mbentry = NULL;
-        struct carddav_data *cdata = NULL;
-        uint32_t olduid;
-        if (USER_COMPACT_EMAILIDS(req->cstate)) {
-            if (id[0] == JMAP_CONTACTID_PREFIX &&
-                strlen(id) < JMAP_CONTACTID_SIZE) {
-                r = carddav_lookup_jmapid(db, id+1, &cdata);  // strip prefix
-            }
-        }
-        else {
-            r = carddav_lookup_uid(db, NULL, id, &cdata);
-        }
-
-        /* is it a valid contact? */
-        if (r || !cdata || !cdata->dav.imap_uid) {
-            r = 0;
-            json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(set.not_destroyed, id, err);
-            continue;
-        }
-        olduid = cdata->dav.imap_uid;
-
-        mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
-
-        if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_REMOVEITEMS)) {
-            int rights = mbentry ? jmap_myrights_mbentry(req, mbentry) : 0;
-            json_t *err = json_pack("{s:s}", "type",
-                                    rights & JACL_READITEMS ?
-                                    "accountReadOnly" : "notFound");
-            json_object_set_new(set.not_destroyed, id, err);
-            mboxlist_entry_free(&mbentry);
-            continue;
-        }
-
-        if (!mailbox || strcmp(mailbox_name(mailbox), mbentry->name)) {
-            mailbox_close(&mailbox);
-            r = mailbox_open_iwl(mbentry->name, &mailbox);
-        }
-        mboxlist_entry_free(&mbentry);
+        json_t *err = NULL;
+        r = _card_set_destroy(req, id, db, &mailbox, NULL, &err);
         if (r) goto done;
-
-        syslog(LOG_NOTICE,
-               "jmap: remove %s %s/%s",
-               cdata->kind == CARDDAV_KIND_GROUP ? "group" : "contact",
-               req->accountid, id);
-        r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->userid);
-        if (r) {
-            xsyslog(LOG_ERR, "IOERROR: carddav remove failed",
-                             "kind=<%s> mailbox=<%s> olduid=<%u>",
-                             cdata->kind == CARDDAV_KIND_GROUP ? "group" : "contact",
-                             mailbox_name(mailbox), olduid);
-            goto done;
+        if (err) {
+            json_object_set_new(set.not_destroyed, id, err);
+            continue;
         }
 
         json_array_append_new(set.destroyed, json_string(id));
@@ -819,54 +814,19 @@ static int jmap_card_set(struct jmap_req *req)
     const char *key;
     json_t *arg;
     json_object_foreach(set.create, key, arg) {
-        json_t *invalid = json_array();
-        jmap_contact_errors_t errors = { invalid, NULL };
+        jmap_contact_errors_t errors = { json_array(), NULL };
         json_t *item = json_object();
         // XXX Silently remove conversion properties if extension
         // capability is used. This is because due to a bug
         // we had served Card objects with these properties
         // and now client requests trying to clone or update these
         // cards get rejected.
-        reject_or_remove_convprops(arg, invalid,
+        reject_or_remove_convprops(arg, errors.invalid,
                 jmap_is_using(req, JMAP_CONTACTS_EXTENSION));
-        r = _card_set_create(req, arg, &mailbox, item, &errors);
-        if (r) {
-            json_t *err;
-            switch (r) {
-                case HTTP_FORBIDDEN:
-                case IMAP_PERMISSION_DENIED:
-                    err = json_pack("{s:s}", "type", "forbidden");
-                    break;
-                case IMAP_QUOTA_EXCEEDED:
-                    err = json_pack("{s:s}", "type", "overQuota");
-                    break;
-                case IMAP_MESSAGE_TOO_LARGE:
-                    err = json_pack("{s:s}", "type", "tooLarge");
-                    break;
-                default:
-                    err = jmap_server_error(r);
-            }
-            json_object_set_new(set.not_created, key, err);
-            r = 0;
-            json_decref(item);
-            json_decref(invalid);
-            continue;
-        }
-        if (json_array_size(invalid)) {
-            json_t *err = json_pack("{s:s s:o}",
-                                    "type", "invalidProperties",
-                                    "properties", invalid);
-            json_object_set_new(set.not_created, key, err);
-            json_decref(errors.blobNotFound);
-            json_decref(item);
-            continue;
-        }
-        json_decref(invalid);
-
-        if (errors.blobNotFound) {
-            json_t *err = json_pack("{s:s s:o}",
-                                    "type", "blobNotFound",
-                                    "notFound", errors.blobNotFound);
+        r = _card_set_create(req, arg, &mailbox, NULL, item, &errors);
+        json_t *err = _card_set_error(r, false, &errors);
+        r = 0;
+        if (err) {
             json_object_set_new(set.not_created, key, err);
             json_decref(item);
             continue;
@@ -882,68 +842,20 @@ static int jmap_card_set(struct jmap_req *req)
     /* update */
     const char *uid;
     json_object_foreach(set.update, uid, arg) {
-        json_t *invalid = json_array();
-        jmap_contact_errors_t errors = { invalid, NULL };
+        jmap_contact_errors_t errors = { json_array(), NULL };
         json_t *item = NULL;
         // XXX Silently remove conversion properties if extension
         // capability is used. This is because due to a bug
         // we had served Card objects with these properties
         // and now client requests trying to clone or update these
         // cards get rejected.
-        reject_or_remove_convprops(arg, invalid,
+        reject_or_remove_convprops(arg, errors.invalid,
                 jmap_is_using(req, JMAP_CONTACTS_EXTENSION));
         r = _card_set_update(req, set.apply_empty_updates,
-                             uid, arg, db, &mailbox, &item, &errors);
-        if (r) {
-            json_t *err;
-            switch (r) {
-            case HTTP_NOT_FOUND:
-                err = json_pack("{s:s}", "type", "notFound");
-                break;
-            case HTTP_NOT_ALLOWED:
-                err = json_pack("{s:s}", "type", "accountReadOnly");
-                break;
-            case HTTP_BAD_REQUEST:
-                err = json_pack("{s:s}", "type", "invalidPatch");
-                break;
-            case HTTP_UNPROCESSABLE:
-                err = json_pack("{s:s s:s}", "type", "serverFail",
-                                "description", "invalid current card");
-                break;
-            case HTTP_FORBIDDEN:
-            case IMAP_PERMISSION_DENIED:
-                err = json_pack("{s:s}", "type", "forbidden");
-                break;
-            case IMAP_QUOTA_EXCEEDED:
-                err = json_pack("{s:s}", "type", "overQuota");
-                break;
-            case IMAP_MESSAGE_TOO_LARGE:
-                err = json_pack("{s:s}", "type", "tooLarge");
-                break;
-            default:
-                err = jmap_server_error(r);
-            }
-            json_object_set_new(set.not_updated, uid, err);
-            r = 0;
-            json_decref(item);
-            json_decref(invalid);
-            continue;
-        }
-        if (json_array_size(invalid)) {
-            json_t *err = json_pack("{s:s s:o}",
-                                    "type", "invalidProperties",
-                                    "properties", invalid);
-            json_object_set_new(set.not_updated, uid, err);
-            json_decref(errors.blobNotFound);
-            json_decref(item);
-            continue;
-        }
-        json_decref(invalid);
-
-        if (errors.blobNotFound) {
-            json_t *err = json_pack("{s:s s:o}",
-                                    "type", "blobNotFound",
-                                    "notFound", errors.blobNotFound);
+                             uid, arg, db, &mailbox, NULL, &item, &errors);
+        json_t *err = _card_set_error(r, true, &errors);
+        r = 0;
+        if (err) {
             json_object_set_new(set.not_updated, uid, err);
             json_decref(item);
             continue;
@@ -953,7 +865,7 @@ static int jmap_card_set(struct jmap_req *req)
         json_object_set_new(set.updated, uid, item);
     }
 
-
+reply:
     /* force modseq to stable */
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
@@ -1609,7 +1521,7 @@ static void _contact_copy(jmap_req_t *req,
     /* Create vcard */
     jmap_contact_errors_t errors = { invalid, NULL };
     json_t *item = json_object();
-    r = _card_set_create(req, dst_card, &dst_mbox, item, &errors);
+    r = _card_set_create(req, dst_card, &dst_mbox, NULL, item, &errors);
     if (r || json_array_size(invalid) || errors.blobNotFound) {
         if (json_array_size(invalid)) {
             *set_err = json_pack("{s:s s:o}", "type", "invalidProperties",
@@ -2289,12 +2201,255 @@ static void setaddressbook_readprops(jmap_req_t *req,
     }
 }
 
+/* An atomic AddressBook/set runs each change twice: a plan pass that only
+ * checks, then an apply pass that logs the inverse of each write. */
+struct abset_atomic
+{
+    bool plan;
+    struct jmap_undo undo;
+    hash_table destroyed; /* plan: mailbox names of destroyed addressbooks */
+    hash_table created;   /* apply: creation id -> addressbook id */
+};
+
+/* Undo record for one write of an atomic AddressBook/set. */
+struct abset_undo
+{
+    char *mboxname;
+    char *userid;
+    char *uniqueid;   /* destroy: finds the DELETED.* mailbox */
+    char *entry;      /* annotation */
+    struct buf value; /* the annotation's old value */
+    char *acl;        /* the old ACL */
+    int subscribed;   /* the old subscription, or -1 if unchanged */
+    bool shared;      /* create: had shareWith */
+};
+
+static struct abset_undo *_abset_undo_new(const char *mboxname,
+                                          const char *userid)
+{
+    struct abset_undo *u = xzmalloc(sizeof(struct abset_undo));
+
+    u->mboxname = xstrdup(mboxname);
+    u->userid = xstrdupnull(userid);
+    u->subscribed = -1;
+    return u;
+}
+
+static void _abset_undo_free(void *rock)
+{
+    struct abset_undo *u = rock;
+
+    free(u->mboxname);
+    free(u->userid);
+    free(u->uniqueid);
+    free(u->entry);
+    buf_free(&u->value);
+    free(u->acl);
+    free(u);
+}
+
+static int _abset_undo_failed(const struct abset_undo *u, int r)
+{
+    if (r) {
+        xsyslog_ev(LOG_ERR,
+                   "jmap.addressbook.undo.failed",
+                   lf_s("mbox.name", u->mboxname),
+                   lf_s_opt("mbox.uniqueid", u->uniqueid),
+                   lf_s_opt("annot.entry", u->entry),
+                   lf_s_opt("old.mbox.acl", u->acl),
+                   lf_err("error", r));
+    }
+    return r;
+}
+
+/* Recompute the upload folder rights that follow from an ACL, as
+ * jmap_set_sharewith does. */
+static int _abset_undo_shares(const char *mboxname)
+{
+    char *owner = mboxname_to_userid(mboxname);
+    int r = jmap_set_upload_rights(owner);
+
+    free(owner);
+    return r;
+}
+
+static int _abset_undo_create(void *rock)
+{
+    struct abset_undo *u = rock;
+    int r = mboxlist_deletemailbox(u->mboxname, 1, "", NULL, NULL, 0);
+
+    if (!r && u->shared) {
+        r = _abset_undo_shares(u->mboxname);
+    }
+    return _abset_undo_failed(u, r);
+}
+
+/* Restore a delayed delete: rename the DELETED.* mailbox back. */
+static int _abset_undo_destroy(void *rock)
+{
+    struct abset_undo *u = rock;
+    mbentry_t *mbentry = NULL;
+    int r = mboxlist_lookup_by_uniqueid(u->uniqueid, &mbentry, NULL);
+
+    if (!r) {
+        r = mboxlist_renamemailbox(mbentry,
+                                   u->mboxname,
+                                   mbentry->partition,
+                                   0 /* uidvalidity */,
+                                   1 /* isadmin */,
+                                   u->userid,
+                                   httpd_authstate,
+                                   NULL /* mboxevent */,
+                                   0 /* local_only */,
+                                   0 /* forceuser */,
+                                   1 /* ignorequota */,
+                                   1 /* keep_intermediaries */,
+                                   0 /* move_subscription */,
+                                   0 /* flags */);
+    }
+    if (!r) {
+        /* Moving to DELETED.* dropped its cards from the DAV database, and
+         * renaming it back doesn't add them again */
+        struct mailbox *mbox = NULL;
+        r = mailbox_open_iwl(u->mboxname, &mbox);
+        if (!r) {
+            r = mailbox_add_dav(mbox, NULL);
+        }
+        if (!r) {
+            r = mailbox_commit(mbox);
+        }
+        mailbox_close(&mbox);
+    }
+    if (!r && u->subscribed > 0) {
+        r = mboxlist_changesub(u->mboxname,
+                               u->userid,
+                               httpd_authstate,
+                               1,
+                               1,
+                               0,
+                               0);
+    }
+    mboxlist_entry_free(&mbentry);
+    return _abset_undo_failed(u, r);
+}
+
+static int _abset_undo_annot(void *rock)
+{
+    struct abset_undo *u = rock;
+
+    return _abset_undo_failed(
+        u,
+        annotatemore_write(u->mboxname, u->entry, u->userid, &u->value));
+}
+
+static int _abset_undo_acl(void *rock)
+{
+    struct abset_undo *u = rock;
+    struct mailbox *mbox = NULL;
+    int r = mailbox_open_iwl(u->mboxname, &mbox);
+
+    if (!r) {
+        r = mboxlist_setacls(u->mboxname,
+                             u->acl,
+                             mailbox_modseq_dirty(mbox),
+                             /*silent*/ 0);
+    }
+    mailbox_close(&mbox);
+    if (!r) {
+        r = _abset_undo_shares(u->mboxname);
+    }
+    return _abset_undo_failed(u, r);
+}
+
+static int _abset_undo_subscription(void *rock)
+{
+    struct abset_undo *u = rock;
+
+    return _abset_undo_failed(u,
+                              mboxlist_changesub(u->mboxname,
+                                                 u->userid,
+                                                 httpd_authstate,
+                                                 u->subscribed,
+                                                 1,
+                                                 0,
+                                                 0));
+}
+
+/* Ahead of an atomic apply's annotation write: the injected failure, or 0
+ * after logging how to restore the current value.  @userid is resolved as
+ * annotatemore_writemask does. */
+static int _abset_before_annot(struct abset_atomic *atomic,
+                               const char *mboxname,
+                               const char *entry,
+                               const char *userid)
+{
+    if (!atomic) {
+        return 0;
+    }
+
+    int r = jmap_undo_failpoint(&atomic->undo);
+    if (r) {
+        return r;
+    }
+    if (mboxname_userownsmailbox(userid, mboxname)) {
+        userid = "";
+    }
+
+    struct abset_undo *u = _abset_undo_new(mboxname, userid);
+    u->entry = xstrdup(entry);
+    annotatemore_lookup(mboxname, entry, userid, &u->value);
+    jmap_undo_push(&atomic->undo, _abset_undo_annot, u, _abset_undo_free);
+    return 0;
+}
+
+/* As _abset_before_annot, for a change to @userid's subscription. */
+static int _abset_before_subscription(struct abset_atomic *atomic,
+                                      const char *mboxname,
+                                      const char *userid)
+{
+    if (!atomic) {
+        return 0;
+    }
+
+    int r = jmap_undo_failpoint(&atomic->undo);
+    if (r) {
+        return r;
+    }
+
+    struct abset_undo *u = _abset_undo_new(mboxname, userid);
+    u->subscribed = !mboxlist_checksub(mboxname, userid);
+    jmap_undo_push(&atomic->undo,
+                   _abset_undo_subscription,
+                   u,
+                   _abset_undo_free);
+    return 0;
+}
+
+/* As _abset_before_annot, for a change to @mbox's ACL. */
+static int _abset_before_acl(struct abset_atomic *atomic, struct mailbox *mbox)
+{
+    if (!atomic) {
+        return 0;
+    }
+
+    int r = jmap_undo_failpoint(&atomic->undo);
+    if (r) {
+        return r;
+    }
+
+    struct abset_undo *u = _abset_undo_new(mailbox_name(mbox), NULL);
+    u->acl = xstrdupnull(mailbox_acl(mbox));
+    jmap_undo_push(&atomic->undo, _abset_undo_acl, u, _abset_undo_free);
+    return 0;
+}
+
 /* Write the addressbook properties in the addressbook mailbox named mboxname.
  * NULL values and negative integers are ignored. Return 0 on success. */
 static int setaddressbook_writeprops(jmap_req_t *req,
                                      const char *mboxname,
                                      struct setaddressbook_props *props,
-                                     int ignore_acl)
+                                     int ignore_acl,
+                                     struct abset_atomic *atomic)
 {
     struct mailbox *mbox = NULL;
     annotate_state_t *astate = NULL;
@@ -2318,7 +2473,12 @@ static int setaddressbook_writeprops(jmap_req_t *req,
         buf_setcstr(&val, props->name);
         static const char *displayname_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-        r = annotate_state_writemask(astate, displayname_annot, req->userid, &val);
+        r = _abset_before_annot(atomic, mboxname, displayname_annot,
+                                req->userid);
+        if (!r) {
+            r = annotate_state_writemask(astate, displayname_annot,
+                                         req->userid, &val);
+        }
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     displayname_annot, error_message(r));
@@ -2331,7 +2491,12 @@ static int setaddressbook_writeprops(jmap_req_t *req,
         buf_setcstr(&val, props->description);
         static const char *description_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">addressbook-description";
-        r = annotate_state_writemask(astate, description_annot, req->userid, &val);
+        r = _abset_before_annot(atomic, mboxname, description_annot,
+                                req->userid);
+        if (!r) {
+            r = annotate_state_writemask(astate, description_annot,
+                                         req->userid, &val);
+        }
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                    description_annot, error_message(r));
@@ -2344,7 +2509,12 @@ static int setaddressbook_writeprops(jmap_req_t *req,
         buf_reset(&val);
         buf_printf(&val, "%d", props->sortOrder);
         static const char *sortorder_annot = IMAP_ANNOT_NS "sortorder";
-        r = annotatemore_writemask(mboxname, sortorder_annot, httpd_userid, &val);
+        r = _abset_before_annot(atomic, mboxname, sortorder_annot,
+                                httpd_userid);
+        if (!r) {
+            r = annotate_state_writemask(astate, sortorder_annot,
+                                         httpd_userid, &val);
+        }
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     sortorder_annot, error_message(r));
@@ -2355,14 +2525,25 @@ static int setaddressbook_writeprops(jmap_req_t *req,
     /* isSubscribed */
     if (!r && props->isSubscribed >= 0) {
         /* Update subscription database */
-        r = mboxlist_changesub(mboxname, req->userid, req->authstate,
+        r = _abset_before_subscription(atomic, mboxname, req->userid);
+        if (!r) {
+            /* the invite status is set even if this fails */
+            mboxlist_changesub(mboxname, req->userid, req->authstate,
                                props->isSubscribed, 0, /*notify*/1, /*silent*/0);
+        }
 
         /* Set invite status for CalDAV */
         buf_setcstr(&val, props->isSubscribed ? "invite-accepted" : "invite-declined");
         static const char *invite_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
-        r = annotate_state_writemask(astate, invite_annot, req->userid, &val);
+        if (!r) {
+            r = _abset_before_annot(atomic, mboxname, invite_annot,
+                                    req->userid);
+        }
+        if (!r) {
+            r = annotate_state_writemask(astate, invite_annot,
+                                         req->userid, &val);
+        }
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     invite_annot, error_message(r));
@@ -2371,6 +2552,9 @@ static int setaddressbook_writeprops(jmap_req_t *req,
     }
 
     /* shareWith */
+    if (!r && props->share.With) {
+        r = _abset_before_acl(atomic, mbox);
+    }
     if (!r && props->share.With) {
         r = jmap_set_sharewith(mbox, props->share.With,
                 props->share.overwrite_acl, addressbook_sharewith_to_rights);
@@ -2394,13 +2578,20 @@ static int _addressbook_hascards_cb(void *rock __attribute__((unused)),
 /* Delete the addressbook mailbox named mboxname for the userid in req. */
 static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
                                     const char *default_addrbookname,
-                                    int destroy_contents, json_t **err)
+                                    int destroy_contents,
+                                    struct abset_atomic *atomic,
+                                    json_t **err)
 {
     mbentry_t *mbentry = NULL;
     struct carddav_db *db = NULL;
     int r = 0;
 
     abookid_to_mbentry(req, abookid, &mbentry);
+    if (mbentry && atomic && atomic->plan &&
+        hash_lookup(mbentry->name, &atomic->destroyed)) {
+        /* destroyed earlier in this method */
+        mboxlist_entry_free(&mbentry);
+    }
 
     /* Check ACL */
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
@@ -2439,6 +2630,17 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
         }
     }
 
+    if (atomic && atomic->plan) {
+        hash_insert(mbentry->name, (void *) 1, &atomic->destroyed);
+        goto done;
+    }
+
+    bool subscribed = !mboxlist_checksub(mbentry->name, req->userid);
+    if (atomic) {
+        r = jmap_undo_failpoint(&atomic->undo);
+        if (r) goto done;
+    }
+
     /* Delete addressbook */
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
     if (mboxlist_delayed_delete_isenabled()) {
@@ -2454,6 +2656,14 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
     }
     mboxevent_free(&mboxevent);
     if (r) goto done;
+
+    if (atomic) {
+        struct abset_undo *u = _abset_undo_new(mbentry->name, req->userid);
+        u->uniqueid = xstrdup(mbentry->uniqueid);
+        u->subscribed = subscribed;
+        jmap_undo_push(&atomic->undo, _abset_undo_destroy, u,
+                       _abset_undo_free);
+    }
 
     jmap_myrights_delete(req, mbentry->name);
 
@@ -2527,6 +2737,7 @@ done:
 static void setaddressbooks_create(struct jmap_req *req,
                                    const char *creation_id,
                                    json_t *arg,
+                                   struct abset_atomic *atomic,
                                    json_t **record,
                                    json_t **err)
 {
@@ -2566,20 +2777,38 @@ static void setaddressbooks_create(struct jmap_req *req,
         free(acl);
         goto done;
     }
+    if (atomic && atomic->plan) {
+        free(acl);
+        goto done;
+    }
     mbentry_t mbentry = MBENTRY_INITIALIZER;
     mbentry.name = mboxname;
     mbentry.acl = acl;
     mbentry.mbtype = MBTYPE_ADDRESSBOOK;
-    r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-            0/*isadmin*/, req->userid, req->authstate,
-            0/*flags*/, NULL/*mailboxptr*/);
+    if (atomic) r = jmap_undo_failpoint(&atomic->undo);
+    if (!r) {
+        r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                0/*isadmin*/, req->userid, req->authstate,
+                0/*flags*/, NULL/*mailboxptr*/);
+    }
     free(acl);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                 mboxname, error_message(r));
         goto done;
     }
-    r = setaddressbook_writeprops(req, mboxname, &props, /*ignore_acl*/1);
+    if (atomic) {
+        struct abset_undo *u = _abset_undo_new(mboxname, req->userid);
+        u->shared = props.share.With != NULL;
+        jmap_undo_push(&atomic->undo, _abset_undo_create, u,
+                       _abset_undo_free);
+    }
+    r = setaddressbook_writeprops(req, mboxname, &props, /*ignore_acl*/1,
+                                  atomic);
+    if (r && atomic) {
+        /* the undo log deletes it */
+        goto done;
+    }
     if (r) {
         int rr = mboxlist_deletemailbox(mboxname, 1, "", NULL, NULL, 0);
         if (rr) {
@@ -2605,7 +2834,11 @@ static void setaddressbooks_create(struct jmap_req *req,
                         "myRights",
                         addressbookrights_to_jmap(jmap_myrights_mbentry(req,
                                                                         newmbentry)));
-    jmap_add_id(req, creation_id, id);
+    if (atomic) {
+        /* registered once the whole method has applied */
+        hash_insert(creation_id, xstrdup(id), &atomic->created);
+    }
+    else jmap_add_id(req, creation_id, id);
 
     if (jmap_is_using(req, JMAP_CONTACTS_EXTENSION)) {
         json_object_set_new(*record, "mailboxUniqueId",
@@ -2637,6 +2870,7 @@ done:
 static void setaddressbooks_update(jmap_req_t *req,
                                    const char *abookid,
                                    json_t *arg,
+                                   struct abset_atomic *atomic,
                                    json_t **record,
                                    json_t **err)
 {
@@ -2644,6 +2878,11 @@ static void setaddressbooks_update(jmap_req_t *req,
     mbentry_t *mbentry = NULL;
 
     abookid_to_mbentry(req, abookid, &mbentry);
+    if (mbentry && atomic && atomic->plan &&
+        hash_lookup(mbentry->name, &atomic->destroyed)) {
+        /* destroyed earlier in this method */
+        mboxlist_entry_free(&mbentry);
+    }
 
     if (!mbentry) {
         *err = json_pack("{s:s}", "type", "notFound");
@@ -2665,8 +2904,17 @@ static void setaddressbooks_update(jmap_req_t *req,
         goto done;
     }
 
+    if (atomic && atomic->plan) {
+        /* as setaddressbook_writeprops checks */
+        if (!jmap_hasrights(req, mbentry->name, JACL_READITEMS)) {
+            *err = json_pack("{s:s}", "type", "notFound");
+        }
+        goto done;
+    }
+
     /* Update the addressbook */
-    int r = setaddressbook_writeprops(req, mbentry->name, &props, /*ignore_acl*/0);
+    int r = setaddressbook_writeprops(req, mbentry->name, &props,
+                                      /*ignore_acl*/0, atomic);
     if (r) {
         switch (r) {
             case IMAP_MAILBOX_NONEXISTENT:
@@ -2726,6 +2974,350 @@ static int setaddressbooks_parse_args(jmap_req_t *req __attribute__((unused)),
     return 0;
 }
 
+/* Plan an update of an addressbook this method creates, as
+ * setaddressbooks_update checks it.  The new addressbook takes its rights
+ * from the addressbook home. */
+static json_t *_abset_plan_update_created(jmap_req_t *req, json_t *arg)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct setaddressbook_props props;
+    char *cardhome = carddav_mboxname(req->accountid, NULL);
+    json_t *err = NULL;
+
+    setaddressbook_readprops(req, &parser, &props, arg, cardhome);
+    if (props.share.With && !jmap_hasrights(req, cardhome, ACL_ADMIN)) {
+        jmap_parser_invalid(&parser, "shareWith");
+    }
+    if (json_array_size(parser.invalid)) {
+        err = json_pack("{s:s s:O}",
+                        "type",
+                        "invalidProperties",
+                        "properties",
+                        parser.invalid);
+    }
+
+    jmap_parser_fini(&parser);
+    free(cardhome);
+    return err;
+}
+
+/* Resolve an AddressBook/set id for an atomic apply, whose creates aren't
+ * registered with the request until it has succeeded. */
+static const char *_abset_resolve_id(jmap_req_t *req,
+                                     struct abset_atomic *atomic,
+                                     const char *id)
+{
+    if (id && id[0] == '#') {
+        const char *abookid = hash_lookup(id + 1, &atomic->created);
+        return abookid ? abookid : jmap_lookup_id(req, id + 1);
+    }
+    return id;
+}
+
+/* Plan the onSuccessSetIsDefault of an atomic AddressBook/set against the
+ * addressbooks the method leaves.  Returns its error, or NULL with the final
+ * default's mailbox name in @default_mboxname ("" for a new addressbook). */
+static json_t *_abset_plan_default(jmap_req_t *req,
+                                   struct jmap_set *set,
+                                   const char *cardhomename,
+                                   const char *newid,
+                                   char **default_mboxname)
+{
+    bool admin = jmap_hasrights(req, cardhomename, JACL_ADMIN_ADDRBOOK);
+    mbentry_t *mbentry = NULL;
+    json_t *err = NULL;
+
+    if (newid[0] == '#' && json_object_get(set->create, newid + 1)) {
+        if (!admin) {
+            err = json_pack("{s:s}", "type", "forbidden");
+        }
+        else {
+            free(*default_mboxname);
+            *default_mboxname = xstrdup("");
+        }
+        return err;
+    }
+
+    const char *abookid =
+        newid[0] == '#' ? jmap_lookup_id(req, newid + 1) : newid;
+    bool destroyed = false;
+    size_t i;
+    json_t *jid;
+
+    if (abookid) {
+        abookid_to_mbentry(req, abookid, &mbentry);
+    }
+    json_array_foreach (set->destroy, i, jid) {
+        const char *id = json_string_value(jid);
+        mbentry_t *destroy_mbentry = NULL;
+
+        if (id && id[0] == '#') {
+            id = jmap_lookup_id(req, id + 1);
+        }
+        if (mbentry && id) {
+            abookid_to_mbentry(req, id, &destroy_mbentry);
+        }
+        if (destroy_mbentry && !strcmp(destroy_mbentry->name, mbentry->name)) {
+            destroyed = true;
+        }
+        mboxlist_entry_free(&destroy_mbentry);
+    }
+
+    if (!mbentry || destroyed) {
+        err = json_pack("{s:s}", "type", "notFound");
+    }
+    else if (!admin) {
+        err = json_pack("{s:s}", "type", "forbidden");
+    }
+    else {
+        free(*default_mboxname);
+        *default_mboxname = xstrdup(mbentry->name);
+    }
+    mboxlist_entry_free(&mbentry);
+    return err;
+}
+
+/* Write onSuccessSetIsDefault as the last step of an atomic apply. */
+static int _abset_apply_default(jmap_req_t *req,
+                                struct jmap_set *set,
+                                struct abset_atomic *atomic,
+                                const char *cardhomename,
+                                const char *newid,
+                                const char *old_default_mboxname)
+{
+    const char *abookid = _abset_resolve_id(req, atomic, newid);
+    mbentry_t *mbentry = NULL;
+    int r = IMAP_MAILBOX_NONEXISTENT;
+
+    if (abookid) {
+        abookid_to_mbentry(req, abookid, &mbentry);
+    }
+    if (mbentry) {
+        r = _abset_before_annot(atomic,
+                                cardhomename,
+                                default_addrbookname_annot,
+                                req->accountid);
+    }
+    if (!r) {
+        struct buf buf = BUF_INITIALIZER;
+
+        buf_init_ro_cstr(&buf, mbentry->name);
+        r = annotatemore_writemask(cardhomename,
+                                   default_addrbookname_annot,
+                                   req->accountid,
+                                   &buf);
+        buf_free(&buf);
+    }
+    if (!r) {
+        jmap_report_isdefault(req, set, mbentry->name, newid, true);
+
+        mboxlist_entry_free(&mbentry);
+        mboxlist_lookup(old_default_mboxname, &mbentry, NULL);
+        if (mbentry) {
+            char oldid[JMAP_MAX_ADDRBOOKID_SIZE];
+
+            jmap_set_addrbookid(req->cstate, mbentry, oldid);
+            jmap_report_isdefault(req, set, mbentry->name, oldid, false);
+        }
+    }
+    mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+/* Atomic AddressBook/set: check every change against the addressbooks the
+ * method leaves, writing nothing, then apply them all, undoing what was
+ * written if any write fails.  Returns the method error, or NULL. */
+static json_t *_addressbook_set_atomic(jmap_req_t *req,
+                                       struct jmap_set *set,
+                                       struct addressbook_set_args *setargs,
+                                       const char *cardhomename,
+                                       const char *default_addrbookname)
+{
+    if (json_array_size(set->destroy) && !mboxlist_delayed_delete_isenabled()) {
+        return json_pack("{s:s s:s}",
+                         "type",
+                         "cannotApplyAtomically",
+                         "description",
+                         "delete_mode does not keep destroyed addressbooks");
+    }
+
+    struct abset_atomic atomic = { .plan = true,
+                                   .undo = JMAP_UNDO_INITIALIZER };
+    const char *newid = setargs->on_success_set_is_default;
+    char *final_default = xstrdup(default_addrbookname);
+    json_t *default_err = NULL;
+    json_t *cause = NULL;
+    json_t *err = NULL;
+    void *dav_mark = NULL;
+    const char *key, *id;
+    json_t *arg, *jid;
+    size_t i;
+
+    construct_hash_table(&atomic.destroyed,
+                         json_array_size(set->destroy) + 1,
+                         0);
+    construct_hash_table(&atomic.created, json_object_size(set->create) + 1, 0);
+
+    if (newid) {
+        default_err =
+            _abset_plan_default(req, set, cardhomename, newid, &final_default);
+    }
+
+    /* Plan, then apply.  The plan pass stops each change before its first
+     * write, so a failure in the apply pass is unexpected. */
+    for (int pass = 0; pass < 2; pass++) {
+        if (pass) {
+            if (default_err) {
+                const char *errid = _abset_resolve_id(req, &atomic, newid);
+                json_object_set_new(set->not_updated,
+                                    errid ? errid : newid,
+                                    default_err);
+                default_err = NULL;
+            }
+            err = jmap_set_atomic_failure(set);
+            if (err) {
+                goto done;
+            }
+            atomic.plan = false;
+            dav_mark = dav_notifications_mark();
+        }
+
+        json_array_foreach (set->destroy, i, jid) {
+            id = json_string_value(jid);
+            if (cause || json_object_get(set->not_destroyed, id)) {
+                continue;
+            }
+            const char *abookid = _abset_resolve_id(req, &atomic, id);
+            json_t *serr = NULL;
+            if (!abookid) {
+                serr = json_pack("{s:s}", "type", "notFound");
+            }
+            else {
+                setaddressbooks_destroy(req,
+                                        abookid,
+                                        final_default,
+                                        setargs->on_destroy_remove_contents,
+                                        &atomic,
+                                        &serr);
+            }
+            if (serr && atomic.plan) {
+                json_object_set_new(set->not_destroyed, id, serr);
+            }
+            else if (serr) {
+                cause = serr;
+            }
+            else if (!atomic.plan) {
+                json_array_append_new(set->destroyed, json_string(id));
+            }
+        }
+
+        json_object_foreach (set->create, key, arg) {
+            if (cause || json_object_get(set->not_created, key)) {
+                continue;
+            }
+            json_t *record = NULL, *serr = NULL;
+            if (!strlen(key)) {
+                serr = json_pack("{s:s}", "type", "invalidArguments");
+            }
+            else {
+                setaddressbooks_create(req, key, arg, &atomic, &record, &serr);
+            }
+            if (serr && atomic.plan) {
+                json_object_set_new(set->not_created, key, serr);
+            }
+            else if (serr) {
+                cause = serr;
+            }
+            else if (record) {
+                json_object_set_new(set->created, key, record);
+            }
+        }
+
+        json_object_foreach (set->update, id, arg) {
+            if (cause || json_object_get(set->not_updated, id)) {
+                continue;
+            }
+            if (atomic.plan && id[0] == '#'
+                && json_object_get(set->create, id + 1))
+            {
+                json_t *serr = _abset_plan_update_created(req, arg);
+                if (serr) {
+                    json_object_set_new(set->not_updated, id, serr);
+                }
+                continue;
+            }
+            const char *abookid = _abset_resolve_id(req, &atomic, id);
+            json_t *record = NULL, *serr = NULL;
+            if (!abookid) {
+                serr = json_pack("{s:s}", "type", "notFound");
+            }
+            else {
+                setaddressbooks_update(req,
+                                       abookid,
+                                       arg,
+                                       &atomic,
+                                       &record,
+                                       &serr);
+            }
+            if (serr && atomic.plan) {
+                json_object_set_new(set->not_updated, id, serr);
+            }
+            else if (serr) {
+                cause = serr;
+            }
+            else if (!atomic.plan) {
+                json_object_set_new(set->updated, id, record);
+            }
+            else {
+                json_decref(record);
+            }
+        }
+    }
+
+    if (!cause && newid) {
+        int r = _abset_apply_default(req,
+                                     set,
+                                     &atomic,
+                                     cardhomename,
+                                     newid,
+                                     default_addrbookname);
+        if (r) {
+            cause = jmap_server_error(r);
+        }
+    }
+
+    if (cause) {
+        xsyslog_ev(LOG_ERR,
+                   "jmap.addressbook.set.failed",
+                   lf_s("jmap.accountid", req->accountid),
+                   lf_s_opt("error.type",
+                            json_string_value(json_object_get(cause, "type"))),
+                   lf_s_opt("error.description",
+                            json_string_value(
+                                json_object_get(cause, "description"))));
+        jmap_undo_run(&atomic.undo);
+        dav_notifications_discard(dav_mark);
+        jmap_mbentry_cache_free(req);
+        json_decref(cause);
+        err = json_pack("{s:s}", "type", "serverFail");
+        goto done;
+    }
+
+    hash_iter *iter = hash_table_iter(&atomic.created);
+    while (hash_iter_next(iter)) {
+        jmap_add_id(req, hash_iter_key(iter), hash_iter_val(iter));
+    }
+    hash_iter_free(&iter);
+
+done:
+    json_decref(default_err);
+    jmap_undo_fini(&atomic.undo);
+    free_hash_table(&atomic.destroyed, NULL);
+    free_hash_table(&atomic.created, free);
+    free(final_default);
+    return err;
+}
+
 static int jmap_addressbook_set(struct jmap_req *req)
 {
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
@@ -2763,6 +3355,16 @@ static int jmap_addressbook_set(struct jmap_req *req)
         if (r) goto done;
     }
 
+    if (set.atomic) {
+        err = _addressbook_set_atomic(req, &set, &setargs, cardhomename,
+                                      default_addrbookname);
+        if (err) {
+            jmap_error(req, err);
+            goto done;
+        }
+        goto reply;
+    }
+
     /* destroy */
     size_t index;
     json_t *jid;
@@ -2785,7 +3387,8 @@ static int jmap_addressbook_set(struct jmap_req *req)
         }
         json_t *err = NULL;
         setaddressbooks_destroy(req, abookid, default_addrbookname,
-                                setargs.on_destroy_remove_contents, &err);
+                                setargs.on_destroy_remove_contents, NULL,
+                                &err);
         if (!err) {
             json_array_append_new(set.destroyed, json_string(id));
         }
@@ -2808,7 +3411,7 @@ static int jmap_addressbook_set(struct jmap_req *req)
             continue;
         }
         json_t *record = NULL, *err = NULL;
-        setaddressbooks_create(req, key, arg, &record, &err);
+        setaddressbooks_create(req, key, arg, NULL, &record, &err);
         if (!err) {
             json_object_set_new(set.created, key, record);
         }
@@ -2832,7 +3435,7 @@ static int jmap_addressbook_set(struct jmap_req *req)
             abookid = newabookid;
         }
         json_t *record = NULL, *err = NULL;
-        setaddressbooks_update(req, abookid, arg, &record, &err);
+        setaddressbooks_update(req, abookid, arg, NULL, &record, &err);
         if (!err) {
             json_object_set_new(set.updated, id, record);
         }
@@ -2899,6 +3502,7 @@ static int jmap_addressbook_set(struct jmap_req *req)
         mboxlist_entry_free(&mbentry);
     }
 
+reply:
     set.new_state =
         modseqtoa(jmap_modseq(req, MBTYPE_ADDRESSBOOK, JMAP_MODSEQ_RELOAD));
 
@@ -3958,9 +4562,329 @@ static int cardquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
  * ContactCard/set
  */
 
+/* An atomic ContactCard/set runs each change twice: a plan pass that only
+ * checks, then an apply pass that writes. */
+struct card_atomic
+{
+    bool plan;
+    const char *recheck; /* plan: the create being checked again */
+    struct jmap_undo undo;
+    hash_table destroyed; /* plan: vCard UIDs of destroyed cards */
+    hash_table uids;      /* plan: vCard UID -> id of the create using it */
+    hash_table planned;   /* plan: creation id -> struct card_planned */
+    hash_table quota;     /* plan: quota root -> struct card_quota */
+    strarray_t mboxes;    /* plan: the mailboxes the method writes */
+    bool unlinks;         /* plan: some change expunges a stored card */
+    const char *op_id;    /* plan: the id of the change in hand */
+    json_t *op_errors;    /* plan: where its SetErrors go */
+    struct appendstate *batch; /* apply: append here, uncommitted */
+    hash_table created;        /* apply: creation id -> card id */
+};
+
+/* Where and how big a planned create stores its card. */
+struct card_planned
+{
+    char *mboxname;
+    quota_t size;
+};
+
+static void _card_planned_free(void *rock)
+{
+    struct card_planned *p = rock;
+
+    free(p->mboxname);
+    free(p);
+}
+
+/* The quota a planned atomic ContactCard/set uses under one root, and the
+ * changes that add to it: pairs of SetError map and id. */
+struct card_quota
+{
+    quota_t diffs[QUOTA_NUMRESOURCES];
+    ptrarray_t charged;
+};
+
+static void _card_quota_free(void *rock)
+{
+    struct card_quota *q = rock;
+
+    for (int i = 1; i < ptrarray_size(&q->charged); i += 2) {
+        free(ptrarray_nth(&q->charged, i));
+    }
+    ptrarray_fini(&q->charged);
+    free(q);
+}
+
+/* Charge the change in hand to @mboxname's quota root, and note that the
+ * method writes @mboxname. */
+static void _card_plan_quota(struct card_atomic *atomic,
+                             const char *mboxname,
+                             quota_t messages,
+                             quota_t storage)
+{
+    char root[MAX_MAILBOX_NAME + 1];
+
+    strarray_add(&atomic->mboxes, mboxname);
+    if (!quota_findroot(root, sizeof(root), mboxname)) {
+        return;
+    }
+
+    struct card_quota *q = hash_lookup(root, &atomic->quota);
+    if (!q) {
+        q = xzmalloc(sizeof(struct card_quota));
+        hash_insert(root, q, &atomic->quota);
+    }
+    q->diffs[QUOTA_MESSAGE] += messages;
+    q->diffs[QUOTA_STORAGE] += storage;
+    if (messages > 0 || storage > 0) {
+        ptrarray_append(&q->charged, atomic->op_errors);
+        ptrarray_append(&q->charged, xstrdup(atomic->op_id));
+    }
+}
+
+/* Report overQuota for every change that adds to a quota root the whole
+ * plan would take over its limit.  A root may stay over quota, but not
+ * grow. */
+static void _card_plan_check_quota(struct card_atomic *atomic)
+{
+    hash_iter *iter = hash_table_iter(&atomic->quota);
+
+    while (hash_iter_next(iter)) {
+        struct card_quota *q = hash_iter_val(iter);
+        quota_t diffs[QUOTA_NUMRESOURCES];
+        bool grows = false;
+
+        for (int res = 0; res < QUOTA_NUMRESOURCES; res++) {
+            diffs[res] = q->diffs[res] > 0 ? q->diffs[res] : -1;
+            grows = grows || q->diffs[res] > 0;
+        }
+        if (!grows || !quota_check_useds(hash_iter_key(iter), diffs)) {
+            continue;
+        }
+        for (int i = 0; i + 1 < ptrarray_size(&q->charged); i += 2) {
+            json_t *errors = ptrarray_nth(&q->charged, i);
+            const char *id = ptrarray_nth(&q->charged, i + 1);
+            if (!json_object_get(errors, id)) {
+                json_object_set_new(errors,
+                                    id,
+                                    json_pack("{s:s}", "type", "overQuota"));
+            }
+        }
+    }
+    hash_iter_free(&iter);
+}
+
+/* Whether the plan has destroyed the card with vCard UID @uid. */
+static bool _card_plan_destroyed(struct card_atomic *atomic, const char *uid)
+{
+    return atomic && atomic->plan && uid
+           && hash_lookup(uid, &atomic->destroyed);
+}
+
+/* As carddav_store checks the size of a vCard of @len bytes, replacing
+ * one of @oldsize bytes. */
+static int _card_check_size(size_t len, uint32_t oldsize)
+{
+    int64_t max_size = config_getbytesize(IMAPOPT_VCARD_MAX_SIZE);
+
+    if (max_size <= 0) {
+        return 0;
+    }
+    if (oldsize > max_size) {
+        max_size += CARDDAV_UPDATE_OVERAGE;
+    }
+    return len > (size_t) max_size ? IMAP_MESSAGE_TOO_LARGE : 0;
+}
+
+/* Plan carddav_store of @vcard as @resource in @mbox, replacing a card of
+ * @oldsize bytes: check its size and return an upper bound on what it
+ * stores, the vCard and the RFC 5322 header around it. */
+static int _card_plan_store(struct mailbox *mbox,
+                            vcardcomponent *vcard,
+                            const char *resource,
+                            uint32_t oldsize,
+                            quota_t *sizep)
+{
+    struct buf *buf = vcard_as_buf(vcard);
+    const char *fn = vcardcomponent_get_fn(vcard);
+    char *owner = mboxname_to_userid(mailbox_name(mbox));
+    int r = _card_check_size(buf_len(buf), oldsize);
+
+    /* MIME encoding at most quadruples From, Subject and the filename */
+    *sizep = buf_len(buf) + 4 * strlen(resource);
+    *sizep += 4 * (fn ? strlen(fn) : 0);
+    *sizep += 4 * (owner ? strlen(owner) : 0);
+    /* Date, Message-ID, Content-* and MIME-Version */
+    *sizep += strlen(config_servername) + 1024;
+
+    free(owner);
+    buf_destroy(buf);
+    return r;
+}
+
+/* Undo record for a ContactCard/set write to one addressbook. */
+struct card_undo
+{
+    char *mboxname;
+    uint32_t olduid;  /* the record it expunged, to restore */
+    uint32_t newuid;  /* the record it appended, to expunge */
+    char *entry;      /* annotation of record olduid */
+    char *userid;     /* the annotation's userid */
+    struct buf value; /* the annotation's old value */
+};
+
+static void _card_undo_free(void *rock)
+{
+    struct card_undo *u = rock;
+
+    free(u->mboxname);
+    free(u->entry);
+    free(u->userid);
+    buf_free(&u->value);
+    free(u);
+}
+
+static int _card_undo_failed(const struct card_undo *u, int r)
+{
+    if (r) {
+        xsyslog_ev(LOG_ERR,
+                   "jmap.card.undo.failed",
+                   lf_s("mbox.name", u->mboxname),
+                   lf_u("old.msg.imapuid", u->olduid),
+                   lf_u("msg.imapuid", u->newuid),
+                   lf_s_opt("annot.entry", u->entry),
+                   lf_err("error", r));
+    }
+    return r;
+}
+
+/* Expunge the record a write appended and restore the one it expunged.
+ * The restored record keeps its createdmodseq and vCard UID, so its card
+ * id. */
+static int _card_undo_record(void *rock)
+{
+    struct card_undo *u = rock;
+    struct mailbox *mbox = NULL;
+    struct index_record record;
+    int r = mailbox_open_iwl(u->mboxname, &mbox);
+
+    if (!r && u->newuid) {
+        r = mailbox_find_index_record(mbox, u->newuid, &record);
+        if (!r && !(record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+            record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+            r = mailbox_rewrite_index_record(mbox, &record);
+        }
+    }
+    if (!r && u->olduid) {
+        r = mailbox_find_index_record(mbox, u->olduid, &record);
+        if (!r && (record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+            /* carddav_remove tags a record it replaces with DAV:unbind;
+             * the restored record is live again */
+            int userflag;
+            if (!mailbox_user_flag(mbox, DFLAG_UNBIND, &userflag, 0)) {
+                record.user_flags[userflag / 32] &= ~(1U << (userflag & 31));
+            }
+            r = mailbox_restore_record(mbox, &record, false, NULL, NULL);
+        }
+    }
+    if (mbox) {
+        if (r) {
+            mailbox_abort(mbox);
+        }
+        else {
+            r = mailbox_commit(mbox);
+        }
+    }
+    mailbox_close(&mbox);
+    return _card_undo_failed(u, r);
+}
+
+/* Restore an annotation of record olduid that a write changed in place. */
+static int _card_undo_annot(void *rock)
+{
+    struct card_undo *u = rock;
+    struct mailbox *mbox = NULL;
+    annotate_state_t *astate = NULL;
+    struct index_record record;
+    int r = mailbox_open_iwl(u->mboxname, &mbox);
+
+    if (!r) {
+        r = mailbox_find_index_record(mbox, u->olduid, &record);
+    }
+    if (!r) {
+        r = mailbox_get_annotate_state(mbox, record.uid, &astate);
+    }
+    if (!r) {
+        r = annotate_state_write(astate, u->entry, u->userid, &u->value);
+    }
+    if (!r) {
+        r = mailbox_rewrite_index_record(mbox, &record);
+    }
+    if (mbox) {
+        if (r) {
+            mailbox_abort(mbox);
+        }
+        else {
+            r = mailbox_commit(mbox);
+        }
+    }
+    mailbox_close(&mbox);
+    return _card_undo_failed(u, r);
+}
+
+/* Push the undo of a write to @mbox that expunged @olduid and appended
+ * @newuid (either may be 0).  Nothing to push when batching. */
+static void _card_push_record(struct card_atomic *atomic,
+                              struct mailbox *mbox,
+                              uint32_t olduid,
+                              uint32_t newuid)
+{
+    if (!atomic || atomic->batch) {
+        return;
+    }
+
+    struct card_undo *u = xzmalloc(sizeof(struct card_undo));
+
+    u->mboxname = xstrdup(mailbox_name(mbox));
+    u->olduid = olduid;
+    u->newuid = newuid;
+    jmap_undo_push(&atomic->undo, _card_undo_record, u, _card_undo_free);
+}
+
+/* Ahead of an atomic apply's change to the importance of @record in place:
+ * the injected failure, or 0 after logging how to restore it. */
+static int _card_before_importance(jmap_req_t *req,
+                                   struct card_atomic *atomic,
+                                   struct mailbox *mbox,
+                                   const struct index_record *record)
+{
+    if (!atomic) {
+        return 0;
+    }
+
+    int r = jmap_undo_failpoint(&atomic->undo);
+    if (r || atomic->batch) {
+        return r;
+    }
+
+    /* as _card_store_importance_annot writes it */
+    const char *userid =
+        mboxname_userownsmailbox(req->userid, mailbox_name(mbox)) ? ""
+                                                                  : req->userid;
+    struct card_undo *u = xzmalloc(sizeof(struct card_undo));
+
+    u->mboxname = xstrdup(mailbox_name(mbox));
+    u->olduid = record->uid;
+    u->entry = xstrdup(DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance");
+    u->userid = xstrdup(userid);
+    annotatemore_msg_lookup(mbox, record->uid, u->entry, userid, &u->value);
+    jmap_undo_push(&atomic->undo, _card_undo_annot, u, _card_undo_free);
+    return 0;
+}
 
 static int _card_set_create(jmap_req_t *req,
                             json_t *jcard, struct mailbox **mailbox,
+                            struct card_atomic *atomic,
                             json_t *item, jmap_contact_errors_t *errors)
 {
     json_t *invalid = errors->invalid;
@@ -3988,6 +4912,16 @@ static int _card_set_create(jmap_req_t *req,
             /* Use custom vCard UID from request object */
             uid = xstrdup(uid);
             r = carddav_lookup_uid(db, NULL, uid, &mycdata);
+            /* An atomic plan checks the UID against the cards the
+             * method leaves */
+            if (!r && _card_plan_destroyed(atomic, uid)) {
+                r = CYRUSDB_NOTFOUND;
+            }
+            if (r == CYRUSDB_NOTFOUND && atomic && atomic->plan &&
+                !atomic->recheck) {
+                if (hash_lookup(uid, &atomic->uids)) r = 0;
+                else hash_insert(uid, (void *) atomic->op_id, &atomic->uids);
+            }
             if (r == CYRUSDB_NOTFOUND) {
                 r = 0;
             }
@@ -4169,10 +5103,49 @@ static int _card_set_create(jmap_req_t *req,
         json_object_set_new(item, "prodId", json_string(_prodid));
     }
 
+    if (atomic && atomic->plan) {
+        quota_t size = 0;
+        r = _card_plan_store(*mailbox, card, resourcename, 0, &size);
+        if (r) goto done;
+
+        struct card_planned *p =
+            atomic->recheck ? hash_lookup(atomic->recheck, &atomic->planned)
+                            : NULL;
+        if (p) {
+            /* the update replaces the card the create planned */
+            atomic->unlinks = true;
+            _card_plan_quota(atomic, p->mboxname, -1, -p->size);
+        }
+        else if (!atomic->recheck) {
+            p = xzmalloc(sizeof(struct card_planned));
+            p->mboxname = xstrdup(mailbox_name(*mailbox));
+            p->size = size;
+            hash_insert(atomic->op_id, p, &atomic->planned);
+        }
+        _card_plan_quota(atomic, mailbox_name(*mailbox), 1, size);
+        goto done;
+    }
+
     modseq_t cmodseq =
         mboxname_nextmodseq(mbentry->name, 0, MBTYPE_ADDRESSBOOK, 0);
-    r = carddav_store(*mailbox, card, resourcename, cmodseq, &annots,
-                      req->userid, req->authstate, ignorequota, /*oldsize*/ 0);
+    if (atomic) {
+        r = jmap_undo_failpoint(&atomic->undo);
+        if (r) goto done;
+    }
+    uint32_t last_uid = (*mailbox)->i.last_uid;
+    if (atomic && atomic->batch) {
+        r = carddav_store_batch(atomic->batch, card, resourcename, cmodseq,
+                                &annots, /*oldsize*/ 0);
+    }
+    else {
+        /* the atomic plan checked quota against the final state */
+        r = carddav_store(*mailbox, card, resourcename, cmodseq, &annots,
+                          req->userid, req->authstate,
+                          atomic ? 1 : ignorequota, /*oldsize*/ 0);
+    }
+    if ((*mailbox)->i.last_uid != last_uid) {
+        _card_push_record(atomic, *mailbox, 0, (*mailbox)->i.last_uid);
+    }
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "carddav_store failed for user %s: %s",
                req->userid, error_message(r));
@@ -4257,9 +5230,34 @@ done:
     return r;
 }
 
+/* Expunge the record @newuid that carddav_store appended to @mbox.  If it
+ * replaced @olduid in the same mailbox, that card comes back as a copy
+ * appended after the new one: the resource's DAV row follows the newest
+ * record, and expunging or unlinking the new record drops it. */
+static int _card_unstore(struct mailbox *mbox, uint32_t newuid, uint32_t olduid)
+{
+    struct index_record record;
+    int r = mailbox_find_index_record(mbox, newuid, &record);
+
+    if (!r) {
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+        r = mailbox_rewrite_index_record(mbox, &record);
+    }
+    if (!r && olduid) {
+        r = mailbox_find_index_record(mbox, olduid, &record);
+    }
+    if (!r && olduid) {
+        /* restoring keeps createdmodseq and vCard UID, so the card id */
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+        r = mailbox_restore_record(mbox, &record, false, NULL, NULL);
+    }
+    return r;
+}
+
 static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
                             const char *id, json_t *jcard,
                             struct carddav_db *db, struct mailbox **mailbox,
+                            struct card_atomic *atomic,
                             json_t **item, jmap_contact_errors_t *errors)
 {
     json_t *invalid = errors->invalid;
@@ -4292,7 +5290,8 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     else {
         r = carddav_lookup_uid(db, NULL, id, &cdata);
     }
-    if (r || !cdata || !cdata->dav.imap_uid) {
+    if (r || !cdata || !cdata->dav.imap_uid ||
+        _card_plan_destroyed(atomic, cdata->vcard_uid)) {
         r = HTTP_NOT_FOUND;
         goto done;
     }
@@ -4403,6 +5402,14 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
         /* just bump the modseq
            if in the same mailbox and no data change */
         annotate_state_t *state = NULL;
+
+        if (atomic && atomic->plan) {
+            _card_plan_quota(atomic, mailbox_name(*mailbox), 0, 0);
+            *item = json_null();
+            goto done;
+        }
+        r = _card_before_importance(req, atomic, *mailbox, &record);
+        if (r) goto done;
 
         syslog(LOG_NOTICE, "jmap: touch contact %s/%s",
                req->accountid, resource);
@@ -4599,14 +5606,47 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
     if (!json_array_size(invalid) && !errors->blobNotFound) {
         struct mailbox *this_mailbox = newmailbox ? newmailbox : *mailbox;
+        uint32_t oldsize = record.size - record.header_size;
+
+        if (atomic && atomic->plan) {
+            quota_t size = 0;
+            r = _card_plan_store(this_mailbox, vcard, resource, oldsize, &size);
+            if (r) goto done;
+            atomic->unlinks = true;
+            if (newmailbox) {
+                _card_plan_quota(atomic, mailbox_name(newmailbox), 1, size);
+                _card_plan_quota(atomic, mailbox_name(*mailbox),
+                                 -1, -(quota_t) record.size);
+            }
+            else {
+                _card_plan_quota(atomic, mailbox_name(*mailbox),
+                                 0, size - (quota_t) record.size);
+            }
+            goto done;
+        }
+        if (atomic) {
+            r = jmap_undo_failpoint(&atomic->undo);
+            if (r) goto done;
+        }
 
         syslog(LOG_NOTICE, "jmap: update %s %s/%s",
                kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                req->accountid, resource);
-        r = carddav_store(this_mailbox, vcard, resource,
-                          record.createdmodseq, &annots, req->userid,
-                          req->authstate, ignorequota,
-                          (record.size - record.header_size));
+        uint32_t last_uid = this_mailbox->i.last_uid;
+        if (atomic && atomic->batch) {
+            r = carddav_store_batch(atomic->batch, vcard, resource,
+                                    record.createdmodseq, &annots, oldsize);
+        }
+        else {
+            /* the atomic plan checked quota against the final state */
+            r = carddav_store(this_mailbox, vcard, resource,
+                              record.createdmodseq, &annots, req->userid,
+                              req->authstate, atomic ? 1 : ignorequota,
+                              oldsize);
+        }
+        if (newmailbox && this_mailbox->i.last_uid != last_uid) {
+            _card_push_record(atomic, newmailbox, 0, newmailbox->i.last_uid);
+        }
         if (!r) {
             struct index_record record;
 
@@ -4657,8 +5697,24 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
                 json_object_set_new(*item, "members", json_object());
             }
 
-            r = carddav_remove(*mailbox, olduid,
-                               /*isreplace*/!newmailbox, req->userid);
+            if (atomic) r = jmap_undo_failpoint(&atomic->undo);
+            if (!r) r = carddav_remove(*mailbox, olduid,
+                                       /*isreplace*/!newmailbox, req->userid);
+            if (!r) {
+                _card_push_record(atomic, *mailbox, olduid,
+                                  newmailbox ? 0 : record.uid);
+            }
+            else if (!(atomic && atomic->batch)) {
+                /* Don't leave the card stored twice */
+                int r2 = _card_unstore(this_mailbox, record.uid,
+                                       newmailbox ? 0 : olduid);
+                if (r2) {
+                    xsyslog_ev(LOG_ERR, "jmap.card.unstore.failed",
+                               lf_s("mbox.name", mailbox_name(this_mailbox)),
+                               lf_u("msg.imapuid", record.uid),
+                               lf_err("error", r2));
+                }
+            }
         }
     }
 
@@ -4680,6 +5736,486 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     json_decref(new_obj);
 
     return r;
+}
+
+/* The SetError for a create or update that returned @r and collected
+ * @errors, or NULL.  Releases @errors. */
+static json_t *_card_set_error(int r,
+                               bool update,
+                               jmap_contact_errors_t *errors)
+{
+    json_t *err = NULL;
+
+    if (r) {
+        switch (r) {
+        case HTTP_NOT_FOUND:
+            err = update ? json_pack("{s:s}", "type", "notFound") : NULL;
+            break;
+        case HTTP_NOT_ALLOWED:
+            err = update ? json_pack("{s:s}", "type", "accountReadOnly") : NULL;
+            break;
+        case HTTP_BAD_REQUEST:
+            err = update ? json_pack("{s:s}", "type", "invalidPatch") : NULL;
+            break;
+        case HTTP_UNPROCESSABLE:
+            err = update ? json_pack("{s:s s:s}",
+                                     "type",
+                                     "serverFail",
+                                     "description",
+                                     "invalid current card")
+                         : NULL;
+            break;
+        case HTTP_FORBIDDEN:
+        case IMAP_PERMISSION_DENIED:
+            err = json_pack("{s:s}", "type", "forbidden");
+            break;
+        case IMAP_QUOTA_EXCEEDED:
+            err = json_pack("{s:s}", "type", "overQuota");
+            break;
+        case IMAP_MESSAGE_TOO_LARGE:
+            err = json_pack("{s:s}", "type", "tooLarge");
+            break;
+        }
+        if (!err) {
+            err = jmap_server_error(r);
+        }
+        json_decref(errors->invalid);
+        json_decref(errors->blobNotFound);
+    }
+    else if (json_array_size(errors->invalid)) {
+        err = json_pack("{s:s s:o}",
+                        "type",
+                        "invalidProperties",
+                        "properties",
+                        errors->invalid);
+        json_decref(errors->blobNotFound);
+    }
+    else {
+        json_decref(errors->invalid);
+        if (errors->blobNotFound) {
+            err = json_pack("{s:s s:o}",
+                            "type",
+                            "blobNotFound",
+                            "notFound",
+                            errors->blobNotFound);
+        }
+    }
+
+    errors->invalid = NULL;
+    errors->blobNotFound = NULL;
+    return err;
+}
+
+/* Destroy the card @id.  Returns an error that fails the method, or 0
+ * with any SetError for the card in @err. */
+static int _card_set_destroy(jmap_req_t *req,
+                             const char *id,
+                             struct carddav_db *db,
+                             struct mailbox **mailbox,
+                             struct card_atomic *atomic,
+                             json_t **err)
+{
+    struct carddav_data *cdata = NULL;
+    mbentry_t *mbentry = NULL;
+    int r = 0;
+
+    if (USER_COMPACT_EMAILIDS(req->cstate)) {
+        if (id[0] == JMAP_CONTACTID_PREFIX && strlen(id) < JMAP_CONTACTID_SIZE)
+        {
+            r = carddav_lookup_jmapid(db, id + 1, &cdata); // strip prefix
+        }
+    }
+    else {
+        r = carddav_lookup_uid(db, NULL, id, &cdata);
+    }
+
+    /* is it a valid contact? */
+    if (r || !cdata || !cdata->dav.imap_uid
+        || _card_plan_destroyed(atomic, cdata->vcard_uid))
+    {
+        *err = json_pack("{s:s}", "type", "notFound");
+        return 0;
+    }
+
+    uint32_t olduid = cdata->dav.imap_uid;
+    unsigned kind = cdata->kind;
+    char *uid = xstrdup(cdata->vcard_uid);
+
+    mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_REMOVEITEMS)) {
+        int rights = mbentry ? jmap_myrights_mbentry(req, mbentry) : 0;
+        *err =
+            json_pack("{s:s}",
+                      "type",
+                      rights & JACL_READITEMS ? "accountReadOnly" : "notFound");
+        goto done;
+    }
+
+    if (!*mailbox || strcmp(mailbox_name(*mailbox), mbentry->name)) {
+        mailbox_close(mailbox);
+        r = mailbox_open_iwl(mbentry->name, mailbox);
+    }
+    if (r) {
+        goto done;
+    }
+
+    if (atomic && atomic->plan) {
+        struct index_record record;
+        r = mailbox_find_index_record(*mailbox, olduid, &record);
+        if (!r) {
+            hash_insert(uid, (void *) 1, &atomic->destroyed);
+            atomic->unlinks = true;
+            _card_plan_quota(atomic,
+                             mailbox_name(*mailbox),
+                             -1,
+                             -(quota_t) record.size);
+        }
+        goto done;
+    }
+    if (atomic) {
+        r = jmap_undo_failpoint(&atomic->undo);
+        if (r) {
+            goto done;
+        }
+    }
+
+    syslog(LOG_NOTICE,
+           "jmap: remove %s %s/%s",
+           kind == CARDDAV_KIND_GROUP ? "group" : "contact",
+           req->accountid,
+           id);
+    r = carddav_remove(*mailbox, olduid, /*isreplace*/ 0, req->userid);
+    if (r) {
+        xsyslog(LOG_ERR,
+                "IOERROR: carddav remove failed",
+                "kind=<%s> mailbox=<%s> olduid=<%u>",
+                kind == CARDDAV_KIND_GROUP ? "group" : "contact",
+                mailbox_name(*mailbox),
+                olduid);
+        goto done;
+    }
+    _card_push_record(atomic, *mailbox, olduid, 0);
+
+done:
+    mboxlist_entry_free(&mbentry);
+    free(uid);
+    return r;
+}
+
+/* Plan an update of a card this method creates, by checking the create of
+ * the patched card, as the update would store it. */
+static json_t *_card_plan_update_created(jmap_req_t *req,
+                                         struct card_atomic *atomic,
+                                         struct jmap_set *set,
+                                         struct mailbox **mailbox,
+                                         const char *creation_id,
+                                         json_t *patch)
+{
+    if (json_object_get(set->not_created, creation_id)) {
+        /* the create already fails the method */
+        return NULL;
+    }
+
+    json_t *base = json_object_get(set->create, creation_id);
+    jmap_contact_errors_t errors = { json_array(), NULL };
+    json_t *card = jmap_patchobject_apply(base, patch, errors.invalid, 0);
+    json_t *err = NULL;
+
+    if (!card) {
+        json_decref(errors.invalid);
+        return json_pack("{s:s}", "type", "invalidPatch");
+    }
+
+    /* as _card_set_update checks them against the stored card */
+    const char *kind = json_string_value(json_object_get(base, "kind"));
+    const char *newkind = json_string_value(json_object_get(card, "kind"));
+    if (!strcmpsafe(kind, "group") != !strcmpsafe(newkind, "group")) {
+        json_array_append_new(errors.invalid, json_string("kind"));
+    }
+    if (strcmpsafe(json_string_value(json_object_get(base, "uid")),
+                   json_string_value(json_object_get(card, "uid"))))
+    {
+        json_array_append_new(errors.invalid, json_string("uid"));
+    }
+    /* the rights _card_set_update needs in the card's addressbook */
+    struct card_planned *p = hash_lookup(creation_id, &atomic->planned);
+    int r = 0;
+    if (p && !json_array_size(errors.invalid)) {
+        json_t *abookids = json_object_get(card, "addressBookIds");
+        const char *abookid =
+            json_object_size(abookids) == 1
+                ? json_object_iter_key(json_object_iter(abookids))
+                : NULL;
+        mbentry_t *mbentry = NULL;
+
+        if (abookid && abookid[0] == '#') {
+            abookid = jmap_lookup_id(req, abookid + 1);
+        }
+        if (abookid) {
+            abookid_to_mbentry(req, abookid, &mbentry);
+        }
+        bool is_move = mbentry && strcmp(mbentry->name, p->mboxname);
+        mboxlist_entry_free(&mbentry);
+
+        int need = required_set_rights(patch,
+                                       is_move ? ADDRBOOK_CHANGE_MOVE
+                                               : ADDRBOOK_CHANGE_NONE);
+        int rights = jmap_myrights(req, p->mboxname);
+        if ((rights & need) != need) {
+            r = (rights & JACL_READITEMS) ? HTTP_NOT_ALLOWED : HTTP_NOT_FOUND;
+        }
+    }
+    if (r) {
+        err = _card_set_error(r, true, &errors);
+    }
+    else if (!json_array_size(errors.invalid)) {
+        json_t *item = json_object();
+
+        atomic->recheck = creation_id;
+        r = _card_set_create(req, card, mailbox, atomic, item, &errors);
+        atomic->recheck = NULL;
+        json_decref(item);
+        err = _card_set_error(r, true, &errors);
+    }
+    else {
+        err = _card_set_error(0, true, &errors);
+    }
+
+    json_decref(card);
+    return err;
+}
+
+/* Atomic ContactCard/set: check every change against the cards the method
+ * leaves, writing nothing, then apply them all.  If the method writes one
+ * addressbook, it is one uncommitted transaction there; otherwise any
+ * writes are undone if one fails.  Returns the method error, or NULL. */
+static json_t *_card_set_atomic(jmap_req_t *req,
+                                struct jmap_set *set,
+                                struct carddav_db *db,
+                                struct mailbox **mailbox)
+{
+    struct card_atomic atomic = { .plan = true,
+                                  .undo = JMAP_UNDO_INITIALIZER,
+                                  .mboxes = STRARRAY_INITIALIZER };
+    bool using_ext = jmap_is_using(req, JMAP_CONTACTS_EXTENSION);
+    struct appendstate as;
+    json_t *cause = NULL;
+    json_t *err = NULL;
+    const char *id;
+    json_t *arg;
+    size_t i;
+    int r = 0;
+
+    construct_hash_table(&atomic.destroyed, 64, 0);
+    construct_hash_table(&atomic.uids, 64, 0);
+    construct_hash_table(&atomic.planned, 64, 0);
+    construct_hash_table(&atomic.quota, 16, 0);
+    construct_hash_table(&atomic.created, json_object_size(set->create) + 1, 0);
+
+    /* Plan, then apply.  The plan pass stops each change before its first
+     * write, so a failure in the apply pass is unexpected. */
+    for (int pass = 0; pass < 2; pass++) {
+        if (pass) {
+            _card_plan_check_quota(&atomic);
+            /* Writes to one addressbook go into one uncommitted
+             * transaction; otherwise expunged cards must be kept to be
+             * restored */
+            bool batch = strarray_size(&atomic.mboxes) == 1;
+            if (!batch && atomic.unlinks
+                && config_getenum(IMAPOPT_EXPUNGE_MODE)
+                       != IMAP_ENUM_EXPUNGE_MODE_DELAYED)
+            {
+                err = json_pack("{s:s s:s}",
+                                "type",
+                                "cannotApplyAtomically",
+                                "description",
+                                "expunge_mode does not keep expunged cards");
+                goto done;
+            }
+            err = jmap_set_atomic_failure(set);
+            if (err) {
+                goto done;
+            }
+            atomic.plan = false;
+
+            if (batch) {
+                const char *mboxname = strarray_nth(&atomic.mboxes, 0);
+                if (!*mailbox || strcmp(mailbox_name(*mailbox), mboxname)) {
+                    mailbox_close(mailbox);
+                    r = mailbox_open_iwl(mboxname, mailbox);
+                }
+                if (!r) {
+                    r = append_setup_mbox(&as,
+                                          *mailbox,
+                                          req->userid,
+                                          req->authstate,
+                                          0,
+                                          /*quota*/ NULL,
+                                          0,
+                                          0,
+                                          EVENT_MESSAGE_NEW | EVENT_CALENDAR);
+                }
+                if (r) {
+                    cause = jmap_server_error(r);
+                    break;
+                }
+                atomic.batch = &as;
+            }
+        }
+
+        json_array_foreach (set->destroy, i, arg) {
+            id = json_string_value(arg);
+            if (!id || cause || json_object_get(set->not_destroyed, id)) {
+                continue;
+            }
+            json_t *serr = NULL;
+            r = _card_set_destroy(req, id, db, mailbox, &atomic, &serr);
+            if (r && !serr) {
+                serr = jmap_server_error(r);
+            }
+            if (serr && atomic.plan) {
+                json_object_set_new(set->not_destroyed, id, serr);
+            }
+            else if (serr) {
+                cause = serr;
+            }
+            else if (!atomic.plan) {
+                json_array_append_new(set->destroyed, json_string(id));
+            }
+        }
+
+        json_object_foreach (set->create, id, arg) {
+            if (cause || json_object_get(set->not_created, id)) {
+                continue;
+            }
+            /* _card_set_create edits its argument, which the apply needs */
+            json_t *card = atomic.plan ? json_deep_copy(arg) : json_incref(arg);
+            jmap_contact_errors_t errors = { json_array(), NULL };
+            json_t *item = json_object();
+
+            reject_or_remove_convprops(card, errors.invalid, using_ext);
+            atomic.op_id = id;
+            atomic.op_errors = set->not_created;
+            r = _card_set_create(req, card, mailbox, &atomic, item, &errors);
+            json_t *serr = _card_set_error(r, false, &errors);
+            if (serr && atomic.plan) {
+                json_object_set_new(set->not_created, id, serr);
+            }
+            else if (serr) {
+                cause = serr;
+            }
+            else if (!atomic.plan) {
+                const char *cardid =
+                    json_string_value(json_object_get(item, "id"));
+                hash_insert(id, xstrdup(cardid), &atomic.created);
+                json_object_set(set->created, id, item);
+            }
+            json_decref(item);
+            json_decref(card);
+        }
+
+        json_object_foreach (set->update, id, arg) {
+            if (cause || json_object_get(set->not_updated, id)) {
+                continue;
+            }
+            /* An update by the vCard UID of a card this method creates */
+            const char *creation_id = USER_COMPACT_EMAILIDS(req->cstate)
+                                          ? NULL
+                                          : hash_lookup(id, &atomic.uids);
+            json_t *patch =
+                atomic.plan ? json_deep_copy(arg) : json_incref(arg);
+            jmap_contact_errors_t errors = { json_array(), NULL };
+            json_t *item = NULL;
+            json_t *serr = NULL;
+
+            reject_or_remove_convprops(patch, errors.invalid, using_ext);
+            atomic.op_id = id;
+            atomic.op_errors = set->not_updated;
+            if (atomic.plan && creation_id) {
+                serr = _card_set_error(0, true, &errors);
+                if (!serr) {
+                    serr = _card_plan_update_created(req,
+                                                     &atomic,
+                                                     set,
+                                                     mailbox,
+                                                     creation_id,
+                                                     patch);
+                }
+            }
+            else {
+                r = _card_set_update(req,
+                                     set->apply_empty_updates,
+                                     id,
+                                     patch,
+                                     db,
+                                     mailbox,
+                                     &atomic,
+                                     &item,
+                                     &errors);
+                serr = _card_set_error(r, true, &errors);
+            }
+            if (serr && atomic.plan) {
+                json_object_set_new(set->not_updated, id, serr);
+            }
+            else if (serr) {
+                cause = serr;
+            }
+            else if (!atomic.plan) {
+                json_object_set(set->updated, id, item ? item : json_null());
+            }
+            json_decref(item);
+            json_decref(patch);
+        }
+    }
+
+    if (atomic.batch && !cause) {
+        /* on failure, this has aborted the mailbox already */
+        r = append_commit(&as);
+        if (r) {
+            cause = jmap_server_error(r);
+        }
+        else {
+            atomic.batch = NULL;
+        }
+    }
+
+    if (cause) {
+        xsyslog_ev(LOG_ERR,
+                   "jmap.card.set.failed",
+                   lf_s("jmap.accountid", req->accountid),
+                   lf_s_opt("error.type",
+                            json_string_value(json_object_get(cause, "type"))),
+                   lf_s_opt("error.description",
+                            json_string_value(
+                                json_object_get(cause, "description"))));
+        if (atomic.batch) {
+            /* aborts the mailbox too, unless append_commit did */
+            append_abort(&as);
+            req->abort_cstate = true;
+        }
+        else {
+            jmap_undo_run(&atomic.undo);
+        }
+        json_decref(cause);
+        err = json_pack("{s:s}", "type", "serverFail");
+        goto done;
+    }
+
+    hash_iter *iter = hash_table_iter(&atomic.created);
+    while (hash_iter_next(iter)) {
+        jmap_add_id(req, hash_iter_key(iter), hash_iter_val(iter));
+    }
+    hash_iter_free(&iter);
+
+done:
+    jmap_undo_fini(&atomic.undo);
+    strarray_fini(&atomic.mboxes);
+    free_hash_table(&atomic.destroyed, NULL);
+    free_hash_table(&atomic.uids, NULL);
+    free_hash_table(&atomic.planned, _card_planned_free);
+    free_hash_table(&atomic.quota, _card_quota_free);
+    free_hash_table(&atomic.created, free);
+    return err;
 }
 
 static json_t *_card_from_record(jmap_req_t *req,

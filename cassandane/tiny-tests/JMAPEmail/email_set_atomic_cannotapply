@@ -1,0 +1,64 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_atomic_cannotapply
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(expunge_mode => 'immediate');
+    $self->_start_instances();
+
+    my $user = $self->default_user;
+    my $jmap = $user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $inbox = $user->mailboxes->inbox;
+    my $a     = $user->mailboxes->create({ name => 'A' });
+    my $id    = $user->emails->create({
+        mailboxIds    => { $inbox->id => JSON::true },
+        subject       => 'subject',
+        bodyStructure => { type => 'text/plain', partId => 'p' },
+        bodyValues    => { p => { value => 'body' } },
+    })->id;
+
+    xlog $self, "an immediate expunge can't be undone: destroy is refused";
+    my $res = $jmap->request([
+        [ 'Email/set', { atomic => JSON::true, destroy => [ $id ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'cannotApplyAtomically' }),
+        $res->single_sentence('error')->arguments,
+    );
+
+    xlog $self, "removing an email from a mailbox is refused too";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            atomic => JSON::true,
+            update => { $id => { mailboxIds => { $a->id => JSON::true } } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'cannotApplyAtomically' }),
+        $res->single_sentence('error')->arguments,
+    );
+
+    $res = $jmap->request([
+        [ 'Email/get', { ids => [ $id ], properties => [ 'mailboxIds' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ { id => $id, mailboxIds => { $inbox->id => JSON::true } } ],
+        $res->single_sentence('Email/get')->arguments->{list},
+    );
+
+    xlog $self, "a keyword update unlinks nothing and still applies";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            atomic => JSON::true,
+            update => { $id => { 'keywords/$flagged' => JSON::true } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $id => undef },
+        $res->single_sentence('Email/set')->arguments->{updated},
+    );
+}

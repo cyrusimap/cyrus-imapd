@@ -180,6 +180,25 @@ int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
                     const char *userid, struct auth_state *authstate,
                     int ignorequota, uint32_t oldsize);
 
+struct appendstate;
+
+/**
+ * Store @p vcard in the mailbox of the open appendstate @p as, without
+ * committing.  As carddav_store() otherwise: vcard_max_size still applies,
+ * allowing for @p oldsize, but quota is whatever @p as was set up to check.
+ *
+ * On error @p as stays open, and the caller still aborts or commits it
+ * with anything appended before.
+ *
+ * @return 0 or an IMAP error code
+ */
+int carddav_store_batch(struct appendstate *as,
+                        vcardcomponent *vcard,
+                        const char *resource,
+                        modseq_t createdmodseq,
+                        struct entryattlist **annots,
+                        uint32_t oldsize);
+
 /* delete a carddav entry */
 int carddav_remove(struct mailbox *mailbox,
                    uint32_t olduid, int isreplace,

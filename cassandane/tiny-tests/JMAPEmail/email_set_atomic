@@ -1,0 +1,132 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_atomic
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $inbox = $user->mailboxes->inbox;
+    my $a     = $user->mailboxes->create({ name => 'A' });
+
+    my %email;
+    for my $name (qw(e1 e2 e3)) {
+        $email{$name} = $user->emails->create({
+            mailboxIds    => { $inbox->id => JSON::true },
+            subject       => $name,
+            bodyStructure => { type => 'text/plain', partId => 'p' },
+            bodyValues    => { p => { value => $name } },
+        })->id;
+    }
+    my %body = (
+        bodyStructure => { type => 'text/plain', partId => 'p' },
+    );
+
+    xlog $self, "a create, move, keyword update and destroy apply together";
+    my $res = $jmap->request([
+        [ 'Email/set', {
+            atomic  => JSON::true,
+            create  => {
+                n => {
+                    mailboxIds => { $a->id => JSON::true },
+                    subject    => 'new',
+                    bodyValues => { p => { value => 'new' } },
+                    %body,
+                },
+            },
+            update  => {
+                $email{e1} => { mailboxIds => { $a->id => JSON::true } },
+                $email{e2} => { 'keywords/$flagged' => JSON::true },
+            },
+            destroy => [ $email{e3} ],
+        } ],
+    ]);
+    my $set = $res->single_sentence('Email/set')->arguments;
+    $self->assert_cmp_deeply(
+        superhashof({
+            created   => { n => superhashof({ id => ignore() }) },
+            updated   => { $email{e1} => undef, $email{e2} => undef },
+            destroyed => [ $email{e3} ],
+        }),
+        $set,
+    );
+    my $idN = $set->{created}{n}{id};
+
+    $res = $jmap->request([
+        [ 'Email/get', {
+            ids        => [ $email{e1}, $email{e2}, $email{e3}, $idN ],
+            properties => [ 'mailboxIds', 'keywords' ],
+        } ],
+    ]);
+    my $get = $res->single_sentence('Email/get')->arguments;
+    $self->assert_cmp_deeply(
+        bag(
+            {
+                id         => $email{e1},
+                mailboxIds => { $a->id => JSON::true },
+                keywords   => {},
+            },
+            {
+                id         => $email{e2},
+                mailboxIds => { $inbox->id => JSON::true },
+                keywords   => { '$flagged' => JSON::true },
+            },
+            {
+                id         => $idN,
+                mailboxIds => { $a->id => JSON::true },
+                keywords   => {},
+            },
+        ),
+        $get->{list},
+    );
+    $self->assert_cmp_deeply([ $email{e3} ], $get->{notFound});
+    my $state = $get->{state};
+
+    xlog $self, "one failing update rejects the whole method";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            atomic  => JSON::true,
+            create  => {
+                m => {
+                    mailboxIds => { $inbox->id => JSON::true },
+                    subject    => 'never',
+                    bodyValues => { p => { value => 'never' } },
+                    %body,
+                },
+            },
+            update  => {
+                $email{e1} => { "mailboxIds/" . $inbox->id => JSON::true },
+                $email{e2} => { 'mailboxIds/nosuchmailbox' => JSON::true },
+            },
+            destroy => [ $idN ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => {
+                $email{e2} => {
+                    type       => 'invalidProperties',
+                    properties => [ 'mailboxIds' ],
+                },
+            },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+
+    $res = $jmap->request([
+        [ 'Email/get', {
+            ids        => [ $email{e1}, $email{e2}, $idN ],
+            properties => [ 'mailboxIds', 'keywords' ],
+        } ],
+        [ 'Email/query', {} ],
+    ]);
+    $self->assert_cmp_deeply(
+        bag($get->{list}->@*),
+        $res->sentence(0)->arguments->{list},
+    );
+    $self->assert_str_equals($state, $res->sentence(0)->arguments->{state});
+    $self->assert_num_equals(3, scalar $res->sentence(1)->arguments->{ids}->@*);
+}

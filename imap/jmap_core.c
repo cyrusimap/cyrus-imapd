@@ -115,6 +115,9 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                 "collationAlgorithms",    json_array()));
 
     json_object_set_new(settings->server_capabilities,
+            JMAP_URN_CONDITIONAL, json_object());
+
+    json_object_set_new(settings->server_capabilities,
             JMAP_CORE_EXTENSION,
             json_pack("{s:I}",
                 "maxCreatedIdsInRequest",

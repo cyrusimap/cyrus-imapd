@@ -13,6 +13,7 @@
 #include "lib/libconfig.h"
 #include "lib/util.h"
 #include "lib/xmalloc.h"
+#include "imap/append.h"
 #include "imap/global.h"
 #include "imap/imap_err.h"
 #include "imap/mailbox.h"
@@ -536,6 +537,84 @@ static void test_relock_notices_vanished(void)
     CU_ASSERT_SYSLOG(match, 1);
 
     mailbox_close(&m);
+}
+
+/* Stage and append a message whose Subject is @subject. */
+static int append_one(struct appendstate *as, const char *subject)
+{
+    struct stagemsg *stage = NULL;
+    struct body *body = NULL;
+    struct timespec internaldate;
+
+    cyrus_gettime(CLOCK_REALTIME, &internaldate);
+    FILE *fp = append_newstage(MBOXNAME, internaldate.tv_sec, 0, &stage);
+    if (!fp) {
+        return IMAP_IOERROR;
+    }
+    fprintf(fp,
+            "From: smurf@example.com\r\n"
+            "Subject: %s\r\n"
+            "Message-ID: <%s@example.com>\r\n"
+            "\r\n"
+            "body\r\n",
+            subject,
+            subject);
+    if (fclose(fp)) {
+        append_removestage(stage);
+        return IMAP_IOERROR;
+    }
+
+    int r = append_fromstage(as, &body, stage, &internaldate, 0, NULL, 0, NULL);
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    append_removestage(stage);
+    return r;
+}
+
+/* A record appended earlier in the same transaction still reads its own
+ * cache after later appends have reused the parse buffers. */
+static void test_pending_record_cache(void)
+{
+    struct auth_state *authstate = auth_newstate("smurf");
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+    struct mailbox *m = NULL;
+    struct appendstate as;
+    struct index_record record;
+
+    int r = mailbox_open_iwl(MBOXNAME, &m);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = append_setup_mbox(&as,
+                          m,
+                          "smurf",
+                          authstate,
+                          0,
+                          qdiffs,
+                          NULL,
+                          0,
+                          EVENT_MESSAGE_NEW);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    CU_ASSERT_EQUAL(append_one(&as, "first"), 0);
+    CU_ASSERT_EQUAL(append_one(&as, "second"), 0);
+
+    r = mailbox_find_index_record(m, 1, &record);
+    CU_ASSERT_EQUAL(r, 0);
+    if (!r) {
+        r = mailbox_cacherecord(m, &record);
+        CU_ASSERT_EQUAL(r, 0);
+    }
+    if (!r) {
+        CU_ASSERT_EQUAL(cacheitem_size(&record, CACHE_SUBJECT), 7);
+        CU_ASSERT_NSTRING_EQUAL(cacheitem_base(&record, CACHE_SUBJECT),
+                                "\"first\"",
+                                7);
+    }
+
+    append_abort(&as);
+    mailbox_close(&m);
+    auth_freestate(authstate);
 }
 
 static int create_mailbox(const char *name)

@@ -286,6 +286,8 @@ struct txn_flags_t {
     unsigned long redirect : 1;         /* CGI local redirect */
     unsigned long retry    : 1;         /* Retry-After */
     unsigned long early    : 1;         /* Request began as TLS early data */
+    unsigned long noquotacheck : 1;     /* dav_store_resource: don't check
+                                           quota, which the caller did */
 };
 
 struct transaction_t;

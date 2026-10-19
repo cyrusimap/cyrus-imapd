@@ -1,0 +1,106 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_notifications_set_atomic_undo
+    :NoStartInstances
+    ($self)
+{
+    # Each method below fails at its fourth write, the mailbox commit.
+    $self->config_set(debug_jmap_atomic_failstep => 4);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    $self->{adminstore}->get_client()->create('user.manifold');
+    my $manjmap = $self->{instance}->create_user_without_setup('manifold')
+                                   ->new_jmaptester;
+    $manjmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $rights = { mayReadItems => JSON::true, mayWriteAll => JSON::true };
+    my $res = $jmap->request([
+        [ 'Calendar/set', { create => {
+            a => { name => 'A', shareWith => { manifold => $rights } },
+            b => { name => 'B', shareWith => { manifold => $rights } },
+            c => { name => 'C', shareWith => { manifold => $rights } },
+        } } ],
+    ]);
+    my $calId = $res->single_sentence('Calendar/set')
+                    ->arguments->{created}{a}{id};
+    $self->assert_not_null($calId);
+
+    my sub event ($title) {
+        return {
+            version     => '2.0',
+            calendarIds => { $calId => JSON::true },
+            title       => $title,
+            start       => '2026-01-01T09:00:00',
+            duration    => 'PT1H',
+        };
+    }
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', { create => {
+            e1 => event('by owner 1'), e2 => event('by owner 2'),
+        } } ],
+    ]);
+    $self->assert_num_equals(2, scalar keys
+        $res->single_sentence('CalendarEvent/set')->arguments->{created}->%*);
+    $res = $manjmap->request([
+        [ 'CalendarEvent/set', {
+            accountId => 'cassandane',
+            create    => {
+                e1 => event('by sharee 1'),
+                e2 => event('by sharee 2'),
+                e3 => event('by sharee 3'),
+            },
+        } ],
+    ]);
+    $self->assert_num_equals(3, scalar keys
+        $res->single_sentence('CalendarEvent/set')->arguments->{created}->%*);
+
+    # [ client, method, accountId, count ]: the sharee's share notifications
+    # (expunged), the owner's event notifications (\Seen), and the owner's
+    # event notifications as seen by the sharee (seen.db, written before the
+    # commit fails, so it has to be restored).
+    my @cases = (
+        [ $manjmap, 'ShareNotification',         'manifold',   3 ],
+        [ $jmap,    'CalendarEventNotification', 'cassandane', 3 ],
+        [ $manjmap, 'CalendarEventNotification', 'cassandane', 2 ],
+    );
+
+    for my $case (@cases) {
+        my ($client, $type, $accountId, $count) = @$case;
+
+        $res = $client->request([
+            [ "$type/get", { accountId => $accountId } ],
+        ]);
+        my $before = $res->single_sentence("$type/get")->arguments;
+        my @ids = map { $_->{id} } $before->{list}->@*;
+        $self->assert_num_equals($count, scalar @ids);
+
+        xlog $self, "$type in $accountId, $count ids: a failed commit is undone";
+        $res = $client->request([
+            [ "$type/set", {
+                accountId => $accountId,
+                atomic    => JSON::true,
+                destroy   => [ @ids ],
+            } ],
+        ]);
+        $self->assert_cmp_deeply(
+            superhashof({ type => 'serverFail' }),
+            $res->single_sentence('error')->arguments,
+        );
+        $self->assert_syslog_matches($self->{instance},
+            qr{event=jmap\.notification\.set\.failed});
+
+        $res = $client->request([
+            [ "$type/get", { accountId => $accountId } ],
+        ]);
+        my $after = $res->single_sentence("$type/get")->arguments;
+        $self->assert_str_equals($before->{state}, $after->{state});
+        $self->assert_cmp_deeply(bag($before->{list}->@*), $after->{list});
+    }
+
+    $self->check_conversations();
+}

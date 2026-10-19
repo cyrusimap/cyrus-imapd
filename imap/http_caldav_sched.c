@@ -3214,6 +3214,43 @@ static void sched_record_status(struct deferred_sched *item)
     buf_free(&txn.buf);
 }
 
+static void sched_free_item(struct deferred_sched *item)
+{
+    free(item->cal_ownerid);
+    free(item->sched_userid);
+    strarray_fini(&item->schedule_addresses);
+    free(item->organizer);
+    if (item->oldical) {
+        icalcomponent_free(item->oldical);
+    }
+    if (item->newical) {
+        icalcomponent_free(item->newical);
+    }
+    free(item->mboxname);
+    free(item->resource);
+    free(item);
+}
+
+EXPORTED void *sched_deferred_mark(void)
+{
+    return deferred_tail;
+}
+
+EXPORTED void sched_deferred_discard(void *mark)
+{
+    struct deferred_sched **tail = mark;
+    struct deferred_sched *item = *tail;
+
+    *tail = NULL;
+    deferred_tail = tail;
+
+    while (item) {
+        struct deferred_sched *next = item->next;
+        sched_free_item(item);
+        item = next;
+    }
+}
+
 EXPORTED void sched_run_deferred(void)
 {
     struct deferred_sched *item;
@@ -3238,14 +3275,6 @@ EXPORTED void sched_run_deferred(void)
 
         if (item->mboxname && item->newical) sched_record_status(item);
 
-        free(item->cal_ownerid);
-        free(item->sched_userid);
-        strarray_fini(&item->schedule_addresses);
-        free(item->organizer);
-        if (item->oldical) icalcomponent_free(item->oldical);
-        if (item->newical) icalcomponent_free(item->newical);
-        free(item->mboxname);
-        free(item->resource);
-        free(item);
+        sched_free_item(item);
     }
 }

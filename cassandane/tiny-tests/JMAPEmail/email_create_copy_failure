@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_create_copy_failure
+    :NoAltNameSpace :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    # A snoozed create appends to the Snoozed mailbox first, then copies
+    my $snoozed = $user->mailboxes->create({ name => 'A', role => 'snoozed' });
+    my $b       = $user->mailboxes->create({ name => 'B' });
+
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setquota('user.cassandane.B', '(MESSAGE 0)');
+    $self->assert_str_equals('ok', $admin->get_last_completion_response());
+
+    my $until = DateTime->now()->add(days => 1)->strftime('%Y-%m-%dT%TZ');
+
+    xlog $self, "a create whose copy to a second mailbox fails leaves no copy";
+    my $res = $jmap->request([
+        [ 'Email/set', {
+            create => {
+                e => {
+                    mailboxIds    => {
+                        $snoozed->id => JSON::true,
+                        $b->id       => JSON::true,
+                    },
+                    snoozed       => { until => $until },
+                    subject       => 'copy failure',
+                    bodyStructure => { type => 'text/plain', partId => 'p' },
+                    bodyValues    => { p => { value => 'body' } },
+                },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { e => { type => 'overQuota' } },
+        $res->single_sentence('Email/set')->arguments->{notCreated},
+    );
+
+    $res = $jmap->request([ [ 'Email/query', {} ] ]);
+    $self->assert_cmp_deeply(
+        [],
+        $res->single_sentence('Email/query')->arguments->{ids},
+    );
+}

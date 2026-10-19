@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+
+# A move that also changes the event must not lose it if the destination
+# calendar can't store it.
+sub test_calendarevent_move_store_failure ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    my $res = $jmap->request([
+        [ 'Calendar/set', { create => {
+            a => { name => 'A' },
+            b => { name => 'B' },
+        } } ],
+    ]);
+    my $created = $res->single_sentence('Calendar/set')->arguments->{created};
+    my $calA = $created->{a}{id};
+    my $calB = $created->{b}{id};
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', { create => { e => {
+            '@type' => 'Event',
+            version => '2.0',
+            calendarIds => { $calA => JSON::true },
+            uid => 'move-store-failure',
+            title => 'event',
+            start => '2026-07-01T09:00:00',
+            duration => 'PT1H',
+            timeZone => 'Etc/UTC',
+        } } } ],
+    ]);
+    my $id = $res->single_sentence('CalendarEvent/set')
+                 ->arguments->{created}{e}{id};
+    $self->assert_not_null($id);
+
+    xlog $self, "move and retitle the event while over quota";
+    $admin->setquota('user.cassandane', '(STORAGE 1)');
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', { update => { $id => {
+            calendarIds => { $calB => JSON::true },
+            title => 'moved',
+            description => 'x' x 10_000,
+        } } } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $id => superhashof({ type => 'overQuota' }) },
+        $res->single_sentence('CalendarEvent/set')->arguments->{notUpdated},
+    );
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/get', {
+            ids => [ $id ],
+            properties => [ 'calendarIds', 'title' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ superhashof({
+            id => $id,
+            calendarIds => { $calA => JSON::true },
+            title => 'event',
+        }) ],
+        $res->single_sentence('CalendarEvent/get')->arguments->{list},
+    );
+}

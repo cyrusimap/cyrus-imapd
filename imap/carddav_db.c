@@ -1115,18 +1115,21 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
     return r;
 }
 
-EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
-                           const char *resource, modseq_t createdmodseq,
-                           struct entryattlist **annots,
-                           const char *userid, struct auth_state *authstate,
-                           int ignorequota, uint32_t oldsize)
+/* With @batch, append into that open appendstate and leave committing or
+ * aborting it to the caller. */
+static int _carddav_store(struct mailbox *mailbox, struct appendstate *batch,
+                          vcardcomponent *vcard,
+                          const char *resource, modseq_t createdmodseq,
+                          struct entryattlist **annots,
+                          const char *userid, struct auth_state *authstate,
+                          int ignorequota, uint32_t oldsize)
 {
     int r = 0;
     FILE *f = NULL;
     struct stagemsg *stage = NULL;
     char *header;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
-    struct appendstate as;
+    struct appendstate own_as, *as = batch ? batch : &own_as;
     struct timespec now;
     char *freeme = NULL;
     char datestr[80];
@@ -1227,7 +1230,8 @@ EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
 
     fclose(f);
 
-    if ((r = append_setup_mbox(&as, mailbox, userid, authstate, 0,
+    if (!batch &&
+        (r = append_setup_mbox(as, mailbox, userid, authstate, 0,
                                ignorequota ? NULL : qdiffs, 0, 0,
                                EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
@@ -1237,7 +1241,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
 
     struct body *body = NULL;
 
-    r = append_fromstage(&as, &body, stage, &now, createdmodseq, NULL, 0, annots);
+    r = append_fromstage(as, &body, stage, &now, createdmodseq, NULL, 0, annots);
     if (body) {
         message_free_body(body);
         free(body);
@@ -1245,12 +1249,13 @@ EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
 
     if (r) {
         syslog(LOG_ERR, "append_fromstage() failed");
-        append_abort(&as);
+        if (!batch) append_abort(as);
         goto done;
     }
+    if (batch) goto done;
 
     /* Commit the append to the addressbook mailbox */
-    r = append_commit(&as);
+    r = append_commit(as);
     if (r) {
         syslog(LOG_ERR, "append_commit() failed");
         goto done;
@@ -1262,6 +1267,47 @@ done:
     free(freeme);
     free(mbuserid);
     return r;
+}
+
+EXPORTED int carddav_store(struct mailbox *mailbox,
+                           vcardcomponent *vcard,
+                           const char *resource,
+                           modseq_t createdmodseq,
+                           struct entryattlist **annots,
+                           const char *userid,
+                           struct auth_state *authstate,
+                           int ignorequota,
+                           uint32_t oldsize)
+{
+    return _carddav_store(mailbox,
+                          NULL,
+                          vcard,
+                          resource,
+                          createdmodseq,
+                          annots,
+                          userid,
+                          authstate,
+                          ignorequota,
+                          oldsize);
+}
+
+EXPORTED int carddav_store_batch(struct appendstate *as,
+                                 vcardcomponent *vcard,
+                                 const char *resource,
+                                 modseq_t createdmodseq,
+                                 struct entryattlist **annots,
+                                 uint32_t oldsize)
+{
+    return _carddav_store(as->mailbox,
+                          as,
+                          vcard,
+                          resource,
+                          createdmodseq,
+                          annots,
+                          NULL,
+                          NULL,
+                          1,
+                          oldsize);
 }
 
 EXPORTED int carddav_remove(struct mailbox *mailbox,

@@ -926,6 +926,26 @@ draft-ietf-jmap-calendars
 
     JMAP for Calendars
 
+draft-ietf-jmap-conditional
+
+    JMAP Conditional Set.  "ifUnchangedBy" and "atomic" are supported on
+    every Foo/set.  "cannotApplyAtomically" is returned, before any write,
+    for: EmailSubmission creates that send immediately; destroys of
+    Mailbox, Calendar and AddressBook under immediate "delete_mode";
+    Email destroys and removals from a mailbox under immediate or
+    semidelayed "expunge_mode"; under those modes, also any CalendarEvent
+    destroy or update, and ContactCard destroys and updates when the
+    method touches more than one addressbook.
+
+    Quota is checked once against the net result of an atomic method.  An
+    unexpected failure while applying undoes the changes and returns
+    "serverFail"; the state string may still have advanced (never after
+    "atomicFailure").  Known limits: intermediate states can be seen by
+    IMAP, CalDAV, CardDAV, ManageSieve and LMTP while the method applies;
+    mailbox events already emitted for undone writes are not retracted;
+    promotion of an intermediate mailbox to a real one is not undone; a
+    lazily created default collection stays created.
+
 draft-murchison-lmtp-ignorequota
 
     LMTP Service Extension for Ignoring Recipient Quotas

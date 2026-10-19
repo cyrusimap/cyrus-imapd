@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_atomic_undo
+    :NoStartInstances :MagicPlus
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 2);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my sub card ($uid, $name, $abookId = undef) {
+        return {
+            '@type' => 'Card',
+            version => '1.0',
+            uid     => $uid,
+            name    => { full => $name },
+            ($abookId ? (addressBookIds => { $abookId => JSON::true }) : ()),
+        };
+    }
+
+    my $res = $jmap->request([
+        [ 'AddressBook/set', { create => { b => { name => 'B' } } } ],
+        [ 'ContactCard/set', { create => {
+            c1 => card('undo-u1', 'One'),
+            c2 => card('undo-u2', 'Two'),
+        } } ],
+    ]);
+    my $abookB = $res->sentence_named('AddressBook/set')
+                     ->arguments->{created}{b}{id};
+    my $created = $res->sentence_named('ContactCard/set')
+                      ->arguments->{created};
+    my $id1 = $created->{c1}{id};
+    my $id2 = $created->{c2}{id};
+    $self->assert_not_null($abookB);
+    $self->assert_not_null($id1);
+    $self->assert_not_null($id2);
+
+    my $props = [ 'uid', 'addressBookIds', 'name' ];
+    $res = $jmap->request([
+        [ 'ContactCard/get', { properties => $props } ],
+    ]);
+    my $before = $res->single_sentence('ContactCard/get')->arguments->{list};
+    $self->assert_num_equals(2, scalar @$before);
+
+    my $imap = $self->{instance}->get_service('imap')
+                    ->create_store(username => 'cassandane+dav')
+                    ->get_client();
+    my @books = map { $_->[2] } $imap->list('', '*#addressbooks.%')->@*;
+    my ($bookA) = grep { m{#addressbooks\.Default$} } @books;
+    my ($bookB) = grep { !m{#addressbooks\.Default$} } @books;
+    $self->assert_not_null($bookA);
+    $self->assert_not_null($bookB);
+
+    my $check = sub ($what) {
+        xlog $self, "after $what, the cards are as before";
+        my $res = $jmap->request([
+            [ 'ContactCard/get', { properties => $props } ],
+        ]);
+        $self->assert_cmp_deeply(
+            bag($before->@*),
+            $res->single_sentence('ContactCard/get')->arguments->{list},
+        );
+        $self->assert_num_equals(2,
+            $imap->status($bookA, '(messages)')->{messages});
+        $self->assert_num_equals(0,
+            $imap->status($bookB, '(messages)')->{messages});
+        $self->check_conversations();
+    };
+
+    my @methods = (
+        [ 'a move fails between storing and expunging', {
+            update => { $id1 => {
+                addressBookIds => { $abookB => JSON::true },
+                name           => { full => 'One moved' },
+            } },
+        } ],
+        [ 'a create in another addressbook fails after a destroy', {
+            destroy => [ $id2 ],
+            create  => { n => card('undo-u3', 'Three', $abookB) },
+        } ],
+        [ 'a create fails after a destroy in the same addressbook', {
+            destroy => [ $id2 ],
+            create  => { n => card('undo-u2', 'Two again') },
+        } ],
+    );
+
+    for my $method (@methods) {
+        my ($what, $args) = @$method;
+        $res = $jmap->request([
+            [ 'ContactCard/set', { atomic => JSON::true, %$args } ],
+        ]);
+        $self->assert_cmp_deeply(
+            superhashof({ type => 'serverFail' }),
+            $res->single_sentence('error')->arguments,
+        );
+        $self->assert_syslog_matches($self->{instance},
+                                     qr{event=jmap\.card\.set\.failed});
+        $check->($what);
+    }
+}

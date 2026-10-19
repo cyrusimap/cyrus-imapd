@@ -1,0 +1,93 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mbox_set_atomic_undo_props
+    :NoAltNameSpace :NoStartInstances
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 4);
+    $self->_start_instances();
+    $self->{instance}->create_user("sharee");
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+
+    my $res = $jmap->request([
+        [ 'Mailbox/set', {
+            create => {
+                a => { name => 'A', sortOrder => 3 },
+                b => { name => 'B' },
+            },
+        } ],
+    ]);
+    my $created = $res->single_sentence('Mailbox/set')->arguments->{created};
+    my $idA = $created->{a}{id};
+    my $idB = $created->{b}{id};
+    $self->assert_not_null($idA);
+    $self->assert_not_null($idB);
+
+    my $props = [ 'sortOrder', 'isSubscribed', 'shareWith' ];
+    $res = $jmap->request([
+        [ 'Mailbox/get', { ids => [ $idA ], properties => $props } ],
+    ]);
+    my $before = $res->single_sentence('Mailbox/get')->arguments->{list};
+
+    xlog $self, "a write failure undoes an update's ACL, annotation and subscription";
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            atomic  => JSON::true,
+            update  => {
+                $idA => {
+                    sortOrder    => 7,
+                    isSubscribed => JSON::true,
+                    shareWith    => {
+                        sharee => { mayRead => JSON::true, mayWrite => JSON::true },
+                    },
+                },
+            },
+            destroy => [ $idB ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+
+    $res = $jmap->request([
+        [ 'Mailbox/get', { ids => [ $idA ], properties => $props } ],
+    ]);
+    $self->assert_cmp_deeply(
+        $before,
+        $res->single_sentence('Mailbox/get')->arguments->{list},
+    );
+
+    my $admin = $self->{adminstore}->get_client();
+    my %acl = $admin->getacl('user.cassandane.A');
+    $self->assert_null($acl{sharee});
+    %acl = $admin->getacl('user.cassandane.#jmap');
+    $self->assert_str_equals('ok', $admin->get_last_completion_response());
+    $self->assert_null($acl{sharee});
+
+    xlog $self, "the same update, applied, shares the upload collection";
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            update => {
+                $idA => {
+                    shareWith => {
+                        sharee => { mayRead => JSON::true, mayWrite => JSON::true },
+                    },
+                },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $idA => ignore() },
+        $res->single_sentence('Mailbox/set')->arguments->{updated},
+    );
+    %acl = $admin->getacl('user.cassandane.#jmap');
+    $self->assert_not_null($acl{sharee});
+
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr{undo\.failed});
+}

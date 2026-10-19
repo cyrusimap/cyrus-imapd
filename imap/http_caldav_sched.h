@@ -128,6 +128,17 @@ extern void sched_defer(const char *cal_ownerid, const char *sched_userid,
                         const char *mboxname, const char *resource,
                         uint32_t imap_uid);
 extern void sched_run_deferred(void);
+
+/**
+ * Opaque position in the deferred iTIP queue, for sched_deferred_discard().
+ * Only valid until the queue is next run.  Discard marks in the reverse
+ * order they were taken: discarding a mark frees the items queued after
+ * it, and so invalidates any mark taken since.
+ */
+extern void *sched_deferred_mark(void);
+
+/** Free, unsent, every item queued since @a mark was taken. */
+extern void sched_deferred_discard(void *mark);
 extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
                                         xmlChar *recipient, xmlChar *status);
 extern int caladdress_lookup(const char *addr, struct caldav_sched_param *param,

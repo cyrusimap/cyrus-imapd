@@ -2070,6 +2070,10 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
 
     /* finally always copy the data into place */
     change->record = *record;
+    /* The parsed cache can point at a shared buffer, such as
+     * message_write_cache's, which the next message parsed overwrites.
+     * Readers reparse it from the cache file, which already holds it. */
+    memset(&change->record.crec, 0, sizeof(change->record.crec));
     /* rewrite might set extra flags, keep all of them */
     change->flags |= flags;
 
@@ -3934,6 +3938,25 @@ EXPORTED int mailbox_add_email_alarms(struct mailbox *mailbox,
 
     return r;
 }
+
+EXPORTED int mailbox_reset_email_alarm(struct mailbox *mailbox, uint32_t uid)
+{
+    struct index_record record;
+    int r = mailbox_find_index_record(mailbox, uid, &record);
+
+    if (r == IMAP_NOTFOUND) {
+        if (!(mailbox->i.options & OPT_IMAP_HAS_ALARMS)) {
+            return 0;
+        }
+        r = caldav_alarm_delete_record(mailbox_name(mailbox), uid);
+    }
+    else if (!r) {
+        r = mailbox_update_email_alarms(mailbox, NULL, &record);
+    }
+
+    /* the alarm db reports its own failures as -1 */
+    return r < 0 ? IMAP_IOERROR : r;
+}
 #endif // WITH_JMAP
 
 #ifdef USE_SIEVE
@@ -4088,6 +4111,11 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
                 r = IMAP_IOERROR;
                 goto done;
             }
+        }
+
+        /* a rename leaves the old name's bytecode behind */
+        if (sdata->imap_uid && sdata->alive && strcmp(sdata->name, name)) {
+            sievedir_delete_script(mailbox->sievedir, sdata->name);
         }
 
         sdata->lastupdated = new->internaldate.tv_sec;
@@ -4471,6 +4499,85 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
         mailbox->i.first_expunged.tv_sec = record->last_updated.tv_sec;
 
     return 0;
+}
+
+EXPORTED int mailbox_restore_record(struct mailbox *mailbox,
+                                    const struct index_record *record,
+                                    bool unset_deleted,
+                                    const char *addflag,
+                                    uint32_t *newuidp)
+{
+    struct index_record newrecord = *record;
+    annotate_state_t *astate = NULL;
+    char oldfname[MAX_MAILBOX_PATH];
+    const char *fname;
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+    int r;
+
+    /* duplicate the old filename */
+    fname = mailbox_record_fname(mailbox, record);
+    xstrncpy(oldfname, fname, MAX_MAILBOX_PATH);
+
+    /* bump the UID, strip the flags */
+    newrecord.uid = mailbox->i.last_uid + 1;
+    newrecord.internal_flags &= ~FLAG_INTERNAL_EXPUNGED;
+    if (unset_deleted) {
+        newrecord.system_flags &= ~FLAG_DELETED;
+    }
+
+    /* copy the message file */
+    fname = mailbox_record_fname(mailbox, &newrecord);
+    int *fdptr = (newrecord.internal_flags & FLAG_INTERNAL_ARCHIVED)
+                     ? &mailbox->archive_dirfd
+                     : &mailbox->spool_dirfd;
+    r = mailbox_copyfile_fdptr(oldfname, fname, 0, fdptr);
+    if (r) {
+        goto done;
+    }
+
+    if (addflag) {
+        int userflag = 0;
+        r = mailbox_user_flag(mailbox, addflag, &userflag, 1);
+        if (r) {
+            goto done;
+        }
+        newrecord.user_flags[userflag / 32] |= 1U << (userflag & 31);
+    }
+
+    r = mailbox_append_index_record(mailbox, &newrecord);
+    if (r) {
+        goto done;
+    }
+
+    /* ensure an astate is connected to the destination mailbox, so
+     * that the annotation txn is committed when the mailbox closes */
+    r = mailbox_get_annotate_state(mailbox, newrecord.uid, &astate);
+    if (r) {
+        goto done;
+    }
+
+    r = annotate_msg_copy(mailbox, record->uid, mailbox, newrecord.uid, userid);
+    if (r) {
+        goto done;
+    }
+
+    /* mark the old one unlinked so it isn't seen again */
+    struct index_record oldrecord = *record;
+    oldrecord.internal_flags |=
+        FLAG_INTERNAL_UNLINKED | FLAG_INTERNAL_NEEDS_CLEANUP;
+    r = mailbox_rewrite_index_record(mailbox, &oldrecord);
+    if (r) {
+        goto done;
+    }
+
+    mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
+    if (newuidp) {
+        *newuidp = newrecord.uid;
+    }
+
+done:
+    free(userid);
+    return r;
 }
 
 /* append a single message to a mailbox - also updates everything

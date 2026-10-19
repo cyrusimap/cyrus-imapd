@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_participantidentity_set_ifinstate
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->CallMethods([['ParticipantIdentity/get', {}, 'R1']]);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    $res = $jmap->CallMethods([['ParticipantIdentity/set', {}, 'R2']]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_equals($state, $res->[0][1]{newState});
+
+    $res = $jmap->CallMethods([
+        ['ParticipantIdentity/set', { ifInState => $state }, 'R3'],
+    ]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+
+    $res = $jmap->request([
+        ['ParticipantIdentity/set', {
+            ifInState => 'wrongstate',
+            destroy => ['partid3'],
+        }, 'R4'],
+    ]);
+    $self->assert_num_equals(1, scalar(() = $res->sentences));
+    $self->assert_cmp_deeply({ type => 'stateMismatch' },
+                             $res->single_sentence('error')->arguments);
+}
