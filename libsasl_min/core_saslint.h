@@ -338,9 +338,7 @@ extern int _is_sasl_server_active(void);
  * _sasl_done_with_plugins frees the LIBRARIES loaded by the above 2
  * _sasl_locate_entry locates an entrypoint in a given library
  */
-extern int _sasl_load_plugins(const add_plugin_list_t *entrypoints,
-                              const sasl_callback_t *getpath_callback,
-                              const sasl_callback_t *verifyfile_callback);
+extern int _sasl_load_plugins(const add_plugin_list_t *entrypoints);
 extern int _sasl_get_plugin(const char *file,
                             const sasl_callback_t *verifyfile_cb,
                             void **libraryptr);
@@ -352,12 +350,6 @@ extern int _sasl_done_with_plugins(void);
 /*
  * common.c
  */
-extern const sasl_callback_t *_sasl_find_getpath_callback(
-    const sasl_callback_t *callbacks);
-
-extern const sasl_callback_t *_sasl_find_getconfpath_callback(
-    const sasl_callback_t *callbacks);
-
 extern const sasl_callback_t *_sasl_find_verifyfile_callback(
     const sasl_callback_t *callbacks);
 

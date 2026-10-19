@@ -769,9 +769,7 @@ EXPORTED int sasl_server_init(const sasl_callback_t *callbacks,
 
     /* load internal plugins */
     sasl_server_add_plugin("EXTERNAL", &external_server_plug_init);
-    ret = _sasl_load_plugins(ep_list,
-                             _sasl_find_getpath_callback(callbacks),
-                             _sasl_find_verifyfile_callback(callbacks));
+    ret = _sasl_load_plugins(ep_list);
 
     if (ret == SASL_OK) {
         _sasl_server_cleanup_hook = &server_done;

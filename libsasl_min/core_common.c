@@ -19,26 +19,6 @@
 #include <syslog.h>
 #include <unistd.h>
 
-/* XXX defines that libsasl would've configured */
-#define SASL_PATH_ENV_VAR "SASL_PATH"
-#define SASL_CONF_PATH_ENV_VAR "SASL_CONF_PATH"
-#define PLUGINDIR "/nonexistent"
-#define CONFIGDIR "/nonexistent"
-
-static int _sasl_getpath(void *context __attribute__((unused)),
-                         const char **path);
-static int _sasl_getpath_simple(void *context __attribute__((unused)),
-                                const char **path);
-static int _sasl_getconfpath(void *context __attribute__((unused)),
-                             char **path);
-static int _sasl_getconfpath_simple(void *context __attribute__((unused)),
-                                    const char **path);
-
-static const char *_sasl_get_default_unix_path(
-    void *context __attribute__((unused)),
-    const char *env_var_name,
-    const char *default_value);
-
 /* It turns out to be convenient to have a shared sasl_utils_t */
 const sasl_utils_t *sasl_global_utils = NULL;
 
@@ -59,19 +39,6 @@ sasl_allocation_utils_t _sasl_allocation_utils = { (sasl_malloc_t *) &malloc,
 int _sasl_allocation_locked = 0;
 
 #define SASL_ENCODEV_EXTRA 4096
-
-/* Default getpath/getconfpath callbacks. These can be edited by sasl_set_path(). */
-static sasl_callback_t default_getpath_cb = { SASL_CB_GETPATH,
-                                              (sasl_callback_ft) &_sasl_getpath,
-                                              NULL };
-static sasl_callback_t default_getconfpath_cb = {
-    SASL_CB_GETCONFPATH,
-    (sasl_callback_ft) &_sasl_getconfpath,
-    NULL
-};
-
-static char *default_plugin_path = NULL;
-static char *default_conf_path = NULL;
 
 static int _sasl_global_getopt(void *context,
                                const char *plugin_name,
@@ -160,56 +127,13 @@ EXPORTED int _sasl_add_string(char **out,
     return SASL_OK;
 }
 
-/* a simpler way to set plugin path or configuration file path
- * without the need to set sasl_getpath_t callback.
- *
- * This function can be called before sasl_server_init/sasl_client_init.
- *
- * Don't call this function without locking in a multithreaded application.
+/* This implementation does not support dynamic plugins or configuration
+ * files.
  */
-EXPORTED int sasl_set_path(int path_type, char *path)
+EXPORTED int sasl_set_path(int path_type __attribute__((unused)),
+                           char *path __attribute__((unused)))
 {
-    int result;
-
-    if (path == NULL) {
-        return (SASL_FAIL);
-    }
-
-    switch (path_type) {
-    case SASL_PATH_TYPE_PLUGIN:
-        if (default_plugin_path != NULL) {
-            sasl_FREE(default_plugin_path);
-            default_plugin_path = NULL;
-        }
-        result = _sasl_strdup(path, &default_plugin_path, NULL);
-        if (result != SASL_OK) {
-            return (result);
-        }
-
-        /* Update the default getpath_t callback */
-        default_getpath_cb.proc = (sasl_callback_ft) &_sasl_getpath_simple;
-        break;
-
-    case SASL_PATH_TYPE_CONFIG:
-        if (default_conf_path != NULL) {
-            sasl_FREE(default_conf_path);
-            default_conf_path = NULL;
-        }
-        result = _sasl_strdup(path, &default_conf_path, NULL);
-        if (result != SASL_OK) {
-            return (result);
-        }
-
-        /* Update the default getpath_t callback */
-        default_getconfpath_cb.proc =
-            (sasl_callback_ft) &_sasl_getconfpath_simple;
-        break;
-
-    default:
-        return (SASL_FAIL);
-    }
-
-    return (SASL_OK);
+    return SASL_FAIL;
 }
 
 /* security-encode a regular string.  Mostly a wrapper for sasl_encodev */
@@ -624,15 +548,6 @@ EXPORTED void sasl_common_done(void)
 {
     /* NOTE - the caller will need to reinitialize the values,
        if it is going to call sasl_client_init/sasl_server_init again. */
-    if (default_plugin_path != NULL) {
-        sasl_FREE(default_plugin_path);
-        default_plugin_path = NULL;
-    }
-    if (default_conf_path != NULL) {
-        sasl_FREE(default_conf_path);
-        default_conf_path = NULL;
-    }
-
     _sasl_canonuser_free();
     _sasl_done_with_plugins();
 
@@ -1667,98 +1582,6 @@ static int _sasl_getsimple(void *context,
     }
 }
 
-static int _sasl_getpath(void *context __attribute__((unused)),
-                         const char **path_dest)
-{
-    int res = SASL_OK;
-
-    if (!path_dest) {
-        return SASL_BADPARAM;
-    }
-
-    /* Only calculate the path once. */
-    if (default_plugin_path == NULL) {
-        const char *path;
-
-        path = _sasl_get_default_unix_path(context,
-                                           SASL_PATH_ENV_VAR,
-                                           PLUGINDIR);
-
-        if (path)
-            res = _sasl_strdup(path, &default_plugin_path, NULL);
-        else
-            res = SASL_FAIL;
-    }
-
-    if (res == SASL_OK) {
-        *path_dest = default_plugin_path;
-    }
-
-    return res;
-}
-
-static int _sasl_getpath_simple(void *context __attribute__((unused)),
-                                const char **path)
-{
-    if (!path) {
-        return SASL_BADPARAM;
-    }
-
-    if (default_plugin_path == NULL) {
-        return SASL_FAIL;
-    }
-
-    *path = default_plugin_path;
-
-    return SASL_OK;
-}
-
-static int _sasl_getconfpath(void *context __attribute__((unused)),
-                             char **path_dest)
-{
-    int res = SASL_OK;
-
-    if (!path_dest) {
-        return SASL_BADPARAM;
-    }
-
-    /* Only calculate the path once. */
-    if (default_conf_path == NULL) {
-        const char *path;
-
-        path = _sasl_get_default_unix_path(context,
-                                           SASL_CONF_PATH_ENV_VAR,
-                                           CONFIGDIR);
-
-        if (path)
-            res = _sasl_strdup(path, &default_conf_path, NULL);
-        else
-            res = SASL_FAIL;
-    }
-
-    if (res == SASL_OK) {
-        *path_dest = default_conf_path;
-    }
-
-    return res;
-}
-
-static int _sasl_getconfpath_simple(void *context __attribute__((unused)),
-                                    const char **path)
-{
-    if (!path) {
-        return SASL_BADPARAM;
-    }
-
-    if (default_conf_path == NULL) {
-        return SASL_FAIL;
-    }
-
-    *path = default_conf_path;
-
-    return SASL_OK;
-}
-
 static int _sasl_verifyfile(void *context __attribute__((unused)),
                             char *file __attribute__((unused)),
                             int type __attribute__((unused)))
@@ -1867,14 +1690,6 @@ EXPORTED int _sasl_getcallback(sasl_conn_t *conn,
     case SASL_CB_LOG:
         *pproc = (sasl_callback_ft) &_sasl_syslog;
         *pcontext = conn;
-        return SASL_OK;
-    case SASL_CB_GETPATH:
-        *pproc = default_getpath_cb.proc;
-        *pcontext = default_getpath_cb.context;
-        return SASL_OK;
-    case SASL_CB_GETCONFPATH:
-        *pproc = default_getconfpath_cb.proc;
-        *pcontext = default_getconfpath_cb.context;
         return SASL_OK;
     case SASL_CB_AUTHNAME:
         *pproc = (sasl_callback_ft) &_sasl_getsimple;
@@ -2243,30 +2058,6 @@ static const sasl_callback_t *_sasl_find_callback_by_type(
     return NULL;
 }
 
-EXPORTED const sasl_callback_t *_sasl_find_getpath_callback(
-    const sasl_callback_t *callbacks)
-{
-    callbacks = _sasl_find_callback_by_type(callbacks, SASL_CB_GETPATH);
-    if (callbacks != NULL) {
-        return callbacks;
-    }
-    else {
-        return &default_getpath_cb;
-    }
-}
-
-EXPORTED const sasl_callback_t *_sasl_find_getconfpath_callback(
-    const sasl_callback_t *callbacks)
-{
-    callbacks = _sasl_find_callback_by_type(callbacks, SASL_CB_GETCONFPATH);
-    if (callbacks != NULL) {
-        return callbacks;
-    }
-    else {
-        return &default_getconfpath_cb;
-    }
-}
-
 EXPORTED const sasl_callback_t *_sasl_find_verifyfile_callback(
     const sasl_callback_t *callbacks)
 {
@@ -2595,19 +2386,4 @@ EXPORTED int _sasl_is_equal_mech(const char *req_mech,
     }
 
     return (strncasecmp(req_mech, plug_mech, n) == 0);
-}
-
-static const char *_sasl_get_default_unix_path(
-    void *context __attribute__((unused)),
-    const char *env_var_name,
-    const char *default_value)
-{
-    const char *path = NULL;
-
-    /* Honor external variable only in a safe environment */
-    if (getuid() == geteuid() && getgid() == getegid()) {
-        path = getenv(env_var_name);
-    }
-
-    return path ? path : default_value;
 }
