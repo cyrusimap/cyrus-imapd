@@ -561,7 +561,6 @@ struct namespace_t *http_namespaces[] = {
     &namespace_notify,          /* MUST be after namespace_principal */
     &namespace_applepush,       /* MUST be after namespace_cal & addr */
     &namespace_ischedule,
-    &namespace_domainkey,
     &namespace_dblookup,
     &namespace_admin,
     &namespace_prometheus,
@@ -3309,10 +3308,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     /* Response Context */
     if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
         simple_hdr(txn, "iSchedule-Version", "1.0");
-
-        if (resp_body->iserial) {
-            simple_hdr(txn, "iSchedule-Capabilities", TIME_T_FMT, resp_body->iserial);
-        }
     }
     if (resp_body->patch) {
         accept_patch_hdr(txn, resp_body->patch);
@@ -5395,6 +5390,17 @@ EXPORTED int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbent
     }
 
     return rights;
+}
+
+EXPORTED bool httpd_authid_is_proxyserver(void)
+{
+    if (!httpd_authid) return false;
+
+    struct auth_state *authstate = auth_newstate(httpd_authid);
+    bool is_proxyserver = global_authisa(authstate, IMAPOPT_PROXYSERVERS);
+    auth_freestate(authstate);
+
+    return is_proxyserver;
 }
 
 /* Allow unauthenticated GET/HEAD, deny all other unauthenticated requests */

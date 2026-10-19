@@ -5,20 +5,9 @@
 #ifndef HTTP_CALDAV_SCHED_H
 #define HTTP_CALDAV_SCHED_H
 
-//#define IOPTEST
-
 #include <config.h>
 
 #include <libical/ical.h>
-
-#ifdef WITH_DKIM
-#include <dkim.h>
-
-#ifndef DKIM_CANON_ISCHEDULE
-#undef WITH_DKIM
-#endif
-
-#endif /* WITH_DKIM */
 
 #include "calsched_support.h"
 #include "http_dav.h"

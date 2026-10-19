@@ -333,7 +333,6 @@ EXTRA_DIST = \
     contrib/add-cyrus-user \
     contrib/README \
     contrib/cyrusv2.mc \
-    contrib/dkim_canon_ischedule.patch \
     contrib/notify_unix/notify \
     contrib/notify_unix/net-server-prefork-0.01.tgz \
     contrib/notify_unix/README \

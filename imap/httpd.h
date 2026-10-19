@@ -85,7 +85,6 @@ enum {
     URL_NS_ADDRESSBOOK,
     URL_NS_DRIVE,
     URL_NS_ISCHEDULE,
-    URL_NS_DOMAINKEY,
     URL_NS_TZDIST,
     URL_NS_DBLOOKUP,
 #ifdef WITH_JMAP
@@ -265,7 +264,6 @@ struct resp_body_t {
     time_t maxage;                      /* Expires          */
     const char *stag;                   /* Schedule-Tag     */
     const char *cmid;                   /* Cal-Managed-ID   */
-    time_t iserial;                     /* iSched serial#   */
     hdrcache_t extra_hdrs;              /* Extra headers    */
     struct buf payload;                 /* Payload          */
 };
@@ -500,7 +498,6 @@ extern struct namespace_t namespace_freebusy;
 extern struct namespace_t namespace_addressbook;
 extern struct namespace_t namespace_drive;
 extern struct namespace_t namespace_ischedule;
-extern struct namespace_t namespace_domainkey;
 extern struct namespace_t namespace_tzdist;
 #ifdef WITH_JMAP
 extern struct namespace_t namespace_jmap;
@@ -588,6 +585,16 @@ extern int process_request(struct transaction_t *txn);
 extern void transaction_free(struct transaction_t *txn);
 
 extern int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbentry);
+
+/**
+ * Whether the client authenticated as one of the servers named by the
+ * proxyservers option.
+ *
+ * This tests the authentication identity, not the user it may be acting for
+ * with Authorize-As, so it is true for a frontend proxying a user's request.
+ * httpd_userisproxyadmin is unrelated: it says whether that user is an admin.
+ */
+extern bool httpd_authid_is_proxyserver(void);
 
 /**
  * mailbox_open_iwl(), but refuse a replicaonly user's mailbox, checked
