@@ -12248,13 +12248,17 @@ static int xfer_initialsync(struct xfer_header *xfer)
     if (xfer->userid) {
         struct xfer_item *item, *next;
 
-        syslog(LOG_INFO, "XFER: initial sync of user %s", xfer->userid);
+        xsyslog_ev(LOG_INFO, "imap.xfer.step",
+                   lf_s("xfer.step", "initial_sync"),
+                   lf_s("u.username", xfer->userid));
 
         r = sync_do_user(&xfer->sync_cs, xfer->userid, xfer->topart);
         if (r) return r;
 
         /* User moves may take a while, do another non-blocking sync */
-        syslog(LOG_INFO, "XFER: second sync of user %s", xfer->userid);
+        xsyslog_ev(LOG_INFO, "imap.xfer.step",
+                   lf_s("xfer.step", "second_sync"),
+                   lf_s("u.username", xfer->userid));
 
         r = sync_do_user(&xfer->sync_cs, xfer->userid, xfer->topart);
         if (r) return r;
@@ -12274,8 +12278,9 @@ static int xfer_initialsync(struct xfer_header *xfer)
     else {
         struct sync_name_list *mboxname_list = sync_name_list_create();
 
-        syslog(LOG_INFO, "XFER: initial sync of mailbox %s",
-               xfer->items->mbentry->name);
+        xsyslog_ev(LOG_INFO, "imap.xfer.step",
+                   lf_s("xfer.step", "initial_sync"),
+                   lf_intname("mbox.name", xfer->items->mbentry->name));
 
         sync_name_list_add(mboxname_list, xfer->items->mbentry->name);
         r = sync_do_mailboxes(&xfer->sync_cs, mboxname_list, xfer->topart, xfer->sync_cs.flags);
@@ -12312,8 +12317,8 @@ static int sync_mailbox(struct xfer_header *xfer,
     /* always send mailbox annotations */
     r = read_annotations(mailbox, NULL, &annots, /*since_modseq*/0, /*flags*/0);
     if (r) {
-        syslog(LOG_ERR, "sync_mailbox(): read annotations failed: %s '%s'",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "imap.xfer.annotations.read.failed",
+                   lf_mailbox(mailbox), lf_err("error", r));
         goto cleanup;
     }
 
@@ -12321,8 +12326,8 @@ static int sync_mailbox(struct xfer_header *xfer,
     if (mailbox_has_conversations(mailbox)) {
         r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
         if (r) {
-            syslog(LOG_ERR, "sync_mailbox(): mailbox get xconvmodseq failed: %s '%s'",
-                mailbox_name(mailbox), error_message(r));
+            xsyslog_ev(LOG_ERR, "imap.xfer.xconvmodseq.read.failed",
+                       lf_mailbox(mailbox), lf_err("error", r));
             goto cleanup;
         }
     }
@@ -12369,10 +12374,11 @@ static int sync_mailbox(struct xfer_header *xfer,
         if (strcmp(mfolder->name, rfolder->name) ||
             strcmp(topart, rfolder->partition)) {
             /* bail and retry */
-            syslog(LOG_NOTICE,
-                   "XFER: rename %s!%s -> %s!%s during final sync"
-                   " - must try XFER again",
-                   mfolder->name, mfolder->partition, rfolder->name, rfolder->partition);
+            xsyslog_ev(LOG_NOTICE, "imap.xfer.renamed_underneath",
+                       lf_intname("mbox.name", mfolder->name),
+                       lf_s("mbox.part", mfolder->partition),
+                       lf_intname("other.mbox.name", rfolder->name),
+                       lf_s("other.mbox.part", rfolder->partition));
             r = IMAP_AGAIN;
             goto cleanup;
         }
@@ -12384,15 +12390,18 @@ static int sync_mailbox(struct xfer_header *xfer,
     r = sync_reserve_partition(&xfer->sync_cs, reserve->partition,
                                replica_folders, reserve->list);
     if (r) {
-        syslog(LOG_ERR, "sync_mailbox(): reserve partition failed: %s '%s'",
-               mfolder->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "imap.xfer.reserve.failed",
+                   lf_intname("mbox.name", mfolder->name),
+                   lf_s("mbox.part", reserve->partition),
+                   lf_err("error", r));
         goto cleanup;
     }
 
     r = sync_do_update_mailbox(&xfer->sync_cs, mfolder, rfolder, topart, reserve_guids);
     if (r) {
-        syslog(LOG_ERR, "sync_mailbox(): update failed: %s '%s'",
-                mfolder->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "imap.xfer.sync.failed",
+                   lf_intname("mbox.name", mfolder->name),
+                   lf_err("error", r));
     }
 
   cleanup:
@@ -12419,7 +12428,9 @@ static int xfer_finalsync(struct xfer_header *xfer)
     int r;
 
     if (xfer->userid) {
-        syslog(LOG_INFO, "XFER: final sync of user %s", xfer->userid);
+        xsyslog_ev(LOG_INFO, "imap.xfer.step",
+                   lf_s("xfer.step", "final_sync"),
+                   lf_s("u.username", xfer->userid));
 
         replica_subs = sync_name_list_create();
         replica_sieve = sync_sieve_list_create();
@@ -12429,8 +12440,9 @@ static int xfer_finalsync(struct xfer_header *xfer)
         kl = dlist_setatom(NULL, cmd, xfer->userid);
     }
     else {
-        syslog(LOG_INFO, "XFER: final sync of mailbox %s",
-               xfer->items->mbentry->name);
+        xsyslog_ev(LOG_INFO, "imap.xfer.step",
+                   lf_s("xfer.step", "final_sync"),
+                   lf_intname("mbox.name", xfer->items->mbentry->name));
 
         cmd = "MAILBOXES";
         kl = dlist_newlist(NULL, cmd);
@@ -12455,9 +12467,9 @@ static int xfer_finalsync(struct xfer_header *xfer)
         r = mailbox_open_iwl(item->mbentry->name, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
         if (r) {
-            syslog(LOG_ERR,
-                   "Failed to open mailbox %s for xfer_final_sync() %s",
-                   item->mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "imap.xfer.mailbox.open.failed",
+                       lf_intname("mbox.name", item->mbentry->name),
+                       lf_err("error", r));
             goto done;
         }
 
@@ -12465,10 +12477,8 @@ static int xfer_finalsync(struct xfer_header *xfer)
            change its location to destination server and partition */
         r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, NULL);
         if (r) {
-            syslog(LOG_ERR,
-                   "Failed to get annotate state for mailbox %s"
-                   " for xfer_final_sync() %s",
-                   mailbox_name(mailbox), error_message(r));
+            xsyslog_ev(LOG_ERR, "imap.xfer.annotations.open.failed",
+                       lf_mailbox(mailbox), lf_err("error", r));
             mailbox_close(&mailbox);
             goto done;
         }
@@ -12497,9 +12507,9 @@ static int xfer_finalsync(struct xfer_header *xfer)
         if (!r) {
             r = sync_mailbox(xfer, mailbox, replica_folders, xfer->topart);
             if (r) {
-                syslog(LOG_ERR,
-                       "Could not move mailbox: %s, sync_mailbox() failed %s",
-                       item->mbentry->name, error_message(r));
+                xsyslog_ev(LOG_ERR, "imap.xfer.sync.failed",
+                           lf_intname("mbox.name", item->mbentry->name),
+                           lf_err("error", r));
             }
             else {
                 const char *quotaroot = mailbox_quotaroot(mailbox);
@@ -12508,9 +12518,9 @@ static int xfer_finalsync(struct xfer_header *xfer)
 
                 r = sync_do_annotation(&xfer->sync_cs, mailbox_name(mailbox));
                 if (r) {
-                    syslog(LOG_ERR, "Could not move mailbox: %s,"
-                           " sync_do_annotation() failed %s",
-                           item->mbentry->name, error_message(r));
+                    xsyslog_ev(LOG_ERR, "imap.xfer.annotations.sync.failed",
+                               lf_intname("mbox.name", item->mbentry->name),
+                               lf_err("error", r));
                 }
             }
         }
@@ -12529,8 +12539,9 @@ static int xfer_finalsync(struct xfer_header *xfer)
         r = sync_do_folder_delete(&xfer->sync_cs, rfolder->name,
                                   rfolder->uniqueid, rfolder->uidvalidity);
         if (r) {
-            syslog(LOG_ERR, "sync_folder_delete(): failed: %s '%s'",
-                   rfolder->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "imap.xfer.folder.delete.failed",
+                       lf_intname("mbox.name", rfolder->name),
+                       lf_err("error", r));
             goto done;
         }
     }
@@ -12561,7 +12572,8 @@ static int xfer_reactivate(struct xfer_header *xfer)
     struct xfer_item *item;
     int r;
 
-    syslog(LOG_INFO, "XFER: reactivating mailboxes");
+    xsyslog_ev(LOG_INFO, "imap.xfer.step",
+               lf_s("xfer.step", "reactivating"));
 
     if (!mupdate_h) return 0;
 
@@ -12573,8 +12585,9 @@ static int xfer_reactivate(struct xfer_header *xfer)
             r = xfer_mupdate(MUPDATE_DELETE, item->mbentry->name,
                              NULL, NULL, NULL);
             if (r) {
-                syslog(LOG_ERR, "MUPDATE: can't delete mailbox entry '%s': %s",
-                           item->mbentry->name, error_message(r));
+                xsyslog_ev(LOG_ERR, "imap.mupdate.delete.failed",
+                           lf_intname("mbox.name", item->mbentry->name),
+                           lf_err("error", r));
             }
             continue;
         }
@@ -12584,8 +12597,9 @@ static int xfer_reactivate(struct xfer_header *xfer)
                     strlen(item->extname), item->extname);
         r = getresult(be->in, "MP1");
         if (r) {
-            syslog(LOG_ERR, "MUPDATE: can't activate mailbox entry '%s': %s",
-                   item->mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "imap.mupdate.activate.failed",
+                       lf_intname("mbox.name", item->mbentry->name),
+                       lf_err("error", r));
         }
     }
 
@@ -12597,7 +12611,8 @@ static int xfer_delete(struct xfer_header *xfer)
     struct xfer_item *item;
     int r;
 
-    syslog(LOG_INFO, "XFER: deleting mailboxes on source");
+    xsyslog_ev(LOG_INFO, "imap.xfer.step",
+               lf_s("xfer.step", "deleting_source"));
 
     /* 7) local delete of mailbox
      * & remove local "remote" mailboxlist entry */
@@ -12611,9 +12626,9 @@ static int xfer_delete(struct xfer_header *xfer)
                                    imapd_userid, imapd_authstate, NULL,
                                    MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
         if (r) {
-            syslog(LOG_ERR,
-                   "Could not delete local mailbox during move of %s: %s",
-                   item->mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "imap.xfer.source.delete.failed",
+                       lf_intname("mbox.name", item->mbentry->name),
+                       lf_err("error", r));
             /* can't abort now! */
         }
     }
@@ -12626,7 +12641,7 @@ static void xfer_recover(struct xfer_header *xfer)
     struct xfer_item *item;
     int r;
 
-    syslog(LOG_INFO, "XFER: recovering");
+    xsyslog_ev(LOG_INFO, "imap.xfer.step", lf_s("xfer.step", "recovering"));
 
     /* Backout any changes - we stop on first untouched mailbox */
     for (item = xfer->items; item && item->state; item = item->next) {
@@ -12637,9 +12652,9 @@ static void xfer_recover(struct xfer_header *xfer)
             r = mboxlist_updatelock(item->mbentry, 1);
 
             if (r) {
-                syslog(LOG_ERR,
-                       "Could not back out MOVING flag during move of %s (%s)",
-                       item->mbentry->name, error_message(r));
+                xsyslog_ev(LOG_ERR, "imap.xfer.recover.moving.failed",
+                           lf_intname("mbox.name", item->mbentry->name),
+                           lf_err("error", r));
             }
             GCC_FALLTHROUGH
 
@@ -12651,9 +12666,9 @@ static void xfer_recover(struct xfer_header *xfer)
                             strlen(item->extname), item->extname);
                 r = getresult(xfer->sync_cs.backend->in, "LD1");
                 if (r) {
-                    syslog(LOG_ERR,
-                        "Could not back out remote mailbox during move of %s (%s)",
-                        item->mbentry->name, error_message(r));
+                    xsyslog_ev(LOG_ERR, "imap.xfer.recover.remote.failed",
+                               lf_intname("mbox.name", item->mbentry->name),
+                               lf_err("error", r));
                 }
             }
             GCC_FALLTHROUGH
@@ -12664,9 +12679,9 @@ static void xfer_recover(struct xfer_header *xfer)
                              item->mbentry->partition,
                              config_servername, item->mbentry->acl);
             if (r) {
-                syslog(LOG_ERR,
-                       "Could not back out mupdate during move of %s (%s)",
-                       item->mbentry->name, error_message(r));
+                xsyslog_ev(LOG_ERR, "imap.xfer.recover.mupdate.failed",
+                           lf_intname("mbox.name", item->mbentry->name),
+                           lf_err("error", r));
             }
         }
     }
@@ -12715,7 +12730,9 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
     struct quota q;
     int r;
 
-    syslog(LOG_INFO, "XFER: setting quota root %s", mboxname);
+    xsyslog_ev(LOG_INFO, "imap.xfer.step",
+               lf_s("xfer.step", "setting_quotaroot"),
+               lf_intname("quota.root", mboxname));
 
     quota_init(&q, mboxname);
     r = quota_read(&q, NULL, 0);
@@ -12733,10 +12750,9 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
     quota_free(&q);
 
     r = getresult(xfer->sync_cs.backend->in, "Q01");
-    if (r) syslog(LOG_ERR,
-                  "Could not move mailbox: %s, " \
-                  "failed setting initial quota root",
-                  mboxname);
+    if (r) xsyslog_ev(LOG_ERR, "imap.xfer.quotaroot.failed",
+                      lf_intname("quota.root", mboxname),
+                      lf_err("error", r));
     return r;
 }
 
@@ -12852,8 +12868,10 @@ static void cmd_xfer(const char *tag, const char *name,
         /* if we are not moving a user, just move the one mailbox */
         if (item->state != XFER_MOVING_USER) {
 
-            syslog(LOG_INFO, "XFER: mailbox '%s' -> %s!%s",
-                   mbentry->name, xfer->toserver, xfer->topart);
+            xsyslog_ev(LOG_INFO, "imap.xfer.started",
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_s("proxy.server", xfer->toserver),
+                       lf_s("mbox.part", xfer->topart));
 
             /* is the selected mailbox the one we're moving? */
             if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index))) {
@@ -12869,8 +12887,10 @@ static void cmd_xfer(const char *tag, const char *name,
         } else {
             xfer->userid = xstrdupnull(mbname_userid(mbname));
 
-            syslog(LOG_INFO, "XFER: user '%s' -> %s!%s",
-                   xfer->userid, xfer->toserver, xfer->topart);
+            xsyslog_ev(LOG_INFO, "imap.xfer.started",
+                       lf_s("u.username", xfer->userid),
+                       lf_s("proxy.server", xfer->toserver),
+                       lf_s("mbox.part", xfer->topart));
 
             if (!config_getswitch(IMAPOPT_ALLOWUSERMOVES)) {
                 /* not configured to allow user moves */
@@ -12924,7 +12944,9 @@ static void cmd_xfer(const char *tag, const char *name,
             if (!r) {
                 /* this was a successful user move, and we need to delete
                    certain user meta-data (but not seen state!) */
-                syslog(LOG_INFO, "XFER: deleting user metadata");
+                xsyslog_ev(LOG_INFO, "imap.xfer.step",
+                           lf_s("xfer.step", "deleting_user_metadata"),
+                           lf_s("u.username", xfer->userid));
                 user_deletedata(inbox_mbentry, 0);
             }
             user_nslock_release(&user_nslock);
@@ -14443,14 +14465,15 @@ static void cmd_mupdatepush(char *tag, char *name)
 
     /* Push mailbox to mupdate server */
     if (!mupdate_h) {
-        syslog(LOG_INFO, "XFER: connecting to mupdate '%s'",
-               config_mupdate_server);
+        xsyslog_ev(LOG_INFO, "imap.mupdate.connecting",
+                   lf_s("proxy.server", config_mupdate_server));
 
         r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
         retry = 1;
         if (r) {
-            syslog(LOG_INFO, "Failed to connect to mupdate '%s'",
-                   config_mupdate_server);
+            xsyslog_ev(LOG_INFO, "imap.mupdate.connect.failed",
+                       lf_s("proxy.server", config_mupdate_server),
+                       lf_err("error", r));
             goto done;
         }
     }
@@ -15690,9 +15713,10 @@ static void push_updates(int idling)
                     int r = conversations_open_user(imapd_userid, 1/*shared*/,
                                                     &convstate);
                     if (r) {
-                        syslog(LOG_WARNING,
-                               "error opening conversations for %s: %s",
-                               imapd_userid, error_message(r));
+                        xsyslog_ev(LOG_WARNING,
+                                   "imap.conversations.open.failed",
+                                   lf_s("u.username", imapd_userid),
+                                   lf_err("error", r));
                     }
                 }
 
