@@ -88,4 +88,19 @@ sub test_email_set_ifunchangedby_other_objects
         { type => 'stateMismatch', failed => [ '#new' ] },
         $res->sentence(2)->arguments,
     );
+
+    xlog $self, "a creation id of another type names no Email, so null holds";
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            create => { box => { name => 'box' } },
+        }, 'R1' ],
+        [ 'Email/set', {
+            ifUnchangedBy => { '#box' => undef },
+            update => { $changed => { 'keywords/$answered' => JSON::true } },
+        }, 'R2' ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $changed => undef },
+        $res->sentence(1)->arguments->{updated},
+    );
 }
