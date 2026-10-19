@@ -4998,8 +4998,10 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
         switch (pipe_including_tag(backend_current, tag, 0)) {
         case PROXY_OK:
-            syslog(LOG_DEBUG, "open: user %s opened %s on %s",
-                   imapd_userid, name, mbentry->server);
+            xsyslog_ev(LOG_DEBUG, "imap.mailbox.opened",
+                       lf_s("u.username", imapd_userid),
+                       lf_intname("mbox.name", intname),
+                       lf_s("proxy.server", mbentry->server));
 
             mboxlist_entry_free((mbentry_t **) &backend_current->context);
             backend_current->context = mboxlist_entry_copy(mbentry);
@@ -5008,8 +5010,9 @@ static void cmd_select(char *tag, char *cmd, char *name)
             protgroup_insert(protin, backend_current->in);
             break;
         default:
-            syslog(LOG_DEBUG, "open: user %s failed to open %s", imapd_userid,
-                   name);
+            xsyslog_ev(LOG_DEBUG, "imap.mailbox.open.failed",
+                       lf_s("u.username", imapd_userid),
+                       lf_intname("mbox.name", intname));
             /* not successfully selected */
             backend_current = NULL;
             break;
@@ -5093,7 +5096,9 @@ static void cmd_select(char *tag, char *cmd, char *name)
     /* n.b. this debug log line is now load-bearing -- the cassandane test
      * Simple.toggleable_debug_logging looks for it
      */
-    syslog(LOG_DEBUG, "open: user %s opened %s", imapd_userid, name);
+    xsyslog_ev(LOG_DEBUG, "imap.mailbox.opened",
+               lf_s("u.username", imapd_userid),
+               lf_intname("mbox.name", intname));
 
  done:
     mboxlist_entry_free(&mbentry);
@@ -5893,9 +5898,8 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
                                  FETCH_EMAILID | FETCH_THREADID))) {
         r = conversations_open_user(imapd_userid, readonly, &convstate);
         if (r) {
-            syslog(LOG_WARNING, "error opening conversations for %s: %s",
-                                imapd_userid,
-                                error_message(r));
+            xsyslog_ev(LOG_WARNING, "imap.conversations.open.failed",
+                       lf_s("u.username", imapd_userid), lf_err("error", r));
             goto freeargs;
         }
     }
@@ -6551,7 +6555,6 @@ static void cmd_sort(char *tag, int usinguid)
     struct sortcrit *sortcrit = NULL;
     struct searchargs *searchargs = NULL;
     clock_t start = clock();
-    char mytime[100];
     int n;
 
     if (backend_current) {
@@ -6612,11 +6615,12 @@ static void cmd_sort(char *tag, int usinguid)
         condstore_enabled("SORT MODSEQ");
 
     if (CONFIG_TIMING_VERBOSE) {
-        snprintf(mytime, sizeof(mytime), "%2.3f",
-                 (clock() - start) / (double) CLOCKS_PER_SEC);
         char *s = sortcrit_as_string(sortcrit);
-        syslog(LOG_DEBUG, "SORT (%s) processing time: %d msg in %s sec",
-               s, n, mytime);
+        xsyslog_ev(LOG_DEBUG, "imap.sort.done",
+                   lf_s("search.sortcrit", s),
+                   lf_d("search.results", n),
+                   lf_duration("search.duration",
+                               (clock() - start) / (double) CLOCKS_PER_SEC));
         free(s);
     }
     search_reply_completed(tag, n, start);
@@ -7229,7 +7233,9 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
                     if (!CAPA(s_conn, CAPA_MUPDATE)) {
                         // Huh?
                         // "reserve mailbox on MUPDATE"
-                        syslog(LOG_WARNING, "backend %s is not advertising any MUPDATE capability (%s:%d)", server, __FILE__, __LINE__);
+                        xsyslog_ev(LOG_WARNING,
+                                   "imap.murder.mupdate.unadvertised",
+                                   lf_s("proxy.server", server));
                     }
 
                     // why not send a LOCALCREATE to the backend?
@@ -7274,7 +7280,9 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
                     if (!CAPA(s_conn, CAPA_MUPDATE)) {
                         // Huh?
                         // "do MUPDATE create operations"
-                        syslog(LOG_WARNING, "backend %s is not advertising any MUPDATE capability (%s:%d)", server, __FILE__, __LINE__);
+                        xsyslog_ev(LOG_WARNING,
+                                   "imap.murder.mupdate.unadvertised",
+                                   lf_s("proxy.server", server));
                     }
 
                     /* make sure we've seen the update */
@@ -7300,7 +7308,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
             } // (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED)
 
             else {
-                syslog(LOG_ERR, "murder configuration I cannot deal with");
+                xsyslog_ev(LOG_ERR, "imap.murder.config.unsupported");
                 prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_SERVER_UNAVAILABLE));
                 goto done;
             }
@@ -7438,9 +7446,8 @@ localcreate:
     if (is_inbox && compactids && (!minor_version || minor_version >= 20)) {
         r = conversations_enable_compactids(cstate, 1);
         if (r) {
-            syslog(LOG_NOTICE,
-                   "IOERROR: failed to enable compactid for %s (%s:%d)",
-                   imapd_userid, __FILE__, __LINE__);
+            xsyslog_ev(LOG_NOTICE, "imap.mailbox.compactids.failed",
+                       lf_s("u.username", imapd_userid), lf_err("error", r));
         }
     }
     jmap_set_mailboxid(cstate, mailbox_mbentry(mailbox), mailboxid);
@@ -7450,15 +7457,11 @@ localcreate:
         r = annotatemore_write(mbname_intname(mbname), "/specialuse", mbname_userid(mbname), &specialuse);
         if (r) {
             /* XXX - failure here SHOULD cause a cleanup of the created mailbox */
-            syslog(
-                    LOG_ERR,
-                    "IOERROR: failed to write specialuse for %s on %s (%s) (%s:%d)",
-                    imapd_userid,
-                    mbname_intname(mbname),
-                    buf_cstring(&specialuse),
-                    __FILE__,
-                    __LINE__
-                );
+            xsyslog_ev(LOG_ERR, "imap.mailbox.specialuse.write.failed",
+                       lf_s("u.username", imapd_userid),
+                       lf_mbname("mbox.name", mbname),
+                       lf_buf("annot.value", &specialuse),
+                       lf_err("error", r));
 
             prot_printf(imapd_out, "%s NO %s (%s:%d)\r\n", tag, error_message(r), __FILE__, __LINE__);
             goto done;
@@ -7476,9 +7479,10 @@ localcreate:
         if (buf.len) {
             int r1 = annotatemore_writemask(mbentry.name, annot, imapd_userid, &buf);
             if (r1) {
-                syslog(LOG_NOTICE,
-                       "failed to write annotation %s on mailbox %s: %s",
-                       annot, mbentry.name, error_message(r1));
+                xsyslog_ev(LOG_NOTICE, "imap.annotation.write.failed",
+                           lf_intname("mbox.name", mbentry.name),
+                           lf_s("annot.entry", annot),
+                           lf_err("error", r1));
             }
         }
 
@@ -8388,20 +8392,23 @@ submboxes:
 respond:
 
     if (r) {
-        xsyslog(LOG_NOTICE, "rename failed",
-                "oldmboxname=<%s> newmboxname=<%s> error=<%s>",
-                oldmailboxname, newmailboxname, error_message(r));
+        xsyslog_ev(LOG_NOTICE, "imap.mailbox.rename.failed",
+                   lf_intname("old.mbox.name", oldmailboxname),
+                   lf_intname("mbox.name", newmailboxname),
+                   lf_err("error", r));
         // ensure the mboxlist entry gets fixed up or removed
         if (olddestmbentry) {
             int r2 = mboxlist_update_full(olddestmbentry, /*localonly*/1, /*silent*/1);
             if (r2)
-                xsyslog(LOG_ERR, "IOERROR: replacing old destination tombstone after rename error",
-                        "mboxname=<%s> error=<%s>", olddestmbentry->name, error_message(r2));
+                xsyslog_ev(LOG_ERR, "imap.mailbox.tombstone.restore.failed",
+                           lf_intname("mbox.name", olddestmbentry->name),
+                           lf_err("error", r2));
         } else if (newdestmbentry) {
             int r2 = mboxlist_delete(newdestmbentry);
             if (r2)
-                xsyslog(LOG_ERR, "IOERROR: removing temporary uniqueid tombstone after rename error",
-                        "mboxname=<%s> error=<%s>", newdestmbentry->name, error_message(r2));
+                xsyslog_ev(LOG_ERR, "imap.mailbox.tombstone.remove.failed",
+                           lf_intname("mbox.name", newdestmbentry->name),
+                           lf_err("error", r2));
         }
     }
 
@@ -8527,9 +8534,10 @@ static void cmd_reconstruct(const char *tag, const char *name, int recursive)
             int ret;
 
             /* Child - exec reconstruct*/
-            syslog(LOG_NOTICE, "Reconstructing '%s' (%s) for user '%s'",
-                   intname, recursive ? "recursive" : "not recursive",
-                   imapd_userid);
+            xsyslog_ev(LOG_NOTICE, "imap.reconstruct.started",
+                       lf_s("u.username", imapd_userid),
+                       lf_intname("mbox.name", intname),
+                       lf_b("imap.recursive", recursive));
 
             fclose(stdin);
             fclose(stdout);
@@ -8588,9 +8596,9 @@ static void cmd_reconstruct(const char *tag, const char *name, int recursive)
             int ret;
 
             /* Child - exec reconstruct*/
-            syslog(LOG_NOTICE,
-                   "Regenerating quota roots starting with '%s' for user '%s'",
-                   intname, imapd_userid);
+            xsyslog_ev(LOG_NOTICE, "imap.quotaroots.regenerating",
+                       lf_s("u.username", imapd_userid),
+                       lf_intname("mbox.name", intname));
 
             fclose(stdin);
             fclose(stdout);
