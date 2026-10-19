@@ -66,15 +66,16 @@ HIDDEN void jmap_vacation_init(jmap_settings_t *settings)
     if (!config_getswitch(IMAPOPT_JMAP_VACATION)) return;
 
     if (config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
-        xsyslog(LOG_WARNING,
-                "can't use home directories -- disabling module", NULL);
+        xsyslog_ev(LOG_WARNING, "jmap.module.disabled",
+                   lf_s("jmap.module", "vacation"),
+                   lf_s("config.option", "sieveusehomedir"));
         return;
     }
 
     if (!sievedir_valid_path(config_getstring(IMAPOPT_SIEVEDIR))) {
-        xsyslog(LOG_WARNING,
-                "sievedir option is not defined or invalid -- disabling module",
-                NULL);
+        xsyslog_ev(LOG_WARNING, "jmap.module.disabled",
+                   lf_s("jmap.module", "vacation"),
+                   lf_s("config.option", "sievedir"));
         return;
     }
 

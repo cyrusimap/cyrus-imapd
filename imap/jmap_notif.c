@@ -51,8 +51,10 @@ HIDDEN int jmap_create_notify_collection(const char *userid, mbentry_t **mbentry
 
         /* we lost the race, that's OK */
         if (r == IMAP_MAILBOX_LOCKED) r = 0;
-        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                      notifmboxname, error_message(r));
+        if (r) xsyslog_ev(LOG_ERR, "jmap.notify.collection.create.failed",
+                          lf_s("u.username", userid),
+                          lf_intname("mbox.name", notifmboxname),
+                          lf_err("error", r));
 
         r = mboxlist_lookup(notifmboxname, mbentryptr, NULL);
         user_nslock_release(&user_nslock);
@@ -171,7 +173,7 @@ static int append_eventnotif(const char *from,
     FILE *fp = append_newstage(mailbox_name(notifmbox), created->tv_sec,
             strhash(ical_uid), &stage);
     if (!fp) {
-        xsyslog(LOG_ERR, "append_newstage failed", "name=%s", mailbox_name(notifmbox));
+        xsyslog_ev(LOG_ERR, "jmap.notify.stage.failed", lf_mailbox(notifmbox));
         r = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -313,8 +315,9 @@ HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
                                      json_t *jpatch)
 {
     if (!notifmbox) {
-        xsyslog(LOG_ERR, "can not create event notification (null notifmbox)",
-                "calendar=%s ical_uid=%s", calmboxname, eid->ical_uid);
+        xsyslog_ev(LOG_ERR, "jmap.notify.mailbox.missing",
+                   lf_intname("mbox.name", calmboxname),
+                   lf_s("cal.uid", eid->ical_uid));
         return 0;
     }
 
@@ -372,22 +375,22 @@ HIDDEN int jmap_create_caldaveventnotif(const char *userid,
     if ((user_nslock_islocked(accountid) == LOCK_SHARED) ||
         (user_nslock_islocked(userid) == LOCK_SHARED)) {
         /* bail out, before notification mailbox crashes on invalid lock */
-        xsyslog(LOG_ERR, "can not exlusively lock jmapnotify collection",
-                "accountid=%s", accountid);
+        xsyslog_ev(LOG_ERR, "jmap.notify.lock.unavailable",
+                   lf_s("jmap.accountid", accountid));
         goto done;
     }
 
     r = jmap_create_notify_collection(accountid, &notifmb);
     if (r) {
-        xsyslog(LOG_ERR, "can not create jmapnotify collection",
-                "accountid=%s error=%s", accountid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.notify.collection.create.failed",
+                   lf_s("jmap.accountid", accountid), lf_err("error", r));
         goto done;
     }
 
     r = mailbox_open_iwl(notifmb->name, &notifmbox);
     if (r) {
-        xsyslog(LOG_ERR, "can not open notification mailbox",
-                "name=%s", notifmb->name);
+        xsyslog_ev(LOG_ERR, "jmap.notify.mailbox.open.failed",
+                   lf_intname("mbox.name", notifmb->name), lf_err("error", r));
         goto done;
     }
 

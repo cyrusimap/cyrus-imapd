@@ -703,8 +703,9 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
 
     /* Can't use fast path. Allocate and try to detect charset. */
     if (cs == CHARSET_UNKNOWN_CHARSET || encoding == ENCODING_UNKNOWN) {
-        syslog(LOG_INFO, "decode_to_utf8 error (%s, %s)",
-                charset, encoding_name(encoding));
+        xsyslog_ev(LOG_INFO, "jmap.text.charset.unknown",
+                   lf_s("part.charset", charset),
+                   lf_s("part.encoding", encoding_name(encoding)));
         if (is_encoding_problem) *is_encoding_problem = 1;
         goto done;
     }
@@ -713,8 +714,9 @@ EXPORTED void jmap_decode_to_utf8(const char *charset, int encoding,
     size_t nreplacement = 0;
     if (!strcasecmp(charset_id, "UTF-8")) {
         if (charset_decode(text, data, datalen, encoding)) {
-            xsyslog(LOG_INFO, "failed to decode UTF-8 data",
-                    "encoding=<%s>", encoding_name(encoding));
+            xsyslog_ev(LOG_INFO, "jmap.text.decode.failed",
+                       lf_s("part.charset", charset),
+                       lf_s("part.encoding", encoding_name(encoding)));
             if (is_encoding_problem) *is_encoding_problem = 1;
             goto done;
         }
@@ -1497,9 +1499,11 @@ uid:
             int r = caldav_lookup_by_cmodseq(db, eid->createdmodseq, &mycdata);
             if (r || !mycdata || !mycdata->ical_uid) {
                 if (r != CYRUSDB_NOTFOUND) {
-                    syslog(LOG_ERR,
-                           "caldav_lookup_by_modseq(%s => " MODSEQ_FMT ") failed: %s",
-                           p, eid->createdmodseq, error_message(r));
+                    xsyslog_ev(LOG_ERR, "jmap.calendarevent.lookup.failed",
+                               lf_s("cal.eventid", p),
+                               lf_raw("cal.createdmodseq", MODSEQ_FMT,
+                                      eid->createdmodseq),
+                               lf_err("error", r));
                 }
             }
             else {
@@ -1524,8 +1528,8 @@ done:
         int r = caldav_lookup_uid(db, eid->ical_uid, cdatap);
         if (r || !*cdatap || !(*cdatap)->ical_uid) {
             if (r != CYRUSDB_NOTFOUND) {
-                syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s",
-                       eid->ical_uid, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.calendarevent.lookup.failed",
+                           lf_s("cal.uid", eid->ical_uid), lf_err("error", r));
             }
 
             xzfree(eid->_alloced[0]);

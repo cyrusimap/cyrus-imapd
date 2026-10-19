@@ -137,10 +137,13 @@ EXPORTED json_t *jmap_push_get_state(jmap_push_ctx_t *jpush)
     struct mboxname_counters cur_counters;
     json_t *jstate = NULL;
 
-    if (mboxname_read_counters(jpush->inboxname, &cur_counters)) {
+    int r = mboxname_read_counters(jpush->inboxname, &cur_counters);
+    if (r) {
         /* Something went wrong - don't reschedule */
-        xsyslog(LOG_NOTICE, "Failed to read counters",
-                "accountid=<%s>", jpush->accountid);
+        xsyslog_ev(LOG_NOTICE, "jmap.push.counters.unreadable",
+                   lf_s("jmap.accountid", jpush->accountid),
+                   lf_intname("mbox.name", jpush->inboxname),
+                   lf_err("error", r));
         return NULL;
     }
 

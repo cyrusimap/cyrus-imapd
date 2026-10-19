@@ -379,8 +379,11 @@ static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
         if (t < INT_MAX) {
             sort_order = (int) t;
         } else {
-            syslog(LOG_ERR, "%s: bogus sortorder annotation value for %s",
-                   mbname_intname(mbname), httpd_userid);
+            xsyslog_ev(LOG_WARNING, "jmap.mailbox.annotation.invalid",
+                       lf_jmapreq(req),
+                       lf_mbname("mbox.name", mbname),
+                       lf_s("annot.entry", annot),
+                       lf_buf("annot.value", &attrib));
         }
     }
 
@@ -425,8 +428,10 @@ static int _mbox_get_readcounts(jmap_req_t *req,
                                    CONV_FOLDER_KEY_MBE(req->cstate, mbentry),
                                    &convstatus);
     if (r) {
-        syslog(LOG_ERR, "conversation_getstatus(%s): %s",
-                mbname_intname(mbname), error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.mailbox.counts.failed",
+                   lf_jmapreq(req),
+                   lf_mbname("mbox.name", mbname),
+                   lf_err("error", r));
         return r;
     }
     if (jmap_wantprop(props, "totalEmails")) {
@@ -595,8 +600,10 @@ static json_t *_mbox_get(jmap_req_t *req,
             int r = status_lookup_mbentry(mbentry, req->userid,
                                           STATUS_MBOPTIONS, &sdata);
             if (r) {
-                syslog(LOG_ERR, "getstatus(%s): %s",
-                        mbname_intname(mbname), error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.mailbox.status.failed",
+                           lf_jmapreq(req),
+                           lf_mbname("mbox.name", mbname),
+                           lf_err("error", r));
                 goto done;
             }
             if (jmap_wantprop(props, "isSeenShared")) {
@@ -655,7 +662,10 @@ static json_t *_mbox_get(jmap_req_t *req,
 
 done:
     if (r) {
-        syslog(LOG_ERR, "_mbox_get: %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.mailbox.get.failed",
+                   lf_jmapreq(req),
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_err("error", r));
     }
     free(role);
     mboxlist_entry_free(&parent);
@@ -738,7 +748,9 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     /* Convert mbox to JMAP object. */
     obj = _mbox_get(req, mbentry, rock->roles, rock->get->props, share_type, rock->sublist);
     if (!obj) {
-        syslog(LOG_INFO, "could not convert mailbox %s to JMAP", mbentry->name);
+        xsyslog_ev(LOG_INFO, "jmap.mailbox.convert.failed",
+                   lf_jmapreq(req),
+                   lf_intname("mbox.name", mbentry->name));
         return IMAP_INTERNAL;
     }
     json_array_append_new(list, obj);
@@ -1171,7 +1183,8 @@ static int _mboxquery_run(mboxquery_t *query, const mboxquery_args_t *args)
     if (query->need_sublist) {
         query->sublist = mboxlist_sublist(query->req->userid);
         if (!query->sublist) {
-            syslog(LOG_ERR, "jmap: mboxquery_run: could not load sublist");
+            xsyslog_ev(LOG_ERR, "jmap.mailbox.sublist.failed",
+                       lf_jmapreq(query->req));
             return IMAP_INTERNAL;
         }
     }
@@ -1636,14 +1649,17 @@ static char *_mbox_newname(const char *name, const char *parentname, int is_topl
     cs = charset_lookupname("utf-8");
     if (cs == CHARSET_UNKNOWN_CHARSET) {
         /* huh? */
-        syslog(LOG_INFO, "charset utf-8 is unknown");
+        xsyslog_ev(LOG_INFO, "jmap.text.charset.unknown",
+                   lf_s("part.charset", "utf-8"));
         goto done;
     }
 
     /* Encode mailbox name in IMAP UTF-7 */
     char *s = charset_to_imaputf7(name, strlen(name), cs, ENCODING_NONE);
     if (!s) {
-        syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
+        xsyslog_ev(LOG_ERR, "jmap.mailbox.name.encode.failed",
+                   lf_utf8("jmap.mailbox.name", name),
+                   lf_intname("mbox.parent", parentname));
         goto done;
     }
     mbname_t *mbname = mbname_from_intname(parentname);
@@ -1708,8 +1724,9 @@ static char *_mbox_tmpname(const char *name, const char *parentname, int is_topl
         }
         /* Log any error and retry. */
         if (r) {
-            syslog(LOG_ERR, "jmap: _mbox_tmpname(%s): %s",
-                    buf_cstring(&buf), error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.mailbox.lookup.failed",
+                       lf_intname("mbox.tmpname", mboxname),
+                       lf_err("error", r));
         }
     } while (retries < 3);
     return NULL;
@@ -2005,8 +2022,11 @@ static int _mbox_set_annots(jmap_req_t *req,
         static const char *annot = "/specialuse";
         r = annotatemore_write(mboxname, annot, req->accountid, &buf);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.mailbox.annotation.write.failed",
+                       lf_jmapreq(req),
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("annot.entry", annot),
+                       lf_err("error", r));
             goto done;
         }
         buf_reset(&buf);
@@ -2019,8 +2039,11 @@ static int _mbox_set_annots(jmap_req_t *req,
         static const char *sortorder_annot = IMAP_ANNOT_NS "sortorder";
         r = annotatemore_writemask(mboxname, sortorder_annot, httpd_userid, &buf);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    sortorder_annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.mailbox.annotation.write.failed",
+                       lf_jmapreq(req),
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("annot.entry", sortorder_annot),
+                       lf_err("error", r));
             goto done;
         }
     }
@@ -2032,8 +2055,11 @@ static int _mbox_set_annots(jmap_req_t *req,
         static const char *annot = IMAP_ANNOT_NS "color";
         r = annotatemore_writemask(mboxname, annot, httpd_userid, &buf);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.mailbox.annotation.write.failed",
+                       lf_jmapreq(req),
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("annot.entry", annot),
+                       lf_err("error", r));
             goto done;
         }
         buf_reset(&buf);
@@ -2046,8 +2072,11 @@ static int _mbox_set_annots(jmap_req_t *req,
         static const char *annot = IMAP_ANNOT_NS "showaslabel";
         r = annotatemore_writemask(mboxname, annot, httpd_userid, &buf);
         if (r) {
-            syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    annot, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.mailbox.annotation.write.failed",
+                       lf_jmapreq(req),
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("annot.entry", annot),
+                       lf_err("error", r));
             goto done;
         }
     }
@@ -2166,7 +2195,10 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     /* Encode the mailbox name for IMAP. */
     mboxname = _mbox_newname(args->name, mbparent->name, args->is_toplevel);
     if (!mboxname) {
-        syslog(LOG_ERR, "could not encode mailbox name");
+        xsyslog_ev(LOG_ERR, "jmap.mailbox.name.encode.failed",
+                   lf_jmapreq(req),
+                   lf_utf8("jmap.mailbox.name", args->name),
+                   lf_intname("mbox.parent", mbparent->name));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -2196,7 +2228,9 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
             result->old_imapname = NULL;
             result->tmp_imapname = _mbox_tmpname(args->name, mbparent->name, args->is_toplevel);
             if (!result->tmp_imapname) {
-                syslog(LOG_ERR, "jmap: no mailbox tmpname for %s", mboxname);
+                xsyslog_ev(LOG_ERR, "jmap.mailbox.tmpname.failed",
+                           lf_jmapreq(req),
+                           lf_intname("mbox.name", mboxname));
                 r = IMAP_INTERNAL;
                 goto done;
             }
@@ -2205,7 +2239,11 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
             /* Keep on processing with tmpname */
         }
         else {
-            syslog(LOG_ERR, "jmap: mailbox already exists: %s", mboxname);
+            /* A name already in use is an ordinary answer to a create:
+              * the client is told alreadyExists. */
+            xsyslog_ev(LOG_WARNING, "jmap.mailbox.name.taken",
+                       lf_jmapreq(req),
+                       lf_intname("mbox.name", mboxname));
             result->err = json_pack("{s:s}", "type", "alreadyExists");
             goto done;
         }
@@ -2242,8 +2280,10 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
                                0/*isadmin*/, req->userid, req->authstate,
                                flags, args->shareWith ? &mailbox : NULL);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.mailbox.create.failed",
+                   lf_jmapreq(req),
+                   lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
         goto done;
     }
     created = true;
@@ -2443,8 +2483,10 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         oldmboxname = xstrdup(mbentry->name);
         r = _findparent(oldmboxname, &mbparent);
         if (r) {
-            syslog(LOG_INFO, "_findparent(%s) failed: %s",
-                            oldmboxname, error_message(r));
+            xsyslog_ev(LOG_INFO, "jmap.mailbox.parent.lookup.failed",
+                       lf_jmapreq(req),
+                       lf_intname("mbox.name", oldmboxname),
+                       lf_err("error", r));
             goto done;
         }
         oldparentname = xstrdup(mbparent->name);
@@ -2611,7 +2653,11 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             /* Determine the unique IMAP mailbox name. */
             char *newmboxname = _mbox_newname(name, parentname, is_toplevel);
             if (!newmboxname) {
-                syslog(LOG_ERR, "_mbox_newname returns NULL: can't rename %s", mboxname);
+                xsyslog_ev(LOG_ERR, "jmap.mailbox.name.encode.failed",
+                           lf_jmapreq(req),
+                           lf_utf8("jmap.mailbox.name", name),
+                           lf_intname("mbox.parent", parentname),
+                           lf_intname("old.mbox.name", mboxname));
                 r = IMAP_INTERNAL;
                 goto done;
             }
@@ -2637,7 +2683,9 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                     result->old_imapname = xstrdup(oldmboxname);
                     result->tmp_imapname = _mbox_tmpname(name, parentname, is_toplevel);
                     if (!result->tmp_imapname) {
-                        syslog(LOG_ERR, "jmap: no mailbox tmpname for %s", newmboxname);
+                        xsyslog_ev(LOG_ERR, "jmap.mailbox.tmpname.failed",
+                                   lf_jmapreq(req),
+                                   lf_intname("mbox.name", newmboxname));
                         r = IMAP_INTERNAL;
                         goto done;
                     }
@@ -2646,7 +2694,10 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                     /* Keep on processing with tmpname */
                 }
                 else {
-                    syslog(LOG_ERR, "jmap: mailbox already exists: %s", newmboxname);
+                    xsyslog_ev(LOG_WARNING, "jmap.mailbox.name.taken",
+                               lf_jmapreq(req),
+                               lf_intname("old.mbox.name", oldmboxname),
+                               lf_intname("mbox.name", newmboxname));
                     result->err = json_pack("{s:s}", "type", "alreadyExists");
                     goto done;
                 }
@@ -2684,8 +2735,11 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             jmap_mbentry_cache_free(req);
 
             if (r) {
-                syslog(LOG_ERR, "mboxlist_renametree(old=%s new=%s): %s",
-                        oldmboxname, newmboxname, error_message(r));
+                xsyslog_ev(LOG_ERR, "jmap.mailbox.rename.failed",
+                           lf_jmapreq(req),
+                           lf_intname("old.mbox.name", oldmboxname),
+                           lf_intname("mbox.name", newmboxname),
+                           lf_err("error", r));
                 goto done;
             }
             mboxname = newmboxname;  // cheap and nasty change!
@@ -2777,8 +2831,8 @@ static int in_otherfolder_cb(const conv_guidrec_t *rec, void *rock)
     intptr_t src_foldernum = (intptr_t)rock;
 
     if (rec->version < 1) {
-        syslog(LOG_ERR, "%s:%s: outdated guid record in mailbox %s",
-                __FILE__, __func__, conv_guidrec_mboxname(rec));
+        xsyslog_ev(LOG_ERR, "jmap.mailbox.guidrecord.legacy",
+                   lf_intname("mbox.name", conv_guidrec_mboxname(rec)));
         return IMAP_INTERNAL;
     }
 
@@ -2805,19 +2859,28 @@ static int _mbox_on_destroy_move(jmap_req_t *req,
     const mbentry_t *dst_mbentry =
         jmap_mbentry_by_mboxid(req, set->on_destroy_move_to_mailboxid);
     if (!dst_mbentry) {
-        syslog(LOG_ERR, "%s: can't find mailbox id %s", __func__,
-                        set->on_destroy_move_to_mailboxid);
+        /* The client names onDestroyMoveToMailboxId, so naming one we
+         * don't have is its own doing, and notFound is the answer. */
+        xsyslog_ev(LOG_WARNING, "jmap.mailbox.move.target.missing",
+                   lf_jmapreq(req),
+                   lf_s("mbox.mailboxid", set->on_destroy_move_to_mailboxid));
         r = IMAP_NOTFOUND;
         goto done;
     }
     r = mailbox_open_irl(src_mbentry->name, &src_mbox);
     if (r) {
-        syslog(LOG_ERR, "%s: can't open %s", __func__, src_mbentry->name);
+        xsyslog_ev(LOG_ERR, "jmap.mailbox.open.failed",
+                   lf_jmapreq(req),
+                   lf_intname("mbox.name", src_mbentry->name),
+                   lf_err("error", r));
         goto done;
     }
     r = mailbox_open_iwl(dst_mbentry->name, &dst_mbox);
     if (r) {
-        syslog(LOG_ERR, "%s: can't open %s", __func__, dst_mbentry->name);
+        xsyslog_ev(LOG_ERR, "jmap.mailbox.open.failed",
+                   lf_jmapreq(req),
+                   lf_intname("mbox.name", dst_mbentry->name),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -2975,9 +3038,11 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
     r = conversation_getstatus(req->cstate,
             CONV_FOLDER_KEY_MBE(req->cstate, mbentry), &convstatus);
     if (r) {
-        xsyslog(LOG_WARNING, "could not read msgcount, will default to 0",
-                "mboxid=<%s> uniqueid=<%s> err=<%s>",
-                mboxid, mbentry->uniqueid, error_message(r));
+        xsyslog_ev(LOG_WARNING, "jmap.mailbox.counts.failed",
+                   lf_jmapreq(req),
+                   lf_s("mbox.mailboxid", mboxid),
+                   lf_s("mbox.uniqueid", mbentry->uniqueid),
+                   lf_err("error", r));
         r = 0;
     }
     else msgcount = convstatus.emailexists;
@@ -3016,16 +3081,23 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid,
         goto done;
     }
 
-    xsyslog(LOG_INFO, "Destroyed mailbox",
-            "mboxid=<%s> uniqueid=<%s> msgcount=<%zu>",
-            mboxid, mbentry->uniqueid, msgcount);
+    xsyslog_ev(LOG_INFO, "jmap.mailbox.destroyed",
+               lf_jmapreq(req),
+               lf_intname("mbox.name", mbentry->name),
+               lf_s("mbox.mailboxid", mboxid),
+               lf_s("mbox.uniqueid", mbentry->uniqueid),
+               lf_zu("mbox.msgcount", msgcount));
 
     /* Remove subscription.  Logged, not reported: the mailbox really is
      * destroyed, so all a failure here leaves is a stale subscription. */
     int r2 = mboxlist_changesub(mbentry->name, req->userid, httpd_authstate, 0, 1, 0, 1);
     if (r2) {
-        syslog(LOG_ERR, "jmap: mbox_destroy: can't unsubscribe %s:%s",
-                mbentry->name, error_message(r2));
+        /* A mailbox that was never subscribed fails here too, so this
+         * isn't reliably an error at all. */
+        xsyslog_ev(LOG_WARNING, "jmap.mailbox.unsubscribe.failed",
+                   lf_jmapreq(req),
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_err("error", r2));
     }
 
     strarray_add(update_intermediaries, mbentry->name);
@@ -3041,8 +3113,10 @@ done:
     if (r) {
         if (result->err == NULL)
             result->err = jmap_server_error(r);
-        syslog(LOG_ERR, "failed to delete mailbox(%s): %s",
-               mboxid, error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.mailbox.destroy.failed",
+                   lf_jmapreq(req),
+                   lf_s("mbox.mailboxid", mboxid),
+                   lf_err("error", r));
     }
     mboxlist_entry_free(&mbinbox);
     mboxlist_entry_free(&mbentry);
@@ -3316,9 +3390,12 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
         strarray_add(update_intermediaries, tmp->new_imapname);
         mboxevent_free(&mboxevent);
         if (r) {
-            syslog(LOG_ERR, "jmap: mailbox rename failed half-way: old=%s tmp=%s new=%s: %s",
-                    tmp->old_imapname ? tmp->old_imapname : "null",
-                    tmp->tmp_imapname, tmp->new_imapname, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.mailbox.rename.interim.failed",
+                       lf_jmapreq(req),
+                       lf_intname("old.mbox.name", tmp->old_imapname),
+                       lf_intname("mbox.tmpname", tmp->tmp_imapname),
+                       lf_intname("mbox.name", tmp->new_imapname),
+                       lf_err("error", r));
 
             /* The mailbox is stuck under its temporary name, which is
              * neither what was asked for nor what it was, and later ops
@@ -4398,7 +4475,8 @@ static int jmap_mailbox_changes(jmap_req_t *req)
     int only_counts_changed = 0;
     int r = _mbox_changes(req, &changes, &only_counts_changed, &err);
     if (r) {
-        syslog(LOG_ERR, "jmap: Mailbox/changes: %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "jmap.mailbox.changes.failed",
+                   lf_jmapreq(req), lf_err("error", r));
         jmap_error(req, jmap_server_error(r));
         goto done;
     }

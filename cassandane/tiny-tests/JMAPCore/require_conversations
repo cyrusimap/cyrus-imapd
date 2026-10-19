@@ -24,6 +24,6 @@ sub test_require_conversations
     # httpd should syslog an error
     $self->assert_syslog_matches(
         $self->{instance},
-        qr/ERROR: cannot enable \w+ module with conversations disabled/,
+        qr/event=jmap\.module\.disabled/,
     );
 }

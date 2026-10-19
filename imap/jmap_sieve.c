@@ -119,15 +119,16 @@ static jmap_method_t jmap_sieve_methods_nonstandard[] = {
 HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
 {
     if (config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
-        xsyslog(LOG_WARNING,
-                "can't use home directories -- disabling module", NULL);
+        xsyslog_ev(LOG_WARNING, "jmap.module.disabled",
+                   lf_s("jmap.module", "sieve"),
+                   lf_s("config.option", "sieveusehomedir"));
         return;
     }
 
     if (!sievedir_valid_path(config_getstring(IMAPOPT_SIEVEDIR))) {
-        xsyslog(LOG_WARNING,
-                "sievedir option is not defined or invalid -- disabling module",
-                NULL);
+        xsyslog_ev(LOG_WARNING, "jmap.module.disabled",
+                   lf_s("jmap.module", "sieve"),
+                   lf_s("config.option", "sievedir"));
         return;
     }
 
@@ -2185,8 +2186,8 @@ static int jmap_sieve_test(struct jmap_req *req)
                             "description", "unable to generate bytecode");
         }
         else if ((fd = mkstemp(template)) < 0) {
-            xsyslog(LOG_WARNING,
-                    "failed to create template", "template=<%s>", template);
+            xsyslog_ev(LOG_WARNING, "jmap.sieve.tempfile.failed",
+                       lf_s("sys.path", template));
 
             err = json_pack("{s:s s:s}", "type", "serverFail",
                             "description", "unable to open temporary file");

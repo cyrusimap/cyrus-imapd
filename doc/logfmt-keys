@@ -41,10 +41,12 @@ mbox.cache.item         which item within a cache record
 mbox.cache.length       the length of a cache entry, in bytes
 mbox.cache.offset       a byte offset into the cache file
 mbox.cache.size         the size of the mapped cache, in bytes
+mbox.changes_epoch      the start of the mailbox's recorded history
 mbox.crcs.annot         annotation sync CRC
 mbox.crcs.basic         basic sync CRC
 mbox.crcs.header        the CRC of the cyrus.header file as read
 mbox.deletedmodseq      highest modseq of a deletion in this mailbox
+mbox.destroyed          when a mailbox was destroyed
 mbox.expunged           how many messages an expunge removed
 mbox.field              which field or annotation reconstruct corrected
 mbox.foldermodseq       the mailbox's folder modseq
@@ -53,8 +55,10 @@ mbox.highestmodseq      the mailbox's highest modseq
 mbox.limit              which exists limit was hit: addressbook, calendar or mailbox
 mbox.lock.duration      how long a mailbox index lock was held, in seconds
 mbox.mailboxid          the mailbox's JMAP id
+mbox.msgcount           how many messages a mailbox holds
 mbox.name               the mailbox name, in the admin namespace
 mbox.owner              the userid that owns the mailbox
+mbox.parent             the parent mailbox name, in the admin namespace
 mbox.part               the partition the mailbox is on
 mbox.readonly           whether the mailbox was opened read-only
 mbox.recno              the physical record number in the index file
@@ -62,6 +66,8 @@ mbox.reconstruct.reason why reconstruct unlinked a record
 mbox.refcount           how many open handles a mailbox struct has
 mbox.repack.dryrun      a repack that reports what it would do, without doing it
 mbox.repack.recalc_nanosec  a repack that recalculates nanosecond internaldates
+mbox.subfolder          the configured subfolder a feature stores things in
+mbox.tmpname            the temporary name a mailbox is parked under mid-rename
 mbox.type               the mailbox type, as a string
 mbox.uidvalidity        the mailbox's uidvalidity
 mbox.uniqueid           the mailbox's uniqueid
@@ -74,24 +80,33 @@ mbox.version            the mailbox index format version
 msg                     placeholder for "no message"; value is always ~null~
 msg.cid                 the message's conversation id
 msg.date                the message's date, as sent
+msg.draft               1 if the record is a draft
 msg.emailid             the message's JMAP id
+msg.expunged            1 if the record is expunged
 msg.flag                a single message flag name
 msg.from                the message's envelope sender
 msg.guid                the message's guid
 msg.id                  the message's RFC 5322 Message-ID
 msg.imapuid             the message's IMAP uid within its mailbox
+msg.internaldate        the message's internaldate
+msg.lastupdated         when the record was last updated
 msg.memofor             the blobId a memo names in its X-ME-Memo-For header
 msg.modseq              the message's modseq
+msg.savedate            the message's savedate
 msg.size                the message's size in bytes
 msg.subject             the message's subject, as UTF-8
 msg.sysflags            the message's system flags, as a string
+msg.threadid            the message's JMAP thread id
 msg.to                  the message's envelope recipient
 
 ### part. - a body part of a message
 
 part.cachefile          path to the extracted-text cache file for this part
+part.charset            the charset a body part declared
 part.count              how many parts an operation covered
+part.encoding           the transfer encoding a body part declared
 part.failed             how many of them it could not handle
+part.id                 a JMAP body part id
 part.subtype            the part's MIME subtype
 part.type               the part's MIME type
 
@@ -118,6 +133,7 @@ send.time               when the message was actually sent
 ### per-subsystem
 
 acl.needed              the ACL rights an operation needed but didn't have
+acl.rights              a set of ACL rights, in its stored string form
 annot.attrib            an annotation attribute name, e.g. value.shared
 annot.column            the column of a line in the annotation definition file
 annot.context           the text a definition-file parse error happened near
@@ -134,13 +150,27 @@ append.callout          the annotation callout program or socket
 append.stage.dir        the staging directory a message is spooled through
 append.stage.file       the staged copy of a message
 append.stage.source     the file a staged message was copied from
+backup.cutoff           the point in time a restore is undoing back to
+backup.reason           why a record or collection was skipped or selected
+backup.replaced         1 if the destroyed resource is replaced by another version
+backup.type             which data a restore covers: contacts, calendars, notes or mail
+backup.undo             what a restore is undoing: create, update or destroy
+backup.update           1 if a resource is recreated as an update, not an undelete
+cal.attendee            a calendar component's ATTENDEE
+cal.createdmodseq       the createdmodseq a JMAP calendar event id encodes
+cal.eventid             a JMAP CalendarEvent id
 cal.organizer           a calendar component's ORGANIZER
+cal.partstat            an attendee's PARTSTAT
+cal.recurid             a calendar component's RECURRENCE-ID
 cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID
+config.option           the name of an imapd.conf option
 conv.guid.exists        how many non-expunged records share this guid
 conv.guid.folderexists  how many of those are in this folder
 conv.guid.numrecords    how many records of any kind share this guid
 dav.collection          the DAV collection a request named
+dav.mailbox             the mailbox a DAV row names, as a name or a uniqueid
+dav.mailbox.byname      1 if dav.mailbox is a name rather than a uniqueid
 dav.owner               the user whose collection a request was for
 dav.resource            the DAV resource within the collection
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
@@ -153,7 +183,33 @@ imip.error              why an iMIP operation failed
 imip.outcome            what an iMIP message did: added, updated, no_action, error
 jmap                    placeholder for "no JMAP request"; value is always ~null~
 jmap.accountid          the JMAP account the request was for
+jmap.addressbook.idform  whether an addressbook id was read as an id or a name
+jmap.addressbookid      a JMAP AddressBook id
+jmap.blobid             a JMAP blob id
+jmap.calendar.idform    whether a calendar id was read as a JMAP id or a name
+jmap.calendarid         a JMAP Calendar id
+jmap.capability         a JMAP capability URI the request asked to use
+jmap.contact.kind       which kind of card an event is about: contact or group
+jmap.contact.name       a contact's full name, as the client sent it
+jmap.contactid          a JMAP Contact, ContactGroup or ContactCard id
+jmap.from.accountid     the account a copy or lookup read from, when not the request's
+jmap.header.form        the internal form code of a JMAP header property
+jmap.mailbox.name       a mailbox name as the client gave it, in UTF-8
+jmap.mailboxids         a JMAP mailboxIds argument, serialised
 jmap.method             the JMAP method call being processed, e.g. Email/get
+jmap.module             the JMAP module an event is about, e.g. sieve
+jmap.noteid             a JMAP Note id
+jmap.push.active        1 if a push subscription was already running
+jmap.push.datatypes     how many data types a push subscription asked for
+jmap.push.next_ping     when an eventSource connection is next due a ping
+jmap.push.next_poll     when a push connection next checks for changes
+jmap.search.field       a field a cached search value was missing
+jmap.search.flag        a system flag mask guidsearch could not handle
+jmap.search.sortkey     the internal sort key code of a search sort
+jmap.seen.source        where $seen comes from for a mailbox: flags or seendb
+jmap.sharee             1 if the request is from a sharee rather than the owner
+jmap.submissionid       a JMAP EmailSubmission id
+jmap.uid.attempts       how many candidate vCard UIDs were tried
 limit.name              which configured limit an operation broke
 limit.value             that limit's configured value
 lmtp.action             what delivery did with the message: implicit, keep, fileinto, ...
