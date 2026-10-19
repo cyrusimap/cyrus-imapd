@@ -113,7 +113,6 @@ static struct mboxevent event_template =
     { EVENT_CONVEXISTS, "vnd.fastmail.convExists", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_CONVUNSEEN, "vnd.fastmail.convUnseen", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_MESSAGE_CID, "vnd.fastmail.cid", EVENT_PARAM_STRING, { 0 }, 0 },
-    { EVENT_COUNTERS, "vnd.fastmail.counters", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_COMPACT_CALIDS, "vnd.fastmail.compactCalendarIds", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_MESSAGE_EMAILID, "vnd.cmu.emailid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MESSAGE_THREADID, "vnd.cmu.threadid", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -658,8 +657,6 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
         return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CONVEXISTS;
     case EVENT_CONVUNSEEN:
         return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CONVUNSEEN;
-    case EVENT_COUNTERS:
-        return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_COUNTERS;
     case EVENT_OLD_UIDSET:
         return type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE);
     default:
@@ -1880,29 +1877,6 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         }
     }
 
-    if (mboxevent_expected_param(event->type, EVENT_COUNTERS)) {
-        struct mboxname_counters counters;
-        struct buf value = BUF_INITIALIZER;
-
-        int r = mboxname_read_counters(mailbox_name(mailbox), &counters);
-        if (!r) buf_printf(&value, "%u "  MODSEQ_FMT " "
-                           MODSEQ_FMT " " MODSEQ_FMT " "
-                           MODSEQ_FMT " " MODSEQ_FMT " "
-                           MODSEQ_FMT " " MODSEQ_FMT " "
-                           MODSEQ_FMT " " MODSEQ_FMT " "
-                           MODSEQ_FMT " " MODSEQ_FMT " "
-                           "%u",
-                           counters.version, counters.highestmodseq,
-                           counters.mailmodseq, counters.caldavmodseq,
-                           counters.carddavmodseq, counters.notesmodseq,
-                           counters.mailfoldersmodseq, counters.caldavfoldersmodseq,
-                           counters.carddavfoldersmodseq, counters.notesfoldersmodseq,
-                           counters.quotamodseq, counters.raclmodseq,
-                           counters.uidvalidity);
-
-        FILL_STRING_PARAM(event, EVENT_COUNTERS, buf_release(&value));
-    }
-
     /* add vnd.fastmail.jmapStates */
     if (mboxevent_expected_param(event->type, EVENT_JMAP_STATES)) {
         struct mboxname_counters counters;
@@ -2169,7 +2143,6 @@ static int filled_params(enum event_type type, struct mboxevent *event)
                 break;
             case EVENT_CONVEXISTS:
             case EVENT_CONVUNSEEN:
-            case EVENT_COUNTERS:
             case EVENT_JMAP_STATES:
                 /* best effort: only mboxevent_extract_mailbox() fills these,
                  * so events without a mailbox (Login, quota, subscription,
