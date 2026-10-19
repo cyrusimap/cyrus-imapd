@@ -37,6 +37,7 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "ptrarray.h"
+#include "mboxevent.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "tok.h"
@@ -130,6 +131,9 @@ struct annotate_state
      * message annotation writes.
      */
     unsigned silent;
+
+    /* If set, writes don't produce change events, e.g. for replication */
+    bool noevents;
 };
 
 enum {
@@ -175,6 +179,14 @@ struct annotate_entrydesc
     void *rock;                 /* rock passed to get() function */
 };
 
+/* An entry written in the current transaction, reported once it commits */
+struct annotate_change {
+    char *mboxname;     /* NULL for server annotations */
+    uint32_t uid;       /* 0 for server and mailbox annotations */
+    char *entry;
+    char *userid;       /* "" for shared values */
+};
+
 struct annotate_db
 {
     annotate_db_t *next;
@@ -184,6 +196,7 @@ struct annotate_db
     struct db *db;
     struct txn *txn;
     int in_txn;
+    ptrarray_t changes; /* struct annotate_change */
 };
 
 #define DB config_annotation_db
@@ -662,6 +675,99 @@ HIDDEN int annotate_getdb(const struct mailbox *mailbox, annotate_db_t **dbp)
                            CYRUSDB_CREATE, dbp);
 }
 
+static void free_changes(annotate_db_t *d)
+{
+    struct annotate_change *c;
+
+    while ((c = ptrarray_pop(&d->changes))) {
+        free(c->mboxname);
+        free(c->entry);
+        free(c->userid);
+        free(c);
+    }
+    ptrarray_fini(&d->changes);
+}
+
+static void record_change(annotate_db_t *d,
+                          const char *mboxname,
+                          uint32_t uid,
+                          const char *entry,
+                          const char *userid)
+{
+    struct annotate_change *c = xzmalloc(sizeof(*c));
+
+    c->mboxname = xstrdupnull(mboxname);
+    c->uid = uid;
+    c->entry = xstrdup(entry);
+    c->userid = xstrdupsafe(userid);
+    ptrarray_append(&d->changes, c);
+}
+
+static bool same_target(const struct annotate_change *a,
+                        const struct annotate_change *b)
+{
+    return !strcmpsafe(a->mboxname, b->mboxname) && !a->uid == !b->uid;
+}
+
+/* One event per mailbox (or the server) and scope, naming every entry */
+static void notify_changes(annotate_db_t *d)
+{
+    int n = ptrarray_size(&d->changes);
+    bool *done = xzmalloc(n * sizeof(bool));
+
+    for (int i = 0; i < n; i++) {
+        struct annotate_change *c = ptrarray_nth(&d->changes, i);
+        if (done[i]) {
+            continue;
+        }
+
+        enum event_type type = !c->mboxname ? EVENT_SERVER_METADATA_CHANGE
+                               : !c->uid    ? EVENT_MAILBOX_METADATA_CHANGE
+                                            : EVENT_ANNOTATION_CHANGE;
+        struct mboxevent *event = mboxevent_new(type);
+        json_t *entries = json_array();
+        strarray_t seen = STRARRAY_INITIALIZER;
+
+        for (int j = i; j < n; j++) {
+            struct annotate_change *cj = ptrarray_nth(&d->changes, j);
+            if (done[j] || !same_target(c, cj)) {
+                continue;
+            }
+            done[j] = true;
+
+            if (event && cj->uid) {
+                if (!event->uidset) {
+                    event->uidset = seqset_init(0, SEQ_SPARSE);
+                }
+                seqset_add(event->uidset, cj->uid, 1);
+            }
+
+            char *key = strconcat(cj->entry, "\t", cj->userid, (char *) NULL);
+            if (strarray_find(&seen, key, 0) < 0) {
+                json_t *jentry = json_pack("{s:s}", "entry", cj->entry);
+                if (*cj->userid) {
+                    json_object_set_new(jentry,
+                                        "user",
+                                        json_string(cj->userid));
+                }
+                json_array_append_new(entries, jentry);
+                strarray_appendm(&seen, key);
+            }
+            else {
+                free(key);
+            }
+        }
+
+        mboxevent_set_metadata_entries(event, entries);
+        mboxevent_set_access(event, NULL, NULL, "", c->mboxname, 0);
+        mboxevent_notify(&event);
+        mboxevent_free(&event);
+        strarray_fini(&seen);
+    }
+
+    free(done);
+}
+
 static void annotate_closedb(annotate_db_t *d)
 {
     annotate_db_t *dx, *prev = NULL;
@@ -683,6 +789,7 @@ static void annotate_closedb(annotate_db_t *d)
                    lf_s("annot.db", d->filename),
                    lf_s("error", cyrusdb_strerror(r)));
 
+    free_changes(d);
     free(d->filename);
     free(d->mboxid);
     memset(d, 0, sizeof(*d));   /* JIC */
@@ -741,6 +848,8 @@ static void annotate_abort(annotate_db_t *d)
     /* don't double-abort */
     if (!d || !d->in_txn) return;
 
+    free_changes(d);
+
     if (d->txn) {
         xsyslog_ev(LOG_DEBUG, "annot.db.txn.aborted",
                    lf_s("annot.db", d->filename));
@@ -765,6 +874,9 @@ static int annotate_commit(annotate_db_t *d)
         d->txn = NULL;
     }
     d->in_txn = 0;
+
+    if (!r) notify_changes(d);
+    free_changes(d);
 
     return r;
 }
@@ -1317,6 +1429,11 @@ _annotate_state_add_entry(annotate_state_t *state,
     state->entry_list = ee;
 
     return ee;
+}
+
+EXPORTED void annotate_state_set_noevents(annotate_state_t *state)
+{
+    state->noevents = true;
 }
 
 EXPORTED void annotate_state_set_auth(annotate_state_t *state,
@@ -3035,6 +3152,8 @@ static int make_entry(struct buf *data,
     return 0;
 }
 
+/* notify: report the change once it commits, unless the mailbox is
+ * being written by replication */
 static int write_entry(struct mailbox *mailbox,
                        unsigned int uid,
                        const char *entry,
@@ -3043,7 +3162,8 @@ static int write_entry(struct mailbox *mailbox,
                        int ignorequota,
                        int silent,
                        const struct annotate_metadata *mdata,
-                       int maywrite)
+                       int maywrite,
+                       bool notify)
 
 {
     char key[MAX_MAILBOX_PATH+1];
@@ -3171,6 +3291,9 @@ static int write_entry(struct mailbox *mailbox,
         }
     }
 
+    if (notify && !(mailbox && mailbox->silentchanges))
+        record_change(d, mailbox ? mboxname : NULL, uid, entry, userid);
+
     if (!mailbox)
         sync_log_annotation("");
     else if (mbtype_isa(mailbox->h.mbtype) == MBTYPE_CALENDAR &&
@@ -3261,7 +3384,8 @@ EXPORTED int annotatemore_write(const char *mboxname, const char *entry,
     if (r) goto done;
 
     r = write_entry(mailbox, /*uid*/0, entry, userid, value,
-                    /*ignorequota*/1, /*silent*/0, NULL, /*maywrite*/1);
+                    /*ignorequota*/1, /*silent*/0, NULL, /*maywrite*/1,
+                    /*notify*/true);
     if (r) goto done;
 
     r = annotate_commit(d);
@@ -3289,7 +3413,7 @@ EXPORTED int annotate_state_write(annotate_state_t *state,
 {
     return write_entry(state->mailbox, state->uid,
                        entry, userid, value, /*ignorequota*/1,
-                       state->silent, NULL, /*maywrite*/1);
+                       state->silent, NULL, /*maywrite*/1, !state->noevents);
 }
 
 HIDDEN int annotate_state_writesilent(annotate_state_t *state,
@@ -3299,7 +3423,7 @@ HIDDEN int annotate_state_writesilent(annotate_state_t *state,
 {
     return write_entry(state->mailbox, state->uid,
                        entry, userid, value, /*ignorequota*/1,
-                       /*silent*/1, NULL, /*maywrite*/1);
+                       /*silent*/1, NULL, /*maywrite*/1, /*notify*/false);
 }
 
 EXPORTED int annotate_state_writemdata(annotate_state_t *state,
@@ -3309,7 +3433,8 @@ EXPORTED int annotate_state_writemdata(annotate_state_t *state,
                                        const struct annotate_metadata *mdata)
 {
     return write_entry(state->mailbox, state->uid, entry, userid, value,
-                       /*ignorequota*/1, /*silent*/1, mdata, /*maywrite*/1);
+                       /*ignorequota*/1, /*silent*/1, mdata, /*maywrite*/1,
+                       /*notify*/false);
 }
 
 EXPORTED int annotate_state_writemask(annotate_state_t *state,
@@ -3546,11 +3671,13 @@ static int annotation_set_todb(annotate_state_t *state,
     if (entry->have_shared)
         r = write_entry(state->mailbox, state->uid,
                         entry->name, "",
-                        &entry->shared, 0, state->silent, NULL, maywrite);
+                        &entry->shared, 0, state->silent, NULL, maywrite,
+                        !state->noevents);
     if (!r && entry->have_priv)
         r = write_entry(state->mailbox, state->uid,
                         entry->name, state->userid,
-                        &entry->priv, 0, state->silent, NULL, maywrite);
+                        &entry->priv, 0, state->silent, NULL, maywrite,
+                        !state->noevents);
 
     return r;
 }
@@ -3762,7 +3889,8 @@ static int annotation_set_specialuse(annotate_state_t *state,
     /* Effectively removes the annotation */
     if (entry->priv.s == NULL) {
         r = write_entry(state->mailbox, state->uid, entry->name, state->userid,
-                        &entry->priv, /*ignorequota*/0, /*silent*/0, NULL, maywrite);
+                        &entry->priv, /*ignorequota*/0, /*silent*/0, NULL, maywrite,
+                        !state->noevents);
         goto done;
     }
 
@@ -3771,7 +3899,8 @@ static int annotation_set_specialuse(annotate_state_t *state,
     if (r) goto done;
 
     r = write_entry(state->mailbox, state->uid, entry->name, state->userid,
-                    &res, /*ignorequota*/0, state->silent, NULL, maywrite);
+                    &res, /*ignorequota*/0, state->silent, NULL, maywrite,
+                    !state->noevents);
 
 done:
     buf_free(&res);
@@ -4005,14 +4134,16 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
             newuserid = rrock->newuserid;
         }
         r = write_entry(rrock->newmailbox, rrock->newuid, entry, newuserid,
-                        value, /*ignorequota*/0, silent, NULL, /*maywrite*/1);
+                        value, /*ignorequota*/0, silent, NULL, /*maywrite*/1,
+                        /*notify*/false);
     }
 
     if (!rrock->copy && !r) {
         /* delete existing entry */
         struct buf dattrib = BUF_INITIALIZER;
         r = write_entry(rrock->oldmailbox, uid, entry, userid, &dattrib,
-                        /*ignorequota*/0, silent, NULL, /*maywrite*/1);
+                        /*ignorequota*/0, silent, NULL, /*maywrite*/1,
+                        /*notify*/false);
     }
 
     return r;
@@ -4572,7 +4703,8 @@ static int _check_rec_cb(void *rock,
                          size_t datalen __attribute__((unused)))
 {
     int *do_upgrade = (int *) rock;
-    annotate_db_t db = { NULL, 0, NULL, NULL, NULL, NULL, 0 };
+    annotate_db_t db = { NULL, 0, NULL, NULL, NULL, NULL, 0,
+                         PTRARRAY_INITIALIZER };
     const char *mboxid, *entry, *userid;
     unsigned uid;
 

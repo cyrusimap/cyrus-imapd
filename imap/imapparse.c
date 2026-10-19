@@ -926,7 +926,7 @@ static int get_search_criterion(struct protstream *pin,
         charset_free(&base->charset);
         base->charset = charset_lookupname(arg.s);
         if (base->charset == CHARSET_UNKNOWN_CHARSET) goto badcharset;
-        if ((client_capa & CAPA_UTF8_ACCEPT) &&
+        if ((client_capa & ENABLED_UTF8_ACCEPT) &&
             strcmp("utf-8", charset_canon_name(base->charset))) {
             goto utf8accept;
         }
@@ -970,7 +970,7 @@ static int get_search_criterion(struct protstream *pin,
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
     case '*':                                           /* RFC 3501 */
-        if (client_capa & CAPA_UIDONLY) {
+        if (client_capa & ENABLED_UIDONLY) {
             prot_printf(pout,
                         "%s BAD [UIDREQUIRED] Message numbers are not allowed in"
                         " Search after UIDONLY is enabled\r\n", base->tag);

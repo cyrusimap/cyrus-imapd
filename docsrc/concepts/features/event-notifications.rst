@@ -29,6 +29,8 @@ Available Event Notifications
     *   :ref:`imap-features-event-notifications-mailboxcreate`
     *   :ref:`imap-features-event-notifications-mailboxdelete`
     *   :ref:`imap-features-event-notifications-mailboxrename`
+* Metadata Events
+    *   :ref:`imap-features-event-notifications-metadatachange`
 * Subscription Events
     *   :ref:`imap-features-event-notifications-mailboxsubscribe`
     *   :ref:`imap-features-event-notifications-mailboxunsubscribe`
@@ -47,6 +49,27 @@ Available Event Notifications
 
 Example Event Notifications
 ===========================
+
+.. _imap-features-event-notifications-metadatachange:
+
+MailboxMetadataChange, ServerMetadataChange, AnnotationChange
+-------------------------------------------------------------
+
+Emitted when mailbox metadata, server metadata or message annotations
+change (:rfc:`5464`, :rfc:`5257`), in the ``metadata`` group of
+``event_groups``.  Writes made by replication are not reported.
+
+``metadataEntries`` lists the changed entries, without their values: an
+array of ``{"entry": name}`` objects, with ``"user"`` added for private
+values.  ``AnnotationChange`` also carries the ``uidset`` of the
+messages.  The same events drive the IMAP NOTIFY events of the same names
+(:rfc:`5465`) and unsolicited METADATA responses after ``ENABLE
+METADATA``.
+
+.. NOTE::
+
+    The event names come from :rfc:`5465`; :rfc:`5423` doesn't define
+    them.
 
 .. _imap-features-event-notifications-aclchange:
 

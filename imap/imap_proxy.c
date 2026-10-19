@@ -1705,20 +1705,23 @@ static void proxy_part_filldata(partlist_t *part_list, int idx)
 
 void prot_print_client_capa(struct protstream *pout, unsigned capa)
 {
-    if (capa & CAPA_IMAP4REV2) {
+    if (capa & ENABLED_IMAP4REV2) {
         prot_puts(pout, " IMAP4rev2");
     }
-    if (capa & CAPA_CONDSTORE) {
+    if (capa & ENABLED_CONDSTORE) {
         prot_puts(pout, " CONDSTORE");
     }
-    if (capa & CAPA_QRESYNC) {
+    if (capa & ENABLED_QRESYNC) {
         prot_puts(pout, " QRESYNC");
     }
-    if (capa & CAPA_UIDONLY) {
+    if (capa & ENABLED_UIDONLY) {
         prot_puts(pout, " UIDONLY");
     }
-    if (capa & CAPA_UTF8_ACCEPT) {
+    if (capa & ENABLED_UTF8_ACCEPT) {
         prot_puts(pout, " UTF8=ACCEPT");
+    }
+    if (capa & ENABLED_METADATA) {
+        prot_puts(pout, " METADATA");
     }
 }
 

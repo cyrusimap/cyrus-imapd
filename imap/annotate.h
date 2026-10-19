@@ -56,6 +56,12 @@ annotate_state_t *annotate_state_new(void);
 void annotate_state_abort(annotate_state_t **statep);
 int annotate_state_commit(annotate_state_t **statep);
 void annotate_state_begin(annotate_state_t *state);
+/**
+ * Don't report this state's writes as change events, e.g. when
+ * replication applies changes made elsewhere.
+ */
+void annotate_state_set_noevents(annotate_state_t *state);
+
 void annotate_state_set_auth(annotate_state_t *state,
                              int isadmin, const char *userid,
                              const struct auth_state *auth_state);

@@ -120,7 +120,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                             const struct fetchargs *fetchargs,
                             struct buf *msg, struct buf *item);
 static void index_printflags(struct index_state *state, uint32_t msgno,
-                             unsigned tell_flags);
+                             unsigned tell_flags, const strarray_t *annots);
 static char *get_localpart_addr(const char *header);
 static char *get_displayname(const char *header);
 static char *index_extract_subject(const char *subj, size_t len, int *is_refwd);
@@ -293,6 +293,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
         state->want_dav = init->want_dav;
         state->want_mbtype = init->want_mbtype;
         state->want_expunged = init->want_expunged;
+        state->want_annotations = init->want_annotations;
 
         state->myrights = cyrus_acl_myrights(init->authstate,
                                              mailbox_acl(state->mailbox));
@@ -861,7 +862,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
                 continue;
             if (im->modseq <= init->vanished.modseq)
                 continue;
-            index_printflags(state, msgno, TELL_UID);
+            index_printflags(state, msgno, TELL_UID, NULL);
         }
         if (seq != state->searchres) seqset_free(&seq);
     }
@@ -891,7 +892,7 @@ EXPORTED int index_check(struct index_state *state, unsigned tell_flags)
             fatal("Mailbox has been (re)moved", EX_IOERR);
         }
 
-        if (state->exists && (client_capa & CAPA_QRESYNC)) {
+        if (state->exists && (client_capa & ENABLED_QRESYNC)) {
             /* XXX - is it OK to just expand to entire possible range? */
             prot_printf(state->out, "* VANISHED 1:%lu\r\n", state->last_uid);
         }
@@ -1144,7 +1145,7 @@ static int index_fetchresponses(struct index_state *state,
         im = &state->map[msgno-1];
         if (seq && !seqset_ismember(seq, usinguid ? im->uid : msgno)) {
             if (im->told_modseq !=0 && im->modseq > im->told_modseq)
-                index_printflags(state, msgno, (usinguid ? TELL_UID : 0));
+                index_printflags(state, msgno, (usinguid ? TELL_UID : 0), NULL);
             continue;
         }
 
@@ -3167,7 +3168,7 @@ static void index_tellexpunge(struct index_state *state)
             if (msgno > state->oldexists)
                 continue;
             state->oldexists--;
-            if (client_capa & (CAPA_QRESYNC|CAPA_UIDONLY))
+            if (client_capa & (ENABLED_QRESYNC|ENABLED_UIDONLY))
                 seqset_add(vanishedlist, im->uid, 1);
             else
                 prot_printf(state->out, "* %u EXPUNGE\r\n", msgno);
@@ -3203,6 +3204,52 @@ static void index_tellexists(struct index_state *state)
     state->oldexists = state->exists;
 }
 
+struct changed_annotations_rock
+{
+    const char *userid;
+    strarray_t *annots;
+};
+
+static int changed_annotations_cb(const char *mboxname __attribute__((unused)),
+                                  uint32_t uid __attribute__((unused)),
+                                  const char *entry,
+                                  const char *userid,
+                                  const struct buf *value
+                                  __attribute__((unused)),
+                                  const struct annotate_metadata *mdata
+                                  __attribute__((unused)),
+                                  void *rock)
+{
+    struct changed_annotations_rock *crock = rock;
+
+    /* other users' private values, and Cyrus's own entries, aren't news */
+    if (*userid && strcmpsafe(userid, crock->userid)) {
+        return 0;
+    }
+    if (!strncmp(entry, IMAP_ANNOT_NS, strlen(IMAP_ANNOT_NS))) {
+        return 0;
+    }
+
+    strarray_add(crock->annots, entry);
+    return 0;
+}
+
+/* Entry names of message annotations changed since the client was told */
+static void changed_annotations(struct index_state *state,
+                                const struct index_map *im,
+                                strarray_t *annots)
+{
+    struct changed_annotations_rock crock = { state->userid, annots };
+
+    annotatemore_findall_mailbox(state->mailbox,
+                                 im->uid,
+                                 "*",
+                                 im->told_modseq,
+                                 changed_annotations_cb,
+                                 &crock,
+                                 ANNOTATE_TOMBSTONES);
+}
+
 EXPORTED void index_tellchanges(struct index_state *state, unsigned tell_flags)
 {
     uint32_t msgno;
@@ -3224,12 +3271,12 @@ EXPORTED void index_tellchanges(struct index_state *state, unsigned tell_flags)
      * Once a client issues a CONDSTORE enabling command, it has announced
      * itself as a "CONDSTORE-aware client".  The server MUST then include
      * mod-sequence data in all subsequent untagged FETCH responses */
-    if (client_capa & CAPA_CONDSTORE) tell_flags |= TELL_MODSEQ;
+    if (client_capa & ENABLED_CONDSTORE) tell_flags |= TELL_MODSEQ;
 
     /* RFC 9051, 7.5.2:
      * If the server chooses to send unsolicited FETCH responses,
      * they MUST include UID FETCH item */
-    if (client_capa & CAPA_IMAP4REV2) tell_flags |= TELL_UID;
+    if (client_capa & ENABLED_IMAP4REV2) tell_flags |= TELL_UID;
 
     /* print any changed message flags */
     for (msgno = 1; msgno <= state->exists; msgno++) {
@@ -3237,13 +3284,30 @@ EXPORTED void index_tellchanges(struct index_state *state, unsigned tell_flags)
 
         /* report if it's changed since last told */
         if (im->modseq > im->told_modseq) {
+            strarray_t annots = STRARRAY_INITIALIZER;
+
+            if (state->want_annotations || state->notify_annotations) {
+                changed_annotations(state, im, &annots);
+            }
+
             /* Per RFC 7162: MODSEQ overrides .SILENT */
-            if ((tell_flags & (TELL_SILENT | TELL_MODSEQ)) != TELL_SILENT)
-                index_printflags(state, msgno, tell_flags);
+            if ((tell_flags & (TELL_SILENT | TELL_MODSEQ)) != TELL_SILENT
+                || strarray_size(&annots))
+            {
+                index_printflags(state, msgno, tell_flags, &annots);
+            }
+            strarray_fini(&annots);
 
             /* Update reported MODSEQ even if we were .SILENT */
             im->told_modseq = im->modseq;
         }
+    }
+}
+
+EXPORTED void index_set_notify_annotations(struct index_state *state, bool want)
+{
+    if (state) {
+        state->notify_annotations = want;
     }
 }
 
@@ -3495,15 +3559,17 @@ static void index_fetchflags(struct index_state *state,
     im->told_modseq = im->modseq;
 }
 
-static void index_printflags(struct index_state *state, 
-                             uint32_t msgno, unsigned tell_flags)
+/* annots: names of changed annotation entries to report, or NULL */
+static void index_printflags(struct index_state *state,
+                             uint32_t msgno, unsigned tell_flags,
+                             const strarray_t *annots)
 {
     struct index_map *im = &state->map[msgno-1];
     int sepchar = '(';
     const char *resp;
     unsigned id;
 
-    if (client_capa & CAPA_UIDONLY) {
+    if (client_capa & ENABLED_UIDONLY) {
         /* RFC 9586, Section 3.3:
          * UID msg-att is redundant.
          * It is replaced by the uniqueid at the beginning
@@ -3515,7 +3581,7 @@ static void index_printflags(struct index_state *state,
         id = im->uid;
     }
     else {
-        if (client_capa & CAPA_QRESYNC) {
+        if (client_capa & ENABLED_QRESYNC) {
             /* RFC 7162, Section 3.2.4:
              * MUST send UID to all untagged FETCH unsolicited responses */
             tell_flags |= TELL_UID;
@@ -3524,10 +3590,14 @@ static void index_printflags(struct index_state *state,
         resp = "FETCH";
         id = msgno;
     }
-    if (client_capa & CAPA_CONDSTORE) {
+    if (client_capa & ENABLED_CONDSTORE) {
         /* RFC 7162, Section 3.1 & RFC 9586, Section 3.7:
          * MUST send MODSEQ to all untagged [UID]FETCH unsolicited responses */
         tell_flags |= TELL_MODSEQ;
+    }
+    if (annots && strarray_size(annots) && !(client_capa & ENABLED_UIDONLY)) {
+        /* RFC 5465, Section 5.1: MUST include UID */
+        tell_flags |= TELL_UID;
     }
 
     prot_printf(state->out, "* %u %s ", id, resp);
@@ -3543,6 +3613,15 @@ static void index_printflags(struct index_state *state,
     if (tell_flags & TELL_MODSEQ) {
         prot_printf(state->out, "%cMODSEQ (" MODSEQ_FMT ")",
                     sepchar, im->modseq);
+        sepchar = ' ';
+    }
+    if (annots && strarray_size(annots)) {
+        prot_printf(state->out, "%cANNOTATION ", sepchar);
+        for (int i = 0; i < strarray_size(annots); i++) {
+            prot_putc(i ? ' ' : '(', state->out);
+            prot_printastring(state->out, strarray_nth(annots, i));
+        }
+        prot_putc(')', state->out);
         sepchar = ' ';
     }
     if (sepchar == '(') prot_putc('(', state->out);
@@ -3631,7 +3710,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     const char *resp;
     unsigned id;
 
-    if (client_capa & CAPA_UIDONLY) {
+    if (client_capa & ENABLED_UIDONLY) {
         resp = "UIDFETCH";
         id = record.uid;
     }
@@ -3652,7 +3731,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         prot_printf(state->out, "* %u %s ", id, resp);
         started = 1;
     }
-    if (fetchitems & FETCH_UID || (ischanged && (client_capa & CAPA_QRESYNC))) {
+    if (fetchitems & FETCH_UID
+        || (ischanged && (client_capa & ENABLED_QRESYNC))) {
         prot_printf(state->out, "%cUID %u", sepchar, record.uid);
         sepchar = ' ';
     }
@@ -3684,7 +3764,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
 
-    if (fetchitems & FETCH_MODSEQ || (ischanged && (client_capa & CAPA_CONDSTORE))) {
+    if (fetchitems & FETCH_MODSEQ
+        || (ischanged && (client_capa & ENABLED_CONDSTORE))) {
         prot_printf(state->out, "%cMODSEQ (" MODSEQ_FMT ")",
                     sepchar, record.modseq);
         sepchar = ' ';
@@ -4440,7 +4521,8 @@ static int index_storeflag(struct index_state *state,
      * must always been told, and we prefer just to tell flags
      * as well in this case, it's simpler and not much more
      * bandwidth */
-    if (!(client_capa & CAPA_CONDSTORE) && storeargs->silent && im->told_modseq == oldmodseq)
+    if (!(client_capa & ENABLED_CONDSTORE) && storeargs->silent
+        && im->told_modseq == oldmodseq)
         im->told_modseq = im->modseq;
 
     return 0;
@@ -4484,7 +4566,8 @@ static int index_store_annotation(struct index_state *state,
     if (r) goto out;
 
     /* if it's silent and unchanged, update the seen value */
-    if (!(client_capa & CAPA_CONDSTORE) && storeargs->silent && im->told_modseq == oldmodseq)
+    if (!(client_capa & ENABLED_CONDSTORE) && storeargs->silent
+        && im->told_modseq == oldmodseq)
         im->told_modseq = im->modseq;
 
 out:

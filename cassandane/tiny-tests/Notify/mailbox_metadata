@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_metadata
+    :needs_component_idled
+    ($self)
+{
+    $self->{instance}->add_start(name => 'idled', argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+    my $othertalk = $svc->create_store()->get_client();
+
+    $talk->_imap_cmd('NOTIFY', 0, "", "SET",
+                     "(PERSONAL (MailboxMetadataChange))");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my @got;
+    my %handlers = (metadata => sub { push @got, $_[1] });
+
+    $othertalk->setmetadata('INBOX', '/shared/comment', 'hello');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $self->assert($store->idle_response(\%handlers, 10), "got METADATA");
+
+    # deleting an entry is a change too
+    $othertalk->setmetadata('INBOX', '/private/comment', 'mine');
+    $self->assert($store->idle_response(\%handlers, 10), "got METADATA");
+    $othertalk->setmetadata('INBOX', '/private/comment', undef);
+    $self->assert($store->idle_response(\%handlers, 10), "got METADATA");
+
+    $self->assert_cmp_deeply([
+        [ 'INBOX', '/shared/comment' ],
+        [ 'INBOX', '/private/comment' ],
+        [ 'INBOX', '/private/comment' ],
+    ], \@got);
+}

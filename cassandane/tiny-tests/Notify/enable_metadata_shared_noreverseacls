@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_enable_metadata_shared_noreverseacls
+    :needs_component_idled :NoAltNamespace
+    ($self)
+{
+    $self->{instance}->add_start(name => 'idled', argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $admintalk = $svc->create_store(username => 'admin')->get_client();
+    $admintalk->create("user.otheruser") or die "create: $@";
+    $admintalk->create("user.otheruser.shared") or die "create: $@";
+    $admintalk->setacl("user.otheruser.shared", "cassandane", "lr")
+        or die "setacl: $@";
+
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+    my $res = $talk->_imap_cmd('ENABLE', 0, 'enabled', 'METADATA');
+    $self->assert_num_equals(1, $res->{metadata});
+
+    my @got;
+    my %handlers = (metadata => sub { push @got, $_[1] });
+
+    # without reverse ACLs only personal mailboxes count, so the first
+    # response is for INBOX, changed after the shared mailbox
+    $admintalk->setmetadata('user.otheruser.shared', '/shared/comment', 'x');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setmetadata('user.cassandane', '/shared/comment', 'y');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->assert($store->idle_response(\%handlers, 10), "got METADATA");
+    $self->assert_cmp_deeply([[ 'INBOX', '/shared/comment' ]], \@got);
+}

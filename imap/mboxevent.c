@@ -54,6 +54,9 @@
 
 #define JMAP_EVENTS    (EVENT_MESSAGES_UNSCHEDULED)
 
+#define METADATA_EVENTS (EVENT_MAILBOX_METADATA_CHANGE|\
+                         EVENT_SERVER_METADATA_CHANGE|EVENT_ANNOTATION_CHANGE)
+
 
 static const char *notifier = NULL;
 static struct namespace namespace;
@@ -160,6 +163,9 @@ static struct mboxevent event_template =
     { EVENT_MESSAGES_UNSCHEDULED_USERID, "userId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MESSAGES_UNSCHEDULED_COUNT,  "count",  EVENT_PARAM_INT,    { 0 }, 0 },
 
+    /* changed metadata or annotation entries */
+    { EVENT_METADATA_ENTRIES, "metadataEntries", EVENT_PARAM_JSON, { 0 }, 0 },
+
     /* always at end to let the parser to easily truncate this part */
     { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, { 0 }, 0 }
   },
@@ -246,6 +252,9 @@ EXPORTED int mboxevent_init(void)
 
     if (groups & IMAP_ENUM_EVENT_GROUPS_JMAP)
         enabled_events |= JMAP_EVENTS;
+
+    if (groups & IMAP_ENUM_EVENT_GROUPS_METADATA)
+        enabled_events |= METADATA_EVENTS;
 
     mboxevent_initialized = 1;
 
@@ -556,6 +565,9 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_VISIBLE_USERS:
         return (type & MAILBOX_EVENTS);
 
+    case EVENT_METADATA_ENTRIES:
+        return type & METADATA_EVENTS;
+
     case EVENT_QUOTA_MESSAGES:
         return type & QUOTA_EVENTS;
 
@@ -629,6 +641,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
                 type & FLAGS_EVENTS ||
                 type & MAILBOX_EVENTS ||
                 type & SUBS_EVENTS ||
+                type & METADATA_EVENTS ||
                 type & (EVENT_LOGIN|EVENT_LOGOUT|EVENT_QUOTA_CHANGE)
             );
     case EVENT_MIDSET:
@@ -853,7 +866,8 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
             }
 
             if (idle_notifier &&
-                (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS|SUBS_EVENTS))) {
+                (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS|SUBS_EVENTS|
+                         METADATA_EVENTS))) {
                 /* the group to which the event belongs is for IMAP IDLE/NOTIFY */
                 json_object_set_new(jevent, "@type", json_string("notify"));
                 idle_notifier(jevent);
@@ -995,6 +1009,19 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
     }
 
     free(extname);
+}
+
+EXPORTED void mboxevent_set_metadata_entries(struct mboxevent *event,
+                                            json_t *entries)
+{
+    if (!event) {
+        json_decref(entries);
+        return;
+    }
+
+    if (event->params[EVENT_METADATA_ENTRIES].filled)
+        json_decref(event->params[EVENT_METADATA_ENTRIES].value.j);
+    FILL_JSON_PARAM(event, EVENT_METADATA_ENTRIES, entries);
 }
 
 EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
@@ -1992,6 +2019,9 @@ static const struct event_t event_list[] = {
     { "ApplePushServiceDAV", EVENT_APPLEPUSHSERVICE_DAV },
     { "MailboxModseq",       EVENT_MAILBOX_MODSEQ       },
     { "MessagesUnscheduled", EVENT_MESSAGES_UNSCHEDULED },
+    { "MailboxMetadataChange", EVENT_MAILBOX_METADATA_CHANGE },
+    { "ServerMetadataChange",  EVENT_SERVER_METADATA_CHANGE  },
+    { "AnnotationChange",      EVENT_ANNOTATION_CHANGE       },
     { NULL,                  0                          }
 };
 
@@ -2136,6 +2166,14 @@ static int filled_params(enum event_type type, struct mboxevent *event)
                 if (config_getenum(IMAPOPT_EVENT_CONTENT_INCLUSION_MODE) !=
                     IMAP_ENUM_EVENT_CONTENT_INCLUSION_MODE_STANDARD)
                     buf_appendcstr(&missing, " messageContent");
+                break;
+            case EVENT_CONVEXISTS:
+            case EVENT_CONVUNSEEN:
+            case EVENT_COUNTERS:
+            case EVENT_JMAP_STATES:
+                /* best effort: only mboxevent_extract_mailbox() fills these,
+                 * so events without a mailbox (Login, quota, subscription,
+                 * metadata...) don't carry them */
                 break;
             case EVENT_MODSEQ:
                 /* modseq is not included if notification refers to several
