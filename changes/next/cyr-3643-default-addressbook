@@ -2,7 +2,8 @@ Description:
 
 The dblookup email2uids, email2details and uid2groups endpoints now search
 the addressbook marked isDefault when the request names no Mailbox, instead
-of the addressbook called "Default".
+of the addressbook called "Default".  ContactCard/set likewise files a
+new card with no addressBookIds into the addressbook marked isDefault.
 
 
 Documentation:

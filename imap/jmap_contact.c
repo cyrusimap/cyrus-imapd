@@ -4063,7 +4063,7 @@ static int _card_set_create(jmap_req_t *req,
     }
 
     if (! addressbookId) {
-        char *mboxname = mboxname_abook(req->accountid, DEFAULT_ADDRBOOK);
+        char *mboxname = carddav_defaultaddressbook_mboxname(req->accountid);
 
         if (jmap_mboxlist_lookup(mboxname, &mbentry, NULL)) {
             mboxlist_entry_free(&mbentry);
