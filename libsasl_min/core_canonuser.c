@@ -272,7 +272,10 @@ EXPORTED int _sasl_canon_user_lookup(sasl_conn_t *conn,
 
     result = _sasl_canon_user(conn, user, ulen, flags, oparams);
     if (result == SASL_OK) {
-        result = _sasl_auxprop_lookup_user_props(conn, flags, oparams);
+        /* no default auxprop plugin in this implementation, so this
+         * will probably fail unless the application supplied its own
+         */
+        _sasl_auxprop_lookup_user_props(conn, flags, oparams);
     }
 
     RETURN(conn, result);
