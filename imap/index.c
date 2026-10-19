@@ -416,8 +416,10 @@ EXPORTED int index_expunge(struct index_state *state, const char *sequence,
             if (state->numunseen)
                 state->numunseen--;
             else
-                syslog(LOG_ERR, "IOERROR: numunseen underflow in expunge: %s %u",
-                       state->mboxname, im->uid);
+                xsyslog_ev(LOG_ERR, "imap.index.counter.underflow",
+                           lf_s("imap.counter", "numunseen"),
+                           lf_intname("mbox.name", state->mboxname),
+                           lf_u("msg.imapuid", im->uid));
             im->isseen = 1;
         }
 
@@ -425,8 +427,10 @@ EXPORTED int index_expunge(struct index_state *state, const char *sequence,
             if (state->numrecent)
                 state->numrecent--;
             else
-                syslog(LOG_ERR, "IOERROR: numrecent underflow in expunge: %s %u",
-                       state->mboxname, im->uid);
+                xsyslog_ev(LOG_ERR, "imap.index.counter.underflow",
+                           lf_s("imap.counter", "numrecent"),
+                           lf_intname("mbox.name", state->mboxname),
+                           lf_u("msg.imapuid", im->uid));
             im->isrecent = 0;
         }
 
@@ -456,8 +460,9 @@ EXPORTED int index_expunge(struct index_state *state, const char *sequence,
     index_unlock(state);
 
     if (!r && (numexpunged > 0)) {
-        syslog(LOG_NOTICE, "Expunged %d messages from %s",
-               numexpunged, state->mboxname);
+        xsyslog_ev(LOG_NOTICE, "imap.mailbox.expunged",
+                   lf_intname("mbox.name", state->mboxname),
+                   lf_d("mbox.expunged", numexpunged));
         /* send the MessageExpunge event notification for "immediate", "default"
          * and "delayed" expunge */
         mboxevent_notify(&mboxevent);
@@ -599,8 +604,11 @@ static seqset_t *_readseen(struct index_state *state, unsigned *recentuid)
             *recentuid = mailbox->i.last_uid;
             prot_printf(state->out, "* OK (seen state failure) %s: %s\r\n",
                    error_message(IMAP_NO_CHECKPRESERVE), error_message(r));
-            syslog(LOG_ERR, "Could not open seen state for %s (%s)",
-                   userid, error_message(r));
+            /* a user who has never had a seen state is the ordinary
+              * case, and the client is told so either way */
+            xsyslog_ev(r == IMAP_NOTFOUND ? LOG_DEBUG : LOG_ERR,
+                       "imap.seen.open.failed",
+                       lf_s("u.username", userid), lf_err("error", r));
         }
         else {
             *recentuid = sd.lastuid;
@@ -885,9 +893,8 @@ EXPORTED int index_check(struct index_state *state, unsigned tell_flags)
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Mailbox has been (re)moved */
         if (config_getswitch(IMAPOPT_DISCONNECT_ON_VANISHED_MAILBOX)) {
-            syslog(LOG_WARNING,
-                   "Mailbox %s has been (re)moved out from under client",
-                   state->mboxname);
+            xsyslog_ev(LOG_WARNING, "imap.mailbox.vanished",
+                       lf_intname("mbox.name", state->mboxname));
             mailbox_close(&state->mailbox);
             fatal("Mailbox has been (re)moved", EX_IOERR);
         }
@@ -957,10 +964,11 @@ seqset_t *index_vanished(struct index_state *state,
         uint32_t msgno;
         unsigned uid;
 
-        syslog(LOG_NOTICE, "inefficient qresync ("
-               MODSEQ_FMT " > " MODSEQ_FMT ") %s",
-               mailbox->i.deletedmodseq, params->modseq,
-               mailbox_name(mailbox));
+        xsyslog_ev(LOG_NOTICE, "imap.qresync.inefficient",
+                   lf_mailbox(mailbox),
+                   lf_raw("mbox.deletedmodseq", MODSEQ_FMT,
+                          mailbox->i.deletedmodseq),
+                   lf_raw("imap.qresync.modseq", MODSEQ_FMT, params->modseq));
 
         /* use the sequence to uid mapping provided by the client to
          * skip over any initial matches - see RFC 7162 section 3.2.5 */
@@ -1045,8 +1053,10 @@ static int _fetch_setseen(struct index_state *state,
     if (state->numunseen)
         state->numunseen--;
     else
-        syslog(LOG_ERR, "IOERROR: unseen underflow on setseen: %s %u",
-               state->mboxname, im->uid);
+        xsyslog_ev(LOG_ERR, "imap.index.counter.underflow",
+                   lf_s("imap.counter", "numunseen"),
+                   lf_intname("mbox.name", state->mboxname),
+                   lf_u("msg.imapuid", im->uid));
     state->seen_dirty = 1;
     im->isseen = 1;
 
@@ -1298,8 +1308,8 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
         *  clients.
         */
         if (storeargs->seen && !(state->myrights & ACL_SETSEEN)) {
-            syslog(LOG_DEBUG, "%s: no permission to alter \\Seen, removing from set",
-                            __func__);
+            xsyslog_ev(LOG_DEBUG, "imap.store.flags.limited",
+                       lf_s("imap.flag.group", "seen"));
             storeargs->seen = 0;
             did_limit_flags = 1;
         }
@@ -1307,8 +1317,8 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
         if ((storeargs->system_flags & FLAG_DELETED)
             && !(state->myrights & ACL_DELETEMSG))
         {
-            syslog(LOG_DEBUG, "%s: no permission to alter \\Deleted, removing from set",
-                            __func__);
+            xsyslog_ev(LOG_DEBUG, "imap.store.flags.limited",
+                       lf_s("imap.flag.group", "deleted"));
             storeargs->system_flags &= ~FLAG_DELETED;
             did_limit_flags = 1;
         }
@@ -1316,8 +1326,8 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
         if (((storeargs->system_flags & ~FLAG_DELETED) || flags->count)
             && !(state->myrights & ACL_WRITE))
         {
-            syslog(LOG_DEBUG, "%s: no permission to alter other flags, removing from set",
-                            __func__);
+            xsyslog_ev(LOG_DEBUG, "imap.store.flags.limited",
+                       lf_s("imap.flag.group", "other"));
             storeargs->system_flags &= FLAG_DELETED; /* turn off everything BUT deleted */
             strarray_truncate(&storeargs->flags, 0);
             did_limit_flags = 1;
@@ -1328,7 +1338,7 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
             && !storeargs->system_flags
             && !flags->count)
         {
-            syslog(LOG_DEBUG, "%s: no permitted flags left, rejecting", __func__);
+            xsyslog_ev(LOG_DEBUG, "imap.store.rejected");
             return IMAP_PERMISSION_DENIED;
         }
     }
@@ -1508,7 +1518,7 @@ static void prefetch_messages(struct index_state *state,
     const char *fname;
     struct index_record record;
 
-    syslog(LOG_ERR, "Prefetching initial parts of messages");
+    xsyslog_ev(LOG_DEBUG, "imap.prefetch.started");
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
         im = &state->map[msgno-1];
@@ -1665,8 +1675,8 @@ out:
     if (r == ENOENT || r == ENOSYS)
         r = 0;
     if (r)
-        syslog(LOG_ERR, "IOERROR: unable to warmup file %s: %s",
-                fname, error_message(r));
+        xsyslog_ev(LOG_ERR, "imap.message.warmup.failed",
+                   lf_s("sys.path", fname), lf_err("error", r));
     free(userid);
     free(tofree);
     strarray_fini(&files);
@@ -2275,9 +2285,12 @@ EXPORTED int index_thread(struct index_state *state, int algorithm,
 
     if (CONFIG_TIMING_VERBOSE) {
         /* debug */
-        syslog(LOG_DEBUG, "THREAD %s processing time: %d msg in %f sec",
-               thread_algs[algorithm].alg_name, nmsg,
-               (clock() - start) / (double) CLOCKS_PER_SEC);
+        xsyslog_ev(LOG_DEBUG, "imap.thread.done",
+                   lf_s("imap.thread.algorithm",
+                        thread_algs[algorithm].alg_name),
+                   lf_d("search.results", nmsg),
+                   lf_duration("search.duration",
+                               (clock() - start) / (double) CLOCKS_PER_SEC));
     }
 
 out:
@@ -2321,7 +2334,9 @@ EXPORTED int index_copy(struct index_state *state,
 
     /* let's just see how common this is... */
     if (!strcmp(index_mboxname(state), name))
-        syslog(LOG_NOTICE, "same mailbox copy %s (%s)", name, sequence);
+        xsyslog_ev(LOG_NOTICE, "imap.copy.same_mailbox",
+                   lf_intname("mbox.name", index_mboxname(state)),
+                   lf_s("imap.sequence", sequence));
 
     is_same_user = mboxname_same_userid(index_mboxname(state), name);
     if (is_same_user < 0)
@@ -2815,7 +2830,8 @@ emitpart:
 
         /* check that the offset isn't corrupt */
         if (offset + size > msg.len) {
-            syslog(LOG_ERR, "invalid part offset in %s", index_mboxname(state));
+            xsyslog_ev(LOG_ERR, "imap.body.offset.invalid",
+                       lf_intname("mbox.name", index_mboxname(state)));
             return IMAP_IOERROR;
         }
 
@@ -3802,7 +3818,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
             struct stat sbuf;
             /* Find the size of the message file */
             if (stat(fname, &sbuf) == -1)
-                syslog(LOG_ERR, "IOERROR: stat on %s: %m", fname);
+                xsyslog_ev(LOG_ERR, "imap.message.stat.failed",
+                           lf_s("sys.path", fname));
             else
                 msg_size = sbuf.st_size;
         }
@@ -4358,8 +4375,10 @@ static int index_storeflag(struct index_state *state,
             if (state->numunseen || new < old)
                 state->numunseen += (old - new);
             else
-                syslog(LOG_ERR, "IOERROR: numunseen underflow in storeflag: %s %u",
-                       state->mboxname, im->uid);
+                xsyslog_ev(LOG_ERR, "imap.index.counter.underflow",
+                           lf_s("imap.counter", "numunseen"),
+                           lf_intname("mbox.name", state->mboxname),
+                           lf_u("msg.imapuid", im->uid));
             im->isseen = new;
             state->seen_dirty = 1;
             dirty++;
@@ -5038,10 +5057,9 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         }
 
         if (str->flags & INDEX_GETSEARCHTEXT_NOCALL_ATTACHEXTRACT) {
-            syslog(LOG_DEBUG, "attachextract disabled for "
-                    "attachment %s (%s/%s)",
-                    message_guid_encode(content_guid),
-                    type, subtype);
+            xsyslog_ev(LOG_DEBUG, "search.attachment.skipped",
+                       lf_s("msg.guid", message_guid_encode(content_guid)),
+                       lf_s("part.type", type), lf_s("part.subtype", subtype));
 
             str->indexlevel |= SEARCH_INDEXLEVEL_PARTIAL;
         }
@@ -5061,9 +5079,11 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                 str->receiver->end_part(str->receiver);
             }
             else if (r) {
-                syslog(LOG_ERR, "IOERROR index: can't extract attachment %s (%s/%s): %s",
-                        message_guid_encode(content_guid),
-                        type, subtype, error_message(r));
+                xsyslog_ev(LOG_ERR, "search.attachment.extract.failed",
+                           lf_s("msg.guid", message_guid_encode(content_guid)),
+                           lf_s("part.type", type),
+                           lf_s("part.subtype", subtype),
+                           lf_err("error", r));
 
                 if (str->flags & INDEX_GETSEARCHTEXT_ALLOW_PARTIALS) {
                     str->indexlevel |= SEARCH_INDEXLEVEL_PARTIAL;
@@ -5335,13 +5355,14 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
         message_get_uid(msg, &uid);
         const char *mboxname = mailbox ? mailbox_name(mailbox) : "";
         if (r) {
-            xsyslog(LOG_ERR, "IOERROR: failed to index msg",
-                    "mailbox=<%s> uid=<%d> r=<%s>",
-                    mboxname, uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "search.index.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_u("msg.imapuid", uid), lf_err("error", r));
         }
         else {
-            xsyslog(LOG_ERR,  "IOERROR: partially indexed msg",
-                    "mailbox=<%s> uid=<%d>", mboxname, uid);
+            xsyslog_ev(LOG_ERR, "search.index.partial",
+                       lf_intname("mbox.name", mboxname),
+                       lf_u("msg.imapuid", uid));
         }
     }
 
@@ -6269,7 +6290,8 @@ void index_msgdata_sort(MsgData **msgdata, int n, const struct sortcrit *sortcri
     }
     else {
         char *tmp = sortcrit_as_string(sortcrit);
-        syslog(LOG_DEBUG, "GENERICSORT: %s", tmp);
+        xsyslog_ev(LOG_DEBUG, "imap.sort.generic",
+                   lf_s("search.sortcrit", tmp));
         free(tmp);
         the_sortcrit = (struct sortcrit *)sortcrit;
         qsort(msgdata, n, sizeof(MsgData *), index_sort_compare_generic_qsort);

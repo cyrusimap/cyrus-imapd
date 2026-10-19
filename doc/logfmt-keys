@@ -232,8 +232,13 @@ imap.client.id.support-url  the client's support URL
 imap.client.id.vendor    the client's vendor
 imap.client.id.version   the client's version
 imap.command            the IMAP command being processed
+imap.counter            which index counter underflowed: numunseen or numrecent
+imap.flag.group         which flags a STORE was not allowed: seen, deleted or other
+imap.qresync.modseq     the modseq the client said it had last seen
 imap.recursive          1 if the operation covers submailboxes too
+imap.sequence           a message sequence set, as the client wrote it
 imap.tag                the client's tag for the command
+imap.thread.algorithm   the THREAD algorithm in use, e.g. REFERENCES
 imip.error              why an iMIP operation failed
 imip.outcome            what an iMIP message did: added, updated, no_action, error
 jmap                    placeholder for "no JMAP request"; value is always ~null~
