@@ -4473,6 +4473,85 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     return 0;
 }
 
+EXPORTED int mailbox_restore_record(struct mailbox *mailbox,
+                                    const struct index_record *record,
+                                    bool unset_deleted,
+                                    const char *addflag,
+                                    uint32_t *newuidp)
+{
+    struct index_record newrecord = *record;
+    annotate_state_t *astate = NULL;
+    char oldfname[MAX_MAILBOX_PATH];
+    const char *fname;
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+    int r;
+
+    /* duplicate the old filename */
+    fname = mailbox_record_fname(mailbox, record);
+    xstrncpy(oldfname, fname, MAX_MAILBOX_PATH);
+
+    /* bump the UID, strip the flags */
+    newrecord.uid = mailbox->i.last_uid + 1;
+    newrecord.internal_flags &= ~FLAG_INTERNAL_EXPUNGED;
+    if (unset_deleted) {
+        newrecord.system_flags &= ~FLAG_DELETED;
+    }
+
+    /* copy the message file */
+    fname = mailbox_record_fname(mailbox, &newrecord);
+    int *fdptr = (newrecord.internal_flags & FLAG_INTERNAL_ARCHIVED)
+                     ? &mailbox->archive_dirfd
+                     : &mailbox->spool_dirfd;
+    r = mailbox_copyfile_fdptr(oldfname, fname, 0, fdptr);
+    if (r) {
+        goto done;
+    }
+
+    if (addflag) {
+        int userflag = 0;
+        r = mailbox_user_flag(mailbox, addflag, &userflag, 1);
+        if (r) {
+            goto done;
+        }
+        newrecord.user_flags[userflag / 32] |= 1U << (userflag & 31);
+    }
+
+    r = mailbox_append_index_record(mailbox, &newrecord);
+    if (r) {
+        goto done;
+    }
+
+    /* ensure an astate is connected to the destination mailbox, so
+     * that the annotation txn is committed when the mailbox closes */
+    r = mailbox_get_annotate_state(mailbox, newrecord.uid, &astate);
+    if (r) {
+        goto done;
+    }
+
+    r = annotate_msg_copy(mailbox, record->uid, mailbox, newrecord.uid, userid);
+    if (r) {
+        goto done;
+    }
+
+    /* mark the old one unlinked so it isn't seen again */
+    struct index_record oldrecord = *record;
+    oldrecord.internal_flags |=
+        FLAG_INTERNAL_UNLINKED | FLAG_INTERNAL_NEEDS_CLEANUP;
+    r = mailbox_rewrite_index_record(mailbox, &oldrecord);
+    if (r) {
+        goto done;
+    }
+
+    mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
+    if (newuidp) {
+        *newuidp = newrecord.uid;
+    }
+
+done:
+    free(userid);
+    return r;
+}
+
 /* append a single message to a mailbox - also updates everything
  * automatically.  These two functions are the ONLY way to modify
  * the contents or tracking fields of a message */
