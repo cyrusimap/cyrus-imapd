@@ -274,11 +274,7 @@ EXPORTED int sasl_setpass(sasl_conn_t *conn,
                       m->plug->mech_name,
                       user,
                       tmpresult,
-#ifndef WIN32
                       errno
-#else
-                      GetLastError()
-#endif
             );
             failed++;
         }
@@ -658,111 +654,6 @@ static int server_idle(sasl_conn_t *conn)
     return 0;
 }
 
-static int load_config(const sasl_callback_t *verifyfile_cb)
-{
-    int result;
-    const char *path_to_config = NULL;
-    size_t path_len;
-    char *config_filename = NULL;
-    size_t len;
-    const sasl_callback_t *getconfpath_cb = NULL;
-    const char *next;
-
-    /* If appname was not provided, behave as if there is no config file
-        (see also sasl_config_init() */
-    if (global_callbacks.appname == NULL) {
-        return SASL_CONTINUE;
-    }
-
-    /* get the path to the config file */
-    getconfpath_cb =
-        _sasl_find_getconfpath_callback(global_callbacks.callbacks);
-    if (getconfpath_cb == NULL) {
-        return SASL_BADPARAM;
-    }
-
-    /* getconfpath_cb->proc MUST be a sasl_getconfpath_t; if only C had a type
-       system */
-    result = ((sasl_getconfpath_t *) (getconfpath_cb->proc))(
-        getconfpath_cb->context,
-        (char **) &path_to_config);
-    if (result != SASL_OK) {
-        goto done;
-    }
-    if (path_to_config == NULL) {
-        path_to_config = "";
-    }
-
-    next = path_to_config;
-
-    while (next != NULL) {
-        next = strchr(path_to_config, PATHS_DELIMITER);
-
-        /* length = length of path + '/' + length of appname + ".conf" + 1
-            for '\0' */
-
-        if (next != NULL) {
-            path_len = next - path_to_config;
-            next++; /* Skip to the next path */
-        }
-        else {
-            path_len = strlen(path_to_config);
-        }
-
-        len = path_len + 2 + strlen(global_callbacks.appname) + 5 + 1;
-
-        if (len > PATH_MAX) {
-            result = SASL_FAIL;
-            goto done;
-        }
-
-        /* construct the filename for the config file */
-        config_filename = sasl_ALLOC((unsigned) len);
-        if (!config_filename) {
-            result = SASL_NOMEM;
-            goto done;
-        }
-
-        snprintf(config_filename,
-                 len,
-                 "%.*s%c%s.conf",
-                 (int) path_len,
-                 path_to_config,
-                 '/',
-                 global_callbacks.appname);
-
-        /* Ask the application if it's safe to use this file */
-        result = ((sasl_verifyfile_t *) (verifyfile_cb->proc))(
-            verifyfile_cb->context,
-            config_filename,
-            SASL_VRFY_CONF);
-
-        /* returns SASL_CONTINUE if the config file doesn't exist */
-        if (result == SASL_OK) {
-            result = sasl_config_init(config_filename);
-
-            if (result != SASL_CONTINUE) {
-                /* We are done */
-                break;
-            }
-        }
-
-        if (config_filename) {
-            sasl_FREE(config_filename);
-            config_filename = NULL;
-        }
-
-        path_to_config = next;
-    }
-
-done:
-    if (config_filename) {
-        sasl_FREE(config_filename);
-    }
-
-    return result;
-}
-
 /*
  * Verify that all the callbacks are valid
  */
@@ -783,30 +674,6 @@ static int verify_server_callbacks(const sasl_callback_t *callbacks)
     return SASL_OK;
 }
 
-static char *grab_field(char *line, char **eofield)
-{
-    int d = 0;
-    char *field;
-
-    while (isspace((int) *line)) {
-        line++;
-    }
-
-    /* find end of field */
-    while (line[d] && !isspace(((int) line[d]))) {
-        d++;
-    }
-    field = sasl_ALLOC(d + 1);
-    if (!field) {
-        return NULL;
-    }
-    memcpy(field, line, d);
-    field[d] = '\0';
-    *eofield = line + d;
-
-    return field;
-}
-
 struct secflag_map_s
 {
     const char *name;
@@ -823,84 +690,6 @@ struct secflag_map_s secflag_map[] = {
     { "mutual_auth",      SASL_SEC_MUTUAL_AUTH      },
     { NULL,               0x0                       }
 };
-
-static int parse_mechlist_file(const char *mechlistfile)
-{
-    FILE *f;
-    char buf[1024];
-    char *t, *ptr;
-    int r = 0;
-
-    f = fopen(mechlistfile, "r");
-    if (!f) {
-        return SASL_FAIL;
-    }
-
-    r = SASL_OK;
-    while (fgets(buf, sizeof(buf), f) != NULL) {
-        mechanism_t *n = sasl_ALLOC(sizeof(mechanism_t));
-        sasl_server_plug_t *nplug;
-
-        if (n == NULL) {
-            r = SASL_NOMEM;
-            break;
-        }
-        n->m.version = SASL_SERVER_PLUG_VERSION;
-        n->m.condition = SASL_CONTINUE;
-        nplug = sasl_ALLOC(sizeof(sasl_server_plug_t));
-        if (nplug == NULL) {
-            r = SASL_NOMEM;
-            break;
-        }
-        memset(nplug, 0, sizeof(sasl_server_plug_t));
-
-        /* each line is:
-           plugin-file WS mech_name WS max_ssf *(WS security_flag) RET
-        */
-
-        /* grab file */
-        n->m.f = grab_field(buf, &ptr);
-
-        /* grab mech_name */
-        nplug->mech_name = grab_field(ptr, &ptr);
-
-        /* grab max_ssf */
-        nplug->max_ssf = strtol(ptr, &ptr, 10);
-
-        /* grab security flags */
-        while (*ptr != '\n') {
-            struct secflag_map_s *map;
-
-            /* read security flag */
-            t = grab_field(ptr, &ptr);
-            map = secflag_map;
-            while (map->name) {
-                if (!strcasecmp(t, map->name)) {
-                    nplug->security_flags |= map->value;
-                    break;
-                }
-                map++;
-            }
-            if (!map->name) {
-                _sasl_log(NULL,
-                          SASL_LOG_ERR,
-                          "%s: couldn't identify flag '%s'",
-                          nplug->mech_name,
-                          t);
-            }
-            free(t);
-        }
-
-        /* insert mechanism into mechlist */
-        n->m.plug = nplug;
-        n->next = mechlist->mech_list;
-        mechlist->mech_list = n;
-        mechlist->mech_length++;
-    }
-
-    fclose(f);
-    return r;
-}
 
 /* initialize server drivers, done once per process
  *  callbacks      -- callbacks for all server connections; must include
@@ -920,12 +709,6 @@ EXPORTED int sasl_server_init(const sasl_callback_t *callbacks,
                               const char *appname)
 {
     int ret;
-    const sasl_callback_t *vf;
-    const char *pluginfile = NULL;
-#ifdef PIC
-    sasl_getopt_t *getopt;
-    void *context;
-#endif
 
     const add_plugin_list_t ep_list[] = {
         { "sasl_server_plug_init",  (add_plugin_t *) sasl_server_add_plugin    },
@@ -984,59 +767,11 @@ EXPORTED int sasl_server_init(const sasl_callback_t *callbacks,
         return ret;
     }
 
-    vf = _sasl_find_verifyfile_callback(callbacks);
-
-    /* load config file if applicable */
-    ret = load_config(vf);
-    if ((ret != SASL_OK) && (ret != SASL_CONTINUE)) {
-        server_done();
-        return ret;
-    }
-
     /* load internal plugins */
     sasl_server_add_plugin("EXTERNAL", &external_server_plug_init);
-
-#ifdef PIC
-    /* delayed loading of plugins? (DSO only, as it doesn't
-     * make much [any] sense to delay in the static library case) */
-    if (_sasl_getcallback(NULL,
-                          SASL_CB_GETOPT,
-                          (sasl_callback_ft *) &getopt,
-                          &context)
-        == SASL_OK)
-    {
-        /* No sasl_conn_t was given to getcallback, so we provide the
-         * global callbacks structure */
-        ret = getopt(&global_callbacks, NULL, "plugin_list", &pluginfile, NULL);
-    }
-#endif
-
-    if (pluginfile != NULL) {
-        /* this file should contain a list of plugins available.
-           we'll load on demand. */
-
-        /* Ask the application if it's safe to use this file */
-        ret = ((sasl_verifyfile_t *) (vf->proc))(vf->context,
-                                                 pluginfile,
-                                                 SASL_VRFY_CONF);
-        if (ret != SASL_OK) {
-            _sasl_log(NULL,
-                      SASL_LOG_ERR,
-                      "unable to load plugin list %s: %z",
-                      pluginfile,
-                      ret);
-        }
-
-        if (ret == SASL_OK) {
-            ret = parse_mechlist_file(pluginfile);
-        }
-    }
-    else {
-        /* load all plugins now */
-        ret = _sasl_load_plugins(ep_list,
-                                 _sasl_find_getpath_callback(callbacks),
-                                 _sasl_find_verifyfile_callback(callbacks));
-    }
+    ret = _sasl_load_plugins(ep_list,
+                             _sasl_find_getpath_callback(callbacks),
+                             _sasl_find_verifyfile_callback(callbacks));
 
     if (ret == SASL_OK) {
         _sasl_server_cleanup_hook = &server_done;
