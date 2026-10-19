@@ -3472,8 +3472,8 @@ static const struct client_id_field {
     { "environment", "imap.client.id.environment" },
     { "name",        "imap.client.id.name"        },
     { "os",          "imap.client.id.os"          },
-    { "os-version",  "imap.client.id.os_version"  },
-    { "support-url", "imap.client.id.support_url" },
+    { "os-version",  "imap.client.id.os-version"  },
+    { "support-url", "imap.client.id.support-url" },
     { "vendor",      "imap.client.id.vendor"      },
     { "version",     "imap.client.id.version"     },
     { NULL,          NULL                         }
