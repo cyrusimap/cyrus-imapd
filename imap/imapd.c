@@ -4111,7 +4111,8 @@ static int append_catenate(const char *tag, FILE *f, const char *cur_name,
             /* Parse newline terminating command */
             c = prot_getc(imapd_in);
         }
-        else if ((client_capa & ENABLED_UTF8_ACCEPT) && !strcasecmp(arg.s, "UTF8")) {
+        else if ((client_capa & ENABLED_UTF8_ACCEPT)
+                 && !strcasecmp(arg.s, "UTF8")) {
             int r1;
 
             if (c != ' ' || (c = prot_getc(imapd_in) != '(')) {

@@ -3652,7 +3652,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         prot_printf(state->out, "* %u %s ", id, resp);
         started = 1;
     }
-    if (fetchitems & FETCH_UID || (ischanged && (client_capa & ENABLED_QRESYNC))) {
+    if (fetchitems & FETCH_UID
+        || (ischanged && (client_capa & ENABLED_QRESYNC))) {
         prot_printf(state->out, "%cUID %u", sepchar, record.uid);
         sepchar = ' ';
     }
@@ -3684,7 +3685,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
 
-    if (fetchitems & FETCH_MODSEQ || (ischanged && (client_capa & ENABLED_CONDSTORE))) {
+    if (fetchitems & FETCH_MODSEQ
+        || (ischanged && (client_capa & ENABLED_CONDSTORE))) {
         prot_printf(state->out, "%cMODSEQ (" MODSEQ_FMT ")",
                     sepchar, record.modseq);
         sepchar = ' ';
@@ -4440,7 +4442,8 @@ static int index_storeflag(struct index_state *state,
      * must always been told, and we prefer just to tell flags
      * as well in this case, it's simpler and not much more
      * bandwidth */
-    if (!(client_capa & ENABLED_CONDSTORE) && storeargs->silent && im->told_modseq == oldmodseq)
+    if (!(client_capa & ENABLED_CONDSTORE) && storeargs->silent
+        && im->told_modseq == oldmodseq)
         im->told_modseq = im->modseq;
 
     return 0;
@@ -4484,7 +4487,8 @@ static int index_store_annotation(struct index_state *state,
     if (r) goto out;
 
     /* if it's silent and unchanged, update the seen value */
-    if (!(client_capa & ENABLED_CONDSTORE) && storeargs->silent && im->told_modseq == oldmodseq)
+    if (!(client_capa & ENABLED_CONDSTORE) && storeargs->silent
+        && im->told_modseq == oldmodseq)
         im->told_modseq = im->modseq;
 
 out:
