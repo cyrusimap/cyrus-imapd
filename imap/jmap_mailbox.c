@@ -670,6 +670,7 @@ struct jmap_mailbox_get_cb_rock {
     hash_table *want;
     struct shared_mboxes *shared_mboxes;
     strarray_t *sublist;
+    hash_table *former_names; /* former name -> mailbox id */
 };
 
 static int is_jmap_mailbox(jmap_req_t *req,
@@ -707,14 +708,211 @@ done:
     return ret;
 }
 
+static int _mbox_former_names_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct jmap_mailbox_get_cb_rock *rock = vrock;
+    mbentry_t *full = NULL;
+
+    if (!mbentry->uniqueid
+        || mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &full, NULL))
+    {
+        return 0;
+    }
+
+    char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+    jmap_set_mailboxid(rock->req->cstate, full, mboxid);
+    for (int i = 0; i < ptrarray_size(&full->name_history); i++) {
+        const former_name_t *item = ptrarray_nth(&full->name_history, i);
+        if (!hash_lookup(item->name, rock->former_names)) {
+            hash_insert(item->name, xstrdup(mboxid), rock->former_names);
+        }
+    }
+
+    mboxlist_entry_free(&full);
+    return 0;
+}
+
+/* The parentId a mailbox named @p name had: the mailbox now holding
+ * the parent name, else a mailbox that held it before. */
+static json_t *_mbox_history_parentid(struct jmap_mailbox_get_cb_rock *rock,
+                                      const char *name)
+{
+    mbname_t *mbname = mbname_from_intname(name);
+    json_t *jparentid = json_null();
+
+    if (strarray_size(mbname_boxes(mbname)) > 1) {
+        free(mbname_pop_boxes(mbname));
+        const char *parentname = mbname_intname(mbname);
+        mbentry_t *parent = NULL;
+
+        if (!mboxlist_lookup_allow_all(parentname, &parent, NULL)
+            && !(parent->mbtype & (MBTYPE_DELETED | MBTYPE_RESERVE)))
+        {
+            char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+            jmap_set_mailboxid(rock->req->cstate, parent, mboxid);
+            jparentid = json_string(mboxid);
+        }
+        else {
+            const char *mboxid = hash_lookup(parentname, rock->former_names);
+            if (mboxid) {
+                jparentid = json_string(mboxid);
+            }
+        }
+        mboxlist_entry_free(&parent);
+    }
+
+    mbname_free(&mbname);
+    return jparentid;
+}
+
+static void _mbox_history_setname(struct jmap_mailbox_get_cb_rock *rock,
+                                  json_t *obj,
+                                  const char *name)
+{
+    if (jmap_wantprop(rock->get->props, "name")) {
+        mbname_t *mbname = mbname_from_intname(name);
+        char *jname = _mbox_get_name(rock->req->accountid, mbname);
+        json_object_set_new(obj, "name", json_string(jname));
+        free(jname);
+        mbname_free(&mbname);
+    }
+    if (jmap_wantprop(rock->get->props, "parentId")) {
+        json_object_set_new(obj,
+                            "parentId",
+                            _mbox_history_parentid(rock, name));
+    }
+}
+
+static bool _mbox_former_name_visible(jmap_req_t *req,
+                                      const char *name,
+                                      uint32_t mbtype)
+{
+    /* A sharee can't be shown to have had access under a former name,
+     * which may also reveal mailboxes hidden from them. */
+    if (strcmp(req->userid, req->accountid)) {
+        return false;
+    }
+
+    mbname_t *mbname = mbname_from_intname(name);
+    bool visible = !strcmpsafe(mbname_userid(mbname), req->accountid)
+                   && !mboxname_isnondeliverymailbox(name, mbtype);
+    mbname_free(&mbname);
+    return visible;
+}
+
+struct mbox_version
+{
+    const char *name;
+    modseq_t version;
+    time_t replaced;
+};
+
+/* Add object history to @p obj, the JMAP mailbox for @p mbentry, and
+ * append its former names if requested.  A mailbox in the
+ * delayed-delete namespace is destroyed at @p deleted under its
+ * pre-deletion name @p livename.
+ *
+ * Name history records a former name with the time its entry was last
+ * written, not the time of the rename, so a former name is taken to be
+ * replaced at the time the next newer name was last written. */
+static void _mbox_get_history(struct jmap_mailbox_get_cb_rock *rock,
+                              const mbentry_t *mbentry,
+                              json_t *obj,
+                              const char *livename,
+                              time_t deleted)
+{
+    struct jmap_get *get = rock->get;
+    mbentry_t *full = NULL;
+
+    if (mbentry->uniqueid) {
+        mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &full, NULL);
+    }
+    size_t nhistory = full ? ptrarray_size(&full->name_history) : 0;
+    struct mbox_version *versions =
+        xzmalloc((nhistory + 1) * sizeof(struct mbox_version));
+    size_t n = 0;
+
+    /* the newest version: live, or destroyed under its pre-deletion name */
+    versions[n++] =
+        (struct mbox_version) { livename, mbentry->foldermodseq, deleted };
+    time_t newer_mtime = deleted ? deleted : mbentry->mtime;
+    for (size_t i = 0; i < nhistory; i++) {
+        const former_name_t *item = ptrarray_nth(&full->name_history, i);
+        time_t replaced = newer_mtime;
+        newer_mtime = item->mtime;
+        if (deleted && i == 0 && !strcmp(item->name, livename)) {
+            continue;
+        }
+        if (!replaced
+            || !_mbox_former_name_visible(rock->req, item->name, item->mbtype))
+        {
+            continue;
+        }
+        versions[n++] =
+            (struct mbox_version) { item->name, item->foldermodseq, replaced };
+    }
+
+    /* newer versions get higher numbers */
+    for (size_t i = n; i-- > 0;) {
+        modseq_t older = i + 1 < n ? versions[i + 1].version : 0;
+        if (versions[i].version <= older) {
+            versions[i].version = older + 1;
+        }
+    }
+
+    if (deleted) {
+        _mbox_history_setname(rock, obj, livename);
+    }
+    jmap_get_history_set(obj, versions[0].version, versions[0].replaced);
+
+    for (size_t i = 1; get->history.include_replaced && i < n; i++) {
+        if (!jmap_get_history_wanted(get, versions[i].replaced)) {
+            continue;
+        }
+        json_t *former = json_deep_copy(obj);
+        _mbox_history_setname(rock, former, versions[i].name);
+        jmap_get_history_set(former, versions[i].version, versions[i].replaced);
+        json_array_append_new(get->list, former);
+    }
+
+    free(versions);
+    mboxlist_entry_free(&full);
+}
+
 static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
 {
     struct jmap_mailbox_get_cb_rock *rock = _rock;
     jmap_req_t *req = rock->req;
     json_t *list = (json_t *) rock->get->list, *obj;
     const char *id = NULL;
+    time_t deleted = 0;
+    char *livename = NULL;
 
-    if (!is_jmap_mailbox(rock->req, mbentry, 0)) return 0;
+    if (!is_jmap_mailbox(rock->req, mbentry, 0)) {
+        if (!rock->get->history.include_destroyed
+            || !mboxname_isdeletedmailbox(mbentry->name, &deleted))
+        {
+            return 0;
+        }
+
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+        mbname_set_isdeleted(mbname, 0);
+        livename = xstrdup(mbname_intname(mbname));
+        mbname_free(&mbname);
+
+        mbentry_t *live = mboxlist_entry_copy(mbentry);
+        free(live->name);
+        live->name = xstrdup(livename);
+        int is_jmap = is_jmap_mailbox(rock->req, live, 0);
+        mboxlist_entry_free(&live);
+        if (!is_jmap
+            || (!rock->shared_mboxes->is_owner
+                && !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)))
+        {
+            free(livename);
+            return 0;
+        }
+    }
 
     /* Do we need to process this mailbox? */
     if (rock->want) {
@@ -725,12 +923,14 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
         else if (USER_COMPACT_EMAILIDS(rock->req->cstate) && // check for legacy id
                  hash_lookup(mbentry->uniqueid, rock->want))
             id = mbentry->uniqueid;
-        else
+        else {
+            free(livename);
             return 0;
+        }
     }
 
     /* Check share_type for this mailbox */
-    enum shared_mbox_type share_type =
+    enum shared_mbox_type share_type = livename ? _SHAREDMBOX_SHARED :
         _shared_mbox_type(rock->shared_mboxes, mbentry->name);
     if (share_type == _SHAREDMBOX_HIDDEN)
         return 0;
@@ -739,9 +939,16 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     obj = _mbox_get(req, mbentry, rock->roles, rock->get->props, share_type, rock->sublist);
     if (!obj) {
         syslog(LOG_INFO, "could not convert mailbox %s to JMAP", mbentry->name);
+        free(livename);
         return IMAP_INTERNAL;
     }
     json_array_append_new(list, obj);
+
+    if (rock->get->history.enabled && share_type == _SHAREDMBOX_SHARED) {
+        _mbox_get_history(rock, mbentry, obj,
+                          livename ? livename : mbentry->name, deleted);
+    }
+    free(livename);
 
     /* Move this mailbox of the lookup list */
     if (rock->want) {
@@ -781,9 +988,20 @@ static int jmap_mailbox_get(jmap_req_t *req)
     if (jmap_wantprop(get.props, "isSubscribed")) {
         sublist = mboxlist_sublist(req->userid);
     }
-    struct jmap_mailbox_get_cb_rock rock = { req, &get, NULL, NULL, shared_mboxes, sublist };
+    struct jmap_mailbox_get_cb_rock rock = { req, &get, NULL, NULL, shared_mboxes, sublist, NULL };
     rock.roles = (hash_table *) xmalloc(sizeof(hash_table));
     construct_hash_table(rock.roles, 8, 0);
+
+    int mboxtree_flags = MBOXTREE_INTERMEDIATES;
+    if (get.history.enabled) {
+        rock.former_names = xzmalloc(sizeof(hash_table));
+        construct_hash_table(rock.former_names, 64, 0);
+        mboxlist_usermboxtree(req->accountid, req->authstate,
+                              _mbox_former_names_cb, &rock,
+                              MBOXTREE_INTERMEDIATES | MBOXTREE_DELETED);
+        if (get.history.include_destroyed)
+            mboxtree_flags |= MBOXTREE_DELETED;
+    }
 
     /* Does the client request specific mailboxes? */
     if (JNOTNULL(get.ids)) {
@@ -806,7 +1024,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
      * all mailbox ids. XXX Optimise this codepath if the ids[] array
      * length is small */
     mboxlist_usermboxtree(req->accountid, req->authstate,
-                          jmap_mailbox_get_cb, &rock, MBOXTREE_INTERMEDIATES);
+                          jmap_mailbox_get_cb, &rock, mboxtree_flags);
 
     /* Report if any requested mailbox has not been found */
     if (rock.want) {
@@ -822,6 +1040,10 @@ static int jmap_mailbox_get(jmap_req_t *req)
     free(rock.want);
     free_hash_table(rock.roles, NULL);
     free(rock.roles);
+    if (rock.former_names) {
+        free_hash_table(rock.former_names, free);
+        free(rock.former_names);
+    }
     strarray_free(rock.sublist);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);

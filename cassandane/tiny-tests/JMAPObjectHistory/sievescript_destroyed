@@ -1,0 +1,99 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sievescript_destroyed ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $blob1 = "" . $jmap->Upload("keep;\r\n", 'application/sieve')->{blobId};
+    my $blob2 = "" . $jmap->Upload("discard;\r\n", 'application/sieve')->{blobId};
+
+    my $res = $jmap->CallMethods([
+        ['SieveScript/set', { create => {
+            gone => { name => 'gone', blobId => $blob1 },
+            kept => { name => 'kept', blobId => $blob1 },
+        } }, 'R1'],
+    ]);
+    my $gone = $res->[0][1]{created}{gone}{id};
+    my $kept = $res->[0][1]{created}{kept}{id};
+    $self->assert_not_null($gone);
+    $self->assert_not_null($kept);
+
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', { update => { $gone => { blobId => $blob2 } } },
+         'R1'],
+        ['SieveScript/set', { destroy => [$gone] }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$gone});
+    $self->assert_cmp_deeply([$gone], $res->[1][1]{destroyed});
+
+    my $old = {
+        version => ignore(),
+        replaced => re(qr/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/),
+    };
+    my $live = { version => ignore(), replaced => undef };
+
+    $res = $jmap->CallMethods([
+        ['SieveScript/get', { ids => [$gone] }, 'R1'],
+        ['SieveScript/get', { ids => [$gone],
+                              includeDestroyed => JSON::true }, 'R2'],
+        ['SieveScript/get', { ids => [$gone],
+                              includeDestroyed => JSON::true,
+                              includeReplaced => JSON::true }, 'R3'],
+        ['SieveScript/get', { ids => [$gone],
+                              includeReplaced => JSON::true }, 'R4'],
+    ]);
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$gone], $res->[0][1]{notFound});
+
+    xlog $self, "includeDestroyed returns the final version only";
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => ignore(),
+        list => [
+            { id => $gone, name => 'gone', isActive => JSON::false,
+              blobId => $blob2, objectHistory => $old },
+        ],
+        notFound => [],
+        hasMoreHistory => JSON::false,
+    }, $res->[1][1]);
+
+    xlog $self, "with includeReplaced every retained version";
+    $self->assert_cmp_deeply([
+        { id => $gone, name => 'gone', isActive => JSON::false,
+          blobId => $blob1, objectHistory => $old },
+        { id => $gone, name => 'gone', isActive => JSON::false,
+          blobId => $blob2, objectHistory => $old },
+    ], $res->[2][1]{list});
+    $self->assert($res->[2][1]{list}[0]{objectHistory}{version}
+                  < $res->[2][1]{list}[1]{objectHistory}{version});
+    $self->assert_cmp_deeply([], $res->[2][1]{notFound});
+
+    xlog $self, "includeReplaced alone does not find destroyed scripts";
+    $self->assert_cmp_deeply([], $res->[3][1]{list});
+    $self->assert_cmp_deeply([$gone], $res->[3][1]{notFound});
+
+    xlog $self, "ids null with includeDestroyed lists live and destroyed";
+    $res = $jmap->CallMethods([
+        ['SieveScript/get', { ids => undef, includeDestroyed => JSON::true,
+                              properties => ['name'] }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(bag(
+        { id => $gone, name => 'gone', objectHistory => $old },
+        { id => $kept, name => 'kept', objectHistory => $live },
+    ), $res->[0][1]{list});
+
+    xlog $self, "unlinked destroyed scripts are gone";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'cyr_expire', '-X' => '0', '-D' => '0');
+    $res = $jmap->CallMethods([
+        ['SieveScript/get', { ids => [$gone, $kept],
+                              includeDestroyed => JSON::true,
+                              includeReplaced => JSON::true,
+                              properties => ['name'] }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        { id => $kept, name => 'kept', objectHistory => $live },
+    ], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$gone], $res->[0][1]{notFound});
+}

@@ -1657,6 +1657,7 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
     const char *key;
     json_t *arg, *val;
     size_t i;
+    bool using_history = jmap_is_using(req, JMAP_URN_OBJECT_HISTORY);
 
     // assume that we are given an initialized jmap_get struct
     get->list = json_array();
@@ -1731,10 +1732,58 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
             }
         }
 
+        else if (using_history && !strcmp(key, "includeReplaced")) {
+            if (json_is_boolean(arg)) {
+                get->history.include_replaced = json_boolean_value(arg);
+            }
+            else {
+                jmap_parser_invalid(parser, key);
+            }
+        }
+
+        else if (using_history && !strcmp(key, "includeDestroyed")) {
+            if (json_is_boolean(arg)) {
+                get->history.include_destroyed = json_boolean_value(arg);
+            }
+            else {
+                jmap_parser_invalid(parser, key);
+            }
+        }
+
+        else if (using_history && !strcmp(key, "historyAfter")) {
+            if (json_is_utcdate(arg)) {
+                get->history.has_after =
+                    time_from_iso8601(json_string_value(arg),
+                                      &get->history.after)
+                    > 0;
+                if (!get->history.has_after) {
+                    jmap_parser_invalid(parser, key);
+                }
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, key);
+            }
+        }
+
+        else if (using_history && !strcmp(key, "historyLimit")) {
+            if (json_is_integer(arg) && json_integer_value(arg) >= 0
+                && json_integer_value(arg) <= JMAP_INT_MAX)
+            {
+                get->history.has_limit = true;
+                get->history.limit = json_integer_value(arg);
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, key);
+            }
+        }
+
         else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
             jmap_parser_invalid(parser, key);
         }
     }
+
+    get->history.enabled =
+        get->history.include_replaced || get->history.include_destroyed;
 
     if (json_array_size(parser->invalid)) {
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
@@ -1792,12 +1841,152 @@ HIDDEN void jmap_get_fini(struct jmap_get *get)
     json_decref(get->not_found);
 }
 
+HIDDEN void jmap_get_history_set(json_t *obj, modseq_t version, time_t replaced)
+{
+    json_t *jreplaced = json_null();
+
+    if (replaced) {
+        char datestr[RFC3339_DATETIME_MAX];
+        time_to_rfc3339(replaced, datestr, sizeof(datestr));
+        jreplaced = json_string(datestr);
+    }
+
+    json_object_set_new(obj,
+                        "objectHistory",
+                        json_pack("{s:I s:o}",
+                                  "version",
+                                  (json_int_t) version,
+                                  "replaced",
+                                  jreplaced));
+}
+
+HIDDEN bool jmap_get_history_wanted(const struct jmap_get *get, time_t replaced)
+{
+    return !replaced || !get->history.has_after
+           || replaced > get->history.after;
+}
+
+struct history_entry
+{
+    json_t *obj;
+    size_t group; /* index of first entry with this id */
+    size_t pos;   /* original list index */
+    json_int_t version;
+    const char *replaced; /* NULL for the live version */
+};
+
+static int history_cmp_recent(const void *va, const void *vb)
+{
+    const struct history_entry *a = va, *b = vb;
+
+    /* live versions first, then newest replaced first;
+     * UTCDate strings: ASCII order == datetime order */
+    if (!a->replaced != !b->replaced) {
+        return a->replaced ? 1 : -1;
+    }
+    if (a->replaced) {
+        int r = strcmp(b->replaced, a->replaced);
+        if (r) {
+            return r;
+        }
+    }
+    if (a->version != b->version) {
+        return a->version < b->version ? 1 : -1;
+    }
+    return a->pos < b->pos ? -1 : a->pos > b->pos;
+}
+
+static int history_cmp_output(const void *va, const void *vb)
+{
+    const struct history_entry *a = va, *b = vb;
+
+    if (a->group != b->group) {
+        return a->group < b->group ? -1 : 1;
+    }
+    if (a->version != b->version) {
+        return a->version < b->version ? -1 : 1;
+    }
+    return a->pos < b->pos ? -1 : a->pos > b->pos;
+}
+
+static void jmap_get_history_finish(struct jmap_get *get)
+{
+    size_t n = json_array_size(get->list);
+    struct history_entry *entries = xzmalloc((n + 1) * sizeof(*entries));
+    hash_table groups = HASH_TABLE_INITIALIZER;
+    size_t count = 0;
+
+    construct_hash_table(&groups, n + 1, 0);
+
+    for (size_t i = 0; i < n; i++) {
+        json_t *obj = json_array_get(get->list, i);
+        json_t *info = json_object_get(obj, "objectHistory");
+
+        if (!info) {
+            /* no history retained for this type: just the live version */
+            jmap_get_history_set(obj, 1, 0);
+            info = json_object_get(obj, "objectHistory");
+        }
+
+        const char *replaced =
+            json_string_value(json_object_get(info, "replaced"));
+        if (replaced && get->history.has_after) {
+            time_t t = 0;
+            time_from_iso8601(replaced, &t);
+            if (!jmap_get_history_wanted(get, t)) {
+                continue;
+            }
+        }
+
+        const char *id = json_string_value(json_object_get(obj, "id"));
+        uintptr_t group = (uintptr_t) hash_lookup(id ? id : "", &groups);
+        if (!group) {
+            group = i + 1;
+            hash_insert(id ? id : "", (void *) group, &groups);
+        }
+
+        struct history_entry *e = &entries[count++];
+        e->obj = obj;
+        e->group = group;
+        e->pos = i;
+        e->version = json_integer_value(json_object_get(info, "version"));
+        e->replaced = replaced;
+    }
+
+    if (get->history.has_limit && count > get->history.limit) {
+        qsort(entries, count, sizeof(*entries), history_cmp_recent);
+        count = get->history.limit;
+        get->history.has_more = true;
+    }
+
+    qsort(entries, count, sizeof(*entries), history_cmp_output);
+
+    json_t *list = json_array();
+    for (size_t i = 0; i < count; i++) {
+        json_array_append(list, entries[i].obj);
+    }
+    json_decref(get->list);
+    get->list = list;
+
+    free_hash_table(&groups, NULL);
+    free(entries);
+}
+
 HIDDEN json_t *jmap_get_reply(struct jmap_get *get)
 {
+    if (get->history.enabled) {
+        jmap_get_history_finish(get);
+    }
+
     json_t *res = json_object();
     json_object_set_new(res, "state", json_string(get->state));
     json_object_set(res, "list", get->list);
     json_object_set(res, "notFound", get->not_found);
+    if (get->history.enabled) {
+        json_object_set_new(res,
+                            "hasMoreHistory",
+                            json_boolean(get->history.has_more));
+    }
     return res;
 }
 

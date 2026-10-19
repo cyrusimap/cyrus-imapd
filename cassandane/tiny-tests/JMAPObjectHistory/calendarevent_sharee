@@ -1,0 +1,81 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_sharee ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $shareeJmap = $self->{instance}->create_user('sharee')->jmap;
+    my @using = $self->jmap_default_using->@*;
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', { create => {
+            shared => {
+                name => 'shared',
+                shareWith => { sharee => { mayReadItems => JSON::true } },
+            },
+            private => { name => 'private' },
+        } }, 'R1'],
+    ]);
+    my $sharedId = $res->[0][1]{created}{shared}{id};
+    my $privateId = $res->[0][1]{created}{private}{id};
+    $self->assert_not_null($sharedId);
+    $self->assert_not_null($privateId);
+
+    my %event = (
+        calendarIds => { $sharedId => JSON::true },
+        version => '2.0',
+        start => '2026-10-01T09:00:00',
+        timeZone => 'Europe/Vienna',
+        duration => 'PT1H',
+    );
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', { create => {
+            e1 => { %event, title => 'stays one' },
+            e2 => { %event, title => 'moves' },
+        } }, 'R1'],
+    ]);
+    my $staysId = $res->[0][1]{created}{e1}{id};
+    my $movesId = $res->[0][1]{created}{e2}{id};
+    $self->assert_not_null($staysId);
+    $self->assert_not_null($movesId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', { update => {
+            $staysId => { title => 'stays two' },
+            $movesId => { calendarIds => { $privateId => JSON::true } },
+        } }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar keys $res->[0][1]{updated}->%*);
+
+    # The sharee sees the history in the shared calendar, but a copy left
+    # there by a move to a calendar it can not read is not a destroyed event
+    $res = $shareeJmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$staysId, $movesId],
+            includeReplaced => JSON::true,
+            includeDestroyed => JSON::true,
+            properties => ['title'],
+        }, 'R1'],
+    ], \@using);
+    $self->assert_cmp_deeply([
+        superhashof({
+            id => $staysId,
+            title => 'stays one',
+            objectHistory => {
+                version => code(sub { $_[0] > 0 }),
+                replaced => re(qr/^\d{4}-\d\d-\d\dT/),
+            },
+        }),
+        superhashof({
+            id => $staysId,
+            title => 'stays two',
+            objectHistory => {
+                version => code(sub { $_[0] > 0 }),
+                replaced => undef,
+            },
+        }),
+    ], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$movesId], $res->[0][1]{notFound});
+}

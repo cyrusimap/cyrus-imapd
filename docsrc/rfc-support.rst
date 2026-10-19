@@ -926,6 +926,10 @@ draft-ietf-jmap-calendars
 
     JMAP for Calendars
 
+draft-ietf-jmap-object-history
+
+    JMAP Object History
+
 draft-murchison-lmtp-ignorequota
 
     LMTP Service Extension for Ignoring Recipient Quotas

@@ -1,0 +1,134 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_replaced ($self)
+{
+    my $jmap = $self->{jmap};
+    my $calId = $self->default_user->calendars->default->id;
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', { create => { e1 => {
+            calendarIds => { $calId => JSON::true },
+            version => '2.0',
+            title => 'one',
+            start => '2026-10-01T09:00:00',
+            timeZone => 'Europe/Vienna',
+            duration => 'PT1H',
+        } } }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{e1}{id};
+    $self->assert_not_null($eventId);
+
+    foreach my $title ('two', 'three') {
+        $res = $jmap->CallMethods([
+            ['CalendarEvent/set', {
+                update => { $eventId => { title => $title } },
+            }, 'R1'],
+        ]);
+        $self->assert(exists $res->[0][1]{updated}{$eventId});
+    }
+
+    # Without history arguments only the live version is returned
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => ['title'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => ignore(),
+        list => [ superhashof({ id => $eventId, title => 'three' }) ],
+        notFound => [],
+    }, $res->[0][1]);
+    $self->assert(not exists $res->[0][1]{list}[0]{objectHistory});
+
+    # All versions in ascending order, the live one last
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeReplaced => JSON::true,
+            properties => ['title', 'calendarIds'],
+        }, 'R1'],
+    ]);
+    my $replaced = {
+        version => code(sub { $_[0] > 0 }),
+        replaced => re(qr/^\d{4}-\d\d-\d\dT/),
+    };
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => ignore(),
+        list => [
+            superhashof({ id => $eventId, title => 'one',
+                          calendarIds => { $calId => JSON::true },
+                          objectHistory => $replaced }),
+            superhashof({ id => $eventId, title => 'two',
+                          objectHistory => $replaced }),
+            superhashof({ id => $eventId, title => 'three',
+                          objectHistory => {
+                              version => code(sub { $_[0] > 0 }),
+                              replaced => undef,
+                          } }),
+        ],
+        notFound => [],
+        hasMoreHistory => jfalse,
+    }, $res->[0][1]);
+
+    my @list = $res->[0][1]{list}->@*;
+    $self->assert($list[0]{objectHistory}{version}
+                  < $list[1]{objectHistory}{version});
+    $self->assert($list[1]{objectHistory}{version}
+                  < $list[2]{objectHistory}{version});
+
+    # Properties filtering applies to old versions too
+    $self->assert(not exists $list[0]{start});
+
+    # The same with ids null
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => undef,
+            includeReplaced => JSON::true,
+            properties => ['title'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(['one', 'two', 'three'],
+        [ map { $_->{title} } $res->[0][1]{list}->@* ]);
+
+    # historyAfter in the future leaves only the live version
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeReplaced => JSON::true,
+            historyAfter => '2100-01-01T00:00:00Z',
+            properties => ['title'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(['three'],
+        [ map { $_->{title} } $res->[0][1]{list}->@* ]);
+
+    # includeDestroyed alone adds nothing for a live event
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeDestroyed => JSON::true,
+            properties => ['title'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(['three'],
+        [ map { $_->{title} } $res->[0][1]{list}->@* ]);
+
+    # Once the expunged copies are cleaned up only the live version remains
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-X' => '0');
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeReplaced => JSON::true,
+            properties => ['title'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([superhashof({
+        id => $eventId,
+        title => 'three',
+        objectHistory => { version => code(sub { $_[0] > 0 }), replaced => undef },
+    })], $res->[0][1]{list});
+}

@@ -4090,6 +4090,18 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
             }
         }
 
+        /* a rename stores a new record; the old name's bytecode goes */
+        if (sdata->alive && sdata->imap_uid && strcmpsafe(sdata->name, name)) {
+            r = sievedir_delete_script(mailbox->sievedir, sdata->name);
+            if (r) {
+                xsyslog_ev(LOG_ERR, "sieve.script.write.failed",
+                           lf_mailbox(mailbox),
+                           lf_s("sieve.script", sdata->name));
+                r = IMAP_IOERROR;
+                goto done;
+            }
+        }
+
         sdata->lastupdated = new->internaldate.tv_sec;
         sdata->mailbox = mailbox_uniqueid(mailbox);
         sdata->imap_uid = new->uid;

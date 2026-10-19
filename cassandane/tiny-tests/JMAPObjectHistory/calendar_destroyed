@@ -1,0 +1,130 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_destroyed ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', { create => { c1 => { name => 'doomed' } } }, 'R1'],
+    ]);
+    my $calId = $res->[0][1]{created}{c1}{id};
+    $self->assert_not_null($calId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', { create => { e1 => {
+            calendarIds => { $calId => JSON::true },
+            version => '2.0',
+            title => 'one',
+            start => '2026-10-01T09:00:00',
+            timeZone => 'Europe/Vienna',
+            duration => 'PT1H',
+        } } }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{e1}{id};
+    $self->assert_not_null($eventId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => { $eventId => { title => 'two' } },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+    # A live calendar has its live version only
+    $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => [$calId],
+            includeReplaced => JSON::true,
+            includeDestroyed => JSON::true,
+            properties => ['name'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([{
+        id => $calId,
+        name => 'doomed',
+        objectHistory => {
+            version => code(sub { $_[0] > 0 }),
+            replaced => undef,
+        },
+    }], $res->[0][1]{list});
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            destroy => [$calId],
+            onDestroyRemoveEvents => JSON::true,
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([$calId], $res->[0][1]{destroyed});
+
+    my $destroyed = {
+        version => code(sub { $_[0] > 0 }),
+        replaced => re(qr/^\d{4}-\d\d-\d\dT/),
+    };
+
+    # The deleted calendar is retained as a destroyed calendar
+    $res = $jmap->CallMethods([
+        ['Calendar/get', { ids => [$calId], properties => ['name'] }, 'R1'],
+        ['Calendar/get', {
+            ids => [$calId],
+            includeDestroyed => JSON::true,
+            properties => ['name'],
+        }, 'R2'],
+        ['Calendar/get', {
+            ids => undef,
+            includeDestroyed => JSON::true,
+            properties => ['name'],
+        }, 'R3'],
+    ]);
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$calId], $res->[0][1]{notFound});
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => ignore(),
+        list => [{
+            id => $calId,
+            name => 'doomed',
+            objectHistory => $destroyed,
+        }],
+        notFound => [],
+        hasMoreHistory => jfalse,
+    }, $res->[1][1]);
+    $self->assert_cmp_deeply(superbagof({
+        id => $calId,
+        name => 'doomed',
+        objectHistory => $destroyed,
+    }), $res->[2][1]{list});
+
+    # So are its events, with all their versions
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeDestroyed => JSON::true,
+            properties => ['title', 'calendarIds'],
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeDestroyed => JSON::true,
+            includeReplaced => JSON::true,
+            properties => ['title'],
+        }, 'R2'],
+    ]);
+    $self->assert_cmp_deeply([
+        superhashof({
+            id => $eventId,
+            title => 'two',
+            calendarIds => { $calId => JSON::true },
+            objectHistory => $destroyed,
+        }),
+    ], $res->[0][1]{list});
+    $self->assert_cmp_deeply([], $res->[0][1]{notFound});
+    $self->assert_cmp_deeply([
+        superhashof({ id => $eventId, title => 'one',
+                      objectHistory => $destroyed }),
+        superhashof({ id => $eventId, title => 'two',
+                      objectHistory => $destroyed }),
+    ], $res->[1][1]{list});
+    my @list = $res->[1][1]{list}->@*;
+    $self->assert($list[0]{objectHistory}{version}
+                  < $list[1]{objectHistory}{version});
+}

@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_set_rename
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', { create => {
+            A => { data => [{ 'data:asText' => "keep;\r\n" }] },
+        } }, 'R0'],
+        ['SieveScript/set', {
+            create => { 1 => { name => 'old', blobId => '#A' } },
+            onSuccessActivateScript => '#1',
+        }, 'R1'],
+    ]);
+    my $id = $res->[1][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', { update => { $id => { name => 'new' } } }, 'R1'],
+        ['SieveScript/get', { ids => [$id] }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+    $self->assert_cmp_deeply(
+        [ superhashof({ id => $id, name => 'new', isActive => jtrue }) ],
+        $res->[1][1]{list},
+    );
+
+    # The bytecode follows the name
+    my $sieve_dir = $self->{instance}->get_sieve_script_dir('cassandane');
+    $self->assert(!-e "$sieve_dir/old.bc");
+    $self->assert(-e "$sieve_dir/new.bc");
+}

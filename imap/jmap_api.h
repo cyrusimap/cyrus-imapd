@@ -36,6 +36,7 @@
 #define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
 #define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
 #define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
+#define JMAP_URN_OBJECT_HISTORY "urn:ietf:params:jmap:object-history"
 
 #define JMAP_CORE_EXTENSION          "https://cyrusimap.org/ns/jmap/core"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
@@ -423,6 +424,28 @@ struct jmap_get {
     char *state;
     json_t *list;
     json_t *not_found;
+
+    /** Object history arguments (draft-ietf-jmap-object-history).
+     *
+     * jmap_get_parse() fills these only if the request is using
+     * JMAP_URN_OBJECT_HISTORY.  A Foo/get implementation that retains
+     * history appends one list entry per version, each carrying an
+     * objectHistory property (see jmap_get_history_set()), and moves
+     * found destroyed ids out of notFound.  jmap_get_reply() applies
+     * historyAfter and historyLimit, groups entries by id in version
+     * order, and gives entries without objectHistory version 1. */
+    struct
+    {
+        bool enabled; /**< includeReplaced || includeDestroyed */
+        bool include_replaced;
+        bool include_destroyed;
+        bool has_after;
+        time_t after; /**< historyAfter, if has_after */
+        bool has_limit;
+        size_t limit;  /**< historyLimit, if has_limit */
+        bool has_more; /**< set by implementations that skipped
+                            retained versions */
+    } history;
 };
 
 #define JMAP_GET_INITIALIZER {0}
@@ -446,6 +469,22 @@ extern void jmap_get_parse(jmap_req_t *req, struct jmap_parser *parser,
 extern void jmap_get_fini(struct jmap_get *get);
 extern json_t *jmap_get_reply(struct jmap_get *get);
 
+/** Set the objectHistory property of object @p obj.
+ *
+ * @param version   per-object version, higher is newer; the live
+ *                  version must have the highest
+ * @param replaced  when this version was superseded or destroyed,
+ *                  or 0 for the live version
+ */
+extern void jmap_get_history_set(json_t *obj,
+                                 modseq_t version,
+                                 time_t replaced);
+
+/** Return true if a version replaced at @p replaced (0 if live) passes
+ * the historyAfter filter of @p get.  Implementations may use this to
+ * skip loading versions that jmap_get_reply() would discard. */
+extern bool jmap_get_history_wanted(const struct jmap_get *get,
+                                    time_t replaced);
 
 /* Foo/set */
 

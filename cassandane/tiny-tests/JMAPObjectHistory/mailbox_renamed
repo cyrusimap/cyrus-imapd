@@ -1,0 +1,95 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_renamed ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', { create => {
+            p => { name => 'P' },
+            a => { name => 'A' },
+        } }, 'R1'],
+    ]);
+    my $parentId = $res->[0][1]{created}{p}{id};
+    my $mboxId = $res->[0][1]{created}{a}{id};
+    $self->assert_not_null($parentId);
+    $self->assert_not_null($mboxId);
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', { update => { $mboxId => { name => 'B' } } }, 'R1'],
+        ['Mailbox/set', { update => { $mboxId => {
+            name => 'C', parentId => $parentId,
+        } } }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxId});
+    $self->assert(exists $res->[1][1]{updated}{$mboxId});
+
+    my $plain = $jmap->CallMethods([
+        ['Mailbox/get', { ids => [$mboxId] }, 'R1'],
+    ]);
+    $self->assert_null($plain->[0][1]{hasMoreHistory});
+    $self->assert_num_equals(1, scalar $plain->[0][1]{list}->@*);
+    my $live = $plain->[0][1]{list}[0];
+    $self->assert_null($live->{objectHistory});
+    $self->assert_str_equals($parentId, $live->{parentId});
+
+    # Former names come first, oldest first; other properties are current
+    my %old = ($live->%*, parentId => undef);
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => [$mboxId],
+                          includeReplaced => JSON::true }, 'R1'],
+    ]);
+    my $replaced = re(qr/^\d{4}-\d\d-\d\dT/);
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => $plain->[0][1]{state},
+        list => [
+            { %old, name => 'A',
+              objectHistory => { version => ignore(), replaced => $replaced } },
+            { %old, name => 'B',
+              objectHistory => { version => ignore(), replaced => $replaced } },
+            { $live->%*,
+              objectHistory => { version => ignore(), replaced => undef } },
+        ],
+        notFound => [],
+        hasMoreHistory => jfalse,
+    }, $res->[0][1]);
+    my @versions = map { $_->{objectHistory}{version} } $res->[0][1]{list}->@*;
+    $self->assert($versions[0] < $versions[1]);
+    $self->assert($versions[1] < $versions[2]);
+
+    # Properties filter applies to former versions too
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => [$mboxId], properties => ['name'],
+                          includeReplaced => JSON::true }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        [ map {; { id => $mboxId, name => $_, objectHistory => ignore() } }
+              qw(A B C) ],
+        $res->[0][1]{list});
+
+    # historyAfter keeps the live version
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => [$mboxId], properties => ['name'],
+                          includeReplaced => JSON::true,
+                          historyAfter => '2100-01-01T00:00:00Z' }, 'R1'],
+        ['Mailbox/get', { ids => [$mboxId], properties => ['name'],
+                          includeReplaced => JSON::true,
+                          historyAfter => '2000-01-01T00:00:00Z' }, 'R2'],
+    ]);
+    $self->assert_cmp_deeply(
+        [{ id => $mboxId, name => 'C',
+           objectHistory => { version => $versions[2], replaced => undef } }],
+        $res->[0][1]{list});
+    $self->assert_num_equals(3, scalar $res->[1][1]{list}->@*);
+
+    # With ids null, every mailbox is returned with its history
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => undef, properties => ['name'],
+                          includeReplaced => JSON::true }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        bag(map {; superhashof({ name => $_ }) } qw(Inbox P A B C)),
+        $res->[0][1]{list});
+}

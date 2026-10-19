@@ -139,6 +139,10 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
 
     jmap_add_methods(jmap_core_methods_standard, settings);
 
+    json_object_set_new(settings->server_capabilities,
+                        JMAP_URN_OBJECT_HISTORY,
+                        json_object());
+
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
                 JMAP_PERFORMANCE_EXTENSION, json_object());
@@ -156,6 +160,16 @@ HIDDEN void jmap_core_capabilities(json_t *account_capabilities)
 {
     json_object_set_new(account_capabilities,
             JMAP_URN_CORE, json_object());
+
+    int32_t history_duration =
+        config_getduration(IMAPOPT_JMAP_HISTORY_DURATION);
+    json_object_set_new(account_capabilities,
+                        JMAP_URN_OBJECT_HISTORY,
+                        json_pack("{s:o}",
+                                  "maxHistoryDuration",
+                                  history_duration > 0
+                                      ? json_integer(history_duration)
+                                      : json_null()));
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(account_capabilities,
