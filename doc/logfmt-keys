@@ -319,6 +319,7 @@ out.msg.id              Message-ID we sent, where msg.id is the one we got
 ### other. - the second mailbox in an event about two of them
 
 other.mbox.name         the name of the other mailbox involved, in the admin namespace
+other.mbox.part         the partition of the other mailbox involved
 other.mbox.uniqueid     the uniqueid of the other mailbox involved
 
 ### old. - the value before a change, paired with the unprefixed key
