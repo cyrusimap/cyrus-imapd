@@ -343,6 +343,7 @@ lib_libsasl_min_la_SOURCES = \
     libsasl_min/core_server.c \
     libsasl_min/core_seterror.c \
     libsasl_min/core_staticopen.c \
+    libsasl_min/mech_anonymous.c \
     libsasl_min/mech_external.c \
     libsasl_min/mech_external.h \
     libsasl_min/mech_plain.c \
