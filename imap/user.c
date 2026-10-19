@@ -696,7 +696,8 @@ static const char *_namelock_name_from_userid(const char *userid)
         free(inbox);
     }
 
-    if (config_skip_userlock && !strcmp(config_skip_userlock, userid)) {
+    if (userid && config_skip_userlock && !strcmp(config_skip_userlock, userid))
+    {
         // add a trailing character to avoid clashing with wrapping lock
         buf_putc(&buf, '~');
     }

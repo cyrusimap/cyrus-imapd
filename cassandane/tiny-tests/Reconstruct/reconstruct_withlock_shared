@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+# Under cyr_withlock_run --user, child commands skip only that user's
+# namespace lock; shared mailboxes still take their own.
+sub test_reconstruct_withlock_shared
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('shared');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $instance = $self->{instance};
+    my $reconstruct = $instance->_find_binary('reconstruct');
+    my $conf = $instance->_imapd_conf();
+
+    foreach my $mboxname ('shared', 'user.cassandane') {
+        xlog $self, "reconstruct $mboxname holding the cassandane lock";
+        $instance->run_command({ cyrus => 1 },
+            'cyr_withlock_run', '--user', 'cassandane', '--',
+            $reconstruct, '-C', $conf, $mboxname);
+    }
+
+    $admintalk->select('shared');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}
