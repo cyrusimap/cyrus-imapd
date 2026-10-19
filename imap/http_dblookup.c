@@ -4,6 +4,7 @@
 
 
 #include "carddav_db.h"
+#include "http_carddav.h"
 #include "http_dav.h"
 #include "jmap_mail_query.h"
 #include "json_support.h"
@@ -104,7 +105,7 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
     int i;
     char *mboxname = NULL;
     const char **mailboxhdrs;
-    const char *mailbox = "Default";
+    const char *mailbox = NULL;
     mbentry_t *mbentry = NULL;
 
     mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
@@ -112,7 +113,8 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
         mailbox = mailboxhdrs[0];
     }
 
-    mboxname = mboxname_abook(userid, mailbox);
+    mboxname = mailbox ? mboxname_abook(userid, mailbox)
+                       : carddav_defaultaddressbook_mboxname(userid);
     if (!mboxname) goto done;
 
     mboxlist_lookup(mboxname, &mbentry, NULL);
@@ -159,7 +161,7 @@ static int get_email2details(struct transaction_t *txn __attribute__((unused)),
     int i;
     char *mboxname = NULL;
     const char **mailboxhdrs;
-    const char *mailbox = "Default";
+    const char *mailbox = NULL;
     mbentry_t *mbentry = NULL;
     int ispinned = 0;
 
@@ -168,7 +170,8 @@ static int get_email2details(struct transaction_t *txn __attribute__((unused)),
         mailbox = mailboxhdrs[0];
     }
 
-    mboxname = mboxname_abook(userid, mailbox);
+    mboxname = mailbox ? mboxname_abook(userid, mailbox)
+                       : carddav_defaultaddressbook_mboxname(userid);
     if (!mboxname) goto done;
 
     mboxlist_lookup(mboxname, &mbentry, NULL);
@@ -219,7 +222,7 @@ static int get_uid2groups(struct transaction_t *txn,
     const char **otheruserhdrs;
     const char *otheruser = "";
     const char **mailboxhdrs;
-    const char *mailbox = "Default";
+    const char *mailbox = NULL;
     mbentry_t *mbentry = NULL;
     ptrarray_t *abook_sets = NULL;
     struct auth_state *authstate = auth_newstate(userid);
@@ -236,7 +239,8 @@ static int get_uid2groups(struct transaction_t *txn,
         mailbox = mailboxhdrs[0];
     }
 
-    mboxname = mboxname_abook(userid, mailbox);
+    mboxname = mailbox ? mboxname_abook(userid, mailbox)
+                       : carddav_defaultaddressbook_mboxname(userid);
     if (!mboxname) goto done;
 
     mboxlist_lookup(mboxname, &mbentry, NULL);

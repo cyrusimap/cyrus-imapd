@@ -1,0 +1,82 @@
+#!perl
+use Cassandane::Tiny;
+
+# The dblookup endpoints search the default addressbook when the request
+# names no Mailbox.  The default is whichever addressbook the account has
+# marked isDefault, not the one that happens to be called Default.
+sub test_dblookup_default_addressbook
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my sub lookup ($desc, $arg) {
+        my $res = $self->dblookup("/dblookup/$arg->{path}" => {
+            User => 'cassandane',
+            Key  => $arg->{key},
+        });
+
+        $self->assert_cmp_deeply($arg->{expect}, $res->{payload}, $desc);
+    }
+
+    my $old_default = $user->addressbooks->default;
+    my $new_default = $user->addressbooks->create({ name => 'foo' });
+
+    my $old_card = $old_default->create_card({
+        name   => { full => 'Old Default' },
+        emails => { e => { address => 'old@example.com' } },
+    });
+
+    my $new_card = $new_default->create_card({
+        name   => { full => 'New Default' },
+        emails => { e => { address => 'new@example.com' } },
+    });
+
+    my $group = $new_default->create_card_group({ name => 'newgroup' });
+    $group->add_member($new_card);
+
+    # entity ids are JSON::Typist strings; the lookups return plain ones
+    my $old_uid   = "" . $old_card->uid;
+    my $new_uid   = "" . $new_card->uid;
+    my $group_uid = "" . $group->uid;
+
+    lookup("old default: email2uids finds old card", {
+        path => 'email2uids', key => 'old@example.com',
+        expect => [ $old_uid ],
+    });
+
+    lookup("old default: email2uids misses new card", {
+        path => 'email2uids', key => 'new@example.com',
+        expect => [],
+    });
+
+    xlog $self, "make the new addressbook the default";
+    my $res = $jmap->request([[
+        'AddressBook/set', { onSuccessSetIsDefault => $new_default->id },
+    ]])->single_sentence('AddressBook/set')->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({ $new_default->id => { isDefault => JSON::true } }),
+        $res->{updated},
+    );
+
+    lookup("new default: email2uids finds new card", {
+        path => 'email2uids', key => 'new@example.com',
+        expect => [ $new_uid ],
+    });
+
+    lookup("new default: email2uids misses old card", {
+        path => 'email2uids', key => 'old@example.com',
+        expect => [],
+    });
+
+    lookup("new default: email2details finds new card", {
+        path => 'email2details', key => 'new@example.com',
+        expect => { uids => [ $new_uid ], isPinned => JSON::false },
+    });
+
+    lookup("new default: uid2groups finds group in new default", {
+        path => 'uid2groups', key => $new_uid,
+        expect => { $group_uid => 'newgroup' },
+    });
+}
