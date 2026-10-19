@@ -305,12 +305,16 @@ search.results          how many messages a search or sort returned
 search.sortcrit         the sort criteria, serialised
 search.uncommitted      how many documents were pending when a commit failed
 search.updates          how many update passes indexed nothing
+seen.op                 which seen database operation is being logged
+seen.uids               a seen state's uid sequence, as stored
 sieve.lineno            the line of a Sieve script an error was found on
 sieve.result            a SIEVE_* result code
 sieve.script            the name of a Sieve script
 sieve.srs.domain        the domain SRS rewrites a return path into
 sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
+statuscache.hit         1 if the status cache had the answer
+statuscache.items       the STATUS items a lookup asked for, as a hex mask
 sync.channel            a replication channel name
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
@@ -348,6 +352,7 @@ old.msg.sysflags        the message's system flags before the change
 old.search.createdmodseq  the createdmodseq the client last saw
 old.search.generation   the search index generation the client last saw
 old.sys.path            the path a file was copied or moved from
+old.u.username          the userid before a rename
 
 ### usage counters
 

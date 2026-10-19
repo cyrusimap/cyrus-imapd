@@ -52,9 +52,9 @@ static void statuscache_open(void)
 
     int r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &statuscachedb);
     if (r) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(r));
-        syslog(LOG_ERR, "statuscache in degraded mode");
+        xsyslog_ev(LOG_ERR, "statuscache.db.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(r)));
         statuscachedb = NULL;
     }
 
@@ -67,8 +67,8 @@ static void statuscache_close(void)
 
     int r = cyrusdb_close(statuscachedb);
     if (r) {
-        syslog(LOG_ERR, "DBERROR: error closing statuscache: %s",
-              cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "statuscache.db.close.failed",
+                   lf_s("error", cyrusdb_strerror(r)));
     }
 
     statuscachedb = NULL;
@@ -285,8 +285,9 @@ static int statuscache_store(const char *mboxname,
     if (!sdata || (sdata->statusitems & STATUS_INDEXITEMS) != STATUS_INDEXITEMS) {
         r = cyrusdb_delete(statuscachedb, keybuf.s, keybuf.len, tidptr, 1);
         if (r != CYRUSDB_OK) {
-            syslog(LOG_ERR, "DBERROR: error deleting statuscache for: %s (%s)",
-                   mboxname, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "statuscache.db.delete.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         goto done;
     }
@@ -303,8 +304,9 @@ static int statuscache_store(const char *mboxname,
     r = cyrusdb_store(statuscachedb, keybuf.s, keybuf.len, databuf.s, databuf.len, tidptr);
 
     if (r != CYRUSDB_OK) {
-        syslog(LOG_ERR, "DBERROR: error updating database: %s (%s)",
-               mboxname, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "statuscache.db.store.failed",
+                   lf_intname("mbox.name", mboxname),
+                   lf_s("error", cyrusdb_strerror(r)));
         goto done;
     }
 
@@ -331,8 +333,9 @@ static int statuscache_store(const char *mboxname,
     r = cyrusdb_store(statuscachedb, keybuf.s, keybuf.len, databuf.s, databuf.len, tidptr);
 
     if (r != CYRUSDB_OK) {
-        syslog(LOG_ERR, "DBERROR: error updating database: %s (%s)",
-               mboxname, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "statuscache.db.store.failed",
+                   lf_intname("mbox.name", mboxname),
+                   lf_s("error", cyrusdb_strerror(r)));
         goto done;
     }
 
@@ -366,7 +369,8 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
         cyrusdb_commit(statuscachedb, tid);
     }
     else {
-        syslog(LOG_NOTICE, "DBERROR: failed to store statuscache data for %s", mboxname);
+        xsyslog_ev(LOG_NOTICE, "statuscache.store.failed",
+                   lf_intname("mbox.name", mboxname), lf_err("error", r));
         if (tid) cyrusdb_abort(statuscachedb, tid);
     }
 
@@ -510,13 +514,19 @@ static int status_lookup_internal(const char *mboxname, const char *userid,
          */
 
         if (!r) {
-            syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'yes'",
-                   mboxname, userid, statusitems);
+            xsyslog_ev(LOG_DEBUG, "statuscache.lookup",
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("u.username", userid),
+                       lf_llx("statuscache.items", statusitems),
+                       lf_b("statuscache.hit", 1));
             return 0;
         }
 
-        syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'no'",
-               mboxname, userid, statusitems);
+        xsyslog_ev(LOG_DEBUG, "statuscache.lookup",
+                   lf_intname("mbox.name", mboxname),
+                   lf_s("u.username", userid),
+                   lf_llx("statuscache.items", statusitems),
+                   lf_b("statuscache.hit", 0));
     }
 
     /* Missing or invalid cache entry */
@@ -580,13 +590,17 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
          */
 
         if (!r) {
-            syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'yes'",
-                   mailbox_name(mailbox), userid, statusitems);
+            xsyslog_ev(LOG_DEBUG, "statuscache.lookup",
+                       lf_mailbox(mailbox), lf_s("u.username", userid),
+                       lf_llx("statuscache.items", statusitems),
+                       lf_b("statuscache.hit", 1));
             return 0;
         }
 
-        syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'no'",
-               mailbox_name(mailbox), userid, statusitems);
+        xsyslog_ev(LOG_DEBUG, "statuscache.lookup",
+                   lf_mailbox(mailbox), lf_s("u.username", userid),
+                   lf_llx("statuscache.items", statusitems),
+                   lf_b("statuscache.hit", 0));
     }
 
     return status_load_mailbox(mailbox, userid, statusitems, sdata);
