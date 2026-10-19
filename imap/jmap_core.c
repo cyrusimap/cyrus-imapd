@@ -15,14 +15,12 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 #include "imap/jmap_err.h"
-#include "imap/jmap_props/usercounters.h"
 
 
 /* JMAP Core API Methods */
 static int jmap_core_echo(jmap_req_t *req);
 
 /* JMAP extension methods */
-static int jmap_usercounters_get(jmap_req_t *req);
 static int jmap_userstate_get(jmap_req_t *req);
 
 // clang-format off
@@ -39,12 +37,6 @@ static jmap_method_t jmap_core_methods_standard[] = {
 
 // clang-format off
 static jmap_method_t jmap_core_methods_nonstandard[] = {
-    {
-        "UserCounters/get",
-        JMAP_USERCOUNTERS_EXTENSION,
-        &jmap_usercounters_get,
-        JMAP_NEED_CSTATE
-    },
     {
         "UserState/get",
         JMAP_USERCOUNTERS_EXTENSION,
@@ -174,150 +166,6 @@ static int jmap_core_echo(jmap_req_t *req)
 {
     json_array_append_new(req->response,
                           json_pack("[s,O,s]", "Core/echo", req->args, req->tag));
-    return 0;
-}
-
-/* UserCounters/get method */
-static void usercounters_get(jmap_req_t *req, struct jmap_get *get)
-{
-    /* Read script */
-    json_t *res = json_pack("{s:s s:b}", "id", "singleton",
-                            "compactCalendarIds", true);
-
-    if (jmap_wantprop(get->props, "highestModSeq"))
-        json_object_set_new(res, "highestModSeq",
-                            json_integer(req->counters.highestmodseq));
-
-    if (jmap_wantprop(get->props, "mailModSeq"))
-        json_object_set_new(res, "mailModSeq",
-                            json_integer(req->counters.mailmodseq));
-    if (jmap_wantprop(get->props, "calendarModSeq"))
-        json_object_set_new(res, "calendarModSeq",
-                            json_integer(req->counters.caldavmodseq));
-    if (jmap_wantprop(get->props, "contactsModSeq"))
-        json_object_set_new(res, "contactsModSeq",
-                            json_integer(req->counters.carddavmodseq));
-    if (jmap_wantprop(get->props, "notesModSeq"))
-        json_object_set_new(res, "notesModSeq",
-                            json_integer(req->counters.notesmodseq));
-    if (jmap_wantprop(get->props, "submissionModSeq"))
-        json_object_set_new(res, "submissionModSeq",
-                            json_integer(req->counters.submissionmodseq));
-    if (jmap_wantprop(get->props, "sieveScriptModSeq"))
-        json_object_set_new(res, "sieveScriptModSeq",
-                            json_integer(req->counters.sievemodseq));
-
-    if (jmap_wantprop(get->props, "mailDeletedModSeq"))
-        json_object_set_new(res, "mailDeletedModSeq",
-                            json_integer(req->counters.maildeletedmodseq));
-    if (jmap_wantprop(get->props, "calendarDeletedModSeq"))
-        json_object_set_new(res, "calendarDeletedModSeq",
-                            json_integer(req->counters.caldavdeletedmodseq));
-    if (jmap_wantprop(get->props, "contactsDeletedModSeq"))
-        json_object_set_new(res, "contactsDeletedModSeq",
-                            json_integer(req->counters.carddavdeletedmodseq));
-    if (jmap_wantprop(get->props, "notesDeletedModSeq"))
-        json_object_set_new(res, "notesDeletedModSeq",
-                            json_integer(req->counters.notesdeletedmodseq));
-    if (jmap_wantprop(get->props, "submissionDeletedModSeq"))
-        json_object_set_new(res, "submissionDeletedModSeq",
-                            json_integer(req->counters.submissiondeletedmodseq));
-    if (jmap_wantprop(get->props, "sieveScriptDeletedModSeq"))
-        json_object_set_new(res, "sieveScriptDeletedModSeq",
-                            json_integer(req->counters.sievedeletedmodseq));
-
-    if (jmap_wantprop(get->props, "mailFoldersModSeq"))
-        json_object_set_new(res, "mailFoldersModSeq",
-                            json_integer(req->counters.mailfoldersmodseq));
-    if (jmap_wantprop(get->props, "calendarFoldersModSeq"))
-        json_object_set_new(res, "calendarFoldersModSeq",
-                            json_integer(req->counters.caldavfoldersmodseq));
-    if (jmap_wantprop(get->props, "contactsFoldersModSeq"))
-        json_object_set_new(res, "contactsFoldersModSeq",
-                            json_integer(req->counters.carddavfoldersmodseq));
-    if (jmap_wantprop(get->props, "notesFoldersModSeq"))
-        json_object_set_new(res, "notesFoldersModSeq",
-                            json_integer(req->counters.notesfoldersmodseq));
-    if (jmap_wantprop(get->props, "submissionFoldersModSeq"))
-        json_object_set_new(res, "submissionFoldersModSeq",
-                            json_integer(req->counters.submissionfoldersmodseq));
-    if (jmap_wantprop(get->props, "sieveScriptFoldersModSeq"))
-        json_object_set_new(res, "sieveScriptFoldersModSeq",
-                            json_integer(req->counters.sievefoldersmodseq));
-
-    if (jmap_wantprop(get->props, "mailFoldersDeletedModSeq"))
-        json_object_set_new(res, "mailFoldersDeletedModSeq",
-                            json_integer(req->counters.mailfoldersdeletedmodseq));
-    if (jmap_wantprop(get->props, "calendarFoldersDeletedModSeq"))
-        json_object_set_new(res, "calendarFoldersDeletedModSeq",
-                            json_integer(req->counters.caldavfoldersdeletedmodseq));
-    if (jmap_wantprop(get->props, "contactsFoldersDeletedModSeq"))
-        json_object_set_new(res, "contactsFoldersDeletedModSeq",
-                            json_integer(req->counters.carddavfoldersdeletedmodseq));
-    if (jmap_wantprop(get->props, "notesFoldersDeletedModSeq"))
-        json_object_set_new(res, "notesFoldersDeletedModSeq",
-                            json_integer(req->counters.notesfoldersdeletedmodseq));
-    if (jmap_wantprop(get->props, "submissionFoldersDeletedModSeq"))
-        json_object_set_new(res, "submissionFoldersDeletedModSeq",
-                            json_integer(req->counters.submissionfoldersdeletedmodseq));
-    if (jmap_wantprop(get->props, "sieveScriptFoldersDeletedModSeq"))
-        json_object_set_new(res, "sieveScriptFoldersDeletedModSeq",
-                            json_integer(req->counters.sievefoldersdeletedmodseq));
-
-    if (jmap_wantprop(get->props, "quotaModSeq"))
-        json_object_set_new(res, "quotaModSeq",
-                            json_integer(req->counters.quotamodseq));
-    if (jmap_wantprop(get->props, "raclModSeq"))
-        json_object_set_new(res, "raclModSeq",
-                            json_integer(req->counters.raclmodseq));
-
-    if (jmap_wantprop(get->props, "uidValidity"))
-        json_object_set_new(res, "uidValidity",
-                            json_integer(req->counters.uidvalidity));
-
-    json_array_append_new(get->list, res);
-}
-
-static int jmap_usercounters_get(jmap_req_t *req)
-{
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get = JMAP_GET_INITIALIZER;
-    json_t *err = NULL;
-
-    /* Parse request */
-    jmap_get_parse(req, &parser, &usercounters_props, /*allow_null_ids*/1,
-                   NULL, NULL, &get, &err);
-    if (err) {
-        jmap_error(req, err);
-        goto done;
-    }
-
-    /* Does the client request specific responses? */
-    if (JNOTNULL(get.ids)) {
-        json_t *jval;
-        size_t i;
-
-        json_array_foreach(get.ids, i, jval) {
-            const char *id = json_string_value(jval);
-
-            if (!strcmp(id, "singleton"))
-                usercounters_get(req, &get);
-            else
-                json_array_append(get.not_found, jval);
-        }
-    }
-    else usercounters_get(req, &get);
-
-    /* Build response */
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, MODSEQ_FMT, req->counters.highestmodseq);
-    get.state = buf_release(&buf);
-    jmap_ok(req, jmap_get_reply(&get));
-
-done:
-    jmap_parser_fini(&parser);
-    jmap_get_fini(&get);
-
     return 0;
 }
 
