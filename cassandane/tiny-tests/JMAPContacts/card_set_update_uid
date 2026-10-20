@@ -47,7 +47,8 @@ for my $tc (@test_cases) {
                     properties => ["uid"],
                 }, $res->{notUpdated}{$c->id});
             } else {
-                $self->assert_not_null($res->{updated}{$c->id});
+                $self->assert_null($res->{notUpdated}{$c->id});
+                $self->assert(exists $res->{updated}{$c->id});
             }
         },
         as => $name,

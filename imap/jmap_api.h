@@ -459,6 +459,12 @@ struct jmap_set {
 
     /* Internal Use */
     json_t *update_external;
+    /* Immutable and server-set properties sent in each update, keyed by
+     * the update id as sent.  Clients may send these only if they leave
+     * the current value unchanged (RFC 8620 5.3).  jmap_set_parse()
+     * gathers them as objects of property name or patch path to value;
+     * the method checks them with jmap_set_check_readonly(). */
+    json_t *update_readonly;
 
     /* Response fields */
     char *old_state;
@@ -483,6 +489,28 @@ extern void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            const jmap_property_set_t *valid_props,
                            jmap_args_parse_cb args_parse, void *args_rock,
                            struct jmap_set *set, json_t **err);
+
+/**
+ * The property names in @p readonly, to fetch the current values for
+ * jmap_set_check_readonly().
+ *
+ * @return a newly allocated table, for the caller to free with
+ *         free_hash_table() and free(), or as jmap_get_fini() frees
+ *         jmap_get.props.
+ */
+extern hash_table *jmap_set_readonly_props(json_t *readonly);
+
+/**
+ * Check that @p readonly, an entry of jmap_set.update_readonly, leaves
+ * @p current unchanged.  @p current is the object as Foo/get returns it
+ * with at least the properties jmap_set_readonly_props() names; a
+ * property missing from it is null.
+ *
+ * @return an invalidProperties SetError naming each property changed, or
+ *         NULL.
+ */
+extern json_t *jmap_set_check_readonly(json_t *readonly, json_t *current);
+
 extern void jmap_set_fini(struct jmap_set *set);
 extern json_t *jmap_set_reply(struct jmap_set *set);
 

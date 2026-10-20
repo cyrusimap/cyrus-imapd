@@ -38,12 +38,12 @@ sub test_mailbox_query
         }, 'c'],
     ]);
 
-    # sortOrder defaults to 0 and is never server-set, so it is not
-    # returned whether it was given explicitly or defaulted
+    # created includes sortOrder only where the client omitted it
+    # (RFC 8620 5.3), and then it is the default of 0
     $self->assert_null($res->[0][1]{created}{1}{sortOrder});
     $self->assert_null($res->[0][1]{created}{2}{sortOrder});
-    $self->assert_null($res->[0][1]{created}{3}{sortOrder});
-    $self->assert_null($res->[0][1]{created}{6}{sortOrder});
+    $self->assert_num_equals(0, $res->[0][1]{created}{3}{sortOrder});
+    $self->assert_num_equals(0, $res->[0][1]{created}{6}{sortOrder});
     $self->assert_null($res->[0][1]{created}{4}{sortOrder});
     $self->assert_null($res->[0][1]{created}{5}{sortOrder});
     $self->assert_null($res->[0][1]{created}{7}{sortOrder});

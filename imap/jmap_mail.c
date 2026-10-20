@@ -13294,6 +13294,7 @@ struct email_update {
     int patch_snoozed;        /* True if snoozed is a patch object */
     struct email_uidrec *snoozed_uidrec; /* Currently snoozed email */
     char *snooze_in_mboxid;   /* Snooze the email in this mailboxid */
+    json_t *readonly;         /* See jmap_set.update_readonly */
 
     /* JMAP Email/copy specific fields */
     const char *creation_id;  /* Input: creation id of copied message */
@@ -13308,6 +13309,7 @@ static void _email_update_free(struct email_update *update)
     json_decref(update->full_keywords);
     json_decref(update->mailboxids);
     json_decref(update->snoozed);
+    json_decref(update->readonly);
     free(update->snooze_in_mboxid);
     free(update);
 }
@@ -14621,6 +14623,74 @@ static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *upd
     return 0;
 }
 
+/* Reject an update that sends an immutable or server-set property with a
+ * value other than the email's current one.  Body-derived properties are
+ * compared as Email/get returns them with default arguments, so a client
+ * that fetched them with other bodyProperties or body value arguments
+ * can't send them back. */
+static void _email_bulkupdate_check_readonly(struct email_bulkupdate *bulk,
+                                             ptrarray_t *updates)
+{
+    for (int i = 0; i < ptrarray_size(updates); i++) {
+        struct email_update *update = ptrarray_nth(updates, i);
+        const char *email_id = update->email_id;
+        if (!update->readonly || json_object_get(bulk->set_errors, email_id)) {
+            continue;
+        }
+
+        ptrarray_t *uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
+        struct email_uidrec *uidrec = ptrarray_nth(uidrecs, 0);
+        struct email_updateplan *plan =
+            hash_lookup(uidrec->mboxrec->mbox_id, &bulk->plans_by_mbox_id);
+
+        struct email_getargs args = _EMAIL_GET_ARGS_INITIALIZER;
+        args.props = jmap_set_readonly_props(update->readonly);
+        args.bodyprops = &_email_get_default_bodyprops;
+        if (!hash_constructed(args.bodyprops)) {
+            _email_init_default_props(args.bodyprops);
+        }
+
+        hash_iter *iter = hash_table_iter(args.props);
+        while (hash_iter_next(iter)) {
+            const char *name = hash_iter_key(iter);
+            if (!strncmp(name, "header:", 7)) {
+                struct header_prop *hprop = _header_parseprop(name);
+                if (hprop) {
+                    ptrarray_append(&args.want_headers, hprop);
+                }
+            }
+        }
+        hash_iter_free(&iter);
+
+        msgrecord_t *mr = NULL;
+        json_t *cur = NULL;
+        int r = msgrecord_find(plan->mbox, uidrec->uid, &mr);
+        if (!r) {
+            r = _email_from_record(bulk->req, &args, mr, &cur);
+        }
+
+        json_t *err = NULL;
+        if (r == IMAP_NOTFOUND) {
+            err = json_pack("{s:s}", "type", "notFound");
+        }
+        else if (r) {
+            err = jmap_server_error(r);
+        }
+        else {
+            err = jmap_set_check_readonly(update->readonly, cur);
+        }
+        if (err) {
+            json_object_set_new(bulk->set_errors, email_id, err);
+        }
+
+        json_decref(cur);
+        msgrecord_unref(&mr);
+        free_hash_table(args.props, NULL);
+        free(args.props);
+        _email_getargs_fini(&args);
+    }
+}
+
 static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
     int i;
@@ -14827,6 +14897,7 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
         }
     }
 
+    _email_bulkupdate_check_readonly(bulk, updates);
 
     /* Map updates to update plan */
     return _email_bulkupdate_plan(bulk, updates);
@@ -15289,12 +15360,12 @@ static void _email_bulkupdate_exec(struct email_bulkupdate *bulk,
 
 /* Execute the sequence of JMAP Email/set/{update} arguments in bulk. */
 static void _email_update_bulk(jmap_req_t *req,
-                               json_t *update,
-                               json_t *updated,
-                               json_t *not_updated,
+                               struct jmap_set *set,
                                json_t *debug,
                                bool *partial)
 {
+    json_t *updated = set->updated;
+    json_t *not_updated = set->not_updated;
     struct email_bulkupdate bulkupdate = _EMAIL_BULKUPDATE_INITIALIZER;
     ptrarray_t updates = PTRARRAY_INITIALIZER;
     int i;
@@ -15341,10 +15412,12 @@ static void _email_update_bulk(jmap_req_t *req,
     const char *email_id;
     json_t *jval;
     bulkupdate.req = req;
-    json_object_foreach(update, email_id, jval) {
+    json_object_foreach(set->update, email_id, jval) {
         struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
         struct email_update *update = xzmalloc(sizeof(struct email_update));
         update->email_id = email_id;
+        update->readonly =
+            json_incref(json_object_get(set->update_readonly, email_id));
         _email_update_parse(req, jval, &parser, update);
 
         /* Validate patched mailbox ids */
@@ -15552,8 +15625,7 @@ static int jmap_email_set(jmap_req_t *req)
     if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
         debug_bulkupdate = json_object();
     }
-    _email_update_bulk(req, set.update, set.updated, set.not_updated,
-                       debug_bulkupdate, &partial);
+    _email_update_bulk(req, &set, debug_bulkupdate, &partial);
 
     if (partial) {
         json_decref(debug_bulkupdate);

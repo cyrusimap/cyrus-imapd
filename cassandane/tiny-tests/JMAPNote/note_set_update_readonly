@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_note_set_update_readonly
+    :JMAPExtensions :NoAltNameSpace
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Note/set', {
+            create => {
+                "1" => { title => 'foo', body => 'bar', isHTML => JSON::false },
+            },
+        }, "R1"],
+    ]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id);
+
+    my $get = sub {
+        my $res = $jmap->CallMethods([['Note/get', { ids => [ $id ] }, "R1"]]);
+        return $res->[0][1]{list}[0];
+    };
+    my $orig = $get->();
+    $self->assert_not_null($orig->{lastSaved});
+
+    # RFC 8620 5.3: a server-set value MUST NOT change
+    for my $patch (
+        { lastSaved     => '2001-02-03T04:05:06Z' },
+        { lastSaved     => JSON::null },
+        { 'lastSaved/x' => 'foo' },
+    ) {
+        $res = $jmap->CallMethods([
+            ['Note/set', { update => { $id => { %$patch, title => 'x' } } }, "R1"],
+        ]);
+        $self->assert_cmp_deeply(
+            { $id => { type => 'invalidProperties', properties => [ 'lastSaved' ] } },
+            $res->[0][1]{notUpdated},
+        );
+        $self->assert_cmp_deeply($orig, $get->());
+    }
+
+    # RFC 8620 5.3: it may be sent unchanged
+    $res = $jmap->CallMethods([
+        ['Note/set', {
+            update => { $id => { lastSaved => $orig->{lastSaved}, title => 'baz' } },
+        }, "R1"],
+    ]);
+    $self->assert_cmp_deeply([ $id ], [ keys $res->[0][1]{updated}->%* ]);
+    $self->assert_str_equals('baz', $get->()->{title});
+
+    # ... including the whole object as Note/get returns it
+    my $cur = $get->();
+    $res = $jmap->CallMethods([
+        ['Note/set', { update => { $id => $cur } }, "R1"],
+    ]);
+    $self->assert_cmp_deeply([ $id ], [ keys $res->[0][1]{updated}->%* ]);
+    $self->assert_cmp_deeply(
+        { %$cur, lastSaved => ignore() },
+        $get->(),
+    );
+}

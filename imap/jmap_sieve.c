@@ -313,7 +313,7 @@ static void putscript(struct mailbox *mailbox, const char *script,
     if (!script) {
         /* fetch existing script content (just a rename) */
         r = sieve_script_fetch(mailbox, sdata, &buf);
-        goto done;
+        if (r) goto done;
     }
     else {
         /* check script size */
@@ -476,8 +476,11 @@ static const char *set_create(struct jmap_req *req,
 }
 
 static void set_update(struct jmap_req *req,
-                       const char *id, json_t *jsieve,
-                       struct mailbox *mailbox, struct sieve_db *db,
+                       const char *id,
+                       json_t *jsieve,
+                       json_t *readonly,
+                       struct mailbox *mailbox,
+                       struct sieve_db *db,
                        struct jmap_set *set)
 {
     json_t *arg, *invalid = json_array(), *err = NULL;
@@ -538,16 +541,18 @@ static void set_update(struct jmap_req *req,
         goto done;
     }
 
-    arg = json_object_get(jsieve, "isActive");
-    if (arg) {
-        if (!json_is_boolean(arg))
-            json_array_append_new(invalid, json_string("isActive"));
-        else if (json_boolean_value(arg) != sdata->isactive) {
-            /* isActive MUST be current value, if present */
-            json_array_append_new(invalid, json_string("isActive"));
+    if (readonly) {
+        struct jmap_get get = JMAP_GET_INITIALIZER;
+        get.props = jmap_set_readonly_props(readonly);
+        get.list = json_array();
+        getscript(&get, sdata);
+        err = jmap_set_check_readonly(readonly, json_array_get(get.list, 0));
+        jmap_get_fini(&get);
+        if (err) {
+            goto done;
         }
     }
- 
+
     arg = json_object_get(jsieve, "blobId");
     if (arg) {
         if (!json_is_string(arg))
@@ -840,7 +845,13 @@ static int jmap_sieve_set(struct jmap_req *req)
         script_id = (id && id[0] == '#') ? jmap_lookup_id(req, id + 1) : id;
         if (!script_id) continue;
 
-        set_update(req, script_id, val, mailbox, db, &set);
+        set_update(req,
+                   script_id,
+                   val,
+                   json_object_get(set.update_readonly, id),
+                   mailbox,
+                   db,
+                   &set);
     }
 
     if (!json_object_size(set.not_created) &&
