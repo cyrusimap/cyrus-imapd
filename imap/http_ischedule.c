@@ -87,16 +87,6 @@ struct namespace_t namespace_ischedule = {
 // clang-format on
 
 
-static int caladdress_equal(const char *a, const char *b)
-{
-    if (!a || !b) return 0;
-    if (!strncasecmp(a, "mailto:", 7)) a += 7;
-    if (!strncasecmp(b, "mailto:", 7)) b += 7;
-
-    return !strcasecmp(a, b);
-}
-
-
 /* Is the Originator the ORGANIZER of the scheduling message, or for a
  * REPLY one of its ATTENDEEs? */
 static int originator_matches(const char *originator, icalcomponent *comp,
