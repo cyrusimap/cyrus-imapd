@@ -1251,6 +1251,7 @@ struct setcalendar_props {
     int isSubscribed;
     int schedulingEnabled;
     int transp;
+    bool is_create;
     bool has_ext_props; // request is setting externally-stored properties
     json_t *participant_identities;
     struct {
@@ -1372,6 +1373,7 @@ static void setcalendar_parseprops(jmap_req_t *req,
     int is_create = (mboxname == NULL);
 
     memset(props, 0, sizeof(struct setcalendar_props));
+    props->is_create = is_create;
 
     if (is_create) {
         props->isVisible = 1;
@@ -1809,7 +1811,17 @@ static int setcalendar_writeprops(jmap_req_t *req,
         /* Update subscription database */
         r = mboxlist_changesub(mailbox_name(mbox), req->userid, req->authstate,
                                props->isSubscribed, 0, /*notify*/1, /*silent*/0);
-
+        if (r == IMAP_MAILBOX_NONEXISTENT && props->is_create) {
+            /* creating in another account: the creator may not be able to
+             * see the new calendar yet, so there is nothing to subscribe */
+            r = 0;
+        }
+        else if (r) {
+            xsyslog_ev(LOG_ERR, "jmap.calendar.subscription.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox), lf_err("error", r));
+        }
+    }
+    if (!r && props->isSubscribed >= 0) {
         /* Set invite status for CalDAV */
         buf_setcstr(&val, props->isSubscribed ? "invite-accepted" : "invite-declined");
         static const char *invite_annot =
