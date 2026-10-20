@@ -6113,7 +6113,6 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
     if (q->groupby_counts) {
         json_object_set(res, "groupByCounts", q->groupby_counts);
     }
-    json_object_set(res, "collapseThreads", json_boolean(q->collapse_threads));
 
     if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
         /* List language stats */
@@ -6966,8 +6965,6 @@ static int jmap_email_querychanges(jmap_req_t *req)
 
     /* Build response */
     json_t *res = jmap_querychanges_reply(&query);
-    json_object_set(res, "collapseThreads",
-            json_boolean(emailquery.collapse_threads));
     if (emailquery.groupby_counts) {
         json_object_set(res, "groupByCounts", emailquery.groupby_counts);
     }
@@ -7977,7 +7974,6 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     /* Prepare response. */
     json_t *res = json_pack("{s:o s:o}",
                             "list", snippets, "notFound", notfound);
-    if (jfilter) json_object_set(res, "filter", jfilter);
     jmap_ok(req, res);
 
 done:

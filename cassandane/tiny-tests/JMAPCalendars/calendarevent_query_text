@@ -82,6 +82,7 @@ sub test_calendarevent_query_text
 
         # Assert that catch-all text search matches
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                        calculateTotal => JSON::true,
                         "filter" => {
                             "text" => $propval,
                         }
@@ -92,6 +93,7 @@ sub test_calendarevent_query_text
 
         # Sanity check catch-all text search
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                        calculateTotal => JSON::true,
                         "filter" => {
                             "text" => "nope",
                         }
@@ -100,6 +102,7 @@ sub test_calendarevent_query_text
 
         # Assert that search by property name matches
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                        calculateTotal => JSON::true,
                         "filter" => {
                             $propname => $propval,
                         }
@@ -110,6 +113,7 @@ sub test_calendarevent_query_text
 
         # Sanity check property name search
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
+                        calculateTotal => JSON::true,
                         "filter" => {
                             $propname => "nope",
                         }

@@ -87,10 +87,8 @@ EOF
                 name => 'Email/query',
                 path => '/partIds',
             },
-            '#filter' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/filter',
+            filter => {
+                text => 'December',
             },
         }, 'R2'],
     ], $using);
@@ -128,10 +126,8 @@ EOF
                 name => 'Email/query',
                 path => '/partIds',
             },
-            '#filter' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/filter',
+            filter => {
+                text => 'body',
             },
         }, 'R2'],
     ], $using);
@@ -170,10 +166,8 @@ EOF
                 name => 'Email/query',
                 path => '/ids',
             },
-            '#filter' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/filter',
+            filter => {
+                text => 'body',
             },
         }, 'R2'],
     ], $using);

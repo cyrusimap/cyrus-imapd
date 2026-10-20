@@ -69,6 +69,7 @@ sub test_email_querychanges_sort_category_listid
 
     $res = $jmap->request([
         [ 'Email/queryChanges', {
+            calculateTotal => JSON::true,
             %query_args,
             sinceQueryState => $since_query_state,
         }, 'R1' ],

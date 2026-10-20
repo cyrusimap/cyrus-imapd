@@ -75,11 +75,8 @@ sub test_mailbox_querychanges_name
     $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
     $self->assert_str_equals($mboxId1, $res->[0][1]{added}[0]{id});
 
-    # position 0 -> the tombstone from 'A'
-    # position 1 -> keep 'B'
-    # position 2 -> keep 'Z'
-    # position 3 -> new mailbox name 'Z'
-    $self->assert_num_equals(3, $res->[0][1]{added}[0]{index});
+    # The index is into the current results: B, C, Z
+    $self->assert_num_equals(2, $res->[0][1]{added}[0]{index});
     $state = $res->[0][1]->{newQueryState};
 
     # Keep mailbox 2 at start of the list and remove mailbox 3
@@ -106,12 +103,8 @@ sub test_mailbox_querychanges_name
     $self->assert(exists $removed{$mboxId2});
     $self->assert(exists $removed{$mboxId3});
 
-    # position 0 -> null
-    # position 1 -> tombstone from 'B'
-    # position 2 -> deleted 'C'
-    # position 3 -> splice in 'Y'
-    # position 4 -> new position of 'Z'
+    # The index is into the current results: Y, Z
     $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
     $self->assert_str_equals($mboxId2, $res->[0][1]{added}[0]{id});
-    $self->assert_num_equals(3, $res->[0][1]{added}[0]{index});
+    $self->assert_num_equals(0, $res->[0][1]{added}[0]{index});
 }

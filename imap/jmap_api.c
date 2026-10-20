@@ -2730,13 +2730,11 @@ HIDDEN json_t *jmap_query_reply(struct jmap_query *query)
 {
 
     json_t *res = json_object();
-    json_object_set(res, "filter", query->filter);
-    json_object_set(res, "sort", query->sort);
     json_object_set_new(res, "queryState", json_string(query->query_state));
     json_object_set_new(res, "canCalculateChanges",
                         json_boolean(query->can_calculate_changes));
     json_object_set_new(res, "position", json_integer(query->result_position));
-    if (query->have_total)
+    if (query->calculate_total && query->have_total)
         json_object_set_new(res, "total", json_integer(query->total));
     /* Special case total */
     if (query->position > 0 && query->total && query->total < SSIZE_MAX) {
@@ -2894,17 +2892,14 @@ HIDDEN void jmap_querychanges_fini(struct jmap_querychanges *query)
 HIDDEN json_t *jmap_querychanges_reply(struct jmap_querychanges *query)
 {
     json_t *res = json_object();
-    json_object_set(res, "filter", query->filter);
-    json_object_set(res, "sort", query->sort);
     json_object_set_new(res, "oldQueryState",
                         json_string(query->since_querystate));
     json_object_set_new(res, "newQueryState",
                         json_string(query->new_querystate));
-    json_object_set_new(res, "upToId", query->up_to_id ?
-            json_string(query->up_to_id) : json_null());
     json_object_set(res, "removed", query->removed);
     json_object_set(res, "added", query->added);
-    json_object_set_new(res, "total", json_integer(query->total));
+    if (query->calculate_total)
+        json_object_set_new(res, "total", json_integer(query->total));
     return res;
 }
 

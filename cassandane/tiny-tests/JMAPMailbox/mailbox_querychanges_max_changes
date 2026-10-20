@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_querychanges_max_changes
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $sort = [{ property => 'name' }];
+
+    my $state = $jmap->request([[ 'Mailbox/query', { sort => $sort } ]])
+                     ->single_sentence('Mailbox/query')
+                     ->arguments->{queryState};
+
+    $user->mailboxes->create({ name => 'A' });
+    $user->mailboxes->create({ name => 'B' });
+
+    my $res = $jmap->request([[ 'Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        sort            => $sort,
+        maxChanges      => 1,
+    } ]]);
+    $self->assert_str_equals('tooManyChanges',
+        $res->single_sentence('error')->arguments->{type});
+
+    # A mailbox created since sinceQueryState is one change, not also removed
+    for my $filter (undef, { hasAnyRole => JSON::false }) {
+        $res = $jmap->request([[ 'Mailbox/queryChanges', {
+            sinceQueryState => $state,
+            sort            => $sort,
+            maxChanges      => 2,
+            ($filter ? (filter => $filter) : ()),
+        } ]]);
+        $self->assert_cmp_deeply(
+            superhashof({ added => [ ignore, ignore ], removed => [] }),
+            $res->single_sentence('Mailbox/queryChanges')->arguments
+        );
+    }
+}

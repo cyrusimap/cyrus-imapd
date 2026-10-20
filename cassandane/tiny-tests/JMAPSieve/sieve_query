@@ -46,12 +46,13 @@ sub test_sieve_query
     my $id4 = $res->[1][1]{created}{"4"}{id};
 
     xlog $self, "get unfiltered list";
-    $res = $jmap->CallMethods([ ['SieveScript/query', { }, "R1"] ]);
+    $res = $jmap->CallMethods([ ['SieveScript/query', { calculateTotal => JSON::true }, "R1"] ]);
     $self->assert_num_equals(4, $res->[0][1]{total});
     $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "sort by name";
     $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    calculateTotal => JSON::true,
                     sort => [{
                         property => 'name',
                     }]
@@ -65,6 +66,7 @@ sub test_sieve_query
 
     xlog $self, "filter by isActive";
     $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    calculateTotal => JSON::true,
                     filter => {
                         isActive => JSON::true,
                     }
@@ -75,6 +77,7 @@ sub test_sieve_query
 
     xlog $self, "filter by not isActive";
     $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    calculateTotal => JSON::true,
                     filter => {
                         isActive => JSON::false,
                     }
@@ -88,6 +91,7 @@ sub test_sieve_query
 
     xlog $self, "filter by name containing 'oo', sorted descending";
     $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    calculateTotal => JSON::true,
                     filter => {
                         name => 'oo',
                     },
@@ -103,6 +107,7 @@ sub test_sieve_query
 
     xlog $self, "filter by name not containing 'oo'";
     $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    calculateTotal => JSON::true,
                     filter => {
                         operator => 'NOT',
                         conditions => [{
@@ -118,6 +123,7 @@ sub test_sieve_query
 
     xlog $self, "filter by name containing 'oo' and inactive";
     $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    calculateTotal => JSON::true,
                     filter => {
                         operator => 'AND',
                         conditions => [{
@@ -132,6 +138,7 @@ sub test_sieve_query
 
     xlog $self, "filter by name not containing 'oo' or active";
     $res = $jmap->CallMethods([ ['SieveScript/query', {
+                    calculateTotal => JSON::true,
                     filter => {
                         operator => 'OR',
                         conditions => [

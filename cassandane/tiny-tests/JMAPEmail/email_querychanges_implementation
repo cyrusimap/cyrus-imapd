@@ -32,12 +32,14 @@ sub test_email_querychanges_implementation
     xlog $self, "Get email ids and state";
     my $res = $jmap->CallMethods([
         ['Email/query', {
+            calculateTotal => JSON::true,
             sort => [
                 { isAscending => JSON::true, property => 'subject' }
             ],
             collapseThreads => JSON::false,
         }, "R1"],
         ['Email/query', {
+            calculateTotal => JSON::true,
             sort => [
                 { isAscending => JSON::true, property => 'subject' }
             ],
@@ -68,6 +70,7 @@ sub test_email_querychanges_implementation
 
     xlog $self, "Get email ids";
     $res = $jmap->CallMethods([['Email/query', {
+        calculateTotal => JSON::true,
         sort => [{ isAscending => JSON::true, property => 'subject' }],
     }, "R1"]]);
     my $msgidC = $res->[0][1]->{ids}[2];
@@ -78,6 +81,7 @@ sub test_email_querychanges_implementation
     xlog $self, "Query changes up to first newly created message";
     $res = $jmap->CallMethods([
         ['Email/queryChanges', {
+            calculateTotal => JSON::true,
             sort => [
                 { isAscending => JSON::true, property => 'subject' }
             ],
@@ -86,6 +90,7 @@ sub test_email_querychanges_implementation
             upToId => $msgidC,
         }, "R1"],
         ['Email/queryChanges', {
+            calculateTotal => JSON::true,
             sort => [
                 { isAscending => JSON::true, property => 'subject' }
             ],
@@ -122,6 +127,7 @@ sub test_email_querychanges_implementation
     xlog $self, "Query changes";
     $res = $jmap->CallMethods([
         ['Email/queryChanges', {
+            calculateTotal => JSON::true,
             sort => [
                 { isAscending => JSON::true, property => 'subject' }
             ],
@@ -129,6 +135,7 @@ sub test_email_querychanges_implementation
             collapseThreads => JSON::false,
         }, "R1"],
         ['Email/queryChanges', {
+            calculateTotal => JSON::true,
             sort => [
                 { isAscending => JSON::true, property => 'subject' }
             ],

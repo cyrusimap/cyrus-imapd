@@ -21,12 +21,13 @@ sub test_email_querychanges_sortflagged_otherfolder
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
 
     xlog $self, "Get mailbox id";
-    $res = $jmap->CallMethods([['Mailbox/query', {}, "R1"]]);
+    $res = $jmap->CallMethods([['Mailbox/query', { calculateTotal => JSON::true }, "R1"]]);
     my $mbid = $res->[0][1]->{ids}[0];
     $self->assert_not_null($mbid);
 
     xlog $self, "Get email id";
     $res = $jmap->CallMethods([['Email/query', {
+        calculateTotal => JSON::true,
         filter => { inMailbox => $mbid },
         collapseThreads => $JSON::true,
         sort => [
@@ -66,6 +67,7 @@ sub test_email_querychanges_sortflagged_otherfolder
     # A C B (with D in the other mailbox)
     # fetch them all by ID now to get an ID map
     $res = $jmap->CallMethods([['Email/query', {
+        calculateTotal => JSON::true,
         filter => { inMailbox => $mbid },
         sort => [
             { property => "receivedAt",
@@ -80,6 +82,7 @@ sub test_email_querychanges_sortflagged_otherfolder
 
     # raw fetch - check order now
     $res = $jmap->CallMethods([['Email/query', {
+        calculateTotal => JSON::true,
         filter => { inMailbox => $mbid },
         collapseThreads => $JSON::true,
         sort => [
@@ -93,6 +96,7 @@ sub test_email_querychanges_sortflagged_otherfolder
     $self->assert_cmp_deeply([$idb, $idc], $res->[0][1]->{ids});
 
     $res = $jmap->CallMethods([['Email/queryChanges', {
+        calculateTotal => JSON::true,
         filter => { inMailbox => $mbid },
         sinceQueryState => $state, collapseThreads => $JSON::true,
         sort => [
@@ -118,6 +122,7 @@ sub test_email_querychanges_sortflagged_otherfolder
 
     # raw fetch - check order now
     $res = $jmap->CallMethods([['Email/query', {
+        calculateTotal => JSON::true,
         filter => { inMailbox => $mbid },
         collapseThreads => $JSON::true,
         sort => [
@@ -131,6 +136,7 @@ sub test_email_querychanges_sortflagged_otherfolder
     $self->assert_cmp_deeply([$idc, $idb], $res->[0][1]->{ids});
 
     $res = $jmap->CallMethods([['Email/queryChanges', {
+        calculateTotal => JSON::true,
         filter => { inMailbox => $mbid },
         sinceQueryState => $state, collapseThreads => $JSON::true,
         sort => [
