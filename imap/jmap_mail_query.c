@@ -507,13 +507,22 @@ HIDDEN int jmap_emailbodies_extract(const struct body *root,
             &bodies->attslist);
 }
 
+/* How much of the message a filter needs indexed.  Each level indexes
+ * a superset of the one below it. */
+enum matchmime_index {
+    MATCHMIME_INDEX_NONE = 0,
+    MATCHMIME_INDEX_HEADERS, /* headers, attachment names and types */
+    MATCHMIME_INDEX_BODY,    /* and body text */
+    MATCHMIME_INDEX_ATTACH,  /* and extracted attachment text */
+};
+
 struct matchmime {
     char *dbpath;
     xapian_dbw_t *dbw;
     message_t *m;
     const struct buf *mime;
     void *convmatch;
-    uint8_t indexlevel;
+    enum matchmime_index indexed;
 };
 
 struct matchmime_receiver {
@@ -605,7 +614,6 @@ static void _matchmime_tr_end_bodypart(search_text_receiver_t *rx __attribute__(
 static int _matchmime_tr_end_message(search_text_receiver_t *rx, uint8_t indexlevel)
 {
     struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
-    tr->matchmime->indexlevel = indexlevel;
     return xapian_dbw_end_doc(tr->matchmime->dbw, indexlevel);
 }
 
@@ -1581,33 +1589,40 @@ HIDDEN void jmap_email_filtercondition_validate(const char *field, json_t *arg,
     }
 }
 
-static int _matchmime_need_attachextract(json_t *jfilter)
+static enum matchmime_index _matchmime_need_index(json_t *jfilter)
 {
-    if (!jfilter) return 0;
+    enum matchmime_index need = MATCHMIME_INDEX_HEADERS;
+    if (!jfilter) {
+        return need;
+    }
 
     const char *criteria;
     json_t *jval;
     json_object_foreach(jfilter, criteria, jval) {
         if (!strcmp("text", criteria) ||
             !strcmp("attachmentBody", criteria)) {
-            return 1;
+            return MATCHMIME_INDEX_ATTACH;
+        }
+        if (!strcmp("body", criteria)) {
+            need = MATCHMIME_INDEX_BODY;
         }
     }
 
     size_t i;
     json_array_foreach(json_object_get(jfilter, "conditions"), i, jval) {
-        if (_matchmime_need_attachextract(jval))
-            return 1;
+        enum matchmime_index subneed = _matchmime_need_index(jval);
+        if (subneed > need) {
+            need = subneed;
+        }
     }
 
-    return 0;
+    return need;
 }
 
 static int _matchmime_index_message(matchmime_t *matchmime, json_t *jfilter)
 {
-    if (matchmime->indexlevel &&
-            !(matchmime->indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) {
-        /* This message already got fully indexed */
+    enum matchmime_index need = _matchmime_need_index(jfilter);
+    if (matchmime->indexed >= need) {
         return 0;
     }
 
@@ -1633,23 +1648,27 @@ static int _matchmime_index_message(matchmime_t *matchmime, json_t *jfilter)
         SEARCH_PART_NONE
     };
 
-    /* Determine if we need to extract text from attachments for this
-     * filter. Since matchmime may evaluate multiple filters for the
-     * same message, we may end up indexing the same message twice:
-     * first without calling the attachment extractor, then again with
-     * calling it. This may result in two documents being indexed
-     * for the same MIME message in the throwaway Xapian database. */
-    int need_attachextract = _matchmime_need_attachextract(jfilter);
+    /* Each deeper level adds another document for the same message to
+     * the throwaway Xapian database.  As each is a superset of the last,
+     * a query matches any of them exactly when it matches the newest.
+     * A partial index, such as from a failed attachment extraction,
+     * still counts as done: retrying would repeat the failure for every
+     * filter evaluated against this message. */
     int flags = INDEX_GETSEARCHTEXT_ALLOW_PARTIALS|
                 INDEX_GETSEARCHTEXT_NOLOG_PARTIALS;
-    if (!need_attachextract) {
-        // suppress calling the attachment extractor
+    if (need < MATCHMIME_INDEX_ATTACH) {
         flags |= INDEX_GETSEARCHTEXT_NOCALL_ATTACHEXTRACT;
+    }
+    if (need < MATCHMIME_INDEX_BODY) {
+        flags |= INDEX_GETSEARCHTEXT_NOBODYTEXT;
     }
 
     int r = index_getsearchtext(matchmime->m, NULL,
             (struct search_text_receiver*) &tr, flags);
     buf_free(&tr.buf);
+    if (!r) {
+        matchmime->indexed = need;
+    }
     return r;
 }
 
