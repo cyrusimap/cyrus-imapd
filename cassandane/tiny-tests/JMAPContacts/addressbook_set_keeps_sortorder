@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+# An AddressBook/set update that doesn't mention sortOrder must leave it alone.
+sub test_addressbook_set_keeps_sortorder ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([
+        [ 'AddressBook/set', {
+            create => { abook => { name => 'A', sortOrder => 5 } },
+        } ],
+    ]);
+    my $id = $res->single_sentence('AddressBook/set')->arguments
+                 ->{created}{abook}{id};
+    $self->assert_not_null($id);
+
+    $res = $jmap->request([
+        [ 'AddressBook/set', { update => { $id => { name => 'B' } } }, 'R1' ],
+        [ 'AddressBook/get', {
+            ids        => [ $id ],
+            properties => [ 'name', 'sortOrder' ],
+        }, 'R2' ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $id => ignore() },
+        $res->sentence_named('AddressBook/set')->arguments->{updated},
+    );
+    $self->assert_cmp_deeply(
+        [ superhashof({ name => 'B', sortOrder => 5 }) ],
+        $res->sentence_named('AddressBook/get')->arguments->{list},
+    );
+}
