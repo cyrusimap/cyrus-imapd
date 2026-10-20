@@ -15,7 +15,7 @@ sub test_metadata_change
         vnd.cmu.sessionId vnd.cmu.mailboxACL vnd.cmu.mbtype
         vnd.cmu.davFilename vnd.cmu.davUid vnd.fastmail.clientId
         vnd.fastmail.sessionId vnd.fastmail.convExists
-        vnd.fastmail.convUnseen vnd.fastmail.cid vnd.fastmail.counters
+        vnd.fastmail.convUnseen vnd.fastmail.cid
         vnd.fastmail.jmapEmail vnd.fastmail.jmapStates vnd.cmu.emailid
         vnd.cmu.threadid vnd.cmu.visibleUsers vnd.fastmail.traceId
     ));

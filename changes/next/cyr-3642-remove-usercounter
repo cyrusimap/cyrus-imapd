@@ -1,0 +1,33 @@
+Description:
+
+The vnd.fastmail.counters event parameter and the UserCounters/get JMAP
+method are gone.  Both exposed the raw per-user modseq counters;
+vnd.fastmail.jmapStates and UserState/get report the same information
+as a JMAP data type to state string map, and remain.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+event_extra_params no longer accepts vnd.fastmail.counters.
+
+
+Upgrade instructions:
+
+Remove vnd.fastmail.counters from event_extra_params in imapd.conf before
+upgrading, and add vnd.fastmail.jmapStates if push consumers need the
+per-type states.  An unknown value in event_extra_params is a fatal
+configuration error, so a config that still lists it will not start.
+
+Push consumers that read vnd.fastmail.counters must switch to
+vnd.fastmail.jmapStates; JMAP clients using UserCounters/get must switch
+to UserState/get.
+
+
+GitHub issue:
+
+None.

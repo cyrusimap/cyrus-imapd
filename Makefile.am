@@ -1312,8 +1312,6 @@ JMAP_PROPS_BUILT_SOURCES = \
     imap/jmap_props/sieve.h \
     imap/jmap_props/thread.c \
     imap/jmap_props/thread.h \
-    imap/jmap_props/usercounters.c \
-    imap/jmap_props/usercounters.h \
     imap/jmap_props/vacation.c \
     imap/jmap_props/vacation.h
 
@@ -1377,8 +1375,7 @@ imap_jmap_props_libcyrus_jmap_props_la_SOURCES = \
     imap/jmap_props/quota.gperf \
     imap/jmap_props/quota_legacy.gperf \
     imap/jmap_props/share_notification.gperf \
-    imap/jmap_props/thread.gperf \
-    imap/jmap_props/usercounters.gperf
+    imap/jmap_props/thread.gperf
 
 if SIEVE
 imap_httpd_SOURCES += \
