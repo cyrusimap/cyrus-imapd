@@ -6,6 +6,7 @@
 
 #include <string.h>
 
+#include "annotate.h"
 #include "append.h"
 #include "dav_db.h"
 #include "dav_util.h"
@@ -263,6 +264,17 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
                     int userflag;
 
                     ret = HTTP_NO_CONTENT;
+
+                    r = annotate_msg_copy_entry(mailbox, oldrecord->uid,
+                                                mailbox, mailbox->i.last_uid,
+                                                JMAP_METADATA_ANNOT);
+                    if (r) {
+                        xsyslog_ev(LOG_ERR, "dav.store.metadata.failed",
+                                   lf_mailbox(mailbox),
+                                   lf_u("msg.imapuid", oldrecord->uid),
+                                   lf_err("error", r));
+                        r = 0;
+                    }
 
                     /* Perform the actual expunge */
                     r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);

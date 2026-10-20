@@ -7,6 +7,7 @@
 #include <syslog.h>
 #include <string.h>
 
+#include "annotate.h"
 #include "append.h"
 #include "cyrusdb.h"
 #include "dav_db.h"
@@ -632,7 +633,10 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
             else if (old_uid) {
                 /* Now that we have the replacement script in place
                    expunge the old one. */
-                r = remove_uid(mailbox, old_uid);
+                r = annotate_msg_copy_entry(mailbox, old_uid,
+                                            mailbox, mailbox->i.last_uid,
+                                            JMAP_METADATA_ANNOT);
+                if (!r) r = remove_uid(mailbox, old_uid);
             }
         }
     }

@@ -96,6 +96,13 @@ struct caldav_db *caldav_open_userid(const char *userid);
 /* close this handle */
 int caldav_close(struct caldav_db *caldavdb);
 
+/**
+ * Advance the modseq of the events of a resource whose record was
+ * rewritten without new iCalendar data, such as for a flag or annotation
+ * change, so that they appear in CalendarEvent/changes.
+ */
+int caldav_touch_jscal(struct caldav_db *caldavdb, struct caldav_data *cdata);
+
 /* lookup an entry from 'caldavdb' by resource
    (optionally inside a transaction for updates) */
 int caldav_lookup_resource(struct caldav_db *caldavdb,

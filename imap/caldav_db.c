@@ -528,6 +528,15 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const mbentry_t *mbentry
     "   AND alive > 0"                 \
     "   AND jscal_objs.modseq <= :modseq"
 
+/* A record rewritten without new iCalendar data, such as a flag or
+ * annotation change, still changes its events */
+#define CMD_UPDATE_JSCAL_MODSEQ        \
+    "UPDATE jscal_objs SET"            \
+    "  modseq = :modseq"               \
+    " WHERE jscal_objs.rowid = :rowid" \
+    "   AND alive > 0"                 \
+    "   AND jscal_objs.modseq < :modseq"
+
 EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
 {
     unsigned comp_flags = _comp_flags_to_num(&cdata->comp_flags);
@@ -578,6 +587,17 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
     return 0;
 }
 
+
+EXPORTED int caldav_touch_jscal(struct caldav_db *caldavdb,
+                                 struct caldav_data *cdata)
+{
+    struct sqldb_bindval bval[] = {
+        { ":rowid",  SQLITE_INTEGER, { .i = cdata->dav.rowid  } },
+        { ":modseq", SQLITE_INTEGER, { .i = cdata->dav.modseq } },
+        { NULL,      SQLITE_NULL,    { .s = NULL              } } };
+
+    return sqldb_exec(caldavdb->db, CMD_UPDATE_JSCAL_MODSEQ, bval, NULL, NULL);
+}
 
 #define CMD_DELETE "DELETE FROM ical_objs WHERE rowid = :rowid;"
 

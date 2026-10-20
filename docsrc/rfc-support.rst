@@ -957,6 +957,18 @@ draft-ietf-jmap-calendars
 
     JMAP for Calendars
 
+draft-ietf-jmap-metadata
+
+    JMAP Object Metadata
+
+    .. NOTE::
+
+       Supported on Mailbox, Email, Calendar, CalendarEvent, AddressBook,
+       ContactCard and SieveScript, with vendor namespaces only and a
+       maxDepth of 8.  A user's privateMetadata write advances the type's
+       state for every user, as other per-user data does in Cyrus, but
+       other users' Foo/changes don't report it.
+
 draft-murchison-lmtp-ignorequota
 
     LMTP Service Extension for Ignoring Recipient Quotas

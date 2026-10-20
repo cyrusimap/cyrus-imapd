@@ -21,6 +21,7 @@
 #include "http_dav.h"
 #include "http_dav_sharing.h"
 #include "http_jmap.h"
+#include "jmap_metadata.h"
 #include "jscontact.h"
 #include "json_support.h"
 #include "mailbox.h"
@@ -54,6 +55,7 @@ static int jmap_card_parse(jmap_req_t *req);
 typedef struct {
     json_t *invalid;
     json_t *blobNotFound;
+    json_t *seterr;  /* any other SetError */
 } jmap_contact_errors_t;
 
 /** Defines an addresbook membership change for a Card */
@@ -406,14 +408,16 @@ static int getchanges_cb(void *rock, struct carddav_data *cdata)
 
     int rights =
         mbentry && jmap_hasrights_mbentry(urock->req, mbentry, JACL_READITEMS);
-    mboxlist_entry_free(&mbentry);
-    if (!rights)
+    if (!rights) {
+        mboxlist_entry_free(&mbentry);
         return 0;
+    }
 
     /* Count, but don't process items that exceed the maximum record count. */
     if (urock->changes->max_changes &&
         ++(urock->seen_records) > urock->changes->max_changes) {
         urock->changes->has_more_changes = 1;
+        mboxlist_entry_free(&mbentry);
         return 0;
     }
 
@@ -422,10 +426,20 @@ static int getchanges_cb(void *rock, struct carddav_data *cdata)
         id = buf_cstring(urock->cid);
     }
 
+    unsigned changed = 0;
+    if (dav.alive && dav.createdmodseq <= urock->changes->since_modseq) {
+        changed = jmap_metadata_changed_lookup(urock->req, mbentry,
+                dav.imap_uid, dav.modseq, urock->changes->since_modseq);
+    }
+    mboxlist_entry_free(&mbentry);
+
     /* Report item as updated or destroyed. */
     if (dav.alive) {
-        if (dav.createdmodseq <= urock->changes->since_modseq)
-            json_array_append_new(urock->changes->updated, json_string(id));
+        if (dav.createdmodseq <= urock->changes->since_modseq) {
+            if (jmap_changes_metadata_include(urock->changes, changed))
+                json_array_append_new(urock->changes->updated,
+                                      json_string(id));
+        }
         else
             json_array_append_new(urock->changes->created, json_string(id));
     } else {
@@ -822,7 +836,7 @@ static int jmap_card_set(struct jmap_req *req)
     json_t *arg;
     json_object_foreach(set.create, key, arg) {
         json_t *invalid = json_array();
-        jmap_contact_errors_t errors = { invalid, NULL };
+        jmap_contact_errors_t errors = { invalid, NULL, NULL };
         json_t *item = json_object();
         // XXX Silently remove conversion properties if extension
         // capability is used. This is because due to a bug
@@ -832,6 +846,14 @@ static int jmap_card_set(struct jmap_req *req)
         reject_or_remove_convprops(arg, invalid,
                 jmap_is_using(req, JMAP_CONTACTS_EXTENSION));
         r = _card_set_create(req, arg, &mailbox, item, &errors);
+        if (errors.seterr) {
+            json_object_set_new(set.not_created, key, errors.seterr);
+            json_decref(errors.blobNotFound);
+            json_decref(item);
+            json_decref(invalid);
+            r = 0;
+            continue;
+        }
         if (r) {
             json_t *err;
             switch (r) {
@@ -885,7 +907,7 @@ static int jmap_card_set(struct jmap_req *req)
     const char *uid;
     json_object_foreach(set.update, uid, arg) {
         json_t *invalid = json_array();
-        jmap_contact_errors_t errors = { invalid, NULL };
+        jmap_contact_errors_t errors = { invalid, NULL, NULL };
         json_t *item = NULL;
         // XXX Silently remove conversion properties if extension
         // capability is used. This is because due to a bug
@@ -896,6 +918,14 @@ static int jmap_card_set(struct jmap_req *req)
                 jmap_is_using(req, JMAP_CONTACTS_EXTENSION));
         r = _card_set_update(req, set.apply_empty_updates,
                              uid, arg, db, &mailbox, &item, &errors);
+        if (errors.seterr) {
+            json_object_set_new(set.not_updated, uid, errors.seterr);
+            json_decref(errors.blobNotFound);
+            json_decref(item);
+            json_decref(invalid);
+            r = 0;
+            continue;
+        }
         if (r) {
             json_t *err;
             switch (r) {
@@ -1156,6 +1186,7 @@ struct contactsquery_filter_rock {
     struct carddav_data *cdata;
     json_t *entry;
     ptrarray_t cached_termsets; // list of named_termset
+    jmap_req_t *req;
 };
 
 struct contact_filter {
@@ -1267,7 +1298,7 @@ struct filter_parse_rock {
 
 static void *card_filter_parse(json_t *arg, void *rock);
 static void card_filter_free(void *vf);
-static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
+static void card_filter_validate(jmap_req_t *req,
                                  struct jmap_parser *parser,
                                  json_t *filter,
                                  json_t *unsupported __attribute__((unused)),
@@ -1603,6 +1634,22 @@ static void _contact_copy(jmap_req_t *req,
         goto done;
     }
 
+    /* Copy metadata, and the copying user's privateMetadata */
+    struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+    bool using_metadata = jmap_is_using(req, JMAP_URN_METADATA);
+    r = jmap_metadata_lookup(req, src_mbox, NULL, record.uid, &md);
+    if (r) {
+        jmap_metadata_fini(&md);
+        json_decref(src_card);
+        goto done;
+    }
+    if (using_metadata) {
+        if (json_object_size(md.shared))
+            json_object_set(src_card, "metadata", md.shared);
+        if (json_object_size(md.private))
+            json_object_set(src_card, "privateMetadata", md.private);
+    }
+
     // Apply patch.
     json_t *invalid = json_array();
     reject_or_remove_convprops(jcard, invalid, false);
@@ -1611,9 +1658,23 @@ static void _contact_copy(jmap_req_t *req,
     json_decref(src_card);
 
     /* Create vcard */
-    jmap_contact_errors_t errors = { invalid, NULL };
+    jmap_contact_errors_t errors = { invalid, NULL, NULL };
     json_t *item = json_object();
     r = _card_set_create(req, dst_card, &dst_mbox, item, &errors);
+    if (!r && !errors.seterr && !json_array_size(invalid) &&
+        !errors.blobNotFound && !using_metadata && json_object_size(md.shared)) {
+        /* without the capability, only metadata is copied */
+        r = jmap_metadata_write(req, dst_mbox, dst_mbox->i.last_uid,
+                                md.shared, NULL, true);
+    }
+    jmap_metadata_fini(&md);
+    if (errors.seterr) {
+        *set_err = errors.seterr;
+        json_decref(invalid);
+        json_decref(errors.blobNotFound);
+        json_decref(item);
+        goto done;
+    }
     if (r || json_array_size(invalid) || errors.blobNotFound) {
         if (json_array_size(invalid)) {
             *set_err = json_pack("{s:s s:o}", "type", "invalidProperties",
@@ -1974,6 +2035,18 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "mailboxUniqueId", json_string(mbentry->uniqueid));
     }
 
+    if (jmap_metadata_wanted(rock->get->props)) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        r = jmap_metadata_lookup(req, NULL, mbentry, 0, &md);
+        if (!r) jmap_metadata_get(rock->get->props, obj, &md);
+        jmap_metadata_fini(&md);
+        if (r) {
+            json_decref(obj);
+            buf_free(&attrib);
+            return r;
+        }
+    }
+
     json_array_append_new(rock->get->list, obj);
 
     buf_free(&attrib);
@@ -2084,11 +2157,14 @@ static int getaddressbookchanges_cb(const mbentry_t *mbentry, void *vrock)
         if (mbentry->createdmodseq <= rock->changes->since_modseq)
             json_array_append_new(rock->changes->destroyed, json_string(id));
     }
-    else {
-        if (mbentry->createdmodseq <= rock->changes->since_modseq)
+    else if (mbentry->createdmodseq <= rock->changes->since_modseq) {
+        unsigned changed = jmap_metadata_changed_lookup(req, mbentry, 0,
+                mbentry->foldermodseq, rock->changes->since_modseq);
+        if (jmap_changes_metadata_include(rock->changes, changed))
             json_array_append_new(rock->changes->updated, json_string(id));
-        else
-            json_array_append_new(rock->changes->created, json_string(id));
+    }
+    else {
+        json_array_append_new(rock->changes->created, json_string(id));
     }
 
 done:
@@ -2530,7 +2606,18 @@ static void setaddressbooks_create(struct jmap_req *req,
     char *parentname = carddav_mboxname(req->accountid, NULL);
     char *uid = xstrdup(makeuuid());
     char *mboxname = carddav_mboxname(req->accountid, uid);
+    struct jmap_metadata_set ms = JMAP_METADATA_SET_INITIALIZER;
+    json_t *md_shared = NULL, *md_private = NULL;
     int r = 0;
+
+    *err = jmap_metadata_set_parse(req, arg, /*is_create*/true, &ms);
+    if (*err) goto done;
+    if (!jmap_metadata_set_isempty(&ms)) {
+        struct jmap_metadata nomd = JMAP_METADATA_INITIALIZER;
+        *err = jmap_metadata_set_apply(req, &ms, true, &nomd,
+                                       &md_shared, &md_private);
+        if (*err) goto done;
+    }
 
     /* Parse and validate properties. */
     setaddressbook_readprops(req, &parser, &props, arg, /*is_create*/NULL);
@@ -2574,6 +2661,16 @@ static void setaddressbooks_create(struct jmap_req *req,
         goto done;
     }
     r = setaddressbook_writeprops(req, mboxname, &props, /*ignore_acl*/1);
+    if (!r && (md_shared || md_private)) {
+        struct mailbox *mbox = NULL;
+        r = mailbox_open_iwl(mboxname, &mbox);
+        if (!r) {
+            r = jmap_metadata_write(req, mbox, 0, md_shared, md_private,
+                                    /*content_changed*/true);
+            mailbox_close(&mbox);
+        }
+        if (r) *err = jmap_metadata_set_error(r);
+    }
     if (r) {
         int rr = mboxlist_deletemailbox(mboxname, 1, "", NULL, NULL, 0);
         if (rr) {
@@ -2624,6 +2721,9 @@ done:
         }
     }
     mboxlist_entry_free(&mbparent);
+    jmap_metadata_set_fini(&ms);
+    json_decref(md_shared);
+    json_decref(md_private);
     jmap_parser_fini(&parser);
     free(parentname);
     free(mboxname);
@@ -2638,12 +2738,35 @@ static void setaddressbooks_update(jmap_req_t *req,
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     mbentry_t *mbentry = NULL;
+    struct jmap_metadata_set ms = JMAP_METADATA_SET_INITIALIZER;
+    json_t *md_shared = NULL, *md_private = NULL;
+
+    *err = jmap_metadata_set_parse(req, arg, /*is_create*/false, &ms);
+    if (*err) goto done;
 
     abookid_to_mbentry(req, abookid, &mbentry);
 
     if (!mbentry) {
         *err = json_pack("{s:s}", "type", "notFound");
         goto done;
+    }
+
+    if (!jmap_metadata_set_isempty(&ms)) {
+        if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+            *err = json_pack("{s:s}", "type", "notFound");
+            goto done;
+        }
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        int r = jmap_metadata_lookup(req, NULL, mbentry, 0, &md);
+        if (!r) {
+            bool may_write = jmap_hasrights_mbentry(req, mbentry,
+                                                    JACL_WRITEALL);
+            *err = jmap_metadata_set_apply(req, &ms, may_write, &md,
+                                           &md_shared, &md_private);
+        }
+        else *err = jmap_server_error(r);
+        jmap_metadata_fini(&md);
+        if (*err) goto done;
     }
 
     /* Parse and validate properties. */
@@ -2663,6 +2786,19 @@ static void setaddressbooks_update(jmap_req_t *req,
 
     /* Update the addressbook */
     int r = setaddressbook_writeprops(req, mbentry->name, &props, /*ignore_acl*/0);
+    if (!r && (md_shared || md_private)) {
+        struct mailbox *mbox = NULL;
+        r = mailbox_open_iwl(mbentry->name, &mbox);
+        if (!r) {
+            r = jmap_metadata_write(req, mbox, 0, md_shared, md_private,
+                                    json_object_size(arg) > 0);
+            mailbox_close(&mbox);
+        }
+        if (r == IMAP_QUOTA_EXCEEDED) {
+            *err = jmap_metadata_set_error(r);
+            goto done;
+        }
+    }
     if (r) {
         switch (r) {
             case IMAP_MAILBOX_NONEXISTENT:
@@ -2691,6 +2827,9 @@ static void setaddressbooks_update(jmap_req_t *req,
 
 done:
     mboxlist_entry_free(&mbentry);
+    jmap_metadata_set_fini(&ms);
+    json_decref(md_shared);
+    json_decref(md_private);
     jmap_parser_fini(&parser);
 }
 
@@ -3022,6 +3161,16 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
         json_object_set_new(obj, "cyrusimap.org:size",
                             json_integer(record.size - record.header_size));
     }
+    if (jmap_metadata_wanted(crock->get->props)) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        r = jmap_metadata_lookup(req, crock->mailbox, NULL, record.uid, &md);
+        if (!r) jmap_metadata_get(crock->get->props, obj, &md);
+        jmap_metadata_fini(&md);
+        if (r) {
+            json_decref(obj);
+            goto done;
+        }
+    }
 
     jmap_set_contactid(req->cstate, cdata, &crock->cid);
     json_object_set_new(obj, "id", json_string(buf_cstring(&crock->cid)));
@@ -3069,6 +3218,7 @@ struct card_filter {
     struct contact_textfilter *text;
     struct contact_textfilter *member;
     struct contact_textfilter *kind;
+    json_t *metadata;  /* the condition, if it uses metadata */
 };
 
 /* Free the memory allocated by this card filter. */
@@ -3095,6 +3245,7 @@ static void card_filter_free(void *vf)
     contact_textfilter_free(f->text);
     contact_textfilter_free(f->member);
     contact_textfilter_free(f->kind);
+    json_decref(f->metadata);
     free(f);
 }
 
@@ -3106,6 +3257,10 @@ static void *card_filter_parse(json_t *arg, void *rock)
     struct filter_parse_rock *frock = (struct filter_parse_rock *) rock;
     struct card_filter *f =
         (struct card_filter *) xzmalloc(sizeof(struct card_filter));
+
+    if (jmap_metadata_filter_uses(arg)) {
+        f->metadata = json_incref(arg);
+    }
 
     /* inAddressBook */
     if (JNOTNULL(json_object_get(arg, "inAddressBook"))) {
@@ -3267,7 +3422,7 @@ static void *card_filter_parse(json_t *arg, void *rock)
     return f;
 }
 
-static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
+static void card_filter_validate(jmap_req_t *req,
                                  struct jmap_parser *parser,
                                  json_t *filter,
                                  json_t *unsupported __attribute__((unused)),
@@ -3341,10 +3496,11 @@ static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
                 jmap_parser_invalid(parser, field);
             }
         }
-        else {
+        else if (!jmap_metadata_is_filter(field)) {
             jmap_parser_invalid(parser, field);
         }
     }
+    jmap_metadata_filter_validate(req, parser, filter);
 }
 
 static int card_comparator_validate(jmap_req_t *req __attribute__((unused)),
@@ -3616,6 +3772,19 @@ static int card_filter_match(void *vf, void *rock)
         return 0;
     }
 
+    /* metadata */
+    if (f->metadata) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        mbentry_t *mbentry = jmap_mbentry_from_dav(cfrock->req, &cdata->dav);
+        int match = mbentry &&
+            !jmap_metadata_lookup(cfrock->req, NULL, mbentry,
+                                  cdata->dav.imap_uid, &md) &&
+            jmap_metadata_filter_match(f->metadata, &md);
+        jmap_metadata_fini(&md);
+        mboxlist_entry_free(&mbentry);
+        if (!match) return 0;
+    }
+
     /* Match time filters */
     if (!card_filter_match_timestamp(card, "created", f->createdBefore, 0) ||
         !card_filter_match_timestamp(card, "created", f->createdAfter,  1) ||
@@ -3757,7 +3926,8 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
     if (crock->filter) {
         /* Match the contact against the filter */
         struct contactsquery_filter_rock cfrock = {
-            crock->carddavdb, &mycdata, entry, PTRARRAY_INITIALIZER
+            crock->carddavdb, &mycdata, entry, PTRARRAY_INITIALIZER,
+            crock->req
         };
         /* Match filter */
         int matches =
@@ -3972,6 +4142,15 @@ static int _card_set_create(jmap_req_t *req,
     property_blob_t *blob;
     mbentry_t *mbentry = NULL;
     json_t *media = NULL, *keys = NULL, *members = NULL;
+    struct jmap_metadata_set ms = JMAP_METADATA_SET_INITIALIZER;
+    json_t *md_shared = NULL, *md_private = NULL;
+
+    errors->seterr = jmap_metadata_set_parse(req, jcard, /*is_create*/true,
+                                             &ms);
+    if (errors->seterr) {
+        jmap_metadata_set_fini(&ms);
+        return 0;
+    }
 
     /* Validate uid */
     struct carddav_db *db = carddav_open_userid(req->accountid);
@@ -4089,6 +4268,19 @@ static int _card_set_create(jmap_req_t *req,
         goto done;
     }
 
+    if (!jmap_metadata_set_isempty(&ms)) {
+        struct jmap_metadata nomd = JMAP_METADATA_INITIALIZER;
+        errors->seterr = jmap_metadata_set_apply(req, &ms,
+                jmap_hasrights_mbentry(req, mbentry, JACL_WRITEALL),
+                &nomd, &md_shared, &md_private);
+        if (errors->seterr) goto done;
+        if (!ignorequota) {
+            r = jmap_metadata_check_quota(mbentry->name, md_shared,
+                                          md_private, NULL);
+            if (r) goto done;
+        }
+    }
+
     /* we need to create and append a record */
     if (!*mailbox || strcmp(mailbox_name(*mailbox), mbentry->name)) {
         mailbox_close(mailbox);
@@ -4194,6 +4386,13 @@ static int _card_set_create(jmap_req_t *req,
     struct index_record record;
     mailbox_find_index_record(*mailbox, (*mailbox)->i.last_uid, &record);
 
+    if (md_shared || md_private) {
+        r = jmap_metadata_write(req, *mailbox, record.uid,
+                                md_shared, md_private, true);
+        if (r) goto done;
+        mailbox_find_index_record(*mailbox, record.uid, &record);
+    }
+
     struct carddav_data cdata = {
         .dav.createdmodseq = record.createdmodseq,
         .vcard_uid = uid
@@ -4247,6 +4446,9 @@ static int _card_set_create(jmap_req_t *req,
 done:
     if (card) vcardcomponent_free(card);
     mboxlist_entry_free(&mbentry);
+    jmap_metadata_set_fini(&ms);
+    json_decref(md_shared);
+    json_decref(md_private);
     free(resourcename);
     freeentryatts(annots);
     free(uid);
@@ -4283,6 +4485,16 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     size_t num_props = json_object_size(jcard);
     json_t *new_obj = NULL;
     unsigned kind = CARDDAV_KIND_ANY;
+    struct jmap_metadata_set ms = JMAP_METADATA_SET_INITIALIZER;
+    json_t *md_shared = NULL, *md_private = NULL;
+
+    errors->seterr = jmap_metadata_set_parse(req, jcard, /*is_create*/false,
+                                             &ms);
+    if (errors->seterr) {
+        jmap_metadata_set_fini(&ms);
+        return 0;
+    }
+    num_props = json_object_size(jcard);
 
     /* is it a valid contact? */
     if (USER_COMPACT_EMAILIDS(req->cstate)) {
@@ -4375,6 +4587,36 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
     olduid = cdata->dav.imap_uid;
 
+    if (!jmap_metadata_set_isempty(&ms)) {
+        /* Shared metadata needs mayWrite on the address book, before and
+         * after a move */
+        bool may_write = (rights & JACL_WRITEALL) == JACL_WRITEALL;
+        if (is_move) {
+            const char *abookid =
+                json_object_iter_key(json_object_iter(jabookids));
+            if (*abookid == '#') abookid = jmap_lookup_id(req, abookid + 1);
+            mbentry_t *tgtmbentry = NULL;
+            if (abookid) abookid_to_mbentry(req, abookid, &tgtmbentry);
+            if (!tgtmbentry ||
+                !jmap_hasrights_mbentry(req, tgtmbentry, JACL_WRITEALL))
+                may_write = false;
+            mboxlist_entry_free(&tgtmbentry);
+        }
+
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        r = jmap_metadata_lookup(req, *mailbox, NULL, record.uid, &md);
+        if (!r) {
+            errors->seterr = jmap_metadata_set_apply(req, &ms, may_write, &md,
+                                                     &md_shared, &md_private);
+        }
+        if (!r && !errors->seterr && !ignorequota) {
+            r = jmap_metadata_check_quota(mailbox_name(*mailbox), md_shared,
+                                          md_private, &md);
+        }
+        jmap_metadata_fini(&md);
+        if (r || errors->seterr) goto done;
+    }
+
     annots = mailbox_extract_annots(*mailbox, &record);
 
     /* Check for changes on immutable id property */
@@ -4395,12 +4637,23 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
     const char *key = "cyrusimap.org:importance";
     json_t *jval;
+    bool sets_importance = false;
 
     if (num_props == 1 &&
         (jval = json_object_get(jcard, key))) {
         _card_store_importance_annot(req, mailbox_name(*mailbox),
                                      key, jval, &annots, invalid);
         num_props--;
+        sets_importance = true;
+    }
+
+    if (!num_props && !apply_empty_updates &&
+        (md_shared || md_private) && !sets_importance) {
+        /* metadata only: the card itself is unchanged */
+        r = jmap_metadata_write(req, *mailbox, record.uid,
+                                md_shared, md_private, false);
+        if (!r) *item = json_null();
+        goto done;
     }
 
     if (!num_props && !apply_empty_updates) {
@@ -4415,6 +4668,8 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
                                     req->userid, req->authstate);
         if (!r) r = annotate_state_store(state, annots);
         if (!r) r = mailbox_rewrite_index_record(*mailbox, &record);
+        if (!r) r = jmap_metadata_write(req, *mailbox, record.uid,
+                                        md_shared, md_private, true);
         if (!r) {
             *item = json_null();
 
@@ -4617,6 +4872,15 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
                           req->authstate, ignorequota,
                           (record.size - record.header_size));
         if (!r) {
+            /* carry over metadata, then apply this update's */
+            r = annotate_msg_copy_entry(*mailbox, olduid, this_mailbox,
+                                        this_mailbox->i.last_uid,
+                                        JMAP_METADATA_ANNOT);
+            if (!r) r = jmap_metadata_write(req, this_mailbox,
+                                            this_mailbox->i.last_uid,
+                                            md_shared, md_private, true);
+        }
+        if (!r) {
             struct index_record record;
 
             mailbox_find_index_record(this_mailbox,
@@ -4674,6 +4938,9 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
   done:
     mboxlist_entry_free(&mbentry);
     mailbox_close(&newmailbox);
+    jmap_metadata_set_fini(&ms);
+    json_decref(md_shared);
+    json_decref(md_private);
     freeentryatts(annots);
     vcardcomponent_free(vcard);
     free(resource);

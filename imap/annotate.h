@@ -19,6 +19,11 @@
 #define DAV_ANNOT_NS            "/vendor/cmu/cyrus-httpd/"
 #define JMAP_ANNOT_NS           "/vendor/cmu/cyrus-jmap/"
 
+/* JMAP metadata and privateMetadata (draft-ietf-jmap-metadata).  Its
+ * private values belong to their users, so mailbox_extract_annots() leaves
+ * it out; copy it with annotate_msg_copy_entry() instead. */
+#define JMAP_METADATA_ANNOT     JMAP_ANNOT_NS "metadata"
+
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
     char *s;                   /* String */
@@ -202,6 +207,15 @@ int annotate_state_store(annotate_state_t *state, struct entryattlist *l);
  * Requires an open transaction. */
 int annotate_state_write(annotate_state_t *, const char *entry,
                          const char *userid, const struct buf *value);
+/**
+ * Write like annotate_state_writemdata(), recording the modseq in @p mdata
+ * and leaving the mailbox's modseqs to the caller, but fail with
+ * IMAP_QUOTA_EXCEEDED if the value would exceed the mailbox's annotation
+ * storage quota.
+ */
+int annotate_state_writequota(annotate_state_t *, const char *entry,
+                              const char *userid, const struct buf *value,
+                              const struct annotate_metadata *mdata);
 /* same but write to shared if the user owns the mailbox */
 int annotate_state_writemask(annotate_state_t *, const char *entry,
                              const char *userid, const struct buf *value);
@@ -222,6 +236,14 @@ int annotate_rename_mailbox(struct mailbox *oldmailbox,
                             struct mailbox *newmailbox);
 /* Handle a message COPY, by copying all the appropriate
  * per-message annotations. */
+/**
+ * Copy every user's value of annotation @p entry from message @p olduid in
+ * @p oldmailbox to message @p newuid in @p newmailbox, which must be
+ * locked for writing.
+ */
+int annotate_msg_copy_entry(const struct mailbox *oldmailbox, uint32_t olduid,
+                            struct mailbox *newmailbox, uint32_t newuid,
+                            const char *entry);
 int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
                       struct mailbox *newmailbox, uint32_t newuid,
                       const char *userid);

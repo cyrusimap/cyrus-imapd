@@ -11,6 +11,7 @@
 
 #include <libical/ical.h>
 
+#include "annotate.h"
 #include "append.h"
 #include "caldav_alarm.h"
 #include "caldav_db.h"
@@ -1570,6 +1571,16 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
 
     r = append_commit(&as);
     if (r) goto done;
+
+    r = annotate_msg_copy_entry(srcmbox, record->uid,
+                                destmbox, destmbox->i.last_uid,
+                                JMAP_METADATA_ANNOT);
+    if (r) {
+        /* the message has moved; losing its metadata is the lesser harm */
+        xsyslog_ev(LOG_ERR, "caldav.alarm.metadata.failed",
+                   lf_mailbox(destmbox),
+                   lf_err("error", r));
+    }
 
   expunge:
     /* Expunge the resource from the source mailbox (also unset \snoozed) */

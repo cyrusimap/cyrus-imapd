@@ -1,0 +1,133 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([
+        ['AddressBook/set', {
+            create => {
+                a1 => {
+                    name => 'meta',
+                    metadata => { 'acme.example.com' => { a => 1 } },
+                },
+            },
+        }],
+    ]);
+    my $id = $res->single_sentence->as_set->created_id('a1');
+    $self->assert_not_null($id);
+
+    $res = $jmap->request([['AddressBook/get', { ids => [$id] }]]);
+    my $args = $res->single_sentence->arguments;
+    $self->assert_cmp_deeply(
+        superhashof({
+            metadata => { 'acme.example.com' => { a => 1 } },
+            privateMetadata => {},
+        }),
+        $args->{list}[0],
+    );
+    my $state = $args->{state};
+
+    $res = $jmap->request([
+        ['AddressBook/set', {
+            update => { $id => { 'privateMetadata/acme.example.com' => { p => 1 } } },
+        }],
+        ['AddressBook/changes', { sinceState => $state }],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            updated => [$id],
+            updatedProperties => ['privateMetadata'],
+        }),
+        $res->sentence(1)->arguments,
+    );
+}
+
+sub test_contactcard
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([
+        ['ContactCard/set', {
+            create => {
+                c1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'Jane Doe' },
+                    metadata => { 'acme.example.com' => { crm => 'C-17' } },
+                    privateMetadata => {
+                        'acme.example.com' => { note => 'met at IETF' },
+                    },
+                },
+            },
+        }],
+    ]);
+    my $id = $res->single_sentence->as_set->created_id('c1');
+    $self->assert_not_null($id);
+
+    $res = $jmap->request([
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name', 'updated', 'metadata', 'privateMetadata'],
+        }],
+    ]);
+    my $args = $res->single_sentence->arguments;
+    my $card = $args->{list}[0];
+    $self->assert_cmp_deeply(
+        { 'acme.example.com' => { crm => 'C-17' } }, $card->{metadata});
+    $self->assert_cmp_deeply(
+        { 'acme.example.com' => { note => 'met at IETF' } },
+        $card->{privateMetadata});
+    my $state = $args->{state};
+    my $updated = $card->{updated};
+
+    xlog $self, "metadata-only update";
+    sleep 1;
+    $res = $jmap->request([
+        ['ContactCard/set', {
+            update => { $id => {
+                id => $id,
+                'metadata/acme.example.com/crm' => 'C-18',
+            } },
+        }],
+        ['ContactCard/changes', { sinceState => $state }],
+        ['ContactCard/get', { ids => [$id], properties => ['updated'] }],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ updated => [$id], updatedProperties => ['metadata'] }),
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_cmp_deeply($updated,
+        $res->sentence(2)->arguments->{list}[0]{updated});
+
+    xlog $self, "a card update keeps the metadata";
+    $res = $jmap->request([
+        ['ContactCard/set', {
+            update => { $id => { 'name/full' => 'Jane Q Doe' } },
+        }],
+        ['ContactCard/get', {
+            ids => [$id], properties => ['metadata', 'privateMetadata'],
+        }],
+        ['ContactCard/query', {
+            filter => { privateMetadataTextContains => {
+                path => 'acme.example.com/note', value => 'ietf' } },
+        }],
+        ['ContactCard/query', {
+            filter => { metadataExists => 'other.example' },
+        }],
+    ]);
+    $self->assert_cmp_deeply({ $id => ignore() },
+        $res->sentence(0)->arguments->{updated});
+    $self->assert_cmp_deeply(
+        superhashof({
+            metadata => { 'acme.example.com' => { crm => 'C-18' } },
+            privateMetadata => { 'acme.example.com' => { note => 'met at IETF' } },
+        }),
+        $res->sentence(1)->arguments->{list}[0],
+    );
+    $self->assert_cmp_deeply([$id], $res->sentence(2)->arguments->{ids});
+    $self->assert_cmp_deeply([], $res->sentence(3)->arguments->{ids});
+}

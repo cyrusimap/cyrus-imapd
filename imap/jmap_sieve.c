@@ -18,6 +18,7 @@
 #include "cyr_qsort_r.h"
 #include "hash.h"
 #include "http_jmap.h"
+#include "jmap_metadata.h"
 #include "jmap_mail.h"
 #include "jmap_mail_query.h"
 #include "json_support.h"
@@ -201,9 +202,16 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
     }
 }
 
-static int getscript(void *rock, struct sieve_data *sdata)
+struct getscript_rock {
+    jmap_req_t *req;
+    struct jmap_get *get;
+    struct mailbox *mailbox;
+};
+
+static int getscript(void *vrock, struct sieve_data *sdata)
 {
-    struct jmap_get *get = (struct jmap_get *) rock;
+    struct getscript_rock *rock = vrock;
+    struct jmap_get *get = rock->get;
     json_t *sieve = json_pack("{s:s}", "id", sdata->id);
 
     if (jmap_wantprop(get->props, "name")) {
@@ -220,6 +228,18 @@ static int getscript(void *rock, struct sieve_data *sdata)
         buf_printf(&buf, "G%s", sdata->contentid);
         json_object_set_new(sieve, "blobId", json_string(buf_cstring(&buf)));
         buf_free(&buf);
+    }
+
+    if (jmap_metadata_wanted(get->props)) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        int r = jmap_metadata_lookup(rock->req, rock->mailbox, NULL,
+                                     sdata->imap_uid, &md);
+        if (!r) jmap_metadata_get(get->props, sieve, &md);
+        jmap_metadata_fini(&md);
+        if (r) {
+            json_decref(sieve);
+            return r;
+        }
     }
 
     /* Add object to list */
@@ -265,6 +285,7 @@ static int jmap_sieve_get(jmap_req_t *req)
     }
 
     /* Does the client request specific responses? */
+    struct getscript_rock grock = { req, &get, mailbox };
     if (JNOTNULL(get.ids)) {
         json_t *jval;
         size_t i;
@@ -279,12 +300,14 @@ static int jmap_sieve_get(jmap_req_t *req)
                 r = 0;
             }
             else {
-                getscript(&get, sdata);
+                r = getscript(&grock, sdata);
+                if (r) goto done;
             }
         }
     }
     else {
-        sievedb_foreach(db, &getscript, &get);
+        r = sievedb_foreach(db, &getscript, &grock);
+        if (r) goto done;
     }
 
     /* Build response */
@@ -392,7 +415,25 @@ static const char *set_create(struct jmap_req *req,
     json_t *arg, *invalid = json_array(), *err = NULL;
     const char *id = makeuuid(), *name = NULL, *content = NULL;
     struct buf buf = BUF_INITIALIZER;
+    struct jmap_metadata_set ms = JMAP_METADATA_SET_INITIALIZER;
+    json_t *md_shared = NULL, *md_private = NULL;
     int r;
+
+    err = jmap_metadata_set_parse(req, jsieve, /*is_create*/true, &ms);
+    if (err) goto done;
+    if (!jmap_metadata_set_isempty(&ms)) {
+        /* scripts belong to the account, which the user may write */
+        struct jmap_metadata nomd = JMAP_METADATA_INITIALIZER;
+        err = jmap_metadata_set_apply(req, &ms, true, &nomd,
+                                      &md_shared, &md_private);
+        if (err) goto done;
+        r = jmap_metadata_check_quota(mailbox_name(mailbox), md_shared,
+                                      md_private, NULL);
+        if (r) {
+            err = jmap_metadata_set_error(r);
+            goto done;
+        }
+    }
 
     arg = json_object_get(jsieve, "id");
     if (arg) json_array_append_new(invalid, json_string("id"));
@@ -450,6 +491,15 @@ static const char *set_create(struct jmap_req *req,
     putscript(mailbox, content, &sdata, &err);
     if (err) goto done;
 
+    if (md_shared || md_private) {
+        r = jmap_metadata_write(req, mailbox, mailbox->i.last_uid,
+                                md_shared, md_private, true);
+        if (r) {
+            err = jmap_metadata_set_error(r);
+            goto done;
+        }
+    }
+
     /* Report script as created, with server-set properties */
     buf_reset(&buf);
     buf_printf(&buf, "G%s", sdata.contentid);
@@ -469,6 +519,9 @@ static const char *set_create(struct jmap_req *req,
         json_object_set_new(set->not_created, creation_id, err);
         id = NULL;
     }
+    jmap_metadata_set_fini(&ms);
+    json_decref(md_shared);
+    json_decref(md_private);
     json_decref(invalid);
     buf_free(&buf);
 
@@ -484,9 +537,14 @@ static void set_update(struct jmap_req *req,
     const char *name = NULL, *content = NULL;
     struct buf buf = BUF_INITIALIZER;
     struct sieve_data *sdata = NULL;
+    struct jmap_metadata_set ms = JMAP_METADATA_SET_INITIALIZER;
+    json_t *md_shared = NULL, *md_private = NULL;
     int r = 0;
 
     if (!id) return;
+
+    err = jmap_metadata_set_parse(req, jsieve, /*is_create*/false, &ms);
+    if (err) goto done;
 
     arg = json_object_get(jsieve, "name");
     if (arg) {
@@ -565,10 +623,45 @@ static void set_update(struct jmap_req *req,
         goto done;
     }
 
+    if (!jmap_metadata_set_isempty(&ms)) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        r = jmap_metadata_lookup(req, mailbox, NULL, sdata->imap_uid, &md);
+        if (!r) {
+            err = jmap_metadata_set_apply(req, &ms, true, &md,
+                                          &md_shared, &md_private);
+        }
+        if (!r && !err) {
+            r = jmap_metadata_check_quota(mailbox_name(mailbox), md_shared,
+                                          md_private, &md);
+            if (r) {
+                err = jmap_metadata_set_error(r);
+                r = 0;
+            }
+        }
+        jmap_metadata_fini(&md);
+        if (r || err) goto done;
+    }
+
     if (name) sdata->name = name;
 
-    putscript(mailbox, content, sdata, &err);
-    if (err) goto done;
+    if (name || content || jmap_metadata_set_isempty(&ms)) {
+        putscript(mailbox, content, sdata, &err);
+        if (err) goto done;
+    }
+
+    if (md_shared || md_private) {
+        /* the script may have been stored as a new record */
+        struct sieve_data *cur = NULL;
+        r = sievedb_lookup_id(db, id, &cur, 0);
+        if (!r) r = jmap_metadata_write(req, mailbox, cur->imap_uid,
+                                        md_shared, md_private,
+                                        name || content);
+        if (r) {
+            err = jmap_metadata_set_error(r);
+            r = 0;
+            goto done;
+        }
+    }
 
     /* Report script as updated, with server-set properties */
     json_t *new_sieve = NULL;
@@ -590,6 +683,9 @@ static void set_update(struct jmap_req *req,
     if (err) {
         json_object_set_new(set->not_updated, id, err);
     }
+    jmap_metadata_set_fini(&ms);
+    json_decref(md_shared);
+    json_decref(md_private);
     json_decref(invalid);
     buf_free(&buf);
 }
@@ -875,7 +971,7 @@ done:
     return 0;
 }
 
-static void filter_parse(jmap_req_t *req __attribute__((unused)),
+static void filter_parse(jmap_req_t *req,
                          struct jmap_parser *parser,
                          json_t *filter,
                          json_t *unsupported __attribute__((unused)),
@@ -896,10 +992,11 @@ static void filter_parse(jmap_req_t *req __attribute__((unused)),
                 jmap_parser_invalid(parser, field);
             }
         }
-        else {
+        else if (!jmap_metadata_is_filter(field)) {
             jmap_parser_invalid(parser, field);
         }
     }
+    jmap_metadata_filter_validate(req, parser, filter);
 }
 
 
@@ -921,6 +1018,7 @@ static int comparator_parse(jmap_req_t *req __attribute__((unused)),
 typedef struct filter {
     const char *name;
     int isactive;
+    const json_t *metadata;  /* the condition, if it uses metadata */
 } filter;
 
 static void *filter_build(json_t *arg,
@@ -940,20 +1038,39 @@ static void *filter_build(json_t *arg,
         jmap_readprop(arg, "isActive", 0, NULL, "b", &f->isactive);
     }
 
+    if (jmap_metadata_filter_uses(arg)) f->metadata = arg;
+
     return f;
 }
 
+struct filter_match_rock {
+    jmap_req_t *req;
+    struct mailbox *mailbox;
+    struct sieve_data *sdata;
+};
+
 /* Match the script in rock against filter. */
-static int filter_match(void *vf, void *rock)
+static int filter_match(void *vf, void *vrock)
 {
     filter *f = (filter *) vf;
-    struct sieve_data *sdata = (struct sieve_data *) rock;
+    struct filter_match_rock *rock = vrock;
+    struct sieve_data *sdata = rock->sdata;
 
     /* name */
     if (f->name && !strstr(sdata->name, f->name)) return 0;
 
     /* isActive */
     if (f->isactive != -1 && ((int) sdata->isactive != f->isactive)) return 0;
+
+    /* metadata */
+    if (f->metadata) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        int match = !jmap_metadata_lookup(rock->req, rock->mailbox, NULL,
+                                          sdata->imap_uid, &md) &&
+                    jmap_metadata_filter_match(f->metadata, &md);
+        jmap_metadata_fini(&md);
+        if (!match) return 0;
+    }
 
     /* All matched. */
     return 1;
@@ -981,6 +1098,8 @@ typedef struct filter_rock {
     jmap_filter *parsed_filter;
     ptrarray_t matches;
     script_info *anchor;
+    jmap_req_t *req;
+    struct mailbox *mailbox;
 } filter_rock;
 
 static int filter_cb(void *rock, struct sieve_data *sdata)
@@ -989,8 +1108,9 @@ static int filter_cb(void *rock, struct sieve_data *sdata)
     struct jmap_query *query = frock->query;
     script_info *info;
 
+    struct filter_match_rock mrock = { frock->req, frock->mailbox, sdata };
     if (query->filter &&
-        !jmap_filter_match(frock->parsed_filter, &filter_match, sdata)) {
+        !jmap_filter_match(frock->parsed_filter, &filter_match, &mrock)) {
         return 0;
     }
 
@@ -1117,7 +1237,8 @@ static int jmap_sieve_query(jmap_req_t *req)
         goto done;
     }
 
-    filter_rock frock = { &query, parsed_filter, PTRARRAY_INITIALIZER, NULL };
+    filter_rock frock = { &query, parsed_filter, PTRARRAY_INITIALIZER, NULL,
+                          req, mailbox };
 
     /* Filter the scripts */
     sievedb_foreach(db, &filter_cb, &frock);

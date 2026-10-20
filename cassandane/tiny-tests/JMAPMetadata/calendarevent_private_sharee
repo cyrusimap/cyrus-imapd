@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_private_sharee
+    ($self)
+{
+    my $owner = $self->{instance}->create_user('owner');
+    my $ojmap = $owner->jmap;
+    $ojmap->{default_using} = $self->jmap_default_using;
+
+    my $res = $ojmap->request([
+        ['Calendar/set', { create => { c1 => {
+            name => 'shared',
+            shareWith => { cassandane => { mayReadItems => JSON::true } },
+        } } }],
+    ]);
+    my $calid = $res->single_sentence->as_set->created_id('c1');
+    $self->assert_not_null($calid);
+
+    my %ids;
+    for my $privacy (qw(public private)) {
+        $res = $ojmap->request([
+            ['CalendarEvent/set', { create => { e1 => {
+                calendarIds => { $calid => JSON::true },
+                version => '2.0',
+                title => $privacy,
+                start => '2026-10-20T10:00:00',
+                timeZone => 'Etc/UTC',
+                duration => 'PT1H',
+                privacy => $privacy,
+                metadata => { 'acme.example.com' => { secret => $privacy } },
+            } } }],
+        ]);
+        $ids{$privacy} = $res->single_sentence->as_set->created_id('e1');
+        $self->assert_not_null($ids{$privacy});
+    }
+
+    xlog $self, "a sharee sees the metadata of public events only";
+    my $jmap = $self->default_user->jmap;
+    $res = $jmap->request([
+        ['CalendarEvent/get', {
+            accountId => 'owner',
+            ids => [$ids{public}, $ids{private}],
+            properties => ['metadata'],
+        }],
+        ['CalendarEvent/query', {
+            accountId => 'owner',
+            filter => { metadataExists => 'acme.example.com/secret' },
+        }],
+    ]);
+    my %got = map { $_->{id} => $_->{metadata} }
+              @{ $res->sentence(0)->arguments->{list} };
+    $self->assert_cmp_deeply(
+        {
+            $ids{public} => { 'acme.example.com' => { secret => 'public' } },
+            $ids{private} => {},
+        },
+        \%got,
+    );
+    $self->assert_cmp_deeply([$ids{public}],
+        $res->sentence(1)->arguments->{ids});
+}

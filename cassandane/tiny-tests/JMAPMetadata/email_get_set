@@ -1,0 +1,198 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_set
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([
+        ['Mailbox/query', { filter => { role => 'inbox' } }],
+    ]);
+    my $inboxid = $res->single_sentence->arguments->{ids}[0];
+
+    xlog $self, "create an email with metadata";
+    $res = $jmap->request([
+        ['Email/set', {
+            create => {
+                m1 => {
+                    mailboxIds => { $inboxid => JSON::true },
+                    subject => 'hello',
+                    from => [{ email => 'foo@example.com' }],
+                    bodyStructure => { type => 'text/plain', partId => '1' },
+                    bodyValues => { 1 => { value => 'hi' } },
+                    metadata => { 'acme.example.com' => { tag => 'one' } },
+                    privateMetadata => {
+                        'acme.example.com' => { memo => 'follow up soon' },
+                    },
+                },
+            },
+        }],
+    ]);
+    my $id = $res->single_sentence('Email/set')->as_set->created_id('m1');
+    $self->assert_not_null($id);
+
+    xlog $self, "metadata isn't a default property of Email/get";
+    $res = $jmap->request([
+        ['Email/get', { ids => [$id] }],
+        ['Email/get', {
+            ids => [$id],
+            properties => ['metadata', 'privateMetadata/acme.example.com',
+                           'privateMetadata/absent.example'],
+        }],
+    ]);
+    my ($all, $some) = map { $_->arguments->{list}[0] } $res->sentences;
+    $self->assert(!exists $all->{metadata});
+    $self->assert(!exists $all->{privateMetadata});
+    $self->assert_cmp_deeply(
+        {
+            id => $id,
+            metadata => { 'acme.example.com' => { tag => 'one' } },
+            privateMetadata => {
+                'acme.example.com' => { memo => 'follow up soon' },
+            },
+        },
+        $some,
+    );
+
+    my $state = $res->sentence(0)->arguments->{state};
+
+    xlog $self, "a metadata-only update shows in updatedProperties";
+    $res = $jmap->request([
+        ['Email/set', {
+            update => { $id => { 'metadata/acme.example.com/tag' => 'two' } },
+        }],
+        ['Email/changes', { sinceState => $state }],
+        ['Email/changes', {
+            sinceState => $state,
+            ignoreMetadataOnlyChanges => JSON::true,
+        }],
+    ]);
+    $self->assert_cmp_deeply({ $id => undef },
+        $res->sentence(0)->arguments->{updated});
+    $self->assert_cmp_deeply(
+        superhashof({
+            updated => [$id],
+            updatedProperties => ['metadata'],
+        }),
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_cmp_deeply(
+        superhashof({
+            updated => [],
+            updatedProperties => undef,
+        }),
+        $res->sentence(2)->arguments,
+    );
+    my $state2 = $res->sentence(1)->arguments->{newState};
+
+    xlog $self, "a keyword change is not metadata-only";
+    $res = $jmap->request([
+        ['Email/set', {
+            update => {
+                $id => {
+                    'keywords/$flagged' => JSON::true,
+                    'privateMetadata/acme.example.com/memo' => 'done',
+                },
+            },
+        }],
+        ['Email/changes', { sinceState => $state2 }],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ updated => [$id], updatedProperties => undef }),
+        $res->sentence(1)->arguments,
+    );
+
+    xlog $self, "query by metadata";
+    $res = $jmap->request([
+        ['Email/query', { filter => { metadataExists => 'acme.example.com' } }],
+        ['Email/query', { filter => {
+            privateMetadataTextContains => {
+                path => 'acme.example.com/memo', value => 'DONE',
+            },
+        } }],
+        ['Email/query', { filter => {
+            metadataTextEquals => {
+                path => 'acme.example.com/tag', value => 'TWO',
+            },
+        } }],
+        ['Email/query', { filter => {
+            operator => 'AND',
+            conditions => [
+                { inMailbox => $inboxid },
+                { metadataTextEquals => {
+                    path => 'acme.example.com/tag', value => 'two',
+                } },
+            ],
+        } }],
+    ]);
+    $self->assert_cmp_deeply(
+        [[$id], [$id], [], [$id]],
+        [ map { $_->arguments->{ids} } $res->sentences ],
+    );
+}
+
+sub test_email_without_capability
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
+    my $user = $self->default_user;
+    my $email = $user->emails->create({
+        mailboxIds    => { $user->mailboxes->inbox->id => JSON::true },
+        bodyStructure => { type => 'text/plain', partId => 'part1' },
+        bodyValues    => { part1 => { value => 'hello' } },
+    });
+    my $id = $email->id;
+
+    xlog $self, "writes need the capability";
+    my $res = $jmap->request({
+        using => $using,
+        methodCalls => [
+            ['Email/set', {
+                update => { $id => { 'metadata/acme.example.com' => {} } },
+            }, 'R1'],
+        ],
+    });
+    $self->assert_cmp_deeply(
+        {
+            type => 'invalidProperties',
+            properties => ['metadata/acme.example.com'],
+        },
+        $res->single_sentence->arguments->{notUpdated}{$id},
+    );
+
+    $res = $jmap->request([
+        ['Email/get', { ids => [$id], properties => ['id'] }],
+    ]);
+    my $state = $res->single_sentence->arguments->{state};
+
+    $res = $jmap->request([
+        ['Email/set', {
+            update => { $id => { 'metadata/acme.example.com' => { a => 1 } } },
+        }],
+    ]);
+    $self->assert_cmp_deeply({ $id => undef },
+        $res->single_sentence->arguments->{updated});
+
+    xlog $self, "without the capability, metadata-only changes are hidden";
+    $res = $jmap->request({
+        using => $using,
+        methodCalls => [
+            ['Email/changes', { sinceState => $state }, 'R1'],
+            ['Email/get', { ids => [$id], properties => ['metadata'] }, 'R2'],
+        ],
+    });
+    my $changes = $res->sentence(0)->arguments;
+    $self->assert_cmp_deeply([], $changes->{updated});
+    $self->assert(!exists $changes->{updatedProperties});
+    $self->assert_str_not_equals($state, $changes->{newState});
+    $self->assert_cmp_deeply(
+        { 'acme.example.com' => { a => 1 } },
+        $res->sentence(1)->arguments->{list}[0]{metadata},
+    );
+}

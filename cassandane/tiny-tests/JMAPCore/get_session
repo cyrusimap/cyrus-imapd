@@ -111,6 +111,7 @@ sub test_get_session
             = 'cassandane';
         }
     }
+    $expect_primaryAccounts->{'urn:ietf:params:jmap:metadata'} = 'cassandane';
     $self->assert_cmp_deeply($expect_primaryAccounts,
                               $session->{primaryAccounts});
 

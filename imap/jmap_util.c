@@ -308,6 +308,20 @@ EXPORTED json_t *jmap_patchobject_create(json_t *src, json_t *dst, unsigned flag
     return diff;
 }
 
+/* Return whether props has a "root/..." subselector */
+static bool has_subselector(hash_table *props, const char *root)
+{
+    size_t len = strlen(root);
+    bool found = false;
+    hash_iter *iter = hash_table_iter(props);
+    while (!found && hash_iter_next(iter)) {
+        const char *prop = hash_iter_key(iter);
+        found = !strncmp(prop, root, len) && prop[len] == '/';
+    }
+    hash_iter_free(&iter);
+    return found;
+}
+
 EXPORTED void jmap_filterprops(json_t *jobj, hash_table *props)
 {
     if (!props) return;
@@ -316,9 +330,14 @@ EXPORTED void jmap_filterprops(json_t *jobj, hash_table *props)
     json_t *jval;
     void *tmp;
     json_object_foreach_safe(jobj, tmp, key, jval) {
-        if (!hash_lookup(key, props)) {
-            json_object_del(jobj, key);
-        }
+        if (hash_lookup(key, props)) continue;
+
+        /* metadata requested by namespace is already filtered */
+        if ((!strcmp(key, "metadata") || !strcmp(key, "privateMetadata")) &&
+            has_subselector(props, key))
+            continue;
+
+        json_object_del(jobj, key);
     }
 }
 

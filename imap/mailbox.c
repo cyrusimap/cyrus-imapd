@@ -1846,6 +1846,9 @@ static int load_annot_cb(const char *mailbox __attribute__((unused)),
 {
     struct entryattlist **eal = (struct entryattlist **)rock;
     const char *attrib = (userid[0] ? "value.priv" : "value.shared");
+
+    if (!strcmp(entry, JMAP_METADATA_ANNOT)) return 0;
+
     setentryatt(eal, entry, attrib, value);
     return 0;
 }
@@ -3622,6 +3625,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         cdata->dav.createdmodseq = new->createdmodseq;
         cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         r = caldav_write(caldavdb, cdata);
+        if (!r && cdata->dav.alive) r = caldav_touch_jscal(caldavdb, cdata);
     }
     else {
         /* Load message containing the resource and parse ical data */
