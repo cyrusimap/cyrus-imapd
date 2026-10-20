@@ -15361,12 +15361,11 @@ static void _email_bulkupdate_exec(struct email_bulkupdate *bulk,
 /* Execute the sequence of JMAP Email/set/{update} arguments in bulk. */
 static void _email_update_bulk(jmap_req_t *req,
                                struct jmap_set *set,
-                               json_t *update,
-                               json_t *updated,
-                               json_t *not_updated,
                                json_t *debug,
                                bool *partial)
 {
+    json_t *updated = set->updated;
+    json_t *not_updated = set->not_updated;
     struct email_bulkupdate bulkupdate = _EMAIL_BULKUPDATE_INITIALIZER;
     ptrarray_t updates = PTRARRAY_INITIALIZER;
     int i;
@@ -15413,7 +15412,7 @@ static void _email_update_bulk(jmap_req_t *req,
     const char *email_id;
     json_t *jval;
     bulkupdate.req = req;
-    json_object_foreach(update, email_id, jval) {
+    json_object_foreach(set->update, email_id, jval) {
         struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
         struct email_update *update = xzmalloc(sizeof(struct email_update));
         update->email_id = email_id;
@@ -15626,13 +15625,7 @@ static int jmap_email_set(jmap_req_t *req)
     if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
         debug_bulkupdate = json_object();
     }
-    _email_update_bulk(req,
-                       &set,
-                       set.update,
-                       set.updated,
-                       set.not_updated,
-                       debug_bulkupdate,
-                       &partial);
+    _email_update_bulk(req, &set, debug_bulkupdate, &partial);
 
     if (partial) {
         json_decref(debug_bulkupdate);
