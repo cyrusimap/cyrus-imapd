@@ -1,0 +1,92 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_test_include_global
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog "install a server-wide global script";
+    $self->{instance}->install_sieve_script(
+        "require \"fileinto\";\r\nfileinto \"GLOBAL\";\r\n",
+        username => '', name => 'gscript');
+
+    xlog "create a personal script";
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "A" => { data => [{
+                   'data:asText' => "require \"fileinto\";\r\nfileinto \"PERSONAL\";\r\n"
+               }] }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => { name => "pscript", blobId => "#A" }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res->[1][1]{created}{1});
+
+    my $email = to_crlf(<<'EOF');
+From: "Some Example Sender" <example@example.com>
+To: cassandane@example.com
+Subject: test email
+Date: Wed, 7 Dec 2016 22:11:11 +1100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+
+This is a test email.
+EOF
+    my $emailid = $jmap->Upload($email, "message/rfc822")->{blobId};
+
+    my sub test_include ($include) {
+        my $script = to_crlf(<<EOF);
+require ["include"];
+include $include;
+EOF
+        my $scriptid = $jmap->Upload($script, "application/sieve")->{blobId};
+
+        my $res = $jmap->CallMethods([
+            ['SieveScript/test', {
+                scriptBlobId => $scriptid,
+                emailBlobIds => [ $emailid ],
+            }, "R1"]
+        ]);
+        return $res->[0][1];
+    }
+
+    my sub included ($mailbox) {
+        return {
+            accountId => 'cassandane',
+            completed => { $emailid => [ [ 'fileinto', { }, [ $mailbox ] ] ] },
+            notCompleted => undef,
+        };
+    }
+
+    my $not_loaded = {
+        accountId => 'cassandane',
+        completed => undef,
+        notCompleted => {
+            $emailid => {
+                type => 'serverFail',
+                description => 'Include can not load script',
+            },
+        },
+    };
+
+    xlog "include :global resolves in the global sieve directory";
+    $self->assert_cmp_deeply(included('GLOBAL'),
+                             test_include(':global "gscript"'));
+
+    xlog "include :personal resolves in the user's sieve directory";
+    $self->assert_cmp_deeply(included('PERSONAL'),
+                             test_include(':personal "pscript"'));
+
+    xlog "global and personal scripts are not visible to each other";
+    $self->assert_cmp_deeply($not_loaded,
+                             test_include(':personal "gscript"'));
+    $self->assert_cmp_deeply($not_loaded,
+                             test_include(':global "pscript"'));
+}

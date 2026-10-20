@@ -2258,6 +2258,13 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
 
             if (requires & BFE_VARIABLES) {
                 script = parse_string(script, variables);
+
+                /* re-apply the script-name check from build_include() */
+                if (strchr(script, '/')) {
+                    *errmsg = "Invalid script name";
+                    res = SIEVE_RUN_ERROR;
+                    break;
+                }
             }
 
             res = i->getinclude(sc, script, isglobal, fpath, sizeof(fpath));
