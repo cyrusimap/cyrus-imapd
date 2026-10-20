@@ -21,7 +21,7 @@ sub test_email_querychanges_thread
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
 
     xlog $self, "Get email id";
-    $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    $res = $jmap->CallMethods([['Email/query', { calculateTotal => JSON::true }, "R1"]]);
     my $ida = $res->[0][1]->{ids}[0];
     $self->assert_not_null($ida);
 
@@ -43,7 +43,7 @@ sub test_email_querychanges_thread
     $exp{D} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "d");
     $exp{D}->set_attributes(uid => 4, cid => $exp{A}->get_attribute('cid'));
 
-    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, collapseThreads => JSON::true }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/queryChanges', { calculateTotal => JSON::true, sinceQueryState => $state, collapseThreads => JSON::true }, "R1"]]);
     $state = $res->[0][1]{newQueryState};
 
     $self->assert_num_equals(2, $res->[0][1]{total});
@@ -56,7 +56,7 @@ sub test_email_querychanges_thread
     $talk->store('3', "+flags", '\\Deleted');
     $talk->expunge();
 
-    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, collapseThreads => JSON::true }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/queryChanges', { calculateTotal => JSON::true, sinceQueryState => $state, collapseThreads => JSON::true }, "R1"]]);
     $state = $res->[0][1]{newQueryState};
 
     $self->assert_num_equals(2, $res->[0][1]{total});
@@ -69,7 +69,7 @@ sub test_email_querychanges_thread
     $talk->store('4', "+flags", '\\Deleted');
     $talk->expunge();
 
-    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, collapseThreads => JSON::true }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/queryChanges', { calculateTotal => JSON::true, sinceQueryState => $state, collapseThreads => JSON::true }, "R1"]]);
 
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{added}}));

@@ -43,6 +43,7 @@ sub test_calendarevent_query_expandrecurrences_too_many
 
         my $res = $jmap->request([
             ['CalendarEvent/query', {
+                calculateTotal => JSON::true,
                 filter => { after => $after, before => $before },
                 expandRecurrences => JSON::true,
                 limit => 1,

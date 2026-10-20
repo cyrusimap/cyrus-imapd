@@ -30,6 +30,7 @@ sub test_calendarevent_query_unixepoch
     xlog $self, "Run squatter";
 
     $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" =>  "1969-01-01T00:00:00",
                         "before" => "1969-12-31T23:59:59",
@@ -38,6 +39,7 @@ sub test_calendarevent_query_unixepoch
     $self->assert_num_equals(1, $res->[0][1]{total});
 
     $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    calculateTotal => JSON::true,
                     "filter" => {
                         "after" =>  "1949-06-20T00:00:00",
                         "before" => "1968-10-14T00:00:00",

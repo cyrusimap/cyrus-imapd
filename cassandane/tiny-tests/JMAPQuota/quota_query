@@ -201,6 +201,8 @@ EOF
             ],
         };
 
+        $q->{calculateTotal} = JSON::true;
+
         if (defined $tc->{position}) {
             $q->{position} = $tc->{position};
         }

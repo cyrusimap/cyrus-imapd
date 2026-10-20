@@ -250,6 +250,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
         },
         "R1"
@@ -262,6 +263,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    => { name => "given1" }
         },
@@ -275,6 +277,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    => { name => "last" }
         },
@@ -287,6 +290,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    => { 'name/given' => "given1" }
         },
@@ -300,6 +304,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    => { 'name/surname' => "last" }
         },
@@ -312,6 +317,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    => { 'name/given' => "given4", 'name/surname' => "last" }
         },
@@ -325,6 +331,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    =>
               { operator => "AND", conditions => [ { 'name/surname' => "last" }, { 'name/given' => "given3" } ] }
@@ -339,6 +346,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    =>
               { operator => "OR", conditions => [ { 'name/given' => "given2" }, { 'name/given' => "given3" } ] }
@@ -352,6 +360,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    => { text => "some" }
         },
@@ -364,6 +373,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    => { nickname => "nick1" }
         },
@@ -377,6 +387,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    => { email => "example.com" }
         },
@@ -389,6 +400,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    => { note => "hello" }
         },
@@ -401,6 +413,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    => { inCardGroup => [ $group1, $group3 ] }
         },
@@ -412,6 +425,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             accountId => 'manifold',
             filter    => {
                 inCardGroup  => [ $group1, $group3 ],
@@ -427,6 +441,7 @@ sub test_card_query_shared
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
+            calculateTotal => JSON::true,
             filter    => { name => "last" },
             accountId => 'manifold',
             sort      => [ { property => "name/given" } ]
