@@ -2230,6 +2230,7 @@ static void setaddressbook_readprops(jmap_req_t *req,
         props->share.overwrite_acl = 1;
     }
     else {
+        props->sortOrder = -1;
         props->isSubscribed = -1;
         props->share.overwrite_acl = 1;
     }
