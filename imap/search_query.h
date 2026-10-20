@@ -5,6 +5,8 @@
 #ifndef __CYRUS_SEARCH_RESULT_H__
 #define __CYRUS_SEARCH_RESULT_H__
 
+#include <stdbool.h>
+
 #include "index.h"
 #include "mailbox.h"
 #include "message.h"
@@ -152,6 +154,9 @@ struct search_query {
     /* Highest createdmodseq and generation of the search index */
     modseq_t highest_createdmodseq;
     uint64_t index_generation;
+    /* Whether any subquery ran against the search index, which may have
+     * covered nothing, leaving highest_createdmodseq at 0 */
+    bool used_index;
 };
 
 extern search_query_t *search_query_new(struct index_state *state,

@@ -210,6 +210,9 @@ struct search_engine {
     int (*langstats)(const char *userid, ptrarray_t *lstats, size_t *total_docs);
     int (*can_match)(enum search_op matchop, enum search_part);
     int (*upgrade)(const char *userid);
+    modseq_t (*get_index_snapshot)(const char *mboxname,
+                                   const char *partition,
+                                   uint64_t *index_generation);
 };
 
 /* Returns the configured search engine */
@@ -246,6 +249,28 @@ extern void search_end_search(search_builder_t *);
  */
 extern modseq_t search_session_get_highest_createdmodseq(search_session_t *,
                                                          uint64_t *index_generation);
+
+/**
+ * Read the index snapshot that a new search session would see, without
+ * starting one.
+ *
+ * Unlike search_begin_session(), this takes no index locks and opens no
+ * search databases, so it never waits for an index update in progress.  The
+ * result may lag such an update, and a caller must treat it as a hint: it
+ * is suitable for deciding whether a result built from an earlier session
+ * is out of date, not for bounding a new search.
+ *
+ * @param mboxname          any mailbox of the account, in internal form
+ * @param partition         the partition of that mailbox
+ * @param index_generation  if not NULL, set to the index generation, with
+ *                          the same meaning as for
+ *                          search_session_get_highest_createdmodseq()
+ * @return the highest createdmodseq of the index, or 0 if there is no index
+ *         or the engine does not track one
+ */
+extern modseq_t search_get_index_snapshot(const char *mboxname,
+                                          const char *partition,
+                                          uint64_t *index_generation);
 
 #define SEARCH_UPDATE_INCREMENTAL (1<<0)
 #define SEARCH_UPDATE_NONBLOCKING (1<<1)

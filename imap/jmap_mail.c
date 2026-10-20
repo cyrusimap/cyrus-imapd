@@ -3447,6 +3447,7 @@ struct emailquery_result {
     int never_matches;
     modseq_t highest_createdmodseq;
     uint64_t index_generation;
+    bool read_index; /* read the search index, even if it covered nothing */
     size_t total_ceiling;
 
     void(*ensure)(struct emailquery *q, struct emailquery_cache *qc, size_t n);
@@ -4766,6 +4767,7 @@ struct emailquery_category {
     /* Index bound that the guidsets were read at, zero if none were read */
     modseq_t highest_createdmodseq;
     uint64_t index_generation;
+    bool read_index; /* the guidsets were read, even from an empty index */
 };
 
 static void emailquery_category_free(struct emailquery_category **catp)
@@ -4913,6 +4915,7 @@ static int emailquery_category_load_guidsets(struct emailquery_category *cat,
     cat->highest_createdmodseq =
         search_session_get_highest_createdmodseq(session,
                                                  &cat->index_generation);
+    cat->read_index = true;
     if (!cat->highest_createdmodseq) return 0;
 
     for (int i = 0; i < ptrarray_size(&cat->guidsets); i++) {
@@ -5044,27 +5047,40 @@ static void emailquery_category_offsets(const struct emailquery_category *cat,
  * This takes a read lock on the search index, so all subqueries have a
  * consistent view of the index. */
 struct emailquery_searchsession {
-    mbname_t *mbname;
     struct mailbox *mbox;
     search_session_t *session;
 };
 
-#define EMAILQUERY_SEARCHSESSION_INITIALIZER { NULL, NULL, NULL }
+#define EMAILQUERY_SEARCHSESSION_INITIALIZER { NULL, NULL }
 
-static int emailquery_searchsession_open(jmap_req_t *req,
-                                         struct emailquery_searchsession *ss)
+/* Look up the mailbox that locates the account's search index.
+ * The mailbox's partition decides where the index tiers live. */
+static int emailquery_index_mbentry(jmap_req_t *req, mbentry_t **mbentryp)
 {
     /* A search index belongs to a whole account, so any mailbox of the
      * account opens it. Use the upload folder, or the account root if that
      * folder does not exist. */
-    ss->mbname = mbname_from_userid(req->accountid);
-    mbname_push_boxes(ss->mbname, config_getstring(IMAPOPT_JMAPUPLOADFOLDER));
+    mbname_t *mbname = mbname_from_userid(req->accountid);
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_JMAPUPLOADFOLDER));
 
-    int r = mailbox_open_irl(mbname_intname(ss->mbname), &ss->mbox);
+    int r = mboxlist_lookup(mbname_intname(mbname), mbentryp, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        free(mbname_pop_boxes(ss->mbname));
-        r = mailbox_open_irl(mbname_intname(ss->mbname), &ss->mbox);
+        free(mbname_pop_boxes(mbname));
+        r = mboxlist_lookup(mbname_intname(mbname), mbentryp, NULL);
     }
+
+    mbname_free(&mbname);
+    return r;
+}
+
+static int emailquery_searchsession_open(jmap_req_t *req,
+                                         struct emailquery_searchsession *ss)
+{
+    mbentry_t *mbentry = NULL;
+
+    int r = emailquery_index_mbentry(req, &mbentry);
+    if (!r) r = mailbox_open_irl(mbentry->name, &ss->mbox);
+    mboxlist_entry_free(&mbentry);
     if (r) return r;
 
     ss->session = search_begin_session(ss->mbox, 0);
@@ -5078,7 +5094,6 @@ static void emailquery_searchsession_close(struct emailquery_searchsession *ss)
     search_end_session(ss->session);
     ss->session = NULL;
     mailbox_close(&ss->mbox);
-    mbname_free(&ss->mbname);
 }
 
 static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
@@ -5249,6 +5264,7 @@ static int emailquery_guidsearch(jmap_req_t *req,
 
     qr->highest_createdmodseq = gsq.highest_createdmodseq;
     qr->index_generation = gsq.index_generation;
+    qr->read_index = true;
 
     /* The guidsets and the matches are ours now, so release the read locks
      * on the search index and the mailbox that opened it before sorting a
@@ -5446,6 +5462,8 @@ static int emailquery_uidsearch(jmap_req_t *req,
     // Read highest created modseq and index generation for Xapian queries.
     qr->highest_createdmodseq = search->query->highest_createdmodseq;
     qr->index_generation = search->query->index_generation;
+    qr->read_index =
+        search->query->used_index || (q->category && q->category->read_index);
 
     /* A category sort reads its groupBy conditions from Xapian, so the
      * result must not reach past the index snapshot they were read at,
@@ -6004,26 +6022,30 @@ static struct emailquery_cache emailquery_cache = { 0 };
  * modseq, which indexing never changes, so this is the only way to notice that
  * the index caught up on emails the cached result had to leave out. A result
  * that never used the index has no snapshot to compare. We treat failure to
- * open the cache as another kind of moved-ness. */
+ * find the index counts as moved, so the result is rebuilt rather than trusted.
+ *
+ * This runs on every cache hit, so it reads the snapshot without a search
+ * session: no index locks, so it never waits for squatter. */
 static bool emailquery_cache_index_moved(jmap_req_t *req,
                                          struct emailquery_cache *qc)
 {
-    if (!qc->qr.highest_createdmodseq) {
+    if (!qc->qr.read_index) {
         return false;
     }
 
-    struct emailquery_searchsession ss = EMAILQUERY_SEARCHSESSION_INITIALIZER;
+    mbentry_t *mbentry = NULL;
     bool moved = true;
 
-    if (!emailquery_searchsession_open(req, &ss)) {
+    if (!emailquery_index_mbentry(req, &mbentry)) {
         uint64_t index_generation = 0;
         modseq_t highest_createdmodseq =
-            search_session_get_highest_createdmodseq(ss.session,
-                                                     &index_generation);
+            search_get_index_snapshot(mbentry->name,
+                                      mbentry->partition,
+                                      &index_generation);
         moved = highest_createdmodseq != qc->qr.highest_createdmodseq
                 || index_generation != qc->qr.index_generation;
     }
-    emailquery_searchsession_close(&ss);
+    mboxlist_entry_free(&mbentry);
 
     return moved;
 }
