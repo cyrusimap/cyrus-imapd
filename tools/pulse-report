@@ -1,0 +1,403 @@
+#!/usr/bin/env perl
+use v5.36;
+
+use Getopt::Long::Descriptive;
+use HTTP::Tiny;
+use JSON::PP qw(decode_json);
+use POSIX qw(strftime);
+use TOML::Tiny qw(from_toml);
+
+binmode *STDOUT, ':encoding(utf-8)';
+
+my ($opt, $usage) = describe_options(
+    'pulse %o',
+    [ 'token=s',    'GitHub API token (overrides $GITHUB_OAUTH_TOKEN)'      ],
+    [ 'days=i',     'number of days to look back',  { default => 7  } ],
+    [ 'config|c=s', 'path to TOML config file'                        ],
+    [ 'org=s',      'GitHub organization', { default => 'cyrusimap' } ],
+    [ 'repo=s',     'GitHub repository', { default => 'cyrus-imapd' } ],
+    [ 'output=s',   'write HTML to this file', { default => 'report.html', required => 1 } ],
+    [],
+    [ 'help|h',     'print usage and exit', { shortcircuit => 1 }     ],
+);
+
+$usage->die if $opt->help;
+
+my $token_raw = $opt->token // $ENV{GITHUB_OAUTH_TOKEN} // '';
+my $token;
+if ($token_raw =~ /^op(?:cli)?:/) {
+    require Password::OnePassword::OPCLI;
+    $token = Password::OnePassword::OPCLI->new->get_field($token_raw);
+} else {
+    $token = $token_raw;
+}
+$usage->die({ pre_text => "Need a GitHub token via --token or \$GITHUB_OAUTH_TOKEN\n" })
+    unless $token;
+
+my $config = {};
+if ($opt->config) {
+    open my $fh, '<', $opt->config
+        or die "Cannot open @{[$opt->config]}: $!\n";
+    local $/;
+    $config = eval { from_toml(<$fh>) }
+        or die "Error parsing @{[$opt->config]}: $@\n";
+}
+
+my $org  = $opt->org  // $config->{org}  or $usage->die({ pre_text => "Need --org or 'org' in config\n" });
+my $repo = $opt->repo // $config->{repo} or $usage->die({ pre_text => "Need --repo or 'repo' in config\n" });
+$repo = "$org/$repo" unless $repo =~ m{/};
+
+my $days = $opt->days;
+
+my %label_emoji;
+{
+    my $path = "$ENV{HOME}/.git-labels.json";
+    if (open my $fh, '<', $path) {
+        local $/;
+        my $data = eval { decode_json(<$fh>) } // {};
+        %label_emoji = %$data;
+    }
+}
+
+my $now         = time;
+my $since_epoch = $now - $days * 86400;
+my $since       = strftime('%Y-%m-%dT%H:%M:%SZ', gmtime($since_epoch));
+my $since_date  = strftime('%Y-%m-%d', gmtime($since_epoch));
+my $now_date    = strftime('%Y-%m-%d', gmtime($now));
+
+my $http = HTTP::Tiny->new(
+    default_headers => {
+        Authorization          => "Bearer $token",
+        Accept                 => 'application/vnd.github+json',
+        'X-GitHub-Api-Version' => '2022-11-28',
+        'User-Agent'           => 'cyrus-pulse/1.0',
+    },
+);
+
+# Fetch all pages from a paginated GitHub API endpoint.
+sub fetch_all ($start_url) {
+    my @items;
+    my $url = $start_url;
+    while ($url) {
+        warn "  GET $url\n";
+        my $resp = $http->get($url);
+        die "GitHub API error $resp->{status} $resp->{reason}\n$resp->{content}\n"
+            unless $resp->{success};
+        my $data = decode_json($resp->{content});
+        push @items, @$data;
+        $url = undef;
+        if (my $link = $resp->{headers}{link}) {
+            ($url) = $link =~ /<([^>]+)>;\s*rel="next"/;
+        }
+    }
+    return @items;
+}
+
+sub gh_fetch_one ($path) {
+    warn "  GET https://api.github.com$path\n";
+    my $resp = $http->get("https://api.github.com$path");
+    die "GitHub API error $resp->{status} $resp->{reason}\n$resp->{content}\n"
+        unless $resp->{success};
+    return decode_json($resp->{content});
+}
+
+# Fetch org info (avatar) and team members.
+warn "Fetching org info for $org...\n";
+my $org_data   = gh_fetch_one("/orgs/$org");
+my $org_avatar = $org_data->{avatar_url};
+
+warn "Fetching org members for $org...\n";
+my %team = map { $_->{login} => 1 }
+    fetch_all("https://api.github.com/orgs/$org/members?per_page=100");
+warn "  Found " . scalar(keys %team) . " members.\n";
+
+# Fetch all issues (including PRs) updated in the reporting period.
+# The GitHub issues API uses the "since" parameter to filter by updated_at,
+# which catches both newly-created issues and those with recent activity.
+warn "Fetching issues updated since $since...\n";
+my @all_issues = fetch_all(
+    "https://api.github.com/repos/$repo/issues"
+    . "?state=all&since=$since&per_page=100"
+);
+warn "  Found " . scalar(@all_issues) . " issues/PRs.\n";
+
+my %issue_by_num = map { $_->{number} => $_ } @all_issues;
+
+# Fetch all issue comments in the reporting period.
+warn "Fetching issue comments since $since...\n";
+my @all_comments = fetch_all(
+    "https://api.github.com/repos/$repo/issues/comments"
+    . "?since=$since&per_page=100"
+);
+warn "  Found " . scalar(@all_comments) . " comments.\n";
+
+# GitHub Apps (the merge-on-demand bot, dependabot, and so on) act as a user
+# whose type is "Bot".  Their comments are not activity by anyone.
+sub is_bot ($user) {
+    return ($user->{type} // '') eq 'Bot' || $user->{login} =~ /\[bot\]\z/;
+}
+
+# Build per-issue comment author lists.  Comments may reference issues older
+# than the reporting period that weren't returned by the issues query (e.g. a
+# dormant issue that received a new comment); fetch those individually so we
+# can include them in the right report section.
+my %issue_commenters; # issue_num => [login, login, ...]
+for my $comment (@all_comments) {
+    next if is_bot($comment->{user});
+    my ($num) = $comment->{issue_url} =~ m{/(\d+)$};
+    push @{ $issue_commenters{$num} }, $comment->{user}{login};
+    unless ($issue_by_num{$num}) {
+        warn "Fetching issue #$num (referenced in comments but not in issues list)...\n";
+        my $issue = gh_fetch_one("/repos/$repo/issues/$num");
+        $issue_by_num{$num} = $issue;
+    }
+}
+
+# Fetch branch names for PRs so we can detect Linear ticket references.
+# Done after %issue_by_num is fully populated (including any issues added
+# above from the comments scan).
+warn "Fetching PR branch names...\n";
+my %pr_branch; # issue_num => head branch name
+for my $num (sort { $a <=> $b } keys %issue_by_num) {
+    my $issue = $issue_by_num{$num};
+    next unless $issue->{pull_request};
+    my $pr = gh_fetch_one("/repos/$repo/pulls/$num");
+    $pr_branch{$num} = $pr->{head}{ref};
+}
+warn "  Done.\n";
+
+# Categorize each issue into report buckets.
+my (%opened_by_external, %has_external_comment, %merged_this_week);
+
+for my $num (keys %issue_by_num) {
+    my $issue = $issue_by_num{$num};
+
+    $opened_by_external{$num} = 1
+        if $issue->{created_at} ge $since
+        && !$team{ $issue->{user}{login} };
+
+    $has_external_comment{$num} = 1
+        if grep { !$team{$_} } @{ $issue_commenters{$num} // [] };
+
+    $merged_this_week{$num} = 1
+        if $issue->{pull_request}
+        && defined $issue->{pull_request}{merged_at}
+        && $issue->{pull_request}{merged_at} ge $since;
+}
+
+# "Team-only active": issues that had activity this week, but all of it from
+# team members (not shown in either of the external sections above).
+my %team_only_active;
+for my $num (keys %issue_by_num) {
+    next if $opened_by_external{$num} || $has_external_comment{$num};
+    my $issue  = $issue_by_num{$num};
+    my $active = ($issue->{created_at} ge $since)
+               || @{ $issue_commenters{$num} // [] };
+    $team_only_active{$num} = 1 if $active;
+}
+
+# ---- HTML generation -------------------------------------------------------
+
+sub html_escape ($str) {
+    $str //= '';
+    $str =~ s/&/&amp;/g;
+    $str =~ s/</&lt;/g;
+    $str =~ s/>/&gt;/g;
+    $str =~ s/"/&quot;/g;
+    return $str;
+}
+
+sub issue_label ($issue) {
+    return $issue->{pull_request} ? 'PR' : 'Issue';
+}
+
+sub issue_state ($issue) {
+    return 'merged'
+        if $issue->{pull_request} && $issue->{pull_request}{merged_at};
+    return $issue->{state}; # 'open' or 'closed'
+}
+
+sub issue_label_emojis ($issue) {
+    my @spans = map  { qq{<span title="$_->{name}">$label_emoji{$_->{name}}</span>} }
+                grep { exists $label_emoji{$_->{name}} }
+                @{ $issue->{labels} };
+    return '' unless @spans;
+    return qq{<span class="label-emojis">} . join('', @spans) . qq{</span>};
+}
+
+sub linear_link ($num) {
+    my $branch = $pr_branch{$num} // return '';
+    my ($ticket_num) = $branch =~ /^cyr-([0-9]+)/i;
+    return '' unless $ticket_num;
+    my $ticket = "CYR-$ticket_num";
+    my $url    = "https://linear.app/fastmail/issue/$ticket";
+    return qq{<a class="linear-ticket" href="$url">$ticket</a>};
+}
+
+sub render_issue ($issue) {
+    my $num   = $issue->{number};
+    my $title = html_escape($issue->{title});
+    my $url   = html_escape($issue->{html_url});
+    my $user  = html_escape($issue->{user}{login});
+    my $label = issue_label($issue);
+    my $state = issue_state($issue);
+
+    return qq{<li class="issue state-$state">}
+         . qq{<span class="label label-\L$label\E">$label</span> }
+         . qq{<a href="$url" class="num">#$num</a> }
+         . qq{<a href="$url" class="title">$title</a> }
+         . linear_link($num)
+         . issue_label_emojis($issue)
+         . qq{<span class="by">by }
+         . qq{<a class="username" href="https://github.com/$user">\@$user</a>}
+         . qq{</span>}
+         . qq{</li>\n};
+}
+
+sub render_section ($heading, $nums_href) {
+    my @issues = map  { $issue_by_num{$_} }
+                 sort { $b <=> $a }
+                 keys %$nums_href;
+
+    my $count = scalar @issues;
+    my $html  = qq{<section>\n}
+              . qq{<h2>$heading <span class="count">($count)</span></h2>\n};
+
+    if (@issues) {
+        $html .= qq{<ul class="issue-list">\n};
+        $html .= render_issue($_) for @issues;
+        $html .= qq{</ul>\n};
+    } else {
+        $html .= qq{<p class="empty">None this week.</p>\n};
+    }
+
+    $html .= qq{</section>\n};
+    return $html;
+}
+
+my $repo_url   = "https://github.com/$repo";
+my $repo_esc   = html_escape($repo);
+my $page_title = html_escape("$repo pulse: $since_date to $now_date");
+
+my $html = <<"END_HTML";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>$page_title</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #24292e;
+    background: #f6f8fa;
+    padding: 24px 16px;
+}
+.page { max-width: 900px; margin: 0 auto; }
+.report-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.org-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+h1 { font-size: 22px; margin-bottom: 2px; }
+h1 a { color: inherit; text-decoration: none; }
+h1 a:hover { text-decoration: underline; }
+.period { color: #586069; font-size: 13px; }
+section {
+    background: #fff;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+h2 {
+    font-size: 15px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e1e4e8;
+}
+.count { font-weight: normal; color: #586069; }
+ul.issue-list { list-style: none; }
+li.issue {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 6px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+li.issue:last-child { border-bottom: none; }
+.label {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    letter-spacing: 0.3px;
+}
+.label-pr    { background: #ddf4ff; color: #0366d6; }
+.label-issue { background: #dafbe1; color: #1a7f37; }
+li.state-merged .label-pr  { background: #f3e6ff; color: #6f42c1; }
+li.state-closed .label     { opacity: 0.55; }
+a { color: #0366d6; text-decoration: none; }
+a:hover { text-decoration: underline; }
+a.num   { color: #586069; flex-shrink: 0; }
+a.title { flex: 1 1 auto; }
+.by { color: #586069; font-size: 12px; flex-shrink: 0; }
+a.username { color: #0366d6; }
+a.linear-ticket {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: #e8e8fd;
+    color: #5e6ad2;
+    border: 1px solid #c7c7f5;
+    flex-shrink: 0;
+    letter-spacing: 0.3px;
+}
+a.linear-ticket:hover { background: #d5d5fa; text-decoration: none; }
+.label-emojis { flex-shrink: 0; }
+.empty { color: #586069; padding: 4px 0; }
+</style>
+</head>
+<body>
+<div class="page">
+<header class="report-header">
+<img class="org-avatar" src="$org_avatar" alt="$org logo">
+<div>
+<h1><a href="$repo_url">$repo_esc</a> &mdash; weekly pulse</h1>
+<p class="period">$since_date through $now_date</p>
+</div>
+</header>
+END_HTML
+
+$html .= render_section('Opened by community members', \%opened_by_external);
+$html .= render_section('Community member comments',   \%has_external_comment);
+$html .= render_section('Team-only activity',          \%team_only_active);
+$html .= render_section('Merged this week',            \%merged_this_week);
+
+$html .= <<'END_HTML';
+</div>
+</body>
+</html>
+END_HTML
+
+if ($opt->output eq '-') {
+    print $html;
+} else {
+    open my $fh, '>:encoding(utf-8)', $opt->output or die "Cannot open @{[$opt->output]}: $!\n";
+    print $fh $html;
+    close $fh;
+    warn "Report written to @{[$opt->output]}\n";
+}
