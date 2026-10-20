@@ -553,10 +553,24 @@ static void my_carddav_shutdown(void)
     carddav_done();
 }
 
+/* Is the target the default addressbook of the user in its path?  A shared
+ * collection belongs to its owner, not the path user, so never matches. */
+static bool is_default_addressbook(const struct request_target_t *tgt)
+{
+    if (!tgt->collection || tgt->resource || !tgt->userid || !tgt->mbentry)
+        return false;
+
+    char *defaultname = carddav_defaultaddressbook_mboxname(tgt->userid);
+    bool is_default = !strcmpsafe(defaultname, tgt->mbentry->name);
+
+    free(defaultname);
+    return is_default;
+}
+
 /* Determine allowed methods in CardDAV namespace */
 static unsigned long carddav_allow_cb(struct request_target_t *tgt) {
     unsigned long allow = calcarddav_allow_cb(tgt);
-    if (tgt->collection && !tgt->resource && !strcmp(tgt->collection, DEFAULT_ADDRBOOK "/"))
+    if (is_default_addressbook(tgt))
         allow &= ~ALLOW_DELETE;
 
     return allow;
@@ -571,9 +585,7 @@ static int carddav_parse_path(const char *path, struct request_target_t *tgt,
                                   resultstr);
     if (r) return r;
 
-    if (!tgt->resource &&
-        !strncmpsafe(tgt->collection,
-                     DEFAULT_ADDRBOOK "/", strlen(DEFAULT_ADDRBOOK)+1)) {
+    if (is_default_addressbook(tgt)) {
         /* Can't delete default addressbook */
         tgt->allow &= ~ALLOW_DELETE;
     }
