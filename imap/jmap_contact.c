@@ -2209,6 +2209,7 @@ struct setaddressbook_props {
     const char *description;
     int sortOrder;
     int isSubscribed;
+    bool is_create;
     struct {
         json_t *With;
         int overwrite_acl;
@@ -2224,6 +2225,7 @@ static void setaddressbook_readprops(jmap_req_t *req,
     int is_create = (mboxname == NULL);
 
     memset(props, 0, sizeof(struct setaddressbook_props));
+    props->is_create = is_create;
 
     if (is_create) {
         props->isSubscribed = 1;
@@ -2409,7 +2411,17 @@ static int setaddressbook_writeprops(jmap_req_t *req,
         /* Update subscription database */
         r = mboxlist_changesub(mboxname, req->userid, req->authstate,
                                props->isSubscribed, 0, /*notify*/1, /*silent*/0);
-
+        if (r == IMAP_MAILBOX_NONEXISTENT && props->is_create) {
+            /* creating in another account: the creator may not be able to
+             * see the new addressbook yet, so there is nothing to subscribe */
+            r = 0;
+        }
+        else if (r) {
+            xsyslog_ev(LOG_ERR, "jmap.addressbook.subscription.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox), lf_err("error", r));
+        }
+    }
+    if (!r && props->isSubscribed >= 0) {
         /* Set invite status for CalDAV */
         buf_setcstr(&val, props->isSubscribed ? "invite-accepted" : "invite-declined");
         static const char *invite_annot =
