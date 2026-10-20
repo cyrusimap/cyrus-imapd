@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+use Encode qw(encode_utf8);
+
+sub test_searchsnippet_preview_size
+    :needs_search_xapian
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    # Markup and entities make the preview longer than its source text
+    my $body = join(' ', ("zpreview \N{U+E9}&<> \N{U+2603}") x 40);
+    $self->make_message("preview",
+        mime_charset => 'utf-8',
+        body => encode_utf8($body),
+    ) or die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $filter = { text => 'zpreview' };
+    my $res = $jmap->request([
+        [ 'Email/query', { filter => $filter }, 'R1' ],
+        [ 'SearchSnippet/get', {
+            filter => $filter,
+            '#emailIds' => { resultOf => 'R1', name => 'Email/query',
+                             path => '/ids' },
+        }, 'R2' ],
+    ]);
+    my $preview = $res->sentence_named('SearchSnippet/get')
+                      ->arguments->{list}[0]{preview};
+    $self->assert_not_null($preview);
+    $self->assert_matches(qr{<mark>zpreview</mark>}, $preview);
+
+    # RFC 8621 5: preview MUST NOT be bigger than 255 octets
+    my $octets = length(encode_utf8($preview));
+    $self->assert($octets <= 255, "preview is $octets octets");
+
+    # Cut on a markup boundary, with every <mark> closed
+    my $open  = () = $preview =~ /<mark>/g;
+    my $close = () = $preview =~ m{</mark>}g;
+    $self->assert_num_equals($open, $close);
+    $self->assert_matches(qr{\.\.\.$}, $preview);
+    (my $text = $preview) =~ s{(?:</mark>)?\.\.\.$}{};
+    $self->assert_does_not_match(qr{&[a-z]*$|<[^>]*$}, $text);
+}

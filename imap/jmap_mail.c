@@ -7318,6 +7318,109 @@ struct snippet_receiver {
     strarray_t *partids;
 };
 
+/* RFC 8621 5: preview MUST NOT be bigger than 255 octets.  Cut on a
+ * character, entity or markup boundary, close any open <mark>, and
+ * drop leading text rather than lose the first match. */
+static char *_snippet_clip_preview(const char *s)
+{
+    static const size_t max = 255;
+    static const char mark[] = "<mark>";
+    static const char endmark[] = "</mark>";
+    static const char omit[] = "...";
+    const size_t marklen = sizeof(mark) - 1;
+    const size_t endmarklen = sizeof(endmark) - 1;
+    const size_t omitlen = sizeof(omit) - 1;
+
+    size_t len = strlen(s);
+    if (len <= max) {
+        return xstrdup(s);
+    }
+
+    /* Token i spans off[i]..off[i+1]; in_mark[i] is the state before it */
+    size_t *off = xmalloc((len + 1) * sizeof(size_t));
+    bool *in_mark = xmalloc((len + 1) * sizeof(bool));
+    size_t n = 0;
+    size_t first_mark = SIZE_MAX, first_endmark = SIZE_MAX;
+
+    off[0] = 0;
+    in_mark[0] = false;
+    for (const char *p = s; *p; n++) {
+        size_t toklen = 1;
+        bool mark_after = in_mark[n];
+
+        if (!strncmp(p, mark, marklen)) {
+            toklen = marklen;
+            mark_after = true;
+            if (first_mark == SIZE_MAX) {
+                first_mark = n;
+            }
+        }
+        else if (!strncmp(p, endmark, endmarklen)) {
+            toklen = endmarklen;
+            mark_after = false;
+            if (first_mark != SIZE_MAX && first_endmark == SIZE_MAX) {
+                first_endmark = n;
+            }
+        }
+        else if (*p == '&') {
+            /* Entities from the snippet generator are short */
+            for (size_t i = 1; i <= 10 && p[i]; i++) {
+                if (p[i] == ';') {
+                    toklen = i + 1;
+                    break;
+                }
+            }
+        }
+        else {
+            while ((p[toklen] & 0xc0) == 0x80) {
+                toklen++;
+            }
+        }
+
+        p += toklen;
+        off[n + 1] = p - s;
+        in_mark[n + 1] = mark_after;
+    }
+
+    /* Tokens before this index must be in the preview */
+    size_t keep = first_endmark != SIZE_MAX ? first_endmark + 1
+                  : first_mark != SIZE_MAX  ? first_mark + 1
+                                            : 0;
+
+    /* The window starts at or before first_mark, so never inside a mark */
+    size_t start, end;
+    for (start = 0;; start++) {
+        size_t pre = start ? omitlen : 0;
+        for (end = start; end < n; end++) {
+            size_t need = pre + off[end + 1] - off[start]
+                          + (in_mark[end + 1] ? endmarklen : 0)
+                          + (end + 1 < n ? omitlen : 0);
+            if (need > max) {
+                break;
+            }
+        }
+        if (end >= keep || start >= first_mark) {
+            break;
+        }
+    }
+
+    struct buf buf = BUF_INITIALIZER;
+    if (start) {
+        buf_appendcstr(&buf, omit);
+    }
+    buf_appendmap(&buf, s + off[start], off[end] - off[start]);
+    if (in_mark[end]) {
+        buf_appendcstr(&buf, endmark);
+    }
+    if (end < n) {
+        buf_appendcstr(&buf, omit);
+    }
+
+    free(off);
+    free(in_mark);
+    return buf_release(&buf);
+}
+
 static int _snippet_get_cb(struct mailbox *mbox __attribute__((unused)),
                            uint32_t uid __attribute__((unused)),
                            int part, const char *part_id,
@@ -7330,7 +7433,9 @@ static int _snippet_get_cb(struct mailbox *mbox __attribute__((unused)),
     }
     else if (part == SEARCH_PART_BODY ||
                 part == SEARCH_PART_ATTACHMENTBODY) {
-        json_object_set_new(sr->snippet, "preview", json_string(s));
+        char *preview = _snippet_clip_preview(s);
+        json_object_set_new(sr->snippet, "preview", json_string(preview));
+        free(preview);
     }
     else if (sr->partids && part == SEARCH_PART_ATTACHMENTNAME && part_id) {
         json_t *jattachments = json_object_get(sr->snippet, "attachments");
@@ -7637,18 +7742,23 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
         if (!r) r = index_getsearchtext(msg, jpartids ? &partids : NULL, srx,
                                         INDEX_GETSEARCHTEXT_SNIPPET);
         if (!r || r == IMAP_OK_COMPLETED) {
-            // prune attachments
             json_t *jattachments = json_object_get(snippet, "attachments");
-            json_t *jmatch;
-            const char *part_id;
-            void *tmp;
-            json_object_foreach_safe(jattachments, tmp, part_id, jmatch){
-                if (!strarray_contains(&partids, part_id)) {
-                    json_object_del(jattachments, part_id);
-                }
+            if (!jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+                json_object_del(snippet, "attachments");
             }
-            if (!json_object_size(jattachments)) {
-                json_object_set_new(snippet, "attachments", json_null());
+            else {
+                // prune attachments
+                json_t *jmatch;
+                const char *part_id;
+                void *tmp;
+                json_object_foreach_safe (jattachments, tmp, part_id, jmatch) {
+                    if (!strarray_contains(&partids, part_id)) {
+                        json_object_del(jattachments, part_id);
+                    }
+                }
+                if (!json_object_size(jattachments)) {
+                    json_object_set_new(snippet, "attachments", json_null());
+                }
             }
             json_array_append_new(*snippets, json_deep_copy(snippet));
             r = 0;
@@ -8362,7 +8472,32 @@ static void _email_init_default_props(hash_table *props)
     }
 }
 
-static int _email_getargs_parse(jmap_req_t *req __attribute__((unused)),
+/* RFC 8621 4.1.4 EmailBodyPart properties, plus Cyrus extensions */
+static bool _email_is_bodyprop(jmap_req_t *req, const char *name)
+{
+    static const char *const props[] = { "partId",   "blobId",      "size",
+                                         "headers",  "name",        "type",
+                                         "charset",  "disposition", "cid",
+                                         "language", "location",    "subParts",
+                                         NULL };
+    static const char *const ext_props[] = { "imageSize", "isDeleted", NULL };
+
+    for (const char *const *p = props; *p; p++) {
+        if (!strcmp(name, *p)) {
+            return true;
+        }
+    }
+    if (jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+        for (const char *const *p = ext_props; *p; p++) {
+            if (!strcmp(name, *p)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static int _email_getargs_parse(jmap_req_t *req,
                                 struct jmap_parser *parser,
                                 const char *key,
                                 json_t *arg,
@@ -8380,7 +8515,15 @@ static int _email_getargs_parse(jmap_req_t *req __attribute__((unused)),
             args->bodyprops = xzmalloc(sizeof(hash_table));
             construct_hash_table(args->bodyprops, json_array_size(arg) + 1, 0);
             json_array_foreach(arg, i, val) {
-                hash_insert(json_string_value(val), (void*)1, args->bodyprops);
+                const char *name = json_string_value(val);
+                if (strncmp(name, "header:", 7)
+                    && !_email_is_bodyprop(req, name))
+                {
+                    jmap_parser_push_index(parser, "bodyProperties", i, name);
+                    jmap_parser_invalid(parser, NULL);
+                    jmap_parser_pop(parser);
+                }
+                hash_insert(name, (void *) 1, args->bodyprops);
             }
         }
         /* header:Xxx properties */
@@ -8404,8 +8547,9 @@ static int _email_getargs_parse(jmap_req_t *req __attribute__((unused)),
     }
 
     /* maxBodyValueBytes */
-    else if (!strcmp(key, "maxBodyValueBytes") &&
-             json_is_integer(arg) && json_integer_value(arg) > 0) {
+    else if (!strcmp(key, "maxBodyValueBytes") && json_is_integer(arg)
+             && json_integer_value(arg) >= 0)
+    {
         args->max_body_bytes = json_integer_value(arg);
     }
 
@@ -9459,6 +9603,24 @@ static json_t * _email_get_bodyvalue(struct body *part,
             &is_encoding_problem);
     if (!raw) goto done;
 
+    /* An unknown charset falls back to us-ascii in the body structure,
+     * while a known one is recorded as named in the charset parameter */
+    for (const struct param *param = part->params; param; param = param->next) {
+        if (!strcasecmpsafe(param->attribute, "charset") && param->value
+            && *param->value)
+        {
+            if (!strcasecmpsafe(param->value, part->charset_id)) {
+                break;
+            }
+            charset_t cs = charset_lookupname(param->value);
+            if (cs == CHARSET_UNKNOWN_CHARSET) {
+                is_encoding_problem = 1;
+            }
+            charset_free(&cs);
+            break;
+        }
+    }
+
     /* In-place remove CR characters from buffer */
     size_t i, j, rawlen = strlen(raw);
     for (i = 0, j = 0; j < rawlen; j++) {
@@ -10135,6 +10297,25 @@ static int _email_parseargs_parse(jmap_req_t *req,
     return _email_getargs_parse(req, parser, key, arg, args->getargs);
 }
 
+/* RFC 8621 4.9: a parsed Email has null id, mailboxIds, keywords and
+ * receivedAt.  The rest are Cyrus extensions about the stored copies. */
+static const char *const _email_parse_nullprops[] = {
+    "id",         "mailboxIds",   "keywords", "receivedAt",
+    "addedDates", "removedDates", "snoozed",  NULL
+};
+
+static void _email_parse_copyprop(const char *name,
+                                  void *data __attribute__((unused)),
+                                  void *rock)
+{
+    for (const char *const *p = _email_parse_nullprops; *p; p++) {
+        if (!strcmp(name, *p)) {
+            return;
+        }
+    }
+    hash_insert(name, (void *) 1, (hash_table *) rock);
+}
+
 static int jmap_email_parse(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -10168,6 +10349,11 @@ static int jmap_email_parse(jmap_req_t *req)
             _email_init_default_props(getargs.bodyprops);
         }
     }
+
+    /* A stored message is parsed without its mailbox metadata */
+    hash_table blobprops = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&blobprops, getargs.props->count + 1, 0);
+    hash_enumerate(getargs.props, _email_parse_copyprop, &blobprops);
 
     /* Process request */
     json_t *jval;
@@ -10227,7 +10413,17 @@ static int jmap_email_parse(jmap_req_t *req)
             _email_from_rfc822body(req, &getargs, mr, part, &email);
         }
         else if (mr) {
+            hash_table *props = getargs.props;
+            getargs.props = &blobprops;
             _email_from_record(req, &getargs, mr, &email);
+            getargs.props = props;
+            for (const char *const *p = _email_parse_nullprops; email && *p;
+                 p++)
+            {
+                if (jmap_wantprop(props, *p)) {
+                    json_object_set_new(email, *p, json_null());
+                }
+            }
         }
 
         if (email) {
@@ -10241,6 +10437,8 @@ static int jmap_email_parse(jmap_req_t *req)
         message_free_body(body);
         free(body);
     }
+
+    free_hash_table(&blobprops, NULL);
 
     /* Build response */
     jmap_ok(req, jmap_parse_reply(&parse));

@@ -1,0 +1,24 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_max_body_value_bytes_zero
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    $self->make_message("foo", body => "good") or die;
+    my $id = $jmap->request([[ 'Email/query', {} ]])
+                  ->single_sentence('Email/query')->arguments->{ids}[0];
+
+    # RFC 8621 4.2: maxBodyValueBytes 0 means no truncation
+    my $email = $jmap->request([[ 'Email/get', {
+        ids => [ $id ],
+        properties => [ 'bodyValues' ],
+        fetchAllBodyValues => JSON::true,
+        maxBodyValueBytes  => 0,
+    } ]])->single_sentence('Email/get')->arguments->{list}[0];
+
+    $self->assert_cmp_deeply({
+        1 => superhashof({ value => "good", isTruncated => JSON::false }),
+    }, $email->{bodyValues});
+}

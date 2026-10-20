@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+use Encode qw(encode_utf8);
+
+sub test_searchsnippet_preview_keeps_match
+    :needs_search_xapian
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    # Entities push the preview past 255 octets, with the match at its end
+    my $body = join(' ', ("filler & <text>") x 40) . " zendmatch.";
+    $self->make_message("preview", body => $body) or die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $filter = { text => 'zendmatch' };
+    my $res = $jmap->request([
+        [ 'Email/query', { filter => $filter }, 'R1' ],
+        [ 'SearchSnippet/get', {
+            filter => $filter,
+            '#emailIds' => { resultOf => 'R1', name => 'Email/query',
+                             path => '/ids' },
+        }, 'R2' ],
+    ]);
+    my $preview = $res->sentence_named('SearchSnippet/get')
+                      ->arguments->{list}[0]{preview};
+    $self->assert_not_null($preview);
+
+    my $octets = length(encode_utf8($preview));
+    $self->assert($octets <= 255, "preview is $octets octets");
+    $self->assert_matches(qr{^\.\.\..*<mark>zendmatch</mark>}, $preview);
+}

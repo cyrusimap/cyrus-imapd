@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_parse_null_metadata
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    $self->make_message("parse me") or die;
+    my $email = $jmap->request([[ 'Email/query', {} ]])
+                      ->single_sentence('Email/query')->arguments->{ids}[0];
+    my $blobId = $jmap->request([[ 'Email/get', {
+        ids => [ $email ], properties => [ 'blobId' ],
+    } ]])->single_sentence('Email/get')->arguments->{list}[0]{blobId};
+
+    # RFC 8621 4.9: a parsed blob has null metadata
+    my $parsed = $jmap->request([[ 'Email/parse', {
+        blobIds => [ $blobId ],
+        properties => [ qw(
+            id mailboxIds keywords receivedAt addedDates removedDates subject
+        ) ],
+    } ]])->single_sentence('Email/parse')->arguments->{parsed}{$blobId};
+
+    $self->assert_cmp_deeply({
+        id           => undef,
+        mailboxIds   => undef,
+        keywords     => undef,
+        receivedAt   => undef,
+        addedDates   => undef,
+        removedDates => undef,
+        subject      => 'parse me',
+    }, $parsed);
+}
