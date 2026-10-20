@@ -292,38 +292,34 @@ static char *mboxevent_mailbox_specialuse(const struct mailbox *mailbox)
     return buf_release(&attrib);
 }
 
-static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
+/* Return true if any of the mailbox's special-use attributes, given as the
+ * value of its /specialuse annotation, is in the event_exclude_specialuse
+ * list.  A NULL value means the mailbox has none. */
+static bool mboxevent_specialuse_excluded(const char *specialuse)
 {
-    char *attrib = NULL;
-    strarray_t *specialuse = NULL;
-    int enabled = 1;
-    int i = 0;
+    if (!specialuse) return false;
 
-    init_internal();
-
-    if (!enable_subfolder && !mboxname_isusermailbox(mailbox_name(mailbox), 1)) {
-        enabled = 0;
-        goto done;
-    }
-
-    /* test if the mailbox has a special-use attribute in the exclude list */
-    if (strarray_size(excluded_specialuse) > 0) {
-        attrib = mboxevent_mailbox_specialuse(mailbox);
-        specialuse = strarray_split(attrib, NULL, 0);
-
-        for (i = 0; i < strarray_size(specialuse) ; i++) {
-            const char *attribute = strarray_nth(specialuse, i);
-            if (strarray_contains(excluded_specialuse, attribute)) {
-                enabled = 0;
-                goto done;
-            }
+    bool excluded = false;
+    strarray_t *uses = strarray_split(specialuse, NULL, 0);
+    for (int i = 0; i < strarray_size(uses); i++) {
+        if (strarray_contains(excluded_specialuse, strarray_nth(uses, i))) {
+            excluded = true;
+            break;
         }
     }
+    strarray_free(uses);
+    return excluded;
+}
 
-done:
-    strarray_free(specialuse);
-    free(attrib);
-    return enabled;
+static bool mboxevent_enabled_for_mailbox(const struct mailbox *mailbox,
+                                          const char *specialuse)
+{
+    init_internal();
+
+    if (!enable_subfolder && !mboxname_isusermailbox(mailbox_name(mailbox), 1))
+        return false;
+
+    return !mboxevent_specialuse_excluded(specialuse);
 }
 
 EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
@@ -1818,8 +1814,16 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     if (event->params[EVENT_URI].filled)
         return;
 
+    /* one annotation lookup for both the exclusion check and the
+     * specialUse event param */
+    bool want_specialuse = mboxevent_expected_param(event->type, EVENT_SPECIAL_USE);
+    char *specialuse = NULL;
+    if (want_specialuse || strarray_size(excluded_specialuse))
+        specialuse = mboxevent_mailbox_specialuse(mailbox);
+
     /* verify if event notification should be disabled for this mailbox  */
-    if (!mboxevent_enabled_for_mailbox(mailbox)) {
+    if (!mboxevent_enabled_for_mailbox(mailbox, specialuse)) {
+        free(specialuse);
         event->type = EVENT_CANCELLED;
         return;
     }
@@ -1852,12 +1856,10 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox_acl(mailbox)));
     FILL_STRING_PARAM(event, EVENT_VISIBLE_USERS, mailbox_visible_users(mailbox));
 
-    /* add the mailbox's special-use attributes if it has any */
-    if (mboxevent_expected_param(event->type, EVENT_SPECIAL_USE)) {
-        char *specialuse = mboxevent_mailbox_specialuse(mailbox);
-        if (specialuse)
-            FILL_STRING_PARAM(event, EVENT_SPECIAL_USE, specialuse);
-    }
+    if (want_specialuse && specialuse)
+        FILL_STRING_PARAM(event, EVENT_SPECIAL_USE, specialuse);
+    else
+        free(specialuse);
 
     /* mailbox related events also require mailboxID and mailboxUniqueId */
     if (event->type & MAILBOX_EVENTS) {
