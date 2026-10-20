@@ -1,0 +1,28 @@
+Description:
+
+The dblookup email2uids, email2details and uid2groups endpoints now search
+the addressbook marked isDefault when the request names no Mailbox, instead
+of the addressbook called "Default".  ContactCard/set likewise files a
+new card with no addressBookIds into the addressbook marked isDefault, and
+CardDAV refuses to DELETE that addressbook rather than the one called
+"Default".
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

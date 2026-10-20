@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+# A ContactCard created without addressBookIds goes into the addressbook
+# marked isDefault, not the one that happens to be called Default.
+sub test_card_set_create_default_addressbook
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my sub create_card ($desc, $arg) {
+        my $res = $jmap->request([[
+            'ContactCard/set', {
+                create => {
+                    c => {
+                        '@type' => 'Card',
+                        version => '1.0',
+                        name    => { full => $arg->{name} },
+                    },
+                },
+            },
+        ]])->single_sentence('ContactCard/set')->arguments;
+
+        my $card = $user->contacts->get($res->{created}{c}{id});
+
+        $self->assert_cmp_deeply(
+            { $arg->{addressbook}->id => JSON::true },
+            $card->addressBookIds,
+            $desc,
+        );
+    }
+
+    my $old_default = $user->addressbooks->default;
+    my $new_default = $user->addressbooks->create({ name => 'foo' });
+
+    create_card("before the switch, card lands in old default", {
+        name => 'Old Default', addressbook => $old_default,
+    });
+
+    xlog $self, "make the new addressbook the default";
+    my $res = $jmap->request([[
+        'AddressBook/set', { onSuccessSetIsDefault => $new_default->id },
+    ]])->single_sentence('AddressBook/set')->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({ $new_default->id => { isDefault => JSON::true } }),
+        $res->{updated},
+    );
+
+    create_card("after the switch, card lands in new default", {
+        name => 'New Default', addressbook => $new_default,
+    });
+}

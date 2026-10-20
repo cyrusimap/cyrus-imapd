@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+# CardDAV refuses to DELETE the addressbook marked isDefault, whatever it
+# is called, and permits deleting the one called Default once it isn't.
+sub test_carddav_delete_default_addressbook
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    my $carddav = $user->carddav;
+
+    my %headers = (Authorization => $carddav->auth_header);
+
+    my sub assert_delete ($desc, $arg) {
+        my $href = $carddav->request_url($arg->{path});
+        my $res = $carddav->ua->request('DELETE', $href, { headers => \%headers });
+        $self->assert_num_equals($arg->{status}, $res->{status}, $desc);
+    }
+
+    my $old_default = $user->addressbooks->default;
+
+    $carddav->NewAddressBook('foo');
+    my $res = $jmap->request([[ 'AddressBook/get', {} ]])
+                   ->single_sentence('AddressBook/get')->arguments;
+    my ($new_default) = grep {; $_->{id} ne $old_default->id } $res->{list}->@*;
+    $self->assert_not_null($new_default);
+
+    assert_delete("Default is protected while it is the default", {
+        path => 'Default', status => 405,
+    });
+
+    xlog $self, "make the new addressbook the default";
+    $res = $jmap->request([[
+        'AddressBook/set', { onSuccessSetIsDefault => $new_default->{id} },
+    ]])->single_sentence('AddressBook/set')->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({ $new_default->{id} => { isDefault => JSON::true } }),
+        $res->{updated},
+    );
+
+    assert_delete("the new default is protected", {
+        path => 'foo', status => 405,
+    });
+
+    assert_delete("Default may be deleted once it is not the default", {
+        path => 'Default', status => 204,
+    });
+}

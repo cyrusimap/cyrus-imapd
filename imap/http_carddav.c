@@ -489,6 +489,26 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
     return r;
 }
 
+EXPORTED char *carddav_defaultaddressbook_mboxname(const char *userid)
+{
+    struct buf buf = BUF_INITIALIZER;
+    char *cardhomename = carddav_mboxname(userid, NULL);
+
+    int r = annotatemore_lookupmask(cardhomename,
+                                    DEFAULT_ADDRBOOK_ANNOT, "", &buf);
+
+    if (r || !buf.len) {
+        mbname_t *mbname = mbname_from_intname(cardhomename);
+
+        mbname_push_boxes(mbname, DEFAULT_ADDRBOOK);
+        buf_setcstr(&buf, mbname_intname(mbname));
+        mbname_free(&mbname);
+    }
+
+    free(cardhomename);
+    return buf_release(&buf);
+}
+
 static int my_carddav_auth(const char *userid)
 {
     if (httpd_userisadmin || httpd_userisanonymous ||
@@ -533,10 +553,24 @@ static void my_carddav_shutdown(void)
     carddav_done();
 }
 
+/* Is the target the default addressbook of the user in its path?  A shared
+ * collection belongs to its owner, not the path user, so never matches. */
+static bool is_default_addressbook(const struct request_target_t *tgt)
+{
+    if (!tgt->collection || tgt->resource || !tgt->userid || !tgt->mbentry)
+        return false;
+
+    char *defaultname = carddav_defaultaddressbook_mboxname(tgt->userid);
+    bool is_default = !strcmpsafe(defaultname, tgt->mbentry->name);
+
+    free(defaultname);
+    return is_default;
+}
+
 /* Determine allowed methods in CardDAV namespace */
 static unsigned long carddav_allow_cb(struct request_target_t *tgt) {
     unsigned long allow = calcarddav_allow_cb(tgt);
-    if (tgt->collection && !tgt->resource && !strcmp(tgt->collection, DEFAULT_ADDRBOOK "/"))
+    if (is_default_addressbook(tgt))
         allow &= ~ALLOW_DELETE;
 
     return allow;
@@ -551,9 +585,7 @@ static int carddav_parse_path(const char *path, struct request_target_t *tgt,
                                   resultstr);
     if (r) return r;
 
-    if (!tgt->resource &&
-        !strncmpsafe(tgt->collection,
-                     DEFAULT_ADDRBOOK "/", strlen(DEFAULT_ADDRBOOK)+1)) {
+    if (is_default_addressbook(tgt)) {
         /* Can't delete default addressbook */
         tgt->allow &= ~ALLOW_DELETE;
     }
