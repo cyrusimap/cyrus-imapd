@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Slurp;
+use File::Copy;
+
+# A "0." message file is a stray like any other: -K removes it, and a dry
+# run reports the removal without making it
+sub test_stray_files_uid_zero ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->{store}->write_message($self->{gen}->generate(subject => "subject"));
+    $self->{store}->write_end();
+    $imaptalk->select("INBOX") || die;
+
+    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
+    copy("$dir/1.", "$dir/0.") or die "copy: $!";
+
+    my $basedir = $self->{instance}->get_basedir();
+    my sub reconstruct (@args) {
+        my $out = "$basedir/reconstruct.out";
+        $self->{instance}->run_command(
+            { cyrus => 1, redirects => { stdout => $out } },
+            'reconstruct', @args, 'user.cassandane');
+        return slurp_file($out);
+    }
+
+    $self->assert_matches(qr/uid 0 not in index - leaving it/, reconstruct());
+    $self->assert_file_test("$dir/0.", '-f');
+
+    $self->{instance}->getsyslog();
+    $self->assert_matches(qr/uid 0 not in index - removing/,
+                          reconstruct('-n', '-K'));
+    $self->assert_syslog_matches($self->{instance},
+        qr/event=reconstruct\.stray\.removed .*msg\.imapuid=0 reconstruct\.dryrun=1/);
+    $self->assert_file_test("$dir/0.", '-f');
+
+    $self->assert_matches(qr/uid 0 not in index - removing/, reconstruct('-K'));
+    $self->assert_not_file_test("$dir/0.", '-e');
+    $self->assert_file_test("$dir/1.", '-f');
+    $self->assert_does_not_match(qr/not in index/, reconstruct());
+    $self->assert_cmp_deeply([1], [$imaptalk->search('all')->@*]);
+}
