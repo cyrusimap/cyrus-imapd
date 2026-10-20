@@ -615,8 +615,10 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPSTATES) &&
                (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
     case EVENT_SPECIAL_USE:
+        /* MailboxCreate can't give us this one, because the value isn't
+         * available yet. */
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SPECIALUSE) &&
-               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
+               (type & ((MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS) & ~EVENT_MAILBOX_CREATE));
     case EVENT_OLD_SPECIAL_USE:
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SPECIALUSE) &&
                (type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE|EVENT_MAILBOX_RENAME));
