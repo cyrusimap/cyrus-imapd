@@ -43,18 +43,13 @@ static const char rfc5322_separators[256] = {
 
 enum {
     Alpha = 1,              /* Alphabet */
-    UAlpha = 2,             /* Uppercase Alphabet */
-    LAlpha = 4,             /* Lowercase Alphabet */
-    Digit = 8,              /* Digits/Numbers */
-    TZSign = 16,            /* Timezone sign +/- */
+    Digit = 8               /* Digits/Numbers */
 };
 
 static const long rfc5322_usascii_charset[257] = {
     ['0' + 1 ... '9' + 1] = Digit,
-    ['A' + 1 ... 'Z' + 1] = Alpha | UAlpha,
-    ['a' + 1 ... 'z' + 1] = Alpha | LAlpha,
-    ['+' + 1] = TZSign,
-    ['-' + 1] = TZSign
+    ['A' + 1 ... 'Z' + 1] = Alpha,
+    ['a' + 1 ... 'z' + 1] = Alpha
 };
 
 struct rfc5322dtbuf {
@@ -1021,22 +1016,6 @@ static inline int to_int(char *str, int len)
     return num;
 }
 
-static inline int to_upper(char ch)
-{
-    if (rfc5322_usascii_charset[ch + 1] & LAlpha)
-        ch =  ch - 32;
-
-    return ch;
-}
-
-static inline int to_lower(char ch)
-{
-    if (rfc5322_usascii_charset[ch + 1] & UAlpha)
-        ch = ch + 32;
-
-    return ch;
-}
-
 /* This code appears to be buggy, because it appears to be conflating return
  * value of 0 to mean "+0000" (or "UT" or "Z") with 0 to mean "parse failed".
  * It isn't. RFC 5322 says:
@@ -1056,13 +1035,14 @@ static inline int to_lower(char ch)
  *    in a local time zone other than Universal Time and that the date-time
  *    contains no information about the local time zone.
  */
+
 static int compute_tzoffset(char *str, int len, int sign)
 {
     int offset = 0;
 
     if (len == 1) {         /* Military timezone */
         int ch;
-        ch = to_upper(str[0]);
+        ch = TOUPPER(str[0]);
         if (ch < 'A')
             return 0;
         if (ch < 'J')
@@ -1078,25 +1058,25 @@ static int compute_tzoffset(char *str, int len, int sign)
     }
 
     if (len == 2 &&
-        to_upper(str[0]) == 'U' &&
-        to_upper(str[1]) == 'T') {         /* Universal Time zone (UT) */
+        TOUPPER(str[0]) == 'U' &&
+        TOUPPER(str[1]) == 'T') {         /* Universal Time zone (UT) */
         return 0;
     }
 
     if (len == 3) {
         const char *p;
 
-        if (to_upper(str[2]) != 'T')
+        if (TOUPPER(str[2]) != 'T')
             return 0;
 
-        p = strchr("AECMPYHB", to_upper(str[0]));
+        p = strchr("AECMPYHB", TOUPPER(str[0]));
         if (!p)
             return 0;
         offset = (strlen(p) - 12) *  60;
 
-        if (to_upper(str[1]) == 'D')
+        if (TOUPPER(str[1]) == 'D')
             return offset + 60;
-        if (to_upper(str[1]) == 'S')
+        if (TOUPPER(str[1]) == 'S')
             return offset;
     }
 
@@ -1210,9 +1190,9 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
         !(rfc5322_usascii_charset[str_token[0] + 1] & Alpha))
         goto failed;
 
-    str_token[0] = to_upper(str_token[0]);
-    str_token[1] = to_lower(str_token[1]);
-    str_token[2] = to_lower(str_token[2]);
+    str_token[0] = TOUPPER(str_token[0]);
+    str_token[1] = TOLOWER(str_token[1]);
+    str_token[2] = TOLOWER(str_token[2]);
     for (i = 0; i < 12; i++) {
         if (memcmp(monthname[i], str_token, 3) == 0) {
             tm->tm_mon = i;
