@@ -14514,7 +14514,12 @@ static void cmd_enable(char *tag)
     if (new_capa) {
         /* ENABLE on all remote mailboxes */
         for (int i = 0; i < ptrarray_size(&backend_cached); i++) {
-            proxy_enable(ptrarray_nth(&backend_cached, i), new_capa);
+            struct backend *be = ptrarray_nth(&backend_cached, i);
+
+            /* reconnecting runs imap_postauth, which enables client_capa */
+            if (be->sock == -1) continue;
+
+            proxy_enable(be, new_capa);
         }
     }
 
