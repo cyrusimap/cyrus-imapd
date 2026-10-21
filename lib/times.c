@@ -330,7 +330,7 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
                     }
                     else {
                         /* Parse 3-char time zone */
-                        char *p;
+                        const char *p;
 
                         zone[2] = *s;
                         zone[3] = '\0';
@@ -685,7 +685,8 @@ EXPORTED int time_from_rfc3501(const char *s, time_t *date)
     int c;
     struct tm tm;
     int old_format = 0;
-    char month[4], zone[4], *p;
+    char month[4], zone[4];
+    const char *p;
     time_t tmp_gmtime;
     int zone_off;   /* timezone offset in minutes */
 
@@ -1062,7 +1063,7 @@ static int compute_tzoffset(char *str, int len, int sign)
     }
 
     if (len == 3) {
-        char *p;
+        const char *p;
 
         if (to_upper(str[2]) != 'T')
             return 0;

@@ -5723,8 +5723,8 @@ static char *index_extract_subject(const char *subj, size_t len, int *is_refwd)
     } else if (*subj == '"') {                  /* quoted? */
         rawbuf = xstrndup(subj + 1, len - 2);   /* yes, strip quotes */
     } else {
-        s = strchr(subj, '}') + 3;              /* literal, skip { }\r\n */
-        rawbuf = xstrndup(s, len - (s - subj));
+        const char *lit = strchr(subj, '}') + 3;  /* literal, skip { }\r\n */
+        rawbuf = xstrndup(lit, len - (lit - subj));
     }
 
     buf = charset_parse_mimeheader(rawbuf, charset_flags);

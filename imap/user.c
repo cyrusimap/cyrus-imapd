@@ -379,7 +379,8 @@ static int user_renamesub(const char *name, void* rock)
 
 static int user_renamesieve(const char *olduser, const char *newuser)
 {
-    char hash, *domain;
+    char hash;
+    const char *domain;
     char oldpath[2048], newpath[2048];
     int r;
 
@@ -387,13 +388,13 @@ static int user_renamesieve(const char *olduser, const char *newuser)
     if(config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
 
     if (config_virtdomains && (domain = strchr(olduser, '@'))) {
+        char *localpart = xstrndup(olduser, domain - olduser);
         char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-        *domain = '\0';  /* split user@domain */
-        hash = (char) dir_hash_c(olduser, config_fulldirhash);
+        hash = (char) dir_hash_c(localpart, config_fulldirhash);
         snprintf(oldpath, sizeof(oldpath), "%s%s%c/%s/%c/%s",
                  config_getstring(IMAPOPT_SIEVEDIR),
-                 FNAME_DOMAINDIR, d, domain+1, hash, olduser);
-        *domain = '@';  /* reassemble user@domain */
+                 FNAME_DOMAINDIR, d, domain+1, hash, localpart);
+        free(localpart);
     }
     else {
         hash = (char) dir_hash_c(olduser, config_fulldirhash);
@@ -403,13 +404,13 @@ static int user_renamesieve(const char *olduser, const char *newuser)
     }
 
     if (config_virtdomains && (domain = strchr(newuser, '@'))) {
+        char *localpart = xstrndup(newuser, domain - newuser);
         char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-        *domain = '\0';  /* split user@domain */
-        hash = (char) dir_hash_c(newuser, config_fulldirhash);
+        hash = (char) dir_hash_c(localpart, config_fulldirhash);
         snprintf(newpath, sizeof(newpath), "%s%s%c/%s/%c/%s",
                  config_getstring(IMAPOPT_SIEVEDIR),
-                 FNAME_DOMAINDIR, d, domain+1, hash, newuser);
-        *domain = '@';  /* reassemble user@domain */
+                 FNAME_DOMAINDIR, d, domain+1, hash, localpart);
+        free(localpart);
     }
     else {
         hash = (char) dir_hash_c(newuser, config_fulldirhash);

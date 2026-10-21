@@ -2026,7 +2026,8 @@ static int _guid_one(struct guid_foreach_rock *frock,
                      uint64_t nano_internaldate,
                      char version)
 {
-    const char *p, *err;
+    char *p;
+    const char *err;
     conv_guidrec_t rec;
     uint32_t res;
 
@@ -2057,7 +2058,7 @@ static int _guid_one(struct guid_foreach_rock *frock,
     r = parseuint32(p + 1, &err, &res);
     if (r) return IMAP_INTERNAL;
     rec.uid = res;
-    p = err;
+    p = item + (err - item);
 
     /* part */
     rec.part = NULL;

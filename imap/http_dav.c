@@ -955,7 +955,8 @@ static bool eval_if(const char *hdr, struct meth_params *params,
 
         if (*list == '<') {
             /* Tagged-list */
-            const char *tag, *err;
+            char *tag;
+            const char *err;
             xmlURIPtr uri;
 
             tag = ++list;
@@ -6104,7 +6105,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     const char *mboxname = mbentry->name;
     struct buf writebuf = BUF_INITIALIZER;
-    char *p;
+    const char *p;
     size_t len;
     int r = 0, rights = 0;
 
@@ -6185,9 +6186,8 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
          * 'last' and make sure it doesn't change from the original request.
          * yay for micro-optimised memory usage... */
         strlcpy(fctx->req_tgt->path, buf_cstring(&writebuf), MAX_MAILBOX_PATH);
-        p = fctx->req_tgt->path + len;
-        fctx->req_tgt->collection = p;
-        fctx->req_tgt->collen = strlen(p);
+        fctx->req_tgt->collection = fctx->req_tgt->path + len;
+        fctx->req_tgt->collen = strlen(fctx->req_tgt->collection);
 
         /* If not filtering by calendar resource, and not excluding root,
            add response for collection */

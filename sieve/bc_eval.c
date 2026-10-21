@@ -1161,7 +1161,7 @@ envelope_err:
 
             /* timezone offset */
             if (zone == B_ORIGINALZONE) {
-                char *origzone = strrchr(header, ' ');
+                const char *origzone = strrchr(header, ' ');
                 if (!origzone || !parse_tzoffset(origzone + 1, &tzoffset)) {
                     res = 0;
                     goto date_err;
@@ -1488,9 +1488,10 @@ envelope_err:
             str = strarray_nth(test.u.sl, x);
 
             if (requires & BFE_VARIABLES) {
-                str = parse_string(str, variables);
-                char *p = strchr(str, ':');
+                char *parsed = parse_string(str, variables);
+                char *p = strchr(parsed, ':');
                 if (p) p[1] = '\0';
+                str = parsed;
             }
 
             if (!strarray_contains_case(interp->notifymethods, str))
