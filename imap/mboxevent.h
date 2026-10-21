@@ -288,6 +288,7 @@ void mboxevent_set_access(struct mboxevent *event,
 /**
  * Set the changed entries of a metadata or annotation change event.
  *
+ * @param event   the event to record them on
  * @param entries JSON array of {"entry": name, "user": userid} objects,
  *                "user" present for private entries only.  The event takes
  *                the reference.
