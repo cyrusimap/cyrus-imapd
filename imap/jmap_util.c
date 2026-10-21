@@ -197,6 +197,51 @@ EXPORTED void jmap_patchobject_applym(json_t *dst,
     }
 }
 
+/* Byte order with '/' sorting below every other non-NUL byte */
+static int patch_path_cmp(const void *va, const void *vb)
+{
+    const unsigned char *a = *(const unsigned char **) va;
+    const unsigned char *b = *(const unsigned char **) vb;
+
+    while (*a && *a == *b) {
+        a++;
+        b++;
+    }
+
+    int ca = *a == '/' ? 1 : *a ? *a + 1 : 0;
+    int cb = *b == '/' ? 1 : *b ? *b + 1 : 0;
+    return ca - cb;
+}
+
+EXPORTED bool jmap_patch_has_prefix_overlap(json_t *patch)
+{
+    size_t n = json_object_size(patch);
+    if (n < 2) {
+        return false;
+    }
+
+    const char **paths = xmalloc(n * sizeof(const char *));
+    size_t i = 0;
+    const char *path;
+    json_t *jval;
+    json_object_foreach (patch, path, jval) {
+        paths[i++] = path;
+    }
+
+    /* In this order, if "p/..." exists it's the successor of "p" */
+    qsort(paths, n, sizeof(const char *), patch_path_cmp);
+
+    bool overlap = false;
+    for (size_t j = 0; j + 1 < n && !overlap; j++) {
+        size_t len = strlen(paths[j]);
+        overlap =
+            !strncmp(paths[j + 1], paths[j], len) && paths[j + 1][len] == '/';
+    }
+
+    free(paths);
+    return overlap;
+}
+
 EXPORTED json_t* jmap_patchobject_apply(json_t *val,
                                         json_t *patch,
                                         json_t *invalid,

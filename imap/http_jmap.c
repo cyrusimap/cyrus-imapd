@@ -421,7 +421,7 @@ static int parse_json_body(struct transaction_t *txn, json_t **req)
     /* Parse the JSON request */
     *req = json_loadb(buf_base(&txn->req_body.payload),
                       buf_len(&txn->req_body.payload),
-                      0, &jerr);
+                      JSON_REJECT_DUPLICATES, &jerr);
     if (!*req) {
         buf_reset(&txn->buf);
         buf_printf(&txn->buf,
