@@ -26,11 +26,6 @@ sub test_scram_fuzz
     $self->assert($auth->is_success, 'default success');
     $self->assert_str_equals('200', $auth->http_response->code, 'default 200');
 
-    my $correct_auth = $jmap->ua->get_default_header('Authorization');
-    my ($token68) = $correct_auth =~ /\ABasic\s+(\S+)/i
-        or die "Can't parse <$correct_auth>";
-    my ($user, $pass) = split ':', decode_base64($token68);
-
     $jmap->ua->set_default_header('Authorization', undef);
 
     $auth = $jmap->get_client_session;
@@ -55,19 +50,9 @@ sub test_scram_fuzz
     $self->assert_str_equals($realm, $schemes{basic}{realm},
                              "$SCRAM and Basic offer the same realm");
 
-    # This is blatant implementation details abuse.
-    # We don't have the SASL password setting binary handy
-    my $etc_dir = path($self->{instance}->{basedir})->child('etc');
-    $etc_dir->mkpath();
-    my $sasldb_file = $etc_dir->child('sasldb2')->stringify;
-    tie my %sasldb, 'DB_File', $sasldb_file, O_RDWR|O_CREAT, 0640, $DB_HASH
-        or die "Can't tie $sasldb_file: $!";
-    $sasldb{join "\0", $user, $realm, 'userPassword'} = $pass;
-    untie %sasldb;
-
     my $client = Authen::SCRAM::Client->new(
-        username => $user,
-        password => $pass,
+        username => $self->default_user->username,
+        password => $self->default_user->password,
         digest   => 'SHA-256',
     );
 
