@@ -1,0 +1,83 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_jmapquery_attachextract_failure_once
+    :needs_component_jmap :SearchAttachmentExtractor :JMAPExtensions
+    :NoCheckSyslog
+    ($self)
+{
+    my $imap = $self->{store}->get_client();
+    my $instance = $self->{instance};
+
+    # The httpd is a forked child, so it reports requests through a file.
+    my $reqlog = "$instance->{basedir}/extractor-requests";
+    my $uri = URI->new($instance->{config}->get('search_attachment_extractor_url'));
+    my $handler = sub ($conn, $req) {
+        if ($req->method eq 'HEAD') {
+            my $res = HTTP::Response->new(204);
+            $res->content("");
+            $conn->send_response($res);
+            return;
+        }
+        open(my $fh, '>>', $reqlog) or die "$reqlog: $!";
+        print $fh $req->method, "\n";
+        close($fh);
+        $conn->send_error(500);
+    };
+    $instance->start_httpd($handler, $uri->port());
+
+    $imap->create("INBOX.text") or die;
+    $imap->create("INBOX.attachbody") or die;
+
+    $instance->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "fileinto", "copy"];
+if jmapquery text:
+  { "text": "testattach" }
+.
+{ fileinto :copy "INBOX.text"; }
+if jmapquery text:
+  { "attachmentBody": "testattach" }
+.
+{ fileinto :copy "INBOX.attachbody"; }
+EOF
+    );
+
+    my $mime = to_crlf(<<'EOF');
+From: from@local
+To: to@local
+Subject: testsubject
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed;
+ boundary=c4683f7a320d4d20902b000486fbdf9b
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Type: text/plain
+
+testbody
+
+--c4683f7a320d4d20902b000486fbdf9b
+Content-Disposition: attachment;filename="test.pdf"
+Content-Type: application/pdf; name="test.pdf"
+Content-Transfer-Encoding: base64
+
+dGVzdGF0dGFjaG1lbnQK
+
+--c4683f7a320d4d20902b000486fbdf9b--
+EOF
+
+    my $msg = Cassandane::Message->new();
+    $msg->set_lines(split /\n/, $mime);
+    $instance->deliver($msg);
+
+    xlog "Assert one extraction attempt serves both filters";
+    open(my $fh, '<', $reqlog) or die "$reqlog: $!";
+    my @requests = map { chomp; $_ } <$fh>;
+    close($fh);
+    $self->assert_cmp_deeply([qw(GET PUT PUT PUT)], \@requests);
+
+    for my $folder (qw(text attachbody)) {
+        $imap->select("INBOX.$folder");
+        $self->assert_num_equals(0, $imap->get_response_code('exists'));
+    }
+}

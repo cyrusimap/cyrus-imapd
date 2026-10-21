@@ -319,6 +319,9 @@ extern int index_expunge(struct index_state *state, const char *uidsequence,
 /* Disable calling the attachment extractor. The message is marked as
  * partially indexed, regardless of the ALLOW_PARTIALs flag. */
 #define INDEX_GETSEARCHTEXT_NOCALL_ATTACHEXTRACT (1<<3)
+/* Index only headers, attachment names and part types, not the content
+ * of any body part.  The message is marked as partially indexed. */
+#define INDEX_GETSEARCHTEXT_NOBODYTEXT (1<<4)
 extern int index_getsearchtext(struct message *msg, const strarray_t *partids,
                                struct search_text_receiver *receiver,
                                int flag);
