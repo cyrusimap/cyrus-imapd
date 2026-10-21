@@ -1246,7 +1246,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
     if (!get_next_token(buf, &str_token, &len))
         goto failed;
 
-    if (len < 1 || len > 2 ||
+    if (len != 2 ||
         !(rfc5322_usascii_charset[str_token[0] + 1] & Digit))
         goto failed;
 
@@ -1264,7 +1264,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
     if (!get_next_token(buf, &str_token, &len))
         goto failed;
 
-    if (len < 1 || len > 2 ||
+    if (len != 2 ||
         !(rfc5322_usascii_charset[str_token[0] + 1] & Digit))
         goto failed;
 
@@ -1281,7 +1281,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
         if (!get_next_token(buf, &str_token, &len))
             goto failed;
 
-        if (len < 1 || len > 2 ||
+        if (len != 2 ||
             !(rfc5322_usascii_charset[str_token[0] + 1] & Digit))
             goto failed;
 

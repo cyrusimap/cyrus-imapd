@@ -857,14 +857,14 @@ test_rfc5322_fail(void)
     assert_rfc5322_fail("Tue, 20 Jun ! 00:49:38 +0000");
     assert_rfc5322_fail("Tue, 20 Jun 201 00:49:38 +0000");
     assert_rfc5322_fail("Tue, 20 Jun 2017 000:49:38 +0000");
-    //assert_rfc5322_fail("Tue, 20 Jun 2017 0:49:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 0:49:38 +0000");
     assert_rfc5322_fail("Tue, 20 Jun 2017 !:49:38 +0000");
     assert_rfc5322_fail("Tue, 20 Jun 2017 00,49:38 +0000");
     assert_rfc5322_fail("Tue, 20 Jun 2017 00:049:38 +0000");
-    //assert_rfc5322_fail("Tue, 20 Jun 2017 00:9:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 00:9:38 +0000");
     assert_rfc5322_fail("Tue, 20 Jun 2017 00:!:38 +0000");
     assert_rfc5322_fail("Tue, 20 Jun 2017 00:49:038 +0000");
-    //assert_rfc5322_fail("Tue, 20 Jun 2017 00:49:8 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 00:49:8 +0000");
     assert_rfc5322_fail("Tue, 20 Jun 2017 00:49:! +0000");
     assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38 +!");
     assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38 +");
