@@ -7825,10 +7825,9 @@ int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
                          xmlNodePtr inroot __attribute__((unused)),
                          struct propfind_ctx *fctx)
 {
-    int ret = 0;
     struct request_target_t req_tgt;
     mbentry_t *mbentry = fctx->req_tgt->mbentry;
-    char *userid, *nextid;
+    char *acl, *userid, *nextid;
 
     /* Generate URL for user principal collection */
     buf_reset(&fctx->buf);
@@ -7843,8 +7842,12 @@ int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
     fctx->lprops = principal_props;
     fctx->proc_by_resource = &propfind_by_resource;
 
-    /* Parse the ACL string (userid/rights pairs) */
-    for (userid = mbentry->acl; userid; userid = nextid) {
+    size_t tailsize = sizeof(req_tgt.path) - (req_tgt.tail - req_tgt.path);
+    strarray_t principals = STRARRAY_INITIALIZER;
+
+    /* Parse a copy of the ACL string (userid/rights pairs) */
+    acl = xstrdupnull(mbentry->acl);
+    for (userid = acl; userid; userid = nextid) {
         char *rightstr;
 
         rightstr = strchr(userid, '\t');
@@ -7855,19 +7858,29 @@ int report_acl_prin_prop(struct transaction_t *txn __attribute__((unused)),
         if (!nextid) break;
         *nextid++ = '\0';
 
+        /* A negative-rights entry names the same principal */
+        if (*userid == '-') userid++;
+
         if (strcmp(userid, "anyone") && strcmp(userid, "anonymous")) {
-            /* Add userid to principal URL */
-            strcpy(req_tgt.tail, userid);
-            req_tgt.userid = xstrdup(userid);
-
-            /* Add response for URL */
-            xml_add_response(fctx, 0, 0, NULL, NULL);
-
-            free(req_tgt.userid);
+            strarray_add(&principals, userid);
         }
     }
+    free(acl);
 
-    return (ret ? ret : HTTP_MULTI_STATUS);
+    for (int i = 0; i < strarray_size(&principals); i++) {
+        userid = (char *) strarray_nth(&principals, i);
+
+        /* Add userid to principal URL */
+        if (strlcpy(req_tgt.tail, userid, tailsize) >= tailsize) continue;
+        req_tgt.userid = userid;
+
+        /* Add response for URL */
+        xml_add_response(fctx, 0, 0, NULL, NULL);
+    }
+    req_tgt.userid = NULL;
+    strarray_fini(&principals);
+
+    return HTTP_MULTI_STATUS;
 }
 
 

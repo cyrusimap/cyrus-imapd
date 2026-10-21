@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_acl_principal_prop_set
+    :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $caldav = $self->default_user->caldav;
+
+    my $mbox = "user.cassandane.#calendars.Default";
+    $admintalk->setacl($mbox, "bob" => "lrs");
+    $admintalk->setacl($mbox, "-bob" => "w");
+    $admintalk->setacl($mbox, "-alice" => "r");
+    $admintalk->setacl($mbox, "anyone" => "r");
+
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<D:acl-principal-prop-set xmlns:D="DAV:">
+  <D:prop><D:displayname/></D:prop>
+</D:acl-principal-prop-set>
+EOF
+
+    my $res = $caldav->Request('REPORT',
+        "/dav/calendars/user/cassandane/Default",
+        $xml,
+        'Content-Type' => 'application/xml',
+        'Depth' => '0',
+    );
+
+    my @hrefs = map { $_->{'{DAV:}href'}{content} }
+                ($res->{'{DAV:}response'} // [])->@*;
+
+    $self->assert_cmp_deeply(
+        bag(map { "/dav/principals/user/$_" } qw(cassandane admin bob alice)),
+        \@hrefs,
+    );
+}
