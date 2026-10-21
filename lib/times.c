@@ -1063,6 +1063,8 @@ static int compute_tzoffset(char *str, int len, int sign)
     if (len == 1) {         /* Military timezone */
         int ch;
         ch = to_upper(str[0]);
+        if (ch < 'A')
+            return 0;
         if (ch < 'J')
             return (str[0] - 'A' + 1) * 60;
         if (ch == 'J')
@@ -1191,7 +1193,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
 
     /* the separator here is either '-' or FWS */
     c = get_next_char(buf);
-    if (rfc5322_special[c])
+    if (c != EOB && rfc5322_special[c])
         skip_ws(buf, 0);
 
     /* month name */
@@ -1214,7 +1216,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
 
     /* the separator here is either '-' or FWS */
     c = get_next_char(buf);
-    if (rfc5322_special[c])
+    if (c != EOB && rfc5322_special[c])
         skip_ws(buf, 0);
 
     /* year 2, 4 or >4 digits */

@@ -832,17 +832,25 @@ test_offsettime_rfc5322_ignore_wday(void)
 }
 
 static void
-assert_rfc5322_fail(const char *ts)
+assert_rfc5322_result(const char *ts, int want_n, time_t want_t)
 {
     struct offsettime ot;
     time_t t = UNINIT_TIMET;
     int r;
 
     r = time_from_rfc5322(ts, &t, DATETIME_FULL);
-    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(r, want_n);
+    if (want_n >= 0)
+        CU_ASSERT_EQUAL(t, want_t);
 
     r = offsettime_from_rfc5322(ts, &ot, DATETIME_FULL);
-    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(r, want_n);
+}
+
+static void
+assert_rfc5322_fail(const char *ts)
+{
+    assert_rfc5322_result(ts, -1, 0);
 }
 
 static void
@@ -874,6 +882,50 @@ test_rfc5322_fail(void)
     assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38+");
     assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38-!");
     assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38-");
+}
+
+static void
+test_rfc5322_truncated(void)
+{
+    char testcase[] = "Tue, 20 Jun 2017 00:49:38 +0200";
+    size_t len = strlen(testcase);
+
+    assert_rfc5322_result(testcase, len, 1497912578);
+
+    /* "... +020", "... +02", "... +0" are all treated as -0000" */
+    int i = 3;
+    do {
+        testcase[--len] = '\0';
+        assert_rfc5322_result(testcase, len, 1497919778);
+    } while (--i);
+
+    /* The trailing + ought to be a parse error, surely? */
+    testcase[--len] = '\0';
+    // assert_rfc5322_fail(testcase);
+    assert_rfc5322_result(testcase, len, 1497919778);
+
+    /* A trailing space is accepted */
+    testcase[--len] = '\0';
+    assert_rfc5322_result(testcase, len, 1497919778);
+    /* HH::MM::SS */
+    testcase[--len] = '\0';
+    assert_rfc5322_result(testcase, len, 1497919778);
+
+    /* HH::MM:S is an error, as is HH::MM: */
+    testcase[--len] = '\0';
+    assert_rfc5322_fail(testcase);
+    testcase[--len] = '\0';
+    assert_rfc5322_fail(testcase);
+
+    /* HH:MM is valid */
+    testcase[--len] = '\0';
+    assert_rfc5322_result(testcase, len, 1497919740);
+
+    /* Everything shorter than this is a parse failure */
+    do {
+        testcase[--len] = '\0';
+        assert_rfc5322_fail(testcase);
+    } while (len);
 }
 
 /* vim: set ft=c: */
