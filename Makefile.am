@@ -350,7 +350,6 @@ EXTRA_DIST = \
     doc/legacy/murder.png \
     doc/README.autocreate \
     doc/README.autosievefolder \
-    doc/README.cyrusdb.md \
     doc/README.twom.md \
     doc/README.xapian \
     doc/README.zeroskip.md \

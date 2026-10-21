@@ -172,8 +172,8 @@ names every page in it by path.  Beyond the pages already cited above:
   i/o), `bytecode.rst` (Sieve), `var_directory_structure.rst` and
   `namespaces.rst`
 - `imap/mailbox.h` -- the mailbox on-disk format, in its `@file` comment
-- `doc/README.cyrusdb.md`, `doc/README.twom.md`, `doc/README.zeroskip.md` --
-  the key-value store interface, and two of its backends
+- `lib/cyrusdb.h` -- the key-value store interface, in its `@file` comment;
+  `doc/README.twom.md` and `doc/README.zeroskip.md` cover two of its backends
 
 **Protocols and standards**
 
