@@ -270,6 +270,16 @@ EXPORTED void mboxevent_setnamespace(struct namespace *n)
     namespace.isalt = 0;
 }
 
+/* Hand back a looked-up annotation value as an owned string, or NULL if
+ * there was none */
+static char *specialuse_release(struct buf *attrib)
+{
+    if (buf_len(attrib)) return buf_release(attrib);
+
+    buf_free(attrib);
+    return NULL;
+}
+
 /* Return the space-separated value of the mailbox's /specialuse annotation
  * (e.g. "\Trash"), or NULL if it has none.
  *
@@ -284,12 +294,19 @@ static char *mboxevent_mailbox_specialuse(const struct mailbox *mailbox)
     annotatemore_lookup_mbox(mailbox, "/specialuse", userid, &attrib);
     free(userid);
 
-    if (!buf_len(&attrib)) {
-        buf_free(&attrib);
-        return NULL;
-    }
+    return specialuse_release(&attrib);
+}
 
-    return buf_release(&attrib);
+/* As mboxevent_mailbox_specialuse(), for a mailbox that isn't open */
+static char *mboxevent_mboxname_specialuse(const char *mboxname)
+{
+    struct buf attrib = BUF_INITIALIZER;
+    char *userid = mboxname_to_userid(mboxname);
+
+    annotatemore_lookup(mboxname, "/specialuse", userid, &attrib);
+    free(userid);
+
+    return specialuse_release(&attrib);
 }
 
 /* Return true if any of the mailbox's special-use attributes, given as the
@@ -614,7 +631,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
         /* MailboxCreate can't give us this one, because the value isn't
          * available yet. */
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SPECIALUSE) &&
-               (type & ((MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS) & ~EVENT_MAILBOX_CREATE));
+               (type & (((MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS) & ~EVENT_MAILBOX_CREATE)
+                        | EVENT_MAILBOX_METADATA_CHANGE));
     case EVENT_OLD_SPECIAL_USE:
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SPECIALUSE) &&
                (type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE|EVENT_MAILBOX_RENAME));
@@ -1039,6 +1057,17 @@ EXPORTED void mboxevent_set_metadata_entries(struct mboxevent *event,
     if (event->params[EVENT_METADATA_ENTRIES].filled)
         json_decref(event->params[EVENT_METADATA_ENTRIES].value.j);
     FILL_JSON_PARAM(event, EVENT_METADATA_ENTRIES, entries);
+}
+
+EXPORTED void mboxevent_set_specialuse(struct mboxevent *event,
+                                       const char *mboxname)
+{
+    if (!event) return;
+    if (!mboxevent_expected_param(event->type, EVENT_SPECIAL_USE)) return;
+
+    char *specialuse = mboxevent_mboxname_specialuse(mboxname);
+    if (specialuse)
+        FILL_STRING_PARAM(event, EVENT_SPECIAL_USE, specialuse);
 }
 
 EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,

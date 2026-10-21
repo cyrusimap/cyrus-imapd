@@ -6,6 +6,8 @@ use Cassandane::Tiny;
 # of the source mailbox (vnd.fastmail.oldSpecialUse).  Both parameters are
 # omitted when the mailbox has no special-use attribute, and MailboxCreate
 # never carries one: the annotation is only written once the mailbox exists.
+# MailboxMetadataChange reports the value after the change, so it is the
+# event that announces a special-use being set or removed.
 
 sub test_specialuse_params
     ($self)
@@ -51,6 +53,12 @@ sub test_specialuse_params
 
     $imaptalk->setmetadata("Trash", "/private/specialuse", "\\Trash");
     assert_ok("set specialuse on Trash");
+    assert_event_specialuse("set specialuse", {
+        event         => 'MailboxMetadataChange',
+        specialUse    => "\\Trash",
+        oldSpecialUse => undef,
+    });
+
     $self->make_message("Message A");
     $self->{instance}->getnotify();
 
@@ -96,6 +104,14 @@ sub test_specialuse_params
         event         => 'MailboxRename',
         specialUse    => "\\Trash",
         oldSpecialUse => "\\Trash",
+    });
+
+    $imaptalk->setmetadata("Bin", "/private/specialuse", undef);
+    assert_ok("remove specialuse from Bin");
+    assert_event_specialuse("remove specialuse", {
+        event         => 'MailboxMetadataChange',
+        specialUse    => undef,
+        oldSpecialUse => undef,
     });
 
     $imaptalk->logout();

@@ -1,10 +1,11 @@
 Description:
 
 Two new event parameters report the special-use attributes of the mailbox
-an event refers to: vnd.fastmail.specialUse on message, flags, and mailbox
-events, and vnd.fastmail.oldSpecialUse for the source mailbox of
-MessageCopy, MessageMove and MailboxRename.  Both are omitted when the
-mailbox has no special-use attribute.
+an event refers to: vnd.fastmail.specialUse on message, flags, mailbox,
+and MailboxMetadataChange events, and vnd.fastmail.oldSpecialUse for the
+source mailbox of MessageCopy, MessageMove and MailboxRename.  Both are
+omitted when the mailbox has no special-use attribute, so a
+MailboxMetadataChange without one reports that the attribute was removed.
 
 
 Documentation:
