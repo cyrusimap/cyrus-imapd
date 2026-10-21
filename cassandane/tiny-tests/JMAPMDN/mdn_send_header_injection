@@ -1,0 +1,94 @@
+#!perl
+use Cassandane::Tiny;
+
+# Header values a received message or the client controls must not be
+# able to start a new header field in the MDN that goes out.
+sub test_mdn_send_header_injection ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->request([ ['Identity/get', {}] ]);
+    my $identityId = $res->single_sentence->arguments->{list}[0]{id};
+
+    my $disposition = {
+        actionMode => 'manual-action',
+        sendingMode => 'mdn-sent-manually',
+        type => 'displayed',
+    };
+
+    my sub deliver ($subject, @extra) {
+        my $msg = $self->make_message($subject,
+            extra_headers => [
+                ['Disposition-Notification-To', 'sender@example.org'],
+                @extra,
+            ],
+            body => 'read me',
+        ) || die;
+
+        my $want = $msg->get_header('Message-ID') =~ s/^<(.*)>$/$1/r;
+        my $res = $jmap->request([
+            ['Email/query', {}, 'q'],
+            ['Email/get', {
+                '#ids' => { resultOf => 'q', name => 'Email/query', path => '/ids' },
+                properties => ['messageId'],
+            }, 'g'],
+        ]);
+        my ($email) = grep { $_->{messageId}[0] eq $want }
+            $res->sentence_named('Email/get')->arguments->{list}->@*;
+        return $email->{id};
+    }
+
+    my sub send_mdn ($emailId, %props) {
+        my $res = $jmap->request([
+            ['MDN/send', {
+                identityId => $identityId,
+                send => { k1 => {
+                    forEmailId => $emailId,
+                    disposition => $disposition,
+                    %props,
+                } },
+                onSuccessUpdateEmail => {
+                    '#k1' => { 'keywords/$mdnsent' => JSON::true },
+                },
+            }],
+        ]);
+        return ($res->sentences)[0]->arguments;
+    }
+
+    # Every MDN sent so far, as one string
+    my sub all_sent () {
+        return join "", $self->smtpd_messages();
+    }
+
+    xlog $self, "an encoded CRLF in the original Subject stays in Subject";
+    my $emailId = deliver('=?us-ascii?Q?hi=0D=0AX-Injected-Subject:_true?=');
+    my $sent = send_mdn($emailId);
+    $self->assert_not_null($sent->{sent}{k1});
+    my $out = all_sent();
+    $self->assert_does_not_match(qr/^X-Injected/m, $out);
+    $self->assert_matches(qr/^Subject: Return Receipt \(displayed\) for\r\n\t\S/m,
+                          $out);
+
+    xlog $self, "an encoded CRLF in Original-Recipient is not decoded";
+    my $encoded = '=?us-ascii?Q?rfc822;_u@example.com=0D=0AX-Injected-Rcpt:_true?=';
+    $emailId = deliver('encoded rcpt', ['Original-Recipient', $encoded]);
+    $sent = send_mdn($emailId);
+    $self->assert_str_equals($encoded, $sent->{sent}{k1}{originalRecipient});
+    $self->assert_does_not_match(qr/^X-Injected/m, all_sent());
+
+    xlog $self, "a folded Original-Recipient is unfolded";
+    $emailId = deliver('folded rcpt',
+        ['Original-Recipient', "rfc822; u\@example.com\r\n X-Injected-Fold: true"]);
+    $sent = send_mdn($emailId);
+    $self->assert_str_equals('rfc822; u@example.com X-Injected-Fold: true',
+                             $sent->{sent}{k1}{originalRecipient});
+    $self->assert_does_not_match(qr/^X-Injected/m, all_sent());
+
+    xlog $self, "a CRLF in reportingUA is rejected";
+    $emailId = deliver('reporting ua');
+    $sent = send_mdn($emailId, reportingUA => "ua\r\nX-Injected-UA: true");
+    $self->assert_cmp_deeply(
+        { k1 => { type => 'invalidProperties', properties => ['reportingUA'] } },
+        $sent->{notSent},
+    );
+}
