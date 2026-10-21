@@ -1037,6 +1037,25 @@ static inline int to_lower(char ch)
     return ch;
 }
 
+/* This code appears to be buggy, because it appears to be conflating return
+ * value of 0 to mean "+0000" (or "UT" or "Z") with 0 to mean "parse failed".
+ * It isn't. RFC 5322 says:
+ *    Other multi-character (usually between 3 and 5) alphabetic time zones
+ *    have been used in Internet messages.  Any such time zone whose
+ *    meaning is not known SHOULD be considered equivalent to "-0000"
+ *    unless there is out-of-band information confirming their meaning.
+ *
+ * However, a tighter reading of "any such" suggests that only unknown
+ * *alphabetic* timezones should be treated as -0000. Implying that sequences of
+ * digits other than length 4 should be parse errors. And, arguably, also
+ * alphanumeric sequences.
+ *
+ * That said, this code isn't able to convey the semantics of "-0000":
+ *    Though "-0000" also indicates Universal Time, it is
+ *    used to indicate that the time was generated on a system that may be
+ *    in a local time zone other than Universal Time and that the date-time
+ *    contains no information about the local time zone.
+ */
 static int compute_tzoffset(char *str, int len, int sign)
 {
     int offset = 0;
