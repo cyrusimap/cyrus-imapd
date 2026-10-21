@@ -3945,6 +3945,7 @@ int meth_acl(struct transaction_t *txn, void *params)
     xmlNodePtr root, ace;
     struct mailbox *mailbox = NULL;
     struct buf acl = BUF_INITIALIZER;
+    char *newacl = NULL, *owner = NULL;
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -4265,12 +4266,18 @@ int meth_acl(struct transaction_t *txn, void *params)
         }
     }
 
-    r = mboxlist_setacls(txn->req_tgt.mbentry->name, buf_cstring(&acl), mailbox_modseq_dirty(mailbox), /*silent*/0);
+    /* Keep the owner's implicit rights in the stored ACL, as SETACL does */
+    owner = mboxname_to_userid(txn->req_tgt.mbentry->name);
+    newacl = buf_release(&acl);
+    if (owner) {
+        cyrus_acl_set(&newacl, owner, ACL_MODE_ADD, config_implicitrights,
+                      NULL, NULL);
+    }
+
+    r = mboxlist_setacls(txn->req_tgt.mbentry->name, newacl, mailbox_modseq_dirty(mailbox), /*silent*/0);
     if (!r) {
-        mailbox_set_acl(mailbox, buf_cstring(&acl));
-        char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
-        r = caldav_update_shareacls(userid);
-        free(userid);
+        mailbox_set_acl(mailbox, newacl);
+        r = caldav_update_shareacls(owner);
     }
     if (r) {
         syslog(LOG_ERR, "mboxlist_setacls(%s) failed: %s",
@@ -4284,6 +4291,8 @@ int meth_acl(struct transaction_t *txn, void *params)
 
   done:
     buf_free(&acl);
+    free(newacl);
+    free(owner);
     if (indoc) xmlFreeDoc(indoc);
     mailbox_close(&mailbox);
     return ret;
