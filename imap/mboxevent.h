@@ -297,6 +297,13 @@ void mboxevent_set_access(struct mboxevent *event,
  */
 void mboxevent_set_metadata_entries(struct mboxevent *event, json_t *entries);
 
+/**
+ * Fill vnd.fastmail.specialUse from the named mailbox's current /specialuse
+ * annotation, for events built without an open mailbox.  Does nothing if
+ * the event doesn't expect the parameter or the mailbox has no special-use.
+ */
+void mboxevent_set_specialuse(struct mboxevent *event, const char *mboxname);
+
 void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
                            const char *rights);
 
