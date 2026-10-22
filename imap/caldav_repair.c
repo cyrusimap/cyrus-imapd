@@ -671,10 +671,13 @@ static int rewrite_primary(struct repair_res *primary, const char *userid,
     r = mailbox_find_index_record(mailbox, primary->imap_uid, &record);
     if (r) goto done;
 
-    /* Keep the createdmodseq: it is what the JMAP event id encodes */
+    /* Keep the createdmodseq: it is what the JMAP event id encodes.  Per-user
+     * data is only read from a resource marked shared, so a merged copy's
+     * data needs the mark even if the primary had none. */
     r = store_resource(mailbox, userid, authstate, target, primary->resource,
                        &record, record.createdmodseq, primary->sched_tag,
-                       primary->tzbyref, primary->shared,
+                       primary->tzbyref,
+                       primary->shared || ptrarray_size(target_userdata),
                        &primary->schedule_addresses, &newuid);
     if (r) goto done;
 

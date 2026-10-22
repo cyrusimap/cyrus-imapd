@@ -10,6 +10,7 @@
 #endif
 
 #include <errno.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -221,9 +222,10 @@ struct stored {
 /* The Content-Disposition filename parameter is where mailbox_update_caldav()
  * reads the resource name from, so a calendar message without one is not
  * indexed at all. */
-static void store_resource(const char *calname, const char *resource,
-                           modseq_t createdmodseq, const char *sched_tag,
-                           const char *ical, struct stored *out)
+static void store_resource_ext(const char *calname, const char *resource,
+                               modseq_t createdmodseq, const char *sched_tag,
+                               bool shared, const char *ical,
+                               struct stored *out)
 {
     char *name = cal_mboxname(calname);
     struct mailbox *mailbox = NULL;
@@ -254,6 +256,7 @@ static void store_resource(const char *calname, const char *resource,
                "Content-Disposition: attachment; filename=\"%s\"",
                resource, resource, resource);
     if (sched_tag) buf_printf(&msg, ";\r\n\tschedule-tag=%s", sched_tag);
+    if (shared) buf_appendcstr(&msg, ";\r\n\tper-user-data=true");
     buf_printf(&msg, "\r\nMIME-Version: 1.0\r\n\r\n%s", ical);
 
     fwrite(buf_base(&msg), 1, buf_len(&msg), f);
@@ -294,6 +297,14 @@ static void store_resource(const char *calname, const char *resource,
     mailbox_close(&mailbox);
     buf_free(&msg);
     free(name);
+}
+
+static void store_resource(const char *calname, const char *resource,
+                           modseq_t createdmodseq, const char *sched_tag,
+                           const char *ical, struct stored *out)
+{
+    store_resource_ext(calname, resource, createdmodseq, sched_tag,
+                       /*shared*/ false, ical, out);
 }
 
 static void expunge_resource(const char *calname, uint32_t imap_uid)
@@ -435,6 +446,7 @@ struct row {
     uint32_t imap_uid;
     modseq_t createdmodseq;
     unsigned comp_type;
+    bool shared;
 };
 
 static int collect_row(void *rock, struct caldav_data *cdata)
@@ -448,6 +460,7 @@ static int collect_row(void *rock, struct caldav_data *cdata)
     row->imap_uid = cdata->dav.imap_uid;
     row->createdmodseq = cdata->dav.createdmodseq;
     row->comp_type = cdata->comp_type;
+    row->shared = cdata->comp_flags.shared;
     ptrarray_append(rows, row);
 
     return 0;
@@ -967,7 +980,8 @@ static void test_scheduling_identity(void)
 /*
  * Per-user data -- personal alarms and useDefaultAlerts -- lives outside the
  * shared iCalendar, so no component says when a merge would drop it.  Here
- * only one copy has any, and the merge carries it over.
+ * only one copy has any, and the merge carries it over.  It is only read from
+ * a resource marked shared, so the kept one has to take the mark as well.
  */
 static void test_per_user_data_carried_over(void)
 {
@@ -975,8 +989,8 @@ static void test_per_user_data_carried_over(void)
     struct stored dup;
 
     store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), NULL);
-    store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
-                   &dup);
+    store_resource_ext(CAL_B, "instance.ics", 2, NULL, /*shared*/ true,
+                       INSTANCE_EVENT("instance"), &dup);
     set_userdata(CAL_B, dup.imap_uid, "-PT5M", dup.createdmodseq);
 
     free(run_repair(DAV_REPAIR_REALLY));
@@ -986,6 +1000,7 @@ static void test_per_user_data_carried_over(void)
 
     struct row *kept = sole_row_with_uid(&rows, EVENT_UID);
     CU_ASSERT(has_userdata(kept));
+    CU_ASSERT(kept->shared);
 
     free_rows(&rows);
 }
