@@ -382,7 +382,7 @@ static void set_userdata(const char *calname, uint32_t imap_uid,
                "DTSTAMP:20260101T000000Z\r\n"
                "UID:per-user-data\r\n"
                "BEGIN:PATCH\r\n"
-               "PATCH-TARGET:/VCALENDAR/ANY\r\n"
+               "PATCH-TARGET:/VCALENDAR/VEVENT[UID=" EVENT_UID "]\r\n"
                "BEGIN:VALARM\r\n"
                "UID:alarm1\r\n"
                "ACTION:DISPLAY\r\n"
@@ -659,6 +659,32 @@ static int has_userdata(const struct row *row)
     return found;
 }
 
+/* The row's per-user VPATCH for this user, serialized. */
+static char *userdata_vpatch(const struct row *row)
+{
+    char *name = cal_mboxname(calname_of(row));
+    struct mailbox *mailbox = NULL;
+    struct buf value = BUF_INITIALIZER;
+    struct icalsupport_personal_data data = { 0 };
+
+    int r = mailbox_open_irl(name, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = mailbox_annotation_lookup(mailbox, row->imap_uid, PER_USER_CAL_DATA,
+                                  USERID, &value);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    mailbox_close(&mailbox);
+
+    r = icalsupport_decode_personal_data(&value, &data);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    char *vpatch = icalcomponent_as_ical_string_r(data.vpatch);
+
+    icalsupport_personal_data_fini(&data);
+    buf_free(&value);
+    free(name);
+
+    return vpatch;
+}
+
 /*
  * Two live resources in the SAME calendar, necessarily under different
  * resource names.  CalDAV PUT cannot produce this; a JMAP create can, when a
@@ -928,6 +954,32 @@ static void test_overlapping_main(void)
     CU_ASSERT_EQUAL(count_summary(ical, "in calendarB"), 1);
     icalcomponent_free(ical);
 
+    free_rows(&rows);
+}
+
+/* A split copy's per-user data follows it to the new UID. */
+static void test_split_reuids_per_user_data(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+    struct stored dup;
+
+    store_resource(CAL_A, "a.ics", 1, NULL, MAIN_EVENT("in calendarA"), NULL);
+    store_resource_ext(CAL_B, "b.ics", 2, NULL, /*shared*/ true,
+                       MAIN_EVENT("in calendarB"), &dup);
+    set_userdata(CAL_B, dup.imap_uid, "-PT5M", dup.createdmodseq);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    struct row *split = split_row(&rows);
+    char *vpatch = userdata_vpatch(split);
+    char *target = strconcat("[UID=", split->ical_uid, "]", (char *) NULL);
+
+    CU_ASSERT_PTR_NOT_NULL(strstr(vpatch, target));
+    CU_ASSERT_PTR_NULL(strstr(vpatch, "[UID=" EVENT_UID "]"));
+
+    free(target);
+    free(vpatch);
     free_rows(&rows);
 }
 

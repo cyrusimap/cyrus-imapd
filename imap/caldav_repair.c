@@ -814,6 +814,88 @@ done:
     return r;
 }
 
+/* Per-user data addresses components by UID, in its VPATCH paths. */
+static void reuid_vpatch(icalcomponent *vpatch, const char *ical_uid,
+                         const char *newical_uid)
+{
+    struct buf path = BUF_INITIALIZER;
+    char *match = strconcat("[UID=", ical_uid, "]", (char *) NULL);
+    char *replace = strconcat("[UID=", newical_uid, "]", (char *) NULL);
+    icalcomponent *patch;
+    icalproperty *prop;
+
+    for (patch = icalcomponent_get_first_component(vpatch,
+                                                   ICAL_XPATCH_COMPONENT);
+         patch;
+         patch = icalcomponent_get_next_component(vpatch,
+                                                  ICAL_XPATCH_COMPONENT)) {
+
+        for (prop = icalcomponent_get_first_property(patch, ICAL_ANY_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(patch, ICAL_ANY_PROPERTY)) {
+
+            switch (icalproperty_isa(prop)) {
+            case ICAL_PATCHTARGET_PROPERTY:
+                buf_setcstr(&path, icalproperty_get_patchtarget(prop));
+                if (buf_replace_all(&path, match, replace))
+                    icalproperty_set_patchtarget(prop, buf_cstring(&path));
+                break;
+            case ICAL_PATCHDELETE_PROPERTY:
+                buf_setcstr(&path, icalproperty_get_patchdelete(prop));
+                if (buf_replace_all(&path, match, replace))
+                    icalproperty_set_patchdelete(prop, buf_cstring(&path));
+                break;
+            case ICAL_PATCHPARAMETER_PROPERTY:
+                buf_setcstr(&path, icalproperty_get_patchparameter(prop));
+                if (buf_replace_all(&path, match, replace))
+                    icalproperty_set_patchparameter(prop, buf_cstring(&path));
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+    buf_free(&path);
+    free(match);
+    free(replace);
+}
+
+/* dav_store_resource() carried the split copy's per-user data over as it was,
+ * and its VPATCH paths still name the old UID. */
+static int reuid_userdata(struct mailbox *mailbox, uint32_t newuid,
+                          ptrarray_t *userdata, const char *ical_uid,
+                          const char *newical_uid)
+{
+    struct index_record record;
+    int r;
+
+    r = mailbox_find_index_record(mailbox, newuid, &record);
+    if (r) return r;
+
+    for (int i = 0; i < ptrarray_size(userdata) && !r; i++) {
+        struct repair_userdata *pud = ptrarray_nth(userdata, i);
+        struct icalsupport_personal_data pdata = { 0 };
+
+        /* Data that does not decode stays as it was, as nothing reads it */
+        if (icalsupport_decode_personal_data(&pud->value, &pdata)) continue;
+
+        struct buf value = BUF_INITIALIZER;
+
+        reuid_vpatch(pdata.vpatch, ical_uid, newical_uid);
+        pdata.lastmod = time(NULL);
+        pdata.modseq = record.modseq;
+        icalsupport_encode_personal_data(&value, &pdata);
+        r = mailbox_annotation_write(mailbox, newuid, PER_USER_CAL_DATA,
+                                     pud->userid, &value);
+
+        buf_free(&value);
+        icalsupport_personal_data_fini(&pdata);
+    }
+
+    return r;
+}
+
 /* A split copy is moved whole, including the components that would have
  * merged cleanly: folding in part of it would spread one resource's content
  * over two events, and leave the owner a fragment they never created. */
@@ -826,7 +908,7 @@ static int split_resource(struct repair_res *dup, const char *ical_uid,
     icalcomponent *split = NULL;
     char *resource = NULL;
     uint32_t newuid = 0;
-    const char *newical_uid = makeuuid();
+    char *newical_uid = xstrdup(makeuuid());
     int r;
 
     r = mailbox_open_iwl(dup->mboxname, &mailbox);
@@ -868,9 +950,13 @@ static int split_resource(struct repair_res *dup, const char *ical_uid,
     r = store_resource(mailbox, userid, authstate, split, resource, &record,
                        /*createdmodseq*/ 0, dup->sched_tag, dup->tzbyref,
                        dup->shared, &dup->schedule_addresses, &newuid);
+    if (r) goto done;
+
+    r = reuid_userdata(mailbox, newuid, &dup->userdata, ical_uid, newical_uid);
 
 done:
     if (split) icalcomponent_free(split);
+    free(newical_uid);
     free(resource);
     mailbox_close(&mailbox);
     return r;
