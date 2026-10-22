@@ -882,6 +882,9 @@ test_rfc5322_fail(void)
     assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38+");
     assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38-!");
     assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38-");
+
+    assert_rfc5322_fail("Tue, 20!Jun 2017 00:49:38");
+    assert_rfc5322_fail("Tue, 20 Jun!2017 00:49:38");
 }
 
 static void

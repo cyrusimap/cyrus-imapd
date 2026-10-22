@@ -1192,9 +1192,17 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
         goto failed;
 
     /* the separator here is either '-' or FWS */
-    c = get_next_char(buf);
-    if (c != EOB && rfc5322_special[c])
+    c = get_current_char(buf);
+    if (c == '-') {
+        /* consume the '-' */
+        get_next_char(buf);
+    }
+    else if (c != EOB && rfc5322_special[c]) {
+        /* consume the whitespace */
         skip_ws(buf, 0);
+    }
+    else
+        goto failed;
 
     /* month name */
     if (!get_next_token(buf, &str_token, &len) ||
@@ -1215,9 +1223,17 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
         goto failed;
 
     /* the separator here is either '-' or FWS */
-    c = get_next_char(buf);
-    if (c != EOB && rfc5322_special[c])
+    c = get_current_char(buf);
+    if (c == '-') {
+        /* consume the '-' */
+        get_next_char(buf);
+    }
+    else if (c != EOB && rfc5322_special[c]) {
+        /* consume the whitespace */
         skip_ws(buf, 0);
+    }
+    else
+        goto failed;
 
     /* year 2, 4 or >4 digits */
     if (!get_next_token(buf, &str_token, &len))
