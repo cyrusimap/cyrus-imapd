@@ -671,6 +671,7 @@ cunit_TESTS = \
     cunit/signals.testc \
     cunit/slowio.testc \
     cunit/smallarrayu64.testc \
+    cunit/smtpclient.testc \
     cunit/sqldb.testc \
     cunit/xsyslog_ev.testc
 

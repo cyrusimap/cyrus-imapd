@@ -155,6 +155,14 @@ static void add_address(struct address_t **recipients, icalproperty *prop,
     if (!strncasecmp(address, "mailto:", 7))
         address += 7;
 
+    /* the address is percent-decoded, and goes into SMTP commands and the
+       message we send everyone else, so it must not be able to break out */
+    if (!smtp_is_safe_mailbox(address)) {
+        xsyslog_ev(LOG_NOTICE, "caldav.imip.address.invalid",
+                   lf_s("msg.to", address));
+        return;
+    }
+
     new = xzmalloc(sizeof(struct address_t));
     new->addr = address;
     param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
@@ -247,6 +255,12 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
 
             add_address(&recipients, prop, &icalproperty_get_decoded_calendaraddress);
         }
+    }
+
+    if (!originator || !recipients ||
+        (recipient && !smtp_is_safe_mailbox(recipient))) {
+        r = HTTP_BAD_REQUEST;
+        goto done;
     }
 
     /* Get other useful properties/values */
@@ -566,11 +580,11 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
     buf_free(&tmpbuf);
     buf_free(&when);
     free(originator);
-    do {
+    while (recipients) {
         struct address_t *freeme = recipients;
         recipients = recipients->next;
         free(freeme);
-    } while (recipients);
+    }
 
     return r;
 }
