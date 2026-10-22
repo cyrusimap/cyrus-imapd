@@ -1178,9 +1178,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
         goto failed;
 
     /* month name */
-    if (!get_next_token(buf, &str_token, &len) ||
-        len != 3 ||
-        !(rfc5322_usascii_charset[str_token[0] + 1] & Alpha))
+    if (!get_next_token(buf, &str_token, &len) || len != 3)
         goto failed;
 
     str_token[0] = TOUPPER(str_token[0]);
