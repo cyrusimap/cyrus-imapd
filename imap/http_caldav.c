@@ -4081,8 +4081,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         txn->error.precond = CALDAV_UID_CONFLICT;
         ret = HTTP_FORBIDDEN;
     }
-    else {
-        /* Check for duplicate iCalendar UID */
+    else if (!cdata->dav.imap_uid) {
+        /* Check for duplicate iCalendar UID.  Rewriting an existing resource
+         * cannot add one, so older duplicates don't block its updates. */
         const char *mbox =
             cdata->dav.mailbox_byname ? mailbox_name(mailbox) : mailbox_uniqueid(mailbox);
         caldav_lookup_uid(db, uid, &cdata);
