@@ -1,0 +1,104 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailboxidexists_acl_bypass
+    :min_version_3_0 :NoAltNameSpace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my $hitfolder = 'INBOX.oracle-hit';
+    my $missfolder = 'INBOX.oracle-miss';
+    $talk->create($hitfolder);
+    $talk->create($missfolder);
+
+    # Create a victim user with a private folder not shared with the attacker
+    $self->{instance}->create_user('victim');
+    my $victimstore = $self->{instance}->get_service('imap')->create_store(
+        username => 'victim');
+    my $victimtalk = $victimstore->get_client();
+
+    # We need extra folders in the victim account so their compact-id doesn't
+    # match one of ours or our test will find the wrong folder
+    $victimtalk->create('INBOX.first');
+    $victimtalk->create('INBOX.second');
+    $victimtalk->create('INBOX.third');
+
+    # Here's the real target
+    $victimtalk->create('INBOX.secret-project');
+    $self->assert_str_equals('ok', $victimtalk->get_last_completion_response());
+
+    my $compactid =  $victimtalk->status('INBOX.secret-project', "(mailboxid)")->{mailboxid}[0];
+    my $uniqueid =  $victimtalk->status('INBOX.secret-project', "(uniqueid)")->{uniqueid}[0];
+
+    $self->assert_not_null($compactid);
+    $self->assert_not_null($uniqueid);
+
+    # Ensure that compactid doesn't exist in our account
+    xlog "Ensure we don't have a compact id that our victim has";
+
+    $talk->list("", "*", "return", ["status", ["mailboxid"]]);
+    my %ids = map { $_->{mailboxid}[0] => 1 } values $talk->get_response_code('status')->%*;
+    $self->assert_null($ids{$compactid});
+
+    my $email1 = to_crlf(<<~'EOF');
+        From: "Some Example Sender" <example@example.com>
+        To: cassandane@example.com
+        Subject: test email
+        Date: Wed, 7 Dec 2016 22:11:11 +1100
+        MIME-Version: 1.0
+        Content-Type: text/plain; charset="UTF-8"
+        Content-Transfer-Encoding: quoted-printable
+        
+        This is a test email.
+        EOF
+
+    my $script = <<~"EOF";
+        require ["fileinto", "mailboxid"];
+        if mailboxidexists "$compactid" {
+            fileinto "$hitfolder";
+        } elsif mailboxidexists "$uniqueid" {
+            fileinto "$hitfolder";
+        } else {
+            fileinto "$missfolder";
+        }
+        EOF
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->Upload($email1, "message/rfc822");
+    my $emailid1 = $res->{blobId};
+
+    $res = $jmap->Upload($script, "application/sieve");
+    my $scriptid = $res->{blobId};
+
+    xlog "test script";
+    $res = $jmap->request([
+        ['SieveScript/test', {
+            emailBlobIds => [ $emailid1 ],
+            scriptBlobId => $scriptid,
+            envelope => {
+                mailFrom => {
+                    email => 'foo@example.com',
+                    parameters => JSON::null
+                },
+                rcptTo => [ {
+                    email => 'cassandane@example.com',
+                    parameters => JSON::null
+                } ]
+            },
+            lastVacationResponse => JSON::null
+         }]
+    ]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            completed => {
+                $emailid1 => [
+                    [ "fileinto", {}, [ $missfolder ] ],
+                ],
+            },
+        }),
+        $res->sentence_named("SieveScript/test")->arguments,
+    );
+}

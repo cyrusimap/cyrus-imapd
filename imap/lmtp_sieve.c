@@ -166,11 +166,20 @@ static int getmailboxidexists(void *sc, const char *extname)
         mboxlist_find_uniqueid(extname, userid, sd->authstate);
     int exists = 0;
 
-    if (intname && !mboxname_isnondeliverymailbox(intname, 0)) {
-        exists = 1;
+    if (intname) {
+        mbentry_t *mbentry = NULL;
+        int r = mboxlist_lookup(intname, &mbentry, NULL);
+        if (!r && !(cyrus_acl_myrights(sd->authstate, mbentry->acl) & ACL_LOOKUP))
+            r = IMAP_MAILBOX_NONEXISTENT;
+        mboxlist_entry_free(&mbentry);
+
+        if (!r && !mboxname_isnondeliverymailbox(intname, 0)) {
+            exists = 1;
+        }
+
+        free(intname);
     }
 
-    free(intname);
     return exists;
 }
 
