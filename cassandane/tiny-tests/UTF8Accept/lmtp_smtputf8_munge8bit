@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_lmtp_smtputf8_munge8bit
+    :Munge8Bit
+    ($self)
+{
+    my $lmtp = $self->lmtp_connect();
+
+    xlog $self, "No SMTPUTF8 while lmtpd munges 8-bit headers";
+    my ($code, @lines) = $self->lmtp_cmd($lmtp, 'LHLO localhost');
+    $self->assert_num_equals(250, $code);
+    $self->assert_cmp_deeply(array_each(none('SMTPUTF8')), \@lines);
+
+    ($code) = $self->lmtp_cmd($lmtp, 'MAIL FROM:<sender@example.com> SMTPUTF8');
+    $self->assert_num_equals(501, $code);
+
+    $self->lmtp_cmd($lmtp, 'QUIT');
+}

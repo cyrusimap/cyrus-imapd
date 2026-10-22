@@ -24,6 +24,7 @@ event                   name of the event; always the first pair on the line
 r.clienthost            the client end of the connection, as host [ip]
 r.sessionid             this process's session id
 r.tid                   trace id, when the client supplied one
+remote.host             the backend or relay we proxied or sent to
 remote.sessionid        the session id of a backend we proxied to
 
 ### u. - the user

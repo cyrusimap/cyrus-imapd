@@ -33,6 +33,7 @@
 #include "loginlog.h"
 #include "util.h"
 #include "auth.h"
+#include "charset.h"
 #include "prot.h"
 #include "times.h"
 #include "global.h"
@@ -175,6 +176,10 @@ static void send_lmtp_error(struct protstream *pout, int r, strarray_t *resp)
         code = LMTP_MESSAGE_INVALID;
         break;
 
+    case IMAP_ADDRESS_NEEDS_SMTPUTF8:
+        code = LMTP_ADDRESS_NOT_ASCII;
+        break;
+
     case IMAP_MAILBOX_NONEXISTENT:
         /* XXX Might have been moved to other server */
         if (LMTP_LONG_ERROR_MSGS) {
@@ -217,6 +222,7 @@ static int msg_new(message_data_t **m, const struct namespace *ns)
     ret->id = NULL;
     ret->size = 0;
     ret->return_path = NULL;
+    ret->smtputf8 = false;
     ret->rcpt = NULL;
     ret->rcpt_num = 0;
     ret->date = NULL;
@@ -400,8 +406,25 @@ static char *parseautheq(char **strp)
     return ret;
 }
 
-/* return malloc'd string containing the address */
-static char *parseaddr(char *s)
+static bool is_ascii(const char *s)
+{
+    for (; *s; s++) {
+        if (*s & 0x80) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool is_domain_char(char c, bool utf8)
+{
+    return Uisalnum(c) || c == '.' || c == '-' || (utf8 && (c & 0x80));
+}
+
+/* return malloc'd string containing the address
+ *
+ * If 'utf8' is set, the address may contain UTF-8 as RFC 6531 allows. */
+static char *parseaddr(char *s, bool utf8)
 {
     char *p;
     int lmtp_strict_rfc2821 = config_getswitch(IMAPOPT_LMTP_STRICT_RFC2821);
@@ -419,7 +442,7 @@ static char *parseaddr(char *s)
             if (*p++ != ']') return 0;
         }
         else {
-            while (Uisalnum(*p) || *p == '.' || *p == '-') p++;
+            while (is_domain_char(*p, utf8)) p++;
         }
         if (*p == ',' && p[1] == '@') p++;
         else if (*p == ':' && p[1] != '@') p++;
@@ -442,7 +465,7 @@ static char *parseaddr(char *s)
             if (*p == '\\') {
                 if (!*++p) return 0;
             }
-            else {
+            else if (!(utf8 && (*p & 128))) {
                 if (*p & 128 && !lmtp_strict_rfc2821) {
                     /* this prevents us from becoming a backscatter
                        source if our MTA allows 8bit in local-part
@@ -465,12 +488,19 @@ static char *parseaddr(char *s)
             if (*p++ != ']') return 0;
         }
         else {
-            while (Uisalnum(*p) || *p == '.' || *p == '-') p++;
+            while (is_domain_char(*p, utf8)) p++;
         }
     }
 
     if (*p++ != '>') return 0;
     if (*p && *p != ' ') return 0;
+
+    if (utf8) {
+        struct char_counts counts = charset_count_validutf8(s, p - s);
+        if (counts.invalid || counts.bytelen[0]) {
+            return 0;
+        }
+    }
 
     return xstrndup(s, p - s);
 }
@@ -598,7 +628,7 @@ static int savemsg(struct clientdata *cd,
     time_to_rfc5322(now, datestr, sizeof(datestr));
     addlen = 8 + strlen(cd->lhlo_param) + strlen(cd->clienthost);
     if (m->authuser) addlen += 28 + strlen(m->authuser) + 5; /* +5 for ssf */
-    addlen += 25 + strlen(config_servername) + strlen(CYRUS_VERSION);
+    addlen += 29 + strlen(config_servername) + strlen(CYRUS_VERSION);
     if (cd->tls_conn) {
         addlen += 3 + tls_get_info(cd->tls_conn, tls_info, sizeof(tls_info));
     }
@@ -622,7 +652,8 @@ static int savemsg(struct clientdata *cd,
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
         p += sprintf(p, " (Cyrus %s)", CYRUS_VERSION);
     }
-    p += sprintf(p, " with LMTP%s%s",
+    p += sprintf(p, " with %sLMTP%s%s",
+                 m->smtputf8 ? "UTF8" : "",
                  cd->starttls_done ? "S" : "",
                  cd->authenticated != NOAUTH ? "A" : "");
 
@@ -777,6 +808,29 @@ static int process_recipient(char *addr,
 
     if (sl) {
         char *rcpt = xstrndup(addr, sl);
+
+        /* mailbox names are stored in NFC */
+        if (!is_ascii(rcpt)) {
+            char *nfc = charset_utf8_normalize(rcpt);
+            if (nfc) {
+                free(rcpt);
+                rcpt = nfc;
+            }
+        }
+
+        /* mailbox names hold domains as A-labels */
+        char *at = strrchr(rcpt, '@');
+        if (at && !is_ascii(at + 1)) {
+            char *alabels = charset_idna_to_ascii(at + 1);
+            if (alabels) {
+                *at = '\0';
+                char *tmp = strconcat(rcpt, "@", alabels, NULL);
+                free(alabels);
+                free(rcpt);
+                rcpt = tmp;
+            }
+        }
+
         mbname = mbname_from_recipient(rcpt, msg->ns);
         free(rcpt);
 
@@ -878,6 +932,14 @@ static int reset_saslconn(sasl_conn_t **conn)
     /* End TLS/SSL Info */
 
     return SASL_OK;
+}
+
+/* This must match imapd's test for UTF8=ACCEPT: what arrives here is what
+ * IMAP serves later. */
+static bool lmtp_utf8_allowed(void)
+{
+    return !(config_getswitch(IMAPOPT_REJECT8BIT)
+             || config_getswitch(IMAPOPT_MUNGE8BIT));
 }
 
 void lmtpmode(struct lmtp_func *func,
@@ -1190,6 +1252,10 @@ void lmtpmode(struct lmtp_func *func,
                                 "250-SIZE %" PRIu64 "\r\n",
                           config_servername, max_msgsize);
 
+              if (lmtp_utf8_allowed()) {
+                  prot_printf(pout, "250-SMTPUTF8\r\n");
+              }
+
               if (tls_starttls_enabled() && !cd.starttls_done &&
                   cd.authenticated == NOAUTH) {
                   prot_printf(pout, "250-STARTTLS\r\n");
@@ -1221,6 +1287,7 @@ void lmtpmode(struct lmtp_func *func,
             }
 
             if (!strncasecmp(buf, "mail ", 5)) {
+                bool utf8_allowed = lmtp_utf8_allowed();
                 char *tmp;
                 if (msg->return_path) {
                     prot_printf(pout,
@@ -1230,7 +1297,7 @@ void lmtpmode(struct lmtp_func *func,
                 /* +5 to get past "mail "
                  * +10 to get past "mail from:" */
                 if (strncasecmp(buf+5, "from:", 5) != 0 ||
-                    !(msg->return_path = parseaddr(buf+10))) {
+                    !(msg->return_path = parseaddr(buf+10, utf8_allowed))) {
                     prot_printf(pout,
                                 "501 5.5.4 Syntax error in parameters\r\n");
                     continue;
@@ -1275,6 +1342,12 @@ void lmtpmode(struct lmtp_func *func,
                         break;
 
                     case 's': case 'S':
+                        if (utf8_allowed && !strncasecmp(tmp, "smtputf8", 8) &&
+                            (!tmp[8] || tmp[8] == ' ')) {
+                            msg->smtputf8 = true;
+                            tmp += 8;
+                            break;
+                        }
                         if (strncasecmp(tmp, "size=", 5) != 0) {
                             goto badparam;
                         }
@@ -1309,6 +1382,16 @@ void lmtpmode(struct lmtp_func *func,
                     prot_printf(pout,
                                 "501 5.5.4 Syntax error in parameters\r\n");
                     continue;
+                }
+
+                /* without SMTPUTF8, 8-bit is subject to lmtp_strict_rfc2821 */
+                if (!msg->smtputf8 && !is_ascii(msg->return_path)) {
+                    free(msg->return_path);
+                    if (!(msg->return_path = parseaddr(buf+10, false))) {
+                        prot_printf(pout,
+                                    "501 5.5.4 Syntax error in parameters\r\n");
+                        continue;
+                    }
                 }
 
                 prot_printf(pout, "250 2.1.0 ok\r\n");
@@ -1352,7 +1435,7 @@ void lmtpmode(struct lmtp_func *func,
                 /* +5 to get past "rcpt "
                  * +8 to get past "rcpt to:" */
                 if (strncasecmp(buf+5, "to:", 3) != 0 ||
-                    !(rcpt = parseaddr(buf+8))) {
+                    !(rcpt = parseaddr(buf+8, msg->smtputf8))) {
                     prot_printf(pout,
                                 "501 5.5.4 Syntax error in parameters\r\n");
                     continue;
@@ -1588,6 +1671,11 @@ static int revconvert_lmtp(const char *code)
             return IMAP_MESSAGE_TOO_LARGE;
         }
         return IMAP_QUOTA_EXCEEDED;
+    case 553:
+        if (code[4] == '5' && code[6] == '6' && code[8] == '7') {
+            return IMAP_ADDRESS_NEEDS_SMTPUTF8;
+        }
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
     case 554:
         return IMAP_MESSAGE_BADHEADER; /* sigh, pick one */
 
@@ -1715,6 +1803,24 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
     const char *traceid = trace_id();
 
     assert(conn && txn);
+
+    bool envelope_utf8 = txn->from && !is_ascii(txn->from);
+    for (j = 0; !envelope_utf8 && j < txn->rcpt_num; j++) {
+        envelope_utf8 = !is_ascii(txn->rcpt[j].addr);
+    }
+    if (envelope_utf8 && !CAPA(conn, CAPA_SMTPUTF8)) {
+        xsyslog_ev(LOG_ERR, "lmtp.proxy.send.refused",
+                   lf_s("remote.host", conn->hostname),
+                   lf_err("error", IMAP_ADDRESS_NEEDS_SMTPUTF8));
+        for (j = 0; j < txn->rcpt_num; j++) {
+            txn->rcpt[j].r = IMAP_ADDRESS_NEEDS_SMTPUTF8;
+            txn->rcpt[j].result = RCPT_PERMFAIL;
+        }
+        return 0;
+    }
+    /* Without SMTPUTF8, the server gets 8-bit headers as 8BITMIME. */
+    bool smtputf8 =
+        (txn->smtputf8 || envelope_utf8) && CAPA(conn, CAPA_SMTPUTF8);
     /* pipelining v. no pipelining? */
 
     /* here's the straightforward non-pipelining version */
@@ -1747,6 +1853,9 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
     if (CAPA(conn, CAPA_AUTH)) {
         prot_printf(conn->out, " AUTH=%s",
                     txn->auth && txn->auth[0] ? txn->auth : "<>");
+    }
+    if (smtputf8) {
+        prot_printf(conn->out, " SMTPUTF8");
     }
     prot_printf(conn->out, "\r\n");
     r = getlastresp(buf, sizeof(buf)-1, &code, conn->in, NULL);

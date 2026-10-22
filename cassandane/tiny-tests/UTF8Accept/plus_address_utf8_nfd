@@ -1,0 +1,23 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+use Encode qw(encode_utf8);
+use Unicode::Normalize qw(NFC NFD);
+
+sub test_plus_address_utf8_nfd
+    :NoAltNameSpace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $talk->create(NFC("INBOX.Bücher"))
+        or die "Cannot create folder: $@";
+
+    xlog $self, "a decomposed plus-address finds the NFC folder";
+    my $msg = $self->{gen}->generate(subject => "books");
+    my $ret = $self->{instance}->deliver($msg,
+                                         user => encode_utf8(NFD("cassandane+Bücher")));
+    $self->assert_num_equals(0, $ret);
+
+    $talk->select(NFC("INBOX.Bücher"));
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+}
