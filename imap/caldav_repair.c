@@ -363,6 +363,16 @@ done:
     return equal;
 }
 
+static bool userdata_is_valid(const struct buf *value)
+{
+    struct icalsupport_personal_data data = { 0 };
+    bool valid = !icalsupport_decode_personal_data(value, &data);
+
+    icalsupport_personal_data_fini(&data);
+
+    return valid;
+}
+
 /*
  * Planning
  */
@@ -412,7 +422,10 @@ static char *fold_resource(struct repair_res *dup,
         struct repair_userdata *tud =
             find_userdata(target_userdata, pud->userid);
 
-        if (tud && !userdata_is_equal(&tud->value, &pud->value)) {
+        /* The merge has to re-encode data the target lacks, so data that
+         * does not decode can only be kept by splitting its copy off. */
+        if (tud ? !userdata_is_equal(&tud->value, &pud->value)
+                : !userdata_is_valid(&pud->value)) {
             conflict = xstrdup("per-user data");
             goto done;
         }
@@ -688,11 +701,13 @@ static int rewrite_primary(struct repair_res *primary, const char *userid,
 
         if (find_userdata(&primary->userdata, pud->userid)) continue;
 
+        /* plan_group() split off any copy whose data does not decode */
         struct icalsupport_personal_data pdata = { 0 };
-        if (icalsupport_decode_personal_data(&pud->value, &pdata)) continue;
+        r = icalsupport_decode_personal_data(&pud->value, &pdata);
+        if (r) r = IMAP_MAILBOX_BADFORMAT;
 
         struct index_record newrecord;
-        r = mailbox_find_index_record(mailbox, newuid, &newrecord);
+        if (!r) r = mailbox_find_index_record(mailbox, newuid, &newrecord);
         if (!r) {
             struct buf value = BUF_INITIALIZER;
 

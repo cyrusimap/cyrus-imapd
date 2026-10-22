@@ -22,6 +22,7 @@
 #include "imap/append.h"
 #include "imap/caldav_db.h"
 #include "imap/caldav_repair.h"
+#include "imap/dlist.h"
 #include "imap/global.h"
 #include "imap/ical_support.h"
 #include "imap/imap_err.h"
@@ -328,16 +329,29 @@ static void expunge_resource(const char *calname, uint32_t imap_uid)
     free(name);
 }
 
+static void write_userdata(const char *calname, uint32_t imap_uid,
+                           const struct buf *value)
+{
+    char *name = cal_mboxname(calname);
+    struct mailbox *mailbox = NULL;
+
+    int r = mailbox_open_iwl(name, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = mailbox_annotation_write(mailbox, imap_uid, PER_USER_CAL_DATA,
+                                 USERID, value);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    mailbox_close(&mailbox);
+    free(name);
+}
+
 /* Personal alarms live in a per-message annotation, outside the shared
  * iCalendar, so nothing in the resource itself says they are there. */
 static void set_userdata(const char *calname, uint32_t imap_uid,
                          const char *trigger, modseq_t modseq)
 {
-    char *name = cal_mboxname(calname);
-    struct mailbox *mailbox = NULL;
     struct buf vpatch = BUF_INITIALIZER;
     struct buf value = BUF_INITIALIZER;
-    int r;
 
     buf_printf(&vpatch,
                "BEGIN:VPATCH\r\n"
@@ -363,18 +377,11 @@ static void set_userdata(const char *calname, uint32_t imap_uid,
     CU_ASSERT_PTR_NOT_NULL_FATAL(data.vpatch);
 
     icalsupport_encode_personal_data(&value, &data);
-
-    r = mailbox_open_iwl(name, &mailbox);
-    CU_ASSERT_EQUAL_FATAL(r, 0);
-    r = mailbox_annotation_write(mailbox, imap_uid, PER_USER_CAL_DATA,
-                                 USERID, &value);
-    CU_ASSERT_EQUAL_FATAL(r, 0);
-    mailbox_close(&mailbox);
+    write_userdata(calname, imap_uid, &value);
 
     icalsupport_personal_data_fini(&data);
     buf_free(&vpatch);
     buf_free(&value);
-    free(name);
 }
 
 /*
@@ -1025,6 +1032,44 @@ static void test_per_user_data_conflict(void)
 
     /* Both sets of alarms are still somewhere. */
     CU_ASSERT(has_userdata(sole_row_with_uid(&rows, EVENT_UID)));
+    CU_ASSERT(has_userdata(split_row(&rows)));
+
+    free_rows(&rows);
+}
+
+/* Per-user data that does not decode -- here, it lacks LASTMOD -- cannot be
+ * re-encoded onto the kept resource, so its copy is split off with the data
+ * intact. */
+static void test_per_user_data_undecodable(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+    struct stored dup;
+    struct buf value = BUF_INITIALIZER;
+
+    store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), NULL);
+    store_resource_ext(CAL_B, "instance.ics", 2, NULL, /*shared*/ true,
+                       INSTANCE_EVENT("instance"), &dup);
+
+    struct dlist *dl = dlist_newkvlist(NULL, NULL);
+    dlist_setatom(dl, "VPATCH",
+                  "BEGIN:VPATCH\r\n"
+                  "VERSION:1\r\n"
+                  "DTSTAMP:20260101T000000Z\r\n"
+                  "UID:per-user-data\r\n"
+                  "END:VPATCH\r\n");
+    dlist_printbuf(dl, 1, &value);
+    dlist_free(&dl);
+    write_userdata(CAL_B, dup.imap_uid, &value);
+    buf_free(&value);
+
+    char *report = run_repair(DAV_REPAIR_REALLY);
+    CU_ASSERT_PTR_NOT_NULL(strstr(report, "conflict: per-user data"));
+    free(report);
+
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 2);
+    CU_ASSERT(!has_userdata(sole_row_with_uid(&rows, EVENT_UID)));
     CU_ASSERT(has_userdata(split_row(&rows)));
 
     free_rows(&rows);
