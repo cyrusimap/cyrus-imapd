@@ -7,6 +7,8 @@
 
 /***************** server-side LMTP *******************/
 
+#include <stdbool.h>
+
 #include "xmalloc.h"
 #include "spool.h"
 #include "mboxname.h"
@@ -26,6 +28,7 @@ struct message_data {
 
     /* msg envelope */
     char *return_path;          /* where to return message */
+    bool smtputf8;              /* MAIL FROM had SMTPUTF8 (RFC 6531) */
     const struct namespace *ns; /* namespace for recipients */
     address_data_t **rcpt;      /* to recipients of this message */
     int rcpt_num;               /* number of recipients */
@@ -107,11 +110,13 @@ enum {
     CAPA_PIPELINING     = (1 << 3),
     CAPA_IGNOREQUOTA    = (1 << 4),
     CAPA_TRACE          = (1 << 5),
+    CAPA_SMTPUTF8       = (1 << 6),
 };
 
 struct lmtp_txn {
     const char *from;
     const char *auth;
+    bool smtputf8;              /* send SMTPUTF8, if the server has it */
     int isdotstuffed;           /* 1 if 'data' is a dotstuffed stream
                                    (including end-of-file \r\n.\r\n) */
     int tempfail_unknown_mailbox; /* 1 if '550 5.1.1 unknown mailbox'

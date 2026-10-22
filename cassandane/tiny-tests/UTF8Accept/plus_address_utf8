@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+use Encode qw(encode_utf8);
+
+sub test_plus_address_utf8
+    :NoAltNameSpace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $talk->create("INBOX.☃")
+        or die "Cannot create folder: $@";
+
+    xlog $self, "deliver sends a UTF-8 recipient with SMTPUTF8";
+    my $msg = $self->{gen}->generate(subject => "snowman");
+    my $ret = $self->{instance}->deliver($msg,
+                                         user => encode_utf8("cassandane+☃"));
+    $self->assert_num_equals(0, $ret);
+
+    $talk->select("INBOX.☃");
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+}

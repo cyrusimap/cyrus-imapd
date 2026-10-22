@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+use Encode qw(decode_utf8 encode_utf8);
+
+sub test_lmtp_smtputf8
+    :NoAltNameSpace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $talk->create("INBOX.Bücher")
+        or die "Cannot create folder: $@";
+
+    my $lmtp = $self->lmtp_connect();
+
+    my ($code, @lines) = $self->lmtp_cmd($lmtp, 'LHLO localhost');
+    $self->assert_num_equals(250, $code);
+    $self->assert_cmp_deeply(supersetof('SMTPUTF8'), \@lines);
+
+    xlog $self, "UTF-8 sender and plus-address, with SMTPUTF8";
+    ($code) = $self->lmtp_cmd($lmtp, 'MAIL FROM:<gøril@grå.example> SMTPUTF8');
+    $self->assert_num_equals(250, $code);
+    ($code) = $self->lmtp_cmd($lmtp, 'RCPT TO:<cassandane+Bücher@example.com>');
+    $self->assert_num_equals(250, $code);
+
+    my @codes = $self->lmtp_data($lmtp, 1, <<"END");
+From: Gøril <gøril\@grå.example>\r
+To: cassandane\@example.com\r
+Subject: Grüße\r
+\r
+Hei\r
+END
+    $self->assert_cmp_deeply([250], \@codes);
+    $self->lmtp_cmd($lmtp, 'QUIT');
+
+    $talk->_imap_cmd('ENABLE', 0, "enabled", "UTF8=ACCEPT");
+    $talk->_imap_cmd('SELECT', 0, "", encode_utf8("INBOX.Bücher"));
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+
+    my $res = $talk->fetch(1, '(BODY.PEEK[HEADER.FIELDS (RETURN-PATH RECEIVED)])');
+    my $hdrs = $res->{1}{headers};
+    $self->assert_str_equals('<gøril@grå.example>',
+                             decode_utf8($hdrs->{'return-path'}[0]));
+    $self->assert_matches(qr/ with UTF8LMTPA?;/, $hdrs->{received}[0]);
+}

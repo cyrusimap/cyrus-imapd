@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_lmtp_smtputf8_required
+    ($self)
+{
+    my $lmtp = $self->lmtp_connect();
+    $self->lmtp_cmd($lmtp, 'LHLO localhost');
+
+    xlog $self, "A UTF-8 sender needs SMTPUTF8";
+    my ($code) = $self->lmtp_cmd($lmtp, 'MAIL FROM:<gøril@example.com>');
+    $self->assert_num_equals(501, $code);
+
+    xlog $self, "SMTPUTF8 takes no value or suffix";
+    ($code) = $self->lmtp_cmd($lmtp, 'MAIL FROM:<gøril@example.com> SMTPUTF8X');
+    $self->assert_num_equals(501, $code);
+    $self->lmtp_cmd($lmtp, 'RSET');
+
+    xlog $self, "SMTPUTF8 doesn't allow malformed UTF-8";
+    $lmtp->print("MAIL FROM:<g\xf8ril\@example.com> SMTPUTF8\r\n");
+    ($code) = $self->lmtp_read($lmtp);
+    $self->assert_num_equals(501, $code);
+
+    xlog $self, "A UTF-8 recipient needs SMTPUTF8 on MAIL FROM";
+    ($code) = $self->lmtp_cmd($lmtp, 'MAIL FROM:<sender@example.com>');
+    $self->assert_num_equals(250, $code);
+    ($code) = $self->lmtp_cmd($lmtp, 'RCPT TO:<cassandane+Bücher@example.com>');
+    $self->assert_num_equals(501, $code);
+
+    $self->lmtp_cmd($lmtp, 'QUIT');
+}
