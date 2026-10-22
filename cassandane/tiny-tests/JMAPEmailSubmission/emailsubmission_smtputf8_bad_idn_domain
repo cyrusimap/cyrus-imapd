@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_emailsubmission_smtputf8_bad_idn_domain
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([ [ 'Identity/get', {}, "R1" ] ]);
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    $self->make_message("foo", body => "an email\r\n") or die;
+    $res = $jmap->CallMethods([ [ 'Email/query', {}, "R1" ] ]);
+    my $emailid = $res->[0][1]->{ids}[0];
+
+    xlog $self, "Without SMTPUTF8 at the relay, a domain IDNA rejects is an invalid recipient";
+    $res = $jmap->CallMethods([ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => { email => 'from@localhost' },
+                    rcptTo => [
+                        { email => 'rcpt@localhost' },
+                        { email => 'info@-grå.org' },
+                    ],
+                },
+            },
+        },
+    }, "R1" ] ]);
+    $self->assert_cmp_deeply({
+        type => 'invalidRecipients',
+        invalidRecipients => [ 'info@-grå.org' ],
+        description => ignore(),
+    }, $res->[0][1]{notCreated}{1});
+
+    xlog $self, "and the message wasn't sent to the valid recipient either";
+    my @data = grep { m/>DATA\r?$/ }
+        $self->{instance}->get_smtpclient_telemetry('http');
+    $self->assert_cmp_deeply([], \@data);
+}

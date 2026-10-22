@@ -121,7 +121,8 @@ HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)
         /* determine extensions from submission server */
         json_t *submit_ext = json_object();
         const char *smtp_capa[] = { "FUTURERELEASE", "SIZE", "DSN",
-                                    "DELIVERBY", "MT-PRIORITY", NULL };
+                                    "DELIVERBY", "MT-PRIORITY", "SMTPUTF8",
+                                    NULL };
         const char **capa;
         struct buf buf = BUF_INITIALIZER;
         int delay_time = config_getduration(IMAPOPT_JMAP_MAX_DELAYED_SEND);
@@ -145,6 +146,17 @@ HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)
                 json_object_set_new(submit_ext, buf_lcase(&buf), jargs);
             }
         }
+
+        /* lmtpd offers SMTPUTF8 exactly when imapd offers UTF8=ACCEPT */
+        bool relay_utf8 = smtpclient_has_ext(smp, "SMTPUTF8") != NULL;
+        bool lmtp_utf8 = !(config_getswitch(IMAPOPT_REJECT8BIT) ||
+                           config_getswitch(IMAPOPT_MUNGE8BIT));
+        if (relay_utf8 != lmtp_utf8) {
+            xsyslog_ev(LOG_NOTICE, "jmap.submission.smtputf8.mismatch",
+                       lf_b("send.smtputf8", relay_utf8),
+                       lf_b("lmtp.smtputf8", lmtp_utf8));
+        }
+
         smtpclient_close(&smp);
         buf_free(&buf);
         submit_capabilities = json_pack("{s:i s:o}",
@@ -1021,7 +1033,7 @@ static void _emailsubmission_create(jmap_req_t *req,
          * server refused. */
         xsyslog_ev(r == IMAP_MESSAGE_TOO_LARGE || r == IMAP_MAILBOX_DISABLED ||
                    r == IMAP_MAILBOX_NONEXISTENT || r == IMAP_REMOTE_DENIED ||
-                   r == IMAP_PROTOCOL_ERROR
+                   r == IMAP_PROTOCOL_ERROR || r == IMAP_ADDRESS_NEEDS_SMTPUTF8
                        ? LOG_WARNING : LOG_ERR,
                    "jmap.submission.send.failed",
                    lf_jmapreq(req),
@@ -1053,6 +1065,33 @@ static void _emailsubmission_create(jmap_req_t *req,
             }
             *set_err = json_pack("{s:s s:o}", "type", "invalidRecipients",
                                  "invalidRecipients", invalid);
+            break;
+
+        case IMAP_ADDRESS_NEEDS_SMTPUTF8:
+            invalid = json_array();
+            for (i = 0; i < smtpenv.rcpts.count; i++) {
+                smtp_addr_t *addr = ptrarray_nth(&smtpenv.rcpts, i);
+                if (smtp_addr_needs_smtputf8(addr->addr)) {
+                    json_array_append_new(invalid, json_string(addr->addr));
+                }
+            }
+            if (json_array_size(invalid)) {
+                *set_err = json_pack("{s:s s:o s:s}",
+                                     "type",
+                                     "invalidRecipients",
+                                     "invalidRecipients",
+                                     invalid,
+                                     "description",
+                                     error_message(r));
+            }
+            else {
+                json_decref(invalid);
+                *set_err = json_pack("{s:s s:s}",
+                                     "type",
+                                     "forbiddenMailFrom",
+                                     "description",
+                                     error_message(r));
+            }
             break;
 
         case IMAP_REMOTE_DENIED: {
