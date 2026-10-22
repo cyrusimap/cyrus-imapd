@@ -51,6 +51,13 @@ struct repair_userdata {
     struct buf value;
 };
 
+/* Any other per-message annotation. */
+struct repair_annot {
+    char *entry;
+    char *userid;
+    struct buf value;
+};
+
 /* One live ical_objs row of a conflicting group, with its content. */
 struct repair_res {
     /* identity, from the database */
@@ -68,6 +75,8 @@ struct repair_res {
     icalcomponent *ical;
     strarray_t schedule_addresses;
     ptrarray_t userdata;        /* struct repair_userdata */
+    strarray_t *flags;
+    ptrarray_t annots;          /* struct repair_annot */
 
     /* filled in by plan_group() */
     enum repair_action action;
@@ -99,6 +108,15 @@ static void repair_userdata_free(struct repair_userdata *pud)
     free(pud);
 }
 
+static void repair_annot_free(struct repair_annot *annot)
+{
+    if (!annot) return;
+    free(annot->entry);
+    free(annot->userid);
+    buf_free(&annot->value);
+    free(annot);
+}
+
 static void repair_res_free(struct repair_res *res)
 {
     if (!res) return;
@@ -115,6 +133,13 @@ static void repair_res_free(struct repair_res *res)
     while ((pud = ptrarray_pop(&res->userdata)))
         repair_userdata_free(pud);
     ptrarray_fini(&res->userdata);
+
+    strarray_free(res->flags);
+
+    struct repair_annot *annot;
+    while ((annot = ptrarray_pop(&res->annots)))
+        repair_annot_free(annot);
+    ptrarray_fini(&res->annots);
 
     free(res);
 }
@@ -330,6 +355,41 @@ static int userdata_cb(const char *mboxname __attribute__((unused)),
     return 0;
 }
 
+static int annot_cb(const char *mboxname __attribute__((unused)),
+                    uint32_t uid __attribute__((unused)),
+                    const char *entry,
+                    const char *userid,
+                    const struct buf *value,
+                    const struct annotate_metadata *mdata
+                        __attribute__((unused)),
+                    void *rock)
+{
+    ptrarray_t *annots = rock;
+
+    if (!buf_len(value) || !strcmp(entry, PER_USER_CAL_DATA)) return 0;
+
+    struct repair_annot *annot = xzmalloc(sizeof(struct repair_annot));
+    annot->entry = xstrdup(entry);
+    annot->userid = xstrdup(userid);
+    buf_copy(&annot->value, value);
+    ptrarray_append(annots, annot);
+
+    return 0;
+}
+
+static bool has_annot(ptrarray_t *annots, const struct repair_annot *annot)
+{
+    for (int i = 0; i < ptrarray_size(annots); i++) {
+        struct repair_annot *a = ptrarray_nth(annots, i);
+        if (!strcmp(a->entry, annot->entry) &&
+            !strcmp(a->userid, annot->userid) &&
+            !buf_cmp(&a->value, &annot->value))
+            return true;
+    }
+
+    return false;
+}
+
 static struct repair_userdata *find_userdata(ptrarray_t *userdata,
                                              const char *userid)
 {
@@ -397,6 +457,26 @@ static char *fold_resource(struct repair_res *dup,
     if (dup->comp_type != primary->comp_type) {
         conflict = xstrdup("component type");
         goto done;
+    }
+
+    /* The kept resource keeps only its own flags and annotations, so the
+     * duplicate's must already be there. */
+    for (int i = 0; i < strarray_size(dup->flags); i++) {
+        const char *flag = strarray_nth(dup->flags, i);
+        if (!strarray_contains_case(primary->flags, flag)) {
+            buf_printf(&reason, "flag %s", flag);
+            conflict = buf_release(&reason);
+            goto done;
+        }
+    }
+
+    for (int i = 0; i < ptrarray_size(&dup->annots); i++) {
+        struct repair_annot *annot = ptrarray_nth(&dup->annots, i);
+        if (!has_annot(&primary->annots, annot)) {
+            buf_printf(&reason, "annotation %s", annot->entry);
+            conflict = buf_release(&reason);
+            goto done;
+        }
     }
 
     for (comp = icalcomponent_get_first_component(dup->ical,
@@ -527,7 +607,7 @@ static void repair_plan_fini(struct repair_plan *plan)
  * Reading and writing resources
  */
 
-static int load_resource(struct repair_res *res)
+static int load_resource(struct repair_res *res, const char *userid)
 {
     struct mailbox *mailbox = NULL;
     struct index_record record;
@@ -548,6 +628,13 @@ static int load_resource(struct repair_res *res)
     struct userdata_rock urock = { &res->userdata };
     r = annotatemore_findall_mailbox(mailbox, res->imap_uid, PER_USER_CAL_DATA,
                                      0, &userdata_cb, &urock, 0);
+    if (r) goto done;
+
+    r = annotatemore_findall_mailbox(mailbox, res->imap_uid, "*", 0, &annot_cb,
+                                     &res->annots, 0);
+    if (r) goto done;
+
+    res->flags = mailbox_extract_flags(mailbox, &record, userid);
 
 done:
     mailbox_close(&mailbox);
@@ -869,7 +956,7 @@ static int repair_group(struct repair_group *group, const char *userid,
     int r = 0;
 
     for (int i = 0; i < ptrarray_size(&group->resources); i++) {
-        r = load_resource(ptrarray_nth(&group->resources, i));
+        r = load_resource(ptrarray_nth(&group->resources, i), userid);
         if (r) goto done;
     }
 

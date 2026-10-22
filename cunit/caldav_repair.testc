@@ -329,16 +329,39 @@ static void expunge_resource(const char *calname, uint32_t imap_uid)
     free(name);
 }
 
-static void write_userdata(const char *calname, uint32_t imap_uid,
-                           const struct buf *value)
+static void write_annotation(const char *calname, uint32_t imap_uid,
+                             const char *entry, const struct buf *value)
 {
     char *name = cal_mboxname(calname);
     struct mailbox *mailbox = NULL;
 
     int r = mailbox_open_iwl(name, &mailbox);
     CU_ASSERT_EQUAL_FATAL(r, 0);
-    r = mailbox_annotation_write(mailbox, imap_uid, PER_USER_CAL_DATA,
-                                 USERID, value);
+    r = mailbox_annotation_write(mailbox, imap_uid, entry, USERID, value);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    mailbox_close(&mailbox);
+    free(name);
+}
+
+static void write_userdata(const char *calname, uint32_t imap_uid,
+                           const struct buf *value)
+{
+    write_annotation(calname, imap_uid, PER_USER_CAL_DATA, value);
+}
+
+static void set_draft(const char *calname, uint32_t imap_uid)
+{
+    char *name = cal_mboxname(calname);
+    struct mailbox *mailbox = NULL;
+    struct index_record record;
+
+    int r = mailbox_open_iwl(name, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = mailbox_find_index_record(mailbox, imap_uid, &record);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    record.system_flags |= FLAG_DRAFT;
+    r = mailbox_rewrite_index_record(mailbox, &record);
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
     mailbox_close(&mailbox);
@@ -1072,6 +1095,69 @@ static void test_per_user_data_undecodable(void)
     CU_ASSERT(!has_userdata(sole_row_with_uid(&rows, EVENT_UID)));
     CU_ASSERT(has_userdata(split_row(&rows)));
 
+    free_rows(&rows);
+}
+
+/*
+ * The kept resource keeps only its own flags and annotations, so a copy is
+ * only merged if it has none the kept one lacks.  \Draft is JMAP isDraft.
+ */
+static void test_flag_conflict(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+    struct stored dup;
+
+    store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), NULL);
+    store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
+                   &dup);
+    set_draft(CAL_B, dup.imap_uid);
+
+    char *report = run_repair(DAV_REPAIR_REALLY);
+    CU_ASSERT_PTR_NOT_NULL(strstr(report, "conflict: flag \\Draft"));
+    free(report);
+
+    live_rows(&rows);
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 2);
+    free_rows(&rows);
+}
+
+static void test_flag_shared(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+    struct stored primary, dup;
+
+    store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), &primary);
+    store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
+                   &dup);
+    set_draft(CAL_A, primary.imap_uid);
+    set_draft(CAL_B, dup.imap_uid);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+
+    live_rows(&rows);
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+    free_rows(&rows);
+}
+
+static void test_annotation_conflict(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+    struct stored dup;
+    struct buf value = BUF_INITIALIZER;
+
+    store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), NULL);
+    store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
+                   &dup);
+    buf_setcstr(&value, "some value");
+    write_annotation(CAL_B, dup.imap_uid, "/comment", &value);
+    buf_free(&value);
+
+    char *report = run_repair(DAV_REPAIR_REALLY);
+    CU_ASSERT_PTR_NOT_NULL(strstr(report, "conflict: annotation /comment"));
+    free(report);
+
+    live_rows(&rows);
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 2);
     free_rows(&rows);
 }
 

@@ -62,8 +62,8 @@ Options
     only ``caldav_put`` enforces and which several other write paths can break.
     One resource keeps its identity, its iCalendar UID and its ``createdmodseq``,
     and therefore the JMAP id clients already hold.  The others are merged into
-    it where no component and no per-user data would be lost, and otherwise are
-    split off whole under a fresh iCalendar UID, resource name and
+    it where no component, per-user data, flag or annotation would be lost, and
+    otherwise are split off whole under a fresh iCalendar UID, resource name and
     ``createdmodseq``, with the original UID recorded in an
     ``X-CYRUS-ORIGINAL-UID`` property.
 
