@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+# "p" on another user's mailbox lets mail be sent there, not filed there
+sub test_fileinto_otheruser_post_only
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user('alice');
+    $admintalk->create("user.alice.target") || die;
+    $admintalk->setacl("user.alice", 'anyone' => 'p') || die;
+    $admintalk->setacl("user.alice.target", 'anyone' => 'p') || die;
+
+    $self->{instance}->install_sieve_script(<<'EOF2'
+require ["fileinto"];
+if header :is "subject" "inbox" { fileinto "user.alice"; }
+else { fileinto "user.alice.target"; }
+EOF2
+    , username => 'cassandane');
+
+    my %exp;
+    foreach my $subject (qw(inbox target)) {
+        my $msg = $self->{gen}->generate(subject => $subject);
+        $self->{instance}->deliver($msg, users => [ 'cassandane' ]);
+        $exp{$subject} = $msg;
+    }
+
+    xlog $self, "nothing reached alice's mailboxes";
+    foreach my $mbox ("user.alice", "user.alice.target") {
+        my $res = $admintalk->status($mbox, ['messages']);
+        $self->assert_num_equals(0, $res->{messages});
+    }
+
+    xlog $self, "both fell back to our INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $exp{inbox}, 2 => $exp{target} },
+                          check_guid => 0);
+
+    xlog $self, "with insert rights, but still no post, fileinto works";
+    $admintalk->setacl("user.alice.target", 'cassandane' => 'lrsi') || die;
+    my $msg = $self->{gen}->generate(subject => "target");
+    $self->{instance}->deliver($msg, users => [ 'cassandane' ]);
+    my $res = $admintalk->status("user.alice.target", ['messages']);
+    $self->assert_num_equals(1, $res->{messages});
+}

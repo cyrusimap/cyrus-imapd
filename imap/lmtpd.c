@@ -500,8 +500,8 @@ done:
  * if you wish to use single instance store, pass stage as non-NULL
  * if you want to deliver message regardless of duplicates, pass id as NULL
  * if you want to notify, pass user
- * if you want to force delivery (to force delivery to INBOX, for instance)
- * pass acloverride
+ * aclcheck is the rights authstate must hold on mailboxname; pass 0 to
+ * force delivery (to INBOX, for instance)
  */
 int deliver_mailbox(FILE *f,
                     struct message_content *content,
@@ -519,7 +519,7 @@ int deliver_mailbox(FILE *f,
                     char *date,
                     time_t savedate,
                     int quotaoverride,
-                    int acloverride)
+                    long aclcheck)
 {
     int r = 0;
     struct appendstate as;
@@ -558,7 +558,7 @@ int deliver_mailbox(FILE *f,
     }
 
     r = append_setup_mbox(&as, mailbox,
-                          authuser, authstate, acloverride ? 0 : ACL_POST,
+                          authuser, authstate, aclcheck,
                           qdiffs, NULL, 0, EVENT_MESSAGE_NEW);
     if (r) {
         mailbox_close(&mailbox);
@@ -784,7 +784,7 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
                                mydata->authuser, mydata->authstate, md->id,
                                NULL, mydata->notifyheader,
                                mode, mbname_intname(origmbname), md->date,
-                               0 /*savedate*/, quotaoverride, 0);
+                               0 /*savedate*/, quotaoverride, ACL_POST);
     }
 
     mbname_t *mbname = mbname_dup(origmbname);
@@ -805,7 +805,7 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
                               mydata->authuser, mydata->authstate, md->id,
                               mbname_userid(mbname), mydata->notifyheader,
                               mode, mbname_intname(mbname), md->date,
-                              0 /*savedate*/, quotaoverride, 0);
+                              0 /*savedate*/, quotaoverride, ACL_POST);
     }
 
     if (ret) {
@@ -819,7 +819,7 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
                               mbname_userid(mbname), authstate, md->id,
                               mbname_userid(mbname), mydata->notifyheader,
                               mode, mbname_intname(mbname), md->date,
-                              0 /*savedate*/, quotaoverride, 1);
+                              0 /*savedate*/, quotaoverride, 0 /*aclcheck*/);
 
         if (authstate) auth_freestate(authstate);
     }

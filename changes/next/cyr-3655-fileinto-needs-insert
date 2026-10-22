@@ -1,0 +1,29 @@
+Description:
+
+A Sieve fileinto that targets a mailbox the script owner doesn't own, by name
+or by :mailboxid, now requires the "i" (insert) right on it.  Previously "p"
+(post) was enough, so a mailbox granting "anyone p" for plus-addressing
+could be filed into from any other user's script, bypassing its owner's
+own Sieve script.
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Sharees who file into another user's or a shared mailbox from their Sieve
+scripts must hold "i" on it.  Messages that lack it are delivered to the
+script owner's INBOX instead.
+
+
+GitHub issue:
+
+None
