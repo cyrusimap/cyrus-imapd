@@ -5213,8 +5213,16 @@ static int createevent_load_ical(jmap_req_t *req,
             r = jmap_openmbox_by_uniqueid(req, rock.uniqueid, &srcmbox, 0);
             if (r) goto done;
 
-            r = caldav_lookup_uid(create->db, create->ical_uid, &cdata);
-            if (r) goto done;
+            const mbentry_t mbentry = {
+                .name = (char *) mailbox_name(srcmbox),
+                .uniqueid = (char *) mailbox_uniqueid(srcmbox)
+            };
+            r = caldav_lookup_resource(create->db, &mbentry,
+                                       rock.resourcename, &cdata, 0);
+            if (r) {
+                mailbox_close(&srcmbox);
+                goto done;
+            }
 
             create->resourcename = xstrdup(cdata->dav.resource);
 
