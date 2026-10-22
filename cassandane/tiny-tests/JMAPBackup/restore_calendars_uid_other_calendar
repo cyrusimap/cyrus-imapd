@@ -1,9 +1,9 @@
 #!perl
 use Cassandane::Tiny;
 
-# Restoring a destroyed event puts its resource back without looking at where
-# the UID lives now, so it resurrects a second resource for a UID that has
-# since been created in another calendar.
+# A destroyed event whose UID has since been created in another calendar stays
+# destroyed on restore, since one UID lives in one resource, and the restore
+# does not count it as undone.
 
 my sub uid_resources ($user, $uid)
 {
@@ -46,13 +46,16 @@ sub test_restore_calendars_uid_other_calendar ($self)
     my $period = 'PT' . (time() - $mark) . 'S';
 
     xlog $self, "restore calendars to before the destroy";
-    $user->jmap->request([
+    my $res = $user->jmap->request([
         ['Backup/restoreCalendars', {
             undoPeriod     => $period,
             undoAll        => JSON::false,
             verboseLogging => JSON::true,
         }, 'R1'],
     ]);
+
+    my $restore = $res->single_sentence('Backup/restoreCalendars')->arguments;
+    $self->assert_num_equals(0, $restore->{numDestroysUndone});
 
     xlog $self, "assert the uid is in exactly one resource";
     my $resources = uid_resources($user, $uid);
