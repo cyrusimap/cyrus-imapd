@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+use Data::UUID;
+
+# A calendar address that decodes to CRLF must not become SMTP commands
+sub test_imip_attendee_crlf
+    :NoStartInstances
+    :want_smtpdaemon
+    ($self)
+{
+    $self->{instance}->{config}->set('imipnotifier' => undef);
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $caldav = $self->{caldav};
+    my $uid = Data::UUID->new->create_str;
+
+    my $smuggled = join '%0D%0A',
+        'invitee@example.com%3E', 'RSET',
+        'MAIL FROM:%3Cforged@example.com%3E',
+        'RCPT TO:%3Cother@example.com%3E', 'DATA',
+        'Subject: smuggled', '', 'smuggled body', '.',
+        'RSET', 'MAIL FROM:%3Ccassandane@example.com%3E',
+        'RCPT TO:%3Cinvitee@example.com';
+    $smuggled =~ s/ /%20/g;
+
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Foo//Bar//EN
+BEGIN:VEVENT
+UID:$uid
+SUMMARY:test
+DTSTART:20240703T153000Z
+DTSTAMP:20240703T153000Z
+SEQUENCE:0
+ORGANIZER:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:$smuggled
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $caldav->Request('PUT', "Default/$uid.ics", $ical,
+                     'Content-Type' => 'text/calendar; charset=utf-8');
+
+    my $dir = $self->{instance}->get_basedir() . '/smtpd';
+    my @bodies;
+    opendir(my $dh, $dir) or die "opendir $dir: $!";
+    foreach my $file (grep { m/\.smtp$/ } readdir $dh) {
+        open(my $fh, '<', "$dir/$file") or die "open $dir/$file: $!";
+        local $/;
+        push @bodies, scalar <$fh>;
+        close $fh;
+    }
+    closedir $dh;
+
+    xlog $self, "the well-formed attendee was invited, and nothing else sent";
+    $self->assert_num_equals(1, scalar @bodies);
+    $self->assert_matches(qr/^To:.*friend\@example\.com/m, $bodies[0]);
+    # the event itself still carries the attendee, percent-encoded
+    $self->assert_does_not_match(qr/^(?:RSET|Subject: smuggled)\r?$/m,
+                                 $bodies[0]);
+}
