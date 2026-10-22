@@ -1,0 +1,88 @@
+#!perl
+use Cassandane::Tiny;
+
+# DELETE of a shared collection removes the share from our own home only
+sub test_davsharing_delete_other_home
+    :NoVirtDomains
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+
+    my sub davtalk {
+        my ($user) = @_;
+        return Net::CalDAVTalk->new(
+            user => $user,
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/',
+            expandurl => 1,
+        );
+    }
+
+    $self->{instance}->create_user('manifold');
+    $self->{instance}->create_user('other');
+    my $mantalk = davtalk('manifold');
+    my $othertalk = davtalk('other');
+
+    xlog $self, "manifold shares a calendar with cassandane, who accepts";
+    my $CalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    $mantalk->Request('POST', $CalendarId, <<EOF2,
+<?xml version="1.0" encoding="utf-8" ?>
+<D:share-resource xmlns:D="DAV:">
+  <D:sharee>
+    <D:href>mailto:cassandane\@example.com</D:href>
+    <D:share-access><D:read-write /></D:share-access>
+  </D:sharee>
+</D:share-resource>
+EOF2
+        'Content-Type' => 'application/davsharing+xml');
+
+    my ($adds) = $CalDAV->SyncEventLinks("/dav/notifications/user/cassandane");
+    $self->assert_num_equals(1, scalar keys %$adds);
+    $CalDAV->Request('POST', (keys %$adds)[0], <<EOF2,
+<?xml version="1.0" encoding="utf-8" ?>
+<D:invite-reply xmlns:D="DAV:">
+  <D:invite-accepted />
+  <D:create-in><D:href>/dav/calendars/user/cassandane/</D:href></D:create-in>
+</D:invite-reply>
+EOF2
+        'Content-Type' => 'application/davsharing+xml');
+
+    my ($shared) = grep { $_->{name} eq 'Manifold Calendar' }
+                   $CalDAV->GetCalendars()->@*;
+    $self->assert_not_null($shared);
+    my $sharedid = $shared->{id};
+
+    my $mboxname = "user.manifold.#calendars.$CalendarId";
+    my $modseq = sub {
+        $admintalk->status($mboxname, ['highestmodseq'])->{highestmodseq};
+    };
+    my $before = $modseq->();
+
+    xlog $self, "other can't remove the share from cassandane's home";
+    my $res = $othertalk->SafeRequest('DELETE',
+        "/dav/calendars/user/cassandane/$sharedid/");
+    $self->assert_num_equals(403, $res->{http_response}{status});
+
+    xlog $self, "or decline it in its own home without access";
+    $res = $othertalk->SafeRequest('DELETE',
+        "/dav/calendars/user/other/$sharedid/");
+    $self->assert_num_equals(404, $res->{http_response}{status});
+
+    xlog $self, "cassandane still has the share, and the mailbox is untouched";
+    $self->assert_num_equals(1, scalar grep { $_->{id} eq $sharedid }
+                             $CalDAV->GetCalendars()->@*);
+    $self->assert_num_equals($before, $modseq->());
+
+    xlog $self, "cassandane can remove it";
+    $CalDAV->DeleteCalendar($sharedid);
+    $self->assert_num_equals(0, scalar grep { $_->{id} eq $sharedid }
+                             $CalDAV->GetCalendars()->@*);
+}
