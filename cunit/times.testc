@@ -885,6 +885,10 @@ test_rfc5322_fail(void)
 
     assert_rfc5322_fail("Tue, 20!Jun 2017 00:49:38");
     assert_rfc5322_fail("Tue, 20 Jun!2017 00:49:38");
+
+    /* 4294969313 truncated to 32 bits is 2017.
+     * The previous implementation made this mistake, and treated this as 2017 */
+    assert_rfc5322_fail("Tue, 20 Jun 4294969313 00:49:38");
 }
 
 static void
