@@ -1088,8 +1088,12 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
      * components sharing a UID live in one resource, and so in one calendar.
      * The Scheduling Inbox is exempt -- it holds the iTIP messages about an
      * event beside the event itself -- and so is a MOVE within one account,
-     * which stores at its destination before expunging its source. */
-    if (!(flags & NO_DUP_CHECK) && !caldav_is_sched_inbox(caldavdb, mailbox)) {
+     * which stores at its destination before expunging its source.
+     * Rewriting an existing resource cannot add a conflict, as its UID was
+     * checked unchanged above, so it is allowed even while older duplicates
+     * of that UID await dav_reconstruct. */
+    if (!cdata->dav.imap_uid && !(flags & NO_DUP_CHECK) &&
+        !caldav_is_sched_inbox(caldavdb, mailbox)) {
         struct caldav_data *dup = NULL;
         const char *mbox = cdata->dav.mailbox_byname ?
             mailbox_name(mailbox) : mailbox_uniqueid(mailbox);
