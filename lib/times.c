@@ -46,10 +46,10 @@ enum {
     Digit = 8               /* Digits/Numbers */
 };
 
-static const long rfc5322_usascii_charset[257] = {
-    ['0' + 1 ... '9' + 1] = Digit,
-    ['A' + 1 ... 'Z' + 1] = Alpha,
-    ['a' + 1 ... 'z' + 1] = Alpha
+static const char rfc5322_usascii_charset[256] = {
+    ['0' ... '9'] = Digit,
+    ['A' ... 'Z'] = Alpha,
+    ['a' ... 'z'] = Alpha
 };
 
 struct rfc5322dtbuf {
@@ -977,7 +977,7 @@ static int get_next_token(struct rfc5322dtbuf *buf, char **str, int *len)
         if (rfc5322_special[c] || rfc5322_separators[c])
             break;
 
-        ch = rfc5322_usascii_charset[c + 1];
+        ch = rfc5322_usascii_charset[c];
         if (!(ch & (Alpha | Digit)))
             break;
 
@@ -1129,7 +1129,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
     if (c == EOB)
         goto failed;
 
-    ch = rfc5322_usascii_charset[c + 1];
+    ch = rfc5322_usascii_charset[c];
     if (ch & Alpha) {       /* Most likely a weekday at the start. */
         if (!get_next_token(buf, &str_token, &len))
             goto failed;
