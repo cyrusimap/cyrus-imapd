@@ -617,6 +617,17 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     The WebSocket Protocol
 
+:rfc:`6531`
+
+    SMTP Extension for Internationalized Email
+
+    .. NOTE::
+
+        lmtpd advertises this extension only if both 'reject8bit' and
+        'munge8bit' are disabled.  When sending to a server without it,
+        Cyrus converts domains to A-labels, and refuses a non-ASCII
+        local-part.
+
 :rfc:`6578`
 
     Collection Synchronization for Web Distributed Authoring and
