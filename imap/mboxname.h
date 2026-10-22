@@ -287,7 +287,8 @@ char *mboxname_metapath(const char *partition,
 char *mboxname_lockpath(const char *mboxname);
 char *mboxname_lockpath_suffix(const char *mboxname, const char *suffix);
 
-/* don't check the domain or userid: for replaying a name that already exists */
+/* don't check the domain, the userid or the characters a name may hold:
+ * for replaying a name that already exists */
 #define MBOXNAME_POLICY_SKIP_IDENTITY (1<<0)
 /* allow '!': the name has a domain prefix, so it can't be the separator */
 #define MBOXNAME_POLICY_UNDER_DOMAIN (1<<1)
