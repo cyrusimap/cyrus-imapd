@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+use Encode qw(encode_utf8);
+
+sub test_mboxname_nfc
+    :NoAltNameSpace
+    ($self)
+{
+    $self->make_message("foo") or die;
+
+    my $talk = $self->{store}->get_client();
+    $talk->_imap_cmd('ENABLE', 0, 'enabled', 'UTF8=ACCEPT');
+
+    my $nfc = encode_utf8("INBOX.Caf\x{e9}");
+    my $nfd = encode_utf8("INBOX.Cafe\x{301}");
+
+    $talk->_imap_cmd('CREATE', 0, '', { Quote => $nfc });
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Every command finds the mailbox by its NFD name";
+    $talk->_imap_cmd('STATUS', 0, 'status', { Quote => $nfd }, ['messages']);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->_imap_cmd('SELECT', 0, '', 'INBOX');
+    $talk->_imap_cmd('COPY', 0, '', '1', { Quote => $nfd });
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->_imap_cmd('SELECT', 0, '', { Quote => $nfc });
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+}

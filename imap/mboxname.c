@@ -664,8 +664,14 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname,
             return NULL;
         }
 
+        /* RFC 9755, Section 3: the same name in another normalization
+         * form must find the same mailbox */
+        char *nfc = charset_utf8_normalize(extname);
+        const char *src = nfc ? nfc : extname;
+
         /* Encode mailbox name in IMAP UTF-7 */
-        freeme = charset_to_imaputf7(extname, strlen(extname), cs, ENCODING_NONE);
+        freeme = charset_to_imaputf7(src, strlen(src), cs, ENCODING_NONE);
+        free(nfc);
         charset_free(&cs);
 
         if (!freeme) {
