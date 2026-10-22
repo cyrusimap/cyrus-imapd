@@ -813,10 +813,9 @@ static void test_three_resources(void)
 }
 
 /*
- * The rows share a createdmodseq, and so encode the same JMAP id.  That is the
- * reported symptom -- query returns the id twice, and get answers with the
- * object and lists the id in notFound -- so the resource that survives has to
- * keep that createdmodseq.
+ * The rows share a createdmodseq, and so encode the same JMAP id, which
+ * clients already hold, so the resource that survives keeps that
+ * createdmodseq.
  */
 static void test_shared_createdmodseq(void)
 {

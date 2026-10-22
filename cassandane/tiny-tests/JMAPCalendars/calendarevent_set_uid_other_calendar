@@ -1,11 +1,9 @@
 #!perl
 use Cassandane::Tiny;
 
-# All components sharing one iCalendar UID must be stored in a single CalDAV
-# resource, and so in a single calendar.  CalDAV PUT rejects a UID that is
-# already in another resource, but CalendarEvent/set looks the UID up across
-# all calendars and then stores the new event in whichever calendar the client
-# named in calendarIds.
+# All components sharing one iCalendar UID are stored in a single CalDAV
+# resource, and so in a single calendar, whichever calendar a
+# CalendarEvent/set create names in calendarIds.
 
 my sub uid_resources ($user, $uid)
 {

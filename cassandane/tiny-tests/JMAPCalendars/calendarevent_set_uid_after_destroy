@@ -1,9 +1,9 @@
 #!perl
 use Cassandane::Tiny;
 
-# Reusing the UID of a destroyed event is allowed, but the dead row of that
-# event must not hide the live event that now holds the UID: the third create
-# below stores a second live resource for the same UID.
+# Reusing the UID of a destroyed event is allowed, but the destroyed event
+# must not hide the live event that now holds the UID: a third create of the
+# same event duplicates the live one, and must not add a second resource.
 
 my sub uid_resources ($user, $uid)
 {

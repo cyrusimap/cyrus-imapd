@@ -1,10 +1,9 @@
 #!perl
 use Cassandane::Tiny;
 
-# An event created with the UID of an event in another calendar inherits the
-# createdmodseq of that event, and both resources then encode the same JMAP
-# id.  A client sees the same id twice in CalendarEvent/query, or gets the id
-# it asked for back in the notFound list of CalendarEvent/get.
+# Creating an event with the UID of an event in another calendar leaves each
+# JMAP id once in CalendarEvent/query, and CalendarEvent/get finds every id
+# the query returns.
 
 my sub create_in_other_calendar ($user, $uid, $in_calendarA, $in_calendarB)
 {

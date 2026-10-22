@@ -1,10 +1,9 @@
 #!perl
 use Cassandane::Tiny;
 
-# An iCalendar UID must live in a single CalDAV resource.  PUT rejects a UID
-# that another resource already holds, and COPY is refused outright within one
-# user's own account, but COPY and MOVE into another user's calendar store the
-# resource without looking the UID up in the destination account.
+# An iCalendar UID lives in a single CalDAV resource of an account, so COPY
+# and MOVE into another user's calendar that already holds the UID are
+# refused.
 
 my sub put_event ($caldav, $href, $uid)
 {

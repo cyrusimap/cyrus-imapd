@@ -957,8 +957,8 @@ static int split_resource(struct repair_res *dup, const char *ical_uid,
     buf_free(&buf);
 
     /* createdmodseq 0 makes mailbox_append_index_record() derive one from the
-     * new record's modseq.  The reported symptom is a createdmodseq
-     * collision, not a UID collision, so re-UIDing alone would leave it. */
+     * new record's modseq.  The JMAP id encodes the createdmodseq, so a new
+     * UID alone would leave the split copy with the kept resource's id. */
     r = store_resource(mailbox, userid, authstate, split, resource, &record,
                        /*createdmodseq*/ 0, dup->sched_tag, dup->tzbyref,
                        dup->shared, &dup->schedule_addresses, &newuid);
