@@ -22,6 +22,7 @@
 #include "imap/append.h"
 #include "imap/caldav_db.h"
 #include "imap/caldav_repair.h"
+#include "imap/caldav_util.h"
 #include "imap/dlist.h"
 #include "imap/global.h"
 #include "imap/ical_support.h"
@@ -330,14 +331,15 @@ static void expunge_resource(const char *calname, uint32_t imap_uid)
 }
 
 static void write_annotation(const char *calname, uint32_t imap_uid,
-                             const char *entry, const struct buf *value)
+                             const char *entry, const char *userid,
+                             const struct buf *value)
 {
     char *name = cal_mboxname(calname);
     struct mailbox *mailbox = NULL;
 
     int r = mailbox_open_iwl(name, &mailbox);
     CU_ASSERT_EQUAL_FATAL(r, 0);
-    r = mailbox_annotation_write(mailbox, imap_uid, entry, USERID, value);
+    r = mailbox_annotation_write(mailbox, imap_uid, entry, userid, value);
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
     mailbox_close(&mailbox);
@@ -347,7 +349,7 @@ static void write_annotation(const char *calname, uint32_t imap_uid,
 static void write_userdata(const char *calname, uint32_t imap_uid,
                            const struct buf *value)
 {
-    write_annotation(calname, imap_uid, PER_USER_CAL_DATA, value);
+    write_annotation(calname, imap_uid, PER_USER_CAL_DATA, USERID, value);
 }
 
 static void set_draft(const char *calname, uint32_t imap_uid)
@@ -1201,7 +1203,7 @@ static void test_annotation_conflict(void)
     store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
                    &dup);
     buf_setcstr(&value, "some value");
-    write_annotation(CAL_B, dup.imap_uid, "/comment", &value);
+    write_annotation(CAL_B, dup.imap_uid, "/comment", USERID, &value);
     buf_free(&value);
 
     char *report = run_repair(DAV_REPAIR_REALLY);
@@ -1210,6 +1212,82 @@ static void test_annotation_conflict(void)
 
     live_rows(&rows);
     CU_ASSERT_EQUAL(ptrarray_size(&rows), 2);
+    free_rows(&rows);
+}
+
+static modseq_t record_modseq(const char *calname, uint32_t imap_uid)
+{
+    char *name = cal_mboxname(calname);
+    struct mailbox *mailbox = NULL;
+    struct index_record record;
+
+    int r = mailbox_open_irl(name, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = mailbox_find_index_record(mailbox, imap_uid, &record);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    mailbox_close(&mailbox);
+    free(name);
+
+    return record.modseq;
+}
+
+static modseq_t shared_modseq(const char *calname, uint32_t imap_uid)
+{
+    char *name = cal_mboxname(calname);
+    struct mailbox *mailbox = NULL;
+    struct buf value = BUF_INITIALIZER;
+
+    int r = mailbox_open_irl(name, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = mailbox_annotation_lookup(mailbox, imap_uid, SHARED_MODSEQ, "", &value);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    modseq_t modseq = strtoull(buf_cstring(&value), NULL, 10);
+
+    mailbox_close(&mailbox);
+    buf_free(&value);
+    free(name);
+
+    return modseq;
+}
+
+static void set_shared_modseq(const char *calname, uint32_t imap_uid)
+{
+    struct buf value = BUF_INITIALIZER;
+
+    buf_printf(&value, MODSEQ_FMT, record_modseq(calname, imap_uid));
+    write_annotation(calname, imap_uid, SHARED_MODSEQ, "", &value);
+
+    buf_free(&value);
+}
+
+/* caldav_store_resource() stamps every shared resource with its own shared
+ * modseq, so two shared copies always differ there.  That must not block a
+ * merge, and the merged resource needs a later one: a sharee's ETag is the
+ * later of it and their own data's modseq. */
+static void test_shared_modseq(void)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+    struct stored primary, dup;
+
+    store_resource_ext(CAL_A, "main.ics", 1, NULL, /*shared*/ true,
+                       MAIN_EVENT("main"), &primary);
+    store_resource_ext(CAL_B, "instance.ics", 2, NULL, /*shared*/ true,
+                       INSTANCE_EVENT("instance"), &dup);
+    set_userdata(CAL_A, primary.imap_uid, "-PT5M", primary.createdmodseq);
+    set_shared_modseq(CAL_A, primary.imap_uid);
+    set_shared_modseq(CAL_B, dup.imap_uid);
+
+    modseq_t before = shared_modseq(CAL_A, primary.imap_uid);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+    live_rows(&rows);
+
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+    struct row *kept = sole_row_with_uid(&rows, EVENT_UID);
+    CU_ASSERT(shared_modseq(calname_of(kept), kept->imap_uid) > before);
+
     free_rows(&rows);
 }
 

@@ -15,6 +15,7 @@
 #include "auth.h"
 #include "caldav_db.h"
 #include "caldav_repair.h"
+#include "caldav_util.h"
 #include "charset.h"
 #include "dav_util.h"
 #include "global.h"
@@ -366,7 +367,10 @@ static int annot_cb(const char *mboxname __attribute__((unused)),
 {
     ptrarray_t *annots = rock;
 
-    if (!buf_len(value) || !strcmp(entry, PER_USER_CAL_DATA)) return 0;
+    /* store_resource() rewrites the shared modseq, so it never conflicts */
+    if (!buf_len(value) || !strcmp(entry, PER_USER_CAL_DATA) ||
+        !strcmp(entry, SHARED_MODSEQ))
+        return 0;
 
     struct repair_annot *annot = xzmalloc(sizeof(struct repair_annot));
     annot->entry = xstrdup(entry);
@@ -729,6 +733,14 @@ static int store_resource(struct mailbox *mailbox, const char *userid,
         r = 0;
     }
     else r = IMAP_IOERROR;
+
+    /* A sharee's ETag is the later of their own data's modseq and this */
+    if (!r && shared) {
+        buf_reset(&txn.buf);
+        buf_printf(&txn.buf, MODSEQ_FMT, mailbox->i.highestmodseq);
+        r = mailbox_annotation_write(mailbox, *newuid, SHARED_MODSEQ, "",
+                                     &txn.buf);
+    }
 
     spool_free_hdrcache(txn.req_hdrs);
     buf_free(&txn.buf);
