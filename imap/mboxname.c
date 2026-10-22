@@ -640,6 +640,12 @@ EXPORTED mbname_t *mbname_from_intname(const char *intname)
     return mbname;
 }
 
+static bool utf8_is_valid(const char *s)
+{
+    struct char_counts counts = charset_count_validutf8(s, strlen(s));
+    return !counts.invalid && !counts.bytelen[0];
+}
+
 EXPORTED mbname_t *mbname_from_extname(const char *extname,
                                        const struct namespace *ns,
                                        const char *userid)
@@ -647,7 +653,9 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname,
     mbname_t *mbname = NULL, *userparts = NULL;
     char *freeme = NULL;
 
-    if (extname && ns->isutf8) {
+    /* An extname that isn't UTF-8 keeps its 8-bit octets,
+     * which no mailbox name has, so it can't name or create one. */
+    if (extname && ns->isutf8 && utf8_is_valid(extname)) {
         /* Encode extname from UTF-8 to IMAP UTF-7. */
         charset_t cs = charset_lookupname("utf-8");
         if (cs == CHARSET_UNKNOWN_CHARSET) {

@@ -4177,6 +4177,9 @@ static char *normalize_mboxname(char *name, struct listargs *listargs)
 {
     char *nfc_name = charset_utf8_normalize(name);
 
+    /* not UTF-8: leave it for mailbox name validation to reject */
+    if (!nfc_name) return name;
+
     if (strcmp(nfc_name, name)) {
         if (listargs) {
             /* Setup to emit LIST response with OLDNAME */
