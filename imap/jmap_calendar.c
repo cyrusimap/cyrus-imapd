@@ -5121,6 +5121,7 @@ struct createevent_load_ical_rock {
     const char *ical_recurid;
     int seen_recurid;
     uint32_t imap_uid;
+    char *mailbox;
     char *uniqueid;
     char *resourcename;
     modseq_t deletedmodseq;
@@ -5131,13 +5132,18 @@ int createevent_load_ical_cb(void *vrock, struct caldav_jscal *jscal)
 {
     struct createevent_load_ical_rock *rock = vrock;
 
-    if (!rock->seen_recurid)
-        rock->seen_recurid =
-            !strcmp(jscal->ical_recurid, rock->ical_recurid);
-
-    if (rock->imap_uid && !(jscal->cdata.dav.alive && rock->deletedmodseq))
+    /* Only the chosen resource's own components count */
+    if (rock->imap_uid && !(jscal->cdata.dav.alive && rock->deletedmodseq)) {
+        if (jscal->cdata.dav.imap_uid == rock->imap_uid &&
+            !strcmpsafe(jscal->cdata.dav.mailbox, rock->mailbox) &&
+            !rock->seen_recurid) {
+            rock->seen_recurid =
+                !strcmp(jscal->ical_recurid, rock->ical_recurid);
+        }
         return 0;
+    }
 
+    xzfree(rock->mailbox);
     xzfree(rock->uniqueid);
     xzfree(rock->resourcename);
 
@@ -5153,10 +5159,12 @@ int createevent_load_ical_cb(void *vrock, struct caldav_jscal *jscal)
     }
 
     rock->imap_uid = jscal->cdata.dav.imap_uid;
+    rock->mailbox = xstrdup(jscal->cdata.dav.mailbox);
     rock->createdmodseq = jscal->cdata.dav.createdmodseq;
     rock->resourcename = xstrdup(jscal->cdata.dav.resource);
     rock->deletedmodseq =
         jscal->cdata.dav.alive ? 0 : jscal->cdata.dav.modseq;
+    rock->seen_recurid = !strcmp(jscal->ical_recurid, rock->ical_recurid);
 
     return 0;
 }
@@ -5230,6 +5238,7 @@ static int createevent_load_ical(jmap_req_t *req,
 
 done:
     caldav_jscal_filter_fini(&jscal_filter);
+    xzfree(rock.mailbox);
     xzfree(rock.uniqueid);
     xzfree(rock.resourcename);
     return r;
