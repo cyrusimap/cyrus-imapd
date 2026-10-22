@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_redirect_utf8_localpart
+    :want_smtpdaemon
+    ($self)
+{
+    $self->{instance}->set_smtpd({ helo => [
+        250, "localhost", "AUTH", "DSN", "SIZE 10000", "ENHANCEDSTATUSCODES",
+        "SMTPUTF8"
+    ] });
+
+    xlog $self, "Redirect to a UTF-8 address";
+    $self->{instance}->install_sieve_script(<<'EOF'
+redirect "gøril@grå.org";
+EOF
+    );
+
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "The relay has SMTPUTF8, so the address goes as UTF-8";
+    my @lines = $self->{instance}->get_smtpclient_telemetry('lmtp');
+    my @from = grep { m/MAIL FROM:/ } @lines;
+    $self->assert_num_equals(1, scalar @from);
+    $self->assert_matches(qr/ SMTPUTF8\b/, $from[0]);
+    my @rcpt = grep { m/RCPT TO:/ } @lines;
+    $self->assert_num_equals(1, scalar @rcpt);
+    $self->assert_matches(qr/<gøril\@grå\.org>/, $rcpt[0]);
+
+    my $talk = $self->{store}->get_client();
+    $talk->select("INBOX");
+    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+}

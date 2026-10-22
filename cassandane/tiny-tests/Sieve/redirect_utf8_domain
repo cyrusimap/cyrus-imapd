@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_redirect_utf8_domain
+    :want_smtpdaemon
+    ($self)
+{
+    xlog $self, "Redirect to a U-label domain";
+    $self->{instance}->install_sieve_script(<<'EOF'
+redirect "info@grå.org";
+EOF
+    );
+
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "Without SMTPUTF8 at the relay, the domain goes as A-labels";
+    my @lines = $self->{instance}->get_smtpclient_telemetry('lmtp');
+    my @from = grep { m/MAIL FROM:/ } @lines;
+    $self->assert_num_equals(1, scalar @from);
+    $self->assert_does_not_match(qr/SMTPUTF8/, $from[0]);
+    my @rcpt = grep { m/RCPT TO:/ } @lines;
+    $self->assert_num_equals(1, scalar @rcpt);
+    $self->assert_matches(qr/<info\@xn--gr-zia\.org>/, $rcpt[0]);
+}
