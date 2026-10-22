@@ -54,6 +54,15 @@ enum {
 
 #define ACTION_MASK  0xF
 
+/**
+ * Append a message to a mailbox.
+ *
+ * @param authuser   the identity the append is made as
+ * @param authstate  the auth state checked against the mailbox's ACL
+ * @param aclcheck   the ACL_* rights authstate must hold on mailboxname,
+ *                   or 0 to skip the check
+ * @return 0 on success (including a suppressed duplicate), or an IMAP_* error
+ */
 extern int deliver_mailbox(FILE *f,
                            struct message_content *content,
                            struct stagemsg *stage,
@@ -70,6 +79,6 @@ extern int deliver_mailbox(FILE *f,
                            char *date,
                            time_t savedate,
                            int quotaoverride,
-                           int acloverride);
+                           long aclcheck);
 
 #endif /* LMTPD_H */
