@@ -943,13 +943,9 @@ static int skip_ws(struct rfc5322dtbuf *buf,
 {
     int c = (unsigned char) buf->str[buf->offset];
 
-    while (c != EOB) {
-        if (rfc5322_special[c]) {
-            c = get_next_char(buf);
-            continue;
-        }
-
-        break;
+    while (rfc5322_special[c]) {
+        c = get_next_char(buf);
+        if (c == EOB) break;
     }
 
     return 1;
