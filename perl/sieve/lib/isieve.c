@@ -293,6 +293,7 @@ int isieve_starttls(isieve_t *obj,
     struct in6_addr addr;
     char errbuf[256];
     long verify;
+    unsigned long err;
 
     if (!obj->starttls_offered) {
         *errstr = xstrdup("server does not offer STARTTLS");
@@ -389,9 +390,12 @@ tlserr:
                             X509_verify_cert_error_string(verify),
                             (char *) NULL);
     }
-    else {
-        ERR_error_string_n(ERR_get_error(), errbuf, sizeof(errbuf));
+    else if ((err = ERR_get_error())) {
+        ERR_error_string_n(err, errbuf, sizeof(errbuf));
         *errstr = strconcat("TLS negotiation failed: ", errbuf, (char *) NULL);
+    }
+    else {
+        *errstr = xstrdup("TLS negotiation failed: connection closed");
     }
     return -1;
 }
