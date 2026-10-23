@@ -4202,18 +4202,14 @@ done:
 }
 
 struct _mbox_changes_data {
-    json_t *created;        /* maps mailbox ids to {id:foldermodseq} */
-    json_t *updated;        /* maps mailbox ids to {id:foldermodseq} */
-    json_t *destroyed;      /* maps mailbox ids to {id:foldermodseq} */
-    modseq_t since_modseq;
-    int *only_counts_changed;
+    struct jmap_collection_changes *cchanges;
     jmap_req_t *req;
 };
 
 static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
 {
     struct _mbox_changes_data *data = rock;
-    modseq_t modseq, mbmodseq;
+    modseq_t mbmodseq;
     jmap_req_t *req = data->req;
 
     /* Ignore anything but regular mailboxes */
@@ -4238,88 +4234,16 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
         mbmodseq = mbentry->foldermodseq;
     }
 
-    /* Ignore old changes */
-    if (mbmodseq <= data->since_modseq) {
-        return 0;
-    }
-
-    /* Determine where to report that update. Note that we even report
-     * hidden mailboxes in order to allow clients remove unshared and
-     * deleted mailboxes */
-    json_t *dest = NULL;
-    if (mbentry->createdmodseq <= data->since_modseq) {
-        if ((mbentry->mbtype & MBTYPE_DELETED) ||
-                !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
-            dest = data->destroyed;
-        }
-        else dest = data->updated;
-    }
-    else {
-        if ((mbentry->mbtype & MBTYPE_DELETED) ||
-                !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
-            // we can't see it and we didn't see it before, ignore
-            return 0;
-        }
-        else dest = data->created;
-    }
-
-    /* Did any of the mailbox metadata change? */
-    if (mbentry->foldermodseq > data->since_modseq) {
-        *(data->only_counts_changed) = 0;
-    }
-
     char mboxid[JMAP_MAX_MAILBOXID_SIZE];
     jmap_set_mailboxid(data->req->cstate, mbentry, mboxid);
 
-    /* Is this a more recent update for an id that we have already seen?
-     * (check all three) */
-    json_t *old[3];
-    old[0] = data->created;
-    old[1] = data->updated;
-    old[2] = data->destroyed;
-    int i;
-    for (i = 0; i < 3; i++) {
-        json_t *val = json_object_get(old[i], mboxid);
-        if (!val) continue;
-        modseq = (modseq_t)json_integer_value(json_object_get(val, "modseq"));
-        if (modseq < mbmodseq) {
-            /* use new update */
-            json_object_del(old[i], mboxid);
-        } else if (modseq == mbmodseq) {
-            /* most likely a rename: report it in 'updated' */
-            if (dest == data->updated) {
-                json_object_del(old[i], mboxid);
-            }
-            else if (i == 1) {
-                return 0;
-            }
-        } else {
-            /* keep old update */
-            return 0;
-        }
-    }
+    /* A hidden mailbox is destroyed, so clients remove unshared ones */
+    bool live = !(mbentry->mbtype & MBTYPE_DELETED) &&
+                jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP);
+    jmap_collection_changes_add(data->cchanges, mboxid, mbmodseq,
+                                mbentry->foldermodseq, mbentry->createdmodseq,
+                                live);
 
-    /* OK, report that update */
-    if (dest)
-        json_object_set_new(dest, mboxid,
-                            json_pack("{s:s s:I}", "id",
-                                mboxid, "modseq", (json_int_t) mbmodseq));
-
-    return 0;
-}
-
-static int _mbox_changes_cmp(const void **pa, const void **pb)
-{
-    const json_t *a = *pa, *b = *pb;
-    modseq_t ma, mb;
-
-    ma = (modseq_t) json_integer_value(json_object_get(a, "modseq"));
-    mb = (modseq_t) json_integer_value(json_object_get(b, "modseq"));
-
-    if (ma < mb)
-        return -1;
-    if (ma > mb)
-        return 1;
     return 0;
 }
 
@@ -4328,107 +4252,23 @@ static int _mbox_changes(jmap_req_t *req,
                          int *only_counts_changed,
                          json_t **err)
 {
-    *only_counts_changed = 1;
+    struct jmap_collection_changes cchanges;
+    struct _mbox_changes_data data = { &cchanges, req };
+    int r;
 
-    ptrarray_t updates = PTRARRAY_INITIALIZER;
-    struct _mbox_changes_data data = {
-        json_object(),
-        json_object(),
-        json_object(),
-        changes->since_modseq,
-        only_counts_changed,
-        req
-    };
-    modseq_t windowmodseq;
-    modseq_t prev_modseq = 0;
-    size_t prev_modseq_mark[3] = {0};
-    const char *id;
-    json_t *val;
-    int r, i;
+    jmap_collection_changes_init(&cchanges);
 
-
-    /* Search for updates */
     r = mboxlist_usermboxtree(req->accountid, req->authstate,
                               _mbox_changes_cb, &data,
                               MBOXTREE_TOMBSTONES|
                               MBOXTREE_INTERMEDIATES);
-    if (r) goto done;
-
-    /* Sort updates by modseq */
-    json_object_foreach(data.created, id, val) {
-        ptrarray_add(&updates, val);
-    }
-    json_object_foreach(data.updated, id, val) {
-        ptrarray_add(&updates, val);
-    }
-    json_object_foreach(data.destroyed, id, val) {
-        ptrarray_add(&updates, val);
-    }
-    ptrarray_sort(&updates, _mbox_changes_cmp);
-
-    /* Build result */
-    changes->has_more_changes = 0;
-    windowmodseq = 0;
-    for (i = 0; i < updates.count; i++) {
-        json_t *update = ptrarray_nth(&updates, i);
-        const char *id = json_string_value(json_object_get(update, "id"));
-        modseq_t modseq = json_integer_value(json_object_get(update, "modseq"));
-
-        /* Apply maxChanges, if any. Mailboxes that share a modseq have to be
-         * reported together, because the state we hand back is a modseq and
-         * there is no way to resume in the middle of them. So if the modseq we
-         * are in the middle of turns out not to fit, take it back out again
-         * and stop before it. */
-        if (changes->max_changes &&
-            jmap_changes_count(changes) >= changes->max_changes) {
-            if (modseq == windowmodseq) {
-                jmap_changes_truncate(changes, prev_modseq_mark);
-                windowmodseq = prev_modseq;
-            }
-            changes->has_more_changes = 1;
-            break;
-        }
-
-        /* Keep track of the highest modseq, and of where it starts */
-        if (windowmodseq < modseq) {
-            prev_modseq = windowmodseq;
-            windowmodseq = modseq;
-            jmap_changes_set_mark(changes, prev_modseq_mark);
-        }
-
-        if (json_object_get(data.created, id)) {
-            json_array_append_new(changes->created, json_string(id));
-        } else if (json_object_get(data.updated, id)) {
-            json_array_append_new(changes->updated, json_string(id));
-        } else {
-            json_array_append_new(changes->destroyed, json_string(id));
-        }
+    if (!r) {
+        *err = jmap_collection_changes_finish(&cchanges, changes,
+                                              jmap_modseq(req, MBTYPE_EMAIL, 0));
+        *only_counts_changed = cchanges.only_counts_changed;
     }
 
-    if (changes->has_more_changes && !jmap_changes_count(changes)) {
-        /* Not even one modseq can be reported */
-        *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
-                         "description",
-                         "maxChanges too small to report a whole modseq");
-        goto done;
-    }
-
-    if ((json_array_size(changes->created) == 0 &&
-         json_array_size(changes->updated) == 0 &&
-         json_array_size(changes->destroyed) == 0) ||
-        (json_array_size(changes->created) > 0) ||
-        (json_array_size(changes->destroyed) > 0)) {
-        *only_counts_changed = 0;
-    }
-
-    changes->new_modseq = changes->has_more_changes ?
-        windowmodseq : jmap_modseq(req, MBTYPE_EMAIL, 0);
-
-done:
-    if (data.created) json_decref(data.created);
-    if (data.updated) json_decref(data.updated);
-    if (data.destroyed) json_decref(data.destroyed);
-    ptrarray_fini(&updates);
+    jmap_collection_changes_fini(&cchanges);
     return r;
 }
 

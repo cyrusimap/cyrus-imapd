@@ -2368,6 +2368,169 @@ HIDDEN json_t *jmap_changes_reply(struct jmap_changes *changes)
     return res;
 }
 
+struct collection_change
+{
+    char *id;
+    modseq_t modseq;
+    modseq_t foldermodseq;
+    modseq_t createdmodseq;
+    bool live;
+};
+
+static void collection_change_free(void *data)
+{
+    struct collection_change *change = data;
+
+    free(change->id);
+    free(change);
+}
+
+HIDDEN void jmap_collection_changes_init(struct jmap_collection_changes *cc)
+{
+    construct_hash_table(&cc->byid, 64, 0);
+    cc->only_counts_changed = false;
+}
+
+HIDDEN void jmap_collection_changes_add(struct jmap_collection_changes *cc,
+                                        const char *id,
+                                        modseq_t modseq,
+                                        modseq_t foldermodseq,
+                                        modseq_t createdmodseq,
+                                        bool live)
+{
+    struct collection_change *change = hash_lookup(id, &cc->byid);
+
+    if (!change) {
+        change = xzmalloc(sizeof(struct collection_change));
+        change->id = xstrdup(id);
+        change->createdmodseq = createdmodseq;
+        hash_insert(id, change, &cc->byid);
+    }
+
+    if (modseq > change->modseq) {
+        change->modseq = modseq;
+    }
+    if (foldermodseq > change->foldermodseq) {
+        change->foldermodseq = foldermodseq;
+    }
+    if (createdmodseq < change->createdmodseq) {
+        change->createdmodseq = createdmodseq;
+    }
+    if (live) {
+        change->live = true;
+    }
+}
+
+static void collection_change_collect(const char *id __attribute__((unused)),
+                                      void *data,
+                                      void *rock)
+{
+    ptrarray_append(rock, data);
+}
+
+static int collection_change_cmp(const void **pa, const void **pb)
+{
+    const struct collection_change *a = *pa, *b = *pb;
+
+    if (a->modseq < b->modseq) {
+        return -1;
+    }
+    if (a->modseq > b->modseq) {
+        return 1;
+    }
+    return 0;
+}
+
+HIDDEN json_t *jmap_collection_changes_finish(
+    struct jmap_collection_changes *cc,
+    struct jmap_changes *changes,
+    modseq_t state_modseq)
+{
+    ptrarray_t sorted = PTRARRAY_INITIALIZER;
+    modseq_t windowmodseq = 0, prev_modseq = 0;
+    size_t prev_modseq_mark[3] = { 0 };
+    bool metadata_changed = false;
+    json_t *err = NULL;
+
+    hash_enumerate(&cc->byid, collection_change_collect, &sorted);
+    ptrarray_sort(&sorted, collection_change_cmp);
+
+    changes->has_more_changes = 0;
+    for (int i = 0; i < ptrarray_size(&sorted); i++) {
+        struct collection_change *change = ptrarray_nth(&sorted, i);
+        bool existed = change->createdmodseq <= changes->since_modseq;
+
+        if (change->modseq <= changes->since_modseq) {
+            continue;
+        }
+
+        /* created and gone again since the client last looked */
+        if (!change->live && !existed) {
+            continue;
+        }
+
+        /* Collections that share a modseq are reported together, as the
+         * state is a modseq and can't resume in the middle of them. */
+        if (changes->max_changes
+            && jmap_changes_count(changes) >= changes->max_changes)
+        {
+            if (change->modseq == windowmodseq) {
+                jmap_changes_truncate(changes, prev_modseq_mark);
+                windowmodseq = prev_modseq;
+            }
+            changes->has_more_changes = 1;
+            break;
+        }
+
+        if (windowmodseq < change->modseq) {
+            prev_modseq = windowmodseq;
+            windowmodseq = change->modseq;
+            jmap_changes_set_mark(changes, prev_modseq_mark);
+        }
+
+        json_t *ids = !change->live ? changes->destroyed
+                      : existed     ? changes->updated
+                                    : changes->created;
+        json_array_append_new(ids, json_string(change->id));
+
+        if (ids != changes->updated
+            || change->foldermodseq > changes->since_modseq)
+        {
+            metadata_changed = true;
+        }
+    }
+
+    /* conservative if maxChanges truncated the changes */
+    cc->only_counts_changed = jmap_changes_count(changes) && !metadata_changed;
+
+    if (changes->has_more_changes && !jmap_changes_count(changes)) {
+        err = json_pack("{s:s s:s}",
+                        "type",
+                        "cannotCalculateChanges",
+                        "description",
+                        "maxChanges too small to report a whole modseq");
+    }
+    else if (changes->has_more_changes) {
+        changes->new_modseq = windowmodseq;
+    }
+    else {
+        struct collection_change *newest = ptrarray_tail(&sorted);
+
+        changes->new_modseq = state_modseq;
+        if (newest && newest->modseq > changes->new_modseq) {
+            changes->new_modseq = newest->modseq;
+        }
+    }
+
+    ptrarray_fini(&sorted);
+    return err;
+}
+
+HIDDEN void jmap_collection_changes_fini(struct jmap_collection_changes *cc)
+{
+    free_hash_table(&cc->byid, collection_change_free);
+}
+
 /* Foo/copy */
 
 HIDDEN void jmap_copy_parse(jmap_req_t *req, struct jmap_parser *parser,

@@ -554,6 +554,59 @@ extern void jmap_changes_truncate(struct jmap_changes *changes,
 
 extern json_t *jmap_changes_reply(struct jmap_changes *changes);
 
+/**
+ * @brief Collects the changes to one type of collection, such as calendars
+ * or addressbooks, by JMAP id.
+ *
+ * The caller adds every entry of its collection tree, tombstones included,
+ * old or not, and jmap_collection_changes_finish() decides what to report.
+ * Entries sharing an id are one collection: a rename or a restore leaves a
+ * tombstone with the id of the live mailbox, which is then not destroyed.
+ */
+struct jmap_collection_changes
+{
+    hash_table byid;
+
+    /* set by jmap_collection_changes_finish(): the changes are all updates
+     * whose metadata didn't change */
+    bool only_counts_changed;
+};
+
+extern void jmap_collection_changes_init(struct jmap_collection_changes *cc);
+
+/**
+ * @brief Adds one entry of the collection tree.
+ *
+ * @param modseq        when the entry or its contents last changed
+ * @param foldermodseq  when the entry's metadata last changed
+ * @param createdmodseq when the collection was created
+ * @param live          whether the collection exists and the user can see
+ *                      it; false for a tombstone
+ */
+extern void jmap_collection_changes_add(struct jmap_collection_changes *cc,
+                                        const char *id,
+                                        modseq_t modseq,
+                                        modseq_t foldermodseq,
+                                        modseq_t createdmodseq,
+                                        bool live);
+
+/**
+ * @brief Fills in the created, updated and destroyed ids of @p changes,
+ * honoring its maxChanges, and its new state.
+ *
+ * The new state is @p state_modseq, the current counter for the type, or
+ * the modseq of the newest entry if that is later, so that no change is
+ * reported twice.
+ *
+ * @return a cannotCalculateChanges error, or NULL
+ */
+extern json_t *jmap_collection_changes_finish(
+    struct jmap_collection_changes *cc,
+    struct jmap_changes *changes,
+    modseq_t state_modseq);
+
+extern void jmap_collection_changes_fini(struct jmap_collection_changes *cc);
+
 
 /* Foo/copy */
 

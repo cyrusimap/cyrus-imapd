@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+# Renaming a calendar's mailbox leaves a tombstone at the old name with the
+# calendar's id, which must not report the calendar as destroyed.
+
+sub test_calendar_changes_rename ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', { create => { c1 => { name => 'moving' } } }, 'R1'],
+    ]);
+    my $calid = $res->[0][1]{created}{c1}{id};
+    $self->assert_not_null($calid);
+    my ($coll) = $res->[0][1]{created}{c1}{'x-href'} =~ m{/([^/]+)/?$};
+
+    $res = $jmap->CallMethods([['Calendar/get', { ids => undef }, 'R1']]);
+    my $state = $res->[0][1]{state};
+
+    xlog $self, "rename the calendar mailbox";
+    my $admin = $self->{adminstore}->get_client();
+    $admin->rename("user.cassandane.#calendars.$coll",
+                   "user.cassandane.#calendars.renamed")
+        or die "rename: $@";
+
+    $res = $jmap->CallMethods([
+        ['Calendar/changes', { sinceState => $state }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply({
+        created => [], updated => [ $calid ], destroyed => [],
+        hasMoreChanges => JSON::false,
+    }, { map { $_ => $res->[0][1]{$_} }
+         qw(created updated destroyed hasMoreChanges) });
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "nothing is left to report";
+    $res = $jmap->CallMethods([
+        ['Calendar/changes', { sinceState => $state }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply({
+        created => [], updated => [], destroyed => [],
+        oldState => $state, newState => $state,
+    }, { map { $_ => $res->[0][1]{$_} }
+         qw(created updated destroyed oldState newState) });
+}

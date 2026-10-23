@@ -2115,57 +2115,40 @@ done:
 
 struct addressbookchanges_rock {
     jmap_req_t *req;
-    struct jmap_changes *changes;
+    struct jmap_collection_changes *cchanges;
 };
 
 static int getaddressbookchanges_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct addressbookchanges_rock *rock = (struct addressbookchanges_rock *) vrock;
     jmap_req_t *req = rock->req;
-    int r = 0;
-
-    /* Ignore old changes. */
-    if (mbentry->foldermodseq <= rock->changes->since_modseq) {
-        goto done;
-    }
 
     /* Ignore any mailboxes that aren't (possibly deleted) addressbooks. */
     if (!mboxname_isaddressbookmailbox(mbentry->name, mbentry->mbtype))
         return 0;
 
-    /* Ignore mailboxes that are hidden from us. */
-    /* XXX Deleted mailboxes loose their ACL so we can't determine
-     * if they ever could be read by the authenticated user. We
-     * need to leak these deleted entries to not mess up client state. */
-    if (!(mbentry->mbtype & MBTYPE_DELETED) || strcmpsafe(mbentry->acl, "")) {
-        if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) return 0;
-    }
-
     char id[JMAP_MAX_ADDRBOOKID_SIZE];
     jmap_set_addrbookid(req->cstate, mbentry, id);
 
-    /* Report this addressbook as created, updated or destroyed. */
-    if (mbentry->mbtype & MBTYPE_DELETED) {
-        if (mbentry->createdmodseq <= rock->changes->since_modseq)
-            json_array_append_new(rock->changes->destroyed, json_string(id));
-    }
-    else {
-        if (mbentry->createdmodseq <= rock->changes->since_modseq)
-            json_array_append_new(rock->changes->updated, json_string(id));
-        else
-            json_array_append_new(rock->changes->created, json_string(id));
-    }
+    /* An unshared addressbook is destroyed for a sharee who may have seen it */
+    bool live = !(mbentry->mbtype & MBTYPE_DELETED) &&
+                jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
+    jmap_collection_changes_add(rock->cchanges, id, mbentry->foldermodseq,
+                                mbentry->foldermodseq, mbentry->createdmodseq,
+                                live);
 
-done:
-    return r;
+    return 0;
 }
 
 static int jmap_addressbook_changes(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
+    struct jmap_collection_changes cchanges;
     json_t *err = NULL;
     int r = 0;
+
+    jmap_collection_changes_init(&cchanges);
 
     /* Parse request */
     jmap_changes_parse(req, &parser, req->counters.carddavfoldersdeletedmodseq,
@@ -2177,7 +2160,7 @@ static int jmap_addressbook_changes(struct jmap_req *req)
 
     /* Lookup any changes. */
     char *mboxname = carddav_mboxname(req->accountid, NULL);
-    struct addressbookchanges_rock rock = { req, &changes };
+    struct addressbookchanges_rock rock = { req, &cchanges };
 
     r = mboxlist_mboxtree(mboxname, getaddressbookchanges_cb, &rock,
                           MBOXTREE_TOMBSTONES|MBOXTREE_SKIP_ROOT);
@@ -2188,14 +2171,18 @@ static int jmap_addressbook_changes(struct jmap_req *req)
         goto done;
     }
 
-    /* Determine new state.  XXX  what about max_changes? */
-    changes.new_modseq = /*changes.has_more_changes ? rock.highestmodseq :*/
-        jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0);
+    err = jmap_collection_changes_finish(&cchanges, &changes,
+                                         jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0));
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
 
     /* Build response */
     jmap_ok(req, jmap_changes_reply(&changes));
 
   done:
+    jmap_collection_changes_fini(&cchanges);
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     if (r) {
