@@ -288,6 +288,11 @@ magic(NoAltNamespace => sub {
 magic(NoMailboxLegacyDirs => sub {
     shift->config_set(mailbox_legacy_dirs => 'no');
 });
+magic(NoCardDAV => sub {
+    my $self = shift;
+    $self->{_config}->clear_bits(httpmodules => 'carddav');
+    xlog $self->_who_wants_it() . " clears config httpmodules bit carddav";
+});
 magic(MailboxLegacyDirs => sub {
     shift->config_set(mailbox_legacy_dirs => 'yes');
 });
