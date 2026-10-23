@@ -846,7 +846,11 @@ static int jmap_card_set(struct jmap_req *req)
             r = mailbox_open_iwl(mbentry->name, &mailbox);
         }
         mboxlist_entry_free(&mbentry);
-        if (r) goto done;
+        if (r) {
+            json_object_set_new(set.not_destroyed, id, jmap_server_error(r));
+            r = 0;
+            continue;
+        }
 
         xsyslog_ev(LOG_NOTICE, "jmap.contact.destroyed", lf_jmapreq(req),
                    lf_s("jmap.contact.kind",
@@ -859,7 +863,9 @@ static int jmap_card_set(struct jmap_req *req)
                             cdata->kind == CARDDAV_KIND_GROUP ? "group" : "contact"),
                        lf_mailbox(mailbox), lf_u("msg.imapuid", olduid),
                        lf_err("error", r));
-            goto done;
+            json_object_set_new(set.not_destroyed, id, jmap_server_error(r));
+            r = 0;
+            continue;
         }
 
         json_array_append_new(set.destroyed, json_string(id));
