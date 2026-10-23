@@ -7,7 +7,8 @@
 
 #include <stdbool.h>
 
-#include <sasl/sasl.h>
+#include "libsasl_min/sasl.h"
+
 #include <libxml/tree.h>
 #include <libxml/uri.h>
 #include <libical/ical.h>

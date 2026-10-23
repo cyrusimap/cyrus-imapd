@@ -4,7 +4,8 @@
 
 #include <config.h>
 
-#include <sasl/sasl.h>
+#include "libsasl_min/sasl.h"
+
 #include <sys/utsname.h>
 
 #include <string.h>

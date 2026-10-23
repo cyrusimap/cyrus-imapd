@@ -8,8 +8,6 @@
 #include <string.h>
 #include <signal.h>
 #include <ctype.h>
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
 #include <sysexits.h>
 #include <syslog.h>
 #include <stdarg.h>
@@ -24,6 +22,9 @@
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 #include "global.h"
 #include "mupdate.h"

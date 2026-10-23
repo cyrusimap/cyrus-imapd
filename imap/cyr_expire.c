@@ -27,7 +27,7 @@
 #include <stdbool.h>
 #include <libgen.h>
 
-#include <sasl/sasl.h>
+#include "libsasl_min/sasl.h"
 
 #include "annotate.h"
 #include "duplicate.h"
