@@ -352,7 +352,8 @@ static void write_userdata(const char *calname, uint32_t imap_uid,
     write_annotation(calname, imap_uid, PER_USER_CAL_DATA, USERID, value);
 }
 
-static void set_draft(const char *calname, uint32_t imap_uid)
+static void set_system_flag(const char *calname, uint32_t imap_uid,
+                            uint32_t flag)
 {
     char *name = cal_mboxname(calname);
     struct mailbox *mailbox = NULL;
@@ -362,7 +363,7 @@ static void set_draft(const char *calname, uint32_t imap_uid)
     CU_ASSERT_EQUAL_FATAL(r, 0);
     r = mailbox_find_index_record(mailbox, imap_uid, &record);
     CU_ASSERT_EQUAL_FATAL(r, 0);
-    record.system_flags |= FLAG_DRAFT;
+    record.system_flags |= flag;
     r = mailbox_rewrite_index_record(mailbox, &record);
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
@@ -1163,7 +1164,7 @@ static void test_flag_conflict(void)
     store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), NULL);
     store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
                    &dup);
-    set_draft(CAL_B, dup.imap_uid);
+    set_system_flag(CAL_B, dup.imap_uid, FLAG_DRAFT);
 
     char *report = run_repair(DAV_REPAIR_REALLY);
     CU_ASSERT_PTR_NOT_NULL(strstr(report, "conflict: flag \\Draft"));
@@ -1182,14 +1183,66 @@ static void test_flag_shared(void)
     store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), &primary);
     store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
                    &dup);
-    set_draft(CAL_A, primary.imap_uid);
-    set_draft(CAL_B, dup.imap_uid);
+    set_system_flag(CAL_A, primary.imap_uid, FLAG_DRAFT);
+    set_system_flag(CAL_B, dup.imap_uid, FLAG_DRAFT);
 
     free(run_repair(DAV_REPAIR_REALLY));
 
     live_rows(&rows);
     CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
     free_rows(&rows);
+}
+
+static uint32_t system_flags_of(const struct row *row)
+{
+    char *name = cal_mboxname(calname_of(row));
+    struct mailbox *mailbox = NULL;
+    struct index_record record;
+
+    int r = mailbox_open_irl(name, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = mailbox_find_index_record(mailbox, row->imap_uid, &record);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    mailbox_close(&mailbox);
+    free(name);
+
+    return record.system_flags;
+}
+
+/* \Seen only says whether the owner has looked at a copy, so it never
+ * blocks a merge, and the merged resource is seen only if every copy was. */
+static void check_flag_seen(bool primary_seen)
+{
+    ptrarray_t rows = PTRARRAY_INITIALIZER;
+    struct stored primary, dup;
+
+    store_resource(CAL_A, "main.ics", 1, NULL, MAIN_EVENT("main"), &primary);
+    store_resource(CAL_B, "instance.ics", 2, NULL, INSTANCE_EVENT("instance"),
+                   &dup);
+    if (primary_seen)
+        set_system_flag(CAL_A, primary.imap_uid, FLAG_SEEN);
+    else
+        set_system_flag(CAL_B, dup.imap_uid, FLAG_SEEN);
+
+    free(run_repair(DAV_REPAIR_REALLY));
+
+    live_rows(&rows);
+    CU_ASSERT_EQUAL(ptrarray_size(&rows), 1);
+    struct row *kept = sole_row_with_uid(&rows, EVENT_UID);
+    CU_ASSERT_EQUAL(system_flags_of(kept) & FLAG_SEEN, 0);
+
+    free_rows(&rows);
+}
+
+static void test_flag_seen_primary(void)
+{
+    check_flag_seen(true);
+}
+
+static void test_flag_seen_dup(void)
+{
+    check_flag_seen(false);
 }
 
 static void test_annotation_conflict(void)

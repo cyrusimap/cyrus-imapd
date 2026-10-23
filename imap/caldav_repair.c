@@ -97,9 +97,10 @@ struct repair_plan {
     ptrarray_t userdata;   /* struct repair_userdata, borrowed */
     unsigned nmerged;      /* resources folded into the kept one */
     unsigned nsplit;       /* resources to be split off under a new UID */
+    bool unseen;           /* a merged copy lacks the owner's \Seen */
 };
 
-#define REPAIR_PLAN_INITIALIZER { NULL, PTRARRAY_INITIALIZER, 0, 0 }
+#define REPAIR_PLAN_INITIALIZER { NULL, PTRARRAY_INITIALIZER, 0, 0, false }
 
 static void repair_userdata_free(struct repair_userdata *pud)
 {
@@ -464,9 +465,11 @@ static char *fold_resource(struct repair_res *dup,
     }
 
     /* The kept resource keeps only its own flags and annotations, so the
-     * duplicate's must already be there. */
+     * duplicate's must already be there.  \Seen is the exception: the merged
+     * resource is seen only if every copy was, so it can always merge. */
     for (int i = 0; i < strarray_size(dup->flags); i++) {
         const char *flag = strarray_nth(dup->flags, i);
+        if (!strcasecmp(flag, "\\Seen")) continue;
         if (!strarray_contains_case(primary->flags, flag)) {
             buf_printf(&reason, "flag %s", flag);
             conflict = buf_release(&reason);
@@ -594,6 +597,8 @@ static void plan_group(struct repair_group *group, struct repair_plan *plan)
         else {
             dup->action = REPAIR_MERGE;
             plan->nmerged++;
+            if (!strarray_contains_case(dup->flags, "\\Seen"))
+                plan->unseen = true;
         }
     }
 
@@ -770,7 +775,8 @@ done:
 
 static int rewrite_primary(struct repair_res *primary, const char *userid,
                            const struct auth_state *authstate,
-                           icalcomponent *target, ptrarray_t *target_userdata)
+                           icalcomponent *target, ptrarray_t *target_userdata,
+                           bool unseen)
 {
     struct mailbox *mailbox = NULL;
     struct index_record record;
@@ -782,6 +788,9 @@ static int rewrite_primary(struct repair_res *primary, const char *userid,
 
     r = mailbox_find_index_record(mailbox, primary->imap_uid, &record);
     if (r) goto done;
+
+    /* dav_store_resource() copies this record's flags to the new one */
+    if (unseen) record.system_flags &= ~FLAG_SEEN;
 
     /* Keep the createdmodseq: it is what the JMAP event id encodes.  Per-user
      * data is only read from a resource marked shared, so a merged copy's
@@ -1073,7 +1082,7 @@ static int repair_group(struct repair_group *group, const char *userid,
 
     if (plan.nmerged) {
         r = rewrite_primary(ptrarray_head(&group->resources), userid,
-                            authstate, plan.ical, &plan.userdata);
+                            authstate, plan.ical, &plan.userdata, plan.unseen);
         if (r) goto done;
     }
 
