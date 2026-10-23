@@ -12,8 +12,9 @@
 #include <errno.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 #include "httpd.h"
 #include "http_proxy.h"
