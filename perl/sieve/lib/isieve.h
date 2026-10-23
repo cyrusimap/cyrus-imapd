@@ -6,7 +6,8 @@
 #define ISIEVE_H_
 
 #include "prot.h"
-#include <sasl/sasl.h>
+
+#include "libsasl_min/sasl.h"
 
 typedef struct iseive_s isieve_t;
 

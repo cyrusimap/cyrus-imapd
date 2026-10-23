@@ -10,7 +10,8 @@
 
 #include <jansson.h>
 #include <openssl/evp.h>
-#include <sasl/saslutil.h>
+
+#include "libsasl_min/saslutil.h"
 
 #include "bsearch.h"
 #include "charset.h"
