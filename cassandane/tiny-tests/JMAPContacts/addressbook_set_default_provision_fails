@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+# AddressBook/set creates a default address book when the account has none.
+# When it can't -- here, there's no mailbox quota left -- that's this
+# method's error, and mustn't fail the request and lose the other responses.
+# Without CardDAV, nothing provisions an address book at login first.
+sub test_addressbook_set_default_provision_fails
+    :NoCardDAV
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "give the account an empty address book home, and no room";
+    $admin->create('user.cassandane.#addressbooks', [ 'TYPE', 'ADDRESSBOOK' ])
+        or die $@;
+    $self->set_quotaroot('user.cassandane');
+    $self->set_quotalimits(mailbox => 1);
+
+    my $res = $jmap->request([
+        [ 'AddressBook/get' => {} ],
+        [ 'AddressBook/set' => {} ],
+    ]);
+
+    $self->assert_cmp_deeply(
+        [ 'AddressBook/get', 'error' ],
+        [ map {; $_->name } $res->sentences ],
+    );
+    $self->assert_syslog_matches($self->{instance},
+        qr{failed to create user\.cassandane\.#addressbooks\.Default \(Over quota\)});
+    $self->assert_cmp_deeply([], $res->sentence(0)->arguments->{list});
+}
