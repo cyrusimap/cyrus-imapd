@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+use Encode qw(encode_utf8);
+
+sub test_mboxname_net_unicode
+    :NoAltNameSpace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Modified UTF-7 names must decode to Net-Unicode";
+    for my $bad ('INBOX.a&ICg-b',   # U+2028 LINE SEPARATOR
+                 'INBOX.a&AIU-b',   # U+0085 NEXT LINE
+                 'INBOX.a&2AA-b',   # lone high surrogate
+                 'INBOX.a&3AA-b') { # lone low surrogate
+        $talk->_imap_cmd('CREATE', 0, '', $bad);
+        $self->assert_str_equals('no', $talk->get_last_completion_response());
+    }
+    $talk->_imap_cmd('CREATE', 0, '', 'INBOX.a&2D3eAA-b');  # U+1F600
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "and so must UTF-8 names";
+    $talk->_imap_cmd('ENABLE', 0, 'enabled', 'UTF8=ACCEPT');
+    for my $bad ("INBOX.c\x{2028}d", "INBOX.c\x{85}d") {
+        $talk->_imap_cmd('CREATE', 0, '', { Quote => encode_utf8($bad) });
+        $self->assert_str_equals('no', $talk->get_last_completion_response());
+    }
+}

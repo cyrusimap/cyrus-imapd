@@ -1,0 +1,29 @@
+Description:
+
+Fixes for UTF8=ACCEPT and IMAP4rev2 mailbox names.  imapd no longer
+crashes on a mailbox name that isn't UTF-8, and rejects malformed UTF-8 in
+quoted strings and atoms with BAD (RFC 9755).  Every command now finds a
+mailbox by any Unicode normalization form of its name, not just CREATE,
+SELECT, DELETE and RENAME.  New mailbox names may no longer contain C1
+control characters, U+2028, U+2029 or unpaired surrogates.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.  Existing mailboxes whose names contain the newly forbidden
+characters keep working, and still replicate.
+
+
+GitHub issue:
+
+None.

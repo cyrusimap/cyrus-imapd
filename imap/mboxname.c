@@ -640,6 +640,12 @@ EXPORTED mbname_t *mbname_from_intname(const char *intname)
     return mbname;
 }
 
+static bool utf8_is_valid(const char *s)
+{
+    struct char_counts counts = charset_count_validutf8(s, strlen(s));
+    return !counts.invalid && !counts.bytelen[0];
+}
+
 EXPORTED mbname_t *mbname_from_extname(const char *extname,
                                        const struct namespace *ns,
                                        const char *userid)
@@ -647,7 +653,9 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname,
     mbname_t *mbname = NULL, *userparts = NULL;
     char *freeme = NULL;
 
-    if (extname && ns->isutf8) {
+    /* An extname that isn't UTF-8 keeps its 8-bit octets,
+     * which no mailbox name has, so it can't name or create one. */
+    if (extname && ns->isutf8 && utf8_is_valid(extname)) {
         /* Encode extname from UTF-8 to IMAP UTF-7. */
         charset_t cs = charset_lookupname("utf-8");
         if (cs == CHARSET_UNKNOWN_CHARSET) {
@@ -656,8 +664,14 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname,
             return NULL;
         }
 
+        /* RFC 9755, Section 3: the same name in another normalization
+         * form must find the same mailbox */
+        char *nfc = charset_utf8_normalize(extname);
+        const char *src = nfc ? nfc : extname;
+
         /* Encode mailbox name in IMAP UTF-7 */
-        freeme = charset_to_imaputf7(extname, strlen(extname), cs, ENCODING_NONE);
+        freeme = charset_to_imaputf7(src, strlen(src), cs, ENCODING_NONE);
+        free(nfc);
         charset_free(&cs);
 
         if (!freeme) {
@@ -1831,8 +1845,36 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
  */
 #define GOODCHARS " #$'()*+,-.0123456789:=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz~"
 
+/* RFC 9755, Section 3: names must be Net-Unicode (RFC 5198),
+ * so no C1 controls or line and paragraph separators.
+ * The C0 controls and DEL are ASCII, which modified UTF-7 can't encode anyway.
+ * Surrogates must pair up, or the name has no UTF-8 form. */
+static bool policycheck_utf16(unsigned u, bool *in_pair)
+{
+    if ((u >= 0x80 && u <= 0x9f) || u == 0x2028 || u == 0x2029) {
+        return false;
+    }
+    if (u >= 0xd800 && u <= 0xdbff) {
+        if (*in_pair) {
+            return false;
+        }
+        *in_pair = true;
+        return true;
+    }
+    if (u >= 0xdc00 && u <= 0xdfff) {
+        if (!*in_pair) {
+            return false;
+        }
+        *in_pair = false;
+        return true;
+    }
+    return !*in_pair;
+}
+
 EXPORTED int mboxname_policycheck_component(const char *name, int flags)
 {
+    bool unicode = !(flags & MBOXNAME_POLICY_SKIP_IDENTITY);
+    bool in_pair = false;
     int sawutf7 = 0;
     unsigned c1, c2, c3, c4, c5, c6, c7, c8;
     int ucs4;
@@ -1866,6 +1908,8 @@ EXPORTED int mboxname_policycheck_component(const char *name, int flags)
                     /* US-ASCII character */
                     return IMAP_MAILBOX_BADNAME;
                 }
+                if (unicode && !policycheck_utf16(ucs4, &in_pair))
+                    return IMAP_MAILBOX_BADNAME;
                 if (*name == '-') {
                     /* Trailing bits not zero */
                     if (c3 & 0x03) return IMAP_MAILBOX_BADNAME;
@@ -1885,6 +1929,8 @@ EXPORTED int mboxname_policycheck_component(const char *name, int flags)
                     /* US-ASCII character */
                     return IMAP_MAILBOX_BADNAME;
                 }
+                if (unicode && !policycheck_utf16(ucs4, &in_pair))
+                    return IMAP_MAILBOX_BADNAME;
                 if (*name == '-') {
                     /* Trailing bits not zero */
                     if (c6 & 0x0f) return IMAP_MAILBOX_BADNAME;
@@ -1903,7 +1949,11 @@ EXPORTED int mboxname_policycheck_component(const char *name, int flags)
                     /* US-ASCII character */
                     return IMAP_MAILBOX_BADNAME;
                 }
+                if (unicode && !policycheck_utf16(ucs4, &in_pair))
+                    return IMAP_MAILBOX_BADNAME;
             }
+
+            if (in_pair) return IMAP_MAILBOX_BADNAME;
 
             if (name[-1] == '&') sawutf7 = 0; /* '&-' is sequence for '&' */
             else sawutf7 = 1;
