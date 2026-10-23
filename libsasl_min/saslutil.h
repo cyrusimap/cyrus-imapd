@@ -1,12 +1,16 @@
 /* saslutil.h -- various utility functions in SASL library
  */
 
-#ifndef SASLUTIL_H
-#define SASLUTIL_H 1
+#ifndef LIBSASL_MIN_SASLUTIL_H
+#define LIBSASL_MIN_SASLUTIL_H 1
 
-#ifndef SASL_H
-# include "sasl.h"
-#endif
+#include <config.h>
+
+#ifndef USE_INTERNAL_SASL
+#include <sasl/saslutil.h>
+#else
+
+#include "libsasl_min/sasl.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -104,4 +108,5 @@ LIBSASL_API char *getpass(const char *prompt);
 }
 #endif
 
-#endif /* SASLUTIL_H */
+#endif /* USE_INTERNAL_SASL */
+#endif /* LIBSASL_MIN_SASLUTIL_H */
