@@ -52,6 +52,11 @@ static int token_lookup(const char *str)
   return -1;
 }
 
+void yylex_reset(void)
+{
+    lexer_state = LEXER_STATE_NORMAL;
+}
+
 int yylex(lexstate_t * lvalp, void * client)
 {
   int ch;
@@ -75,8 +80,10 @@ int yylex(lexstate_t * lvalp, void * client)
 
     ch = prot_getc(stream);
 
-    if (ch == -1)
+    if (ch == -1) {
+        yylex_reset();
         return SIEVE_FAIL;
+    }
 
     switch (lexer_state)
     {
@@ -151,8 +158,13 @@ int yylex(lexstate_t * lvalp, void * client)
                        *end = it + count;
 
         while (it < end) {
-          *it=prot_getc(stream);
-          it++;
+          if ((ch = prot_getc(stream)) == EOF) {
+            free(lvalp->str);
+            lvalp->str = NULL;
+            yylex_reset();
+            return SIEVE_FAIL;
+          }
+          *it++ = ch;
         }
         *it = '\0';
       }

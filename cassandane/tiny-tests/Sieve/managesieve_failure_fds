@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Net::FakeManageSieve;
+
+sub test_managesieve_failure_fds
+    ($self)
+{
+    my $srv = Cassandane::Net::FakeManageSieve->new(
+        tls => {
+            greeting => qq{"SASL" "PLAIN"\r\n"VERSION" "1.0"\r\n}
+                      . qq{"STARTTLS"\r\nOK\r\n},
+            STARTTLS => sub { "OK\r\n" },
+        },
+        refer => {
+            LISTSCRIPTS => sub ($srv, @) {
+                my $port = $srv->port('deny');
+                qq{BYE (REFERRAL "sieve://127.0.0.1:$port") "moved"\r\n};
+            },
+        },
+        deny => { auth => sub { qq{NO "denied"\r\n} } },
+    );
+
+    my ($status, $out) = $srv->run_client($self->{instance}, <<'EOF', map { $srv->port($_) } qw(tls refer));
+$SIG{PIPE} = 'IGNORE';
+my ($tlsport, $referport) = @ARGV;
+sub cb { 'cassandane' }
+sub nfds { opendir my $d, '/proc/self/fd'; scalar grep { /^\d+$/ } readdir $d }
+
+sub tls_fail {
+    sieve_get_handle("127.0.0.1:$tlsport", "cb", "cb", "cb", "cb", 1)
+        and die "STARTTLS unexpectedly succeeded";
+}
+sub referral_fail {
+    my $h = sieve_get_handle("127.0.0.1:$referport", "cb", "cb", "cb", "cb")
+        or die "login failed: " . sieve_get_global_error();
+    sieve_list($h, sub {}) or die "referral unexpectedly succeeded";
+    sieve_logout($h);
+}
+
+tls_fail();
+referral_fail();
+my $before = nfds();
+for (1..10) { tls_fail(); referral_fail(); }
+print "before=$before after=" . nfds() . "\n";
+EOF
+
+    $self->assert_str_equals('ok', $status);
+    $self->assert_matches(qr/^before=(\d+) after=\1$/m, $out);
+}

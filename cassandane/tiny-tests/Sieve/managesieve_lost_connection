@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Net::FakeManageSieve;
+use Cassandane::Util::Slurp;
+
+sub test_managesieve_lost_connection
+    ($self)
+{
+    # Each server hangs up partway through a response.
+    my $srv = Cassandane::Net::FakeManageSieve->new(
+        greeting => { greeting => qq{"SASL" "PLA} },
+        list => { LISTSCRIPTS => sub { qq{"s1" ACTIVE\r\n"scr} } },
+        get => { GETSCRIPT => sub { qq{{20}\r\nrequire} } },
+        put => { PUTSCRIPT => sub { qq{NO "too} } },
+        good => { LISTSCRIPTS => sub { qq{"s1" ACTIVE\r\nOK\r\n} } },
+    );
+    my @roles = qw(greeting list get put good);
+
+    my ($status, $out) = $srv->run_client($self->{instance}, <<'EOF', map { $srv->port($_) } @roles);
+$SIG{PIPE} = 'IGNORE';
+my %port;
+@port{qw(greeting list get put good)} = @ARGV;
+sub cb { 'cassandane' }
+sub login { sieve_get_handle("127.0.0.1:$port{$_[0]}", "cb", "cb", "cb", "cb") }
+sub result {
+    my ($what, $h, $r) = @_;
+    my $err = $h ? sieve_get_error($h) : sieve_get_global_error();
+    print "$what: ", ($r ? $err // 'no error' : 'succeeded'), "\n";
+}
+
+result('greeting', undef, !login('greeting'));
+my $h = login('list') or die "login failed";
+result('list', $h, sieve_list($h, sub {}));
+$h = login('get') or die "login failed";
+result('get', $h, sieve_get($h, 's1', my $str));
+$h = login('put') or die "login failed";
+result('put', $h, sieve_put($h, 's1', 'keep;'));
+
+$h = login('good') or die "login failed: " . sieve_get_global_error();
+my @scripts;
+sieve_list($h, sub { push @scripts, "@_" }) == 0 or die "list failed";
+print "scripts: @scripts\n";
+EOF
+
+    $self->assert_matches(qr/^greeting: Bad protocol from MANAGESIEVE server: /m, $out);
+    $self->assert_matches(qr/^list: Bad protocol .*: lost connection$/m, $out);
+    $self->assert_matches(qr/^get: Bad protocol .*: lost connection$/m, $out);
+    $self->assert_matches(qr/^put: .*Bad protocol .*: expected string$/m, $out);
+    $self->assert_matches(qr/^scripts: s1 1$/m, $out);
+    $self->assert_str_equals('ok', $status);
+
+    my $shellout = $self->{instance}->get_basedir() . "/sieveshell.out";
+    my $failed = 0;
+    $self->{instance}->run_command({
+        perl_xs => 1,
+        redirects => { stdout => $shellout, stderr => $shellout },
+        handlers => { exited_abnormally => sub { $failed = 1 } },
+    }, $self->{instance}->_find_binary('sieveshell'),
+       '-u', 'cassandane', '-a', 'cassandane', '-p', 'test',
+       '-e', "list\n", '127.0.0.1:' . $srv->port('list'));
+
+    $self->assert_num_equals(1, $failed);
+    $self->assert_matches(qr/^list failed: Bad protocol .*: lost connection$/m,
+                          slurp_file($shellout));
+}

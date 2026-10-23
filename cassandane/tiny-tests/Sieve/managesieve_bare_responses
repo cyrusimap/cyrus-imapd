@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Net::FakeManageSieve;
+
+sub test_managesieve_bare_responses
+    ($self)
+{
+    my $srv = Cassandane::Net::FakeManageSieve->new(
+        main => {
+            PUTSCRIPT => sub { "NO\r\n" },
+            SETACTIVE => sub { "NO (NONEXISTENT)\r\n" },
+            DELETESCRIPT => sub { "BYE\r\n" },
+        },
+    );
+
+    my ($status, $out) = $srv->run_client($self->{instance}, <<'EOF', $srv->port('main'));
+$SIG{PIPE} = 'IGNORE';
+sub cb { 'cassandane' }
+my $h = sieve_get_handle("127.0.0.1:$ARGV[0]", "cb", "cb", "cb", "cb")
+    or die "login failed: " . sieve_get_global_error();
+sub result { print "$_[0]: ", ($_[1] ? sieve_get_error($h) : 'succeeded'), "\n" }
+
+result('put', sieve_put($h, 's1', 'keep;'));
+result('activate', sieve_activate($h, 's1'));
+result('delete', sieve_delete($h, 's1'));
+sieve_logout($h);
+result('after logout', sieve_list($h, sub {}));
+sieve_logout($h);
+print "done\n";
+EOF
+
+    $self->assert_str_equals('ok', $status);
+    $self->assert_matches(qr/^put: Putting script: $/m, $out);
+    $self->assert_matches(qr/^activate: Setting script active: $/m, $out);
+    $self->assert_matches(qr/^delete: Deleting script: $/m, $out);
+    $self->assert_matches(qr/^after logout: not connected$/m, $out);
+    $self->assert_matches(qr/^done$/m, $out);
+}

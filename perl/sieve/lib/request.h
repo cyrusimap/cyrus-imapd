@@ -31,7 +31,8 @@ int installdata(int version,struct protstream *pout, struct protstream *pin,
 //           char **refer_to);
 
 int list_wcb(int version, struct protstream *pout, struct protstream *pin,
-             isieve_listcb_t *cb , void *rock, char **refer_to);
+             isieve_listcb_t *cb , void *rock, char **refer_to,
+             char **errstr);
 
 int setscriptactive(int version, struct protstream *pout,
                     struct protstream *pin,
@@ -48,7 +49,16 @@ int getscriptvalue(int version,struct protstream *pout, struct protstream *pin,
                    char *name, char **data, char **refer_to,
                    char **errstr);
 
-void parseerror(const char *str);
+/**
+ * Report a malformed or truncated response from the server.
+ *
+ * Marks @p pin as at EOF, since the rest of the response can't be told
+ * apart from the next one, and sets *@p errstr (if @p errstr isn't NULL)
+ * to a new string describing @p str.
+ *
+ * @return -1
+ */
+int parseerror(struct protstream *pin, const char *str, char **errstr);
 
 
 #endif
