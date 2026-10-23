@@ -321,7 +321,18 @@ if USE_INTERNAL_SASL
 noinst_LTLIBRARIES += lib/libsasl_min.la
 endif # USE_INTERNAL_SASL
 
-lib_libsasl_min_la_SOURCES =
+# These headers correspond to the public SASL API.  They must be kept
+# compatible with any external SASL implementation we want to be able
+# to link with.
+LIBSASL_API = \
+    libsasl_min/sasl.h \
+    libsasl_min/saslplug.h \
+    libsasl_min/saslutil.h \
+    libsasl_min/prop.h
+
+lib_libsasl_min_la_SOURCES = \
+    $(LIBSASL_API)
+
 lib_libsasl_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 lib_libsasl_min_la_LIBADD =
 
