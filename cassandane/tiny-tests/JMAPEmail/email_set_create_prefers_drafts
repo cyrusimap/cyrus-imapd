@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+# A new email is appended to the drafts mailbox, if it's one of them, and
+# copied to the rest.  The append is checked against its quota root for
+# every copy, so which mailbox goes first decides which root is checked.
+sub test_email_set_create_prefers_drafts ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $mailboxes = $self->default_user->mailboxes;
+
+    my $drafts  = $mailboxes->create({ name => 'Drafts', role => 'drafts' });
+    my $limited = $mailboxes->create({ name => 'Limited' });
+
+    xlog $self, "give Limited a quota root with room for one copy, not two";
+    $self->set_quotaroot('user.cassandane.Limited');
+    $self->set_quotalimits(storage => 6);
+
+    my $set = $jmap->request([
+        [ 'Email/set' => {
+            create => {
+                draft => {
+                    mailboxIds => { $drafts->id => JSON::true,
+                                    $limited->id => JSON::true },
+                    from      => [{ email => 'cassandane@example.com' }],
+                    subject   => 'draft',
+                    bodyStructure => { partId => '1' },
+                    bodyValues    => { 1 => { value => 'x' x 4096 } },
+                },
+            },
+        } ],
+    ])->single_sentence('Email/set')->as_set;
+
+    $self->assert_cmp_deeply({}, $set->create_errors);
+    $self->assert_not_null($set->created_id('draft'));
+}
