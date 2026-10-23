@@ -1,21 +1,17 @@
 /* saslplug.h --  API for SASL plug-ins
  */
 
-#ifndef SASLPLUG_H
-#define SASLPLUG_H 1
+#ifndef LIBSASL_MIN_SASLPLUG_H
+#define LIBSASL_MIN_SASLPLUG_H 1
 
-#ifndef MD5GLOBAL_H
-# include "md5global.h"
-#endif
-#ifndef MD5_H
+#include <config.h>
+
+#ifndef USE_INTERNAL_SASL
+#include <sasl/saslplug.h>
+#else
+
 # include "md5.h"
-#endif
-#ifndef HMAC_MD5_H
-# include "hmac-md5.h"
-#endif
-#ifndef PROP_H
-# include "prop.h"
-#endif
+# include "libsasl_min/prop.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -1028,4 +1024,5 @@ LIBSASL_API int auxprop_plugin_info(const char *mech_list,
 }
 #endif
 
-#endif /* SASLPLUG_H */
+#endif /* USE_INTERNAL_SASL */
+#endif /* LIBSASL_MIN_SASLPLUG_H */

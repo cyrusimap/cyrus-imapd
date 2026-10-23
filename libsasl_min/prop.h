@@ -19,39 +19,17 @@
  * Properties may be multi-valued.
  */
 
-#ifndef PROP_H
-#define PROP_H 1
+#ifndef LIBSASL_MIN_PROP_H
+#define LIBSASL_MIN_PROP_H 1
 
-/* The following ifdef block is the standard way of creating macros
- * which make exporting from a DLL simpler. All files within this DLL
- * are compiled with the LIBSASL_EXPORTS symbol defined on the command
- * line. this symbol should not be defined on any project that uses
- * this DLL. This way any other project whose source files include
- * this file see LIBSASL_API functions as being imported from a DLL,
- * wheras this DLL sees symbols defined with this macro as being
- * exported.  */
-/* Under Unix, life is simpler: we just need to mark library functions
- * as extern.  (Technically, we don't even have to do that.) */
-#ifdef WIN32
-# ifdef LIBSASL_EXPORTS
-#  define LIBSASL_API extern __declspec(dllexport)
-# else /* LIBSASL_EXPORTS */
-#  define LIBSASL_API extern __declspec(dllimport)
-# endif /* LIBSASL_EXPORTS */
-#else   /* WIN32 */
-# define LIBSASL_API extern
-#endif /* WIN32 */
+#include <config.h>
 
-/* Same as above, but used during a variable declaration. */
-#ifdef WIN32
-# ifdef LIBSASL_EXPORTS
-#  define LIBSASL_VAR extern __declspec(dllexport)
-# else /* LIBSASL_EXPORTS */
-#  define LIBSASL_VAR extern __declspec(dllimport)
-# endif /* LIBSASL_EXPORTS */
-#else   /* WIN32 */
-# define LIBSASL_VAR extern
-#endif /* WIN32 */
+#ifndef USE_INTERNAL_SASL
+#include <sasl/prop.h>
+#else
+
+#define LIBSASL_API extern
+#define LIBSASL_VAR extern
 
 /* the resulting structure for property values
  */
@@ -191,4 +169,5 @@ LIBSASL_API int prop_setvals(struct propctx *ctx,
 }
 #endif
 
-#endif /* PROP_H */
+#endif /* USE_INTERNAL_SASL */
+#endif /* LIBSASL_MIN_PROP_H */
