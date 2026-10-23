@@ -1273,6 +1273,27 @@ sub set_smtpd {
     }
 }
 
+# Return the lines of the SMTP conversations that smtpclient logged from
+# processes named $prefix, such as "lmtp" or "http".
+sub get_smtpclient_telemetry
+{
+    my ($self, $prefix) = @_;
+
+    my $dir = "$self->{basedir}/conf/log/smtpclient.host";
+    opendir(my $dh, $dir) or die "opendir $dir: $!";
+    my @files = sort grep { m/^\Q$prefix\E-/ } readdir $dh;
+    closedir $dh;
+
+    my @lines;
+    for my $file (@files) {
+        open(my $fh, '<', "$dir/$file") or die "open $dir/$file: $!";
+        push @lines, <$fh>;
+        close $fh;
+    }
+
+    return @lines;
+}
+
 sub _start_smtpd
 {
     my ($self) = @_;

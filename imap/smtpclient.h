@@ -5,6 +5,8 @@
 #ifndef INCLUDED_SMTPCLIENT_H
 #define INCLUDED_SMTPCLIENT_H
 
+#include <stdbool.h>
+
 #include "prot.h"
 #include "ptrarray.h"
 #include "strarray.h"
@@ -35,6 +37,14 @@ typedef struct {
 
 /* The empty SMTP envelope */
 #define SMTP_ENVELOPE_INITIALIZER { { NULL, PTRARRAY_INITIALIZER, 0 }, PTRARRAY_INITIALIZER }
+
+/**
+ * Return true if addr can only be sent to a server with SMTPUTF8 (RFC 6531).
+ *
+ * That is the case when its local-part is not ASCII.  A non-ASCII domain
+ * doesn't count, because smtpclient sends it as A-labels if need be.
+ */
+extern bool smtp_addr_needs_smtputf8(const char *addr);
 
 /* Return non-zero if val is a valid esmtp-keyword
  * as defined in RFC 5321, section 4.1.2. */

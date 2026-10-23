@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_smtputf8_mismatch
+    ($self)
+{
+    $self->{instance}->set_smtpd({ helo => [
+        250, "localhost", "AUTH", "DSN", "SIZE 10000", "ENHANCEDSTATUSCODES",
+        "SMTPUTF8"
+    ] });
+
+    xlog $self, "relay offers SMTPUTF8, but munge8bit keeps lmtpd from it";
+    my $session = $self->{jmap}->get_client_session->client_session;
+    my $capa = $session->{accounts}{cassandane}{accountCapabilities};
+    $self->assert_not_null(
+        $capa->{'urn:ietf:params:jmap:submission'}{submissionExtensions}{smtputf8});
+
+    my @lines = $self->{instance}->getsyslog(
+        qr/event=jmap\.submission\.smtputf8\.mismatch/);
+    $self->assert_num_equals(1, scalar @lines);
+    $self->assert_matches(qr/ send\.smtputf8=1 .*lmtp\.smtputf8=0/, $lines[0]);
+}

@@ -131,6 +131,9 @@ ec IMAP_MESSAGE_CONTAINSNL,
 ec IMAP_MESSAGE_CONTAINS8BIT,
    "Message contains non-ASCII characters in headers"
 
+ec IMAP_ADDRESS_NEEDS_SMTPUTF8,
+   "Non-ASCII address requires SMTPUTF8"
+
 ec IMAP_MESSAGE_BADHEADER,
    "Message contains invalid header"
 

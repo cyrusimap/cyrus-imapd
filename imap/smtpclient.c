@@ -15,6 +15,7 @@
 #include <syslog.h>
 
 #include "backend.h"
+#include "charset.h"
 #include "xmalloc.h"
 #include "global.h"
 #include "smtpclient.h"
@@ -50,6 +51,9 @@ struct smtpclient {
     char *by;
     char *jmapid;
     unsigned long msgsize;
+    bool utf8_headers; /* the message has 8-bit header fields */
+    bool smtputf8;     /* send SMTPUTF8 in this transaction */
+    bool alabels;      /* send domains as A-labels in this transaction */
     smtp_resp_t resp;
 };
 
@@ -62,6 +66,7 @@ enum {
     SMTPCLIENT_CAPA_PRIORITY  = (1 << 8),
     SMTPCLIENT_CAPA_SENDCHECK = (1 << 9),
     SMTPCLIENT_CAPA_JMAPID    = (1 << 10),
+    SMTPCLIENT_CAPA_SMTPUTF8  = (1 << 11),
 };
 
 static const char *smtpclient_ehlo_hostname = NULL;
@@ -82,6 +87,7 @@ static struct protocol_t smtp_protocol =
           { "MT-PRIORITY", SMTPCLIENT_CAPA_PRIORITY },
           { "SENDCHECK", SMTPCLIENT_CAPA_SENDCHECK },
           { "JMAPIDENTITY", SMTPCLIENT_CAPA_JMAPID },
+          { "SMTPUTF8", SMTPCLIENT_CAPA_SMTPUTF8 },
           { NULL, 0 } } },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
@@ -451,15 +457,73 @@ done:
     return r;
 }
 
+static bool is_ascii(const char *s)
+{
+    for (; *s; s++) {
+        if (*s & 0x80) {
+            return false;
+        }
+    }
+    return true;
+}
+
+EXPORTED bool smtp_addr_needs_smtputf8(const char *addr)
+{
+    const char *at = strrchr(addr, '@');
+    size_t len = at ? (size_t) (at - addr) : strlen(addr);
+
+    for (size_t i = 0; i < len; i++) {
+        if (addr[i] & 0x80) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Return addr with its domain as A-labels, or NULL if that won't make it
+ * ASCII. */
+static char *addr_to_alabels(const char *addr)
+{
+    if (smtp_addr_needs_smtputf8(addr)) {
+        return NULL;
+    }
+
+    const char *at = strrchr(addr, '@');
+    if (!at) {
+        return NULL;
+    }
+
+    char *domain = charset_idna_to_ascii(at + 1);
+    if (!domain) {
+        return NULL;
+    }
+
+    struct buf buf = BUF_INITIALIZER;
+    buf_appendmap(&buf, addr, at + 1 - addr);
+    buf_appendcstr(&buf, domain);
+    free(domain);
+
+    return buf_release(&buf);
+}
+
 static int write_addr(smtpclient_t *sm,
                       const char *cmd,
                       const smtp_addr_t *addr,
                       const ptrarray_t *extra_params)
 {
     int i, r = 0;
+    char *alabels = NULL;
+
+    if (sm->alabels && !is_ascii(addr->addr)) {
+        alabels = addr_to_alabels(addr->addr);
+        if (!alabels) {
+            return IMAP_ADDRESS_NEEDS_SMTPUTF8;
+        }
+    }
 
     buf_reset(&sm->buf);
-    buf_printf(&sm->buf, "%s:<%s>", cmd, addr->addr);
+    buf_printf(&sm->buf, "%s:<%s>", cmd, alabels ? alabels : addr->addr);
+    free(alabels);
     for (i = 0; i < addr->params.count; i++) {
         smtp_param_t *param = ptrarray_nth(&addr->params, i);
         buf_appendcstr(&sm->buf, " ");
@@ -509,7 +573,7 @@ static void smtp_params_set_extra(ptrarray_t *params, ptrarray_t *extra,
     if (i == params->count) {
         smtp_param_t *param = xzmalloc(sizeof(smtp_param_t));
         param->key = xstrdup(key);
-        param->val = xstrdup(val);
+        param->val = xstrdupnull(val);
         ptrarray_add(extra, param);
     }
 }
@@ -530,6 +594,9 @@ static void smtp_params_fini(ptrarray_t *params)
 static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr)
 {
     ptrarray_t extra_params = PTRARRAY_INITIALIZER;
+    if (sm->smtputf8) {
+        smtp_params_set_extra(&addr->params, &extra_params, "SMTPUTF8", NULL);
+    }
     if (sm->authid && CAPA(sm->backend, CAPA_AUTH)) {
         smtp_params_set_extra(&addr->params, &extra_params, "AUTH", sm->authid);
     }
@@ -702,6 +769,44 @@ static int validate_envelope(smtp_envelope_t *env)
     return 0;
 }
 
+/* Decide how to send a non-ASCII envelope or header (RFC 6531).  A server
+ * without SMTPUTF8 gets 8-bit header fields as before, and domains as
+ * A-labels, but can't take a non-ASCII local-part. */
+static int smtpclient_set_utf8(smtpclient_t *sm, smtp_envelope_t *env)
+{
+    bool envelope_utf8 = !is_ascii(env->from.addr);
+    for (int i = 0; !envelope_utf8 && i < ptrarray_size(&env->rcpts); i++) {
+        smtp_addr_t *addr = ptrarray_nth(&env->rcpts, i);
+        envelope_utf8 = !is_ascii(addr->addr);
+    }
+
+    sm->smtputf8 = false;
+    sm->alabels = false;
+
+    if (CAPA(sm->backend, SMTPCLIENT_CAPA_SMTPUTF8)) {
+        sm->smtputf8 = envelope_utf8 || sm->utf8_headers;
+        return 0;
+    }
+    if (!envelope_utf8) {
+        return 0;
+    }
+
+    bool ok = !smtp_addr_needs_smtputf8(env->from.addr);
+    for (int i = 0; ok && i < ptrarray_size(&env->rcpts); i++) {
+        smtp_addr_t *addr = ptrarray_nth(&env->rcpts, i);
+        ok = !smtp_addr_needs_smtputf8(addr->addr);
+    }
+    if (!ok) {
+        xsyslog_ev(LOG_WARNING, "smtpclient.send.refused",
+                   lf_s_opt("remote.host", sm->backend->hostname),
+                   lf_err("error", IMAP_ADDRESS_NEEDS_SMTPUTF8));
+        return IMAP_ADDRESS_NEEDS_SMTPUTF8;
+    }
+
+    sm->alabels = true;
+    return 0;
+}
+
 static int smtpclient_sendenv(smtpclient_t *sm, smtp_envelope_t *env)
 {
     int r = 0;
@@ -716,6 +821,9 @@ static int smtpclient_sendenv(smtpclient_t *sm, smtp_envelope_t *env)
     }
 
     r = validate_envelope(env);
+    if (r) goto done;
+
+    r = smtpclient_set_utf8(sm, env);
     if (r) goto done;
 
     r = smtpclient_from(sm, &env->from);
@@ -737,13 +845,37 @@ EXPORTED int smtpclient_sendprot(smtpclient_t *sm,
     return smtpclient_data(sm, data);
 }
 
+static bool headers_have_8bit(const struct buf *data)
+{
+    const char *p = buf_base(data);
+    const char *end = p + buf_len(data);
+
+    for (; p < end; p++) {
+        if (*p & 0x80) {
+            return true;
+        }
+        if (*p == '\n') {
+            const char *next = p + 1;
+            if (next < end && *next == '\r') {
+                next++;
+            }
+            if (next < end && *next == '\n') {
+                break; /* end of header */
+            }
+        }
+    }
+    return false;
+}
+
 EXPORTED int smtpclient_send(smtpclient_t *sm,
                              smtp_envelope_t *env, struct buf *data)
 {
 
     struct protstream *p = prot_readmap(buf_base(data), buf_len(data));
     smtpclient_set_size(sm, buf_len(data));
+    sm->utf8_headers = headers_have_8bit(data);
     int r = smtpclient_sendprot(sm, env, p);
+    sm->utf8_headers = false;
     prot_free(p);
     return r;
 }

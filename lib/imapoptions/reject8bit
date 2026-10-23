@@ -1,6 +1,9 @@
 Name: reject8bit
 Type: SWITCH
 Default-Value: 0
-Last-Modified: 2.3.17
+Last-Modified: UNRELEASED
 
 If enabled, lmtpd rejects messages with 8-bit characters in the headers.
+
+If enabled, imapd does not advertise UTF8=ACCEPT (:rfc:`9755`) and lmtpd
+does not advertise SMTPUTF8 (:rfc:`6531`).  See also :imapdconf:`munge8bit`.

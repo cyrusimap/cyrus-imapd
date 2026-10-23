@@ -136,6 +136,7 @@ static struct protocol_t lmtp_protocol =
           { "PIPELINING", CAPA_PIPELINING },
           { "IGNOREQUOTA", CAPA_IGNOREQUOTA },
           { "TRACE", CAPA_TRACE },
+          { "SMTPUTF8", CAPA_SMTPUTF8 },
           { NULL, 0 } } },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
@@ -676,6 +677,7 @@ static void deliver_remote(message_data_t *msgdata,
         int i = 0;
 
         lt->from = msgdata->return_path;
+        lt->smtputf8 = msgdata->smtputf8;
         lt->auth = d->authas[0] ? d->authas : NULL;
         lt->isdotstuffed = 0;
         lt->tempfail_unknown_mailbox = 1;
