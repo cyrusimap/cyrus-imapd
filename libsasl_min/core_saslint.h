@@ -413,20 +413,6 @@ int _sasl_ipfromstring(const char *addr,
                        struct sockaddr *out,
                        socklen_t outlen);
 
-/*
- * external plugin (external.c)
- */
-int external_client_plug_init(const sasl_utils_t *utils,
-                              int max_version,
-                              int *out_version,
-                              sasl_client_plug_t **pluglist,
-                              int *plugcount);
-int external_server_plug_init(const sasl_utils_t *utils,
-                              int max_version,
-                              int *out_version,
-                              sasl_server_plug_t **pluglist,
-                              int *plugcount);
-
 /* Mech Listing Functions */
 int _sasl_build_mechlist(void);
 int _sasl_server_listmech(sasl_conn_t *conn,
