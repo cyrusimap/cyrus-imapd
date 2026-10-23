@@ -326,7 +326,7 @@ static struct recurrence_data *_add_override(icalarray *array,
     }
 
     if (!data) {
-        struct recurrence_data new;
+        struct recurrence_data new = { 0 };
         icalarray_append(array, &new);
         data = icalarray_element_at(array, i);
     }

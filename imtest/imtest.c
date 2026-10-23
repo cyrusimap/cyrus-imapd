@@ -100,7 +100,7 @@ static sasl_callback_t callbacks[] = {
     }, {
         SASL_CB_PASS, NULL, NULL
     }, {
-        SASL_CB_GETOPT, (int (*)()) &mysasl_config, NULL
+        SASL_CB_GETOPT, (int (*)(void)) (void (*)(void)) &mysasl_config, NULL
     }, {
         SASL_CB_LIST_END, NULL, NULL
     }
@@ -1678,7 +1678,7 @@ static void imap_parse_mechlist(struct buf *ret, const char *str,
                                 struct protocol_t *prot,
                                 unsigned long *capabilities __attribute__((unused)))
 {
-    char *tmp;
+    const char *tmp;
     int num = 0;
 
     if (strstr(str, " SASL-IR")) {
@@ -1687,7 +1687,7 @@ static void imap_parse_mechlist(struct buf *ret, const char *str,
     }
 
     while ((tmp = strstr(str, " AUTH="))) {
-        char *end = (tmp += 6);
+        const char *end = (tmp += 6);
 
         while((*end != ' ') && (*end != '\0')) end++;
 
@@ -2414,7 +2414,7 @@ static int auth_http_sasl(const char *servername, const char *mechlist)
 
                     if (use_params) {
                         /* Parse parameters */
-                        const char *token = in;
+                        char *token = in;
 
                         in = NULL;
                         while (token && *token) {
@@ -2996,7 +2996,8 @@ int main(int argc, char **argv)
                     uint8_t fam;
                     uint16_t len;
                 } v2hdr = {
-                    "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A",
+                    { 0x0D, 0x0A, 0x0D, 0x0A, 0x00, 0x0D,
+                      0x0A, 0x51, 0x55, 0x49, 0x54, 0x0A },
                     (0x02 << 4) /* VER2 */ | 0x00 /* LOCAL  */,
                     (0x01 << 4) /* INET */ | 0x01 /* STREAM */,
                     0

@@ -388,7 +388,7 @@ static void buf_replace_bindvals(struct buf *cmd, struct sqldb_bindval bval[])
 
     for (; bval && bval->name; bval++) {
         /* Does the command contain this bindval? */
-        char *p = strstr(buf_base(cmd), bval->name);
+        const char *p = strstr(buf_base(cmd), bval->name);
         size_t matchlen = strlen(bval->name);
         size_t off = 0;
 

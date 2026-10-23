@@ -990,7 +990,7 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
             *p++ = '\0';
             service = p;
 
-            if ((p = strchr(service, '/'))) {
+            if ((p = strchr(p, '/'))) {
                 tok_t tok;
                 char *opt;
 

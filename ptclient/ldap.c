@@ -580,8 +580,8 @@ static int ptsmodule_expand_tokens(
 {
     char *buf;
     char *end, *ptr, *temp;
-    char *ebuf, *user;
-    char *domain;
+    char *ebuf;
+    const char *domain, *user;
     int rc;
 
     /* to permit multiple occurences of username and/or realm in filter */
@@ -721,7 +721,7 @@ static int ptsmodule_get_dn(
     char *authzid;
 #endif
     char *base = NULL, *filter = NULL;
-    char *domain = NULL;
+    const char *domain = NULL;
     char domain_filter[1024];
     char *attrs[] = {(char *) LDAP_NO_ATTRS,NULL}; //do not return all attrs!
     char *domain_attrs[] = {(char *)ptsm->domain_name_attribute,(char *)ptsm->domain_result_attribute,NULL};
@@ -1226,7 +1226,7 @@ static int ptsmodule_make_authstate_group(
     struct auth_state **newstate)
 {
     char *base = NULL, *filter = NULL;
-    char *domain = NULL;
+    const char *domain = NULL;
     char domain_filter[1024];
     char *domain_attrs[] = {(char *)ptsm->domain_name_attribute,(char *)ptsm->domain_result_attribute,NULL};
     int rc;

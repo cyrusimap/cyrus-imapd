@@ -541,8 +541,8 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     /* get the name of the table and CREATE it if necessary */
 
     /* strip any path from the fname */
-    p = strrchr(fname, '/');
-    table = xstrdup(p ? ++p : fname);
+    const char *base = strrchr(fname, '/');
+    table = xstrdup(base ? base + 1 : fname);
 
     /* convert '.' to '_' */
     if ((p = strrchr(table, '.'))) *p = '_';

@@ -3194,7 +3194,7 @@ struct shared_rock {
 static int sharedrights_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct shared_rock *srock = (struct shared_rock *) vrock;
-    const char *userid;
+    char *userid;
     char *nextid = NULL;
 
     /* Skip any special use folders (#jmap, #calendars, #notifications, etc.) */
@@ -3318,11 +3318,11 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
 
     /* parse the existing ACL and calculate the types of shares */
     char *nextid = NULL;
-    for (userid = acl; userid; userid = nextid) {
+    for (char *aclid = acl; aclid; aclid = nextid) {
         char *rightstr;
         int access;
 
-        rightstr = strchr(userid, '\t');
+        rightstr = strchr(aclid, '\t');
         if (!rightstr) break;
         *rightstr++ = '\0';
 
@@ -3331,7 +3331,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         *nextid++ = '\0';
 
         /* Is this a shareable user? (not owner or admin) */
-        if (strcmp(userid, owner) && !is_system_user(userid)) {
+        if (strcmp(aclid, owner) && !is_system_user(aclid)) {
             /* Add regular user to our table */
             change = xzmalloc(sizeof(struct acl_change));
             cyrus_acl_strtomask(rightstr, &change->oldrights);
@@ -3339,17 +3339,17 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
             /* unless we're overwriting, we start with the existing state */
             if (!overwrite) change->newrights = change->oldrights;
 
-            hash_insert(userid, (void *) change, &user_access);
+            hash_insert(aclid, (void *) change, &user_access);
         }
         else {
             /* Add owner or system user to new ACL */
             cyrus_acl_strtomask(rightstr, &access);
 
-            r = cyrus_acl_set(&newacl, userid,
+            r = cyrus_acl_set(&newacl, aclid,
                               ACL_MODE_SET, access, NULL, NULL);
             if (r) {
                 xsyslog_ev(LOG_ERR, "jmap.sharewith.acl.invalid",
-                           lf_mailbox(mbox), lf_s("u.username", userid),
+                           lf_mailbox(mbox), lf_s("u.username", aclid),
                            lf_s("acl.rights", rightstr), lf_err("error", r));
                 goto done;
             }

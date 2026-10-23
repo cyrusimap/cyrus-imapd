@@ -118,7 +118,8 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
 {
     int config_virtdomains = libcyrus_config_getswitch(CYRUSOPT_VIRTDOMAINS);
     int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
-    char c, *p;
+    char c;
+    const char *p;
     unsigned len;
 
     if ((len = snprintf(buf, size, "%s", path)) >= size) {
@@ -128,14 +129,14 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
     size -= len;
 
     if (config_virtdomains && (p = strchr(qr, '!'))) {
-        *p = '\0';  /* split domain!qr */
-        c = (char) dir_hash_c(qr, config_fulldirhash);
-        if ((len = snprintf(buf, size, "%s%c/%s",
-                            FNAME_DOMAINDIR, c, qr)) >= size) {
+        char *domain = xstrndup(qr, p - qr);
+        c = (char) dir_hash_c(domain, config_fulldirhash);
+        len = snprintf(buf, size, "%s%c/%s", FNAME_DOMAINDIR, c, domain);
+        free(domain);
+        if (len >= size) {
             fatal("insufficient buffer size in hash_quota", EX_TEMPFAIL);
         }
-        *p++ = '!';  /* reassemble domain!qr */
-        qr = p;
+        qr = p + 1;
         buf += len;
         size -= len;
 
@@ -450,7 +451,7 @@ static int fetch(struct dbengine *db,
 static const char *path_to_qr(const char *path, char *buf)
 {
     const char *qr;
-    char *p;
+    const char *p;
 
     qr = strrchr(path, '/') + 1;
     if ((p = strstr(path, FNAME_DOMAINDIR))) {
@@ -539,7 +540,8 @@ static int foreach(struct dbengine *db,
     char quota_path[MAX_QUOTA_PATH+1];
     strarray_t pathbuf = STRARRAY_INITIALIZER;
     int i;
-    char *tmpprefix = NULL, *p = NULL;
+    char *tmpprefix = NULL;
+    const char *p = NULL;
 
     assert(cb);
 
