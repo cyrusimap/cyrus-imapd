@@ -80,6 +80,7 @@ int handle_response(int res, int version __attribute__((unused)),
               res = 0;
               while(res != ')' && res != -1) {
                   res = yylex(&state, pin);
+                  if (res == STRING) free(state.str);
               }
               if(res != ')') {
                   BAD("expected RPAREN");
@@ -109,6 +110,7 @@ int handle_response(int res, int version __attribute__((unused)),
           res = 0;
           while(res != ')' && res != -1) {
               res = yylex(&state, pin);
+              if (res == STRING) free(state.str);
           }
           if(res != ')') {
               BAD("expected RPAREN");
@@ -144,7 +146,10 @@ int handle_response(int res, int version __attribute__((unused)),
               res = yylex(&state, pin);
               if (res == ' ') res = yylex(&state, pin);
           }
-          if (res == STRING) res = yylex(&state, pin);
+          if (res == STRING) {
+              free(state.str);
+              res = yylex(&state, pin);
+          }
       }
 
       if (res != EOL)
@@ -187,11 +192,13 @@ int deleteascript(int version, struct protstream *pout,
   ret = handle_response(res,version,pin,refer_to,&errstr);
 
   if(ret == -2 && *refer_to) {
+      free(errstr);
       return -2;
   } else if (ret!=0) {
       *errstrp = strconcat("Deleting script: ",
                            errstr,
                            (char *)NULL);
+      free(errstr);
       return -1;
   }
 
@@ -223,11 +230,13 @@ int installdata(int version,struct protstream *pout, struct protstream *pin,
 
   /* if command failed */
   if(ret == -2 && *refer_to) {
+      free(errstr);
       return -2;
   } else if (ret!=0) {
       *errstrp = strconcat("Putting script: ",
                            errstr,
                            (char *)NULL);
+      free(errstr);
       return -1;
   }
 
@@ -332,11 +341,13 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
 
   /* if command failed */
   if(ret == -2 && *refer_to) {
+      free(errstr);
       return -2;
   } else if (ret!=0) {
       *errstrp = strconcat("put script: ",
                            errstr,
                            (char *)NULL);
+      free(errstr);
       return -1;
   }
 
@@ -417,11 +428,13 @@ int setscriptactive(int version, struct protstream *pout,
 
   /* if command failed */
   if(ret == -2 && *refer_to) {
+      free(errstr);
       return -2;
   } else if (ret != 0) {
       *errstrp = strconcat("Setting script active: ",
                            errstr,
                            (char *)NULL);
+      free(errstr);
       return -1;
   }
   return 0;
@@ -458,6 +471,7 @@ int getscriptvalue(int version, struct protstream *pout,
 
   /* if command failed */
   if(ret == -2 && *refer_to) {
+      free(errstr);
       return -2;
   } else if (ret!=0) {
       *errstrp = errstr;
