@@ -5,11 +5,14 @@
 #include <config.h>
 
 #include <errno.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "calsched_support.h"
 #include "http_dav.h"
 #include "mailbox.h"
+#include "mboxlist.h"
+#include "mboxname.h"
 #include "strarray.h"
 #include "util.h"
 
@@ -105,6 +108,78 @@ done:
     return r;
 }
 
+/* Add to userids the userids whose default scheduling addresses (see
+   get_schedule_addresses()) can include addr, whether or not they exist */
+static void sched_address_userids(const char *addr, strarray_t *userids)
+{
+    if (!strncasecmp(addr, "mailto:", 7)) {
+        addr += 7;
+    }
+
+    const char *at = strrchr(addr, '@');
+    if (!at) {
+        return;
+    }
+
+    const char *domain = at + 1;
+    if (!strarray_contains_case(&config_cua_domains, domain)) {
+        return;
+    }
+
+    /* user+detail@domain is an address of user and of user@domain */
+    const char *plus = memchr(addr, '+', at - addr);
+    size_t len = (plus ? plus : at) - addr;
+    if (!len) {
+        return;
+    }
+
+    struct buf buf = BUF_INITIALIZER;
+    buf_setmap(&buf, addr, len);
+    strarray_add(userids, buf_cstring(&buf));
+    buf_printf(&buf, "@%s", domain);
+    strarray_add(userids, buf_cstring(&buf));
+
+    /* addresses compare without regard to case, userids may not */
+    for (int i = 0, n = strarray_size(userids); i < n; i++) {
+        buf_setcstr(&buf, strarray_nth(userids, i));
+        strarray_add(userids, buf_lcase(&buf));
+    }
+
+    buf_free(&buf);
+}
+
+EXPORTED void sched_addresses_restrict(strarray_t *addresses,
+                                       const char *userid,
+                                       const char *ownerid)
+{
+    strarray_t addr_userids = STRARRAY_INITIALIZER;
+
+    for (int i = strarray_size(addresses) - 1; i >= 0; i--) {
+        strarray_truncate(&addr_userids, 0);
+        sched_address_userids(strarray_nth(addresses, i), &addr_userids);
+
+        if ((userid && strarray_contains_case(&addr_userids, userid))
+            || (ownerid && strarray_contains_case(&addr_userids, ownerid)))
+        {
+            continue;
+        }
+
+        for (int j = 0; j < strarray_size(&addr_userids); j++) {
+            char *inbox =
+                mboxname_user_mbox(strarray_nth(&addr_userids, j), NULL);
+            bool exists = !mboxlist_lookup(inbox, NULL, NULL);
+            free(inbox);
+
+            if (exists) {
+                free(strarray_remove(addresses, i));
+                break;
+            }
+        }
+    }
+
+    strarray_fini(&addr_userids);
+}
+
 EXPORTED void get_schedule_addresses(const char *mboxname,
                                      const char *userid, strarray_t *addresses)
 {
@@ -127,22 +202,30 @@ EXPORTED void get_schedule_addresses(const char *mboxname,
             char *addr = xmlURIUnescapeString(item, strlen(item), NULL);
             strarray_setm(addresses, i, addr);
         }
+
+        /* the set can list anything: drop other users' addresses */
+        char *ownerid = mboxname_to_userid(mboxname);
+        sched_addresses_restrict(addresses, userid, ownerid);
+        free(ownerid);
     }
-    else if (strchr(userid, '@')) {
-        /* userid corresponding to target */
-        strarray_add(addresses, userid);
-    }
-    else {
-        /* append fully qualified userids */
-        int i;
 
-        for (i = 0; i < strarray_size(&config_cua_domains); i++) {
-            const char *domain = strarray_nth(&config_cua_domains, i);
+    if (r || !strarray_size(addresses)) {
+        if (strchr(userid, '@')) {
+            /* userid corresponding to target */
+            strarray_add(addresses, userid);
+        }
+        else {
+            /* append fully qualified userids */
+            int i;
 
-            buf_reset(&buf);
-            buf_printf(&buf, "%s@%s", userid, domain);
+            for (i = 0; i < strarray_size(&config_cua_domains); i++) {
+                const char *domain = strarray_nth(&config_cua_domains, i);
 
-            strarray_add(addresses, buf_cstring(&buf));
+                buf_reset(&buf);
+                buf_printf(&buf, "%s@%s", userid, domain);
+
+                strarray_add(addresses, buf_cstring(&buf));
+            }
         }
     }
 

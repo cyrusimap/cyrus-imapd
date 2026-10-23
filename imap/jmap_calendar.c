@@ -6936,6 +6936,8 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     }
     /* Load VEVENT from record. */
     oldical = record_to_ical(mbox, &record, &schedule_addresses);
+    /* the record adds the addresses it was stored with */
+    sched_addresses_restrict(&schedule_addresses, req->userid, sched_userid);
     if (!oldical) {
         xsyslog_ev(LOG_ERR, "jmap.calendarevent.ical.unparseable",
                    lf_jmapreq(req), lf_mailbox(mbox),

@@ -1,0 +1,95 @@
+#!perl
+use Cassandane::Tiny;
+
+# Any user can list any address in their own calendar-user-address-set.
+# Replying as an attendee address that belongs to another local user must
+# not change that attendee's status in the organizer's copy.
+sub test_schedule_attendee_address_claimed
+    :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.test");
+    $admintalk->create("user.other");
+
+    my $service = $self->{instance}->get_service("http");
+    my sub caldav_for ($user) {
+        return Net::CalDAVTalk->new(
+            user => $user,
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/',
+            expandurl => 1,
+        );
+    }
+    my $testtalk = caldav_for('test');
+    my $othertalk = caldav_for('other');
+    $testtalk->GetCalendars();
+    $othertalk->GetCalendars();
+
+    my $uuid = $self->{caldav}->genuuid();
+    my sub event ($partstat) {
+        return <<~EOF;
+            BEGIN:VCALENDAR
+            VERSION:2.0
+            PRODID:-//Cassandane//EN
+            BEGIN:VEVENT
+            UID:$uuid
+            DTSTAMP:20260901T120000Z
+            DTSTART:20260915T090000Z
+            DTEND:20260915T100000Z
+            SEQUENCE:0
+            SUMMARY:Budget review
+            ORGANIZER:MAILTO:cassandane\@example.com
+            ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+            ATTENDEE;PARTSTAT=$partstat;RSVP=TRUE:MAILTO:test\@example.com
+            END:VEVENT
+            END:VCALENDAR
+            EOF
+    }
+
+    xlog $self, "organizer invites a local attendee";
+    my $CalendarId = $self->{caldav}->NewCalendar({name => 'organizer'});
+    my $href = "$CalendarId/$uuid.ics";
+    $self->{caldav}->Request('PUT', $href, event('NEEDS-ACTION'),
+                             'Content-Type' => 'text/calendar');
+
+    my sub organizer_partstat () {
+        my $ical = $self->{caldav}->Request('GET', $href)->{content};
+        $ical =~ s/\r?\n[ \t]//g;
+        my ($attendee) = grep { m/^ATTENDEE.*test\@example\.com/ }
+                              split /\r?\n/, $ical;
+        $self->assert_not_null($attendee);
+        my ($partstat) = $attendee =~ m/PARTSTAT=([A-Z-]+)/;
+        return $partstat;
+    }
+    $self->assert_str_equals('NEEDS-ACTION', organizer_partstat());
+
+    xlog $self, "another user adds the attendee's address to their own set";
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-user-address-set>
+        <D:href>mailto:test\@example.com</D:href>
+      </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $othertalk->Request('PROPPATCH', "/dav/principals/user/other", $xml,
+                        'Content-Type' => 'text/xml');
+
+    xlog $self, "that user stores the event and then declines it";
+    my $OtherCalendarId = $othertalk->NewCalendar({name => 'other'});
+    for my $partstat (qw(NEEDS-ACTION DECLINED)) {
+        $othertalk->Request('PUT', "$OtherCalendarId/$uuid.ics",
+                            event($partstat),
+                            'Content-Type' => 'text/calendar');
+    }
+
+    $self->assert_str_equals('NEEDS-ACTION', organizer_partstat());
+}
