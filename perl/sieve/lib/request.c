@@ -56,7 +56,11 @@ int handle_response(int res, int version __attribute__((unused)),
       BAD("ATOM");
 
   if(res == TOKEN_BYE) {
-      if (yylex(&state, pin)!=' ')
+      r = -2;
+      res = yylex(&state, pin);
+      if (res == EOL)
+          goto done;
+      if (res != ' ')
           BAD("expected space");
 
       res = yylex(&state, pin);
@@ -91,14 +95,17 @@ int handle_response(int res, int version __attribute__((unused)),
           if (res == ' ') res = yylex(&state, pin);
       }
 
-      r = -2;
       if (res == EOL)
           goto done;
       if (res != STRING)
           BAD("expected string2");
       text = state.str;
   } else if (res==TOKEN_NO) {
-      if (yylex(&state, pin)!=' ')
+      r = -1;
+      res = yylex(&state, pin);
+      if (res == EOL)
+          goto done;
+      if (res != ' ')
           BAD("expected space");
 
       res = yylex(&state, pin);
@@ -120,11 +127,11 @@ int handle_response(int res, int version __attribute__((unused)),
           if (res == ' ') res = yylex(&state, pin);
       }
 
+      if (res == EOL)
+          goto done;
       if (res != STRING)
           BAD("expected string");
       text = state.str;
-
-      r = -1;
   } else {
       /* "OK" [SP "(" resp-code ")"] [SP string] */
       res = yylex(&state, pin);
