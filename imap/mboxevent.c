@@ -316,14 +316,8 @@ static bool mboxevent_specialuse_excluded(const char *specialuse)
 {
     if (!specialuse) return false;
 
-    bool excluded = false;
     strarray_t *uses = strarray_split(specialuse, NULL, 0);
-    for (int i = 0; i < strarray_size(uses); i++) {
-        if (strarray_contains(excluded_specialuse, strarray_nth(uses, i))) {
-            excluded = true;
-            break;
-        }
-    }
+    bool excluded = strarray_intersect(uses, excluded_specialuse);
     strarray_free(uses);
     return excluded;
 }
