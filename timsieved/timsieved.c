@@ -11,7 +11,6 @@
 #include <limits.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <sasl/sasl.h> /* yay! sasl */
 #include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -22,6 +21,8 @@
 #include <sysexits.h>
 #include <syslog.h>
 #include <unistd.h>
+
+#include "libsasl_min/sasl.h"
 
 #include "auth.h"
 #include "libconfig.h"

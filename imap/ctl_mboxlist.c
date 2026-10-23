@@ -33,7 +33,8 @@
 #include <syslog.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sasl/sasl.h>
+
+#include "libsasl_min/sasl.h"
 
 #include "assert.h"
 #include "annotate.h"
