@@ -13,19 +13,20 @@ sub test_searchsnippet_get_standard_properties
     my $id = $jmap->request([[ 'Email/query', {} ]])
                   ->single_sentence('Email/query')->arguments->{ids}[0];
 
-    my $get = sub {
+    my sub get_snippet {
         $jmap->request([[ 'SearchSnippet/get', {
             filter => { text => 'snippet' }, emailIds => [ $id ],
         } ]])->single_sentence('SearchSnippet/get')->arguments->{list}[0];
-    };
+    }
 
     # RFC 8621 5: a SearchSnippet has emailId, subject and preview
     $jmap->DefaultUsing([ grep { !m{cyrusimap.org/ns/jmap/mail} } @with_ext ]);
     $self->assert_cmp_deeply(
-        bag(qw( emailId subject preview )), [ keys %{ $get->() } ]);
+        bag(qw( emailId subject preview )), [ keys %{ get_snippet() } ]);
 
     # attachments is a Cyrus extension
     $jmap->DefaultUsing(\@with_ext);
     $self->assert_cmp_deeply(
-        bag(qw( emailId subject preview attachments )), [ keys %{ $get->() } ]);
+        bag(qw( emailId subject preview attachments )),
+        [ keys %{ get_snippet() } ]);
 }

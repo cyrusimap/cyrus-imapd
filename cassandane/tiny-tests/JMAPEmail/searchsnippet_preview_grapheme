@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+use Encode qw(encode_utf8);
+
+sub test_searchsnippet_preview_grapheme
+    :needs_search_xapian
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    # Decomposed u-umlaut and a ZWJ family emoji span several code points
+    my $umlaut = "u\N{U+0308}";
+    my $family = "\N{U+1F468}\N{U+200D}\N{U+1F469}\N{U+200D}\N{U+1F467}";
+    my $cluster = "$umlaut$family";
+    my $filler = join(' ', map { $cluster x ($_ % 4 + 1) } 1 .. 40);
+
+    # Padding moves the cut across every offset within a cluster
+    my $width = length(encode_utf8($cluster));
+    for my $pad (0 .. $width - 1) {
+        my $body = join(' ', 'zgrapheme', 'x' x $pad, $filler);
+        $self->make_message("preview $pad",
+            mime_charset => 'utf-8',
+            body => encode_utf8($body),
+        ) or die;
+    }
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $filter = { text => 'zgrapheme' };
+    my $res = $jmap->request([
+        [ 'Email/query', { filter => $filter }, 'R1' ],
+        [ 'SearchSnippet/get', {
+            filter => $filter,
+            '#emailIds' => { resultOf => 'R1', name => 'Email/query',
+                             path => '/ids' },
+        }, 'R2' ],
+    ]);
+    my $list = $res->sentence_named('SearchSnippet/get')
+                   ->arguments->{list};
+    $self->assert_num_equals($width, scalar @$list);
+
+    for my $snippet (@$list) {
+        my $preview = $snippet->{preview};
+        $self->assert_matches(qr{<mark>zgrapheme</mark>}, $preview);
+        $self->assert(length(encode_utf8($preview)) <= 255);
+
+        # Cuts fall between grapheme clusters, never inside one
+        (my $text = $preview) =~ s{^\.\.\.|\.\.\.$|</?mark>}{}g;
+        $self->assert_matches(
+            qr{^(?:\Q$umlaut\E|\Q$family\E|zgrapheme|x|\s)*$}, $text);
+    }
+}

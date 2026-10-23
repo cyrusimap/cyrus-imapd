@@ -20,6 +20,9 @@
 #include <chardet/chardet.h>
 #endif
 
+#include <unicode/ubrk.h>
+#include <unicode/utext.h>
+
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
@@ -7339,6 +7342,16 @@ static char *_snippet_clip_preview(const char *s)
     size_t n = 0;
     size_t first_mark = SIZE_MAX, first_endmark = SIZE_MAX;
 
+    /* If ICU fails, cut on code points instead */
+    UErrorCode uerr = U_ZERO_ERROR;
+    UText *ut = utext_openUTF8(NULL, s, len, &uerr);
+    UBreakIterator *bi = ubrk_open(UBRK_CHARACTER, NULL, NULL, 0, &uerr);
+    ubrk_setUText(bi, ut, &uerr);
+    if (U_FAILURE(uerr)) {
+        ubrk_close(bi);
+        bi = NULL;
+    }
+
     off[0] = 0;
     in_mark[0] = false;
     for (const char *p = s; *p; n++) {
@@ -7369,7 +7382,16 @@ static char *_snippet_clip_preview(const char *s)
             }
         }
         else {
-            while ((p[toklen] & 0xc0) == 0x80) {
+            /* Keep grapheme clusters, such as combining sequences, whole */
+            for (;;) {
+                while ((p[toklen] & 0xc0) == 0x80) {
+                    toklen++;
+                }
+                if (!bi || !p[toklen] || p[toklen] == '<' || p[toklen] == '&'
+                    || ubrk_isBoundary(bi, p - s + toklen))
+                {
+                    break;
+                }
                 toklen++;
             }
         }
@@ -7378,6 +7400,8 @@ static char *_snippet_clip_preview(const char *s)
         off[n + 1] = p - s;
         in_mark[n + 1] = mark_after;
     }
+    ubrk_close(bi);
+    utext_close(ut);
 
     /* Tokens before this index must be in the preview */
     size_t keep = first_endmark != SIZE_MAX ? first_endmark + 1
