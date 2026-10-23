@@ -118,8 +118,14 @@
  * purposes, this simplifies security validation.
  */
 
-#ifndef SASL_H
-#define SASL_H 1
+#ifndef LIBSASL_MIN_SASL_H
+#define LIBSASL_MIN_SASL_H 1
+
+#include <config.h>
+
+#ifndef USE_INTERNAL_SASL
+#include <sasl/sasl.h>
+#else
 
 #include <stddef.h> /* For size_t */
 
@@ -132,7 +138,7 @@
 #define SASL_VERSION_FULL                                                      \
     ((SASL_VERSION_MAJOR << 16) | (SASL_VERSION_MINOR << 8) | SASL_VERSION_STEP)
 
-#include "prop.h"
+#include "libsasl_min/prop.h"
 
 /*************
  * Basic API *
@@ -1369,4 +1375,5 @@ LIBSASL_API int sasl_decode(sasl_conn_t *conn,
 }
 #endif
 
-#endif /* SASL_H */
+#endif /* USE_INTERNAL_SASL */
+#endif /* LIBSASL_MIN_SASL_H */
