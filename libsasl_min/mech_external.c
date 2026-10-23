@@ -4,6 +4,8 @@
 
 #include <config.h>
 
+#include "libsasl_min/mech_external.h"
+
 #include "libsasl_min/core_saslint.h"
 #include "libsasl_min/plugin_common.h"
 
