@@ -5,6 +5,7 @@
 #include <config.h>
 
 #include <errno.h>
+#include <stdbool.h>
 #include <sys/types.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -655,6 +656,23 @@ out:
     return r;
 }
 
+/* True if a positive folder match in a top-level conjunction of 'e'
+ * names a folder other than 'mboxname'. */
+static bool expr_excludes_folder(const search_expr_t *e, const char *mboxname)
+{
+    if (e->op == SEOP_AND) {
+        for (const search_expr_t *c = e->children; c; c = c->next) {
+            if (expr_excludes_folder(c, mboxname)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    return e->op == SEOP_MATCH && e->attr == search_attr_find("folder")
+           && e->value.s && strcmp(e->value.s, mboxname);
+}
+
 /*
  * After an indexed subquery is run, we have accumulated a number of
  * found UID hits in folders.  Here we check those UIDs for a) not
@@ -673,6 +691,11 @@ static void subquery_post_enginesearch(const char *key, void *data, void *rock)
 
     if (query->error) return;
     if (!folder->found_dirty) return;
+
+    if (expr_excludes_folder(sub->expr, mboxname)) {
+        folder->found_dirty = 0;
+        return;
+    }
 
     if (config_getenum(IMAPOPT_SEARCH_ENGINE) == IMAP_ENUM_SEARCH_ENGINE_SQUAT) {
         /* The squat engine is unable to evaluate unindexed messages, and so
