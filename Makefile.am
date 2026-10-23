@@ -627,6 +627,7 @@ cunit_TESTS = \
     cunit/bitvector.testc \
     cunit/buf.testc \
     cunit/bufarray.testc \
+    cunit/caldav_repair.testc \
     cunit/byteorder.testc \
     cunit/charset.testc \
     cunit/command.testc \
@@ -1002,6 +1003,8 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/caldav_alarm.h \
     imap/caldav_db.c \
     imap/caldav_db.h \
+    imap/caldav_repair.c \
+    imap/caldav_repair.h \
     imap/calsched_support.c \
     imap/calsched_support.h \
     imap/carddav_db.c \

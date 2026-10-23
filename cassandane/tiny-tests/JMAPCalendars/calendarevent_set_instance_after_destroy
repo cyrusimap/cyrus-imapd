@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+# A standalone instance whose recurrence id exists only in a destroyed
+# resource is new to the live event that now holds the UID, so creating it
+# joins that event's resource.
+
+my sub create_event ($user, $calendar, $uid, $title, %props)
+{
+    my $res = $user->jmap->request([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    version     => '2.0',
+                    uid         => $uid,
+                    calendarIds => { $calendar->id => JSON::true },
+                    title       => $title,
+                    start       => '2026-02-02T02:02:02',
+                    timeZone    => 'Etc/UTC',
+                    duration    => 'PT1H',
+                    %props,
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    return $res->single_sentence('CalendarEvent/set')->arguments;
+}
+
+sub test_calendarevent_set_instance_after_destroy ($self)
+{
+    my $user = $self->default_user;
+    my $calendar = $user->calendars->default;
+    my $uid = 'event1uid';
+    my %instance = (
+        recurrenceId         => '2026-02-03T02:02:02',
+        recurrenceIdTimeZone => 'Etc/UTC',
+    );
+
+    xlog $self, "create and destroy a standalone instance";
+    $calendar->create_event({ uid => $uid, title => 'first', %instance })
+             ->destroy;
+
+    xlog $self, "create a main event with the same uid";
+    my $res = create_event($user, $calendar, $uid, 'main',
+        recurrenceRule => { frequency => 'daily', count => 3 });
+    my $mainId = $res->{created}{event}{id};
+    $self->assert_not_null($mainId);
+
+    xlog $self, "create the instance again";
+    $res = create_event($user, $calendar, $uid, 'instance', %instance);
+    my $instanceId = $res->{created}{event}{id};
+    $self->assert_not_null($instanceId);
+
+    xlog $self, "both are in the same resource";
+    $res = $user->jmap->request([
+        ['CalendarEvent/get', {
+            ids        => [ $mainId, $instanceId ],
+            properties => [ 'title', 'x-href' ],
+        }, 'R1'],
+    ]);
+    my $list = $res->single_sentence('CalendarEvent/get')->arguments->{list};
+    $self->assert_cmp_deeply([ 'instance', 'main' ],
+                             [ sort map { $_->{title} } @$list ]);
+    $self->assert_str_equals($list->[0]{'x-href'}, $list->[1]{'x-href'});
+}

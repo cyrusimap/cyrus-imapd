@@ -1,0 +1,101 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::CRLF;
+
+# A UID stored in two resources by older Cyrus stays that way until
+# dav_reconstruct repairs it.  Undoing an update to one of them puts its
+# earlier version back in the same resource, which cannot add a conflict.
+
+my sub event_message ($resource, $summary, $recurid)
+{
+    my $rid = $recurid ? "RECURRENCE-ID:$recurid\r\n" : "";
+
+    return to_crlf(<<EOF);
+From: <cassandane\@example.com>
+Subject: $summary
+Date: Thu, 01 Jan 2026 00:00:00 +0000
+Message-ID: <$resource\@example.com>
+Content-Type: text/calendar; charset=utf-8; component=VEVENT
+Content-Transfer-Encoding: 8bit
+Content-Disposition: attachment; filename="$resource"
+MIME-Version: 1.0
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+BEGIN:VEVENT
+UID:event1uid
+${rid}DTSTART:20260102T090000Z
+DURATION:PT1H
+DTSTAMP:20260101T000000Z
+SUMMARY:$summary
+END:VEVENT
+END:VCALENDAR
+EOF
+}
+
+sub test_restore_calendars_update_uid_duplicate
+    :MagicPlus
+    ($self)
+{
+    my $user = $self->default_user;
+    my $calendarB = $self->{caldav}->NewCalendar({ name => 'calendarB' });
+
+    # IMAP APPEND stores the resource without the CalDAV UID check
+    xlog $self, "append two resources with one UID in two calendars";
+    my $imap = $self->{instance}->get_service('imap')
+                    ->create_store(username => 'cassandane+dav')
+                    ->get_client();
+    $imap->append('#calendars.Default',
+        event_message('a.ics', 'in Default', undef)) || die $@;
+    $imap->append("#calendars.$calendarB",
+        event_message('b.ics', 'in calendarB', '20260102T090000Z')) || die $@;
+
+    my $defaultId = $user->calendars->default->id;
+
+    my sub default_events () {
+        my $res = $user->jmap->request([
+            ['CalendarEvent/get', {
+                properties => [ 'calendarIds', 'title' ],
+            }, 'R1'],
+        ]);
+        return [ grep { $_->{calendarIds}{$defaultId} }
+                 $res->single_sentence('CalendarEvent/get')
+                     ->arguments->{list}->@* ];
+    }
+
+    my $events = default_events();
+    $self->assert_num_equals(1, scalar $events->@*);
+    my $id = $events->[0]{id};
+
+    sleep 2;
+    my $mark = time();
+    sleep 2;
+
+    xlog $self, "update the event in Default";
+    my $res = $user->jmap->request([
+        ['CalendarEvent/set', {
+            update => { $id => { title => 'updated' } },
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([ "$id" ],
+        [ map {; "$_" } $res->single_sentence('CalendarEvent/set')
+                             ->as_set->updated_ids ]);
+
+    my $period = 'PT' . (time() - $mark) . 'S';
+
+    xlog $self, "undo the update";
+    $res = $user->jmap->request([
+        ['Backup/restoreCalendars', {
+            undoPeriod     => $period,
+            undoAll        => JSON::true,
+            verboseLogging => JSON::true,
+        }, 'R1'],
+    ]);
+    my $restore = $res->single_sentence('Backup/restoreCalendars')->arguments;
+    $self->assert_num_equals(1, $restore->{numUpdatesUndone});
+
+    xlog $self, "the event in Default is back to its earlier version";
+    $self->assert_cmp_deeply([ 'in Default' ],
+                             [ map { $_->{title} } default_events()->@* ]);
+}

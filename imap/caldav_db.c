@@ -433,6 +433,18 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 }
 
 
+EXPORTED bool caldav_is_sched_inbox(struct caldav_db *caldavdb,
+                                    const struct mailbox *mailbox)
+{
+    if (!caldavdb->sched_inbox) return false;
+
+    const char *mbox = (caldavdb->db->version >= DB_MBOXID_VERSION) ?
+        mailbox_uniqueid(mailbox) : mailbox_name(mailbox);
+
+    return !strcmpsafe(mbox, caldavdb->sched_inbox);
+}
+
+
 #define CMD_SELCMODSEQ CMD_READFIELDS \
     " WHERE createdmodseq = :cmodseq AND mailbox != :inbox AND alive = 1;"
 
@@ -454,6 +466,26 @@ EXPORTED int caldav_lookup_by_cmodseq(struct caldav_db *caldavdb,
     if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
 
     return r;
+}
+
+
+#define CMD_SELUIDCONFLICT CMD_READFIELDS \
+    " WHERE alive = 1 AND mailbox != :inbox AND ical_uid IN"           \
+    " (SELECT ical_uid FROM ical_objs"                                 \
+    "   WHERE alive = 1 AND mailbox != :inbox"                         \
+    "   GROUP BY ical_uid HAVING COUNT(*) > 1)"                        \
+    " ORDER BY ical_uid;"
+
+EXPORTED int caldav_foreach_uid_conflict(struct caldav_db *caldavdb,
+                                         caldav_cb_t *cb, void *rock)
+{
+    struct sqldb_bindval bval[] = {
+        { ":inbox", SQLITE_TEXT, { .s = caldavdb->sched_inbox } },
+        { NULL,     SQLITE_NULL, { .s = NULL                  } } };
+    struct caldav_data cdata;
+    struct read_rock rrock = { caldavdb, &cdata, 0, cb, rock };
+
+    return sqldb_exec(caldavdb->db, CMD_SELUIDCONFLICT, bval, &read_cb, &rrock);
 }
 
 
