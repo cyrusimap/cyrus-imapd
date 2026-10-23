@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+# A card that can't be destroyed, because its address book can't be opened,
+# must be reported in notDestroyed, not fail the call and hide the cards
+# destroyed before it.
+sub test_contactcard_set_destroy_unopenable_addressbook
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $default = $user->addressbooks->default;
+    my $second = $user->addressbooks->create({ name => 'Second' });
+    my $good = $user->contacts->create({
+        addressBookIds => { $second->id => JSON::true },
+    });
+    my $bad = $user->contacts->create({
+        addressBookIds => { $default->id => JSON::true },
+    });
+
+    xlog $self, "break the default address book so opening it fails";
+    my $header = $self->{instance}->folder_to_directory(
+        'INBOX.#addressbooks.Default') . '/cyrus.header';
+    $self->assert(-f $header, "couldn't find cyrus.header file");
+    rename $header, "$header.hidden" or die "rename $header: $!";
+
+    my $res = $jmap->request([
+        [ 'ContactCard/set' => { destroy => [ $good->id, $bad->id ] } ],
+    ]);
+
+    rename "$header.hidden", $header or die "rename $header: $!";
+
+    my $set = $res->single_sentence('ContactCard/set')->as_set;
+
+    $self->assert_cmp_deeply([ $good->id ], [ $set->destroyed_ids ]);
+    $self->assert_cmp_deeply(
+        { $bad->id => superhashof({ type => 'serverFail' }) },
+        $set->destroy_errors,
+    );
+    $self->assert_syslog_matches($self->{instance},
+        qr{event=mailbox\.header\.read\.failed .*mbox\.name=user\.cassandane\.#addressbooks\.Default });
+}

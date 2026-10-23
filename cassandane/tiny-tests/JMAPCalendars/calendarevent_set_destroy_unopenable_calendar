@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+# An event that can't be destroyed, because its calendar can't be opened,
+# must be reported in notDestroyed, not fail the request and hide the events
+# destroyed before it.
+sub test_calendarevent_set_destroy_unopenable_calendar
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $second = $user->calendars->create({ name => 'Second' });
+    my $good = $user->calendarevents->create({
+        calendarIds => { $second->id => JSON::true },
+    });
+    my $bad = $user->calendarevents->create({
+        calendarIds => { $user->calendars->default->id => JSON::true },
+    });
+
+    xlog $self, "break the default calendar so opening it fails";
+    my $header = $self->{instance}->folder_to_directory(
+        'INBOX.#calendars.Default') . '/cyrus.header';
+    $self->assert(-f $header, "couldn't find cyrus.header file");
+    rename $header, "$header.hidden" or die "rename $header: $!";
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => { destroy => [ $good->id, $bad->id ] } ],
+    ]);
+
+    rename "$header.hidden", $header or die "rename $header: $!";
+
+    my $set = $res->single_sentence('CalendarEvent/set')->as_set;
+
+    $self->assert_cmp_deeply([ $good->id ], [ $set->destroyed_ids ]);
+    $self->assert_cmp_deeply(
+        { $bad->id => superhashof({ type => 'serverFail' }) },
+        $set->destroy_errors,
+    );
+    $self->assert_syslog_matches($self->{instance},
+        qr{event=mailbox\.header\.read\.failed .*mbox\.name=user\.cassandane\.#calendars\.Default });
+}
