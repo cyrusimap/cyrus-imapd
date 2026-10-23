@@ -839,7 +839,7 @@ fail:
 
 int isieve_logout(isieve_t **obj)
 {
-    prot_printf((*obj)->pout, "LOGOUT");
+    prot_printf((*obj)->pout, "LOGOUT\r\n");
     prot_flush((*obj)->pout);
 
     sieve_free_net(*obj);

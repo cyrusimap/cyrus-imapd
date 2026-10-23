@@ -38,6 +38,16 @@ static void set_globalerr(char *err)
     globalerr = err;
 }
 
+/* a handle stays defined after sieve_logout(), but has no connection */
+#define REQUIRE_CONNECTION(obj)                            \
+    do {                                                   \
+        if (!(obj)->isieve) {                              \
+            free((obj)->errstr);                           \
+            (obj)->errstr = xstrdup("not connected");      \
+            XSRETURN_IV(-1);                               \
+        }                                                  \
+    } while (0)
+
 /* the contexts are Perl callbacks owned by the array */
 static void free_callbacks(sasl_callback_t *callbacks)
 {
@@ -340,13 +350,13 @@ sieve_get_global_error()
 int
 sieve_logout(Sieveobj obj)
   CODE:
-    /* xxx this leaves the object unusable */
-    isieve_logout(&(obj->isieve));
+    if (obj->isieve) isieve_logout(&(obj->isieve));
     XSRETURN_UNDEF;
 
 int
 sieve_put_file(Sieveobj obj, char *filename)
   CODE:
+    REQUIRE_CONNECTION(obj);
     RETVAL = isieve_put_file(obj->isieve, filename, NULL, &obj->errstr);
   OUTPUT:
     RETVAL
@@ -354,6 +364,7 @@ sieve_put_file(Sieveobj obj, char *filename)
 int
 sieve_put_file_withdest(Sieveobj obj, char *filename, char *destname)
   CODE:
+    REQUIRE_CONNECTION(obj);
     RETVAL = isieve_put_file(obj->isieve, filename, destname, &obj->errstr);
   OUTPUT:
     RETVAL
@@ -361,6 +372,7 @@ sieve_put_file_withdest(Sieveobj obj, char *filename, char *destname)
 int
 sieve_put(Sieveobj obj, char *name, char *data)
   CODE:
+    REQUIRE_CONNECTION(obj);
     RETVAL = isieve_put(obj->isieve, name, data, strlen(data), &obj->errstr);
   OUTPUT:
     RETVAL
@@ -368,6 +380,7 @@ sieve_put(Sieveobj obj, char *name, char *data)
 int
 sieve_delete(Sieveobj obj, char *name)
   CODE:
+    REQUIRE_CONNECTION(obj);
     RETVAL = isieve_delete(obj->isieve, name, &obj->errstr);
   OUTPUT:
     RETVAL
@@ -375,6 +388,7 @@ sieve_delete(Sieveobj obj, char *name)
 int
 sieve_list(Sieveobj obj, SV *cb)
   CODE:
+    REQUIRE_CONNECTION(obj);
     RETVAL = isieve_list(obj->isieve, (isieve_listcb_t *) &call_listcb,
                          cb, &obj->errstr);
   OUTPUT:
@@ -383,6 +397,7 @@ sieve_list(Sieveobj obj, SV *cb)
 int
 sieve_activate(Sieveobj obj, char *name)
   CODE:
+    REQUIRE_CONNECTION(obj);
     RETVAL = isieve_activate(obj->isieve, name, &obj->errstr);
   OUTPUT:
     RETVAL
@@ -390,6 +405,7 @@ sieve_activate(Sieveobj obj, char *name)
 int
 sieve_get(Sieveobj obj, char *name, char *output)
   CODE:
+    REQUIRE_CONNECTION(obj);
     RETVAL = isieve_get(obj->isieve, name, &output, &obj->errstr);
 
   OUTPUT:

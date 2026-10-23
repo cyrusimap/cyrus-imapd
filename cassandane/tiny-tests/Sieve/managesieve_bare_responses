@@ -23,6 +23,9 @@ sub result { print "$_[0]: ", ($_[1] ? sieve_get_error($h) : 'succeeded'), "\n" 
 result('put', sieve_put($h, 's1', 'keep;'));
 result('activate', sieve_activate($h, 's1'));
 result('delete', sieve_delete($h, 's1'));
+sieve_logout($h);
+result('after logout', sieve_list($h, sub {}));
+sieve_logout($h);
 print "done\n";
 EOF
 
@@ -30,5 +33,6 @@ EOF
     $self->assert_matches(qr/^put: Putting script: $/m, $out);
     $self->assert_matches(qr/^activate: Setting script active: $/m, $out);
     $self->assert_matches(qr/^delete: Deleting script: $/m, $out);
+    $self->assert_matches(qr/^after logout: not connected$/m, $out);
     $self->assert_matches(qr/^done$/m, $out);
 }
