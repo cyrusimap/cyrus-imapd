@@ -118,7 +118,7 @@ segment = 1*( lowercase / DIGIT / "_" / "-" )
 
 A hyphen is legal in an event name where the thing being named has one.
 Don't reach for it to join an object to its outcome, though -- that's what
-the dot is for.  (Keys are stricter: no hyphens.  See "Naming keys".)
+the dot is for.
 
 Read the name as **`<subsystem>.<object>.<outcome>`**, from general to
 specific, so that a prefix match selects a useful family:
@@ -146,9 +146,19 @@ Rules:
 
 ## Naming keys
 
+```
+key = segment *( "." segment )
+segment = 1*( lowercase / DIGIT / "_" / "-" )
+```
+
 Keys are dotted too, and the first segment says what the value is *about*, not
 which subsystem happened to log it.  A mailbox is `mbox.name` whether IMAP,
 JMAP or the replication code logged it.
+
+As in an event name, a hyphen is for a thing that already has one:
+`imap.client.id.os-version` is RFC 2971's `os-version` field, spelled as the
+RFC spells it.  Words that are ours to join take an underscore, as in
+`mbox.repack.recalc_nanosec`.
 
 The registered namespaces:
 

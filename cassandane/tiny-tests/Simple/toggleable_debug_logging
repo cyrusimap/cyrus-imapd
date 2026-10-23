@@ -34,7 +34,11 @@ sub test_toggleable_debug_logging
         # this is really looking at cassandane's own injected syslog
         # output, so it depends on the injected syslog doing the right
         # thing with masking
-        my $selectpat = qr/open: user cassandane opened INBOX/;
+        my $selectpat = qr{
+            event=imap\.mailbox\.opened
+            .+
+            mbox\.name=user\.cassandane\b
+        }x;
         my @lines = $self->{instance}->getsyslog($selectpat);
         if ($config_debug) {
             $self->assert_num_equals(1, scalar @lines);

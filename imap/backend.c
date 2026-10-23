@@ -680,8 +680,9 @@ static int backend_authenticate(struct backend *s, const char *userid,
             char *newmechlist = intersect_mechlists( conf, mechlist );
 
             if ( newmechlist == NULL ) {
-                syslog( LOG_INFO, "%s did not offer %s", s->hostname,
-                        mech_conf );
+                xsyslog_ev(LOG_INFO, "backend.mech.unoffered",
+                           lf_s("proxy.server", s->hostname),
+                           lf_s("login.mech", mech_conf));
             }
 
             free(conf);
@@ -737,9 +738,9 @@ static int backend_login(struct backend *ret, const char *userid,
     else {
         do { /* read the initial greeting */
             if (!prot_fgets(buf, sizeof(buf), ret->in)) {
-                syslog(LOG_ERR,
-                       "backend_login(): couldn't read initial greeting: %s",
-                       ret->in->error ? ret->in->error : "(null)");
+                xsyslog_ev(LOG_ERR, "backend.greeting.unreadable",
+                           lf_s("proxy.server", ret->hostname),
+                           lf_s_opt("error", ret->in->error));
                 return -1;
             }
         } while (strncasecmp(buf, prot->u.std.banner.resp,
@@ -759,8 +760,11 @@ static int backend_login(struct backend *ret, const char *userid,
         const char *my_status = NULL;
 
         if ((r = backend_authenticate(ret, userid, cb, &my_status))) {
-            syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
-                   cyrus_sasl_errmsg(ret->saslconn, r, /*for_client*/0));
+            xsyslog_ev(LOG_ERR, "backend.auth.failed",
+                       lf_s("proxy.server", ret->hostname),
+                       lf_s("error",
+                            cyrus_sasl_errmsg(ret->saslconn, r,
+                                              /*for_client*/0)));
             free(old_mechlist);
             return -1;
         }
@@ -798,8 +802,8 @@ static int backend_login(struct backend *ret, const char *userid,
                 if (new_mechlist &&
                     old_mechlist &&
                     strcmp(new_mechlist, old_mechlist)) {
-                    syslog(LOG_ERR, "possible MITM attack:"
-                           "list of available SASL mechanisms changed");
+                    xsyslog_ev(LOG_ERR, "backend.mechlist.changed",
+                               lf_s("proxy.server", ret->hostname));
 
                     if (new_mechlist) free(new_mechlist);
                     if (old_mechlist) free(old_mechlist);
@@ -831,7 +835,9 @@ static int backend_login(struct backend *ret, const char *userid,
         prot->u.std.compress_cmd.cmd) {
         r = do_compress(ret, &prot->u.std.compress_cmd);
         if (r) {
-            syslog(LOG_NOTICE, "couldn't enable compression on backend server: %s", error_message(r));
+            xsyslog_ev(LOG_NOTICE, "backend.compress.failed",
+                       lf_s("proxy.server", ret->hostname),
+                       lf_err("error", r));
             r = 0; /* not a fail-level error */
         }
     }
@@ -854,8 +860,9 @@ static int backend_client_bind(const int sock, const struct addrinfo *dest)
 
     r = getaddrinfo(client_bind_name, NULL, &hints, &res0);
     if (r && config_debug) {
-        syslog(LOG_DEBUG, "%s: getaddrinfo(%s) failed: %s",
-               __func__, client_bind_name, gai_strerror(r));
+        xsyslog_ev(LOG_DEBUG, "backend.bind.resolve.failed",
+                   lf_s("sys.host", client_bind_name),
+                   lf_s("error", gai_strerror(r)));
     }
 
     for (iter = res0; iter != NULL; iter = iter->ai_next) {
@@ -872,13 +879,14 @@ static int backend_client_bind(const int sock, const struct addrinfo *dest)
                         NI_NUMERICHOST);
 
             errno = saved_errno;
-            syslog(LOG_DEBUG, "%s: bind(%s) failed: %m", __func__, bind_addr);
+            xsyslog_ev(LOG_DEBUG, "backend.bind.failed",
+                       lf_s("sys.host", bind_addr));
         }
     }
 
     if (r || !iter) {
-        syslog(LOG_ERR, "client bind failed: no suitable address found for %s",
-               client_bind_name);
+        xsyslog_ev(LOG_ERR, "backend.bind.noaddress",
+                   lf_s("sys.host", client_bind_name));
         r = r ? r : -1;
     }
 
@@ -1012,8 +1020,9 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
         hints.ai_socktype = SOCK_STREAM;
         err = getaddrinfo(host, service, &hints, &res0);
         if (err) {
-            syslog(LOG_ERR, "getaddrinfo(%s) failed: %s",
-                   server, gai_strerror(err));
+            xsyslog_ev(LOG_ERR, "backend.resolve.failed",
+                       lf_s("proxy.server", server),
+                       lf_s("error", gai_strerror(err)));
             goto error;
         }
 
@@ -1084,7 +1093,11 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
 
     if (sock < 0) {
         if (res0 != &hints) freeaddrinfo(res0);
-        syslog(LOG_ERR, "connect(%s) failed: %m", server);
+        /* A backend that isn't there is the caller's news to break:
+         * sync_client retries, the proxy fails over, and each says so
+         * at the level it means. */
+        xsyslog_ev(LOG_WARNING, "backend.connect.failed",
+                   lf_s("proxy.server", server));
         goto error;
     }
 
@@ -1278,9 +1291,10 @@ EXPORTED int backend_version(struct backend *be)
             /* unrecognised future version surely supports at least whatever
              * this version supports, which is a much better assumption than 6
              */
-            syslog(LOG_INFO, "%s: did not recognise remote Cyrus version from "
-                             "banner \"%s\". Assuming index version %d!",
-                             __func__, be->banner, MAILBOX_MINOR_VERSION);
+            xsyslog_ev(LOG_INFO, "backend.version.unrecognised",
+                       lf_s("proxy.server", be->hostname),
+                       lf_s("backend.banner", be->banner),
+                       lf_d("mbox.version", MAILBOX_MINOR_VERSION));
             return MAILBOX_MINOR_VERSION;
         }
         else if (major == 3) {
@@ -1352,8 +1366,9 @@ EXPORTED int backend_version(struct backend *be)
 
 unrecognised:
     /* fallthrough, shouldn't happen */
-    syslog(LOG_WARNING, "%s: did not recognise remote Cyrus version from "
-                        "banner \"%s\".  Assuming index version 6!",
-                        __func__, be->banner);
+    xsyslog_ev(LOG_WARNING, "backend.version.unrecognised",
+               lf_s("proxy.server", be->hostname),
+               lf_s("backend.banner", be->banner),
+               lf_d("mbox.version", 6));
     return 6;
 }
