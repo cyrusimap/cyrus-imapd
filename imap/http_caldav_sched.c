@@ -3051,4 +3051,9 @@ void caldav_get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
         strarray_fini(&owned);
         free(owner);
     }
+
+    /* a request schedules only as its user or the calendar's owner */
+    char *ownerid = mboxname_to_userid(mboxname);
+    sched_addresses_restrict(addresses, httpd_userid, ownerid);
+    free(ownerid);
 }

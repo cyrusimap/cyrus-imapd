@@ -1,0 +1,30 @@
+Description:
+
+CalDAV and JMAP scheduling no longer let a user schedule as another local
+user's address.  Such an address is now ignored when it comes from the
+user's calendar-user-address-set, from a Schedule-Address request header,
+or from the addresses a stored calendar resource was scheduled with.
+Before, a user could list another user's address and then update or cancel
+that user's events in other local users' calendars, or reply in an
+attendee's name.  Aliases that are no user's own address keep working; to
+schedule on behalf of another user, share their calendar instead.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

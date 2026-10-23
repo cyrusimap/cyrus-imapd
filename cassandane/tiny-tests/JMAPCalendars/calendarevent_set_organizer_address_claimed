@@ -1,0 +1,97 @@
+#!perl
+use Cassandane::Tiny;
+
+# Any user can list any address in their own calendar-user-address-set.
+# Scheduling over JMAP as an address that belongs to another local user must
+# not change the copy that user's attendee holds.
+sub test_calendarevent_set_organizer_address_claimed
+{
+    my ($self) = @_;
+    my $uid = '3c1f0b7e-2a55-4e0d-9d43-6f2b8e5a7c11';
+
+    my ($attendeeJmap, $attendeeCalDAV) = $self->create_user('test');
+    $attendeeCalDAV->GetCalendars();
+    my ($otherJmap, $otherCalDAV) = $self->create_user('other');
+    $otherCalDAV->GetCalendars();
+
+    my $event = sub {
+        my ($sequence, $title) = @_;
+        return {
+            uid => $uid,
+            title => $title,
+            start => '2026-09-15T09:00:00',
+            duration => 'PT1H',
+            timeZone => 'Etc/UTC',
+            sequence => $sequence,
+            replyTo => { imip => 'mailto:cassandane@example.com' },
+            participants => {
+                cassandane => {
+                    roles => { owner => JSON::true, attendee => JSON::true },
+                    sendTo => { imip => 'mailto:cassandane@example.com' },
+                    participationStatus => 'accepted',
+                },
+                test => {
+                    roles => { attendee => JSON::true },
+                    sendTo => { imip => 'mailto:test@example.com' },
+                    participationStatus => 'needs-action',
+                    expectReply => JSON::true,
+                },
+            },
+        };
+    };
+
+    my $attendee_title = sub {
+        my $res = $attendeeJmap->CallMethods([
+            ['CalendarEvent/get', { properties => [qw(uid title)] }, 'R1'],
+        ]);
+        my ($ev) = grep { $_->{uid} eq $uid } @{$res->[0][1]{list}};
+        $self->assert_not_null($ev);
+        return $ev->{title};
+    };
+
+    xlog $self, "organizer invites a local attendee";
+    my $res = $self->{jmap}->CallMethods([
+        ['CalendarEvent/set', {
+            sendSchedulingMessages => JSON::true,
+            create => {
+                1 => {
+                    calendarIds => { Default => JSON::true },
+                    %{ $event->(0, 'Budget review') },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{1});
+    $self->assert_str_equals('Budget review', $attendee_title->());
+
+    xlog $self, "another user adds the organizer's address to their own set";
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-user-address-set>
+        <D:href>mailto:cassandane\@example.com</D:href>
+      </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $otherCalDAV->Request('PROPPATCH', "/dav/principals/user/other",
+                          $xml, 'Content-Type' => 'text/xml');
+
+    xlog $self, "that user creates a later SEQUENCE of the event in their own calendar";
+    $otherJmap->CallMethods([
+        ['CalendarEvent/set', {
+            sendSchedulingMessages => JSON::true,
+            create => {
+                1 => {
+                    calendarIds => { Default => JSON::true },
+                    %{ $event->(1, 'Cancelled, see new invite') },
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_str_equals('Budget review', $attendee_title->());
+}

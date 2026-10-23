@@ -1202,6 +1202,10 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
                              mimehdr, txn->req_hdrs);
         free(value);
     }
+    else {
+        /* never store one the client sent */
+        spool_remove_header("X-Schedule-User-Address", txn->req_hdrs);
+    }
 
     time_to_rfc5322(icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
                                                utc_zone),

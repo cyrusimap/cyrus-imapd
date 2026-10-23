@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+use experimental 'signatures';
+
+# As schedule_organizer_address_claimed, with virtual domains and an
+# organizer in the default domain, whose address is in another
+# calendar_user_address_set domain.
+sub test_schedule_organizer_address_claimed_virtdomains
+    :VirtDomains :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.test\@example.com");
+    $admintalk->create("user.other\@example.com");
+
+    my $service = $self->{instance}->get_service("http");
+    my sub caldav_for ($user) {
+        return Net::CalDAVTalk->new(
+            user => $user,
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/',
+            expandurl => 1,
+        );
+    }
+    my $testtalk = caldav_for('test@example.com');
+    my $othertalk = caldav_for('other@example.com');
+    $testtalk->GetCalendars();
+    $othertalk->GetCalendars();
+
+    my $uuid = $self->{caldav}->genuuid();
+    my sub event ($sequence, $summary) {
+        return <<~EOF;
+            BEGIN:VCALENDAR
+            VERSION:2.0
+            PRODID:-//Cassandane//EN
+            BEGIN:VEVENT
+            UID:$uuid
+            DTSTAMP:20260901T120000Z
+            DTSTART:20260915T090000Z
+            DTEND:20260915T100000Z
+            SEQUENCE:$sequence
+            SUMMARY:$summary
+            ORGANIZER:MAILTO:cassandane\@example.com
+            ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+            ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test\@example.com
+            END:VEVENT
+            END:VCALENDAR
+            EOF
+    }
+    my sub attendee_summary () {
+        my ($event) = grep { $_->{uid} eq $uuid }
+                           @{$testtalk->GetEvents('Default')};
+        $self->assert_not_null($event);
+        return $event->{title};
+    }
+
+    xlog $self, "organizer invites a local attendee";
+    my $CalendarId = $self->{caldav}->NewCalendar({name => 'organizer'});
+    $self->{caldav}->Request('PUT', "$CalendarId/$uuid.ics",
+                             event(0, 'Budget review'),
+                             'Content-Type' => 'text/calendar');
+    $self->assert_str_equals('Budget review', attendee_summary());
+
+    xlog $self, "another user adds the organizer's address to their own set";
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-user-address-set>
+        <D:href>mailto:cassandane\@example.com</D:href>
+      </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $othertalk->Request('PROPPATCH',
+                        "/dav/principals/user/other\@example.com", $xml,
+                        'Content-Type' => 'text/xml');
+
+    xlog $self, "that user stores a later SEQUENCE of the event in their own calendar";
+    my $OtherCalendarId = $othertalk->NewCalendar({name => 'other'});
+    $othertalk->Request('PUT', "$OtherCalendarId/$uuid.ics",
+                        event(1, 'Cancelled, see new invite'),
+                        'Content-Type' => 'text/calendar');
+
+    $self->assert_str_equals('Budget review', attendee_summary());
+}
