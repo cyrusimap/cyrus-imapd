@@ -13,7 +13,7 @@ sub test_sieveshell_starttls
     system('openssl', 'req', '-x509',
            '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1',
            '-nodes', '-keyout', $key, '-out', $cert, '-days', '1',
-           '-subj', '/CN=127.0.0.1',
+           '-subj', '/CN=cassandane',
            '-addext', 'subjectAltName=IP:127.0.0.1') == 0
         or die "openssl req failed: $?";
 
@@ -65,7 +65,7 @@ sub test_sieveshell_starttls
     # untrusted certificate
     ($failed, $out) = sieveshell('127.0.0.1', '--tls');
     $self->assert_num_equals(1, $failed);
-    $self->assert_matches(qr/TLS negotiation failed: self-signed/, $out);
+    $self->assert_matches(qr/TLS negotiation failed: self.signed/, $out);
 
     # certificate not valid for the name connected to
     ($failed, $out) = sieveshell('localhost', '--tls', '--cafile', $cert);

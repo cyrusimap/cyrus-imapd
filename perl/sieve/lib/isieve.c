@@ -337,15 +337,21 @@ int isieve_starttls(isieve_t *obj,
     SSL_CTX_set_verify(obj->tls_ctx, SSL_VERIFY_PEER, NULL);
 
     obj->tls_conn = SSL_new(obj->tls_ctx);
-    if (!obj->tls_conn || !SSL_set1_host(obj->tls_conn, obj->serverFQDN)
-        || !SSL_set_fd(obj->tls_conn, obj->sock))
-    {
+    if (!obj->tls_conn || !SSL_set_fd(obj->tls_conn, obj->sock)) {
         goto tlserr;
     }
-    /* SNI takes a hostname, never an address literal */
-    if (inet_pton(AF_INET, obj->serverFQDN, &addr) != 1
-        && inet_pton(AF_INET6, obj->serverFQDN, &addr) != 1
-        && !SSL_set_tlsext_host_name(obj->tls_conn, obj->serverFQDN))
+    /* an address literal is checked against IP SANs and gets no SNI */
+    if (inet_pton(AF_INET, obj->serverFQDN, &addr) == 1
+        || inet_pton(AF_INET6, obj->serverFQDN, &addr) == 1)
+    {
+        if (!X509_VERIFY_PARAM_set1_ip_asc(SSL_get0_param(obj->tls_conn),
+                                           obj->serverFQDN))
+        {
+            goto tlserr;
+        }
+    }
+    else if (!SSL_set1_host(obj->tls_conn, obj->serverFQDN)
+             || !SSL_set_tlsext_host_name(obj->tls_conn, obj->serverFQDN))
     {
         goto tlserr;
     }
