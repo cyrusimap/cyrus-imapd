@@ -15,7 +15,7 @@
 #include <libxml/HTMLparser.h>
 #include <libxml/tree.h>
 
-#include <sasl/saslutil.h>
+#include "libsasl_min/saslutil.h"
 
 #include "caldav_util.h"
 #include "dynarray.h"

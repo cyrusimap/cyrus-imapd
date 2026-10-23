@@ -227,7 +227,7 @@ AC_SEARCH_LIBS([strlcpy], [bsd], [
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdalign.h stdarg.h)
 AC_REPLACE_FUNCS(strcasecmp posix_fadvise strsep memmem memrchr)
-AC_CHECK_FUNCS(getgrouplist fmemopen pselect futimens futimes getline)
+AC_CHECK_FUNCS(getgrouplist fmemopen pselect futimens futimes getline jrand48)
 AC_CHECK_HEADERS(malloc.h)
 AC_CHECK_FUNCS(malloc_trim mallinfo2)
 AC_HEADER_DIRENT
@@ -1196,8 +1196,6 @@ if test "$with_krb5config" != "no"; then
     CFLAGS="$KRB5_CFLAGS $CFLAGS"
 fi
 
-SASL_SET_GSSAPI_LIBS
-
 dnl
 dnl Check for OpenSSL library, needed for TLS support
 dnl
@@ -1800,8 +1798,30 @@ AC_ARG_ENABLE(oldsievename,
         fi,
         AC_MSG_RESULT(no))
 
-CMU_SASL2_REQUIRE_VER(2,1,7)
-CMU_SASL2_CHECKAPOP_REQUIRED
+dnl Check which SASL to use
+AC_ARG_WITH(sasl,
+            [AC_HELP_STRING([--with-sasl=PATH],
+                            [look for libsasl2 in PATH])],
+            [],
+            [with_sasl="yes"])
+AC_ARG_WITH(staticsasl,
+            [AC_HELP_STRING([--with-staticsasl=PATH],
+                            [look for static libsasl2 in PATH])],
+            [],
+            [with_staticsasl="no"])
+AS_IF([test "x$with_staticsasl" != "xno" -o "x$with_sasl" != "xno"],
+      [ SASL_SET_GSSAPI_LIBS
+        CMU_SASL2_REQUIRE_VER(2,1,7)
+        CMU_SASL2_CHECKAPOP_REQUIRED
+      ],
+      [ with_sasl="internal"
+        SASLFLAGS=""
+        LIB_SASL=lib/libsasl_min.la ])
+AS_IF([test "x$with_sasl" = "xinternal"],
+      [AC_DEFINE([USE_INTERNAL_SASL], [], [Build with libsasl_min])])
+AM_CONDITIONAL([USE_INTERNAL_SASL], [test "x$with_sasl" = "xinternal" ])
+AC_SUBST(SASLFLAGS)
+AC_SUBST(LIB_SASL)
 
 # find perl
 AC_ARG_VAR(PERL, [Location of perl])
@@ -1885,37 +1905,6 @@ AC_CONFIG_FILES([tools/rehash], [chmod +x tools/rehash])
 
 CMU_LIBWRAP
 
-# Figure out what directories we're linking against.
-# Lots of fun for the whole family.
-# This probably chokes on anything with spaces in it.
-# All we want is the list of -L directories, and -L may or may not be
-# followed by a space.
-isdir=no
-libpath=""
-#echo "debug ldflags: << ${ldflags} >>"
-#echo "debug default_ldflags: << ${default_ldflags} >>"
-for flag in ${ldflags} ${default_ldflags}; do
-  case $flag in
-    -L)
-      # it's a split -L option, we'll mark the next option as a dir.
-      isdir=yes
-      ;;
-
-    -L*)
-      # attached -L option: split off the directory
-      larg=`echo $flag | sed -e 's:-L\(..*\):\1:'`
-      libpath="${libpath} ${larg}"
-      ;;
-
-    *)
-      if test $isdir = yes ; then
-        libpath="${libpath} ${flag}"
-        isdir=no
-      fi
-  esac
-done
-
-AC_SUBST(LIB_SASL)
 AC_SUBST(LIB_UUID)
 
 dnl
@@ -2454,6 +2443,7 @@ External dependencies:
    ldap:               $have_ldap
    zlib:               $with_zlib
    jansson:            $with_jansson
+   sasl:               $with_sasl
    pcre:               $cyrus_cv_pcre_utf8
    pcre2:              $cyrus_cv_pcre2_utf8
    clamav:             $with_clamav

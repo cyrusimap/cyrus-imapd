@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_scram_plus_tls12_unique
-    :TLS :needs_dependency_openssl :NoStartInstances
+    :TLS :needs_dependency_openssl :needs_dependency_libsasl2 :NoStartInstances
     ($self)
 {
     $self->assert_str_equals('p=tls-unique',

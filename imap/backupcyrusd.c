@@ -21,8 +21,8 @@
 #include <arpa/inet.h>
 #include "prot.h"
 
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 #include "assert.h"
 #include "acl.h"

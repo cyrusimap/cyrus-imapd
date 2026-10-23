@@ -26,7 +26,7 @@
 #include <stdbool.h>
 #include <errno.h>
 
-#include <sasl/sasl.h>
+#include "libsasl_min/sasl.h"
 
 #include <openssl/hmac.h>
 #include <openssl/rand.h>

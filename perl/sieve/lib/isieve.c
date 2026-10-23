@@ -8,12 +8,13 @@
 
 #include <netdb.h>
 #include <netinet/in.h>
-#include <sasl/saslutil.h>
 #include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <string.h>
 #include <unistd.h>
+
+#include "libsasl_min/saslutil.h"
 
 #include "iptostring.h"
 #include "util.h"
