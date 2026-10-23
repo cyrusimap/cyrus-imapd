@@ -134,7 +134,7 @@ PROTOTYPES: ENABLE
 
 
 
-Sieveobj
+SV *
 sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *password_cb, SV *realm_cb)
 
   PREINIT:
@@ -266,8 +266,10 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     }
     free(mechlist);
 
-    ST(0) = sv_newmortal();
-    sv_setref_pv(ST(0), ret->class, (void *) ret);
+    RETVAL = newSV(0);
+    sv_setref_pv(RETVAL, ret->class, (void *) ret);
+  OUTPUT:
+    RETVAL
 
 char *
 sieve_get_error(Sieveobj obj)
@@ -283,7 +285,7 @@ sieve_get_global_error()
   OUTPUT:
     RETVAL
 
-int
+void
 sieve_logout(Sieveobj obj)
   CODE:
     /* xxx this leaves the object unusable */

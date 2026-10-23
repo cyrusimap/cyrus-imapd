@@ -12,6 +12,9 @@
 #include <pwd.h>
 #include <unistd.h>
 
+/* MakeMaker defines VERSION as the module's version, config.h as Cyrus's */
+#undef VERSION
+
 #include "lib/imclient.h"
 #include "lib/imapurl.h"
 #include "lib/util.h"
@@ -165,7 +168,7 @@ static int get_password(sasl_conn_t *conn, void *context, int id,
         ptr = cyrus_getpass("");
         text->password = safemalloc(sizeof(sasl_secret_t) + strlen(ptr));
         text->password->len = strlen(ptr);
-        strncpy((char *) text->password->data, ptr, text->password->len);
+        memcpy(text->password->data, ptr, text->password->len);
   }
   *psecret = text->password;
   return SASL_OK;
@@ -268,9 +271,11 @@ CODE:
           sv_setiv(bang, rc);
           XSRETURN_UNDEF;
         }
-        ST(0) = sv_newmortal();
+        RETVAL = newSV(0);
         /* fprintf(stderr, "!NEW %p %s\n", rv, class); */
-        sv_setref_pv(ST(0), class, (void *) rv);
+        sv_setref_pv(RETVAL, class, (void *) rv);
+OUTPUT:
+        RETVAL
 
 void
 imclient_DESTROY(client)
@@ -314,9 +319,11 @@ PPCODE:
 int
 imclient_flags(client)
         Cyrus_IMAP client
-PPCODE:
+CODE:
         /* why is there no way to query this? */
         RETVAL = client->flags;
+OUTPUT:
+        RETVAL
 
 char *
 imclient_servername(client)
@@ -335,7 +342,7 @@ imclient_processoneevent(client)
 PPCODE:
         imclient_processoneevent(client->imclient);
 
-SV *
+bool
 imclient__authenticate(client, mechlist, service, user, auth, password, minssf, maxssf)
         Cyrus_IMAP client
         char* mechlist
@@ -348,12 +355,7 @@ imclient__authenticate(client, mechlist, service, user, auth, password, minssf, 
 PREINIT:
         int rc;
 CODE:
-        ST(0) = sv_newmortal();
-
-        if(client->authenticated) {
-          ST(0) = &PL_sv_no;
-          return;
-        }
+        if(client->authenticated) XSRETURN_NO;
 
         /* If the user parameter is undef, set user to be NULL */
         if(!SvOK(ST(3))) user = NULL;
@@ -367,17 +369,19 @@ CODE:
             client->password =
                 safemalloc(sizeof(sasl_secret_t) + strlen(password));
             client->password->len = strlen(password);
-            strncpy((char *) client->password->data, password, client->password->len);
+            memcpy(client->password->data, password, client->password->len);
         }
 
         rc = imclient_authenticate(client->imclient, mechlist, service, user,
                                    minssf, maxssf);
         if (rc)
-          ST(0) = &PL_sv_no;
+          RETVAL = false;
         else {
           client->authenticated = 1;
-          ST(0) = &PL_sv_yes;
+          RETVAL = true;
         }
+OUTPUT:
+        RETVAL
 
 int
 imclient_havetls()
@@ -386,7 +390,7 @@ CODE:
 OUTPUT:
         RETVAL
 
-SV *
+bool
 imclient__starttls(client, tls_cert_file, tls_key_file, CAfile, CApath)
         Cyrus_IMAP client
         char* tls_cert_file
@@ -396,17 +400,17 @@ imclient__starttls(client, tls_cert_file, tls_key_file, CAfile, CApath)
 PREINIT:
         int rc;
 CODE:
-        ST(0) = sv_newmortal();
-
         /* If the tls_{cert, key}_file parameters are undef, set to be NULL */
         if(!SvOK(ST(2))) tls_cert_file = NULL;
         if(!SvOK(ST(3))) tls_key_file = NULL;
         rc = imclient_starttls(client->imclient, tls_cert_file, tls_key_file, CAfile, CApath);
         if (rc)
-          ST(0) = &PL_sv_no;
+          RETVAL = false;
         else {
-          ST(0) = &PL_sv_yes;
+          RETVAL = true;
         }
+OUTPUT:
+        RETVAL
 
 void
 imclient_addcallback(client, ...)
@@ -649,6 +653,7 @@ imclient_fromURL(client,url)
 PREINIT:
         struct imapurl imapurl;
 PPCODE:
+        PERL_UNUSED_VAR(client);
         imapurl_fromURL(&imapurl, url);
 
         if(!imapurl.server || !imapurl.mailbox) {
@@ -673,6 +678,7 @@ PREINIT:
         struct buf buf = BUF_INITIALIZER;
         struct imapurl imapurl;
 PPCODE:
+        PERL_UNUSED_VAR(client);
         memset(&imapurl, 0, sizeof(struct imapurl));
         imapurl.server = server;
         imapurl.mailbox = box;

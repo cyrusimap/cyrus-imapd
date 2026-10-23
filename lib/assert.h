@@ -8,6 +8,8 @@
 __attribute__((noreturn))
 void assertionfailed(const char *file, int line, const char *expr);
 
+/* replaces the system's, which perl.h includes first */
+#undef assert
 #define assert(expr)                                                \
     ((expr)                                                         \
      ? (void)(0)                                                    \
