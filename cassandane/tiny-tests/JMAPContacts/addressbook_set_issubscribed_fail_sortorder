@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+# When the subscription change in an update fails, the update's other
+# changes -- here, sortOrder -- must not be left behind.
+sub test_addressbook_set_issubscribed_fail_sortorder ($self)
+{
+    my $jmap  = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    my $other = $self->{instance}->create_user('other');
+    my $abook = $other->addressbooks->default;
+    $admin->setacl('user.other.#addressbooks.Default', cassandane => 'lr')
+        or die "setacl: $@";
+
+    my sub get_abook {
+        $jmap->request([
+            [ 'AddressBook/get', {
+                accountId  => 'other',
+                ids        => [ $abook->id ],
+                properties => [ 'isSubscribed', 'sortOrder' ],
+            } ],
+        ])->single_sentence('AddressBook/get')->arguments->{list}[0];
+    }
+    my $before = get_abook();
+
+    xlog $self, "make cassandane's subscriptions database unwritable";
+    $self->{store}->get_client()->subscribe('INBOX')
+        or die "subscribe: $@";
+    my $subfile = $self->{instance}->get_conf_user_file('cassandane', 'sub');
+    my $mode = (stat $subfile)[2] & 07777;
+    $self->assert_num_equals(1, chmod(0400, $subfile));
+
+    my $res = $jmap->request([
+        [ 'AddressBook/set', {
+            accountId => 'other',
+            update    => { $abook->id => {
+                isSubscribed => JSON::true,
+                sortOrder    => $before->{sortOrder} + 7,
+            } },
+        } ],
+    ]);
+
+    $self->assert_num_equals(1, chmod($mode, $subfile));
+
+    $self->assert_cmp_deeply(
+        { $abook->id => superhashof({ type => 'serverFail' }) },
+        $res->single_sentence('AddressBook/set')->arguments->{notUpdated},
+    );
+    $self->assert_syslog_matches($self->{instance},
+        qr/jmap\.addressbook\.subscription\.write\.failed/);
+
+    xlog $self, "the address book is as it was";
+    $self->assert_cmp_deeply($before, get_abook());
+}
