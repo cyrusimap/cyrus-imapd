@@ -39,16 +39,18 @@ static const size_t n_canonuser_plugins = sizeof(canonuser_plugins)
 
 static const struct plugin client_plugins[] =
 {
-    { "ANONYMOUS", { .client_init_fn = anonymous_client_plug_init } },
-    { "PLAIN", { .client_init_fn = plain_client_plug_init } },
+    { "ANONYMOUS",  { .client_init_fn = anonymous_client_plug_init } },
+    { "EXTERNAL",   { .client_init_fn = external_client_plug_init } },
+    { "PLAIN",      { .client_init_fn = plain_client_plug_init } },
 };
 static const size_t n_client_plugins = sizeof(client_plugins)
                                        / sizeof(client_plugins[0]);
 
 static const struct plugin server_plugins[] =
 {
-    { "ANONYMOUS", { .server_init_fn = anonymous_server_plug_init } },
-    { "PLAIN", { .server_init_fn = plain_server_plug_init } },
+    { "ANONYMOUS",  { .server_init_fn = anonymous_server_plug_init } },
+    { "EXTERNAL",   { .server_init_fn = external_server_plug_init } },
+    { "PLAIN",      { .server_init_fn = plain_server_plug_init } },
 };
 static const size_t n_server_plugins = sizeof(server_plugins)
                                        / sizeof(server_plugins[0]);
