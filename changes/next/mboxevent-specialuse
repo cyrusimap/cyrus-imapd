@@ -1,0 +1,30 @@
+Description:
+
+Two new event parameters report the special-use attributes of the mailbox
+an event refers to: vnd.fastmail.specialUse on message, flags, mailbox,
+and MailboxMetadataChange events, and vnd.fastmail.oldSpecialUse for the
+source mailbox of MessageCopy, MessageMove and MailboxRename.  Both are
+omitted when the mailbox has no special-use attribute, so a
+MailboxMetadataChange without one reports that the attribute was removed.
+
+
+Documentation:
+
+imapd.conf(5), event_extra_params.
+
+
+Config changes:
+
+event_extra_params accepts the new value vnd.fastmail.specialUse, which
+enables both parameters.
+
+
+Upgrade instructions:
+
+None.  The parameters are opt-in: add vnd.fastmail.specialUse to
+event_extra_params to receive them.
+
+
+GitHub issue:
+
+None.

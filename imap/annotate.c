@@ -760,6 +760,7 @@ static void notify_changes(annotate_db_t *d)
 
         mboxevent_set_metadata_entries(event, entries);
         mboxevent_set_access(event, NULL, NULL, "", c->mboxname, 0);
+        if (c->mboxname) mboxevent_set_specialuse(event, c->mboxname);
         mboxevent_notify(&event);
         mboxevent_free(&event);
         strarray_fini(&seen);
