@@ -347,7 +347,7 @@ extern int _sasl_get_plugin(const char *file,
 extern int _sasl_locate_entry(void *library,
                               const char *entryname,
                               void **entry_point);
-extern int _sasl_done_with_plugins();
+extern int _sasl_done_with_plugins(void);
 
 /*
  * common.c
@@ -454,13 +454,11 @@ sasl_string_list_t *_sasl_server_mechs(void);
 extern const char *sasl_config_getstring(const char *key, const char *def);
 
 /* checkpw.c */
-#ifdef DO_SASL_CHECKAPOP
 extern int _sasl_auxprop_verify_apop(sasl_conn_t *conn,
                                      const char *userstr,
                                      const char *challenge,
                                      const char *response,
                                      const char *user_realm);
-#endif /* DO_SASL_CHECKAPOP */
 
 /* Auxprop Plugin (sasldb.c) */
 extern int sasldb_auxprop_plug_init(const sasl_utils_t *utils,
