@@ -11,13 +11,14 @@
 #include <netinet/in.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
-#include <sasl/saslutil.h>
 #include <stdbool.h>
 #include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <string.h>
 #include <unistd.h>
+
+#include "libsasl_min/saslutil.h"
 
 #include "iptostring.h"
 #include "util.h"

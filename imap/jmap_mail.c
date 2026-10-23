@@ -14,7 +14,7 @@
 #include <errno.h>
 #include <sys/mman.h>
 
-#include <sasl/saslutil.h>
+#include "libsasl_min/saslutil.h"
 
 #ifdef HAVE_LIBCHARDET
 #include <chardet/chardet.h>

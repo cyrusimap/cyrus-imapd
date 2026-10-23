@@ -24,8 +24,8 @@
 #include <ctype.h>
 #include <errno.h>
 
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 #include "auditlog.h"
 #include "backend.h"
