@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_set_unstorable_not_sent ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $identityid = $jmap->request([ [ 'Identity/get' => {} ] ])
+        ->single_sentence('Identity/get')->arguments->{list}[0]{id};
+    $self->assert_not_null($identityid);
+
+    my $email = $self->default_user->mailboxes->inbox->new_email;
+
+    xlog $self, "an empty set is enough to create the submission folder";
+    $jmap->request([ [ 'EmailSubmission/set' => {} ] ]);
+
+    xlog $self, "make the submission folder unwritable, so storing fails";
+    my $dir = $self->{instance}->folder_to_directory(
+        'user.cassandane.#jmapsubmission');
+    $self->assert_not_null($dir);
+    my $mode = (stat $dir)[2] & 07777;
+    $self->assert_num_equals(1, chmod(0500, $dir));
+
+    my $res = eval {
+        $jmap->request([
+            [ 'EmailSubmission/set' => {
+                create => {
+                    1 => {
+                        identityId => $identityid,
+                        emailId    => $email->id,
+                        envelope   => {
+                            mailFrom => {   email => 'from@localhost'  },
+                            rcptTo   => [{ email => 'rcpt1@localhost' }],
+                        },
+                    },
+                },
+            } ],
+        ]);
+    };
+    my $error = $@;
+
+    # Restore the folder before asserting, so the end-of-test checks can run
+    $self->assert_num_equals(1, chmod($mode, $dir));
+
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: create failed.*Permission denied/);
+
+    $self->assert_str_equals('', "$error");
+    $self->assert_cmp_deeply(
+        { 1 => superhashof({ type => 'serverFail' }) },
+        $res->single_sentence('EmailSubmission/set')->as_set->create_errors,
+    );
+
+    xlog $self, "a submission that couldn't be stored was not sent";
+    my $smtpdir = "$self->{instance}{basedir}/smtpd";
+    my @sent = glob("$smtpdir/*.smtp");
+    $self->assert_num_equals(0, scalar @sent);
+}

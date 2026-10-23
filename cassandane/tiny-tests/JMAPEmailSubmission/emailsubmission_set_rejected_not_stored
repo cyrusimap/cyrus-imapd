@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_set_rejected_not_stored ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([
+        [ 'Identity/get' => {} ],
+        [ 'EmailSubmission/get' => { ids => [] } ],
+    ]);
+    my $identityid =
+        $res->sentence_named('Identity/get')->arguments->{list}[0]{id};
+    $self->assert_not_null($identityid);
+    my $state = $res->sentence_named('EmailSubmission/get')->arguments->{state};
+
+    my $email = $self->default_user->mailboxes->inbox->new_email;
+
+    $self->{instance}->set_smtpd({ begin_data => ["554", "5.3.0 bad egg"] });
+
+    xlog $self, "submission is stored before the send, which is then refused";
+    my $set = $jmap->request([
+        [ 'EmailSubmission/set' => {
+            create => {
+                1 => {
+                    identityId => $identityid,
+                    emailId    => $email->id,
+                    envelope   => {
+                        mailFrom => {   email => 'from@localhost'  },
+                        rcptTo   => [{ email => 'rcpt1@localhost' }],
+                    },
+                },
+            },
+        } ],
+    ])->single_sentence('EmailSubmission/set')->as_set;
+    $self->assert_cmp_deeply(
+        { 1 => superhashof({ type => 'forbiddenToSend' }) },
+        $set->create_errors,
+    );
+
+    xlog $self, "the stored record of the refused submission was removed";
+    $res = $jmap->request([
+        [ 'EmailSubmission/query' => {} ],
+        [ 'EmailSubmission/changes' => { sinceState => $state } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [],
+        $res->sentence_named('EmailSubmission/query')->arguments->{ids},
+    );
+    $self->assert_cmp_deeply(
+        [],
+        $res->sentence_named('EmailSubmission/changes')->arguments->{created},
+    );
+}
