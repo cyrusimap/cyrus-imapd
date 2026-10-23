@@ -4,3 +4,4 @@ gdbtramp
 crash
 syslog.so
 syslog_probe
+h3migrate
