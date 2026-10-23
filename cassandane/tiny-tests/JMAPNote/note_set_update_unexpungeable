@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+# An update writes the new note, then expunges the old one with a user flag.
+# With every user flag already taken, that expunge fails, and notUpdated
+# must not leave both versions of the note behind.
+sub test_note_set_update_unexpungeable
+    :JMAPExtensions :NoAltNameSpace
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $created = $jmap->request([
+        [ 'Note/set' => {
+            create => { 1 => { title => 'old', body => 'b', isHTML => JSON::false } },
+        } ],
+    ])->single_sentence('Note/set')->as_set;
+    my $id = "" . $created->created_id('1');
+
+    xlog $self, "use up every user flag in the notes folder";
+    my $imap = $self->{store}->get_client();
+    $imap->select('INBOX.Notes') or die;
+    my $i = 0;
+    1 while $imap->store('1', '+FLAGS', '(flag' . $i++ . ')');
+    $self->assert_matches(qr/Too many user flags/, $imap->get_last_error);
+
+    my $updated = $jmap->request([
+        [ 'Note/set' => { update => { $id => { title => 'new' } } } ],
+    ])->single_sentence('Note/set')->as_set;
+    $self->assert_cmp_deeply(
+        { $id => superhashof({ type => 'serverFail' }) },
+        $updated->update_errors,
+    );
+
+    xlog $self, "only the old version of the note is there";
+    my $get = $jmap->request([ [ 'Note/get' => { ids => undef } ] ])
+                   ->single_sentence('Note/get')->arguments;
+    $self->assert_cmp_deeply(
+        [ superhashof({ id => $id, title => 'old' }) ],
+        $get->{list},
+    );
+
+    $self->{instance}->getsyslog(qr{mailbox\.userflag\.exhausted});
+}
