@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+# Renaming an addressbook's mailbox leaves a tombstone at the old name with
+# the addressbook's id, which must not report the addressbook as destroyed.
+
+sub test_addressbook_changes_rename ($self)
+{
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+
+    my %before = map { $_->[2] => 1 }
+                 $admin->list('', 'user.cassandane.#addressbooks.%')->@*;
+
+    my $res = $jmap->CallMethods([
+        ['AddressBook/set', { create => { a1 => { name => 'moving' } } }, 'R1'],
+    ]);
+    my $abookid = $res->[0][1]{created}{a1}{id};
+    $self->assert_not_null($abookid);
+
+    my ($mboxname) = grep { !$before{$_} } map { $_->[2] }
+                     $admin->list('', 'user.cassandane.#addressbooks.%')->@*;
+    $self->assert_not_null($mboxname);
+
+    $res = $jmap->CallMethods([['AddressBook/get', { ids => undef }, 'R1']]);
+    my $state = $res->[0][1]{state};
+
+    xlog $self, "rename the addressbook mailbox";
+    $admin->rename($mboxname, 'user.cassandane.#addressbooks.renamed')
+        or die "rename: $@";
+
+    $res = $jmap->CallMethods([
+        ['AddressBook/changes', { sinceState => $state }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply({
+        created => [], updated => [ $abookid ], destroyed => [],
+    }, { map { $_ => $res->[0][1]{$_} } qw(created updated destroyed) });
+}

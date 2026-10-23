@@ -1124,7 +1124,7 @@ done:
 
 struct calendarchanges_rock {
     jmap_req_t *req;
-    struct jmap_changes *changes;
+    struct jmap_collection_changes *cchanges;
 };
 
 static int getcalendarchanges_cb(const mbentry_t *mbentry, void *vrock)
@@ -1133,11 +1133,6 @@ static int getcalendarchanges_cb(const mbentry_t *mbentry, void *vrock)
     mbname_t *mbname = NULL;
     jmap_req_t *req = rock->req;
     int r = 0;
-
-    /* Ignore old changes. */
-    if (mbentry->foldermodseq <= rock->changes->since_modseq) {
-        goto done;
-    }
 
     /* Ignore any mailboxes that aren't (possibly deleted) calendars. */
     if (!mboxname_iscalendarmailbox(mbentry->name, mbentry->mbtype))
@@ -1167,19 +1162,12 @@ static int getcalendarchanges_cb(const mbentry_t *mbentry, void *vrock)
     char id[JMAP_MAX_CALENDARID_SIZE];
     jmap_set_calendarid(rock->req->cstate, mbentry, id);
 
-    /* Report this calendar as created, updated or destroyed. */
-    if (mbentry->mbtype & MBTYPE_DELETED ||
-            // leak unshared calendars, they might have been shared before
-            !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
-        if (mbentry->createdmodseq <= rock->changes->since_modseq)
-            json_array_append_new(rock->changes->destroyed, json_string(id));
-    }
-    else {
-        if (mbentry->createdmodseq <= rock->changes->since_modseq)
-            json_array_append_new(rock->changes->updated, json_string(id));
-        else
-            json_array_append_new(rock->changes->created, json_string(id));
-    }
+    /* An unshared calendar is destroyed for a sharee who may have seen it */
+    bool live = !(mbentry->mbtype & MBTYPE_DELETED) &&
+                jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
+    jmap_collection_changes_add(rock->cchanges, id, mbentry->foldermodseq,
+                                mbentry->foldermodseq, mbentry->createdmodseq,
+                                live);
 
 done:
     mbname_free(&mbname);
@@ -1191,8 +1179,11 @@ static int jmap_calendar_changes(struct jmap_req *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes =
         { .prefixed_state = USER_COMPACT_EMAILIDS(req->cstate) };
+    struct jmap_collection_changes cchanges;
     json_t *err = NULL;
     int r = 0;
+
+    jmap_collection_changes_init(&cchanges);
 
     /* Parse request */
     jmap_changes_parse(req, &parser, req->counters.caldavfoldersdeletedmodseq,
@@ -1210,7 +1201,7 @@ static int jmap_calendar_changes(struct jmap_req *req)
 
     /* Lookup any changes. */
     char *mboxname = caldav_mboxname(req->accountid, NULL);
-    struct calendarchanges_rock rock = { req, &changes };
+    struct calendarchanges_rock rock = { req, &cchanges };
 
     r = mboxlist_mboxtree(mboxname, getcalendarchanges_cb, &rock,
                           MBOXTREE_TOMBSTONES|MBOXTREE_SKIP_ROOT);
@@ -1221,14 +1212,18 @@ static int jmap_calendar_changes(struct jmap_req *req)
         goto done;
     }
 
-    /* Determine new state.  XXX  what about max_changes? */
-    changes.new_modseq = /*changes.has_more_changes ? rock.highestmodseq :*/
-        jmap_modseq(req, MBTYPE_CALENDAR, 0);
+    err = jmap_collection_changes_finish(&cchanges, &changes,
+                                         jmap_modseq(req, MBTYPE_CALENDAR, 0));
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
 
     /* Build response */
     jmap_ok(req, jmap_changes_reply(&changes));
 
   done:
+    jmap_collection_changes_fini(&cchanges);
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     if (r) {

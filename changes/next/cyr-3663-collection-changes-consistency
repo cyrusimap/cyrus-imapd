@@ -1,0 +1,28 @@
+Description:
+
+Calendar/changes, AddressBook/changes and Mailbox/changes no longer
+report a renamed collection as destroyed, and no longer report the same
+change on every call with an unchanged state.  Calendar/changes and
+AddressBook/changes now honor maxChanges, and AddressBook/changes
+reports an addressbook that is no longer shared as destroyed for the
+sharee, as the other two methods already did.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
