@@ -5,7 +5,6 @@
 #include <config.h>
 
 #include "libsasl_min/core_saslint.h"
-#include "libsasl_min/mech_external.h"
 
 #include "libsasl_min/sasl.h"
 #include "libsasl_min/saslplug.h"
@@ -328,8 +327,6 @@ EXPORTED int sasl_client_init(const sasl_callback_t *callbacks)
         client_done();
         return ret;
     }
-
-    sasl_client_add_plugin("EXTERNAL", &external_client_plug_init);
 
     ret = _sasl_common_init(&global_callbacks_client);
 
