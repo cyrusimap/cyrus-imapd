@@ -7,8 +7,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 #include "xmalloc.h"
 #include "saslclient.h"

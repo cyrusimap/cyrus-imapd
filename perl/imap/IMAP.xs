@@ -15,7 +15,7 @@
 /* MakeMaker defines VERSION as the module's version, config.h as Cyrus's */
 #undef VERSION
 
-#include <sasl/sasl.h>
+#include "libsasl_min/sasl.h"
 
 #include "lib/imclient.h"
 #include "lib/imapurl.h"

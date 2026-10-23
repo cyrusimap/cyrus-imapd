@@ -14,7 +14,7 @@
 #include <errno.h>
 #include <syslog.h>
 
-#include <sasl/saslutil.h>
+#include "libsasl_min/saslutil.h"
 
 #include "http_h2.h"
 #include "proc.h"
