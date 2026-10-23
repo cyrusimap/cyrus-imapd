@@ -1135,6 +1135,7 @@ EXPORTED int search_query_run(search_query_t *query)
         };
 
         /* Cache highest createdmodseq and index generation from session */
+        query->used_index = ctx.session != NULL;
         query->highest_createdmodseq =
             search_session_get_highest_createdmodseq(ctx.session,
                     &query->index_generation);

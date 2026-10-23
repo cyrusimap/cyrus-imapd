@@ -2205,6 +2205,52 @@ static modseq_t session_get_highest_createdmodseq(search_session_t *session,
     return highest_createdmodseq;
 }
 
+/* Read the top tier's indexeddb as a session would, without the namelock or
+ * an activefile lock.  activefile_write() replaces the file by rename, so the
+ * unlocked map is always one whole version of it.  A tier deleted between
+ * resolving and reading it just reads as no index. */
+static modseq_t get_index_snapshot(const char *mboxname,
+                                   const char *partition,
+                                   uint64_t *index_generation)
+{
+    modseq_t highest_createdmodseq = 0;
+    struct mappedfile *activefile = NULL;
+    strarray_t *active = NULL;
+    strarray_t *dirs = NULL;
+    char *userid = mboxname_to_userid(mboxname);
+    char *fname = activefile_fname(mboxname);
+
+    if (index_generation) {
+        *index_generation = 0;
+    }
+    if (!userid || !fname) {
+        goto done;
+    }
+
+    if (mappedfile_open(&activefile, fname, 0)) {
+        goto done;
+    }
+
+    active = activefile_read(activefile);
+    /* stat each tier like xapiandb_lock_open(), so the top tier is the same
+     * one a session would read */
+    dirs = activefile_resolve(mboxname, partition, active, /*dostat*/ 1, NULL);
+    if (dirs->count) {
+        read_highest_createdmodseq_at_dir(userid,
+                                          strarray_nth(dirs, 0),
+                                          &highest_createdmodseq,
+                                          index_generation);
+    }
+
+done:
+    strarray_free(dirs);
+    strarray_free(active);
+    mappedfile_close(&activefile);
+    free(fname);
+    free(userid);
+    return highest_createdmodseq;
+}
+
 static void end_session(search_session_t *session)
 {
     if (!session) return;
@@ -4667,6 +4713,7 @@ const struct search_engine xapian_search_engine = {
     check_config,
     langstats,
     can_match,
-    upgrade
+    upgrade,
+    get_index_snapshot
 };
 
