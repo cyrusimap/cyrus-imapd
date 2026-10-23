@@ -59,7 +59,7 @@ that followed it; returns the reply.  Commands without a handler get NO.
 =back
 
 The connection closes after any greeting or reply that doesn't end in CRLF,
-and after LOGOUT.
+after the reply to STARTTLS, and after LOGOUT.
 
 =cut
 
@@ -130,7 +130,7 @@ sub _serve ($self, $conn, $role)
             $reply = qq{NO "unsupported"\r\n};
         }
         syswrite $conn, $reply;
-        return if $reply !~ m/\r\n\z/;
+        return if $reply !~ m/\r\n\z/ || $cmd eq 'STARTTLS';
     }
 }
 
