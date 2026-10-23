@@ -10773,7 +10773,7 @@ static void _email_append(jmap_req_t *req,
                                 req->accountid, &buf);
             if (buf.len) {
                 strarray_t *uses = strarray_split(buf_cstring(&buf), " ", STRARRAY_TRIM);
-                if (strarray_find_case(uses, "\\Drafts", 0)) {
+                if (strarray_find_case(uses, "\\Drafts", 0) >= 0) {
                     if (mboxname) free(mboxname);
                     mboxname = xstrdup(mbentry->name);
                 }
