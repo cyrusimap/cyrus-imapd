@@ -510,6 +510,8 @@ static int do_referral(isieve_t *obj, char *refer_to)
         /* copy the callbacks, substituting some of our own */
         callbacks = obj->refer_callbacks = xmalloc(n*sizeof(sasl_callback_t));
 
+        /* sasl_callback_t.proc is a generic type, so cast through the
+         * one -Wcast-function-type accepts */
         while (--n >= 0) {
             callbacks[n].id = obj->callbacks[n].id;
 
