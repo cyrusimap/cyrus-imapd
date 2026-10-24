@@ -172,6 +172,8 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     const char *mtried;
     isieve_t *obj;
     char *autherr;
+    char *caperr = NULL;
+    char *mitmerr = NULL;
     char *p;
     sasl_ssf_t ssf;
 
@@ -227,7 +229,11 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
         XSRETURN_UNDEF;
     }
 
-    mechlist=read_capability(obj);
+    mechlist = read_capability(obj, &caperr);
+    if (caperr) {
+        get_handle_failed(obj, callbacks, caperr);
+        XSRETURN_UNDEF;
+    }
 
     if (usetls) {
         char *tlserr = NULL;
@@ -299,11 +305,9 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     if (ssf) {
         /* SASL security layer negotiated --
            check if SASL mech list changed */
-        if (detect_mitm(obj, mechlist)) {
+        if (detect_mitm(obj, mechlist, &mitmerr)) {
             free(mechlist);
-            get_handle_failed(obj, callbacks,
-                              xstrdup("possible MITM attack: list of "
-                                      "available SASL mechanisms changed"));
+            get_handle_failed(obj, callbacks, mitmerr);
             XSRETURN_UNDEF;
         }
     }
