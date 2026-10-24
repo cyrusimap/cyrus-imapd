@@ -614,7 +614,7 @@ static int do_referral(isieve_t *obj, char *refer_to)
 {
     int ret;
     struct servent *serv;
-    isieve_t *obj_new;
+    isieve_t *obj_new = NULL;
     char *mechlist = NULL;
     int port;
     char *errstr = NULL;
@@ -622,6 +622,8 @@ static int do_referral(isieve_t *obj, char *refer_to)
     const char *scheme = "sieve://";
     char *host, *p;
     sasl_callback_t *callbacks;
+    char *refer_authinfo = NULL;
+    sasl_callback_t *refer_callbacks = NULL;
     sasl_ssf_t ssf;
 
     /* check scheme */
@@ -636,7 +638,7 @@ static int do_referral(isieve_t *obj, char *refer_to)
         *host++ = '\0';
 
         /* get authid - make a copy so it persists for the callbacks */
-        authid = obj->refer_authinfo = xstrdup(refer_to + strlen(scheme));
+        authid = refer_authinfo = xstrdup(refer_to + strlen(scheme));
 
         /* get userid */
         if ((userid = strrchr(authid, ';')))
@@ -646,7 +648,7 @@ static int do_referral(isieve_t *obj, char *refer_to)
         for (n = 0; obj->callbacks[n++].id != SASL_CB_LIST_END;);
 
         /* copy the callbacks, substituting some of our own */
-        callbacks = obj->refer_callbacks = xmalloc(n*sizeof(sasl_callback_t));
+        callbacks = refer_callbacks = xmalloc(n*sizeof(sasl_callback_t));
 
         /* sasl_callback_t.proc is a generic type, so cast through the
          * one -Wcast-function-type accepts */
@@ -696,7 +698,9 @@ static int do_referral(isieve_t *obj, char *refer_to)
     }
 
     ret = init_net(host, port, &obj_new);
-    if(ret) return STAT_NO;
+    if (ret) {
+        goto fail;
+    }
 
     /* Start up SASL */
     ret = init_sasl(obj_new, 128, callbacks);
@@ -743,6 +747,7 @@ static int do_referral(isieve_t *obj, char *refer_to)
             ucase(mtr);
             tmp = strstr(mechlist,mtr);
             if (tmp) {
+                *tmp = '\0';
                 strcpy(newlist, mechlist);
                 tmp++;
                 tmp = strchr(tmp, ' ');
@@ -770,6 +775,18 @@ static int do_referral(isieve_t *obj, char *refer_to)
     }
     free(mechlist);
 
+    /* the new connection's SASL context points into these */
+    if (refer_callbacks) {
+        obj_new->refer_authinfo = refer_authinfo;
+        obj_new->refer_callbacks = refer_callbacks;
+    }
+    else {
+        obj_new->refer_authinfo = obj->refer_authinfo;
+        obj_new->refer_callbacks = obj->refer_callbacks;
+        obj->refer_authinfo = NULL;
+        obj->refer_callbacks = NULL;
+    }
+
     /* free old isieve_t */
     sieve_dispose(obj);
 
@@ -785,6 +802,8 @@ static int do_referral(isieve_t *obj, char *refer_to)
 fail:
     free(mechlist);
     sieve_free_net(obj_new);
+    free(refer_authinfo);
+    free(refer_callbacks);
     return STAT_NO;
 }
 
