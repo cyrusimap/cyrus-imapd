@@ -23,7 +23,7 @@ WriteMakefile(
     'LD'        => $Config{ld} . " $build->{GCOV_LDFLAGS}",
     'OBJECT'    => 'IMAP.o',
     'MYEXTLIB'  => "$build->{top_builddir}/perl/.libs/libcyrus.a $build->{top_builddir}/perl/.libs/libcyrus_min.a",
-    'LIBS'      => [ "$LIB_SASL $build->{SSL_LIBS} $build->{LIB_UUID} $build->{LIB_REGEX} $build->{ZLIB} $build->{GCOV_LIBS}"],
+    'LIBS'      => [ "$LIB_SASL $build->{SSL_LIBS} $build->{LIB_UUID} $build->{LIB_REGEX} $build->{ZLIB} $build->{ICU_LIBS} $build->{GCOV_LIBS}"],
     'DEFINE'    => '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING'
     'INC'       => "-I$build->{top_srcdir} -I$build->{top_srcdir}/com_err/et $build->{SASLFLAGS} $build->{SSL_CFLAGS} $build->{GCOV_CFLAGS} -I$build->{top_srcdir}/perl/imap",
     'EXE_FILES' => [cyradm],
