@@ -1,0 +1,26 @@
+Description:
+
+sieveshell has a new ``--tls`` option to use STARTTLS, verifying the server
+certificate, with ``--cafile`` and ``--capath`` to trust extra CAs.  The
+Cyrus::SIEVE::managesieve ``sieve_get_handle`` function takes the same
+settings as optional arguments.
+
+
+Documentation:
+
+sieveshell(1), Cyrus::SIEVE::managesieve
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.  Without ``--tls``, sieveshell behaves as before.
+
+
+GitHub issue:
+
+#530

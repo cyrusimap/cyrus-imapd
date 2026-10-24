@@ -30,7 +30,8 @@ void parseerror(const char *str)
   exit(2);
 }
 
-int handle_response(int res,int version,struct protstream *pin,
+int handle_response(int res, int version __attribute__((unused)),
+                    struct protstream *pin,
                     char **refer_to, char **errstr)
 {
   lexstate_t state;
@@ -117,16 +118,15 @@ int handle_response(int res,int version,struct protstream *pin,
 
       r = -1;
   } else {
-      /* ok */
+      /* "OK" [SP "(" resp-code ")"] [SP string] */
       int res;
 
-      /* SASL response */
       res = yylex(&state, pin);
-      if(res == ' ') {
-          if (yylex(&state, pin) != '(')
-              parseerror("expected LPAREN");
-
-          if (yylex(&state, pin)==TOKEN_SASL) {
+      if (res == ' ') {
+          res = yylex(&state, pin);
+          if (res == '(') {
+              if (yylex(&state, pin) != TOKEN_SASL)
+                  parseerror("unexpected response code with OK response");
               if (yylex(&state, pin)!=' ')
                   parseerror("expected space");
               if (yylex(&state, pin)!=STRING)
@@ -136,21 +136,17 @@ int handle_response(int res,int version,struct protstream *pin,
 
               if (yylex(&state, pin)!=')')
                   parseerror("expected RPAREN");
-          } else {
-              parseerror("unexpected response code with OK response");
+
+              res = yylex(&state, pin);
+              if (res == ' ') res = yylex(&state, pin);
           }
-      } else if (version != OLD_VERSION && res == EOL) {
-          return r;
+          if (res == STRING) res = yylex(&state, pin);
       }
 
-      /* old version of protocol had strings with ok responses too */
-      if (version == OLD_VERSION) {
-          if (res !=' ')
-              parseerror("expected sp");
+      if (res != EOL)
+          parseerror("expected EOL");
 
-          if (yylex(&state, pin)!=STRING)
-              parseerror("expected string");
-      }
+      return r;
   }
 
   if (yylex(&state, pin)!=EOL)

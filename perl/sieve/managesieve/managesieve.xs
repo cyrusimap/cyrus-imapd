@@ -135,7 +135,7 @@ PROTOTYPES: ENABLE
 
 
 SV *
-sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *password_cb, SV *realm_cb)
+sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *password_cb, SV *realm_cb, int usetls = 0, char *cafile = NULL, char *capath = NULL)
 
   PREINIT:
     Sieveobj ret = NULL;
@@ -208,6 +208,30 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     ret->errstr = NULL;
 
     mechlist=read_capability(obj);
+
+    if (usetls) {
+        char *tlserr = NULL;
+
+        if (cafile && !*cafile) cafile = NULL;
+        if (capath && !*capath) capath = NULL;
+
+        free(mechlist);
+        mechlist = NULL;
+        if (isieve_starttls(obj, cafile, capath, &mechlist, &tlserr)) {
+            globalerr = tlserr;
+            free(ret);
+            sieve_free_net(obj);
+            XSRETURN_UNDEF;
+        }
+        if (init_sasl(obj, 128, callbacks)) {
+            globalerr = "sasl initialization failed";
+            free(ret);
+            free(mechlist);
+            sieve_free_net(obj);
+            XSRETURN_UNDEF;
+        }
+    }
+
     if (!mechlist) {
         globalerr = "sasl mech list empty";
         free(ret);
