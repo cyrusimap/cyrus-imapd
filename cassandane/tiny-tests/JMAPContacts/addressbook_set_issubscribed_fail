@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+# A subscription change that can't be written must be reported, not hidden
+# behind an "updated" for an addressbook whose isSubscribed didn't change.
+sub test_addressbook_set_issubscribed_fail ($self)
+{
+    my $jmap  = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    my $other = $self->{instance}->create_user('other');
+    my $abook = $other->addressbooks->default;
+    $admin->setacl('user.other.#addressbooks.Default', cassandane => 'lr')
+        or die "setacl: $@";
+
+    xlog $self, "make cassandane's subscriptions database unwritable";
+    $self->{store}->get_client()->subscribe('INBOX')
+        or die "subscribe: $@";
+    my $subfile = $self->{instance}->get_conf_user_file('cassandane', 'sub');
+    $self->assert_not_null($subfile);
+    $self->assert(-f $subfile, "$subfile exists");
+    my $mode = (stat $subfile)[2] & 07777;
+    $self->assert_num_equals(1, chmod(0400, $subfile));
+
+    my $res = eval {
+        $jmap->request([
+            [ 'AddressBook/set', {
+                accountId => 'other',
+                update    => { $abook->id => { isSubscribed => JSON::true } },
+            } ],
+        ]);
+    };
+    my $error = $@;
+
+    # Restore the file before asserting, so the end-of-test checks can run
+    $self->assert_num_equals(1, chmod($mode, $subfile));
+
+    $self->assert_str_equals('', "$error");
+
+    my $args = $res->single_sentence('AddressBook/set')->arguments;
+    $self->assert_null($args->{updated});
+    $self->assert_cmp_deeply(
+        { $abook->id => superhashof({ type => 'serverFail' }) },
+        $args->{notUpdated},
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/jmap\.addressbook\.subscription\.write\.failed/);
+
+    $res = $jmap->request([
+        [ 'AddressBook/get', {
+            accountId  => 'other',
+            ids        => [ $abook->id ],
+            properties => [ 'isSubscribed' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ superhashof({ isSubscribed => jfalse() }) ],
+        $res->single_sentence('AddressBook/get')->arguments->{list},
+    );
+}

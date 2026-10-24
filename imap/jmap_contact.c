@@ -2209,6 +2209,7 @@ struct setaddressbook_props {
     const char *description;
     int sortOrder;
     int isSubscribed;
+    bool is_create;
     struct {
         json_t *With;
         int overwrite_acl;
@@ -2224,12 +2225,14 @@ static void setaddressbook_readprops(jmap_req_t *req,
     int is_create = (mboxname == NULL);
 
     memset(props, 0, sizeof(struct setaddressbook_props));
+    props->is_create = is_create;
 
     if (is_create) {
         props->isSubscribed = 1;
         props->share.overwrite_acl = 1;
     }
     else {
+        props->sortOrder = -1;
         props->isSubscribed = -1;
         props->share.overwrite_acl = 1;
     }
@@ -2393,7 +2396,7 @@ static int setaddressbook_writeprops(jmap_req_t *req,
         buf_reset(&val);
         buf_printf(&val, "%d", props->sortOrder);
         static const char *sortorder_annot = IMAP_ANNOT_NS "sortorder";
-        r = annotatemore_writemask(mboxname, sortorder_annot, httpd_userid, &val);
+        r = annotate_state_writemask(astate, sortorder_annot, req->userid, &val);
         if (r) {
             xsyslog_ev(LOG_ERR, "jmap.addressbook.annotation.write.failed",
                        lf_jmapreq(req), lf_mailbox(mbox),
@@ -2408,7 +2411,17 @@ static int setaddressbook_writeprops(jmap_req_t *req,
         /* Update subscription database */
         r = mboxlist_changesub(mboxname, req->userid, req->authstate,
                                props->isSubscribed, 0, /*notify*/1, /*silent*/0);
-
+        if (r == IMAP_MAILBOX_NONEXISTENT && props->is_create) {
+            /* creating in another account: the creator may not be able to
+             * see the new addressbook yet, so there is nothing to subscribe */
+            r = 0;
+        }
+        else if (r) {
+            xsyslog_ev(LOG_ERR, "jmap.addressbook.subscription.write.failed",
+                       lf_jmapreq(req), lf_mailbox(mbox), lf_err("error", r));
+        }
+    }
+    if (!r && props->isSubscribed >= 0) {
         /* Set invite status for CalDAV */
         buf_setcstr(&val, props->isSubscribed ? "invite-accepted" : "invite-declined");
         static const char *invite_annot =
