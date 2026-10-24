@@ -31,6 +31,22 @@ void fatal(const char *s, int t)
     exit(-1);
 }
 
+/* takes ownership of err */
+static void set_globalerr(char *err)
+{
+    free(globalerr);
+    globalerr = err;
+}
+
+static void get_handle_failed(isieve_t *obj,
+                              sasl_callback_t *callbacks,
+                              char *err)
+{
+    if (err) set_globalerr(err);
+    sieve_free_net(obj);
+    safefree(callbacks);
+}
+
 static int perlsieve_getpass(sasl_conn_t *conn, void *context,
                              int id, sasl_secret_t **psecret)
 {
@@ -146,12 +162,12 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     char *mechlist=NULL,*mlist=NULL;
     const char *mtried;
     isieve_t *obj;
+    char *autherr;
     char *p;
     sasl_ssf_t ssf;
 
   CODE:
 
-    /* xxx this gets leaked! */
     callbacks = safemalloc(5 * sizeof(sasl_callback_t));
 
     callbacks[0].id = SASL_CB_USER;
@@ -191,21 +207,16 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     }
 
     if (init_net(servername, port, &obj)) {
-        globalerr = "network initialization failed";
+        get_handle_failed(NULL, callbacks,
+                          xstrdup("network initialization failed"));
         XSRETURN_UNDEF;
     }
 
     if (init_sasl(obj, 128, callbacks)) {
-        globalerr = "sasl initialization failed";
-        sieve_free_net(obj);
+        get_handle_failed(obj, callbacks,
+                          xstrdup("sasl initialization failed"));
         XSRETURN_UNDEF;
     }
-
-    ret = xmalloc(sizeof(struct xscyrus));
-    ret->class = safemalloc(20);
-    strcpy(ret->class,"managesieve");
-    ret->isieve = obj;
-    ret->errstr = NULL;
 
     mechlist=read_capability(obj);
 
@@ -218,23 +229,19 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
         free(mechlist);
         mechlist = NULL;
         if (isieve_starttls(obj, cafile, capath, &mechlist, &tlserr)) {
-            globalerr = tlserr;
-            free(ret);
-            sieve_free_net(obj);
+            get_handle_failed(obj, callbacks, tlserr);
             XSRETURN_UNDEF;
         }
         if (init_sasl(obj, 128, callbacks)) {
-            globalerr = "sasl initialization failed";
-            free(ret);
             free(mechlist);
-            sieve_free_net(obj);
+            get_handle_failed(obj, callbacks,
+                              xstrdup("sasl initialization failed"));
             XSRETURN_UNDEF;
         }
     }
 
     if (!mechlist) {
-        globalerr = "sasl mech list empty";
-        free(ret);
+        get_handle_failed(obj, callbacks, xstrdup("sasl mech list empty"));
         XSRETURN_UNDEF;
     }
 
@@ -243,7 +250,9 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
     /* loop through all the mechanisms */
     do {
         mtried = NULL;
-        r = auth_sasl(mlist, obj, &mtried, &ssf, &globalerr);
+        autherr = NULL;
+        r = auth_sasl(mlist, obj, &mtried, &ssf, &autherr);
+        if (autherr) set_globalerr(autherr);
 
         if (r) init_sasl(obj, 128, callbacks);
 
@@ -269,11 +278,12 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
         }
     } while (r && mtried);
 
+    free(mlist);
+
     if (r) {
         /* we failed */
-        safefree(ret->class);
-        free(ret);
         free(mechlist);
+        get_handle_failed(obj, callbacks, NULL);
         XSRETURN_UNDEF;
     }
 
@@ -281,14 +291,21 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
         /* SASL security layer negotiated --
            check if SASL mech list changed */
         if (detect_mitm(obj, mechlist)) {
-            globalerr = "possible MITM attack: "
-                "list of available SASL mechanisms changed";
-            free(ret);
             free(mechlist);
+            get_handle_failed(obj, callbacks,
+                              xstrdup("possible MITM attack: list of "
+                                      "available SASL mechanisms changed"));
             XSRETURN_UNDEF;
         }
     }
     free(mechlist);
+
+    ret = xmalloc(sizeof(struct xscyrus));
+    ret->class = safemalloc(20);
+    strcpy(ret->class,"managesieve");
+    ret->isieve = obj;
+    ret->callbacks = callbacks;
+    ret->errstr = NULL;
 
     RETVAL = newSV(0);
     sv_setref_pv(RETVAL, ret->class, (void *) ret);
@@ -367,3 +384,16 @@ sieve_get(Sieveobj obj, char *name, char *output)
   OUTPUT:
     RETVAL
     output
+
+
+MODULE = Cyrus::SIEVE::managesieve              PACKAGE = managesieve
+
+void
+DESTROY(Sieveobj obj)
+  CODE:
+    /* sieve_logout() already freed and cleared isieve */
+    if (obj->isieve) sieve_free_net(obj->isieve);
+    safefree(obj->callbacks);
+    safefree(obj->class);
+    free(obj->errstr);
+    free(obj);

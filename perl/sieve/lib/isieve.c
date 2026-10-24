@@ -71,6 +71,8 @@ static void sieve_dispose(isieve_t *obj)
     SSL_CTX_free(obj->tls_ctx);
     free(obj->cafile);
     free(obj->capath);
+
+    close(obj->sock);
 }
 
 void sieve_free_net(isieve_t *obj)
@@ -307,6 +309,7 @@ int isieve_starttls(isieve_t *obj,
         return -1;
     }
 
+    ERR_clear_error();
     obj->tls_ctx = SSL_CTX_new(TLS_client_method());
     if (!obj->tls_ctx
         || !SSL_CTX_set_min_proto_version(obj->tls_ctx, TLS1_2_VERSION)
@@ -612,7 +615,7 @@ static int do_referral(isieve_t *obj, char *refer_to)
     int ret;
     struct servent *serv;
     isieve_t *obj_new;
-    char *mechlist;
+    char *mechlist = NULL;
     int port;
     char *errstr = NULL;
     const char *mtried;
@@ -697,7 +700,9 @@ static int do_referral(isieve_t *obj, char *refer_to)
 
     /* Start up SASL */
     ret = init_sasl(obj_new, 128, callbacks);
-    if(ret) return STAT_NO;
+    if (ret) {
+        goto fail;
+    }
 
     mechlist = read_capability(obj_new);
 
@@ -711,12 +716,11 @@ static int do_referral(isieve_t *obj, char *refer_to)
                             &errstr))
         {
             free(errstr);
-            sieve_free_net(obj_new);
-            return STAT_NO;
+            goto fail;
         }
         ret = init_sasl(obj_new, 128, callbacks);
         if (ret) {
-            return STAT_NO;
+            goto fail;
         }
     }
 
@@ -753,15 +757,15 @@ static int do_referral(isieve_t *obj, char *refer_to)
         }
     } while(ret && mtried);
 
-    /* XXX leak? */
-    if(ret) return STAT_NO;
+    if (ret) {
+        goto fail;
+    }
 
     if (ssf) {
         /* SASL security layer negotiated --
            check if SASL mech list changed */
         if (detect_mitm(obj_new, mechlist)) {
-            free(mechlist);
-            return STAT_NO;
+            goto fail;
         }
     }
     free(mechlist);
@@ -777,14 +781,17 @@ static int do_referral(isieve_t *obj, char *refer_to)
     free(refer_to);
 
     return STAT_OK;
+
+fail:
+    free(mechlist);
+    sieve_free_net(obj_new);
+    return STAT_NO;
 }
 
 int isieve_logout(isieve_t **obj)
 {
     prot_printf((*obj)->pout, "LOGOUT");
     prot_flush((*obj)->pout);
-
-    close((*obj)->sock);
 
     sieve_free_net(*obj);
     *obj = NULL;
