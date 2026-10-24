@@ -3355,7 +3355,9 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         }
     }
 
-    if (!local_only && config_mupdate_server) {
+    /* the MUPDATE master does not store intermediate mailboxes */
+    if (!local_only && config_mupdate_server &&
+        !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
         /* commit the mailbox in MUPDATE */
         char *loc = strconcat(config_servername, "!", newpartition, (char *)NULL);
 
