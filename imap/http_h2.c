@@ -47,6 +47,7 @@ struct http2_stream {
     int32_t id;                         /* Stream ID */
     size_t num_resp_hdrs;               /* Number of response headers */
     nghttp2_nv resp_hdrs[HTTP2_MAX_HEADERS]; /* Array of response headers */
+    bool copy_hdrs;                     /* nghttp2 must copy header values */
 
     /* Response body awaiting transmission.
      *
@@ -604,6 +605,10 @@ static void begin_resp_headers(struct transaction_t *txn, long code)
 
     strm->num_resp_hdrs = 0;
 
+    /* A 1xx response may still be queued when the next header block reuses
+       resp_hdrs, so nghttp2 must copy its values */
+    strm->copy_hdrs = code && code < HTTP_OK;
+
     if (txn->conn->logfd != -1) {
         /* telemetry log */
         struct buf *logbuf = &txn->conn->logbuf;
@@ -637,7 +642,8 @@ static void add_resp_header(struct transaction_t *txn,
         nv->name = (uint8_t *) name;
         nv->valuelen = buf_len(value);
         nv->value = (uint8_t *) buf_release(value);
-        nv->flags = NGHTTP2_NV_FLAG_NO_COPY_VALUE;
+        nv->flags = strm->copy_hdrs ? NGHTTP2_NV_FLAG_NONE
+                                    : NGHTTP2_NV_FLAG_NO_COPY_VALUE;
 
         strm->num_resp_hdrs++;
 
@@ -695,6 +701,7 @@ static int end_resp_headers(struct transaction_t *txn, long code)
 
     case HTTP_CONTINUE:
     case HTTP_PROCESSING:
+    case HTTP_EARLY_HINTS:
         /* Provisional response */
         flags = NGHTTP2_FLAG_NONE;
         break;
@@ -716,6 +723,10 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     if (r) {
         syslog(LOG_ERR, "%s: %s",
                "nghttp2_submit headers", nghttp2_strerror(r));
+    }
+    else if (code < HTTP_OK) {
+        /* No body follows to push out a provisional response */
+        http2_output(txn->conn);
     }
 
     return r;
