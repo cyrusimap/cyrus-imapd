@@ -63,6 +63,10 @@ struct http2_stream {
     unsigned body_complete  : 1;        /* No further chunks are coming */
     unsigned body_deferred  : 1;        /* Provider parked, needs resuming */
     unsigned body_failed    : 1;        /* nghttp2 submit/resume failed */
+    unsigned trailer_pending : 1;       /* Send trailers at EOF */
+
+    /* CTag trailer value, kept until the provider reaches EOF */
+    char *ctag;
 };
 
 static nghttp2_session_callbacks *http2_callbacks = NULL;
@@ -76,6 +80,7 @@ static void stream_free(struct transaction_t *txn)
             int i;
 
             buf_free(&strm->body);
+            free(strm->ctag);
 
             for (i = 0; i < HTTP2_MAX_HEADERS; i++) {
                 free(strm->resp_hdrs[i].value);
@@ -743,6 +748,29 @@ static int end_resp_headers(struct transaction_t *txn, long code)
    rather than waiting for the whole buffer to drain. */
 #define HTTP2_BODY_COMPACT_AT (64 * 1024)
 
+/* Trailers are submitted only here, at EOF: nghttp2 sends HEADERS ahead of
+   queued DATA, so submitting them earlier could end the stream before the
+   body, and the response HEADERS are now sent, freeing resp_hdrs for reuse */
+static void data_source_eof(struct transaction_t *txn, uint32_t *data_flags)
+{
+    struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
+
+    *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+
+    if (strm->trailer_pending) {
+        /* The trailing HEADERS ends the stream */
+        *data_flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
+        strm->trailer_pending = 0;
+
+        begin_resp_headers(txn, 0);
+        if (txn->flags.trailer & (TRAILER_DIGEST | TRAILER_UNENCODED)) {
+            digest_hdrs(txn);
+        }
+        if (strm->ctag) simple_hdr(txn, "CTag", "%s", strm->ctag);
+        end_resp_headers(txn, 0);
+    }
+}
+
 static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((unused)),
                                          int32_t stream_id,
                                          uint8_t *buf, size_t length,
@@ -750,7 +778,8 @@ static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((un
                                          nghttp2_data_source *source,
                                          void *user_data __attribute__((unused)))
 {
-    struct http2_stream *strm = source->ptr;
+    struct transaction_t *txn = source->ptr;
+    struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
     size_t remain = buf_len(&strm->body) - strm->body_off;
     size_t n = length < remain ? length : remain;
 
@@ -767,7 +796,7 @@ static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((un
             return NGHTTP2_ERR_DEFERRED;
         }
 
-        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+        data_source_eof(txn, data_flags);
         return 0;
     }
 
@@ -775,7 +804,7 @@ static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((un
     strm->body_off += n;
 
     if (strm->body_complete && strm->body_off == buf_len(&strm->body)) {
-        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+        data_source_eof(txn, data_flags);
     }
 
     /* Reclaim what has already been handed to nghttp2, so that a large
@@ -831,7 +860,16 @@ static int resp_body_chunk(struct transaction_t *txn,
     /* Our own copy -- see struct http2_stream's body comment for why we
      * can't just alias 'data' instead of copying it. */
     if (datalen) buf_appendmap(&strm->body, data, datalen);
-    if (last_chunk) strm->body_complete = 1;
+    if (last_chunk) {
+        strm->body_complete = 1;
+
+        if (txn->flags.trailer & ~TRAILER_PROXY) {
+            strm->trailer_pending = 1;
+            if (txn->flags.trailer & TRAILER_CTAG) {
+                strm->ctag = xstrdupnull(txn->resp_body.ctag);
+            }
+        }
+    }
 
     if (!strm->body_submitted) {
         /* nghttp2 accepts only one DATA submission per stream, so this runs
@@ -847,7 +885,7 @@ static int resp_body_chunk(struct transaction_t *txn,
         }
 
         nghttp2_data_provider2 prd = {
-            .source.ptr    = strm,
+            .source.ptr    = txn,
             .read_callback = data_source_read_cb
         };
 
@@ -877,17 +915,6 @@ static int resp_body_chunk(struct transaction_t *txn,
 
     /* Write frame(s) */
     http2_output(txn->conn);
-
-    if (last_chunk && (txn->flags.trailer & ~TRAILER_PROXY)) {
-        begin_resp_headers(txn, 0);
-        if (txn->flags.trailer & (TRAILER_DIGEST | TRAILER_UNENCODED)) {
-            digest_hdrs(txn);
-        }
-        if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
-            simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
-        }
-        end_resp_headers(txn, 0);
-    }
 
     return 0;
 }
