@@ -296,6 +296,7 @@ static int frame_recv_cb(nghttp2_session *session,
             /* Tunnel - stream input to backend */
             prot_putbuf(txn->be->out, &txn->req_body.payload);
             prot_flush(txn->be->out);
+            buf_reset(&txn->req_body.payload);
             break;
         }
 
