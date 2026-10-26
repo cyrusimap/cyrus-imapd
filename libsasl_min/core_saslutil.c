@@ -8,6 +8,8 @@
 
 #include "libsasl_min/saslutil.h"
 
+#include <openssl/rand.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,24 +21,11 @@
  * sasl_encode64
  * sasl_mkchal
  * sasl_utf8verify
- * sasl_randcreate
- * sasl_randfree
- * sasl_randseed
- * sasl_rand
- * sasl_churn
  * sasl_erasebuffer
  */
 
 char *encode_table;
 char *decode_table;
-
-#define RPOOL_SIZE 3
-struct sasl_rand_s
-{
-    unsigned short pool[RPOOL_SIZE];
-    /* since the init time might be really bad let's make this lazy */
-    int initialized;
-};
 
 #define CHAR64(c) (((c) < 0 || (c) > 127) ? -1 : index_64[(c)])
 
@@ -232,9 +221,7 @@ EXPORTED int sasl_mkchal(sasl_conn_t *conn,
                          unsigned maxlen,
                          unsigned hostflag)
 {
-    sasl_rand_t *pool = NULL;
     unsigned long randnum;
-    int ret;
     time_t now;
     unsigned len;
 
@@ -249,13 +236,13 @@ EXPORTED int sasl_mkchal(sasl_conn_t *conn,
         return 0;
     }
 
-    ret = sasl_randcreate(&pool);
-    if (ret != SASL_OK) {
-        return 0; /* xxx sasl return code? */
+    if (1 != RAND_bytes((unsigned char *) &randnum, sizeof(randnum))) {
+        /* couldn't get random data!
+         * cyrus-sasl pretends failure to obtain a random number is a
+         * not-enough-memory problem, so we'll do the same for now
+         */
+         return 0;
     }
-
-    sasl_rand(pool, (char *) &randnum, sizeof(randnum));
-    sasl_randfree(&pool);
 
     time(&now);
 
@@ -303,184 +290,6 @@ EXPORTED int sasl_utf8verify(const char *str, unsigned len)
         }
     }
     return SASL_OK;
-}
-
-/*
- * To see why this is really bad see RFC 1750
- *
- * unfortunatly there currently is no way to make
- * cryptographically secure pseudo random numbers
- * without specialized hardware etc...
- * thus, this is for nonce use only
- */
-EXPORTED void getranddata(unsigned short ret[RPOOL_SIZE])
-{
-    long curtime;
-
-    memset(ret, 0, RPOOL_SIZE * sizeof(unsigned short));
-
-#ifdef DEV_RANDOM
-    {
-        int fd;
-
-        fd = open(DEV_RANDOM, O_RDONLY);
-        if (fd != -1) {
-            unsigned char *buf = (unsigned char *) ret;
-            ssize_t bytesread = 0;
-            size_t bytesleft = RPOOL_SIZE * sizeof(unsigned short);
-
-            do {
-                bytesread = read(fd, buf, bytesleft);
-                if (bytesread == -1 && errno == EINTR) {
-                    continue;
-                }
-                else if (bytesread <= 0) {
-                    break;
-                }
-                bytesleft -= bytesread;
-                buf += bytesread;
-            } while (bytesleft != 0);
-
-            close(fd);
-        }
-    }
-#endif
-
-#ifdef HAVE_GETPID
-    ret[0] ^= (unsigned short) getpid();
-#endif
-
-#ifdef HAVE_GETTIMEOFDAY
-    {
-        struct timeval tv;
-
-        /* xxx autoconf macro */
-# ifdef _SVID_GETTOD
-        if (!gettimeofday(&tv))
-# else
-        if (!gettimeofday(&tv, NULL))
-# endif
-        {
-            /* longs are guaranteed to be at least 32 bits; we need
-               16 bits in each short */
-            ret[0] ^= (unsigned short) (tv.tv_sec & 0xFFFF);
-            ret[1] ^= (unsigned short) (clock() & 0xFFFF);
-            ret[1] ^= (unsigned short) (tv.tv_usec >> 16);
-            ret[2] ^= (unsigned short) (tv.tv_usec & 0xFFFF);
-            return;
-        }
-    }
-#endif /* HAVE_GETTIMEOFDAY */
-
-    /* if all else fails just use time() */
-    curtime = (long) time(NULL); /* better be at least 32 bits */
-
-    ret[0] ^= (unsigned short) (curtime >> 16);
-    ret[1] ^= (unsigned short) (curtime & 0xFFFF);
-    ret[2] ^= (unsigned short) (clock() & 0xFFFF);
-
-    return;
-}
-
-EXPORTED int sasl_randcreate(sasl_rand_t **rpool)
-{
-    (*rpool) = sasl_ALLOC(sizeof(sasl_rand_t));
-    if ((*rpool) == NULL) {
-        return SASL_NOMEM;
-    }
-
-    /* init is lazy */
-    (*rpool)->initialized = 0;
-
-    return SASL_OK;
-}
-
-EXPORTED void sasl_randfree(sasl_rand_t **rpool)
-{
-    sasl_FREE(*rpool);
-}
-
-EXPORTED void sasl_randseed(sasl_rand_t *rpool, const char *seed, unsigned len)
-{
-    /* is it acceptable to just use the 1st 3 char's given??? */
-    unsigned int lup;
-
-    /* check params */
-    if (seed == NULL) {
-        return;
-    }
-    if (rpool == NULL) {
-        return;
-    }
-
-    rpool->initialized = 1;
-
-    if (len > sizeof(unsigned short) * RPOOL_SIZE) {
-        len = sizeof(unsigned short) * RPOOL_SIZE;
-    }
-
-    for (lup = 0; lup < len; lup += 2) {
-        rpool->pool[lup / 2] = (seed[lup] << 8) + seed[lup + 1];
-    }
-}
-
-static void randinit(sasl_rand_t *rpool)
-{
-    if (!rpool) {
-        return;
-    }
-
-    if (!rpool->initialized) {
-        getranddata(rpool->pool);
-        rpool->initialized = 1;
-# ifndef HAVE_JRAND48
-        {
-            /* xxx varies by platform */
-            unsigned int *foo = (unsigned int *) rpool->pool;
-            srandom(*foo);
-        }
-# endif /* HAVE_JRAND48 */
-    }
-}
-
-EXPORTED void sasl_rand(sasl_rand_t *rpool, char *buf, unsigned len)
-{
-    unsigned int lup;
-
-    /* check params */
-    if (!rpool || !buf) {
-        return;
-    }
-
-    /* init if necessary */
-    randinit(rpool);
-
-    for (lup = 0; lup < len; lup++) {
-# ifdef HAVE_JRAND48
-        buf[lup] = (char) (jrand48(rpool->pool) >> 8);
-# else
-        buf[lup] = (char) (random() >> 8);
-# endif /* HAVE_JRAND48 */
-    }
-}
-
-/* this function is just a bad idea all around, since we're not trying to
-   implement a true random number generator */
-EXPORTED void sasl_churn(sasl_rand_t *rpool, const char *data, unsigned len)
-{
-    unsigned int lup;
-
-    /* check params */
-    if (!rpool || !data) {
-        return;
-    }
-
-    /* init if necessary */
-    randinit(rpool);
-
-    for (lup = 0; lup < len; lup++) {
-        rpool->pool[lup % RPOOL_SIZE] ^= data[lup];
-    }
 }
 
 EXPORTED void sasl_erasebuffer(char *buf, unsigned len)

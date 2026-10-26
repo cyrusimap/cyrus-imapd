@@ -1944,8 +1944,6 @@ EXPORTED sasl_utils_t *_sasl_alloc_utils(
 
     utils->conn = conn;
 
-    sasl_randcreate(&utils->rpool);
-
     if (conn) {
         utils->getopt = &_sasl_conn_getopt;
         utils->getopt_context = conn;
@@ -1967,8 +1965,6 @@ EXPORTED sasl_utils_t *_sasl_alloc_utils(
 
     utils->mkchal = &sasl_mkchal;
     utils->utf8verify = &sasl_utf8verify;
-    utils->rand = &sasl_rand;
-    utils->churn = &sasl_churn;
     utils->checkpass = NULL;
 
     utils->encode64 = &sasl_encode64;
@@ -2023,7 +2019,6 @@ EXPORTED int _sasl_free_utils(const sasl_utils_t **utils)
      * does make life easier to have it const everywhere else. */
     nonconst = (sasl_utils_t *) (*utils);
 
-    sasl_randfree(&(nonconst->rpool));
     sasl_FREE(nonconst);
 
     *utils = NULL;
