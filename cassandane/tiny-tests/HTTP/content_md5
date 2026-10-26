@@ -1,0 +1,94 @@
+#!perl
+use Cassandane::Tiny;
+use Digest::MD5 qw(md5);
+use Digest::SHA qw(sha256);
+
+# With httpcontentmd5, a response carries Content-MD5: in the header section
+# for a full body, in the trailer section for a chunked one, and not at all
+# for a HEAD.  A Want-Content-Digest supersedes it: the response carries
+# only the Content-Digest asked for.
+sub test_content_md5
+    :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set(httpcontentmd5 => 'yes');
+    $self->_start_instances();
+
+    my $path = '/dav/calendars/user/cassandane/Default/content-md5.ics';
+    my $ical = join("\r\n",
+        'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Cassandane//EN',
+        'BEGIN:VEVENT', 'UID:content-md5', 'DTSTAMP:20260101T000000Z',
+        'DTSTART:20260101T100000Z', 'DURATION:PT1H',
+        'SUMMARY:Content-MD5 test', 'END:VEVENT', 'END:VCALENDAR', '');
+
+    my $put = $self->http1_request(
+        method  => 'PUT',
+        path    => $path,
+        headers => [ 'content-type' => 'text/calendar',
+                     'connection'   => 'close' ],
+        body    => $ical,
+        timeout => 10,
+    );
+    $self->assert_str_equals('201', $put->{statuses}[0] // '');
+
+    my sub get ($target, $want = undef) {
+        my $service = $self->{instance}->get_service('http');
+        my $s = $self->http1_connect();
+        http1_send($s,
+            "GET $target HTTP/1.1\r\n",
+            "Host: ", $service->host, ":", $service->port, "\r\n",
+            "Authorization: Basic ", encode_base64('cassandane:pass', ''),
+            "\r\n",
+            (defined $want ? "Want-Content-Digest: $want\r\n" : ''),
+            "\r\n");
+        my $res = http1_read_response($s);
+        close($s);
+        $self->assert_num_equals(200, $res->{status});
+        return $res;
+    }
+
+    xlog $self, "a full body: Content-MD5 in the header section";
+    my $res = get($path);
+    $self->assert_http_response({
+        headers => { 'content-md5' => encode_base64(md5($res->{body}), '') },
+    }, $res);
+
+    xlog $self, "a chunked body: Content-MD5 in the trailer section";
+    $res = get('/dav/calendars/user/cassandane/Default/');
+    $self->assert_http_response({
+        headers  => { 'transfer-encoding' => re(qr/^chunked$/i),
+                      trailer             => re(qr/\bContent-MD5\b/),
+                      'content-md5'       => undef },
+        trailers => { 'content-md5' => encode_base64(md5($res->{body}), '') },
+    }, $res);
+
+    my sub sha256_digest ($data) {
+        return 'sha-256=:' . encode_base64(sha256($data), '') . ':';
+    }
+
+    xlog $self, "Want-Content-Digest supersedes Content-MD5";
+    $res = get($path, 'sha-256=10');
+    $self->assert_http_response({
+        headers => { 'content-md5'    => undef,
+                     'content-digest' => sha256_digest($res->{body}) },
+    }, $res);
+
+    $res = get('/dav/calendars/user/cassandane/Default/', 'sha-256=10');
+    $self->assert_http_response({
+        headers  => { trailer => all(re(qr/\bContent-Digest\b/),
+                                     none(re(qr/\bContent-MD5\b/))) },
+        trailers => { 'content-md5'    => undef,
+                      'content-digest' => sha256_digest($res->{body}) },
+    }, $res);
+
+    # http1_read_response() can't tell a HEAD response has no body
+    xlog $self, "a HEAD: no Content-MD5";
+    my $head = $self->http1_request(
+        method  => 'HEAD',
+        path    => $path,
+        headers => [ 'connection' => 'close' ],
+        timeout => 10,
+    );
+    $self->assert_str_equals('200', $head->{statuses}[0] // '');
+    $self->assert_does_not_match(qr/^Content-MD5:/mi, $head->{raw});
+}
