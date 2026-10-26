@@ -380,7 +380,7 @@ static int saslauthd_verify_password(sasl_conn_t *conn,
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
-        sasl_seterror(conn, 0, "cannot create socket for saslauthd: %m", errno);
+        sasl_seterror(conn, 0, "cannot create socket for saslauthd: %m");
         goto fail;
     }
 
@@ -392,10 +392,7 @@ static int saslauthd_verify_password(sasl_conn_t *conn,
         int r = connect(s, (struct sockaddr *) &srvaddr, sizeof(srvaddr));
         if (r == -1) {
             close(s);
-            sasl_seterror(conn,
-                          0,
-                          "cannot connect to saslauthd server: %m",
-                          errno);
+            sasl_seterror(conn, 0, "cannot connect to saslauthd server: %m");
             goto fail;
         }
     }

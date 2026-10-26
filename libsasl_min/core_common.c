@@ -1718,7 +1718,7 @@ EXPORTED int _sasl_getcallback(sasl_conn_t *conn,
     *pcontext = NULL;
     sasl_seterror(conn,
                   SASL_NOLOG,
-                  "Unable to find a callback: %d",
+                  "Unable to find a callback: %lu",
                   callbackid);
     RETURN(conn, SASL_FAIL);
 }
@@ -2113,16 +2113,6 @@ EXPORTED int _buf_alloc(char **rwbuf, size_t *curlen, size_t newlen)
     }
 
     return SASL_OK;
-}
-
-/* for the mac os x cfm glue: this lets the calling function
-   get pointers to the error buffer without having to touch the sasl_conn_t struct */
-EXPORTED void _sasl_get_errorbuf(sasl_conn_t *conn,
-                                 char ***bufhdl,
-                                 size_t **lenhdl)
-{
-    *bufhdl = &conn->error_buf;
-    *lenhdl = &conn->error_buf_len;
 }
 
 /* convert an iovec to a single buffer */
