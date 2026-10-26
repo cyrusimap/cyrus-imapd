@@ -148,9 +148,9 @@ EOF
     $self->assert_str_equals('accepted', Cassandane::TestSuite::Sieve::_participant($events->[0]{participants}, 'cassandane@example.com')->{participationStatus});    
 
     $response = $CalDAV->Request('GET', $href);
-    $ical = Data::ICal->new(data => $response->{content});
-    $self->assert_str_equals('TRANSPARENT', $ical->{entries}[0]{properties}{transp}[0]{value});
-    $self->assert_str_equals('DISPLAY', $ical->{entries}[0]{entries}[0]{properties}{action}[0]{value});
-    $self->assert_str_equals('TRANSPARENT', $ical->{entries}[1]{properties}{transp}[0]{value});
-    $self->assert_str_equals('DISPLAY', $ical->{entries}[1]{entries}[0]{properties}{action}[0]{value});
+    $ical = ical2hash($response->{content});
+    $self->assert_str_equals('TRANSPARENT', $ical->{objects}[0]{properties}{transp}[0]{value});
+    $self->assert_str_equals('DISPLAY', $ical->{objects}[0]{objects}[0]{properties}{action}[0]{value});
+    $self->assert_str_equals('TRANSPARENT', $ical->{objects}[1]{properties}{transp}[0]{value});
+    $self->assert_str_equals('DISPLAY', $ical->{objects}[1]{objects}[0]{properties}{action}[0]{value});
 }

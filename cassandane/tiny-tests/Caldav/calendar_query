@@ -181,66 +181,66 @@ EOF
     my $responses = $res->{'{DAV:}response'};
     $self->assert_equals(2, scalar @$responses);
 
-    my $ical = Data::ICal->new(data =>
-                               $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content});
+    my $ical = ical2hash(
+        $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content});
     $self->assert_str_equals('One-Time Event',
-                             $ical->{entries}[0]{properties}{summary}[0]{value});
+                             $ical->{objects}[0]{properties}{summary}[0]{value});
     $self->assert_str_equals($uuid1,
-                             $ical->{entries}[0]{properties}{uid}[0]{value});
+                             $ical->{objects}[0]{properties}{uid}[0]{value});
     $self->assert_str_equals('20211215T211500Z',
-                             $ical->{entries}[0]{properties}{dtstart}[0]{value});
-    $self->assert_null($ical->{entries}[0]{properties}{dtstamp});
-    $self->assert_null($ical->{entries}[0]{properties}{status});
-    $self->assert_null($ical->{entries}[0]{properties}{rrule});
-    $self->assert_null($ical->{entries}[0]{properties}{'recurrence-id'});
+                             $ical->{objects}[0]{properties}{dtstart}[0]{value});
+    $self->assert_null($ical->{objects}[0]{properties}{dtstamp});
+    $self->assert_null($ical->{objects}[0]{properties}{status});
+    $self->assert_null($ical->{objects}[0]{properties}{rrule});
+    $self->assert_null($ical->{objects}[0]{properties}{'recurrence-id'});
 
-    $ical = Data::ICal->new(data =>
-                            $res->{'{DAV:}response'}[1]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content});
+    $ical = ical2hash(
+        $res->{'{DAV:}response'}[1]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content});
 
     $self->assert_str_equals('Recurring Event',
-                             $ical->{entries}[0]{properties}{summary}[0]{value});
+                             $ical->{objects}[0]{properties}{summary}[0]{value});
     $self->assert_str_equals($uuid2,
-                             $ical->{entries}[0]{properties}{uid}[0]{value});
+                             $ical->{objects}[0]{properties}{uid}[0]{value});
     $self->assert_str_equals('20211215T200000Z',
-                             $ical->{entries}[0]{properties}{dtstart}[0]{value});
-    $self->assert_null($ical->{entries}[0]{properties}{dtstamp});
-    $self->assert_null($ical->{entries}[0]{properties}{status});
-    $self->assert_null($ical->{entries}[0]{properties}{rrule});
-    $self->assert_null($ical->{entries}[0]{properties}{'recurrence-id'});
+                             $ical->{objects}[0]{properties}{dtstart}[0]{value});
+    $self->assert_null($ical->{objects}[0]{properties}{dtstamp});
+    $self->assert_null($ical->{objects}[0]{properties}{status});
+    $self->assert_null($ical->{objects}[0]{properties}{rrule});
+    $self->assert_null($ical->{objects}[0]{properties}{'recurrence-id'});
 
     $self->assert_str_equals('Recurring Event',
-                             $ical->{entries}[1]{properties}{summary}[0]{value});
+                             $ical->{objects}[1]{properties}{summary}[0]{value});
     $self->assert_str_equals($uuid2,
-                             $ical->{entries}[1]{properties}{uid}[0]{value});
+                             $ical->{objects}[1]{properties}{uid}[0]{value});
     $self->assert_str_equals('20211216T200000Z',
-                             $ical->{entries}[1]{properties}{dtstart}[0]{value});
+                             $ical->{objects}[1]{properties}{dtstart}[0]{value});
     $self->assert_str_equals('20211216T200000Z',
-                             $ical->{entries}[1]{properties}{'recurrence-id'}[0]{value});
-    $self->assert_null($ical->{entries}[1]{properties}{dtstamp});
-    $self->assert_null($ical->{entries}[1]{properties}{status});
-    $self->assert_null($ical->{entries}[1]{properties}{rrule});
+                             $ical->{objects}[1]{properties}{'recurrence-id'}[0]{value});
+    $self->assert_null($ical->{objects}[1]{properties}{dtstamp});
+    $self->assert_null($ical->{objects}[1]{properties}{status});
+    $self->assert_null($ical->{objects}[1]{properties}{rrule});
 
     $self->assert_str_equals('Recurring Event (exception)',
-                             $ical->{entries}[2]{properties}{summary}[0]{value});
+                             $ical->{objects}[2]{properties}{summary}[0]{value});
     $self->assert_str_equals($uuid2,
-                             $ical->{entries}[2]{properties}{uid}[0]{value});
+                             $ical->{objects}[2]{properties}{uid}[0]{value});
     $self->assert_str_equals('20211217T200000Z',
-                             $ical->{entries}[2]{properties}{dtstart}[0]{value});
+                             $ical->{objects}[2]{properties}{dtstart}[0]{value});
     $self->assert_str_equals('20211217T200000Z',
-                             $ical->{entries}[2]{properties}{'recurrence-id'}[0]{value});
-    $self->assert_null($ical->{entries}[2]{properties}{dtstamp});
-    $self->assert_null($ical->{entries}[2]{properties}{status});
-    $self->assert_null($ical->{entries}[2]{properties}{rrule});
+                             $ical->{objects}[2]{properties}{'recurrence-id'}[0]{value});
+    $self->assert_null($ical->{objects}[2]{properties}{dtstamp});
+    $self->assert_null($ical->{objects}[2]{properties}{status});
+    $self->assert_null($ical->{objects}[2]{properties}{rrule});
 
     $self->assert_str_equals('Recurring Event',
-                             $ical->{entries}[3]{properties}{summary}[0]{value});
+                             $ical->{objects}[3]{properties}{summary}[0]{value});
     $self->assert_str_equals($uuid2,
-                             $ical->{entries}[3]{properties}{uid}[0]{value});
+                             $ical->{objects}[3]{properties}{uid}[0]{value});
     $self->assert_str_equals('20211218T200000Z',
-                             $ical->{entries}[3]{properties}{dtstart}[0]{value});
+                             $ical->{objects}[3]{properties}{dtstart}[0]{value});
     $self->assert_str_equals('20211218T200000Z',
-                             $ical->{entries}[3]{properties}{'recurrence-id'}[0]{value});
-    $self->assert_null($ical->{entries}[3]{properties}{dtstamp});
-    $self->assert_null($ical->{entries}[3]{properties}{status});
-    $self->assert_null($ical->{entries}[3]{properties}{rrule});
+                             $ical->{objects}[3]{properties}{'recurrence-id'}[0]{value});
+    $self->assert_null($ical->{objects}[3]{properties}{dtstamp});
+    $self->assert_null($ical->{objects}[3]{properties}{status});
+    $self->assert_null($ical->{objects}[3]{properties}{rrule});
 }
