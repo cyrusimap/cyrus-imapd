@@ -321,9 +321,9 @@ EXPORTED int sasl_canonuser_add_plugin(const char *plugname,
         _sasl_log(NULL,
                   SASL_LOG_ERR,
                   "%s_canonuser_plug_init() failed in "
-                  "sasl_canonuser_add_plugin(): %z\n",
+                  "sasl_canonuser_add_plugin(): %s\n",
                   plugname,
-                  result);
+                  sasl_errstring(result, NULL, NULL));
         return result;
     }
 
