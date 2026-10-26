@@ -28,6 +28,7 @@ remote.sessionid        the session id of a backend we proxied to
 
 ### u. - the user
 
+u.group                 a group the user is, or is being made, a member of
 u.username              the userid the event happened for or on behalf of
 
 ### mbox. - a mailbox

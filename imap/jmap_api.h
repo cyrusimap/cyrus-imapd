@@ -48,6 +48,7 @@
 #define JMAP_NOTES_EXTENSION         "https://cyrusimap.org/ns/jmap/notes"
 #define JMAP_SIEVE_EXTENSION         "https://cyrusimap.org/ns/jmap/sieve"
 #define JMAP_USERCOUNTERS_EXTENSION  "https://cyrusimap.org/ns/jmap/usercounters"
+#define JMAP_ADMIN_EXTENSION         "https://cyrusimap.org/ns/jmap/admin"
 #define JMAP_JSCALENDARBIS_EXTENSION "https://cyrusimap.org/ns/jmap/jscalendarbis"
 
 enum {
@@ -272,6 +273,7 @@ extern void jmap_vacation_init(jmap_settings_t *settings);
 extern void jmap_backup_init(jmap_settings_t *settings);
 extern void jmap_notes_init(jmap_settings_t *settings);
 extern void jmap_sieve_init(jmap_settings_t *settings);
+extern void jmap_admin_init(jmap_settings_t *settings);
 
 extern void jmap_core_capabilities(json_t *account_capabilities);
 extern void jmap_blob_capabilities(json_t *account_capabilities);
@@ -293,6 +295,7 @@ extern void jmap_vacation_capabilities(json_t *account_capabilities);
 extern void jmap_backup_capabilities(json_t *account_capabilities);
 extern void jmap_notes_capabilities(json_t *account_capabilities);
 extern void jmap_sieve_capabilities(json_t *account_capabilities);
+extern void jmap_admin_capabilities(json_t *account_capabilities);
 
 extern void jmap_accounts(json_t *accounts, json_t *primary_accounts);
 
@@ -485,6 +488,12 @@ struct jmap_set {
 extern void jmap_set_default_failed(struct jmap_set *set, const char *id,
                                     const char *type, const char *desc);
 
+extern bool jmap_set_validate_props(jmap_req_t *req,
+                                    const char *id,
+                                    json_t *jobj,
+                                    const jmap_property_set_t *valid_props,
+                                    json_t **readonly,
+                                    json_t **err);
 extern void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            const jmap_property_set_t *valid_props,
                            jmap_args_parse_cb args_parse, void *args_rock,
