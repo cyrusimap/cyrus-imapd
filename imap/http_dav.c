@@ -485,6 +485,54 @@ static int principal_acl_check(const char *userid, struct auth_state *authstate)
 }
 
 
+static int shared_dav_collection_cb(const mbentry_t *mbentry, void *rock)
+{
+    bool *found = rock;
+
+    switch (mbtype_isa(mbentry->mbtype)) {
+    case MBTYPE_CALENDAR:
+    case MBTYPE_ADDRESSBOOK:
+        break;
+    default:
+        return 0;
+    }
+
+    if ((httpd_myrights(httpd_authstate, mbentry) & DACL_READ) == DACL_READ) {
+        *found = true;
+        return CYRUSDB_DONE;
+    }
+
+    return 0;
+}
+
+enum target_access {
+    TARGET_NO_ACCESS = 0,
+    TARGET_READ,
+    TARGET_DISPLAYNAME_ONLY
+};
+
+/* Check how much of the request target the current user may read.
+ * A principal's DAV:displayname is also readable by anyone who can read
+ * one of its owner's calendars or address books, so that a sharee can
+ * identify the sharer. */
+static enum target_access dav_target_access(const struct request_target_t *tgt)
+{
+    int rights = httpd_myrights(httpd_authstate, tgt->mbentry);
+
+    if ((rights & DACL_READ) == DACL_READ) return TARGET_READ;
+
+    if (tgt->namespace->id == URL_NS_PRINCIPAL && tgt->userid) {
+        bool found = false;
+
+        mboxlist_usermboxtree(tgt->userid, NULL,
+                              &shared_dav_collection_cb, &found, 0);
+        if (found) return TARGET_DISPLAYNAME_ONLY;
+    }
+
+    return TARGET_NO_ACCESS;
+}
+
+
 /* Determine allowed methods in DAV principals namespace */
 static unsigned long principal_allow_cb(struct request_target_t *tgt)
 {
@@ -1581,7 +1629,15 @@ static int xml_add_response(struct propfind_ctx *fctx, long code, unsigned preco
         for (e = fctx->elist; e; e = e->next) {
             int r = HTTP_NOT_FOUND;
 
-            if (e->get) {
+            if (fctx->displayname_only &&
+                (!e->ns || xmlStrcmp(e->ns->href, BAD_CAST XML_NS_DAV) ||
+                 xmlStrcmp(e->name, BAD_CAST "displayname"))) {
+                /* allprop and propname list only what is readable */
+                if (fctx->mode == PROPFIND_ALL || fctx->mode == PROPFIND_NAME)
+                    continue;
+                r = HTTP_FORBIDDEN;
+            }
+            else if (e->get) {
                 r = 0;
 
                 /* Pre-screen request based on prop flags */
@@ -6277,11 +6333,10 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     }
 
     if (txn->req_tgt.mbentry) {
-        int rights;
-
         /* Check ACL for current user */
-        rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-        if ((rights & DACL_READ) != DACL_READ) {
+        enum target_access access = dav_target_access(&txn->req_tgt);
+
+        if (access == TARGET_NO_ACCESS) {
             /* DAV:need-privileges */
             txn->error.precond = DAV_NEED_PRIVS;
             txn->error.resource = txn->req_tgt.path;
@@ -6289,6 +6344,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
             ret = HTTP_NO_PRIVS;
             goto done;
         }
+        fctx.displayname_only = (access == TARGET_DISPLAYNAME_ONLY);
 
         if (txn->req_tgt.mbentry->server) {
             /* Remote mailbox */
@@ -7705,19 +7761,49 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
 
     fctx->mode = PROPFIND_EXPAND;
     fctx->prefer &= ~PREFER_NOROOT;
-    if (href) {
-        /* Parse the URL */
-        req_tgt.namespace = namespace;
-        parse_path(href, &req_tgt, &fctx->txn->error.desc);
-
-        fctx->req_tgt = &req_tgt;
-    }
     fctx->lprops = lprops;
     fctx->elist = NULL;
     fctx->root = root;
     fctx->depth = depth;
     fctx->mbentry = NULL;
     fctx->mailbox = NULL;
+    fctx->displayname_only = false;
+
+    if (href) {
+        /* Parse the URL */
+        const char *resultstr = NULL;
+
+        req_tgt.namespace = namespace;
+        req_tgt.allow = namespace->allow;
+        fctx->req_tgt = &req_tgt;
+
+        r = parse_path(href, &req_tgt, &resultstr);
+        if (r) {
+            xml_add_response(fctx, r, 0, NULL,
+                             r == HTTP_MOVED ? resultstr : NULL);
+            goto done;
+        }
+    }
+
+    /* Expanding a resource requires the same rights as a PROPFIND on it */
+    if (fctx->req_tgt->mbentry) {
+        enum target_access access = dav_target_access(fctx->req_tgt);
+
+        if (access == TARGET_NO_ACCESS) {
+            if (href) {
+                xml_add_response(fctx, HTTP_FORBIDDEN, 0, NULL, NULL);
+            }
+            else {
+                /* DAV:need-privileges */
+                fctx->txn->error.precond = DAV_NEED_PRIVS;
+                fctx->txn->error.resource = fctx->req_tgt->path;
+                fctx->txn->error.rights = DACL_READ;
+                ret = HTTP_NO_PRIVS;
+            }
+            goto done;
+        }
+        fctx->displayname_only = (access == TARGET_DISPLAYNAME_ONLY);
+    }
 
     ret = preload_proplist(inroot->children, fctx);
     if (ret) goto done;
@@ -7726,7 +7812,10 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
         /* Add response for principal or home-set collection */
         struct mailbox *mailbox = NULL;
 
-        if (fctx->req_tgt->mbentry) {
+        /* As with PROPFIND, a principal's properties don't come from its
+           home-set, whose dead properties need read rights on the home */
+        if (fctx->req_tgt->mbentry &&
+            fctx->req_tgt->namespace->id != URL_NS_PRINCIPAL) {
             /* Open mailbox for reading */
             if ((r = mailbox_open_irl(fctx->req_tgt->mbentry->name, &mailbox))) {
                 syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
@@ -7779,6 +7868,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
     free_entry_list(fctx);
 
     free(req_tgt.userid);
+    mboxlist_entry_free(&req_tgt.mbentry);
 
     fctx->mbentry = prev_ctx.mbentry;
     fctx->mailbox = prev_ctx.mailbox;
@@ -7788,6 +7878,7 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
     fctx->lprops = prev_ctx.lprops;
     fctx->req_tgt = prev_ctx.req_tgt;
     fctx->prefer = prev_ctx.prefer;
+    fctx->displayname_only = prev_ctx.displayname_only;
 
     if (root != fctx->root) {
         /* Move any defined namespaces up to the previous parent */
