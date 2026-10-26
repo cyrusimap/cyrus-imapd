@@ -157,9 +157,9 @@ EXPORTED int sasl_setpass(sasl_conn_t *conn,
         if (result != SASL_OK) {
             _sasl_log(conn,
                       SASL_LOG_ERR,
-                      "setpass failed for %s: %z",
+                      "setpass failed for %s: %s",
                       user,
-                      result);
+                      sasl_errstring(result, NULL, NULL));
             failed++;
         }
         else {
@@ -196,9 +196,9 @@ EXPORTED int sasl_setpass(sasl_conn_t *conn,
             }
             _sasl_log(conn,
                       SASL_LOG_ERR,
-                      "setpass callback failed for %s: %z",
+                      "setpass callback failed for %s: %s",
                       user,
-                      tmpresult);
+                      sasl_errstring(tmpresult, NULL, NULL));
             failed++;
         }
         else {
@@ -269,11 +269,10 @@ EXPORTED int sasl_setpass(sasl_conn_t *conn,
             result = tmpresult;
             _sasl_log(conn,
                       SASL_LOG_ERR,
-                      "%s: failed to set secret for %s: %z (%m)",
+                      "%s: failed to set secret for %s: %s (%m)",
                       m->plug->mech_name,
                       user,
-                      tmpresult,
-                      errno
+                      sasl_errstring(tmpresult, NULL, NULL)
             );
             failed++;
         }
@@ -490,9 +489,9 @@ EXPORTED int sasl_server_add_plugin(const char *plugname,
         _sasl_log(
             NULL,
             SASL_LOG_DEBUG,
-            "%s_client_plug_init() failed in sasl_server_add_plugin(): %z\n",
+            "%s_client_plug_init() failed in sasl_server_add_plugin(): %s\n",
             plugname,
-            result);
+            sasl_errstring(result, NULL, NULL));
         return result;
     }
 
