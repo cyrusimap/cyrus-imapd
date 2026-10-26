@@ -327,8 +327,9 @@ static int login(struct backend *s, const char *userid,
                             free(newmechlist);
                         }
                         else {
-                            syslog(LOG_DEBUG, "%s did not offer %s",
-                                   s->hostname, mech_conf);
+                            xsyslog_ev(LOG_DEBUG, "proxy.mech.unavailable",
+                                       lf_s("proxy.server", s->hostname),
+                                       lf_s("login.mech", mech_conf));
                             buf_reset(&buf);
                         }
                         free(conf);
@@ -407,9 +408,8 @@ static int login(struct backend *s, const char *userid,
                             if (!sid) sid = xstrndup(this_sid, sid_len);
                             else if (sid_len != strlen(sid) ||
                                      strncmp(this_sid, sid, sid_len)) {
-                                syslog(LOG_ERR,
-                                       "%s: Incorrect 'sid' parameter in challenge",
-                                       scheme->name);
+                                xsyslog_ev(LOG_ERR, "proxy.auth.sid.mismatch",
+                                           lf_s("login.scheme", scheme->name));
                                 r = SASL_BADAUTH;
                             }
                         }
@@ -700,7 +700,8 @@ static int pipe_resp_body(struct protstream *pin, struct transaction_t *txn,
     case FRAMING_LENGTH:
         /* Read 'len' octets */
         if (resp_body->len && !pipe_chunk(pin, txn, resp_body->len)) {
-            syslog(LOG_ERR, "prot_read() error");
+            xsyslog_ev(LOG_ERR, "proxy.body.read.failed",
+                       lf_s_opt("error", prot_error(pin)));
             *errstr = "Unable to read body data";
             return HTTP_BAD_GATEWAY;
         }
@@ -733,7 +734,8 @@ static int pipe_resp_body(struct protstream *pin, struct transaction_t *txn,
             if (chunk) {
                 /* Read 'chunk' octets */
                 if (!pipe_chunk(pin, txn, chunk)) {
-                    syslog(LOG_ERR, "prot_read() error");
+                    xsyslog_ev(LOG_ERR, "proxy.chunk.read.failed",
+                               lf_s_opt("error", prot_error(pin)));
                     *errstr = "Unable to read chunk data";
                     return HTTP_BAD_GATEWAY;
                 }
@@ -1348,7 +1350,7 @@ EXPORTED int http_proxy_check_input(struct http_connection *conn,
     n = prot_select(protin, PROT_NO_FD, &protout, NULL,
                     timeout_sec ? &timeout : NULL);
     if (n == -1 && errno != EINTR) {
-        syslog(LOG_ERR, "prot_select() failed in proxy_check_input(): %m");
+        xsyslog_ev(LOG_ERR, "proxy.select.failed");
         fatal("prot_select() failed in proxy_check_input()", EX_TEMPFAIL);
     }
 

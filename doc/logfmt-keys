@@ -197,6 +197,7 @@ dav.synctoken.fields    how many components of a sync-token parsed
 dav.synctoken.modseq    the modseq a sync-token names
 dav.synctoken.uidvalidity  the uidvalidity a sync-token names
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
+http.auth.param         the name of a parameter in an HTTP auth credential
 http.auth.reset.reason  why the connection's authentication state was reset
 http.auth.response      1 if the credentials carried a client response
 http.auth.scheme        the auth scheme named in the client's credentials
@@ -365,6 +366,7 @@ reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
 sasl.result             a SASL result code
 sasl.text               a message logged by the SASL library
 sched.addresses         the scheduling addresses considered, one per indexed subkey
+sched.recipient         the scheduling address a request was sent to
 sched.userid            the userid whose scheduling addresses were used
 scope                   the scope a duplicate-delivery check applied to
 search.batch_highest_createdmodseq  highest createdmodseq indexed in this batch

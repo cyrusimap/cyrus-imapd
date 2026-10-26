@@ -426,8 +426,10 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
     txn.req_body.flags = BODY_DECODE;
     r = http_read_response(be, METH_POST, &code,
                            &txn.req_hdrs, &txn.req_body, &txn.error.desc);
-    syslog(LOG_INFO, "isched_send(%s, %s) => %u",
-           recipient, buf_cstring(&txn.buf), code);
+    xsyslog_ev(LOG_INFO, "isched.request.done",
+               lf_s_opt("sched.recipient", recipient),
+               lf_buf("proxy.server", &txn.buf),
+               lf_u("http.status", code));
 
     if (!r) {
         switch (code) {
