@@ -192,6 +192,9 @@ dav.request.type        the PROPFIND mode or REPORT name a request body named
 dav.resource            the DAV resource within the collection
 dav.synctoken           a DAV sync-token, as the client sent it
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
+http.auth.reset.reason  why the connection's authentication state was reset
+http.auth.response      1 if the credentials carried a client response
+http.auth.scheme        the auth scheme named in the client's credentials
 http.body.flags         the request body parser's flags, as a hex mask
 http.body.framing       how the request body is delimited, as a framing code
 http.body.length        the length of a response body being written, in bytes

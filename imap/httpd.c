@@ -1728,7 +1728,8 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
     if ((hdr = spool_getheader(txn->req_hdrs, "Authorization"))) {
         if (httpd_userid) {
             /* Reauth - reinitialize */
-            syslog(LOG_DEBUG, "reauth - reinit");
+            xsyslog_ev(LOG_DEBUG, "http.auth.reset",
+                       lf_s("http.auth.reset.reason", "reauth"));
             reset_saslconn(&httpd_saslconn);
             txn->auth_chal.scheme = NULL;
         }
@@ -1749,7 +1750,8 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
                     buf_appendcstr(&txn->buf, emsg);
                     txn->error.desc = buf_cstring(&txn->buf);
                 }
-                syslog(LOG_DEBUG, "auth failed - reinit");
+                xsyslog_ev(LOG_DEBUG, "http.auth.reset",
+                           lf_s("http.auth.reset.reason", "auth_failed"));
                 reset_saslconn(&httpd_saslconn);
                 txn->auth_chal.scheme = NULL;
                 if (r == SASL_UNAVAIL) {
@@ -1775,14 +1777,15 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
     }
     else if (!httpd_userid && txn->auth_chal.scheme) {
         /* Started auth exchange, but client didn't engage - reinit */
-        syslog(LOG_DEBUG, "client didn't complete auth - reinit");
+        xsyslog_ev(LOG_DEBUG, "http.auth.reset",
+                   lf_s("http.auth.reset.reason", "auth_abandoned"));
         reset_saslconn(&httpd_saslconn);
         txn->auth_chal.scheme = NULL;
     }
 
     /* Drop auth credentials, if not a backend in a Murder */
     else if (!config_mupdate_server || !config_getstring(IMAPOPT_PROXYSERVERS)) {
-        syslog(LOG_DEBUG, "drop auth creds");
+        xsyslog_ev(LOG_DEBUG, "http.auth.credentials.dropped");
 
         free(httpd_userid);
         httpd_userid = NULL;
@@ -1815,7 +1818,8 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
                 buf_appendcstr(&txn->buf, emsg);
                 txn->error.desc = buf_cstring(&txn->buf);
             }
-            syslog(LOG_DEBUG, "proxy authz failed - reinit");
+            xsyslog_ev(LOG_DEBUG, "http.auth.reset",
+                       lf_s("http.auth.reset.reason", "proxy_authz_failed"));
             reset_saslconn(&httpd_saslconn);
             txn->auth_chal.scheme = NULL;
             ret = HTTP_UNAUTHORIZED;
@@ -4092,7 +4096,8 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
     unsigned authzlen;
     int status;
 
-    syslog(LOG_DEBUG, "proxy_auth: authzid='%s'", *authzid);
+    xsyslog_ev(LOG_DEBUG, "http.proxy.authz.requested",
+               lf_s("u.username", *authzid));
 
     /* Free userid & authstate previously allocated for auth'd user */
     if (httpd_userid) {
@@ -4206,7 +4211,7 @@ static int auth_success(struct transaction_t *txn, const char *userid)
         off_t end = lseek(logfd, 0, SEEK_END);
 
         if (ftruncate(logfd, end - buf_len(&txn->buf)))
-            syslog(LOG_ERR, "IOERROR: failed to truncate http log");
+            xsyslog_ev(LOG_ERR, "http.telemetry.truncate.failed");
 
         /* Close existing telemetry log */
         close(logfd);
@@ -4224,7 +4229,7 @@ static int auth_success(struct transaction_t *txn, const char *userid)
     if (logfd != -1) {
         /* Log credential-redacted request */
         if (write(logfd, buf_cstring(&txn->buf), buf_len(&txn->buf)) < 0)
-            syslog(LOG_ERR, "IOERROR: failed to write to http log");
+            xsyslog_ev(LOG_ERR, "http.telemetry.write.failed");
     }
 
     buf_reset(&txn->buf);
@@ -4272,10 +4277,12 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         clientinlen = strlen(clientin);
     }
 
-    syslog(LOG_DEBUG,
-           "http_auth: status=%d   scheme='%s'   creds='%.*s%s'",
-           status, chal->scheme ? chal->scheme->name : "",
-           slen, creds, clientin ? " <response>" : "");
+    xsyslog_ev(LOG_DEBUG, "http.auth.started",
+               lf_d("sasl.result", status),
+               lf_s_opt("login.scheme",
+                        chal->scheme ? chal->scheme->name : NULL),
+               lf_raw("http.auth.scheme", "%.*s", slen, creds),
+               lf_flag("http.auth.response", clientin != NULL));
 
     /* Free userid & authstate previously allocated for auth'd user */
     if (httpd_userid) {
@@ -4302,7 +4309,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
         if (strncasecmp(scheme->name, creds, slen)) {
             /* Changing auth scheme -> reset state */
-            syslog(LOG_DEBUG, "http_auth: changing scheme");
+            xsyslog_ev(LOG_DEBUG, "http.auth.scheme.changed");
             reset_saslconn(&httpd_saslconn);
             chal->scheme = NULL;
             status = SASL_OK;
@@ -4311,7 +4318,6 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
     if (!chal->scheme) {
         /* Find the client-specified auth scheme */
-        syslog(LOG_DEBUG, "http_auth: find client scheme");
         for (scheme = auth_schemes; scheme->name; scheme++) {
             if (slen && !strncasecmp(scheme->name, creds, slen)) {
                 /* Found a supported scheme, see if its available */
@@ -4321,11 +4327,13 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         }
         if (!scheme || !scheme->name) {
             /* Didn't find a matching scheme that is available */
-            syslog(LOG_DEBUG, "Unknown auth scheme '%.*s'", slen, creds);
+            xsyslog_ev(LOG_DEBUG, "http.auth.scheme.unknown",
+                       lf_raw("http.auth.scheme", "%.*s", slen, creds));
             return SASL_NOMECH;
         }
         /* We found it! */
-        syslog(LOG_DEBUG, "http_auth: found matching scheme: %s", scheme->name);
+        xsyslog_ev(LOG_DEBUG, "http.auth.scheme.selected",
+                   lf_s("login.scheme", scheme->name));
         chal->scheme = scheme;
         status = SASL_OK;
 
@@ -4369,8 +4377,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
             if (sid_len != strlen(mysid) ||
                 strncmp(mysid, sid, sid_len)) {
-                syslog(LOG_ERR, "%s: Incorrect 'sid' parameter in credentials",
-                       scheme->name);
+                xsyslog_ev(LOG_WARNING, "http.auth.sid.mismatch",
+                           lf_s("login.scheme", scheme->name));
                 return SASL_BADAUTH;
             }
         }
@@ -4381,8 +4389,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         r = sasl_decode64(clientin, clientinlen,
                           base64, BASE64_BUF_SIZE, &clientinlen);
         if (r != SASL_OK) {
-            syslog(LOG_ERR, "Base64 decode failed: %s",
-                   sasl_errstring(r, NULL, NULL));
+            xsyslog_ev(LOG_WARNING, "http.auth.decode.failed",
+                       lf_s("error", sasl_errstring(r, NULL, NULL)));
             return r;
         }
         clientin = base64;
@@ -4396,7 +4404,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         char *domain;
 
         if (!clientin) {
-            syslog(LOG_ERR, "Basic auth: Missing token68");
+            xsyslog_ev(LOG_WARNING, "http.auth.basic.credentials.missing");
             return SASL_BADPARAM;
         }
 
@@ -4406,7 +4414,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         user = base64;
         pass = strchr(base64, ':');
         if (!pass) {
-            syslog(LOG_ERR, "Basic auth: Missing password");
+            xsyslog_ev(LOG_WARNING, "http.auth.basic.password.missing");
             return SASL_BADPARAM;
         }
         *pass++ = '\0';
@@ -4494,13 +4502,17 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
         if (status == SASL_CONTINUE) {
             /* Continue current authentication exchange */
-            syslog(LOG_DEBUG, "http_auth: continue %s", scheme->saslmech);
+            xsyslog_ev(LOG_DEBUG, "http.auth.step",
+                       lf_s("http.step", "continue"),
+                       lf_s("login.mech", scheme->saslmech));
             status = sasl_server_step(httpd_saslconn, clientin, clientinlen,
                                       &serverout, &serveroutlen);
         }
         else {
             /* Start new authentication exchange */
-            syslog(LOG_DEBUG, "http_auth: start %s", scheme->saslmech);
+            xsyslog_ev(LOG_DEBUG, "http.auth.step",
+                       lf_s("http.step", "start"),
+                       lf_s("login.mech", scheme->saslmech));
             status = sasl_server_start(httpd_saslconn, scheme->saslmech,
                                        clientin, clientinlen,
                                        &serverout, &serveroutlen);
@@ -4508,8 +4520,11 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
         /* Failure - probably bad client response */
         if ((status != SASL_OK) && (status != SASL_CONTINUE)) {
-            syslog(LOG_ERR, "SASL failed: %s",
-                   cyrus_sasl_errmsg(httpd_saslconn, status, /*for_client*/0));
+            xsyslog_ev(LOG_WARNING, "http.auth.failed",
+                       lf_s("login.mech", scheme->saslmech),
+                       lf_s("error",
+                            cyrus_sasl_errmsg(httpd_saslconn, status,
+                                              /*for_client*/0)));
             return status;
         }
 
@@ -4526,8 +4541,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
             r = sasl_encode64(serverout, serveroutlen,
                               base64 + auth_params_len, MAX_BASE64_SIZE, NULL);
             if (r != SASL_OK) {
-                syslog(LOG_ERR, "Base64 encode failed: %s",
-                       sasl_errstring(r, NULL, NULL));
+                xsyslog_ev(LOG_ERR, "http.auth.encode.failed",
+                           lf_s("error", sasl_errstring(r, NULL, NULL)));
                 return r;
             }
             serverout = base64;
@@ -4551,7 +4566,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         /* Get the userid from SASL - already canonicalized */
         status = sasl_getprop(httpd_saslconn, SASL_USERNAME, &canon_user);
         if (status != SASL_OK) {
-            syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", status);
+            xsyslog_ev(LOG_ERR, "http.auth.username.failed",
+                       lf_d("sasl.result", status));
             return status;
         }
         user = (const char *) canon_user;
@@ -4579,7 +4595,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
          * so avoid to return SASL_BADAUTH. It would trigger the
          * HTTP handler to send UNAUTHORIZED, and might confuse
          * users that provided their correct credentials. */
-        syslog(LOG_ERR, "auth_success returned error: %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "http.auth.postprocess.failed", lf_err("error", r));
         status = SASL_FAIL;
     }
 
