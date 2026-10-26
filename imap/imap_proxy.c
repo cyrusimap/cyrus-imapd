@@ -1033,10 +1033,9 @@ int proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                             "%s UID Store %s +FLAGS.SILENT (\\Deleted)\r\n",
                             movetag, expseq);
                 if (pipe_until_tag(backend_current, movetag, 0) != PROXY_OK) {
-                    syslog(LOG_ERR, "MOVE proxy: UID STORE \\Deleted failed on source "
-                                    "after successful APPEND, expunge will be skipped "
-                                    "(user: %s)",
-                                    imapd_userid);
+                    xsyslog_ev(LOG_ERR, "imap.move.proxy.store.failed",
+                               lf_s("u.username", imapd_userid),
+                               lf_s("imap.sequence", expseq));
                 }
 
                 /* UID EXPUNGE (RFC 4315, always available on Cyrus backends) */
@@ -1045,10 +1044,9 @@ int proxy_copy(const char *tag, char *sequence, char *name, int myrights,
                             "%s UID Expunge %s\r\n",
                             movetag, expseq);
                 if (pipe_until_tag(backend_current, movetag, 0) != PROXY_OK) {
-                     syslog(LOG_ERR, "MOVE proxy: UID EXPUNGE failed on source after "
-                                     "successful APPEND, message may be duplicated "
-                                     "(user: %s)",
-                                     imapd_userid);
+                     xsyslog_ev(LOG_ERR, "imap.move.proxy.expunge.failed",
+                                lf_s("u.username", imapd_userid),
+                                lf_s("imap.sequence", expseq));
                 }
             }
 
@@ -1513,7 +1511,8 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
                 scope = "/private";
             }
             else {
-                syslog(LOG_ERR, "won't get deprecated annotation attribute %s", attr);
+                xsyslog_ev(LOG_WARNING, "imap.annotation.attrib.deprecated",
+                           lf_s("annot.attrib", attr));
                 continue;
             }
             prot_printf(be->out, "%s%s%s", i ? " " : "", scope, entry);
@@ -1560,9 +1559,8 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
                 buf_setcstr(&entrybuf, "/private");
             }
             else {
-                syslog(LOG_ERR,
-                       "won't proxy annotation with deprecated attribute %s",
-                       av->attrib);
+                xsyslog_ev(LOG_WARNING, "imap.annotation.attrib.deprecated",
+                           lf_s("annot.attrib", av->attrib));
                 buf_free(&entrybuf);
                 return IMAP_INTERNAL;
             }
@@ -1631,7 +1629,8 @@ static void proxy_part_filldata(partlist_t *part_list, int idx)
     item->total = 0;
     item->quota = 0.;
 
-    syslog(LOG_DEBUG, "checking free space on server '%s'", item->value);
+    xsyslog_ev(LOG_DEBUG, "imap.proxy.freespace.checking",
+               lf_s("proxy.server", item->value));
 
     /* connect to server */
     be = proxy_findserver(item->value, &imap_protocol,

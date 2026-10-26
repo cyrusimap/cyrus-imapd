@@ -196,7 +196,7 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
     n = prot_select(protin, extra_read_fd, &protout, extra_read_flag,
                     timeout_sec ? &timeout : NULL);
     if (n == -1 && errno != EINTR) {
-        syslog(LOG_ERR, "prot_select() failed in proxy_check_input(): %m");
+        xsyslog_ev(LOG_ERR, "proxy.select.failed");
         fatal("prot_select() failed in proxy_check_input()", EX_TEMPFAIL);
     }
 

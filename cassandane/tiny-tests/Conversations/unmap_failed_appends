@@ -25,7 +25,7 @@ EOF
     $imap->append('INBOX', $mime) || die $@;
 
     # look up the PID of the imapd process
-    my @lines = grep(/imap\[\d+\]: command: \w+ Append$/,
+    my @lines = grep(/imap\[\d+\]: event=imap\.command\.received .*\simap\.command=Append$/,
         $self->{instance}->getsyslog());
     $self->assert_num_equals(1, scalar @lines);
 

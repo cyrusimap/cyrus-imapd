@@ -150,6 +150,7 @@ append.callout          the annotation callout program or socket
 append.stage.dir        the staging directory a message is spooled through
 append.stage.file       the staged copy of a message
 append.stage.source     the file a staged message was copied from
+backend.banner          the greeting banner a backend sent
 backup.cutoff           the point in time a restore is undoing back to
 backup.reason           why a record or collection was skipped or selected
 backup.replaced         1 if the destroyed resource is replaced by another version
@@ -164,7 +165,15 @@ cal.partstat            an attendee's PARTSTAT
 cal.recurid             a calendar component's RECURRENCE-ID
 cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID
+cmd.duration            how long a command took, in seconds
+cmd.nettime             how long a command spent on the network, in seconds
+cmd.total               cmd.duration and cmd.nettime added together
+compress.algorithm      the compression algorithm a connection negotiated
 config.option           the name of an imapd.conf option
+conn.host               open connections from this client host
+conn.host.max           how many are allowed from one host
+conn.user               open connections for this user
+conn.user.max           how many are allowed for one user
 conv.guid.exists        how many non-expunged records share this guid
 conv.guid.folderexists  how many of those are in this folder
 conv.guid.numrecords    how many records of any kind share this guid
@@ -176,9 +185,65 @@ dav.resource            the DAV resource within the collection
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
 http.header.name        the name of an HTTP header
 http.header.value       the value of an HTTP header
+idle.client             the imapd an idled message is to or from
+idle.events             the mailbox events a client asked to hear about, as a mask
+idle.filter             the mailbox filter a client idles with
+idle.keys               the filter keys a client idles with, serialised
 idle.mboxevent          the mailbox event being forwarded, e.g. MessageNew
-idle.message            which message to idled failed: notify, init or done
+idle.message            which message to idled: notify, init or done
 idle.poll.interval      seconds between polls when idled can't be reached
+imap.behavior           prefix for the keys below; never logged on its own
+# imap.behavior.* -- one per entry in imapd.c's client_behavior_registry,
+# pushed by key name, so the lint can't see them.  Value is always 1:
+# only the behaviors a session exhibited are logged.
+imap.behavior.annotate     the session used the annotate capability or command
+imap.behavior.annotatembox the session used the annotatembox capability or command
+imap.behavior.binary       the session used the binary capability or command
+imap.behavior.catenate     the session used the catenate capability or command
+imap.behavior.compress     the session used the compress capability or command
+imap.behavior.condstore    the session used the condstore capability or command
+imap.behavior.idle         the session used the idle capability or command
+imap.behavior.imap4rev2    the session used the imap4rev2 capability or command
+imap.behavior.metadata     the session used the metadata capability or command
+imap.behavior.move         the session used the move capability or command
+imap.behavior.multisearch  the session used the multisearch capability or command
+imap.behavior.notify       the session used the notify capability or command
+imap.behavior.objectid     the session used the objectid capability or command
+imap.behavior.partial      the session used the partial capability or command
+imap.behavior.preview      the session used the preview capability or command
+imap.behavior.qresync      the session used the qresync capability or command
+imap.behavior.replace      the session used the replace capability or command
+imap.behavior.savedate     the session used the savedate capability or command
+imap.behavior.searchfuzzy  the session used the searchfuzzy capability or command
+imap.behavior.searchres    the session used the searchres capability or command
+imap.behavior.uidbatches   the session used the uidbatches capability or command
+imap.behavior.uidonly      the session used the uidonly capability or command
+imap.behavior.unselect     the session used the unselect capability or command
+imap.behavior.utf8_accept  the session used the utf8_accept capability or command
+imap.behavior.xlist        the session used the xlist capability or command
+# imap.client.id.* -- the RFC 2971 section 3.3 fields, as the client sent
+# them in its ID command.  Pushed by key name from the table in imapd.c,
+# so the lint can't see most of them.  A field sent as NIL logs ~null~.
+imap.client.id          prefix for the keys below; never logged on its own
+imap.client.id.address   the client's contact address
+imap.client.id.arguments the arguments the client was started with
+imap.client.id.command   the command line the client was started from
+imap.client.id.date      the client's build date
+imap.client.id.environment  the client's deployment environment
+imap.client.id.name      the client's name
+imap.client.id.os        the client's operating system
+imap.client.id.os-version  the client's operating system version
+imap.client.id.support-url  the client's support URL
+imap.client.id.vendor    the client's vendor
+imap.client.id.version   the client's version
+imap.command            the IMAP command being processed
+imap.counter            which index counter underflowed: numunseen or numrecent
+imap.flag.group         which flags a STORE was not allowed: seen, deleted or other
+imap.qresync.modseq     the modseq the client said it had last seen
+imap.recursive          1 if the operation covers submailboxes too
+imap.sequence           a message sequence set, as the client wrote it
+imap.tag                the client's tag for the command
+imap.thread.algorithm   the THREAD algorithm in use, e.g. REFERENCES
 imip.error              why an iMIP operation failed
 imip.outcome            what an iMIP message did: added, updated, no_action, error
 jmap                    placeholder for "no JMAP request"; value is always ~null~
@@ -222,8 +287,11 @@ mboxlist.key            a raw mailboxes.db key
 mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
 pop.subfolder           the subfolder a POP session was restricted to
+proxy.server            the backend server a request was proxied to
 quota.root              the quota root a quota applies to
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
+sasl.result             a SASL result code
+sasl.text               a message logged by the SASL library
 sched.addresses         the scheduling addresses considered, one per indexed subkey
 sched.userid            the userid whose scheduling addresses were used
 scope                   the scope a duplicate-delivery check applied to
@@ -238,17 +306,25 @@ search.index_version    the format version of the search index
 search.min_index_version  the lowest search index version an operation needs
 search.op               a search operator, e.g. OR
 search.restarts         how many times indexing restarted from the first message
+search.results          how many messages a search or sort returned
+search.sortcrit         the sort criteria, serialised
 search.uncommitted      how many documents were pending when a commit failed
 search.updates          how many update passes indexed nothing
+seen.op                 which seen database operation is being logged
+seen.uids               a seen state's uid sequence, as stored
 sieve.lineno            the line of a Sieve script an error was found on
 sieve.result            a SIEVE_* result code
 sieve.script            the name of a Sieve script
 sieve.srs.domain        the domain SRS rewrites a return path into
 sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
+statuscache.hit         1 if the status cache had the answer
+statuscache.items       the STATUS items a lookup asked for, as a hex mask
 sync.channel            a replication channel name
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
+xfer.capability         a capability the transfer destination advertises
+xfer.step               which step of a mailbox transfer is being logged
 
 ### out. - the outbound half of an event that has two halves
 
@@ -257,6 +333,7 @@ out.msg.id              Message-ID we sent, where msg.id is the one we got
 ### other. - the second mailbox in an event about two of them
 
 other.mbox.name         the name of the other mailbox involved, in the admin namespace
+other.mbox.part         the partition of the other mailbox involved
 other.mbox.uniqueid     the uniqueid of the other mailbox involved
 
 ### old. - the value before a change, paired with the unprefixed key
@@ -280,6 +357,7 @@ old.msg.sysflags        the message's system flags before the change
 old.search.createdmodseq  the createdmodseq the client last saw
 old.search.generation   the search index generation the client last saw
 old.sys.path            the path a file was copied or moved from
+old.u.username          the userid before a rename
 
 ### usage counters
 
@@ -296,6 +374,7 @@ error.type              a machine-readable error type, e.g. a JMAP SetError type
 sys.error               strerror() of errno at the point of logging
 sys.exitcode            the exit code a process is dying with
 sys.filename            a file name within a directory
+sys.host                a host name or address
 sys.path                a filesystem path
 sys.pid                 a process id
 

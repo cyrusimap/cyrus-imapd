@@ -22,10 +22,12 @@ sub test_cmd_id ($self)
         $imaptalk->logout();
         undef $imaptalk;
 
-        my @behavior_lines = $self->{instance}->getsyslog(qr/session ended/);
+        my @behavior_lines =
+            $self->{instance}->getsyslog(qr/event=imap\.session\.ended/);
 
         $self->assert_num_gte(1, scalar @behavior_lines);
 
-        $self->assert_matches(qr/\bid\.name=<cassandane>/, $_) for @behavior_lines;
+        $self->assert_matches(qr/\simap\.client\.id\.name=cassandane\s/, $_)
+            for @behavior_lines;
     }
 }
