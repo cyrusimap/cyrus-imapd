@@ -1,0 +1,28 @@
+Description:
+
+The HTTP server supports Content-Digest and Want-Content-Digest (RFC 9530),
+with the sha-256 and sha-512 algorithms.  A response carries Content-Digest
+when the request's Want-Content-Digest asks for it, as a trailer for a
+chunked response, and a request whose Content-Digest doesn't match its
+content is refused with 400.  A Want-Content-Digest supersedes
+httpcontentmd5: the response carries the Content-Digest asked for instead of
+Content-MD5.
+
+The HTTP server also supports Unencoded-Digest and Want-Unencoded-Digest
+(draft-ietf-httpbis-unencoded-digest), whose digest is of the
+representation without any content coding, such as compression.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

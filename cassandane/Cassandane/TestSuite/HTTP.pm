@@ -140,9 +140,9 @@ sub http1_send
     return;
 }
 
-# Read one HTTP/1.x response (status, headers lowercased, and the
-# entity body if any) from a socket returned by http1_connect() or
-# https1_connect().
+# Read one HTTP/1.x response (status, headers and trailers lowercased,
+# and the entity body if any) from a socket returned by http1_connect()
+# or https1_connect().
 sub http1_read_response
 {
     my ($s) = @_;
@@ -171,9 +171,38 @@ sub http1_read_response
         $body .= $chunk;
     }
 
-    wire_recv(_peer_of($s), "$log\n$body");
+    my %trailers;
+    my @tkv = $s->get_trailers;
+    my $tlog = '';
+    while (@tkv) {
+        my ($k, $v) = splice(@tkv, 0, 2);
+        $trailers{lc $k} = $v;
+        $tlog .= "$k: $v\n";
+    }
 
-    return { status => $code, headers => \%headers, body => $body };
+    wire_recv(_peer_of($s), "$log\n$body$tlog");
+
+    return { status => $code, headers => \%headers, body => $body,
+             trailers => \%trailers };
+}
+
+# assert_cmp_deeply() a response from http1_read_response() against
+# $expected, comparing only the keys $expected has.  Its headers and
+# trailers hashes name just the fields to compare, so undef means absent.
+sub assert_http_response
+{
+    my ($self, $expected, $res) = @_;
+
+    my %got;
+    for my $k (keys %$expected) {
+        $got{$k} = ref $expected->{$k} eq 'HASH'
+            ? { map { $_ => $res->{$k}{$_} } keys $expected->{$k}->%* }
+            : $res->{$k};
+    }
+
+    my (undef, $file, $line) = caller;
+    $self->assert_cmp_deeply($expected, \%got,
+                             "response checked at $file line $line");
 }
 
 # Read exactly $len raw bytes, e.g. a post-upgrade frame header,

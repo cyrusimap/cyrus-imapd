@@ -1,0 +1,142 @@
+#!perl
+use Cassandane::Tiny;
+use Digest::SHA qw(sha256 sha512);
+use IO::Compress::Gzip qw(gzip $GzipError);
+
+# A request whose Content-Digest, in its header or trailer section, doesn't
+# match its content is refused.  Digests using algorithms the server doesn't
+# support, and malformed fields, are ignored (RFC 9530 Section 2).  The
+# content is what was sent: still compressed if it has a Content-Encoding,
+# or empty.
+sub test_content_digest_request
+    ($self)
+{
+    my $n = 0;
+
+    my sub ical ($i) {
+        return join("\r\n",
+            'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Cassandane//EN',
+            'BEGIN:VEVENT', "UID:content-digest-put$i",
+            'DTSTAMP:20260101T000000Z', 'DTSTART:20260101T100000Z',
+            'DURATION:PT1H', 'SUMMARY:Content-Digest request test',
+            'END:VEVENT', 'END:VCALENDAR', '');
+    }
+
+    my %digest = (
+        sha256   => sub { 'sha-256=:' . encode_base64(sha256($_[0]), '') . ':' },
+        sha512   => sub { 'sha-512=:' . encode_base64(sha512($_[0]), '') . ':' },
+        wrong256 => sub { 'sha-256=:' . encode_base64(sha256('x'), '') . ':' },
+    );
+
+    # PUT a new event with a Content-Digest field built by $field from its
+    # body, in the header section or (chunked) the trailer section
+    my sub put ($field, $in_trailer = 0) {
+        my $body = ical(++$n);
+        my $value = $field->($body);
+        my @hdrs = ('content-type' => 'text/calendar',
+                    'connection'   => 'close');
+        my %framing;
+
+        if ($in_trailer) {
+            push @hdrs, 'transfer-encoding' => 'chunked',
+                        'trailer' => 'Content-Digest';
+            $framing{raw_body} = sprintf("%x\r\n%s\r\n0\r\n"
+                                         . "Content-Digest: %s\r\n\r\n",
+                                         length $body, $body, $value);
+        }
+        else {
+            push @hdrs, 'content-digest' => $value;
+            $framing{body} = $body;
+        }
+
+        my $res = $self->http1_request(
+            method  => 'PUT',
+            path    => "/dav/calendars/user/cassandane/Default/put$n.ics",
+            headers => \@hdrs,
+            timeout => 10,
+            %framing,
+        );
+        return $res->{statuses}[0] // '';
+    }
+
+    xlog $self, "matching digests are accepted";
+    $self->assert_str_equals('201', put($digest{sha256}));
+    $self->assert_str_equals('201', put($digest{sha512}));
+    $self->assert_str_equals('201',
+        put(sub { $digest{sha512}->($_[0]) . ', ' . $digest{sha256}->($_[0]) }));
+
+    xlog $self, "any mismatching supported digest is refused";
+    $self->assert_str_equals('400', put($digest{wrong256}));
+    $self->assert_str_equals('400',
+        put(sub { $digest{sha512}->($_[0]) . ', ' . $digest{wrong256}->() }));
+    $self->assert_str_equals('400', put(sub { 'sha-256=:AAAA:' }));
+
+    xlog $self, "a refused request stores nothing";
+    my $get = $self->http1_request(
+        path    => "/dav/calendars/user/cassandane/Default/put$n.ics",
+        headers => [ 'connection' => 'close' ],
+        timeout => 10);
+    $self->assert_str_equals('404', $get->{statuses}[0] // '');
+
+    xlog $self, "unsupported algorithms and malformed fields are ignored";
+    $self->assert_str_equals('201',
+        put(sub { 'md5=:AAAAAAAAAAAAAAAAAAAAAA==:' }));
+    $self->assert_str_equals('201', put(sub { $digest{wrong256}->() . ',' }));
+    $self->assert_str_equals('201', put(sub { 'sha-256="not bytes"' }));
+
+    xlog $self, "a digest in a trailer section is checked too";
+    $self->assert_str_equals('201', put($digest{sha256}, 1));
+    $self->assert_str_equals('400', put($digest{wrong256}, 1));
+
+    xlog $self, "a field split across lines is one Dictionary";
+    for my $case ([$digest{sha256}, '201'], [$digest{wrong256}, '400']) {
+        my ($second, $status) = @$case;
+        my $body = ical(++$n);
+        my $res = $self->http1_request(
+            method  => 'PUT',
+            path    => "/dav/calendars/user/cassandane/Default/put$n.ics",
+            headers => [ 'content-type'   => 'text/calendar',
+                         'connection'     => 'close',
+                         'content-digest' => $digest{sha512}->($body),
+                         'content-digest' => $second->($body) ],
+            body    => $body,
+            timeout => 10,
+        );
+        $self->assert_str_equals($status, $res->{statuses}[0] // '');
+    }
+
+    xlog $self, "compressed content: the digest is of the compressed bytes";
+    for my $case ([1, '201'], [0, '400']) {
+        my ($of_compressed, $status) = @$case;
+        my $body = ical(++$n);
+        my $gz;
+        gzip(\$body => \$gz) or die "gzip failed: $GzipError";
+        my $res = $self->http1_request(
+            method  => 'PUT',
+            path    => "/dav/calendars/user/cassandane/Default/put$n.ics",
+            headers => [ 'content-type'     => 'text/calendar',
+                         'content-encoding' => 'gzip',
+                         'connection'       => 'close',
+                         'content-digest'   =>
+                             $digest{sha256}->($of_compressed ? $gz : $body) ],
+            body    => $gz,
+            timeout => 10,
+        );
+        $self->assert_str_equals($status, $res->{statuses}[0] // '');
+    }
+
+    xlog $self, "empty content: the digest is of empty content";
+    for my $case ([$digest{sha256}->(''), '207'], [$digest{wrong256}->(), '400']) {
+        my ($field, $status) = @$case;
+        my $res = $self->http1_request(
+            method  => 'PROPFIND',
+            path    => '/dav/calendars/user/cassandane/Default/',
+            headers => [ 'depth'          => '0',
+                         'connection'     => 'close',
+                         'content-digest' => $field ],
+            body    => '',
+            timeout => 10,
+        );
+        $self->assert_str_equals($status, $res->{statuses}[0] // '');
+    }
+}

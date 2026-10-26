@@ -164,7 +164,7 @@ static ssize_t send_cb(wslay_event_context_ptr ev,
     int last_chunk = (txn->flags.conn & CONN_CLOSE) && !(flags & WSLAY_MSG_MORE);
 
     int r = txn->conn->resp_body_chunk(txn, (const char *) data, len,
-                                       last_chunk, NULL /* md5ctx */);
+                                       last_chunk);
 
     xsyslog(LOG_DEBUG, "WS send", "len=<%zu>, r=<%d>", len, r);
 

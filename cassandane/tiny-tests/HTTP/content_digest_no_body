@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+use Digest::SHA qw(sha256);
+
+# Responses without content: 204, 304 and HEAD carry neither Content-Digest
+# nor Content-MD5.  A response whose content is empty (a 201, a 416) carries
+# the Content-Digest of empty content, which RFC 9530 Section 3 lets a
+# sender use to say so, but not Content-MD5, which has never been sent for
+# empty content.
+sub test_content_digest_no_body
+    :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set(httpcontentmd5 => 'yes');
+    $self->_start_instances();
+
+    my $path = '/dav/calendars/user/cassandane/Default/no-body.ics';
+    my $ical = join("\r\n",
+        'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Cassandane//EN',
+        'BEGIN:VEVENT', 'UID:no-body', 'DTSTAMP:20260101T000000Z',
+        'DTSTART:20260101T100000Z', 'DURATION:PT1H',
+        'SUMMARY:no body test', 'END:VEVENT', 'END:VCALENDAR', '');
+    my $empty_digest = 'sha-256=:' . encode_base64(sha256(''), '') . ':';
+
+    # One request on its own connection: the status and header fields of its
+    # response (http1_read_response() can't tell when a HEAD has no body)
+    my sub request ($method, @args) {
+        my %args = @args;
+        my $res = $self->http1_request(
+            method  => $method,
+            path    => $path,
+            headers => [ 'want-content-digest' => 'sha-256=10',
+                         'connection'          => 'close',
+                         @{$args{headers} // []} ],
+            timeout => 10,
+            (defined $args{body} ? (body => $args{body}) : ()),
+        );
+        my ($head) = split /\r\n\r\n/, $res->{raw}, 2;
+        my ($status_line, @lines) = split /\r\n/, $head // '';
+        my %hdrs = map { my ($k, $v) = /^([^:]+):\s*(.*)$/; (lc $k => $v) }
+                   @lines;
+        my ($status) = ($status_line // '') =~ m{^HTTP/1\.1 (\d{3})};
+        return { status => $status // '', headers => \%hdrs };
+    }
+
+    xlog $self, "a 201 with empty content: the digest of empty content";
+    my $res = request('PUT',
+                      headers => [ 'content-type' => 'text/calendar' ],
+                      body => $ical);
+    $self->assert_http_response({
+        status  => '201',
+        headers => { 'content-digest' => $empty_digest,
+                     'content-md5'    => undef },
+    }, $res);
+
+    my $get = request('GET');
+    $self->assert_str_equals('200', $get->{status});
+    my $etag = $get->{headers}{etag};
+    $self->assert_not_null($etag);
+
+    my %no_digest = ('content-digest' => undef, 'content-md5' => undef);
+
+    xlog $self, "a HEAD: no digest";
+    $res = request('HEAD');
+    $self->assert_http_response(
+        { status => '200', headers => \%no_digest }, $res);
+
+    xlog $self, "a 304: no digest";
+    $res = request('GET', headers => [ 'if-none-match' => $etag ]);
+    $self->assert_http_response(
+        { status => '304', headers => \%no_digest }, $res);
+
+    xlog $self, "a 416 with empty content: the digest of empty content";
+    $res = request('GET', headers => [ 'range' => 'bytes=100000-' ]);
+    $self->assert_http_response({
+        status  => '416',
+        headers => { 'content-digest' => $empty_digest,
+                     'content-md5'    => undef },
+    }, $res);
+
+    xlog $self, "a 204: no digest";
+    $res = request('DELETE');
+    $self->assert_http_response(
+        { status => '204', headers => \%no_digest }, $res);
+}

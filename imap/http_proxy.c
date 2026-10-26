@@ -1394,7 +1394,7 @@ EXPORTED int http_proxy_check_input(struct http_connection *conn,
 
                     if (c == 0 || c < 0) break;
                     if (pout == clientout)
-                        txn->conn->resp_body_chunk(txn, buf, c, 0, NULL);
+                        txn->conn->resp_body_chunk(txn, buf, c, 0);
                     else
                         prot_write(serverout, buf, c);
                 } while (pin->cnt > 0);
@@ -1405,7 +1405,7 @@ EXPORTED int http_proxy_check_input(struct http_connection *conn,
                         ptrarray_remove(pipes, idx);
 
                         /* send a "final" chunk to close the stream */
-                        txn->conn->resp_body_chunk(txn, NULL, 0, 1, NULL);
+                        txn->conn->resp_body_chunk(txn, NULL, 0, 1);
 
                         if (serverout) {
                             /* HTTP/1.x */
