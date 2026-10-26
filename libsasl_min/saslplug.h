@@ -48,7 +48,6 @@ typedef struct sasl_utils
 
     /* contexts */
     sasl_conn_t *conn;
-    sasl_rand_t *rpool;
     void *getopt_context;
 
     /* option function */
@@ -72,8 +71,6 @@ typedef struct sasl_utils
                   unsigned maxlen,
                   unsigned hostflag);
     int (*utf8verify)(const char *str, unsigned len);
-    void (*rand)(sasl_rand_t *rpool, char *buf, unsigned len);
-    void (*churn)(sasl_rand_t *rpool, const char *data, unsigned len);
 
     /* This allows recursive calls to the sasl_checkpass() routine from
      * within a SASL plug-in.  This MUST NOT be used in the PLAIN mechanism
