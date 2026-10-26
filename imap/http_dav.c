@@ -1046,11 +1046,11 @@ static bool eval_if(const char *hdr, struct meth_params *params,
                                 r = mailbox_open_irl(tag_tgt.mbentry->name,
                                                      &my_mailbox);
                                 if (r) {
-                                    syslog(LOG_NOTICE,
-                                           "failed to open mailbox '%s'"
-                                           " in tagged If header: %s",
-                                           tag_tgt.mbentry->name,
-                                           error_message(r));
+                                    xsyslog_ev(LOG_NOTICE,
+                                               "dav.if.mailbox.open.failed",
+                                               lf_intname("mbox.name",
+                                                   tag_tgt.mbentry->name),
+                                               lf_err("error", r));
                                 }
                                 mailbox = my_mailbox;
                             }
@@ -1083,13 +1083,12 @@ static bool eval_if(const char *hdr, struct meth_params *params,
                                                                           ddata->imap_uid,
                                                                           &record);
                                             if (r) {
-                                                syslog(LOG_NOTICE,
-                                                       "failed to fetch record for"
-                                                       " '%s':%u in tagged"
-                                                       " If header: %s",
-                                                       mailbox_name(mailbox),
-                                                       ddata->imap_uid,
-                                                       error_message(r));
+                                                xsyslog_ev(LOG_NOTICE,
+                                                    "dav.if.record.missing",
+                                                    lf_mailbox(mailbox),
+                                                    lf_u("msg.imapuid",
+                                                         ddata->imap_uid),
+                                                    lf_err("error", r));
                                             }
                                             else {
                                                 etag =
@@ -3007,7 +3006,7 @@ EXPORTED int propfind_quota(const xmlChar *name, xmlNsPtr ns,
         strcmp(fctx->quota.root, qr)) {
         /* Different quotaroot - read it */
 
-        syslog(LOG_DEBUG, "reading quota for '%s'", qr);
+        xsyslog_ev(LOG_DEBUG, "dav.quota.reading", lf_s("quota.root", qr));
 
         fctx->quota.root = strcpy(prevroot, qr);
 
@@ -3743,7 +3742,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
             else if ((pctx->txn->meth == METH_PROPPATCH) &&
                      !xmlStrcmp(instr->name, BAD_CAST "remove")) set = 0;
             else {
-                syslog(LOG_INFO, "Unknown PROPPATCH instruction");
+                xsyslog_ev(LOG_INFO, "dav.proppatch.instruction.unknown");
                 pctx->txn->error.desc = "Unknown PROPPATCH instruction";
                 return HTTP_BAD_REQUEST;
             }
@@ -3962,7 +3961,7 @@ int meth_acl(struct transaction_t *txn, void *params)
     /* Make sure method is allowed (only allowed on collections) */
     if (!(txn->req_tgt.allow & ALLOW_ACL)) {
         txn->error.desc = "ACLs can only be set on collections";
-        syslog(LOG_DEBUG, "Tried to set ACL on non-collection");
+        xsyslog_ev(LOG_DEBUG, "dav.acl.target.invalid");
         return HTTP_NOT_ALLOWED;
     }
 
@@ -4014,8 +4013,9 @@ int meth_acl(struct transaction_t *txn, void *params)
     r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
         if (r != IMAP_MAILBOX_REPLICAONLY)
-            syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                       lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                       lf_err("error", r));
         txn->error.desc = error_message(r);
         ret = http_status_for_write_error(r);
         goto done;
@@ -4282,8 +4282,9 @@ int meth_acl(struct transaction_t *txn, void *params)
         free(userid);
     }
     if (r) {
-        syslog(LOG_ERR, "mboxlist_setacls(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.acl.write.failed",
+                   lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                   lf_err("error", r));
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
@@ -4786,8 +4787,9 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     r = http_mailbox_open_w(dest_tgt.mbentry->name, &dest_mbox);
     if (r) {
         if (r != IMAP_MAILBOX_REPLICAONLY)
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   dest_tgt.mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                       lf_intname("mbox.name", dest_tgt.mbentry->name),
+                       lf_err("error", r));
         txn->error.desc = error_message(r);
         ret = http_status_for_write_error(r);
         goto done;
@@ -4830,9 +4832,11 @@ int meth_copy_move(struct transaction_t *txn, void *params)
         }
         if (r) {
             if (r != IMAP_MAILBOX_REPLICAONLY)
-                syslog(LOG_ERR, "mailbox_open_i%cl(%s) failed: %s",
-                       meth_move  ? 'w' : 'r',
-                       txn->req_tgt.mbentry->name, error_message(r));
+                xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                           lf_intname("mbox.name",
+                                      txn->req_tgt.mbentry->name),
+                           lf_b("mbox.readonly", !meth_move),
+                           lf_err("error", r));
             txn->error.desc = error_message(r);
             ret = http_status_for_write_error(r);
             goto done;
@@ -4922,8 +4926,10 @@ int meth_copy_move(struct transaction_t *txn, void *params)
                 /* Mapped URL */
                 src_rec.internal_flags |= FLAG_INTERNAL_EXPUNGED;
                 if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
-                    syslog(LOG_ERR, "expunging src record (%s) failed: %s",
-                           txn->req_tgt.mbentry->name, error_message(r));
+                    xsyslog_ev(LOG_ERR, "dav.record.expunge.failed",
+                               lf_intname("mbox.name",
+                                          txn->req_tgt.mbentry->name),
+                               lf_err("error", r));
                     txn->error.desc = error_message(r);
                     ret = HTTP_SERVER_ERROR;
                     goto done;
@@ -5012,8 +5018,9 @@ static int meth_delete_collection(struct transaction_t *txn,
                             httpd_userid, httpd_authstate);
         user_nslock_release(&user_nslock);
         if (r) {
-            syslog(LOG_ERR, "meth_delete(%s) failed to remove acl: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.acl.remove.failed",
+                       lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                       lf_err("error", r));
             txn->error.desc = error_message(r);
             return HTTP_SERVER_ERROR;
         }
@@ -5056,9 +5063,12 @@ static int meth_delete_collection(struct transaction_t *txn,
                                    txn->req_tgt.userid,
                                    httpd_authstate, 0 /* remove */, 0, 0, 0);
             if (r) {
-                syslog(LOG_ERR, "mboxlist_changesub(%s, %s) failed: %s",
-                       txn->req_tgt.mbentry->name, txn->req_tgt.userid,
-                       error_message(r));
+                xsyslog_ev(LOG_ERR, "dav.subscription.change.failed",
+                           lf_intname("mbox.name",
+                                      txn->req_tgt.mbentry->name),
+                           lf_s("u.username", txn->req_tgt.userid),
+                           lf_b("dav.subscribe", 0),
+                           lf_err("error", r));
                 txn->error.desc = error_message(r);
                 ret = HTTP_SERVER_ERROR;
             }
@@ -5068,9 +5078,10 @@ static int meth_delete_collection(struct transaction_t *txn,
             r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &mailbox);
             if (r) {
                 if (r != IMAP_MAILBOX_REPLICAONLY)
-                    syslog(LOG_ERR,
-                           "IOERROR: failed to open mailbox %s for DELETE share",
-                           txn->req_tgt.mbentry->name);
+                    xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                               lf_intname("mbox.name",
+                                          txn->req_tgt.mbentry->name),
+                               lf_err("error", r));
             }
             else {
                 annotate_state_t *astate = NULL;
@@ -5126,8 +5137,9 @@ static int meth_delete_collection(struct transaction_t *txn,
     /* Open mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                   lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                   lf_err("error", r));
         txn->error.desc = error_message(r);
         return HTTP_SERVER_ERROR;
     }
@@ -5260,8 +5272,9 @@ static int meth_delete_resource(struct transaction_t *txn,
     r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
         if (r != IMAP_MAILBOX_REPLICAONLY)
-            syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                       lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                       lf_err("error", r));
         txn->error.desc = error_message(r);
         return http_status_for_write_error(r);
     }
@@ -5319,8 +5332,9 @@ static int meth_delete_resource(struct transaction_t *txn,
         r = mailbox_rewrite_index_record(mailbox, &record);
 
         if (r) {
-            syslog(LOG_ERR, "expunging record (%s) failed: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.record.expunge.failed",
+                       lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                       lf_err("error", r));
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
         }
@@ -5441,8 +5455,9 @@ int meth_get_head(struct transaction_t *txn, void *params)
     /* Open mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                   lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -5619,8 +5634,9 @@ int meth_lock(struct transaction_t *txn, void *params)
     /* Open mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                   lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                   lf_err("error", r));
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
@@ -5771,8 +5787,7 @@ int meth_lock(struct transaction_t *txn, void *params)
 
     r = lparams->davdb.write_resourceLOCKONLY(davdb, ddata);
     if (r) {
-        syslog(LOG_ERR, "Unable to write lock record to DAV DB: %s",
-               error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.lock.write.failed", lf_err("error", r));
         ret = HTTP_SERVER_ERROR;
         txn->error.desc = "Unable to create locked resource";
         goto done;
@@ -6210,8 +6225,9 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     if (!fctx->mailbox) {
         /* Open mailbox for reading */
         if ((r = mailbox_open_irl(mboxname, &fctx->mailbox))) {
-            syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-                   mboxname, error_message(r));
+            xsyslog_ev(LOG_INFO, "dav.mailbox.open.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_err("error", r));
         }
     }
 
@@ -6372,8 +6388,9 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                 return HTTP_NOT_FOUND;
             }
             else if (r) {
-                syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-                       txn->req_tgt.mbentry->name, error_message(r));
+                xsyslog_ev(LOG_INFO, "dav.mailbox.open.failed",
+                           lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                           lf_err("error", r));
                 txn->error.desc = error_message(r);
                 return HTTP_SERVER_ERROR;
             }
@@ -6557,8 +6574,9 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
                 if ((r = mailbox_open_irl(txn->req_tgt.mbentry->name,
                                           &fctx.mailbox))
                     && r != IMAP_MAILBOX_NONEXISTENT) {
-                    syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-                           txn->req_tgt.mbentry->name, error_message(r));
+                    xsyslog_ev(LOG_INFO, "dav.mailbox.open.failed",
+                               lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                               lf_err("error", r));
                     txn->error.desc = error_message(r);
                     ret = HTTP_SERVER_ERROR;
                     goto done;
@@ -6737,8 +6755,9 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
         if (r != IMAP_MAILBOX_REPLICAONLY)
-            syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for proppatch",
-                   txn->req_tgt.mbentry->name);
+            xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                       lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                       lf_err("error", r));
         txn->error.desc = error_message(r);
         ret = http_status_for_write_error(r);
         goto done;
@@ -6755,7 +6774,7 @@ int meth_proppatch(struct transaction_t *txn, void *params)
 
     /* Add a response tree to 'root' for the specified href */
     resp = xmlNewChild(root, NULL, BAD_CAST "response", NULL);
-    if (!resp) syslog(LOG_ERR, "new child response failed");
+    if (!resp) xsyslog_ev(LOG_ERR, "dav.response.create.failed");
     xmlNewChild(resp, NULL, BAD_CAST "href", BAD_CAST txn->req_tgt.path);
 
     /* Populate our proppatch context */
@@ -6883,8 +6902,9 @@ static int dav_post_import(struct transaction_t *txn,
     if ((r = append_check(txn->req_tgt.mbentry->name, httpd_authstate,
                           ACL_INSERT, ignorequota ? NULL : qdiffs))) {
         if (r != IMAP_MAILBOX_REPLICAONLY)
-            syslog(LOG_ERR, "append_check(%s) failed: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.append.check.failed",
+                       lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                       lf_err("error", r));
         txn->error.desc = error_message(r);
         return http_status_for_write_error(r);
     }
@@ -6893,8 +6913,9 @@ static int dav_post_import(struct transaction_t *txn,
     r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
         if (r != IMAP_MAILBOX_REPLICAONLY)
-            syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                       lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                       lf_err("error", r));
         txn->error.desc = error_message(r);
         return http_status_for_write_error(r);
     }
@@ -7172,8 +7193,10 @@ int meth_put(struct transaction_t *txn, void *params)
         if ((r = append_check(txn->req_tgt.mbentry->name, httpd_authstate,
                               ACL_INSERT, ignorequota ? NULL : qdiffs))) {
             if (r != IMAP_MAILBOX_REPLICAONLY)
-                syslog(LOG_ERR, "append_check(%s) failed: %s",
-                       txn->req_tgt.mbentry->name, error_message(r));
+                xsyslog_ev(LOG_ERR, "dav.append.check.failed",
+                           lf_intname("mbox.name",
+                                      txn->req_tgt.mbentry->name),
+                           lf_err("error", r));
             txn->error.desc = error_message(r);
             return http_status_for_write_error(r);
         }
@@ -7189,8 +7212,9 @@ int meth_put(struct transaction_t *txn, void *params)
     r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
         if (r != IMAP_MAILBOX_REPLICAONLY)
-            syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                       lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                       lf_err("error", r));
         txn->error.desc = error_message(r);
         ret = http_status_for_write_error(r);
         goto done;
@@ -7444,8 +7468,9 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
                 /* Open mailbox for reading */
                 r = mailbox_open_irl(tgt.mbentry->name, &mailbox);
                 if (r && r != IMAP_MAILBOX_NONEXISTENT) {
-                    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-                           tgt.mbentry->name, error_message(r));
+                    xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                               lf_intname("mbox.name", tgt.mbentry->name),
+                               lf_err("error", r));
                     xml_add_response(fctx, HTTP_SERVER_ERROR,
                                      0, error_message(r), NULL);
                     goto next;
@@ -7463,7 +7488,8 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
             /* Open the DAV DB corresponding to the mailbox */
             fctx->davdb = rparams->davdb.open_db(fctx->mailbox);
             if (!fctx->davdb) {
-                syslog(LOG_ERR, "dav_open(%s) failed", mailbox_name(fctx->mailbox));
+                xsyslog_ev(LOG_ERR, "dav.db.open.failed",
+                           lf_mailbox(fctx->mailbox));
                 xml_add_response(fctx, HTTP_SERVER_ERROR,
                                  0, error_message(r), NULL);
                 goto next;
@@ -7574,8 +7600,9 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
     /* Open mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                   lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                   lf_err("error", r));
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
@@ -7603,9 +7630,12 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                            &uidvalidity, &syncmodseq, &basemodseq,
                            tokenuri /* test for trailing junk */);
 
-                syslog(LOG_DEBUG,
-                       "scanned token %s to %d %u " MODSEQ_FMT " " MODSEQ_FMT,
-                       str, r, uidvalidity, syncmodseq, basemodseq);
+                xsyslog_ev(LOG_DEBUG, "dav.synctoken.parsed",
+                           lf_s("dav.synctoken", (const char *) str),
+                           lf_d("dav.synctoken.fields", r),
+                           lf_u("dav.synctoken.uidvalidity", uidvalidity),
+                           lf_llu("dav.synctoken.modseq", syncmodseq),
+                           lf_llu("dav.synctoken.basemodseq", basemodseq));
                 /* Sanity check the token components */
                 if (r < 2 || r > 3 ||
                     (uidvalidity != mailbox->i.uidvalidity) ||
@@ -7818,8 +7848,9 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
             fctx->req_tgt->namespace->id != URL_NS_PRINCIPAL) {
             /* Open mailbox for reading */
             if ((r = mailbox_open_irl(fctx->req_tgt->mbentry->name, &mailbox))) {
-                syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-                       fctx->req_tgt->mbentry->name, error_message(r));
+                xsyslog_ev(LOG_INFO, "dav.mailbox.open.failed",
+                           lf_intname("mbox.name", fctx->req_tgt->mbentry->name),
+                           lf_err("error", r));
                 fctx->txn->error.desc = error_message(r);
                 ret = HTTP_SERVER_ERROR;
                 goto done;
@@ -8308,7 +8339,8 @@ int meth_report(struct transaction_t *txn, void *params)
             !xmlStrcmp(inroot->name, BAD_CAST report->name)) break;
     }
     if (!report || !report->name) {
-        syslog(LOG_WARNING, "REPORT %s", inroot->name);
+        xsyslog_ev(LOG_WARNING, "dav.report.unsupported",
+                   lf_s("dav.request.type", (const char *) inroot->name));
         /* DAV:supported-report */
         txn->error.precond = DAV_SUPP_REPORT;
         ret = HTTP_FORBIDDEN;
@@ -8536,8 +8568,9 @@ int meth_unlock(struct transaction_t *txn, void *params)
     /* Open mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                   lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                   lf_err("error", r));
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
@@ -8663,7 +8696,7 @@ static void my_dav_init(struct buf *serverinfo)
 
     /* Start construction of our server-info */
     if (!(root = init_xml_response("server-info", NS_DAV, NULL, ns))) {
-        syslog(LOG_ERR, "Unable to create server-info XML");
+        xsyslog_ev(LOG_ERR, "dav.serverinfo.create.failed");
         return;
     }
 
@@ -8736,7 +8769,7 @@ static void my_dav_init(struct buf *serverinfo)
     xmlFreeDoc(root->doc);
 
     if (!server_info) {
-        syslog(LOG_ERR, "Unable to dump server-info XML tree");
+        xsyslog_ev(LOG_ERR, "dav.serverinfo.dump.failed");
     }
 
     return;

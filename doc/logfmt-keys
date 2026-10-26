@@ -190,7 +190,12 @@ dav.owner               the user whose collection a request was for
 dav.precondition        the DAV precondition a response failed, as its element name
 dav.request.type        the PROPFIND mode or REPORT name a request body named
 dav.resource            the DAV resource within the collection
+dav.subscribe           1 if a subscription change is a subscribe, 0 an unsubscribe
 dav.synctoken           a DAV sync-token, as the client sent it
+dav.synctoken.basemodseq  the base modseq a sync-token names
+dav.synctoken.fields    how many components of a sync-token parsed
+dav.synctoken.modseq    the modseq a sync-token names
+dav.synctoken.uidvalidity  the uidvalidity a sync-token names
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
 http.auth.reset.reason  why the connection's authentication state was reset
 http.auth.response      1 if the credentials carried a client response
