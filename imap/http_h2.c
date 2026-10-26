@@ -94,13 +94,14 @@ static int begin_headers_cb(nghttp2_session *session,
         return 0;
     }
 
-    syslog(LOG_DEBUG, "http2_begin_headers_cb(id=%d, type=%d)",
-           frame->hd.stream_id, frame->hd.type);
+    xsyslog_ev(LOG_DEBUG, "http2.headers.started",
+               lf_d("http.stream.id", frame->hd.stream_id),
+               lf_u("http2.frame.type", frame->hd.type));
 
     /* Create header cache */
     hdrcache_t hdrs = spool_new_hdrcache();
     if (!hdrs) {
-        syslog(LOG_ERR, "Unable to create header cache");
+        xsyslog_ev(LOG_ERR, "http2.header.cache.failed");
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
 
@@ -166,7 +167,9 @@ static int header_cb(nghttp2_session *session,
     my_name = xstrndup((const char *) name, namelen);
     my_value = xstrndup((const char *) value, valuelen);
 
-    syslog(LOG_DEBUG, "http2_header_cb(%s: %s)", my_name, my_value);
+    xsyslog_ev(LOG_DEBUG, "http2.header.received",
+               lf_s("http.header.name", my_name),
+               lf_s("http.header.value", my_value));
 
     if (my_name[0] == ':') {
         switch (my_name[1]) {
@@ -206,8 +209,10 @@ static int data_chunk_recv_cb(nghttp2_session *session,
 
     if (!txn) return 0;
 
-    syslog(LOG_DEBUG, "http2_data_chunk_recv_cb(id=%d, len=%zu, txnflags=%#x)",
-           stream_id, len, txn->req_body.flags);
+    xsyslog_ev(LOG_DEBUG, "http2.data.received",
+               lf_d("http.stream.id", stream_id),
+               lf_zu("http2.bytes", len),
+               lf_llx("http.body.flags", txn->req_body.flags));
 
     if (txn->req_body.flags & BODY_DISCARD) return 0;
 
@@ -247,8 +252,10 @@ static int frame_recv_cb(nghttp2_session *session,
 
     ctx = (struct http2_context *) txn->conn->sess_ctx;
 
-    syslog(LOG_DEBUG, "http2_frame_recv_cb(id=%d, type=%d, flags=%#x)",
-           frame->hd.stream_id, frame->hd.type, frame->hd.flags);
+    xsyslog_ev(LOG_DEBUG, "http2.frame.received",
+               lf_d("http.stream.id", frame->hd.stream_id),
+               lf_u("http2.frame.type", frame->hd.type),
+               lf_llx("http2.frame.flags", frame->hd.flags));
 
     if ((txn->conn->logfd != -1) && (frame->hd.type <= NGHTTP2_HEADERS)) {
         /* telemetry log */
@@ -305,7 +312,8 @@ static int frame_recv_cb(nghttp2_session *session,
 
             if (txn->flags.conn & CONN_CLOSE) {
                 /* Issue RST_STREAM so that stream does not hang around. */
-                syslog(LOG_DEBUG, "nghttp2_submit_rst stream()");
+                xsyslog_ev(LOG_DEBUG, "http2.stream.reset",
+                           lf_d("http.stream.id", frame->hd.stream_id));
                 nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
                                           frame->hd.stream_id,
                                           NGHTTP2_NO_ERROR);
@@ -364,8 +372,9 @@ static int stream_close_cb(nghttp2_session *session, int32_t stream_id,
     struct transaction_t *txn =
         nghttp2_session_get_stream_user_data(session, stream_id);
 
-    syslog(LOG_DEBUG, "http2_stream_close_cb(id=%d): '%s'",
-           stream_id, nghttp2_http2_strerror(error_code));
+    xsyslog_ev(LOG_DEBUG, "http2.stream.closed",
+               lf_d("http.stream.id", stream_id),
+               lf_s("error", nghttp2_http2_strerror(error_code)));
 
     if (txn) {
         struct http2_context *http2_ctx =
@@ -394,8 +403,10 @@ static int frame_not_send_cb(nghttp2_session *session,
                              int lib_error_code,
                              void *user_data __attribute__((unused)))
 {
-    syslog(LOG_DEBUG, "http2_frame_not_send_cb(id=%d, type=%d, flags=%#x)",
-           frame->hd.stream_id, frame->hd.type, frame->hd.flags);
+    xsyslog_ev(LOG_DEBUG, "http2.frame.not_sent",
+               lf_d("http.stream.id", frame->hd.stream_id),
+               lf_u("http2.frame.type", frame->hd.type),
+               lf_llx("http2.frame.flags", frame->hd.flags));
 
     /* Issue RST_STREAM so that stream does not hang around. */
     nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
@@ -408,8 +419,10 @@ static int frame_send_cb(nghttp2_session *session __attribute__((unused)),
                          const nghttp2_frame *frame,
                          void *user_data __attribute__((unused)))
 {
-    syslog(LOG_DEBUG, "http2_frame_send_cb(id=%d, type=%d, flags=%#x)",
-           frame->hd.stream_id, frame->hd.type, frame->hd.flags);
+    xsyslog_ev(LOG_DEBUG, "http2.frame.sent",
+               lf_d("http.stream.id", frame->hd.stream_id),
+               lf_u("http2.frame.type", frame->hd.type),
+               lf_llx("http2.frame.flags", frame->hd.flags));
 
     return 0;
 }
@@ -418,8 +431,10 @@ static int begin_frame_cb(nghttp2_session *session __attribute__((unused)),
                          const nghttp2_frame_hd *hd,
                          void *user_data __attribute__((unused)))
 {
-    syslog(LOG_DEBUG, "http2_begin_frame_cb(id=%d, type=%d, flags=%#x)",
-           hd->stream_id, hd->type, hd->flags);
+    xsyslog_ev(LOG_DEBUG, "http2.frame.started",
+               lf_d("http.stream.id", hd->stream_id),
+               lf_u("http2.frame.type", hd->type),
+               lf_llx("http2.frame.flags", hd->flags));
 
     return 0;
 }
@@ -440,17 +455,22 @@ static void end_session(struct http_connection *conn,
     while ((stream_id = arrayu64_pop(&ctx->ws_ids))) {
         stream_close_cb(ctx->session, stream_id, err, conn);
 
-        syslog(LOG_DEBUG, "nghttp2_submit_rst stream()");
+        xsyslog_ev(LOG_DEBUG, "http2.stream.reset",
+                   lf_d("http.stream.id", stream_id));
         nghttp2_submit_rst_stream(ctx->session, NGHTTP2_FLAG_NONE, stream_id, err);
     }
 
-    syslog(LOG_DEBUG, "nghttp2_submit_goaway(%s)", msg);
+    xsyslog_ev(LOG_DEBUG, "http2.submitted",
+               lf_s("http2.call", "goaway"),
+               lf_s("http.close.reason", msg));
 
     stream_id = nghttp2_session_get_last_proc_stream_id(ctx->session);
     int r = nghttp2_submit_goaway(ctx->session, NGHTTP2_FLAG_NONE, stream_id, err,
                                   (const uint8_t *) msg, strlen(msg));
     if (r) {
-        syslog(LOG_ERR, "nghttp2_submit_goaway: %s", nghttp2_strerror(r));
+        xsyslog_ev(LOG_ERR, "http2.submit.failed",
+                   lf_s("http2.call", "goaway"),
+                   lf_s("error", nghttp2_strerror(r)));
     }
 }
 
@@ -487,24 +507,26 @@ static void http2_output(struct http_connection *conn)
             int r = prot_write(conn->pout, (const char *) data, nwrite);
 
             if (r) {
-                syslog(LOG_ERR, "prot_write(): %s", prot_error(conn->pout));
+                xsyslog_ev(LOG_WARNING, "http2.write.failed",
+                           lf_s_opt("error", prot_error(conn->pout)));
                 conn->close = 1;
                 break;
             }
             else {
-                syslog(LOG_DEBUG, "http2_output(): sent %zd bytes", nwrite);
+                xsyslog_ev(LOG_DEBUG, "http2.output.written",
+                           lf_zd("http2.bytes", nwrite));
             }
         }
 
         if (nwrite < 0) {
-            syslog(LOG_ERR,
-                   "nghttp2_session_mem_send2: %s", nghttp2_strerror(nwrite));
+            xsyslog_ev(LOG_ERR, "http2.send.failed",
+                       lf_s("error", nghttp2_strerror(nwrite)));
             conn->close = 1;
         }
     }
     else if (!nghttp2_session_want_read(ctx->session)) {
         /* We're done */
-        syslog(LOG_DEBUG, "closing connection");
+        xsyslog_ev(LOG_DEBUG, "http2.session.finished");
         conn->close = 1;
     }
 }
@@ -532,8 +554,9 @@ HIDDEN bool http2_init(struct http_connection *conn, struct buf *serverinfo)
 
     /* Setup HTTP/2 callbacks */
     if ((r = nghttp2_session_callbacks_new(&http2_callbacks))) {
-        syslog(LOG_WARNING,
-               "nghttp2_session_callbacks_new: %s", nghttp2_strerror(r));
+        xsyslog_ev(LOG_WARNING, "http2.init.failed",
+                   lf_s("http2.call", "session_callbacks_new"),
+                   lf_s("error", nghttp2_strerror(r)));
         return false;
     }
 
@@ -584,7 +607,7 @@ HIDDEN bool http2_preface(struct http_connection *conn)
 
         if (prot_lookahead(conn->pin,
                            NGHTTP2_CLIENT_MAGIC, NGHTTP2_CLIENT_MAGIC_LEN, &c)) {
-            syslog(LOG_DEBUG, "HTTP/2 client connection preface");
+            xsyslog_ev(LOG_DEBUG, "http2.preface.detected");
             return true;
         }
     }
@@ -597,9 +620,10 @@ static void begin_resp_headers(struct transaction_t *txn, long code)
 {
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
 
-    syslog(LOG_DEBUG,
-           "http2_begin_resp_headers(code = %ld, len = %ld, flags.te = %#x)",
-           code, txn->resp_body.len, txn->flags.te);
+    xsyslog_ev(LOG_DEBUG, "http2.resp_headers.started",
+               lf_d("http.status", atoi(error_message(code))),
+               lf_lu("http.body.length", txn->resp_body.len),
+               lf_llx("http.te.flags", txn->flags.te));
 
     strm->num_resp_hdrs = 0;
 
@@ -621,9 +645,11 @@ static void add_resp_header(struct transaction_t *txn,
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
 
     if (strm->num_resp_hdrs >= HTTP2_MAX_HEADERS) {
-        syslog(LOG_ERR, "add_resp_header(id=%d): dropping '%s' header,"
-                        " HTTP2_MAX_HEADERS (%d) reached",
-               strm->id, name, HTTP2_MAX_HEADERS);
+        xsyslog_ev(LOG_ERR, "http2.header.dropped",
+                   lf_d("http.stream.id", strm->id),
+                   lf_s("http.header.name", name),
+                   lf_s("limit.name", "HTTP2_MAX_HEADERS"),
+                   lf_d("limit.value", HTTP2_MAX_HEADERS));
         buf_free(value);
         return;
     }
@@ -668,9 +694,10 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     uint8_t flags = NGHTTP2_FLAG_END_STREAM;
     int r;
 
-    syslog(LOG_DEBUG,
-           "http2_end_resp_headers(code = %ld, len = %ld, flags.te = %#x)",
-           code, txn->resp_body.len, txn->flags.te);
+    xsyslog_ev(LOG_DEBUG, "http2.resp_headers.ended",
+               lf_d("http.status", atoi(error_message(code))),
+               lf_lu("http.body.length", txn->resp_body.len),
+               lf_llx("http.te.flags", txn->flags.te));
 
     if (txn->conn->logfd != -1) {
         /* telemetry log */
@@ -680,13 +707,16 @@ static int end_resp_headers(struct transaction_t *txn, long code)
     switch (code) {
     case 0:
         /* Trailer */
-        syslog(LOG_DEBUG, "%s(id=%d)", "nghttp2_submit_trailer", strm->id);
+        xsyslog_ev(LOG_DEBUG, "http2.submitted",
+                   lf_s("http2.call", "trailer"),
+                   lf_d("http.stream.id", strm->id));
 
         r = nghttp2_submit_trailer(ctx->session, strm->id,
                                    strm->resp_hdrs, strm->num_resp_hdrs);
         if (r) {
-            syslog(LOG_ERR, "%s: %s",
-                   "nghttp2_submit_trailer", nghttp2_strerror(r));
+            xsyslog_ev(LOG_ERR, "http2.submit.failed",
+                       lf_s("http2.call", "trailer"),
+                       lf_s("error", nghttp2_strerror(r)));
         }
 
         return r;
@@ -707,14 +737,17 @@ static int end_resp_headers(struct transaction_t *txn, long code)
         break;
     }
 
-    syslog(LOG_DEBUG, "%s(id=%d, flags=%#x)",
-           "nghttp2_submit headers", strm->id, flags);
+    xsyslog_ev(LOG_DEBUG, "http2.submitted",
+               lf_s("http2.call", "headers"),
+               lf_d("http.stream.id", strm->id),
+               lf_llx("http2.frame.flags", flags));
 
     r = nghttp2_submit_headers(ctx->session, flags, strm->id, NULL,
                                strm->resp_hdrs, strm->num_resp_hdrs, NULL);
     if (r) {
-        syslog(LOG_ERR, "%s: %s",
-               "nghttp2_submit headers", nghttp2_strerror(r));
+        xsyslog_ev(LOG_ERR, "http2.submit.failed",
+                   lf_s("http2.call", "headers"),
+                   lf_s("error", nghttp2_strerror(r)));
     }
 
     return r;
@@ -742,9 +775,12 @@ static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((un
     size_t remain = buf_len(&strm->body) - strm->body_off;
     size_t n = length < remain ? length : remain;
 
-    syslog(LOG_DEBUG,
-           "http2_data_source_read_cb(id=%d, len=%zu): remain=%zu, n=%zu, complete=%d",
-           stream_id, length, remain, n, strm->body_complete);
+    xsyslog_ev(LOG_DEBUG, "http2.data.provided",
+               lf_d("http.stream.id", stream_id),
+               lf_zu("http2.bytes.wanted", length),
+               lf_zu("http2.bytes", n),
+               lf_zu("http2.body.remaining", remain),
+               lf_b("http2.body.complete", strm->body_complete));
 
     if (!n) {
         if (!strm->body_complete) {
@@ -789,8 +825,9 @@ static int resp_body_chunk(struct transaction_t *txn,
     struct http2_context *ctx = (struct http2_context *) txn->conn->sess_ctx;
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
 
-    syslog(LOG_DEBUG, "http2_resp_data_chunk(datalen=%u, last=%d)",
-           datalen, last_chunk);
+    xsyslog_ev(LOG_DEBUG, "http2.chunk.queued",
+               lf_u("http.chunk.size", datalen),
+               lf_b("http.chunk.last", last_chunk));
 
     if (strm->body_failed) {
         /* A previous nghttp2 submission/resume already failed for this
@@ -849,12 +886,16 @@ static int resp_body_chunk(struct transaction_t *txn,
             .read_callback = data_source_read_cb
         };
 
-        syslog(LOG_DEBUG, "nghttp2_submit_data2(id=%d, flags=%#x)",
-               strm->id, flags);
+        xsyslog_ev(LOG_DEBUG, "http2.submitted",
+                   lf_s("http2.call", "data"),
+                   lf_d("http.stream.id", strm->id),
+                   lf_llx("http2.frame.flags", flags));
 
         int r = nghttp2_submit_data2(ctx->session, flags, strm->id, &prd);
         if (r) {
-            syslog(LOG_ERR, "nghttp2_submit_data2: %s", nghttp2_strerror(r));
+            xsyslog_ev(LOG_ERR, "http2.submit.failed",
+                       lf_s("http2.call", "data"),
+                       lf_s("error", nghttp2_strerror(r)));
             strm->body_failed = 1;
             return HTTP_SERVER_ERROR;
         }
@@ -865,8 +906,9 @@ static int resp_body_chunk(struct transaction_t *txn,
            Wake it now that there is more to send. */
         int r = nghttp2_session_resume_data(ctx->session, strm->id);
         if (r) {
-            syslog(LOG_ERR, "nghttp2_session_resume_data: %s",
-                   nghttp2_strerror(r));
+            xsyslog_ev(LOG_ERR, "http2.resume.failed",
+                       lf_d("http.stream.id", strm->id),
+                       lf_s("error", nghttp2_strerror(r)));
             strm->body_failed = 1;
             return HTTP_SERVER_ERROR;
         }
@@ -938,7 +980,9 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         }
         free(ctx);
 
-        syslog(LOG_WARNING, "%s: %s", func, nghttp2_strerror(r));
+        xsyslog_ev(LOG_WARNING, "http2.session.create.failed",
+                   lf_s("http2.call", func),
+                   lf_s("error", nghttp2_strerror(r)));
         return HTTP_SERVER_ERROR;
     }
 
@@ -951,8 +995,8 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         r = nghttp2_session_upgrade2(ctx->session, settings, settings_len,
                                      txn->meth == METH_HEAD, NULL);
         if (r) {
-            syslog(LOG_WARNING, "nghttp2_session_upgrade: %s",
-                   nghttp2_strerror(r));
+            xsyslog_ev(LOG_WARNING, "http2.upgrade.failed",
+                       lf_s("error", nghttp2_strerror(r)));
             return HTTP_BAD_REQUEST;
         }
 
@@ -985,7 +1029,9 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
 
     r = nghttp2_submit_settings(ctx->session, NGHTTP2_FLAG_NONE, iv, niv);
     if (r) {
-        syslog(LOG_ERR, "nghttp2_submit_settings: %s", nghttp2_strerror(r));
+        xsyslog_ev(LOG_ERR, "http2.submit.failed",
+                   lf_s("http2.call", "settings"),
+                   lf_s("error", nghttp2_strerror(r)));
         return HTTP_SERVER_ERROR;
     }
 
@@ -998,7 +1044,9 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         free(origin);
 
         if (r) {
-            syslog(LOG_ERR, "nghttp2_submit_altsvc: %s", nghttp2_strerror(r));
+            xsyslog_ev(LOG_ERR, "http2.submit.failed",
+                       lf_s("http2.call", "altsvc"),
+                       lf_s("error", nghttp2_strerror(r)));
             return HTTP_SERVER_ERROR;
         }
     }
@@ -1018,8 +1066,10 @@ HIDDEN void http2_input(struct http_connection *conn)
     nghttp2_error_code err = goaway ? NGHTTP2_REFUSED_STREAM : NGHTTP2_NO_ERROR;
     struct protstream *pin = conn->pin;
 
-    syslog(LOG_DEBUG, "http2_input()  goaway: %d, eof: %d, want read: %d",
-           goaway, prot_IS_EOF(pin), want_read);
+    xsyslog_ev(LOG_DEBUG, "http2.input.started",
+               lf_b("http2.goaway", goaway),
+               lf_b("http2.eof", prot_IS_EOF(pin)),
+               lf_b("http2.want_read", want_read));
 
     if (want_read && !goaway) {
         /* Read frame(s) */
@@ -1027,7 +1077,8 @@ HIDDEN void http2_input(struct http_connection *conn)
         int nread;
 
         while ((nread = prot_read(pin, data, PROT_BUFSIZE)) > 0) {
-            syslog(LOG_DEBUG, "http2_input(): read %d bytes", nread);
+            xsyslog_ev(LOG_DEBUG, "http2.input.read",
+                       lf_d("http2.bytes", nread));
 
             nghttp2_ssize r = nghttp2_session_mem_recv2(ctx->session,
                                                         (const uint8_t *) data,
@@ -1055,13 +1106,14 @@ HIDDEN void http2_input(struct http_connection *conn)
                 }
 
                 conn->close_str = nghttp2_strerror(r);
-                syslog(LOG_ERR,
-                       "nghttp2_session_mem_recv2: %s", conn->close_str);
+                xsyslog_ev(LOG_WARNING, "http2.receive.failed",
+                           lf_s("error", conn->close_str));
                 break;
             }
             else {
                 /* Successfully received frames */
-                syslog(LOG_DEBUG, "nghttp2_session_mem_recv2: %zd", r);
+                xsyslog_ev(LOG_DEBUG, "http2.input.consumed",
+                           lf_zd("http2.bytes", r));
 
                 /* Don't block next time (so we can submit output) */
                 prot_NONBLOCK(pin);
@@ -1070,7 +1122,7 @@ HIDDEN void http2_input(struct http_connection *conn)
 
         if (prot_IS_EOF(pin)) {
             /* Client closed connection */
-            syslog(LOG_DEBUG, "client closed connection");
+            xsyslog_ev(LOG_DEBUG, "http.connection.closed");
             nghttp2_session_terminate_session(ctx->session, NGHTTP2_NO_ERROR);
             conn->close = 1;
             return;

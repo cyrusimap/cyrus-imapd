@@ -198,6 +198,7 @@ http.auth.scheme        the auth scheme named in the client's credentials
 http.body.flags         the request body parser's flags, as a hex mask
 http.body.framing       how the request body is delimited, as a framing code
 http.body.length        the length of a response body being written, in bytes
+http.chunk.last         1 if this is the last chunk of the response body
 http.chunk.part         which piece of a chunked response was written
 http.chunk.size         the size of a response body chunk, in bytes
 http.client             the X-Client header, naming the client application
@@ -231,7 +232,7 @@ http.reqline.extra      anything the client sent after the version on the reques
 http.requested_with     the X-Requested-With header, naming the client application
 http.status             the HTTP status code of a response
 http.step               which step of a multi-step HTTP operation is being logged
-http.stream.id          the HTTP/2 stream a request arrived on
+http.stream.id          the HTTP/2 stream a request or frame belongs to
 http.te                 the TE header of a request
 http.te.flags           the transfer codings applied to a response, as a hex mask
 http.tls.required       1 if the connection must be under TLS before it is used
@@ -240,6 +241,16 @@ http.upgrade.flags      the protocols a request offered to upgrade to, as a hex 
 http.uri                the request target, as the client wrote it
 http.useragent          the User-Agent header, as the client sent it
 http.version            the HTTP version on the request-line, as the client wrote it
+http2.body.complete     1 if the whole response body has been generated
+http2.body.remaining    how much of the response body is still unsent, in bytes
+http2.bytes             how many bytes of HTTP/2 frames were moved
+http2.bytes.wanted      how many bytes nghttp2 asked the body provider for
+http2.call              which nghttp2 call an event is about, without its prefix
+http2.eof               1 if the client's end of the connection is at EOF
+http2.frame.flags       an HTTP/2 frame's flags, as a hex mask
+http2.frame.type        an HTTP/2 frame's type code
+http2.goaway            1 if the session is on its way out
+http2.want_read         1 if nghttp2 still wants to read from the client
 idle.client             the imapd an idled message is to or from
 idle.events             the mailbox events a client asked to hear about, as a mask
 idle.filter             the mailbox filter a client idles with
