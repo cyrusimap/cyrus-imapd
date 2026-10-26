@@ -16,8 +16,8 @@
 #include "dynarray.h"
 #include "hash.h"
 #include "http_client.h"
+#include "http_digest.h"
 #include "mailbox.h"
-#include "md5.h"
 #include "prometheus.h"
 #include "spool.h"
 
@@ -252,7 +252,8 @@ struct resp_body_t {
     } enc;                              /* Content-Encoding */
     const char *lang;                   /* Content-Language */
     const char *loc;                    /* Content-Location */
-    const u_char *md5;                  /* Content-MD5      */
+    struct http_digest *digest;         /* Content-Digest or Content-MD5 */
+    struct http_digest *unencoded;      /* Unencoded-Digest */
     const char *type;                   /* Content-Type     */
     const struct patch_doc_t *patch;    /* Accept-Patch     */
     unsigned prefs;                     /* Prefer           */
@@ -280,7 +281,7 @@ struct txn_flags_t {
     unsigned long cc       : 8;         /* Cache-Control directives for resp */
     unsigned long ranges   : 1;         /* Accept range requests for resource */
     unsigned long vary     : 6;         /* Headers on which response can vary */
-    unsigned long trailer  : 3;         /* Headers which will be in trailer */
+    unsigned long trailer  : 4;         /* Headers which will be in trailer */
     unsigned long redirect : 1;         /* CGI local redirect */
     unsigned long retry    : 1;         /* Retry-After */
     unsigned long early    : 1;         /* Request began as TLS early data */
@@ -310,7 +311,7 @@ struct http_connection {
     void (*add_resp_header)(txn_t *txn, const char *name, struct buf *value);
     int (*end_resp_headers)(txn_t *txn, long code);
     int (*resp_body_chunk)(txn_t *txn, const char *data, unsigned datalen,
-                           int last_chunk, MD5_CTX *md5ctx);
+                           int last_chunk);
 
     ptrarray_t reset_callbacks;         /* Array of functions to reset
                                            auxiliary connection contexts
@@ -436,9 +437,10 @@ enum {
 
 /* Trailer header flags */
 enum {
-    TRAILER_CMD5 =      (1<<0), /* Content-MD5 will be generated */
-    TRAILER_CTAG =      (1<<1), /* CTag will be returned */
-    TRAILER_PROXY =     (1<<2)  /* Trailer(s) will be proxied from origin */
+    TRAILER_CTAG =      (1<<0), /* CTag will be returned */
+    TRAILER_UNENCODED = (1<<1), /* Unencoded-Digest will be generated */
+    TRAILER_DIGEST =    (1<<2), /* Content-Digest/MD5 will be generated */
+    TRAILER_PROXY =     (1<<3), /* Trailer(s) will be proxied from origin */
 };
 
 typedef int (*premethod_proc_t)(struct transaction_t *txn);
@@ -546,8 +548,13 @@ void httpdate_gen(char *buf, size_t len, time_t t) __attribute__((nonnull));
 extern void simple_hdr(struct transaction_t *txn,
                        const char *name, const char *value, ...)
                       __attribute__((format(printf, 3, 4)));
-extern void content_md5_hdr(struct transaction_t *txn,
-                            const unsigned char *md5);
+/**
+ * Add the response's Content-Digest (RFC 9530) or Content-MD5 field
+ * (RFC 2616 Section 14.15), and its Unencoded-Digest field
+ * (draft-ietf-httpbis-unencoded-digest), each if it has a final digest.
+ */
+extern void digest_hdrs(struct transaction_t *txn);
+
 extern void comma_list_hdr(struct transaction_t *txn,
                            const char *hdr, const char *vals[],
                            unsigned flags, ...);
@@ -626,6 +633,6 @@ extern void http1_add_resp_header(struct transaction_t *txn,
 extern int http1_end_resp_headers(struct transaction_t *txn, long code);
 extern int http1_resp_body_chunk(struct transaction_t *txn,
                                  const char *data, unsigned datalen,
-                                 int last_chunk, MD5_CTX *md5ctx);
+                                 int last_chunk);
 
 #endif /* HTTPD_H */

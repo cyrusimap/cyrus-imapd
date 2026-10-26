@@ -13,6 +13,7 @@
 #include "caldav_db.h"
 #include "carddav_db.h"
 #include "http_jmap.h"
+#include "md5.h"
 #include "times.h"
 
 /* generated headers are not necessarily in current directory */

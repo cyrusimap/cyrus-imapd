@@ -47,6 +47,7 @@ struct http2_stream {
     int32_t id;                         /* Stream ID */
     size_t num_resp_hdrs;               /* Number of response headers */
     nghttp2_nv resp_hdrs[HTTP2_MAX_HEADERS]; /* Array of response headers */
+    bool copy_hdrs;                     /* nghttp2 must copy header values */
 
     /* Response body awaiting transmission.
      *
@@ -62,6 +63,10 @@ struct http2_stream {
     unsigned body_complete  : 1;        /* No further chunks are coming */
     unsigned body_deferred  : 1;        /* Provider parked, needs resuming */
     unsigned body_failed    : 1;        /* nghttp2 submit/resume failed */
+    unsigned trailer_pending : 1;       /* Send trailers at EOF */
+
+    /* CTag trailer value, kept until the provider reaches EOF */
+    char *ctag;
 };
 
 static nghttp2_session_callbacks *http2_callbacks = NULL;
@@ -75,6 +80,7 @@ static void stream_free(struct transaction_t *txn)
             int i;
 
             buf_free(&strm->body);
+            free(strm->ctag);
 
             for (i = 0; i < HTTP2_MAX_HEADERS; i++) {
                 free(strm->resp_hdrs[i].value);
@@ -296,6 +302,7 @@ static int frame_recv_cb(nghttp2_session *session,
             /* Tunnel - stream input to backend */
             prot_putbuf(txn->be->out, &txn->req_body.payload);
             prot_flush(txn->be->out);
+            buf_reset(&txn->req_body.payload);
             break;
         }
 
@@ -603,6 +610,10 @@ static void begin_resp_headers(struct transaction_t *txn, long code)
 
     strm->num_resp_hdrs = 0;
 
+    /* A 1xx response may still be queued when the next header block reuses
+       resp_hdrs, so nghttp2 must copy its values */
+    strm->copy_hdrs = code && code < HTTP_OK;
+
     if (txn->conn->logfd != -1) {
         /* telemetry log */
         struct buf *logbuf = &txn->conn->logbuf;
@@ -636,7 +647,8 @@ static void add_resp_header(struct transaction_t *txn,
         nv->name = (uint8_t *) name;
         nv->valuelen = buf_len(value);
         nv->value = (uint8_t *) buf_release(value);
-        nv->flags = NGHTTP2_NV_FLAG_NO_COPY_VALUE;
+        nv->flags = strm->copy_hdrs ? NGHTTP2_NV_FLAG_NONE
+                                    : NGHTTP2_NV_FLAG_NO_COPY_VALUE;
 
         strm->num_resp_hdrs++;
 
@@ -694,6 +706,7 @@ static int end_resp_headers(struct transaction_t *txn, long code)
 
     case HTTP_CONTINUE:
     case HTTP_PROCESSING:
+    case HTTP_EARLY_HINTS:
         /* Provisional response */
         flags = NGHTTP2_FLAG_NONE;
         break;
@@ -716,6 +729,10 @@ static int end_resp_headers(struct transaction_t *txn, long code)
         syslog(LOG_ERR, "%s: %s",
                "nghttp2_submit headers", nghttp2_strerror(r));
     }
+    else if (code < HTTP_OK) {
+        /* No body follows to push out a provisional response */
+        http2_output(txn->conn);
+    }
 
     return r;
 }
@@ -731,6 +748,29 @@ static int end_resp_headers(struct transaction_t *txn, long code)
    rather than waiting for the whole buffer to drain. */
 #define HTTP2_BODY_COMPACT_AT (64 * 1024)
 
+/* Trailers are submitted only here, at EOF: nghttp2 sends HEADERS ahead of
+   queued DATA, so submitting them earlier could end the stream before the
+   body, and the response HEADERS are now sent, freeing resp_hdrs for reuse */
+static void data_source_eof(struct transaction_t *txn, uint32_t *data_flags)
+{
+    struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
+
+    *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+
+    if (strm->trailer_pending) {
+        /* The trailing HEADERS ends the stream */
+        *data_flags |= NGHTTP2_DATA_FLAG_NO_END_STREAM;
+        strm->trailer_pending = 0;
+
+        begin_resp_headers(txn, 0);
+        if (txn->flags.trailer & (TRAILER_DIGEST | TRAILER_UNENCODED)) {
+            digest_hdrs(txn);
+        }
+        if (strm->ctag) simple_hdr(txn, "CTag", "%s", strm->ctag);
+        end_resp_headers(txn, 0);
+    }
+}
+
 static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((unused)),
                                          int32_t stream_id,
                                          uint8_t *buf, size_t length,
@@ -738,7 +778,8 @@ static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((un
                                          nghttp2_data_source *source,
                                          void *user_data __attribute__((unused)))
 {
-    struct http2_stream *strm = source->ptr;
+    struct transaction_t *txn = source->ptr;
+    struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
     size_t remain = buf_len(&strm->body) - strm->body_off;
     size_t n = length < remain ? length : remain;
 
@@ -755,7 +796,7 @@ static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((un
             return NGHTTP2_ERR_DEFERRED;
         }
 
-        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+        data_source_eof(txn, data_flags);
         return 0;
     }
 
@@ -763,7 +804,7 @@ static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((un
     strm->body_off += n;
 
     if (strm->body_complete && strm->body_off == buf_len(&strm->body)) {
-        *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+        data_source_eof(txn, data_flags);
     }
 
     /* Reclaim what has already been handed to nghttp2, so that a large
@@ -783,9 +824,8 @@ static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((un
 
 static int resp_body_chunk(struct transaction_t *txn,
                            const char *data, unsigned datalen,
-                           int last_chunk, MD5_CTX *md5ctx)
+                           int last_chunk)
 {
-    static unsigned char md5[MD5_DIGEST_LENGTH];
     struct http2_context *ctx = (struct http2_context *) txn->conn->sess_ctx;
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
 
@@ -817,19 +857,19 @@ static int resp_body_chunk(struct transaction_t *txn,
         retry_writev(txn->conn->logfd, iov, niov);
     }
 
-    if (txn->flags.te && (txn->flags.trailer & TRAILER_CMD5)) {
-        if (!last_chunk) {
-            if (datalen) MD5Update(md5ctx, data, datalen);
-        }
-        else {
-            MD5Final(md5, md5ctx);
-        }
-    }
-
     /* Our own copy -- see struct http2_stream's body comment for why we
      * can't just alias 'data' instead of copying it. */
     if (datalen) buf_appendmap(&strm->body, data, datalen);
-    if (last_chunk) strm->body_complete = 1;
+    if (last_chunk) {
+        strm->body_complete = 1;
+
+        if (txn->flags.trailer & ~TRAILER_PROXY) {
+            strm->trailer_pending = 1;
+            if (txn->flags.trailer & TRAILER_CTAG) {
+                strm->ctag = xstrdupnull(txn->resp_body.ctag);
+            }
+        }
+    }
 
     if (!strm->body_submitted) {
         /* nghttp2 accepts only one DATA submission per stream, so this runs
@@ -845,7 +885,7 @@ static int resp_body_chunk(struct transaction_t *txn,
         }
 
         nghttp2_data_provider2 prd = {
-            .source.ptr    = strm,
+            .source.ptr    = txn,
             .read_callback = data_source_read_cb
         };
 
@@ -875,15 +915,6 @@ static int resp_body_chunk(struct transaction_t *txn,
 
     /* Write frame(s) */
     http2_output(txn->conn);
-
-    if (last_chunk && (txn->flags.trailer & ~TRAILER_PROXY)) {
-        begin_resp_headers(txn, 0);
-        if (txn->flags.trailer & TRAILER_CMD5) content_md5_hdr(txn, md5);
-        if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
-            simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
-        }
-        end_resp_headers(txn, 0);
-    }
 
     return 0;
 }
