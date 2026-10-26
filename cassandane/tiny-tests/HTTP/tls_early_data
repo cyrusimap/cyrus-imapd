@@ -128,7 +128,9 @@ sub test_tls_early_data_large
     my @ok = $out =~ m{^HTTP/1\.1 200 }mg;
     $self->assert_num_equals($count, scalar @ok);
 
-    my @early = grep { m{"GET /\.well-known HTTP/1\.1".*\(early-data\)} }
+    my @early = grep { m{event=http\.request\.completed\b}
+                       && m{\shttp\.uri=/\.well-known\s}
+                       && m{\shttp\.early_data=1\b} }
                 $self->{instance}->getsyslog();
     $self->assert_num_equals($count, scalar @early);
 }
@@ -252,8 +254,14 @@ sub test_tls_early_data_http2
     # one of those has to wait
     my %status;
     for (@log) {
-        next unless m{"(\w+) \S+ HTTP/2".*? => "HTTP/2 (\d{3})[^"]*" \(stream-id=(\d+)(; early-data)?};
-        $status{$3} = $2 . ($4 ? ' early' : '');
+        next unless m{event=http\.request\.completed\b};
+
+        my ($stream) = m{\shttp\.stream\.id=(\d+)\b};
+        my ($code)   = m{\shttp\.status=(\d+)\b};
+        next unless defined $stream && defined $code;
+
+        my $early = m{\shttp\.early_data=1\b} ? ' early' : '';
+        $status{$stream} = "$code$early";
     }
     $self->assert_cmp_deeply({ 1 => '200 early',
                                 3 => '425 early',
