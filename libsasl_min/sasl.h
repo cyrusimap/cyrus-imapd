@@ -123,6 +123,14 @@
 
 #include <config.h>
 
+/* sasl_callback_t.proc is generic;
+ * going via void (*)(void) avoids -Wcast-function-type
+ *
+ * We always define this, even when using an external libsasl2, because
+ * the problem it solves is inherent to the API, not the implementation.
+ */
+#define SASL_CB_PROC_PTR  (int (*)(void)) (void (*)(void))
+
 #ifndef USE_INTERNAL_SASL
 #include <sasl/sasl.h>
 #else
