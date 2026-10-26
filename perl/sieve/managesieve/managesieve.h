@@ -7,6 +7,7 @@
 
 struct xscyrus {
     isieve_t *isieve;
+    sasl_callback_t *callbacks; /* outlives isieve, for referrals */
 
     char *errstr;               /* last error, if any */
 

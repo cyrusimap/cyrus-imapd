@@ -79,7 +79,7 @@ It provides the following functions.
 
 =over
 
-=item sieve_get_handle($servername, &username_cb, &authname_cb, &password_cb, &realm_cb)
+=item sieve_get_handle($servername, &username_cb, &authname_cb, &password_cb, &realm_cb [, $usetls, $cafile, $capath])
 
 Creates and returns a new Sieve object which can be used for communicating
 with the SIEVE server.  The server is connected to and a login sequence
@@ -117,6 +117,12 @@ C<"password">, or C<"realm"> respectively, and I<prompt> is a
 human-readable English language prompt string for the user's benefit.
 Each callback should return a string containing the required
 information.
+
+If I<usetls> is true, the connection is upgraded with STARTTLS before
+authenticating, and fails if the server doesn't offer it.  The server
+certificate must chain to the default trust store, or to the CA
+certificates in I<cafile> or the directory I<capath>, and must match
+I<servername>.
 
 The function will return I<undef> on error, use
 I<sieve_get_global_error> to get a description of the error.

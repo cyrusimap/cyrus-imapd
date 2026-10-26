@@ -1,0 +1,76 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Slurp;
+use File::Temp qw(tempdir);
+
+sub test_sieveshell_starttls
+    :needs_dependency_openssl :NoStartInstances
+    ($self)
+{
+    my $certdir = tempdir(CLEANUP => 1);
+    my $cert = "$certdir/cert.pem";
+    my $key = "$certdir/key.pem";
+    system('openssl', 'req', '-x509',
+           '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1',
+           '-nodes', '-keyout', $key, '-out', $cert, '-days', '1',
+           '-subj', '/CN=cassandane',
+           '-addext', 'subjectAltName=IP:127.0.0.1') == 0
+        or die "openssl req failed: $?";
+
+    $self->config_set(allowstarttls => 'on',
+                      tls_server_cert => $cert,
+                      tls_server_key => $key);
+    $self->_start_instances();
+
+    my $srv = $self->{instance}->get_service('sieve');
+    my $sieveshell = $self->{instance}->_find_binary('sieveshell');
+    my $basedir = $self->{instance}->get_basedir();
+    my $n = 0;
+
+    my $script = "$basedir/test1";
+    open my $fh, '>', $script or die "$script: $!";
+    print $fh "keep;\n";
+    close $fh;
+    my $commands = "put $script\nactivate test1\nlist\n";
+
+    my sub sieveshell ($host, @args) {
+        $n++;
+        my $out = "$basedir/sieveshell.$n.out";
+        my $failed = 0;
+        $self->{instance}->run_command({
+            perl_xs => 1,
+            redirects => { stdout => $out, stderr => $out },
+            handlers => { exited_abnormally => sub { $failed = 1 } },
+        }, $sieveshell, '-u', 'cassandane', '-a', 'cassandane',
+           '-p', 'test', '-e', $commands, @args, "$host:" . $srv->port());
+        return ($failed, slurp_file($out));
+    }
+
+    my $logins = qr/event=login\.good .*login\.tls=1/;
+    $self->{instance}->getsyslog();
+
+    my ($failed, $out) = sieveshell('127.0.0.1', '--tls', '--cafile', $cert);
+    $self->assert_num_equals(0, $failed);
+    $self->assert_does_not_match(qr/failed/, $out);
+    $self->assert_matches(qr/^test1\s+<- active script$/m, $out);
+    $self->assert_syslog_matches($self->{instance}, $logins);
+
+    # without --tls, nothing changes
+    ($failed, $out) = sieveshell('127.0.0.1');
+    $self->assert_num_equals(0, $failed);
+    $self->assert_matches(qr/^test1\s+<- active script$/m, $out);
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/event=login\.good .*login\.tls=0/);
+
+    # untrusted certificate
+    ($failed, $out) = sieveshell('127.0.0.1', '--tls');
+    $self->assert_num_equals(1, $failed);
+    $self->assert_matches(qr/TLS negotiation failed: self.signed/, $out);
+
+    # certificate not valid for the name connected to
+    ($failed, $out) = sieveshell('localhost', '--tls', '--cafile', $cert);
+    $self->assert_num_equals(1, $failed);
+    $self->assert_matches(qr/TLS negotiation failed: hostname mismatch/, $out);
+
+    $self->assert_syslog_does_not_match($self->{instance}, $logins);
+}

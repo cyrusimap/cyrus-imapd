@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Net::FakeManageSieve;
+
+sub test_managesieve_handle_fds
+    ($self)
+{
+    my $srv = Cassandane::Net::FakeManageSieve->new(
+        good => { LISTSCRIPTS => sub { qq{"s1" ACTIVE\r\nOK\r\n} } },
+    );
+
+    # Handles dropped with and without logging out first must both be freed.
+    my ($status, $out) = $srv->run_client($self->{instance}, <<'EOF', $srv->port('good'));
+$SIG{PIPE} = 'IGNORE';
+my ($port) = @ARGV;
+sub cb { 'cassandane' }
+sub nfds { opendir my $d, '/proc/self/fd'; scalar grep { /^\d+$/ } readdir $d }
+
+sub use_handle {
+    my ($logout) = @_;
+    my $h = sieve_get_handle("127.0.0.1:$port", "cb", "cb", "cb", "cb")
+        or die "login failed: " . sieve_get_global_error();
+    sieve_list($h, sub {}) == 0 or die "list failed";
+    sieve_logout($h) if $logout;
+}
+
+use_handle(0);
+use_handle(1);
+my $before = nfds();
+for (1..10) { use_handle(0); use_handle(1); }
+print "before=$before after=" . nfds() . "\n";
+EOF
+
+    $self->assert_matches(qr/^before=(\d+) after=\1$/m, $out);
+    $self->assert_str_equals('ok', $status);
+}
