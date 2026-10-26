@@ -1,0 +1,104 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_writeown_caldav_scheduleaddress
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $cal = $self->default_user->calendars->default;
+
+    my $caldav = $self->{caldav};
+
+    xlog "Create sharee user";
+    $self->{instance}->create_user("sharee");
+    my $service = $self->{instance}->get_service("http");
+    my $shareeCaldav = Net::CalDAVTalk->new(
+        user => "sharee",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "Share calendar with mayWriteOwn only";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $cal->id => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                            mayWriteOwn => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$cal->id});
+
+    xlog "Create event organized by the owner";
+    my $event = $cal->create_event({
+        title => 'cassowner',
+        participants => {
+            owner => {
+                roles => { owner => JSON::true, attendee => JSON::true },
+                calendarAddress => 'mailto:cassandane@example.com',
+            },
+            attendee => {
+                roles => { attendee => JSON::true },
+                calendarAddress => 'mailto:attendee@example.com',
+            },
+        },
+    });
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$event->id],
+            properties => ['x-href'],
+        }, 'R1'],
+    ]);
+    my $ownerHref = $res->[0][1]{list}[0]{'x-href'};
+    $self->assert_not_null($ownerHref);
+    my $href = ($ownerHref =~ s{/user/cassandane/Default/}
+                               {/user/sharee/cassandane.Default/}r);
+
+    xlog "Sharee fetches the owner's event";
+    $res = $shareeCaldav->SafeRequest('GET', $href, '');
+    $self->assert_num_equals(200, $res->{http_response}{status});
+
+    my $updatedIcal = ($res->{payload}{content} =~
+                       s{^SUMMARY:cassowner(\r?)$}{SUMMARY:cassownerChanged$1}mr);
+    $self->assert_matches(qr/^SUMMARY:cassownerChanged\r?$/m, $updatedIcal);
+
+    xlog "Baseline: update as sharee without Schedule-Address is forbidden";
+    $res = $shareeCaldav->SafeRequest('PUT', $href, $updatedIcal,
+        'Content-Type' => 'text/calendar');
+    $self->assert_num_equals(403, $res->{http_response}{status});
+
+    xlog "Baseline: delete as sharee without Schedule-Address is forbidden";
+    $res = $shareeCaldav->SafeRequest('DELETE', $href, '');
+    $self->assert_num_equals(403, $res->{http_response}{status});
+
+    xlog "Update as sharee claiming the owner's Schedule-Address is forbidden";
+    $res = $shareeCaldav->SafeRequest('PUT', $href, $updatedIcal,
+        'Content-Type' => 'text/calendar',
+        'Schedule-Address' => 'cassandane@example.com');
+    $self->assert_num_equals(403, $res->{http_response}{status});
+
+    xlog "Delete as sharee claiming the owner's Schedule-Address is forbidden";
+    $res = $shareeCaldav->SafeRequest('DELETE', $href, '',
+        'Schedule-Address' => 'cassandane@example.com');
+    $self->assert_num_equals(403, $res->{http_response}{status});
+
+    xlog "The owner's event must be unchanged";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$event->id],
+            properties => ['title'],
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('cassowner', $res->[0][1]{list}[0]{title});
+}

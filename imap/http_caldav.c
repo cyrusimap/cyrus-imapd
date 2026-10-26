@@ -1049,11 +1049,13 @@ static int caldav_check_precond(struct transaction_t *txn,
                 /* User may delete events with no organizer or where
                  * they are organizer. */
                 if (cdata->organizer) {
+                    /* Use the server-verified addresses, not the
+                     * client-asserted Schedule-Address override, to
+                     * decide whether this user counts as organizer */
                     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
-                    caldav_get_schedule_addresses(txn->req_hdrs,
-                                                  txn->req_tgt.mbentry->name,
-                                                  txn->req_tgt.userid,
-                                                  &schedule_addresses);
+                    get_schedule_addresses(txn->req_tgt.mbentry->name,
+                                           httpd_userid,
+                                           &schedule_addresses);
                     if (!strarray_contains(&schedule_addresses, cdata->organizer)) {
                         precond = HTTP_FORBIDDEN;
                     }

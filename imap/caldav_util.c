@@ -11,6 +11,7 @@
 #include "caldav_alarm.h"
 #include "caldav_db.h"
 #include "caldav_util.h"
+#include "calsched_support.h"
 #include "defaultalarms.h"
 #include "http_dav.h"
 #include "ical_support.h"
@@ -757,15 +758,30 @@ static int caldav_store_preprocess(struct transaction_t *txn,
     rights = cyrus_acl_myrights(authstate, mailbox_acl(mailbox));
     auth_freestate(authstate);
 
+    bool is_own_scheduling_resource = false;
+    if (cdata->dav.imap_uid && (rights & DACL_WRITEOWNRSRC)) {
+        if (!cdata->organizer) {
+            is_own_scheduling_resource = true;
+        }
+        else {
+            /* Verify against the server-stored addresses, not a
+             * client-asserted Schedule-Address override, since this
+             * decides whether to grant full property-update rights */
+            strarray_t verified_addresses = STRARRAY_INITIALIZER;
+            get_schedule_addresses(mailbox_name(mailbox), userid,
+                                   &verified_addresses);
+            is_own_scheduling_resource =
+                strarray_contains(&verified_addresses, cdata->organizer);
+            strarray_fini(&verified_addresses);
+        }
+    }
+
     if (rights & DACL_WRITECONT) {
         /* User has read-write access */
         allow_propupdates = propupdate_all;
     }
-    else if (cdata->dav.imap_uid && (rights & DACL_WRITEOWNRSRC) &&
-            (!cdata->organizer ||
-             (schedule_addresses &&
-              strarray_contains(schedule_addresses, cdata->organizer)))) {
-        /* User may update resource whey they are organizer */
+    else if (is_own_scheduling_resource) {
+        /* User may update resource when they are organizer */
         allow_propupdates = propupdate_all;
     }
     else {
