@@ -12,6 +12,8 @@
 #include "libsasl_min/saslutil.h"
 #include "libsasl_min/prop.h"
 
+#include <stdarg.h>
+
 #ifndef INLINE
 # define INLINE inline
 #endif
@@ -374,19 +376,22 @@ extern int _sasl_getcallback(sasl_conn_t *conn,
                              sasl_callback_ft *pproc,
                              void **pcontext);
 
-extern void _sasl_log(sasl_conn_t *conn, int level, const char *fmt, ...);
+extern void _sasl_log(sasl_conn_t *conn, int level, const char *fmt, ...)
+            __attribute__((format(printf, 3, 4)));
 
 void _sasl_get_errorbuf(sasl_conn_t *conn, char ***bufhdl, size_t **lenhdl);
-int _sasl_add_string(char **out,
-                     size_t *alloclen,
-                     size_t *outlen,
-                     const char *add);
 
 /* More Generic Utilities in common.c */
 extern int _sasl_strdup(const char *in, char **out, size_t *outlen);
 
 /* Basically a conditional call to realloc(), if we need more */
 int _buf_alloc(char **rwbuf, size_t *curlen, size_t newlen);
+
+/* Like vsprintf, but sasl_ALLOC an appropriately sized destination buffer,
+ * which caller must sasl_FREE.
+ */
+extern int _vmprintf(char **pbuf, const char *fmt, va_list args)
+           __attribute__((format(printf, 2, 0)));
 
 /* convert an iovec to a single buffer */
 int _iovec_to_buf(const struct iovec *vec,
