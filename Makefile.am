@@ -352,9 +352,7 @@ lib_libsasl_min_la_SOURCES = \
     libsasl_min/plugin_common.c \
     libsasl_min/plugin_common.h
 
-lib_libsasl_min_la_CFLAGS = \
-    $(AM_CFLAGS) $(CFLAG_VISIBILITY) \
-    -Wno-cast-function-type
+lib_libsasl_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib_libsasl_min_la_LIBADD =
 
