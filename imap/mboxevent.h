@@ -112,6 +112,8 @@ enum event_param {
     EVENT_MESSAGE_THREADID,
     EVENT_JMAP_EMAIL,
     EVENT_JMAP_STATES,
+    EVENT_SPECIAL_USE,
+    EVENT_OLD_SPECIAL_USE,
     EVENT_CALENDAR_ALARM_TIME,
     EVENT_CALENDAR_ALARM_RECIPIENTS,
     EVENT_CALENDAR_ALERTID,
@@ -294,6 +296,13 @@ void mboxevent_set_access(struct mboxevent *event,
  *                the reference.
  */
 void mboxevent_set_metadata_entries(struct mboxevent *event, json_t *entries);
+
+/**
+ * Fill vnd.fastmail.specialUse from the named mailbox's current /specialuse
+ * annotation, for events built without an open mailbox.  Does nothing if
+ * the event doesn't expect the parameter or the mailbox has no special-use.
+ */
+void mboxevent_set_specialuse(struct mboxevent *event, const char *mboxname);
 
 void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
                            const char *rights);

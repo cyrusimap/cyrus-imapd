@@ -118,6 +118,8 @@ static struct mboxevent event_template =
     { EVENT_MESSAGE_THREADID, "vnd.cmu.threadid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_JMAP_EMAIL, "vnd.fastmail.jmapEmail", EVENT_PARAM_JSON, { 0 }, 0 },
     { EVENT_JMAP_STATES, "vnd.fastmail.jmapStates", EVENT_PARAM_JSON, { 0 }, 0 },
+    { EVENT_SPECIAL_USE, "vnd.fastmail.specialUse", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_OLD_SPECIAL_USE, "vnd.fastmail.oldSpecialUse", EVENT_PARAM_STRING, { 0 }, 0 },
 
     /* calendar params for calalarmd/notifyd */
     { EVENT_CALENDAR_ALARM_TIME, "alarmTime", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -268,46 +270,67 @@ EXPORTED void mboxevent_setnamespace(struct namespace *n)
     namespace.isalt = 0;
 }
 
-static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
+/* Hand back a looked-up annotation value as an owned string, or NULL if
+ * there was none */
+static char *specialuse_release(struct buf *attrib)
+{
+    if (buf_len(attrib)) return buf_release(attrib);
+
+    buf_free(attrib);
+    return NULL;
+}
+
+/* Return the space-separated value of the mailbox's /specialuse annotation
+ * (e.g. "\Trash"), or NULL if it has none.
+ *
+ * This looks up by the open mailbox rather than by name, because the old
+ * mailbox of a rename has no mboxlist entry under its old name by the time
+ * its event is built, so a by-name lookup would find nothing. */
+static char *mboxevent_mailbox_specialuse(const struct mailbox *mailbox)
 {
     struct buf attrib = BUF_INITIALIZER;
-    char *userid = NULL;
-    strarray_t *specialuse = NULL;
-    int enabled = 1;
-    int i = 0;
-    int r = 0;
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
 
+    annotatemore_lookup_mbox(mailbox, "/specialuse", userid, &attrib);
+    free(userid);
+
+    return specialuse_release(&attrib);
+}
+
+/* As mboxevent_mailbox_specialuse(), for a mailbox that isn't open */
+static char *mboxevent_mboxname_specialuse(const char *mboxname)
+{
+    struct buf attrib = BUF_INITIALIZER;
+    char *userid = mboxname_to_userid(mboxname);
+
+    annotatemore_lookup(mboxname, "/specialuse", userid, &attrib);
+    free(userid);
+
+    return specialuse_release(&attrib);
+}
+
+/* Return true if any of the mailbox's special-use attributes, given as the
+ * value of its /specialuse annotation, is in the event_exclude_specialuse
+ * list.  A NULL value means the mailbox has none. */
+static bool mboxevent_specialuse_excluded(const char *specialuse)
+{
+    if (!specialuse) return false;
+
+    strarray_t *uses = strarray_split(specialuse, NULL, 0);
+    bool excluded = strarray_intersect(uses, excluded_specialuse);
+    strarray_free(uses);
+    return excluded;
+}
+
+static bool mboxevent_enabled_for_mailbox(const struct mailbox *mailbox,
+                                          const char *specialuse)
+{
     init_internal();
 
-    if (!enable_subfolder && !mboxname_isusermailbox(mailbox_name(mailbox), 1)) {
-        enabled = 0;
-        goto done;
-    }
+    if (!enable_subfolder && !mboxname_isusermailbox(mailbox_name(mailbox), 1))
+        return false;
 
-    /* test if the mailbox has a special-use attribute in the exclude list */
-    if (strarray_size(excluded_specialuse) > 0) {
-        userid = mboxname_to_userid(mailbox_name(mailbox));
-
-        r = annotatemore_lookup_mbox(mailbox, "/specialuse", userid, &attrib);
-        if (r) goto done; /* XXX - return -1?  Failure? */
-
-        /* get info and set flags */
-        specialuse = strarray_split(buf_cstring(&attrib), NULL, 0);
-
-        for (i = 0; i < strarray_size(specialuse) ; i++) {
-            const char *attribute = strarray_nth(specialuse, i);
-            if (strarray_contains(excluded_specialuse, attribute)) {
-                enabled = 0;
-                goto done;
-            }
-        }
-    }
-
-done:
-    strarray_free(specialuse);
-    buf_free(&attrib);
-    free(userid);
-    return enabled;
+    return !mboxevent_specialuse_excluded(specialuse);
 }
 
 EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
@@ -598,6 +621,15 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
          * available for events that carry a mailbox. */
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPSTATES) &&
                (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS));
+    case EVENT_SPECIAL_USE:
+        /* MailboxCreate can't give us this one, because the value isn't
+         * available yet. */
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SPECIALUSE) &&
+               (type & (((MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS) & ~EVENT_MAILBOX_CREATE)
+                        | EVENT_MAILBOX_METADATA_CHANGE));
+    case EVENT_OLD_SPECIAL_USE:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SPECIALUSE) &&
+               (type & (EVENT_MESSAGE_COPY|EVENT_MESSAGE_MOVE|EVENT_MAILBOX_RENAME));
     case EVENT_MESSAGES:
         if (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN))
             return 1;
@@ -1019,6 +1051,17 @@ EXPORTED void mboxevent_set_metadata_entries(struct mboxevent *event,
     if (event->params[EVENT_METADATA_ENTRIES].filled)
         json_decref(event->params[EVENT_METADATA_ENTRIES].value.j);
     FILL_JSON_PARAM(event, EVENT_METADATA_ENTRIES, entries);
+}
+
+EXPORTED void mboxevent_set_specialuse(struct mboxevent *event,
+                                       const char *mboxname)
+{
+    if (!event) return;
+    if (!mboxevent_expected_param(event->type, EVENT_SPECIAL_USE)) return;
+
+    char *specialuse = mboxevent_mboxname_specialuse(mboxname);
+    if (specialuse)
+        FILL_STRING_PARAM(event, EVENT_SPECIAL_USE, specialuse);
 }
 
 EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
@@ -1794,8 +1837,16 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     if (event->params[EVENT_URI].filled)
         return;
 
+    /* one annotation lookup for both the exclusion check and the
+     * specialUse event param */
+    bool want_specialuse = mboxevent_expected_param(event->type, EVENT_SPECIAL_USE);
+    char *specialuse = NULL;
+    if (want_specialuse || strarray_size(excluded_specialuse))
+        specialuse = mboxevent_mailbox_specialuse(mailbox);
+
     /* verify if event notification should be disabled for this mailbox  */
-    if (!mboxevent_enabled_for_mailbox(mailbox)) {
+    if (!mboxevent_enabled_for_mailbox(mailbox, specialuse)) {
+        free(specialuse);
         event->type = EVENT_CANCELLED;
         return;
     }
@@ -1827,6 +1878,11 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 
     FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox_acl(mailbox)));
     FILL_STRING_PARAM(event, EVENT_VISIBLE_USERS, mailbox_visible_users(mailbox));
+
+    if (want_specialuse && specialuse)
+        FILL_STRING_PARAM(event, EVENT_SPECIAL_USE, specialuse);
+    else
+        free(specialuse);
 
     /* mailbox related events also require mailboxID and mailboxUniqueId */
     if (event->type & MAILBOX_EVENTS) {
@@ -1917,6 +1973,13 @@ void mboxevent_extract_old_mailbox(struct mboxevent *event,
     FILL_STRING_PARAM(event, EVENT_OLD_MAILBOX_ID, buf_release(&url));
 
     free(extname);
+
+    /* add the old mailbox's special-use attributes if it has any */
+    if (mboxevent_expected_param(event->type, EVENT_OLD_SPECIAL_USE)) {
+        char *specialuse = mboxevent_mailbox_specialuse(mailbox);
+        if (specialuse)
+            FILL_STRING_PARAM(event, EVENT_OLD_SPECIAL_USE, specialuse);
+    }
 }
 
 EXPORTED void mboxevent_set_client_id(const char *id)
@@ -2153,6 +2216,10 @@ static int filled_params(enum event_type type, struct mboxevent *event)
                  * messages */
                 if (!event->uidset || (seqset_first(event->uidset) == seqset_last(event->uidset)))
                     buf_appendcstr(&missing, " modseq");
+                break;
+            case EVENT_SPECIAL_USE:
+            case EVENT_OLD_SPECIAL_USE:
+                /* only included if the mailbox has a special-use attribute */
                 break;
             default:
                 buf_appendcstr(&missing, " ");

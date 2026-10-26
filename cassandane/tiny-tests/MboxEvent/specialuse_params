@@ -1,0 +1,118 @@
+#!perl
+use Cassandane::Tiny;
+
+# Asserts that events carry the special-use attributes of the mailbox they
+# refer to (vnd.fastmail.specialUse) and, for copy, move and rename events,
+# of the source mailbox (vnd.fastmail.oldSpecialUse).  Both parameters are
+# omitted when the mailbox has no special-use attribute, and MailboxCreate
+# never carries one: the annotation is only written once the mailbox exists.
+# MailboxMetadataChange reports the value after the change, so it is the
+# event that announces a special-use being set or removed.
+
+sub test_specialuse_params
+    ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+
+    my sub assert_ok ($desc) {
+        $self->assert_str_equals('ok',
+            $imaptalk->get_last_completion_response(), $desc);
+    }
+
+    # Drains the pending events, finds the one named in $arg->{event}, and
+    # checks each special-use parameter against $arg: a string must match,
+    # and undef means the parameter must be absent.
+    my sub assert_event_specialuse ($desc, $arg) {
+        my @events = map { decode_json($_->{MESSAGE}) }
+                         $self->{instance}->getnotify->@*;
+        my @matches = grep { $_->{event} eq $arg->{event} } @events;
+        $self->assert_num_equals(1, scalar @matches,
+            "$desc: expected exactly one $arg->{event} event");
+
+        for my $key (qw(specialUse oldSpecialUse)) {
+            my $param = "vnd.fastmail.$key";
+            if (defined $arg->{$key}) {
+                $self->assert_str_equals($arg->{$key},
+                    $matches[0]{$param} // '<absent>', "$desc: $param");
+            }
+            else {
+                $self->assert(!exists $matches[0]{$param},
+                    "$desc: $param should be absent");
+            }
+        }
+    }
+
+    $self->{instance}->getnotify();
+    $imaptalk->create("Trash");
+    assert_ok("create Trash");
+    assert_event_specialuse("create", {
+        event         => 'MailboxCreate',
+        specialUse    => undef,
+        oldSpecialUse => undef,
+    });
+
+    $imaptalk->setmetadata("Trash", "/private/specialuse", "\\Trash");
+    assert_ok("set specialuse on Trash");
+    assert_event_specialuse("set specialuse", {
+        event         => 'MailboxMetadataChange',
+        specialUse    => "\\Trash",
+        oldSpecialUse => undef,
+    });
+
+    $self->make_message("Message A");
+    $self->{instance}->getnotify();
+
+    $imaptalk->select("INBOX");
+    $imaptalk->copy("1", "Trash");
+    assert_ok("copy INBOX -> Trash");
+    assert_event_specialuse("copy to Trash", {
+        event         => 'vnd.cmu.MessageCopy',
+        specialUse    => "\\Trash",
+        oldSpecialUse => undef,
+    });
+
+    $imaptalk->select("Trash");
+    $imaptalk->copy("1", "INBOX");
+    assert_ok("copy Trash -> INBOX");
+    assert_event_specialuse("copy from Trash", {
+        event         => 'vnd.cmu.MessageCopy',
+        specialUse    => undef,
+        oldSpecialUse => "\\Trash",
+    });
+
+    $imaptalk->store('1', '+flags', '(\\Flagged)');
+    assert_ok("flag message in Trash");
+    assert_event_specialuse("flags set in Trash", {
+        event         => 'FlagsSet',
+        specialUse    => "\\Trash",
+        oldSpecialUse => undef,
+    });
+
+    $imaptalk->select("INBOX");
+    $imaptalk->move("2", "Trash");
+    assert_ok("move INBOX -> Trash");
+    assert_event_specialuse("move to Trash", {
+        event         => 'vnd.cmu.MessageMove',
+        specialUse    => "\\Trash",
+        oldSpecialUse => undef,
+    });
+
+    $imaptalk->unselect();
+    $imaptalk->rename("Trash", "Bin");
+    assert_ok("rename Trash -> Bin");
+    assert_event_specialuse("rename", {
+        event         => 'MailboxRename',
+        specialUse    => "\\Trash",
+        oldSpecialUse => "\\Trash",
+    });
+
+    $imaptalk->setmetadata("Bin", "/private/specialuse", undef);
+    assert_ok("remove specialuse from Bin");
+    assert_event_specialuse("remove specialuse", {
+        event         => 'MailboxMetadataChange',
+        specialUse    => undef,
+        oldSpecialUse => undef,
+    });
+
+    $imaptalk->logout();
+}
