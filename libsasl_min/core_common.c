@@ -19,6 +19,14 @@
 #include <syslog.h>
 #include <unistd.h>
 
+/* SASL callbacks need a lot of nasty casting.  Mark the intentional ones
+ * with a bounce through void(*)(void) so they don't warn, and then we
+ * don't need to suppress the warning everywhere.
+ *
+ * See also SASL_CB_PROC_PTR in sasl.h
+ */
+#define PROC_CAST(t) (t *) (void (*)(void))
+
 /* It turns out to be convenient to have a shared sasl_utils_t */
 const sasl_utils_t *sasl_global_utils = NULL;
 
@@ -1435,12 +1443,12 @@ static int _sasl_global_getopt(void *context,
                 if (!callback->proc) {
                     return SASL_FAIL;
                 }
-                if (((sasl_getopt_t *) (callback->proc))(callback->context,
-                                                         plugin_name,
-                                                         option,
-                                                         result,
-                                                         len)
-                    == SASL_OK)
+                sasl_getopt_t *proc = PROC_CAST(sasl_getopt_t) callback->proc;
+                if (SASL_OK == proc(callback->context,
+                                    plugin_name,
+                                    option,
+                                    result,
+                                    len))
                 {
                     return SASL_OK;
                 }
@@ -1479,13 +1487,13 @@ static int _sasl_conn_getopt(void *context,
         for (callback = conn->callbacks; callback->id != SASL_CB_LIST_END;
              callback++)
         {
+            sasl_getopt_t *proc = PROC_CAST(sasl_getopt_t) callback->proc;
             if (callback->id == SASL_CB_GETOPT
-                && (((sasl_getopt_t *) (callback->proc))(callback->context,
-                                                         plugin_name,
-                                                         option,
-                                                         result,
-                                                         len)
-                    == SASL_OK))
+                && SASL_OK == (proc(callback->context,
+                                    plugin_name,
+                                    option,
+                                    result,
+                                    len)))
             {
                 return SASL_OK;
             }
@@ -1636,11 +1644,11 @@ EXPORTED int _sasl_getcallback(sasl_conn_t *conn,
         INTERROR(conn, SASL_FAIL);
     case SASL_CB_GETOPT:
         if (conn) {
-            *pproc = (sasl_callback_ft) &_sasl_conn_getopt;
+            *pproc = SASL_CB_PROC_PTR &_sasl_conn_getopt;
             *pcontext = conn;
         }
         else {
-            *pproc = (sasl_callback_ft) &_sasl_global_getopt;
+            *pproc = SASL_CB_PROC_PTR &_sasl_global_getopt;
             *pcontext = NULL;
         }
         return SASL_OK;
@@ -1688,19 +1696,19 @@ EXPORTED int _sasl_getcallback(sasl_conn_t *conn,
     /* Otherwise, see if the library provides a default callback. */
     switch (callbackid) {
     case SASL_CB_LOG:
-        *pproc = (sasl_callback_ft) &_sasl_syslog;
+        *pproc = SASL_CB_PROC_PTR &_sasl_syslog;
         *pcontext = conn;
         return SASL_OK;
     case SASL_CB_AUTHNAME:
-        *pproc = (sasl_callback_ft) &_sasl_getsimple;
+        *pproc = SASL_CB_PROC_PTR &_sasl_getsimple;
         *pcontext = conn;
         return SASL_OK;
     case SASL_CB_VERIFYFILE:
-        *pproc = (sasl_callback_ft) &_sasl_verifyfile;
+        *pproc = SASL_CB_PROC_PTR &_sasl_verifyfile;
         *pcontext = NULL;
         return SASL_OK;
     case SASL_CB_PROXY_POLICY:
-        *pproc = (sasl_callback_ft) &_sasl_proxy_policy;
+        *pproc = SASL_CB_PROC_PTR &_sasl_proxy_policy;
         *pcontext = NULL;
         return SASL_OK;
     }
@@ -2063,7 +2071,7 @@ EXPORTED const sasl_callback_t *_sasl_find_verifyfile_callback(
 {
     static const sasl_callback_t default_verifyfile_cb = {
         SASL_CB_VERIFYFILE,
-        (sasl_callback_ft) &_sasl_verifyfile,
+        SASL_CB_PROC_PTR &_sasl_verifyfile,
         NULL
     };
 
