@@ -4,11 +4,8 @@ use warnings FATAL => 'all';
 package Text::JSCalendar;
 
 use Carp;
-use Data::ICal;
-use Data::ICal::Entry::Event;
+use Cassandane::Util::ICalendar qw(ical2hash);
 use Data::ICal::TimeZone;
-use Data::ICal::Entry::Alarm::Email;
-use Data::ICal::Entry::Alarm::Display;
 use DateTime::Format::ICal;
 use DateTime::TimeZone;
 use JSON::XS qw(encode_json);
@@ -23,24 +20,6 @@ use Data::Dumper;
 use JSON;
 
 use Text::JSCalendar::TimeZones;
-
-# monkey patch like a bandit
-BEGIN {
-  my @alarm_properties = Data::ICal::Entry::Alarm::optional_unique_properties();
-  foreach my $want (qw(uid acknowledged)) {
-    push @alarm_properties, $want unless grep { $_ eq $want } @alarm_properties;
-  }
-  no warnings 'redefine';
-  *Data::ICal::Entry::Alarm::optional_unique_properties = sub { @alarm_properties };
-
-  # Suppress warnings for properties not known to Data::ICal::Entry::Event
-  my $orig_warn = $SIG{__WARN__};
-  $SIG{__WARN__} = sub {
-    return if $_[0] =~ /^Unknown property for Data::ICal::Entry::/;
-    if ($orig_warn) { $orig_warn->(@_) }
-    else { warn @_ }
-  };
-}
 
 our $UTC = DateTime::TimeZone::UTC->new();
 our $FLOATING = DateTime::TimeZone::Floating->new();
@@ -1657,10 +1636,9 @@ sub _argsToVEvents {
   my $is_task = $type eq 'jstask' || $type eq 'Task';
   my $VEvent;
   if ($is_task) {
-    eval { require Data::ICal::Entry::Todo };
-    $VEvent = Data::ICal::Entry::Todo->new();
+    $VEvent = Text::JSCalendar::Component->new('vtodo');
   } else {
-    $VEvent = Data::ICal::Entry::Event->new();
+    $VEvent = Text::JSCalendar::Component->new('vevent');
   }
 
   # required properties
@@ -1817,8 +1795,9 @@ sub _argsToVEvents {
       my $VAlarm;
 
       if ($Type eq 'display') {
-        $VAlarm = Data::ICal::Entry::Alarm::Display->new();
+        $VAlarm = Text::JSCalendar::Component->new('valarm');
         $VAlarm->add_properties(
+          action      => 'DISPLAY',
           description => (($Sign eq '-')
             ? "'$Args->{title}' $Loc1 in $Minutes minutes"
             : "'$Args->{title}' $Loc2 $Minutes minutes ago"),
@@ -1836,8 +1815,9 @@ sub _argsToVEvents {
           $Description = "Your event '$Args->{title}' $Loc2 $Minutes minutes ago";
         }
 
-        $VAlarm = Data::ICal::Entry::Alarm::Email->new();
+        $VAlarm = Text::JSCalendar::Component->new('valarm');
         $VAlarm->add_properties(
+          action      => 'EMAIL',
           summary     => $Summary,
           attendee    => 'mailto:',  # XXX - name?
           description => join("\n",
@@ -2021,29 +2001,30 @@ sub _argsToVCalendar {
   my $Item = shift;
   my %ExtraProp = @_;
 
-  my $VCalendar = Data::ICal->new();
-  my $havepid = 0;
+  my $VCalendar = Text::JSCalendar::Component->new('vcalendar');
+  my $ProdId;
 
   foreach my $extra (keys %ExtraProp) {
     $VCalendar->add_properties($extra => $ExtraProp{$extra});
   }
-  $VCalendar->add_properties(calscale => 'GREGORIAN');
+  $VCalendar->add_properties(
+    version  => '2.0',
+    calscale => 'GREGORIAN',
+  );
 
   my @VEvents;
   my %TimeZones;
   foreach my $Args (ref $Item eq 'ARRAY' ? @$Item : $Item) {
-    if (not $havepid and $Args->{prodId}) {
-      $VCalendar->add_properties('prodid' => $Args->{prodId});
-      $havepid = 1;
-    }
+    $ProdId ||= $Args->{prodId};
     push @VEvents, $Self->_argsToVEvents(\%TimeZones, $Args);
   }
+  $VCalendar->add_property(prodid => $ProdId // '-//CyrusIMAP.org//Cassandane//EN');
 
   # add timezone parts first
   foreach my $Zone (sort keys %TimeZones) {
     my $VTimeZone = Text::JSCalendar::TimeZones->GetVTimeZone($Zone);
     next unless $VTimeZone;
-    $VCalendar->add_entry($VTimeZone);
+    $VCalendar->add_entry(ical2hash($VTimeZone->as_string));
   }
 
   # then the events
@@ -2479,5 +2460,51 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 =cut
+
+# An iCalendar component under construction, in the structure that
+# Cassandane::Util::ICalendar reads and writes.
+package Text::JSCalendar::Component {
+  sub new {
+    my ($Class, $Type) = @_;
+    return bless { type => $Type, properties => {}, objects => [] }, $Class;
+  }
+
+  # $Value is either a value or [ $Value, \%Params ].
+  sub add_property {
+    my ($Self, $Name, $Value) = @_;
+    my ($Val, $Params) = ref $Value eq 'ARRAY' ? @$Value : ($Value);
+    $Name = lc $Name;
+
+    my %Params = map {;
+      lc($_) => [ ref $Params->{$_} ? @{$Params->{$_}} : $Params->{$_} ]
+    } keys %{$Params || {}};
+
+    push @{$Self->{properties}{$Name}}, {
+      name   => $Name,
+      value  => $Val,
+      params => \%Params,
+    };
+    return $Self;
+  }
+
+  sub add_properties {
+    my ($Self, @Pairs) = @_;
+    while (my ($Name, $Value) = splice @Pairs, 0, 2) {
+      $Self->add_property($Name => $Value);
+    }
+    return $Self;
+  }
+
+  sub add_entry {
+    my ($Self, $Component) = @_;
+    push @{$Self->{objects}}, $Component;
+    return $Self;
+  }
+
+  sub as_string {
+    my ($Self) = @_;
+    return Cassandane::Util::ICalendar::hash2ical($Self);
+  }
+}
 
 1; # End of Text::JSCalendar
