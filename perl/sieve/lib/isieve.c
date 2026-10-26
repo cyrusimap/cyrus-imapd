@@ -682,7 +682,7 @@ static int do_referral(isieve_t *obj, char *refer_to)
 
             switch (callbacks[n].id) {
             case SASL_CB_USER:
-                callbacks[n].proc = (int (*)(void)) (void (*)(void)) &refer_simple_cb;
+                callbacks[n].proc = SASL_CB_PROC_PTR &refer_simple_cb;
                 callbacks[n].context = userid ? userid : authid;
                 break;
             case SASL_CB_AUTHNAME:
