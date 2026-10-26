@@ -326,12 +326,13 @@ static int my_webdav_auth(const char *userid)
                                        httpd_userisadmin || httpd_userisproxyadmin,
                                        userid, httpd_authstate,
                                        0/*flags*/, NULL/*mailboxptr*/);
-            if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                          mbname_intname(mbname), error_message(r));
+            if (r) xsyslog_ev(LOG_ERR, "webdav.drive.create.failed",
+                              lf_mbname("mbox.name", mbname),
+                              lf_err("error", r));
         }
         else {
-            syslog(LOG_ERR, "could not autoprovision DAV drive for userid %s: %s",
-                   userid, error_message(r));
+            xsyslog_ev(LOG_ERR, "webdav.autoprovision.failed",
+                       lf_s("u.username", userid), lf_err("error", r));
             if (r == IMAP_INVALID_USER) {
                 /* We successfully authenticated, but don't have a user INBOX.
                    Assume that the user has yet to be fully provisioned,

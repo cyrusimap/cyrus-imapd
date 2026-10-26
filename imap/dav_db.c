@@ -506,11 +506,13 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
     free(inboxname);
     if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
     else if (r) {
-        syslog(LOG_ERR, "dav_reconstruct_user: %s FAILED %s", userid, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.reconstruct.failed",
+                   lf_s("u.username", userid), lf_err("error", r));
         return r;
     }
 
-    syslog(LOG_NOTICE, "dav_reconstruct_user: %s", userid);
+    xsyslog_ev(LOG_NOTICE, "dav.reconstruct.started",
+               lf_s("u.username", userid));
 
     struct buf fname = BUF_INITIALIZER;
     dav_getpath_byuserid(&fname, userid);
@@ -551,14 +553,16 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
 
     /* this actually works before close according to the internets */
     if (r) {
-        syslog(LOG_ERR, "dav_reconstruct_user: %s FAILED %s", userid, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.reconstruct.failed",
+                   lf_s("u.username", userid), lf_err("error", r));
         if (audit_tool) {
             printf("Not auditing %s, reconstruct failed %s\n", userid, error_message(r));
         }
         xunlink(buf_cstring(&newfname));
     }
     else {
-        syslog(LOG_NOTICE, "dav_reconstruct_user: %s SUCCEEDED", userid);
+        xsyslog_ev(LOG_NOTICE, "dav.reconstruct.done",
+                   lf_s("u.username", userid));
         if (audit_tool) {
             run_audit_tool(audit_tool, userid, buf_cstring(&fname), buf_cstring(&newfname));
             xunlink(buf_cstring(&newfname));

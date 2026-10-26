@@ -498,7 +498,7 @@ EXPORTED int webdav_get_updates(struct webdav_db *webdavdb,
     buf_free(&sqlbuf);
 
     if (r) {
-        syslog(LOG_ERR, "webdav error %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "webdav.db.query.failed", lf_err("error", r));
     }
     return r;
 }
