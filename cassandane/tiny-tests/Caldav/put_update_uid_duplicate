@@ -1,0 +1,67 @@
+#!perl
+use Cassandane::Tiny;
+
+# A UID stored in two resources by older Cyrus stays that way until
+# dav_reconstruct repairs it.  Rewriting either resource cannot add a
+# conflict, so a PUT to either one is not a UID conflict.
+
+my sub event_message ($resource, $summary, $recurid)
+{
+    my $rid = $recurid ? "RECURRENCE-ID:$recurid\r\n" : "";
+
+    return to_crlf(<<EOF);
+From: <cassandane\@example.com>
+Subject: $summary
+Date: Thu, 01 Jan 2026 00:00:00 +0000
+Message-ID: <$resource\@example.com>
+Content-Type: text/calendar; charset=utf-8; component=VEVENT
+Content-Transfer-Encoding: 8bit
+Content-Disposition: attachment; filename="$resource"
+MIME-Version: 1.0
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+BEGIN:VEVENT
+UID:event1uid
+${rid}DTSTART:20260102T090000Z
+DURATION:PT1H
+DTSTAMP:20260101T000000Z
+SUMMARY:$summary
+END:VEVENT
+END:VCALENDAR
+EOF
+}
+
+sub test_put_update_uid_duplicate
+    :MagicPlus
+    ($self)
+{
+    my $caldav = $self->{caldav};
+    my $calendarB = $caldav->NewCalendar({ name => 'calendarB' });
+
+    # IMAP APPEND stores the resource without the CalDAV UID check
+    xlog $self, "append two resources with one UID in two calendars";
+    my $imap = $self->{instance}->get_service('imap')
+                    ->create_store(username => 'cassandane+dav')
+                    ->get_client();
+    $imap->append('#calendars.Default',
+        event_message('a.ics', 'in Default', undef)) || die $@;
+    $imap->append("#calendars.$calendarB",
+        event_message('b.ics', 'in calendarB', '20260102T090000Z')) || die $@;
+
+    for my $href ('Default/a.ics', "$calendarB/b.ics") {
+        xlog $self, "PUT an update to $href";
+        my $ical = $caldav->Request('GET', $href)->{content};
+        $ical =~ s/^SUMMARY:.*$/SUMMARY:updated/m;
+
+        my $res = $caldav->ua->request('PUT', $caldav->request_url($href), {
+            headers => {
+                'Content-Type' => 'text/calendar',
+                'Authorization' => $caldav->auth_header(),
+            },
+            content => $ical,
+        });
+        $self->assert_str_equals('204', $res->{status});
+    }
+}

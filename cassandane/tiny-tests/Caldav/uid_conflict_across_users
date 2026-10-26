@@ -1,0 +1,104 @@
+#!perl
+use Cassandane::Tiny;
+
+# An iCalendar UID lives in a single CalDAV resource of an account, so COPY
+# and MOVE into another user's calendar that already holds the UID are
+# refused.
+
+my sub put_event ($caldav, $href, $uid)
+{
+    my $ical = <<~EOF;
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//Cassandane//EN
+        CALSCALE:GREGORIAN
+        BEGIN:VEVENT
+        CREATED:20260806T234327Z
+        UID:$uid
+        SUMMARY:An Event
+        DTSTART:20260831T153000Z
+        DURATION:PT1H
+        DTSTAMP:20260806T234327Z
+        SEQUENCE:0
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+
+    return $caldav->Request('PUT', $href, $ical,
+        'Content-Type' => 'text/calendar');
+}
+
+my sub uid_hrefs ($caldav, $uid)
+{
+    my @hrefs;
+
+    for my $calendar ($caldav->GetCalendars->@*) {
+        my $events = $caldav->GetEvents($calendar->{id});
+        push @hrefs, map { $_->{href} }
+                     grep { ($_->{uid} // '') eq $uid } @$events;
+    }
+
+    return [sort @hrefs];
+}
+
+sub assert_uid_conflict_across_users ($self, $method)
+{
+    my $caldav = $self->{caldav};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $uid = '172a9c9e-7ed3-4f50-a582-4888b6545f4f';
+
+    xlog $self, "create second user";
+    $admintalk->create("user.manifold");
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    my $service = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "second user has the event in their default calendar";
+    put_event($mantalk, "Default/$uid.ics", $uid);
+
+    xlog $self, "share the second user's other calendar to cassandane";
+    my $mancal = $mantalk->NewCalendar({ name => 'Manifold Calendar' });
+    $self->assert_not_null($mancal);
+    $admintalk->setacl("user.manifold.#calendars.$mancal",
+                       cassandane => 'lrswipkxtecdn');
+
+    xlog $self, "cassandane has the same event in their own calendar";
+    put_event($caldav, "Default/$uid.ics", $uid);
+
+    xlog $self, "$method the event into the shared calendar";
+    my $source = "/dav/calendars/user/cassandane/Default/$uid.ics";
+    # A sharee addresses a shared calendar below their own calendar home.
+    my $dest = "/dav/calendars/user/cassandane/manifold.$mancal/copied.ics";
+    $caldav->ua->request($method, $caldav->request_url($source), {
+        content => '',
+        headers => {
+            Authorization => $caldav->auth_header(),
+            Destination   => $caldav->request_url($dest),
+        },
+    });
+
+    xlog $self, "assert the uid is in exactly one of their resources";
+    my $hrefs = uid_hrefs($mantalk, $uid);
+    $self->assert_num_equals(1, scalar $hrefs->@*,
+        "uid $uid is in resources " . join(' ', $hrefs->@*));
+}
+
+sub test_uid_conflict_across_users__copy ($self)
+{
+    $self->assert_uid_conflict_across_users('COPY');
+}
+
+sub test_uid_conflict_across_users__move ($self)
+{
+    $self->assert_uid_conflict_across_users('MOVE');
+}

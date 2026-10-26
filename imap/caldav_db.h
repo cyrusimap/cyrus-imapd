@@ -125,6 +125,11 @@ int caldav_lookup_by_cmodseq(struct caldav_db *caldavdb,
 int caldav_foreach(struct caldav_db *caldavdb, const mbentry_t *mbentry,
                    caldav_cb_t *cb, void *rock);
 
+/* process every live entry outside the scheduling Inbox whose iCalendar UID
+   is shared with another such entry, grouped by UID */
+int caldav_foreach_uid_conflict(struct caldav_db *caldavdb,
+                                caldav_cb_t *cb, void *rock);
+
 enum caldav_sort {
     CAL_SORT_NONE = 0,
     CAL_SORT_ICAL_UID,
@@ -156,6 +161,16 @@ int caldav_commit(struct caldav_db *caldavdb);
 int caldav_abort(struct caldav_db *caldavdb);
 
 char *caldav_mboxname(const char *userid, const char *name);
+
+/**
+ * Is this mailbox the scheduling Inbox of the database's owner?
+ *
+ * @param caldavdb  the database
+ * @param mailbox   the mailbox to test
+ * @return true if @a mailbox is the owner's scheduling Inbox
+ */
+bool caldav_is_sched_inbox(struct caldav_db *caldavdb,
+                           const struct mailbox *mailbox);
 
 /* Process each entry for 'caldavdb' with a modseq higher than oldmodseq,
  * in ascending order of modseq.

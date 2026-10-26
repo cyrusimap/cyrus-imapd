@@ -237,7 +237,8 @@ struct restore_rock {
     uint32_t mbtype;
     modseq_t deletedmodseq;
     char *(*resource_name_cb)(message_t *, void *);
-    int (*restore_cb)(message_t *, message_t *, jmap_req_t *, void *, int);
+    int (*restore_cb)(message_t *, message_t *, jmap_req_t *, void *, int,
+                      bool *undone);
     void *rock;
     struct mailbox *mailbox;
     int keep_open;
@@ -262,6 +263,7 @@ static int restore_resource_cb(const char *resource __attribute__((unused)),
     jmap_req_t *req = rrock->req;
     message_t *recreatemsg = NULL;
     message_t *destroymsg = NULL;
+    bool undone = true;
     int r = 0;
 
     switch (restore->type) {
@@ -315,11 +317,12 @@ static int restore_resource_cb(const char *resource __attribute__((unused)),
             destroymsg = message_new_from_record(mailbox, &record);
         }
 
-        r = rrock->restore_cb(recreatemsg, destroymsg, req, rrock->rock, log_level);
+        r = rrock->restore_cb(recreatemsg, destroymsg, req, rrock->rock,
+                              log_level, &undone);
 
     }
 
-    if (!r) {
+    if (!r && undone) {
         rrock->jrestore->num_undone[restore->type]++;
 
         if (restore->currently_destroyed && restore->type == UPDATES) {
@@ -774,7 +777,8 @@ static int _group_name_cb(void *rock, struct carddav_data *cdata)
 }
 
 static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
-                           jmap_req_t *req, void *rock, int log_level)
+                           jmap_req_t *req, void *rock, int log_level,
+                           bool *undone __attribute__((unused)))
 {
     int is_update = recreatemsg && destroymsg;
     int r = 0;
@@ -1016,8 +1020,52 @@ static int do_scheduling(jmap_req_t *req,
     return 0;
 }
 
+/* A destroyed resource is recreated by appending its message again, which
+ * does not go through caldav_store_resource(), so the rule that one
+ * iCalendar UID lives in one resource is kept here instead: if the UID has
+ * been created somewhere else in the meantime, the event the owner wants
+ * back already exists and this copy stays destroyed. */
+static bool check_uid_already_exists(struct caldav_db *caldavdb,
+                                     const mbentry_t *mbentry,
+                                     uint32_t imap_uid)
+{
+    struct caldav_data *cdata = NULL;
+    char *ical_uid = NULL, *mboxid = NULL, *resource = NULL;
+    bool found = false;
+
+    if (caldav_lookup_imapuid(caldavdb, mbentry, imap_uid, &cdata,
+                              /*tombstones*/ 1))
+        return false;
+
+    if (!cdata->ical_uid) return false;
+
+    /* The lookups below overwrite cdata */
+    ical_uid = xstrdup(cdata->ical_uid);
+    mboxid = xstrdup(cdata->dav.mailbox);
+    resource = xstrdup(cdata->dav.resource);
+
+    if (!caldav_lookup_uid(caldavdb, ical_uid, &cdata) &&
+        cdata->dav.imap_uid &&
+        (strcmpsafe(cdata->dav.mailbox, mboxid) ||
+         strcmpsafe(cdata->dav.resource, resource))) {
+
+        xsyslog_ev(LOG_NOTICE, "jmap.backup.restore.uid_conflict",
+                   lf_s("cal.uid", ical_uid),
+                   lf_s("dav.conflict.mbox", cdata->dav.mailbox),
+                   lf_s("dav.conflict.resource", cdata->dav.resource));
+        found = true;
+    }
+
+    free(ical_uid);
+    free(mboxid);
+    free(resource);
+
+    return found;
+}
+
 static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
-                         jmap_req_t *req, struct caldav_db *caldavdb, int log_level)
+                         jmap_req_t *req, struct caldav_db *caldavdb,
+                         int log_level, bool *undone)
 {
     struct mailbox *mailbox = msg_mailbox(recreatemsg);
     const struct index_record *record = msg_record(recreatemsg);
@@ -1027,6 +1075,13 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
                                 .uniqueid = (char *)mailbox_uniqueid(mailbox) };
     struct caldav_data *cdata = NULL;
     int r;
+
+    /* Undoing an update rewrites the resource that holds the UID already */
+    if (!destroymsg &&
+        check_uid_already_exists(caldavdb, &mbentry, record->uid)) {
+        *undone = false;
+        return 0;
+    }
 
     r = caldav_lookup_imapuid(caldavdb, &mbentry,
                               oldrecord ? oldrecord->uid : record->uid,
@@ -1121,14 +1176,16 @@ static int destroy_ical(message_t *destroymsg, jmap_req_t *req,
 }
 
 static int restore_ical(message_t *recreatemsg, message_t *destroymsg,
-                        jmap_req_t *req, void *rock, int log_level)
+                        jmap_req_t *req, void *rock, int log_level,
+                        bool *undone)
 {
     struct calendar_rock *crock = (struct calendar_rock *) rock;
     int is_update = recreatemsg && destroymsg;
     int r = 0;
 
     if (recreatemsg) {
-        r = recreate_ical(recreatemsg, destroymsg, req, crock->caldavdb, log_level);
+        r = recreate_ical(recreatemsg, destroymsg, req, crock->caldavdb,
+                          log_level, undone);
     }
 
     if (!r && destroymsg) {
@@ -1445,7 +1502,7 @@ static char *note_resource_name(message_t *msg,
 
 static int restore_note(message_t *recreatemsg, message_t *destroymsg,
                         jmap_req_t *req, void *rock __attribute__((unused)),
-                        int log_level)
+                        int log_level, bool *undone __attribute__((unused)))
 {
     int is_update = recreatemsg && destroymsg;
     int r = 0;

@@ -1,0 +1,87 @@
+#!perl
+use Cassandane::Tiny;
+
+# Creating an event with the UID of an event in another calendar leaves each
+# JMAP id once in CalendarEvent/query, and CalendarEvent/get finds every id
+# the query returns.
+
+my sub create_in_other_calendar ($user, $uid, $in_calendarA, $in_calendarB)
+{
+    my $calendarA = $user->calendars->default;
+    my $calendarB = $user->calendars->create({ name => 'calendarB' });
+
+    $calendarA->create_event({
+        uid   => $uid,
+        title => 'in calendarA',
+        %$in_calendarA,
+    });
+
+    $user->jmap->request([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    version     => '2.0',
+                    uid         => $uid,
+                    calendarIds => { $calendarB->id => JSON::true },
+                    title       => 'in calendarB',
+                    start       => '2026-02-02T02:02:02',
+                    timeZone    => 'Etc/UTC',
+                    duration    => 'PT1H',
+                    %$in_calendarB,
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    return;
+}
+
+sub assert_get_uid_other_calendar ($self, $in_calendarA, $in_calendarB)
+{
+    my $user = $self->default_user;
+
+    xlog $self, "create two events with the same uid in two calendars";
+    create_in_other_calendar($user, 'event1uid', $in_calendarA, $in_calendarB);
+
+    xlog $self, "query events";
+    my $res = $user->jmap->request([
+        ['CalendarEvent/query', { }, 'R1'],
+    ]);
+    my $ids = $res->single_sentence('CalendarEvent/query')->arguments->{ids};
+
+    xlog $self, "assert query returns each event once";
+    my %count;
+    my @duplicates = grep { $count{$_}++ } $ids->@*;
+    $self->assert_num_equals(0, scalar @duplicates,
+        "query returned duplicate ids " . join(' ', @duplicates));
+
+    xlog $self, "assert get finds every queried event";
+    $res = $user->jmap->request([
+        ['CalendarEvent/get', {
+            ids        => $ids,
+            properties => ['uid'],
+        }, 'R1'],
+    ]);
+    my $notfound = $res->single_sentence('CalendarEvent/get')
+                        ->arguments->{notFound};
+    $self->assert_num_equals(0, scalar $notfound->@*,
+        "get did not find ids " . join(' ', $notfound->@*));
+}
+
+sub test_calendarevent_get_uid_other_calendar__standalone_instance ($self)
+{
+    # The main event is in calendar A, a standalone instance goes to B.
+    $self->assert_get_uid_other_calendar({}, {
+        recurrenceId         => '2026-02-02T02:02:02',
+        recurrenceIdTimeZone => 'Etc/UTC',
+    });
+}
+
+sub test_calendarevent_get_uid_other_calendar__main_event ($self)
+{
+    # A standalone instance is in calendar A, the main event goes to B.
+    $self->assert_get_uid_other_calendar({
+        recurrenceId         => '2026-01-01T01:01:01',
+        recurrenceIdTimeZone => 'Etc/UTC',
+    }, {});
+}

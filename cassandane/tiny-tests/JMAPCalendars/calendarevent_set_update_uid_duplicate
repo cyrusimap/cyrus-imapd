@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+# Older Cyrus could store one iCalendar UID in two resources, and those stay
+# until dav_reconstruct repairs them.  Until then, rewriting either resource
+# must not count as a UID conflict: it cannot add one.
+
+my sub event_message ($resource, $summary, $recurid)
+{
+    my $rid = $recurid ? "RECURRENCE-ID:$recurid\r\n" : "";
+
+    return to_crlf(<<EOF);
+From: <cassandane\@example.com>
+Subject: $summary
+Date: Thu, 01 Jan 2026 00:00:00 +0000
+Message-ID: <$resource\@example.com>
+Content-Type: text/calendar; charset=utf-8; component=VEVENT
+Content-Transfer-Encoding: 8bit
+Content-Disposition: attachment; filename="$resource"
+MIME-Version: 1.0
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+BEGIN:VEVENT
+UID:event1uid
+${rid}DTSTART:20260102T090000Z
+DURATION:PT1H
+DTSTAMP:20260101T000000Z
+SUMMARY:$summary
+END:VEVENT
+END:VCALENDAR
+EOF
+}
+
+sub test_calendarevent_set_update_uid_duplicate
+    :MagicPlus
+    ($self)
+{
+    my $user = $self->default_user;
+    my $calendarB = $self->{caldav}->NewCalendar({ name => 'calendarB' });
+
+    # IMAP APPEND stores the resource without the CalDAV UID check
+    xlog $self, "append two resources with one UID in two calendars";
+    my $imap = $self->{instance}->get_service('imap')
+                    ->create_store(username => 'cassandane+dav')
+                    ->get_client();
+    $imap->append('#calendars.Default',
+        event_message('a.ics', 'in calendarA', undef)) || die $@;
+    $imap->append("#calendars.$calendarB",
+        event_message('b.ics', 'in calendarB', '20260102T090000Z')) || die $@;
+
+    my $res = $user->jmap->request([
+        ['CalendarEvent/query', { }, 'R1'],
+    ]);
+    my $ids = $res->single_sentence('CalendarEvent/query')->arguments->{ids};
+    $self->assert_num_equals(2, scalar $ids->@*);
+
+    xlog $self, "update both events";
+    $res = $user->jmap->request([
+        ['CalendarEvent/set', {
+            update => { map {; $_ => { title => 'updated' } } $ids->@* },
+        }, 'R1'],
+    ]);
+    my $set = $res->single_sentence('CalendarEvent/set')->as_set;
+
+    $self->assert_cmp_deeply([ sort map {; "$_" } $ids->@* ],
+                             [ sort map {; "$_" } $set->updated_ids ]);
+}
