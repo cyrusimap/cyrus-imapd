@@ -183,8 +183,20 @@ dav.mailbox.byname      1 if dav.mailbox is a name rather than a uniqueid
 dav.owner               the user whose collection a request was for
 dav.resource            the DAV resource within the collection
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
+http.body.flags         the request body parser's flags, as a hex mask
+http.body.framing       how the request body is delimited, as a framing code
+http.body.length        the length of a response body being written, in bytes
+http.chunk.part         which piece of a chunked response was written
+http.chunk.size         the size of a response body chunk, in bytes
+http.close.reason       why the connection is being closed
+http.conn.flags         the Connection options a request asked for, as a hex mask
 http.header.name        the name of an HTTP header
 http.header.value       the value of an HTTP header
+http.status             the HTTP status code of a response
+http.step               which step of a multi-step HTTP operation is being logged
+http.te.flags           the transfer codings applied to a response, as a hex mask
+http.tls.required       1 if the connection must be under TLS before it is used
+http.upgrade.flags      the protocols a request offered to upgrade to, as a hex mask
 idle.client             the imapd an idled message is to or from
 idle.events             the mailbox events a client asked to hear about, as a mask
 idle.filter             the mailbox filter a client idles with
@@ -367,6 +379,7 @@ used.bytes.out          bytes written to the client this session
 ### failure detail
 
 error                   why the operation failed, as human-readable text
+error.code              a library's own numeric error code
 error.column            the column a parse error was found at
 error.description       the human-readable detail paired with error.type
 error.line              the line a parse error was found at
@@ -377,6 +390,7 @@ sys.filename            a file name within a directory
 sys.host                a host name or address
 sys.path                a filesystem path
 sys.pid                 a process id
+sys.signal              a signal number
 
 ### caller. - where in the C source the event was logged
 

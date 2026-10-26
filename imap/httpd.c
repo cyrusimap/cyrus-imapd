@@ -148,7 +148,10 @@ HIDDEN int zlib_compress(struct transaction_t *txn, unsigned flags,
         zr = deflate(zstrm, flush);
         if (!(zr == Z_OK || zr == Z_STREAM_END || zr == Z_BUF_ERROR)) {
             /* something went wrong */
-            syslog(LOG_ERR, "zlib deflate error: %d %s", zr, zstrm->msg);
+            xsyslog_ev(LOG_ERR, "http.compress.failed",
+                       lf_s("compress.algorithm", "deflate"),
+                       lf_d("error.code", zr),
+                       lf_s_opt("error", zstrm->msg));
             return -1;
         }
 
@@ -171,7 +174,10 @@ HIDDEN int zlib_compress(struct transaction_t *txn, unsigned flags,
             zr = deflatePending(zstrm, &pending, Z_NULL);
             if (zr != Z_OK) {
                 /* something went wrong */
-                syslog(LOG_ERR, "zlib deflate error: %d %s", zr, zstrm->msg);
+                xsyslog_ev(LOG_ERR, "http.compress.failed",
+                           lf_s("compress.algorithm", "deflate"),
+                           lf_d("error.code", zr),
+                           lf_s_opt("error", zstrm->msg));
                 return -1;
             }
 #else
@@ -255,7 +261,8 @@ static int brotli_compress(struct transaction_t *txn,
         if (!BrotliEncoderCompressStream(brotli, op,
                                          &avail_in, &next_in,
                                          &avail_out, &next_out, NULL)) {
-            syslog(LOG_ERR, "Brotli: Error while compressing data");
+            xsyslog_ev(LOG_ERR, "http.compress.failed",
+                       lf_s("compress.algorithm", "br"));
             return -1;
         }
 
@@ -333,8 +340,10 @@ static int zstd_compress(struct transaction_t *txn,
         remaining = ZSTD_compressStream2(cctx, &output, &input, mode);
 
         if (ZSTD_isError(remaining)) {
-            syslog(LOG_ERR, "Zstandard: %s",
-                   ZSTD_getErrorString(ZSTD_getErrorCode(remaining)));
+            xsyslog_ev(LOG_ERR, "http.compress.failed",
+                       lf_s("compress.algorithm", "zstd"),
+                       lf_s("error",
+                            ZSTD_getErrorString(ZSTD_getErrorCode(remaining))));
             return -1;
         }
     } while (remaining || (input.pos != input.size));
@@ -605,7 +614,9 @@ EXPORTED int http1_resp_body_chunk(struct transaction_t *txn,
     if (txn->flags.te && txn->flags.ver == VER_1_1) {
         /* HTTP/1.1 chunk */
         if (datalen) {
-            syslog(LOG_DEBUG, "write_body: chunk(%d)", datalen);
+            xsyslog_ev(LOG_DEBUG, "http.chunk.written",
+                       lf_s("http.chunk.part", "body"),
+                       lf_u("http.chunk.size", datalen));
             prot_printf(txn->conn->pout, "%x\r\n", datalen);
             prot_write(txn->conn->pout, data, datalen);
             prot_puts(txn->conn->pout, "\r\n");
@@ -614,22 +625,26 @@ EXPORTED int http1_resp_body_chunk(struct transaction_t *txn,
         }
         if (last_chunk) {
             /* Terminate the HTTP/1.1 body with a zero-length chunk */
-            syslog(LOG_DEBUG, "write_body: last chunk");
+            xsyslog_ev(LOG_DEBUG, "http.chunk.written",
+                       lf_s("http.chunk.part", "last"));
             prot_puts(txn->conn->pout, "0\r\n");
 
             /* Trailer */
             if (txn->flags.trailer & TRAILER_CMD5) {
-                syslog(LOG_DEBUG, "write_body: trailer Content-MD5");
+                xsyslog_ev(LOG_DEBUG, "http.chunk.written",
+                           lf_s("http.chunk.part", "trailer_content_md5"));
                 MD5Final(md5, md5ctx);
                 content_md5_hdr(txn, md5);
             }
             if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
-                syslog(LOG_DEBUG, "write_body: trailer CTag");
+                xsyslog_ev(LOG_DEBUG, "http.chunk.written",
+                           lf_s("http.chunk.part", "trailer_ctag"));
                 simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
             }
 
             if (txn->flags.trailer != TRAILER_PROXY) {
-                syslog(LOG_DEBUG, "write_body: CRLF");
+                xsyslog_ev(LOG_DEBUG, "http.chunk.written",
+                           lf_s("http.chunk.part", "terminator"));
                 prot_puts(txn->conn->pout, "\r\n");
             }
         }
@@ -1044,8 +1059,8 @@ int service_main(int argc __attribute__((unused)),
 #endif
             action.sa_handler = sigalrm_handler;
             if (sigaction(SIGALRM, &action, NULL) < 0) {
-                syslog(LOG_ERR,
-                       "unable to install signal handler for %d: %m", SIGALRM);
+                xsyslog_ev(LOG_ERR, "http.signal.handler.failed",
+                           lf_d("sys.signal", SIGALRM));
                 httpd_keepalive = 0;
             }
         }
@@ -1214,7 +1229,11 @@ EXPORTED void fatal(const char* s, int code)
         prot_flush(httpd_out);
     }
 
-    syslog(LOG_ERR, "%s%s", fatal, s);
+    xsyslog_ev(LOG_ERR, "http.fatal",
+               lf_s("u.username", httpd_userid),
+               lf_s("r.clienthost", http_conn.clienthost),
+               lf_s("error", s),
+               lf_d("sys.exitcode", code));
 
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
@@ -1256,7 +1275,7 @@ static int tls_init(int client_auth, struct buf *serverinfo)
 
     SSL_CTX *ctx = NULL;
     if (tls_init_serverengine("http", 5 /* depth */, client_auth, &ctx) == -1) {
-        syslog(LOG_ERR, "error initializing TLS");
+        xsyslog_ev(LOG_ERR, "http.starttls.init.failed");
         return HTTP_SERVER_ERROR;
     }
 
@@ -1274,14 +1293,16 @@ static void starttls(struct http_connection *conn, int timeout)
 
     /* if error */
     if (result == -1) {
-        syslog(LOG_NOTICE, "Error negotiating TLS");
+        xsyslog_ev(LOG_NOTICE, "http.starttls.failed",
+                   lf_s("r.clienthost", conn->clienthost));
         shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, httpd_saslconn);
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "saslprops_set_tls() failed");
+        xsyslog_ev(LOG_NOTICE, "http.starttls.saslprops.failed",
+                   lf_s("r.clienthost", conn->clienthost));
         shut_down(EX_TEMPFAIL);
     }
 
@@ -1568,8 +1589,10 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     /* Check for Connection options */
     if ((ret = parse_connection(txn))) return ret;
 
-    syslog(LOG_DEBUG, "conn flags: %#x  upgrade flags: %#x  tls req: %d",
-           txn->flags.conn, txn->flags.upgrade, httpd_tls_required);
+    xsyslog_ev(LOG_DEBUG, "http.connection.parsed",
+               lf_llx("http.conn.flags", txn->flags.conn),
+               lf_llx("http.upgrade.flags", txn->flags.upgrade),
+               lf_b("http.tls.required", httpd_tls_required));
     if (txn->flags.conn & CONN_UPGRADE) {
         /* Read any request body (can't upgrade in middle of request) */
         txn->req_body.flags |= BODY_DECODE;
@@ -1588,8 +1611,9 @@ static int preauth_check_hdrs(struct transaction_t *txn)
             txn->flags.upgrade &= ~UPGRADE_TLS;
         }
 
-        syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
-               txn->flags.upgrade, httpd_tls_required);
+        xsyslog_ev(LOG_DEBUG, "http.upgrade.considered",
+                   lf_llx("http.upgrade.flags", txn->flags.upgrade),
+                   lf_b("http.tls.required", httpd_tls_required));
         if ((txn->flags.upgrade & UPGRADE_HTTP2) && !httpd_tls_required) {
             if ((ret = http2_start_session(txn, NULL))) {
                 txn->flags.conn = CONN_CLOSE;
@@ -2134,7 +2158,8 @@ static int http1_input(struct transaction_t *txn)
 
     do {
         /* Read request-line */
-        syslog(LOG_DEBUG, "read request-line");
+        xsyslog_ev(LOG_DEBUG, "http.request.step",
+                   lf_s("http.step", "read_request_line"));
         if (!prot_fgets(req_line->buf, MAX_REQ_LINE+1, httpd_in)) {
             txn->error.desc = prot_error(httpd_in);
             if (txn->error.desc && strcmp(txn->error.desc, PROT_EOF_STRING)) {
@@ -2143,7 +2168,7 @@ static int http1_input(struct transaction_t *txn)
             }
             else {
                 /* client closed connection */
-                syslog(LOG_DEBUG, "client closed connection");
+                xsyslog_ev(LOG_DEBUG, "http.connection.closed");
             }
 
             txn->flags.conn = CONN_CLOSE;
@@ -2155,12 +2180,14 @@ static int http1_input(struct transaction_t *txn)
 
 
     /* Parse request-line = method SP request-target SP HTTP-version CRLF */
-    syslog(LOG_DEBUG, "parse request-line");
+    xsyslog_ev(LOG_DEBUG, "http.request.step",
+               lf_s("http.step", "parse_request_line"));
     ret = parse_request_line(txn);
 
     /* Parse headers */
     if (!ret) {
-        syslog(LOG_DEBUG, "read headers");
+        xsyslog_ev(LOG_DEBUG, "http.request.step",
+                   lf_s("http.step", "read_headers"));
         ret = http_read_headers(httpd_in, 1 /* read_sep */,
                                 &txn->req_hdrs, &txn->error.desc);
     }
@@ -2173,7 +2200,7 @@ static int http1_input(struct transaction_t *txn)
     apply_trace_id(txn);
 
     /* Examine request */
-    syslog(LOG_DEBUG, "examine request");
+    xsyslog_ev(LOG_DEBUG, "http.request.step", lf_s("http.step", "examine"));
     ret = examine_request(txn, NULL);
     if (ret) goto done;
 
@@ -2181,7 +2208,7 @@ static int http1_input(struct transaction_t *txn)
     if (txn->flags.ver == VER_1_1) alarm(httpd_keepalive);
 
     /* Process the requested method */
-    syslog(LOG_DEBUG, "process request");
+    xsyslog_ev(LOG_DEBUG, "http.request.step", lf_s("http.step", "process"));
     ret = process_request(txn);
 
   done:
@@ -2270,7 +2297,8 @@ static void cmdloop(struct http_connection *conn)
 
             signals_poll();
 
-            syslog(LOG_DEBUG, "http_proxy_check_input()");
+            xsyslog_ev(LOG_DEBUG, "http.request.step",
+                       lf_s("http.step", "proxy_check_input"));
 
         } while (!http_proxy_check_input(conn, &httpd_pipes,
                                          0 /* timeout */));
@@ -2310,15 +2338,16 @@ static void cmdloop(struct http_connection *conn)
         }
 
         if (ret == HTTP_SHUTDOWN) {
-            syslog(LOG_WARNING,
-                   "Shutdown file: \"%s\", closing connection", conn->close_str);
+            xsyslog_ev(LOG_WARNING, "http.shutdown.requested",
+                       lf_s("http.close.reason", conn->close_str));
             shut_down(0);
         }
 
     } while (!conn->close);
 
     if (conn->close_str && strcmp(conn->close_str, PROT_EOF_STRING)) {
-        syslog(LOG_WARNING, "%s, closing connection", conn->close_str);
+        xsyslog_ev(LOG_WARNING, "http.connection.closing",
+                   lf_s("http.close.reason", conn->close_str));
     }
 
     /* Memory cleanup */
@@ -2424,7 +2453,7 @@ static int parse_expect(struct transaction_t *txn)
         while (!ret && (token = tok_next(&tok))) {
             /* Check if client wants acknowledgment before sending body */ 
             if (!strcasecmp(token, "100-continue")) {
-                syslog(LOG_DEBUG, "Expect: 100-continue");
+                xsyslog_ev(LOG_DEBUG, "http.continue.expected");
                 txn->req_body.flags |= BODY_CONTINUE;
             }
             else {
@@ -2734,7 +2763,9 @@ EXPORTED void simple_hdr(struct transaction_t *txn,
     buf_vprintf(&buf, value, args);
     va_end(args);
 
-    syslog(LOG_DEBUG, "simple_hdr(%s: %s)", name, buf_cstring(&buf));
+    xsyslog_ev(LOG_DEBUG, "http.header.added",
+               lf_s("http.header.name", name),
+               lf_s("http.header.value", buf_cstring(&buf)));
 
     /* Drop headers with illegal characters. */
     if (has_illegal_hdr_char(name, strlen(name)) ||
@@ -3729,8 +3760,10 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
     static MD5_CTX ctx;
     static unsigned char md5[MD5_DIGEST_LENGTH];
 
-    syslog(LOG_DEBUG, "write_body(code = %ld, flags.te = %#x, len = %u)",
-           code, txn->flags.te, len);
+    xsyslog_ev(LOG_DEBUG, "http.body.writing",
+               lf_d("http.status", atoi(error_message(code))),
+               lf_llx("http.te.flags", txn->flags.te),
+               lf_u("http.body.length", len));
 
     if (txn->flags.ver == VER_0_9) {
         /* A HTTP/0.9 response has no status-line or headers
@@ -5429,8 +5462,9 @@ EXPORTED int http_read_req_body(struct transaction_t *txn)
 {
     struct body_t *body = &txn->req_body;
 
-    syslog(LOG_DEBUG, "http_read_req_body(flags=%#x, framing=%d)",
-           body->flags, body->framing);
+    xsyslog_ev(LOG_DEBUG, "http.body.reading",
+               lf_llx("http.body.flags", body->flags),
+               lf_d("http.body.framing", body->framing));
 
     if (body->flags & BODY_DONE) return 0;
     body->flags |= BODY_DONE;
