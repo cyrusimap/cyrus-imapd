@@ -16,7 +16,7 @@ sub test_append_channel_without_sync_host
 
     if ($self->{instance}->{have_syslog_replacement}) {
         my @lines = $self->{instance}->getsyslog(
-            qr/event=sync\.rightnow\.nohost/);
+            qr/event=sync\.rightnow\.host\.missing/);
         $self->assert_num_equals(1, scalar @lines);
         $self->assert_matches(qr/sync\.channel=nosuch/, $lines[0]);
     }
