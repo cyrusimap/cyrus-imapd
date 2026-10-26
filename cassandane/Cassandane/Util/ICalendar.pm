@@ -10,7 +10,11 @@ use base qw(Exporter);
 use Carp ();
 use Text::VCardFast ();
 
+use Cassandane::Cassini;
+use Cassandane::Util::Slurp;
+
 our @EXPORT = qw(&ical2hash &hash2ical);
+our @EXPORT_OK = qw(&vtimezone);
 
 =head1 NAME
 
@@ -124,6 +128,43 @@ sub _param_value ($value)
     $value =~ s/"/^'/g;
 
     return $value =~ /[:;,]/ ? qq{"$value"} : $value;
+}
+
+=head2 vtimezone
+
+    my $vtimezone = vtimezone($tzid);
+
+Return the VTIMEZONE component for C<$tzid> from the time zone data the Cyrus
+build installed, or undef if there's none.  That's the C<zoneinfo_dir> set in
+the C<[config]> section of F<cassandane.ini>, if any, and otherwise where the
+build installs it under the prefix of the default installation.
+
+=cut
+
+my %vtimezones;
+
+sub vtimezone ($tzid)
+{
+    return $vtimezones{$tzid} if exists $vtimezones{$tzid};
+
+    my $file = _zoneinfo_dir() . "/$tzid.ics";
+    return $vtimezones{$tzid} = undef unless -f $file;
+
+    my $vcalendar = ical2hash(slurp_file($file));
+    my ($vtimezone) = grep { $_->{type} eq 'vtimezone' } $vcalendar->{objects}->@*;
+    return $vtimezones{$tzid} = $vtimezone;
+}
+
+sub _zoneinfo_dir
+{
+    my $cassini = Cassandane::Cassini->instance();
+
+    my $dir = $cassini->val('config', 'zoneinfo_dir');
+    return $dir if defined $dir;
+
+    my $destdir = $cassini->val('cyrus default', 'destdir', q{});
+    my $prefix = $cassini->val('cyrus default', 'prefix', '/usr/cyrus');
+    return "$destdir$prefix/share/cyrus-imapd/zoneinfo";
 }
 
 1;

@@ -4,8 +4,7 @@ use warnings FATAL => 'all';
 package Text::JSCalendar;
 
 use Carp;
-use Cassandane::Util::ICalendar qw(ical2hash);
-use Data::ICal::TimeZone;
+use Cassandane::Util::ICalendar qw(vtimezone);
 use DateTime::Format::ICal;
 use DateTime::TimeZone;
 use JSON::XS qw(encode_json);
@@ -2022,9 +2021,9 @@ sub _argsToVCalendar {
 
   # add timezone parts first
   foreach my $Zone (sort keys %TimeZones) {
-    my $VTimeZone = Text::JSCalendar::TimeZones->GetVTimeZone($Zone);
+    my $VTimeZone = vtimezone($Zone);
     next unless $VTimeZone;
-    $VCalendar->add_entry(ical2hash($VTimeZone->as_string));
+    $VCalendar->add_entry($VTimeZone);
   }
 
   # then the events
