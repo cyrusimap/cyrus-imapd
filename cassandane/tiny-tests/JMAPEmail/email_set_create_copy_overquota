@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+# A new email is appended to one mailbox -- the snoozed mailbox, when it's
+# one of them -- and then copied to the others.  A copy into a mailbox under
+# its own, full quota root fails after the append has committed, and
+# notCreated must not leave the email behind in the first mailbox.
+sub test_email_set_create_copy_overquota ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $mailboxes = $self->default_user->mailboxes;
+
+    my $snoozed = $mailboxes->create({ name => 'Snoozed', role => 'snoozed' });
+    my $limited = $mailboxes->create({ name => 'Limited' });
+
+    $self->set_quotaroot('user.cassandane.Limited');
+    $self->set_quotalimits(storage => 1);
+
+    xlog $self, "create an email too big for Limited, in Snoozed and Limited";
+    my $set = $jmap->request([
+        [ 'Email/set' => {
+            create => {
+                big => {
+                    mailboxIds => { $snoozed->id => JSON::true,
+                                    $limited->id => JSON::true },
+                    snoozed    => { until => '2099-01-01T00:00:00Z' },
+                    from       => [{ email => 'cassandane@example.com' }],
+                    subject    => 'too big',
+                    bodyStructure => { partId => '1' },
+                    bodyValues    => { 1 => { value => 'x' x 4096 } },
+                },
+            },
+        } ],
+    ])->single_sentence('Email/set')->as_set;
+
+    $self->assert_cmp_deeply(
+        { big => superhashof({ type => 'overQuota' }) },
+        $set->create_errors,
+    );
+
+    xlog $self, "the email isn't left in Snoozed";
+    my $query = $jmap->request([ [ 'Email/query' => {} ] ])
+                     ->single_sentence('Email/query')->arguments;
+    $self->assert_cmp_deeply([], $query->{ids});
+}
