@@ -760,11 +760,11 @@ LIBSASL_API const char *sasl_errstring(int saslerr,
 LIBSASL_API const char *sasl_errdetail(sasl_conn_t *conn);
 
 /* set the error string which will be returned by sasl_errdetail() using
- *  syslog()-style formatting (e.g. printf-style with %m as most recent
- *  errno error)
+ * syslog()-style formatting (e.g. printf-style with %m as most recent
+ * errno error)
  *
- *  primarily for use by server callbacks such as the sasl_authorize_t
- *  callback and internally to plug-ins
+ * Primarily for use by server callbacks such as the sasl_authorize_t
+ * callback and internally to plug-ins
  *
  * This will also trigger a call to the SASL logging callback (if any)
  * with a level of SASL_LOG_FAIL unless the SASL_NOLOG flag is set.
@@ -778,7 +778,8 @@ LIBSASL_API const char *sasl_errdetail(sasl_conn_t *conn);
 LIBSASL_API void sasl_seterror(sasl_conn_t *conn,
                                unsigned flags,
                                const char *fmt,
-                               ...);
+                               ...)
+                 __attribute__((format(printf, 3, 4)));
 #define SASL_NOLOG 0x01
 
 /* get property from SASL connection state
