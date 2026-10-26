@@ -68,23 +68,6 @@ LIBSASL_API int sasl_mkchal(sasl_conn_t *conn,
  */
 LIBSASL_API int sasl_utf8verify(const char *str, unsigned len);
 
-/* create random pool seeded with OS-based params */
-LIBSASL_API int sasl_randcreate(sasl_rand_t **rpool);
-
-/* free random pool from randcreate */
-LIBSASL_API void sasl_randfree(sasl_rand_t **rpool);
-
-/* seed random number generator */
-LIBSASL_API void sasl_randseed(sasl_rand_t *rpool,
-                               const char *seed,
-                               unsigned len);
-
-/* generate random octets */
-LIBSASL_API void sasl_rand(sasl_rand_t *rpool, char *buf, unsigned len);
-
-/* churn data into random number generator */
-LIBSASL_API void sasl_churn(sasl_rand_t *rpool, const char *data, unsigned len);
-
 /* erase a security sensitive buffer or password.
  *   Implementation may use recovery-resistant erase logic.
  */
