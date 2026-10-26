@@ -890,6 +890,12 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     JSON Meta Application Protocol (JMAP) for Quotas
 
+:rfc:`9530`
+
+    Digest Fields: Content-Digest and Want-Content-Digest, with the
+    sha-256 and sha-512 algorithms.  Repr-Digest and Want-Repr-Digest are
+    not supported.
+
 :rfc:`9553`
 
     JSContact: A JSON Representation of Contact Data
@@ -964,6 +970,11 @@ draft-murchison-lmtp-ignorequota
 draft-desruisseaux-ischedule
 
     Internet Calendar Scheduling Protocol (iSchedule)
+
+draft-ietf-httpbis-unencoded-digest
+
+    HTTP Unencoded Digest: Unencoded-Digest and Want-Unencoded-Digest, with
+    the sha-256 and sha-512 algorithms.
 
 draft-thomson-hybi-http-timeout
 

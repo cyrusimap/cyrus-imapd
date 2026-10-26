@@ -63,7 +63,6 @@
 #include "times.h"
 #include "tok.h"
 #include "wildmat.h"
-#include "md5.h"
 #include "attachextract.h"
 
 /* generated headers are not necessarily in current directory */
@@ -607,10 +606,8 @@ EXPORTED int http1_end_resp_headers(struct transaction_t *txn,
 
 EXPORTED int http1_resp_body_chunk(struct transaction_t *txn,
                                  const char *data, unsigned datalen,
-                                 int last_chunk, MD5_CTX *md5ctx)
+                                 int last_chunk)
 {
-    static unsigned char md5[MD5_DIGEST_LENGTH];
-
     if (txn->flags.te && txn->flags.ver == VER_1_1) {
         /* HTTP/1.1 chunk */
         if (datalen) {
@@ -620,8 +617,6 @@ EXPORTED int http1_resp_body_chunk(struct transaction_t *txn,
             prot_printf(txn->conn->pout, "%x\r\n", datalen);
             prot_write(txn->conn->pout, data, datalen);
             prot_puts(txn->conn->pout, "\r\n");
-
-            if (txn->flags.trailer & TRAILER_CMD5) MD5Update(md5ctx, data, datalen);
         }
         if (last_chunk) {
             /* Terminate the HTTP/1.1 body with a zero-length chunk */
@@ -630,11 +625,20 @@ EXPORTED int http1_resp_body_chunk(struct transaction_t *txn,
             prot_puts(txn->conn->pout, "0\r\n");
 
             /* Trailer */
-            if (txn->flags.trailer & TRAILER_CMD5) {
-                xsyslog_ev(LOG_DEBUG, "http.chunk.written",
-                           lf_s("http.chunk.part", "trailer_content_md5"));
-                MD5Final(md5, md5ctx);
-                content_md5_hdr(txn, md5);
+            if (txn->flags.trailer & (TRAILER_DIGEST | TRAILER_UNENCODED)) {
+                if (txn->flags.trailer & TRAILER_DIGEST) {
+                    xsyslog_ev(LOG_DEBUG, "http.chunk.written",
+                               lf_s("http.chunk.part", "trailer_digest"),
+                               lf_s("http.header.name",
+                                    http_digest_field(txn->resp_body.digest)));
+                }
+                if (txn->flags.trailer & TRAILER_UNENCODED) {
+                    xsyslog_ev(LOG_DEBUG, "http.chunk.written",
+                               lf_s("http.chunk.part",
+                                    "trailer_unencoded_digest"),
+                               lf_s("http.header.name", "Unencoded-Digest"));
+                }
+                digest_hdrs(txn);
             }
             if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
                 xsyslog_ev(LOG_DEBUG, "http.chunk.written",
@@ -2098,6 +2102,8 @@ static void transaction_reset(struct transaction_t *txn)
     memset(&txn->error, 0, sizeof(struct error_t));
 
     strarray_fini(&txn->resp_body.links);
+    http_digest_free(&txn->resp_body.digest);
+    http_digest_free(&txn->resp_body.unencoded);
     memset(&txn->resp_body, 0,  /* Don't zero the response payload buffer */
            sizeof(struct resp_body_t) - sizeof(struct buf));
     buf_reset(&txn->resp_body.payload);
@@ -2900,15 +2906,18 @@ EXPORTED void accept_patch_hdr(struct transaction_t *txn,
     buf_free(&buf);
 }
 
-#define MD5_BASE64_LEN 25   /* ((MD5_DIGEST_LENGTH / 3) + 1) * 4 */
-
-EXPORTED void content_md5_hdr(struct transaction_t *txn,
-                              const unsigned char *md5)
+/* Output each digest of the response that is final */
+EXPORTED void digest_hdrs(struct transaction_t *txn)
 {
-    char base64[MD5_BASE64_LEN+1];
+    struct http_digest *digests[] = {
+        txn->resp_body.digest, txn->resp_body.unencoded
+    };
 
-    sasl_encode64((char *) md5, MD5_DIGEST_LENGTH, base64, MD5_BASE64_LEN, NULL);
-    simple_hdr(txn, "Content-MD5", "%s", base64);
+    for (size_t i = 0; i < sizeof(digests) / sizeof(digests[0]); i++) {
+        const char *value = http_digest_value(digests[i]);
+
+        if (value) simple_hdr(txn, http_digest_field(digests[i]), "%s", value);
+    }
 }
 
 /* Write end-to-end header (ignoring hop-by-hop) from cache to protstream. */
@@ -3484,10 +3493,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
             if (txn->flags.cors) Access_Control_Expose("Content-Location");
         }
-        if (resp_body->md5) {
-            content_md5_hdr(txn, resp_body->md5);
-        }
     }
+
+    /* Even of empty content, which has no Content-Type */
+    digest_hdrs(txn);
 
 
     /* Payload */
@@ -3529,7 +3538,12 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
             if (txn->flags.trailer & ~TRAILER_PROXY) {
                 /* Construct Trailer header */
-                const char *trailer_hdrs[] = { "Content-MD5", "CTag", NULL };
+                const char *trailer_hdrs[] = {
+                    "CTag",
+                    "Unencoded-Digest",
+                    http_digest_field(resp_body->digest),
+                    NULL
+                };
 
                 comma_list_hdr(txn, "Trailer", trailer_hdrs, txn->flags.trailer);
             }
@@ -3697,6 +3711,40 @@ static void multipart_byteranges(struct transaction_t *txn,
 }
 
 
+/* Whether a response to txn with this status code has content to digest */
+static bool has_content(long code, struct transaction_t *txn)
+{
+    switch (code) {
+    case HTTP_CONTINUE:
+    case HTTP_SWITCH_PROT:
+    case HTTP_PROCESSING:
+    case HTTP_EARLY_HINTS:
+    case HTTP_NO_CONTENT:
+    case HTTP_NOT_MODIFIED:
+        return false;
+
+    default:
+        return txn->meth != METH_HEAD;
+    }
+}
+
+/* The digest a response to txn carries, if any:
+   one Want-Content-Digest asks for, or else Content-MD5 */
+static struct http_digest *response_digest(long code, struct transaction_t *txn,
+                                           bool empty)
+{
+    if (!has_content(code, txn)) return NULL;
+
+    struct http_digest *digest = http_digest_want(txn->req_hdrs);
+
+    /* Content-MD5 has never been sent for empty content */
+    if (!digest && !empty && config_getswitch(IMAPOPT_HTTPCONTENTMD5)) {
+        digest = http_digest_content_md5();
+    }
+
+    return digest;
+}
+
 /*
  * Output an HTTP response with body data, compressed as necessary.
  *
@@ -3712,10 +3760,6 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
                          const char *buf, unsigned len)
 {
     unsigned outlen = len, offset = 0, last_chunk;
-    int do_md5 = (txn->meth == METH_HEAD) ? 0 :
-        config_getswitch(IMAPOPT_HTTPCONTENTMD5);
-    static MD5_CTX ctx;
-    static unsigned char md5[MD5_DIGEST_LENGTH];
 
     xsyslog_ev(LOG_DEBUG, "http.body.writing",
                lf_d("http.status", atoi(error_message(code))),
@@ -3743,6 +3787,16 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
         }
     }
 
+    /* Unencoded-Digest is of the whole representation, before compression */
+    if (code && has_content(code, txn)) {
+        txn->resp_body.unencoded = http_digest_want_unencoded(txn->req_hdrs);
+    }
+    if (txn->resp_body.unencoded &&
+        !http_digest_value(txn->resp_body.unencoded)) {
+        http_digest_update(txn->resp_body.unencoded, buf, len);
+        if (last_chunk) http_digest_final(txn->resp_body.unencoded);
+    }
+
     /* Compress data */
     if (txn->resp_body.enc.proc) {
         unsigned flags = 0;
@@ -3760,7 +3814,6 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
     if (code) {
         /* Initial call - prepare response header based on CE, TE and version */
-        if (do_md5) MD5Init(&ctx);
 
         if (txn->flags.te & ~TE_CHUNKED) {
             /* Transfer-Encoded content MUST be chunked */
@@ -3804,47 +3857,58 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
                     break;
 
                 case HTTP_BAD_RANGE:
-                    /* No valid ranges */
+                    /* No valid ranges, and so no representation */
                     outlen = 0;
+                    http_digest_free(&txn->resp_body.unencoded);
                     break;
                 }
             }
 
-            if (outlen && do_md5) {
-                MD5Update(&ctx, buf+offset, outlen);
-                MD5Final(md5, &ctx);
-                txn->resp_body.md5 = md5;
+            /* Of the content: the range, compressed if it is */
+            struct http_digest *digest = response_digest(code, txn, !outlen);
+
+            if (digest) {
+                http_digest_update(digest, buf ? buf + offset : NULL, outlen);
+                http_digest_final(digest);
+                txn->resp_body.digest = digest;
             }
         }
         else if (txn->flags.ver == VER_1_0) {
-            /* HTTP/1.0 doesn't support chunked - close-delimit the body */
+            /* HTTP/1.0 doesn't support chunked - close-delimit the body,
+               which leaves no trailer section for a digest */
             txn->flags.conn = CONN_CLOSE;
+            http_digest_free(&txn->resp_body.unencoded);
         }
-        else if (do_md5) txn->flags.trailer |= TRAILER_CMD5;
+        else {
+            /* Digests aren't known until the last chunk */
+            if ((txn->resp_body.digest = response_digest(code, txn, false))) {
+                txn->flags.trailer |= TRAILER_DIGEST;
+            }
+            if (txn->resp_body.unencoded) {
+                txn->flags.trailer |= TRAILER_UNENCODED;
+            }
+        }
 
         response_header(code, txn);
 
         /* MUST NOT send a body for 1xx/204/304 response or any HEAD response */
-        switch (code) {
-        case HTTP_CONTINUE:
-        case HTTP_SWITCH_PROT:
-        case HTTP_PROCESSING:
-        case HTTP_NO_CONTENT:
-        case HTTP_NOT_MODIFIED:
+        if (!has_content(code, txn)) return;
+
+        if (!outlen && last_chunk) {
+            /* Zero-length body */
             return;
-
-        default:
-            if (txn->meth == METH_HEAD) return;
-
-            if (!outlen && last_chunk) {
-                /* Zero-length body */
-                return;
-            }
         }
     }
 
+    const char *content = buf ? buf + offset : NULL;
+
+    if (txn->flags.trailer & TRAILER_DIGEST) {
+        http_digest_update(txn->resp_body.digest, content, outlen);
+        if (last_chunk) http_digest_final(txn->resp_body.digest);
+    }
+
     /* Output data */
-    txn->conn->resp_body_chunk(txn, buf ? buf + offset : NULL, outlen, last_chunk, &ctx);
+    txn->conn->resp_body_chunk(txn, content, outlen, last_chunk);
 }
 
 

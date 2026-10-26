@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+use Digest::SHA qw(sha256);
+use MIME::Base64 qw(encode_base64);
+
+# Content-Digest (RFC 9530) over HTTP/2: a request body arriving in DATA
+# frames is checked against it, and a response carries it on request.
+sub test_content_digest
+    :needs_dependency_nghttp2
+    ($self)
+{
+    $self->{caldav}->GetCalendars();
+
+    my $n = 0;
+    my sub ical ($i) {
+        return join("\r\n",
+            'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Cassandane//EN',
+            'BEGIN:VEVENT', "UID:h2-content-digest$i",
+            'DTSTAMP:20260101T000000Z', 'DTSTART:20260101T100000Z',
+            'DURATION:PT1H', 'END:VEVENT', 'END:VCALENDAR', '');
+    }
+    my sub digest ($data) {
+        return 'sha-256=:' . encode_base64(sha256($data), '') . ':';
+    }
+
+    xlog $self, "a matching request digest is accepted";
+    my $body = ical(++$n);
+    my $path = "/dav/calendars/user/cassandane/Default/h2-$n.ics";
+    my $res = $self->http2_request(
+        method  => 'PUT',
+        path    => $path,
+        headers => [ 'content-type'   => 'text/calendar',
+                     'content-digest' => digest($body) ],
+        body    => $body,
+    );
+    $self->assert_num_equals(201, $res->{status});
+
+    xlog $self, "the response carries the digest it was asked for";
+    $res = $self->http2_request(
+        path    => $path,
+        headers => [ 'want-content-digest' => 'sha-256=10' ],
+    );
+    $self->assert_num_equals(200, $res->{status});
+    $self->assert_str_equals(digest($res->{body}),
+                             $res->{headers}{'content-digest'});
+
+    xlog $self, "a mismatching request digest is refused";
+    $body = ical(++$n);
+    $res = $self->http2_request(
+        method  => 'PUT',
+        path    => "/dav/calendars/user/cassandane/Default/h2-$n.ics",
+        headers => [ 'content-type'   => 'text/calendar',
+                     'content-digest' => digest('something else') ],
+        body    => $body,
+    );
+    $self->assert_num_equals(400, $res->{status});
+}

@@ -1028,6 +1028,8 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/haproxy.h \
     imap/http_client.c \
     imap/http_client.h \
+    imap/http_digest.c \
+    imap/http_digest.h \
     imap/ical_support.c \
     imap/ical_support.h \
     imap/icu_wrap.cpp \
