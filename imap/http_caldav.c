@@ -766,7 +766,10 @@ static int my_caldav_auth(const char *userid)
     mboxlist_entry_free(&mbentry);
 
     if (r) {
-        xsyslog_ev(LOG_ERR, "caldav.autoprovision.failed",
+        /* no INBOX means the user isn't provisioned yet, or is being
+         * renamed; that's a race we wait out rather than a failure */
+        xsyslog_ev(r == IMAP_INVALID_USER ? LOG_WARNING : LOG_ERR,
+                   "caldav.autoprovision.failed",
                    lf_s("u.username", userid), lf_err("error", r));
         if (r == IMAP_INVALID_USER) {
             /* We successfully authenticated, but don't have a user INBOX.

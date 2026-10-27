@@ -331,7 +331,10 @@ static int my_webdav_auth(const char *userid)
                               lf_err("error", r));
         }
         else {
-            xsyslog_ev(LOG_ERR, "webdav.autoprovision.failed",
+            /* no INBOX means the user isn't provisioned yet, or is being
+             * renamed; that's a race we wait out rather than a failure */
+            xsyslog_ev(r == IMAP_INVALID_USER ? LOG_WARNING : LOG_ERR,
+                       "webdav.autoprovision.failed",
                        lf_s("u.username", userid), lf_err("error", r));
             if (r == IMAP_INVALID_USER) {
                 /* We successfully authenticated, but don't have a user INBOX.
