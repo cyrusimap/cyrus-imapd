@@ -79,8 +79,8 @@ sub test_calendarevent_defaultalerts_etag_preserved_after_alarm
     my $notifdata = $self->{instance}->getnotify();
     my @notifs;
     foreach (@$notifdata) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
+        if ($_->{class} eq 'EVENT') {
+            my $e = $_->{message};
             if ($e->{event} eq "CalendarAlarm") {
                 push @notifs, $e;
             }

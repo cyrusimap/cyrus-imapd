@@ -165,10 +165,10 @@ sub test_restore_calendars_all
     $self->assert_str_equals('aqua', $res->[0][1]{list}[0]{color});
 
     my $data = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($imip);
 
-    my $payload = decode_json($imip->{MESSAGE});
+    my $payload = $imip->{message};
     my $ical = $payload->{ical};
 
     $self->assert_str_equals("bugs\@example.com", $payload->{recipient});

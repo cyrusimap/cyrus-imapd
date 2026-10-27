@@ -722,7 +722,7 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 struct pending_notify {
     struct pending_notify *next;
     char *notifier;
-    char *message;
+    json_t *message;
 };
 
 static struct pending_notify *pending_notifies = NULL;
@@ -738,7 +738,7 @@ EXPORTED void mboxevent_flush_notifications(void)
         notify(p->notifier, "EVENT", NULL, NULL, NULL, 0, NULL, p->message, NULL);
 
         free(p->notifier);
-        free(p->message);
+        json_decref(p->message);
         free(p);
     }
 }
@@ -749,7 +749,7 @@ static void mboxevent_delayed_flush(void *rock __attribute__((unused)))
 }
 
 /* takes ownership of message */
-static void mboxevent_queue_notify(const char *notifier, char *message)
+static void mboxevent_queue_notify(const char *notifier, json_t *message)
 {
     struct pending_notify *p = xzmalloc(sizeof(struct pending_notify));
 
@@ -773,7 +773,6 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
     enum event_type type;
     struct mboxevent *event;
     char stimestamp[TIMESTAMP_MAX+1];
-    char *formatted_message;
 
     /* nothing to notify */
     if (!*mboxevents)
@@ -887,11 +886,10 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
                 /* check if expected event parameters are filled */
                 assert(filled_params(type, event));
 
-                formatted_message = json_dumps(jevent,
-                                               JSON_PRESERVE_ORDER|JSON_COMPACT);
                 /* this path never passes a file to notifyd, so there is no
-                 * file lifetime to keep open until it has been read */
-                mboxevent_queue_notify(notifier, formatted_message);
+                 * file lifetime to keep open until it has been read.
+                 * Queue a copy: the IDLE path below adds "@type" to jevent. */
+                mboxevent_queue_notify(notifier, json_deep_copy(jevent));
             }
 
             if (idle_notifier &&

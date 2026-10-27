@@ -16,7 +16,7 @@ sub _deliver_and_states ($self, $subject, $uid) {
     my $ret = $self->{instance}->deliver($msg, user => "cassandane");
     $self->assert_num_equals(0, $ret);
 
-    my @events = map { decode_json($_->{MESSAGE}) }
+    my @events = map { $_->{message} }
                  $self->{instance}->getnotify->@*;
     my ($new) = grep { $_->{event} eq 'MessageNew' } @events;
     $self->assert_not_null($new, "got a MessageNew event");

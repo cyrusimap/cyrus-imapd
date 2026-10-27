@@ -7,7 +7,7 @@ sub test_calendarevent_set_color_empty_text_no_itip ($self)
 
     my $get_imips = sub {
         my $data = $self->{instance}->getnotify();
-        return [ grep { $_->{METHOD} eq 'imip' } @$data ];
+        return [ grep { $_->{method} eq 'imip' } @$data ];
     };
 
     $self->{instance}->getnotify();

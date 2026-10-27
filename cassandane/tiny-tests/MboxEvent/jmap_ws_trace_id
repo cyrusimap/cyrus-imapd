@@ -30,7 +30,7 @@ sub test_jmap_ws_trace_id
             $logheaders ? (logHeaders => $logheaders) : (),
         });
 
-        my @events = map { decode_json($_->{MESSAGE}) }
+        my @events = map { $_->{message} }
                          $self->{instance}->getnotify->@*;
         $self->assert(0+@events, "Mailbox/set should generate events");
         my @ids = map { $_->{'vnd.fastmail.traceId'} } @events;

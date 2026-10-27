@@ -83,11 +83,11 @@ EOF
 
     xlog $self, "Assert that iMIP message is sent";
     my $data = $self->{instance}->getnotify();
-    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($imip);
 
     xlog $self, "Assert privacy property is not present in iTIP REPLY";
-    my $msg = decode_json($imip->{MESSAGE});
+    my $msg = $imip->{message};
     $self->assert($msg->{ical} !~ /CLASS:PRIVATE/);
 
     xlog $self, "Organizer updates invite with recurrence override";

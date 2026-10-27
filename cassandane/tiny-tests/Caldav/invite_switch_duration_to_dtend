@@ -57,7 +57,7 @@ EOF
 
     xlog $self, "make sure an invite is NOT sent to attendee";
     my $newdata = $self->{instance}->getnotify();
-    my @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    my @imip = grep { $_->{method} eq 'imip' } @$newdata;
     $self->assert_num_equals(0, scalar(@imip));
 
     xlog $self, "update event using DURATION";
@@ -66,7 +66,7 @@ EOF
 
     xlog $self, "make sure an invite is NOT sent to attendee";
     $newdata = $self->{instance}->getnotify();
-    @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    @imip = grep { $_->{method} eq 'imip' } @$newdata;
     $self->assert_num_equals(0, scalar(@imip));
 
     xlog $self, "update event using DTEND with different TZID";
@@ -95,7 +95,7 @@ EOF
 
     xlog $self, "make sure an invite is NOT sent to attendee";
     $newdata = $self->{instance}->getnotify();
-    @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    @imip = grep { $_->{method} eq 'imip' } @$newdata;
     $self->assert_num_equals(0, scalar(@imip));
 
     xlog $self, "update event changing TZID on DTEND";
