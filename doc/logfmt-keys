@@ -58,6 +58,7 @@ mbox.lock.duration      how long a mailbox index lock was held, in seconds
 mbox.mailboxid          the mailbox's JMAP id
 mbox.msgcount           how many messages a mailbox holds
 mbox.name               the mailbox name, in the admin namespace
+mbox.options            the mailbox options bitmask, in hex
 mbox.owner              the userid that owns the mailbox
 mbox.parent             the parent mailbox name, in the admin namespace
 mbox.part               the partition the mailbox is on
@@ -136,6 +137,20 @@ send.time               when the message was actually sent
 
 acl.needed              the ACL rights an operation needed but didn't have
 acl.rights              a set of ACL rights, in its stored string form
+alarm.age               how late an alarm was when it came up, in seconds
+alarm.duplicates        how many duplicate alarms were suppressed for one record
+alarm.index             which VALARM within the component, counting from 1
+alarm.lastalarm         the lastalarm annotation value: last run and next check
+alarm.lastrun           when the alarm database last ran this record
+alarm.nextcheck         when the alarm database will next look at this record
+alarm.rcpts             how many recipients a scheduled submission has
+alarm.reason            why an alarm or alarm record was skipped or removed
+alarm.retries           how many times this record has been retried
+alarm.smtp.code         the SMTP response code a submission got
+alarm.step              which step of an alarm operation an event reports
+alarm.submission.state  what a submission was marked as: sent or cancelled
+alarm.time              when an alarm was due, as an iCalendar date-time
+alarm.type              the alarm type, as stored in the alarm database
 annot.attrib            an annotation attribute name, e.g. value.shared
 annot.column            the column of a line in the annotation definition file
 annot.context           the text a definition-file parse error happened near
@@ -168,9 +183,14 @@ cal.method              an iCalendar METHOD, such as REQUEST or REPLY
 cal.organizer           a calendar component's ORGANIZER
 cal.partstat            an attendee's PARTSTAT
 cal.property            an iCalendar property name, such as DTSTART
+cal.recur.bypart        the BY part that made a recurrence too frequent
+cal.recur.freq          a recurrence rule FREQ
+cal.recur.interval      a recurrence rule INTERVAL
 cal.recurid             a calendar component's RECURRENCE-ID
 cal.reqstatus           a REQUEST-STATUS code, as the client sent it
+cal.start               a calendar component's DTSTART
 cal.step                which step of a calendar operation an event reports
+cal.summary             a calendar component's SUMMARY
 cal.timezones           the CalDAV-Timezones preference a request asked for
 cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID
@@ -427,6 +447,7 @@ out.msg.id              Message-ID we sent, where msg.id is the one we got
 
 ### other. - the second mailbox in an event about two of them
 
+other.mbox.mailboxid    the JMAP id of the other mailbox involved
 other.mbox.name         the name of the other mailbox involved, in the admin namespace
 other.mbox.part         the partition of the other mailbox involved
 other.mbox.uniqueid     the uniqueid of the other mailbox involved
