@@ -1217,10 +1217,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         }
 
         if (mbname_isdeleted(mbname)) {
-            xsyslog(LOG_ERR, "corrupt ical_objs table detected: "
-                    "mailbox is deleted, but ical_objs row exists",
-                    "mboxid=<%s> imap_uid=<%d>",
-                    mbentry->uniqueid, cdata->dav.imap_uid);
+            xsyslog_ev(LOG_ERR, "caldav.db.row.orphaned",
+                       lf_s("mbox.uniqueid", mbentry->uniqueid),
+                       lf_u("msg.imapuid", cdata->dav.imap_uid));
         }
 
         mboxlist_entry_free(&mbentry);
@@ -1269,7 +1268,8 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                 free(scheddefault);
             }
             else {
-                xsyslog(LOG_ERR, "could not find default calendar", NULL);
+                xsyslog_ev(LOG_ERR, "caldav.default_calendar.missing",
+                           lf_s("u.username", sparam->userid));
                 SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
                 goto done;
             }
@@ -1430,8 +1430,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                                 &recipient_addresses, 0, oldical, NULL,
                                 sender_address, sender_name);
                         if (r2) {
-                            xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
-                                    "error=%s", error_message(r2));
+                            xsyslog_ev(LOG_WARNING,
+                                       "jmap.calendarevent.notification.failed",
+                                       lf_err("error", r2));
                         }
                     }
                 }
@@ -1564,8 +1565,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                     &recipient_addresses, 0, oldical, ical,
                     sender_address, sender_name);
             if (r2) {
-                xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
-                        "error=%s", error_message(r2));
+                xsyslog_ev(LOG_WARNING,
+                           "jmap.calendarevent.notification.failed",
+                           lf_err("error", r2));
             }
         }
     }

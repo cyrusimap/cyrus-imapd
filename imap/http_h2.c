@@ -958,7 +958,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
 
         if (charset_decode(&txn->buf,
                            hdr[0], strlen(hdr[0]), ENCODING_BASE64URL)) {
-            xsyslog(LOG_WARNING, "Cannot decode HTTP2-Settings", NULL);
+            xsyslog_ev(LOG_WARNING, "http2.settings.decode.failed");
             return HTTP_BAD_REQUEST;
         }
 

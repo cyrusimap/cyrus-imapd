@@ -143,6 +143,12 @@ sub test_restore_calendars_vpoll_hideattendees ($self)
         $res->single_sentence('Backup/restoreCalendars')
             ->arguments->{numUpdatesUndone});
 
+    # A VPOLL has no JMAP type, so the iMIP notification can't be built
+    # and scheduling one always fails.  VPOLL support is being removed, so
+    # fixing this beyond expecting the error would be wasted effort.
+    $self->assert_syslog_matches($self->{instance},
+        qr/event=imip\.notification\.create\.failed/);
+
     xlog "server survived: a follow-up request still works";
     $res = $jmap->request([
         ['Calendar/get', { properties => ['id'] }],

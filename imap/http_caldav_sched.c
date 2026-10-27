@@ -696,9 +696,11 @@ static int imip_send(const char *cal_ownerid, const char *sched_userid,
                                sched_mechanisms[sched_data->mech],
                                "actorCyrusName", httpd_userid);
     if (!val) {
-        xsyslog(LOG_ERR, "failed to create iMIP notification message",
-                "ownerid=<%s> sender=<%s> recipient=<%s> err=<%s>",
-                cal_ownerid, sender, buf_cstring(&recipient), jerr.text);
+        xsyslog_ev(LOG_ERR, "imip.notification.create.failed",
+                   lf_s("dav.owner", cal_ownerid),
+                   lf_s_opt("sched.sender", sender),
+                   lf_buf("sched.recipient", &recipient),
+                   lf_s("error", jerr.text));
         r = IMAP_INTERNAL;
     }
     else {
@@ -2273,8 +2275,9 @@ static void caldav_rewrite_attachprop_to_binary(struct mailbox *attachments,
     // Check if entry exists in WebDAV attachments
     int r = webdav_lookup_uid(webdavdb, mid, &wdata);
     if (r) {
-        xsyslog(LOG_ERR, "webdav_lookup_uid failed", "mid=<%s> err=<%s>",
-                mid, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "caldav.attachment.lookup.failed",
+                   lf_s("cal.managedid", mid),
+                   lf_s("error", cyrusdb_strerror(r)));
         goto done;
     }
 
@@ -2357,8 +2360,9 @@ HIDDEN void caldav_rewrite_attachprop_to_url(struct webdav_db *webdavdb,
     int r = webdav_lookup_uid(webdavdb, mid, &wdata);
     if (r) {
         if (r != CYRUSDB_NOTFOUND) {
-            xsyslog(LOG_ERR, "webdav_lookup_uid failed", "mid=<%s> err=<%s>",
-                    mid, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "caldav.attachment.lookup.failed",
+                       lf_s("cal.managedid", mid),
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         return;
     }
@@ -2403,8 +2407,9 @@ HIDDEN void caldav_rewrite_attachments(const char *userid,
     char *mboxname = caldav_mboxname(userid, MANAGED_ATTACH);
     int r = mailbox_open_irl(mboxname, &attachments);
     if (r) {
-        xsyslog(LOG_ERR, "can't open attachments",
-                "mboxname=<%s> err<%s>", mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                   lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
     }
     free(mboxname);
     if (r) goto done;
@@ -2415,7 +2420,8 @@ HIDDEN void caldav_rewrite_attachments(const char *userid,
     mbname = mbname_from_intname(mailbox_name(attachments));
     const char *baseurl = config_getstring(IMAPOPT_WEBDAV_ATTACHMENTS_BASEURL);
     if (!baseurl) {
-        xsyslog(LOG_ERR, "no webdav_attachments_baseurl config", NULL);
+        xsyslog_ev(LOG_ERR, "caldav.unconfigured",
+                   lf_s("config.option", "webdav_attachments_baseurl"));
         goto done;
     }
     caldav_attachment_url(&attachments_url, mbname_userid(mbname), baseurl, "");
@@ -3189,27 +3195,29 @@ static void sched_record_status(struct deferred_sched *item)
        deleted while we were delivering, and this checks for that */
     r = http_mailbox_open_w(item->mboxname, &mailbox);
     if (r) {
-        xsyslog(LOG_NOTICE, "can not record scheduling status, "
-                            "calendar is gone",
-                            "mboxname=<%s> resource=<%s> err=<%s>",
-                            item->mboxname, item->resource, error_message(r));
+        xsyslog_ev(LOG_NOTICE, "sched.status.record.skipped",
+                   lf_s("sched.reason", "calendar_gone"),
+                   lf_intname("mbox.name", item->mboxname),
+                   lf_s("dav.resource", item->resource),
+                   lf_err("error", r));
         goto done;
     }
 
     caldavdb = caldav_open_mailbox(mailbox);
     if (!caldavdb) {
-        xsyslog(LOG_ERR, "can not open caldav db to record scheduling status",
-                         "mboxname=<%s>", item->mboxname);
+        xsyslog_ev(LOG_ERR, "dav.db.open.failed",
+                   lf_intname("mbox.name", item->mboxname));
         goto done;
     }
 
     r = caldav_lookup_resource(caldavdb, mailbox->mbentry,
                                item->resource, &cdata, 0);
     if (r) {
-        xsyslog(LOG_NOTICE, "can not record scheduling status, "
-                            "resource is gone",
-                            "mboxname=<%s> resource=<%s> err=<%s>",
-                            item->mboxname, item->resource, error_message(r));
+        xsyslog_ev(LOG_NOTICE, "sched.status.record.skipped",
+                   lf_s("sched.reason", "resource_gone"),
+                   lf_intname("mbox.name", item->mboxname),
+                   lf_s("dav.resource", item->resource),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -3217,12 +3225,12 @@ static void sched_record_status(struct deferred_sched *item)
         /* somebody else wrote the resource while we delivered, and theirs
            is what the world has seen.  Don't overwrite it with our stale
            copy just to add a status parameter */
-        xsyslog(LOG_NOTICE, "not recording scheduling status, "
-                            "resource changed while scheduling",
-                            "mboxname=<%s> resource=<%s>"
-                            " uid=<%u> newuid=<%u>",
-                            item->mboxname, item->resource,
-                            item->imap_uid, cdata->dav.imap_uid);
+        xsyslog_ev(LOG_NOTICE, "sched.status.record.skipped",
+                   lf_s("sched.reason", "resource_changed"),
+                   lf_intname("mbox.name", item->mboxname),
+                   lf_s("dav.resource", item->resource),
+                   lf_u("old.msg.imapuid", item->imap_uid),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         goto done;
     }
 
@@ -3231,9 +3239,10 @@ static void sched_record_status(struct deferred_sched *item)
                               NEW_STAG, item->cal_ownerid, NULL, NULL,
                               &item->schedule_addresses);
     if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-        xsyslog(LOG_ERR, "can not store scheduling status",
-                         "mboxname=<%s> resource=<%s> err=<%s>",
-                         item->mboxname, item->resource, error_message(r));
+        xsyslog_ev(LOG_ERR, "sched.status.store.failed",
+                   lf_intname("mbox.name", item->mboxname),
+                   lf_s("dav.resource", item->resource),
+                   lf_err("error", r));
     }
 
   done:

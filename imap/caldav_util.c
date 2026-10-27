@@ -1093,10 +1093,10 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
             oldrecord = &record;
         }
         else {
-            xsyslog(LOG_ERR,
-                    "Couldn't find index record corresponding to CalDAV DB record",
-                    "mailbox=<%s> record=<%u> error=<%s>",
-                    mailbox_name(mailbox), cdata->dav.imap_uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.record.lookup.failed",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", cdata->dav.imap_uid),
+                       lf_err("error", r));
         }
     }
 
@@ -1687,9 +1687,8 @@ static int caldav_bump_defaultalarms_calhome_cb(const mbentry_t *mbentry,
     int r = mailbox_open_iwl(mbentry->name, &mailbox);
 
     if (r) {
-        xsyslog(LOG_ERR, "mailbox_open_iwl",
-                "mboxname=<%s> uniqueid=<%s> err=<%s>",
-                mbentry->name, mbentry->uniqueid, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                   lf_mbentry(mbentry), lf_err("error", r));
         return r;
     }
 
@@ -1850,9 +1849,9 @@ HIDDEN int caldav_init_jmapcalendar(const char *userid, struct mailbox *mailbox)
             rock.defalarms.with_time.ical,
             rock.defalarms.with_date.ical);
     if (r) {
-        xsyslog(LOG_WARNING, "failed to write default alarms",
-                "mboxname=<%s> err=<%s>",
-                mailbox_name(mailbox), cyrusdb_strerror(r));
+        xsyslog_ev(LOG_WARNING, "caldav.defaultalarms.write.failed",
+                   lf_mailbox(mailbox),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = 0;
     }
 

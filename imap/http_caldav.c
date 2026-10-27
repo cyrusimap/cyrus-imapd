@@ -1561,8 +1561,9 @@ static int caldav_delete_cal(struct transaction_t *txn,
                     &eid, &schedule_addresses, is_draft, ical, NULL,
                     NULL, NULL);
                 if (r2) {
-                    xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
-                            "error=%s", error_message(r2));
+                    xsyslog_ev(LOG_WARNING,
+                               "jmap.calendarevent.notification.failed",
+                               lf_err("error", r2));
                 }
             }
         }
@@ -2744,10 +2745,8 @@ static int caldav_mkcol(struct mailbox *mailbox)
     if (types & CAL_COMP_VEVENT) {
         r = caldav_init_jmapcalendar(httpd_userid, mailbox);
         if (r) {
-            xsyslog(LOG_WARNING,
-                    "failed to initialize new calendar for JMAP",
-                    "mboxname=<%s> err=<%s>",
-                    mailbox_name(mailbox), error_message(r));
+            xsyslog_ev(LOG_WARNING, "caldav.calendar.jmap_init.failed",
+                       lf_mailbox(mailbox), lf_err("error", r));
             r = 0;
         }
     }
@@ -4355,8 +4354,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                     &schedule_addresses, is_draft, oldical, ical,
                     NULL, NULL);
             if (r2) {
-                xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
-                        "error=%s", error_message(r2));
+                xsyslog_ev(LOG_WARNING,
+                           "jmap.calendarevent.notification.failed",
+                           lf_err("error", r2));
             }
         }
 #endif
@@ -6310,8 +6310,9 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
 
             *pctx->ret = HTTP_SERVER_ERROR;
 
-            xsyslog(LOG_ERR, "could not write schedule addresses",
-                    "err=<%s>", error_message(r));
+            xsyslog_ev(LOG_ERR, "caldav.schedule_addresses.write.failed",
+                       lf_s("u.username", httpd_userid),
+                       lf_err("error", r));
         }
 
         strarray_fini(&new);

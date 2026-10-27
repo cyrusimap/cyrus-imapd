@@ -296,10 +296,9 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
                     r = dav_get_validators(mailbox, &ddata, txn->userid, &newrecord,
                                            &etag, &txn->resp_body.lastmod);
                     if (r) {
-                        xsyslog(LOG_ERR, "read index record failed",
-                                         "mailbox=<%s> uid=<%u>",
-                                         mailbox_name(mailbox),
-                                         ddata.imap_uid);
+                        xsyslog_ev(LOG_ERR, "dav.record.lookup.failed",
+                                   lf_mailbox(mailbox),
+                                   lf_u("msg.imapuid", ddata.imap_uid));
                         txn->error.desc = error_message(r);
                         ret = HTTP_SERVER_ERROR;
                     }
