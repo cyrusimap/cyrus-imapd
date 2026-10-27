@@ -667,16 +667,19 @@ static int decode_wait_status(struct centry *c, pid_t pid, int status)
     char *desc = centry_describe(c, pid);
 
     if (WIFEXITED(status)) {
-        if (!WEXITSTATUS(status)) {
+        int ex = WEXITSTATUS(status);
+
+        switch (ex) {
+        case EX_OK:
             syslog(LOG_DEBUG, "%s exited normally", desc);
-        }
-        else if (WEXITSTATUS(status) == EX_TEMPFAIL) {
+            break;
+        case EX_TEMPFAIL:
             syslog(LOG_DEBUG, "%s was killed", desc);
-        }
-        else {
-            syslog(LOG_ERR, "%s exited, status %d",
-                   desc, WEXITSTATUS(status));
+            break;
+        default:
+            syslog(LOG_ERR, "%s exited, status %d", desc, ex);
             failed = 1;
+            break;
         }
     }
 
