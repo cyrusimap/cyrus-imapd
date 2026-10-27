@@ -1,0 +1,104 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_davsharing_notifications_carddav_disabled
+    :NoVirtDomains
+    ($self)
+{
+    my $instance = $self->{instance};
+    my $CalDAV = $self->{caldav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.manifold");
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    my $service = $instance->get_service("http");
+    my %params = (
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $mancal = Net::CalDAVTalk->new(%params);
+    my $mancard = Net::CardDAVTalk->new(%params);
+
+    my $invite = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<D:share-resource xmlns:D="DAV:">
+  <D:sharee>
+    <D:href>mailto:cassandane\@example.com</D:href>
+    <D:share-access>
+      <D:read />
+    </D:share-access>
+  </D:sharee>
+</D:share-resource>
+EOF
+
+    my $reply = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<D:invite-reply xmlns:D="DAV:">
+  <D:invite-accepted />
+</D:invite-reply>
+EOF
+
+    xlog $self, "share a calendar and an addressbook with cassandane";
+    my $calendar = $mancal->NewCalendar({ name => 'Shared' });
+    $mancal->Request('POST', $calendar, $invite,
+                     'Content-Type' => 'application/davsharing+xml');
+    my $abook = $mancard->NewAddressBook('Shared', name => 'Shared');
+    $mancard->Request('POST', "$abook/", $invite,
+                      'Content-Type' => 'application/davsharing+xml');
+
+    my $casnotify = "/dav/notifications/user/cassandane";
+    my ($adds) = $CalDAV->SyncEventLinks($casnotify);
+    $self->assert_num_equals(2, scalar keys %$adds);
+
+    xlog $self, "accept both invites";
+    my %invite_type;
+    for my $href (keys %$adds) {
+        my $res = $CalDAV->Request('GET', $href);
+        $invite_type{$href} =
+            $res->{content} =~ m{/dav/addressbooks/} ? 'abook' : 'cal';
+        $CalDAV->Request('POST', $href, $reply,
+                         'Content-Type' => 'application/davsharing+xml');
+    }
+    my ($abook_invite) = grep { $invite_type{$_} eq 'abook' } keys %$adds;
+    $self->assert_not_null($abook_invite);
+
+    my $mannotify = "/dav/notifications/user/manifold";
+    ($adds) = $mancal->SyncEventLinks($mannotify);
+    $self->assert_num_equals(2, scalar keys %$adds);
+
+    xlog $self, "restart with only CalDAV in httpmodules";
+    $instance->stop();
+    $instance->{re_use_dir} = 1;
+    $instance->{config}->set(httpmodules => 'caldav');
+    $instance->{config}->generate($instance->_imapd_conf());
+    $instance->start();
+
+    xlog $self, "only the calendar invite and reply are listed";
+    ($adds) = $CalDAV->SyncEventLinks($casnotify);
+    $self->assert_num_equals(1, scalar keys %$adds);
+    $self->assert(!exists $adds->{$abook_invite});
+
+    ($adds) = $mancal->SyncEventLinks($mannotify);
+    $self->assert_num_equals(1, scalar keys %$adds);
+    my $res = $mancal->Request('GET', (keys %$adds)[0]);
+    $self->assert_does_not_match(qr{/dav/addressbooks/}, $res->{content});
+
+    my $propfind = $CalDAV->Request('PROPFIND', "$casnotify/",
+        '<?xml version="1.0"?><D:propfind xmlns:D="DAV:"><D:prop>'
+        . '<D:getetag/></D:prop></D:propfind>',
+        Depth => 1);
+    my @hrefs = map { $_->{'{DAV:}href'}{content} }
+                $propfind->{'{DAV:}response'}->@*;
+    $self->assert(!grep { $_ eq $abook_invite } @hrefs);
+
+    $res = $CalDAV->{ua}->get($CalDAV->request_url($abook_invite),
+        { headers => { Authorization => $CalDAV->auth_header() } });
+    $self->assert_num_equals(404, $res->{status});
+}
