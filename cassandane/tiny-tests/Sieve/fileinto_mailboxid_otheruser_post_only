@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+# knowing another user's mailboxid and having "p" isn't enough to file there
+sub test_fileinto_mailboxid_otheruser_post_only
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user('alice');
+    $admintalk->create("user.alice.target") || die;
+    $admintalk->setacl("user.alice.target", 'anyone' => 'p') || die;
+
+    # a uniqueid, not a JMAP id: those are looked up in our own account only
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my $res = $admintalk->getmetadata("user.alice.target", $entry);
+    my $id = $res->{"user.alice.target"}{$entry};
+    $self->assert_not_null($id);
+
+    $self->{instance}->install_sieve_script(<<EOF2
+require ["fileinto", "mailboxid"];
+fileinto :mailboxid "$id" "nope";
+EOF2
+    , username => 'cassandane');
+
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg, users => [ 'cassandane' ]);
+
+    xlog $self, "nothing reached alice's mailbox";
+    $res = $admintalk->status("user.alice.target", ['messages']);
+    $self->assert_num_equals(0, $res->{messages});
+
+    xlog $self, "the message fell back to our INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+}
