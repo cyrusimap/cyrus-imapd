@@ -160,14 +160,18 @@ backup.type             which data a restore covers: contacts, calendars, notes 
 backup.undo             what a restore is undoing: create, update or destroy
 backup.update           1 if a resource is recreated as an update, not an undelete
 cal.attendee            a calendar component's ATTENDEE
+cal.component           an iCalendar component name, such as VEVENT
 cal.createdmodseq       the createdmodseq a JMAP calendar event id encodes
 cal.eventid             a JMAP CalendarEvent id
 cal.organizer           a calendar component's ORGANIZER
 cal.partstat            an attendee's PARTSTAT
+cal.property            an iCalendar property name, such as DTSTART
 cal.recurid             a calendar component's RECURRENCE-ID
+cal.reqstatus           a REQUEST-STATUS code, as the client sent it
 cal.timezones           the CalDAV-Timezones preference a request asked for
 cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID
+cal.valuetype           an iCalendar value type, such as DATE-TIME
 cmd.duration            how long a command took, in seconds
 cmd.nettime             how long a command spent on the network, in seconds
 cmd.total               cmd.duration and cmd.nettime added together
