@@ -23,7 +23,7 @@ sub test_specialuse_params
     # checks each special-use parameter against $arg: a string must match,
     # and undef means the parameter must be absent.
     my sub assert_event_specialuse ($desc, $arg) {
-        my @events = map { decode_json($_->{MESSAGE}) }
+        my @events = map { $_->{message} }
                          $self->{instance}->getnotify->@*;
         my @matches = grep { $_->{event} eq $arg->{event} } @events;
         $self->assert_num_equals(1, scalar @matches,

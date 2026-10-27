@@ -645,8 +645,10 @@ int deliver_mailbox(FILE *f,
         }
 
         /* translate mailboxname */
+        json_t *jmsg = notify_text(notifyheader);
         notify(notifier, "MAIL", NULL, user, extname, 0, NULL,
-               notifyheader ? notifyheader : "", /*fname*/NULL);
+               jmsg, /*fname*/NULL);
+        json_decref(jmsg);
         free(extname);
     }
 

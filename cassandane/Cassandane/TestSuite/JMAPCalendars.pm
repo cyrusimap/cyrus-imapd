@@ -449,9 +449,9 @@ sub assert_rewrite_webdav_attachment_url_itip
 
     xlog "Assert ATTACH in iTIP message is a BINARY value";
     my $data = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($imip);
-    my $payload = decode_json($imip->{MESSAGE});
+    my $payload = $imip->{message};
 
     my $ical = Data::ICal->new(data => $payload->{ical});
     my %entries = map { $_->ical_entry_type() => $_ } @{$ical->entries()};

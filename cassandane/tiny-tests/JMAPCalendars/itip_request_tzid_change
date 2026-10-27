@@ -50,9 +50,9 @@ sub test_itip_request_tzid_change
 
     xlog "Assert that iTIP notification is sent";
     my $data = $self->{instance}->getnotify();
-    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($notif);
-    my $notif_payload = decode_json($notif->{MESSAGE});
+    my $notif_payload = $notif->{message};
     my $expect_id = $eventId;
     $self->assert_str_equals($expect_id, $notif_payload->{id});
     $self->assert_str_equals('REQUEST', $notif_payload->{method});
@@ -74,9 +74,9 @@ sub test_itip_request_tzid_change
 
     xlog "Assert that iTIP notification is sent";
     $data = $self->{instance}->getnotify();
-    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($notif);
-    $notif_payload = decode_json($notif->{MESSAGE});
+    $notif_payload = $notif->{message};
     $self->assert_str_equals($expect_id, $notif_payload->{id});
     $self->assert_str_equals('REQUEST', $notif_payload->{method});
 }

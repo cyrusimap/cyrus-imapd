@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+# The old "dlist:" notifysocket prefix still reaches the listener, which now
+# reads JSON, and logs that the prefix is deprecated.
+sub test_notifysocket_dlist_prefix
+    :NoStartInstances
+    ($self)
+{
+    # Cassandane keeps the prefix and supplies its own path
+    $self->config_set(notifysocket => 'dlist:');
+    $self->_start_instances();
+
+    # discard events from setting up
+    $self->{instance}->getnotify();
+
+    $self->make_message('dlist prefix');
+
+    my @events = map {; $_->{message}{event} }
+                 grep {; $_->{class} eq 'EVENT' }
+                 $self->{instance}->getnotify()->@*;
+    $self->assert_cmp_deeply(superbagof('MessageAppend'), \@events);
+
+    $self->assert_syslog_matches($self->{instance},
+        qr/event=notify\.config\.deprecated .*config\.option=notifysocket/);
+}

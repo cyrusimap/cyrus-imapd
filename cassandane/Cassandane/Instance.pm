@@ -830,10 +830,13 @@ sub _generate_imapd_conf
         cyrus_prefix => $self->{cyrus_prefix},
         prefix => getcwd(),
     );
+    # a test may pick the stream prefix, but the path is always ours
+    my ($notify_prefix) = ($config->get('notifysocket') // '') =~ m/^(\w+):/;
+    $notify_prefix //= 'json';
     $config->set(
         sasl_pwcheck_method => 'saslauthd',
         sasl_saslauthd_path => "$self->{basedir}/run/mux",
-        notifysocket => "dlist:$self->{basedir}/run/notify",
+        notifysocket => "$notify_prefix:$self->{basedir}/run/notify",
         event_notifier => 'pusher',
     );
     if ($cyrus_major_version >= 3) {
@@ -2786,12 +2789,10 @@ sub notifyd
         my $Handle = AnyEvent::Handle->new(
             fh => $fh,
         );
-        $Handle->push_read('Cyrus::DList' => 1, sub {
-            my $dlist = $_[1];
-            my $event = $dlist->as_perl();
-            #xlog "GOT EVENT: " . encode_json($event);
+        $Handle->push_read(line => sub {
+            my $event = decode_json($_[1]);
             push @EVENTS, $event;
-            $Handle->push_write('Cyrus::DList' => scalar(Cyrus::DList->new_kvlist("OK")), 1);
+            $Handle->push_write(encode_json({ status => 'OK' }) . "\r\n");
             $Handle->push_shutdown();
         });
     });

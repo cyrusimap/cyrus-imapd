@@ -700,9 +700,7 @@ static int imip_send(const char *cal_ownerid, const char *sched_userid,
         r = IMAP_INTERNAL;
     }
     else {
-        char *serial = json_dumps(val, JSON_COMPACT);
-        notify(notifier, "IMIP", NULL, sched_userid, NULL, 0, NULL, serial, NULL);
-        free(serial);
+        notify(notifier, "IMIP", NULL, sched_userid, NULL, 0, NULL, val, NULL);
         json_decref(val);
     }
 

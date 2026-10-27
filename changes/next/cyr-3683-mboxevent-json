@@ -1,0 +1,31 @@
+Description:
+
+Notifications sent to a stream notifysocket are now JSON: each is one line
+holding a JSON object, and an EVENT or IMIP notification carries its
+message as a nested JSON object rather than a string.  The dlist stream
+format is gone: a "dlist:" notifysocket now selects JSON too, with a
+warning.
+
+
+Documentation:
+
+imapd.conf(5), notifysocket; the "Transport" section
+of the event notifications page.
+
+
+Config changes:
+
+notifysocket accepts a "json:" prefix to select the JSON stream format.
+The old "dlist:" prefix is deprecated and selects the same format.
+
+
+Upgrade instructions:
+
+Before upgrading, update the listener on a "dlist:" notifysocket to read
+and reply with JSON lines.  The prefix itself can be changed to "json:"
+later; until then each process logs a notify.config.deprecated warning.
+
+
+GitHub issue:
+
+None.
