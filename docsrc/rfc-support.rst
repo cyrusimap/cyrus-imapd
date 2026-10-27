@@ -993,6 +993,10 @@ draft-pot-webdav-notifications
 
     WebDAV: User Notifications
 
+draft-ietf-jmap-mail-sharing
+
+    JMAP Mail Sharing
+
 ..
 
     caldav-ctag     Calendar Collection Entity Tag (CTag) in CalDAV
