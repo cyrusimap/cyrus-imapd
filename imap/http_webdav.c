@@ -662,10 +662,10 @@ static int webdav_put(struct transaction_t *txn, void *obj,
             oldrecord = &record;
         }
         else {
-            xsyslog(LOG_ERR,
-                    "Couldn't find index record corresponding to WebDAV DB record",
-                    "mailbox=<%s> record=<%u> error=<%s>",
-                    mailbox_name(mailbox), wdata->dav.imap_uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.record.lookup.failed",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", wdata->dav.imap_uid),
+                       lf_err("error", r));
         }
     }
 

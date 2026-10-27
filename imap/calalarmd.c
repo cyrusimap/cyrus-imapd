@@ -33,8 +33,9 @@ static struct namespace calalarmd_namespace;
 EXPORTED void fatal(const char *msg, int err)
 {
     if (debugmode) fprintf(stderr, "dying with %s %d\n", msg, err);
-    syslog(LOG_CRIT, "%s", msg);
-    syslog(LOG_NOTICE, "exiting");
+    xsyslog_ev(LOG_CRIT, "alarm.fatal",
+               lf_s("error", msg),
+               lf_d("sys.exitcode", err));
 
     cyrus_done();
 

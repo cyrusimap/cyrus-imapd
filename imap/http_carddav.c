@@ -658,10 +658,10 @@ static int carddav_store_resource(struct transaction_t *txn,
             oldrecord = &record;
         }
         else {
-            xsyslog(LOG_ERR,
-                    "Couldn't find index record corresponding to CardDAV DB record",
-                    "mailbox=<%s> record=<%u> error=<%s>",
-                    mailbox_name(mailbox), cdata->dav.imap_uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.record.lookup.failed",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", cdata->dav.imap_uid),
+                       lf_err("error", r));
         }
 
         cmodseq = cdata->dav.createdmodseq;

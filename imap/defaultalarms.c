@@ -263,9 +263,12 @@ static int load_alarms(const char *mboxname,
             if (!get_alarms_dl(root, "WITH_TIME", &defalarms->with_time) ||
                 !get_alarms_dl(root, "WITH_DATE", &defalarms->with_date)) {
 
-                xsyslog(LOG_ERR, "corrupt default alarm annotation value",
-                        "mboxname=<%s> userid=<%s> annot=<%s> value=<%s>",
-                        mboxname, userid, annot, buf_cstring(&buf));
+                xsyslog_ev(LOG_ERR,
+                           "caldav.defaultalarms.annotation.invalid",
+                           lf_intname("mbox.name", mboxname),
+                           lf_s("u.username", userid),
+                           lf_s("annot.entry", annot),
+                           lf_buf("annot.value", &buf));
 
                 defaultalarms_fini(defalarms);
             }
@@ -359,9 +362,8 @@ EXPORTED int defaultalarms_save(struct mailbox *mbox,
 
     int r = mailbox_get_annotate_state(mbox, 0, &astate);
     if (r) {
-        xsyslog(LOG_ERR, "failed to get annotation state",
-                "mboxname=<%s> err=<%s>",
-                mailbox_name(mbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "caldav.defaultalarms.annotstate.failed",
+                   lf_mailbox(mbox), lf_err("error", r));
         return CYRUSDB_INTERNAL;
     }
 
@@ -615,9 +617,10 @@ static int migrate39_rewrite_peruser_data(struct mailbox *mbox,
     int r = 0;
 
     if (icalsupport_decode_personal_data(&value, &data)) {
-        xsyslog(LOG_ERR, "invalid per-user data",
-                "mboxname=<%s> imap_uid=<%d> userid=<%s>",
-                mailbox_name(mbox), cdata->dav.imap_uid, userid);
+        xsyslog_ev(LOG_ERR, "caldav.defaultalarms.peruser.invalid",
+                   lf_mailbox(mbox),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid),
+                   lf_s("u.username", userid));
         r = CYRUSDB_INTERNAL;
         goto done;
     }
@@ -733,9 +736,10 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
 
     int r = mailbox_open_iwl(mbentry->name, &mbox);
     if (r) {
-        xsyslog(LOG_ERR, "could not open mailbox",
-                "mboxname=<%s> err=<%s>",
-                mbentry->name, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "caldav.defaultalarms.migrate.failed",
+                   lf_s("cal.step", "open_mailbox"),
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_s("error", cyrusdb_strerror(r)));
         err = jmap_server_error(r);
         goto done;
     }
@@ -743,9 +747,11 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
     // Load default alerts, either from JMAP or CalDAV
     r = load_alarms(mailbox_name(mbox), ownerid, 0, &defalarms);
     if (r) {
-        xsyslog(LOG_ERR, "could not load default alarms",
-                "mboxname=<%s> userid=<%s> err=<%s>",
-                mailbox_name(mbox), ownerid, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "caldav.defaultalarms.migrate.failed",
+                   lf_s("cal.step", "load_alarms"),
+                   lf_mailbox(mbox),
+                   lf_s("u.username", ownerid),
+                   lf_s("error", cyrusdb_strerror(r)));
         err = jmap_server_error(r);
         goto done;
     }
@@ -754,8 +760,9 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
     // the mailbox annotation state to mailbox scope is gnarly
     astate = annotate_state_new();
     if (!astate) {
-        xsyslog(LOG_ERR, "could not get annotation state",
-                "mboxname=<%s>", mailbox_name(mbox));
+        xsyslog_ev(LOG_ERR, "caldav.defaultalarms.migrate.failed",
+                   lf_s("cal.step", "get_annotation_state"),
+                   lf_mailbox(mbox));
         r = CYRUSDB_INTERNAL;
         err = jmap_server_error(r);
         goto done;
@@ -769,9 +776,11 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
         r = defaultalarms_save_astate(astate, ownerid,
                 defalarms.with_time.ical, defalarms.with_date.ical);
         if (r) {
-            xsyslog(LOG_ERR, "could not set JMAP default alerts",
-                    "mboxname=<%s> userid=<%s> err=<%s>",
-                    mailbox_name(mbox), ownerid, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "caldav.defaultalarms.migrate.failed",
+                       lf_s("cal.step", "set_jmap_alerts"),
+                       lf_mailbox(mbox),
+                       lf_s("u.username", ownerid),
+                       lf_s("error", cyrusdb_strerror(r)));
             err = jmap_server_error(r);
             goto done;
         }
@@ -784,9 +793,11 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
         const char *annot = CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATETIME;
         r = annotate_state_write(astate, annot, "", &buf);
         if (r) {
-            xsyslog(LOG_ERR, "failed to remove annotation",
-                    "mboxname=<%s> annot=<%s> err=<%s>",
-                    mailbox_name(mbox), annot, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "caldav.defaultalarms.migrate.failed",
+                       lf_s("cal.step", "remove_annotation"),
+                       lf_mailbox(mbox),
+                       lf_s("annot.entry", annot),
+                       lf_s("error", cyrusdb_strerror(r)));
             json_object_set_new(caldav_alarm_err, "withTime",
                     jmap_server_error(r));
         }
@@ -794,9 +805,11 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
         annot = CALDAV_ANNOT_DEFAULTALARM_VEVENT_DATE;
         r = annotate_state_write(astate, annot, "", &buf);
         if (r) {
-            xsyslog(LOG_ERR, "failed to remove annotation",
-                    "mboxname=<%s> annot=<%s> err=<%s>",
-                    mailbox_name(mbox), annot, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "caldav.defaultalarms.migrate.failed",
+                       lf_s("cal.step", "remove_annotation"),
+                       lf_mailbox(mbox),
+                       lf_s("annot.entry", annot),
+                       lf_s("error", cyrusdb_strerror(r)));
 
             json_object_set_new(caldav_alarm_err, "withoutTime",
                     jmap_server_error(r));
@@ -805,8 +818,9 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
 
     r = annotate_state_commit(&astate);
     if (r) {
-        xsyslog(LOG_ERR, "could not commit annotation state",
-                "mboxname=<%s>", mailbox_name(mbox));
+        xsyslog_ev(LOG_ERR, "caldav.defaultalarms.migrate.failed",
+                   lf_s("cal.step", "commit_annotation_state"),
+                   lf_mailbox(mbox));
         err = jmap_server_error(r);
         goto done;
     }
@@ -815,8 +829,9 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
 
     struct caldav_db *caldav_db = caldav_open_mailbox(mbox);
     if (!caldav_db) {
-        xsyslog(LOG_ERR, "could not open caldav.db", "mboxname=<%s>",
-                mailbox_name(mbox));
+        xsyslog_ev(LOG_ERR, "caldav.defaultalarms.migrate.failed",
+                   lf_s("cal.step", "open_db"),
+                   lf_mailbox(mbox));
         err = jmap_server_error(CYRUSDB_INTERNAL);
         goto done;
     }
@@ -839,14 +854,17 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
         r = caldav_lookup_imapuid(caldav_db, mbentry, record->uid, &cdata, 1);
         if (r) {
             if (r == CYRUSDB_NOTFOUND) {
-                xsyslog(LOG_INFO, "ignoring annotation tombstone in caldav.db",
-                        "mboxname=<%s> imap_uid=<%d>",
-                        mailbox_name(mbox), record->uid);
+                xsyslog_ev(LOG_INFO,
+                           "caldav.defaultalarms.tombstone.ignored",
+                           lf_mailbox(mbox),
+                           lf_u("msg.imapuid", record->uid));
             }
             else {
-                xsyslog(LOG_ERR, "can not load entry from caldav.db",
-                        "mboxname=<%s> imap_uid=<%d> err=<%s>",
-                        mailbox_name(mbox), record->uid, cyrusdb_strerror(r));
+                xsyslog_ev(LOG_ERR, "caldav.defaultalarms.migrate.failed",
+                           lf_s("cal.step", "load_record"),
+                           lf_mailbox(mbox),
+                           lf_u("msg.imapuid", record->uid),
+                           lf_s("error", cyrusdb_strerror(r)));
                 free_hash_table(&peruser, free);
 
                 buf_reset(&buf);
@@ -870,10 +888,13 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
                     r = mailbox_annotation_write(mbox, record->uid,
                             PER_USER_CAL_DATA, userid, &buf);
                     if (r) {
-                        xsyslog(LOG_ERR, "could not rewrite per-user data",
-                                "mboxname=<%s> imap_uid=<%d> userid=<%s> err=<%s>",
-                                mailbox_name(mbox), record->uid,
-                                userid, error_message(r));
+                        xsyslog_ev(LOG_ERR,
+                                   "caldav.defaultalarms.migrate.failed",
+                                   lf_s("cal.step", "rewrite_peruser"),
+                                   lf_mailbox(mbox),
+                                   lf_u("msg.imapuid", record->uid),
+                                   lf_s("u.username", userid),
+                                   lf_err("error", r));
 
                         buf_reset(&buf);
                         buf_printf(&buf, "%d/%s", record->uid, userid);
