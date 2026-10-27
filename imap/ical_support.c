@@ -47,23 +47,22 @@ EXPORTED void ical_support_init(void)
     icalarray *timezones;
 
     if (config_zoneinfo_dir) {
-        syslog(LOG_DEBUG, "using timezone data from zoneinfo_dir=%s",
-                          config_zoneinfo_dir);
         icaltimezone_set_zone_directory(config_zoneinfo_dir);
         icaltimezone_set_tzid_prefix("");
         icaltimezone_set_builtin_tzdata(1);
     }
-    else {
-        syslog(LOG_DEBUG, "zoneinfo_dir is unset, libical will find "
-                           "its own timezone data");
-    }
+
+    xsyslog_ev(LOG_DEBUG, "ical.timezones.configured",
+               lf_s("cal.tzdata",
+                    config_zoneinfo_dir ? "zoneinfo_dir" : "libical"),
+               lf_s_opt("sys.path", config_zoneinfo_dir));
 
     /* make sure libical actually finds some timezone data! */
     assert(icalerrno == 0);
     timezones = icaltimezone_get_builtin_timezones();
     if (icalerrno != 0) {
-        syslog(LOG_ERR, "libical error while loading timezones: %s",
-                        icalerror_strerror(icalerrno));
+        xsyslog_ev(LOG_ERR, "ical.timezones.load.failed",
+                   lf_s("error", icalerror_strerror(icalerrno)));
     }
 
     if (timezones->num_elements == 0) {
@@ -73,8 +72,8 @@ EXPORTED void ical_support_init(void)
 
     icalparser_set_ctrl(ICALPARSER_CTRL_OMIT);
 
-    syslog(LOG_DEBUG, "%s: found %zu timezones",
-                       __func__, timezones->num_elements);
+    xsyslog_ev(LOG_DEBUG, "ical.timezones.loaded",
+               lf_zu("cal.tzcount", timezones->num_elements));
 
 #ifdef HAVE_LIBICALVCARD_XPROP_VALUE
     /* Initialize libicalvcard extended property values */

@@ -193,6 +193,8 @@ cal.start               a calendar component's DTSTART
 cal.step                which step of a calendar operation an event reports
 cal.summary             a calendar component's SUMMARY
 cal.timezones           the CalDAV-Timezones preference a request asked for
+cal.tzcount             how many time zones libical loaded
+cal.tzdata              where time zone data came from: zoneinfo_dir or libical
 cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID
 cal.valuetype           an iCalendar value type, such as DATE-TIME
