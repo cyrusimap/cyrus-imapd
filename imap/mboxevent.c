@@ -104,7 +104,6 @@ static struct mboxevent event_template =
     { EVENT_VISIBLE_USERS, "vnd.cmu.visibleUsers", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_DAV_FILENAME, "vnd.cmu.davFilename", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_DAV_UID, "vnd.cmu.davUid", EVENT_PARAM_STRING, { 0 }, 0 },
-    { EVENT_ENVELOPE, "vnd.cmu.envelope", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_SESSIONID, "vnd.cmu.sessionId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_BODYSTRUCTURE, "bodyStructure", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CLIENT_ID, "vnd.fastmail.clientId", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -564,9 +563,6 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
                  * extra parameter */
                 ((extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_DISKUSED) &&
                  (type & (EVENT_QUOTA_CHANGE))));
-    case EVENT_ENVELOPE:
-        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_ENVELOPE) &&
-               (type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND));
     case EVENT_FLAG_NAMES:
         return (type & (EVENT_FLAGS_SET|EVENT_FLAGS_CLEAR)) ||
                ((extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_FLAGNAMES) &&
@@ -1229,13 +1225,6 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         }
     }
 
-    /* add vnd.cmu.envelope */
-    if (mboxevent_expected_param(event->type, EVENT_ENVELOPE)) {
-        FILL_STRING_PARAM(event, EVENT_ENVELOPE,
-                          xstrndup(cacheitem_base(record, CACHE_ENVELOPE),
-                                   cacheitem_size(record, CACHE_ENVELOPE)));
-    }
-
     /* add bodyStructure */
     if (mboxevent_expected_param(event->type, EVENT_BODYSTRUCTURE)) {
         FILL_STRING_PARAM(event, EVENT_BODYSTRUCTURE,
@@ -1453,16 +1442,6 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
 
             FILL_JSON_PARAM(event, EVENT_JMAP_EMAIL, email);
         }
-    }
-
-    /* add vnd.cmu.envelope */
-    if (mboxevent_expected_param(event->type, EVENT_ENVELOPE)) {
-        char *env;
-        if ((r = msgrecord_get_cache_item(msgrec, CACHE_ENVELOPE, &env))) {
-            syslog(LOG_ERR, "mboxevent: can't extract cache envelope: %s", error_message(r));
-            return;
-        }
-        FILL_STRING_PARAM(event, EVENT_ENVELOPE, env);
     }
 
     /* add bodyStructure */

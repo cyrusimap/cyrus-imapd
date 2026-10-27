@@ -11,7 +11,7 @@ sub test_metadata_change
     $self->config_set(event_extra_params => join ' ', qw(
         bodyStructure clientAddress diskUsed flagNames messageContent
         messageSize messages modseq service timestamp uidnext
-        vnd.cmu.midset vnd.cmu.unseenMessages vnd.cmu.envelope
+        vnd.cmu.midset vnd.cmu.unseenMessages
         vnd.cmu.sessionId vnd.cmu.mailboxACL vnd.cmu.mbtype
         vnd.cmu.davFilename vnd.cmu.davUid vnd.fastmail.clientId
         vnd.fastmail.sessionId vnd.fastmail.convExists
