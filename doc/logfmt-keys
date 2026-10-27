@@ -162,6 +162,7 @@ backup.update           1 if a resource is recreated as an update, not an undele
 cal.attendee            a calendar component's ATTENDEE
 cal.component           an iCalendar component name, such as VEVENT
 cal.createdmodseq       the createdmodseq a JMAP calendar event id encodes
+cal.element             an iCalendar or CalDAV XML element a request named
 cal.eventid             a JMAP CalendarEvent id
 cal.organizer           a calendar component's ORGANIZER
 cal.partstat            an attendee's PARTSTAT

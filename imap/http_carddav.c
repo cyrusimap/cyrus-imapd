@@ -437,8 +437,9 @@ static int _create_mailbox(const char *userid, const char *mailboxname, int type
         mailbox_close(&mailbox);
     }
 
-    if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                  mailboxname, error_message(r));
+    if (r) xsyslog_ev(LOG_ERR, "carddav.addressbook.create.failed",
+                      lf_intname("mbox.name", mailboxname),
+                      lf_err("error", r));
 
     return r;
 }
@@ -525,8 +526,8 @@ static int my_carddav_auth(const char *userid)
     /* Auto-provision an addressbook for 'userid' */
     int r = carddav_create_defaultaddressbook(userid);
     if (r) {
-        syslog(LOG_ERR, "could not autoprovision addressbook for userid %s: %s",
-                userid, error_message(r));
+        xsyslog_ev(LOG_ERR, "carddav.autoprovision.failed",
+                   lf_s("u.username", userid), lf_err("error", r));
         if (r == IMAP_INVALID_USER) {
             /* We successfully authenticated, but don't have a user INBOX.
                Assume that the user has yet to be fully provisioned,
@@ -914,8 +915,9 @@ static int export_addressbook(struct transaction_t *txn,
     /* Open mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                   lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                   lf_err("error", r));
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
@@ -1751,8 +1753,7 @@ static int carddav_import(struct transaction_t *txn, void *obj,
         /* Create DAV:response element */
         resp = xmlNewChild(xmlroot, ns[NS_DAV], BAD_CAST "response", NULL);
         if (!resp) {
-            syslog(LOG_ERR,
-                   "import_resource()): Unable to add response XML element");
+            xsyslog_ev(LOG_ERR, "dav.response.create.failed");
             fatal("import_resource()): Unable to add response XML element",
                   EX_SOFTWARE);
         }

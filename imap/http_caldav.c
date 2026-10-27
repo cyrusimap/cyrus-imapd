@@ -766,8 +766,8 @@ static int my_caldav_auth(const char *userid)
     mboxlist_entry_free(&mbentry);
 
     if (r) {
-        syslog(LOG_ERR, "could not autoprovision calendars for userid %s: %s",
-                userid, error_message(r));
+        xsyslog_ev(LOG_ERR, "caldav.autoprovision.failed",
+                   lf_s("u.username", userid), lf_err("error", r));
         if (r == IMAP_INVALID_USER) {
             /* We successfully authenticated, but don't have a user INBOX.
                Assume that the user has yet to be fully provisioned,
@@ -1191,9 +1191,10 @@ static int _scheduling_enabled(struct transaction_t *txn,
         !strcasecmp(buf_cstring(&buf), "F")) {
         is_enabled = 0;
 
-        syslog(LOG_WARNING, "Scheduling disabled for user %s on mailbox %s"
-               " by CY:scheduling-enabled annotation",
-               httpd_userid, mailbox_name(mailbox));
+        xsyslog_ev(LOG_WARNING, "caldav.scheduling.disabled",
+                   lf_s("u.username", httpd_userid),
+                   lf_intname("mbox.name", mailbox_name(mailbox)),
+                   lf_s("annot.entry", entry));
     }
 
     const char **hdr = spool_getheader(txn->req_hdrs, "Scheduling-Enabled");
@@ -1296,16 +1297,16 @@ static int open_attachments(const char *userid, struct mailbox **attachments,
     r = http_mailbox_open_w(mailboxname, attachments);
     if (r) {
         if (r != IMAP_MAILBOX_REPLICAONLY)
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   mailboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                       lf_intname("mbox.name", mailboxname),
+                       lf_err("error", r));
         ret = http_status_for_write_error(r);
     }
     else {
         /* Open the WebDAV DB corresponding to the attachments collection */
         *webdavdb = webdav_open_mailbox(*attachments);
         if (!*webdavdb) {
-            syslog(LOG_ERR,
-                   "webdav_open_mailbox(%s) failed", mailbox_name(*attachments));
+            xsyslog_ev(LOG_ERR, "dav.db.open.failed", lf_mailbox(*attachments));
             ret = HTTP_SERVER_ERROR;
         }
     }
@@ -1449,7 +1450,8 @@ static int manage_attachments(struct transaction_t *txn,
 
     if (cdata->comp_flags.mattach) {
         if (!*oldical) {
-            syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
+            xsyslog_ev(LOG_DEBUG, "caldav.resource.loading",
+                       lf_u("msg.imapuid", cdata->dav.imap_uid));
 
             /* Load message containing the resource and parse iCal data */
             *oldical = caldav_record_to_ical(mailbox, cdata,
@@ -1506,9 +1508,9 @@ static int caldav_delete_cal(struct transaction_t *txn,
         if (!ical) ical = record_to_ical(mailbox, record, &schedule_addresses);
 
         if (!ical) {
-            syslog(LOG_ERR,
-                   "meth_delete: failed to parse iCalendar object %s:%u",
-                   txn->req_tgt.mbentry->name, record->uid);
+            xsyslog_ev(LOG_ERR, "caldav.ical.parse.failed",
+                       lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                       lf_u("msg.imapuid", record->uid));
             return HTTP_SERVER_ERROR;
         }
 
@@ -1671,8 +1673,9 @@ static int export_calendar(struct transaction_t *txn)
     /* Open mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                   lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                   lf_err("error", r));
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
@@ -1738,8 +1741,11 @@ static int export_calendar(struct transaction_t *txn)
             n = sscanf((char *) hdr[0], "\"%u-" MODSEQ_FMT "%1s",
                        &uidvalidity, &syncmodseq, dquote /* trailing DQUOTE */);
 
-            syslog(LOG_DEBUG, "scanned token %s to %d %u " MODSEQ_FMT,
-                   hdr[0], n, uidvalidity, syncmodseq);
+            xsyslog_ev(LOG_DEBUG, "dav.synctoken.parsed",
+                       lf_s("dav.synctoken", (const char *) hdr[0]),
+                       lf_d("dav.synctoken.fields", n),
+                       lf_u("dav.synctoken.uidvalidity", uidvalidity),
+                       lf_llu("dav.synctoken.modseq", syncmodseq));
 
             /* Sanity check the token components */
             if (n != 3 || dquote[0] != '"' ||
@@ -2632,8 +2638,8 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
             mailbox_unlock_index(mailbox, NULL);
             r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
             if (r) {
-                syslog(LOG_ERR, "relock index(%s) failed: %s",
-                       mailbox_name(mailbox), error_message(r));
+                xsyslog_ev(LOG_ERR, "caldav.index.relock.failed",
+                           lf_mailbox(mailbox), lf_err("error", r));
                 return HTTP_SERVER_ERROR;
             }
 
@@ -2789,8 +2795,8 @@ static void decrement_refcount(const char *managed_id,
         r = mailbox_rewrite_index_record(attachments, &record);
 
         if (r) {
-            syslog(LOG_ERR, "expunging record (%s) failed: %s",
-                   mailbox_name(attachments), error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.record.expunge.failed",
+                       lf_mailbox(attachments), lf_err("error", r));
         }
     }
     else {
@@ -2798,8 +2804,9 @@ static void decrement_refcount(const char *managed_id,
         r = webdav_write(webdavdb, wdata);
 
         if (r) {
-            syslog(LOG_ERR, "updating ref count (%s) failed: %s",
-                   wdata->dav.resource, error_message(r));
+            xsyslog_ev(LOG_ERR, "caldav.attachment.refcount.failed",
+                       lf_s("dav.resource", wdata->dav.resource),
+                       lf_err("error", r));
         }
     }
 }
@@ -2820,8 +2827,9 @@ static struct webdav_data *increment_refcount(const char *managed_id,
         r = webdav_write(webdavdb, wdata);
 
         if (r) {
-            syslog(LOG_ERR, "updating ref count (%s) failed: %s",
-                   wdata->dav.resource, error_message(r));
+            xsyslog_ev(LOG_ERR, "caldav.attachment.refcount.failed",
+                       lf_s("dav.resource", wdata->dav.resource),
+                       lf_err("error", r));
         }
     }
 
@@ -2920,8 +2928,9 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     r = http_mailbox_open_w(txn->req_tgt.mbentry->name, &calendar);
     if (r) {
         if (r != IMAP_MAILBOX_REPLICAONLY)
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   txn->req_tgt.mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                       lf_intname("mbox.name", txn->req_tgt.mbentry->name),
+                       lf_err("error", r));
         txn->error.desc = error_message(r);
         ret = http_status_for_write_error(r);
         goto done;
@@ -3489,8 +3498,7 @@ static void import_resource(const char *uid, void *data, void *rock)
     /* Create DAV:response element */
     resp = xmlNewChild(root, ns[NS_DAV], BAD_CAST "response", NULL);
     if (!resp) {
-        syslog(LOG_ERR,
-               "import_resource()): Unable to add response XML element");
+        xsyslog_ev(LOG_ERR, "dav.response.create.failed");
         fatal("import_resource()): Unable to add response XML element",
               EX_SOFTWARE);
     }
@@ -4143,7 +4151,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         if (organizer) {
             /* Scheduling object resource */
 
-            syslog(LOG_DEBUG, "caldav_put: organizer: %s", organizer);
+            xsyslog_ev(LOG_DEBUG, "caldav.put.examined",
+                       lf_s("cal.organizer", organizer));
 
             if (cdata->organizer &&
                 !spool_getheader(txn->req_hdrs, "Allow-Organizer-Change")) {
@@ -4157,7 +4166,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             /* existing record? */
             if (cdata->dav.imap_uid && !oldical) {
                 /* Update existing object */
-                syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
+                xsyslog_ev(LOG_DEBUG, "caldav.resource.loading",
+                           lf_u("msg.imapuid", cdata->dav.imap_uid));
 
                 /* Load message containing the resource and parse iCal data */
                 oldical = caldav_record_to_ical(mailbox, cdata,
@@ -4329,7 +4339,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             }
 
             if (!oldical && cdata->dav.imap_uid) {
-                syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
+                xsyslog_ev(LOG_DEBUG, "caldav.resource.loading",
+                           lf_u("msg.imapuid", cdata->dav.imap_uid));
                 /* Load message containing the resource and parse iCal data */
                 oldical = caldav_record_to_ical(mailbox, cdata,
                         NULL, NULL);
@@ -5089,8 +5100,8 @@ static int caldav_propfind_by_resource(void *rock, void *data)
             mailbox_unlock_index(fctx->mailbox, NULL);
             r = mailbox_lock_index(fctx->mailbox, LOCK_EXCLUSIVE);
             if (r) {
-                syslog(LOG_ERR, "relock index(%s) failed: %s",
-                       mailbox_name(fctx->mailbox), error_message(r));
+                xsyslog_ev(LOG_ERR, "caldav.index.relock.failed",
+                           lf_mailbox(fctx->mailbox), lf_err("error", r));
                 goto done;
             }
         }
@@ -5111,9 +5122,9 @@ static int caldav_propfind_by_resource(void *rock, void *data)
             struct transaction_t txn;
 
             if (!ical) {
-                syslog(LOG_NOTICE,
-                       "Unable to parse iCal %s:%u prior to stripping TZ",
-                       mailbox_name(fctx->mailbox), fctx->record->uid);
+                xsyslog_ev(LOG_NOTICE, "caldav.ical.parse.failed",
+                           lf_mailbox(fctx->mailbox),
+                           lf_u("msg.imapuid", fctx->record->uid));
                 strarray_fini(&schedule_addresses);
                 goto done;
             }
@@ -5649,8 +5660,8 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
             }
             else if (!xmlStrcmp(node->name, BAD_CAST "limit-freebusy-set") &&
                      !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
-                syslog(LOG_NOTICE,
-                       "Client attempted to use CALDAV:limit-freebusy-set");
+                xsyslog_ev(LOG_NOTICE, "caldav.report.element.unsupported",
+                           lf_s("cal.element", "limit-freebusy-set"));
                 return (*fctx->ret = HTTP_NOT_IMPLEMENTED);
             }
         }
@@ -7237,8 +7248,9 @@ static int report_cal_query(struct transaction_t *txn,
                 xmlChar *tzid = NULL;
 
                 /* XXX  Need to pass this to query for floating time */
-                syslog(LOG_WARNING, "REPORT calendar-query w/tzid");
                 tzid = xmlNodeGetContent(node);
+                xsyslog_ev(LOG_WARNING, "caldav.query.tzid.ignored",
+                           lf_s("cal.tzid", (const char *) tzid));
 
                 if (tzid) {
                     icaltimezone *tz =
@@ -7964,8 +7976,10 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
         (struct freebusy_filter *) fctx->filter_crit;
     struct vavailability_array *vavail = &fbfilter->vavail;
 
-    syslog(LOG_DEBUG, "busytime_query_local(mbox: '%s', org: '%s', att: '%s')",
-           mailboxname, organizer, attendee);
+    xsyslog_ev(LOG_DEBUG, "caldav.busytime.query",
+               lf_intname("mbox.name", mailboxname),
+               lf_s_opt("cal.organizer", organizer),
+               lf_s_opt("cal.attendee", attendee));
 
     fctx->open_db = (db_open_proc_t) &caldav_open_mailbox;
     fctx->close_db = (db_close_proc_t) &caldav_close;
