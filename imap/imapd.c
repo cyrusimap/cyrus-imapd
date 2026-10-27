@@ -4285,12 +4285,17 @@ static int cmd_append(char *tag, char *name, const char *cur_name,
     /* See if we can append */
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
 
-    /* Prohibit APPENDing to non-IMAP mailboxes unless using magic +DAV */
+    /* Prohibit APPENDing to non-IMAP mailboxes unless using magic +DAV,
+     * going by the mailbox's type as well as its name */
     if (imapd_mailbox_isdav_forbidden(intname, 0)) {
         r = IMAP_MAILBOX_NOTSUPPORTED;
     }
     else {
         r = mlookup(tag, name, intname, &mbentry);
+        if (!r && imapd_mailbox_isdav_forbidden(intname, mbentry->mbtype)) {
+            mboxlist_entry_free(&mbentry);
+            r = IMAP_MAILBOX_NOTSUPPORTED;
+        }
     }
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
@@ -6745,12 +6750,17 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
 
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
 
-    /* Prohibit COPYing to non-IMAP mailboxes unless using magic +DAV */
+    /* Prohibit COPYing to non-IMAP mailboxes unless using magic +DAV,
+     * going by the mailbox's type as well as its name */
     if (imapd_mailbox_isdav_forbidden(intname, 0)) {
         r = IMAP_MAILBOX_NOTSUPPORTED;
     }
     else {
         r = mlookup(NULL, NULL, intname, &mbentry);
+        if (!r && imapd_mailbox_isdav_forbidden(intname, mbentry->mbtype)) {
+            mboxlist_entry_free(&mbentry);
+            r = IMAP_MAILBOX_NOTSUPPORTED;
+        }
     }
 
     if (!r) myrights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
@@ -7801,6 +7811,13 @@ static int checkmboxname(const mbentry_t *mbentry, void *rock)
         return IMAP_MAILBOX_BADNAME;
 
     strcpy(text->newmailboxname + text->nl, mbentry->name + text->ol);
+
+    /* renmbox() renames children as admin, so check their types here */
+    if (!imapd_userisadmin) {
+        r = mboxlist_rename_typecheck(mbentry->mbtype, mbentry->name,
+                                      text->newmailboxname);
+        if (r) return r;
+    }
 
     /* force create, but don't ignore policy.  This is a filthy hack that
        will go away when we refactor this code */

@@ -1,0 +1,81 @@
+#!perl
+use Cassandane::Tiny;
+
+# A non-admin must not be able to move a non-email typed mailbox into
+# another user's tree, either directly or as a child of a mail folder.
+# If they could, a sharee could move their Sieve mailbox under the
+# sharer, and mailbox_update_sieve() would install its scripts for the
+# sharer, since it installs for the owner of the mailbox's name.  A +dav
+# session is used because without it, there's no way to even try this.
+sub test_sieve_mailbox_rebind
+    :MagicPlus :NoAltNameSpace
+    ($self)
+{
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "sharer shares a folder with a sharee";
+    $admin->create("user.sharee") or die;
+    $admin->create("user.sharer") or die;
+    $admin->create("user.sharer.Shared") or die;
+    # the strongest grant a sharee could realistically hold
+    $admin->setacl("user.sharer.Shared", sharee => 'lrswipkxtecda') or die;
+
+    xlog $self, "sharee has a Sieve store and an addressbook of their own";
+    $admin->create("user.sharee.#sieve", ['TYPE', 'SIEVE']) or die;
+    $admin->create("user.sharee.#addressbooks.Foo", ['TYPE', 'ADDRESSBOOK'])
+        or die;
+
+    my $sharee = $self->{instance}->get_service('imap')->create_store(
+        username => 'sharee+dav');
+    my $talk = $sharee->get_client();
+
+    my $script = sub ($name) {
+        return to_crlf(<<~"EOF");
+            Subject: $name
+            MIME-Version: 1.0
+            Content-Type: application/sieve; charset=utf-8
+            Content-Disposition: attachment; filename=$name.sieve
+
+            keep;
+            EOF
+    };
+
+    xlog $self, "sharee installs an active script";
+    $talk->append("user.sharee.#sieve", "(\\Flagged)", $script->('rules'));
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_sieve_exists($self->{instance}, 'sharee', 'rules', 1);
+
+    xlog $self, "sharee cannot move their Sieve store into the sharer";
+    $talk->rename("user.sharee.#sieve", "user.sharer.Shared.Rules");
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    xlog $self, "nor move any other typed mailbox into the sharer";
+    $talk->rename("user.sharee.#addressbooks.Foo", "user.sharer.Shared.Book");
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    xlog $self, "nor carry one along under a mail folder";
+    $talk->create("user.sharee.Folder") or die;
+    $talk->rename("user.sharee.#addressbooks.Foo", "user.sharee.Folder.Book");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->rename("user.sharee.Folder", "user.sharer.Shared.Folder");
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    my $mailboxes = $self->{instance}->read_mailboxes_db();
+    $self->assert_not_null($mailboxes->{'user.sharee.Folder.Book'});
+    $self->assert_null($mailboxes->{'user.sharer.Shared.Folder.Book'});
+
+    xlog $self, "but an ordinary mail folder still moves into the sharer";
+    $talk->create("user.sharee.Keep") or die;
+    $talk->rename("user.sharee.Keep", "user.sharer.Shared.Keep");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "a Sieve mailbox off the owner's #sieve installs nothing";
+    $admin->create("user.sharer.Shared.Rules", ['TYPE', 'SIEVE']) or die;
+    $talk->append("user.sharer.Shared.Rules", "(\\Flagged)",
+                  $script->('more'));
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "the sharer never gained a Sieve script";
+    for my $name (qw(rules more)) {
+        $self->assert_sieve_not_exists($self->{instance}, 'sharer', $name, 1);
+    }
+}
