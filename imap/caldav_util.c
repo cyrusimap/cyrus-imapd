@@ -824,7 +824,8 @@ static int caldav_store_preprocess(struct transaction_t *txn,
 
     if (cdata->dav.imap_uid &&
         (!is_owner || allow_propupdates != propupdate_all || cdata->comp_flags.shared)) {
-        syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
+        xsyslog_ev(LOG_DEBUG, "caldav.resource.loading",
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
 
         /* Load message containing the existing resource and parse iCal data */
         oldical = caldav_record_to_ical(mailbox, cdata, NULL, NULL);
@@ -1401,8 +1402,9 @@ static int _create_mailbox(const char *userid, const char *mailboxname,
                             1, userid, authstate);
     }
 
-    if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                  mailboxname, error_message(r));
+    if (r) xsyslog_ev(LOG_ERR, "caldav.calendar.create.failed",
+                      lf_intname("mbox.name", mailboxname),
+                      lf_err("error", r));
     return r;
 }
 
@@ -1556,23 +1558,26 @@ static int caldav_bump_defaultalarms_mailbox(struct mailbox *mailbox)
     /* Gather record uids of events with default alerts */
     db = caldav_open_mailbox(mailbox);
     if (!db) {
-        syslog(LOG_ERR, "%s: can't open caldav.db for %s",
-                __func__, mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "caldav.defaultalarms.bump.failed",
+                   lf_s("cal.step", "open_db"),
+                   lf_mailbox(mailbox));
         r = HTTP_SERVER_ERROR;
         goto done;
     }
 
     r = mboxlist_lookup_by_uniqueid(mailbox_uniqueid(mailbox), &mbentry, NULL);
     if (r) {
-        syslog(LOG_ERR, "%s: failed to lookup mbentry %s: %s",
-                __func__, mailbox_uniqueid(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "caldav.defaultalarms.bump.failed",
+                   lf_s("cal.step", "lookup_mbentry"),
+                   lf_mailbox(mailbox), lf_err("error", r));
         r = HTTP_SERVER_ERROR;
         goto done;
     }
     r = caldav_foreach(db, mbentry, bumpdefaultalarms_cb, &data);
     if (r) {
-        syslog(LOG_ERR, "%s: failed to iterate caldav.db %s: %s",
-                __func__, mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "caldav.defaultalarms.bump.failed",
+                   lf_s("cal.step", "iterate_db"),
+                   lf_mailbox(mailbox), lf_err("error", r));
         r = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -1583,8 +1588,9 @@ static int caldav_bump_defaultalarms_mailbox(struct mailbox *mailbox)
     /* Bump modseqs of calendar event records */
     iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     if (!iter) {
-        syslog(LOG_ERR, "%s: can't open mailbox iterator for %s",
-                __func__, mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "caldav.defaultalarms.bump.failed",
+                   lf_s("cal.step", "open_iterator"),
+                   lf_mailbox(mailbox));
         r = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -1628,8 +1634,11 @@ static int caldav_bump_defaultalarms_mailbox(struct mailbox *mailbox)
         /* Bump record */
         r = mailbox_rewrite_index_record(mailbox, &copyrecord);
         if (r) {
-            syslog(LOG_ERR, "%s: rewrite index record %s:%d: %s",
-                    __func__, mailbox_name(mailbox), record->uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "caldav.defaultalarms.bump.failed",
+                       lf_s("cal.step", "rewrite_record"),
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", record->uid),
+                       lf_err("error", r));
             continue;
         }
         if (dl) {
@@ -1641,15 +1650,21 @@ static int caldav_bump_defaultalarms_mailbox(struct mailbox *mailbox)
             r = annotate_state_write(mailbox->annot_state, PER_USER_CAL_DATA,
                                      httpd_userid, &userdata);
             if (r) {
-                syslog(LOG_ERR, "%s: can't update per-user modseq for record %s:%d: %s",
-                        __func__, mailbox_name(mailbox), record->uid, error_message(r));
+                xsyslog_ev(LOG_ERR, "caldav.defaultalarms.bump.failed",
+                           lf_s("cal.step", "write_per_user_modseq"),
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", record->uid),
+                           lf_err("error", r));
                 continue;
             }
         }
         r = caldav_alarm_touch_record(mailbox, record, /*force*/1);
         if (r) {
-            syslog(LOG_ERR, "%s: touch alarms for index record %s:%d: %s",
-                    __func__, mailbox_name(mailbox), record->uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "caldav.defaultalarms.bump.failed",
+                       lf_s("cal.step", "touch_alarms"),
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", record->uid),
+                       lf_err("error", r));
             continue;
         }
     }

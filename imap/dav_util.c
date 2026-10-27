@@ -25,9 +25,6 @@
 #include "imap/imap_err.h"
 
 
-/* The two ways a store can be refused for want of quota. */
-#define OVER_QUOTA(r) ((r) == IMAP_QUOTA_EXCEEDED || (r) == IMAP_NO_OVERQUOTA)
-
 EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
                                 const char *userid __attribute__((unused)),
                                 struct index_record *record,

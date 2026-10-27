@@ -168,6 +168,7 @@ cal.partstat            an attendee's PARTSTAT
 cal.property            an iCalendar property name, such as DTSTART
 cal.recurid             a calendar component's RECURRENCE-ID
 cal.reqstatus           a REQUEST-STATUS code, as the client sent it
+cal.step                which step of a calendar operation an event reports
 cal.timezones           the CalDAV-Timezones preference a request asked for
 cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID

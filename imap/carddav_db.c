@@ -1059,7 +1059,7 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
     int r = sqldb_exec(carddavdb->db, buf_cstring(&sqlbuf), bval, &read_cb, &rrock);
     buf_free(&sqlbuf);
     if (r) {
-        syslog(LOG_ERR, "carddav error %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "carddav.db.query.failed", lf_err("error", r));
         /* XXX - free memory */
     }
 
@@ -1108,7 +1108,7 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
     buf_free(&sqlbuf);
 
     if (r) {
-        syslog(LOG_ERR, "carddav error %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "carddav.db.query.failed", lf_err("error", r));
         /* XXX - free memory */
     }
 
@@ -1151,7 +1151,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox_name(mailbox), now.tv_sec, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "dav.stage.create.failed", lf_mailbox(mailbox));
         return -1;
     }
 
@@ -1215,8 +1215,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
     fprintf(f, "%s", buf_cstring(buf));
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
-        syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
-               mailbox_name(mailbox), strerror(errno));
+        xsyslog_ev(LOG_ERR, "dav.stage.write.failed", lf_mailbox(mailbox));
         fclose(f);
         r = IMAP_IOERROR;
         goto done;
@@ -1230,8 +1229,9 @@ EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
     if ((r = append_setup_mbox(&as, mailbox, userid, authstate, 0,
                                ignorequota ? NULL : qdiffs, 0, 0,
                                EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
-        syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(OVER_QUOTA(r) ? LOG_WARNING : LOG_ERR,
+                   "dav.append.setup.failed",
+                   lf_mailbox(mailbox), lf_err("error", r));
         goto done;
     }
 
@@ -1244,7 +1244,9 @@ EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
     }
 
     if (r) {
-        syslog(LOG_ERR, "append_fromstage() failed");
+        xsyslog_ev(OVER_QUOTA(r) ? LOG_WARNING : LOG_ERR,
+                   "dav.append.failed",
+                   lf_mailbox(mailbox), lf_err("error", r));
         append_abort(&as);
         goto done;
     }
@@ -1252,7 +1254,8 @@ EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
     /* Commit the append to the addressbook mailbox */
     r = append_commit(&as);
     if (r) {
-        syslog(LOG_ERR, "append_commit() failed");
+        xsyslog_ev(LOG_ERR, "dav.append.commit.failed",
+                   lf_mailbox(mailbox), lf_err("error", r));
         goto done;
     }
 
@@ -1291,8 +1294,8 @@ EXPORTED int carddav_remove(struct mailbox *mailbox,
         mboxevent_free(&mboxevent);
     }
     if (r) {
-        syslog(LOG_ERR, "expunging record (%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.record.expunge.failed",
+                   lf_mailbox(mailbox), lf_err("error", r));
     }
     return r;
 }
