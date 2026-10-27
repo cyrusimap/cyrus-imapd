@@ -43,8 +43,8 @@ sub test_itip_request_with_transp
 
     xlog $self, "Assert that TRANSP is included in iTIP REQUEST";
     my $data = $self->{instance}->getnotify();
-    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
-    my $ical = vcard2hash((decode_json($notif->{MESSAGE}))->{ical});
+    my ($notif) = grep { $_->{method} eq 'imip' } @$data;
+    my $ical = vcard2hash(($notif->{message})->{ical});
     $self->assert_str_equals('TRANSPARENT',
         $ical->{objects}[0]{objects}[0]{properties}{transp}[0]{value});
 }

@@ -79,9 +79,9 @@ sub test_calendarevent_participantreply_reply_rsvp_sharee
 
     xlog $self, "Check that no iMIP reply was sent";
     my $data = $self->{instance}->getnotify();
-    my @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+    my @imips = grep { $_->{method} eq 'imip' } @$data;
     foreach my $imip (@imips) {
-        my $payload = decode_json($imip->{MESSAGE});
+        my $payload = $imip->{message};
         $self->assert_str_not_equals("other\@example.com", $payload->{sender});
     }
 

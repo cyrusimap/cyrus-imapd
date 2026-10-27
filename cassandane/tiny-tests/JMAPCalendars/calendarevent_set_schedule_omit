@@ -51,6 +51,6 @@ sub test_calendarevent_set_schedule_omit
 
     # assert no notification is sent.
     my $data = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_null($imip);
 }

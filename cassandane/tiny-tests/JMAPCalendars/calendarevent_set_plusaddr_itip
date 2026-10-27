@@ -62,10 +62,10 @@ EOF
 
     xlog "Assert that iTIP notification is sent";
     my $data = $self->{instance}->getnotify();
-    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($notif);
 
-    my $notif_payload = decode_json($notif->{MESSAGE});
+    my $notif_payload = $notif->{message};
     $self->assert_str_equals('REQUEST', $notif_payload->{method});
     $self->assert_str_equals('cassandane+test@example.com',
                              $notif_payload->{sender});

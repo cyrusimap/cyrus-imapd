@@ -64,6 +64,6 @@ sub test_calendarevent_set_create_no_reply_exdate
   ]);
 
   my $data = $self->{instance}->getnotify();
-  my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+  my ($imip) = grep { $_->{method} eq 'imip' } @$data;
   $self->assert_null($imip);
 }
