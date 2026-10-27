@@ -5037,7 +5037,26 @@ static int meth_delete_collection(struct transaction_t *txn,
 
     /* Special case of deleting a shared collection */
     if (txn->req_tgt.flags == TGT_DAV_SHARED) {
-        char *inboxname = mboxname_user_mbox(txn->req_tgt.userid, NULL);
+        /* a share can only be removed from our own home */
+        mbname_t *sharee = mbname_from_userid(txn->req_tgt.userid);
+        if (httpd_extradomain &&
+            !strcmpsafe(mbname_domain(sharee), httpd_extradomain)) {
+            mbname_set_domain(sharee, NULL);
+        }
+        bool isown = !strcmpsafe(mbname_userid(sharee), httpd_userid);
+        mbname_free(&sharee);
+        if (!isown) {
+            txn->error.precond = DAV_NEED_PRIVS;
+            txn->error.resource = txn->req_tgt.path;
+            txn->error.rights = DACL_RMCOL;
+            return HTTP_NO_PRIVS;
+        }
+
+        /* and only of a collection we can see */
+        rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
+        if (!(rights & ACL_LOOKUP)) return HTTP_NOT_FOUND;
+
+        char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
         mbentry_t *mbentry = NULL;
 
         r = proxy_mlookup(inboxname, &mbentry, NULL, NULL);
@@ -5067,13 +5086,13 @@ static int meth_delete_collection(struct transaction_t *txn,
 
             /* Unsubscribe */
             r = mboxlist_changesub(txn->req_tgt.mbentry->name,
-                                   txn->req_tgt.userid,
+                                   httpd_userid,
                                    httpd_authstate, 0 /* remove */, 0, 0, 0);
             if (r) {
                 xsyslog_ev(LOG_ERR, "dav.subscription.change.failed",
                            lf_intname("mbox.name",
                                       txn->req_tgt.mbentry->name),
-                           lf_s("u.username", txn->req_tgt.userid),
+                           lf_s("u.username", httpd_userid),
                            lf_b("dav.subscribe", 0),
                            lf_err("error", r));
                 txn->error.desc = error_message(r);
@@ -5101,7 +5120,7 @@ static int meth_delete_collection(struct transaction_t *txn,
 
                     buf_init_ro_cstr(&value, "invite-declined");
                     r = annotate_state_writemask(astate, annot,
-                                                 txn->req_tgt.userid, &value);
+                                                 httpd_userid, &value);
                 }
 
                 mailbox_close(&mailbox);

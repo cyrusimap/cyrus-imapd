@@ -1,0 +1,26 @@
+Description:
+
+A CalDAV or CardDAV DELETE of a shared collection now only removes the share
+from the authenticated user's own home, and only for a collection they can
+see.  Previously any authenticated user could unsubscribe any other user from
+a shared collection and mark their invitation declined.
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+None
