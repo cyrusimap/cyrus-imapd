@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_applepush_carddav_disabled
+    ($self)
+{
+    my $instance = $self->{instance};
+
+    # Provision both DAV homes while both modules are enabled
+    $self->{carddav}->GetAddressBooks();
+    $self->{caldav}->GetCalendars();
+
+    my $admin = $self->{adminstore}->get_client();
+    my $uniqueid_key = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my %uniqueid;
+    for my $mbox ('user.cassandane.#calendars.Default',
+                  'user.cassandane.#addressbooks.Default') {
+        my $res = $admin->getmetadata($mbox, $uniqueid_key);
+        $uniqueid{$mbox} = $res->{$mbox}{$uniqueid_key};
+        $self->assert_not_null($uniqueid{$mbox});
+    }
+
+    xlog $self, "restart with only CalDAV in httpmodules";
+    $instance->stop();
+    $instance->{re_use_dir} = 1;
+    $instance->{config}->set(
+        httpmodules => 'caldav',
+        event_groups => 'applepushservice',
+        aps_topic_caldav => 'test.caldav',
+        aps_topic_carddav => 'test.carddav',
+    );
+    $instance->{config}->generate($instance->_imapd_conf());
+    $instance->start();
+
+    my $caldav = $self->{caldav};
+    my $url = $caldav->request_url('/applepush/subscribe');
+    my $subscribe = sub ($mbox) {
+        return $caldav->{ua}->get(
+            "$url?token=abc&key=cassandane/$uniqueid{$mbox}",
+            { headers => { Authorization => $caldav->auth_header() } }
+        );
+    };
+
+    my $res = $subscribe->('user.cassandane.#calendars.Default');
+    $self->assert_num_equals(200, $res->{status});
+
+    $res = $subscribe->('user.cassandane.#addressbooks.Default');
+    $self->assert_num_equals(400, $res->{status});
+}
