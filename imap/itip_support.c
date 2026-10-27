@@ -1114,8 +1114,10 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
     strarray_append(&recipient_addresses, recipient);
 
-    syslog(LOG_DEBUG, "sched_deliver_local(%s, %s, %X)",
-           sender ? sender : "", recipient, sparam->flags);
+    xsyslog_ev(LOG_DEBUG, "sched.deliver.local.started",
+               lf_s_opt("sched.sender", sender),
+               lf_s("sched.recipient", recipient),
+               lf_llx("sched.flags", sparam->flags));
 
     if (icalp) *icalp = NULL;
     if (attendeep) *attendeep = NULL;
@@ -1142,8 +1144,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     mailboxname = caldav_mboxname(sparam->userid, SCHED_INBOX);
     r = mboxlist_lookup(mailboxname, &mbentry, NULL);
     if (r) {
-        syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-               mailboxname, error_message(r));
+        xsyslog_ev(LOG_INFO, "sched.inbox.lookup.failed",
+                   lf_intname("mbox.name", mailboxname),
+                   lf_err("error", r));
         SCHED_STATUS(sched_data, REQSTAT_REJECTED, SCHEDSTAT_REJECTED);
         goto done;
     }
@@ -1156,15 +1159,17 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     reqd_privs = SCHED_IS_REPLY(sched_data) ? DACL_REPLY : DACL_INVITE;
     if (!(rights & reqd_privs)) {
         SCHED_STATUS(sched_data, REQSTAT_NOPRIVS, SCHEDSTAT_NOPRIVS);
-        syslog(LOG_DEBUG, "No scheduling receive ACL for user %s on Inbox %s",
-               userid, sparam->userid);
+        xsyslog_ev(LOG_DEBUG, "sched.deliver.denied",
+                   lf_s("u.username", userid),
+                   lf_s("dav.owner", sparam->userid));
         goto done;
     }
 
     /* Open recipient's Inbox for writing */
     if ((r = mailbox_open_iwl(mailboxname, &inbox))) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-               mailboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                   lf_intname("mbox.name", mailboxname),
+                   lf_err("error", r));
         SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
         goto done;
     }
@@ -1298,8 +1303,9 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     /* Open recipient's calendar for writing */
     r = mailbox_open_iwl(mailboxname, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-               mailboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                   lf_intname("mbox.name", mailboxname),
+                   lf_err("error", r));
         SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
         goto done;
     }
@@ -1385,8 +1391,10 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
             /* Fetch index record for the resource */
             r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
             if (r) {
-                syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
-                       mailbox_name(mailbox), cdata->dav.imap_uid, error_message(r));
+                xsyslog_ev(LOG_ERR, "dav.record.lookup.failed",
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", cdata->dav.imap_uid),
+                           lf_err("error", r));
             }
             else {
                 struct mboxevent *mboxevent =
@@ -1396,8 +1404,8 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
                 r = mailbox_rewrite_index_record(mailbox, &record);
                 if (r) {
-                    syslog(LOG_ERR, "expunging record (%s) failed: %s",
-                           mailbox_name(mailbox), error_message(r));
+                    xsyslog_ev(LOG_ERR, "dav.record.expunge.failed",
+                               lf_mailbox(mailbox), lf_err("error", r));
                 }
                 else {
                     mboxevent_extract_record(mboxevent, mailbox, &record);
@@ -1463,8 +1471,8 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 #endif
     default:
         /* Unknown METHOD -- ignore it */
-        syslog(LOG_ERR, "Unknown iTIP method: %s",
-               icalproperty_method_to_string(method));
+        xsyslog_ev(LOG_WARNING, "sched.method.unknown",
+                   lf_s("cal.method", icalproperty_method_to_string(method)));
 
         sched_data->flags &= ~SCHEDFLAG_IS_REPLY;
         goto inbox;
@@ -1569,8 +1577,10 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
             (r == HTTP_CREATED) ? SCHED_DELIVER_ADDED : SCHED_DELIVER_UPDATED;
     }
     else {
-        syslog(LOG_ERR, "caldav_store_resource(%s) failed: %s (%s)",
-               mailbox_name(mailbox), error_message(r), txn.error.resource);
+        xsyslog_ev(LOG_ERR, "sched.resource.store.failed",
+                   lf_mailbox(mailbox),
+                   lf_s_opt("dav.resource", txn.error.resource),
+                   lf_err("error", r));
         SCHED_STATUS(sched_data, REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
         goto done;
     }
