@@ -7,18 +7,17 @@ non-standard extensions for now, because the draft hasn't been published yet.
 
 Using that capability, the values in shareWith are MailboxRights objects, the
 same shape as myRights, so each right can be granted on its own instead of in
-one of the three bundles our own extension offers.
+one of the three bundles our own extension offered.
 
 mayRename can be read but not written.  It isn't a right we store anywhere --
 it's derived from mayDelete on the mailbox and mayCreateChild on the parent --
 so a client may send back the value we gave it, which is what a
 read-modify-write of shareWith does, but asking us to change it is forbidden.
 
-The old https://cyrusimap.org/ns/jmap/mail capability for shareWith still
-works, and will for a patch version or two.  Each request gets kind of
-shareWith it asked for, and the two can't be mixed: mayRead, mayWrite and
-mayAdmin are rejected as unknown rights under mail:share, and the MailboxRights
-rights are rejected as unknown without it.
+shareWith is no longer available through https://cyrusimap.org/ns/jmap/mail.
+A client that doesn't use urn:ietf:params:jmap:mail:share gets no shareWith at
+all, and the old mayRead, mayWrite and mayAdmin rights are gone.  myRights no
+longer includes the non-standard mayAdmin, either.
 
 
 Documentation:

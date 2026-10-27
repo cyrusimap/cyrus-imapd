@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-# Under JMAP Mail Sharing, the values in shareWith are MailboxRights objects.
-# Every right maps to its own ACL rights -- unlike our own mayWrite, which is a
-# bundle -- and mayShare is the IMAP "a" right by itself.
+# The values in shareWith are MailboxRights objects.  Every right maps to its own
+# ACL rights, and mayShare is the IMAP "a" right by itself.
 sub test_mailbox_set_sharewith_mailboxrights
     :JMAPExtensions
     ($self)
@@ -75,7 +74,7 @@ sub test_mailbox_set_sharewith_mailboxrights
     assert_share({ maySetKeywords => JSON::true }, 'wn');
     assert_share({ mayShare       => JSON::true }, 'a');
 
-    xlog $self, 'the old vocabulary is not accepted under mail:share';
+    xlog $self, 'mayRead is not a MailboxRights property';
 
     my $res = $jmap->request({
         using       => $using,

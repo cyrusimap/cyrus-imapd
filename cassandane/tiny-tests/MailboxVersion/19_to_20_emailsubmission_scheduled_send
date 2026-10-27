@@ -49,7 +49,6 @@ sub test_19_to_20_emailsubmission_scheduled_send
         maySubmit => JSON::false,
         maySetSeen => JSON::true,
         maySetKeywords => JSON::true,
-        mayAdmin => JSON::false,
         mayRename => JSON::false
     }, $myRights);
 

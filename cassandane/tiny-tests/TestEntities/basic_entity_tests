@@ -67,14 +67,21 @@ sub test_basic_entity_tests
     );
 
     my $other = $self->{instance}->create_user('other');
-    $inbox->share_with($other => [ 'mayRead' ]);
+    $inbox->share_with($other => [ 'mayReadItems' ]);
 
     $self->assert_cmp_deeply(
         {
             $other->username => {
-                mayAdmin  => JSON::false(),
-                mayRead   => JSON::true(),
-                mayWrite  => JSON::false(),
+                mayReadItems   => JSON::true(),
+                mayAddItems    => JSON::false(),
+                mayRemoveItems => JSON::false(),
+                mayCreateChild => JSON::false(),
+                mayDelete      => JSON::false(),
+                mayRename      => JSON::false(),
+                maySubmit      => JSON::false(),
+                maySetSeen     => JSON::false(),
+                maySetKeywords => JSON::false(),
+                mayShare       => JSON::false(),
             }
         },
         $inbox->properties->{shareWith},

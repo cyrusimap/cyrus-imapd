@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+
+# Without JMAP Mail Sharing there is no shareWith, even for a client using our
+# own mail extension.
+sub test_mailbox_sharewith_needs_mail_share
+    :JMAPExtensions
+    ($self)
+{
+    my $owner   = $self->default_user;
+    my $mailbox = $owner->mailboxes->create({ name => 'A' });
+    $self->{instance}->create_user('sharee');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
+    my $res = $owner->jmap->request({
+        using       => $using,
+        methodCalls => [
+            [ 'Mailbox/get', { ids => [ $mailbox->id ] }, 'R1' ],
+            [ 'Mailbox/get', {
+                ids        => [ $mailbox->id ],
+                properties => [ 'id', 'shareWith' ],
+            }, 'R2' ],
+            [ 'Mailbox/set', {
+                update => {
+                    $mailbox->id => {
+                        shareWith => { sharee => { mayReadItems => JSON::true } },
+                    },
+                },
+            }, 'R3' ],
+            [ 'Mailbox/set', {
+                update => {
+                    $mailbox->id => {
+                        'shareWith/sharee' => { mayReadItems => JSON::true },
+                    },
+                },
+            }, 'R4' ],
+        ],
+    });
+
+    my $props = $res->sentence(0)->arguments->{list}[0];
+    $self->assert(! exists $props->{shareWith}, 'we do not get shareWith');
+
+    $self->assert_cmp_deeply(
+        { type => 'invalidArguments', arguments => [ 'properties[1:shareWith]' ] },
+        $res->sentence(1)->arguments,
+    );
+
+    my sub assert_rejected ($sentence, $path) {
+        $self->assert_cmp_deeply(
+            { type => 'invalidProperties', properties => [ $path ] },
+            $sentence->arguments->{notUpdated}{ $mailbox->id },
+        );
+    }
+
+    assert_rejected($res->sentence(2), 'shareWith');
+    assert_rejected($res->sentence(3), 'shareWith/sharee');
+
+    my %acl = @{ $self->{adminstore}->get_client->getacl('user.cassandane.A') };
+    $self->assert_null($acl{sharee});
+}

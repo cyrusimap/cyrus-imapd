@@ -59,13 +59,15 @@ sub test_jmap_sharewith_aclchange ($self) {
     $self->_assert_share_emits('mailbox share', {
         collection => $inbox,
         sharee     => $sharee,
-        grant      => [ 'mayRead' ],
+        grant      => [ 'mayReadItems' ],
         rights     => 'lr',
     });
     $self->_assert_share_emits('mailbox share widened', {
         collection => $inbox,
         sharee     => $sharee,
-        grant      => [ 'mayRead', 'mayWrite' ],
+        grant      => [ qw(
+            mayReadItems mayAddItems mayRemoveItems maySetSeen maySetKeywords
+        ) ],
         rights     => 'lrswitedn',
     });
     $self->_assert_share_emits('mailbox unshare', {
