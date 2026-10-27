@@ -12,6 +12,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
+#include "imap/imap_err.h"
 
 static void applepush_init(struct buf *serverinfo);
 
@@ -91,16 +92,18 @@ static int meth_get_applepush(struct transaction_t *txn,
     mboxname = mboxlist_find_uniqueid(mailbox_uniqueid, mailbox_userid,
                                       httpd_authstate);
     if (!mboxname) {
-        syslog(LOG_ERR,
-               "meth_get_applepush: mboxlist_find_uniqueid(%s, %s) not found",
-               mailbox_uniqueid, mailbox_userid);
+        xsyslog_ev(LOG_WARNING, "applepush.mailbox.missing",
+                   lf_s("mbox.uniqueid", mailbox_uniqueid),
+                   lf_s("u.username", mailbox_userid));
         goto done;
     }
 
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r || !mbentry) {
-        syslog(LOG_ERR, "meth_get_applepush: mboxlist_lookup(%s): %s",
-               mboxname, error_message(r));
+        xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT ? LOG_WARNING : LOG_ERR,
+                   "applepush.mailbox.lookup.failed",
+                   lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -112,8 +115,10 @@ static int meth_get_applepush(struct transaction_t *txn,
     /* check if auth user has access to mailbox */
     int myrights = httpd_myrights(httpd_authstate, mbentry);
     if (!(myrights & ACL_READ)) {
-        syslog(LOG_ERR, "meth_get_applepush: no read access to %s for %s (%s)",
-               mboxname, httpd_userid, mbentry->acl);
+        xsyslog_ev(LOG_WARNING, "applepush.access.denied",
+                   lf_intname("mbox.name", mboxname),
+                   lf_s("u.username", httpd_userid),
+                   lf_s("mbox.acl", mbentry->acl));
         goto done;
     }
 
@@ -121,8 +126,10 @@ static int meth_get_applepush(struct transaction_t *txn,
                                  IMAPOPT_APS_TOPIC_CALDAV :
                                  IMAPOPT_APS_TOPIC_CARDDAV);
     if (!aps_topic) {
-        syslog(LOG_ERR, "aps_topic_%s not configured, can't subscribe",
-               mbtype_isa(mbtype) == MBTYPE_CALENDAR ? "caldav" : "carddav");
+        xsyslog_ev(LOG_ERR, "applepush.unconfigured",
+                   lf_s("config.option",
+                        mbtype_isa(mbtype) == MBTYPE_CALENDAR
+                            ? "aps_topic_caldav" : "aps_topic_carddav"));
         goto done;
     }
 
@@ -205,10 +212,10 @@ int propfind_push_transports(const xmlChar *name, xmlNsPtr ns,
         config_getstring(fctx->req_tgt->namespace->id == URL_NS_CALENDAR ?
                          IMAPOPT_APS_TOPIC_CALDAV : IMAPOPT_APS_TOPIC_CARDDAV);
     if (!aps_topic) {
-        syslog(LOG_DEBUG, "aps_topic_%s not configured,"
-               " can't build CS:push-transports response",
-               fctx->req_tgt->namespace->id == URL_NS_CALENDAR ?
-               "caldav" : "carddav");
+        xsyslog_ev(LOG_DEBUG, "applepush.unconfigured",
+                   lf_s("config.option",
+                        fctx->req_tgt->namespace->id == URL_NS_CALENDAR
+                            ? "aps_topic_caldav" : "aps_topic_carddav"));
         return HTTP_NOT_FOUND;
     }
 

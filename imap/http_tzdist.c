@@ -137,6 +137,8 @@ static struct tz_shape_t tz_aq    = { 0, NULL, NULL };
 static void open_shape_file(struct buf *serverinfo)
 {
     char buf[1024];
+    /* an xBase field name is at most 11 characters */
+    char fieldname[16];
     int nrecords, shapetype;
     double minbound[4], maxbound[4];
     DBFFieldType fieldtype;
@@ -146,12 +148,14 @@ static void open_shape_file(struct buf *serverinfo)
     /* Open the tz_world shape files */
     snprintf(buf, sizeof(buf), "%s%s", config_zoneinfo_dir, FNAME_WORLD_SHAPEFILE);
     if (!(tz_world.shp = SHPOpen(buf, "rb"))) {
-        syslog(LOG_ERR, "Failed to open file %s", buf);
+        xsyslog_ev(LOG_ERR, "tzdist.shapefile.open.failed",
+                   lf_s("sys.path", buf));
         return;
     }
 
     if (!(tz_world.dbf = DBFOpen(buf, "rb"))) {
-        syslog(LOG_ERR, "Failed to open file %s", buf);
+        xsyslog_ev(LOG_ERR, "tzdist.shapefile.open.failed",
+                   lf_s("sys.path", buf));
         return;
     }
 
@@ -161,13 +165,18 @@ static void open_shape_file(struct buf *serverinfo)
         minbound[0] < -180.0 || maxbound[0] > 180.0 ||  /* longitude range */
         minbound[1] <  -90.0 || maxbound[1] >  90.0 ||  /* latitude range */
         nrecords != DBFGetRecordCount(tz_world.dbf)) {  /* record counts */
-        syslog(LOG_ERR, "%s appears to contain invalid data", buf);
+        xsyslog_ev(LOG_ERR, "tzdist.shapefile.invalid",
+                   lf_s("sys.path", buf),
+                   lf_s("error", "not polygons within world bounds"));
         return;
     }
 
-    fieldtype = DBFGetFieldInfo(tz_world.dbf, 0 /* column 1 */, buf, NULL, NULL);
-    if (fieldtype != FTString || strcasecmp(buf, "TZID")) {   /* TZIDs */
-        syslog(LOG_ERR, "%s appears to contain invalid data", buf);
+    fieldtype = DBFGetFieldInfo(tz_world.dbf, 0 /* column 1 */,
+                                fieldname, NULL, NULL);
+    if (fieldtype != FTString || strcasecmp(fieldname, "TZID")) {   /* TZIDs */
+        xsyslog_ev(LOG_ERR, "tzdist.shapefile.invalid",
+                   lf_s("sys.path", buf),
+                   lf_s("error", "first column is not a TZID string"));
         return;
     }
 
@@ -176,12 +185,14 @@ static void open_shape_file(struct buf *serverinfo)
     /* Open the tz_antarctica shape files (optional) */
     snprintf(buf, sizeof(buf), "%s%s", config_zoneinfo_dir, FNAME_AQ_SHAPEFILE);
     if (!(tz_aq.shp = SHPOpen(buf, "rb"))) {
-        syslog(LOG_NOTICE, "Failed to open file %s", buf);
+        xsyslog_ev(LOG_NOTICE, "tzdist.shapefile.open.failed",
+                   lf_s("sys.path", buf));
         return;
     }
 
     if (!(tz_aq.dbf = DBFOpen(buf, "rb"))) {
-        syslog(LOG_NOTICE, "Failed to open file %s", buf);
+        xsyslog_ev(LOG_NOTICE, "tzdist.shapefile.open.failed",
+                   lf_s("sys.path", buf));
         SHPClose(tz_aq.shp);
         return;
     }
@@ -192,13 +203,18 @@ static void open_shape_file(struct buf *serverinfo)
         minbound[0] < -180.0 || maxbound[0] > 180.0 ||  /* longitude range */
         minbound[1] <  -90.0 || maxbound[1] > -60.0 ||  /* latitude range */
         nrecords != DBFGetRecordCount(tz_aq.dbf)) {     /* record counts */
-        syslog(LOG_ERR, "%s appears to contain invalid data", buf);
+        xsyslog_ev(LOG_ERR, "tzdist.shapefile.invalid",
+                   lf_s("sys.path", buf),
+                   lf_s("error", "not points within Antarctic bounds"));
         return;
     }
 
-    fieldtype = DBFGetFieldInfo(tz_aq.dbf, 1 /* column 2 */, buf, NULL, NULL);
-    if (fieldtype != FTString || strcasecmp(buf, "TZID")) {  /* TZIDs */
-        syslog(LOG_ERR, "%s appears to contain invalid data", buf);
+    fieldtype = DBFGetFieldInfo(tz_aq.dbf, 1 /* column 2 */,
+                                fieldname, NULL, NULL);
+    if (fieldtype != FTString || strcasecmp(fieldname, "TZID")) {  /* TZIDs */
+        xsyslog_ev(LOG_ERR, "tzdist.shapefile.invalid",
+                   lf_s("sys.path", buf),
+                   lf_s("error", "second column is not a TZID string"));
         return;
     }
 
@@ -552,7 +568,8 @@ static void read_leap_seconds()
 
     snprintf(buf, sizeof(buf), "%s%s", config_zoneinfo_dir, FNAME_LEAPSECFILE);
     if (!(fp = fopen(buf, "r"))) {
-        syslog(LOG_ERR, "Failed to open file %s", buf);
+        xsyslog_ev(LOG_ERR, "tzdist.leapseconds.open.failed",
+                   lf_s("sys.path", buf));
         return;
     }
 
@@ -601,7 +618,8 @@ static void tzdist_init(struct buf *serverinfo __attribute__((unused)))
 
     /* Find configured zoneinfo_zir */
     if (!config_zoneinfo_dir) {
-        syslog(LOG_ERR, "zoneinfo_dir must be set for tzdist service");
+        xsyslog_ev(LOG_ERR, "tzdist.unconfigured",
+                   lf_s("config.option", "zoneinfo_dir"));
         namespace_tzdist.enabled = 0;
         return;
     }

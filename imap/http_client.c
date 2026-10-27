@@ -218,7 +218,8 @@ EXPORTED int http_read_headers(struct protstream *pin, int read_sep,
 {
     int r, c;
 
-    syslog(LOG_DEBUG, "read & parse headers");
+    xsyslog_ev(LOG_DEBUG, "http.request.step",
+               lf_s("http.step", "parse_headers"));
 
     if (*hdrs) {
         spool_free_hdrcache(*hdrs);
@@ -239,7 +240,8 @@ EXPORTED int http_read_headers(struct protstream *pin, int read_sep,
     else if ((*errstr = prot_error(pin)) &&
         strcmp(*errstr, PROT_EOF_STRING)) {
         /* client timed out */
-        syslog(LOG_WARNING, "%s, closing connection", *errstr);
+        xsyslog_ev(LOG_WARNING, "http.connection.closing",
+                   lf_s("http.close.reason", *errstr));
         return HTTP_TIMEOUT;
     }
 
@@ -267,8 +269,9 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
     unsigned n;
     int r = 0;
 
-    syslog(LOG_DEBUG, "http_read_body(flags=%#x, framing=%d)",
-           body->flags, body->framing);
+    xsyslog_ev(LOG_DEBUG, "http.body.reading",
+               lf_llx("http.body.flags", body->flags),
+               lf_d("http.body.framing", body->framing));
 
     if (body->framing == FRAMING_UNKNOWN) {
         /* Get message framing */
@@ -291,7 +294,8 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
                 n = prot_readbuf(pin, &body->payload, body->len);
 
             if (!n) {
-                syslog(LOG_ERR, "prot_read() error");
+                xsyslog_ev(LOG_WARNING, "http.body.read.failed",
+                           lf_s_opt("error", prot_error(pin)));
                 *errstr = "Unable to read body data";
                 goto read_failure;
             }
@@ -338,7 +342,8 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
                     n = prot_readbuf(pin, &body->payload, chunk);
 
                 if (!n) {
-                    syslog(LOG_ERR, "prot_read() error");
+                    xsyslog_ev(LOG_WARNING, "http.chunk.read.failed",
+                               lf_s_opt("error", prot_error(pin)));
                     *errstr = "Unable to read chunk data";
                     goto read_failure;
                 }
@@ -436,7 +441,8 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
     if (!strcmpsafe(prot_error(pin), PROT_IDLE_STRING)) {
         /* client timed out */
         *errstr = prot_error(pin);
-        syslog(LOG_WARNING, "%s, closing connection", *errstr);
+        xsyslog_ev(LOG_WARNING, "http.connection.closing",
+                   lf_s("http.close.reason", *errstr));
         return HTTP_TIMEOUT;
     }
     else return HTTP_BAD_REQUEST;
@@ -559,8 +565,7 @@ EXPORTED int http_parse_auth_params(const char *params,
              * I believe that this code path is only reachable for a header with
              * a trailing comma, but have not tested it exhaustively to confirm
              * that. If it is, we could tighten this log message. */
-            syslog(LOG_ERR,
-                   "Expected another parameter in credentials, but reached end of string");
+            xsyslog_ev(LOG_WARNING, "http.auth.params.truncated");
             return SASL_BADAUTH;
         }
         /* Trim trailing BWS */
@@ -577,9 +582,8 @@ EXPORTED int http_parse_auth_params(const char *params,
         }
 
         if (!value) {
-            syslog(LOG_ERR,
-                   "Missing value for '%.*s' parameter in credentials",
-                   (int) tok_len, param);
+            xsyslog_ev(LOG_WARNING, "http.auth.param.valueless",
+                       lf_raw("http.auth.param", "%.*s", (int) tok_len, param));
             return SASL_BADAUTH;
         }
 

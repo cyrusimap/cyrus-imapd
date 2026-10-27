@@ -163,6 +163,7 @@ cal.eventid             a JMAP CalendarEvent id
 cal.organizer           a calendar component's ORGANIZER
 cal.partstat            an attendee's PARTSTAT
 cal.recurid             a calendar component's RECURRENCE-ID
+cal.timezones           the CalDAV-Timezones preference a request asked for
 cal.tzid                an iCalendar time zone identifier
 cal.uid                 a calendar component's iCalendar UID
 cmd.duration            how long a command took, in seconds
@@ -177,14 +178,85 @@ conn.user.max           how many are allowed for one user
 conv.guid.exists        how many non-expunged records share this guid
 conv.guid.folderexists  how many of those are in this folder
 conv.guid.numrecords    how many records of any kind share this guid
+dav.brief               the Brief preference a request asked for
 dav.collection          the DAV collection a request named
+dav.depth               the Depth a request asked to recurse to
+dav.if                  an If header, as the client sent it
+dav.if_schedule_tag_match  an If-Schedule-Tag-Match header, as the client sent it
+dav.lock_token          a DAV lock token
 dav.mailbox             the mailbox a DAV row names, as a name or a uniqueid
 dav.mailbox.byname      1 if dav.mailbox is a name rather than a uniqueid
 dav.owner               the user whose collection a request was for
+dav.precondition        the DAV precondition a response failed, as its element name
+dav.request.type        the PROPFIND mode or REPORT name a request body named
 dav.resource            the DAV resource within the collection
+dav.subscribe           1 if a subscription change is a subscribe, 0 an unsubscribe
+dav.synctoken           a DAV sync-token, as the client sent it
+dav.synctoken.basemodseq  the base modseq a sync-token names
+dav.synctoken.fields    how many components of a sync-token parsed
+dav.synctoken.modseq    the modseq a sync-token names
+dav.synctoken.uidvalidity  the uidvalidity a sync-token names
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
+http.auth.param         the name of a parameter in an HTTP auth credential
+http.auth.reset.reason  why the connection's authentication state was reset
+http.auth.response      1 if the credentials carried a client response
+http.auth.scheme        the auth scheme named in the client's credentials
+http.body.flags         the request body parser's flags, as a hex mask
+http.body.framing       how the request body is delimited, as a framing code
+http.body.length        the length of a response body being written, in bytes
+http.chunk.last         1 if this is the last chunk of the response body
+http.chunk.part         which piece of a chunked response was written
+http.chunk.size         the size of a response body chunk, in bytes
+http.client             the X-Client header, naming the client application
+http.close.reason       why the connection is being closed
+http.conn.flags         the Connection options a request asked for, as a hex mask
+http.content_encoding   the Content-Encoding of a request body
+http.cors               1 if the response carried a CORS allow-origin header
+http.dblookup           the user and key a dblookup request named, as user/key
+http.destination        the Destination header of a COPY or MOVE
+http.early_data         1 if the request arrived in TLS early data
+http.expect             the Expect header, when the response was about it
 http.header.name        the name of an HTTP header
 http.header.value       the value of an HTTP header
+http.if_match           an If-Match header, as the client sent it
+http.if_modified_since  an If-Modified-Since header, as the client sent it
+http.if_none_match      an If-None-Match header, as the client sent it
+http.if_unmodified_since  an If-Unmodified-Since header, as the client sent it
+http.location           the Location a response redirected to
+http.logheader          prefix for the keys below; never logged on its own
+# http.logheader.* -- one per header named by the httplogheaders config
+# option, pushed by key name, so the lint can't see them.  The value is the
+# header as the client sent it, and a character a key may not hold becomes
+# an underscore.
+http.method             the request method, as it arrived
+http.method.override    the method a POST was overridden to
+http.origin             the Origin a request came from
+http.prefer             the Prefer header, as the client sent it
+http.redirect.path      the path a CGI local redirect sent the request to
+http.referer            the Referer header, as the client sent it
+http.reqline.extra      anything the client sent after the version on the request-line
+http.requested_with     the X-Requested-With header, naming the client application
+http.status             the HTTP status code of a response
+http.step               which step of a multi-step HTTP operation is being logged
+http.stream.id          the HTTP/2 stream a request or frame belongs to
+http.te                 the TE header of a request
+http.te.flags           the transfer codings applied to a response, as a hex mask
+http.tls.required       1 if the connection must be under TLS before it is used
+http.upgrade            the Upgrade header of a request
+http.upgrade.flags      the protocols a request offered to upgrade to, as a hex mask
+http.uri                the request target, as the client wrote it
+http.useragent          the User-Agent header, as the client sent it
+http.version            the HTTP version on the request-line, as the client wrote it
+http2.body.complete     1 if the whole response body has been generated
+http2.body.remaining    how much of the response body is still unsent, in bytes
+http2.bytes             how many bytes of HTTP/2 frames were moved
+http2.bytes.wanted      how many bytes nghttp2 asked the body provider for
+http2.call              which nghttp2 call an event is about, without its prefix
+http2.eof               1 if the client's end of the connection is at EOF
+http2.frame.flags       an HTTP/2 frame's flags, as a hex mask
+http2.frame.type        an HTTP/2 frame's type code
+http2.goaway            1 if the session is on its way out
+http2.want_read         1 if nghttp2 still wants to read from the client
 idle.client             the imapd an idled message is to or from
 idle.events             the mailbox events a client asked to hear about, as a mask
 idle.filter             the mailbox filter a client idles with
@@ -262,6 +334,7 @@ jmap.header.form        the internal form code of a JMAP header property
 jmap.mailbox.name       a mailbox name as the client gave it, in UTF-8
 jmap.mailboxids         a JMAP mailboxIds argument, serialised
 jmap.method             the JMAP method call being processed, e.g. Email/get
+jmap.methods            every method call a JMAP request made, comma-separated
 jmap.module             the JMAP module an event is about, e.g. sieve
 jmap.noteid             a JMAP Note id
 jmap.push.active        1 if a push subscription was already running
@@ -293,6 +366,7 @@ reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
 sasl.result             a SASL result code
 sasl.text               a message logged by the SASL library
 sched.addresses         the scheduling addresses considered, one per indexed subkey
+sched.recipient         the scheduling address a request was sent to
 sched.userid            the userid whose scheduling addresses were used
 scope                   the scope a duplicate-delivery check applied to
 search.batch_highest_createdmodseq  highest createdmodseq indexed in this batch
@@ -328,6 +402,10 @@ xfer.step               which step of a mailbox transfer is being logged
 
 ### out. - the outbound half of an event that has two halves
 
+out.http.content_encoding  the Content-Encoding we applied to the response
+out.http.transfer_encoding  the Transfer-Encoding we applied to the response
+out.http.upgrade        the protocols we agreed to upgrade to
+out.http.version        the HTTP version we answered in
 out.msg.id              Message-ID we sent, where msg.id is the one we got
 
 ### other. - the second mailbox in an event about two of them
@@ -367,6 +445,7 @@ used.bytes.out          bytes written to the client this session
 ### failure detail
 
 error                   why the operation failed, as human-readable text
+error.code              a library's own numeric error code
 error.column            the column a parse error was found at
 error.description       the human-readable detail paired with error.type
 error.line              the line a parse error was found at
@@ -377,6 +456,7 @@ sys.filename            a file name within a directory
 sys.host                a host name or address
 sys.path                a filesystem path
 sys.pid                 a process id
+sys.signal              a signal number
 
 ### caller. - where in the C source the event was logged
 

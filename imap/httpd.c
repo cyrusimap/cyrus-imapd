@@ -148,7 +148,10 @@ HIDDEN int zlib_compress(struct transaction_t *txn, unsigned flags,
         zr = deflate(zstrm, flush);
         if (!(zr == Z_OK || zr == Z_STREAM_END || zr == Z_BUF_ERROR)) {
             /* something went wrong */
-            syslog(LOG_ERR, "zlib deflate error: %d %s", zr, zstrm->msg);
+            xsyslog_ev(LOG_ERR, "http.compress.failed",
+                       lf_s("compress.algorithm", "deflate"),
+                       lf_d("error.code", zr),
+                       lf_s_opt("error", zstrm->msg));
             return -1;
         }
 
@@ -171,7 +174,10 @@ HIDDEN int zlib_compress(struct transaction_t *txn, unsigned flags,
             zr = deflatePending(zstrm, &pending, Z_NULL);
             if (zr != Z_OK) {
                 /* something went wrong */
-                syslog(LOG_ERR, "zlib deflate error: %d %s", zr, zstrm->msg);
+                xsyslog_ev(LOG_ERR, "http.compress.failed",
+                           lf_s("compress.algorithm", "deflate"),
+                           lf_d("error.code", zr),
+                           lf_s_opt("error", zstrm->msg));
                 return -1;
             }
 #else
@@ -255,7 +261,8 @@ static int brotli_compress(struct transaction_t *txn,
         if (!BrotliEncoderCompressStream(brotli, op,
                                          &avail_in, &next_in,
                                          &avail_out, &next_out, NULL)) {
-            syslog(LOG_ERR, "Brotli: Error while compressing data");
+            xsyslog_ev(LOG_ERR, "http.compress.failed",
+                       lf_s("compress.algorithm", "br"));
             return -1;
         }
 
@@ -333,8 +340,10 @@ static int zstd_compress(struct transaction_t *txn,
         remaining = ZSTD_compressStream2(cctx, &output, &input, mode);
 
         if (ZSTD_isError(remaining)) {
-            syslog(LOG_ERR, "Zstandard: %s",
-                   ZSTD_getErrorString(ZSTD_getErrorCode(remaining)));
+            xsyslog_ev(LOG_ERR, "http.compress.failed",
+                       lf_s("compress.algorithm", "zstd"),
+                       lf_s("error",
+                            ZSTD_getErrorString(ZSTD_getErrorCode(remaining))));
             return -1;
         }
     } while (remaining || (input.pos != input.size));
@@ -605,7 +614,9 @@ EXPORTED int http1_resp_body_chunk(struct transaction_t *txn,
     if (txn->flags.te && txn->flags.ver == VER_1_1) {
         /* HTTP/1.1 chunk */
         if (datalen) {
-            syslog(LOG_DEBUG, "write_body: chunk(%d)", datalen);
+            xsyslog_ev(LOG_DEBUG, "http.chunk.written",
+                       lf_s("http.chunk.part", "body"),
+                       lf_u("http.chunk.size", datalen));
             prot_printf(txn->conn->pout, "%x\r\n", datalen);
             prot_write(txn->conn->pout, data, datalen);
             prot_puts(txn->conn->pout, "\r\n");
@@ -614,22 +625,26 @@ EXPORTED int http1_resp_body_chunk(struct transaction_t *txn,
         }
         if (last_chunk) {
             /* Terminate the HTTP/1.1 body with a zero-length chunk */
-            syslog(LOG_DEBUG, "write_body: last chunk");
+            xsyslog_ev(LOG_DEBUG, "http.chunk.written",
+                       lf_s("http.chunk.part", "last"));
             prot_puts(txn->conn->pout, "0\r\n");
 
             /* Trailer */
             if (txn->flags.trailer & TRAILER_CMD5) {
-                syslog(LOG_DEBUG, "write_body: trailer Content-MD5");
+                xsyslog_ev(LOG_DEBUG, "http.chunk.written",
+                           lf_s("http.chunk.part", "trailer_content_md5"));
                 MD5Final(md5, md5ctx);
                 content_md5_hdr(txn, md5);
             }
             if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
-                syslog(LOG_DEBUG, "write_body: trailer CTag");
+                xsyslog_ev(LOG_DEBUG, "http.chunk.written",
+                           lf_s("http.chunk.part", "trailer_ctag"));
                 simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
             }
 
             if (txn->flags.trailer != TRAILER_PROXY) {
-                syslog(LOG_DEBUG, "write_body: CRLF");
+                xsyslog_ev(LOG_DEBUG, "http.chunk.written",
+                           lf_s("http.chunk.part", "terminator"));
                 prot_puts(txn->conn->pout, "\r\n");
             }
         }
@@ -1044,8 +1059,8 @@ int service_main(int argc __attribute__((unused)),
 #endif
             action.sa_handler = sigalrm_handler;
             if (sigaction(SIGALRM, &action, NULL) < 0) {
-                syslog(LOG_ERR,
-                       "unable to install signal handler for %d: %m", SIGALRM);
+                xsyslog_ev(LOG_ERR, "http.signal.handler.failed",
+                           lf_d("sys.signal", SIGALRM));
                 httpd_keepalive = 0;
             }
         }
@@ -1214,7 +1229,11 @@ EXPORTED void fatal(const char* s, int code)
         prot_flush(httpd_out);
     }
 
-    syslog(LOG_ERR, "%s%s", fatal, s);
+    xsyslog_ev(LOG_ERR, "http.fatal",
+               lf_s("u.username", httpd_userid),
+               lf_s("r.clienthost", http_conn.clienthost),
+               lf_s("error", s),
+               lf_d("sys.exitcode", code));
 
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
@@ -1256,7 +1275,7 @@ static int tls_init(int client_auth, struct buf *serverinfo)
 
     SSL_CTX *ctx = NULL;
     if (tls_init_serverengine("http", 5 /* depth */, client_auth, &ctx) == -1) {
-        syslog(LOG_ERR, "error initializing TLS");
+        xsyslog_ev(LOG_ERR, "http.starttls.init.failed");
         return HTTP_SERVER_ERROR;
     }
 
@@ -1274,14 +1293,16 @@ static void starttls(struct http_connection *conn, int timeout)
 
     /* if error */
     if (result == -1) {
-        syslog(LOG_NOTICE, "Error negotiating TLS");
+        xsyslog_ev(LOG_NOTICE, "http.starttls.failed",
+                   lf_s("r.clienthost", conn->clienthost));
         shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, httpd_saslconn);
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "saslprops_set_tls() failed");
+        xsyslog_ev(LOG_NOTICE, "http.starttls.saslprops.failed",
+                   lf_s("r.clienthost", conn->clienthost));
         shut_down(EX_TEMPFAIL);
     }
 
@@ -1568,8 +1589,10 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     /* Check for Connection options */
     if ((ret = parse_connection(txn))) return ret;
 
-    syslog(LOG_DEBUG, "conn flags: %#x  upgrade flags: %#x  tls req: %d",
-           txn->flags.conn, txn->flags.upgrade, httpd_tls_required);
+    xsyslog_ev(LOG_DEBUG, "http.connection.parsed",
+               lf_llx("http.conn.flags", txn->flags.conn),
+               lf_llx("http.upgrade.flags", txn->flags.upgrade),
+               lf_b("http.tls.required", httpd_tls_required));
     if (txn->flags.conn & CONN_UPGRADE) {
         /* Read any request body (can't upgrade in middle of request) */
         txn->req_body.flags |= BODY_DECODE;
@@ -1588,8 +1611,9 @@ static int preauth_check_hdrs(struct transaction_t *txn)
             txn->flags.upgrade &= ~UPGRADE_TLS;
         }
 
-        syslog(LOG_DEBUG, "upgrade flags: %#x  tls req: %d",
-               txn->flags.upgrade, httpd_tls_required);
+        xsyslog_ev(LOG_DEBUG, "http.upgrade.considered",
+                   lf_llx("http.upgrade.flags", txn->flags.upgrade),
+                   lf_b("http.tls.required", httpd_tls_required));
         if ((txn->flags.upgrade & UPGRADE_HTTP2) && !httpd_tls_required) {
             if ((ret = http2_start_session(txn, NULL))) {
                 txn->flags.conn = CONN_CLOSE;
@@ -1704,7 +1728,8 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
     if ((hdr = spool_getheader(txn->req_hdrs, "Authorization"))) {
         if (httpd_userid) {
             /* Reauth - reinitialize */
-            syslog(LOG_DEBUG, "reauth - reinit");
+            xsyslog_ev(LOG_DEBUG, "http.auth.reset",
+                       lf_s("http.auth.reset.reason", "reauth"));
             reset_saslconn(&httpd_saslconn);
             txn->auth_chal.scheme = NULL;
         }
@@ -1725,7 +1750,8 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
                     buf_appendcstr(&txn->buf, emsg);
                     txn->error.desc = buf_cstring(&txn->buf);
                 }
-                syslog(LOG_DEBUG, "auth failed - reinit");
+                xsyslog_ev(LOG_DEBUG, "http.auth.reset",
+                           lf_s("http.auth.reset.reason", "auth_failed"));
                 reset_saslconn(&httpd_saslconn);
                 txn->auth_chal.scheme = NULL;
                 if (r == SASL_UNAVAIL) {
@@ -1751,14 +1777,15 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
     }
     else if (!httpd_userid && txn->auth_chal.scheme) {
         /* Started auth exchange, but client didn't engage - reinit */
-        syslog(LOG_DEBUG, "client didn't complete auth - reinit");
+        xsyslog_ev(LOG_DEBUG, "http.auth.reset",
+                   lf_s("http.auth.reset.reason", "auth_abandoned"));
         reset_saslconn(&httpd_saslconn);
         txn->auth_chal.scheme = NULL;
     }
 
     /* Drop auth credentials, if not a backend in a Murder */
     else if (!config_mupdate_server || !config_getstring(IMAPOPT_PROXYSERVERS)) {
-        syslog(LOG_DEBUG, "drop auth creds");
+        xsyslog_ev(LOG_DEBUG, "http.auth.credentials.dropped");
 
         free(httpd_userid);
         httpd_userid = NULL;
@@ -1791,7 +1818,8 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
                 buf_appendcstr(&txn->buf, emsg);
                 txn->error.desc = buf_cstring(&txn->buf);
             }
-            syslog(LOG_DEBUG, "proxy authz failed - reinit");
+            xsyslog_ev(LOG_DEBUG, "http.auth.reset",
+                       lf_s("http.auth.reset.reason", "proxy_authz_failed"));
             reset_saslconn(&httpd_saslconn);
             txn->auth_chal.scheme = NULL;
             ret = HTTP_UNAUTHORIZED;
@@ -2134,7 +2162,8 @@ static int http1_input(struct transaction_t *txn)
 
     do {
         /* Read request-line */
-        syslog(LOG_DEBUG, "read request-line");
+        xsyslog_ev(LOG_DEBUG, "http.request.step",
+                   lf_s("http.step", "read_request_line"));
         if (!prot_fgets(req_line->buf, MAX_REQ_LINE+1, httpd_in)) {
             txn->error.desc = prot_error(httpd_in);
             if (txn->error.desc && strcmp(txn->error.desc, PROT_EOF_STRING)) {
@@ -2143,7 +2172,7 @@ static int http1_input(struct transaction_t *txn)
             }
             else {
                 /* client closed connection */
-                syslog(LOG_DEBUG, "client closed connection");
+                xsyslog_ev(LOG_DEBUG, "http.connection.closed");
             }
 
             txn->flags.conn = CONN_CLOSE;
@@ -2155,12 +2184,14 @@ static int http1_input(struct transaction_t *txn)
 
 
     /* Parse request-line = method SP request-target SP HTTP-version CRLF */
-    syslog(LOG_DEBUG, "parse request-line");
+    xsyslog_ev(LOG_DEBUG, "http.request.step",
+               lf_s("http.step", "parse_request_line"));
     ret = parse_request_line(txn);
 
     /* Parse headers */
     if (!ret) {
-        syslog(LOG_DEBUG, "read headers");
+        xsyslog_ev(LOG_DEBUG, "http.request.step",
+                   lf_s("http.step", "read_headers"));
         ret = http_read_headers(httpd_in, 1 /* read_sep */,
                                 &txn->req_hdrs, &txn->error.desc);
     }
@@ -2173,7 +2204,7 @@ static int http1_input(struct transaction_t *txn)
     apply_trace_id(txn);
 
     /* Examine request */
-    syslog(LOG_DEBUG, "examine request");
+    xsyslog_ev(LOG_DEBUG, "http.request.step", lf_s("http.step", "examine"));
     ret = examine_request(txn, NULL);
     if (ret) goto done;
 
@@ -2181,7 +2212,7 @@ static int http1_input(struct transaction_t *txn)
     if (txn->flags.ver == VER_1_1) alarm(httpd_keepalive);
 
     /* Process the requested method */
-    syslog(LOG_DEBUG, "process request");
+    xsyslog_ev(LOG_DEBUG, "http.request.step", lf_s("http.step", "process"));
     ret = process_request(txn);
 
   done:
@@ -2270,7 +2301,8 @@ static void cmdloop(struct http_connection *conn)
 
             signals_poll();
 
-            syslog(LOG_DEBUG, "http_proxy_check_input()");
+            xsyslog_ev(LOG_DEBUG, "http.request.step",
+                       lf_s("http.step", "proxy_check_input"));
 
         } while (!http_proxy_check_input(conn, &httpd_pipes,
                                          0 /* timeout */));
@@ -2310,15 +2342,16 @@ static void cmdloop(struct http_connection *conn)
         }
 
         if (ret == HTTP_SHUTDOWN) {
-            syslog(LOG_WARNING,
-                   "Shutdown file: \"%s\", closing connection", conn->close_str);
+            xsyslog_ev(LOG_WARNING, "http.shutdown.requested",
+                       lf_s("http.close.reason", conn->close_str));
             shut_down(0);
         }
 
     } while (!conn->close);
 
     if (conn->close_str && strcmp(conn->close_str, PROT_EOF_STRING)) {
-        syslog(LOG_WARNING, "%s, closing connection", conn->close_str);
+        xsyslog_ev(LOG_WARNING, "http.connection.closing",
+                   lf_s("http.close.reason", conn->close_str));
     }
 
     /* Memory cleanup */
@@ -2424,7 +2457,7 @@ static int parse_expect(struct transaction_t *txn)
         while (!ret && (token = tok_next(&tok))) {
             /* Check if client wants acknowledgment before sending body */ 
             if (!strcasecmp(token, "100-continue")) {
-                syslog(LOG_DEBUG, "Expect: 100-continue");
+                xsyslog_ev(LOG_DEBUG, "http.continue.expected");
                 txn->req_body.flags |= BODY_CONTINUE;
             }
             else {
@@ -2734,7 +2767,9 @@ EXPORTED void simple_hdr(struct transaction_t *txn,
     buf_vprintf(&buf, value, args);
     va_end(args);
 
-    syslog(LOG_DEBUG, "simple_hdr(%s: %s)", name, buf_cstring(&buf));
+    xsyslog_ev(LOG_DEBUG, "http.header.added",
+               lf_s("http.header.name", name),
+               lf_s("http.header.value", buf_cstring(&buf)));
 
     /* Drop headers with illegal characters. */
     if (has_illegal_hdr_char(name, strlen(name)) ||
@@ -2939,235 +2974,188 @@ HIDDEN void connection_hdrs(struct transaction_t *txn)
 static const char *te_strings[] = { "deflate", "gzip", "chunked", NULL };
 const char *ce_strings[] = { "deflate", "gzip", "br", "zstd", NULL };
 
+/* The first value of a request header, or NULL if the request had no
+ * headers or didn't carry this one. */
+static const char *req_hdr(struct transaction_t *txn, const char *name)
+{
+    const char **hdr;
+
+    if (!txn->req_hdrs) return NULL;
+
+    hdr = spool_getheader(txn->req_hdrs, name);
+    return hdr ? hdr[0] : NULL;
+}
+
+/* A comma_list table and the mask saying which of its entries are in play. */
+struct flag_names {
+    const char **names;
+    unsigned flags;
+};
+
+static void logfmt_arg_flag_names(struct logfmt *lf, const char *key,
+                                  const void *value)
+{
+    const struct flag_names *fn = (const struct flag_names *) value;
+    struct buf buf = BUF_INITIALIZER;
+    const char *sep = "";
+
+    for (unsigned i = 0; fn->names[i]; i++) {
+        if (!(fn->flags & (1 << i))) continue;
+
+        buf_printf(&buf, "%s%s", sep, fn->names[i]);
+        sep = ",";
+    }
+
+    logfmt_push(lf, key, buf_cstring(&buf));
+    buf_free(&buf);
+}
+
+static void logfmt_arg_precondition(struct logfmt *lf, const char *key,
+                                    const void *value)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    dav_precond_as_string(&buf, (struct error_t *) value);
+    logfmt_push(lf, key, buf_cstring(&buf));
+    buf_free(&buf);
+}
+
+/* Push http.logheader.<name>=<value> for each header the httplogheaders
+ * option names that this request carried.
+ *
+ * The keys come from the config file, so tools/lint-logfmt-keys can't see
+ * them; doc/logfmt-keys registers the prefix.  A header name may hold
+ * characters a key may not, so anything outside the key alphabet becomes an
+ * underscore.
+ */
+static void logfmt_arg_log_headers(struct logfmt *lf,
+                                   const char *key __attribute__((unused)),
+                                   const void *value)
+{
+    hdrcache_t req_hdrs = (hdrcache_t) value;
+    struct buf keybuf = BUF_INITIALIZER;
+
+    if (!req_hdrs) return;
+
+    for (int i = 0; i < strarray_size(httpd_log_headers); i++) {
+        const char *name = strarray_nth(httpd_log_headers, i);
+        const char **hdr = spool_getheader(req_hdrs, name);
+
+        if (!hdr) continue;
+
+        buf_setcstr(&keybuf, "http.logheader.");
+        for (const char *p = name; *p; p++) {
+            int c = tolower((unsigned char) *p);
+            buf_putc(&keybuf, (islower(c) || isdigit(c) || c == '-') ? c : '_');
+        }
+
+        logfmt_push(lf, buf_cstring(&keybuf), hdr[0]);
+    }
+
+    buf_free(&keybuf);
+}
+
 HIDDEN void log_request(long code, struct transaction_t *txn)
 {
-    int i, size;
-    va_list noargs;
     double cmdtime, nettime;
-    const char **hdr, *sep;
-    struct buf *logbuf = &txn->conn->logbuf;
+    const char *reqline_extra = NULL;
+    struct flag_names upgraded = { upgrd_tokens, txn->flags.upgrade };
+    struct flag_names transfer_enc = { te_strings, txn->flags.te };
+    struct flag_names content_enc = { ce_strings, txn->resp_body.enc.type };
 
-    /* Log the client request and our response */
-    buf_reset(logbuf);
+    if (txn->req_line.ver && code != HTTP_URI_TOO_LONG && *txn->req_line.buf) {
+        /* the request-line is NUL-split in place, so anything the client
+         * sent after the version is still sitting after it */
+        const char *p = txn->req_line.ver + strlen(txn->req_line.ver) + 1;
 
-    /* Add client data */
-    buf_printf(logbuf, "%s", txn->conn->clienthost);
-    if (httpd_userid) buf_printf(logbuf, " as \"%s\"", httpd_userid);
-    if (txn->req_hdrs &&
-        (hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
-        buf_printf(logbuf, " with \"%s\"", hdr[0]);
-        if ((hdr = spool_getheader(txn->req_hdrs, "X-Client")))
-            buf_printf(logbuf, " by \"%s\"", hdr[0]);
-        else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With")))
-            buf_printf(logbuf, " by \"%s\"", hdr[0]);
+        if (*p) reqline_extra = p;
     }
 
-    /* Add session id */
-    buf_printf(logbuf, " via SESSIONID=<%s>", session_id());
-
-    /* Add request-line */
-    buf_appendcstr(logbuf, "; \"");
-    if (txn->req_line.meth) {
-        buf_printf(logbuf, "%s",
-                   txn->flags.override ? "POST" : txn->req_line.meth);
-        if (txn->req_line.uri) {
-            buf_printf(logbuf, " %s", txn->req_line.uri);
-            if (txn->req_line.ver) {
-                buf_printf(logbuf, " %s", txn->req_line.ver);
-                if (code != HTTP_URI_TOO_LONG && *txn->req_line.buf) {
-                    const char *p =
-                        txn->req_line.ver + strlen(txn->req_line.ver) + 1;
-                    if (*p) buf_printf(logbuf, " %s", p);
-                }
-            }
-        }
-    }
-    buf_appendcstr(logbuf, "\"");
-
-    if (txn->req_hdrs) {
-        /* Add any request modifying headers */
-        sep = " (";
-
-        if (txn->flags.override) {
-            buf_printf(logbuf, "%smethod-override=%s", sep, txn->req_line.meth);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Origin"))) {
-            buf_printf(logbuf, "%sorigin=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Referer"))) {
-            buf_printf(logbuf, "%sreferer=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if (txn->flags.upgrade &&
-            (hdr = spool_getheader(txn->req_hdrs, "Upgrade"))) {
-            buf_printf(logbuf, "%supgrade=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if (code == HTTP_CONTINUE || code == HTTP_EXPECT_FAILED) {
-            hdr = spool_getheader(txn->req_hdrs, "Expect");
-            buf_printf(logbuf, "%sexpect=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, "TE"))) {
-            buf_printf(logbuf, "%ste=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Content-Encoding"))) {
-            buf_printf(logbuf, "%scnt-encoding=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if (txn->auth_chal.scheme) {
-            buf_printf(logbuf, "%sauth=%s", sep, txn->auth_chal.scheme->name);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
-            buf_printf(logbuf, "%sdestination=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Lock-Token"))) {
-            buf_printf(logbuf, "%slock-token=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, "If"))) {
-            buf_printf(logbuf, "%sif=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, "If-Schedule-Tag-Match"))) {
-            buf_printf(logbuf, "%sif-schedule-tag-match=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        else if ((hdr = spool_getheader(txn->req_hdrs, "If-Match"))) {
-            buf_printf(logbuf, "%sif-match=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        else if ((hdr = spool_getheader(txn->req_hdrs, "If-Unmodified-Since"))) {
-            buf_printf(logbuf, "%sif-unmodified-since=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, "If-None-Match"))) {
-            buf_printf(logbuf, "%sif-none-match=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        else if ((hdr = spool_getheader(txn->req_hdrs, "If-Modified-Since"))) {
-            buf_printf(logbuf, "%sif-modified-since=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, ":type"))) {
-            buf_printf(logbuf, "%stype=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, ":token"))) {
-            buf_printf(logbuf, "%stoken=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, ":jmap"))) {
-            buf_printf(logbuf, "%sjmap=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, ":dblookup"))) {
-            buf_printf(logbuf, "%slookup=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
-            buf_printf(logbuf, "%sdepth=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
-            buf_printf(logbuf, "%sprefer=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        else if ((hdr = spool_getheader(txn->req_hdrs, "Brief"))) {
-            buf_printf(logbuf, "%sbrief=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-        if ((hdr = spool_getheader(txn->req_hdrs, "CalDAV-Timezones"))) {
-            buf_printf(logbuf, "%scaldav-timezones=%s", sep, hdr[0]);
-            sep = "; ";
-        }
-
-        /* Add httplogheaders */
-        size = strarray_size(httpd_log_headers);
-        for (i = 0; i < size; i++) {
-            const char *name = strarray_nth(httpd_log_headers, i);
-
-            if ((hdr = spool_getheader(txn->req_hdrs, name))) {
-                buf_printf(logbuf, "%s%s=\"%s\"", sep, name, hdr[0]);
-                sep = "; ";
-            }
-        }
-
-        if (*sep == ';') buf_appendcstr(logbuf, ")");
-    }
-
-    if (txn->flags.redirect) {
-        /* Add CGI local redirect */
-        buf_printf(logbuf, " => \"%s %s %s\"",
-                   txn->req_line.meth, txn->req_tgt.path, txn->req_line.ver);
-    }
-
-    /* Add response */
-    buf_printf(logbuf, " => \"%s\"", http_statusline(txn->flags.ver, code));
-
-    /* Add any auxiliary response data */
-    sep = " (";
-    if (txn->req_hdrs &&
-        (hdr = spool_getheader(txn->req_hdrs, ":stream-id"))) {
-        buf_printf(logbuf, "%sstream-id=%s", sep, hdr[0]);
-        sep = "; ";
-    }
-    if (txn->flags.early) {
-        buf_printf(logbuf, "%searly-data", sep);
-        sep = "; ";
-    }
-    if (code == HTTP_SWITCH_PROT || code == HTTP_UPGRADE) {
-        buf_printf(logbuf, "%supgrade=", sep);
-#pragma GCC diagnostic push
-// despite the name, this pragma is for clang. clang complains about
-// the va_list noargs variable being unitialized. And gcc complains
-// about an unknown pragma if we correctly address clang in the
-// pragma definition. So let clang just pick up the GCC pragma.
-#pragma GCC diagnostic ignored "-Wuninitialized"
-        comma_list_body(logbuf, upgrd_tokens, txn->flags.upgrade, 0, noargs);
-#pragma GCC diagnostic pop
-        sep = "; ";
-    }
-    if (txn->flags.te) {
-        buf_printf(logbuf, "%stx-encoding=", sep);
-        comma_list_body(logbuf, te_strings, txn->flags.te, 0, noargs);
-        sep = "; ";
-    }
-    if (txn->resp_body.enc.type && (txn->resp_body.len || txn->flags.te)) {
-        buf_printf(logbuf, "%scnt-encoding=", sep);
-        comma_list_body(logbuf, ce_strings, txn->resp_body.enc.type, 0, noargs);
-        sep = "; ";
-    }
-    if (txn->location) {
-        buf_printf(logbuf, "%slocation=%s", sep, txn->location);
-        sep = "; ";
-    }
-    else if (txn->flags.cors) {
-        buf_printf(logbuf, "%sallow-origin", sep);
-        sep = "; ";
-    }
-    else if (txn->error.precond) {
-        buf_printf(logbuf, "%sprecond=", sep);
-        dav_precond_as_string(logbuf, &txn->error);
-        sep = "; ";
-    }
-    else if (txn->error.desc) {
-        buf_printf(logbuf, "%serror=%s", sep, txn->error.desc);
-        sep = "; ";
-    }
-    if (*sep == ';') buf_appendcstr(logbuf, ")");
-
-    /* Add timing stats */
     cmdtime_endtimer(&cmdtime, &nettime);
-    buf_printf(logbuf, " [timing: cmd=%f net=%f total=%f]",
-               cmdtime, nettime, cmdtime + nettime);
 
-    syslog(LOG_INFO, "%s", buf_cstring(logbuf));
+    xsyslog_ev(LOG_INFO, "http.request.completed",
+               lf_s("r.clienthost", txn->conn->clienthost),
+               lf_s_opt("u.username", httpd_userid),
+               lf_s_opt("http.useragent", req_hdr(txn, "User-Agent")),
+               lf_s_opt("http.client", req_hdr(txn, "X-Client")),
+               lf_s_opt("http.requested_with", req_hdr(txn, "X-Requested-With")),
+
+               /* the request */
+               lf_s_opt("http.method",
+                        txn->flags.override ? "POST" : txn->req_line.meth),
+               lf_s_opt("http.method.override",
+                        txn->flags.override ? txn->req_line.meth : NULL),
+               lf_s_opt("http.uri", txn->req_line.uri),
+               lf_s_opt("http.version", txn->req_line.ver),
+               lf_s_opt("http.reqline.extra", reqline_extra),
+
+               /* headers that modify what the request means */
+               lf_s_opt("http.origin", req_hdr(txn, "Origin")),
+               lf_s_opt("http.referer", req_hdr(txn, "Referer")),
+               txn->flags.upgrade
+                   ? lf_s_opt("http.upgrade", req_hdr(txn, "Upgrade"))
+                   : lf_skip(),
+               (code == HTTP_CONTINUE || code == HTTP_EXPECT_FAILED)
+                   ? lf_s_opt("http.expect", req_hdr(txn, "Expect"))
+                   : lf_skip(),
+               lf_s_opt("http.te", req_hdr(txn, "TE")),
+               lf_s_opt("http.content_encoding",
+                        req_hdr(txn, "Content-Encoding")),
+               lf_s_opt("login.scheme",
+                        txn->auth_chal.scheme ? txn->auth_chal.scheme->name
+                                              : NULL),
+               lf_s_opt("http.destination", req_hdr(txn, "Destination")),
+               lf_s_opt("http.prefer", req_hdr(txn, "Prefer")),
+               lf_s_opt("http.if_match", req_hdr(txn, "If-Match")),
+               lf_s_opt("http.if_none_match", req_hdr(txn, "If-None-Match")),
+               lf_s_opt("http.if_modified_since",
+                        req_hdr(txn, "If-Modified-Since")),
+               lf_s_opt("http.if_unmodified_since",
+                        req_hdr(txn, "If-Unmodified-Since")),
+               lf_s_opt("dav.brief", req_hdr(txn, "Brief")),
+               lf_s_opt("dav.depth", req_hdr(txn, "Depth")),
+               lf_s_opt("dav.if", req_hdr(txn, "If")),
+               lf_s_opt("dav.if_schedule_tag_match",
+                        req_hdr(txn, "If-Schedule-Tag-Match")),
+               lf_s_opt("dav.lock_token", req_hdr(txn, "Lock-Token")),
+               lf_s_opt("cal.timezones", req_hdr(txn, "CalDAV-Timezones")),
+               lf_fn("http.logheader", logfmt_arg_log_headers, txn->req_hdrs),
+
+               /* what the handlers recorded about the request */
+               lf_s_opt("dav.request.type", req_hdr(txn, ":type")),
+               lf_s_opt("dav.synctoken", req_hdr(txn, ":token")),
+               lf_s_opt("jmap.methods", req_hdr(txn, ":jmap")),
+               lf_s_opt("http.dblookup", req_hdr(txn, ":dblookup")),
+               lf_s_opt("http.stream.id", req_hdr(txn, ":stream-id")),
+
+               /* the response */
+               lf_d("http.status", atoi(error_message(code))),
+               lf_s("out.http.version", http_versions[txn->flags.ver]),
+               lf_s_opt("http.redirect.path",
+                        txn->flags.redirect ? txn->req_tgt.path : NULL),
+               lf_flag("http.early_data", txn->flags.early),
+               (code == HTTP_SWITCH_PROT || code == HTTP_UPGRADE)
+                   ? lf_fn("out.http.upgrade", logfmt_arg_flag_names, &upgraded)
+                   : lf_skip(),
+               txn->flags.te
+                   ? lf_fn("out.http.transfer_encoding",
+                           logfmt_arg_flag_names, &transfer_enc)
+                   : lf_skip(),
+               (txn->resp_body.enc.type && (txn->resp_body.len || txn->flags.te))
+                   ? lf_fn("out.http.content_encoding",
+                           logfmt_arg_flag_names, &content_enc)
+                   : lf_skip(),
+               lf_s_opt("http.location", txn->location),
+               lf_flag("http.cors", txn->flags.cors),
+               txn->error.precond
+                   ? lf_fn("dav.precondition", logfmt_arg_precondition,
+                           &txn->error)
+                   : lf_skip(),
+               lf_s_opt("error", txn->error.desc),
+
+               lf_duration("cmd.duration", cmdtime),
+               lf_duration("cmd.nettime", nettime),
+               lf_duration("cmd.total", cmdtime + nettime));
 }
 
 EXPORTED void response_header(long code, struct transaction_t *txn)
@@ -3729,8 +3717,10 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
     static MD5_CTX ctx;
     static unsigned char md5[MD5_DIGEST_LENGTH];
 
-    syslog(LOG_DEBUG, "write_body(code = %ld, flags.te = %#x, len = %u)",
-           code, txn->flags.te, len);
+    xsyslog_ev(LOG_DEBUG, "http.body.writing",
+               lf_d("http.status", atoi(error_message(code))),
+               lf_llx("http.te.flags", txn->flags.te),
+               lf_u("http.body.length", len));
 
     if (txn->flags.ver == VER_0_9) {
         /* A HTTP/0.9 response has no status-line or headers
@@ -4106,7 +4096,8 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
     unsigned authzlen;
     int status;
 
-    syslog(LOG_DEBUG, "proxy_auth: authzid='%s'", *authzid);
+    xsyslog_ev(LOG_DEBUG, "http.proxy.authz.requested",
+               lf_s("u.username", *authzid));
 
     /* Free userid & authstate previously allocated for auth'd user */
     if (httpd_userid) {
@@ -4220,7 +4211,7 @@ static int auth_success(struct transaction_t *txn, const char *userid)
         off_t end = lseek(logfd, 0, SEEK_END);
 
         if (ftruncate(logfd, end - buf_len(&txn->buf)))
-            syslog(LOG_ERR, "IOERROR: failed to truncate http log");
+            xsyslog_ev(LOG_ERR, "http.telemetry.truncate.failed");
 
         /* Close existing telemetry log */
         close(logfd);
@@ -4238,7 +4229,7 @@ static int auth_success(struct transaction_t *txn, const char *userid)
     if (logfd != -1) {
         /* Log credential-redacted request */
         if (write(logfd, buf_cstring(&txn->buf), buf_len(&txn->buf)) < 0)
-            syslog(LOG_ERR, "IOERROR: failed to write to http log");
+            xsyslog_ev(LOG_ERR, "http.telemetry.write.failed");
     }
 
     buf_reset(&txn->buf);
@@ -4286,10 +4277,12 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         clientinlen = strlen(clientin);
     }
 
-    syslog(LOG_DEBUG,
-           "http_auth: status=%d   scheme='%s'   creds='%.*s%s'",
-           status, chal->scheme ? chal->scheme->name : "",
-           slen, creds, clientin ? " <response>" : "");
+    xsyslog_ev(LOG_DEBUG, "http.auth.started",
+               lf_d("sasl.result", status),
+               lf_s_opt("login.scheme",
+                        chal->scheme ? chal->scheme->name : NULL),
+               lf_raw("http.auth.scheme", "%.*s", slen, creds),
+               lf_flag("http.auth.response", clientin != NULL));
 
     /* Free userid & authstate previously allocated for auth'd user */
     if (httpd_userid) {
@@ -4316,7 +4309,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
         if (strncasecmp(scheme->name, creds, slen)) {
             /* Changing auth scheme -> reset state */
-            syslog(LOG_DEBUG, "http_auth: changing scheme");
+            xsyslog_ev(LOG_DEBUG, "http.auth.scheme.changed");
             reset_saslconn(&httpd_saslconn);
             chal->scheme = NULL;
             status = SASL_OK;
@@ -4325,7 +4318,6 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
     if (!chal->scheme) {
         /* Find the client-specified auth scheme */
-        syslog(LOG_DEBUG, "http_auth: find client scheme");
         for (scheme = auth_schemes; scheme->name; scheme++) {
             if (slen && !strncasecmp(scheme->name, creds, slen)) {
                 /* Found a supported scheme, see if its available */
@@ -4335,11 +4327,13 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         }
         if (!scheme || !scheme->name) {
             /* Didn't find a matching scheme that is available */
-            syslog(LOG_DEBUG, "Unknown auth scheme '%.*s'", slen, creds);
+            xsyslog_ev(LOG_DEBUG, "http.auth.scheme.unknown",
+                       lf_raw("http.auth.scheme", "%.*s", slen, creds));
             return SASL_NOMECH;
         }
         /* We found it! */
-        syslog(LOG_DEBUG, "http_auth: found matching scheme: %s", scheme->name);
+        xsyslog_ev(LOG_DEBUG, "http.auth.scheme.selected",
+                   lf_s("login.scheme", scheme->name));
         chal->scheme = scheme;
         status = SASL_OK;
 
@@ -4383,8 +4377,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
             if (sid_len != strlen(mysid) ||
                 strncmp(mysid, sid, sid_len)) {
-                syslog(LOG_ERR, "%s: Incorrect 'sid' parameter in credentials",
-                       scheme->name);
+                xsyslog_ev(LOG_WARNING, "http.auth.sid.mismatch",
+                           lf_s("login.scheme", scheme->name));
                 return SASL_BADAUTH;
             }
         }
@@ -4395,8 +4389,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         r = sasl_decode64(clientin, clientinlen,
                           base64, BASE64_BUF_SIZE, &clientinlen);
         if (r != SASL_OK) {
-            syslog(LOG_ERR, "Base64 decode failed: %s",
-                   sasl_errstring(r, NULL, NULL));
+            xsyslog_ev(LOG_WARNING, "http.auth.decode.failed",
+                       lf_s("error", sasl_errstring(r, NULL, NULL)));
             return r;
         }
         clientin = base64;
@@ -4410,7 +4404,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         char *domain;
 
         if (!clientin) {
-            syslog(LOG_ERR, "Basic auth: Missing token68");
+            xsyslog_ev(LOG_WARNING, "http.auth.basic.credentials.missing");
             return SASL_BADPARAM;
         }
 
@@ -4420,7 +4414,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         user = base64;
         pass = strchr(base64, ':');
         if (!pass) {
-            syslog(LOG_ERR, "Basic auth: Missing password");
+            xsyslog_ev(LOG_WARNING, "http.auth.basic.password.missing");
             return SASL_BADPARAM;
         }
         *pass++ = '\0';
@@ -4508,13 +4502,17 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
         if (status == SASL_CONTINUE) {
             /* Continue current authentication exchange */
-            syslog(LOG_DEBUG, "http_auth: continue %s", scheme->saslmech);
+            xsyslog_ev(LOG_DEBUG, "http.auth.step",
+                       lf_s("http.step", "continue"),
+                       lf_s("login.mech", scheme->saslmech));
             status = sasl_server_step(httpd_saslconn, clientin, clientinlen,
                                       &serverout, &serveroutlen);
         }
         else {
             /* Start new authentication exchange */
-            syslog(LOG_DEBUG, "http_auth: start %s", scheme->saslmech);
+            xsyslog_ev(LOG_DEBUG, "http.auth.step",
+                       lf_s("http.step", "start"),
+                       lf_s("login.mech", scheme->saslmech));
             status = sasl_server_start(httpd_saslconn, scheme->saslmech,
                                        clientin, clientinlen,
                                        &serverout, &serveroutlen);
@@ -4522,8 +4520,11 @@ static int http_auth(const char *creds, struct transaction_t *txn)
 
         /* Failure - probably bad client response */
         if ((status != SASL_OK) && (status != SASL_CONTINUE)) {
-            syslog(LOG_ERR, "SASL failed: %s",
-                   cyrus_sasl_errmsg(httpd_saslconn, status, /*for_client*/0));
+            xsyslog_ev(LOG_WARNING, "http.auth.failed",
+                       lf_s("login.mech", scheme->saslmech),
+                       lf_s("error",
+                            cyrus_sasl_errmsg(httpd_saslconn, status,
+                                              /*for_client*/0)));
             return status;
         }
 
@@ -4540,8 +4541,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
             r = sasl_encode64(serverout, serveroutlen,
                               base64 + auth_params_len, MAX_BASE64_SIZE, NULL);
             if (r != SASL_OK) {
-                syslog(LOG_ERR, "Base64 encode failed: %s",
-                       sasl_errstring(r, NULL, NULL));
+                xsyslog_ev(LOG_ERR, "http.auth.encode.failed",
+                           lf_s("error", sasl_errstring(r, NULL, NULL)));
                 return r;
             }
             serverout = base64;
@@ -4565,7 +4566,8 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         /* Get the userid from SASL - already canonicalized */
         status = sasl_getprop(httpd_saslconn, SASL_USERNAME, &canon_user);
         if (status != SASL_OK) {
-            syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", status);
+            xsyslog_ev(LOG_ERR, "http.auth.username.failed",
+                       lf_d("sasl.result", status));
             return status;
         }
         user = (const char *) canon_user;
@@ -4593,7 +4595,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
          * so avoid to return SASL_BADAUTH. It would trigger the
          * HTTP handler to send UNAUTHORIZED, and might confuse
          * users that provided their correct credentials. */
-        syslog(LOG_ERR, "auth_success returned error: %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "http.auth.postprocess.failed", lf_err("error", r));
         status = SASL_FAIL;
     }
 
@@ -5429,8 +5431,9 @@ EXPORTED int http_read_req_body(struct transaction_t *txn)
 {
     struct body_t *body = &txn->req_body;
 
-    syslog(LOG_DEBUG, "http_read_req_body(flags=%#x, framing=%d)",
-           body->flags, body->framing);
+    xsyslog_ev(LOG_DEBUG, "http.body.reading",
+               lf_llx("http.body.flags", body->flags),
+               lf_d("http.body.framing", body->framing));
 
     if (body->flags & BODY_DONE) return 0;
     body->flags |= BODY_DONE;

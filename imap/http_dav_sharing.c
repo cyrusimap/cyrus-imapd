@@ -849,23 +849,21 @@ static int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
     /* Open notifications collection for writing */
     r = create_notify_collection(userid, &mailbox);
     if (r == IMAP_INVALID_USER) {
-        syslog(LOG_NOTICE,
-               "dav_send_notification(%s) failed: %s", userid, error_message(r));
+        xsyslog_ev(LOG_NOTICE, "dav.notification.send.failed",
+                   lf_s("u.username", userid), lf_err("error", r));
         r = 0;
         goto done;
     }
     else if (r) {
-        syslog(LOG_ERR,
-               "dav_send_notification: create_notify_collection(%s) failed: %s",
-               userid, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.notify_collection.create.failed",
+                   lf_s("u.username", userid), lf_err("error", r));
         goto done;
     }
 
     /* Open the WebDAV DB corresponding to collection */
     webdavdb = webdav_open_mailbox(mailbox);
     if (!webdavdb) {
-        syslog(LOG_ERR, "dav_send_notification: unable to open WebDAV DB (%s)",
-               mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "dav.db.open.failed", lf_mailbox(mailbox));
         r = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -882,7 +880,7 @@ static int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
 
     /* Create header cache */
     if (!(txn.req_hdrs = spool_new_hdrcache())) {
-        syslog(LOG_ERR, "dav_send_notification: unable to create header cache");
+        xsyslog_ev(LOG_ERR, "dav.header.cache.failed");
         r = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -1046,8 +1044,9 @@ HIDDEN int notify_post(struct transaction_t *txn)
         txn->req_tgt.mbentry = NULL;
         r = dav_lookup_notify_collection(txn->req_tgt.userid, &txn->req_tgt.mbentry);
         if (r) {
-            syslog(LOG_ERR, "lookup_notify_collection(%s) failed: %s",
-                   txn->req_tgt.userid, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.notify_collection.lookup.failed",
+                       lf_s("u.username", txn->req_tgt.userid),
+                       lf_err("error", r));
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
             goto done;
@@ -1085,8 +1084,11 @@ HIDDEN int notify_post(struct transaction_t *txn)
     r = mboxlist_changesub(mboxname, txn->req_tgt.userid,
                            httpd_authstate, add, 0, 0, 0);
     if (r) {
-        syslog(LOG_ERR, "mboxlist_changesub(%s, %s) failed: %s",
-               mboxname, txn->req_tgt.userid, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.subscription.change.failed",
+                   lf_intname("mbox.name", mboxname),
+                   lf_s("u.username", txn->req_tgt.userid),
+                   lf_b("dav.subscribe", add),
+                   lf_err("error", r));
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
@@ -1817,9 +1819,11 @@ static int set_share_access(const char *mboxname,
                                          /*add*/0, /*force*/0,
                                          /*notify*/1, /*silent*/0);
         if (unsub_r) {
-            syslog(LOG_ERR,
-                   "mboxlist_changesub(%s, %s) failed during share revoke: %s",
-                   mboxname, userid, error_message(unsub_r));
+            xsyslog_ev(LOG_ERR, "dav.subscription.change.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("u.username", userid),
+                       lf_b("dav.subscribe", 0),
+                       lf_err("error", unsub_r));
             r = unsub_r;
         }
     }
@@ -2063,10 +2067,11 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
                     r = set_share_access(txn->req_tgt.mbentry->name,
                                          "anyone", access);
                     if (r) {
-                        syslog(LOG_NOTICE,
-                               "failed to set share access for"
-                               " 'anyone' on '%s': %s",
-                               txn->req_tgt.mbentry->name, error_message(r));
+                        xsyslog_ev(LOG_NOTICE, "dav.share.access.failed",
+                                   lf_intname("mbox.name",
+                                              txn->req_tgt.mbentry->name),
+                                   lf_s("u.username", "anyone"),
+                                   lf_err("error", r));
                     }
                     else userid = xstrdup("-anonymous");
                 }
@@ -2091,17 +2096,18 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
 
             if (!userid) {
                 /* XXX  set invite-invalid ? */
-                syslog(LOG_NOTICE, "could not parse userid from sharing href");
+                xsyslog_ev(LOG_NOTICE, "dav.share.sharee.unparseable");
             }
             else {
                 /* Set access rights */
                 r = set_share_access(txn->req_tgt.mbentry->name,
                                      userid, access);
                 if (r) {
-                    syslog(LOG_NOTICE,
-                           "failed to set share access for '%s' on '%s': %s",
-                           userid, txn->req_tgt.mbentry->name,
-                           error_message(r));
+                    xsyslog_ev(LOG_NOTICE, "dav.share.access.failed",
+                               lf_intname("mbox.name",
+                                          txn->req_tgt.mbentry->name),
+                               lf_s("u.username", userid),
+                               lf_err("error", r));
                 }
                 else {
                     /* Notify sharee */

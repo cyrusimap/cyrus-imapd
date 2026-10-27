@@ -9245,7 +9245,7 @@ EXPORTED int sync_checkpoint(struct protstream *clientin)
         if (!rightnow_sync_cs.servername) {
             static bool logged = false;
             if (!logged) {
-                xsyslog_ev(LOG_ERR, "sync.rightnow.nohost",
+                xsyslog_ev(LOG_ERR, "sync.rightnow.host.missing",
                            lf_s("sync.channel", conf));
                 logged = true;
             }

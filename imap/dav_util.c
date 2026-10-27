@@ -25,6 +25,9 @@
 #include "imap/imap_err.h"
 
 
+/* The two ways a store can be refused for want of quota. */
+#define OVER_QUOTA(r) ((r) == IMAP_QUOTA_EXCEEDED || (r) == IMAP_NO_OVERQUOTA)
+
 EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
                                 const char *userid __attribute__((unused)),
                                 struct index_record *record,
@@ -46,8 +49,10 @@ EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
         /* Fetch index record for the resource */
         r = mailbox_find_index_record(mailbox, ddata->imap_uid, record);
         if (r) {
-            syslog(LOG_ERR, "mailbox_find_index_record(%s, %u) failed: %s",
-                   mailbox_name(mailbox), ddata->imap_uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.record.lookup.failed",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", ddata->imap_uid),
+                       lf_err("error", r));
             return r;
         }
 
@@ -87,7 +92,7 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
                               strhash(mboxname), /* unique msgnum to avoid clash
                                                     during iMIP processing */
                               &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "dav.stage.create.failed", lf_mailbox(mailbox));
         txn->error.desc = "append_newstage() failed";
         return HTTP_SERVER_ERROR;
     }
@@ -171,8 +176,7 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
     qdiffs[QUOTA_STORAGE] = ftell(f);
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
-        syslog(LOG_ERR, "IOERROR: append_commit(%s) failed: %s",
-               mailbox_name(mailbox), strerror(errno));
+        xsyslog_ev(LOG_ERR, "dav.stage.write.failed", lf_mailbox(mailbox));
         fclose(f);
         append_removestage(stage);
         txn->error.desc = "append_commit() failed";
@@ -185,8 +189,10 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
     /* Prepare to append the message to the mailbox */
     if ((r = append_setup_mbox(&as, mailbox, txn->userid, txn->authstate,
                           0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
-        syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        /* over quota is the client's news to break, not a failure of ours */
+        xsyslog_ev(OVER_QUOTA(r) ? LOG_WARNING : LOG_ERR,
+                   "dav.append.setup.failed",
+                   lf_mailbox(mailbox), lf_err("error", r));
         if (r == IMAP_QUOTA_EXCEEDED || r == IMAP_NO_OVERQUOTA) {
             /* DAV:quota-not-exceeded */
             txn->error.precond = DAV_OVER_QUOTA;
@@ -227,8 +233,9 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
         /* Append the message to the mailbox */
         if ((r = append_fromstage(&as, &body, stage, NULL,
                                   createdmodseq, flaglist, 0, &annots))) {
-            syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
-                   mailbox_name(mailbox), error_message(r));
+            xsyslog_ev(OVER_QUOTA(r) ? LOG_WARNING : LOG_ERR,
+                       "dav.append.failed",
+                       lf_mailbox(mailbox), lf_err("error", r));
             if (r == IMAP_QUOTA_EXCEEDED || r == IMAP_NO_OVERQUOTA) {
                 /* DAV:quota-not-exceeded */
                 txn->error.precond = DAV_OVER_QUOTA;
@@ -251,8 +258,8 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
         else {
             /* Commit the append to the mailbox */
             if ((r = append_commit(&as))) {
-                syslog(LOG_ERR, "append_commit(%s) failed: %s",
-                       mailbox_name(mailbox), error_message(r));
+                xsyslog_ev(LOG_ERR, "dav.append.commit.failed",
+                           lf_mailbox(mailbox), lf_err("error", r));
                 ret = HTTP_SERVER_ERROR;
                 txn->error.desc = "append_commit() failed";
             }
@@ -272,8 +279,8 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
                         r = mailbox_rewrite_index_record(mailbox, oldrecord);
                     }
                     if (r) {
-                        syslog(LOG_ERR, "expunging record (%s) failed: %s",
-                               mailbox_name(mailbox), error_message(r));
+                        xsyslog_ev(LOG_ERR, "dav.record.expunge.failed",
+                                   lf_mailbox(mailbox), lf_err("error", r));
                         txn->error.desc = error_message(r);
                         ret = HTTP_SERVER_ERROR;
                     }
