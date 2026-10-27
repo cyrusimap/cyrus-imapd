@@ -953,6 +953,19 @@ HIDDEN void dav_run_notifications()
 
 
 /* Perform a POST request on a WebDAV notification resource */
+/* Is the DAV module serving this shared collection in httpmodules? */
+static bool shared_collection_enabled(const char *mboxname)
+{
+    if (!mboxname) return false;
+    if (mboxname_iscalendarmailbox(mboxname, 0))
+        return namespace_calendar.enabled;
+    if (mboxname_isaddressbookmailbox(mboxname, 0))
+        return namespace_addressbook.enabled;
+    if (mboxname_isdavdrivemailbox(mboxname, 0))
+        return namespace_drive.enabled;
+    return false;
+}
+
 HIDDEN int notify_post(struct transaction_t *txn)
 {
     xmlNodePtr root = NULL, node, resp = NULL;
@@ -962,7 +975,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
     user_nslock_t *user_nslock = NULL;
     struct webdav_data *wdata;
     struct dlist *dl = NULL, *data;
-    const char *type_str, *mboxname, *url_prefix;
+    const char *type_str, *mboxname = NULL, *url_prefix;
     char dtstamp[RFC3339_DATETIME_MAX], *resource = NULL;
     xmlNodePtr notify = NULL, type, sharee;
     xmlNsPtr ns[NUM_NAMESPACE];
@@ -1085,6 +1098,10 @@ HIDDEN int notify_post(struct transaction_t *txn)
 
     dlist_getlist(dl, "D", &data);
     dlist_getatom(data, "M", &mboxname);
+    if (!shared_collection_enabled(mboxname)) {
+        ret = HTTP_NOT_FOUND;
+        goto done;
+    }
 
     /* [Un]subscribe */
     r = mboxlist_changesub(mboxname, txn->req_tgt.userid,
