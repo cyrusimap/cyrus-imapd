@@ -713,7 +713,7 @@ static struct dlist *notify_extract_dl(xmlDocPtr doc)
                 node = xmlNextElementSibling(node)) {
             if (!xmlStrcmp(node->name, BAD_CAST "sharer-resource-uri")) {
                 struct request_target_t tgt;
-                struct meth_params *pparams;
+                struct meth_params *pparams = NULL;
                 const char *errstr;
                 char *path;
                 int i;
@@ -723,27 +723,33 @@ static struct dlist *notify_extract_dl(xmlDocPtr doc)
                                             xmlStrlen(value), NULL);
                 xmlFree(value);
 
-                /* Find the namespace of the requested resource */
+                memset(&tgt, 0, sizeof(struct request_target_t));
+
+                /* Find the DAV namespace of the shared collection.
+                 * The URI is server-generated and JMAP sharing uses it even
+                 * when the namespace is disabled in httpmodules. */
                 for (i = 0; http_namespaces[i]; i++) {
+                    struct meth_params *params =
+                        http_namespaces[i]->methods[METH_PUT].params;
                     size_t len;
 
-                    /* Skip disabled namespaces */
-                    if (!http_namespaces[i]->enabled) continue;
+                    /* Skip non-DAV namespaces, including the default */
+                    if (!params || !params->parse_path) continue;
 
                     /* See if the prefix matches - terminated with NUL or '/' */
                     len = strlen(http_namespaces[i]->prefix);
-                    if (!strncmp(path, http_namespaces[i]->prefix, len) &&
-                            (!path[len] || (path[len] == '/') || !strcmp(path, "*"))) {
+                    if (len && !strncmp(path, http_namespaces[i]->prefix, len) &&
+                            (!path[len] || (path[len] == '/'))) {
+                        tgt.namespace = http_namespaces[i];
+                        pparams = params;
                         break;
                     }
                 }
 
-                memset(&tgt, 0, sizeof(struct request_target_t));
-                tgt.namespace = http_namespaces[i];
-                pparams =
-                    (struct meth_params *) tgt.namespace->methods[METH_PUT].params;
-                tgt.flags = TGT_DAV_SHARED;  // prevent old-style sharing redirect
-                pparams->parse_path(path, &tgt, &errstr);
+                if (pparams) {
+                    tgt.flags = TGT_DAV_SHARED;  // prevent old-style sharing redirect
+                    pparams->parse_path(path, &tgt, &errstr);
+                }
                 free(tgt.userid);
                 free(path);
 
