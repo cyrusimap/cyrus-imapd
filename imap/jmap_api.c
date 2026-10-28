@@ -3640,6 +3640,14 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
     return r;
 }
 
+HIDDEN bool jmap_sharee_valid(const char *sharee)
+{
+    /* a group's name ends up in filesystem paths just as a userid does */
+    if (!strncmp(sharee, "group:", 6)) sharee += 6;
+
+    return !mboxname_policycheck_userid(sharee);
+}
+
 HIDDEN void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith)
 {
     struct buf buf = BUF_INITIALIZER;

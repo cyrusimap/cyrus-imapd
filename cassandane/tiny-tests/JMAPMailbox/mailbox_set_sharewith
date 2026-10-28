@@ -117,4 +117,33 @@ sub test_mailbox_set_sharewith
             }
         },
         $res->[0][1]{notUpdated});
+
+    # auth_unix drops a group that isn't in /etc/group from the ACL, so
+    # this only checks that a group sharee is accepted
+    xlog $self, "Give access to a group";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => { $inboxId => {
+                'shareWith/group:c1234' => { mayRead => JSON::true },
+            }},
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]{updated}{$inboxId});
+
+    xlog $self, "Try to give access to a bogus group";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => { $inboxId => {
+                shareWith => { "group:../v/victim" => { mayRead => JSON::true } },
+            }},
+        }, 'R1'],
+    ], $using);
+    $self->assert_cmp_deeply(
+        {
+            $inboxId => {
+                type => 'invalidProperties',
+                properties => [ "shareWith/group:..~1v~1victim" ],
+            }
+        },
+        $res->[0][1]{notUpdated});
 }

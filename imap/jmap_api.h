@@ -801,6 +801,14 @@ extern int jmap_set_sharewith(struct mailbox *mbox,
                               int (*patchrights)(int, json_t*));
 extern void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith);
 
+/**
+ * Check that a shareWith key names a user or a "group:" identifier whose
+ * name is valid as a userid.
+ *
+ * @return true if the sharee is valid
+ */
+extern bool jmap_sharee_valid(const char *sharee);
+
 extern void jmap_mbentry_cache_free(jmap_req_t *req);
 extern const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id);
 extern const mbentry_t *jmap_mbentry_by_uniqueid_all(jmap_req_t *req, const char *id);
