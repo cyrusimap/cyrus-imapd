@@ -447,6 +447,22 @@ statuscache.items       the STATUS items a lookup asked for, as a hex mask
 sync.channel            a replication channel name
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
+ws.eof                  1 if the WebSocket input stream is at end of file
+ws.fin                  1 if a frame is the last one of its message
+ws.goaway               1 if the WebSocket channel is shutting down
+ws.length               the length of a WebSocket frame or message, in bytes
+ws.maxsize              the largest message the server will inflate, in bytes
+ws.opcode               the opcode of a WebSocket frame or message
+ws.prot.error           what the protstream said went wrong
+ws.read.got             how many bytes a read of the WebSocket stream returned
+ws.read.wanted          how many bytes that read asked for
+ws.rsv                  the reserved bits of a WebSocket frame, as a hex mask
+ws.sent                 1 if the frame reached the client
+ws.status               the status code of a WebSocket close frame
+ws.step                 which step of closing a WebSocket an event reports
+ws.want.read            1 if wslay wants to read next
+ws.want.write           1 if wslay wants to write next
+ws.zlib.code            a zlib return code
 xfer.capability         a capability the transfer destination advertises
 xfer.step               which step of a mailbox transfer is being logged
 

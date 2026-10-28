@@ -150,8 +150,11 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
         wslay_event_set_error(ev, WSLAY_ERR_WOULDBLOCK);
     }
 
-    xsyslog(LOG_DEBUG, "WS recv", "len=<%zu>, n=<%zd>, eof=<%d>, err=<%s>",
-            len, n, pin->eof, pin->error ? pin->error : "");
+    xsyslog_ev(LOG_DEBUG, "ws.read.done",
+               lf_zu("ws.read.wanted", len),
+               lf_zd("ws.read.got", n),
+               lf_b("ws.eof", pin->eof),
+               lf_s_opt("error", pin->error));
 
     return n;
 }
@@ -166,7 +169,9 @@ static ssize_t send_cb(wslay_event_context_ptr ev,
     int r = txn->conn->resp_body_chunk(txn, (const char *) data, len,
                                        last_chunk, NULL /* md5ctx */);
 
-    xsyslog(LOG_DEBUG, "WS send", "len=<%zu>, r=<%d>", len, r);
+    xsyslog_ev(LOG_DEBUG, "ws.send.done",
+               lf_zu("ws.length", len),
+               lf_b("ws.sent", !r));
 
     if (r) {
         wslay_event_set_error(ev, WSLAY_ERR_CALLBACK_FAILURE);
@@ -271,7 +276,7 @@ static int zlib_decompress(struct transaction_t *txn,
     z_stream *zstrm = ctx->pmce.deflate.zstrm;
 
     if (!zstrm) {
-        xsyslog(LOG_ERR, "WS: no z_stream", NULL);
+        xsyslog_ev(LOG_ERR, "ws.zstream.missing");
         return WSLAY_CODE_INTERNAL_SERVER_ERROR;
     }
 
@@ -288,8 +293,8 @@ static int zlib_decompress(struct transaction_t *txn,
          * memory as we keep growing txn->zbuf to hold the inflated
          * output */
         if ((int64_t) txn->zbuf.len >= ctx->max_msgsize) {
-            xsyslog(LOG_ERR, "WS: inflated message too large",
-                    "maxsize=<%lld>", (long long) ctx->max_msgsize);
+            xsyslog_ev(LOG_WARNING, "ws.message.too_big",
+                       lf_lld("ws.maxsize", (long long) ctx->max_msgsize));
             return WSLAY_CODE_MESSAGE_TOO_BIG;
         }
 
@@ -301,8 +306,9 @@ static int zlib_decompress(struct transaction_t *txn,
         zr = inflate(zstrm, Z_SYNC_FLUSH);
         if (!(zr == Z_OK || zr == Z_STREAM_END || zr == Z_BUF_ERROR)) {
             /* something went wrong */
-            xsyslog(LOG_ERR, "WS inflate error",
-                    "zr=<%d>, msg=<%s>", zr, zstrm->msg);
+            xsyslog_ev(LOG_WARNING, "ws.inflate.failed",
+                       lf_d("ws.zlib.code", zr),
+                       lf_s_opt("error", zstrm->msg));
             return WSLAY_CODE_PROTOCOL_ERROR;
         }
 
@@ -335,9 +341,11 @@ static void on_frame_recv_start_cb(wslay_event_context_ptr ev __attribute__((unu
                                    const struct wslay_event_on_frame_recv_start_arg *arg,
                                    void *user_data __attribute__((unused)))
 {
-    xsyslog(LOG_DEBUG, "WS frame start",
-            "opcode=<%s>, rsv=<0x%x>, fin=<0x%x>, length=<%ld>",
-           wslay_opcode_as_str(arg->opcode), arg->rsv, arg->fin, arg->payload_length);
+    xsyslog_ev(LOG_DEBUG, "ws.frame.started",
+               lf_s("ws.opcode", wslay_opcode_as_str(arg->opcode)),
+               lf_llx("ws.rsv", arg->rsv),
+               lf_b("ws.fin", arg->fin),
+               lf_ld("ws.length", arg->payload_length));
 }
 
 #define COMP_FAILED_ERR    "Compressing message failed"
@@ -356,7 +364,7 @@ static int queue_msg(struct transaction_t *txn, struct buf *outbuf,
                               ctx->pmce.deflate.no_context ? COMPRESS_START : 0,
                               buf_base(outbuf), buf_len(outbuf));
         if (r) {
-            xsyslog(LOG_ERR, "WS: zlib_compress() failed", NULL);
+            xsyslog_ev(LOG_ERR, "ws.deflate.failed");
 
             if (err_msg) *err_msg = COMP_FAILED_ERR;
             return WSLAY_CODE_INTERNAL_SERVER_ERROR;
@@ -406,14 +414,14 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 
             err_code = zlib_decompress(txn, buf_base(&inbuf), buf_len(&inbuf));
             if (err_code) {
-                xsyslog(LOG_ERR, "WS: zlib_decompress() failed", NULL);
+                xsyslog_ev(LOG_WARNING, "ws.decompress.failed");
                 err_msg = (err_code == WSLAY_CODE_MESSAGE_TOO_BIG) ?
                     TOO_BIG_ERR : DECOMP_FAILED_ERR;
                 goto err;
             }
         }
         else {
-            xsyslog(LOG_ERR, "WS: unknown PMCE", NULL);
+            xsyslog_ev(LOG_ERR, "ws.pmce.unknown");
             err_code = WSLAY_CODE_PROTOCOL_ERROR;
             err_msg = DECOMP_FAILED_ERR;
             goto err;
@@ -455,8 +463,8 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&inbuf), buf_len(&inbuf));
             if (writev(logfd, iov, niov) < 0) {
-                xsyslog(LOG_NOTICE, "failed to write telemetry",
-                        "userid=<%s>", httpd_userid);
+                xsyslog_ev(LOG_ERR, "http.telemetry.write.failed",
+                           lf_s_opt("u.username", httpd_userid));
             }
         }
 
@@ -493,8 +501,8 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
                                 buf_base(&txn->buf), buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&outbuf), buf_len(&outbuf));
             if (writev(logfd, iov, niov) < 0) {
-                xsyslog(LOG_NOTICE, "failed to write telemetry",
-                        "userid=<%s>", httpd_userid);
+                xsyslog_ev(LOG_ERR, "http.telemetry.write.failed",
+                           lf_s_opt("u.username", httpd_userid));
             }
         }
 
@@ -523,7 +531,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
     if (err_code) {
         size_t err_msg_len = strlen(err_msg);
 
-        xsyslog(LOG_DEBUG, "WS close", NULL);
+        xsyslog_ev(LOG_DEBUG, "ws.close.queued",
+                   lf_u("ws.status", err_code),
+                   lf_s_opt("error", err_msg));
         wslay_event_queue_close(ev, err_code, (uint8_t *) err_msg, err_msg_len);
 
         /* Log the server response */
@@ -618,19 +628,21 @@ static void _end_channel(struct transaction_t *txn)
 
         if (!msg) msg = "Server unavailable";
 
-        xsyslog(LOG_DEBUG, "WS close", "msg=<%s>", msg);
+        xsyslog_ev(LOG_DEBUG, "ws.close.queued", lf_s_opt("error", msg));
 
         r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
                                     (uint8_t *) msg, strlen(msg));
         if (r) {
-            xsyslog(LOG_ERR, "WS close failed",
-                    "err=<%s>", wslay_error_as_str(r));
+            xsyslog_ev(LOG_ERR, "ws.close.failed",
+                       lf_s("ws.step", "queue"),
+                       lf_s("error", wslay_error_as_str(r)));
         }
         else {
             r = wslay_event_send(ev);
             if (r) {
-                xsyslog(LOG_ERR, "WS send failed",
-                        "err=<%s>", wslay_error_as_str(r));
+                xsyslog_ev(LOG_ERR, "ws.close.failed",
+                           lf_s("ws.step", "send"),
+                           lf_s("error", wslay_error_as_str(r)));
             }
         }
     }
@@ -736,7 +748,8 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
         r = sasl_encode64((char *) sha1buf, SHA1_DIGEST_LENGTH,
                           (char *) accept_key, WS_AKEY_LEN+1, NULL);
         if (r != SASL_OK) {
-            xsyslog(LOG_WARNING, "WS base64 encode failed", "r=<%d>", r);
+            xsyslog_ev(LOG_WARNING, "ws.accept_key.encode.failed",
+                       lf_d("sasl.result", r));
         }
 
         resp_code = HTTP_SWITCH_PROT;
@@ -755,7 +768,8 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     /* Create server context */
     r = wslay_event_context_server_init(&ev, &callbacks, txn);
     if (r) {
-        xsyslog(LOG_WARNING, "WS init failed", "err=<%s>", wslay_error_as_str(r));
+        xsyslog_ev(LOG_WARNING, "ws.init.failed",
+                   lf_s("error", wslay_error_as_str(r)));
         return HTTP_SERVER_ERROR;
     }
 
@@ -863,21 +877,24 @@ static void ws_output(struct transaction_t *txn)
 
     errno = 0;
 
-    xsyslog(LOG_DEBUG, "WS output", "eof=<%d>, want read=<%d>, want write=<%d>",
-            txn->conn->pin->eof, want_read, want_write);
+    xsyslog_ev(LOG_DEBUG, "ws.output.step",
+               lf_b("ws.eof", txn->conn->pin->eof),
+               lf_b("ws.want.read", want_read),
+               lf_b("ws.want.write", want_write));
 
     if (want_write) {
         /* Send queued frame(s) */
         int r = wslay_event_send(ev);
         if (r) {
-            xsyslog(LOG_DEBUG, "WS send failed", "err=<%s>", wslay_error_as_str(r));
+            xsyslog_ev(LOG_DEBUG, "ws.send.failed",
+                       lf_s("error", wslay_error_as_str(r)));
             txn->flags.conn = CONN_CLOSE;
             txn->error.desc = wslay_error_as_str(r);
         }
     }
     else if (!want_read) {
         /* Connection is done */
-        xsyslog(LOG_DEBUG, "closing connection", NULL);
+        xsyslog_ev(LOG_DEBUG, "ws.connection.closing");
         txn->flags.conn = CONN_CLOSE;
     }
 }
@@ -894,9 +911,11 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
     errno = 0;
 
-    xsyslog(LOG_DEBUG, "WS input",
-            "goaway=<%d>, eof=<%d>, want read=<%d>, want write=<%d>",
-            goaway, prot_IS_EOF(pin), want_read, want_write);
+    xsyslog_ev(LOG_DEBUG, "ws.input.step",
+               lf_b("ws.goaway", goaway),
+               lf_b("ws.eof", prot_IS_EOF(pin)),
+               lf_b("ws.want.read", want_read),
+               lf_b("ws.want.write", want_write));
 
     if (want_read && !goaway) {
         /* In scope for wslay_event_recv(), which reads it via ctx->pin */
@@ -920,7 +939,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
         if (prot_IS_EOF(pin)) {
             /* Client closed connection */
-            xsyslog(LOG_DEBUG, "client closed connection", NULL);
+            xsyslog_ev(LOG_DEBUG, "ws.connection.closed_by_client");
             wslay_event_shutdown_write(ev);
             txn->flags.conn = CONN_CLOSE;
         }
@@ -931,14 +950,15 @@ HIDDEN void ws_input(struct transaction_t *txn)
         }
         else if (r) {
             /* Failure */
-            xsyslog(LOG_DEBUG, "WS recv failed", "err=<%s>, prot err=<%s>",
-                    wslay_error_as_str(r), prot_error(pin));
+            xsyslog_ev(LOG_DEBUG, "ws.recv.failed",
+                       lf_s("error", wslay_error_as_str(r)),
+                       lf_s_opt("ws.prot.error", prot_error(pin)));
             goaway = 1;
             txn->error.desc = wslay_error_as_str(r);
         }
         else {
             /* Successfully received frames */
-            xsyslog(LOG_DEBUG, "WS recv: success", NULL);
+            xsyslog_ev(LOG_DEBUG, "ws.recv.done");
 
             /* Reset request payload buffer */
             buf_reset(&txn->req_body.payload);
@@ -967,8 +987,8 @@ HIDDEN void ws_send(struct transaction_t *txn, struct buf *outbuf)
     int err_code = queue_msg(txn, outbuf, &msgarg, &rsv, NULL, &err_msg);
 
     if (err_code) {
-        xsyslog(LOG_ERR, "WS: failed to queue outgoing message",
-                "err=<%s>", err_msg);
+        xsyslog_ev(LOG_ERR, "ws.message.queue.failed",
+                   lf_s("error", err_msg));
         wslay_event_queue_close(ctx->event, err_code,
                                 (uint8_t *) err_msg, strlen(err_msg));
     }
