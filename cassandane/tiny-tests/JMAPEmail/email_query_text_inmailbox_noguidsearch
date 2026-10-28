@@ -1,0 +1,73 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_text_inmailbox_noguidsearch
+    :needs_component_sieve :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    $imap->create("INBOX.A") or die;
+    $imap->create("INBOX.B") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', { properties => ['name'] }, "R1"]
+    ], $using);
+    my %mboxIdByName = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
+
+    my sub email ($subject, @mboxnames) {
+        return {
+            mailboxIds => { map { $mboxIdByName{$_} => JSON::true } @mboxnames },
+            from => [{ email => 'foo@local' }],
+            to => [{ email => 'bar@local' }],
+            subject => $subject,
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues => { part1 => { value => 'needle' } },
+        };
+    }
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                mA => email('A', 'A'),
+                mB => email('B', 'B'),
+                mAB => email('AB', 'A', 'B'),
+                mInbox => email('Inbox', 'Inbox'),
+            },
+        }, 'R1'],
+    ], $using);
+    my %emailId = map { $_ => $res->[0][1]{created}{$_}{id} }
+                  qw(mA mB mAB mInbox);
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    for my $case (['A', [qw(mA mAB)]], ['B', [qw(mB mAB)]]) {
+        my ($mboxname, $want) = @$case;
+        $res = $jmap->CallMethods([
+            ['Email/query', {
+                filter => {
+                    operator => 'AND',
+                    conditions => [
+                        { inMailbox => $mboxIdByName{$mboxname} },
+                        { text => 'needle' },
+                    ],
+                },
+                disableGuidSearch => JSON::true,
+            }, 'R1'],
+        ], $using);
+        $self->assert_cmp_deeply(
+            bag(map { $emailId{$_} } @$want),
+            $res->[0][1]{ids},
+        );
+        $self->assert_equals(JSON::false,
+            $res->[0][1]{performance}{details}{isGuidSearch});
+    }
+}
