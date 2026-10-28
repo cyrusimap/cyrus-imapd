@@ -56,8 +56,16 @@ struct ws_context {
     const char *protocol;
     ws_data_callback *data_cb;
     int64_t max_msgsize;             /* Max size of a (decompressed) message */
-    struct buf log;
-    int log_tail;
+
+    /* Who is at the other end.  Every message logs a line of its own, and
+     * every one of those lines repeats these. */
+    char *clienthost;
+    char *userid;
+    char *useragent;
+    char *client;
+    char *streamid;
+    char *version;
+
     unsigned ext;                    /* Bitmask of negotiated extension(s) */
 
     struct protstream *pin;          /* Input data stream */
@@ -386,6 +394,18 @@ static int queue_msg(struct transaction_t *txn, struct buf *outbuf,
     return 0;
 }
 
+/* The channel's fields, which every message's log line repeats. */
+static void push_channel(struct ws_context *ctx, struct logfmt *lf)
+{
+    logfmt_push(lf, "r.clienthost", ctx->clienthost);
+    if (ctx->userid) logfmt_push(lf, "u.username", ctx->userid);
+    if (ctx->useragent) logfmt_push(lf, "http.useragent", ctx->useragent);
+    if (ctx->client) logfmt_push(lf, "http.client", ctx->client);
+    if (ctx->streamid) logfmt_push(lf, "http.stream.id", ctx->streamid);
+    logfmt_push(lf, "ws.protocol", ctx->protocol ? ctx->protocol : "echo");
+    if (ctx->version) logfmt_push(lf, "http.version", ctx->version);
+}
+
 static void on_msg_recv_cb(wslay_event_context_ptr ev,
                            const struct wslay_event_on_msg_recv_arg *arg,
                            void *user_data)
@@ -394,6 +414,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
     struct buf inbuf = BUF_INITIALIZER, outbuf = BUF_INITIALIZER;
     struct wslay_event_msg msgarg = { arg->opcode, NULL, 0 };
+    struct logfmt lf = LOGFMT_INITIALIZER;
     uint8_t rsv = WSLAY_RSV_NONE;
     double cmdtime, nettime;
     const char *err_msg;
@@ -403,6 +424,17 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 
     /* Place client request into a buf */
     buf_init_ro(&inbuf, (const char *) arg->msg, arg->msg_length);
+
+    /* A data frame is a request in its own right, so it gets an id of its
+     * own, and the line this message is about starts here. */
+    if (arg->opcode == WSLAY_TEXT_FRAME || arg->opcode == WSLAY_BINARY_FRAME)
+        session_new_id();
+
+    logfmt_init(&lf, "ws.message.completed");
+    push_channel(ctx, &lf);
+    logfmt_push(&lf, "ws.opcode", wslay_opcode_as_str(arg->opcode));
+    logfmt_pushf(&lf, "ws.rsv", "0x%x", arg->rsv);
+    logfmt_pushf(&lf, "ws.length", "%ld", arg->msg_length);
 
     /* Decompress request, if necessary */
     if (wslay_get_rsv1(arg->rsv)) {
@@ -430,27 +462,25 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         buf_move(&inbuf, &txn->zbuf);
     }
 
-    /* Log the uncompressed client request */
-    buf_truncate(&ctx->log, ctx->log_tail);
-    buf_printf(&ctx->log, "opcode=%s; rsv=0x%x; length=%ld",
-               wslay_opcode_as_str(arg->opcode), arg->rsv, arg->msg_length);
+    /* Log the size of the request as the handler will see it */
     if (pmce_str) {
-        buf_printf(&ctx->log, " [%ld]; pmce=%s", buf_len(&inbuf), pmce_str);
+        logfmt_push(&lf, "ws.pmce", pmce_str);
+        logfmt_pushf(&lf, "ws.payload.length", "%zu", buf_len(&inbuf));
         pmce_str = NULL;
     }
 
     switch (arg->opcode) {
     case WSLAY_CONNECTION_CLOSE:
-        buf_printf(&ctx->log, "; status=%d; msg='%s'", arg->status_code,
-                   /* First 2 bytes are the status code already captured
-                    * above; only the rest (if any) is the close reason. */
-                   buf_len(&inbuf) > 2 ? buf_cstring(&inbuf)+2 : "");
+        logfmt_pushf(&lf, "ws.status", "%d", arg->status_code);
+        /* First 2 bytes are the status code already captured above; only
+         * the rest (if any) is the close reason. */
+        if (buf_len(&inbuf) > 2)
+            logfmt_push(&lf, "ws.close.reason", buf_cstring(&inbuf)+2);
         txn->flags.conn = CONN_CLOSE;
         break;
 
     case WSLAY_TEXT_FRAME:
     case WSLAY_BINARY_FRAME:
-        session_new_id();
         logfd = telemetry_log(httpd_userid, NULL, NULL, 0);
         if (logfd >= 0) {
             /* Telemetry logging */
@@ -469,7 +499,7 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         }
 
         /* Process the request */
-        r = ctx->data_cb(txn, arg->opcode, &inbuf, &outbuf, &ctx->log);
+        r = ctx->data_cb(txn, arg->opcode, &inbuf, &outbuf, &lf);
         if (r) {
             switch (r) {
             case HTTP_NO_CONTENT:
@@ -511,11 +541,12 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         err_code = queue_msg(txn, &outbuf, &msgarg, &rsv, &pmce_str, &err_msg);
 
         /* Log the server response */
-        buf_printf(&ctx->log,
-                   ") => \"Success\" (opcode=%s; rsv=0x%x; length=%ld",
-                   wslay_opcode_as_str(msgarg.opcode), rsv, msgarg.msg_length);
+        logfmt_push(&lf, "out.ws.opcode", wslay_opcode_as_str(msgarg.opcode));
+        logfmt_pushf(&lf, "out.ws.rsv", "0x%x", rsv);
+        logfmt_pushf(&lf, "out.ws.length", "%ld", msgarg.msg_length);
         if (pmce_str) {
-            buf_printf(&ctx->log, " [%ld]; pmce=%s", orig_len, pmce_str);
+            logfmt_push(&lf, "out.ws.pmce", pmce_str);
+            logfmt_pushf(&lf, "out.ws.payload.length", "%zu", orig_len);
         }
 
         /* close out the telemetry log for this action */
@@ -537,19 +568,23 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         wslay_event_queue_close(ev, err_code, (uint8_t *) err_msg, err_msg_len);
 
         /* Log the server response */
-        buf_printf(&ctx->log,
-                   ") => \"Fail\" (opcode=%s; rsv=0x%x; length=%ld"
-                   "; status=%d; msg='%s'",
-                   wslay_opcode_as_str(WSLAY_CONNECTION_CLOSE), rsv, err_msg_len,
-                   err_code, err_msg);
+        logfmt_push(&lf, "out.ws.opcode",
+                    wslay_opcode_as_str(WSLAY_CONNECTION_CLOSE));
+        logfmt_pushf(&lf, "out.ws.rsv", "0x%x", rsv);
+        logfmt_pushf(&lf, "out.ws.length", "%zu", err_msg_len);
+        logfmt_pushf(&lf, "out.ws.status", "%d", err_code);
+        logfmt_push(&lf, "error", err_msg);
     }
 
     /* Add timing stats */
     cmdtime_endtimer(&cmdtime, &nettime);
-    buf_printf(&ctx->log, ") [timing: cmd=%f net=%f total=%f]",
-               cmdtime, nettime, cmdtime + nettime);
+    logfmt_pushf(&lf, "cmd.duration", "%.3f", cmdtime);
+    logfmt_pushf(&lf, "cmd.nettime", "%.3f", nettime);
+    logfmt_pushf(&lf, "cmd.total", "%.3f", cmdtime + nettime);
 
-    xsyslog(LOG_INFO, buf_cstring(&ctx->log), NULL);
+    /* Only now: processing a frame can set its own trace id */
+    logfmt_push_session(&lf);
+    logfmt_emit(&lf, LOG_INFO);
 
     /* A trace id set while processing the frame belongs to it alone */
     trace_set_id(NULL, 0);
@@ -648,7 +683,13 @@ static void _end_channel(struct transaction_t *txn)
     }
 
     wslay_event_context_free(ev);
-    buf_free(&ctx->log);
+
+    free(ctx->clienthost);
+    free(ctx->userid);
+    free(ctx->useragent);
+    free(ctx->client);
+    free(ctx->streamid);
+    free(ctx->version);
 
     ws_zlib_done(txn);
 
@@ -791,26 +832,24 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     /* Check for supported WebSocket extensions */
     parse_extensions(txn);
 
-    /* Prepare log buffer */
+    /* Keep what every message's log line will want to say about the
+     * client: the request these came from is over once we upgrade. */
+    ctx->clienthost = xstrdupnull(txn->conn->clienthost);
+    ctx->userid = xstrdupnull(httpd_userid);
+    ctx->version = xstrdupnull(txn->req_line.ver);
 
-    /* Add client data */
-    buf_printf(&ctx->log, "%s", txn->conn->clienthost);
-    if (httpd_userid) buf_printf(&ctx->log, " as \"%s\"", httpd_userid);
     if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
-        buf_printf(&ctx->log, " with \"%s\"", hdr[0]);
+        ctx->useragent = xstrdup(hdr[0]);
+
         if ((hdr = spool_getheader(txn->req_hdrs, "X-Client")))
-            buf_printf(&ctx->log, " by \"%s\"", hdr[0]);
+            ctx->client = xstrdup(hdr[0]);
         else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With")))
-            buf_printf(&ctx->log, " by \"%s\"", hdr[0]);
+            ctx->client = xstrdup(hdr[0]);
     }
 
-    /* Add request-line */
-    buf_printf(&ctx->log, "; \"WebSocket/%s via %s\" (",
-               protocol ? protocol : "echo" , txn->req_line.ver);
     if ((hdr = spool_getheader(txn->req_hdrs, ":stream-id"))) {
-        buf_printf(&ctx->log, "stream-id=%s; ", hdr[0]);
+        ctx->streamid = xstrdup(hdr[0]);
     }
-    ctx->log_tail = buf_len(&ctx->log);
 
     /* Tell client that WebSocket negotiation has succeeded */
     response_header(resp_code, txn);

@@ -4951,7 +4951,7 @@ static int list_well_known(struct transaction_t *txn)
 static int ws_echo(struct transaction_t *txn __attribute__((unused)),
                    enum wslay_opcode opcode __attribute__((unused)),
                    struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf __attribute__((unused)))
+                   struct logfmt *lf __attribute__((unused)))
 {
     buf_init_ro(outbuf, buf_base(inbuf), buf_len(inbuf));
 

@@ -9,6 +9,8 @@
 
 #include <stdbool.h>
 
+#include "logfmt.h"
+
 #ifdef HAVE_WSLAY
 #include <wslay/wslay.h>
 
@@ -27,9 +29,12 @@ enum wslay_opcode {
 
 extern bool ws_init(struct http_connection *conn, struct buf *serverinfo);
 
+/* Handle one message.  Anything the handler wants in the message's log
+ * line -- the JMAP methods it ran, say -- it pushes onto lf.
+ */
 typedef int ws_data_callback(struct transaction_t *txn, enum wslay_opcode opcode,
                              struct buf *inbuf, struct buf *outbuf,
-                             struct buf *logbuf);
+                             struct logfmt *lf);
 
 extern int ws_start_channel(struct transaction_t *txn,
                             const char *sub_prot, ws_data_callback *data_cb,
