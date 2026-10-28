@@ -57,7 +57,7 @@ EOF
 
     xlog $self, "We should have generated a syslog message about annotation";
     $self->assert_syslog_matches($self->{instance},
-        qr/Scheduling disabled for user cassandane on mailbox user.cassandane.#calendars.Default by CY:scheduling-enabled annotation/);
+        qr/event=caldav\.scheduling\.disabled .*u\.username=cassandane .*mbox\.name=user\.cassandane\.#calendars\.Default /);
 
     my $att_uuid = "cfebc73f8201-6de280c9-edff-4019-8ebd";
     my $att_href = "Default/$att_uuid.ics";
@@ -93,7 +93,7 @@ EOF
 
     xlog $self, "We should have generated a syslog message about annotation";
     $self->assert_syslog_matches($self->{instance},
-        qr/Scheduling disabled for user cassandane on mailbox user.cassandane.#calendars.Default by CY:scheduling-enabled annotation/);
+        qr/event=caldav\.scheduling\.disabled .*u\.username=cassandane .*mbox\.name=user\.cassandane\.#calendars\.Default /);
 
     # clean notification cache
     $self->{instance}->getnotify();
@@ -108,7 +108,7 @@ EOF
 
     xlog $self, "We should have generated a syslog message about annotation";
     $self->assert_syslog_matches($self->{instance},
-        qr/Scheduling disabled for user cassandane on mailbox user.cassandane.#calendars.Default by CY:scheduling-enabled annotation/);
+        qr/event=caldav\.scheduling\.disabled .*u\.username=cassandane .*mbox\.name=user\.cassandane\.#calendars\.Default /);
 
     # Enable scheduling on Default calendar
     $xml = <<EOF;
@@ -163,5 +163,5 @@ EOF
 
     xlog $self, "We should NOT have generated a syslog message about annotation";
     $self->assert_syslog_does_not_match($self->{instance},
-        qr/Scheduling disabled for user cassandane on mailbox user.cassandane.#calendars.Default by CY:scheduling-enabled annotation/);
+        qr/event=caldav\.scheduling\.disabled .*u\.username=cassandane .*mbox\.name=user\.cassandane\.#calendars\.Default /);
 }

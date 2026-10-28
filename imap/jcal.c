@@ -475,14 +475,18 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
         if (json_is_boolean(jvalue))
             value = icalvalue_new_integer(json_is_true(jvalue));
         else
-            syslog(LOG_WARNING, "jCal boolean object expected");
+            xsyslog_ev(LOG_WARNING, "jcal.value.invalid",
+                       lf_s("cal.valuetype", icalvalue_kind_to_string(kind)),
+                       lf_s("error", "expected a boolean"));
         break;
 
     case ICAL_FLOAT_VALUE:
         if (json_is_real(jvalue))
             value = icalvalue_new_float((float) json_real_value(jvalue));
         else
-            syslog(LOG_WARNING, "jCal double object expected");
+            xsyslog_ev(LOG_WARNING, "jcal.value.invalid",
+                       lf_s("cal.valuetype", icalvalue_kind_to_string(kind)),
+                       lf_s("error", "expected a number"));
         break;
 
     case ICAL_GEO_VALUE:
@@ -509,7 +513,9 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
             }
         }
         if (!value)
-            syslog(LOG_WARNING, "jCal array object of 2 doubles expected");
+            xsyslog_ev(LOG_WARNING, "jcal.value.invalid",
+                       lf_s("cal.valuetype", icalvalue_kind_to_string(kind)),
+                       lf_s("error", "expected an array of 2 numbers"));
         break;
 
     case ICAL_INTEGER_VALUE:
@@ -518,7 +524,9 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
         else if (json_is_string(jvalue))
             value = icalvalue_new_integer(atoi(json_string_value(jvalue)));
         else
-            syslog(LOG_WARNING, "jCal integer object expected");
+            xsyslog_ev(LOG_WARNING, "jcal.value.invalid",
+                       lf_s("cal.valuetype", icalvalue_kind_to_string(kind)),
+                       lf_s("error", "expected an integer"));
         break;
 
     case ICAL_RECUR_VALUE:
@@ -545,7 +553,9 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
             icalrecurrencetype_unref(rt);
         }
         else
-            syslog(LOG_WARNING, "jCal object object expected");
+            xsyslog_ev(LOG_WARNING, "jcal.value.invalid",
+                       lf_s("cal.valuetype", icalvalue_kind_to_string(kind)),
+                       lf_s("error", "expected an object"));
         break;
 
     case ICAL_REQUESTSTATUS_VALUE:
@@ -566,7 +576,10 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
                     rst.code = icalenum_num_to_reqstat(maj, min);
                 }
                 if (rst.code == ICAL_UNKNOWN_STATUS) {
-                    syslog(LOG_WARNING, "Unknown request-status code");
+                    xsyslog_ev(LOG_WARNING, "jcal.reqstatus.unknown",
+                               lf_s("cal.reqstatus",
+                                    json_string_value(
+                                        json_array_get(jvalue, 0))));
                     break;
                 }
 
@@ -579,7 +592,9 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
             }
         }
         if (!value)
-            syslog(LOG_WARNING, "jCal array object of 2-3 strings expected");
+            xsyslog_ev(LOG_WARNING, "jcal.value.invalid",
+                       lf_s("cal.valuetype", icalvalue_kind_to_string(kind)),
+                       lf_s("error", "expected an array of 2 or 3 strings"));
         break;
 
     case ICAL_UTCOFFSET_VALUE:
@@ -589,7 +604,10 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
 
             if (sscanf(json_string_value(jvalue), "%c%02d:%02d:%02d",
                        &sign, &hours, &minutes, &seconds) < 3) {
-                syslog(LOG_WARNING, "Unexpected utc-offset format");
+                xsyslog_ev(LOG_WARNING, "jcal.value.invalid",
+                           lf_s("cal.valuetype",
+                                 icalvalue_kind_to_string(kind)),
+                           lf_s("error", "expected [+-]hh:mm[:ss]"));
                 break;
             }
 
@@ -600,7 +618,9 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
             value = icalvalue_new_utcoffset(utcoffset);
         }
         else
-            syslog(LOG_WARNING, "jCal string object expected");
+            xsyslog_ev(LOG_WARNING, "jcal.value.invalid",
+                       lf_s("cal.valuetype", icalvalue_kind_to_string(kind)),
+                       lf_s("error", "expected a string"));
         break;
 
     default:
@@ -608,7 +628,9 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
             value = icalvalue_new_from_string(kind,
                                               json_string_value(jvalue));
         else
-            syslog(LOG_WARNING, "jCal string object expected");
+            xsyslog_ev(LOG_WARNING, "jcal.value.invalid",
+                       lf_s("cal.valuetype", icalvalue_kind_to_string(kind)),
+                       lf_s("error", "expected a string"));
         break;
     }
 
@@ -631,8 +653,8 @@ EXPORTED icalproperty *jcal_array_as_icalproperty(json_t *jprop)
 
     /* Sanity check the types of the jCal property object */
     if (!json_is_array(jprop) || (len = json_array_size(jprop)) < 4) {
-        syslog(LOG_WARNING,
-               "jCal component object is not an array of 4+ objects");
+        xsyslog_ev(LOG_WARNING, "jcal.property.invalid",
+                   lf_s("error", "not an array of 4 or more members"));
         return NULL;
     }
 
@@ -642,7 +664,9 @@ EXPORTED icalproperty *jcal_array_as_icalproperty(json_t *jprop)
 
     if (!json_is_string(jtype) ||
         !json_is_object(jparams) || !json_is_string(jvaltype)) {
-        syslog(LOG_WARNING, "jCal property array contains incorrect objects");
+        xsyslog_ev(LOG_WARNING, "jcal.property.invalid",
+                   lf_s("error", "name, parameters or value type is not "
+                        "the right JSON type"));
         return NULL;
     }
 
@@ -650,7 +674,8 @@ EXPORTED icalproperty *jcal_array_as_icalproperty(json_t *jprop)
     propname = ucase(icalmemory_tmp_copy(json_string_value(jtype)));
     kind = icalproperty_string_to_kind(propname);
     if (kind == ICAL_NO_PROPERTY) {
-        syslog(LOG_WARNING, "Unknown jCal property type: %s", propname);
+        xsyslog_ev(LOG_WARNING, "jcal.property.unknown",
+                   lf_s("cal.property", propname));
         return NULL;
     }
 
@@ -659,8 +684,9 @@ EXPORTED icalproperty *jcal_array_as_icalproperty(json_t *jprop)
     valkind = !strcmp(typestr, "unknown") ? ICAL_X_VALUE :
         icalvalue_string_to_kind(ucase(icalmemory_tmp_copy(typestr)));
     if (valkind == ICAL_NO_VALUE) {
-        syslog(LOG_WARNING, "Unknown jCal value type for %s property: %s",
-               propname, typestr);
+        xsyslog_ev(LOG_WARNING, "jcal.valuetype.unknown",
+                   lf_s("cal.property", propname),
+                   lf_s("cal.valuetype", typestr));
         return NULL;
     }
     else if (valkind == ICAL_TEXT_VALUE) {
@@ -671,7 +697,8 @@ EXPORTED icalproperty *jcal_array_as_icalproperty(json_t *jprop)
     /* Create new property */
     prop = icalproperty_new(kind);
     if (!prop) {
-        syslog(LOG_ERR, "Creation of new %s property failed", propname);
+        xsyslog_ev(LOG_ERR, "jcal.property.create.failed",
+                   lf_s("cal.property", propname));
         return NULL;
     }
     if (kind == ICAL_X_PROPERTY) icalproperty_set_x_name(prop, propname);
@@ -710,8 +737,8 @@ EXPORTED icalproperty *jcal_array_as_icalproperty(json_t *jprop)
     default:
         value = json_object_to_icalvalue(jvalue, valkind);
         if (!value) {
-            syslog(LOG_ERR, "Creation of new %s property value failed",
-                   propname);
+            xsyslog_ev(LOG_WARNING, "jcal.property.value.invalid",
+                       lf_s("cal.property", propname));
             goto error;
         }
         break;
@@ -740,8 +767,8 @@ EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
 
     /* Sanity check the types of the jCal component object */
     if (!json_is_array(jobj) || json_array_size(jobj) != 3) {
-        syslog(LOG_WARNING,
-               "jCal component object is not an array of 3 objects");
+        xsyslog_ev(LOG_WARNING, "jcal.component.invalid",
+                   lf_s("error", "not an array of 3 members"));
         return NULL;
     }
 
@@ -751,14 +778,17 @@ EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
 
     if (!json_is_string(jtype) ||
         !json_is_array(jprops) || !json_is_array(jsubs)) {
-        syslog(LOG_WARNING, "jCal component array contains incorrect objects");
+        xsyslog_ev(LOG_WARNING, "jcal.component.invalid",
+                   lf_s("error", "name, properties or sub-components is not "
+                        "the right JSON type"));
         return NULL;
     }
 
     type = json_string_value(jtype);
     kind = icalcomponent_string_to_kind(ucase(icalmemory_tmp_copy(type)));
     if (kind == ICAL_NO_COMPONENT) {
-        syslog(LOG_WARNING, "Unknown jCal component type: %s", type);
+        xsyslog_ev(LOG_WARNING, "jcal.component.unknown",
+                   lf_s("cal.component", type));
         return NULL;
     }
 
@@ -772,7 +802,8 @@ EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
         comp = icalcomponent_new(kind);
     }
     if (!comp) {
-        syslog(LOG_ERR, "Creation of new %s component failed", type);
+        xsyslog_ev(LOG_ERR, "jcal.component.create.failed",
+                   lf_s("cal.component", type));
         return NULL;
     }
 
@@ -818,7 +849,8 @@ EXPORTED icalcomponent *jcal_string_as_icalcomponent(const struct buf *buf)
 
     jcal = json_loads(str, 0, &jerr);
     if (!jcal) {
-        syslog(LOG_WARNING, "json parse error: '%s'", jerr.text);
+        xsyslog_ev(LOG_WARNING, "jcal.json.parse.failed",
+                   lf_s("error", jerr.text));
         return NULL;
     }
 

@@ -353,9 +353,9 @@ static int _create_notify_collection(const char *userid, mbentry_t **mbentryp)
                                    1/*isadmin*/, userid, NULL/*authstate*/,
                                    0/*flags*/, NULL);
 
-        if (r) xsyslog(LOG_ERR, "IOERROR: failed to create notify collection",
-                      "mailbox=<%s> error=<%s>",
-                      mbentry->name, error_message(r));
+        if (r) xsyslog_ev(LOG_ERR, "dav.notify_collection.create.failed",
+                          lf_intname("mbox.name", mbentry->name),
+                          lf_err("error", r));
     }
 
  done:
@@ -377,9 +377,10 @@ static int create_notify_collection(const char *userid, struct mailbox **mailbox
     if (!r && mailboxp) {
         /* Open mailbox for writing */
         r = http_mailbox_open_w(mbentry->name, mailboxp);
-        if (r && r != IMAP_MAILBOX_REPLICAONLY) xsyslog(LOG_ERR, "IOERROR: failed to open notify collection",
-                       "mailbox=<%s> error=<%s>",
-                       mbentry->name, error_message(r));
+        if (r && r != IMAP_MAILBOX_REPLICAONLY)
+            xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_err("error", r));
     }
 
     mboxlist_entry_free(&mbentry);
@@ -892,9 +893,10 @@ static int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
                                mailbox, resource, webdavdb);
     extradata = NULL;  // eaten by dav_store_notification
     if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-        xsyslog(LOG_ERR, "can not store notification",
-                "mboxname=<%s> resource=<%s> err=<%s>",
-                mailbox_name(mailbox), resource, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.notification.store.failed",
+                   lf_mailbox(mailbox),
+                   lf_s("dav.resource", resource),
+                   lf_err("error", r));
     }
 
   done:
@@ -1102,8 +1104,9 @@ HIDDEN int notify_post(struct transaction_t *txn)
     r = http_mailbox_open_w(mboxname, &shared);
     if (r) {
         if (r != IMAP_MAILBOX_REPLICAONLY)
-            xsyslog(LOG_ERR, "IOERROR: failed to open mailbox for share reply",
-                    "mailbox=<%s> err=<%s>", mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_err("error", r));
     }
     else {
         annotate_state_t *astate = NULL;

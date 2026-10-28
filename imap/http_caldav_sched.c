@@ -53,11 +53,9 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
 
     if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
 
-    char *addresses = schedule_addresses ? strarray_join(schedule_addresses, ",") : xstrdup("NULL");
-    syslog(LOG_DEBUG,
-           "caladdress_lookup(userid: '%s', schedule_addresses: '%s')",
-           userid, addresses);
-    free(addresses);
+    xsyslog_ev(LOG_DEBUG, "sched.caladdress.lookup",
+               lf_s("u.username", userid),
+               lf_strarray("sched.addresses", schedule_addresses));
 
     param->userid = xstrdup(userid);
 
@@ -555,8 +553,9 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
     smtpclient_t *sm = NULL;
     r = smtpclient_open(&sm);
     if (r) {
-        syslog(LOG_ERR,
-               "imip_send_sendmail(%s): failed to open SMTP client", recipient);
+        xsyslog_ev(LOG_ERR, "imip.smtp.open.failed",
+                   lf_s("sched.recipient", recipient),
+                   lf_err("error", r));
         r = HTTP_UNAVAILABLE;
         goto done;
     }
@@ -575,8 +574,10 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
 
     /* Send message */
     r = smtpclient_send(sm, &sm_env, &msgbuf);
-    syslog(LOG_INFO,
-           "imip_send_sendmail(%s): %s", recipient, error_message(r));
+    xsyslog_ev(LOG_INFO, "imip.send.done",
+               lf_s("sched.recipient", recipient),
+               lf_b("imip.sent", !r),
+               lf_s_opt("error", r ? error_message(r) : NULL));
     smtp_envelope_fini(&sm_env);
 
     int r2 = smtpclient_close(&sm);
@@ -608,7 +609,8 @@ static int imip_send(const char *cal_ownerid, const char *sched_userid,
     struct buf recipient = BUF_INITIALIZER;
     charset_decode_percent(&recipient, encoded_recipient);
 
-    syslog(LOG_DEBUG, "imip_send(%s)", buf_cstring(&recipient));
+    xsyslog_ev(LOG_DEBUG, "imip.send.started",
+               lf_buf("sched.recipient", &recipient));
 
     /* if no notifier, fall back to sendmail */
     if (!notifier) {
@@ -694,9 +696,11 @@ static int imip_send(const char *cal_ownerid, const char *sched_userid,
                                sched_mechanisms[sched_data->mech],
                                "actorCyrusName", httpd_userid);
     if (!val) {
-        xsyslog(LOG_ERR, "failed to create iMIP notification message",
-                "ownerid=<%s> sender=<%s> recipient=<%s> err=<%s>",
-                cal_ownerid, sender, buf_cstring(&recipient), jerr.text);
+        xsyslog_ev(LOG_ERR, "imip.notification.create.failed",
+                   lf_s("dav.owner", cal_ownerid),
+                   lf_s_opt("sched.sender", sender),
+                   lf_buf("sched.recipient", &recipient),
+                   lf_s("error", jerr.text));
         r = IMAP_INTERNAL;
     }
     else {
@@ -750,8 +754,9 @@ static void busytime_query_remote(const char *server __attribute__((unused)),
     const char *status = NULL;
     int r;
 
-    syslog(LOG_DEBUG, "busytime_query_remote(server: '%s', flags: 0x%x)",
-           server, remote->flags);
+    xsyslog_ev(LOG_DEBUG, "sched.busytime.remote.query",
+               lf_s("proxy.server", server),
+               lf_llx("sched.flags", remote->flags));
 
     comp = icalcomponent_get_first_real_component(rrock->ical);
 
@@ -1005,8 +1010,9 @@ int sched_busytime_query(struct transaction_t *txn,
 
             r = mboxlist_lookup(inboxname, &mbentry, NULL);
             if (r) {
-                syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-                       inboxname, error_message(r));
+                xsyslog_ev(LOG_INFO, "sched.inbox.lookup.failed",
+                           lf_intname("mbox.name", inboxname),
+                           lf_err("error", r));
                 status = REQSTAT_REJECTED;
             }
             else if (!(httpd_myrights(org_authstate, mbentry) & DACL_SCHEDFB)) {
@@ -1112,7 +1118,9 @@ static void sched_deliver_remote(const char *cal_ownerid, const char *sched_user
 {
     int r;
 
-    syslog(LOG_DEBUG, "sched_deliver_remote(%s, %X)", recipient, sparam->flags);
+    xsyslog_ev(LOG_DEBUG, "sched.deliver.remote.started",
+               lf_s("sched.recipient", recipient),
+               lf_llx("sched.flags", sparam->flags));
 
     if (sparam->flags & SCHEDTYPE_ISCHEDULE) {
         /* Use iSchedule */
@@ -1325,7 +1333,8 @@ void sched_deliver(const char *cal_ownerid, const char *sched_userid,
     struct caldav_sched_param sparam;
     int islegal;
 
-    syslog(LOG_DEBUG, "sched_deliver(%s)", recipient);
+    xsyslog_ev(LOG_DEBUG, "sched.deliver.started",
+               lf_s("sched.recipient", recipient));
 
     memset(&sparam, 0, sizeof(struct caldav_sched_param));
 
@@ -1364,9 +1373,11 @@ void sched_deliver(const char *cal_ownerid, const char *sched_userid,
 
     if (sparam.flags) {
         /* Remote recipient */
-        syslog(LOG_NOTICE, "%s scheduling delivery to %s",
-               (sparam.flags & SCHEDTYPE_ISCHEDULE) ? "iSchedule" : "iMIP",
-               recipient);
+        xsyslog_ev(LOG_NOTICE, "sched.delivery.started",
+                   lf_s("sched.transport",
+                        (sparam.flags & SCHEDTYPE_ISCHEDULE) ? "ischedule"
+                                                             : "imip"),
+                   lf_s("sched.recipient", recipient));
 
         sched_deliver_remote(cal_ownerid, sched_userid,
                              sender, recipient, &sparam, sched_data);
@@ -1377,7 +1388,9 @@ void sched_deliver(const char *cal_ownerid, const char *sched_userid,
         const char *attendee = NULL;
         unsigned r;
 
-        syslog(LOG_NOTICE, "CalDAV scheduling delivery to %s", recipient);
+        xsyslog_ev(LOG_NOTICE, "sched.delivery.started",
+                   lf_s("sched.transport", "caldav"),
+                   lf_s("sched.recipient", recipient));
 
         r = sched_deliver_local(sched_userid, sender, recipient, NULL, &sparam,
                                 sched_data, authstate, &attendee, &ical);
@@ -2032,9 +2045,10 @@ static void schedule_sub_updates(const char *cal_ownerid, const char *sched_user
         /* unchanged event - we don't need to send anything */
         if (!check_changes(oldcomp, comp, attendee)) {
             if (force_send == ICAL_SCHEDULEFORCESEND_NONE) {
-                syslog(LOG_INFO,
-                       "Not sending iTIP request for attendee %s (event %s):"
-                       " no changes", attendee, recurid);
+                xsyslog_ev(LOG_INFO, "sched.request.skipped",
+                           lf_s("cal.attendee", attendee),
+                           lf_s("cal.recurid", recurid),
+                           lf_s("sched.reason", "no_changes"));
                 if (freeme) icalcomponent_free(freeme);
                 continue;
             }
@@ -2052,10 +2066,12 @@ static void schedule_sub_updates(const char *cal_ownerid, const char *sched_user
 
         if (!do_send) {
             if (icalcomponent_is_historical(copy, h_cutoff)) {
-                syslog(LOG_INFO,
-                       "Not sending iTIP request for attendee %s (event %s):"
-                       " historical cutoff %s",
-                       attendee, recurid, icaltime_as_ical_string(h_cutoff));
+                xsyslog_ev(LOG_INFO, "sched.request.skipped",
+                           lf_s("cal.attendee", attendee),
+                           lf_s("cal.recurid", recurid),
+                           lf_s("sched.reason", "historical"),
+                           lf_s("sched.cutoff",
+                                icaltime_as_ical_string(h_cutoff)));
             }
             else {
                 do_send = 1;
@@ -2259,8 +2275,9 @@ static void caldav_rewrite_attachprop_to_binary(struct mailbox *attachments,
     // Check if entry exists in WebDAV attachments
     int r = webdav_lookup_uid(webdavdb, mid, &wdata);
     if (r) {
-        xsyslog(LOG_ERR, "webdav_lookup_uid failed", "mid=<%s> err=<%s>",
-                mid, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "caldav.attachment.lookup.failed",
+                   lf_s("cal.managedid", mid),
+                   lf_s("error", cyrusdb_strerror(r)));
         goto done;
     }
 
@@ -2343,8 +2360,9 @@ HIDDEN void caldav_rewrite_attachprop_to_url(struct webdav_db *webdavdb,
     int r = webdav_lookup_uid(webdavdb, mid, &wdata);
     if (r) {
         if (r != CYRUSDB_NOTFOUND) {
-            xsyslog(LOG_ERR, "webdav_lookup_uid failed", "mid=<%s> err=<%s>",
-                    mid, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "caldav.attachment.lookup.failed",
+                       lf_s("cal.managedid", mid),
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         return;
     }
@@ -2389,8 +2407,9 @@ HIDDEN void caldav_rewrite_attachments(const char *userid,
     char *mboxname = caldav_mboxname(userid, MANAGED_ATTACH);
     int r = mailbox_open_irl(mboxname, &attachments);
     if (r) {
-        xsyslog(LOG_ERR, "can't open attachments",
-                "mboxname=<%s> err<%s>", mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.mailbox.open.failed",
+                   lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
     }
     free(mboxname);
     if (r) goto done;
@@ -2401,7 +2420,8 @@ HIDDEN void caldav_rewrite_attachments(const char *userid,
     mbname = mbname_from_intname(mailbox_name(attachments));
     const char *baseurl = config_getstring(IMAPOPT_WEBDAV_ATTACHMENTS_BASEURL);
     if (!baseurl) {
-        xsyslog(LOG_ERR, "no webdav_attachments_baseurl config", NULL);
+        xsyslog_ev(LOG_ERR, "caldav.unconfigured",
+                   lf_s("config.option", "webdav_attachments_baseurl"));
         goto done;
     }
     caldav_attachment_url(&attachments_url, mbname_userid(mbname), baseurl, "");
@@ -2490,8 +2510,9 @@ void sched_request(const char *cal_ownerid, const char *sched_userid,
     char *outboxname = caldav_mboxname(sched_userid, SCHED_OUTBOX);
     int r = mboxlist_lookup(outboxname, &mbentry, NULL);
     if (r) {
-        syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-               outboxname, error_message(r));
+        xsyslog_ev(LOG_INFO, "sched.outbox.lookup.failed",
+                   lf_intname("mbox.name", outboxname),
+                   lf_err("error", r));
     }
     else {
         rights = httpd_myrights(httpd_authstate, mbentry);
@@ -2501,9 +2522,10 @@ void sched_request(const char *cal_ownerid, const char *sched_userid,
 
     if (!(rights & DACL_INVITE)) {
         /* DAV:need-privileges */
-        syslog(LOG_WARNING,
-               "No schedule-send-invite privilege for user %s on Outbox %s",
-               httpd_userid, organizer);
+        xsyslog_ev(LOG_WARNING, "sched.send.denied",
+                   lf_s("u.username", httpd_userid),
+                   lf_s("dav.privilege", "schedule-send-invite"),
+                   lf_s("cal.organizer", organizer));
 
         update_attendee_status(newical, NULL, NULL, SCHEDSTAT_NOPRIVS);
 
@@ -2559,8 +2581,9 @@ void sched_request(const char *cal_ownerid, const char *sched_userid,
             }
         }
 
-        syslog(LOG_NOTICE, "iTIP scheduling request from %s to %s",
-               myorganizer, attendee);
+        xsyslog_ev(LOG_NOTICE, "sched.request.sending",
+                   lf_s("cal.organizer", myorganizer),
+                   lf_s("cal.attendee", attendee));
         schedule_one_attendee(cal_ownerid, sched_userid, schedule_addresses,
                               myorganizer, attendee,
                               h_cutoff, oldical, newical, createdmodseq, mech);
@@ -2976,8 +2999,9 @@ void sched_reply(const char *cal_ownerid, const char *sched_userid,
     char *outboxname = caldav_mboxname(sched_userid, SCHED_OUTBOX);
     int r = mboxlist_lookup(outboxname, &mbentry, NULL);
     if (r) {
-        syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-               outboxname, error_message(r));
+        xsyslog_ev(LOG_INFO, "sched.outbox.lookup.failed",
+                   lf_intname("mbox.name", outboxname),
+                   lf_err("error", r));
     }
     else {
         rights = httpd_myrights(httpd_authstate, mbentry);
@@ -2987,9 +3011,10 @@ void sched_reply(const char *cal_ownerid, const char *sched_userid,
 
     if (!(rights & DACL_REPLY)) {
         /* DAV:need-privileges */
-        syslog(LOG_WARNING,
-               "No schedule-send-reply privilege for user %s on Outbox %s",
-               httpd_userid, sched_userid);
+        xsyslog_ev(LOG_WARNING, "sched.send.denied",
+                   lf_s("u.username", httpd_userid),
+                   lf_s("dav.privilege", "schedule-send-reply"),
+                   lf_s("dav.owner", sched_userid));
         update_organizer_status(newical, NULL, SCHEDSTAT_NOPRIVS);
         return;
     }
@@ -3023,8 +3048,9 @@ void sched_reply(const char *cal_ownerid, const char *sched_userid,
                 { mech, flags, reply.itip, oldical, newical,
                   reply.force_send, schedule_addresses,
                   NULL, NULL, createdmodseq };
-            syslog(LOG_NOTICE, "iTIP scheduling reply from %s to %s",
-                   attendee, reply.organizer ? reply.organizer : "<unknown>");
+            xsyslog_ev(LOG_NOTICE, "sched.reply.sending",
+                       lf_s("cal.attendee", attendee),
+                       lf_s("cal.organizer", reply.organizer));
             sched_deliver(cal_ownerid, sched_userid, attendee,
                           reply.organizer, &sched, httpd_authstate);
             update_organizer_status(newical, reply.didparts, sched.status);
@@ -3169,27 +3195,29 @@ static void sched_record_status(struct deferred_sched *item)
        deleted while we were delivering, and this checks for that */
     r = http_mailbox_open_w(item->mboxname, &mailbox);
     if (r) {
-        xsyslog(LOG_NOTICE, "can not record scheduling status, "
-                            "calendar is gone",
-                            "mboxname=<%s> resource=<%s> err=<%s>",
-                            item->mboxname, item->resource, error_message(r));
+        xsyslog_ev(LOG_NOTICE, "sched.status.record.skipped",
+                   lf_s("sched.reason", "calendar_gone"),
+                   lf_intname("mbox.name", item->mboxname),
+                   lf_s("dav.resource", item->resource),
+                   lf_err("error", r));
         goto done;
     }
 
     caldavdb = caldav_open_mailbox(mailbox);
     if (!caldavdb) {
-        xsyslog(LOG_ERR, "can not open caldav db to record scheduling status",
-                         "mboxname=<%s>", item->mboxname);
+        xsyslog_ev(LOG_ERR, "dav.db.open.failed",
+                   lf_intname("mbox.name", item->mboxname));
         goto done;
     }
 
     r = caldav_lookup_resource(caldavdb, mailbox->mbentry,
                                item->resource, &cdata, 0);
     if (r) {
-        xsyslog(LOG_NOTICE, "can not record scheduling status, "
-                            "resource is gone",
-                            "mboxname=<%s> resource=<%s> err=<%s>",
-                            item->mboxname, item->resource, error_message(r));
+        xsyslog_ev(LOG_NOTICE, "sched.status.record.skipped",
+                   lf_s("sched.reason", "resource_gone"),
+                   lf_intname("mbox.name", item->mboxname),
+                   lf_s("dav.resource", item->resource),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -3197,12 +3225,12 @@ static void sched_record_status(struct deferred_sched *item)
         /* somebody else wrote the resource while we delivered, and theirs
            is what the world has seen.  Don't overwrite it with our stale
            copy just to add a status parameter */
-        xsyslog(LOG_NOTICE, "not recording scheduling status, "
-                            "resource changed while scheduling",
-                            "mboxname=<%s> resource=<%s>"
-                            " uid=<%u> newuid=<%u>",
-                            item->mboxname, item->resource,
-                            item->imap_uid, cdata->dav.imap_uid);
+        xsyslog_ev(LOG_NOTICE, "sched.status.record.skipped",
+                   lf_s("sched.reason", "resource_changed"),
+                   lf_intname("mbox.name", item->mboxname),
+                   lf_s("dav.resource", item->resource),
+                   lf_u("old.msg.imapuid", item->imap_uid),
+                   lf_u("msg.imapuid", cdata->dav.imap_uid));
         goto done;
     }
 
@@ -3211,9 +3239,10 @@ static void sched_record_status(struct deferred_sched *item)
                               NEW_STAG, item->cal_ownerid, NULL, NULL,
                               &item->schedule_addresses);
     if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
-        xsyslog(LOG_ERR, "can not store scheduling status",
-                         "mboxname=<%s> resource=<%s> err=<%s>",
-                         item->mboxname, item->resource, error_message(r));
+        xsyslog_ev(LOG_ERR, "sched.status.store.failed",
+                   lf_intname("mbox.name", item->mboxname),
+                   lf_s("dav.resource", item->resource),
+                   lf_err("error", r));
     }
 
   done:

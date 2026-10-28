@@ -79,7 +79,7 @@ EXPORTED int caldav_alarm_init(void)
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&caldav_alarm_namespace, NAMESPACE_OPTION_ADMIN))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.namespace.init.failed", lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -187,7 +187,7 @@ static sqldb_t *caldav_alarm_open()
     /* we need exclusivity! */
     int r = mboxname_lock("$CALDAVALARMDB", &my_alarmdb_lock, LOCK_EXCLUSIVE);
     if (r) {
-        syslog(LOG_ERR, "DBERROR: failed to lock $CALDAVALARMDB");
+        xsyslog_ev(LOG_ERR, "alarm.db.lock.failed");
         return NULL;
     }
 
@@ -201,7 +201,8 @@ static sqldb_t *caldav_alarm_open()
                             config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
 
     if (!my_alarmdb) {
-        syslog(LOG_ERR, "DBERROR: failed to open %s", dbfilename);
+        xsyslog_ev(LOG_ERR, "alarm.db.open.failed",
+                   lf_s("sys.path", dbfilename));
         mboxname_release(&my_alarmdb_lock);
     }
 
@@ -579,7 +580,8 @@ static int process_alarm_cb(icalcomponent *comp,
         else if (!is_duration &&
                  icaltime_compare(recurid, icalcomponent_get_dtstart(comp)) > 0) {
             /* alarms with absolute triggers can only fire once */
-            syslog(LOG_DEBUG, "XXX  absolute trigger - skipping recurrence");
+            xsyslog_ev(LOG_DEBUG, "alarm.recurrence.skipped",
+                       lf_s("alarm.reason", "absolute_trigger"));
             continue;
         }
 
@@ -595,23 +597,29 @@ static int process_alarm_cb(icalcomponent *comp,
 
             int age = data->now - check;
             if (age > 7200) { // more than 2 hours stale?  Just log it
-                syslog(LOG_ERR, "suppressing alarm aged %d seconds "
-                       "at %s for %s %u - %s(%d) %s",
-                       age,
-                       icaltime_as_ical_string(alarmtime),
-                       data->mboxname, data->imap_uid,
-                       icaltime_as_ical_string(start), alarmno,
-                       summary);
+                xsyslog_ev(LOG_WARNING, "alarm.suppressed",
+                           lf_s("alarm.reason", "stale"),
+                           lf_d("alarm.age", age),
+                           lf_s("alarm.time",
+                                icaltime_as_ical_string(alarmtime)),
+                           lf_intname("mbox.name", data->mboxname),
+                           lf_u("msg.imapuid", data->imap_uid),
+                           lf_s("cal.start", icaltime_as_ical_string(start)),
+                           lf_d("alarm.index", alarmno),
+                           lf_utf8("cal.summary", summary));
             }
             else if (!hashset_add(seen_alarms, &alarm_id) && suppress_duplicates) {
                 suppressed_n_duplicates++;
             }
             else {
-                syslog(LOG_NOTICE, "sending alarm at %s for %s %u - %s(%d) %s",
-                       icaltime_as_ical_string(alarmtime),
-                       data->mboxname, data->imap_uid,
-                       icaltime_as_ical_string(start), alarmno,
-                       summary);
+                xsyslog_ev(LOG_NOTICE, "alarm.sending",
+                           lf_s("alarm.time",
+                                icaltime_as_ical_string(alarmtime)),
+                           lf_intname("mbox.name", data->mboxname),
+                           lf_u("msg.imapuid", data->imap_uid),
+                           lf_s("cal.start", icaltime_as_ical_string(start)),
+                           lf_d("alarm.index", alarmno),
+                           lf_utf8("cal.summary", summary));
                 int sr = send_alarm(data, comp, alarm, start, end,
                                     recurid, is_standalone, alarmtime);
                 if (!sr) {
@@ -640,7 +648,7 @@ static int process_alarm_cb(icalcomponent *comp,
         /* alarms can't be more than a week either side of the event start,
          * so if we're past 2 months, then just check again in a month */
         if (check > data->now + 86400*60) {
-            syslog(LOG_DEBUG, "XXX  pushing off nextcheck");
+            xsyslog_ev(LOG_DEBUG, "alarm.nextcheck.deferred");
             time_t next = data->now + 86400*30;
             if (!data->nextcheck || next < data->nextcheck)
                 data->nextcheck = next;
@@ -650,9 +658,10 @@ static int process_alarm_cb(icalcomponent *comp,
     }
 
     if (suppressed_n_duplicates) {
-        xsyslog(LOG_INFO, "suppressed duplicate alarms",
-                "mboxname=<%s> imap_uid=<%d> n_duplicates=<%zu>",
-                data->mboxname, data->imap_uid, suppressed_n_duplicates);
+        xsyslog_ev(LOG_INFO, "alarm.duplicates.suppressed",
+                   lf_intname("mbox.name", data->mboxname),
+                   lf_u("msg.imapuid", data->imap_uid),
+                   lf_zu("alarm.duplicates", suppressed_n_duplicates));
     }
 
 done:
@@ -682,10 +691,15 @@ static int update_alarmdb(const char *mboxname,
     if (!alarmdb) return -1;
     int rc = SQLITE_OK;
 
-    syslog(LOG_DEBUG,
-           "update_alarmdb(%s:%u, " TIME_T_FMT ", %u, %u, %u, " TIME_T_FMT ", %s)",
-           mboxname, imap_uid, nextcheck, type, num_rcpts,
-           num_retries, last_run, last_err ? last_err : "NULL");
+    xsyslog_ev(LOG_DEBUG, "alarm.db.updating",
+               lf_intname("mbox.name", mboxname),
+               lf_u("msg.imapuid", imap_uid),
+               lf_time("alarm.nextcheck", nextcheck),
+               lf_u("alarm.type", type),
+               lf_u("alarm.rcpts", num_rcpts),
+               lf_u("alarm.retries", num_retries),
+               lf_time("alarm.lastrun", last_run),
+               lf_s_opt("error", last_err));
 
     if (nextcheck)
         rc = sqldb_exec(alarmdb, CMD_REPLACE, bval, NULL, NULL);
@@ -861,8 +875,8 @@ static int is_supported_component(icalcomponent *ical)
     }
 
     if (!is_supported) {
-        xsyslog(LOG_DEBUG, "alarms are not supported for iCalendar component",
-                "kind=<%s>", icalcomponent_kind_to_string(kind));
+        xsyslog_ev(LOG_DEBUG, "alarm.component.unsupported",
+                   lf_s("cal.component", icalcomponent_kind_to_string(kind)));
     }
 
     return is_supported;
@@ -873,8 +887,8 @@ static int has_alarms(void *data, struct mailbox *mailbox,
 {
     int has_alarms = 0;
 
-    syslog(LOG_DEBUG, "checking for alarms in mailbox %s uid %u",
-           mailbox_name(mailbox), uid);
+    xsyslog_ev(LOG_DEBUG, "alarm.check.started",
+               lf_mailbox(mailbox), lf_u("msg.imapuid", uid));
 
     if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
         if (data && num_rcpts &&
@@ -891,8 +905,8 @@ static int has_alarms(void *data, struct mailbox *mailbox,
     icalcomponent *ical = (icalcomponent *) data;
     if (ical) {
         if (!is_supported_component(ical)) {
-            xsyslog(LOG_DEBUG, "ignoring alarms for index record",
-                    "mboxname=<%s> imap_uid=<%d>", mailbox_name(mailbox), uid);
+            xsyslog_ev(LOG_DEBUG, "alarm.record.ignored",
+                       lf_mailbox(mailbox), lf_u("msg.imapuid", uid));
             return 0;
         }
 
@@ -900,7 +914,8 @@ static int has_alarms(void *data, struct mailbox *mailbox,
         icalcomponent *comp = icalcomponent_get_first_real_component(ical);
         icalcomponent_kind kind = icalcomponent_isa(comp);
 
-        syslog(LOG_DEBUG, "checking resource");
+        xsyslog_ev(LOG_DEBUG, "alarm.check.step",
+                   lf_s("alarm.step", "resource"));
         for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
             icalproperty *prop;
 
@@ -969,13 +984,13 @@ static int has_alarms(void *data, struct mailbox *mailbox,
                 }
 
                 if (disable) {
-                    xsyslog(LOG_NOTICE,
-                            "Disabling alarms for high frequence calendar entry",
-                            "freq=<%s> interval=<%u> bypart=<%s>"
-                            " mboxname=<%s> imap_uid=<%d>",
-                            icalrecur_freq_to_string(rrule->freq),
-                            rrule->interval, bypart,
-                            mailbox_name(mailbox), uid);
+                    xsyslog_ev(LOG_NOTICE, "alarm.recurrence.too_frequent",
+                               lf_s("cal.recur.freq",
+                                    icalrecur_freq_to_string(rrule->freq)),
+                               lf_u("cal.recur.interval", rrule->interval),
+                               lf_s_opt("cal.recur.bypart", bypart),
+                               lf_mailbox(mailbox),
+                               lf_u("msg.imapuid", uid));
                     icalrecurrencetype_unref(rrule);
                     return 0;
                 }
@@ -998,7 +1013,8 @@ static int has_alarms(void *data, struct mailbox *mailbox,
         &has_alarms
     };
 
-    syslog(LOG_DEBUG, "checking per-user-data");
+    xsyslog_ev(LOG_DEBUG, "alarm.check.step",
+               lf_s("alarm.step", "per_user_data"));
     mailbox_get_annotate_state(mailbox, uid, NULL);
     annotatemore_findall_mailbox(mailbox, uid, PER_USER_CAL_DATA, /* modseq */ 0,
                          &has_peruser_alarms_cb, &hrock, /* flags */ 0);
@@ -1018,8 +1034,9 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
         // support to ignore component kinds, or because an installation
         // changed their config of supported components and did not
         // rebuild the alarm database.
-        xsyslog(LOG_DEBUG, "ignoring alarms for index record",
-                "mboxname=<%s> imap_uid=<%d>", mboxname, imap_uid);
+        xsyslog_ev(LOG_DEBUG, "alarm.record.ignored",
+                   lf_intname("mbox.name", mboxname),
+                   lf_u("msg.imapuid", imap_uid));
         return 0;
     }
 
@@ -1066,13 +1083,14 @@ static int write_lastalarm(struct mailbox *mailbox,
 {
     struct buf annot_buf = BUF_INITIALIZER;
 
-    syslog(LOG_DEBUG, "writing last alarm for mailbox %s uid %u",
-           mailbox_name(mailbox), record->uid);
-
     if (data) {
         buf_printf(&annot_buf, TIME_T_FMT " " TIME_T_FMT, data->lastrun, data->nextcheck);
     }
-    syslog(LOG_DEBUG, "data: %s", buf_cstring(&annot_buf));
+
+    xsyslog_ev(LOG_DEBUG, "alarm.lastalarm.writing",
+               lf_mailbox(mailbox),
+               lf_u("msg.imapuid", record->uid),
+               lf_buf("alarm.lastalarm", &annot_buf));
 
     const char *annotname = DAV_ANNOT_NS "lastalarm";
     int r = mailbox_annotation_write(mailbox, record->uid,
@@ -1089,8 +1107,8 @@ static int read_lastalarm(struct mailbox *mailbox,
     int r = IMAP_NOTFOUND;
     memset(data, 0, sizeof(struct lastalarm_data));
 
-    syslog(LOG_DEBUG, "reading last alarm for mailbox %s uid %u",
-           mailbox_name(mailbox), record->uid);
+    xsyslog_ev(LOG_DEBUG, "alarm.lastalarm.reading",
+               lf_mailbox(mailbox), lf_u("msg.imapuid", record->uid));
 
     const char *annotname = DAV_ANNOT_NS "lastalarm";
     struct buf annot_buf = BUF_INITIALIZER;
@@ -1347,8 +1365,9 @@ static int process_valarms(struct mailbox *mailbox,
     const char *mboxname = mailbox_name(mailbox);
 
     if (!ical) {
-        syslog(LOG_ERR, "error parsing ical string mailbox %s uid %u",
-               mboxname, record->uid);
+        xsyslog_ev(LOG_ERR, "caldav.ical.parse.failed",
+                   lf_intname("mbox.name", mboxname),
+                   lf_u("msg.imapuid", record->uid));
         caldav_alarm_delete_record(mboxname, record->uid);
         return 0;
     }
@@ -1361,9 +1380,10 @@ static int process_valarms(struct mailbox *mailbox,
         record->uid != cdata->dav.imap_uid ||
         strcmp(cdata->dav.mailbox_byname ? mboxname : mailbox_uniqueid(mailbox),
                cdata->dav.mailbox)) {
-        syslog(LOG_NOTICE, "removing bogus lastalarm check "
-               "for mailbox %s uid %u which is not current event",
-               mboxname, record->uid);
+        xsyslog_ev(LOG_NOTICE, "alarm.lastalarm.removed",
+                   lf_s("alarm.reason", "not_current_event"),
+                   lf_intname("mbox.name", mboxname),
+                   lf_u("msg.imapuid", record->uid));
         caldav_alarm_delete_record(mboxname, record->uid);
         goto done_item;
     }
@@ -1371,17 +1391,20 @@ static int process_valarms(struct mailbox *mailbox,
     /* check for bogus lastalarm data on record
        which actually shouldn't have it */
     if (!has_alarms(ical, mailbox, record->uid, NULL)) {
-        syslog(LOG_NOTICE, "removing bogus lastalarm check "
-               "for mailbox %s uid %u which has no alarms",
-               mboxname, record->uid);
+        xsyslog_ev(LOG_NOTICE, "alarm.lastalarm.removed",
+                   lf_s("alarm.reason", "no_alarms"),
+                   lf_intname("mbox.name", mboxname),
+                   lf_u("msg.imapuid", record->uid));
         caldav_alarm_delete_record(mboxname, record->uid);
         goto done_item;
     }
 
     /* don't process alarms in draft messages */
     if (record->system_flags & FLAG_DRAFT) {
-        syslog(LOG_NOTICE, "removing lastalarm for draft message in mailbox %s uid %u",
-               mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_NOTICE, "alarm.lastalarm.removed",
+                   lf_s("alarm.reason", "draft"),
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid));
         caldav_alarm_delete_record(mboxname, record->uid);
         goto done_item;
     }
@@ -1393,7 +1416,8 @@ static int process_valarms(struct mailbox *mailbox,
     /* Process VALARMs in iCalendar resource */
     char *userid = mboxname_to_userid(mboxname);
 
-    syslog(LOG_DEBUG, "processing alarms in resource");
+    xsyslog_ev(LOG_DEBUG, "alarm.process.step",
+               lf_s("alarm.step", "resource"));
 
     data.nextcheck = process_alarms(mboxname, record->uid,
                                     record->createdmodseq, userid,
@@ -1409,7 +1433,8 @@ static int process_valarms(struct mailbox *mailbox,
         ical, &data, runtime, dryrun
     };
 
-    syslog(LOG_DEBUG, "processing per-user alarms");
+    xsyslog_ev(LOG_DEBUG, "alarm.process.step",
+               lf_s("alarm.step", "per_user_data"));
 
     mailbox_get_annotate_state(mailbox, record->uid, NULL);
     annotatemore_findall_mailbox(mailbox, record->uid, PER_USER_CAL_DATA,
@@ -1450,8 +1475,10 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     FILE *f = NULL;
     int r = 0;
 
-    syslog(LOG_DEBUG, "moving message %s:%u to mailboxid %s",
-           mailbox_name(srcmbox), record->uid, destmboxid);
+    xsyslog_ev(LOG_DEBUG, "alarm.message.moving",
+               lf_mailbox(srcmbox),
+               lf_u("msg.imapuid", record->uid),
+               lf_s("other.mbox.mailboxid", destmboxid));
 
     // make sure we pre-load the conversation state into the source
     // mailbox first!
@@ -1538,7 +1565,8 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
 
     /* Prepare to stage the message */
     if (!(f = append_newstage_full(destname, time(0), 0, &stage, fname))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", destname);
+        xsyslog_ev(LOG_ERR, "alarm.stage.create.failed",
+                   lf_intname("mbox.name", destname));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -1577,8 +1605,10 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     if (is_snoozed) record->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
     r = mailbox_rewrite_index_record(srcmbox, record);
     if (r) {
-        syslog(LOG_ERR, "expunging record (%s:%u) failed: %s",
-               mailbox_name(srcmbox), record->uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "alarm.record.expunge.failed",
+                   lf_mailbox(srcmbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_err("error", r));
     }
 
   done:
@@ -1655,8 +1685,9 @@ static int find_scheduled_email(const char *emailid,
     struct conversations_state *cstate = NULL;
     int r = conversations_open_user(frock->userid, 1/*shared*/, &cstate);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open conversations for user %s",
-               frock->userid);
+        xsyslog_ev(LOG_ERR, "alarm.conversations.open.failed",
+                   lf_s("u.username", frock->userid),
+                   lf_err("error", r));
         return r;
     }
 
@@ -1713,8 +1744,9 @@ static int update_unscheduled(const char *mboxname, time_t nextcheck)
     sqldb_t *alarmdb = caldav_alarm_open();
     if (!alarmdb) return -1;
 
-    syslog(LOG_DEBUG, "update_unscheduled(%s, " TIME_T_FMT ")",
-           mboxname, nextcheck);
+    xsyslog_ev(LOG_DEBUG, "alarm.unscheduled.updating",
+               lf_intname("mbox.name", mboxname),
+               lf_time("alarm.nextcheck", nextcheck));
 
     unsigned count = 0;
     int rc = sqldb_exec(alarmdb, CMD_GET_UNSCHEDULED_COUNT,
@@ -1800,19 +1832,21 @@ static int process_futurerelease(struct caldav_alarm_data *data,
     struct buf subjbuf = BUF_INITIALIZER;
     struct buf msgidbuf = BUF_INITIALIZER;
 
-    syslog(LOG_DEBUG, "processing future release for mailbox %s uid %u",
-           mailbox_name(mailbox), record->uid);
+    xsyslog_ev(LOG_DEBUG, "alarm.futurerelease.processing",
+               lf_mailbox(mailbox), lf_u("msg.imapuid", record->uid));
 
     if (record->system_flags & FLAG_ANSWERED) {
-        syslog(LOG_NOTICE, "email already sent for mailbox %s uid %u",
-               mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_NOTICE, "alarm.futurerelease.skipped",
+                   lf_s("alarm.reason", "already_sent"),
+                   lf_mailbox(mailbox), lf_u("msg.imapuid", record->uid));
         r = IMAP_NO_NOSUCHMSG;
         goto done;
     }
 
     if (record->system_flags & FLAG_FLAGGED) {
-        syslog(LOG_NOTICE, "submission canceled for mailbox %s uid %u",
-               mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_NOTICE, "alarm.futurerelease.skipped",
+                   lf_s("alarm.reason", "cancelled"),
+                   lf_mailbox(mailbox), lf_u("msg.imapuid", record->uid));
         r = IMAP_NO_NOSUCHMSG;
         goto done;
     }
@@ -1869,8 +1903,9 @@ static int process_futurerelease(struct caldav_alarm_data *data,
     /* Load message */
     r = message_get_field(m, "rawbody", MESSAGE_RAW, &buf);
     if (r) {
-        syslog(LOG_ERR, "process_futurerelease: can't get body for %s:%u",
-               mailbox_name(mailbox), record->uid);
+        xsyslog_ev(LOG_ERR, "alarm.futurerelease.body.missing",
+                   lf_mailbox(mailbox), lf_u("msg.imapuid", record->uid),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -1880,7 +1915,7 @@ static int process_futurerelease(struct caldav_alarm_data *data,
     r = smtpclient_open(&sm);
     if (r) {
         err = error_message(r);
-        syslog(LOG_ERR, "smtpclient_open failed: %s", err);
+        xsyslog_ev(LOG_ERR, "alarm.smtp.open.failed", lf_s("error", err));
     }
     else {
         /* Set AUTH ID */
@@ -1928,7 +1963,11 @@ static int process_futurerelease(struct caldav_alarm_data *data,
             if (!err) {
                 err = error_message(r);
             }
-            syslog(LOG_ERR, "smtpclient_send failed: %s", err);
+            /* the MTA answering, even with a refusal, is its news to
+             * break rather than a failure of ours */
+            xsyslog_ev(code ? LOG_WARNING : LOG_ERR, "alarm.smtp.send.failed",
+                       lf_s("error", err),
+                       lf_u("alarm.smtp.code", code));
         }
     }
 
@@ -2033,9 +2072,11 @@ static int process_futurerelease(struct caldav_alarm_data *data,
 
     r = mailbox_rewrite_index_record(mailbox, record);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: marking emailsubmission as %s (%s:%u) failed: %s",
-               cancel ? "cancelled" : "sent",
-               mailbox_name(mailbox), record->uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "alarm.submission.mark.failed",
+                   lf_s("alarm.submission.state",
+                        cancel ? "cancelled" : "sent"),
+                   lf_mailbox(mailbox), lf_u("msg.imapuid", record->uid),
+                   lf_err("error", r));
         // email is already sent, so we don't want to try to send it again!
         // go ahead and delete the record still...
     }
@@ -2054,26 +2095,36 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         int r1 = find_scheduled_email(emailid, &frock);
 
         if (r1 || !frock.mboxname || !frock.uid) {
-            syslog(LOG_ERR,
-                   "IOERROR: failed to find scheduled email %s for user %s (%s)",
-                   emailid, userid, error_message(r1));
+            xsyslog_ev(LOG_ERR, "alarm.scheduled_email.move.failed",
+                       lf_s("alarm.step", "find_email"),
+                       lf_s("msg.emailid", emailid),
+                       lf_s("u.username", userid),
+                       lf_err("error", r1));
         }
         else if ((r1 = mailbox_open_iwl(frock.mboxname, &sched_mbox))) {
-            syslog(LOG_ERR, "IOERROR: failed to open %s: %s",
-                   frock.mboxname, error_message(r1));
+            xsyslog_ev(LOG_ERR, "alarm.scheduled_email.move.failed",
+                       lf_s("alarm.step", "open_mailbox"),
+                       lf_intname("mbox.name", frock.mboxname),
+                       lf_err("error", r1));
         }
         else if ((r1 = mailbox_find_index_record(sched_mbox,
                                                  frock.uid, &sched_rec))) {
-            syslog(LOG_ERR, "IOERROR: failed find message %u in %s: %s",
-                   frock.uid, frock.mboxname, error_message(r1));
+            xsyslog_ev(LOG_ERR, "alarm.scheduled_email.move.failed",
+                       lf_s("alarm.step", "find_record"),
+                       lf_intname("mbox.name", frock.mboxname),
+                       lf_u("msg.imapuid", frock.uid),
+                       lf_err("error", r1));
         }
         else {
             r1 = move_to_mailboxid(sched_mbox, &sched_rec, destmboxid,
                                   time(0), setkeywords, 0/*is_snoozed*/);
 
             if (r1) {
-                syslog(LOG_ERR, "IOERROR: failed to move %s:%u (%s)",
-                       frock.mboxname, frock.uid, error_message(r));
+                xsyslog_ev(LOG_ERR, "alarm.scheduled_email.move.failed",
+                           lf_s("alarm.step", "move"),
+                           lf_intname("mbox.name", frock.mboxname),
+                           lf_u("msg.imapuid", frock.uid),
+                           lf_err("error", r1));
 
             }
             else if (cancel) {
@@ -2107,8 +2158,8 @@ static int process_snoozed(struct caldav_alarm_data *data,
     time_t wakeup;
     int r = 0;
 
-    syslog(LOG_DEBUG, "processing snoozed email for mailbox %s uid %u",
-           mailbox_name(mailbox), record->uid);
+    xsyslog_ev(LOG_DEBUG, "alarm.snoozed.processing",
+               lf_mailbox(mailbox), lf_u("msg.imapuid", record->uid));
 
     /* Get the snoozed annotation */
     snoozed = jmap_fetch_snoozed(mailbox_name(mailbox), record->uid);
@@ -2135,8 +2186,9 @@ static int process_snoozed(struct caldav_alarm_data *data,
                           wakeup, setkeywords, 1/*is_snoozed*/);
 
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to unsnooze %s:%u (%s)",
-               mailbox_name(mailbox), record->uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "alarm.unsnooze.failed",
+                   lf_mailbox(mailbox), lf_u("msg.imapuid", record->uid),
+                   lf_err("error", r));
         /* try again in 5 minutes */
         caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
     }
@@ -2176,9 +2228,8 @@ static void process_unscheduled(struct caldav_alarm_data *data)
         mboxevent_free(&event);
     }
     else {
-        syslog(LOG_NOTICE,
-               "failed to create UNSCHEDULED notification for mailbox %s",
-               data->mboxname);
+        xsyslog_ev(LOG_NOTICE, "alarm.unscheduled.notification.failed",
+                   lf_intname("mbox.name", data->mboxname));
 
     }
 
@@ -2190,9 +2241,11 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
     int r;
     struct mailbox *mailbox = NULL;
 
-    syslog(LOG_DEBUG,
-           "processing alarms for mailbox %s uid %u type %u retries %u",
-           data->mboxname, data->imap_uid, data->type, data->num_retries);
+    xsyslog_ev(LOG_DEBUG, "alarm.record.processing",
+               lf_intname("mbox.name", data->mboxname),
+               lf_u("msg.imapuid", data->imap_uid),
+               lf_u("alarm.type", data->type),
+               lf_u("alarm.retries", data->num_retries));
 
     if (data->type == ALARM_UNSCHEDULED) {
         // process_unscheduled() emits a notification, which is a side-effect;
@@ -2205,15 +2258,18 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
 
     r = dryrun ? mailbox_open_irl(data->mboxname, &mailbox) : mailbox_open_iwl(data->mboxname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        syslog(LOG_ERR, "not found mailbox %s", data->mboxname);
+        xsyslog_ev(LOG_NOTICE, "alarm.mailbox.missing",
+                   lf_intname("mbox.name", data->mboxname));
         /* no record, no worries */
         caldav_alarm_delete_record(data->mboxname, data->imap_uid);
         return;
     }
     else if (r) {
         /* Temporary error - skip over this message for now and try again in 5 minutes */
-        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s for uid %u (%s)",
-               data->mboxname, data->imap_uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "alarm.mailbox.open.failed",
+                   lf_intname("mbox.name", data->mboxname),
+                   lf_u("msg.imapuid", data->imap_uid),
+                   lf_err("error", r));
         caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
         return;
     }
@@ -2222,23 +2278,27 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
     memset(&record, 0, sizeof(struct index_record));
     r = mailbox_find_index_record(mailbox, data->imap_uid, &record);
     if (r == IMAP_NOTFOUND) {
-        syslog(LOG_NOTICE, "not found mailbox %s uid %u",
-               data->mboxname, data->imap_uid);
+        xsyslog_ev(LOG_NOTICE, "alarm.record.missing",
+                   lf_intname("mbox.name", data->mboxname),
+                   lf_u("msg.imapuid", data->imap_uid));
         /* no record, no worries */
         caldav_alarm_delete_record(data->mboxname, data->imap_uid);
         goto done;
     }
     if (r) {
-        syslog(LOG_ERR, "IOERROR: error reading mailbox %s uid %u (%s)",
-               data->mboxname, data->imap_uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "alarm.record.read.failed",
+                   lf_intname("mbox.name", data->mboxname),
+                   lf_u("msg.imapuid", data->imap_uid),
+                   lf_err("error", r));
         /* XXX no index record? item deleted or transient error? */
         caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
         goto done;
     }
 
     if (record.internal_flags & FLAG_INTERNAL_EXPUNGED) {
-        syslog(LOG_NOTICE, "already expunged mailbox %s uid %u",
-               data->mboxname, data->imap_uid);
+        xsyslog_ev(LOG_NOTICE, "alarm.record.expunged",
+                   lf_intname("mbox.name", data->mboxname),
+                   lf_u("msg.imapuid", data->imap_uid));
         /* no longer exists?  nothing to do */
         caldav_alarm_delete_record(data->mboxname, data->imap_uid);
         goto done;
@@ -2267,10 +2327,12 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
 #endif
     default:
         /* XXX  Should never get here */
-        syslog(LOG_ERR, "Unknown/unsupported alarm triggered for"
-               " mailbox %s uid %u of type %d with options 0x%02x",
-               data->mboxname, data->imap_uid,
-               mailbox_mbtype(mailbox), mailbox->i.options);
+        xsyslog_ev(LOG_ERR, "alarm.type.unsupported",
+                   lf_intname("mbox.name", data->mboxname),
+                   lf_u("msg.imapuid", data->imap_uid),
+                   lf_s("mbox.type",
+                        mboxlist_mbtype_to_string(mailbox_mbtype(mailbox))),
+                   lf_llx("mbox.options", mailbox->i.options));
         caldav_alarm_delete_record(data->mboxname, data->imap_uid);
         break;
     }
@@ -2292,12 +2354,13 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
     if (suppress_file) {
         struct stat sbuf;
         if (!stat(suppress_file, &sbuf)) {
-            syslog(LOG_NOTICE, "NOTICE: suppressing alarms due to existence of %s", suppress_file);
+            xsyslog_ev(LOG_NOTICE, "alarm.run.suppressed",
+                       lf_s("sys.path", suppress_file));
             return 0;
         }
     }
 
-    syslog(LOG_DEBUG, "processing alarms");
+    xsyslog_ev(LOG_DEBUG, "alarm.run.started");
 
     if (!runtime) {
         runtime = time(NULL);
@@ -2384,7 +2447,7 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
 
     ptrarray_fini(&rock.list);
 
-    syslog(LOG_DEBUG, "done");
+    xsyslog_ev(LOG_DEBUG, "alarm.run.done");
 
     return rc;
 }
@@ -2402,7 +2465,7 @@ static int upgrade_read_cb(sqlite3_stmt *stmt, void *rock)
 
 EXPORTED int caldav_alarm_upgrade()
 {
-    syslog(LOG_DEBUG, "checking if alarm database needs upgrading");
+    xsyslog_ev(LOG_DEBUG, "alarm.db.upgrade.checking");
 
     struct mailbox *mailbox = NULL;
 
@@ -2419,7 +2482,8 @@ EXPORTED int caldav_alarm_upgrade()
     int i;
     for (i = 0; i < strarray_size(&mailboxes); i++) {
         const char *mboxname = strarray_nth(&mailboxes, i);
-        syslog(LOG_DEBUG, "UPDATING calalarm database for %s", mboxname);
+        xsyslog_ev(LOG_DEBUG, "alarm.db.upgrade.mailbox",
+                   lf_intname("mbox.name", mboxname));
         rc = mailbox_open_iwl(mboxname, &mailbox);
         if (rc) continue;
 

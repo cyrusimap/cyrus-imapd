@@ -341,8 +341,8 @@ static void guess_timezones(jscal_ctx_t *ctx, icalcomponent *ical)
             ctx->gtz = guesstz_open(fname);
             free(fname);
             if (guesstz_error(ctx->gtz)) {
-                xsyslog(LOG_ERR, "can't open guesstz database",
-                        "err<%s>", guesstz_error(ctx->gtz));
+                xsyslog_ev(LOG_ERR, "ical.guesstz.open.failed",
+                           lf_s("error", guesstz_error(ctx->gtz)));
                 guesstz_close(&ctx->gtz);
             }
         }

@@ -6,7 +6,7 @@ use Cassandane::Tiny;
 # rejected whole: neither attendee's status changes, and no override is
 # created.
 sub test_imip_reply_forged_attendee
-    :needs_component_sieve :want_service_http
+    :needs_component_sieve :want_service_http :want_smtpdaemon
     ($self)
 {
     my $CalDAV = $self->{caldav};

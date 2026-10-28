@@ -100,7 +100,7 @@ sub test_futurerelease_fail_onsend_reconstruct
 
     # We should have generated an IOERROR
     $self->assert_syslog_matches($self->{instance},
-                                 qr/IOERROR: failed to find scheduled email/);
+                                 qr/event=alarm\.scheduled_email\.move\.failed alarm\.step=find_email/);
 
     xlog $self, "Verify no events left in the alarmdb";
     $alarmdata = $self->{instance}->getalarmdb();

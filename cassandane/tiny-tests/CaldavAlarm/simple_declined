@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_simple_declined
-    :min_version_3_7
+    :min_version_3_7 :want_smtpdaemon
     ($self)
 {
     my $CalDAV = $self->{caldav};

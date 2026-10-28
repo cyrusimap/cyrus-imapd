@@ -25,9 +25,6 @@
 #include "imap/imap_err.h"
 
 
-/* The two ways a store can be refused for want of quota. */
-#define OVER_QUOTA(r) ((r) == IMAP_QUOTA_EXCEEDED || (r) == IMAP_NO_OVERQUOTA)
-
 EXPORTED int dav_get_validators(struct mailbox *mailbox, void *data,
                                 const char *userid __attribute__((unused)),
                                 struct index_record *record,
@@ -299,10 +296,9 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
                     r = dav_get_validators(mailbox, &ddata, txn->userid, &newrecord,
                                            &etag, &txn->resp_body.lastmod);
                     if (r) {
-                        xsyslog(LOG_ERR, "read index record failed",
-                                         "mailbox=<%s> uid=<%u>",
-                                         mailbox_name(mailbox),
-                                         ddata.imap_uid);
+                        xsyslog_ev(LOG_ERR, "dav.record.lookup.failed",
+                                   lf_mailbox(mailbox),
+                                   lf_u("msg.imapuid", ddata.imap_uid));
                         txn->error.desc = error_message(r);
                         ret = HTTP_SERVER_ERROR;
                     }

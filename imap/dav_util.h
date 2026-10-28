@@ -10,6 +10,9 @@
 
 #define FNAME_DAVSUFFIX "dav" /* per-user DAV DB extension */
 
+/* The two ways a store can be refused for want of quota. */
+#define OVER_QUOTA(r) ((r) == IMAP_QUOTA_EXCEEDED || (r) == IMAP_NO_OVERQUOTA)
+
 /* XML namespace URIs */
 #define XML_NS_DAV      "DAV:"
 #define XML_NS_CALDAV   "urn:ietf:params:xml:ns:caldav"

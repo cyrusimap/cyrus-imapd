@@ -47,7 +47,7 @@ EOF
 
     xlog $self, "We should have generated a syslog message about lack of privs";
     $self->assert_syslog_matches($self->{instance},
-        qr/No schedule-send-invite privilege for user cassandane on Outbox/);
+        qr/event=sched\.send\.denied .*u\.username=cassandane .*dav\.privilege=schedule-send-invite/);
 
     xlog $self, "Restore schedule-send-invite privilege";
     $admintalk->setacl("user.cassandane.#calendars.Outbox",
@@ -113,7 +113,7 @@ EOF
 
     xlog $self, "We should have generated a syslog message about lack of privs";
     $self->assert_syslog_matches($self->{instance},
-        qr/No schedule-send-reply privilege for user cassandane on Outbox/);
+        qr/event=sched\.send\.denied .*u\.username=cassandane .*dav\.privilege=schedule-send-reply/);
 
     xlog $self, "Restore schedule-send-reply privilege";
     $admintalk->setacl("user.cassandane.#calendars.Outbox",

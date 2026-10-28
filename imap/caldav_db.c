@@ -68,7 +68,7 @@ EXPORTED int caldav_init(void)
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&caldav_namespace, NAMESPACE_OPTION_ADMIN))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "dav.namespace.init.failed", lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -646,7 +646,7 @@ EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
     buf_free(&sqlbuf);
 
     if (r) {
-        syslog(LOG_ERR, "caldav error %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "caldav.db.query.failed", lf_err("error", r));
     }
     return r;
 }
@@ -1839,7 +1839,7 @@ EXPORTED int caldav_get_floating_events(struct caldav_db *caldavdb,
 
     r = sqldb_exec(caldavdb->db, CMD_SELFLOATING, bval, &read_cb, &rrock);
     if (r) {
-        syslog(LOG_ERR, "caldav error %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "caldav.db.query.failed", lf_err("error", r));
     }
 
     return r;
