@@ -32,12 +32,6 @@ sub test_plus_address_mutf7
         plusaddr => "a&b",
         mailbox => "a&b",
     },
-# Can't test UTF-8 plus address until we support SMTPUTF8
-#    {
-#        uid => 2,
-#        plusaddr => "☃",
-#        mailbox => "☃",
-#    },
     {
         uid => 2,
         plusaddr => "a&-b", # mUTF7-encoded

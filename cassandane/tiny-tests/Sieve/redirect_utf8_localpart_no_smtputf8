@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_redirect_utf8_localpart_no_smtputf8
+    :want_smtpdaemon
+    ($self)
+{
+    xlog $self, "Redirect to a UTF-8 local-part";
+    $self->{instance}->install_sieve_script(<<'EOF'
+redirect "gøril@example.com";
+EOF
+    );
+
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    xlog $self, "A relay without SMTPUTF8 gets no transaction";
+    my @lines = $self->{instance}->get_smtpclient_telemetry('lmtp');
+    $self->assert_cmp_deeply([], [ grep { m/MAIL FROM:|RCPT TO:/ } @lines ]);
+
+    xlog $self, "The failed redirect means an implicit keep";
+    my $talk = $self->{store}->get_client();
+    $talk->select("INBOX");
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+}

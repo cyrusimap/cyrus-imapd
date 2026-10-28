@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_lmtp_smtputf8_idn_domain
+    :VirtDomains :NoAltNameSpace
+    ($self)
+{
+    xlog $self, "A U-label domain finds the user stored under its A-label";
+    $self->{instance}->create_user('foo@xn--grn-1na.example');
+
+    my $lmtp = $self->lmtp_connect();
+    $self->lmtp_cmd($lmtp, 'LHLO localhost');
+
+    my ($code) = $self->lmtp_cmd($lmtp, 'MAIL FROM:<sender@example.com> SMTPUTF8');
+    $self->assert_num_equals(250, $code);
+    ($code) = $self->lmtp_cmd($lmtp, 'RCPT TO:<foo@grøn.example>');
+    $self->assert_num_equals(250, $code);
+
+    my @codes = $self->lmtp_data($lmtp, 1, <<"END");
+From: sender\@example.com\r
+To: foo\@grøn.example\r
+Subject: test\r
+\r
+test\r
+END
+    $self->assert_cmp_deeply([250], \@codes);
+    $self->lmtp_cmd($lmtp, 'QUIT');
+
+    my $store = $self->{instance}->get_service('imap')->create_store(
+        username => 'foo@xn--grn-1na.example');
+    my $talk = $store->get_client();
+    $talk->select('INBOX');
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+}

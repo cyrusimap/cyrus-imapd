@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+use Encode qw(decode_utf8);
+
+sub test_emailsubmission_smtputf8
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([ [ 'Identity/get', {}, "R1" ] ]);
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    $self->make_message("foo", body => "an email\r\n") or die;
+    $res = $jmap->CallMethods([ [ 'Email/query', {}, "R1" ] ]);
+    my $emailid = $res->[0][1]->{ids}[0];
+
+    my $submit = sub ($from, @rcpts) {
+        my $res = $jmap->CallMethods([ [ 'EmailSubmission/set', {
+            create => {
+                '1' => {
+                    identityId => $identityid,
+                    emailId  => $emailid,
+                    envelope => {
+                        mailFrom => { email => $from },
+                        rcptTo => [ map { { email => $_ } } @rcpts ],
+                    },
+                },
+            },
+        }, "R1" ] ]);
+        return $res->[0][1];
+    };
+    my $rcpt_lines = sub {
+        return map { decode_utf8($_) } grep { m/RCPT TO:/ }
+            $self->{instance}->get_smtpclient_telemetry('http');
+    };
+
+    xlog $self, "Without SMTPUTF8 at the relay, a U-label domain is sent as A-labels";
+    $res = $submit->('from@localhost', 'info@grå.org');
+    $self->assert_not_null($res->{created}{1});
+    $self->assert_matches(qr/<info\@xn--gr-zia\.org>/, ($rcpt_lines->())[-1]);
+
+    xlog $self, "but a UTF-8 local-part can't be sent at all";
+    $res = $submit->('from@localhost', 'rcpt@localhost', 'gøril@grå.org');
+    $self->assert_cmp_deeply({
+        type => 'invalidRecipients',
+        invalidRecipients => [ 'gøril@grå.org' ],
+        description => ignore(),
+    }, $res->{notCreated}{1});
+
+    $res = $submit->('gøril@localhost', 'rcpt@localhost');
+    $self->assert_str_equals('forbiddenMailFrom', $res->{notCreated}{1}{type});
+
+    xlog $self, "With SMTPUTF8 at the relay, the address goes as UTF-8";
+    $self->{instance}->set_smtpd({ helo => [
+        250, "localhost", "AUTH", "DSN", "SIZE 10000", "ENHANCEDSTATUSCODES",
+        "SMTPUTF8"
+    ] });
+    $res = $submit->('from@localhost', 'gøril@grå.org');
+    $self->assert_not_null($res->{created}{1});
+    $self->assert_matches(qr/<gøril\@grå\.org>/, ($rcpt_lines->())[-1]);
+}

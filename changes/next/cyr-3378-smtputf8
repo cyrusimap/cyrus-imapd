@@ -1,0 +1,35 @@
+Description:
+
+Adds SMTPUTF8 (RFC 6531) support.  lmtpd accepts UTF-8 envelope addresses
+when the client requests SMTPUTF8, including plus-addresses that name a
+folder in UTF-8.  Outgoing mail (Sieve redirect and vacation, JMAP
+EmailSubmission, iMIP) uses SMTPUTF8 when the relay supports it, and
+otherwise sends internationalized domains as A-labels.  A message for a
+non-ASCII local-part is refused when the relay doesn't support SMTPUTF8.
+JMAP advertises "smtputf8" in submissionExtensions when the relay does.
+
+
+Documentation:
+
+docsrc/rfc-support.rst, and the imapd.conf options listed below.
+
+
+Config changes:
+
+lmtpd advertises SMTPUTF8 exactly when imapd advertises UTF8=ACCEPT: when
+both munge8bit and reject8bit are disabled.  lmtp_strict_rfc2821 no longer
+applies to SMTPUTF8 transactions.  httpd logs
+jmap.submission.smtputf8.mismatch when the outbound relay's SMTPUTF8
+support differs from lmtpd's.
+
+Changed: lmtp_strict_rfc2821, munge8bit, reject8bit
+
+
+Upgrade instructions:
+
+None.  With the default munge8bit enabled, lmtpd behaves as before.
+
+
+GitHub issue:
+
+https://github.com/cyrusimap/cyrus-imapd/pull/6231
