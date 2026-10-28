@@ -1494,6 +1494,27 @@ static void ws_push_enable(struct transaction_t *txn, json_t *req)
     strarray_fini(&types);
 }
 
+/* A WebSocket connection may be shared by many requests, so the X-Trace-Id of
+ * the upgrade request only identifies whoever opened it.  Each request names
+ * its own trace id in logHeaders; use that for its events and log line. */
+static void ws_set_trace_id(json_t *req)
+{
+    json_t *jlogHeaders = json_object_get(req, "logHeaders");
+    const char *traceid = NULL;
+    const char *hdrname;
+    json_t *jval;
+
+    json_object_foreach(jlogHeaders, hdrname, jval) {
+        if (!strcasecmp(hdrname, "X-Trace-Id")) {
+            traceid = json_string_value(jval);
+            break;
+        }
+    }
+
+    if (trace_set_id(traceid, 0) == -1)
+        trace_set_id(NULL, 0);
+}
+
 /*
  * WebSockets data callback ('jmap' sub-protocol): Process JMAP API request.
  *
@@ -1531,6 +1552,8 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
         /* Parse the JSON request */
         ret = parse_json_body(txn, &req);
     }
+
+    ws_set_trace_id(req);
 
     if (ret) {
         ret = jmap_error_response(txn, ret, &res);

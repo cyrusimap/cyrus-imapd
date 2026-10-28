@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+# Requests sharing one JMAP WebSocket connection each carry their own trace
+# id in logHeaders, and the events they cause must have that one, not the
+# one from the upgrade request or an earlier request on the connection.
+
+sub test_jmap_ws_trace_id
+    :needs_dependency_wslay
+    ($self)
+{
+    eval { require Cassandane::JMAPTesterWS; 1 } or do {
+        xlog $self, "Cassandane::JMAPTesterWS not available; skipping";
+        return;
+    };
+
+    my $ws = $self->default_user->new_jmaptester_ws;
+
+    my sub create_mailbox ($name, $log_headers) {
+        $self->{instance}->getnotify();
+
+        my $res = $ws->request({
+            using => [
+                'urn:ietf:params:jmap:core',
+                'urn:ietf:params:jmap:mail',
+            ],
+            methodCalls => [[
+                'Mailbox/set', { create => { mb => { name => $name } } }, 'R1',
+            ]],
+            ($log_headers ? (logHeaders => $log_headers) : ()),
+        });
+        $self->assert_not_null(
+            $res->single_sentence('Mailbox/set')->arguments->{created}{mb});
+
+        my @events = map { decode_json($_->{MESSAGE}) }
+                     $self->{instance}->getnotify->@*;
+        $self->assert(0+@events, "creating $name should generate an event");
+        return @events;
+    }
+
+    for my $trace_id ('trace.one', 'trace.two') {
+        my @events = create_mailbox($trace_id, { 'X-Trace-Id' => $trace_id });
+        for my $e (@events) {
+            $self->assert_str_equals(
+                $trace_id,
+                $e->{'vnd.fastmail.traceId'} // '',
+                "event $e->{event} has wrong vnd.fastmail.traceId",
+            );
+        }
+    }
+
+    my @events = create_mailbox('untraced', undef);
+    for my $e (@events) {
+        $self->assert_null($e->{'vnd.fastmail.traceId'},
+            "event $e->{event} kept an earlier request's trace id");
+    }
+}
