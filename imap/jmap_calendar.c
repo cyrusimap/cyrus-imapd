@@ -1489,7 +1489,8 @@ static void setcalendar_parseprops(jmap_req_t *req,
         const char *sharee;
         json_t *jrights;
         json_object_foreach(jprop, sharee, jrights) {
-            if (!mboxname_policycheck(sharee, 0) && json_object_size(jrights)) {
+            if (!mboxname_policycheck_userid(sharee) &&
+                json_object_size(jrights)) {
                 const char *right;
                 json_t *jval;
                 json_object_foreach(jrights, right, jval) {
