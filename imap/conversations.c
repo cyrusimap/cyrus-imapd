@@ -4,6 +4,7 @@
 
 #include <config.h>
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -136,6 +137,20 @@ EXPORTED char *conversations_getmboxpath(const char *mboxname)
 static int _compactids_always(void)
 {
     return config_getenum(IMAPOPT_COMPACT_IDS) == IMAP_ENUM_COMPACT_IDS_ALWAYS;
+}
+
+static int _stop_cb(void *rock __attribute__((unused)),
+                    const char *key __attribute__((unused)),
+                    size_t keylen __attribute__((unused)),
+                    const char *val __attribute__((unused)),
+                    size_t vallen __attribute__((unused)))
+{
+    return CYRUSDB_DONE;
+}
+
+static bool _db_is_empty(struct db *db, struct txn **tidptr)
+{
+    return cyrusdb_foreach(db, "", 0, NULL, _stop_cb, NULL, tidptr) == 0;
 }
 
 static int _init_counted(struct conversations_state *state,
@@ -375,21 +390,7 @@ EXPORTED int conversations_open_path_version(const char *fname,
         open->user_nslock = user_nslock_lock(userid, locktype);
     }
 
-    /* set version -
-       for new files we use the specified version or CONVERSATIONS_VERSION,
-       otherwise we assume v0 unless/until we read VERSIONKEY
-    */
-    struct stat sbuf;
-    int is_new = 0;
-    if (!stat(fname, &sbuf))
-        open->s.version = 0;
-    else {
-        is_new = 1;
-        if (version)
-            open->s.version = version;
-        else
-            open->s.version = CONVERSATIONS_VERSION;
-    }
+    bool is_new = false;
 
     /* open db */
     int flags = CYRUSDB_CREATE | (shared ? (CYRUSDB_SHARED|CYRUSDB_NOCRC) : CYRUSDB_CONVERT);
@@ -411,6 +412,14 @@ EXPORTED int conversations_open_path_version(const char *fname,
             return IMAP_MAILBOX_BADFORMAT;
         }
         open->s.version = version;
+    }
+    else if (_db_is_empty(open->s.db, &open->s.txn)) {
+        /* new, even if a shared open already created the file */
+        is_new = true;
+        open->s.version = version ? version : CONVERSATIONS_VERSION;
+    }
+    else {
+        open->s.version = 0;
     }
 
     /* are compactids enabled? */

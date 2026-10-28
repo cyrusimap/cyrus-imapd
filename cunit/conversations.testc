@@ -76,6 +76,94 @@ static void test_open(void)
     CU_ASSERT_EQUAL(r, 0);
 }
 
+/* A shared open of a missing db creates an empty file; the next writer
+ * must still treat it as new rather than as a version 0 db. */
+static void test_open_shared_first(void)
+{
+    int r;
+    struct conversations_state *state = NULL;
+    struct stat sbuf;
+
+    r = conversations_open_path(DBNAME, NULL, 1/*shared*/, &state);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_EQUAL(state->version, CONVERSATIONS_VERSION);
+    r = conversations_abort(&state);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(stat(DBNAME, &sbuf), 0);
+
+    r = conversations_open_path(DBNAME, NULL, 1/*shared*/, &state);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_EQUAL(state->version, CONVERSATIONS_VERSION);
+    r = conversations_abort(&state);
+    CU_ASSERT_EQUAL(r, 0);
+
+    r = conversations_open_path(DBNAME, NULL, 0/*shared*/, &state);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_EQUAL(state->version, CONVERSATIONS_VERSION);
+    r = conversations_commit(&state);
+    CU_ASSERT_EQUAL(r, 0);
+
+    r = conversations_open_path(DBNAME, NULL, 1/*shared*/, &state);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_EQUAL(state->version, CONVERSATIONS_VERSION);
+    r = conversations_abort(&state);
+    CU_ASSERT_EQUAL(r, 0);
+}
+
+static void test_open_shared_first_compact_always(void)
+{
+    int r;
+    struct conversations_state *state = NULL;
+
+    imapopts[IMAPOPT_COMPACT_IDS].val.e = IMAP_ENUM_COMPACT_IDS_ALWAYS;
+
+    r = conversations_open_path(DBNAME, NULL, 1/*shared*/, &state);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_EQUAL(state->compact_emailids, 1);
+    r = conversations_abort(&state);
+    CU_ASSERT_EQUAL(r, 0);
+
+    r = conversations_open_path(DBNAME, NULL, 0/*shared*/, &state);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_EQUAL(state->compact_emailids, 1);
+    r = conversations_commit(&state);
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* the setting was recorded in the db */
+    imapopts[IMAPOPT_COMPACT_IDS].val.e = IMAP_ENUM_COMPACT_IDS_PER_USER;
+
+    r = conversations_open_path(DBNAME, NULL, 1/*shared*/, &state);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_EQUAL(state->version, CONVERSATIONS_VERSION);
+    CU_ASSERT_EQUAL(state->compact_emailids, 1);
+    r = conversations_abort(&state);
+    CU_ASSERT_EQUAL(r, 0);
+}
+
+/* A db with content but no $VERSION key predates versioning. */
+static void test_open_unversioned(void)
+{
+    int r;
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    struct conversations_state *state = NULL;
+
+    r = cyrusdb_open(config_conversations_db, DBNAME, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = cyrusdb_store(db, "$FOLDER_NAMES", 13, "()", 2, &txn);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = cyrusdb_commit(db, txn);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    r = conversations_open_path(DBNAME, NULL, 0/*shared*/, &state);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_EQUAL(state->version, 0);
+    r = conversations_abort(&state);
+    CU_ASSERT_EQUAL(r, 0);
+}
+
 static void test_getset(void)
 {
     int r;
