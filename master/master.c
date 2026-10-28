@@ -676,6 +676,14 @@ static int decode_wait_status(struct centry *c, pid_t pid, int status)
         case EX_TEMPFAIL:
             syslog(LOG_DEBUG, "%s was killed", desc);
             break;
+        case EX_PROTOCOL:
+            if (c && c->si != SERVICE_NONE && Services[c->si].listen) {
+                /* the client misbehaved, not the service */
+                syslog(LOG_DEBUG, "%s exited after a client protocol error",
+                       desc);
+                break;
+            }
+            GCC_FALLTHROUGH
         default:
             syslog(LOG_ERR, "%s exited, status %d", desc, ex);
             failed = 1;

@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <syslog.h>
+#include <sysexits.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <ctype.h>
@@ -280,6 +281,12 @@ main(int argc, char **argv)
     else if (!strcmp(mode, "exit"))
     {
         lemming_exit();
+    }
+    else if (!strcmp(mode, "protocol"))
+    {
+        /* as a service does when its client breaks the protocol */
+        syslog(LOG_ERR, "lemming exiting, code EX_PROTOCOL");
+        exit(EX_PROTOCOL);
     }
     else if (!strcmp(mode, "abort"))
     {
