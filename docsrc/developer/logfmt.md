@@ -144,6 +144,27 @@ Rules:
 - An event name is an interface.  Once something outside the tree parses it,
   renaming it is a breaking change; see "Changing an existing event" below.
 
+### One event, with a key for the step
+
+An operation that can give up in a dozen places does not want a dozen event
+names.  Give the whole operation one event, and let a key say where it was:
+
+```c
+xsyslog_ev(LOG_ERR, "caldav.defaultalarms.migrate.failed",
+           lf_s("cal.step", "open_mailbox"),
+           lf_mbname("mbox.name", mbname),
+           lf_err("error", r));
+```
+
+The key is named for the subsystem -- `cal.step`, `alarm.step`, `http.step`,
+`xfer.step` -- and its values are a short, fixed vocabulary.
+`<subsystem>.reason` does the same for a decision rather than a position:
+why a message was skipped, why a record was dropped.
+
+Failures by step are then a group-by rather than a dozen separate counters,
+and a new step is a new value instead of a new name for every consumer to
+learn.
+
 ## Naming keys
 
 ```
