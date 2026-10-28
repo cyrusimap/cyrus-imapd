@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+# An addressbook that is no longer shared is destroyed for the sharee, who
+# may have it cached.
+
+sub test_addressbook_changes_unshare ($self)
+{
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+
+    $admin->create("user.master");
+    $admin->setacl("user.master", admin => 'lrswipkxtecdan');
+    $admin->setacl("user.master", master => 'lrswipkxtecdn');
+
+    my $mastalk = Net::CardDAVTalk->new(
+        user => "master",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "share two addressbooks with cassandane";
+    my @abooks = map { $mastalk->NewAddressBook($_, name => $_) } qw(A B);
+    for my $abook (@abooks) {
+        $admin->setacl("user.master.#addressbooks.$abook",
+                       cassandane => 'lr') or die;
+    }
+
+    my $res = $jmap->CallMethods([
+        ['AddressBook/get', { accountId => 'master', ids => undef }, 'R1'],
+    ]);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    xlog $self, "unshare one of them";
+    $admin->setacl("user.master.#addressbooks.$abooks[0]",
+                   cassandane => '') or die;
+
+    $res = $jmap->CallMethods([
+        ['AddressBook/changes', { accountId => 'master', sinceState => $state },
+         'R1'],
+    ]);
+    $self->assert_cmp_deeply({
+        created => [], updated => [], destroyed => [ $abooks[0] ],
+    }, { map { $_ => $res->[0][1]{$_} } qw(created updated destroyed) });
+}
