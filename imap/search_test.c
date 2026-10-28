@@ -102,7 +102,9 @@ static int do_search(const char *mboxname,
 
     index_checkflags(state, 0, 0);
 
-    searchargs = new_searchargs(".", GETSEARCH_CHARSET_KEYWORD, &ns, userid, init.authstate, /*isadmin*/0);
+    searchargs = new_searchargs(".",
+                                GETSEARCH_CHARSET_KEYWORD | GETSEARCH_FUZZY,
+                                &ns, userid, init.authstate, /*isadmin*/0);
 
     gettimeofday(&start_time, NULL);
 
@@ -173,7 +175,8 @@ static int do_serialise(char **words, int nwords)
     pin = prot_readmap(querytext.s, querytext.len);
     pout = prot_new(/*fd*/0, /*write*/1);
 
-    searchargs = new_searchargs(".", GETSEARCH_CHARSET_KEYWORD, &ns, userid, auth_newstate(userid), /*isadmin*/0);
+    searchargs = new_searchargs(".", GETSEARCH_CHARSET_KEYWORD|GETSEARCH_FUZZY,
+                                &ns, userid, auth_newstate(userid), /*isadmin*/0);
 
     r = get_search_program(pin, pout, 0/*quirks*/, searchargs);
     if (r != '\r') {

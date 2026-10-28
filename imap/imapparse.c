@@ -1138,10 +1138,12 @@ static int get_search_criterion(struct protstream *pin,
             string_match(parent, arg.s, criteria.s, base);
         }
         else if (!strcmp(criteria.s, "fuzzy")) {        /* RFC 6203 */
+            /* Without fuzzy matching, accept and ignore FUZZY */
+            int fuzzy = !!(base->state & GETSEARCH_FUZZY);
             if (c != ' ') goto missingarg;
-            base->fuzzy_depth++;
+            base->fuzzy_depth += fuzzy;
             c = get_search_criterion(pin, pout, parent, base, depth+1);
-            base->fuzzy_depth--;
+            base->fuzzy_depth -= fuzzy;
             if (c <= EOF) return c;
 
             base->client_behavior_mask |= CB_SEARCHFUZZY;
@@ -1587,33 +1589,37 @@ EXPORTED int get_search_program(struct protstream *pin,
     int c;
 
     /* Set FUZZY search according to config and quirks */
-    if (client_quirks & QUIRK_SEARCHFUZZY) {
-        /* Quirks overrule anything */
-        searchargs->fuzzy_depth++;
-    }
-    else {
-        int config_fuzzy = -1;
+    if (searchargs->state & GETSEARCH_FUZZY) {
+        if (client_quirks & QUIRK_SEARCHFUZZY) {
+            /* Quirks overrule anything */
+            searchargs->fuzzy_depth++;
+        }
+        else {
+            int config_fuzzy = -1;
 
-        if (searchargs->userid) {
-            static const char *annot = IMAP_ANNOT_NS "search-fuzzy-always";
-            char *inbox = mboxname_user_mbox(searchargs->userid, NULL);
-            struct buf val = BUF_INITIALIZER;
+            if (searchargs->userid) {
+                static const char *annot = IMAP_ANNOT_NS "search-fuzzy-always";
+                char *inbox = mboxname_user_mbox(searchargs->userid, NULL);
+                struct buf val = BUF_INITIALIZER;
 
-            if (!annotatemore_lookupmask(inbox, annot, searchargs->userid, &val)
-                && buf_len(&val)) {
-                /* User may override global config */
-                config_fuzzy = config_parse_switch(buf_cstring(&val));
-                if (config_fuzzy > 0)
-                    searchargs->fuzzy_depth++;
+                if (!annotatemore_lookupmask(inbox, annot,
+                                             searchargs->userid, &val)
+                    && buf_len(&val)) {
+                    /* User may override global config */
+                    config_fuzzy = config_parse_switch(buf_cstring(&val));
+                    if (config_fuzzy > 0)
+                        searchargs->fuzzy_depth++;
+                }
+
+                buf_free(&val);
+                free(inbox);
             }
 
-            buf_free(&val);
-            free(inbox);
-        }
-
-        if (config_fuzzy < 0 && config_getswitch(IMAPOPT_SEARCH_FUZZY_ALWAYS)) {
-            /* Use global config */
-            searchargs->fuzzy_depth++;
+            if (config_fuzzy < 0 &&
+                config_getswitch(IMAPOPT_SEARCH_FUZZY_ALWAYS)) {
+                /* Use global config */
+                searchargs->fuzzy_depth++;
+            }
         }
     }
 

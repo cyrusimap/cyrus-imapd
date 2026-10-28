@@ -1,0 +1,18 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_searchfuzzy_always_none
+    :SearchEngineNone :SearchFuzzyAlways
+    ($self)
+{
+    my $imap = $self->{store}->get_client();
+
+    $self->make_message("I run", body => "they jumped") || die;
+    $self->make_message("unrelated", body => "nothing") || die;
+
+    xlog $self, "search_fuzzy_always has no effect without fuzzy matching";
+    my $uids = $imap->search('subject', 'run');
+    $self->assert_cmp_deeply([1], $uids);
+    $uids = $imap->search('body', 'jump');
+    $self->assert_cmp_deeply([1], $uids);
+}

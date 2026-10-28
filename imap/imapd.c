@@ -68,6 +68,7 @@
 #include "proc.h"
 #include "prometheus.h"
 #include "quota.h"
+#include "search_engines.h"
 #include "seen.h"
 #include "sieve_db.h"
 #include "slowio.h"
@@ -176,6 +177,7 @@ static const char *plaintextloginalert = NULL;
 static const char *imapd_jmapaccess_url = NULL;
 static int imapd_jmapaccess_enabled = 0;
 static int imapd_preview_enabled = 0;
+static int imapd_searchfuzzy_enabled = 0;
 static int ignorequota = 0;
 static int sync_sieve_mailbox_enabled = 0;
 static int sync_archive_enabled = 0;
@@ -426,7 +428,8 @@ static struct capa_struct base_capabilities[] = {
     { "SASL-IR",               CAPA_PREAUTH,            { 0 } }, /* RFC 4959 */
     { "SAVEDATE",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8514 */
     { "SAVELIMIT=",            0, /* not implemented */ { 0 } }, /* RFC 9738 */
-    { "SEARCH=FUZZY",          CAPA_POSTAUTH,           { 0 } }, /* RFC 6203 */
+    { "SEARCH=FUZZY",          CAPA_POSTAUTH|CAPA_STATE,         /* RFC 6203 */
+      { .statep = &imapd_searchfuzzy_enabled }                },
     { "SEARCHRES",             CAPA_POSTAUTH,           { 0 } }, /* RFC 5182 */
     { "SORT",                  CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
     { "SORT=DISPLAY",          CAPA_POSTAUTH,           { 0 } }, /* RFC 5957 */
@@ -1085,6 +1088,9 @@ int service_init(int argc, char **argv, char **envp)
 
     const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
     imapd_preview_enabled = !strncmpsafe(annot, "/shared/", 8);
+
+    imapd_searchfuzzy_enabled =
+        !!(search_engine()->flags & SEARCH_FLAG_CAN_FUZZY);
 
     /* setup for sending IMAP IDLE/NOTIFY notifications */
     if ((imapd_idle_enabled = idle_enabled())) {
@@ -6334,6 +6340,9 @@ static void cmd_search(const char *tag, const char *cmd)
     if (!(client_capa & ENABLED_UTF8_ACCEPT)) {
         state |= GETSEARCH_CHARSET_KEYWORD;
     }
+    if (imapd_searchfuzzy_enabled) {
+        state |= GETSEARCH_FUZZY;
+    }
 
     /* local mailbox */
     searchargs = new_searchargs(tag, state,
@@ -6574,7 +6583,9 @@ static void cmd_sort(char *tag, int usinguid)
     }
 
     /* local mailbox */
-    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
+    int state = GETSEARCH_CHARSET_FIRST |
+        (imapd_searchfuzzy_enabled ? GETSEARCH_FUZZY : 0);
+    searchargs = new_searchargs(tag, state,
                                 &imapd_namespace, imapd_userid, imapd_authstate,
                                 imapd_userisadmin || imapd_userisproxyadmin);
 
@@ -6681,7 +6692,9 @@ static void cmd_thread(char *tag, int usinguid)
         return;
     }
 
-    searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
+    int state = GETSEARCH_CHARSET_FIRST |
+        (imapd_searchfuzzy_enabled ? GETSEARCH_FUZZY : 0);
+    searchargs = new_searchargs(tag, state,
                                 &imapd_namespace, imapd_userid, imapd_authstate,
                                 imapd_userisadmin || imapd_userisproxyadmin);
 

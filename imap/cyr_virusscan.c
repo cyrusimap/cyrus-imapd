@@ -311,8 +311,10 @@ int main (int argc, char *argv[])
         scan_in = prot_readmap(search_str, strlen(search_str)+1); /* inc NUL */
         scan_out = prot_new(2, 1);
 
-        srock.searchargs = new_searchargs("*", GETSEARCH_CHARSET_KEYWORD,
-                                          &scan_namespace, NULL, NULL, 1);
+        srock.searchargs =
+            new_searchargs("*",
+                           GETSEARCH_CHARSET_KEYWORD | GETSEARCH_FUZZY,
+                           &scan_namespace, NULL, NULL, 1);
         c = get_search_program(scan_in, scan_out, 0/*quirks*/, srock.searchargs);
         prot_free(scan_in);
         prot_flush(scan_out);

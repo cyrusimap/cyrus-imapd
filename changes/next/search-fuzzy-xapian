@@ -1,0 +1,29 @@
+Description:
+
+imapd advertises SEARCH=FUZZY only when search_engine is xapian,
+the one engine that does fuzzy matching, and otherwise accepts and
+ignores the FUZZY search key.
+For the same reason, search_fuzzy_always, the search-fuzzy-always annotation
+and the searchfuzzy client quirk now have no effect unless search_engine is
+xapian.
+
+
+Documentation:
+
+The RFC 6203 note on the RFC support page;
+imapd.conf(5), search_fuzzy_always.
+
+
+Config changes:
+
+search_fuzzy_always has no effect unless search_engine is xapian.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+#6596
