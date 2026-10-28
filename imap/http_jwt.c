@@ -83,7 +83,7 @@ static EVP_PKEY *read_public_key(struct buf *pem)
 
     if (pkey) {
         if (!EVP_PKEY_is_a(pkey, "RSA")) {
-            xsyslog(LOG_ERR, "Unsupported public key", NULL);
+            xsyslog_ev(LOG_ERR, "jwt.publickey.unsupported");
             EVP_PKEY_free(pkey);
             pkey = NULL;
         }
@@ -103,7 +103,8 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
 
     FILE *fp = fopen(fname, "r");
     if (!fp) {
-        xsyslog(LOG_ERR, "Can not open key file", "fname=<%s>", fname);
+        xsyslog_ev(LOG_ERR, "jwt.keyfile.open.failed",
+                   lf_s("sys.path", fname));
         goto done;
     }
 
@@ -116,7 +117,10 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
 
         if (!strcmp("-----BEGIN PUBLIC KEY-----", buf_cstring(&line))) {
             if (state != NONE) {
-                xsyslog(LOG_ERR, "Unexpected line", "linenum=<%zu>", linenum);
+                xsyslog_ev(LOG_ERR, "jwt.keyfile.invalid",
+                           lf_s("sys.path", fname),
+                           lf_zu("jwt.lineno", linenum),
+                           lf_s("jwt.reason", "unexpected_line"));
                 goto done;
             }
             buf_append(&buf, &line);
@@ -127,7 +131,10 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
 
         if (!strcmp("-----END PUBLIC KEY-----", buf_cstring(&line))) {
             if (state != PUBLIC) {
-                xsyslog(LOG_ERR, "Unexpected line", "linenum=<%zu>", linenum);
+                xsyslog_ev(LOG_ERR, "jwt.keyfile.invalid",
+                           lf_s("sys.path", fname),
+                           lf_zu("jwt.lineno", linenum),
+                           lf_s("jwt.reason", "unexpected_line"));
                 goto done;
             }
             buf_append(&buf, &line);
@@ -135,7 +142,10 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
 
             EVP_PKEY *pkey = read_public_key(&buf);
             if (!pkey) {
-                xsyslog(LOG_ERR, "Invalid public key", "linenum=<%zu>", linenum);
+                xsyslog_ev(LOG_ERR, "jwt.keyfile.invalid",
+                           lf_s("sys.path", fname),
+                           lf_zu("jwt.lineno", linenum),
+                           lf_s("jwt.reason", "invalid_public_key"));
                 goto done;
             }
             ptrarray_append(keys, pkey);
@@ -147,7 +157,10 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
 
         if (!strcmp("-----BEGIN HMAC KEY-----", buf_cstring(&line))) {
             if (state != NONE) {
-                xsyslog(LOG_ERR, "Unexpected line", "linenum=<%zu>", linenum);
+                xsyslog_ev(LOG_ERR, "jwt.keyfile.invalid",
+                           lf_s("sys.path", fname),
+                           lf_zu("jwt.lineno", linenum),
+                           lf_s("jwt.reason", "unexpected_line"));
                 goto done;
             }
             state = HMAC;
@@ -156,13 +169,19 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
 
         if (!strcmp("-----END HMAC KEY-----", buf_cstring(&line))) {
             if (state != HMAC) {
-                xsyslog(LOG_ERR, "Unexpected line", "linenum=<%zu>", linenum);
+                xsyslog_ev(LOG_ERR, "jwt.keyfile.invalid",
+                           lf_s("sys.path", fname),
+                           lf_zu("jwt.lineno", linenum),
+                           lf_s("jwt.reason", "unexpected_line"));
                 goto done;
             }
 
             EVP_PKEY *pkey = read_hmac_key(&buf);
             if (!pkey) {
-                xsyslog(LOG_ERR, "Invalid hmac key", "linenum=<%zu>", linenum);
+                xsyslog_ev(LOG_ERR, "jwt.keyfile.invalid",
+                           lf_s("sys.path", fname),
+                           lf_zu("jwt.lineno", linenum),
+                           lf_s("jwt.reason", "invalid_hmac_key"));
                 goto done;
             }
             ptrarray_append(keys, pkey);
@@ -200,12 +219,13 @@ HIDDEN int http_jwt_init(const char *keydir, int age)
     char *paths[2] = { (char *) keydir, NULL };
     FTS *fts = fts_open(paths, 0, NULL);
     if (!fts) {
-        xsyslog(LOG_ERR, "Can not open keydir", "keydir=<%s>", keydir);
+        xsyslog_ev(LOG_ERR, "jwt.keydir.open.failed",
+                   lf_s("sys.path", keydir));
         goto done;
     }
 
     if (age < 0) {
-        xsyslog(LOG_ERR, "Maximum age must not be negative", "age=<%d>", age);
+        xsyslog_ev(LOG_ERR, "jwt.maxage.invalid", lf_d("jwt.maxage", age));
         goto done;
     }
     max_age = age;
@@ -221,14 +241,15 @@ HIDDEN int http_jwt_init(const char *keydir, int age)
         if (fe->fts_info == FTS_F || fe->fts_info == FTS_SL) {
             r = read_keyfile(fe->fts_accpath, &pkeys);
             if (r) {
-                xsyslog(LOG_ERR, "Can not read keyfile", "keyfile=<%s>", fe->fts_accpath);
+                xsyslog_ev(LOG_ERR, "jwt.keyfile.read.failed",
+                           lf_s("sys.path", fe->fts_accpath));
                 goto done;
             }
         }
     }
 
     if (!ptrarray_size(&pkeys)) {
-        xsyslog(LOG_ERR, "No keys found in keydir", "keydir=<%s>", keydir);
+        xsyslog_ev(LOG_ERR, "jwt.keydir.empty", lf_s("sys.path", keydir));
         goto done;
     }
 
@@ -262,13 +283,15 @@ static int parse_token(struct jwt *jwt, const char *in, size_t inlen)
             continue;
         }
 
-        xsyslog(LOG_ERR, "Token contains invalid character",
-                "char=<%c> hex=<%#0x> position=<%zu>",
-                in[i] & 0xff, in[i] & 0xff, i);
+        xsyslog_ev(LOG_WARNING, "jwt.token.invalid",
+                   lf_s("jwt.reason", "invalid_character"),
+                   lf_llx("jwt.token.byte", in[i] & 0xff),
+                   lf_zu("jwt.token.offset", i));
         return 0;
     }
     if (ndot != 2 || dot[0] == 0 || dot[1] == inlen-1 || dot[1] - dot[0] <= 1) {
-        xsyslog(LOG_ERR, "Token has invalid JWS structure", NULL);
+        xsyslog_ev(LOG_WARNING, "jwt.token.invalid",
+                   lf_s("jwt.reason", "bad_jws_structure"));
         return 0;
     }
 
@@ -296,12 +319,24 @@ static int validate_pkey_type(struct jwt *jwt, EVP_PKEY *pkey)
     return 0;
 }
 
+/* The message for the OpenSSL error that failed the last call, if any.
+ *
+ * The call's own return value is just a flag: the detail is on the thread's
+ * error queue, and reading it clears it.
+ */
+static const char *ssl_error_string(void)
+{
+    unsigned long err = ERR_get_error();
+    return err ? ERR_error_string(err, NULL) : NULL;
+}
+
 static int validate_signature(struct jwt *jwt)
 {
     buf_reset(&jwt->buf);
 
     if (charset_decode(&jwt->buf, jwt->sig, jwt->siglen, ENCODING_BASE64URL)) {
-        xsyslog(LOG_ERR, "Cannot decode token signature", NULL);
+        xsyslog_ev(LOG_WARNING, "jwt.token.invalid",
+                   lf_s("jwt.reason", "undecodable_signature"));
         return 0;
     }
 
@@ -326,22 +361,25 @@ static int validate_signature(struct jwt *jwt)
 
             int r = EVP_DigestSignInit(ctx, NULL, jwt->emd, NULL, pkey);
             if (r != 1) {
-                xsyslog(LOG_ERR, "Cannot initialize digest context",
-                        "sslerr=<%s>", ERR_error_string(r, NULL));
+                xsyslog_ev(LOG_ERR, "jwt.signature.check.failed",
+                           lf_s("jwt.step", "digest_init"),
+                           lf_s_opt("error", ssl_error_string()));
                 continue;
             }
 
             r = EVP_DigestSignUpdate(ctx, tok, toklen);
             if (r != 1) {
-                xsyslog(LOG_ERR, "Cannot update digest context",
-                        "sslerr=<%s>", ERR_error_string(r, NULL));
+                xsyslog_ev(LOG_ERR, "jwt.signature.check.failed",
+                           lf_s("jwt.step", "digest_update"),
+                           lf_s_opt("error", ssl_error_string()));
                 continue;
             }
 
             r = EVP_DigestSignFinal(ctx, md, &mdlen);
             if (r != 1) {
-                xsyslog(LOG_ERR, "Cannot finalize digest context",
-                        "sslerr=<%s>", ERR_error_string(r, NULL));
+                xsyslog_ev(LOG_ERR, "jwt.signature.check.failed",
+                           lf_s("jwt.step", "digest_final"),
+                           lf_s_opt("error", ssl_error_string()));
                 continue;
             }
 
@@ -353,15 +391,17 @@ static int validate_signature(struct jwt *jwt)
         else {
             int r = EVP_DigestVerifyInit(ctx, NULL, jwt->emd, NULL, pkey);
             if (r != 1) {
-                xsyslog(LOG_ERR, "Cannot initialize verify context",
-                        "sslerr=<%s>", ERR_error_string(r, NULL));
+                xsyslog_ev(LOG_ERR, "jwt.signature.check.failed",
+                           lf_s("jwt.step", "verify_init"),
+                           lf_s_opt("error", ssl_error_string()));
                 continue;
             }
 
             r = EVP_DigestVerifyUpdate(ctx, tok, toklen);
             if (r != 1) {
-                xsyslog(LOG_ERR, "Cannot update verify context",
-                        "sslerr=<%s>", ERR_error_string(r, NULL));
+                xsyslog_ev(LOG_ERR, "jwt.signature.check.failed",
+                           lf_s("jwt.step", "verify_update"),
+                           lf_s_opt("error", ssl_error_string()));
                 continue;
             }
 
@@ -378,7 +418,8 @@ static int validate_header(struct jwt *jwt)
     buf_reset(&jwt->buf);
 
     if (charset_decode(&jwt->buf, jwt->joh, jwt->johlen, ENCODING_BASE64URL)) {
-        xsyslog(LOG_ERR, "Cannot decode JOSE header", NULL);
+        xsyslog_ev(LOG_WARNING, "jwt.token.invalid",
+                   lf_s("jwt.reason", "undecodable_header"));
         return 0;
     }
 
@@ -386,13 +427,17 @@ static int validate_header(struct jwt *jwt)
 
     json_t *joh = json_loads(buf_cstring(&jwt->buf), JSON_REJECT_DUPLICATES, NULL);
     if (json_object_size(joh) != 2) {
-        xsyslog(LOG_ERR, "Unexpected JOSE header structure", NULL);
+        xsyslog_ev(LOG_WARNING, "jwt.token.invalid",
+                   lf_s("jwt.reason", "bad_header_structure"));
         goto done;
     }
 
     const char *typ = json_string_value(json_object_get(joh, "typ"));
     if (strcmpsafe(typ, "JWT")) {
-        xsyslog(LOG_ERR, "Invalid \"typ\" claim", "typ=<%s>", typ);
+        xsyslog_ev(LOG_WARNING, "jwt.claim.invalid",
+                   lf_s("jwt.claim", "typ"),
+                   lf_s("jwt.reason", "unsupported"),
+                   lf_s("jwt.claim.value", typ));
         goto done;
     }
 
@@ -420,7 +465,10 @@ static int validate_header(struct jwt *jwt)
             jwt->emd = EVP_sha512();
     }
     if (jwt->nid == EVP_PKEY_NONE || !jwt->emd) {
-        xsyslog(LOG_ERR, "Invalid \"alg\" claim", "alg=<%s>", alg);
+        xsyslog_ev(LOG_WARNING, "jwt.claim.invalid",
+                   lf_s("jwt.claim", "alg"),
+                   lf_s("jwt.reason", "unsupported"),
+                   lf_s("jwt.claim.value", alg));
         goto done;
     }
 
@@ -436,7 +484,8 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
     buf_reset(&jwt->buf);
 
     if (charset_decode(&jwt->buf, jwt->jws, jwt->jwslen, ENCODING_BASE64URL)) {
-        xsyslog(LOG_ERR, "Cannot decode JWS payload", NULL);
+        xsyslog_ev(LOG_WARNING, "jwt.token.invalid",
+                   lf_s("jwt.reason", "undecodable_payload"));
         return 0;
     }
 
@@ -445,13 +494,16 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
 
     json_t *jws = json_loads(buf_cstring(&jwt->buf), JSON_REJECT_DUPLICATES, NULL);
     if (!json_object_size(jws)) {
-        xsyslog(LOG_ERR, "Unexpected JWS payload structure", NULL);
+        xsyslog_ev(LOG_WARNING, "jwt.token.invalid",
+                   lf_s("jwt.reason", "bad_payload_structure"));
         goto done;
     }
 
     const char *sub = json_string_value(json_object_get(jws, "sub"));
     if (!sub) {
-        xsyslog(LOG_ERR, "Missing \"sub\" claim", NULL);
+        xsyslog_ev(LOG_WARNING, "jwt.claim.invalid",
+                   lf_s("jwt.claim", "sub"),
+                   lf_s("jwt.reason", "missing"));
         goto done;
     }
 
@@ -460,19 +512,25 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
 
     json_t *jnbf = json_object_get(jws, "nbf");
     if (jnbf && !json_is_integer(jnbf)) {
-        xsyslog(LOG_ERR, "Invalid \"nbf\" claim", NULL);
+        xsyslog_ev(LOG_WARNING, "jwt.claim.invalid",
+                   lf_s("jwt.claim", "nbf"),
+                   lf_s("jwt.reason", "not_an_integer"));
         has_err = 1;
     }
 
     json_t *jexp = json_object_get(jws, "exp");
     if (jexp && !json_is_integer(jexp)) {
-        xsyslog(LOG_ERR, "Invalid \"exp\" claim", NULL);
+        xsyslog_ev(LOG_WARNING, "jwt.claim.invalid",
+                   lf_s("jwt.claim", "exp"),
+                   lf_s("jwt.reason", "not_an_integer"));
         has_err = 1;
     }
 
     json_t *jiat = json_object_get(jws, "iat");
     if (jiat && !json_is_integer(jiat)) {
-        xsyslog(LOG_ERR, "Invalid \"iat\" claim", NULL);
+        xsyslog_ev(LOG_WARNING, "jwt.claim.invalid",
+                   lf_s("jwt.claim", "iat"),
+                   lf_s("jwt.reason", "not_an_integer"));
         has_err = 1;
     }
 
@@ -484,7 +542,9 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
     if (jnbf) {
         time_t nbf = json_integer_value(jnbf);
         if (!(now >= nbf)) {
-            xsyslog(LOG_ERR, "Out-of-range \"nbf\" claim", NULL);
+            xsyslog_ev(LOG_WARNING, "jwt.claim.invalid",
+                       lf_s("jwt.claim", "nbf"),
+                       lf_s("jwt.reason", "out_of_range"));
             goto done;
         }
     }
@@ -492,7 +552,9 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
     if (jexp) {
         time_t exp = json_integer_value(jexp);
         if (!(now < exp)) {
-            xsyslog(LOG_ERR, "Out-of-range \"exp\" claim", NULL);
+            xsyslog_ev(LOG_WARNING, "jwt.claim.invalid",
+                       lf_s("jwt.claim", "exp"),
+                       lf_s("jwt.reason", "out_of_range"));
             goto done;
         }
     }
@@ -501,20 +563,27 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
         if (jiat) {
             time_t iat = json_integer_value(jiat);
             if (iat + max_age <= now || iat > now) {
-                xsyslog(LOG_ERR, "Out-of-range \"iat\" claim", NULL);
+                xsyslog_ev(LOG_WARNING, "jwt.claim.invalid",
+                           lf_s("jwt.claim", "iat"),
+                           lf_s("jwt.reason", "out_of_range"));
                 goto done;
             }
         }
         else {
-            xsyslog(LOG_ERR, "Max token age set, missing \"iat\" claim", NULL);
+            xsyslog_ev(LOG_WARNING, "jwt.claim.invalid",
+                       lf_s("jwt.claim", "iat"),
+                       lf_s("jwt.reason", "missing"));
             goto done;
         }
     }
 
     size_t sublen = strlen(sub);
     if (sublen >= outlen) {
-        xsyslog(LOG_ERR, "Excessively long \"sub\" claim value",
-                "length=<%zu> maxlength=<%zu>", sublen, outlen-1);
+        xsyslog_ev(LOG_WARNING, "jwt.claim.invalid",
+                   lf_s("jwt.claim", "sub"),
+                   lf_s("jwt.reason", "too_long"),
+                   lf_zu("jwt.claim.length", sublen),
+                   lf_zu("jwt.claim.maxlength", outlen-1));
         goto done;
     }
 
@@ -530,7 +599,7 @@ done:
 HIDDEN int http_jwt_auth(const char *in, size_t inlen, char *out, size_t outlen)
 {
     if (!is_enabled) {
-        xsyslog(LOG_INFO, "JSON Web Token authentication is disabled", NULL);
+        xsyslog_ev(LOG_INFO, "jwt.auth.disabled");
         return SASL_BADAUTH;
     }
 

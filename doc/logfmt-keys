@@ -382,6 +382,16 @@ jmap.seen.source        where $seen comes from for a mailbox: flags or seendb
 jmap.sharee             1 if the request is from a sharee rather than the owner
 jmap.submissionid       a JMAP EmailSubmission id
 jmap.uid.attempts       how many candidate vCard UIDs were tried
+jwt.claim               the name of a claim in a JSON Web Token
+jwt.claim.length        the length of a claim's value, in bytes
+jwt.claim.maxlength     the longest value that claim could have had, in bytes
+jwt.claim.value         a claim's value, as the token spelled it
+jwt.lineno              the line of the JWT key file an event is about
+jwt.maxage              the configured maximum age of a token, in seconds
+jwt.reason              why a token, or one of its claims, was rejected
+jwt.step                which step of checking a signature an event reports
+jwt.token.byte          a byte a token may not contain, in hex
+jwt.token.offset        a byte offset into a token
 limit.name              which configured limit an operation broke
 limit.value             that limit's configured value
 lmtp.action             what delivery did with the message: implicit, keep, fileinto, ...
