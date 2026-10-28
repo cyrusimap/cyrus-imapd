@@ -1,10 +1,11 @@
 Name: jmap_require_accountid
 Type: SWITCH
 Default-Value: 0
-Last-Modified: 3.13.8
+Last-Modified: UNRELEASED
+Deprecated-Since: UNRELEASED
 
-If enabled, a JMAP method call that omits the "accountId" argument (or
-gives a null or non-string value) is rejected with an "invalidArguments"
-error, as RFC 8620 requires of every method other than Core/echo.  If not
-enabled, a missing or null "accountId" is taken to mean the authenticated
-user's own account.
+This option once allowed a JMAP method call to omit the "accountId"
+argument, which was then taken to mean the authenticated user's own
+account.  It is now ignored: as RFC 8620 requires, every method other than
+Core/echo rejects a missing, null or non-string "accountId" with an
+"invalidArguments" error.

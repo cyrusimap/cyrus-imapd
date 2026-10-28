@@ -1,0 +1,27 @@
+Description:
+
+JMAP method calls now always require an accountId, as RFC 8620 Section 3.6.2
+says.  A call other than Core/echo that omits accountId, or gives a null or
+non-string one, is rejected with invalidArguments.  The jmap_require_accountid
+option, which made this behaviour optional, is deprecated and ignored.
+
+
+Documentation:
+
+lib/imapoptions/jmap_require_accountid
+
+
+Config changes:
+
+jmap_require_accountid (deprecated)
+
+
+Upgrade instructions:
+
+Clients must send accountId on every method call but Core/echo.  Remove
+jmap_require_accountid from imapd.conf.
+
+
+GitHub issue:
+
+None

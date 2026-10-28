@@ -697,9 +697,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         }
 
         /* RFC 8620 Section 3.6.2: every method but Core/echo requires
-         * accountId, and a missing or non-string one is invalidArguments.
-         * Without jmap_require_accountid, missing or null means the
-         * login's own account. */
+         * accountId, and a missing or non-string one is invalidArguments. */
         const char *accountid = NULL;
         json_t *arg = json_object_get(args, "accountId");
         if (mp->flags & JMAP_NO_ACCOUNTID) {
@@ -707,10 +705,6 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         }
         else if (json_is_cyrus_accountid(arg)) {
             accountid = json_string_value(arg);
-        }
-        else if (!JNOTNULL(arg) &&
-                 !config_getswitch(IMAPOPT_JMAP_REQUIRE_ACCOUNTID)) {
-            accountid = httpd_userid;
         }
         if (!accountid) {
             err = json_pack("{s:s, s:[s]}",
