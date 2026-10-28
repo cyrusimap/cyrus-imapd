@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+# Asserts that each JMAP request sent over a WebSocket carries the trace id
+# from its own logHeaders, not the one from the upgrade request.
+
+sub test_jmap_ws_trace_id
+    :needs_dependency_wslay
+    ($self)
+{
+    eval { require Cassandane::JMAPTesterWS; 1 } or do {
+        xlog $self, "Cassandane::JMAPTesterWS not available; skipping";
+        return;
+    };
+
+    my $ws = $self->default_user->new_jmaptester_ws;
+    $ws->upgrade_headers([ 'X-Trace-Id' => 'trace.upgrade' ]);
+
+    my $create = sub ($name, $logheaders) {
+        $self->{instance}->getnotify();
+
+        $ws->request({
+            using       => ['urn:ietf:params:jmap:core',
+                            'urn:ietf:params:jmap:mail'],
+            methodCalls => [['Mailbox/set', {
+                create => { 1 => { name => $name } },
+            }, 'R1']],
+            $logheaders ? (logHeaders => $logheaders) : (),
+        });
+
+        my @events = map { decode_json($_->{MESSAGE}) }
+                         $self->{instance}->getnotify->@*;
+        $self->assert(0+@events, "Mailbox/set should generate events");
+        return map { $_->{'vnd.fastmail.traceId'} } @events;
+    };
+
+    xlog $self, "each frame uses the trace id from its own logHeaders";
+    for my $trace_id (qw(trace.one trace.two)) {
+        my @ids = $create->($trace_id, { 'X-Trace-Id' => $trace_id });
+        $self->assert_cmp_deeply([ ($trace_id) x @ids ], \@ids);
+    }
+
+    xlog $self, "a frame without one has no trace id";
+    my @ids = $create->('none', undef);
+    $self->assert_cmp_deeply([ (undef) x @ids ], \@ids);
+}
