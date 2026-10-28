@@ -48,10 +48,10 @@ sub test_calendarevent_set_schedule_request_add_participant
     my $id = $res->[0][1]{created}{"1"}{id};
 
     my $data = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($imip);
 
-    my $payload = decode_json($imip->{MESSAGE});
+    my $payload = $imip->{message};
     my $ical = $payload->{ical};
 
     $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
@@ -73,10 +73,10 @@ sub test_calendarevent_set_schedule_request_add_participant
     }}, "R1"]]);
 
     $data = $self->{instance}->getnotify();
-    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($imip);
 
-    $payload = decode_json($imip->{MESSAGE});
+    $payload = $imip->{message};
     $ical = $payload->{ical};
 
     $self->assert_str_equals("rr\@looneytunes.com", $payload->{recipient});

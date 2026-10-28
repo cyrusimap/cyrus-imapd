@@ -48,7 +48,7 @@ sub test_calendarevent_set_reply_partstat_changed
 
     xlog "Assert that no iTIP notification is sent";
     my $data = $self->{instance}->getnotify();
-    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_null($notif);
 
     xlog "Clean notifications";
@@ -68,7 +68,7 @@ sub test_calendarevent_set_reply_partstat_changed
 
     xlog "Assert that iTIP notification is sent";
     $data = $self->{instance}->getnotify();
-    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($notif);
 
     xlog "Clean notifications";
@@ -88,7 +88,7 @@ sub test_calendarevent_set_reply_partstat_changed
 
     xlog "Assert that no iTIP notification is sent";
     $data = $self->{instance}->getnotify();
-    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_null($notif);
 
     xlog "Clean notifications";
@@ -112,7 +112,7 @@ sub test_calendarevent_set_reply_partstat_changed
 
     xlog "Assert that iTIP notification is sent";
     $data = $self->{instance}->getnotify();
-    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($notif);
 
     xlog "Clean notifications";
@@ -134,6 +134,6 @@ sub test_calendarevent_set_reply_partstat_changed
 
     xlog "Assert that no iTIP notification is sent";
     $data = $self->{instance}->getnotify();
-    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_null($notif);
 }

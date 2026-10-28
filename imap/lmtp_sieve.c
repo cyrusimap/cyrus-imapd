@@ -2244,9 +2244,11 @@ static int sieve_notify(void *ac,
         prometheus_increment(CYRUS_LMTP_SIEVE_NOTIFY_TOTAL);
 
         /* "default" is a magic value that implies the default */
+        json_t *jmsg = notify_text(nc->message);
         notify(!strcmp("default",nc->method) ? notifier : nc->method,
                "SIEVE", nc->priority, mbname_userid(sd->mbname), NULL,
-               nopt, (const char **) nc->options->data, nc->message, nc->fname);
+               nopt, (const char **) nc->options->data, jmsg, nc->fname);
+        json_decref(jmsg);
     }
 
     return SIEVE_OK;

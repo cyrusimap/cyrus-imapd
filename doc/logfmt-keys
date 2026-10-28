@@ -359,6 +359,9 @@ lmtp.target             how the destination mailbox was chosen: default, plus-ad
 mboxlist.key            a raw mailboxes.db key
 mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
+notify.class            a notification's class: EVENT, MAIL, SIEVE, IMIP, ...
+notify.method           the notifier method a notification was sent with
+notify.status           the status a notifysocket listener replied with
 pop.subfolder           the subfolder a POP session was restricted to
 proxy.server            the backend server a request was proxied to
 quota.root              the quota root a quota applies to

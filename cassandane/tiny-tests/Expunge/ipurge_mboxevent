@@ -49,7 +49,7 @@ sub test_ipurge_mboxevent
 
     # examine the mboxevents
     foreach (@{$events}) {
-        my $e = decode_json($_->{MESSAGE});
+        my $e = $_->{message};
         # uri must contain the mailbox!
         $self->assert_matches(qr{^imap://(?:[^/]+)/shared\.folder;UIDVALIDITY=},
                               $e->{uri});

@@ -55,11 +55,11 @@ EOF
 
     xlog $self, "verify invitation sent from organizer to attendees";
     my $data = $self->{instance}->getnotify();
-    my @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+    my @imips = grep { $_->{method} eq 'imip' } @$data;
     my $imip = $imips[0];
     $self->assert_not_null($imip);
 
-    my $payload = decode_json($imip->{MESSAGE});
+    my $payload = $imip->{message};
     my $ical = $payload->{ical};
 
     $self->assert_str_equals("CalDAV", $payload->{schedulingMechanism});
@@ -73,7 +73,7 @@ EOF
     $imip = $imips[1];
     $self->assert_not_null($imip);
 
-    $payload = decode_json($imip->{MESSAGE});
+    $payload = $imip->{message};
     $ical = $payload->{ical};
 
     $self->assert_str_equals("CalDAV", $payload->{schedulingMechanism});
@@ -96,11 +96,11 @@ EOF
 
     xlog $self, "verify reply sent from attendee to organizer";
     $data = $self->{instance}->getnotify();
-    @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+    @imips = grep { $_->{method} eq 'imip' } @$data;
     $imip = $imips[0];
     $self->assert_not_null($imip);
 
-    $payload = decode_json($imip->{MESSAGE});
+    $payload = $imip->{message};
     $ical = $payload->{ical};
 
     $self->assert_str_equals("CalendarEvent/participantReply",

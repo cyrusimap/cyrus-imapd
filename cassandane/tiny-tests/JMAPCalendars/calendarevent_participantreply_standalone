@@ -68,11 +68,11 @@ sub test_calendarevent_participantreply_standalone
 
     xlog $self, "verify invitation sent from organizer to attendees";
     my $data = $self->{instance}->getnotify();
-    my @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+    my @imips = grep { $_->{method} eq 'imip' } @$data;
     my $imip = $imips[0];
     $self->assert_not_null($imip);
 
-    my $payload = decode_json($imip->{MESSAGE});
+    my $payload = $imip->{message};
     my $ical = $payload->{ical};
 
     $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
@@ -91,11 +91,11 @@ sub test_calendarevent_participantreply_standalone
 
     xlog $self, "verify reply sent from attendee to organizer";
     $data = $self->{instance}->getnotify();
-    @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+    @imips = grep { $_->{method} eq 'imip' } @$data;
     $imip = $imips[0];
     $self->assert_not_null($imip);
 
-    $payload = decode_json($imip->{MESSAGE});
+    $payload = $imip->{message};
     $ical = $payload->{ical};
 
     $self->assert_str_equals("bugs\@looneytunes.com", $payload->{sender});
@@ -107,7 +107,7 @@ sub test_calendarevent_participantreply_standalone
     $imip = $imips[1];
     $self->assert_not_null($imip);
 
-    $payload = decode_json($imip->{MESSAGE});
+    $payload = $imip->{message};
     $ical = $payload->{ical};
 
     $self->assert_str_equals("cassandane\@example.com", $payload->{sender});
@@ -140,7 +140,7 @@ sub test_calendarevent_participantreply_standalone
 
         xlog $self, "verify that NO iMIP messages are sent to organizer/attendee";
         $data = $self->{instance}->getnotify();
-        @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+        @imips = grep { $_->{method} eq 'imip' } @$data;
         $self->assert_null($imips[0]);
     }
 }
