@@ -505,6 +505,21 @@ mupdate.workers         how many mupdate worker threads are running
 mupdate.workers.idle    how many mupdate worker threads are waiting for work
 pop.subfolder           the subfolder a POP session was restricted to
 proxy.server            the backend server a request was proxied to
+pts.domain              a domain the PTS module looked an identity up in
+pts.domain.parent       the domain an alias domain resolves to
+pts.id                  an identity as given to the PTS module, before canonicalisation
+pts.ldap.attribute      an LDAP attribute the PTS module reads
+pts.ldap.base           the base DN of an LDAP search
+pts.ldap.dn             an LDAP distinguished name
+pts.ldap.entries        how many entries an LDAP search returned
+pts.ldap.filter         an LDAP search filter
+pts.ldap.option         an LDAP library option the PTS module tried to set
+pts.ldap.uri            the LDAP server URI
+pts.ldap.value          the value the PTS module tried to give an LDAP option
+pts.ldap.version        the LDAP protocol version
+pts.lookup              which kind of PTS lookup is being logged: groups for group membership
+pts.reason              why a PTS operation failed or was refused
+pts.step                which step of a PTS operation is being logged
 quota.root              the quota root a quota applies to
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
 sasl.result             a SASL result code
