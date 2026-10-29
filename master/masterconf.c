@@ -122,9 +122,10 @@ int masterconf_getint(struct entry *e,
     if (!val) return def;
     if (!Uisdigit(*val) &&
         (*val != '-' || !Uisdigit(val[1]))) {
-            syslog(LOG_DEBUG,
-                   "value '%s' for '%s' does not look like a number.",
-                   val, key);
+            xsyslog_ev(LOG_DEBUG, "master.config.value.invalid",
+                       lf_s("master.config.key", key),
+                       lf_s("master.config.value", val),
+                       lf_s("master.reason", "not_a_number"));
             return def;
     }
     return atoi(val);
@@ -145,8 +146,10 @@ int masterconf_getswitch(struct entry *e, const char *key, int def)
         return 1;
     }
 
-    syslog(LOG_DEBUG, "cannot interpret value '%s' for key '%s'. use y/n.",
-               val, key);
+    xsyslog_ev(LOG_DEBUG, "master.config.value.invalid",
+               lf_s("master.config.key", key),
+               lf_s("master.config.value", val),
+               lf_s("master.reason", "not_a_switch"));
 
     return def;
 }

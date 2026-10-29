@@ -37,24 +37,28 @@ EXPORTED void cronevent_add(const char *name,
     int spec_idx, det_idx;
 
     if (!name || !*name) {
-        xsyslog(LOG_ERR, "event missing name",
-                         "spec=<%s> cmd=<%s>",
-                         spec, cmd);
+        xsyslog_ev(LOG_ERR, "master.event.invalid",
+                   lf_s("master.reason", "missing_name"),
+                   lf_s("master.event.cron", spec),
+                   lf_s("master.service.cmd", cmd));
         if (ignore_err) return;
         fatal("event missing name", EX_CONFIG);
     }
 
     if (!cmd || !*cmd) {
-        xsyslog(LOG_ERR, "event missing cmd",
-                         "name=<%s>", name);
+        xsyslog_ev(LOG_ERR, "master.event.invalid",
+                   lf_s("master.reason", "missing_command"),
+                   lf_s("master.event", name));
         if (ignore_err) return;
         fatal("event missing cmd", EX_CONFIG);
     }
 
     if (!spec || cron_parse_spec(spec, &cron_spec, &parse_err)) {
-        xsyslog(LOG_ERR, "unable to parse cron spec",
-                         "name=<%s> spec=<%s> parse_err=<%s>",
-                         name, spec, parse_err);
+        xsyslog_ev(LOG_ERR, "master.event.invalid",
+                   lf_s("master.reason", "bad_cron_spec"),
+                   lf_s("master.event", name),
+                   lf_s("master.event.cron", spec),
+                   lf_s("error", parse_err));
         if (ignore_err) return;
         fatal("unable to parse cron spec", EX_CONFIG);
     }

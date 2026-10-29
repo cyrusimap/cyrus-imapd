@@ -103,9 +103,10 @@ EXPORTED void reschedule_event(struct event *evt, struct timeval now)
             mark += period;
             skipped ++;
         } while (mark <= now_s);
-        xsyslog(LOG_WARNING, "periodic event behind schedule",
-                             "name=<%s> period=<" TIME_T_FMT "> skipped=<%u>",
-                             evt->name, evt->period, skipped);
+        xsyslog_ev(LOG_WARNING, "master.event.behind_schedule",
+                   lf_s("master.event", evt->name),
+                   lf_lld("master.event.period", (long long) evt->period),
+                   lf_u("master.event.skipped", skipped));
     }
 
     evt->mark.tv_sec = mark;

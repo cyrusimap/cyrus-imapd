@@ -410,10 +410,15 @@ master.child.age        how long ago master spawned a child process, in seconds
 master.child.state      master's record of a child's state: READY, BUSY, DEAD or UNKNOWN
 master.child.type       what master spawned a child as: START, SERVICE, DAEMON or EVENT
 master.children         how many child processes master found
+master.config.key       a cyrus.conf setting name
+master.config.value     a cyrus.conf setting value, as written
 master.disabled.seconds how long master disables a failing service for
 master.disabled.until   what re-enables a service master disabled: sighup
 master.event            the name of a cyrus.conf EVENTS entry
 master.event.at         an EVENTS entry's at= time, as hhmm
+master.event.cron       an EVENTS entry's cron= spec
+master.event.period     an EVENTS entry's period, in seconds
+master.event.skipped    how many runs of a periodic event were skipped
 master.failures         how many times in a row a service has failed
 master.fcntl.flag       the file descriptor flag master tried to change
 master.fds.cur          the file descriptor limit a process gets
