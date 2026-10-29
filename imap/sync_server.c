@@ -419,7 +419,10 @@ EXPORTED void fatal(const char* s, int code)
         prot_printf(sync_out, "* Fatal error: %s\r\n", s);
         prot_flush(sync_out);
     }
-    syslog(LOG_ERR, "Fatal error: %s", s);
+    xsyslog_ev(LOG_ERR, "sync.fatal",
+               lf_s("r.clienthost", sync_clienthost),
+               lf_s("error", s),
+               lf_d("sys.exitcode", code));
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
     shut_down(code);
 }
@@ -465,7 +468,8 @@ static void cmdloop(void)
     char *p;
     struct dlist *kl;
 
-    syslog(LOG_DEBUG, "cmdloop(): startup");
+    xsyslog_ev(LOG_DEBUG, "sync.server.started",
+               lf_s("r.clienthost", sync_clienthost));
 
     reserve_list = sync_reserve_list_create(SYNC_MESSAGE_LIST_HASH_SIZE);
 
@@ -527,8 +531,8 @@ static void cmdloop(void)
                     dlist_free(&kl);
                 }
                 else {
-                    xsyslog(LOG_ERR, "IOERROR: received bad command",
-                                     "command=<%s>", cmd.s);
+                    xsyslog_ev(LOG_ERR, "sync.command.unparseable",
+                               lf_buf("sync.command", &cmd));
                     prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse APPLY line\r\n");
                 }
                 continue;
@@ -555,8 +559,8 @@ static void cmdloop(void)
                     dlist_free(&kl);
                 }
                 else {
-                    xsyslog(LOG_ERR, "IOERROR: received bad command",
-                                     "command=<%s>", cmd.s);
+                    xsyslog_ev(LOG_ERR, "sync.command.unparseable",
+                               lf_buf("sync.command", &cmd));
                     prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse GET line\r\n");
                 }
                 continue;
@@ -599,8 +603,8 @@ static void cmdloop(void)
                     dlist_free(&kl);
                 }
                 else {
-                    xsyslog(LOG_ERR, "IOERROR: received bad command",
-                                     "command=<%s>", cmd.s);
+                    xsyslog_ev(LOG_ERR, "sync.command.unparseable",
+                               lf_buf("sync.command", &cmd));
                     prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse RESTORE line\r\n");
                 }
                 continue;
@@ -634,8 +638,8 @@ static void cmdloop(void)
 
         }
 
-        xsyslog(LOG_ERR, "IOERROR: received bad command",
-                         "command=<%s>", cmd.s);
+        xsyslog_ev(LOG_ERR, "sync.command.unknown",
+                   lf_buf("sync.command", &cmd));
         prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Unrecognized command\r\n");
         eatline(sync_in, c);
         continue;
@@ -733,8 +737,8 @@ static void cmd_authenticate(char *mech, char *resp)
     if (sasl_result != SASL_OK) {
         prot_printf(sync_out, "NO weird SASL error %d SASL_USERNAME\r\n",
                     sasl_result);
-        syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME",
-               sasl_result);
+        xsyslog_ev(LOG_ERR, "sync.sasl.username.failed",
+                   lf_d("sasl.result", sasl_result));
 
         reset_saslconn(&sync_saslconn);
         return;
@@ -792,7 +796,7 @@ static void cmd_starttls(void)
                                  NULL);
 
     if (result == -1) {
-        syslog(LOG_ERR, "error initializing TLS");
+        xsyslog_ev(LOG_ERR, "sync.starttls.init.failed");
         prot_printf(sync_out, "NO %s\r\n", "Error initializing TLS");
         return;
     }
@@ -810,14 +814,16 @@ static void cmd_starttls(void)
 
     /* if error */
     if (result==-1) {
-        syslog(LOG_NOTICE, "TLS negotiation failed: %s", sync_clienthost);
+        xsyslog_ev(LOG_NOTICE, "sync.starttls.failed",
+                   lf_s("r.clienthost", sync_clienthost));
         shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, sync_saslconn);
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
+        xsyslog_ev(LOG_NOTICE, "sync.starttls.saslprops.failed",
+                   lf_s("r.clienthost", sync_clienthost));
         shut_down(EX_TEMPFAIL);
     }
 

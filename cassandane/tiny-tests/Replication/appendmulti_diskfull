@@ -78,8 +78,8 @@ EOF
         # junk commands!  we need sync_server specifically for this (and not
         # a replication-aware imapd), because only sync_server logs bad
         # commands.
-        $self->assert_does_not_match(qr/IOERROR:\sreceived\sbad\scommand:\s
-                                        command=<Return-path:>/x,
+        $self->assert_does_not_match(qr/event=sync\.command\.unknown\b
+                                        .*\bsync\.command="?Return-path:/x,
                                      "@lines");
     }
 }
