@@ -51,6 +51,7 @@
 #include "assert.h"
 #include "bsearch.h"
 #include "caldav_db.h"
+#include "calsched_support.h"
 #include "css3_color.h"
 #include "global.h"
 #include "ical_support.h"
@@ -890,13 +891,23 @@ EXPORTED icalcomponent *record_to_ical(struct mailbox *mailbox,
                                MESSAGE_DECODED|MESSAGE_TRIM, &buf)) {
             if (buf.len) {
                 strarray_t *vals = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
+                strarray_t stored = STRARRAY_INITIALIZER;
                 int i;
                 for (i = 0; i < strarray_size(vals); i++) {
                     const char *email = strarray_nth(vals, i);
                     if (!strncasecmp(email, "mailto:", 7)) email += 7;
-                    strarray_add(schedule_addresses, email);
+                    strarray_add(&stored, email);
                 }
                 strarray_free(vals);
+
+                /* anyone who can store a resource can set this header, so
+                   keep no other user's address but the calendar owner's */
+                char *ownerid = mboxname_to_userid(mailbox_name(mailbox));
+                sched_addresses_restrict(&stored, NULL, ownerid);
+                free(ownerid);
+
+                strarray_cat(schedule_addresses, &stored);
+                strarray_fini(&stored);
             }
         }
     }
