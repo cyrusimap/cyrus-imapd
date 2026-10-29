@@ -2032,6 +2032,9 @@ EXPORTED int process_request(struct transaction_t *txn)
 {
     int ret = 0;
 
+    /* scheduling looks up whose each address is, often many times over */
+    sched_address_cache_begin();
+
     if (txn->req_tgt.namespace->premethod) {
         ret = txn->req_tgt.namespace->premethod(txn);
     }
@@ -2049,6 +2052,8 @@ EXPORTED int process_request(struct transaction_t *txn)
             prometheus_lookup_label(http_methods[txn->meth].metric,
                                     txn->req_tgt.namespace->name));
     }
+
+    sched_address_cache_end();
 
     if (ret == HTTP_UNAUTHORIZED) {
         /* User must authenticate */

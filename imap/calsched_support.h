@@ -57,6 +57,15 @@ extern char *caladdress_userid(const char *addr, bool defdomain_fallback,
                                mbentry_t **calhomep);
 
 /**
+ * Between these calls, sched_address_permitted() and
+ * sched_addresses_restrict() remember which user each address belongs to,
+ * rather than looking it up again.  Bracket a unit of work, such as one
+ * HTTP request, in which no user is created or removed.
+ */
+extern void sched_address_cache_begin(void);
+extern void sched_address_cache_end(void);
+
+/**
  * Check whether userid may schedule as addr in a calendar owned by
  * ownerid: addr is no local user's address (see caladdress_userid()), or
  * is userid's or ownerid's.  Either of userid and ownerid may be NULL.
