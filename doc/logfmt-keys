@@ -450,8 +450,11 @@ statuscache.hit         1 if the status cache had the answer
 statuscache.items       the STATUS items a lookup asked for, as a hex mask
 sync.cached             the mailboxes a replication lookup took from the sync cache
 sync.capabilities       the capability list a replication server advertised
+sync.capability         a single replication protocol capability
 sync.channel            a replication channel name
 sync.command            a replication protocol command
+sync.count              how many items a replication batch holds
+sync.enable             the capabilities a replication ENABLE asked for, as a hex bitmask
 sync.field              which mailbox field a replication comparison is about
 sync.file.guid          the guid of a message file, where it disagrees with msg.guid
 sync.file.size          the size of a message file, where it disagrees with msg.size
@@ -459,6 +462,7 @@ sync.forced             1 if replication is running in force mode
 sync.from.modseq        the modseq a partial replication starts after
 sync.from.uid           the uid a partial replication starts after
 sync.mailboxes          the mailboxes a replication lookup asked the replica about
+sync.promoted_to        the broader replication command a failed one was promoted to
 sync.reason             why replication skipped, refused or rejected something
 sync.renames            how many renames a replication pass performed
 sync.response           a replication server's response, or the part of it at fault

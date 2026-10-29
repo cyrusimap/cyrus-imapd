@@ -8908,9 +8908,6 @@ static void remove_meta(char *user, struct sync_action_list *list)
 
 /* ====================================================================== */
 
-#define report_verbose(...) syslog(LOG_INFO, __VA_ARGS__)
-#define report_verbose_error(...) syslog(LOG_ERR, __VA_ARGS__)
-
 static int do_mailboxes(struct sync_client_state *sync_cs,
                         struct sync_name_list *mboxname_list,
                         struct sync_action_list *user_list,
@@ -8925,7 +8922,9 @@ static int do_mailboxes(struct sync_client_state *sync_cs,
             for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
                 if (mbox->mark) continue;
                 sync_log_channel_mailbox(sync_cs->channel, mbox->name);
-                report_verbose("  Deferred: MAILBOX %s\n", mbox->name);
+                xsyslog_ev(LOG_INFO, "sync.action.deferred",
+                           lf_s("sync.command", "MAILBOX"),
+                           lf_intname("mbox.name", mbox->name));
             }
             r = 0;
         }
@@ -8943,8 +8942,11 @@ static int do_mailboxes(struct sync_client_state *sync_cs,
                     mbox->mark = 1;
 
                     sync_action_list_add(user_list, NULL, userid);
-                    report_verbose("  Promoting: MAILBOX %s -> USER %s\n",
-                                   mbox->name, userid);
+                    xsyslog_ev(LOG_INFO, "sync.action.promoted",
+                               lf_s("sync.command", "MAILBOX"),
+                               lf_s("sync.promoted_to", "USER"),
+                               lf_intname("mbox.name", mbox->name),
+                               lf_s("u.username", userid));
                     free(userid);
                 }
                 else
@@ -9000,8 +9002,8 @@ static void split_user_mailboxes(const char *key __attribute__((unused)),
     }
 
     if (mboxname_list->count) {
-        syslog(LOG_DEBUG, "sync_mailboxes: doing %lu",
-                           mboxname_list->count);
+        xsyslog_ev(LOG_DEBUG, "sync.mailboxes.batch",
+                   lf_lu("sync.count", mboxname_list->count));
         smrock->r = do_mailboxes(smrock->sync_cs, mboxname_list,
                                  smrock->user_list, smrock->sync_cs->flags);
         if (!smrock->r) smrock->r = sync_do_restart(smrock->sync_cs);
@@ -9070,7 +9072,9 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
                 }
             }
             else {
-                syslog(LOG_ERR, "Missing mailbox name: %s", args[0]);
+                xsyslog_ev(LOG_ERR, "sync.log.entry.invalid",
+                           lf_s("sync.command", args[0]),
+                           lf_s("sync.reason", "missing_mboxname"));
             }
 
             free(freeme);
@@ -9121,7 +9125,9 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         else if (!strcmp(args[0], "UNSUB"))
             sync_action_list_add(sub_list, args[2], args[1]);
         else
-            syslog(LOG_ERR, "Unknown action type: %s", args[0]);
+            xsyslog_ev(LOG_ERR, "sync.log.entry.invalid",
+                       lf_s("sync.command", args[0]),
+                       lf_s("sync.reason", "unknown_command"));
     }
 
     /* Optimise out redundant clauses */
@@ -9174,15 +9180,19 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         r = sync_do_quota(sync_cs, action->name);
         if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
             sync_log_channel_quota(sync_cs->channel, action->name);
-            report_verbose("  Deferred: QUOTA %s\n", action->name);
+            xsyslog_ev(LOG_INFO, "sync.action.deferred",
+                       lf_s("sync.command", "QUOTA"),
+                       lf_s("quota.root", action->name));
         }
         else if (r == IMAP_BYE_LOGOUT) {
             goto cleanup;
         }
         else if (r) {
             sync_action_list_add(user_list, action->name, NULL);
-            report_verbose("  Promoting: QUOTA %s -> USER %s\n",
-                           action->name, action->name);
+            xsyslog_ev(LOG_INFO, "sync.action.promoted",
+                       lf_s("sync.command", "QUOTA"),
+                       lf_s("sync.promoted_to", "USER"),
+                       lf_s("quota.root", action->name));
         }
     }
 
@@ -9198,15 +9208,19 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
 
         if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
             sync_log_channel_annotation(sync_cs->channel, action->name);
-            report_verbose("  Deferred: ANNOTATION %s\n", action->name);
+            xsyslog_ev(LOG_INFO, "sync.action.deferred",
+                       lf_s("sync.command", "ANNOTATION"),
+                       lf_intname("mbox.name", action->name));
         }
         else if (r == IMAP_BYE_LOGOUT) {
             goto cleanup;
         }
         else if (r) {
             sync_action_list_add(user_list, action->name, NULL);
-            report_verbose("  Promoting: ANNOTATION %s -> USER %s\n",
-                           action->name, action->name);
+            xsyslog_ev(LOG_INFO, "sync.action.promoted",
+                       lf_s("sync.command", "ANNOTATION"),
+                       lf_s("sync.promoted_to", "USER"),
+                       lf_intname("mbox.name", action->name));
         }
     }
 
@@ -9217,8 +9231,10 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         r = sync_do_seen(sync_cs, action->user, action->name);
         if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
             sync_log_channel_seen(sync_cs->channel, action->user, action->name);
-            report_verbose("  Deferred: SEEN %s %s\n",
-                           action->user, action->name);
+            xsyslog_ev(LOG_INFO, "sync.action.deferred",
+                       lf_s("sync.command", "SEEN"),
+                       lf_s("u.username", action->user),
+                       lf_s("mbox.uniqueid", action->name));
         }
         else if (r == IMAP_BYE_LOGOUT) {
             goto cleanup;
@@ -9227,12 +9243,18 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
             char *userid = mboxname_to_userid(action->name);
             if (userid && mboxname_isusermailbox(action->name, 1) && !strcmp(userid, action->user)) {
                 sync_action_list_add(user_list, NULL, action->user);
-                report_verbose("  Promoting: SEEN %s %s -> USER %s\n",
-                               action->user, action->name, action->user);
+                xsyslog_ev(LOG_INFO, "sync.action.promoted",
+                           lf_s("sync.command", "SEEN"),
+                           lf_s("sync.promoted_to", "USER"),
+                           lf_s("u.username", action->user),
+                           lf_s("mbox.uniqueid", action->name));
             } else {
                 sync_action_list_add(meta_list, NULL, action->user);
-                report_verbose("  Promoting: SEEN %s %s -> META %s\n",
-                               action->user, action->name, action->user);
+                xsyslog_ev(LOG_INFO, "sync.action.promoted",
+                           lf_s("sync.command", "SEEN"),
+                           lf_s("sync.promoted_to", "META"),
+                           lf_s("u.username", action->user),
+                           lf_s("mbox.uniqueid", action->name));
             }
             free(userid);
         }
@@ -9245,16 +9267,21 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         r = user_sub(sync_cs, action->user, action->name);
         if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
             sync_log_channel_subscribe(sync_cs->channel, action->user, action->name);
-            report_verbose("  Deferred: SUB %s %s\n",
-                           action->user, action->name);
+            xsyslog_ev(LOG_INFO, "sync.action.deferred",
+                       lf_s("sync.command", "SUB"),
+                       lf_s("u.username", action->user),
+                       lf_intname("mbox.name", action->name));
         }
         else if (r == IMAP_BYE_LOGOUT) {
             goto cleanup;
         }
         else if (r) {
             sync_action_list_add(meta_list, NULL, action->user);
-            report_verbose("  Promoting: SUB %s %s -> META %s\n",
-                           action->user, action->name, action->user);
+            xsyslog_ev(LOG_INFO, "sync.action.promoted",
+                       lf_s("sync.command", "SUB"),
+                       lf_s("sync.promoted_to", "META"),
+                       lf_s("u.username", action->user),
+                       lf_intname("mbox.name", action->name));
         }
     }
 
@@ -9273,7 +9300,9 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         r = do_unmailbox(sync_cs, action->name);
         if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
             sync_log_channel_unmailbox(sync_cs->channel, action->name);
-            report_verbose("  Deferred: UNMAILBOX %s\n", action->name);
+            xsyslog_ev(LOG_INFO, "sync.action.deferred",
+                       lf_s("sync.command", "UNMAILBOX"),
+                       lf_intname("mbox.name", action->name));
         }
         else if (r) goto cleanup;
     }
@@ -9285,15 +9314,19 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         r = sync_do_meta(sync_cs, action->user);
         if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
             sync_log_channel_sieve(sync_cs->channel, action->user);
-            report_verbose("  Deferred: META %s\n", action->user);
+            xsyslog_ev(LOG_INFO, "sync.action.deferred",
+                       lf_s("sync.command", "META"),
+                       lf_s("u.username", action->user));
         }
         else if (r == IMAP_INVALID_USER || r == IMAP_BYE_LOGOUT) {
             goto cleanup;
         }
         else if (r) {
             sync_action_list_add(user_list, NULL, action->user);
-            report_verbose("  Promoting: META %s -> USER %s\n",
-                           action->user, action->user);
+            xsyslog_ev(LOG_INFO, "sync.action.promoted",
+                       lf_s("sync.command", "META"),
+                       lf_s("sync.promoted_to", "USER"),
+                       lf_s("u.username", action->user));
         }
     }
 
@@ -9303,7 +9336,9 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         r = sync_do_user(sync_cs, action->user, NULL);
         if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
             sync_log_channel_user(sync_cs->channel, action->user);
-            report_verbose("  Deferred: USER %s\n", action->user);
+            xsyslog_ev(LOG_INFO, "sync.action.deferred",
+                       lf_s("sync.command", "USER"),
+                       lf_s("u.username", action->user));
         }
         else if (r) goto cleanup;
         r = sync_do_restart(sync_cs);
@@ -9316,14 +9351,17 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
         r = do_unuser(sync_cs, action->user);
         if (sync_cs->channel && r == IMAP_MAILBOX_LOCKED) {
             sync_log_channel_unuser(sync_cs->channel, action->user);
-            report_verbose("  Deferred: UNUSER %s\n", action->user);
+            xsyslog_ev(LOG_INFO, "sync.action.deferred",
+                       lf_s("sync.command", "UNUSER"),
+                       lf_s("u.username", action->user));
         }
         else if (r) goto cleanup;
     }
 
   cleanup:
     if (r && r != IMAP_BYE_LOGOUT) {
-        report_verbose_error("Error in do_sync(): bailing out! %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "sync.batch.failed",
+                   lf_err("error", r));
     }
 
     sync_action_list_free(&user_list);
@@ -9415,7 +9453,8 @@ connected:
         prot_flush(backend->out);
 
         if (sync_parse_response("COMPRESS", backend->in, NULL)) {
-            syslog(LOG_NOTICE, "Failed to enable compression, continuing uncompressed");
+            xsyslog_ev(LOG_NOTICE, "sync.compress.failed",
+                       lf_s("remote.host", sync_cs->servername));
         }
         else {
             prot_setcompress(backend->in);
@@ -9427,23 +9466,31 @@ connected:
     unsigned capabilities = 0;
 
     if (CAPA(backend, CAPA_SIEVE_MAILBOX)) {
-        syslog(LOG_INFO, "Destination supports #sieve mailbox");
+        xsyslog_ev(LOG_INFO, "sync.capability.found",
+                   lf_s("remote.host", sync_cs->servername),
+                   lf_s("sync.capability", "SIEVE-MAILBOX"));
         capabilities |= CAPA_SIEVE_MAILBOX;
     }
 
     if (CAPA(backend, CAPA_UNMAILBOX_ID)) {
-        syslog(LOG_INFO, "Destination supports identified UNMAILBOX");
+        xsyslog_ev(LOG_INFO, "sync.capability.found",
+                   lf_s("remote.host", sync_cs->servername),
+                   lf_s("sync.capability", "UNMAILBOX-ID"));
         capabilities |= CAPA_UNMAILBOX_ID;
     }
 
     if (sync_cs->flags & SYNC_FLAG_ARCHIVE) {
         if (CAPA(backend, CAPA_REPLICATION_ARCHIVE)) {
-            syslog(LOG_INFO, "Destination supports replication to archive");
+            xsyslog_ev(LOG_INFO, "sync.capability.found",
+                       lf_s("remote.host", sync_cs->servername),
+                       lf_s("sync.capability", "REPLICATION-ARCHIVE"));
             capabilities |= CAPA_REPLICATION_ARCHIVE;
             sync_cs->flags &= ~SYNC_FLAG_ARCHIVE;
         }
         else {
-            syslog(LOG_NOTICE, "Destination doesn't support replication to archive");
+            xsyslog_ev(LOG_NOTICE, "sync.capability.missing",
+                       lf_s("remote.host", sync_cs->servername),
+                       lf_s("sync.capability", "REPLICATION-ARCHIVE"));
         }
     }
 
@@ -9453,7 +9500,9 @@ connected:
         if ((capabilities & CAPA_REPLICATION_ARCHIVE)
             && !(sync_cs->flags & SYNC_FLAG_ARCHIVE))
         {
-            syslog(LOG_NOTICE, "Replication to archive requested but destination didn't enable it");
+            xsyslog_ev(LOG_NOTICE, "sync.capability.refused",
+                       lf_s("remote.host", sync_cs->servername),
+                       lf_s("sync.capability", "REPLICATION-ARCHIVE"));
             return IMAP_REMOTE_DENIED;
         }
     }
@@ -9492,7 +9541,8 @@ sync_rightnow_timeout(struct protstream *s __attribute__((unused)),
                       struct prot_waitevent *ev __attribute__((unused)),
                       void *rock __attribute__((unused)))
 {
-    syslog(LOG_DEBUG, "sync_rightnow_timeout()");
+    xsyslog_ev(LOG_DEBUG, "sync.rightnow.idle_timeout",
+               lf_s("remote.host", rightnow_sync_cs.servername));
 
     /* too long since we last used the syncer - disconnect */
     sync_disconnect(&rightnow_sync_cs);
@@ -9530,11 +9580,12 @@ EXPORTED int sync_checkpoint(struct protstream *clientin)
             return 0;
         }
         rightnow_sync_cs.flags = SYNC_FLAG_LOGGING;
-        syslog(LOG_DEBUG, "sync_rightnow_connect(%s)", rightnow_sync_cs.servername);
+        xsyslog_ev(LOG_DEBUG, "sync.rightnow.connecting",
+                   lf_s("remote.host", rightnow_sync_cs.servername));
         sync_connect(&rightnow_sync_cs);
         if (!rightnow_sync_cs.backend) {
-            syslog(LOG_ERR, "SYNCERROR sync_rightnow: failed to connect to server: %s",
-                   rightnow_sync_cs.servername);
+            xsyslog_ev(LOG_ERR, "sync.rightnow.connect.failed",
+                       lf_s("remote.host", rightnow_sync_cs.servername));
             // dammit, but the show must go on
             buf_reset(buf);
             return 0;
@@ -9549,8 +9600,9 @@ EXPORTED int sync_checkpoint(struct protstream *clientin)
     int r = sync_log_reader_begin(slr);
     if (!r) r = sync_do_reader(&rightnow_sync_cs, slr);
     if (r) {
-        syslog(LOG_ERR, "SYNCERROR sync_rightnow: error syncing to: %s (%s)",
-               rightnow_sync_cs.servername, error_message(r));
+        xsyslog_ev(LOG_ERR, "sync.rightnow.failed",
+                   lf_s("remote.host", rightnow_sync_cs.servername),
+                   lf_err("error", r));
     }
 
     sync_log_reader_end(slr);
@@ -9573,7 +9625,9 @@ int sync_do_enable(struct sync_client_state *sync_cs, unsigned capabilities)
         printf("ENABLE 0x%x\n", capabilities);
 
     if (sync_cs->flags & SYNC_FLAG_LOGGING)
-        syslog(LOG_INFO, "ENABLE 0x%x", capabilities);
+        xsyslog_ev(LOG_INFO, "sync.command.issued",
+                   lf_s("sync.command", "ENABLE"),
+                   lf_raw("sync.enable", "0x%x", capabilities));
 
     kl = dlist_newlist(NULL, "CAPABILITIES");
     if (capabilities & CAPA_SIEVE_MAILBOX) {
@@ -9594,8 +9648,9 @@ int sync_do_enable(struct sync_client_state *sync_cs, unsigned capabilities)
     if (!r && kin) {
         struct dlist *ki = kin->head;
         if (strcmp(ki->name, "ENABLED")) {
-            xsyslog(LOG_ERR, "SYNCERROR: Illegal response to CAPABILITIES",
-                    "name=<%s>", ki->name);
+            xsyslog_ev(LOG_ERR, "sync.response.invalid",
+                       lf_s("sync.command", "CAPABILITIES"),
+                       lf_s("sync.response", ki->name));
             r = IMAP_PROTOCOL_BAD_PARAMETERS;
         }
         else {
