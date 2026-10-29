@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+# A calendar-user-address-set naming another local user's address is
+# refused when it is set, as it would be ignored when scheduling.
+sub test_calendar_user_address_set_other_user
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $caldav = $self->{caldav};
+
+    $self->create_user_and_allocate_calendar('other');
+
+    my sub set_addresses (@hrefs) {
+        my $res = $caldav->Request(
+          'PROPPATCH',
+          '',
+          x('D:propertyupdate', $caldav->NS(),
+            x('D:set',
+              x('D:prop',
+                x('C:calendar-user-address-set',
+                  map { x('D:href', $_) } @hrefs
+                )
+              )
+            )
+          )
+        );
+        return $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]
+                    {'{DAV:}status'}{content};
+    }
+
+    my sub addresses () {
+        my $res = $jmap->CallMethods([
+            ['ParticipantIdentity/get', {}, 'R1'],
+        ]);
+        return [ sort map { $_->{calendarAddress} } @{$res->[0][1]{list}} ];
+    }
+
+    xlog $self, "another user's address is refused";
+    my $status = set_addresses('mailto:cassandane@example.com',
+                               'mailto:other@example.com');
+    $self->assert_str_equals('HTTP/1.1 403 Forbidden', $status);
+    $self->assert_cmp_deeply(['mailto:cassandane@example.com'], addresses());
+
+    xlog $self, "so is one escaped or in another case";
+    $status = set_addresses('mailto:cassandane@example.com',
+                            'mailto:OTHER%40example.com');
+    $self->assert_str_equals('HTTP/1.1 403 Forbidden', $status);
+    $self->assert_cmp_deeply(['mailto:cassandane@example.com'], addresses());
+
+    xlog $self, "the user's own address and an alias are accepted";
+    $status = set_addresses('mailto:cassandane@example.com',
+                            'mailto:foo@local');
+    # a minimal response omits the propstat of a property that was set
+    $self->assert_null($status);
+    $self->assert_cmp_deeply(
+        ['mailto:cassandane@example.com', 'mailto:foo@local'],
+        addresses());
+}

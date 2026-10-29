@@ -57,6 +57,17 @@ extern char *caladdress_userid(const char *addr, bool defdomain_fallback,
                                mbentry_t **calhomep);
 
 /**
+ * Check whether userid may schedule as addr in a calendar owned by
+ * ownerid: addr is no local user's address (see caladdress_userid()), or
+ * is userid's or ownerid's.  Either of userid and ownerid may be NULL.
+ *
+ * @return true if userid may schedule as addr
+ */
+extern bool sched_address_permitted(const char *addr,
+                                    const char *userid,
+                                    const char *ownerid);
+
+/**
  * Remove from addresses every address of a local user (see
  * caladdress_userid()) other than userid and ownerid, either of which may
  * be NULL.  Other addresses, such as an alias a user lists in their

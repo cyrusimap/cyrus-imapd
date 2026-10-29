@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+# Calendar/set refuses a participant identity that is another local
+# user's address, as it would be ignored when scheduling.
+sub test_calendar_set_participantidentities_other_user
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $cal_id = $self->default_user->calendars->default->id;
+    $self->create_user_and_allocate_calendar('other');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ];
+
+    my sub set_identities (@uris) {
+        my $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                update => {
+                    $cal_id => {
+                        participantIdentities => [
+                            map { { uri => $_ } } @uris
+                        ],
+                    },
+                },
+            }, 'R1'],
+        ], $using);
+        return $res->[0][1];
+    }
+
+    xlog $self, "another user's address is refused";
+    my $set = set_identities('mailto:cassandane@example.com',
+                             'mailto:other@example.com');
+    $self->assert_cmp_deeply({
+        type => 'invalidProperties',
+        properties => ['participantIdentities[1]/uri'],
+    }, $set->{notUpdated}{$cal_id});
+
+    xlog $self, "the user's own address and an alias are accepted";
+    $set = set_identities('mailto:cassandane@example.com',
+                          'mailto:foo@local');
+    $self->assert(exists $set->{updated}{$cal_id});
+}
