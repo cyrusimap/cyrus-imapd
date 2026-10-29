@@ -217,6 +217,9 @@ cmd.total               cmd.duration and cmd.nettime added together
 compress.algorithm      the compression algorithm a connection negotiated
 config.debug            1 if debug logging is now on
 config.option           the name of an imapd.conf option
+config.partitions       the partitions that share a disk path, comma separated
+config.replacement      the option or value that replaces a deprecated one
+config.since            the version an option or value was deprecated in
 config.value            the value given for an imapd.conf option
 conn.host               open connections from this client host
 conn.host.max           how many are allowed from one host
@@ -487,6 +490,11 @@ lmtp.rcpt.index         which recipient of the transaction, counting from zero
 lmtp.rcpt.state         a recipient's delivery state in the proxy state machine
 lmtp.smtputf8           1 if lmtpd offers SMTPUTF8
 lmtp.target             how the destination mailbox was chosen: default, plus-addr, ...
+mappedfile.length       how many bytes a mappedfile write tried to write
+mappedfile.lock.action  the step at which reopening a mappedfile under lock failed
+mappedfile.lock.duration  how long a mappedfile lock was held, in seconds
+mappedfile.offset       the offset a mappedfile write was at
+mappedfile.step         which step of a mappedfile operation is being logged
 master.child            placeholder for "no known child process"; value is always ~null~
 master.child.age        how long ago master spawned a child process, in seconds
 master.child.state      master's record of a child's state: READY, BUSY, DEAD or UNKNOWN
@@ -829,6 +837,7 @@ other.mbox.part         the partition of the other mailbox involved
 other.mbox.uniqueid     the uniqueid of the other mailbox involved
 other.msg.guid          the guid of the other message involved
 other.msg.imapuid       the IMAP uid of the other message involved
+other.sys.path          the second path involved
 
 ### replica. - the replica's copy of a value, paired with the unprefixed key for the master's
 

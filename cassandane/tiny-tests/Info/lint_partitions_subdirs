@@ -46,5 +46,5 @@ sub test_lint_partitions_subdirs
     );
 
     $self->assert_syslog_matches($self->{instance},
-                                 qr{disk path is a prefix of others});
+                                 qr{\bevent=config\.partition\.path\.nested\b});
 }
