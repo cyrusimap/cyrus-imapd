@@ -17,7 +17,7 @@ EOF
 
     # Verify that message was redirected (no RCPT TO error)
     $self->assert_syslog_does_not_match($self->{instance},
-                                        qr/RCPT TO: code=553 text=5.1.1/);
+                                        qr/\bevent=smtpclient\.response\.unexpected\b.*\bsmtp\.command="RCPT TO" smtp\.code=553\b/);
 
     xlog $self, "Make sure that message is NOT in INBOX (due to runtime error)";
     my $talk = $self->{store}->get_client();

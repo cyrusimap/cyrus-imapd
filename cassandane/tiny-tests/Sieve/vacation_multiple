@@ -36,6 +36,6 @@ EOF
     $self->{instance}->deliver($msg2);
 
     # Make sure that we only sent one response
-    my @resp = $self->{instance}->getsyslog(qr/smtpclient_open:/);
+    my @resp = $self->{instance}->getsyslog(qr/\bevent=smtpclient\.connecting\b/);
     $self->assert_num_equals(1, scalar @resp);
 }
