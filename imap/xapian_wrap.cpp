@@ -286,8 +286,8 @@ static const Xapian::Stopper* get_stopper(const std::string& iso)
     errno = 0;
     std::ifstream inFile (fname);
     if (inFile.fail()) {
-        syslog(LOG_DEBUG, "Xapian: could not open stopword file %s: %s",
-                fname.c_str(), errno ? strerror(errno) : "unknown error");
+        xsyslog_ev(LOG_DEBUG, "search.xapian.stopwords.open.failed",
+                   lf_s("sys.path", fname.c_str()));
         return NULL;
     }
 
@@ -553,8 +553,9 @@ EXPORTED int xapian_compact_dbs(const char *dest, const char **sources)
             // Aggregate language counts.
             r = calculate_language_counts(subdb, lang_counts);
             if (r) {
-                xsyslog(LOG_ERR, "IOERROR: corrupt language metadata",
-                                 "path=<%s>", thispath);
+                xsyslog_ev(LOG_ERR, "search.xapian.metadata.invalid",
+                           lf_s("sys.path", thispath),
+                           lf_s("search.reason", "language"));
                 return r;
             }
         }
@@ -575,9 +576,9 @@ EXPORTED int xapian_compact_dbs(const char *dest, const char **sources)
         write_language_counts(newdb, lang_counts);
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s> path=<%s>",
-                         err.get_description().c_str(), thispath);
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()),
+                   lf_s("sys.path", thispath));
         r = IMAP_IOERROR;
     }
 
@@ -772,9 +773,9 @@ EXPORTED int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
         r = IMAP_MAILBOX_LOCKED;
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s> path=<%s>",
-                         err.get_description().c_str(), thispath);
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()),
+                   lf_s("sys.path", thispath));
         r = IMAP_IOERROR;
     }
 
@@ -791,9 +792,10 @@ EXPORTED int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
                 ptrarray_append(&dbw->otherdbs, new Xapian::Database{*paths++});
             }
             catch (const Xapian::Error &err) {
-                xsyslog(LOG_ERR, "IOERROR: reading database",
-                                 "exception=<%s> path=<%s>",
-                                 err.get_description().c_str(), thispath);
+                xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                           lf_s("error", err.get_description().c_str()),
+                           lf_s("sys.path", thispath),
+                           lf_s("search.step", "read"));
             }
         }
     }
@@ -839,9 +841,8 @@ EXPORTED void xapian_dbw_close(xapian_dbw_t *dbw)
         free(dbw);
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
     }
 }
 
@@ -852,9 +853,8 @@ EXPORTED int xapian_dbw_begin_txn(xapian_dbw_t *dbw)
         dbw->database->begin_transaction();
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
         r = IMAP_IOERROR;
     }
     return r;
@@ -867,9 +867,8 @@ EXPORTED int xapian_dbw_commit_txn(xapian_dbw_t *dbw)
         dbw->database->commit_transaction();
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
         r = IMAP_IOERROR;
     }
     return r;
@@ -882,9 +881,8 @@ EXPORTED int xapian_dbw_cancel_txn(xapian_dbw_t *dbw)
         dbw->database->cancel_transaction();
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
         r = IMAP_IOERROR;
     }
     return r;
@@ -911,9 +909,8 @@ EXPORTED int xapian_dbw_begin_doc(xapian_dbw_t *dbw,
         dbw->term_generator->set_termpos(1);
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
         r = IMAP_IOERROR;
     }
     return r;
@@ -924,8 +921,9 @@ static int add_language_part(xapian_dbw_t *dbw, const struct buf *part, enum sea
     std::string prefix(get_term_prefix(partnum));
     std::string val = parse_langcode(buf_cstring(part));
     if (val.empty()) {
-        syslog(LOG_INFO, "Xapian: not a valid ISO 639 code: %s",
-                buf_cstring(part));
+        xsyslog_ev(LOG_INFO, "search.xapian.term.invalid",
+                   lf_s("search.reason", "language"),
+                   lf_s("search.value", buf_cstring(part)));
         return 0;
     }
     add_boolean_nterm(*dbw->document, prefix + val);
@@ -948,8 +946,9 @@ static int add_priority_part(xapian_dbw_t *dbw, const struct buf *part, enum sea
     if (buf_len(part)) {
         std::string val = parse_priority(buf_cstring(part));
         if (val.empty()) {
-            syslog(LOG_DEBUG, "Xapian: not a valid priority: %s",
-                    buf_cstring(part));
+            xsyslog_ev(LOG_DEBUG, "search.xapian.term.invalid",
+                       lf_s("search.reason", "priority"),
+                       lf_s("search.value", buf_cstring(part)));
             return 0;
         }
         add_boolean_nterm(*dbw->document, prefix + val);
@@ -1005,8 +1004,9 @@ static int add_listid_part(xapian_dbw_t *dbw, const struct buf *part, enum searc
     std::string val = parse_listid(buf_cstring(part));
     val.erase(std::remove_if(val.begin(), val.end(), isspace), val.end());
     if (val.empty()) {
-        syslog(LOG_DEBUG, "Xapian: not a valid list-id: %s",
-                buf_cstring(part));
+        xsyslog_ev(LOG_DEBUG, "search.xapian.term.invalid",
+                   lf_s("search.reason", "listid"),
+                   lf_s("search.value", buf_cstring(part)));
         return 0;
     }
 
@@ -1162,8 +1162,8 @@ static int add_text_part(xapian_dbw_t *dbw, const struct buf *part, enum search_
             // Index by language.
 #ifndef HAVE_CLD2
             // XXX is this really an "IOERROR"?
-            xsyslog(LOG_ERR, "IOERROR: language indexing requires CLD2 library",
-                             NULL);
+            xsyslog_ev(LOG_ERR, "search.xapian.cld2.missing",
+                       lf_s("config.option", "search_index_language"));
             return IMAP_IOERROR;
 #else
 
@@ -1178,8 +1178,8 @@ static int add_text_part(xapian_dbw_t *dbw, const struct buf *part, enum search_
                             dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len),
                                     1, lang_prefix(iso_lang, prefix));
                         } catch (const Xapian::InvalidArgumentError &err) {
-                            syslog(LOG_DEBUG, "Xapian: no stemmer for language %s",
-                                    iso_lang.c_str());
+                            xsyslog_ev(LOG_DEBUG, "search.xapian.stemmer.missing",
+                                       lf_s("search.language", iso_lang.c_str()));
                         }
                     }
                     if (dbw->doctype == 'P') {
@@ -1260,9 +1260,8 @@ EXPORTED int xapian_dbw_doc_part(xapian_dbw_t *dbw,
         dbw->term_generator->increase_termpos();
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
         r = IMAP_IOERROR;
     }
     return r;
@@ -1314,9 +1313,8 @@ EXPORTED int xapian_dbw_end_doc(xapian_dbw_t *dbw, uint8_t indexlevel)
         dbw->subjects->clear();
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
         r = IMAP_IOERROR;
     }
     return r;
@@ -1329,9 +1327,8 @@ EXPORTED unsigned long xapian_dbw_total_length(xapian_dbw_t *dbw)
         res = dbw->database->get_total_length();
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
     }
     return res;
 }
@@ -1409,9 +1406,8 @@ static int xapian_db_init(xapian_db_t *db, int is_inmemory)
         }
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
         r = IMAP_IOERROR;
     }
 
@@ -1436,7 +1432,9 @@ EXPORTED int xapian_db_open(const char **paths, xapian_db_t **dbp)
             Xapian::Database subdb {thispath};
             std::set<int> db_versions = read_db_versions(subdb);
             if (db_versions.empty()) {
-                syslog(LOG_ERR, "xapian_wrapper: invalid db version in %s", thispath);
+                xsyslog_ev(LOG_ERR, "search.xapian.db.invalid",
+                           lf_s("sys.path", thispath),
+                           lf_s("search.reason", "version"));
                 r = IMAP_INTERNAL;
                 goto done;
             }
@@ -1445,9 +1443,9 @@ EXPORTED int xapian_db_open(const char **paths, xapian_db_t **dbp)
             db->db_versions->insert(db_versions.begin(), db_versions.end());
             // Check for experimental v4 indexes, they were bogus.
             if (db_versions.find(4) != db_versions.end()) {
-                xsyslog(LOG_WARNING, "deprecated v4 index detected, "
-                        "search may return wrong results",
-                        "db=<%s>", thispath);
+                xsyslog_ev(LOG_WARNING, "search.xapian.db.deprecated",
+                           lf_s("sys.path", thispath),
+                           lf_d("search.index_version", 4));
             }
             // Add database.
             if (!db->database) db->database = new Xapian::Database;
@@ -1470,9 +1468,9 @@ EXPORTED int xapian_db_open(const char **paths, xapian_db_t **dbp)
         if (r) goto done;
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s> path=<%s>",
-                         err.get_description().c_str(), thispath);
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()),
+                   lf_s("sys.path", thispath));
         r = IMAP_IOERROR;
     }
 
@@ -1522,9 +1520,8 @@ EXPORTED void xapian_db_close(xapian_db_t *db)
     }
     catch (const Xapian::Error &err) {
         /* XXX - memory leak? */
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
     }
 }
 
@@ -1607,7 +1604,8 @@ static Xapian::Query* query_new_textmatch_internal(const xapian_db_t *db,
                     q |= db->parser->parse_query(lmatch, flags, lang_prefix(iso_lang, prefix));
                 }
             } catch (const Xapian::InvalidArgumentError &err) {
-                syslog(LOG_INFO, "Xapian: no stemmer for language %s", iso_lang.c_str());
+                xsyslog_ev(LOG_INFO, "search.xapian.stemmer.missing",
+                           lf_s("search.language", iso_lang.c_str()));
             }
         }
 
@@ -1627,7 +1625,9 @@ static Xapian::Query *query_new_language(const xapian_db_t *db __attribute__((un
 {
     std::string val = parse_langcode(str);
     if (val.empty()) {
-        syslog(LOG_DEBUG, "Xapian: invalid language in query: %s", str);
+        xsyslog_ev(LOG_DEBUG, "search.xapian.query.invalid",
+                   lf_s("search.reason", "language"),
+                   lf_s("search.value", str));
         return new Xapian::Query(Xapian::Query::MatchNothing);
     }
     return new Xapian::Query(get_term_prefix(partnum) + val);
@@ -1639,7 +1639,9 @@ static Xapian::Query *query_new_priority(const xapian_db_t *db __attribute__((un
 {
     std::string val = parse_priority(str);
     if (val.empty()) {
-        syslog(LOG_DEBUG, "Xapian: invalid priority in query: %s", str);
+        xsyslog_ev(LOG_DEBUG, "search.xapian.query.invalid",
+                   lf_s("search.reason", "priority"),
+                   lf_s("search.value", str));
         return new Xapian::Query(Xapian::Query::MatchNothing);
     }
     return new Xapian::Query(get_term_prefix(partnum) + val);
@@ -1661,7 +1663,9 @@ static Xapian::Query *query_new_listid(const xapian_db_t *db,
         q = new Xapian::Query(prefix + val);
     }
     else {
-        syslog(LOG_DEBUG, "Xapian: invalid listid in query: %s", str);
+        xsyslog_ev(LOG_DEBUG, "search.xapian.query.invalid",
+                   lf_s("search.reason", "listid"),
+                   lf_s("search.value", str));
         q = new Xapian::Query(Xapian::Query::MatchNothing);
     }
 
@@ -2317,9 +2321,8 @@ static Xapian::Query *xapian_query_new_match_internal(const xapian_db_t *db,
         }
 
     } catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
     }
 
     free(mystr);
@@ -2377,11 +2380,10 @@ xapian_query_new_match(const xapian_db_t *db, enum search_part partnum, const ch
 
     unsigned min_version = *db->db_versions->begin();
     if (min_version < XAPIAN_DB_MIN_SUPPORTED_VERSION) {
-        xsyslog(LOG_WARNING,
-                "deprecated database version, reindex required",
-                "version=<%d> min_supported_version=<%d> paths=<%s>",
-                min_version, XAPIAN_DB_MIN_SUPPORTED_VERSION,
-                db->paths->c_str());
+        xsyslog_ev(LOG_WARNING, "search.xapian.db.deprecated",
+                   lf_s("sys.path", db->paths->c_str()),
+                   lf_u("search.index_version", min_version),
+                   lf_d("search.min_index_version", XAPIAN_DB_MIN_SUPPORTED_VERSION));
     }
 
     unsigned max_version = *db->db_versions->rbegin();
@@ -2459,9 +2461,8 @@ xapian_query_new_compound(const xapian_db_t *db __attribute__((unused)),
         return (xapian_query_t *)compound;
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
         return 0;
     }
 }
@@ -2485,9 +2486,8 @@ xapian_query_new_not(const xapian_db_t *db __attribute__((unused)),
         return (xapian_query_t *)qq;
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
         return 0;
     }
 }
@@ -2513,9 +2513,8 @@ xapian_query_new_has_doctype(const xapian_db_t *db __attribute__((unused)),
         return (xapian_query_t *)qq;
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
         return 0;
     }
 }
@@ -2526,9 +2525,8 @@ EXPORTED void xapian_query_free(xapian_query_t *qq)
         delete (Xapian::Query *)qq;
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
     }
 }
 
@@ -2555,16 +2553,19 @@ EXPORTED int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq,
 
             /* ignore documents with no cyrusid.  Shouldn't happen, but has been seen */
             if (cyrusid.length() != 43) {
-                xsyslog(LOG_ERR, "IOERROR: skipping document with zero-length cyrusid",
-                                 "documentid=<%u> paths=<%s>",
-                                 d.get_docid(), db->paths->c_str());
+                xsyslog_ev(LOG_ERR, "search.xapian.document.invalid",
+                           lf_s("sys.path", db->paths->c_str()),
+                           lf_u("search.document", d.get_docid()),
+                           lf_s("search.reason", "empty_cyrusid"));
                 continue;
             }
             const char *cstr = cyrusid.c_str();
             if (cstr[0] != '*' || !isalpha(cstr[1]) || cstr[2] != '*') {
-                xsyslog(LOG_ERR, "IOERROR: skipping document with invalid cyrusid",
-                                 "cyrusid=<%s> documentid=<%u> paths=<%s>",
-                                 cstr, d.get_docid(), db->paths->c_str());
+                xsyslog_ev(LOG_ERR, "search.xapian.document.invalid",
+                           lf_s("sys.path", db->paths->c_str()),
+                           lf_u("search.document", d.get_docid()),
+                           lf_s("search.reason", "bad_cyrusid"),
+                           lf_s("search.cyrusid", cstr));
                 continue;
             }
             if (n >= size) throw Xapian::DatabaseError("Too many records in MSet");
@@ -2575,10 +2576,9 @@ EXPORTED int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq,
         }
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s> query=<%s>",
-                         err.get_description().c_str(),
-                         query ? query->get_description().c_str() : "");
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()),
+                   lf_s("search.query", query ? query->get_description().c_str() : ""));
         free(data);
         return IMAP_IOERROR;
     }
@@ -2783,9 +2783,8 @@ EXPORTED int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
             buf_appendcstr(snipgen->buf, snippet.c_str());
         }
     } catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s>",
-                         err.get_description().c_str());
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()));
         r = IMAP_IOERROR;
     }
     return r;
@@ -2966,9 +2965,8 @@ EXPORTED int xapian_filter(const char *dest, const char **sources,
         std::map<const std::string, unsigned> lang_counts;
         r = calculate_language_counts(destdb, lang_counts);
         if (r) {
-            xsyslog(LOG_ERR, "IOERROR: corrupt metadata",
-                             "filter=<%s>",
-                             dest);
+            xsyslog_ev(LOG_ERR, "search.xapian.metadata.invalid",
+                       lf_s("search.filter", dest));
             return r;
         }
         write_language_counts(destdb, lang_counts);
@@ -2977,9 +2975,9 @@ EXPORTED int xapian_filter(const char *dest, const char **sources,
         destdb.commit();
     }
     catch (const Xapian::Error &err) {
-        xsyslog(LOG_ERR, "IOERROR: caught exception",
-                         "exception=<%s> path=<%s>",
-                         err.get_description().c_str(), thispath);
+        xsyslog_ev(LOG_ERR, "search.xapian.exception",
+                   lf_s("error", err.get_description().c_str()),
+                   lf_s("sys.path", thispath));
         r = IMAP_IOERROR;
     }
 
