@@ -1320,12 +1320,16 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
 
     struct mailbox *mailbox;
     if ((r = msgrecord_get_mailbox(msgrec, &mailbox))) {
-        syslog(LOG_ERR, "mboxevent: can't extract mailbox: %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                   lf_s("mboxevent.field", "mailbox"),
+                   lf_err("error", r));
         return;
     }
 
     if ((r = msgrecord_get_uid(msgrec, &uid))) {
-        syslog(LOG_ERR, "mboxevent: can't extract uid: %s", error_message(r));
+        xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                   lf_s("mboxevent.field", "uid"),
+                   lf_err("error", r));
         return;
     }
 
@@ -1333,7 +1337,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     if (mboxevent_expected_param(event->type, EVENT_MODSEQ)) {
         modseq_t modseq = 0;
         if ((r = msgrecord_get_modseq(msgrec, &modseq))) {
-            syslog(LOG_ERR, "mboxevent: can't extract modseq: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "modseq"),
+                       lf_err("error", r));
             return;
         }
         if (event->uidset == NULL || (seqset_first(event->uidset) == seqset_last(event->uidset))) {
@@ -1362,7 +1368,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     if (mboxevent_expected_param(event->type, (EVENT_MIDSET))) {
         char *msgid = NULL;
         if ((r = msgrecord_get_cache_env(msgrec, ENV_MSGID, &msgid))) {
-            syslog(LOG_ERR, "mboxevent: can't extract msgid: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "msgid"),
+                       lf_err("error", r));
             return;
         }
         strarray_add(&event->midset, msgid ? msgid : "NIL");
@@ -1373,7 +1381,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_SIZE)) {
         uint32_t size;
         if ((r = msgrecord_get_size(msgrec, &size))) {
-            syslog(LOG_ERR, "mboxevent: can't extract size: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "size"),
+                       lf_err("error", r));
             return;
         }
         FILL_UNSIGNED_PARAM(event, EVENT_MESSAGE_SIZE, size);
@@ -1383,7 +1393,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_CID)) {
         bit64 cid;
         if ((r = msgrecord_get_cid(msgrec, &cid))) {
-            syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "cid"),
+                       lf_err("error", r));
             return;
         }
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
@@ -1398,11 +1410,15 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         struct message_guid guid;
         struct timespec internaldate;
         if ((r = msgrecord_get_guid(msgrec, &guid))) {
-            syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "guid"),
+                       lf_err("error", r));
             return;
         }
         if ((r = msgrecord_get_internaldate(msgrec, &internaldate))) {
-            syslog(LOG_ERR, "mboxevent: can't extract internaldate: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "internaldate"),
+                       lf_err("error", r));
             return;
         }
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
@@ -1417,7 +1433,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_THREADID)) {
         bit64 cid;
         if ((r = msgrecord_get_cid(msgrec, &cid))) {
-            syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "cid"),
+                       lf_err("error", r));
             return;
         }
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
@@ -1433,19 +1451,27 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         struct timespec internaldate;
         bit64 cid;
         if ((r = msgrecord_get_guid(msgrec, &guid))) {
-            syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "guid"),
+                       lf_err("error", r));
             return;
         }
         if ((r = msgrecord_get_internaldate(msgrec, &internaldate))) {
-            syslog(LOG_ERR, "mboxevent: can't extract internaldate: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "internaldate"),
+                       lf_err("error", r));
             return;
         }
         if ((r = msgrecord_get_cid(msgrec, &cid))) {
-            syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "cid"),
+                       lf_err("error", r));
             return;
         }
         if ((r = msgrecord_extract_bodystructure(msgrec, &body))) {
-            syslog(LOG_ERR, "mboxevent: can't extract body: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "body"),
+                       lf_err("error", r));
             return;
         }
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
@@ -1461,7 +1487,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     if (mboxevent_expected_param(event->type, EVENT_ENVELOPE)) {
         char *env;
         if ((r = msgrecord_get_cache_item(msgrec, CACHE_ENVELOPE, &env))) {
-            syslog(LOG_ERR, "mboxevent: can't extract cache envelope: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "cache_envelope"),
+                       lf_err("error", r));
             return;
         }
         FILL_STRING_PARAM(event, EVENT_ENVELOPE, env);
@@ -1471,7 +1499,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     if (mboxevent_expected_param(event->type, EVENT_BODYSTRUCTURE)) {
         char *bs;
         if ((r = msgrecord_get_cache_item(msgrec, CACHE_BODYSTRUCTURE, &bs))) {
-            syslog(LOG_ERR, "mboxevent: can't extract cached bodystructure: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                       lf_s("mboxevent.field", "cached_bodystructure"),
+                       lf_err("error", r));
             return;
         }
         FILL_STRING_PARAM(event, EVENT_BODYSTRUCTURE, bs);
@@ -1488,7 +1518,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         if (!body) {
             r = msgrecord_extract_bodystructure(msgrec, &body);
             if (r) {
-                syslog(LOG_ERR, "mboxevent: can't extract body: %s", error_message(r));
+                xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                           lf_s("mboxevent.field", "body"),
+                           lf_err("error", r));
                 return;
             }
         }
@@ -1600,7 +1632,8 @@ void mboxevent_extract_content_msgrec(struct mboxevent *event,
 
     if (msgrecord_get_size(msgrec, &record_size) ||
         msgrecord_get_header_size(msgrec, &header_size)) {
-        syslog(LOG_ERR, "mboxevent: can't determine content size");
+        xsyslog_ev(LOG_ERR, "mboxevent.extract.failed",
+                   lf_s("mboxevent.field", "content_size"));
         return;
     }
 
@@ -2230,8 +2263,9 @@ static int filled_params(enum event_type type, struct mboxevent *event)
     }
 
     if (buf_len(&missing)) {
-        syslog(LOG_ALERT, "Cannot notify event %s: missing parameters:%s",
-               event_to_name(type), buf_cstring(&missing));
+        xsyslog_ev(LOG_ALERT, "mboxevent.params.missing",
+                   lf_s("mboxevent.event", event_to_name(type)),
+                   lf_buf("mboxevent.params", &missing));
         ret = 0;
     }
 

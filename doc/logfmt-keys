@@ -510,6 +510,9 @@ master.waitdaemons      how many waitdaemon structures are in use
 master.waitdaemons.allocated  how many waitdaemon structures are allocated
 master.workers.desired  how many waiting children a service should have
 master.workers.max      the most children a service may have
+mboxevent.event         the name of a mailbox event notification
+mboxevent.field         which field of a message an event notification couldn't get
+mboxevent.params        the parameters an event notification was missing
 mboxlist.key            a raw mailboxes.db key
 mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
@@ -527,6 +530,11 @@ mupdate.retry.delay     how long until the next mupdate connection attempt, in s
 mupdate.step            which step of an mupdate operation is being logged
 mupdate.workers         how many mupdate worker threads are running
 mupdate.workers.idle    how many mupdate worker threads are waiting for work
+notify.class            the class of a notifyd notification
+notify.method           the notifyd method a notification asked for
+notify.reason           why sending a notification failed
+notify.response         notifyd's response to a notification
+notify.step             which step of sending a notification is being logged
 pop.subfolder           the subfolder a POP session was restricted to
 proxy.server            the backend server a request was proxied to
 pts.canonical           the canonical form of an identity, as the PTS module gave it
@@ -621,6 +629,14 @@ sieve.script            the name of a Sieve script
 sieve.srs.domain        the domain SRS rewrites a return path into
 sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
+smtp.code               an SMTP reply code
+smtp.command            the SMTP command a reply or failure was for
+smtp.param              an ESMTP parameter's keyword or value
+smtp.text               an SMTP reply's text
+smtpclient.backend      the smtp_backend setting
+smtpclient.rcpt.index   the position of a recipient in an envelope, from 0
+smtpclient.reason       why the SMTP client refused or failed something
+smtpclient.step         which step of the SMTP client's work is being logged
 statuscache.hit         1 if the status cache had the answer
 statuscache.items       the STATUS items a lookup asked for, as a hex mask
 sync.archive            1 if replication is staging a message on an archive partition
