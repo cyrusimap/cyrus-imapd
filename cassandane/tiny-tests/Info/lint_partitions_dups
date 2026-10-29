@@ -42,5 +42,5 @@ sub test_lint_partitions_dups
     );
 
     $self->assert_syslog_matches($self->{instance},
-                                 qr{disk path used by multiple partitions});
+                                 qr{\bevent=config\.partition\.path\.shared\b});
 }
