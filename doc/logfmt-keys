@@ -89,6 +89,7 @@ msg.draft               1 if the record is a draft
 msg.emailid             the message's JMAP id
 msg.expunged            1 if the record is expunged
 msg.flag                a single message flag name
+msg.flags               all of a message's flags, system and user, space-separated
 msg.from                the message's envelope sender
 msg.guid                the message's guid
 msg.id                  the message's RFC 5322 Message-ID
@@ -452,11 +453,17 @@ sync.channel            a replication channel name
 sync.command            a replication protocol command
 sync.field              which mailbox field a replication comparison is about
 sync.file.guid          the guid of a message file, where it disagrees with msg.guid
+sync.file.size          the size of a message file, where it disagrees with msg.size
 sync.forced             1 if replication is running in force mode
+sync.from.modseq        the modseq a partial replication starts after
+sync.from.uid           the uid a partial replication starts after
 sync.reason             why replication skipped, refused or rejected something
 sync.response           a replication server's response, or the part of it at fault
+sync.retry              1 if replication will retry after this event
 sync.stage.path         a message file in the replication staging area
 sync.step               which step of a replication operation is being logged
+sync.to.modseq          the modseq a partial replication stops at
+sync.to.uid             the uid a partial replication stops at
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
 ws.close.reason         the reason text of a WebSocket close frame
@@ -514,7 +521,12 @@ replica.mbox.type       the replica's mailbox type, as a string
 replica.mbox.uidvalidity  the replica's uidvalidity for the mailbox
 replica.mbox.uniqueid   the replica's uniqueid for the mailbox
 replica.mbox.xconvmodseq  the replica's highest conversation modseq for the mailbox
+replica.msg.cid         the replica's conversation id for the message
+replica.msg.flags       the replica's flags for the message, as msg.flags
 replica.msg.guid        the guid of the replica's message at this uid
+replica.msg.imapuid     the uid of the replica's message
+replica.msg.internaldate  the replica's internaldate for the message
+replica.msg.lastupdated when the replica's record was last updated
 replica.msg.modseq      the replica's modseq for the message
 ### old. - the value before a change, paired with the unprefixed key
 
