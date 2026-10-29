@@ -96,17 +96,14 @@ static int usage(const char *name, const char *message)
 EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s\n", s);
-    syslog(LOG_ERR, "Fatal error: %s", s);
+    xsyslog_ev(LOG_ERR, "sync.fatal",
+               lf_s("error", s),
+               lf_d("sys.exitcode", code));
 
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
     exit(code);
 }
-
-#define report_verbose(...) do {                            \
-    if (verbose) printf(__VA_ARGS__);                       \
-    if (verbose_logging) syslog(LOG_INFO, __VA_ARGS__);     \
-} while(0)
 
 static int do_sync_filename(const char *filename)
 {
@@ -191,9 +188,11 @@ static int do_daemon_work(const char *sync_shutdown_file,
 
         /* Process the work log */
         if ((r=sync_do_reader(&sync_cs, slr))) {
-            syslog(LOG_ERR,
-                   "Processing sync log file %s failed: %s",
-                   sync_log_reader_get_file_name(slr), error_message(r));
+            /* the replica going away cleanly is routine */
+            xsyslog_ev(r == IMAP_BYE_LOGOUT ? LOG_NOTICE : LOG_ERR,
+                       "sync.log.process.failed",
+                       lf_s("sys.path", sync_log_reader_get_file_name(slr)),
+                       lf_err("error", r));
             break;
         }
 
@@ -215,10 +214,10 @@ static int do_daemon_work(const char *sync_shutdown_file,
     if (*restartp == RESTART_NORMAL && !sync_once) {
         r = sync_do_restart(&sync_cs);
         if (r) {
-            syslog(LOG_ERR, "sync_client RESTART failed: %s",
-                   error_message(r));
+            xsyslog_ev(LOG_ERR, "sync.restart.failed",
+                       lf_err("error", r));
         } else {
-            syslog(LOG_INFO, "sync_client RESTART succeeded");
+            xsyslog_ev(LOG_INFO, "sync.restart.succeeded");
         }
         r = 0;
     }
@@ -252,7 +251,8 @@ static void replica_connect(void)
     if (!sync_cs.backend) {
         fprintf(stderr, "Can not connect to server '%s'\n",
                 servername);
-        syslog(LOG_ERR, "Can not connect to server '%s'", servername);
+        xsyslog_ev(LOG_ERR, "sync.connect.failed",
+                   lf_s("remote.host", servername));
         _exit(1);
     }
 
@@ -260,8 +260,8 @@ static void replica_connect(void)
     if (do_compress && !sync_cs.backend->in->zstrm) {
         fprintf(stderr, "Failed to enable compression to server '%s'\n",
                 servername);
-        syslog(LOG_ERR, "Failed to enable compression to server '%s'",
-                servername);
+        xsyslog_ev(LOG_ERR, "sync.compress.failed",
+                   lf_s("remote.host", servername));
         _exit(1);
     }
 #endif
@@ -278,7 +278,9 @@ static void replica_connect(void)
         sync_send_apply(kl, sync_cs.backend->out);
         int r = sync_parse_response(cmd, sync_cs.backend->in, &kin);
         if (r) {
-            syslog(LOG_ERR, "SYNCERROR: failed to enable force mode");
+            xsyslog_ev(LOG_ERR, "sync.force.failed",
+                       lf_s("remote.host", servername),
+                       lf_err("error", r));
             _exit(1);
         }
         dlist_free(&kl);
@@ -363,7 +365,10 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
         if (r) {
             if (verbose)
                 fprintf(stderr, "Error from do_user(%s): bailing out!\n", userid);
-            syslog(LOG_ERR, "Error in do_user(%s): bailing out!", userid);
+            xsyslog_ev(LOG_ERR, "sync.client.failed",
+                       lf_s("sync.command", "USER"),
+                       lf_s("u.username", userid),
+                       lf_err("error", r));
             goto done;
         }
     }
@@ -379,7 +384,10 @@ static int cb_allmbox(const mbentry_t *mbentry, void *rock)
         if (r) {
             if (verbose)
                 fprintf(stderr, "Error from do_user(%s): bailing out!\n", mbentry->name);
-            syslog(LOG_ERR, "Error in do_user(%s): bailing out!", mbentry->name);
+            xsyslog_ev(LOG_ERR, "sync.client.failed",
+                       lf_s("sync.command", "MAILBOXES"),
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_err("error", r));
             goto done;
         }
     }
@@ -653,7 +661,9 @@ int main(int argc, char **argv)
 
         if (input_filename) {
             if ((file=fopen(input_filename, "r")) == NULL) {
-                syslog(LOG_NOTICE, "Unable to open %s: %m", input_filename);
+                xsyslog_ev(LOG_NOTICE, "sync.input.open.failed",
+                           lf_s("sys.path", input_filename),
+                           lf_s("sys.error", strerror(errno)));
                 shut_down(1);
             }
             while (fgets(buf, sizeof(buf), file)) {
@@ -669,8 +679,9 @@ int main(int argc, char **argv)
                         fprintf(stderr,
                                 "Error from sync_do_user(%s): bailing out!\n",
                                 buf);
-                    syslog(LOG_ERR, "Error in sync_do_user(%s): bailing out!",
-                           buf);
+                    xsyslog_ev(LOG_ERR, "sync.client.failed",
+                               lf_s("sync.command", "USER"),
+                               lf_s("u.username", buf));
                     exit_rc = 1;
                 }
             }
@@ -680,7 +691,9 @@ int main(int argc, char **argv)
                 if (verbose)
                     fprintf(stderr, "Error from sync_do_user(%s): bailing out!\n",
                             argv[i]);
-                syslog(LOG_ERR, "Error in sync_do_user(%s): bailing out!", argv[i]);
+                xsyslog_ev(LOG_ERR, "sync.client.failed",
+                           lf_s("sync.command", "USER"),
+                           lf_s("u.username", argv[i]));
                 exit_rc = 1;
             }
         }
@@ -707,7 +720,9 @@ int main(int argc, char **argv)
         mboxname_list = sync_name_list_create();
         if (input_filename) {
             if ((file=fopen(input_filename, "r")) == NULL) {
-                syslog(LOG_NOTICE, "Unable to open %s: %m", input_filename);
+                xsyslog_ev(LOG_NOTICE, "sync.input.open.failed",
+                           lf_s("sys.path", input_filename),
+                           lf_s("sys.error", strerror(errno)));
                 shut_down(1);
             }
             while (fgets(buf, sizeof(buf), file)) {
@@ -734,7 +749,8 @@ int main(int argc, char **argv)
                 fprintf(stderr,
                         "Error from sync_do_mailboxes(): bailing out!\n");
             }
-            syslog(LOG_ERR, "Error in sync_do_mailboxes(): bailing out!");
+            xsyslog_ev(LOG_ERR, "sync.client.failed",
+                       lf_s("sync.command", "MAILBOXES"));
             exit_rc = 1;
         }
 
@@ -753,8 +769,9 @@ int main(int argc, char **argv)
                             "Error from sync_do_meta(%s): bailing out!\n",
                             argv[i]);
                 }
-                syslog(LOG_ERR, "Error in sync_do_meta(%s): bailing out!",
-                       argv[i]);
+                xsyslog_ev(LOG_ERR, "sync.client.failed",
+                           lf_s("sync.command", "META"),
+                           lf_s("u.username", argv[i]));
                 exit_rc = 1;
             }
         }
