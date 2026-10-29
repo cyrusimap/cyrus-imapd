@@ -534,7 +534,10 @@ mupdate.step            which step of an mupdate operation is being logged
 mupdate.workers         how many mupdate worker threads are running
 mupdate.workers.idle    how many mupdate worker threads are waiting for work
 notify.class            the class of a notifyd notification
+notify.message          the text of a notifyd notification
 notify.method           the notifyd method a notification asked for
+notify.options          the options of a notifyd notification, as a list
+notify.priority         the priority of a notifyd notification
 notify.reason           why sending a notification failed
 notify.response         notifyd's response to a notification
 notify.step             which step of sending a notification is being logged

@@ -170,7 +170,8 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in,
   {
   case EOF:
       /* timlex() will return EOF when the remote disconnects badly */
-      syslog(LOG_WARNING, "Lost connection to client -- exiting");
+      xsyslog_ev(LOG_WARNING, "timsieve.connection.lost",
+                 lf_s("r.clienthost", sieved_clienthost));
       prot_printf(sieved_out, "BYE \"Shutdown TCP timeout\"\r\n");
       ret = TRUE;
       goto done;
@@ -630,7 +631,8 @@ static void cmd_unauthenticate(struct protstream *sieved_out,
     prot_flush(sieved_out);
 
     if (chdir("/tmp/"))
-        syslog(LOG_ERR, "Failed to chdir to /tmp/");
+        xsyslog_ev(LOG_ERR, "timsieve.chdir.failed",
+                   lf_s("sys.path", "/tmp/"));
     reset_saslconn(&sieved_saslconn);
     prot_unsetsasl(sieved_out);
     prot_unsetsasl(sieved_in);
@@ -760,8 +762,8 @@ static int cmd_authenticate(struct protstream *sieved_out,
   if (sasl_result!=SASL_OK)
   {
     *errmsg = "Internal SASL error";
-    syslog(LOG_ERR, "SASL: sasl_getprop SASL_USERNAME: %s",
-           cyrus_sasl_errmsg(sieved_saslconn, sasl_result, /*for_client*/0));
+    xsyslog_ev(LOG_ERR, "timsieve.sasl.username.failed",
+               lf_s("error", cyrus_sasl_errmsg(sieved_saslconn, sasl_result, /*for_client*/0)));
     goto reset;
   }
   username = xstrdup((const char *) canon_user);
@@ -778,7 +780,8 @@ static int cmd_authenticate(struct protstream *sieved_out,
 
       if(r && !sieved_userisadmin) {
           /* lookup error */
-          syslog(LOG_ERR, "%s", error_message(r));
+          xsyslog_ev(LOG_ERR, "timsieve.auth.failed",
+                     lf_err("error", r));
           goto reset;
       }
 
@@ -798,8 +801,8 @@ static int cmd_authenticate(struct protstream *sieved_out,
                                            &canon_user);
                   if (sasl_result!=SASL_OK) {
                       *errmsg = "Internal SASL error";
-                      syslog(LOG_ERR, "SASL: sasl_getprop SASL_AUTHUSER: %s",
-                             cyrus_sasl_errmsg(sieved_saslconn, sasl_result, /*for_client*/0));
+                      xsyslog_ev(LOG_ERR, "timsieve.sasl.authuser.failed",
+                                 lf_s("error", cyrus_sasl_errmsg(sieved_saslconn, sasl_result, /*for_client*/0)));
                       goto reset;
                   }
                   authname = xstrdup((const char *) canon_user);
@@ -830,7 +833,8 @@ static int cmd_authenticate(struct protstream *sieved_out,
                                         username, NULL, &statusline, -1);
 
               if (!backend) {
-                  syslog(LOG_ERR, "couldn't authenticate to backend server");
+                  xsyslog_ev(LOG_ERR, "timsieve.proxy.auth.failed",
+                             lf_s("r.clienthost", sieved_clienthost));
                   prot_printf(sieved_out, "NO \"%s\"\r\n",
                               statusline ? statusline :
                               "Authentication to backend server failed");
@@ -841,7 +845,8 @@ static int cmd_authenticate(struct protstream *sieved_out,
           }
       } else if (actions_setuser(username) != TIMSIEVE_OK) {
           *errmsg = "internal error";
-          syslog(LOG_ERR, "error in actions_setuser()");
+          xsyslog_ev(LOG_ERR, "timsieve.auth.failed",
+                     lf_s("sieve.step", "setuser"));
           goto reset;
       }
   }
@@ -917,7 +922,7 @@ static int cmd_starttls(struct protstream *sieved_out,
 
     if (result == -1) {
 
-        syslog(LOG_ERR, "error initializing TLS");
+        xsyslog_ev(LOG_ERR, "timsieve.starttls.init.failed");
 
         prot_printf(sieved_out, "NO \"Error initializing TLS\"\r\n");
 
@@ -937,7 +942,8 @@ static int cmd_starttls(struct protstream *sieved_out,
 
     /* if error */
     if (result==-1) {
-        syslog(LOG_NOTICE, "TLS negotiation failed: %s", sieved_clienthost);
+        xsyslog_ev(LOG_NOTICE, "timsieve.starttls.failed",
+                   lf_s("r.clienthost", sieved_clienthost));
         shut_down(EX_PROTOCOL);
     }
 
@@ -945,7 +951,8 @@ static int cmd_starttls(struct protstream *sieved_out,
     result = saslprops_set_tls(saslprops, sieved_saslconn);
 
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
+        xsyslog_ev(LOG_NOTICE, "timsieve.starttls.saslprops.failed",
+                   lf_s("r.clienthost", sieved_clienthost));
         shut_down(EX_TEMPFAIL);
     }
 

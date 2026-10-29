@@ -78,7 +78,8 @@ static int do_notify(void)
     optlen = sizeof(bufsiz);
     r = getsockopt(soc, SOL_SOCKET, SO_RCVBUF, &bufsiz, &optlen);
     if (r == -1) {
-        syslog(LOG_ERR, "unable to getsockopt(SO_RCVBUF) on notify socket: %m");
+        xsyslog_ev(LOG_ERR, "notifyd.socket.failed",
+                   lf_s("notify.step", "getsockopt"));
         return (errno);
     }
 
@@ -126,7 +127,7 @@ static int do_notify(void)
         if (cp) fname = (cp = fetch_arg(cp, tail));
 
         if (!message) {
-            syslog(LOG_ERR, "malformed notify request");
+            xsyslog_ev(LOG_ERR, "notifyd.request.invalid");
             strarray_fini(&options);
             return 0;
         }
@@ -141,8 +142,8 @@ static int do_notify(void)
             }
         }
 
-        syslog(LOG_DEBUG, "do_notify using method '%s'",
-               nmethod->name ? nmethod->name: "unknown");
+        xsyslog_ev(LOG_DEBUG, "notifyd.notifying",
+                   lf_s_opt("notify.method", nmethod->name));
 
         if (nmethod->name) {
             reply = nmethod->notify(class, priority, user, mailbox,
@@ -175,7 +176,9 @@ EXPORTED void fatal(const char *s, int code)
     }
     recurse_code = code;
 
-    syslog(LOG_ERR, "Fatal error: %s", s);
+    xsyslog_ev(LOG_ERR, "notifyd.fatal",
+               lf_s("error", s),
+               lf_d("sys.exitcode", code));
 
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
@@ -184,7 +187,7 @@ EXPORTED void fatal(const char *s, int code)
 
 static void usage(void)
 {
-    syslog(LOG_ERR, "usage: notifyd [-C <alt_config>] [-U <max usage>] [-T timeout] [-D] [-X] [-m method].  method defaults to null");
+    xsyslog_ev(LOG_ERR, "notifyd.usage");
     exit(EX_USAGE);
 }
 
