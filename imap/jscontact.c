@@ -298,7 +298,7 @@ static json_t *_to_jmap_date(vcardproperty *prop)
 }
 
 static void _unmapped_param(json_t *obj,
-                            vcardparameter *param, char *param_value)
+                            vcardparameter *param, const char *param_value)
 {
     vcardparameter_kind param_kind = vcardparameter_isa(param);
     json_t *params = json_object_get_vanew(obj, "vCardParams", "{}");
@@ -331,7 +331,8 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
          param = vcardproperty_get_next_parameter(prop, VCARD_ANY_PARAMETER)) {
         vcardparameter_kind param_kind = vcardparameter_isa(param);
         char *param_str = vcardparameter_as_vcard_string(param);
-        char *param_value = strchr(param_str, '=') + 1;
+        const char *param_value = vcardparameter_get_xvalue(param);
+        if (!param_value) param_value = strchr(param_str, '=') + 1;
         const char *key = NULL;
 
         switch (param_kind) {
@@ -359,16 +360,18 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
 
         case VCARD_CALSCALE_PARAMETER:
             if (param_flags & ALLOW_CALSCALE_PARAM) {
+                buf_setcstr(&buf, param_value);
                 json_object_set_new(obj, "calendarScale",
-                                    json_string(lcase(param_value)));
+                                    json_string(buf_lcase(&buf)));
                 continue;
             }
             break;
 
         case VCARD_CC_PARAMETER:
             if (prop_kind == VCARD_ADR_PROPERTY) {
+                buf_setcstr(&buf, param_value);
                 json_object_set_new(obj, "countryCode",
-                                    json_string(lcase(param_value)));
+                                    json_string(buf_lcase(&buf)));
                 continue;
             }
             break;
@@ -1802,7 +1805,10 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                     break;
 
                 default:
-                    val = jmap_utf8string(param_value);
+                    if (vcardparameter_get_xvalue(param))
+                        val = jmap_utf8string(vcardparameter_get_xvalue(param));
+                    else
+                        val = jmap_utf8string(param_value);
                     break;
                 }
 
