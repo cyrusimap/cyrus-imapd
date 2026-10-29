@@ -249,8 +249,8 @@ static struct conn *conn_new(int fd)
                         NULL, 0,
                         &C->saslconn);
     if (r != SASL_OK) {
-        syslog(LOG_ERR, "failed to start sasl for connection: %s",
-               sasl_errstring(r, NULL, NULL));
+        xsyslog_ev(LOG_ERR, "mupdate.sasl.failed",
+                   lf_s("error", sasl_errstring(r, NULL, NULL)));
         prot_printf(C->pout, SERVER_UNABLE_STRING);
 
         C->idle = 0;
@@ -445,27 +445,32 @@ int service_init(int argc, char **argv,
     workers_to_start = config_getint(IMAPOPT_MUPDATE_WORKERS_START);
 
     if (config_getint(IMAPOPT_MUPDATE_WORKERS_MAX) < config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
-        syslog(LOG_CRIT, "Maximum total worker threads is less than minimum spare worker threads");
+        xsyslog_ev(LOG_CRIT, "mupdate.config.invalid",
+                   lf_s("mupdate.reason", "max_workers_below_min_spare"));
         return EX_SOFTWARE;
     }
 
     if (workers_to_start < config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
-        syslog(LOG_CRIT, "Starting worker threads is less than minimum spare worker threads");
+        xsyslog_ev(LOG_CRIT, "mupdate.config.invalid",
+                   lf_s("mupdate.reason", "start_workers_below_min_spare"));
         return EX_SOFTWARE;
     }
 
     if (config_getint(IMAPOPT_MUPDATE_WORKERS_MAXSPARE) < workers_to_start) {
-        syslog(LOG_CRIT, "Maximum spare worker threads is less than starting worker threads");
+        xsyslog_ev(LOG_CRIT, "mupdate.config.invalid",
+                   lf_s("mupdate.reason", "max_spare_below_start_workers"));
         return EX_SOFTWARE;
     }
 
     if (config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE) > workers_to_start) {
-        syslog(LOG_CRIT, "Minimum spare worker threads is greater than starting worker threads");
+        xsyslog_ev(LOG_CRIT, "mupdate.config.invalid",
+                   lf_s("mupdate.reason", "min_spare_above_start_workers"));
         return EX_SOFTWARE;
     }
 
     if (config_getint(IMAPOPT_MUPDATE_WORKERS_MAX) < workers_to_start) {
-        syslog(LOG_CRIT, "Maximum total worker threads is less than starting worker threads");
+        xsyslog_ev(LOG_CRIT, "mupdate.config.invalid",
+                   lf_s("mupdate.reason", "max_workers_below_start_workers"));
         return EX_SOFTWARE;
     }
 
@@ -502,7 +507,8 @@ int service_init(int argc, char **argv,
     }
 
     if (pipe(conn_pipe) == -1) {
-        syslog(LOG_ERR, "could not setup connection signaling pipe %m");
+        xsyslog_ev(LOG_ERR, "mupdate.init.failed",
+                   lf_s("mupdate.step", "pipe"));
         return EX_OSERR;
     }
 
@@ -513,7 +519,8 @@ int service_init(int argc, char **argv,
         if (r == 0) {
             pthread_detach(t);
         } else {
-            syslog(LOG_ERR, "could not start client thread");
+            xsyslog_ev(LOG_ERR, "mupdate.init.failed",
+                       lf_s("mupdate.step", "worker_thread"));
             return EX_SOFTWARE;
         }
 
@@ -529,7 +536,8 @@ int service_init(int argc, char **argv,
         if (r == 0) {
             pthread_detach(t);
         } else {
-            syslog(LOG_ERR, "could not start placebo kick thread");
+            xsyslog_ev(LOG_ERR, "mupdate.init.failed",
+                       lf_s("mupdate.step", "kick_thread"));
             return EX_SOFTWARE;
         }
 
@@ -542,7 +550,8 @@ int service_init(int argc, char **argv,
         if (r == 0) {
             pthread_detach(t);
         } else {
-            syslog(LOG_ERR, "could not start client thread");
+            xsyslog_ev(LOG_ERR, "mupdate.init.failed",
+                       lf_s("mupdate.step", "worker_thread"));
             return EX_SOFTWARE;
         }
     }
@@ -563,7 +572,9 @@ EXPORTED void fatal(const char *s, int code)
     if (recurse_code) exit(code);
     else recurse_code = code;
 
-    syslog(LOG_ERR, "%s", s);
+    xsyslog_ev(LOG_ERR, "mupdate.fatal",
+               lf_s("error", s),
+               lf_d("sys.exitcode", code));
 
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
@@ -909,7 +920,8 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 
         if ((err = prot_error(c->pin)) != NULL
             && strcmp(err, PROT_EOF_STRING)) {
-            syslog(LOG_WARNING, "%s, closing connection", err);
+            xsyslog_ev(LOG_WARNING, "mupdate.connection.closed",
+                       lf_s("error", err));
             prot_printf(c->pout, "* BYE \"%s\"\r\n", err);
         }
 
@@ -953,15 +965,15 @@ int service_main_fd(int fd,
         r = write(fd,SERVER_UNABLE_STRING,sizeof(SERVER_UNABLE_STRING));
         close(fd);
 
-        syslog(LOG_ERR,
-               "Server too busy, dropping connection.");
+        xsyslog_ev(LOG_ERR, "mupdate.connection.dropped",
+                   lf_s("mupdate.reason", "too_busy"));
         if (r) return 0; /* filthy hack to avoid warning on 'r' */
     } else if (write(conn_pipe[1], &fd, sizeof(fd)) == -1) {
         /* signal that a new file descriptor is available.
          * If it fails... */
 
-        syslog(LOG_CRIT,
-               "write to conn_pipe to signal new connection failed: %m");
+        xsyslog_ev(LOG_CRIT, "mupdate.connection.signal.failed",
+                   lf_s("mupdate.step", "write"));
         return EX_TEMPFAIL;
     }
     return 0;
@@ -1041,8 +1053,8 @@ static void *thread_main(void *rock __attribute__((unused)))
     pthread_mutex_lock(&worker_count_mutex); /* LOCK */
     /* Change total number of workers */
     worker_count++;
-    syslog(LOG_DEBUG,
-           "New worker thread started, for a total of %d", worker_count);
+    xsyslog_ev(LOG_DEBUG, "mupdate.worker.started",
+               lf_d("mupdate.workers", worker_count));
     /* Unlock Worker Count Mutex */
     pthread_mutex_unlock(&worker_count_mutex); /* UNLOCK */
 
@@ -1091,8 +1103,7 @@ static void *thread_main(void *rock __attribute__((unused)))
                 idle_worker_count--;
                 pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
 
-                syslog(LOG_DEBUG,
-                       "Thread timed out waiting for listener_lock");
+                xsyslog_ev(LOG_DEBUG, "mupdate.worker.idle_timeout");
                 goto worker_thread_done;
             }
         }
@@ -1129,7 +1140,7 @@ static void *thread_main(void *rock __attribute__((unused)))
         /* Select on Idle Conns + conn_pipe */
         if (prot_select(protin, conn_pipe[0],
                        &protout, &connflag, NULL) == -1) {
-            syslog(LOG_ERR, "prot_select() failed in thread_main: %m");
+            xsyslog_ev(LOG_ERR, "mupdate.worker.select.failed");
             fatal("prot_select() failed in thread_main", EX_TEMPFAIL);
         }
 
@@ -1167,8 +1178,8 @@ static void *thread_main(void *rock __attribute__((unused)))
         if (connflag) {
             /* read the fd from the pipe, if needed */
             if (read(conn_pipe[0], &new_fd, sizeof(new_fd)) == -1) {
-                syslog(LOG_CRIT,
-                       "read from conn_pipe for new connection failed: %m");
+                xsyslog_ev(LOG_CRIT, "mupdate.connection.signal.failed",
+                           lf_s("mupdate.step", "read"));
                 fatal("conn_pipe read failed", EX_TEMPFAIL);
             }
         } else {
@@ -1235,8 +1246,7 @@ static void *thread_main(void *rock __attribute__((unused)))
                 if (r == 0) {
                     pthread_detach(t);
                 } else {
-                    syslog(LOG_ERR,
-                           "could not start a new worker thread (not fatal)");
+                    xsyslog_ev(LOG_ERR, "mupdate.worker.start.failed");
                 }
                 /* Even if we fail to create the new thread, keep going */
                 need_workers--;
@@ -1306,9 +1316,9 @@ static void *thread_main(void *rock __attribute__((unused)))
     pthread_mutex_lock(&worker_count_mutex); /* LOCK */
     worker_count--;
     pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
-    syslog(LOG_DEBUG,
-           "Worker thread finished, for a total of %d (%d spare)",
-           worker_count, idle_worker_count);
+    xsyslog_ev(LOG_DEBUG, "mupdate.worker.finished",
+               lf_d("mupdate.workers", worker_count),
+               lf_d("mupdate.workers.idle", idle_worker_count));
     pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
     pthread_mutex_unlock(&worker_count_mutex); /* UNLOCK */
 
@@ -1548,7 +1558,9 @@ static void cmd_set(struct conn *C,
         EXISTS, NOTACTIVE, DOESNTEXIST, ISOK, NOOUTPUT
     } msg = NOOUTPUT;
 
-    syslog(LOG_DEBUG, "cmd_set(fd:%d, %s)", C->fd, mailbox);
+    xsyslog_ev(LOG_DEBUG, "mupdate.command.set",
+               lf_d("mupdate.fd", C->fd),
+               lf_intname("mbox.name", mailbox));
 
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
@@ -1690,7 +1702,9 @@ static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 {
     struct mbent *m;
 
-    syslog(LOG_DEBUG, "cmd_find(fd:%d, %s)", C->fd, mailbox);
+    xsyslog_ev(LOG_DEBUG, "mupdate.command.find",
+               lf_d("mupdate.fd", C->fd),
+               lf_intname("mbox.name", mailbox));
 
     /* Only hold the mutex around database_lookup,
      * since the mbent stays valid even if the database changes,
@@ -1915,7 +1929,7 @@ static void cmd_starttls(struct conn *C, const char *tag)
 
     if (result == -1) {
 
-        syslog(LOG_ERR, "error initializing TLS");
+        xsyslog_ev(LOG_ERR, "mupdate.starttls.init.failed");
 
         prot_printf(C->pout, "%s NO Error initializing TLS\r\n", tag);
 
@@ -1935,14 +1949,16 @@ static void cmd_starttls(struct conn *C, const char *tag)
 
     /* if error */
     if (result==-1) {
-        syslog(LOG_NOTICE, "TLS negotiation failed: %s", C->clienthost);
+        xsyslog_ev(LOG_NOTICE, "mupdate.starttls.failed",
+                   lf_s("r.clienthost", C->clienthost));
         shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&C->saslprops, C->saslconn);
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
+        xsyslog_ev(LOG_NOTICE, "mupdate.starttls.saslprops.failed",
+                   lf_s("r.clienthost", C->clienthost));
         shut_down(EX_TEMPFAIL);
     }
 
@@ -2053,8 +2069,8 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
         m = database_lookup(mdata->mailbox, NULL, NULL);
 
         if (!m) {
-            syslog(LOG_DEBUG, "attempt to delete unknown mailbox %s",
-                   mdata->mailbox);
+            xsyslog_ev(LOG_DEBUG, "mupdate.delete.unknown",
+                       lf_intname("mbox.name", mdata->mailbox));
             /* Mailbox doesn't exist - this isn't as fatal as you might
              * think. */
             /* ret = -1; */
@@ -2082,8 +2098,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
             } else if (!strncmp(rock, "RESERVE", 7)) {
                 m->t = SET_RESERVE;
             } else {
-                syslog(LOG_DEBUG,
-                       "bad mupdate command in cmd_change: %s", rock);
+                xsyslog_ev(LOG_DEBUG, "mupdate.command.invalid",
+                           lf_s("mupdate.command", rock),
+                           lf_s("mupdate.step", "change"));
                 ret = 1;
                 goto done;
             }
@@ -2116,8 +2133,9 @@ int cmd_change(struct mupdate_mailboxdata *mdata,
             } else if (!strncmp(rock, "RESERVE", 7)) {
                 newm->t = SET_RESERVE;
             } else {
-                syslog(LOG_DEBUG,
-                       "bad mupdate command in cmd_change: %s", rock);
+                xsyslog_ev(LOG_DEBUG, "mupdate.command.invalid",
+                           lf_s("mupdate.command", rock),
+                           lf_s("mupdate.step", "change"));
                 ret = 1;
                 goto done;
             }
@@ -2192,8 +2210,9 @@ static int cmd_resync(struct mupdate_mailboxdata *mdata,
     } else if (!strncmp(rock, "RESERVE", 7)) {
         newm->t = SET_RESERVE;
     } else {
-        syslog(LOG_NOTICE,
-               "bad mupdate command in cmd_resync: %s", rock);
+        xsyslog_ev(LOG_NOTICE, "mupdate.command.invalid",
+                   lf_s("mupdate.command", rock),
+                   lf_s("mupdate.step", "resync"));
         return 1;
     }
 
@@ -2238,8 +2257,8 @@ int mupdate_synchronize_remote(mupdate_handle *handle,
     /* ask mupdate master for updates and set nonblocking */
     prot_printf(handle->conn->out, "U01 UPDATE\r\n");
 
-    syslog(LOG_NOTICE,
-           "scarfing mailbox list from master mupdate server");
+    xsyslog_ev(LOG_NOTICE, "mupdate.resync.started",
+               lf_s("mupdate.step", "scarf"));
 
     remote_boxes->head = NULL;
     remote_boxes->tail = &(remote_boxes->head);
@@ -2278,8 +2297,8 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
      * us for the duration.  this is a GOOD THING */
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 
-    syslog(LOG_NOTICE,
-           "synchronizing mailbox list with master mupdate server");
+    xsyslog_ev(LOG_NOTICE, "mupdate.resync.started",
+               lf_s("mupdate.step", "synchronize"));
 
     local_boxes.head = NULL;
     local_boxes.tail = &(local_boxes.head);
@@ -2309,8 +2328,9 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
                  */
                 if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) &&
                         (strchr( l->location, '!' ) == NULL )) {
-                    syslog(LOG_ERR, "local mailbox %s wrong in mailbox list",
-                            l->mailbox );
+                    xsyslog_ev(LOG_ERR, "mupdate.resync.mismatch",
+                               lf_intname("mbox.name", l->mailbox),
+                               lf_s("mupdate.reason", "wrong_location"));
                     err++;
                 } else {
                     mbentry_t *mbentry = mboxlist_entry_create();
@@ -2348,8 +2368,9 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
                  */
             if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) &&
                     (strchr( l->location, '!' ) == NULL )) {
-                syslog(LOG_ERR, "local mailbox %s not in mailbox list",
-                        l->mailbox );
+                xsyslog_ev(LOG_ERR, "mupdate.resync.mismatch",
+                           lf_intname("mbox.name", l->mailbox),
+                           lf_s("mupdate.reason", "missing"));
                 err++;
             } else {
                 mboxlist_deleteremote(l->mailbox, &tid);
@@ -2380,8 +2401,9 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
         while(l) {
             if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) &&
                     (strchr( l->location, '!' ) == NULL )) {
-                syslog(LOG_ERR, "local mailbox %s not in mailbox list",
-                        l->mailbox );
+                xsyslog_ev(LOG_ERR, "mupdate.resync.mismatch",
+                           lf_intname("mbox.name", l->mailbox),
+                           lf_s("mupdate.reason", "missing"));
                 err++;
             } else {
                 mboxlist_deleteremote(l->mailbox, &tid);
@@ -2415,10 +2437,10 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 
     /* All up to date! */
     if ( err ) {
-        syslog(LOG_ERR, "mailbox list synchronization NOT complete (%d) errors",
-                err);
+        xsyslog_ev(LOG_ERR, "mupdate.resync.failed",
+                   lf_d("mupdate.errors", err));
     } else {
-        syslog(LOG_NOTICE, "mailbox list synchronization complete");
+        xsyslog_ev(LOG_NOTICE, "mupdate.resync.completed");
     }
 
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
@@ -2438,7 +2460,7 @@ void mupdate_ready(void)
     pthread_mutex_lock(&ready_for_connections_mutex);
 
     if (ready_for_connections) {
-        syslog(LOG_CRIT, "mupdate_ready called when already ready");
+        xsyslog_ev(LOG_CRIT, "mupdate.ready.duplicate");
         fatal("mupdate_ready called when already ready", EX_TEMPFAIL);
     }
 
@@ -2453,7 +2475,7 @@ void mupdate_unready(void)
 {
     pthread_mutex_lock(&ready_for_connections_mutex);
 
-    syslog(LOG_NOTICE, "unready for connections");
+    xsyslog_ev(LOG_NOTICE, "mupdate.unready");
 
     ready_for_connections = 0;
 
