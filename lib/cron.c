@@ -6,6 +6,7 @@
 
 #include "lib/cron.h"
 #include "lib/xmalloc.h"
+#include "lib/util.h"
 
 #include <sysexits.h>
 #include <syslog.h>
@@ -31,12 +32,14 @@ EXPORTED void cron_spec_from_timeval(struct cron_spec *result,
         const int leapday = (tm->tm_mon == 1 &&
                              (!(year % 4) && ((year % 100) || !(year % 400))));
 
-        syslog(LOG_DEBUG, "%s: compensating for tm_mon=%d tm_mday=%d!\n",
-                          __func__, tm->tm_mon, tm->tm_mday);
+        xsyslog_ev(LOG_DEBUG, "cron.mday.clamped",
+                   lf_d("cron.tm_mon", tm->tm_mon),
+                   lf_d("cron.tm_mday", tm->tm_mday));
         tm->tm_mday = monthdays[result->months] + leapday;
         tm->tm_mon = (tm->tm_mon + 12 - 1) % 12;
-        syslog(LOG_DEBUG, "%s: computed tm_mon=%d tm_mday=%d!\n",
-                          __func__, tm->tm_mon, tm->tm_mday);
+        xsyslog_ev(LOG_DEBUG, "cron.mday.computed",
+                   lf_d("cron.tm_mon", tm->tm_mon),
+                   lf_d("cron.tm_mday", tm->tm_mday));
     }
 
     if (result) {

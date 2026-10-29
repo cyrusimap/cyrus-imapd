@@ -21,6 +21,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
+#include "util.h"
 
 static int wait_for_child(const char *argv0, pid_t pid);
 
@@ -29,14 +30,15 @@ EXPORTED int run_command_strarray(const strarray_t *argv)
     const char *argv0 = strarray_nth(argv, 0);
     pid_t pid = fork();
     if (pid < 0) {
-        syslog(LOG_ERR, "Failed to fork: %m");
+        xsyslog_ev(LOG_ERR, "command.fork.failed");
         return IMAP_SYS_ERROR;
     }
 
     if (!pid) {
         /* in child */
         execv(argv0, argv->data);
-        syslog(LOG_ERR, "Failed to execute %s: %m", argv0);
+        xsyslog_ev(LOG_ERR, "command.exec.failed",
+                   lf_s("command.program", argv0));
         exit(1);
     }
 
@@ -91,7 +93,7 @@ EXPORTED int command_popen(struct command **cmdp, const char *mode,
     if (do_stdin) {
         r = pipe(stdin_pipe);
         if (r) {
-            syslog(LOG_ERR, "Failed to pipe(): %m");
+            xsyslog_ev(LOG_ERR, "command.pipe.failed");
             r = IMAP_SYS_ERROR;
             goto out;
         }
@@ -100,7 +102,7 @@ EXPORTED int command_popen(struct command **cmdp, const char *mode,
     if (do_stdout) {
         r = pipe(stdout_pipe);
         if (r) {
-            syslog(LOG_ERR, "Failed to pipe(): %m");
+            xsyslog_ev(LOG_ERR, "command.pipe.failed");
             r = IMAP_SYS_ERROR;
             goto out;
         }
@@ -108,7 +110,7 @@ EXPORTED int command_popen(struct command **cmdp, const char *mode,
 
     pid = fork();
     if (pid < 0) {
-        syslog(LOG_ERR, "Failed to fork: %m");
+        xsyslog_ev(LOG_ERR, "command.fork.failed");
         r = IMAP_SYS_ERROR;
         goto out;
     }
@@ -128,11 +130,13 @@ EXPORTED int command_popen(struct command **cmdp, const char *mode,
 
         if (cwd) {
             r = chdir(cwd);
-            if (r) syslog(LOG_ERR, "Failed to chdir(%s): %m", cwd);
+            if (r) xsyslog_ev(LOG_ERR, "command.chdir.failed",
+                              lf_s("sys.path", cwd));
         }
 
         r = execv(argv0, argv.data);
-        syslog(LOG_ERR, "Failed to execute %s: %m", argv0);
+        xsyslog_ev(LOG_ERR, "command.exec.failed",
+                   lf_s("command.program", argv0));
         exit(1);
     }
 
@@ -215,7 +219,7 @@ static int wait_for_child(const char *argv0, pid_t pid)
                     break;  /* someone else reaped the child */
                 }
                 else {
-                    syslog(LOG_ERR, "waitpid() failed: %m");
+                    xsyslog_ev(LOG_ERR, "command.waitpid.failed");
                     r = IMAP_SYS_ERROR;
                     break;
                 }
@@ -223,15 +227,19 @@ static int wait_for_child(const char *argv0, pid_t pid)
             if (WIFEXITED(status)) {
                 r = 0;
                 if (WEXITSTATUS(status)) {
-                    syslog(LOG_ERR, "Program %s (pid %d) exited with status %d",
-                           argv0, (int)pid, WEXITSTATUS(status));
+                    xsyslog_ev(LOG_ERR, "command.exited",
+                               lf_s("command.program", argv0),
+                               lf_d("sys.pid", (int) pid),
+                               lf_d("sys.exitcode", WEXITSTATUS(status)));
                     r = IMAP_SYS_ERROR;
                 }
                 break;
             }
             if (WIFSIGNALED(status)) {
-                syslog(LOG_ERR, "Program %s (pid %d) died with signal %d",
-                       argv0, (int)pid, WTERMSIG(status));
+                xsyslog_ev(LOG_ERR, "command.signaled",
+                           lf_s("command.program", argv0),
+                           lf_d("sys.pid", (int) pid),
+                           lf_d("sys.signal", WTERMSIG(status)));
                 r = IMAP_SYS_ERROR;
                 break;
             }

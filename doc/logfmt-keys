@@ -142,7 +142,9 @@ send.time               when the message was actually sent
 ### per-subsystem
 
 acl.needed              the ACL rights an operation needed but didn't have
+acl.right               a single ACL right character
 acl.rights              a set of ACL rights, in its stored string form
+acl.string              an ACL rights string as given
 alarm.age               how late an alarm was when it came up, in seconds
 alarm.duplicates        how many duplicate alarms were suppressed for one record
 alarm.index             which VALARM within the component, counting from 1
@@ -173,6 +175,9 @@ append.callout          the annotation callout program or socket
 append.stage.dir        the staging directory a message is spooled through
 append.stage.file       the staged copy of a message
 append.stage.source     the file a staged message was copied from
+assert.expr             the expression of a failed assertion
+assert.file             the source file of a failed assertion
+assert.line             the source line of a failed assertion
 autocreate.created      how many folders autocreation created
 autocreate.identifier   the identifier an autocreated folder's ACL entry is for
 autocreate.reason       why autocreation skipped or changed course
@@ -214,6 +219,7 @@ cal.valuetype           an iCalendar value type, such as DATE-TIME
 cmd.duration            how long a command took, in seconds
 cmd.nettime             how long a command spent on the network, in seconds
 cmd.total               cmd.duration and cmd.nettime added together
+command.program         the program run_command ran
 compress.algorithm      the compression algorithm a connection negotiated
 config.debug            1 if debug logging is now on
 config.option           the name of an imapd.conf option
@@ -241,6 +247,8 @@ conversations.threads   how many threads a conversations record counts
 conversations.value     a value in the conversations db, as stored
 conversations.version   a conversations db's format version
 conversations.version.max  the newest conversations db format version this code reads
+cron.tm_mday            the day of the month a cron calculation produced
+cron.tm_mon             the month a cron calculation produced, counting from zero
 ctl_cyrusdb.op          which ctl_cyrusdb operation ran: recover or checkpoint
 ctl_mboxlist.action     which repair ctl_mboxlist made or would make
 ctl_mboxlist.dryrun     1 if ctl_mboxlist only reported what it would do
@@ -490,6 +498,10 @@ lmtp.rcpt.index         which recipient of the transaction, counting from zero
 lmtp.rcpt.state         a recipient's delivery state in the proxy state machine
 lmtp.smtputf8           1 if lmtpd offers SMTPUTF8
 lmtp.target             how the destination mailbox was chosen: default, plus-addr, ...
+lock.duration           how long taking a file lock took, in seconds
+map.file                which kind of file was being mapped, e.g. index
+map.owner               what the mapped file belongs to: often an internal mailbox name, sometimes a path
+map.step                which step of mapping a file is being logged
 mappedfile.length       how many bytes a mappedfile write tried to write
 mappedfile.lock.action  the step at which reopening a mappedfile under lock failed
 mappedfile.lock.duration  how long a mappedfile lock was held, in seconds
@@ -589,6 +601,9 @@ prometheus.report       which prometheus report is being logged
 prometheus.services     how many services a prometheus report covers
 prometheus.slow_count   how many times in a row a report took too long to collate
 prometheus.step         which step of a prometheus stats operation is being logged
+prot.buffer.size        the size of a protstream compression buffer, in bytes
+prot.direction          which direction of a protstream: read or write
+prot.zlib.result        a zlib return code
 proxy.server            the backend server a request was proxied to
 pts.canonical           the canonical form of an identity, as the PTS module gave it
 pts.domain              a domain the PTS module looked an identity up in
@@ -697,6 +712,8 @@ sieve.srs.domain        the domain SRS rewrites a return path into
 sieve.step              which step of a Sieve storage operation is being logged
 sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
+signals.nfds            the highest file descriptor passed to select, plus one
+signals.sender          the process that sent a shutdown signal
 smmap.step              which step of an smmapd lookup is being logged
 smtp.code               an SMTP reply code
 smtp.command            the SMTP command a reply or failure was for
@@ -814,6 +831,7 @@ ws.want.write           1 if wslay wants to write next
 ws.zlib.code            a zlib return code
 xfer.capability         a capability the transfer destination advertises
 xfer.step               which step of a mailbox transfer is being logged
+xunlink.flags           the flags unlinkat was called with
 
 ### out. - the outbound half of an event that has two halves
 
@@ -884,6 +902,7 @@ old.msg.cid             a message's conversation id before it was reassigned
 old.msg.imapuid         the message's IMAP uid before a move
 old.msg.sysflags        the message's system flags before the change
 old.prometheus.frequency  how often a prometheus report was written before a change, in seconds
+old.prot.buffer.size    the protstream compression buffer size before it grew
 old.search.cacheonly    the attachment extractor's cache-only flag before a change
 old.search.createdmodseq  the createdmodseq the client last saw
 old.search.generation   the search index generation the client last saw
@@ -904,6 +923,7 @@ error.description       the human-readable detail paired with error.type
 error.line              the line a parse error was found at
 error.type              a machine-readable error type, e.g. a JMAP SetError type
 sys.coredump            1 if a process dumped core
+sys.dirfd               the directory file descriptor a path was relative to
 sys.error               strerror() of errno at the point of logging
 sys.exitcode            the exit code a process is dying with
 sys.fd                  a file descriptor

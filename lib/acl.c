@@ -23,8 +23,9 @@ EXPORTED int cyrus_acl_checkstr(const char *str, char **errstr)
         if (strchr(rights, *p) == NULL) {
             struct buf errbuf = BUF_INITIALIZER;
 
-            syslog(LOG_DEBUG, "%s: unrecognised right '%c' in string \"%s\"",
-                              __func__, *p, str);
+            xsyslog_ev(LOG_DEBUG, "acl.right.unrecognised",
+                       lf_raw("acl.right", "%c", *p),
+                       lf_s("acl.string", str));
 
             buf_printf(&errbuf, "The %c right is not supported", *p);
             *errstr = buf_release(&errbuf);
@@ -100,8 +101,9 @@ EXPORTED int cyrus_acl_strtomask(const char *str, int *mask)
         }
         else if (nomatch) {
             /* unrecognised right character, bad! */
-            syslog(LOG_INFO, "%s: ACL string \"%s\" contains unrecognised right '%c'",
-                             __func__, str, *p);
+            xsyslog_ev(LOG_INFO, "acl.right.unrecognised",
+                       lf_raw("acl.right", "%c", *p),
+                       lf_s("acl.string", str));
             r = IMAP_INVALID_RIGHTS;
         }
     }

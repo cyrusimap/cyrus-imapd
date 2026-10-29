@@ -4,6 +4,7 @@
 #include "config.h"
 #include "libconfig.h"
 #include "iostat.h"
+#include "util.h"
 
 EXPORTED void read_io_count(struct io_count *iocount) {
     FILE *file = NULL;
@@ -19,9 +20,10 @@ EXPORTED void read_io_count(struct io_count *iocount) {
         return;
     }
     else {
-        syslog(LOG_ERR,"IOERROR: opening file /proc/self/io");
+        xsyslog_ev(LOG_ERR, "iostat.open.failed",
+                   lf_s("sys.path", "/proc/self/io"));
         config_iolog = 0;
-        syslog(LOG_ERR,"I/O log has been deactivated");
+        xsyslog_ev(LOG_ERR, "iostat.disabled");
     }
 }
 

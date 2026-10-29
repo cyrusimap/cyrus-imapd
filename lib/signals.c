@@ -175,8 +175,7 @@ static int signals_poll_mask(sigset_t *oldmaskp)
          * to die. */
         if (!signals_deferral_logged) {
             signals_deferral_logged = 1;
-            syslog(LOG_NOTICE,
-                   "graceful shutdown deferred: write transaction in progress");
+            xsyslog_ev(LOG_NOTICE, "signals.shutdown.deferred");
         }
     }
     else if (!signals_in_shutdown &&
@@ -186,12 +185,12 @@ static int signals_poll_mask(sigset_t *oldmaskp)
             /* whine in syslog if we were sent a graceful shutdown signal
              * by anyone other than the master process.  */
             char *desc = describe_process(killer_pid);
-            syslog(LOG_NOTICE, "graceful shutdown initiated by "
-                               "unexpected process %s", desc);
+            xsyslog_ev(LOG_NOTICE, "signals.shutdown",
+                       lf_s("signals.sender", desc));
             free(desc);
         }
         else {
-            syslog(LOG_NOTICE, "graceful shutdown");
+            xsyslog_ev(LOG_NOTICE, "signals.shutdown");
         }
 
         if (oldmaskp)
@@ -242,7 +241,9 @@ EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
                             fd_set *efds, struct timeval *tout)
 {
     if (nfds > 0.9 * FD_SETSIZE) {
-        syslog(LOG_WARNING, "signals_select: nfds = %d/%d", nfds, FD_SETSIZE);
+        xsyslog_ev(LOG_WARNING, "signals.select.nfds",
+                   lf_d("signals.nfds", nfds),
+                   lf_d("limit.value", FD_SETSIZE));
         assert(nfds < FD_SETSIZE);
     }
 

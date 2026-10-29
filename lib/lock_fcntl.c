@@ -10,6 +10,7 @@
 #include <errno.h>
 
 #include "cyr_lock.h"
+#include "util.h"
 
 #include <syslog.h>
 #include <time.h>
@@ -74,7 +75,9 @@ EXPORTED int lock_reopen_ex(int fd, const char *filename,
                 double locktime = (double)(endtime.tv_sec - starttime.tv_sec) +
                                   (double)(endtime.tv_usec - starttime.tv_usec)/1000000.0;
                 if (locktime > debug_locks_longer_than) /* 10ms */
-                    syslog(LOG_NOTICE, "locktimer: reopen %s (%0.2fs)", filename, locktime);
+                    xsyslog_ev(LOG_NOTICE, "lock.reopen.slow",
+                               lf_s("sys.path", filename),
+                               lf_duration("lock.duration", locktime));
             }
             return 0;
         }
@@ -125,7 +128,9 @@ EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
                 double locktime = (double)(endtime.tv_sec - starttime.tv_sec) +
                                   (double)(endtime.tv_usec - starttime.tv_usec)/1000000.0;
                 if (locktime > debug_locks_longer_than)
-                    syslog(LOG_NOTICE, "locktimer: reopen %s (%0.2fs)", filename, locktime);
+                    xsyslog_ev(LOG_NOTICE, "lock.reopen.slow",
+                               lf_s("sys.path", filename),
+                               lf_duration("lock.duration", locktime));
             }
             return 0;
         }
