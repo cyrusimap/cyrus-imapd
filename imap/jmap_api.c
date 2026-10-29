@@ -755,10 +755,11 @@ HIDDEN int jmap_api(struct transaction_t *txn,
                                 &capabilities_by_accountid);
                 }
                 if (json_is_null(from_capas)) {
-                    err = json_pack("{s:s}", "type", "accountNotFound");
+                    err = json_pack("{s:s}", "type", "fromAccountNotFound");
                 }
                 else if (!json_object_get(from_capas, mp->capability)) {
-                    err = json_pack("{s:s}", "type", "accountNotSupportedByMethod");
+                    err = json_pack("{s:s}", "type",
+                                    "fromAccountNotSupportedByMethod");
                 }
             }
             if (err) {
@@ -2081,8 +2082,9 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                                                           &err);
             }
 
-            // TODO We could report the following set errors here:
-            // - invalidPatch
+            if (!err && jmap_patch_has_prefix_overlap(val)) {
+                err = json_pack("{s:s}", "type", "invalidPatch");
+            }
 
             if (err) {
                 json_object_set_new(set->not_updated, id, err);
@@ -2277,6 +2279,9 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
                     changes->since_modseq = atomodseq_t(since_state);
                 }
             }
+            else {
+                jmap_parser_invalid(parser, "sinceState");
+            }
         }
 
         /* maxChanges */
@@ -2291,6 +2296,10 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
         else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
             jmap_parser_invalid(parser, key);
         }
+    }
+
+    if (!json_object_get(jargs, "sinceState")) {
+        jmap_parser_invalid(parser, "sinceState");
     }
 
     if (json_array_size(parser->invalid)) {
