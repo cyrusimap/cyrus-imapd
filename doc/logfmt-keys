@@ -263,6 +263,10 @@ db.refcount             how many open handles share a database
 db.repack_size          a database's size after its last repack, in bytes
 db.result               a cyrusdb call's return code, in debug traces
 db.size                 a database file's size, in bytes
+db.sql.command          an SQL statement a database backend ran
+db.sql.database         the name of an SQL database
+db.sql.ssl              1 if an SQL connection uses SSL
+db.sql.table            the SQL table a cyrusdb database is stored in
 db.step                 which step of a database operation is being logged
 db.target               the offset a database pointer refers to
 db.version              a database's format version
