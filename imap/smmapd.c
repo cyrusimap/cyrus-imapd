@@ -129,7 +129,9 @@ EXPORTED void fatal(const char* s, int code)
         exit(code);
     }
     recurse_code = code;
-    syslog(LOG_ERR, "Fatal error: %s", s);
+    xsyslog_ev(LOG_ERR, "smmap.fatal",
+               lf_s("error", s),
+               lf_d("sys.exitcode", code));
 
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
@@ -155,7 +157,8 @@ int service_init(int argc, char **argv, char **envp)
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&map_namespace, NAMESPACE_OPTION_ADMIN))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "smmap.init.failed",
+                   lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -165,7 +168,7 @@ int service_init(int argc, char **argv, char **envp)
             skipplus = 1;
             break;
         default:
-            syslog(LOG_ERR, "usage: smmapd [-C <alt_config>] [-U uses] [-T timeout] [-D] [-p]");
+            xsyslog_ev(LOG_ERR, "smmap.usage");
             exit(EX_USAGE);
         }
     }
@@ -277,20 +280,25 @@ static int verify_user(const char *key, struct auth_state *authstate)
          * (assume under quota)
          */
 
-        syslog(LOG_ERR, "verify_user(%s) proxying to host %s",
-               mbname_userid(mbname), mbentry->server);
+        xsyslog_ev(LOG_INFO, "smmap.verify.proxying",
+                   lf_s("u.username", mbname_userid(mbname)),
+                   lf_s("remote.host", mbentry->server));
 
         hp = gethostbyname(mbentry->server);
         if (hp == (struct hostent*) 0) {
-            syslog(LOG_ERR, "verify_user(%s) failed: can't find host %s",
-                   mbname_userid(mbname), mbentry->server);
+            xsyslog_ev(LOG_ERR, "smmap.verify.failed",
+                       lf_s("u.username", mbname_userid(mbname)),
+                       lf_s("remote.host", mbentry->server),
+                       lf_s("smmap.step", "resolve"));
             goto done;
         }
 
         soc = socket(PF_INET, SOCK_STREAM, 0);
         if (soc < 0) {
-            syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s",
-                   mbname_userid(mbname), mbentry->server);
+            xsyslog_ev(LOG_ERR, "smmap.verify.failed",
+                       lf_s("u.username", mbname_userid(mbname)),
+                       lf_s("remote.host", mbentry->server),
+                       lf_s("smmap.step", "connect"));
             goto done;
         }
         memcpy(&sin.sin_addr.s_addr,hp->h_addr,hp->h_length);
@@ -300,8 +308,10 @@ static int verify_user(const char *key, struct auth_state *authstate)
         sin.sin_port = htons(12345);
 
         if (connect(soc,(struct sockaddr *) &sin, sizeof(sin)) < 0) {
-            syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s",
-                   mbname_userid(mbname), mbentry->server);
+            xsyslog_ev(LOG_ERR, "smmap.verify.failed",
+                       lf_s("u.username", mbname_userid(mbname)),
+                       lf_s("remote.host", mbentry->server),
+                       lf_s("smmap.step", "connect"));
             close(soc);
             goto done;
         }
@@ -329,8 +339,9 @@ static int verify_user(const char *key, struct auth_state *authstate)
 
 done:
     mboxlist_entry_free(&mbentry);
-    if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", mbname_userid(mbname),
-                  error_message(r));
+    if (r) xsyslog_ev(LOG_DEBUG, "smmap.verify.failed",
+                      lf_s("u.username", mbname_userid(mbname)),
+                      lf_err("error", r));
     mbname_free(&mbname);
 
     return r;

@@ -538,6 +538,10 @@ notify.method           the notifyd method a notification asked for
 notify.reason           why sending a notification failed
 notify.response         notifyd's response to a notification
 notify.step             which step of sending a notification is being logged
+pop.command             a POP3 command
+pop.count.dele          how many DELE commands a POP3 session ran
+pop.count.retr          how many RETR commands a POP3 session ran
+pop.count.top           how many TOP commands a POP3 session ran
 pop.subfolder           the subfolder a POP session was restricted to
 prometheus.bytes        how many bytes a prometheus stats operation handled
 prometheus.bytes.wanted how many bytes a prometheus stats operation expected
@@ -642,6 +646,7 @@ sieve.script            the name of a Sieve script
 sieve.srs.domain        the domain SRS rewrites a return path into
 sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
+smmap.step              which step of an smmapd lookup is being logged
 smtp.code               an SMTP reply code
 smtp.command            the SMTP command a reply or failure was for
 smtp.param              an ESMTP parameter's keyword or value
@@ -722,6 +727,10 @@ tls.sni                 the server name a TLS client asked for
 tls.state               OpenSSL's description of the handshake state
 tls.step                which step of a TLS operation is being logged
 tls.verify.depth        the depth in the chain of the certificate being verified
+userdeny.negated        1 if a user_deny.db pattern is negated
+userdeny.pattern        one service pattern from a user_deny.db entry
+userdeny.patterns       a user_deny.db entry's service patterns, as stored
+userdeny.service        the service a user_deny.db entry is checked against
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
 ws.close.reason         the reason text of a WebSocket close frame
