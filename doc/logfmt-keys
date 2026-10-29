@@ -519,11 +519,13 @@ search.duration         how long a search index operation took, in seconds
 search.expr             a search expression, serialised
 search.filter           a Xapian index filter, from its metadata
 search.generation       the search index generation
+search.index.bytes      the size of a search index, in bytes
 search.index_version    the format version of the search index
 search.indexed.key      a key in a search tier's indexed.db
 search.indexed.value    a value in a search tier's indexed.db
 search.language         an ISO 639 language code
 search.lock             the name lock a search index operation needs
+search.messages         how many messages a search index operation handled
 search.min_index_version  the lowest search index version an operation needs
 search.op               a search operator, e.g. OR
 search.part             which part of a message a search term or index entry is for
@@ -531,6 +533,7 @@ search.query            a Xapian query, as Xapian describes it
 search.reason           why a search operation skipped, refused or rejected something
 search.restarts         how many times indexing restarted from the first message
 search.results          how many messages a search or sort returned
+search.retries          how many times a search operation retried
 search.sortcrit         the sort criteria, serialised
 search.source.index_version  the index version of the search tier being read from
 search.step             which step of a search operation is being logged

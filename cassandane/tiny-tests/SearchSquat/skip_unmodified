@@ -16,10 +16,10 @@ sub test_skip_unmodified
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
     $self->assert_syslog_does_not_match($self->{instance},
-                                        qr{Squat skipping mailbox});
+                                        qr{\bevent=search\.squatter\.skipped\b.*\bsearch\.reason=unchanged\b});
 
     $self->{instance}->getsyslog();
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-s', '0');
     $self->assert_syslog_matches($self->{instance},
-                                 qr{Squat skipping mailbox});
+                                 qr{\bevent=search\.squatter\.skipped\b.*\bsearch\.reason=unchanged\b});
 }
