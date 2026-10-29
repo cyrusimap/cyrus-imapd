@@ -267,9 +267,12 @@ db.sql.command          an SQL statement a database backend ran
 db.sql.database         the name of an SQL database
 db.sql.ssl              1 if an SQL connection uses SSL
 db.sql.table            the SQL table a cyrusdb database is stored in
+db.sqldb.owner          who holds an sqldb handle open
+db.sqldb.scope          the scope an sqldb handle was opened with
 db.step                 which step of a database operation is being logged
 db.target               the offset a database pointer refers to
 db.version              a database's format version
+db.version.wanted       the database format version the code expects
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
 http.auth.param         the name of a parameter in an HTTP auth credential
 http.auth.reset.reason  why the connection's authentication state was reset
@@ -667,6 +670,8 @@ replica.msg.modseq      the replica's modseq for the message
 old.db.backend          the cyrusdb backend a database was in before a convert
 old.db.logstart         a skiplist's log offset before recovery corrected it
 old.db.size             a database file's size before a repack, in bytes
+old.db.sqldb.owner      who first opened an sqldb handle
+old.db.sqldb.scope      the scope an sqldb handle was first opened with
 old.master.child.state  a child's state before a message changed it
 old.master.service      the service master thought a child belonged to
 old.mbox.acl            the mailbox ACL before the change
