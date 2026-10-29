@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_get_param_rfc6868
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $carddav = $self->{carddav};
+
+    xlog $self, "Create vCard with RFC 6868-encoded and quoted parameters";
+    my $card = to_crlf(<< 'EOF');
+BEGIN:VCARD
+VERSION:4.0
+UID:6928260E-EDF6-11EF-9AB7-AEA159270051
+N:foo;;;;
+ADR;CC=^^;GEO="geo:1,2":;;123 bar;;;;
+FN:foo
+REV:20210915T054744Z
+END:VCARD
+EOF
+    $carddav->Request(
+        'PUT', "Default/test.vcf", $card, 'Content-Type' => 'text/vcard'
+    );
+
+    my $res = $jmap->request([['ContactCard/query', { }]]);
+    my ($card_id) = $res->single_sentence->arguments->{ids}->@*;
+    $self->assert_not_null($card_id);
+
+    xlog $self, "Assert that parameter values are decoded in JSContact";
+    $res = $jmap->request([['ContactCard/get', {
+        ids => [$card_id], properties => ['addresses'],
+    }]]);
+    my ($addr) = values $res->single_sentence->arguments->{list}[0]{addresses}->%*;
+    $self->assert_cmp_deeply(superhashof({
+        countryCode => '^',
+        coordinates => 'geo:1,2',
+    }), $addr);
+
+    xlog $self, "Updating the card keeps the parameters intact";
+    $res = $jmap->request([['ContactCard/set', {
+        update => { $card_id => { 'name/full' => 'bar' } },
+    }]]);
+    $self->assert_not_null(
+        $res->single_sentence->as_set->updated->{$card_id});
+
+    $res = $carddav->Request('GET', "Default/test.vcf");
+    my $vcard = $res->{content};
+    $vcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+    $self->assert_matches(qr/^ADR;.*CC=\^\^[;:]/m, $vcard);
+    $self->assert_matches(qr/^ADR;.*GEO="geo:1,2"[;:]/m, $vcard);
+}
