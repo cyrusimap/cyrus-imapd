@@ -2080,7 +2080,9 @@ static void add_waitdaemon(const char *name, struct entry *e, void *rock)
                  "unable to find command or port for service '%s'", name);
 
         if (ignore_err) {
-            syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+            xsyslog_ev(LOG_WARNING, "master.config.ignored",
+                       lf_s("master.service", name),
+                       lf_s("master.reason", "missing_command"));
             goto done;
         }
 
@@ -2094,7 +2096,9 @@ static void add_waitdaemon(const char *name, struct entry *e, void *rock)
             snprintf(buf, sizeof(buf), "multiple entries for waitdaemon '%s'", name);
 
             if (ignore_err) {
-                syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+                xsyslog_ev(LOG_WARNING, "master.config.ignored",
+                           lf_s("master.service", name),
+                           lf_s("master.reason", "duplicate"));
                 goto done;
             }
 
@@ -2114,7 +2118,9 @@ static void add_waitdaemon(const char *name, struct entry *e, void *rock)
             snprintf(buf, sizeof(buf), "multiple entries for waitdaemon '%s'", name);
 
             if (ignore_err) {
-                syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+                xsyslog_ev(LOG_WARNING, "master.config.ignored",
+                           lf_s("master.service", name),
+                           lf_s("master.reason", "duplicate"));
                 goto done;
             }
 
@@ -2153,10 +2159,12 @@ static void add_waitdaemon(const char *name, struct entry *e, void *rock)
     WaitDaemons[i].familyname = "daemon";
 
     if (verbose > 2)
-        syslog(LOG_DEBUG, "%s: waitdaemon '%s' (%s, %d)",
-               reconfig ? "reconfig" : "add",
-               WaitDaemons[i].name, cmd,
-               (int) WaitDaemons[i].maxfds);
+        xsyslog_ev(LOG_DEBUG, "master.config.loaded",
+                   lf_s("master.child.type", "DAEMON"),
+                   lf_s("master.service", WaitDaemons[i].name),
+                   lf_s("master.service.cmd", cmd),
+                   lf_b("master.reconfig", reconfig),
+                   lf_d("master.fds.max", (int) WaitDaemons[i].maxfds));
 
 done:
     free(cmd);
@@ -2186,7 +2194,9 @@ static void add_daemon(const char *name, struct entry *e, void *rock)
                  "unable to find command or port for service '%s'", name);
 
         if (ignore_err) {
-            syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+            xsyslog_ev(LOG_WARNING, "master.config.ignored",
+                       lf_s("master.service", name),
+                       lf_s("master.reason", "missing_command"));
             goto done;
         }
 
@@ -2200,7 +2210,9 @@ static void add_daemon(const char *name, struct entry *e, void *rock)
             snprintf(buf, sizeof(buf), "multiple entries for service '%s'", name);
 
             if (ignore_err) {
-                syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+                xsyslog_ev(LOG_WARNING, "master.config.ignored",
+                           lf_s("master.service", name),
+                           lf_s("master.reason", "duplicate"));
                 goto done;
             }
 
@@ -2220,7 +2232,9 @@ static void add_daemon(const char *name, struct entry *e, void *rock)
             snprintf(buf, sizeof(buf), "multiple entries for service '%s'", name);
 
             if (ignore_err) {
-                syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+                xsyslog_ev(LOG_WARNING, "master.config.ignored",
+                           lf_s("master.service", name),
+                           lf_s("master.reason", "duplicate"));
                 goto done;
             }
 
@@ -2259,10 +2273,12 @@ static void add_daemon(const char *name, struct entry *e, void *rock)
     Services[i].familyname = "daemon";
 
     if (verbose > 2)
-        syslog(LOG_DEBUG, "%s: daemon '%s' (%s, %d)",
-               reconfig ? "reconfig" : "add",
-               Services[i].name, cmd,
-               (int) Services[i].maxfds);
+        xsyslog_ev(LOG_DEBUG, "master.config.loaded",
+                   lf_s("master.child.type", "DAEMON"),
+                   lf_s("master.service", Services[i].name),
+                   lf_s("master.service.cmd", cmd),
+                   lf_b("master.reconfig", reconfig),
+                   lf_d("master.fds.max", (int) Services[i].maxfds));
 
 done:
     free(cmd);
@@ -2291,7 +2307,9 @@ static void add_service(const char *name, struct entry *e, void *rock)
                  "unable to find command or port for service '%s'", name);
 
         if (ignore_err) {
-            syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+            xsyslog_ev(LOG_WARNING, "master.config.ignored",
+                       lf_s("master.service", name),
+                       lf_s("master.reason", "missing_command"));
             goto done;
         }
 
@@ -2305,7 +2323,9 @@ static void add_service(const char *name, struct entry *e, void *rock)
             snprintf(buf, sizeof(buf), "multiple entries for service '%s'", name);
 
             if (ignore_err) {
-                syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+                xsyslog_ev(LOG_WARNING, "master.config.ignored",
+                           lf_s("master.service", name),
+                           lf_s("master.reason", "duplicate"));
                 goto done;
             }
 
@@ -2325,7 +2345,9 @@ static void add_service(const char *name, struct entry *e, void *rock)
             snprintf(buf, sizeof(buf), "multiple entries for service '%s'", name);
 
             if (ignore_err) {
-                syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+                xsyslog_ev(LOG_WARNING, "master.config.ignored",
+                           lf_s("master.service", name),
+                           lf_s("master.reason", "duplicate"));
                 goto done;
             }
 
@@ -2400,13 +2422,16 @@ static void add_service(const char *name, struct entry *e, void *rock)
     }
 
     if (verbose > 2)
-        syslog(LOG_DEBUG, "%s: service '%s' (%s, %s:%s, %d, %d, %d)",
-               reconfig ? "reconfig" : "add",
-               Services[i].name, cmd,
-               Services[i].proto, Services[i].listen,
-               Services[i].desired_workers,
-               Services[i].max_workers,
-               (int) Services[i].maxfds);
+        xsyslog_ev(LOG_DEBUG, "master.config.loaded",
+                   lf_s("master.child.type", "SERVICE"),
+                   lf_s("master.service", Services[i].name),
+                   lf_s("master.service.cmd", cmd),
+                   lf_s("master.service.proto", Services[i].proto),
+                   lf_s("master.service.listen", Services[i].listen),
+                   lf_b("master.reconfig", reconfig),
+                   lf_d("master.workers.desired", Services[i].desired_workers),
+                   lf_d("master.workers.max", Services[i].max_workers),
+                   lf_d("master.fds.max", (int) Services[i].maxfds));
 
 done:
     free(cmd);
@@ -2433,7 +2458,9 @@ static void add_event(const char *name, struct entry *e, void *rock)
                  "unable to find command or port for event '%s'", name);
 
         if (ignore_err) {
-            syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
+            xsyslog_ev(LOG_WARNING, "master.config.ignored",
+                       lf_s("master.event", name),
+                       lf_s("master.reason", "missing_command"));
             return;
         }
 
@@ -2451,8 +2478,9 @@ static void add_event(const char *name, struct entry *e, void *rock)
         min = at % 100;
 
         if (hour > 23 || min > 59) {
-            xsyslog(LOG_ERR, "invalid at=hhmm specification",
-                             "name=<%s> at=<%d>", name, at);
+            xsyslog_ev(LOG_ERR, "master.event.at.invalid",
+                       lf_s("master.event", name),
+                       lf_d("master.event.at", at));
             if (ignore_err) return;
             fatal("invalid at=hhmm specification", EX_CONFIG);
         }
@@ -2484,9 +2512,9 @@ static void limit_fds(rlim_t x)
 #ifdef HAVE_GETRLIMIT
     if (!getrlimit(RLIMIT_NUMFDS, &rl)) {
         if (x != RLIM_INFINITY && rl.rlim_max != RLIM_INFINITY && x > rl.rlim_max) {
-            syslog(LOG_WARNING,
-                   "limit_fds: requested %" PRIu64 ", but capped to %" PRIu64,
-                   (uint64_t) x, (uint64_t) rl.rlim_max);
+            xsyslog_ev(LOG_WARNING, "master.fds.capped",
+                       lf_llu("master.fds.requested", (uint64_t) x),
+                       lf_llu("master.fds.max", (uint64_t) rl.rlim_max));
         }
         rl.rlim_cur = (x == RLIM_INFINITY || x > rl.rlim_max) ? rl.rlim_max : x;
     }
@@ -2497,14 +2525,14 @@ static void limit_fds(rlim_t x)
     }
 
     if (verbose > 1) {
-        syslog(LOG_DEBUG, "set maximum file descriptors to " RLIM_T_FMT "/" RLIM_T_FMT,
-               rl.rlim_cur, rl.rlim_max);
+        xsyslog_ev(LOG_DEBUG, "master.fds.set",
+                   lf_llu("master.fds.cur", (uint64_t) rl.rlim_cur),
+                   lf_llu("master.fds.max", (uint64_t) rl.rlim_max));
     }
 
     if (setrlimit(RLIMIT_NUMFDS, &rl) < 0) {
-        syslog(LOG_ERR,
-               "setrlimit: Unable to set file descriptors limit to " RLIM_T_FMT ": %m",
-               rl.rlim_cur);
+        xsyslog_ev(LOG_ERR, "master.fds.set.failed",
+                   lf_llu("master.fds.cur", (uint64_t) rl.rlim_cur));
     }
 }
 #endif /* HAVE_SETRLIMIT */
@@ -2536,8 +2564,9 @@ static void init_prom_report(struct timeval now)
     }
 
     if (!buf_len(&buf)) {
-        syslog(LOG_NOTICE, "couldn't find somewhere to write prometheus report to"
-                           " - disabling master prometheus report until next reload");
+        xsyslog_ev(LOG_NOTICE, "master.prometheus.disabled",
+                   lf_s("master.reason", "no_stats_dir"),
+                   lf_s("config.option", "prometheus_stats_dir"));
         prom_enabled = 0;
         buf_free(&buf);
         return;
@@ -2551,8 +2580,9 @@ static void init_prom_report(struct timeval now)
                              now, prom_frequency);
     schedule_event(evt);
 
-    syslog(LOG_DEBUG, "updating %s every %d seconds",
-                      prom_report_fname, prom_frequency);
+    xsyslog_ev(LOG_DEBUG, "master.prometheus.scheduled",
+               lf_s("sys.path", prom_report_fname),
+               lf_d("master.prometheus.frequency", prom_frequency));
 }
 
 static void do_prom_report(struct timeval now)
@@ -2567,25 +2597,26 @@ static void do_prom_report(struct timeval now)
     /* open and grab the lock -- but if we would block, just skip this time */
     fd = open(prom_report_fname, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     if (fd == -1) {
-        syslog(LOG_ERR, "open(%s): %m - %s",
-                        prom_report_fname,
-                        "disabling master prometheus report until next reload");
+        xsyslog_ev(LOG_ERR, "master.prometheus.disabled",
+                   lf_s("master.reason", "open_failed"),
+                   lf_s("sys.path", prom_report_fname));
         prom_enabled = 0;
         return;
     }
     r = lock_setlock(fd, /*ex*/ 1, /*nb*/ 1, prom_report_fname);
     if (r == -1) {
         if (errno != EWOULDBLOCK) {
-            syslog(LOG_ERR, "lock_setlock(%s): %m - %s",
-                            prom_report_fname,
-                            "disabling master prometheus report until next reload");
+            xsyslog_ev(LOG_ERR, "master.prometheus.disabled",
+                       lf_s("master.reason", "lock_failed"),
+                       lf_s("sys.path", prom_report_fname));
             prom_enabled = 0;
         }
         return;
     }
 
     /* okay, now prepare the report */
-    syslog(LOG_DEBUG, "updating prometheus report for master process");
+    xsyslog_ev(LOG_DEBUG, "master.prometheus.updating",
+               lf_s("sys.path", prom_report_fname));
     last_updated = now_ms();
 
     buf_printf(&report, "# HELP %s %s\n",
@@ -2726,7 +2757,9 @@ static void do_prom_report(struct timeval now)
     /* write it out */
     retry_write(fd, buf_cstring(&report), buf_len(&report));
     if (ftruncate(fd, buf_len(&report))) {
-        syslog(LOG_ERR, "IOERROR: failed to truncate prom file %s: %m", prom_report_fname);
+        xsyslog_ev(LOG_ERR, "master.prometheus.write.failed",
+                   lf_s("sys.path", prom_report_fname),
+                   lf_s("master.step", "truncate"));
     }
     lock_unlock(fd, prom_report_fname);
     close(fd);
@@ -2762,10 +2795,12 @@ static void send_sighup(struct service *s, int si, int wdi)
         /* cleanup newly disabled services */
 
         if (verbose > 2)
-            syslog(LOG_DEBUG, "disable: service %s/%s socket %d pipe %d %d",
-                   s->name, s->familyname,
-                   s->socket,
-                   s->stat[0], s->stat[1]);
+            xsyslog_ev(LOG_DEBUG, "master.service.fds",
+                       lf_service(s),
+                       lf_s("master.step", "disable"),
+                       lf_d("master.service.socket", s->socket),
+                       lf_d("master.service.pipe.read", s->stat[0]),
+                       lf_d("master.service.pipe.write", s->stat[1]));
 
         /* Only free the service info on the primary */
         if (s->associate == 0) {
@@ -2785,10 +2820,12 @@ static void send_sighup(struct service *s, int si, int wdi)
 
         service_create(s, 0);
         if (verbose > 2)
-            syslog(LOG_DEBUG, "init: service %s/%s socket %d pipe %d %d",
-                   s->name, s->familyname,
-                   s->socket,
-                   s->stat[0], s->stat[1]);
+            xsyslog_ev(LOG_DEBUG, "master.service.fds",
+                       lf_service(s),
+                       lf_s("master.step", "init"),
+                       lf_d("master.service.socket", s->socket),
+                       lf_d("master.service.pipe.read", s->stat[0]),
+                       lf_d("master.service.pipe.write", s->stat[1]));
     }
 }
 
@@ -2829,12 +2866,12 @@ static void reread_conf(struct timeval now)
     init_cronevent(now);
 
     /* send some feedback to admin */
-    syslog(LOG_NOTICE,
-            "Services reconfigured. %d out of %d (max %d) services structures "
-            "and %d out of %d (max %d) waitdaemon structures "
-            "are now in use",
-            nservices, allocservices, SERVICE_MAX,
-            nwaitdaemons, allocwaitdaemons, SERVICE_MAX);
+    xsyslog_ev(LOG_NOTICE, "master.reconfigured",
+               lf_d("master.services", nservices),
+               lf_d("master.services.allocated", allocservices),
+               lf_d("master.waitdaemons", nwaitdaemons),
+               lf_d("master.waitdaemons.allocated", allocwaitdaemons),
+               lf_d("master.services.max", SERVICE_MAX));
 }
 
 static void check_undermanned(struct service *s, int si, int wdi)
@@ -2853,10 +2890,8 @@ static void check_undermanned(struct service *s, int si, int wdi)
             s->lastreadyfail = now;
         }
         if (s->lastreadyfail) {
-            syslog(LOG_ERR,
-                   "lost all children for service: %s/%s.  " \
-                   "Applying babysitter.",
-                   s->name, s->familyname);
+            xsyslog_ev(LOG_ERR, "master.service.babysat",
+                       lf_service(s));
         }
         spawn_service(s, si, wdi);
     } else if (s->exec /* enabled */
@@ -2867,8 +2902,10 @@ static void check_undermanned(struct service *s, int si, int wdi)
         int j = s->desired_workers - s->ready_workers;
 
         if (verbose) {
-            syslog(LOG_DEBUG, "service %s/%s needs %d more ready workers",
-                   s->name, s->familyname, j);
+            xsyslog_ev(LOG_DEBUG, "master.service.workers",
+                       lf_service(s),
+                       lf_d("master.ready_workers", s->ready_workers),
+                       lf_d("master.workers.desired", s->desired_workers));
         }
 
         while (j-- > 0) {
@@ -2878,9 +2915,11 @@ static void check_undermanned(struct service *s, int si, int wdi)
                 s->name /* not yet removed */ &&
                 s->nactive == 0) {
         if (verbose > 2)
-            syslog(LOG_DEBUG, "remove: service %s/%s pipe %d %d",
-                   s->name, s->familyname,
-                   s->stat[0], s->stat[1]);
+            xsyslog_ev(LOG_DEBUG, "master.service.fds",
+                       lf_service(s),
+                       lf_s("master.step", "remove"),
+                       lf_d("master.service.pipe.read", s->stat[0]),
+                       lf_d("master.service.pipe.write", s->stat[1]));
 
         /* Only free the service info on the primary */
         if (s->associate == 0) {
@@ -2901,7 +2940,7 @@ static void master_ready(const char *ready_file, int ready)
 {
     int fd;
 
-    syslog(LOG_DEBUG, "ready for work");
+    xsyslog_ev(LOG_DEBUG, "master.ready");
 
     if (!ready_file) ready_file = config_getstring(IMAPOPT_MASTER_READY_FILE);
     if (!ready_file) return;
@@ -2920,9 +2959,8 @@ static void master_ready(const char *ready_file, int ready)
         close(fd);
     }
     else {
-        xsyslog(LOG_ERR, "unable to create ready file",
-                         "fname=<%s>",
-                         ready_file);
+        xsyslog_ev(LOG_ERR, "master.ready_file.create.failed",
+                   lf_s("sys.path", ready_file));
         exit(EX_OSERR);
     }
 }
@@ -3072,18 +3110,22 @@ int main(int argc, char **argv)
 
         pidlock_fd = open(pidfile_lock, O_CREAT|O_TRUNC|O_RDWR|O_NOFOLLOW, 0644);
         if (pidlock_fd == -1) {
-            syslog(LOG_ERR, "can't open pidfile lock: %s (%m)", pidfile_lock);
+            xsyslog_ev(LOG_ERR, "master.pidfile.lock.failed",
+                       lf_s("sys.path", pidfile_lock),
+                       lf_s("master.step", "open"));
             exit(EX_OSERR);
         } else {
             if (lock_nonblocking(pidlock_fd, pidfile)) {
-                syslog(LOG_ERR, "can't get exclusive lock on %s",
-                       pidfile_lock);
+                xsyslog_ev(LOG_ERR, "master.pidfile.lock.failed",
+                           lf_s("sys.path", pidfile_lock),
+                           lf_s("master.step", "lock"));
                 exit(EX_TEMPFAIL);
             }
         }
 
         if (pipe(startup_pipe) == -1) {
-            syslog(LOG_ERR, "can't create startup pipe (%m)");
+            xsyslog_ev(LOG_ERR, "master.daemonize.failed",
+                       lf_s("master.step", "pipe"));
             exit(EX_OSERR);
         }
 
@@ -3091,7 +3133,7 @@ int main(int argc, char **argv)
             pid = fork();
 
             if ((pid == -1) && (errno == EAGAIN)) {
-                syslog(LOG_WARNING, "master fork failed (sleeping): %m");
+                xsyslog_ev(LOG_WARNING, "master.daemonize.fork.retry");
                 sleep(5);
             }
         } while ((pid == -1) && (errno == EAGAIN));
@@ -3103,7 +3145,8 @@ int main(int argc, char **argv)
 
             /* Parent, wait for child */
             if (read(startup_pipe[0], &exit_code, sizeof(exit_code)) == -1) {
-                syslog(LOG_ERR, "could not read from startup_pipe (%m)");
+                xsyslog_ev(LOG_ERR, "master.daemonize.failed",
+                           lf_s("master.step", "read_startup_pipe"));
                 xunlink(pidfile_lock);
                 exit(EX_OSERR);
             } else {
@@ -3126,7 +3169,8 @@ int main(int argc, char **argv)
 
             /* Tell our parent that we failed. */
             if (write(startup_pipe[1], &exit_result, sizeof(exit_result)) == -1) {
-                syslog(LOG_ERR, "can't write to startup parent pipe: %m");
+                xsyslog_ev(LOG_ERR, "master.daemonize.failed",
+                           lf_s("master.step", "write_startup_pipe"));
             }
 
             fatal("setsid failure", EX_OSERR);
@@ -3138,11 +3182,13 @@ int main(int argc, char **argv)
     if (pidfd == -1) {
         int exit_result = EX_OSERR;
 
-        syslog(LOG_ERR, "can't open pidfile: %m");
+        xsyslog_ev(LOG_ERR, "master.pidfile.open.failed",
+                   lf_s("sys.path", pidfile));
 
         /* Tell our parent that we failed. */
         if (daemon_mode && write(startup_pipe[1], &exit_result, sizeof(exit_result)) == -1) {
-            syslog(LOG_ERR, "can't write to startup parent pipe: %m");
+            xsyslog_ev(LOG_ERR, "master.daemonize.failed",
+                       lf_s("master.step", "write_startup_pipe"));
         }
 
         exit(EX_OSERR);
@@ -3154,7 +3200,8 @@ int main(int argc, char **argv)
 
             /* Tell our parent that we failed. */
             if (write(startup_pipe[1], &exit_result, sizeof(exit_result)) == -1) {
-                syslog(LOG_ERR, "can't write to startup parent pipe: %m");
+                xsyslog_ev(LOG_ERR, "master.daemonize.failed",
+                           lf_s("master.step", "write_startup_pipe"));
             }
 
             fatal("cannot get exclusive lock on pidfile (is another master still running?)", EX_OSERR);
@@ -3166,11 +3213,14 @@ int main(int argc, char **argv)
             if (pidfd_flags == -1) {
                 int exit_result = EX_OSERR;
 
-                syslog(LOG_ERR, "unable to set close-on-exec for pidfile: %m");
+                xsyslog_ev(LOG_ERR, "master.pidfile.write.failed",
+                           lf_s("sys.path", pidfile),
+                           lf_s("master.step", "cloexec"));
 
                 /* Tell our parent that we failed. */
                 if (write(startup_pipe[1], &exit_result, sizeof(exit_result)) == -1) {
-                    syslog(LOG_ERR, "can't write to startup parent pipe: %m");
+                    xsyslog_ev(LOG_ERR, "master.daemonize.failed",
+                               lf_s("master.step", "write_startup_pipe"));
                 }
 
                 fatalf(EX_OSERR, "unable to set close-on-exec for pidfile (see syslog for details)");
@@ -3184,11 +3234,14 @@ int main(int argc, char **argv)
             {
                 int exit_result = EX_OSERR;
 
-                syslog(LOG_ERR, "unable to write to pidfile: %m");
+                xsyslog_ev(LOG_ERR, "master.pidfile.write.failed",
+                           lf_s("sys.path", pidfile),
+                           lf_s("master.step", "write"));
 
                 /* Tell our parent that we failed. */
                 if (daemon_mode && write(startup_pipe[1], &exit_result, sizeof(exit_result)) == -1) {
-                    syslog(LOG_ERR, "can't write to startup parent pipe: %m");
+                    xsyslog_ev(LOG_ERR, "master.daemonize.failed",
+                               lf_s("master.step", "write_startup_pipe"));
                 }
 
                 fatalf(EX_OSERR, "unable to write to pidfile (see syslog for details)");
@@ -3210,7 +3263,7 @@ int main(int argc, char **argv)
         xclose(pidlock_fd);
     }
 
-    syslog(LOG_DEBUG, "process started");
+    xsyslog_ev(LOG_DEBUG, "master.started");
 
     masterconf_getsection("START", &add_start, NULL);
     masterconf_getsection("SERVICES", &add_service, NULL);
@@ -3224,14 +3277,16 @@ int main(int argc, char **argv)
     for (i = 0; i < nservices; i++) {
         service_create(&Services[i], 1);
         if (verbose > 2)
-            syslog(LOG_DEBUG, "init: service %s/%s socket %d pipe %d %d",
-                   Services[i].name, Services[i].familyname,
-                   Services[i].socket,
-                   Services[i].stat[0], Services[i].stat[1]);
+            xsyslog_ev(LOG_DEBUG, "master.service.fds",
+                       lf_service(&Services[i]),
+                       lf_s("master.step", "init"),
+                       lf_d("master.service.socket", Services[i].socket),
+                       lf_d("master.service.pipe.read", Services[i].stat[0]),
+                       lf_d("master.service.pipe.write", Services[i].stat[1]));
     }
 
     if (become_cyrus() != 0) {
-        syslog(LOG_ERR, "can't change to the cyrus user: %m");
+        xsyslog_ev(LOG_ERR, "master.setuid.failed");
         exit(1);
     }
     if (daemon_mode) chdir_cores();
@@ -3307,7 +3362,7 @@ int main(int argc, char **argv)
         }
 
         if (gotsighup) {
-            syslog(LOG_NOTICE, "got SIGHUP");
+            xsyslog_ev(LOG_NOTICE, "master.sighup.received");
             gotsighup = 0;
             reread_conf(now);
         }
@@ -3322,8 +3377,9 @@ int main(int argc, char **argv)
             /* messages */
             if (x >= 0) {
                 if (verbose > 2)
-                    syslog(LOG_DEBUG, "listening for messages from %s/%s",
-                           Services[i].name, Services[i].familyname);
+                    xsyslog_ev(LOG_DEBUG, "master.service.listening",
+                               lf_service(&Services[i]),
+                               lf_s("master.step", "messages"));
                 FD_SET(x, &rfds);
             }
             if (x > maxfd) maxfd = x;
@@ -3333,16 +3389,18 @@ int main(int argc, char **argv)
                 Services[i].nactive < Services[i].max_workers &&
                 !service_is_fork_limited(&Services[i])) {
                 if (verbose > 2)
-                    syslog(LOG_DEBUG, "listening for connections for %s/%s",
-                           Services[i].name, Services[i].familyname);
+                    xsyslog_ev(LOG_DEBUG, "master.service.listening",
+                               lf_service(&Services[i]),
+                               lf_s("master.step", "connections"));
                 FD_SET(y, &rfds);
                 if (y > maxfd) maxfd = y;
             }
 
             /* paranoia */
             if (Services[i].ready_workers < 0) {
-                syslog(LOG_ERR, "%s/%s has %d workers?!?", Services[i].name,
-                       Services[i].familyname, Services[i].ready_workers);
+                xsyslog_ev(LOG_ERR, "master.service.workers.negative",
+                           lf_service(&Services[i]),
+                           lf_d("master.ready_workers", Services[i].ready_workers));
             }
         }
         maxfd++;                /* need 1 greater than maxfd */
@@ -3380,7 +3438,8 @@ int main(int argc, char **argv)
                      * again. */
                     interrupted++;
                     if (interrupted > 5) {
-                        syslog(LOG_WARNING, "Repeatedly interrupted, too many signals?");
+                        xsyslog_ev(LOG_WARNING, "master.select.interrupted",
+                                   lf_d("master.interruptions", interrupted));
                         /* Fake a timeout */
                         ready_fds = 0;
                         FD_ZERO(&rfds);
@@ -3403,13 +3462,14 @@ int main(int argc, char **argv)
                         process_msg(i, &msg);
 
                     if (r == 2) {
-                        syslog(LOG_ERR,
-                            "got incorrectly sized response from child: %x", i);
+                        xsyslog_ev(LOG_ERR, "master.child.message.read.failed",
+                                   lf_service(&Services[i]),
+                                   lf_s("master.reason", "wrong_size"));
                         continue;
                     }
                     if (r < 0) {
-                        syslog(LOG_ERR,
-                            "error while receiving message from child %x: %m", i);
+                        xsyslog_ev(LOG_ERR, "master.child.message.read.failed",
+                                   lf_service(&Services[i]));
                         continue;
                     }
                 }
@@ -3448,51 +3508,46 @@ finished:
 
                 /* XXX log for paranoia rather than short-circuiting */
                 if (found++) {
-                    syslog(LOG_DEBUG,
-                           "found %d extra living children for %s/%s...",
-                           found, s->name, s->familyname);
+                    xsyslog_ev(LOG_DEBUG, "master.waitdaemon.extra_children",
+                               lf_service(s),
+                               lf_d("master.children", found));
                 }
 
                 r = kill(c->pid, SIGTERM);
                 if (r && errno != ESRCH) {
-                    syslog(LOG_ERR, "kill child %ld of %s/%s: %m",
-                                    (long) c->pid, s->name, s->familyname);
+                    xsyslog_ev(LOG_ERR, "master.waitdaemon.kill.failed",
+                               lf_service(s),
+                               lf_ld("sys.pid", (long) c->pid));
                     centry_set_state(c, SERVICE_STATE_DEAD);
                     continue;
                 }
 
-                syslog(LOG_NOTICE, "waiting for child %ld of %s/%s to exit...",
-                        (long) c->pid, s->name, s->familyname);
+                xsyslog_ev(LOG_NOTICE, "master.waitdaemon.stopping",
+                           lf_service(s),
+                           lf_ld("sys.pid", (long) c->pid));
 
                 gotpid = waitpid(c->pid, &status, 0);
                 if (gotpid == -1) {
-                    syslog(LOG_ERR, "waitpid %ld: %m", (long) c->pid);
+                    xsyslog_ev(LOG_ERR, "master.waitpid.failed",
+                               lf_service(s),
+                               lf_ld("sys.pid", (long) c->pid));
                 }
                 else {
-                    const char *childexit;
-                    const char *coredumped = "";
-                    int detail;
-
-                    if (WIFEXITED(status)) {
-                        childexit = "exited with status";
-                        detail = WEXITSTATUS(status);
-                    }
-                    else if (WIFSIGNALED(status)) {
-                        childexit = "killed with signal";
-                        detail = WTERMSIG(status);
+                    bool coredumped = false;
 #ifdef WCOREDUMP
-                        if (WCOREDUMP(status))
-                            coredumped = " (core dumped)";
+                    coredumped = WIFSIGNALED(status) && WCOREDUMP(status);
 #endif
-                    }
-                    else {
-                        childexit = "is in unknown state";
-                        detail = status;
-                    }
-                    syslog(LOG_NOTICE,
-                           "child %ld of %s/%s %s %d%s",
-                           (long) c->pid, s->name, s->familyname,
-                           childexit, detail, coredumped);
+
+                    xsyslog_ev(LOG_NOTICE, "master.waitdaemon.stopped",
+                               lf_service(s),
+                               lf_ld("sys.pid", (long) c->pid),
+                               WIFEXITED(status)
+                                   ? lf_d("sys.exitcode", WEXITSTATUS(status)) : lf_skip(),
+                               WIFSIGNALED(status)
+                                   ? lf_d("sys.signal", WTERMSIG(status)) : lf_skip(),
+                               lf_flag("sys.coredump", coredumped),
+                               (WIFEXITED(status) || WIFSIGNALED(status))
+                                   ? lf_skip() : lf_d("master.wait.status", status));
                 }
 
                 centry_set_state(c, SERVICE_STATE_DEAD);
@@ -3508,6 +3563,6 @@ finished:
 
     /* XXX paranoia: burn through child table, complain if anything there? */
 
-    syslog(LOG_NOTICE, "All children have exited, closing down");
+    xsyslog_ev(LOG_NOTICE, "master.shutdown.completed");
     return 0;
 }

@@ -24,5 +24,5 @@ sub test_at_event_bad ($self)
 
     $self->assert_num_equals(0, $self->{instance}->is_running());
     $self->assert_syslog_matches($self->{instance},
-                                 qr{invalid at=hhmm specification});
+                                 qr{\bevent=master\.event\.at\.invalid\b});
 }
