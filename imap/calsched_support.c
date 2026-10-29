@@ -223,21 +223,28 @@ static bool sched_same_user(const char *a, const char *b)
     return same;
 }
 
+EXPORTED bool sched_address_permitted(const char *addr,
+                                      const char *userid,
+                                      const char *ownerid)
+{
+    char *addrid = caladdress_userid(addr, true, NULL, NULL);
+    bool permitted = !addrid || sched_same_user(addrid, userid)
+                             || sched_same_user(addrid, ownerid);
+
+    free(addrid);
+    return permitted;
+}
+
 EXPORTED void sched_addresses_restrict(strarray_t *addresses,
                                        const char *userid,
                                        const char *ownerid)
 {
     for (int i = strarray_size(addresses) - 1; i >= 0; i--) {
-        char *addrid = caladdress_userid(strarray_nth(addresses, i),
-                                         true, NULL, NULL);
-
-        if (addrid && !sched_same_user(addrid, userid)
-                   && !sched_same_user(addrid, ownerid))
+        if (!sched_address_permitted(strarray_nth(addresses, i),
+                                     userid, ownerid))
         {
             free(strarray_remove(addresses, i));
         }
-
-        free(addrid);
     }
 }
 
