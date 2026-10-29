@@ -31,5 +31,5 @@ sub test_daemon_exits ($self)
     $self->{instance}->stop(no_check_syslog => 1);
     # then consume and check them
     $self->assert_syslog_matches($self->{instance},
-                                 qr{too many failures for});
+                                 qr{\bevent=master\.service\.disabled\b.*\bmaster\.reason=too_many_failures\b});
 }

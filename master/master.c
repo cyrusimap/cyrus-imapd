@@ -286,6 +286,18 @@ static void logfmt_arg_service(struct logfmt *lf, const char *key,
 }
 #define lf_service(sp) lf_fn("master.service", logfmt_arg_service, (sp))
 
+static const char *sstate_name(enum sstate state)
+{
+    switch (state) {
+    case SERVICE_STATE_UNKNOWN: return "UNKNOWN";
+    case SERVICE_STATE_INIT:    return "INIT";
+    case SERVICE_STATE_READY:   return "READY";
+    case SERVICE_STATE_BUSY:    return "BUSY";
+    case SERVICE_STATE_DEAD:    return "DEAD";
+    }
+    return "ILLEGAL";
+}
+
 /* free a centry */
 static void centry_free(struct centry *c)
 {
@@ -1356,11 +1368,11 @@ static void reap_child(void)
             case SERVICE_STATE_DEAD:
                 break;
             default:
-                syslog(LOG_CRIT,
-                       "service %s/%s pid %d in ILLEGAL STATE: exited. Serious "
-                       "software bug or memory corruption detected!",
-                       s ? SERVICEPARAM(s->name) : "unknown",
-                       s ? SERVICEPARAM(s->familyname) : "unknown", pid);
+                xsyslog_ev(LOG_CRIT, "master.child.state.illegal",
+                           lf_service(s),
+                           lf_d("sys.pid", pid),
+                           lf_s("master.child.state", sstate_name(c->service_state)),
+                           lf_s("master.step", "reap"));
                 centry_set_state(c, SERVICE_STATE_UNKNOWN);
             }
             if (s) {
@@ -1372,28 +1384,26 @@ static void reap_child(void)
                     if (!in_shutdown && failed) {
                         time_t now = time(NULL);
 
-                        syslog(LOG_WARNING,
-                               "service %s/%s pid %d in READY state: "
-                               "terminated abnormally",
-                               SERVICEPARAM(s->name),
-                               SERVICEPARAM(s->familyname), pid);
+                        xsyslog_ev(LOG_WARNING, "master.child.failed",
+                                   lf_service(s),
+                                   lf_d("sys.pid", pid),
+                                   lf_s("master.child.state", "READY"));
                         if (now - s->lastreadyfail > MAX_READY_FAIL_INTERVAL) {
                             s->nreadyfails = 0;
                         }
                         s->lastreadyfail = now;
                         if (++s->nreadyfails >= MAX_READY_FAILS && s->exec) {
                             if (s->babysit) {
-                                syslog(LOG_ERR, "ERROR: too many failures for "
-                                       "service %s/%s, disabling for %d seconds",
-                                       SERVICEPARAM(s->name),
-                                       SERVICEPARAM(s->familyname),
-                                       MAX_READY_FAIL_INTERVAL);
+                                xsyslog_ev(LOG_ERR, "master.service.disabled",
+                                           lf_service(s),
+                                           lf_s("master.reason", "too_many_failures"),
+                                           lf_d("master.disabled.seconds", MAX_READY_FAIL_INTERVAL));
                             }
                             else {
-                                syslog(LOG_ERR, "ERROR: too many failures for "
-                                       "service %s/%s, disabling until next SIGHUP",
-                                       SERVICEPARAM(s->name),
-                                       SERVICEPARAM(s->familyname));
+                                xsyslog_ev(LOG_ERR, "master.service.disabled",
+                                           lf_service(s),
+                                           lf_s("master.reason", "too_many_failures"),
+                                           lf_s("master.disabled.until", "sighup"));
                                 service_forget_exec(s);
                                 xclose(s->socket);
                             }
@@ -1403,30 +1413,29 @@ static void reap_child(void)
 
                 case SERVICE_STATE_DEAD:
                     /* uh? either we got duplicate signals, or we are now MT */
-                    syslog(LOG_WARNING,
-                           "service %s/%s pid %d in DEAD state: "
-                           "receiving duplicate signals",
-                           SERVICEPARAM(s->name),
-                           SERVICEPARAM(s->familyname), pid);
+                    xsyslog_ev(LOG_WARNING, "master.child.signal.duplicate",
+                               lf_service(s),
+                               lf_d("sys.pid", pid),
+                               lf_s("master.child.state", "DEAD"));
                     break;
 
                 case SERVICE_STATE_BUSY:
                     s->nactive--;
                     if (!in_shutdown && failed) {
-                        syslog(LOG_DEBUG,
-                               "service %s/%s pid %d in BUSY state: "
-                               "terminated abnormally",
-                               SERVICEPARAM(s->name),
-                               SERVICEPARAM(s->familyname), pid);
+                        xsyslog_ev(LOG_DEBUG, "master.child.failed",
+                                   lf_service(s),
+                                   lf_d("sys.pid", pid),
+                                   lf_s("master.child.state", "BUSY"));
                     }
                     break;
 
                 case SERVICE_STATE_UNKNOWN:
                     s->nactive--;
-                    syslog(LOG_WARNING,
-                           "service %s/%s pid %d in UNKNOWN state: exited",
-                           SERVICEPARAM(s->name),
-                           SERVICEPARAM(s->familyname), pid);
+                    xsyslog_ev(LOG_WARNING, "master.child.state.unexpected",
+                               lf_service(s),
+                               lf_d("sys.pid", pid),
+                               lf_s("master.child.state", "UNKNOWN"),
+                               lf_s("master.step", "reap"));
                     break;
                 default:
                     /* Shouldn't get here */
@@ -1444,11 +1453,10 @@ static void reap_child(void)
                     if (!in_shutdown && failed) {
                         time_t now = time(NULL);
 
-                        syslog(LOG_WARNING,
-                            "daemon %s/%s pid %d in READY state: "
-                            "terminated abnormally",
-                            SERVICEPARAM(wd->name),
-                            SERVICEPARAM(wd->familyname), pid);
+                        xsyslog_ev(LOG_WARNING, "master.child.failed",
+                                   lf_service(wd),
+                                   lf_d("sys.pid", pid),
+                                   lf_s("master.child.state", "READY"));
 
                         /* if this is repeatedly failing, YELL LOUDLY */
                         if (now - wd->lastreadyfail > MAX_READY_FAIL_INTERVAL) {
@@ -1456,29 +1464,30 @@ static void reap_child(void)
                         }
                         wd->lastreadyfail = now;
                         if (++wd->nreadyfails >= MAX_READY_FAILS && wd->exec) {
-                            syslog(LOG_ERR, "daemon %s/%s is repeatedly failing",
-                                   SERVICEPARAM(wd->name),
-                                   SERVICEPARAM(wd->familyname));
+                            xsyslog_ev(LOG_ERR, "master.daemon.failing",
+                                       lf_service(wd),
+                                       lf_d("master.failures", wd->nreadyfails));
                         }
                     }
                     break;
                 default:
-                    syslog(LOG_WARNING,
-                           "daemon %s/%s pid %d in unexpected state (%u): exited",
-                           SERVICEPARAM(wd->name),
-                           SERVICEPARAM(wd->familyname),
-                           pid, c->service_state);
+                    xsyslog_ev(LOG_WARNING, "master.child.state.unexpected",
+                               lf_service(wd),
+                               lf_d("sys.pid", pid),
+                               lf_s("master.child.state", sstate_name(c->service_state)),
+                               lf_s("master.step", "reap"));
                     break;
                 }
             } else {
                 /* children from spawn_exec (events) or
                  * children of services removed by reread_conf() */
                 if (c->service_state != SERVICE_STATE_READY) {
-                    syslog(LOG_WARNING,
-                           "unknown service pid %d in state %d: exited "
-                           "(maybe using a service as an event, "
-                           "or a service was removed by SIGHUP?)",
-                           pid, c->service_state);
+                    /* maybe a service used as an event, or one a SIGHUP removed */
+                    xsyslog_ev(LOG_WARNING, "master.child.state.unexpected",
+                               lf_centry(c),
+                               lf_d("sys.pid", pid),
+                               lf_s("master.child.state", sstate_name(c->service_state)),
+                               lf_s("master.step", "reap"));
                 }
             }
 
@@ -1496,23 +1505,21 @@ static void reap_child(void)
             centry_set_state(c, SERVICE_STATE_DEAD);
         } else {
             /* Are we multithreaded now? we don't know this child */
-            syslog(LOG_ERR,
-                   "received SIGCHLD from unknown child pid %d, ignoring",
-                   pid);
+            xsyslog_ev(LOG_ERR, "master.child.unknown",
+                       lf_d("sys.pid", pid),
+                       lf_s("master.step", "reap"));
             /* XXX: is this something we should take lightly? */
         }
         if (verbose && c) {
             if (c->si != SERVICE_NONE) {
-                syslog(LOG_DEBUG, "service %s/%s now has %d ready workers",
-                       SERVICEPARAM(Services[c->si].name),
-                       SERVICEPARAM(Services[c->si].familyname),
-                       Services[c->si].ready_workers);
+                xsyslog_ev(LOG_DEBUG, "master.service.workers",
+                           lf_service(&Services[c->si]),
+                           lf_d("master.ready_workers", Services[c->si].ready_workers));
             }
             else if (c->wdi != SERVICE_NONE) {
-                syslog(LOG_DEBUG, "waitdaemon %s/%s now has %d ready workers",
-                       SERVICEPARAM(WaitDaemons[c->wdi].name),
-                       SERVICEPARAM(WaitDaemons[c->wdi].familyname),
-                       WaitDaemons[c->wdi].ready_workers);
+                xsyslog_ev(LOG_DEBUG, "master.service.workers",
+                           lf_service(&WaitDaemons[c->wdi]),
+                           lf_d("master.ready_workers", WaitDaemons[c->wdi].ready_workers));
             }
         }
     }
@@ -1589,21 +1596,11 @@ static void child_janitor(struct timeval now)
                     struct service *wd = ((c->wdi) != SERVICE_NONE) ?
                         &WaitDaemons[c->wdi] : NULL;
 
-                    if (wd) {
-                        syslog(LOG_INFO,
-                               "waitdaemon %s/%s pid %d in state %d has not "
-                               "yet been recycled since SIGHUP was sent (%ds ago)",
-                               wd ? SERVICEPARAM(wd->name) : "unknown",
-                               wd ? SERVICEPARAM(wd->familyname) : "unknown",
-                               c->pid, c->service_state, (int) delay);
-                    }
-                    else {
-                        syslog(LOG_INFO, "service %s/%s pid %d in state %d has not "
-                            "yet been recycled since SIGHUP was sent (%ds ago)",
-                            s ? SERVICEPARAM(s->name) : "unknown",
-                            s ? SERVICEPARAM(s->familyname) : "unknown",
-                            c->pid, c->service_state, (int)delay);
-                    }
+                    xsyslog_ev(LOG_INFO, "master.child.recycle.slow",
+                               lf_service(wd ? wd : s),
+                               lf_d("sys.pid", c->pid),
+                               lf_s("master.child.state", sstate_name(c->service_state)),
+                               lf_d("master.sighup.age", (int) delay));
 
                     /* no need to log it more than once */
                     c->sighuptime = (time_t)-1;
@@ -1630,11 +1627,12 @@ static void begin_shutdown(void)
     if (in_shutdown)
         return;
     in_shutdown = 1;
-    syslog(LOG_INFO, "attempting clean shutdown on signal");
+    xsyslog_ev(LOG_INFO, "master.shutdown.started");
 
     /* send our process group a SIGTERM */
     if (kill(0, SIGTERM) < 0) {
-        syslog(LOG_ERR, "begin_shutdown: kill(0, SIGTERM): %m");
+        xsyslog_ev(LOG_ERR, "master.shutdown.kill.failed",
+                   lf_d("sys.signal", SIGTERM));
     }
 }
 
@@ -1728,15 +1726,21 @@ static void child_sighandler_setup(void)
     sigemptyset(&action.sa_mask);
     action.sa_handler = SIG_DFL;
     if (sigaction(SIGQUIT, &action, NULL) < 0) {
-        syslog(LOG_ERR, "unable to remove signal handler for SIGQUIT: %m");
+        xsyslog_ev(LOG_ERR, "master.child.setup.failed",
+                   lf_s("master.step", "sigaction"),
+                   lf_d("sys.signal", SIGQUIT));
         exit(EX_TEMPFAIL);
     }
     if (sigaction(SIGINT, &action, NULL) < 0) {
-        syslog(LOG_ERR, "unable to remove signal handler for SIGINT: %m");
+        xsyslog_ev(LOG_ERR, "master.child.setup.failed",
+                   lf_s("master.step", "sigaction"),
+                   lf_d("sys.signal", SIGINT));
         exit(EX_TEMPFAIL);
     }
     if (sigaction(SIGTERM, &action, NULL) < 0) {
-        syslog(LOG_ERR, "unable to remove signal handler for SIGTERM: %m");
+        xsyslog_ev(LOG_ERR, "master.child.setup.failed",
+                   lf_s("master.step", "sigaction"),
+                   lf_d("sys.signal", SIGTERM));
         exit(EX_TEMPFAIL);
     }
 
@@ -1794,9 +1798,10 @@ static void process_msg(int si, struct notify_message *msg)
          *
          * Note that this analysis depends on master's single-threaded
          * nature */
-        syslog(LOG_WARNING,
-                "service %s/%s pid %d: receiving messages from long dead children",
-               SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), msg->service_pid);
+        xsyslog_ev(LOG_WARNING, "master.child.unknown",
+                   lf_service(s),
+                   lf_d("sys.pid", msg->service_pid),
+                   lf_s("master.step", "message"));
         /* re-add child to list */
         c = centry_alloc();
         centry_set_name(c, "ZOMBIE", NULL, NULL);
@@ -1807,27 +1812,32 @@ static void process_msg(int si, struct notify_message *msg)
 
     /* paranoia */
     if (si != c->si) {
-        syslog(LOG_ERR,
-               "service %s/%s pid %d: changing from service %s/%s due to received message",
-               SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid,
-               ((c->si != SERVICE_NONE) ? SERVICEPARAM(Services[c->si].name) : "unknown"),
-               ((c->si != SERVICE_NONE) ? SERVICEPARAM(Services[c->si].familyname) : "unknown"));
+        xsyslog_ev(LOG_ERR, "master.child.service.changed",
+                   lf_service(s),
+                   lf_d("sys.pid", c->pid),
+                   lf_s("old.master.service", (c->si != SERVICE_NONE)
+                                              ? Services[c->si].name : NULL));
         c->si = si;
     }
     switch (c->service_state) {
     case SERVICE_STATE_UNKNOWN:
-        syslog(LOG_WARNING,
-               "service %s/%s pid %d in UNKNOWN state: processing message 0x%x",
-               SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid, msg->message);
+        xsyslog_ev(LOG_WARNING, "master.child.message.unexpected",
+                   lf_service(s),
+                   lf_d("sys.pid", c->pid),
+                   lf_s("master.child.state", "UNKNOWN"),
+                   lf_raw("master.message", "0x%x", msg->message));
         break;
     case SERVICE_STATE_READY:
     case SERVICE_STATE_BUSY:
     case SERVICE_STATE_DEAD:
         break;
     default:
-        syslog(LOG_CRIT,
-               "service %s/%s pid %d in ILLEGAL state: detected. Serious software bug or memory corruption uncloaked while processing message 0x%x from child!",
-               SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid, msg->message);
+        xsyslog_ev(LOG_CRIT, "master.child.state.illegal",
+                   lf_service(s),
+                   lf_d("sys.pid", c->pid),
+                   lf_s("master.child.state", sstate_name(c->service_state)),
+                   lf_s("master.step", "message"),
+                   lf_raw("master.message", "0x%x", msg->message));
         centry_set_state(c, SERVICE_STATE_UNKNOWN);
         break;
     }
@@ -1838,25 +1848,33 @@ static void process_msg(int si, struct notify_message *msg)
         switch (c->service_state) {
         case SERVICE_STATE_READY:
             /* duplicate message? */
-            syslog(LOG_WARNING,
-                   "service %s/%s pid %d in READY state: sent available message but it is already ready",
-                   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
+            xsyslog_ev(LOG_WARNING, "master.child.message.unexpected",
+                       lf_service(s),
+                       lf_d("sys.pid", c->pid),
+                       lf_s("master.child.state", "READY"),
+                       lf_s("master.message", "AVAILABLE"));
             break;
 
         case SERVICE_STATE_UNKNOWN:
             /* since state is unknown, error in non-DoS way, i.e.
              * we don't increment ready_workers */
-            syslog(LOG_DEBUG,
-                   "service %s/%s pid %d in UNKNOWN state: now available and in READY state",
-                   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
+            xsyslog_ev(LOG_DEBUG, "master.child.state.changed",
+                       lf_service(s),
+                       lf_d("sys.pid", c->pid),
+                       lf_s("old.master.child.state", "UNKNOWN"),
+                       lf_s("master.child.state", "READY"),
+                       lf_s("master.message", "AVAILABLE"));
             centry_set_state(c, SERVICE_STATE_READY);
             break;
 
         case SERVICE_STATE_BUSY:
             if (verbose)
-                syslog(LOG_DEBUG,
-                       "service %s/%s pid %d in BUSY state: now available and in READY state",
-                       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
+                xsyslog_ev(LOG_DEBUG, "master.child.state.changed",
+                           lf_service(s),
+                           lf_d("sys.pid", c->pid),
+                           lf_s("old.master.child.state", "BUSY"),
+                           lf_s("master.child.state", "READY"),
+                           lf_s("master.message", "AVAILABLE"));
             centry_set_state(c, SERVICE_STATE_READY);
             s->ready_workers++;
             break;
@@ -1875,23 +1893,31 @@ static void process_msg(int si, struct notify_message *msg)
         switch (c->service_state) {
         case SERVICE_STATE_BUSY:
             /* duplicate message? */
-            syslog(LOG_WARNING,
-                   "service %s/%s pid %d in BUSY state: sent unavailable message but it is already busy",
-                   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
+            xsyslog_ev(LOG_WARNING, "master.child.message.unexpected",
+                       lf_service(s),
+                       lf_d("sys.pid", c->pid),
+                       lf_s("master.child.state", "BUSY"),
+                       lf_s("master.message", "UNAVAILABLE"));
             break;
 
         case SERVICE_STATE_UNKNOWN:
-            syslog(LOG_DEBUG,
-                   "service %s/%s pid %d in UNKNOWN state: now unavailable and in BUSY state",
-                   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
+            xsyslog_ev(LOG_DEBUG, "master.child.state.changed",
+                       lf_service(s),
+                       lf_d("sys.pid", c->pid),
+                       lf_s("old.master.child.state", "UNKNOWN"),
+                       lf_s("master.child.state", "BUSY"),
+                       lf_s("master.message", "UNAVAILABLE"));
             centry_set_state(c, SERVICE_STATE_BUSY);
             break;
 
         case SERVICE_STATE_READY:
             if (verbose)
-                syslog(LOG_DEBUG,
-                       "service %s/%s pid %d in READY state: now unavailable and in BUSY state",
-                       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
+                xsyslog_ev(LOG_DEBUG, "master.child.state.changed",
+                           lf_service(s),
+                           lf_d("sys.pid", c->pid),
+                           lf_s("old.master.child.state", "READY"),
+                           lf_s("master.child.state", "BUSY"),
+                           lf_s("master.message", "UNAVAILABLE"));
             centry_set_state(c, SERVICE_STATE_BUSY);
             s->ready_workers--;
             break;
@@ -1911,23 +1937,32 @@ static void process_msg(int si, struct notify_message *msg)
         case SERVICE_STATE_BUSY:
             s->nconnections++;
             if (verbose)
-                syslog(LOG_DEBUG,
-                       "service %s/%s pid %d in BUSY state: now serving connection",
-                       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
+                xsyslog_ev(LOG_DEBUG, "master.child.state.changed",
+                           lf_service(s),
+                           lf_d("sys.pid", c->pid),
+                           lf_s("old.master.child.state", "BUSY"),
+                           lf_s("master.child.state", "BUSY"),
+                           lf_s("master.message", "CONNECTION"));
             break;
 
         case SERVICE_STATE_UNKNOWN:
             s->nconnections++;
             centry_set_state(c, SERVICE_STATE_BUSY);
-            syslog(LOG_DEBUG,
-                   "service %s/%s pid %d in UNKNOWN state: now in BUSY state and serving connection",
-                   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
+            xsyslog_ev(LOG_DEBUG, "master.child.state.changed",
+                       lf_service(s),
+                       lf_d("sys.pid", c->pid),
+                       lf_s("old.master.child.state", "UNKNOWN"),
+                       lf_s("master.child.state", "BUSY"),
+                       lf_s("master.message", "CONNECTION"));
             break;
 
         case SERVICE_STATE_READY:
-            syslog(LOG_ERR,
-                   "service %s/%s pid %d in READY state: reported new connection, forced to BUSY state",
-                   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
+            xsyslog_ev(LOG_ERR, "master.child.state.forced",
+                       lf_service(s),
+                       lf_d("sys.pid", c->pid),
+                       lf_s("old.master.child.state", "READY"),
+                       lf_s("master.child.state", "BUSY"),
+                       lf_s("master.message", "CONNECTION"));
             /* be resilient on face of a bogon source, so lets err to the side
              * of non-denial-of-service */
             centry_set_state(c, SERVICE_STATE_BUSY);
@@ -1951,15 +1986,21 @@ static void process_msg(int si, struct notify_message *msg)
         case SERVICE_STATE_READY:
             s->nconnections++;
             if (verbose)
-                syslog(LOG_DEBUG,
-                       "service %s/%s pid %d in READY state: serving one more multi-threaded connection",
-                       SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
+                xsyslog_ev(LOG_DEBUG, "master.child.state.changed",
+                           lf_service(s),
+                           lf_d("sys.pid", c->pid),
+                           lf_s("old.master.child.state", "READY"),
+                           lf_s("master.child.state", "READY"),
+                           lf_s("master.message", "CONNECTION_MULTI"));
             break;
 
         case SERVICE_STATE_BUSY:
-            syslog(LOG_ERR,
-                   "service %s/%s pid %d in BUSY state: serving one more multi-threaded connection, forced to READY state",
-                   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
+            xsyslog_ev(LOG_ERR, "master.child.state.forced",
+                       lf_service(s),
+                       lf_d("sys.pid", c->pid),
+                       lf_s("old.master.child.state", "BUSY"),
+                       lf_s("master.child.state", "READY"),
+                       lf_s("master.message", "CONNECTION_MULTI"));
             /* be resilient on face of a bogon source, so lets err to the side
              * of non-denial-of-service */
             centry_set_state(c, SERVICE_STATE_READY);
@@ -1970,9 +2011,12 @@ static void process_msg(int si, struct notify_message *msg)
         case SERVICE_STATE_UNKNOWN:
             s->nconnections++;
             centry_set_state(c, SERVICE_STATE_READY);
-            syslog(LOG_ERR,
-                   "service %s/%s pid %d in UNKNOWN state: serving one more multi-threaded connection, forced to READY state",
-                   SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid);
+            xsyslog_ev(LOG_ERR, "master.child.state.forced",
+                       lf_service(s),
+                       lf_d("sys.pid", c->pid),
+                       lf_s("old.master.child.state", "UNKNOWN"),
+                       lf_s("master.child.state", "READY"),
+                       lf_s("master.message", "CONNECTION_MULTI"));
             break;
 
         case SERVICE_STATE_DEAD:
@@ -1987,14 +2031,17 @@ static void process_msg(int si, struct notify_message *msg)
         break;
 
     default:
-        syslog(LOG_CRIT, "service %s/%s pid %d: Software bug: unrecognized message 0x%x",
-               SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), c->pid, msg->message);
+        xsyslog_ev(LOG_CRIT, "master.child.message.unknown",
+                   lf_service(s),
+                   lf_d("sys.pid", c->pid),
+                   lf_raw("master.message", "0x%x", msg->message));
         break;
     }
 
     if (verbose)
-        syslog(LOG_DEBUG, "service %s/%s now has %d ready workers",
-               SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), s->ready_workers);
+        xsyslog_ev(LOG_DEBUG, "master.service.workers",
+                   lf_service(s),
+                   lf_d("master.ready_workers", s->ready_workers));
 }
 
 static void add_start(const char *name, struct entry *e,

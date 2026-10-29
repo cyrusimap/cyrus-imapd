@@ -407,15 +407,22 @@ lmtp.smtputf8           1 if lmtpd offers SMTPUTF8
 lmtp.target             how the destination mailbox was chosen: default, plus-addr, ...
 master.child            placeholder for "no known child process"; value is always ~null~
 master.child.age        how long ago master spawned a child process, in seconds
+master.child.state      master's record of a child's state: READY, BUSY, DEAD or UNKNOWN
 master.child.type       what master spawned a child as: START, SERVICE, DAEMON or EVENT
+master.disabled.seconds how long master disables a failing service for
+master.disabled.until   what re-enables a service master disabled: sighup
 master.event            the name of a cyrus.conf EVENTS entry
+master.failures         how many times in a row a service has failed
 master.fcntl.flag       the file descriptor flag master tried to change
+master.message          a message a child sent master about its state
+master.ready_workers    how many of a service's children are waiting for work
 master.reason           why master disabled, ignored or refused something
 master.respawn          1 if master is restarting a waitdaemon rather than starting it
 master.service          the name of a cyrus.conf SERVICES or DAEMON entry
 master.service.family   the address family a service listens on: ipv4, ipv6, unix or daemon
 master.service.listen   a service's listen= address
 master.service.proto    a service's proto= setting
+master.sighup.age       how long ago master asked a child to restart, in seconds
 master.sockopt          the socket option master tried to set
 master.step             which step of a master operation is being logged
 mboxlist.key            a raw mailboxes.db key
@@ -553,6 +560,8 @@ replica.msg.lastupdated when the replica's record was last updated
 replica.msg.modseq      the replica's modseq for the message
 ### old. - the value before a change, paired with the unprefixed key
 
+old.master.child.state  a child's state before a message changed it
+old.master.service      the service master thought a child belonged to
 old.mbox.acl            the mailbox ACL before the change
 old.mbox.cache.crc      the CRC of a cache record before it was rebuilt
 old.mbox.cache.offset   the offset of a cache record before it was rebuilt
