@@ -203,9 +203,9 @@ These structural prefixes stack on top of the above:
   Always paired with the unprefixed key carrying the new value.
 - **`out.`** — a value on the way out, where the event also mentions one coming
   in: `msg.id` and `out.msg.id` in Sieve redirect logging.
-- **`other.`** — the second mailbox in an event about two of them, such as a
-  clash: `mbox.uniqueid` is the one being written, `other.mbox.uniqueid` the
-  one already there.
+- **`other.`** — the second mailbox or message in an event about two of them,
+  such as a clash: `mbox.uniqueid` is the one being written,
+  `other.mbox.uniqueid` the one already there.
 - **`replica.`** — the replica's copy of a value, in a replication event that
   compares the two ends: `mbox.highestmodseq` is the master's,
   `replica.mbox.highestmodseq` the replica's.  This holds whichever end logged

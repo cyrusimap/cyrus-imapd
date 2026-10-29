@@ -64,6 +64,11 @@
 
 #define DB config_conversations_db
 
+/* A folder key is a mailbox name or a uniqueid, as CONV_FOLDER_KEY_MBOX chose */
+#define lf_folder_key(state, key)                                  \
+    ((state)->folders_byname ? lf_intname("mbox.name", (key))      \
+                             : lf_s("mbox.uniqueid", (key)))
+
 struct conversations_open {
     struct conversations_state s;
     user_nslock_t *user_nslock;
@@ -167,7 +172,9 @@ static int _init_counted(struct conversations_state *state,
                 r = cyrusdb_store(state->db, CFKEY, strlen(CFKEY),
                                   val, vallen, &state->txn);
                 if (r) {
-                    syslog(LOG_ERR, "Failed to write counted_flags");
+                    xsyslog_ev(LOG_ERR, "conversations.header.write.failed",
+                               lf_s("conversations.step", "counted_flags"),
+                               lf_err("error", r));
                     return r;
                 }
             }
@@ -178,7 +185,9 @@ static int _init_counted(struct conversations_state *state,
             r = cyrusdb_store(state->db, VERSIONKEY, strlen(VERSIONKEY),
                               vbuf, strlen(vbuf), &state->txn);
             if (r) {
-                syslog(LOG_ERR, "Failed to write version");
+                xsyslog_ev(LOG_ERR, "conversations.header.write.failed",
+                           lf_s("conversations.step", "version"),
+                           lf_err("error", r));
                 return r;
             }
         }
@@ -194,8 +203,9 @@ static int _init_counted(struct conversations_state *state,
     if (vallen) {
         state->counted_flags = strarray_nsplit(val, vallen, " ", /*flags*/0);
         if (state->counted_flags->count > 32) {
-            syslog(LOG_ERR, "conversations: truncating counted_flags: %d (%.*s)",
-                            state->counted_flags->count, vallen, val);
+            xsyslog_ev(LOG_ERR, "conversations.counted_flags.truncated",
+                       lf_d("conversations.flags", state->counted_flags->count),
+                       lf_raw("conversations.value", "%.*s", vallen, val));
             strarray_truncate(state->counted_flags, 32);
         }
     }
@@ -370,7 +380,9 @@ EXPORTED int conversations_open_path_version(const char *fname,
     for (open = open_conversations; open; open = open->next) {
         if (!strcmp(open->s.path, fname))
             return IMAP_CONVERSATIONS_ALREADY_OPEN;
-        syslog(LOG_NOTICE, "conversations_open_path: opening %s over %s", fname, open->s.path);
+        xsyslog_ev(LOG_NOTICE, "conversations.open.shared",
+                   lf_s("sys.path", fname),
+                   lf_s("old.sys.path", open->s.path));
     }
 
     open = xzmalloc(sizeof(struct conversations_open));
@@ -407,8 +419,10 @@ EXPORTED int conversations_open_path_version(const char *fname,
         r = parsenum(val, &val, vallen, &version);
         if (r) return IMAP_MAILBOX_BADFORMAT;
         if (version > CONVERSATIONS_VERSION) {
-            syslog(LOG_ERR, "conversations: future version %s (%d > %d)",
-                   fname, (int)version, CONVERSATIONS_VERSION);
+            xsyslog_ev(LOG_ERR, "conversations.version.unsupported",
+                       lf_s("sys.path", fname),
+                       lf_d("conversations.version", (int)version),
+                       lf_d("conversations.version.max", CONVERSATIONS_VERSION));
             return IMAP_MAILBOX_BADFORMAT;
         }
         open->s.version = version;
@@ -444,9 +458,9 @@ EXPORTED int conversations_open_path_version(const char *fname,
              * it does, this would get called *a lot* */
             static int warned_v1 = 0;
             if (!warned_v1++) {
-                syslog(LOG_ERR, "compact_ids is \"always\" but %s is version %d:"
-                                " falling back to legacy ids",
-                       fname, open->s.version);
+                xsyslog_ev(LOG_ERR, "conversations.compactids.unavailable",
+                           lf_s("sys.path", fname),
+                           lf_d("conversations.version", open->s.version));
             }
         }
     }
@@ -1119,8 +1133,10 @@ static int _write_quota(struct conversations_state *state)
 
     // can't go negative (could happen before a rebuild)
     if (emails < 0 || storage < 0) {
-        syslog(LOG_ERR, "IOERROR: conversations_audit on quota store: %s (%lld %lld)",
-               state->path, (long long)emails, (long long)storage);
+        xsyslog_ev(LOG_ERR, "conversations.audit.quota.invalid",
+                   lf_s("sys.path", state->path),
+                   lf_lld("conversations.emails", (long long)emails),
+                   lf_lld("conversations.storage", (long long)storage));
         emails = 0;
         storage = 0;
     }
@@ -1304,7 +1320,8 @@ EXPORTED int conversation_getstatus(struct conversations_state *state,
 
  done:
     if (r)
-        syslog(LOG_ERR, "IOERROR: conversations invalid status %s", mailbox);
+        xsyslog_ev(LOG_ERR, "conversations.status.invalid",
+                   lf_folder_key(state, mailbox));
 
     free(key);
 
@@ -1650,8 +1667,10 @@ EXPORTED int conversation_load_advanced(struct conversations_state *state,
     r = conversation_parse(data, datalen, conv, flags);
 
     if (r) {
-        syslog(LOG_ERR, "IOERROR: conversations_audit parse error: %s %s %.*s",
-               state->path, bkey, (int)datalen, data);
+        xsyslog_ev(LOG_ERR, "conversations.audit.parse.failed",
+                   lf_s("sys.path", state->path),
+                   lf_s("conversations.key", bkey),
+                   lf_raw("conversations.value", "%.*s", (int)datalen, data));
     }
 
     return r;
@@ -1726,8 +1745,8 @@ EXPORTED int conversation_get_modseq(struct conversations_state *state,
 
     r = _conversation_load_modseq(data, datalen, modseqp);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: conversation_get_modseq: invalid conversation "
-               CONV_FMT, cid);
+        xsyslog_ev(LOG_ERR, "conversations.thread.invalid",
+                   lf_raw("msg.cid", CONV_FMT, cid));
         *modseqp = 0;
     }
 
@@ -2256,18 +2275,26 @@ EXPORTED int conversations_iterate_searchset(struct conversations_state *state,
     if (limit && n > limit) {
         size_t estimate = conversations_estimate_emailcount(state);
         if (estimate > n*20) { // 5% matches is enough to to iterate!
-            syslog(LOG_DEBUG, "conversation_iterate_searchset: %s falling back to index for %d/%d records",
-                   state->path, (int)n, (int)estimate);
+            xsyslog_ev(LOG_DEBUG, "conversations.search.mode",
+                       lf_s("sys.path", state->path),
+                       lf_s("conversations.mode", "index_fallback"),
+                       lf_d("conversations.records", (int)n),
+                       lf_d("conversations.estimate", (int)estimate));
         }
         else {
-            syslog(LOG_DEBUG, "conversation_iterate_searchset: %s using scan mode for %d/%d records",
-                   state->path, (int)n, (int)estimate);
+            xsyslog_ev(LOG_DEBUG, "conversations.search.mode",
+                       lf_s("sys.path", state->path),
+                       lf_s("conversations.mode", "scan"),
+                       lf_d("conversations.records", (int)n),
+                       lf_d("conversations.estimate", (int)estimate));
             return _guid_foreach_helper(state, "", cb, cbrock, data, n);
         }
     }
     else {
-        syslog(LOG_DEBUG, "conversation_iterate_searchset: %s using indexed mode for %d records",
-               state->path, (int)n);
+        xsyslog_ev(LOG_DEBUG, "conversations.search.mode",
+                   lf_s("sys.path", state->path),
+                   lf_s("conversations.mode", "indexed"),
+                   lf_d("conversations.records", (int)n));
     }
     size_t i;
     for (i = 0; i < n; i++) {
@@ -2636,8 +2663,8 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
             if (!new) {
                 /* We're trying to delete a conversation that's already
                  * gone...don't try to hard */
-                syslog(LOG_NOTICE, "conversation "CONV_FMT" already "
-                                   "deleted, ignoring", record->cid);
+                xsyslog_ev(LOG_NOTICE, "conversations.thread.deleted",
+                           lf_raw("msg.cid", CONV_FMT, record->cid));
                 goto done;
             }
             conv = conversation_new();
@@ -3485,8 +3512,10 @@ static int folder_key_rename(struct conversations_state *state,
      * but DB corruption could mean this wasn't cleared - better to allow the rename to
      * succeed and clean up later */
     if (status.threadexists || status.emailexists) {
-        syslog(LOG_ERR, "IOERROR: conversationsdb corruption %s still had %d/%d messages in folder key on delete",
-               from_name, status.threadexists, status.emailexists);
+        xsyslog_ev(LOG_ERR, "conversations.folder.corrupt",
+                   lf_folder_key(state, from_name),
+                   lf_d("conversations.threads", status.threadexists),
+                   lf_d("conversations.emails", status.emailexists));
     }
 
     return 0;
@@ -3507,12 +3536,13 @@ EXPORTED int conversations_rename_folder(struct conversations_state *state,
     if (r) return r;
 
     if (to_name) {
-        syslog(LOG_NOTICE, "conversations_rename_folder: renamed %s to %s",
-               from_name, to_name);
+        xsyslog_ev(LOG_NOTICE, "conversations.folder.renamed",
+                   lf_intname("old.mbox.name", from_name),
+                   lf_intname("mbox.name", to_name));
     }
     else {
-        syslog(LOG_NOTICE, "conversations_rename_folder: deleted %s",
-               from_name);
+        xsyslog_ev(LOG_NOTICE, "conversations.folder.deleted",
+                   lf_folder_key(state, from_name));
     }
 
     return 0;
@@ -3791,8 +3821,8 @@ EXPORTED int conversations_jmapid_guidrep_lookup(struct conversations_state *sta
     if (r) return r;
 
     if (datalen < MESSAGE_GUIDREP_SIZE) {
-        xsyslog(LOG_NOTICE, "IOERROR: malformed data value in J record",
-                "key=<%s>", key);
+        xsyslog_ev(LOG_NOTICE, "conversations.record.invalid",
+                   lf_s("conversations.key", key));
         return CYRUSDB_NOTFOUND;
     }
 
@@ -3901,14 +3931,14 @@ EXPORTED void conversations_adjust_internaldate(struct conversations_state *csta
             existing_uniqueid = lrock.mbentry->uniqueid;
         }
  
-        xsyslog(LOG_INFO, "JMAPID conflict during append,"
-                " incrementing internaldate.tv_nsec",
-                "mboxname=<%s> guid=<%s>"
-                " internaldate=<" UINT64_FMT UINT64_NANOSEC_FMT ">"
-                " existing.mboxname=<%s> existing.uniqueid=<%s>"
-                " existing.uid=<%u> existing.guid=<%s>",
-                mboxname, my_guid, internaldate->tv_sec, internaldate->tv_nsec,
-                existing_mboxname, existing_uniqueid, lrock.uid, existing_guid);
+        xsyslog_ev(LOG_INFO, "conversations.jmapid.conflict",
+                   lf_intname("mbox.name", mboxname),
+                   lf_s("msg.guid", my_guid),
+                   lf_raw("msg.internaldate", UINT64_FMT UINT64_NANOSEC_FMT, internaldate->tv_sec, internaldate->tv_nsec),
+                   lf_intname("other.mbox.name", existing_mboxname),
+                   lf_s("other.mbox.uniqueid", existing_uniqueid),
+                   lf_u("other.msg.imapuid", lrock.uid),
+                   lf_s("other.msg.guid", existing_guid));
 
         mboxlist_entry_free(&lrock.mbentry);
 
@@ -3932,9 +3962,8 @@ EXPORTED int conversations_enable_compactids(struct conversations_state *state,
      * happily delete it out from under us. -- rjbs, 2026-08-06
      */
     if (!enable && _compactids_always()) {
-        syslog(LOG_NOTICE, "compact_ids is \"always\":"
-                           " refusing to disable compactids for %s",
-               state->userid ? state->userid : "<unknown>");
+        xsyslog_ev(LOG_NOTICE, "conversations.compactids.refused",
+                   lf_s_opt("u.username", state->userid));
         return 0;
     }
 
@@ -3944,7 +3973,9 @@ EXPORTED int conversations_enable_compactids(struct conversations_state *state,
         r = cyrusdb_store(state->db, IDKEY, strlen(IDKEY),
                           vbuf, strlen(vbuf), &state->txn);
         if (r) {
-            syslog(LOG_ERR, "Failed to enable compactids");
+            xsyslog_ev(LOG_ERR, "conversations.compactids.failed",
+                       lf_s("conversations.step", "enable"),
+                       lf_err("error", r));
         }
         else {
             state->compact_emailids = 1;
@@ -3954,7 +3985,9 @@ EXPORTED int conversations_enable_compactids(struct conversations_state *state,
         r = cyrusdb_delete(state->db, IDKEY, strlen(IDKEY),
                            &state->txn, /*force*/1);
         if (r) {
-            syslog(LOG_ERR, "Failed to disable compactids");
+            xsyslog_ev(LOG_ERR, "conversations.compactids.failed",
+                       lf_s("conversations.step", "disable"),
+                       lf_err("error", r));
         }
         else {
             state->compact_emailids = 0;

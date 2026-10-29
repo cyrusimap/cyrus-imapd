@@ -221,6 +221,19 @@ conn.user.max           how many are allowed for one user
 conv.guid.exists        how many non-expunged records share this guid
 conv.guid.folderexists  how many of those are in this folder
 conv.guid.numrecords    how many records of any kind share this guid
+conversations.basecid   the conversation id a thread was split from
+conversations.emails    how many emails a conversations record counts
+conversations.estimate  how many records a conversations search expected to visit
+conversations.flags     how many flags the conversations db counts
+conversations.key       a key in the conversations db
+conversations.mode      how a conversations search walks the db: scan, indexed or index_fallback
+conversations.records   how many records a conversations operation handled
+conversations.step      which step of a conversations db operation is being logged
+conversations.storage   how many bytes a conversations record counts
+conversations.threads   how many threads a conversations record counts
+conversations.value     a value in the conversations db, as stored
+conversations.version   a conversations db's format version
+conversations.version.max  the newest conversations db format version this code reads
 dav.brief               the Brief preference a request asked for
 dav.collection          the DAV collection a request named
 dav.depth               the Depth a request asked to recurse to
@@ -500,6 +513,10 @@ master.workers.max      the most children a service may have
 mboxlist.key            a raw mailboxes.db key
 mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
+message.bodysize        the size a parsed message's headers and body add up to, in bytes
+message.cacheitem       a message cache item, as stored
+message.reason          why message parsing failed or stopped
+message.step            which step of message parsing or copying is being logged
 mupdate.command         an mupdate protocol command
 mupdate.errors          how many mailboxes an mupdate resync couldn't reconcile
 mupdate.fd              the file descriptor of an mupdate connection
@@ -713,12 +730,14 @@ out.ws.pmce             the compression extension we applied to it
 out.ws.rsv              the reserved bits we set on it, as a hex mask
 out.ws.status           the status code of the close frame we sent
 
-### other. - the second mailbox in an event about two of them
+### other. - the second mailbox or message in an event about two of them
 
 other.mbox.mailboxid    the JMAP id of the other mailbox involved
 other.mbox.name         the name of the other mailbox involved, in the admin namespace
 other.mbox.part         the partition of the other mailbox involved
 other.mbox.uniqueid     the uniqueid of the other mailbox involved
+other.msg.guid          the guid of the other message involved
+other.msg.imapuid       the IMAP uid of the other message involved
 
 ### replica. - the replica's copy of a value, paired with the unprefixed key for the master's
 
@@ -761,6 +780,7 @@ old.mbox.uniqueid       the uniqueid of the mailbox a message moved out of
 old.mbox.value          the value of the field named by mbox.field, before the change
 old.mboxlist.key        a mailboxes.db key before it was rewritten
 old.mboxlist.subs.version  the subscriptions db version before an upgrade
+old.msg.cid             a message's conversation id before it was reassigned
 old.msg.imapuid         the message's IMAP uid before a move
 old.msg.sysflags        the message's system flags before the change
 old.search.cacheonly    the attachment extractor's cache-only flag before a change
