@@ -17,7 +17,7 @@ sub test_nonincremental
         my (undef, $err) = $self->run_squatter('-vv');
 
         # better have indexed them all, not just the new one!
-        $self->assert_matches(qr{indexed $n messages}, $err);
+        $self->assert_matches(qr{\bevent=search\.squat\.indexed\b.*\bsearch\.messages=$n\b}, $err);
     }
 
     # make a message with no subject, to, or from
@@ -28,5 +28,5 @@ sub test_nonincremental
     my (undef, $err) = $self->run_squatter('-vv');
 
     # better have indexed them all, not just the new one!
-    $self->assert_matches(qr{indexed $n messages}, $err);
+    $self->assert_matches(qr{\bevent=search\.squat\.indexed\b.*\bsearch\.messages=$n\b}, $err);
 }
