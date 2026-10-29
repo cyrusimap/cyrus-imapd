@@ -26,7 +26,7 @@ sub test_babysit
 
     # make sure it said it's going to wait
     $self->assert_syslog_matches($self->{instance},
-                                 qr{ERROR: too many failures .*disabling});
+                                 qr{\bevent=master\.service\.disabled\b.*\bmaster\.reason=too_many_failures\b});
 
     # master should not have restarted after 5 deaths
     $self->assert_cmp_deeply({ A => { live => 0, dead => 5 } },

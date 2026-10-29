@@ -22,5 +22,5 @@ sub test_service_exit_protocol ($self)
     $self->assert($dead >= 10, "only $dead lemmings exited");
 
     $self->assert_syslog_does_not_match($self->{instance},
-                                        qr{too many failures});
+                                        qr{\bevent=master\.service\.disabled\b});
 }
