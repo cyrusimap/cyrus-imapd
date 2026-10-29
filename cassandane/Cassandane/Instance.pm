@@ -3392,6 +3392,7 @@ sub jmap_default_default_using {
     return [ qw(
         urn:ietf:params:jmap:core
         urn:ietf:params:jmap:mail
+        urn:ietf:params:jmap:mail:share
         urn:ietf:params:jmap:submission
         urn:ietf:params:jmap:vacationresponse
         urn:ietf:params:jmap:calendars

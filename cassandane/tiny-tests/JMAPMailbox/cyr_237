@@ -11,7 +11,7 @@ sub test_cyr_237
     my $using = [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
-        'https://cyrusimap.org/ns/jmap/mail',
+        'urn:ietf:params:jmap:mail:share',
     ];
 
     xlog $self, "Create \\Scheduled mailbox";
@@ -45,8 +45,11 @@ sub test_cyr_237
                 $inboxId => {
                     shareWith => {
                         sharee => {
-                            mayRead => JSON::true,
-                            mayWrite => JSON::true,
+                            mayReadItems   => JSON::true,
+                            mayAddItems    => JSON::true,
+                            mayRemoveItems => JSON::true,
+                            maySetSeen     => JSON::true,
+                            maySetKeywords => JSON::true,
                         },
                     },
                 },

@@ -16,7 +16,7 @@ sub test_email_copy_quota_storage ($self)
 
     my $other_user = $self->{instance}->create_user('other');
     my $other_inbox = $other_user->mailboxes->inbox;
-    $other_inbox->share_with(cassandane => [ qw(mayRead) ]);
+    $other_inbox->share_with(cassandane => [ qw(mayReadItems) ]);
 
     xlog $self, "Land a >1 KiB message in other's INBOX via IMAP";
 

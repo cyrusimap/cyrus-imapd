@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-# mayShare is only visible to a client using JMAP Mail Sharing.  It is also not
-# our own mayAdmin under a new name: mayShare is the IMAP "a" right by itself,
-# while mayAdmin also demands "x" and "k".
+# mayShare is only visible to a client using JMAP Mail Sharing, and is the IMAP
+# "a" right by itself.  The old non-standard mayAdmin is never visible.
 sub test_mailbox_get_myrights_mayshare
     :JMAPExtensions
     ($self)
@@ -12,7 +11,7 @@ sub test_mailbox_get_myrights_mayshare
     my $sharee = $self->{instance}->create_user('sharee');
 
     my $mailbox = $owner->mailboxes->create({ name => 'Shared' });
-    $mailbox->share_with($sharee => [ 'mayRead' ]);
+    $mailbox->share_with($sharee => [ 'mayReadItems' ]);
 
     my $base       = [ 'urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail' ];
     my $with_share = [ @$base, 'urn:ietf:params:jmap:mail:share' ];
@@ -47,16 +46,16 @@ sub test_mailbox_get_myrights_mayshare
     };
 
     $assert_rights->('owner without mail:share', $owner, $base,
-        { mayAdmin => JSON::true, mayShare => undef });
+        { mayAdmin => undef, mayShare => undef });
 
     $assert_rights->('owner with mail:share', $owner, $with_share,
-        { mayAdmin => JSON::true, mayShare => JSON::true });
+        { mayAdmin => undef, mayShare => JSON::true });
 
     $assert_rights->('read-only sharee without mail:share', $sharee, $base,
-        { mayAdmin => JSON::false, mayShare => undef });
+        { mayAdmin => undef, mayShare => undef });
 
     $assert_rights->('read-only sharee with mail:share', $sharee, $with_share,
-        { mayAdmin => JSON::false, mayShare => JSON::false });
+        { mayAdmin => undef, mayShare => JSON::false });
 
     xlog $self, 'grant the sharee the IMAP "a" right, but not "x" or "k"';
 
@@ -65,5 +64,5 @@ sub test_mailbox_get_myrights_mayshare
         or die "setacl failed: $@";
 
     $assert_rights->('sharee with only "a" and mail:share', $sharee, $with_share,
-        { mayAdmin => JSON::false, mayShare => JSON::true });
+        { mayAdmin => undef, mayShare => JSON::true });
 }

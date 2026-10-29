@@ -28,7 +28,6 @@ sub test_mailbox_set_create_serverset_props
                         maySubmit => JSON::true,
                         maySetSeen => JSON::true,
                         maySetKeywords => JSON::true,
-                        mayAdmin => JSON::true,
                         mayRename => JSON::true,
                     },
                 },

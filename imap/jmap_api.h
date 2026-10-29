@@ -51,12 +51,6 @@
 #define JMAP_USERCOUNTERS_EXTENSION  "https://cyrusimap.org/ns/jmap/usercounters"
 #define JMAP_JSCALENDARBIS_EXTENSION "https://cyrusimap.org/ns/jmap/jscalendarbis"
 
-/* Mailbox's shareWith is reachable through either JMAP Mail Sharing or our own
- * mail extension, which disagree about what its values look like.  This must
- * stay a single macro: the gperf files use the comma as a field separator.
- */
-#define JMAP_SHAREWITH_CAPS JMAP_URN_MAIL_SHARE "," JMAP_MAIL_EXTENSION
-
 enum {
     MAX_SIZE_REQUEST = 0,
     MAX_CALLS_IN_REQUEST,
@@ -266,7 +260,6 @@ extern int jmap_initreq(jmap_req_t *req);
 extern void jmap_finireq(jmap_req_t *req);
 
 extern int jmap_is_using(jmap_req_t *req, const char *capa);
-extern int jmap_is_using_any(jmap_req_t *req, const char *capas);
 
 /* Protocol implementations */
 extern void jmap_core_init(jmap_settings_t *settings);
@@ -384,12 +377,7 @@ extern int jmap_parse_strings(json_t *arg,
 
 typedef struct jmap_property {
     const char *name;
-    /* The capability a client must use to see this property.  This may be a
-     * comma-separated list, in which case any one of them will do; see
-     * jmap_is_using_any().  Beware that the gperf files, and the script that
-     * parses them, both use the comma as a field separator: spell a list as a
-     * single macro, not as a literal with a comma in it.
-     */
+    /** The capability a client must use to see this property, or NULL. */
     const char *capability;
     unsigned flags;
 } jmap_property_t;

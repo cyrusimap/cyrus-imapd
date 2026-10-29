@@ -21,7 +21,7 @@ sub test_mailbox_set_sharee_is_seen_shared
     xlog $self, 'victim creates a mailbox, shared read-only with cassandane';
 
     my $victim_mbox = $victim->mailboxes->create({ name => 'Confidential' });
-    $victim_mbox->share_with(cassandane => [ 'mayRead' ]);
+    $victim_mbox->share_with(cassandane => [ 'mayReadItems' ]);
 
     xlog $self, 'sharee Mailbox/get confirms shared-seen is off (default)';
 
@@ -41,7 +41,6 @@ sub test_mailbox_set_sharee_is_seen_shared
                 myRights     => superhashof({
                     mayReadItems   => jtrue(),
                     maySetKeywords => jfalse(),
-                    mayAdmin       => jfalse(),
                 }),
             }) ],
         }),
@@ -94,7 +93,7 @@ sub test_mailbox_set_sharee_is_seen_shared
 
     xlog $self, 'victim promotes cassandane to an administrator of the mailbox';
 
-    $victim_mbox->share_with(cassandane => [ qw( mayRead mayWrite mayAdmin ) ]);
+    $victim_mbox->share_with(cassandane => [ qw( mayReadItems mayCreateChild mayDelete mayShare ) ]);
 
     xlog $self, 'sharee Mailbox/set may now enable shared-seen';
 
@@ -112,7 +111,7 @@ sub test_mailbox_set_sharee_is_seen_shared
     $self->assert(
         exists $res->sentence_named('Mailbox/set')->arguments->{updated}
                                                   ->{$victim_mbox->id},
-        'sharee with mayAdmin can set isSeenShared',
+        'sharee with admin rights can set isSeenShared',
     );
 
     $res = $victim_jmap->request([

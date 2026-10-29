@@ -2,23 +2,27 @@
 use Cassandane::Tiny;
 
 sub test_mailbox_set_sharewith
-    :min_version_3_3 :NoAltNameSpace :JMAPExtensions
+    :NoAltNameSpace :JMAPExtensions
     ($self)
 {
     my $jmap = $self->{jmap};
-    my $imap = $self->{store}->get_client();
     my $admin = $self->{adminstore}->get_client();
 
     my $using = [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
-        'https://cyrusimap.org/ns/jmap/mail',
+        'urn:ietf:params:jmap:mail:share',
     ];
 
     my $inboxId = $self->getinbox()->{id};
     $self->assert_not_null($inboxId);
 
     $self->{instance}->create_user("sharee");
+
+    my %no_rights = map {; $_ => JSON::false } qw(
+        mayReadItems mayAddItems mayRemoveItems mayCreateChild mayDelete
+        mayRename maySubmit maySetSeen maySetKeywords mayShare
+    );
 
     xlog $self, "Overwrite shareWith";
     my $res = $jmap->CallMethods([
@@ -31,7 +35,7 @@ sub test_mailbox_set_sharewith
                 $inboxId => {
                     shareWith => {
                         sharee => {
-                            mayRead => JSON::true,
+                            mayReadItems => JSON::true,
                         },
                     },
                 },
@@ -45,11 +49,7 @@ sub test_mailbox_set_sharewith
 
     $self->assert_null($res->[0][1]{list}[0]{shareWith});
     $self->assert_cmp_deeply({
-        sharee => {
-            mayRead => JSON::true,
-            mayWrite => JSON::false,
-            mayAdmin => JSON::false,
-        },
+        sharee => { %no_rights, mayReadItems => JSON::true },
     }, $res->[2][1]{list}[0]{shareWith});
     my $acl = $admin->getacl("user.cassandane");
     my %map = @$acl;
@@ -60,7 +60,7 @@ sub test_mailbox_set_sharewith
         ['Mailbox/set', {
             update => {
                 $inboxId => {
-                    'shareWith/sharee/mayWrite' => JSON::true,
+                    'shareWith/sharee/maySetSeen' => JSON::true,
                 },
             },
         }, 'R1'],
@@ -72,14 +72,14 @@ sub test_mailbox_set_sharewith
 
     $self->assert_cmp_deeply({
         sharee => {
-            mayRead => JSON::true,
-            mayWrite => JSON::true,
-            mayAdmin => JSON::false,
+            %no_rights,
+            mayReadItems => JSON::true,
+            maySetSeen   => JSON::true,
         },
     }, $res->[1][1]{list}[0]{shareWith});
     $acl = $admin->getacl("user.cassandane");
     %map = @$acl;
-    $self->assert_str_equals('lrswitedn', $map{sharee});
+    $self->assert_str_equals('lrs', $map{sharee});
 
     xlog $self, "Patch shareWith with unknown right";
     $res = $jmap->CallMethods([
