@@ -223,11 +223,44 @@ static bool sched_same_user(const char *a, const char *b)
     return same;
 }
 
+/* address -> its user, or "" for none; NULL outside a cached scope */
+static hash_table *addrid_cache = NULL;
+
+EXPORTED void sched_address_cache_begin(void)
+{
+    if (addrid_cache) return;
+
+    addrid_cache = xzmalloc(sizeof(hash_table));
+    construct_hash_table(addrid_cache, 64, 0);
+}
+
+EXPORTED void sched_address_cache_end(void)
+{
+    if (!addrid_cache) return;
+
+    free_hash_table(addrid_cache, &free);
+    free(addrid_cache);
+    addrid_cache = NULL;
+}
+
+static char *sched_address_userid(const char *addr)
+{
+    if (!addrid_cache) return caladdress_userid(addr, true, NULL, NULL);
+
+    const char *cached = hash_lookup(addr, addrid_cache);
+    if (cached) return *cached ? xstrdup(cached) : NULL;
+
+    char *addrid = caladdress_userid(addr, true, NULL, NULL);
+    hash_insert(addr, xstrdup(addrid ? addrid : ""), addrid_cache);
+
+    return addrid;
+}
+
 EXPORTED bool sched_address_permitted(const char *addr,
                                       const char *userid,
                                       const char *ownerid)
 {
-    char *addrid = caladdress_userid(addr, true, NULL, NULL);
+    char *addrid = sched_address_userid(addr);
     bool permitted = !addrid || sched_same_user(addrid, userid)
                              || sched_same_user(addrid, ownerid);
 
