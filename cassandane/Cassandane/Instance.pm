@@ -1937,7 +1937,11 @@ sub _check_syslog
         _syslog_line_is_error($_) || ($pattern && m/$pattern/)
     } @lines;
 
-    @errors = grep { not m/DBERROR.*skipstamp/ } @errors;
+    # skiplist complains of an unreadable skipstamp when ctl_cyrusdb -r has
+    # never run, which is how Cassandane starts every instance
+    @errors = grep {
+        not m/DBERROR.*skipstamp|\bevent=db\.skiplist\.skipstamp\.unreadable\b/
+    } @errors;
 
     $self->xlog("syslog error: $_") for @errors;
 
