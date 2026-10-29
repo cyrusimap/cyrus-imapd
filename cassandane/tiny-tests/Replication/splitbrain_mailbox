@@ -64,7 +64,8 @@ sub test_splitbrain_mailbox
         my @replicasyslog = $self->{replica}->getsyslog();
 
         my $master_pattern = qr{
-            \bdo_folders\(\):\supdate\sfailed:\suser\.cassandane\.foo\b
+            \bevent=sync\.mailbox\.update\.failed\b
+            .*\bmbox\.name=user\.cassandane\.foo\b
         }x;
 
         my $replica_pattern1 = qr{

@@ -7833,8 +7833,10 @@ static int do_folders(struct sync_client_state *sync_cs,
                     int foreign = rfolder_userid && strcmp(rfolder_userid, sync_cs->userid) != 0;
                     free(rfolder_userid);
                     if (foreign) {
-                        syslog(LOG_NOTICE, "SYNCNOTICE: skipping delete of %s (foreign user, syncing %s)",
-                               rfolder->name, sync_cs->userid);
+                        xsyslog_ev(LOG_NOTICE, "sync.mailbox.delete.skipped",
+                                   lf_intname("mbox.name", rfolder->name),
+                                   lf_s("u.username", sync_cs->userid),
+                                   lf_s("sync.reason", "foreign_user"));
                         r = 0;
                         continue;
                     }
@@ -7842,8 +7844,9 @@ static int do_folders(struct sync_client_state *sync_cs,
                 r = sync_do_folder_delete(sync_cs, rfolder->name,
                                           rfolder->uniqueid, rfolder->uidvalidity);
                 if (r) {
-                    syslog(LOG_ERR, "SYNCERROR: sync_do_folder_delete(): failed: %s (%s)",
-                                    rfolder->name, error_message(r));
+                    xsyslog_ev(LOG_ERR, "sync.mailbox.delete.failed",
+                               lf_intname("mbox.name", rfolder->name),
+                               lf_err("error", r));
                     goto bail;
                 }
             }
@@ -7868,27 +7871,32 @@ static int do_folders(struct sync_client_state *sync_cs,
                 int foreign = rfolder_userid && strcmp(rfolder_userid, sync_cs->userid) != 0;
                 free(rfolder_userid);
                 if (foreign) {
-                    syslog(LOG_NOTICE, "SYNCNOTICE: skipping delete of %s (foreign user, syncing %s)",
-                           rfolder->name, sync_cs->userid);
+                    xsyslog_ev(LOG_NOTICE, "sync.mailbox.delete.skipped",
+                               lf_intname("mbox.name", rfolder->name),
+                               lf_s("u.username", sync_cs->userid),
+                               lf_s("sync.reason", "foreign_user"));
                     r = 0;
                     continue;
                 }
             }
             /* we're forcing a delete */
-            syslog(LOG_NOTICE, "SYNCNOTICE: forcing delete of remote folder despite no tombstone %s",
-                   rfolder->name);
+            xsyslog_ev(LOG_NOTICE, "sync.mailbox.delete.forced",
+                       lf_intname("mbox.name", rfolder->name),
+                       lf_s("sync.reason", "no_tombstone"));
             r = sync_do_folder_delete(sync_cs, rfolder->name,
                                       rfolder->uniqueid, rfolder->uidvalidity);
             if (r) {
-                syslog(LOG_ERR, "SYNCERROR: sync_do_folder_delete(): failed: %s (%s)",
-                                rfolder->name, error_message(r));
+                xsyslog_ev(LOG_ERR, "sync.mailbox.delete.failed",
+                           lf_intname("mbox.name", rfolder->name),
+                           lf_err("error", r));
                 goto bail;
             }
         }
         else {
             if (!mboxname_isdeletedmailbox(rfolder->name, NULL)) {
-                syslog(LOG_NOTICE, "SYNCNOTICE: no tombstone for deleted mailbox %s (%s)",
-                       rfolder->name, error_message(r));
+                xsyslog_ev(LOG_NOTICE, "sync.mailbox.tombstone.missing",
+                           lf_intname("mbox.name", rfolder->name),
+                           lf_err("error", r));
                 /* XXX copy the missing local mailbox back from the replica? */
             }
 
@@ -7957,8 +7965,10 @@ static int do_folders(struct sync_client_state *sync_cs,
             r = folder_rename(sync_cs, item->oldname, item->newname, item->partition,
                               item->uidvalidity);
             if (r) {
-                syslog(LOG_ERR, "SYNCERROR: do_folders(): failed to rename: %s -> %s ",
-                       item->oldname, item->newname);
+                xsyslog_ev(LOG_ERR, "sync.mailbox.rename.failed",
+                           lf_intname("old.mbox.name", item->oldname),
+                           lf_intname("mbox.name", item->newname),
+                           lf_err("error", r));
                 goto bail;
             }
 
@@ -7971,8 +7981,8 @@ static int do_folders(struct sync_client_state *sync_cs,
             /* Scanned entire list without a match */
             const char *name = "unknown";
             if (item2) name = item2->oldname;
-            syslog(LOG_ERR,
-                   "SYNCERROR: do_folders(): failed to order folders correctly at %s", name);
+            xsyslog_ev(LOG_ERR, "sync.mailbox.rename.unordered",
+                       lf_intname("mbox.name", name));
             r = IMAP_AGAIN;
             goto bail;
         }
@@ -7981,8 +7991,8 @@ static int do_folders(struct sync_client_state *sync_cs,
     /* if we renamed anything, we want to resync the mailbox list before doing the
      * mailbox contents */
     if (rename_folders->count) {
-        syslog(LOG_DEBUG,
-               "do_folders(): did some renames, so retrying");
+        xsyslog_ev(LOG_DEBUG, "sync.mailbox.rename.retry",
+                   lf_u("sync.renames", rename_folders->count));
         r = IMAP_AGAIN;
         goto bail;
     }
@@ -7993,8 +8003,9 @@ static int do_folders(struct sync_client_state *sync_cs,
         /* rfolder may not exist, so we use mfolder->name here */
         r = sync_do_update_mailbox(sync_cs, mfolder, rfolder, topartition, reserve_list);
         if (r) {
-            syslog(LOG_ERR, "SYNCERROR: do_folders(): update failed: %s '%s'",
-                   mfolder->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "sync.mailbox.update.failed",
+                       lf_intname("mbox.name", mfolder->name),
+                       lf_err("error", r));
             goto bail;
         }
         if (sync_cs->channel && mfolder->ispartial) {
@@ -8016,6 +8027,8 @@ int sync_do_mailboxes(struct sync_client_state *sync_cs,
     struct sync_name *mbox, *next, *prev = NULL;
     struct sync_folder_list *replica_folders = sync_folder_list_create();
     struct buf buf = BUF_INITIALIZER;
+    strarray_t lookup_names = STRARRAY_INITIALIZER;
+    strarray_t cached_names = STRARRAY_INITIALIZER;
     int r = 0;
     strarray_t userids = STRARRAY_INITIALIZER;
     strarray_t dosieve = STRARRAY_INITIALIZER;
@@ -8064,7 +8077,8 @@ int sync_do_mailboxes(struct sync_client_state *sync_cs,
 redo:
     tries++;
     if (tries > 3) {
-        syslog(LOG_ERR, "failed to settle renames after 3 tries!");
+        xsyslog_ev(LOG_ERR, "sync.mailbox.rename.unsettled",
+                   lf_d("sync.tries", tries - 1));
         r = IMAP_SYNC_CHANGED;
         goto done;
     }
@@ -8085,15 +8099,19 @@ redo:
         if (usecache && !sync_readcache(sync_cs, mbox->name, &cl) && cl) {
             if (!cachel) cachel = dlist_newlist(NULL, "MAILBOXES");
             dlist_stitch(cachel, cl);
-            if ((flags & SYNC_FLAG_VERBOSE) || (flags & SYNC_FLAG_LOGGING))
+            if (flags & SYNC_FLAG_VERBOSE)
                 buf_printf(&buf, " (%s)", mbox->name);
+            if (flags & SYNC_FLAG_LOGGING)
+                strarray_append(&cached_names, mbox->name);
         }
         // if it's not in the cache, then we need to ask for it
         else {
             if (!kl) kl = dlist_newlist(NULL, "MAILBOXES");
             dlist_setatom(kl, "MBOXNAME", mbox->name);
-            if ((flags & SYNC_FLAG_VERBOSE) || (flags & SYNC_FLAG_LOGGING))
+            if (flags & SYNC_FLAG_VERBOSE)
                 buf_printf(&buf, " %s", mbox->name);
+            if (flags & SYNC_FLAG_LOGGING)
+                strarray_append(&lookup_names, mbox->name);
         }
     }
 
@@ -8101,9 +8119,14 @@ redo:
         printf("MAILBOXES%s\n", buf_cstring(&buf));
 
     if (flags & SYNC_FLAG_LOGGING)
-        syslog(LOG_INFO, "MAILBOXES%s", buf_cstring(&buf));
+        xsyslog_ev(LOG_INFO, "sync.command.issued",
+                   lf_s("sync.command", "MAILBOXES"),
+                   lf_strarray("sync.mailboxes", &lookup_names),
+                   lf_strarray("sync.cached", &cached_names));
 
     buf_free(&buf);
+    strarray_fini(&lookup_names);
+    strarray_fini(&cached_names);
 
     if (kl) {
         sync_send_lookup(kl, sync_cs->backend->out);
@@ -8138,7 +8161,9 @@ redo:
             printf("META %s\n", userid);
 
         if (sync_cs->flags & SYNC_FLAG_LOGGING)
-            syslog(LOG_INFO, "META %s", userid);
+            xsyslog_ev(LOG_INFO, "sync.command.issued",
+                       lf_s("sync.command", "META"),
+                       lf_s("u.username", userid));
 
         kl = dlist_setatom(NULL, "META", userid);
         sync_send_lookup(kl, sync_cs->backend->out);
@@ -8293,10 +8318,11 @@ static int do_user_main(struct sync_client_state *sync_cs,
     sync_name_list_free(&info.quotalist);
 
     if (r && r != IMAP_AGAIN) {
-        xsyslog(LOG_ERR, "IOERROR: user replication failed",
-                         "error=<%s> userid=<%s> channel=<%s> servername=<%s>",
-                         error_message(r), userid,
-                         sync_cs->channel, sync_cs->servername);
+        xsyslog_ev(LOG_ERR, "sync.user.failed",
+                   lf_s("u.username", userid),
+                   lf_s("sync.channel", sync_cs->channel),
+                   lf_s("remote.host", sync_cs->servername),
+                   lf_err("error", r));
     }
 
     return r;
@@ -8312,8 +8338,8 @@ int sync_do_user_sub(struct sync_client_state *sync_cs, const char *userid,
     /* Includes subsidiary nodes automatically */
     strarray_t *msubs = mboxlist_sublist(userid);
     if (!msubs) {
-        xsyslog(LOG_ERR, "IOERROR: fetching subscriptions failed",
-                         "userid=<%s>", userid);
+        xsyslog_ev(LOG_ERR, "sync.subscriptions.read.failed",
+                   lf_s("u.username", userid));
         r = IMAP_IOERROR;
         goto bail;
     }
@@ -8400,7 +8426,8 @@ int sync_do_user_sieve(struct sync_client_state *sync_cs, const char *userid,
 
     master_sieve = sync_sieve_list_generate(userid);
     if (!master_sieve) {
-        syslog(LOG_ERR, "Unable to list sieve scripts for %s", userid);
+        xsyslog_ev(LOG_ERR, "sync.sieve.list.failed",
+                   lf_s("u.username", userid));
         return IMAP_IOERROR;
     }
 
@@ -8495,14 +8522,18 @@ int sync_do_user(struct sync_client_state *sync_cs,
         printf("USER %s\n", userid);
 
     if (sync_cs->flags & SYNC_FLAG_LOGGING)
-        syslog(LOG_INFO, "USER %s", userid);
+        xsyslog_ev(LOG_INFO, "sync.command.issued",
+                   lf_s("sync.command", "USER"),
+                   lf_s("u.username", userid));
 
     int tries = 0;
 
 redo:
     tries++;
     if (tries > 3) {
-        syslog(LOG_ERR, "failed to sync user %s after 3 tries", userid);
+        xsyslog_ev(LOG_ERR, "sync.user.unsettled",
+                   lf_s("u.username", userid),
+                   lf_d("sync.tries", tries - 1));
         r = IMAP_SYNC_CHANGED;
         goto done;
     }
@@ -8532,7 +8563,9 @@ redo:
         if (sync_cs->flags & SYNC_FLAG_VERBOSE)
             printf("Does not exist locally %s\n", userid);
         if (sync_cs->flags & SYNC_FLAG_LOGGING)
-            syslog(LOG_INFO, "Does not exist locally %s", userid);
+            xsyslog_ev(LOG_INFO, "sync.user.skipped",
+                       lf_s("u.username", userid),
+                       lf_s("sync.reason", "no_local_user"));
 
         // just skip this user.  XXX - tombstone for user -> sync_reset?
         r = 0;
@@ -8594,7 +8627,9 @@ int sync_do_meta(struct sync_client_state *sync_cs, const char *userid)
         printf("META %s\n", userid);
 
     if (sync_cs->flags & SYNC_FLAG_LOGGING)
-        syslog(LOG_INFO, "META %s", userid);
+        xsyslog_ev(LOG_INFO, "sync.command.issued",
+                   lf_s("sync.command", "META"),
+                   lf_s("u.username", userid));
 
     kl = dlist_setatom(NULL, "META", userid);
     sync_send_lookup(kl, sync_cs->backend->out);
@@ -8691,9 +8726,8 @@ EXPORTED const char *sync_apply(struct dlist *kin, struct sync_reserve_list *res
         r = sync_apply_capabilities(kin, state);
 
     else {
-        xsyslog(LOG_ERR, "SYNCERROR: unknown command",
-                         "command=<%s>",
-                         kin->name);
+        xsyslog_ev(LOG_ERR, "sync.command.unknown",
+                   lf_s("sync.command", kin->name));
         r = IMAP_PROTOCOL_ERROR;
     }
 
@@ -8745,9 +8779,8 @@ EXPORTED const char *sync_restore(struct dlist *kin,
         r = sync_restore_mailbox(kin, reserve_list, state);
     }
     else {
-        xsyslog(LOG_ERR, "SYNCERROR: unknown command",
-                         "command=<%s>",
-                         kin->name);
+        xsyslog_ev(LOG_ERR, "sync.command.unknown",
+                   lf_s("sync.command", kin->name));
         r = IMAP_PROTOCOL_ERROR;
     }
 
@@ -8765,7 +8798,9 @@ static int do_unuser(struct sync_client_state *sync_cs, const char *userid)
 
     /* nothing to do if there's no userid */
     if (!userid || !userid[0]) {
-        syslog(LOG_WARNING, "ignoring attempt to %s() without userid", __func__);
+        xsyslog_ev(LOG_WARNING, "sync.command.invalid",
+                   lf_s("sync.command", cmd),
+                   lf_s("sync.reason", "missing_userid"));
         return 0;
     }
 
@@ -8822,25 +8857,32 @@ static int do_unmailbox(struct sync_client_state *sync_cs, const char *mboxname)
         r = mboxlist_lookup_allow_all(mboxname, &tombstone, NULL);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             // otherwise we don't change anything on the replica
-            xsyslog(LOG_NOTICE, "SYNCNOTICE: attempt to UNMAILBOX without a tombstone",
-                                "mailbox=<%s>", mboxname);
+            xsyslog_ev(LOG_NOTICE, "sync.mailbox.tombstone.missing",
+                       lf_s("sync.command", "UNMAILBOX"),
+                       lf_intname("mbox.name", mboxname));
             r = 0;
             goto skip;
         }
         if (r) {
-            syslog(LOG_ERR, "%s: mboxlist_lookup() failed: %s '%s'",
-                            __func__, mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "sync.mailbox.lookup.failed",
+                       lf_s("sync.command", "UNMAILBOX"),
+                       lf_intname("mbox.name", mboxname),
+                       lf_err("error", r));
         }
         else if ((tombstone->mbtype & MBTYPE_DELETED) == 0) {
-            syslog(LOG_ERR, "attempt to UNMAILBOX non-tombstone: \"%s\"",
-                            mboxname);
+            xsyslog_ev(LOG_ERR, "sync.mailbox.tombstone.missing",
+                       lf_s("sync.command", "UNMAILBOX"),
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("mbox.type",
+                            mboxlist_mbtype_to_string(tombstone->mbtype)));
         }
         else {
             r = sync_do_folder_delete(sync_cs, mboxname, tombstone->uniqueid,
                                       tombstone->uidvalidity);
             if (r) {
-                syslog(LOG_ERR, "%s: sync_do_folder_delete(): failed: %s '%s'",
-                                __func__, mboxname, error_message(r));
+                xsyslog_ev(LOG_ERR, "sync.mailbox.delete.failed",
+                           lf_intname("mbox.name", mboxname),
+                           lf_err("error", r));
             }
         }
         skip:

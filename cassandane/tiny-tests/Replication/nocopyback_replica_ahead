@@ -31,7 +31,7 @@ sub test_nocopyback_replica_ahead
                           $e->to_string());
     my @syslog = $self->{instance}->getsyslog();
     $self->assert_matches(qr/event=sync\.mailbox\.replica_ahead/, "@syslog");
-    $self->assert_not_contains(qr/failed to settle renames/, \@syslog);
+    $self->assert_not_contains(qr/event=sync\.mailbox\.rename\.unsettled\b/, \@syslog);
 
     xlog $self, "a copyback sync still reconciles it";
     $self->run_replication();
