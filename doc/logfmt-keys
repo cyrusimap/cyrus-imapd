@@ -233,6 +233,18 @@ dav.synctoken.basemodseq  the base modseq a sync-token names
 dav.synctoken.fields    how many components of a sync-token parsed
 dav.synctoken.modseq    the modseq a sync-token names
 dav.synctoken.uidvalidity  the uidvalidity a sync-token names
+db.archive.path         where a database file is being archived to
+db.aside.path           where a database is moved aside to during a convert
+db.backend              a cyrusdb backend name, e.g. twom
+db.backend.requested    the cyrusdb backend the caller asked for
+db.engine               the address of a database handle, in debug traces
+db.flags                the flags a database operation was called with
+db.key                  a database record's key
+db.lock.action          the step at which taking a database file lock failed
+db.op                   which cyrusdb call a debug trace is for
+db.reason               why a database operation failed, skipped or refused something
+db.result               a cyrusdb call's return code, in debug traces
+db.step                 which step of a database operation is being logged
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
 http.auth.param         the name of a parameter in an HTTP auth credential
 http.auth.reset.reason  why the connection's authentication state was reset
@@ -627,6 +639,7 @@ replica.msg.lastupdated when the replica's record was last updated
 replica.msg.modseq      the replica's modseq for the message
 ### old. - the value before a change, paired with the unprefixed key
 
+old.db.backend          the cyrusdb backend a database was in before a convert
 old.master.child.state  a child's state before a message changed it
 old.master.service      the service master thought a child belonged to
 old.mbox.acl            the mailbox ACL before the change
