@@ -298,6 +298,11 @@ db.target               the offset a database pointer refers to
 db.version              a database's format version
 db.version.wanted       the database format version the code expects
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
+duplicate.action        what delivery did about a duplicate message
+duplicate.count         how many duplicate delivery records a prune examined
+duplicate.deleted       how many duplicate delivery records a prune removed
+duplicate.mark          when a duplicate delivery record was marked
+duplicate.prune.age     how old a duplicate delivery record must be to be pruned, in seconds
 http.auth.param         the name of a parameter in an HTTP auth credential
 http.auth.reset.reason  why the connection's authentication state was reset
 http.auth.response      1 if the credentials carried a client response
@@ -593,7 +598,15 @@ pts.time                the current time, as the PTS code compared it
 pts.timeout             how long the PTS client will wait, in seconds
 pts.waited              1 if the PTS client had to wait to connect
 pts.write               1 if the PTS client is waiting to write
+quota.detail            what the quota tool was doing when it failed
+quota.diff.message      the change in message count a quota update carried
+quota.diff.storage      the change in storage a quota update carried, in bytes
+quota.resource          a quota resource name, e.g. STORAGE
 quota.root              the quota root a quota applies to
+quota.step              which step of a quota operation is being logged
+quota.test_sync.duration  how long quota -Z waited for its signal, in seconds
+quota.test_sync.wait    how quota -Z's wait ended: none, signaled or timeout
+quota.value             a quota record as stored
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
 sasl.prop               which SASL property couldn't be set
 sasl.result             a SASL result code

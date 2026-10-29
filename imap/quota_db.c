@@ -252,9 +252,9 @@ EXPORTED int quota_read(struct quota *quota, struct txn **tid, int wrlock)
         if (!*data) return IMAP_QUOTAROOT_NONEXISTENT;
         r = quota_parseval(data, datalen, quota, wrlock);
         if (r) {
-            syslog(LOG_ERR, "DBERROR: error fetching quota "
-                            "root=<%s> value=<%s>",
-                   quota->root, data);
+            xsyslog_ev(LOG_ERR, "quota.db.parse.failed",
+                       lf_s("quota.root", quota->root),
+                       lf_raw("quota.value", "%.*s", (int) datalen, data));
             return r;
         }
         break;
@@ -267,8 +267,9 @@ EXPORTED int quota_read(struct quota *quota, struct txn **tid, int wrlock)
     }
 
     if (r) {
-        syslog(LOG_ERR, "DBERROR: error fetching quota %s: %s",
-               quota->root, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "quota.db.fetch.failed",
+                   lf_s("quota.root", quota->root),
+                   lf_s("error", cyrusdb_strerror(r)));
         return IMAP_IOERROR;
     }
 
@@ -318,9 +319,9 @@ EXPORTED void quota_use(struct quota *q,
         q->dirty = 1;
     /* prevent underflow */
     if ((delta < 0) && (-delta > q->useds[res])) {
-        syslog(LOG_INFO, "Quota underflow for root %s, resource %s,"
-                         " you may wish to run \"quota -f\"",
-                         q->root, quota_names[res]);
+        xsyslog_ev(LOG_INFO, "quota.underflow",
+                   lf_s("quota.root", q->root),
+                   lf_s("quota.resource", quota_names[res]));
         q->useds[res] = 0;
     }
     else {
@@ -390,7 +391,7 @@ EXPORTED void quota_commit(struct txn **tid)
 {
     if (tid && *tid) {
         if (cyrusdb_commit(qdb, *tid)) {
-            syslog(LOG_ERR, "IOERROR: committing quota: %m");
+            xsyslog_ev(LOG_ERR, "quota.db.commit.failed");
         }
         *tid = NULL;
     }
@@ -403,7 +404,7 @@ EXPORTED void quota_abort(struct txn **tid)
 {
     if (tid && *tid) {
         if (cyrusdb_abort(qdb, *tid)) {
-            syslog(LOG_ERR, "IOERROR: aborting quota: %m");
+            xsyslog_ev(LOG_ERR, "quota.db.abort.failed");
         }
         *tid = NULL;
     }
@@ -471,8 +472,9 @@ EXPORTED int quota_write(struct quota *quota, int silent, struct txn **tid)
         break;
 
     default:
-        syslog(LOG_ERR, "DBERROR: error storing %s: %s",
-               quota->root, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "quota.db.store.failed",
+                   lf_s("quota.root", quota->root),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
         break;
     }
@@ -500,7 +502,11 @@ EXPORTED int quota_update_useds(const char *quotaroot,
     quota_init(&q, quotaroot);
 
     r = quota_read(&q, &tid, 1);
-    if (r) syslog(LOG_ERR, "QUOTAERROR: failed to read quota for %s (%s)", mboxname, error_message(r));
+    if (r) xsyslog_ev(LOG_ERR, "quota.update.failed",
+                      lf_s("quota.step", "read"),
+                      lf_s("quota.root", quotaroot),
+                      mboxname ? lf_intname("mbox.name", mboxname) : lf_skip(),
+                      lf_err("error", r));
 
     if (!r) {
         int res;
@@ -522,7 +528,11 @@ EXPORTED int quota_update_useds(const char *quotaroot,
             }
         }
         r = quota_write(&q, silent, &tid);
-        if (r) syslog(LOG_ERR, "QUOTAERROR: failed to write quota for %s (%s)", mboxname, error_message(r));
+        if (r) xsyslog_ev(LOG_ERR, "quota.update.failed",
+                          lf_s("quota.step", "write"),
+                          lf_s("quota.root", quotaroot),
+                          mboxname ? lf_intname("mbox.name", mboxname) : lf_skip(),
+                          lf_err("error", r));
     }
 
     if (r) {
@@ -536,10 +546,11 @@ EXPORTED int quota_update_useds(const char *quotaroot,
 out:
     quota_free(&q);
     if (r) {
-        syslog(LOG_ERR, "LOSTQUOTA: unable to record change of "
-               QUOTA_T_FMT " bytes and " QUOTA_T_FMT " messages in quota %s: %s",
-               diff[QUOTA_STORAGE], diff[QUOTA_MESSAGE],
-               quotaroot, error_message(r));
+        xsyslog_ev(LOG_ERR, "quota.update.lost",
+                   lf_s("quota.root", quotaroot),
+                   lf_lld("quota.diff.storage", (long long) diff[QUOTA_STORAGE]),
+                   lf_lld("quota.diff.message", (long long) diff[QUOTA_MESSAGE]),
+                   lf_err("error", r));
     }
 
     mboxevent_freequeue(&mboxevents);
@@ -611,8 +622,9 @@ EXPORTED int quota_deleteroot(const char *quotaroot, int silent)
         return IMAP_AGAIN;
 
     default:
-        syslog(LOG_ERR, "DBERROR: error deleting quotaroot %s: %s",
-               quotaroot, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "quota.db.delete.failed",
+                   lf_s("quota.root", quotaroot),
+                   lf_s("error", cyrusdb_strerror(r)));
         return IMAP_IOERROR;
     }
 
@@ -693,8 +705,9 @@ EXPORTED void quotadb_open(const char *fname)
 
     ret = cyrusdb_open(QDB, fname, CYRUSDB_CREATE, &qdb);
     if (ret != 0) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(ret));
+        xsyslog_ev(LOG_ERR, "quota.db.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(ret)));
             /* Exiting TEMPFAIL because Sendmail thinks this
                EX_OSFILE == permanent failure. */
         fatal("can't read quotas file", EX_TEMPFAIL);
@@ -719,8 +732,8 @@ EXPORTED void quotadb_close(void)
     if (quota_dbopen) {
         r = cyrusdb_close(qdb);
         if (r) {
-            syslog(LOG_ERR, "DBERROR: error closing quotas: %s",
-                   cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "quota.db.close.failed",
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         quota_dbopen = 0;
     }
