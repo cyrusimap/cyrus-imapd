@@ -4,6 +4,7 @@
 
 #include <config.h>
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -59,6 +60,7 @@
 
 #include "lib/assert.h"
 #include "lib/cyr_lock.h"
+#include "lib/logfmt.h"
 #include "lib/proc.h"
 #include "lib/retry.h"
 #include "lib/strarray.h"
@@ -113,7 +115,9 @@ struct centry {
     time_t janitor_deadline;    /* cleanup deadline */
     int si;                     /* Services[] index */
     int wdi;                    /* WaitDaemons[] index */
-    char *desc;                 /* human readable description for logging */
+    const char *type;           /* START, SERVICE, DAEMON or EVENT */
+    char *name;                 /* the cyrus.conf entry's name */
+    char *path;                 /* the executable */
     struct timeval spawntime;   /* when the centry was allocated */
     time_t sighuptime;          /* when did we send a SIGHUP */
     struct proc_handle *proc_handle; /* for tracking proc registrations */
@@ -160,8 +164,9 @@ static int myselect(int nfds, fd_set *rfds, fd_set *wfds,
 
 EXPORTED void fatal(const char *msg, int code)
 {
-    syslog(LOG_CRIT, "%s", msg);
-    syslog(LOG_NOTICE, "exiting");
+    xsyslog_ev(LOG_CRIT, "master.fatal",
+               lf_s("error", msg),
+               lf_d("sys.exitcode", code));
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
     exit(code);
 }
@@ -239,36 +244,55 @@ static struct centry *centry_alloc(void)
 static void centry_set_name(struct centry *c, const char *type,
                             const char *name, const char *path)
 {
-    free(c->desc);
-    if (name && path)
-        c->desc = strconcat("type:", type, " name:", name, " path:", path, NULL);
-    else
-        c->desc = strconcat("type:", type, NULL);
+    free(c->name);
+    free(c->path);
+    c->type = type;
+    c->name = (name && path) ? xstrdup(name) : NULL;
+    c->path = (name && path) ? xstrdup(path) : NULL;
 }
 
-static char *centry_describe(const struct centry *c, pid_t pid)
+/* The fields of the child a log line is about.  master.child=~null~ is
+ * a child master has no record of. */
+static void logfmt_arg_centry(struct logfmt *lf, const char *key,
+                              const void *value)
 {
-    struct buf desc = BUF_INITIALIZER;
+    const struct centry *c = value;
+    struct timeval now;
 
     if (!c) {
-        buf_appendcstr(&desc, "unknown process");
+        logfmt_push(lf, key, NULL);
+        return;
     }
-    else {
-        struct timeval now;
-        gettimeofday(&now, NULL);
-        buf_printf(&desc, "process %s age:%.3fs",
-                   c->desc, timesub(&c->spawntime, &now));
-    }
-    buf_printf(&desc, " pid:%d", (int)pid);
-    return buf_release(&desc);
+
+    gettimeofday(&now, NULL);
+    logfmt_push(lf, "master.child.type", c->type);
+    if (c->name) logfmt_push(lf, "master.service", c->name);
+    if (c->path) logfmt_push(lf, "sys.path", c->path);
+    logfmt_pushf(lf, "master.child.age", "%.3f",
+                 timesub(&c->spawntime, &now));
 }
+#define lf_centry(cp) lf_fn("master.child", logfmt_arg_centry, (cp))
+
+/* A service's name and address family.  master.service=~null~ is a
+ * service master has no record of. */
+static void logfmt_arg_service(struct logfmt *lf, const char *key,
+                               const void *value)
+{
+    const struct service *s = value;
+
+    logfmt_push(lf, key, s ? s->name : NULL);
+    if (s && s->familyname)
+        logfmt_push(lf, "master.service.family", s->familyname);
+}
+#define lf_service(sp) lf_fn("master.service", logfmt_arg_service, (sp))
 
 /* free a centry */
 static void centry_free(struct centry *c)
 {
     assert(c->proc_handle == NULL); /* better have cleaned this up already */
 
-    free(c->desc);
+    free(c->name);
+    free(c->path);
     free(c);
 }
 
@@ -451,8 +475,10 @@ static void service_create(struct service *s, int is_startup)
 
     if (s->listen[0] == '/') { /* unix socket */
         if (strlen(s->listen) >= sizeof(sunsock.sun_path)) {
-            syslog(LOG_ERR, "invalid listen '%s' (too long), disabling %s",
-                   s->listen, s->name);
+            xsyslog_ev(LOG_ERR, "master.service.listen.invalid",
+                       lf_s("master.service", s->name),
+                       lf_s("master.service.listen", s->listen),
+                       lf_s("master.reason", "too_long"));
             service_forget_exec(s);
             return;
         }
@@ -511,15 +537,17 @@ static void service_create(struct service *s, int is_startup)
             hints.ai_socktype = SOCK_DGRAM;
 #endif
         } else {
-            syslog(LOG_INFO, "invalid proto '%s', disabling %s",
-                   s->proto, s->name);
+            xsyslog_ev(LOG_INFO, "master.service.proto.invalid",
+                       lf_s("master.service", s->name),
+                       lf_s("master.service.proto", s->proto));
             service_forget_exec(s);
             return;
         }
 
         if (parse_inet_listen(s->listen, &listen_addr, &port) < 0) {
-            syslog(LOG_ERR, "invalid listen '%s', disabling %s",
-                   s->listen, s->name);
+            xsyslog_ev(LOG_ERR, "master.service.listen.invalid",
+                       lf_s("master.service", s->name),
+                       lf_s("master.service.listen", s->listen));
             service_forget_exec(s);
             return;
         }
@@ -530,7 +558,10 @@ static void service_create(struct service *s, int is_startup)
         free(port);
 
         if (error) {
-            syslog(LOG_INFO, "%s, disabling %s", gai_strerror(error), s->name);
+            xsyslog_ev(LOG_INFO, "master.service.resolve.failed",
+                       lf_s("master.service", s->name),
+                       lf_s("master.service.listen", s->listen),
+                       lf_s("error", gai_strerror(error)));
             service_forget_exec(s);
             return;
         }
@@ -553,8 +584,8 @@ static void service_create(struct service *s, int is_startup)
         }
 
         if (verbose > 2) {
-            syslog(LOG_DEBUG, "activating service %s/%s",
-                s->name, s->familyname);
+            xsyslog_ev(LOG_DEBUG, "master.service.activating",
+                       lf_service(s));
         }
 
         s->socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
@@ -567,8 +598,9 @@ static void service_create(struct service *s, int is_startup)
                 fatal(buf_cstring(&buf), EX_UNAVAILABLE);
             }
 
-            syslog(LOG_ERR, "unable to open %s/%s socket: %m",
-                s->name, s->familyname);
+            xsyslog_ev(LOG_ERR, "master.service.socket.failed",
+                       lf_service(s),
+                       lf_s("master.step", "socket"));
             continue;
         }
 
@@ -576,16 +608,20 @@ static void service_create(struct service *s, int is_startup)
         r = setsockopt(s->socket, SOL_SOCKET, SO_REUSEADDR,
                        (void *) &on, sizeof(on));
         if (r < 0) {
-            syslog(LOG_ERR, "unable to setsocketopt(SO_REUSEADDR) service %s/%s: %m",
-                s->name, s->familyname);
+            xsyslog_ev(LOG_ERR, "master.service.socket.failed",
+                       lf_service(s),
+                       lf_s("master.step", "setsockopt"),
+                       lf_s("master.sockopt", "SO_REUSEADDR"));
         }
 #if defined(IPV6_V6ONLY) && !(defined(__FreeBSD__) && __FreeBSD__ < 3)
         if (res->ai_family == AF_INET6) {
             r = setsockopt(s->socket, IPPROTO_IPV6, IPV6_V6ONLY,
                            (void *) &on, sizeof(on));
             if (r < 0) {
-                syslog(LOG_ERR, "unable to setsocketopt(IPV6_V6ONLY) service %s/%s: %m",
-                    s->name, s->familyname);
+                xsyslog_ev(LOG_ERR, "master.service.socket.failed",
+                           lf_service(s),
+                           lf_s("master.step", "setsockopt"),
+                           lf_s("master.sockopt", "IPV6_V6ONLY"));
             }
         }
 #endif
@@ -597,9 +633,10 @@ static void service_create(struct service *s, int is_startup)
                            (void *) &config_qosmarking,
                            sizeof(config_qosmarking));
             if (r < 0) {
-                syslog(LOG_WARNING,
-                       "unable to setsocketopt(IP_TOS) service %s/%s: %m",
-                       s->name, s->familyname);
+                xsyslog_ev(LOG_WARNING, "master.service.socket.failed",
+                           lf_service(s),
+                           lf_s("master.step", "setsockopt"),
+                           lf_s("master.sockopt", "IP_TOS"));
             }
         }
 #endif
@@ -616,8 +653,9 @@ static void service_create(struct service *s, int is_startup)
                 fatal(buf_cstring(&buf), EX_UNAVAILABLE);
             }
 
-            syslog(LOG_ERR, "unable to bind to %s/%s socket: %m",
-                s->name, s->familyname);
+            xsyslog_ev(LOG_ERR, "master.service.socket.failed",
+                       lf_service(s),
+                       lf_s("master.step", "bind"));
             xclose(s->socket);
             continue;
         }
@@ -633,8 +671,9 @@ static void service_create(struct service *s, int is_startup)
                 fatal(buf_cstring(&buf), EX_UNAVAILABLE);
             }
 
-            syslog(LOG_ERR, "unable to listen to %s/%s socket: %m",
-                s->name, s->familyname);
+            xsyslog_ev(LOG_ERR, "master.service.socket.failed",
+                       lf_service(s),
+                       lf_s("master.step", "listen"));
             xclose(s->socket);
             continue;
         }
@@ -655,7 +694,9 @@ static void service_create(struct service *s, int is_startup)
             freeaddrinfo(res0);
     }
     if (nsocket <= 0) {
-        syslog(LOG_ERR, "unable to create %s listener socket: %m", s->name);
+        xsyslog_ev(LOG_ERR, "master.service.listener.failed",
+                   lf_s("master.service", s->name),
+                   lf_s("master.service.listen", s->listen));
         service_forget_exec(s);
         return;
     }
@@ -664,38 +705,58 @@ static void service_create(struct service *s, int is_startup)
 static int decode_wait_status(struct centry *c, pid_t pid, int status)
 {
     int failed = 0;
-    char *desc = centry_describe(c, pid);
 
     if (WIFEXITED(status)) {
         if (!WEXITSTATUS(status)) {
-            syslog(LOG_DEBUG, "%s exited normally", desc);
+            xsyslog_ev(LOG_DEBUG, "master.child.exited",
+                       lf_centry(c),
+                       lf_d("sys.pid", pid),
+                       lf_d("sys.exitcode", 0));
         }
         else if (WEXITSTATUS(status) == EX_TEMPFAIL) {
-            syslog(LOG_DEBUG, "%s was killed", desc);
+            xsyslog_ev(LOG_DEBUG, "master.child.exited",
+                       lf_centry(c),
+                       lf_d("sys.pid", pid),
+                       lf_d("sys.exitcode", WEXITSTATUS(status)));
         }
         else {
-            syslog(LOG_ERR, "%s exited, status %d",
-                   desc, WEXITSTATUS(status));
+            /* EX_PROTOCOL means the client broke the protocol, not the
+             * service. */
+            xsyslog_ev(WEXITSTATUS(status) == EX_PROTOCOL ? LOG_WARNING
+                                                          : LOG_ERR,
+                       "master.child.exited",
+                       lf_centry(c),
+                       lf_d("sys.pid", pid),
+                       lf_d("sys.exitcode", WEXITSTATUS(status)));
             failed = 1;
         }
     }
 
     if (WIFSIGNALED(status)) {
-        const char *signame = strsignal(WTERMSIG(status));
+        int sig = WTERMSIG(status);
+        const char *signame = strsignal(sig);
+        bool coredump = false;
+
         if (!signame)
             signame = "unknown signal";
 #ifdef WCOREDUMP
-        syslog(LOG_ERR, "%s signaled to death by signal %d (%s%s)",
-               desc, WTERMSIG(status), signame,
-               WCOREDUMP(status) ? ", core dumped" : "");
-        failed = WCOREDUMP(status) ? 2 : 1;
-#else
-        syslog(LOG_ERR, "%s signaled to death by %s %d",
-               desc, signame, WTERMSIG(status));
-        failed = 1;
+        coredump = WCOREDUMP(status);
 #endif
+
+        /* A signal that only asks a process to stop is someone stopping
+         * it, and master spawns another; a crash is an error. */
+        bool stopped = !coredump
+                    && (sig == SIGTERM || sig == SIGKILL || sig == SIGINT
+                        || sig == SIGQUIT || sig == SIGHUP);
+
+        xsyslog_ev(stopped ? LOG_WARNING : LOG_ERR, "master.child.signaled",
+                   lf_centry(c),
+                   lf_d("sys.pid", pid),
+                   lf_d("sys.signal", sig),
+                   lf_s("sys.signal.name", signame),
+                   lf_flag("sys.coredump", coredump));
+        failed = coredump ? 2 : 1;
     }
-    free(desc);
     return failed;
 }
 
@@ -719,13 +780,16 @@ static void run_startup(const char *name, const strarray_t *cmd)
 
         child_sighandler_setup();
 
-        syslog(LOG_DEBUG, "about to exec %s", path);
+        xsyslog_ev(LOG_DEBUG, "master.child.exec",
+                   lf_s("sys.path", path));
         execv(path, cmd->data);
         fatalf(EX_OSERR, "can't exec %s for startup: %m", path);
 
     default: /* parent */
         if (waitpid(pid, &status, 0) < 0) {
-            syslog(LOG_ERR, "waitpid(): %m");
+            xsyslog_ev(LOG_ERR, "master.waitpid.failed",
+                       lf_s("master.child.type", "START"),
+                       lf_s("master.service", name));
             return;
         }
         c = centry_alloc();
@@ -742,7 +806,8 @@ static void fcntl_unset(int fd, int flag)
     int fdflags = fcntl(fd, F_GETFD, 0);
     if (fdflags != -1) fdflags = fcntl(fd, F_SETFD, fdflags & ~flag);
     if (fdflags == -1) {
-        syslog(LOG_ERR, "fcntl(): unable to unset %d: %m", flag);
+        xsyslog_ev(LOG_ERR, "master.fcntl.failed",
+                   lf_d("master.fcntl.flag", flag));
     }
 }
 
@@ -777,7 +842,8 @@ static int service_is_fork_limited(struct service *s)
          */
         s->interval_forks = 0;
         s->last_interval_start = now;
-        syslog(LOG_WARNING, "time of day clock went backwards");
+        xsyslog_ev(LOG_WARNING, "master.clock.backwards",
+                   lf_s("master.service", s->name));
     }
 
     /* If we've been busy lately, we will refuse to fork! */
@@ -825,9 +891,9 @@ static void spawn_waitdaemon(struct service *s, int wdi)
     r = pipe(pgid_pipe);
     if (!r) r = pipe(childready_pipe);
     if (r) {
-        syslog(LOG_ERR, "ERROR: unable to spawn waitdaemon %s/%s:"
-                        " pipe failed: %m",
-                        s->name, s->familyname);
+        xsyslog_ev(LOG_ERR, "master.waitdaemon.spawn.failed",
+                   lf_s("master.service", s->name),
+                   lf_s("master.step", "pipe"));
         r = EX_OSERR;
         goto done;
     }
@@ -836,8 +902,8 @@ static void spawn_waitdaemon(struct service *s, int wdi)
     if (p == 0) {
         /* child process */
         if (verbose > 2) {
-            syslog(LOG_DEBUG, "forked process to run service %s/%s",
-                              s->name, s->familyname);
+            xsyslog_ev(LOG_DEBUG, "master.child.forked",
+                       lf_service(s));
         }
 
         /* Child - Release our pidfile lock. */
@@ -849,7 +915,9 @@ static void spawn_waitdaemon(struct service *s, int wdi)
         close(childready_pipe[0]);
         r = dup2(childready_pipe[1], STATUS_FD);
         if (r < 0) {
-            syslog(LOG_ERR, "can't duplicate child ready fd: %m");
+            xsyslog_ev(LOG_ERR, "master.child.setup.failed",
+                       lf_s("master.service", s->name),
+                       lf_s("master.step", "dup_ready_fd"));
             exit(1);
         }
         /* close the original write end, if it's not the same as the dup2'd one */
@@ -875,11 +943,14 @@ static void spawn_waitdaemon(struct service *s, int wdi)
         }
 
         /* wait for parent to finish setting our pgid */
-        syslog(LOG_DEBUG, "waiting for parent to set our pgid...");
+        xsyslog_ev(LOG_DEBUG, "master.child.pgid.waiting",
+                   lf_s("master.service", s->name));
         close(pgid_pipe[1]);
         int len = read(pgid_pipe[0], &ignored, sizeof ignored);
         if (len < 0) {
-            syslog(LOG_ERR, "can't read parent pgid: %m");
+            xsyslog_ev(LOG_ERR, "master.child.setup.failed",
+                       lf_s("master.service", s->name),
+                       lf_s("master.step", "read_pgid"));
             exit(1);
         }
         close(pgid_pipe[0]);
@@ -893,9 +964,12 @@ static void spawn_waitdaemon(struct service *s, int wdi)
         putenv(env_id);
 
         /* execute the daemon */
-        syslog(LOG_DEBUG, "about to exec %s", path);
+        xsyslog_ev(LOG_DEBUG, "master.child.exec",
+                   lf_s("sys.path", path));
         execv(path, s->exec->data);
-        syslog(LOG_ERR, "couldn't exec %s: %m", path);
+        xsyslog_ev(LOG_ERR, "master.child.exec.failed",
+                   lf_s("master.service", s->name),
+                   lf_s("sys.path", path));
         exit(EX_OSERR);
     }
     else if (p > 0) {
@@ -921,8 +995,9 @@ static void spawn_waitdaemon(struct service *s, int wdi)
             /* not a crisis, but when cyrus shuts down it will just shut
              * this one down asynchronously like a normal service.
              */
-            syslog(LOG_NOTICE, "unable to set pgid for %s/%s: %m",
-                                s->name, s->familyname);
+            xsyslog_ev(LOG_NOTICE, "master.child.pgid.failed",
+                       lf_service(s),
+                       lf_s("sys.error", strerror(errno)));
             r = 0;
         }
         else if (waitdaemon_pgid == -1) {
@@ -937,9 +1012,9 @@ static void spawn_waitdaemon(struct service *s, int wdi)
         if (nread < 0 || (size_t) nread != sizeof childready_buf
             || strncmp(childready_buf, "ok\r\n", nread))
         {
-            syslog(LOG_ERR,
-                   "ERROR: waitdaemon %s/%s did not write \"%s\" to fd %i: %m",
-                   s->name, s->familyname, "ok\\r\\n", STATUS_FD);
+            xsyslog_ev(LOG_ERR, "master.waitdaemon.spawn.failed",
+                       lf_s("master.service", s->name),
+                       lf_s("master.step", "ready_message"));
             r = EX_CONFIG;
             goto done;
         }
@@ -954,18 +1029,19 @@ static void spawn_waitdaemon(struct service *s, int wdi)
         r = proc_register(&c->proc_handle, p,
                           s->name, NULL, NULL, NULL, NULL);
         if (r) {
-            syslog(LOG_ERR, "ERROR: unable to register process %u"
-                            " for waitdaemon %s/%s",
-                            p, s->name, s->familyname);
+            xsyslog_ev(LOG_ERR, "master.child.register.failed",
+                       lf_s("master.child.type", "DAEMON"),
+                       lf_s("master.service", s->name),
+                       lf_d("sys.pid", p));
             r = 0; /* don't sweat it */
         }
         centry_add(c, p);
     }
     else {
         /* fork failed */
-        syslog(LOG_ERR, "ERROR: unable to spawn waitdaemon %s/%s:"
-                        " fork failed: %m",
-                        s->name, s->familyname);
+        xsyslog_ev(LOG_ERR, "master.waitdaemon.spawn.failed",
+                   lf_s("master.service", s->name),
+                   lf_s("master.step", "fork"));
         r = EX_OSERR;
     }
 
@@ -1010,23 +1086,24 @@ static void spawn_service(struct service *s, int si, int wdi)
          */
         r = pipe(wdpgid_pipe);
         if (r) {
-            syslog(LOG_ERR,
-                   "ERROR: unable to respawn waitdaemon %s/%s: pipe failed: %m",
-                   s->name, s->familyname);
+            xsyslog_ev(LOG_ERR, "master.waitdaemon.spawn.failed",
+                       lf_s("master.service", s->name),
+                       lf_s("master.step", "pipe"),
+                       lf_b("master.respawn", 1));
             return;
         }
     }
 
     switch (p = fork()) {
     case -1:
-        syslog(LOG_ERR, "can't fork process to run service %s/%s: %m",
-            s->name, s->familyname);
+        xsyslog_ev(LOG_ERR, "master.service.fork.failed",
+                   lf_service(s));
         break;
 
     case 0:
         if (verbose > 2) {
-            syslog(LOG_DEBUG, "forked process to run service %s/%s",
-                s->name, s->familyname);
+            xsyslog_ev(LOG_DEBUG, "master.child.forked",
+                       lf_service(s));
         }
 
         /* Child - Release our pidfile lock. */
@@ -1036,11 +1113,15 @@ static void spawn_service(struct service *s, int si, int wdi)
 
         if (s->listen) {
             if (dup2(s->stat[1], STATUS_FD) < 0) {
-                syslog(LOG_ERR, "can't duplicate status fd: %m");
+                xsyslog_ev(LOG_ERR, "master.child.setup.failed",
+                           lf_s("master.service", s->name),
+                           lf_s("master.step", "dup_status_fd"));
                 exit(1);
             }
             if (dup2(s->socket, LISTEN_FD) < 0) {
-                syslog(LOG_ERR, "can't duplicate listener fd: %m");
+                xsyslog_ev(LOG_ERR, "master.child.setup.failed",
+                           lf_s("master.service", s->name),
+                           lf_s("master.step", "dup_listen_fd"));
                 exit(1);
             }
 
@@ -1069,17 +1150,21 @@ static void spawn_service(struct service *s, int si, int wdi)
 
         /* wait for parent to finish setting our pgid */
         if (wdi != SERVICE_NONE) {
-            syslog(LOG_DEBUG, "waiting for parent to set our pgid...");
+            xsyslog_ev(LOG_DEBUG, "master.child.pgid.waiting",
+                       lf_s("master.service", s->name));
             close(wdpgid_pipe[1]);
             int len = read(wdpgid_pipe[0], &ignored, sizeof ignored);
             if (len < 0) {
-                syslog(LOG_ERR, "can't read parent pgid: %m");
+                xsyslog_ev(LOG_ERR, "master.child.setup.failed",
+                           lf_s("master.service", s->name),
+                           lf_s("master.step", "read_pgid"));
                 exit(1);
             }
             close(wdpgid_pipe[0]);
         }
 
-        syslog(LOG_DEBUG, "about to exec %s", path);
+        xsyslog_ev(LOG_DEBUG, "master.child.exec",
+                   lf_s("sys.path", path));
 
         /* add service name to environment */
         snprintf(name_env, sizeof(name_env), "CYRUS_SERVICE=%s", s->name);
@@ -1088,7 +1173,9 @@ static void spawn_service(struct service *s, int si, int wdi)
         putenv(name_env2);
 
         execv(path, s->exec->data);
-        syslog(LOG_ERR, "couldn't exec %s: %m", path);
+        xsyslog_ev(LOG_ERR, "master.child.exec.failed",
+                   lf_s("master.service", s->name),
+                   lf_s("sys.path", path));
         exit(EX_OSERR);
 
     default:                    /* parent */
@@ -1113,8 +1200,9 @@ static void spawn_service(struct service *s, int si, int wdi)
                 /* not a crisis, but when cyrus shuts down it will just shut
                  * down asynchronously like a normal service.
                  */
-                syslog(LOG_NOTICE, "unable to set pgid for %s/%s: %m",
-                                   s->name, s->familyname);
+                xsyslog_ev(LOG_NOTICE, "master.child.pgid.failed",
+                           lf_service(s),
+                           lf_s("sys.error", strerror(errno)));
             }
             else if (waitdaemon_pgid == -1) {
                 waitdaemon_pgid = p;
@@ -1133,9 +1221,10 @@ static void spawn_service(struct service *s, int si, int wdi)
             r = proc_register(&c->proc_handle, p,
                               s->name, NULL, NULL, NULL, NULL);
             if (r) {
-                syslog(LOG_ERR, "ERROR: unable to register process %u"
-                                " for daemon %s/%s",
-                                p, s->name, s->familyname);
+                xsyslog_ev(LOG_ERR, "master.child.register.failed",
+                           lf_s("master.child.type", "DAEMON"),
+                           lf_s("master.service", s->name),
+                           lf_d("sys.pid", p));
                 r = 0; /* don't sweat it */
             }
         }
@@ -1156,7 +1245,8 @@ static void spawn_exec(const char *name,
     get_executable(path, sizeof(path), exec);
     switch (p = fork()) {
     case -1:
-        syslog(LOG_CRIT, "can't fork process to run event %s", name);
+        xsyslog_ev(LOG_CRIT, "master.event.fork.failed",
+                   lf_s("master.event", name));
         break;
 
     case 0:
@@ -1175,9 +1265,12 @@ static void spawn_exec(const char *name,
             xclose(WaitDaemons[i].stat[1]);
         }
 
-        syslog(LOG_DEBUG, "about to exec %s", path);
+        xsyslog_ev(LOG_DEBUG, "master.child.exec",
+                   lf_s("sys.path", path));
         execv(path, exec->data);
-        syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
+        xsyslog_ev(LOG_ERR, "master.child.exec.failed",
+                   lf_s("master.event", name),
+                   lf_s("sys.path", path));
         exit(EX_OSERR);
         break;
 
@@ -1190,9 +1283,10 @@ static void spawn_exec(const char *name,
         centry_set_state(c, SERVICE_STATE_READY);
         r = proc_register(&c->proc_handle, p, name, NULL, NULL, NULL, NULL);
         if (r) {
-            syslog(LOG_ERR, "ERROR: unable to register process %u"
-                            " for event %s",
-                            p, name);
+            xsyslog_ev(LOG_ERR, "master.child.register.failed",
+                       lf_s("master.child.type", "EVENT"),
+                       lf_s("master.event", name),
+                       lf_d("sys.pid", p));
         }
         centry_add(c, p);
         break;

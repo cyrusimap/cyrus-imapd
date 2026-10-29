@@ -405,6 +405,19 @@ lmtp.rcpt.index         which recipient of the transaction, counting from zero
 lmtp.rcpt.state         a recipient's delivery state in the proxy state machine
 lmtp.smtputf8           1 if lmtpd offers SMTPUTF8
 lmtp.target             how the destination mailbox was chosen: default, plus-addr, ...
+master.child            placeholder for "no known child process"; value is always ~null~
+master.child.age        how long ago master spawned a child process, in seconds
+master.child.type       what master spawned a child as: START, SERVICE, DAEMON or EVENT
+master.event            the name of a cyrus.conf EVENTS entry
+master.fcntl.flag       the file descriptor flag master tried to change
+master.reason           why master disabled, ignored or refused something
+master.respawn          1 if master is restarting a waitdaemon rather than starting it
+master.service          the name of a cyrus.conf SERVICES or DAEMON entry
+master.service.family   the address family a service listens on: ipv4, ipv6, unix or daemon
+master.service.listen   a service's listen= address
+master.service.proto    a service's proto= setting
+master.sockopt          the socket option master tried to set
+master.step             which step of a master operation is being logged
 mboxlist.key            a raw mailboxes.db key
 mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
@@ -574,6 +587,7 @@ error.column            the column a parse error was found at
 error.description       the human-readable detail paired with error.type
 error.line              the line a parse error was found at
 error.type              a machine-readable error type, e.g. a JMAP SetError type
+sys.coredump            1 if a process dumped core
 sys.error               strerror() of errno at the point of logging
 sys.exitcode            the exit code a process is dying with
 sys.filename            a file name within a directory
@@ -581,6 +595,7 @@ sys.host                a host name or address
 sys.path                a filesystem path
 sys.pid                 a process id
 sys.signal              a signal number
+sys.signal.name         the name of the signal in sys.signal
 
 ### caller. - where in the C source the event was logged
 
