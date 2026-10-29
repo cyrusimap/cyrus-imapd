@@ -510,6 +510,7 @@ sched.userid            the userid whose scheduling addresses were used
 scope                   the scope a duplicate-delivery check applied to
 search.batch_highest_createdmodseq  highest createdmodseq indexed in this batch
 search.batch_lowest_createdmodseq   lowest createdmodseq indexed in this batch
+search.bytes            how many bytes a search index operation handled
 search.committed        how many documents a Xapian commit wrote
 search.createdmodseq    highest createdmodseq the search index covers
 search.cyrusid          a Xapian document's cyrusid term
@@ -519,15 +520,23 @@ search.expr             a search expression, serialised
 search.filter           a Xapian index filter, from its metadata
 search.generation       the search index generation
 search.index_version    the format version of the search index
+search.indexed.key      a key in a search tier's indexed.db
+search.indexed.value    a value in a search tier's indexed.db
 search.language         an ISO 639 language code
+search.lock             the name lock a search index operation needs
 search.min_index_version  the lowest search index version an operation needs
 search.op               a search operator, e.g. OR
+search.part             which part of a message a search term or index entry is for
 search.query            a Xapian query, as Xapian describes it
 search.reason           why a search operation skipped, refused or rejected something
 search.restarts         how many times indexing restarted from the first message
 search.results          how many messages a search or sort returned
 search.sortcrit         the sort criteria, serialised
+search.source.index_version  the index version of the search tier being read from
 search.step             which step of a search operation is being logged
+search.tier             a Xapian search tier name
+search.tier.key         a key that names a Xapian search tier
+search.uids             a sequence of message uids, as a search index records them
 search.uncommitted      how many documents were pending when a commit failed
 search.updates          how many update passes indexed nothing
 search.value            a search term's value, as given
