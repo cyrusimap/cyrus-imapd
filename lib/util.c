@@ -414,8 +414,9 @@ static int xopendirpath(const char *path, int flags)
     // ignore exist, if someone else won that's OK
     if (mkdirat(parentfd, leaf, 0755) == -1) {
         if (errno != EEXIST) {
-            xsyslog(LOG_ERR, "IOERROR: failed to create intermediate directory",
-                             "filename=<%s>", path);
+            xsyslog_ev(LOG_ERR, "util.mkdir.failed",
+                       lf_s("util.step", "mkdir"),
+                       lf_s("sys.path", path));
             int saved_errno = errno;
             free(copy);
             close(parentfd);
@@ -426,8 +427,9 @@ static int xopendirpath(const char *path, int flags)
     }
     else if (!(flags & XOPENDIR_NOSYNC)) {
         if (fsync(parentfd) < 0) {
-            xsyslog(LOG_ERR, "IOERROR: fsync directory failed",
-                             "filename=<%s>", path);
+            xsyslog_ev(LOG_ERR, "util.mkdir.failed",
+                       lf_s("util.step", "fsync_dir"),
+                       lf_s("sys.path", path));
             int saved_errno = errno;
             free(copy);
             close(parentfd);
@@ -576,8 +578,9 @@ EXPORTED int cyrus_copyfile_fdptr(const char *from, const char *to,
              * probably racing against something
              */
             if (unlinkat(*dirfdp, leaf, 0) == -1) {
-                xsyslog(LOG_ERR, "IOERROR: unlinking to recreate failed",
-                                 "filename=<%s>", to);
+                xsyslog_ev(LOG_ERR, "util.copyfile.failed",
+                           lf_s("util.step", "unlink"),
+                           lf_s("sys.path", to));
                 errno = 0;
                 r = -1;
                 goto done;
@@ -590,30 +593,34 @@ EXPORTED int cyrus_copyfile_fdptr(const char *from, const char *to,
 
     srcfd = open(from, O_RDONLY, 0666);
     if (srcfd == -1) {
-        xsyslog(LOG_ERR, "IOERROR: open failed",
-                         "filename=<%s>", from);
+        xsyslog_ev(LOG_ERR, "util.copyfile.failed",
+                   lf_s("util.step", "open"),
+                   lf_s("sys.path", from));
         r = -1;
         goto done;
     }
 
     if (fstat(srcfd, &sbuf) == -1) {
-        xsyslog(LOG_ERR, "IOERROR: fstat failed",
-                         "filename=<%s>", from);
+        xsyslog_ev(LOG_ERR, "util.copyfile.failed",
+                   lf_s("util.step", "fstat"),
+                   lf_s("sys.path", from));
         r = -1;
         goto done;
     }
 
     if (!sbuf.st_size) {
-        xsyslog(LOG_ERR, "IOERROR: zero byte file",
-                         "filename=<%s>", from);
+        xsyslog_ev(LOG_ERR, "util.copyfile.failed",
+                   lf_s("util.step", "empty"),
+                   lf_s("sys.path", from));
         r = -1;
         goto done;
     }
 
     destfd = openat(*dirfdp, leaf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (destfd == -1) {
-        xsyslog(LOG_ERR, "IOERROR: create failed",
-                         "filename=<%s>", to);
+        xsyslog_ev(LOG_ERR, "util.copyfile.failed",
+                   lf_s("util.step", "create"),
+                   lf_s("sys.path", to));
         r = -1;
         goto done;
     }
@@ -623,8 +630,9 @@ EXPORTED int cyrus_copyfile_fdptr(const char *from, const char *to,
     n = retry_write(destfd, src_base, src_size);
 
     if (n == -1 || fsync(destfd)) {
-        xsyslog(LOG_ERR, "IOERROR: retry_write failed",
-                         "filename=<%s>", to);
+        xsyslog_ev(LOG_ERR, "util.copyfile.failed",
+                   lf_s("util.step", "write"),
+                   lf_s("sys.path", to));
         r = -1;
         xunlinkat(*dirfdp, leaf, /*flags*/0);  /* remove any rubbish we created */
         goto done;
@@ -652,8 +660,9 @@ EXPORTED int cyrus_copyfile_fdptr(const char *from, const char *to,
         ret = utimes(to, tv);
 #endif
         if (ret) {
-            xsyslog(LOG_ERR, "IOERROR: setting times failed",
-                             "filename=<%s>", to);
+            xsyslog_ev(LOG_ERR, "util.copyfile.failed",
+                       lf_s("util.step", "utimes"),
+                       lf_s("sys.path", to));
             r = -1;
             xunlink(to);  /* remove any rubbish we created */
             goto done;
@@ -663,8 +672,9 @@ EXPORTED int cyrus_copyfile_fdptr(const char *from, const char *to,
 sync:
     if (!nodirsync && local_dirfd >= 0) {
         if (fsync(local_dirfd) < 0) {
-            xsyslog(LOG_ERR, "IOERROR: fsync directory failed",
-                             "filename=<%s>", to);
+            xsyslog_ev(LOG_ERR, "util.copyfile.failed",
+                       lf_s("util.step", "fsync_dir"),
+                       lf_s("sys.path", to));
             r = -1;
             xunlink(to);  /* remove any rubbish we created */
             goto done;
@@ -698,7 +708,9 @@ EXPORTED int become_cyrus(void)
 
     p = getpwnam(cyrus);
     if (p == NULL) {
-        syslog(LOG_ERR, "no entry in /etc/passwd for user %s", cyrus);
+        xsyslog_ev(LOG_ERR, "util.become_cyrus.failed",
+                   lf_s("util.step", "getpwnam"),
+                   lf_s("u.username", cyrus));
         return -1;
     }
 
@@ -709,7 +721,9 @@ EXPORTED int become_cyrus(void)
     if (mail != NULL) {
         g = getgrnam(mail);
         if (g == NULL) {
-            syslog(LOG_ERR, "no entry in /etc/group for group %s", mail);
+            xsyslog_ev(LOG_ERR, "util.become_cyrus.failed",
+                       lf_s("util.step", "getgrnam"),
+                       lf_s("util.group", mail));
             return -1;
         }
         newgid = g->gr_gid;
@@ -725,14 +739,17 @@ EXPORTED int become_cyrus(void)
     }
 
     if (initgroups(cyrus, newgid)) {
-        syslog(LOG_ERR, "unable to initialize groups for user %s: %s",
-               cyrus, strerror(errno));
+        xsyslog_ev(LOG_ERR, "util.become_cyrus.failed",
+                   lf_s("util.step", "initgroups"),
+                   lf_s("u.username", cyrus));
         return -1;
     }
 
     if (setgid(newgid)) {
-        syslog(LOG_ERR, "unable to set group id to %d for user %s: %s",
-              newgid, cyrus, strerror(errno));
+        xsyslog_ev(LOG_ERR, "util.become_cyrus.failed",
+                   lf_s("util.step", "setgid"),
+                   lf_s("u.username", cyrus),
+                   lf_d("util.gid", newgid));
         return -1;
     }
 
@@ -794,7 +811,7 @@ EXPORTED int64_t now_ms(void)
         return (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
     }
     else {
-        syslog(LOG_WARNING, "cyrus_gettime(): %m");
+        xsyslog_ev(LOG_WARNING, "util.gettime.failed");
         return time(NULL) * 1000;
     }
 }
@@ -1378,7 +1395,9 @@ static int is_tcp_socket(int fd)
 
     if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &so_type, &so_type_len) == -1) {
         if (errno != ENOTSOCK)
-            syslog(LOG_ERR, "%s: getsockopt(%d): %m", __func__, fd);
+            xsyslog_ev(LOG_ERR, "util.socket.failed",
+                       lf_s("util.step", "getsockopt"),
+                       lf_d("sys.fd", fd));
         return 0;
     }
 
@@ -1386,7 +1405,9 @@ static int is_tcp_socket(int fd)
 
     if (getsockname(fd, &sock_addr, &sock_addr_len) == -1) {
         if (errno != ENOTSOCK)
-            syslog(LOG_ERR, "%s: getsockname(%d): %m", __func__, fd);
+            xsyslog_ev(LOG_ERR, "util.socket.failed",
+                       lf_s("util.step", "getsockname"),
+                       lf_d("sys.fd", fd));
         return 0;
     }
 
@@ -1409,14 +1430,18 @@ EXPORTED void tcp_enable_keepalive(int fd)
 
         r = setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen);
         if (r < 0) {
-            syslog(LOG_ERR, "unable to setsocketopt(SO_KEEPALIVE): %m");
+            xsyslog_ev(LOG_ERR, "util.socket.failed",
+                       lf_s("util.step", "setsockopt"),
+                       lf_s("util.sockopt", "SO_KEEPALIVE"));
         }
 #ifdef TCP_KEEPCNT
         optval = config_getint(IMAPOPT_TCP_KEEPALIVE_CNT);
         if (optval) {
             r = setsockopt(fd, proto->p_proto, TCP_KEEPCNT, &optval, optlen);
             if (r < 0) {
-                syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPCNT): %m");
+                xsyslog_ev(LOG_ERR, "util.socket.failed",
+                           lf_s("util.step", "setsockopt"),
+                           lf_s("util.sockopt", "TCP_KEEPCNT"));
             }
         }
 #endif
@@ -1425,7 +1450,9 @@ EXPORTED void tcp_enable_keepalive(int fd)
         if (optval) {
             r = setsockopt(fd, proto->p_proto, TCP_KEEPIDLE, &optval, optlen);
             if (r < 0) {
-                syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPIDLE): %m");
+                xsyslog_ev(LOG_ERR, "util.socket.failed",
+                           lf_s("util.step", "setsockopt"),
+                           lf_s("util.sockopt", "TCP_KEEPIDLE"));
             }
         }
 #endif
@@ -1434,7 +1461,9 @@ EXPORTED void tcp_enable_keepalive(int fd)
         if (optval) {
             r = setsockopt(fd, proto->p_proto, TCP_KEEPINTVL, &optval, optlen);
             if (r < 0) {
-                syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPINTVL): %m");
+                xsyslog_ev(LOG_ERR, "util.socket.failed",
+                           lf_s("util.step", "setsockopt"),
+                           lf_s("util.sockopt", "TCP_KEEPINTVL"));
             }
         }
 #endif
@@ -1451,13 +1480,16 @@ EXPORTED void tcp_disable_nagle(int fd)
 
     struct protoent *proto = getprotobyname("tcp");
     if (!proto) {
-        syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
+        xsyslog_ev(LOG_ERR, "util.socket.failed",
+                   lf_s("util.step", "getprotobyname"));
         return;
     }
 
     int on = 1;
     if (setsockopt(fd, proto->p_proto, TCP_NODELAY, &on, sizeof(on)) != 0) {
-        syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
+        xsyslog_ev(LOG_ERR, "util.socket.failed",
+                   lf_s("util.step", "setsockopt"),
+                   lf_s("util.sockopt", "TCP_NODELAY"));
     }
 }
 
