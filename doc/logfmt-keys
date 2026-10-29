@@ -171,6 +171,13 @@ append.callout          the annotation callout program or socket
 append.stage.dir        the staging directory a message is spooled through
 append.stage.file       the staged copy of a message
 append.stage.source     the file a staged message was copied from
+autocreate.created      how many folders autocreation created
+autocreate.identifier   the identifier an autocreated folder's ACL entry is for
+autocreate.reason       why autocreation skipped or changed course
+autocreate.specialuse   the special-use flag autocreation gives a folder
+autocreate.step         which step of autocreation is being logged
+autocreate.subscribed   how many folders autocreation subscribed the user to
+autocreate.value        an autocreate_* setting's value, as configured
 backend.banner          the greeting banner a backend sent
 backup.cutoff           the point in time a restore is undoing back to
 backup.reason           why a record or collection was skipped or selected

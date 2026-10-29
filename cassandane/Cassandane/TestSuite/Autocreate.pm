@@ -21,7 +21,6 @@ sub new
         autocreate_quota => '500000',
         autocreate_inbox_folders => 'Drafts|Sent|Trash|SPAM|plus',
         autocreate_subscribe_folder => 'Drafts|Sent|Trash|SPAM|plus',
-        autocreate_sieve_script => '@basedir@/conf/foo_sieve.script',
         autocreate_acl => 'plus anyone p',
         'xlist-drafts' => 'Drafts',
         'xlist-junk' => 'SPAM',
