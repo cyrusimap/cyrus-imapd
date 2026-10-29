@@ -291,8 +291,11 @@ static void popd_reset(void)
 
     proc_cleanup(&proc_handle);
 
-    syslog(LOG_NOTICE, "counts: retr=<%d> top=<%d> dele=<%d>",
-                       count_retr, count_top, count_dele);
+    xsyslog_ev(LOG_NOTICE, "pop.session.counts",
+               lf_s_opt("u.username", popd_userid),
+               lf_d("pop.count.retr", count_retr),
+               lf_d("pop.count.top", count_top),
+               lf_d("pop.count.dele", count_dele));
     count_retr = 0;
     count_top = 0;
     count_dele = 0;
@@ -387,7 +390,8 @@ int service_init(int argc, char **argv,
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&popd_namespace, NAMESPACE_OPTION_ADMIN))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "pop.init.failed",
+                   lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -402,7 +406,7 @@ int service_init(int argc, char **argv,
         case 's': /* pop3s (do starttls right away) */
             pop3s = 1;
             if (!tls_enabled()) {
-                syslog(LOG_ERR, "pop3s: required OpenSSL options not present");
+                xsyslog_ev(LOG_ERR, "pop.starttls.unavailable");
                 fatal("pop3s: required OpenSSL options not present",
                       EX_CONFIG);
             }
@@ -501,7 +505,7 @@ int service_main(int argc __attribute__((unused)),
         (sasl_checkapop(popd_saslconn, NULL, 0, NULL, 0) == SASL_OK) &&
         !sasl_mkchal(popd_saslconn,
                      popd_apop_chal, sizeof(popd_apop_chal), 1)) {
-        syslog(LOG_WARNING, "APOP disabled: can't create challenge");
+        xsyslog_ev(LOG_WARNING, "pop.apop.disabled");
     }
 
     prot_printf(popd_out, "+OK");
@@ -533,10 +537,10 @@ int service_main(int argc __attribute__((unused)),
 
     if (config_iolog) {
         read_io_count(io_count_stop);
-        syslog(LOG_INFO,
-               "POP session stats : I/O read : %d bytes : I/O write : %d bytes",
-                io_count_stop->io_read_count - io_count_start->io_read_count,
-                io_count_stop->io_write_count - io_count_start->io_write_count);
+        xsyslog_ev(LOG_INFO, "pop.session.io",
+                   lf_s_opt("u.username", popd_userid),
+                   lf_d("used.bytes.in", io_count_stop->io_read_count - io_count_start->io_read_count),
+                   lf_d("used.bytes.out", io_count_stop->io_write_count - io_count_start->io_write_count));
         free(io_count_start);
         free(io_count_stop);
     }
@@ -589,8 +593,11 @@ void shut_down(int code)
         free(backend);
     }
 
-    syslog(LOG_NOTICE, "counts: retr=<%d> top=<%d> dele=<%d>",
-                       count_retr, count_top, count_dele);
+    xsyslog_ev(LOG_NOTICE, "pop.session.counts",
+               lf_s_opt("u.username", popd_userid),
+               lf_d("pop.count.retr", count_retr),
+               lf_d("pop.count.top", count_top),
+               lf_d("pop.count.dele", count_dele));
 
     idle_done();
 
@@ -632,10 +639,10 @@ void shut_down(int code)
 
     if (config_iolog) {
         read_io_count(io_count_stop);
-        syslog(LOG_INFO,
-               "POP session stats : I/O read : %d bytes : I/O write : %d bytes",
-                io_count_stop->io_read_count - io_count_start->io_read_count,
-                io_count_stop->io_write_count - io_count_start->io_write_count);
+        xsyslog_ev(LOG_INFO, "pop.session.io",
+                   lf_s_opt("u.username", popd_userid),
+                   lf_d("used.bytes.in", io_count_stop->io_read_count - io_count_start->io_read_count),
+                   lf_d("used.bytes.out", io_count_stop->io_write_count - io_count_start->io_write_count));
         free (io_count_start);
         free (io_count_stop);
     }
@@ -667,7 +674,11 @@ EXPORTED void fatal(const char* s, int code)
         prot_printf(popd_out, "-ERR [SYS/PERM] Fatal error: %s\r\n", s);
         prot_flush(popd_out);
     }
-    syslog(LOG_ERR, "Fatal error: %s", s);
+    xsyslog_ev(LOG_ERR, "pop.fatal",
+               lf_s_opt("u.username", popd_userid),
+               lf_s("r.clienthost", popd_clienthost),
+               lf_s("error", s),
+               lf_d("sys.exitcode", code));
 
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
 
@@ -752,9 +763,8 @@ static void cmdloop(void)
             config_getswitch(IMAPOPT_DISCONNECT_ON_VANISHED_MAILBOX)) {
             if (popd_mailbox->i.options & OPT_MAILBOX_DELETED) {
                 /* Mailbox has been (re)moved */
-                syslog(LOG_WARNING,
-                       "Maildrop %s has been (re)moved out from under client",
-                       mailbox_name(popd_mailbox));
+                xsyslog_ev(LOG_WARNING, "pop.maildrop.vanished",
+                           lf_mailbox(popd_mailbox));
                 prot_printf(popd_out,
                             "-ERR [SYS/TEMP] "
                             "Maildrop has been (re)moved\r\n");
@@ -796,7 +806,8 @@ static void cmdloop(void)
         lcase(inputbuf);
 
         if (config_getswitch(IMAPOPT_CHATTY))
-            syslog(LOG_NOTICE, "command: %s", inputbuf);
+            xsyslog_ev(LOG_NOTICE, "pop.command.received",
+                       lf_s("pop.command", inputbuf));
 
         /* register process */
         r = proc_register(&proc_handle, 0,
@@ -1139,7 +1150,7 @@ static void cmd_stls(int pop3s)
 
     if (result == -1) {
 
-        syslog(LOG_ERR, "[pop3d] error initializing TLS");
+        xsyslog_ev(LOG_ERR, "pop.starttls.init.failed");
 
         if (pop3s == 0)
             prot_printf(popd_out, "-ERR [SYS/PERM] %s\r\n", "Error initializing TLS");
@@ -1176,14 +1187,16 @@ static void cmd_stls(int pop3s)
 
     /* if error */
     if (result==-1) {
-        syslog(LOG_NOTICE, "TLS negiation failed: %s", popd_clienthost);
+        xsyslog_ev(LOG_NOTICE, "pop.starttls.failed",
+                   lf_s("r.clienthost", popd_clienthost));
         shut_down(EX_PROTOCOL);
     }
 
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, popd_saslconn);
     if (result != SASL_OK) {
-        syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_stls()");
+        xsyslog_ev(LOG_NOTICE, "pop.starttls.saslprops.failed",
+                   lf_s("r.clienthost", popd_clienthost));
         shut_down(EX_TEMPFAIL);
     }
 
@@ -1664,8 +1677,10 @@ int openinbox(void)
     if (r) {
         sleep(3);
         log_level = LOG_INFO;
-        syslog(log_level, "Unable to open maildrop %s: %s",
-               mbname_intname(mbname), error_message(r));
+        xsyslog_ev(log_level, "pop.maildrop.open.failed",
+                   lf_s_opt("u.username", popd_userid),
+                   lf_mbname("mbox.name", mbname),
+                   lf_err("error", r));
         prot_printf(popd_out,
                     "-ERR [SYS/TEMP] Unable to open maildrop: %s\r\n",
                     error_message(r));
@@ -1692,7 +1707,8 @@ int openinbox(void)
                                   userid, NULL, &statusline, -1);
 
         if (!backend) {
-            syslog(LOG_ERR, "couldn't authenticate to backend server");
+            xsyslog_ev(LOG_ERR, "pop.proxy.auth.failed",
+                       lf_s_opt("u.username", popd_userid));
             prot_printf(popd_out, "-ERR%s",
                         statusline ? statusline :
                         " Authentication to backend server failed\r\n");
@@ -1705,7 +1721,8 @@ int openinbox(void)
              !(r = status_lookup_mbname(mbname, popd_userid, STATUS_MESSAGES, &sdata)) &&
              !sdata.messages) {
         /* local mailbox (empty) -- don't bother opening the mailbox */
-        syslog(LOG_INFO, "optimized mode for empty maildrop: %s", popd_userid);
+        xsyslog_ev(LOG_INFO, "pop.maildrop.empty",
+                   lf_s("u.username", popd_userid));
     }
     else {
         /* local mailbox */
@@ -1717,8 +1734,10 @@ int openinbox(void)
         r = mailbox_open_irl(mbname_intname(mbname), &popd_mailbox);
         if (r) {
             sleep(3);
-            syslog(log_level, "Unable to open maildrop %s: %s",
-                   mbname_intname(mbname), error_message(r));
+            xsyslog_ev(log_level, "pop.maildrop.open.failed",
+                       lf_s_opt("u.username", popd_userid),
+                       lf_mbname("mbox.name", mbname),
+                       lf_err("error", r));
             prot_printf(popd_out,
                         "-ERR [SYS/PERM] Unable to open maildrop: %s\r\n",
                         error_message(r));
@@ -1733,8 +1752,10 @@ int openinbox(void)
 
         if (r) {
             mailbox_close(&popd_mailbox);
-            syslog(LOG_ERR, "Unable to lock maildrop %s: %s",
-                   mbname_intname(mbname), error_message(r));
+            xsyslog_ev(LOG_ERR, "pop.maildrop.lock.failed",
+                       lf_s_opt("u.username", popd_userid),
+                       lf_mbname("mbox.name", mbname),
+                       lf_err("error", r));
             prot_printf(popd_out,
                         "-ERR [IN-USE] Unable to lock maildrop: %s\r\n",
                         error_message(r));
@@ -1743,9 +1764,10 @@ int openinbox(void)
 
         if ((minpoll = config_getduration(IMAPOPT_POPMINPOLL)) &&
             popd_mailbox->i.pop3_last_login.tv_sec + minpoll > popd_login_time) {
-            syslog(LOG_ERR, "%s: Logins must be at least %d minute%s apart",
-                        mbname_intname(mbname),
-                        minpoll / 60, minpoll / 60 > 1 ? "s" : "");
+            xsyslog_ev(LOG_WARNING, "pop.login.too_soon",
+                       lf_s_opt("u.username", popd_userid),
+                       lf_mbname("mbox.name", mbname),
+                       lf_d("limit.value", minpoll));
             prot_printf(popd_out,
                         "-ERR [LOGIN-DELAY] Logins must be at least %d minute%s apart\r\n",
                         minpoll / 60, minpoll / 60 > 1 ? "s" : "");
@@ -1815,7 +1837,13 @@ int openinbox(void)
                         limits.user, limits.maxuser, popd_userid);
         }
         prot_printf(popd_out, ")\r\n");
-        syslog(LOG_ERR, "Too many open connections (%s%s)", part1, part2);
+        xsyslog_ev(LOG_ERR, "pop.connection.limit_reached",
+                   lf_s_opt("u.username", popd_userid),
+                   lf_s("r.clienthost", popd_clienthost),
+                   lf_d("conn.host", limits.host),
+                   lf_d("conn.host.max", limits.maxhost),
+                   lf_d("conn.user", limits.user),
+                   lf_d("conn.user.max", limits.maxuser));
         mailbox_close(&popd_mailbox);
         goto fail;
     }
