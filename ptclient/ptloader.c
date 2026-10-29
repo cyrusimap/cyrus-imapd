@@ -209,7 +209,8 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     /* set signal handlers */
     signal(SIGPIPE, SIG_IGN);
 
-    syslog(LOG_NOTICE, "starting: ptloader.c %s", PACKAGE_VERSION);
+    xsyslog_ev(LOG_NOTICE, "pts.loader.started",
+               lf_s("sys.version", PACKAGE_VERSION));
 
     while ((opt = getopt(argc, argv, "d:")) != EOF) {
         switch (opt) {
@@ -220,7 +221,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
             }
             break;
         default:
-            syslog(LOG_ERR, "invalid command line option specified");
+            xsyslog_ev(LOG_ERR, "pts.loader.usage");
             break;
             /* just pass through */
         }
@@ -234,8 +235,9 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
 
     r = cyrusdb_open(config_ptscache_db, fname, CYRUSDB_CREATE, &ptsdb);
     if (r != 0) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "pts.cache.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(r)));
         fatal("can't read pts database", EX_TEMPFAIL);
     }
 
@@ -253,8 +255,8 @@ void service_abort(int error)
 
     r = cyrusdb_close(ptsdb);
     if (r) {
-        syslog(LOG_ERR, "DBERROR: error closing ptsdb: %s",
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "pts.cache.close.failed",
+                   lf_s("error", cyrusdb_strerror(r)));
     }
 
     cyrusdb_done();
@@ -276,33 +278,40 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 
     (void)memset(&size, 0, sizeof(size));
     if (read(c, &size, sizeof(size_t)) < 0) {
-        syslog(LOG_ERR, "socket (size): %m");
+        xsyslog_ev(LOG_ERR, "pts.loader.request.invalid",
+                   lf_s("pts.step", "read_size"));
         reply = "Error reading request (size)";
         goto sendreply;
     }
 
     if (size > PTS_DB_KEYSIZE)  {
-        syslog(LOG_ERR, "size sent %d is greater than buffer size %d",
-               (int)size, PTS_DB_KEYSIZE);
+        xsyslog_ev(LOG_ERR, "pts.loader.request.invalid",
+                   lf_s("pts.reason", "too_long"),
+                   lf_d("pts.size", (int)size),
+                   lf_d("limit.value", PTS_DB_KEYSIZE));
         reply = "Error: invalid request size";
         goto sendreply;
     }
 
     if (size == 0) {
-        syslog(LOG_ERR, "size sent is 0");
+        xsyslog_ev(LOG_ERR, "pts.loader.request.invalid",
+                   lf_s("pts.reason", "empty"));
         reply = "Error: zero request size";
         goto sendreply;
     }
 
     memset(&user, 0, sizeof(user));
     if (read(c, &user, size) < 0) {
-        syslog(LOG_ERR, "socket(user; size = %d): %m", (int)size);
+        xsyslog_ev(LOG_ERR, "pts.loader.request.invalid",
+                   lf_s("pts.step", "read_user"),
+                   lf_d("pts.size", (int)size));
         reply = "Error reading request (user)";
         goto sendreply;
     }
 
     if (ptclient_debug) {
-        syslog(LOG_DEBUG, "user %s", user);
+        xsyslog_ev(LOG_DEBUG, "pts.loader.request",
+                   lf_s("pts.id", user));
     }
 
     newstate = ptsmodule_make_authstate(user, size, &reply, &dsize);
@@ -324,7 +333,7 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 
  sendreply:
     if (retry_write(c, reply, strlen(reply) + 1) <0) {
-        syslog(LOG_WARNING, "retry_write: %m");
+        xsyslog_ev(LOG_WARNING, "pts.loader.reply.failed");
     }
     close(c);
 
@@ -336,7 +345,9 @@ int service_main_fd(int c, int argc __attribute__((unused)),
  */
 EXPORTED void fatal(const char *msg, int exitcode)
 {
-    syslog(LOG_ERR, "%s", msg);
+    xsyslog_ev(LOG_ERR, "pts.loader.fatal",
+               lf_s("error", msg),
+               lf_d("sys.exitcode", exitcode));
 
     if (exitcode != EX_PROTOCOL && config_fatals_abort) abort();
 
