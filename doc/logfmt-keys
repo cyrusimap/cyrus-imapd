@@ -239,9 +239,11 @@ db.backend              a cyrusdb backend name, e.g. twom
 db.backend.requested    the cyrusdb backend the caller asked for
 db.bytes                a size within a database, in bytes
 db.checkpoint.path      the file a checkpoint writes before renaming it into place
+db.compacted            1 if a database repack was a full compaction
 db.duration             how long a database operation took, in seconds
 db.engine               the address of a database handle, in debug traces
 db.fd                   a database's file descriptor
+db.fixed                how many offsets a database recovery corrected
 db.flags                the flags a database operation was called with
 db.inode                a database file's inode number
 db.key                  a database record's key
@@ -252,9 +254,13 @@ db.logstart             the offset where a skiplist's log begins
 db.maxlevel             the highest skiplist level allowed
 db.offset               an offset within a database file
 db.op                   which cyrusdb call a debug trace is for
+db.prev.key             the key of the record before the one in db.key
+db.prev.offset          the offset of the record before the one in db.offset
 db.reason               why a database operation failed, skipped or refused something
 db.records              how many records a database holds or an operation handled
+db.records.expected     how many records a database's header claims
 db.refcount             how many open handles share a database
+db.repack_size          a database's size after its last repack, in bytes
 db.result               a cyrusdb call's return code, in debug traces
 db.size                 a database file's size, in bytes
 db.step                 which step of a database operation is being logged
@@ -656,6 +662,7 @@ replica.msg.modseq      the replica's modseq for the message
 
 old.db.backend          the cyrusdb backend a database was in before a convert
 old.db.logstart         a skiplist's log offset before recovery corrected it
+old.db.size             a database file's size before a repack, in bytes
 old.master.child.state  a child's state before a message changed it
 old.master.service      the service master thought a child belonged to
 old.mbox.acl            the mailbox ACL before the change

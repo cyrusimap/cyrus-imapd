@@ -26,22 +26,21 @@ static void _twom_error_callback(const char *msg, const char *fmt, ...)
 {
     int saved_errno = errno;
 
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "DBERROR: twom %s:", msg);
+    struct buf detail = BUF_INITIALIZER;
 
     if (fmt) {
         va_list args;
         va_start(args, fmt);
-        buf_putc(&buf, ' ');
-        buf_vprintf(&buf, fmt, args);
+        buf_vprintf(&detail, fmt, args);
         va_end(args);
     }
 
-    if (saved_errno)
-        buf_printf(&buf, " syserror=<%s>",  strerror(saved_errno));
-
-    syslog(LOG_ERR, "%s", buf_cstring(&buf));
-    buf_free(&buf);
+    /* xsyslog_ev reports errno as sys.error */
+    errno = saved_errno;
+    xsyslog_ev(LOG_ERR, "db.twom.error",
+               lf_s("error", msg),
+               fmt ? lf_buf("error.description", &detail) : lf_skip());
+    buf_free(&detail);
 
     errno = saved_errno;
 }
@@ -95,18 +94,22 @@ static int checkpoint(struct twom_db *db)
     size_t postsize = twom_db_size(db);
     size_t num = twom_db_num_records(db);
     if (r == CYRUSDB_LOCKED) {
-        xsyslog(LOG_INFO, "twom: repack already locked",
-               "filename=<%s>", twom_db_fname(db));
+        xsyslog_ev(LOG_INFO, "db.twom.checkpoint.skipped",
+                   lf_s("sys.path", twom_db_fname(db)),
+                   lf_s("db.reason", "locked"));
     }
     else if (r) {
-        xsyslog(LOG_ERR, "twom: failed to checkpoint",
-               "filename=<%s> error=<%s>", twom_db_fname(db), cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "db.twom.checkpoint.failed",
+                   lf_s("sys.path", twom_db_fname(db)),
+                   lf_s("error", cyrusdb_strerror(r)));
     }
     else {
-        syslog(LOG_INFO,
-               "twom: repacked %s (%llu record%s, %llu => %llu bytes) in %2.3f seconds",
-               twom_db_fname(db), (LLU)num, num == 1 ? "" : "s", (LLU)presize, (LLU)(postsize),
-               (sclock() - start) / (double) CLOCKS_PER_SEC);
+        xsyslog_ev(LOG_INFO, "db.twom.checkpointed",
+                   lf_s("sys.path", twom_db_fname(db)),
+                   lf_llu("db.records", (LLU)num),
+                   lf_llu("old.db.size", (LLU)presize),
+                   lf_llu("db.size", (LLU)postsize),
+                   lf_duration("db.duration", (sclock() - start) / (double) CLOCKS_PER_SEC));
     }
     return r;
 }
@@ -127,21 +130,25 @@ static void _delayed_checkpoint(void *rock)
         /* somebody in this process still has it open with flags we can't
          * match - a readonly handle, most likely, which could not have
          * been repacked through anyway.  The next commit asks again. */
-        syslog(LOG_INFO, "twom: not checkpointing %s, already open with "
-               "different flags", drock->fname);
+        xsyslog_ev(LOG_INFO, "db.twom.checkpoint.skipped",
+                   lf_s("sys.path", drock->fname),
+                   lf_s("db.reason", "open_with_other_flags"));
         return;
     }
     if (tmr) {
-        syslog(LOG_ERR, "DBERROR: opening %s for checkpoint: %s",
-               drock->fname, cyrusdb_strerror(_errormap(tmr)));
+        xsyslog_ev(LOG_ERR, "db.twom.checkpoint.failed",
+                   lf_s("sys.path", drock->fname),
+                   lf_s("db.step", "open"),
+                   lf_s("error", cyrusdb_strerror(_errormap(tmr))));
         return;
     }
     if (twom_db_should_repack(db)) {
         checkpoint(db);
     }
     else {
-        syslog(LOG_INFO, "twom: delayed checkpoint already done %s",
-               drock->fname);
+        xsyslog_ev(LOG_INFO, "db.twom.checkpoint.skipped",
+                   lf_s("sys.path", drock->fname),
+                   lf_s("db.reason", "already_done"));
     }
     twom_db_close(&db);
 }
@@ -178,8 +185,9 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     if (tmr == TWOM_NOTFOUND && (flags & CYRUSDB_CREATE)) {
         int r = cyrus_mkdir(fname, 0755);
         if (r < 0) {
-            xsyslog(LOG_ERR, "IOERROR: twom cyrus_mkdir failed",
-                             "filename=<%s>", fname);
+            xsyslog_ev(LOG_ERR, "db.twom.open.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("db.step", "mkdir"));
             return r;
         }
         tmr = twom_db_open(fname, &init, &tmdb, tidptr ? &tmtxn : NULL);

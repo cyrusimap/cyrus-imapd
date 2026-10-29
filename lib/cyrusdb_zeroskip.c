@@ -41,22 +41,21 @@ static void _zeroskip_error_callback(const char *msg, const char *fmt, ...)
 {
     int saved_errno = errno;
 
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "DBERROR: zeroskip %s:", msg);
+    struct buf detail = BUF_INITIALIZER;
 
     if (fmt) {
         va_list args;
         va_start(args, fmt);
-        buf_putc(&buf, ' ');
-        buf_vprintf(&buf, fmt, args);
+        buf_vprintf(&detail, fmt, args);
         va_end(args);
     }
 
-    if (saved_errno)
-        buf_printf(&buf, " syserror=<%s>", strerror(saved_errno));
-
-    syslog(LOG_ERR, "%s", buf_cstring(&buf));
-    buf_free(&buf);
+    /* xsyslog_ev reports errno as sys.error */
+    errno = saved_errno;
+    xsyslog_ev(LOG_ERR, "db.zeroskip.error",
+               lf_s("error", msg),
+               fmt ? lf_buf("error.description", &detail) : lf_skip());
+    buf_free(&detail);
 
     errno = saved_errno;
 }
@@ -140,19 +139,21 @@ static int checkpoint(struct dbengine *db, int full)
      * to a single file, having merged whatever it could first.  That is partial
      * success rather than corruption, so it must not fail the checkpoint. */
     if (full && zsr == ZS_BADFORMAT) {
-        xsyslog(LOG_INFO, "zeroskip: compact did not reach a single file",
-                "filename=<%s>", db->fname);
+        xsyslog_ev(LOG_INFO, "db.zeroskip.compact.incomplete",
+                   lf_s("sys.path", db->fname));
         zsr = ZS_OK;
     }
 
     int r = _errormap(zsr);
     if (r == CYRUSDB_LOCKED) {
-        xsyslog(LOG_INFO, "zeroskip: repack already locked",
-                "filename=<%s>", db->fname);
+        xsyslog_ev(LOG_INFO, "db.zeroskip.checkpoint.skipped",
+                   lf_s("sys.path", db->fname),
+                   lf_s("db.reason", "locked"));
     }
     else if (r) {
-        xsyslog(LOG_ERR, "zeroskip: failed to checkpoint",
-                "filename=<%s> error=<%s>", db->fname, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "db.zeroskip.checkpoint.failed",
+                   lf_s("sys.path", db->fname),
+                   lf_s("error", cyrusdb_strerror(r)));
     }
     else {
         zs_db_stats(db->db, &after);
@@ -163,11 +164,12 @@ static int checkpoint(struct dbengine *db, int full)
             (after.repack_bytes - before.repack_bytes)
             + (after.convert_bytes - before.convert_bytes);
 
-        syslog(LOG_INFO,
-               "zeroskip: %s %s (%llu record%s, %llu bytes) in %2.3f seconds",
-               full ? "compacted" : "repacked", db->fname,
-               records, records == 1 ? "" : "s", bytes,
-               (sclock() - start) / (double) CLOCKS_PER_SEC);
+        xsyslog_ev(LOG_INFO, "db.zeroskip.checkpointed",
+                   lf_s("sys.path", db->fname),
+                   lf_b("db.compacted", full),
+                   lf_llu("db.records", records),
+                   lf_llu("db.bytes", bytes),
+                   lf_duration("db.duration", (sclock() - start) / (double) CLOCKS_PER_SEC));
     }
     return r;
 }
@@ -187,8 +189,10 @@ static void _delayed_checkpoint(void *rock)
         return;
     }
     else if (r) {
-        syslog(LOG_ERR, "DBERROR: opening %s for checkpoint: %s",
-               drock->fname, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "db.zeroskip.checkpoint.failed",
+                   lf_s("sys.path", drock->fname),
+                   lf_s("db.step", "open"),
+                   lf_s("error", cyrusdb_strerror(r)));
         return;
     }
 
@@ -196,8 +200,9 @@ static void _delayed_checkpoint(void *rock)
         checkpoint(db, 0);
     }
     else {
-        syslog(LOG_INFO, "zeroskip: delayed checkpoint already done %s",
-               drock->fname);
+        xsyslog_ev(LOG_INFO, "db.zeroskip.checkpoint.skipped",
+                   lf_s("sys.path", drock->fname),
+                   lf_s("db.reason", "already_done"));
     }
     myclose(db);
 }
@@ -220,8 +225,9 @@ static int myopen(const char *fname, int flags,
     if (zsr == ZS_IOERROR && (flags & CYRUSDB_CREATE)) {
         int r = cyrus_mkdir(fname, 0755);
         if (r < 0) {
-            xsyslog(LOG_ERR, "IOERROR: zeroskip cyrus_mkdir failed",
-                    "filename=<%s>", fname);
+            xsyslog_ev(LOG_ERR, "db.zeroskip.open.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("db.step", "mkdir"));
             return CYRUSDB_IOERROR;
         }
         zsr = zs_db_open(fname, &setup, &zsdb);
@@ -280,7 +286,8 @@ static int myarchive(const strarray_t *fnames, const char *dirname)
 
         struct stat sbuf;
         if (stat(fname, &sbuf) < 0) {
-            syslog(LOG_DEBUG, "not archiving database file: %s: %m", fname);
+            xsyslog_ev(LOG_DEBUG, "db.archive.skipped",
+                       lf_s("sys.path", fname));
             continue;
         }
 
@@ -289,13 +296,18 @@ static int myarchive(const strarray_t *fnames, const char *dirname)
 
         snprintf(dstpath, sizeof(dstpath), "%s/%s/dummy", dirname, base);
         if (cyrus_mkdir(dstpath, 0755) < 0) {
-            syslog(LOG_ERR, "DBERROR: error creating archive dir for %s", fname);
+            xsyslog_ev(LOG_ERR, "db.archive.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("db.archive.path", dstpath),
+                       lf_s("db.step", "mkdir"));
             return CYRUSDB_IOERROR;
         }
 
         DIR *d = opendir(fname);
         if (!d) {
-            syslog(LOG_ERR, "DBERROR: error opening %s: %m", fname);
+            xsyslog_ev(LOG_ERR, "db.archive.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("db.step", "opendir"));
             return CYRUSDB_IOERROR;
         }
 
@@ -310,10 +322,13 @@ static int myarchive(const strarray_t *fnames, const char *dirname)
             snprintf(dstpath, sizeof(dstpath), "%s/%s/%s",
                      dirname, base, de->d_name);
 
-            syslog(LOG_DEBUG, "archiving database file: %s", srcpath);
+            xsyslog_ev(LOG_DEBUG, "db.archiving",
+                       lf_s("sys.path", srcpath),
+                       lf_s("db.archive.path", dstpath));
             if (cyrusdb_copyfile(srcpath, dstpath)) {
-                syslog(LOG_ERR,
-                       "DBERROR: error archiving database file: %s", srcpath);
+                xsyslog_ev(LOG_ERR, "db.archive.failed",
+                           lf_s("sys.path", srcpath),
+                           lf_s("db.archive.path", dstpath));
                 r = CYRUSDB_IOERROR;
                 break;
             }
