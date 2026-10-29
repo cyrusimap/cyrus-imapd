@@ -409,22 +409,42 @@ master.child            placeholder for "no known child process"; value is alway
 master.child.age        how long ago master spawned a child process, in seconds
 master.child.state      master's record of a child's state: READY, BUSY, DEAD or UNKNOWN
 master.child.type       what master spawned a child as: START, SERVICE, DAEMON or EVENT
+master.children         how many child processes master found
 master.disabled.seconds how long master disables a failing service for
 master.disabled.until   what re-enables a service master disabled: sighup
 master.event            the name of a cyrus.conf EVENTS entry
+master.event.at         an EVENTS entry's at= time, as hhmm
 master.failures         how many times in a row a service has failed
 master.fcntl.flag       the file descriptor flag master tried to change
+master.fds.cur          the file descriptor limit a process gets
+master.fds.max          the most file descriptors a process may have
+master.fds.requested    the file descriptor limit cyrus.conf asked for
+master.interruptions    how many signals in a row interrupted master's select
 master.message          a message a child sent master about its state
+master.prometheus.frequency  how often master writes its prometheus report, in seconds
 master.ready_workers    how many of a service's children are waiting for work
 master.reason           why master disabled, ignored or refused something
+master.reconfig         1 if a cyrus.conf entry replaces one master already had
 master.respawn          1 if master is restarting a waitdaemon rather than starting it
 master.service          the name of a cyrus.conf SERVICES or DAEMON entry
+master.service.cmd      a cyrus.conf entry's command line
 master.service.family   the address family a service listens on: ipv4, ipv6, unix or daemon
 master.service.listen   a service's listen= address
+master.service.pipe.read  the read end of a service's status pipe
+master.service.pipe.write  the write end of a service's status pipe
 master.service.proto    a service's proto= setting
+master.service.socket   a service's listening socket descriptor
+master.services         how many service structures are in use
+master.services.allocated  how many service structures are allocated
+master.services.max     the most service structures master will allocate
 master.sighup.age       how long ago master asked a child to restart, in seconds
 master.sockopt          the socket option master tried to set
 master.step             which step of a master operation is being logged
+master.wait.status      a raw wait() status master couldn't decode
+master.waitdaemons      how many waitdaemon structures are in use
+master.waitdaemons.allocated  how many waitdaemon structures are allocated
+master.workers.desired  how many waiting children a service should have
+master.workers.max      the most children a service may have
 mboxlist.key            a raw mailboxes.db key
 mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
