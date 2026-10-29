@@ -99,7 +99,7 @@ sub check_sorted
 
 my @sources;
 find(sub {
-    return unless -f && /\.[ch]$/;
+    return unless -f && /\.(?:[ch]|cpp)$/;
     push @sources, $File::Find::name;
 }, grep { -d } map { "$srcdir/$_" } @scan);
 

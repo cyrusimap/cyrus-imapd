@@ -58,7 +58,7 @@ xsyslog_ev(LOG_ERR, "mailbox.append.failed",
 ```
 
 This is the direct replacement for `syslog()` and `xsyslog()`, and it's what
-the bulk of the conversion produces.
+the bulk of the conversion produces.  It works in C++ too.
 
 `xsyslog_ev()` adds some fields for you:
 
