@@ -507,6 +507,8 @@ pop.subfolder           the subfolder a POP session was restricted to
 proxy.server            the backend server a request was proxied to
 pts.domain              a domain the PTS module looked an identity up in
 pts.domain.parent       the domain an alias domain resolves to
+pts.expire.age          how old a PTS cache entry must be for ptexpire to remove it, in seconds
+pts.found               1 if a PTS cache entry was there to remove
 pts.id                  an identity as given to the PTS module, before canonicalisation
 pts.ldap.attribute      an LDAP attribute the PTS module reads
 pts.ldap.base           the base DN of an LDAP search
@@ -518,8 +520,11 @@ pts.ldap.uri            the LDAP server URI
 pts.ldap.value          the value the PTS module tried to give an LDAP option
 pts.ldap.version        the LDAP protocol version
 pts.lookup              which kind of PTS lookup is being logged: groups for group membership
+pts.module              which PTS module logged: ldap, http or afskrb
 pts.reason              why a PTS operation failed or was refused
+pts.size                the size of a PTS request, in bytes
 pts.step                which step of a PTS operation is being logged
+pts.time                the current time, as the PTS code compared it
 quota.root              the quota root a quota applies to
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
 sasl.result             a SASL result code
@@ -770,6 +775,7 @@ sys.path                a filesystem path
 sys.pid                 a process id
 sys.signal              a signal number
 sys.signal.name         the name of the signal in sys.signal
+sys.version             a program's version
 
 ### caller. - where in the C source the event was logged
 
