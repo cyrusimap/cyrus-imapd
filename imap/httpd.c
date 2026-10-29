@@ -2236,6 +2236,9 @@ static int http1_input(struct transaction_t *txn)
         }
     }
 
+    /* After a WebSocket upgrade, each frame sets its own trace id */
+    if (txn->ws_ctx) trace_set_id(NULL, 0);
+
     return 0;
 }
 

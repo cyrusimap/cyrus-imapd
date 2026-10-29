@@ -1537,6 +1537,17 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
     }
     else {
         const char *type = json_string_value(json_object_get(req, "@type"));
+        json_t *jhdrs = json_object_get(req, "logHeaders");
+        const char *hdrname;
+        json_t *jval;
+
+        /* Each frame is its own request, with its own trace id */
+        json_object_foreach(jhdrs, hdrname, jval) {
+            if (!strcasecmp(hdrname, "X-Trace-Id")) {
+                trace_set_id(json_string_value(jval), 0);
+                break;
+            }
+        }
 
         if (!strcmpsafe(type, "Request")) {
             /* Process the API request */

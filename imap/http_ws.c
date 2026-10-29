@@ -541,6 +541,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 
     xsyslog(LOG_INFO, buf_cstring(&ctx->log), NULL);
 
+    /* A trace id set while processing the frame belongs to it alone */
+    trace_set_id(NULL, 0);
+
     buf_free(&inbuf);
     buf_free(&outbuf);
 }
