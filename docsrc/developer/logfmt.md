@@ -197,7 +197,7 @@ The registered namespaces:
 | `http.`, `jmap.`, `dav.`           | those protocols                                                   |
 | `error`                            | why the operation failed (bare, no prefix — it's universal)       |
 
-Two structural prefixes stack on top of the above:
+These structural prefixes stack on top of the above:
 
 - **`old.`** — the value before a change: `old.mbox.name`, `old.msg.sysflags`.
   Always paired with the unprefixed key carrying the new value.
@@ -206,6 +206,10 @@ Two structural prefixes stack on top of the above:
 - **`other.`** — the second mailbox in an event about two of them, such as a
   clash: `mbox.uniqueid` is the one being written, `other.mbox.uniqueid` the
   one already there.
+- **`replica.`** — the replica's copy of a value, in a replication event that
+  compares the two ends: `mbox.highestmodseq` is the master's,
+  `replica.mbox.highestmodseq` the replica's.  This holds whichever end logged
+  the event, so a reader never needs to know which process it came from.
 
 Rules:
 

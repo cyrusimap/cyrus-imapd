@@ -3146,7 +3146,9 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
 
         r = parse_upload(ki, mailbox, &mrecord, &mannots);
         if (r) {
-            xsyslog(LOG_ERR, "SYNCERROR: failed to parse uploaded record", NULL);
+            xsyslog_ev(LOG_ERR, "sync.record.parse.failed",
+                       lf_mailbox(mailbox),
+                       lf_err("error", r));
             return IMAP_PROTOCOL_ERROR;
         }
 
@@ -3169,28 +3171,30 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             /* GUID mismatch is an error straight away, it only ever happens if we
              * had a split brain - and it will take a full sync to sort out the mess */
             if (!message_guid_equal(&mrecord.guid, &rrecord->guid)) {
-                xsyslog(LOG_ERR, "SYNCERROR: guid mismatch",
-                                 "mailbox=<%s> uid=<%u>",
-                                 mailbox_name(mailbox), mrecord.uid);
+                char *mguid = xstrdup(message_guid_encode(&mrecord.guid));
+                xsyslog_ev(LOG_ERR, "sync.record.guid.mismatch",
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", mrecord.uid),
+                           lf_s("msg.guid", mguid),
+                           lf_s("replica.msg.guid",
+                                message_guid_encode(&rrecord->guid)));
+                free(mguid);
                 r = IMAP_SYNC_CHECKSUM;
                 goto out;
             }
 
             /* higher modseq on the replica is an error */
             if (rrecord->modseq > mrecord.modseq) {
-                if (opt_force) {
-                    if (doupdate)
-                        syslog(LOG_NOTICE, "forcesync: higher modseq on replica %s %u "
-                               "(" MODSEQ_FMT " > " MODSEQ_FMT ")",
-                               mailbox_name(mailbox), mrecord.uid, rrecord->modseq, mrecord.modseq);
+                if (!opt_force || doupdate) {
+                    xsyslog_ev(opt_force ? LOG_NOTICE : LOG_WARNING,
+                               "sync.record.replica_ahead",
+                               lf_mailbox(mailbox),
+                               lf_u("msg.imapuid", mrecord.uid),
+                               lf_llu("msg.modseq", mrecord.modseq),
+                               lf_llu("replica.msg.modseq", rrecord->modseq),
+                               lf_flag("sync.forced", opt_force));
                 }
-                else {
-                    xsyslog(LOG_ERR, "SYNCERROR: higher modseq on replica",
-                                     "mailbox=<%s> uid=<%u>"
-                                        " replicamodseq=<" MODSEQ_FMT ">"
-                                        " mastermodseq=<" MODSEQ_FMT ">",
-                                     mailbox_name(mailbox), mrecord.uid,
-                                     rrecord->modseq, mrecord.modseq);
+                if (!opt_force) {
                     r = IMAP_SYNC_CHECKSUM;
                     goto out;
                 }
@@ -3200,9 +3204,9 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
              * that's bad */
             if (!(mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED) &&
                 (rrecord->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-                xsyslog(LOG_ERR, "SYNCERROR: expunged on replica",
-                                 "mailbox=<%s> uid=<%u>",
-                                 mailbox_name(mailbox), mrecord.uid);
+                xsyslog_ev(LOG_ERR, "sync.record.replica_expunged",
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", mrecord.uid));
                 r = IMAP_SYNC_CHECKSUM;
                 goto out;
             }
@@ -3236,22 +3240,22 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             r = read_annotations(mailbox, &copy, &rannots, rrecord->modseq,
                                  /*XXX ANNOTATE_TOMBSTONES*/0);
             if (r) {
-                xsyslog(LOG_ERR, "SYNCERROR: failed to read local annotations",
-                                 "mailbox=<%s> recno=<%u> error=<%s>",
-                                 mailbox_name(mailbox),
-                                 rrecord->recno,
-                                 error_message(r));
+                xsyslog_ev(LOG_ERR, "sync.annotations.read.failed",
+                           lf_mailbox(mailbox),
+                           lf_u("mbox.recno", rrecord->recno),
+                           lf_u("msg.imapuid", rrecord->uid),
+                           lf_err("error", r));
                 goto out;
             }
 
             int hadsnoozed = 0;
             r = apply_annotations(mailbox, &copy, rannots, mannots, 0, &hadsnoozed);
             if (r) {
-                xsyslog(LOG_ERR, "SYNCERROR: failed to write merged annotations",
-                                 "mailbox=<%s> recno=<%u> error=<%s>",
-                                 mailbox_name(mailbox),
-                                 rrecord->recno,
-                                 error_message(r));
+                xsyslog_ev(LOG_ERR, "sync.annotations.apply.failed",
+                           lf_mailbox(mailbox),
+                           lf_u("mbox.recno", rrecord->recno),
+                           lf_u("msg.imapuid", rrecord->uid),
+                           lf_err("error", r));
                 goto out;
             }
 
@@ -3261,9 +3265,11 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.ignorelimits = 1;
             r = mailbox_rewrite_index_record(mailbox, &copy);
             if (r) {
-                xsyslog(LOG_ERR, "IOERROR: rewrite record failed",
-                                 "mboxname=<%s> recno=<%u>",
-                                 mailbox_name(mailbox), rrecord->recno);
+                xsyslog_ev(LOG_ERR, "sync.record.rewrite.failed",
+                           lf_mailbox(mailbox),
+                           lf_u("mbox.recno", rrecord->recno),
+                           lf_u("msg.imapuid", rrecord->uid),
+                           lf_err("error", r));
                 goto out;
             }
         }
@@ -3272,11 +3278,10 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
         else if (mrecord.uid <= mailbox->i.last_uid) {
             /* Expunged, just skip it */
             if (!(mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-                xsyslog(LOG_ERR, "SYNCERROR: not found and less than LAST_UID, bogus",
-                                 "mailbox=<%s> uid=<%u> last_uid=<%u>",
-                                 mailbox_name(mailbox),
-                                 mrecord.uid,
-                                 mailbox->i.last_uid);
+                xsyslog_ev(LOG_ERR, "sync.record.replica_missing",
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", mrecord.uid),
+                           lf_u("replica.mbox.last_uid", mailbox->i.last_uid));
                 r = IMAP_SYNC_CHECKSUM;
                 goto out;
             }
@@ -3300,9 +3305,10 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             mrecord.silentupdate = 1;
             r = sync_append_copyfile(mailbox, &mrecord, mannots, partition_list);
             if (r) {
-                xsyslog(LOG_ERR, "IOERROR: append file failed",
-                                 "mboxname=<%s> uid=<%d>",
-                                 mailbox_name(mailbox), mrecord.uid);
+                xsyslog_ev(LOG_ERR, "sync.record.append.failed",
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", mrecord.uid),
+                           lf_err("error", r));
                 goto out;
             }
 
@@ -3472,9 +3478,10 @@ static int sync_apply_mailbox(struct dlist *kin,
         // if they have the same name it's probably an intermediate being
         // promoted.  Intermediates, the gift that keeps on giving.
         if (oldname && strcmp(oldname, mboxname)) {
-            xsyslog(LOG_ERR, "SYNCNOTICE: mailbox uniqueid already in use",
-                             "mailbox=<%s> uniqueid=<%s> usedby=<%s>",
-                             mboxname, uniqueid, oldname);
+            xsyslog_ev(LOG_ERR, "sync.mailbox.uniqueid.in_use",
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("mbox.uniqueid", uniqueid),
+                       lf_intname("other.mbox.name", oldname));
             free(oldname);
             r = IMAP_SYNC_WRONG_MAILBOX;
         }
@@ -3522,7 +3529,8 @@ static int sync_apply_mailbox(struct dlist *kin,
                     r2 = 0;
                 }
                 if (r2) {
-                    syslog(LOG_ERR, "Failed to create %s:%m", sieve_path);
+                    xsyslog_ev(LOG_ERR, "sync.sieve.dir.create.failed",
+                               lf_s("sys.path", sieve_path));
                     r = IMAP_IOERROR;
                 }
             }
@@ -3532,9 +3540,11 @@ static int sync_apply_mailbox(struct dlist *kin,
 
     if (!r && strcmpsafe(mailbox_uniqueid(mailbox), uniqueid)) {
         if (opt_force || mailbox->i.last_uid == 0) {
-            xsyslog(LOG_NOTICE, "SYNCNOTICE: mailbox uniqueid changed - replacing",
-                                "mailbox=<%s> origuniqueid=<%s> newuniqueid=<%s>",
-                                mboxname, mailbox_uniqueid(mailbox), uniqueid);
+            xsyslog_ev(LOG_NOTICE, "sync.mailbox.uniqueid.replaced",
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("mbox.uniqueid", uniqueid),
+                       lf_s("replica.mbox.uniqueid", mailbox_uniqueid(mailbox)),
+                       lf_flag("sync.forced", opt_force));
             mailbox_close(&mailbox);
             int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT;
             if (sstate->flags & SYNC_FLAG_LOCALONLY)
@@ -3568,16 +3578,19 @@ static int sync_apply_mailbox(struct dlist *kin,
             if (!r) mailbox->i.highestmodseq = 0;
         }
         else {
-            xsyslog(LOG_ERR, "SYNCERROR: mailbox uniqueid changed - retry",
-                             "mailbox=<%s> origuniqueid=<%s> newuniqueid=<%s>",
-                             mboxname, mailbox_uniqueid(mailbox), uniqueid);
+            xsyslog_ev(LOG_ERR, "sync.mailbox.uniqueid.mismatch",
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("mbox.uniqueid", uniqueid),
+                       lf_s("replica.mbox.uniqueid", mailbox_uniqueid(mailbox)));
             r = IMAP_SYNC_WRONG_MAILBOX;
             goto done;
         }
     }
     if (r) {
-        syslog(LOG_ERR, "Failed to open mailbox %s to update: %s",
-               mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "sync.mailbox.open.failed",
+                   lf_s("sync.command", "MAILBOX"),
+                   lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -3586,24 +3599,28 @@ static int sync_apply_mailbox(struct dlist *kin,
         struct synccrcs mycrcs = mailbox_synccrcs(mailbox, 0);
         if (since_modseq != mailbox->i.highestmodseq ||
             !mailbox_crceq(since_crcs, mycrcs)) {
-            xsyslog(LOG_ERR, "SYNCNOTICE: mailbox sync mismatch",
-                             "mailbox=<%s>"
-                                " hms_master=<" MODSEQ_FMT ">"
-                                " hms_replica=<" MODSEQ_FMT ">"
-                                " crcs_master=<%u/%u>"
-                                " crcs_replica=<%u/%u>",
-                             mailbox_name(mailbox),
-                             since_modseq,
-                             mailbox->i.highestmodseq,
-                             since_crcs.basic, since_crcs.annot,
-                             mycrcs.basic, mycrcs.annot);
+            xsyslog_ev(LOG_ERR, "sync.mailbox.since.mismatch",
+                       lf_mailbox(mailbox),
+                       lf_llu("mbox.highestmodseq", since_modseq),
+                       lf_llu("replica.mbox.highestmodseq",
+                              mailbox->i.highestmodseq),
+                       lf_u("mbox.crcs.basic", since_crcs.basic),
+                       lf_u("replica.mbox.crcs.basic", mycrcs.basic),
+                       lf_u("mbox.crcs.annot", since_crcs.annot),
+                       lf_u("replica.mbox.crcs.annot", mycrcs.annot));
             r = IMAP_SYNC_CHANGED;
             goto done;
         }
     }
 
     if ((mbtypes_sync(mailbox_mbtype(mailbox))) != mbtype) {
-        syslog(LOG_ERR, "INVALID MAILBOX TYPE %s (%d, %d)", mailbox_name(mailbox), mailbox_mbtype(mailbox), mbtype);
+        char *mtype = xstrdup(mboxlist_mbtype_to_string(mbtype));
+        xsyslog_ev(LOG_ERR, "sync.mailbox.type.mismatch",
+                   lf_mailbox(mailbox),
+                   lf_s("mbox.type", mtype),
+                   lf_s("replica.mbox.type",
+                        mboxlist_mbtype_to_string(mailbox_mbtype(mailbox))));
+        free(mtype);
         /* is this even possible? */
         r = IMAP_MAILBOX_BADTYPE;
         goto done;
@@ -3618,17 +3635,19 @@ static int sync_apply_mailbox(struct dlist *kin,
     /* and make it hold a transaction open */
     annotate_state_begin(astate);
 
+    /* The master answers IMAP_SYNC_CHECKSUM with a full update, so the
+     * replica_ahead refusals here are recoverable. */
     /* skip out now, it's going to mismatch for sure! */
     if (highestmodseq < mailbox->i.highestmodseq) {
-        if (opt_force) {
-            syslog(LOG_NOTICE, "forcesync: higher modseq on replica %s - "
-                   MODSEQ_FMT " < " MODSEQ_FMT,
-                   mboxname, highestmodseq, mailbox->i.highestmodseq);
-        }
-        else {
-            syslog(LOG_ERR, "higher modseq on replica %s - "
-                   MODSEQ_FMT " < " MODSEQ_FMT,
-                   mboxname, highestmodseq, mailbox->i.highestmodseq);
+        xsyslog_ev(opt_force ? LOG_NOTICE : LOG_WARNING,
+                   "sync.mailbox.replica_ahead",
+                   lf_mailbox(mailbox),
+                   lf_s("sync.field", "highestmodseq"),
+                   lf_llu("mbox.highestmodseq", highestmodseq),
+                   lf_llu("replica.mbox.highestmodseq",
+                          mailbox->i.highestmodseq),
+                   lf_flag("sync.forced", opt_force));
+        if (!opt_force) {
             r = IMAP_SYNC_CHECKSUM;
             goto done;
         }
@@ -3636,13 +3655,14 @@ static int sync_apply_mailbox(struct dlist *kin,
 
     /* skip out now, it's going to mismatch for sure! */
     if (uidvalidity < mailbox->i.uidvalidity) {
-        if (opt_force) {
-            syslog(LOG_NOTICE, "forcesync: higher uidvalidity on replica %s - %u < %u",
-                   mboxname, uidvalidity, mailbox->i.uidvalidity);
-        }
-        else {
-            syslog(LOG_ERR, "higher uidvalidity on replica %s - %u < %u",
-                   mboxname, uidvalidity, mailbox->i.uidvalidity);
+        xsyslog_ev(opt_force ? LOG_NOTICE : LOG_WARNING,
+                   "sync.mailbox.replica_ahead",
+                   lf_mailbox(mailbox),
+                   lf_s("sync.field", "uidvalidity"),
+                   lf_u("mbox.uidvalidity", uidvalidity),
+                   lf_u("replica.mbox.uidvalidity", mailbox->i.uidvalidity),
+                   lf_flag("sync.forced", opt_force));
+        if (!opt_force) {
             r = IMAP_SYNC_CHECKSUM;
             goto done;
         }
@@ -3650,13 +3670,14 @@ static int sync_apply_mailbox(struct dlist *kin,
 
     /* skip out now, it's going to mismatch for sure! */
     if (last_uid < mailbox->i.last_uid) {
-        if (opt_force) {
-            syslog(LOG_NOTICE, "forcesync: higher last_uid on replica %s - %u < %u",
-                   mboxname, last_uid, mailbox->i.last_uid);
-        }
-        else {
-            syslog(LOG_ERR, "higher last_uid on replica %s - %u < %u",
-                   mboxname, last_uid, mailbox->i.last_uid);
+        xsyslog_ev(opt_force ? LOG_NOTICE : LOG_WARNING,
+                   "sync.mailbox.replica_ahead",
+                   lf_mailbox(mailbox),
+                   lf_s("sync.field", "last_uid"),
+                   lf_u("mbox.last_uid", last_uid),
+                   lf_u("replica.mbox.last_uid", mailbox->i.last_uid),
+                   lf_flag("sync.forced", opt_force));
+        if (!opt_force) {
             r = IMAP_SYNC_CHECKSUM;
             goto done;
         }
@@ -3665,10 +3686,12 @@ static int sync_apply_mailbox(struct dlist *kin,
     /* skip out now, it's going to mismatch for sure! */
     /* 0 is the default case, and should always be overwritten with the real value */
     if (createdmodseq > mailbox->i.createdmodseq && mailbox->i.createdmodseq != 0) {
-        xsyslog(LOG_NOTICE, "SYNCNOTICE: lower createdmodseq on replica",
-                            "mailbox=<%s> createdmodseq=<" MODSEQ_FMT ">"
-                                " replica_createdmodseq=<" MODSEQ_FMT ">",
-                            mboxname, createdmodseq, mailbox->i.createdmodseq);
+        xsyslog_ev(LOG_NOTICE, "sync.mailbox.replica_behind",
+                   lf_mailbox(mailbox),
+                   lf_s("sync.field", "createdmodseq"),
+                   lf_llu("mbox.createdmodseq", createdmodseq),
+                   lf_llu("replica.mbox.createdmodseq",
+                          mailbox->i.createdmodseq));
     }
 
     /* NOTE - this is optional */
@@ -3677,8 +3700,9 @@ static int sync_apply_mailbox(struct dlist *kin,
 
         r = mailbox_get_xconvmodseq(mailbox, &ourxconvmodseq);
         if (r) {
-            syslog(LOG_ERR, "Failed to read xconvmodseq for %s: %s",
-                   mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "sync.mailbox.xconvmodseq.read.failed",
+                       lf_mailbox(mailbox),
+                       lf_err("error", r));
             goto done;
         }
 
@@ -3688,16 +3712,14 @@ static int sync_apply_mailbox(struct dlist *kin,
 
         /* skip out now, it's going to mismatch for sure! */
         if (xconvmodseq < ourxconvmodseq) {
-            if (opt_force) {
-                syslog(LOG_NOTICE,
-                       "forcesync: higher xconvmodseq on replica %s - "
-                       MODSEQ_FMT " < " MODSEQ_FMT,
-                       mboxname, xconvmodseq, ourxconvmodseq);
-            }
-            else {
-                syslog(LOG_ERR, "higher xconvmodseq on replica %s - "
-                       MODSEQ_FMT " < " MODSEQ_FMT,
-                       mboxname, xconvmodseq, ourxconvmodseq);
+            xsyslog_ev(opt_force ? LOG_NOTICE : LOG_WARNING,
+                       "sync.mailbox.replica_ahead",
+                       lf_mailbox(mailbox),
+                       lf_s("sync.field", "xconvmodseq"),
+                       lf_llu("mbox.xconvmodseq", xconvmodseq),
+                       lf_llu("replica.mbox.xconvmodseq", ourxconvmodseq),
+                       lf_flag("sync.forced", opt_force));
+            if (!opt_force) {
                 r = IMAP_SYNC_CHECKSUM;
                 goto done;
             }
@@ -3782,9 +3804,9 @@ static int sync_apply_mailbox(struct dlist *kin,
     if (!r) r = apply_annotations(mailbox, NULL, rannots, mannots, 0, NULL);
 
     if (r) {
-        xsyslog(LOG_ERR, "SYNCERROR: annotations failed to apply",
-                         "mailbox=<%s>",
-                          mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "sync.annotations.apply.failed",
+                   lf_mailbox(mailbox),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -3799,11 +3821,10 @@ static int sync_apply_mailbox(struct dlist *kin,
 
             r = mailbox_user_flag(mailbox, userflag, NULL, /*allow all*/2);
             if (r) {
-                xsyslog(LOG_ERR, "syncerror: unable to add userflag",
-                                 "mailbox=<%s> userflag=<%s> error=<%s>",
-                                 mailbox_name(mailbox),
-                                 userflag,
-                                 error_message(r));
+                xsyslog_ev(LOG_ERR, "sync.flag.record.failed",
+                           lf_mailbox(mailbox),
+                           lf_s("msg.flag", userflag),
+                           lf_err("error", r));
             }
         }
     }
@@ -3811,9 +3832,9 @@ static int sync_apply_mailbox(struct dlist *kin,
     r = sync_mailbox_compare_update(mailbox, kr, 1, partition_list);
     if (r) {
         /* SHOULD never happen */
-        xsyslog(LOG_ERR, "SYNCERROR: mailbox compare update failed",
-                         "mailbox=<%s> error=<%s>",
-                         mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "sync.mailbox.update.failed",
+                   lf_mailbox(mailbox),
+                   lf_err("error", r));
         abort();
         return r;
     }
@@ -3850,8 +3871,10 @@ static int sync_apply_mailbox(struct dlist *kin,
 
     /* this happens rarely, so let us know */
     if (mailbox->i.uidvalidity != uidvalidity) {
-        syslog(LOG_NOTICE, "%s uidvalidity changed, updating %u => %u",
-               mailbox_name(mailbox), mailbox->i.uidvalidity, uidvalidity);
+        xsyslog_ev(LOG_NOTICE, "sync.mailbox.uidvalidity.changed",
+                   lf_mailbox(mailbox),
+                   lf_u("mbox.uidvalidity", uidvalidity),
+                   lf_u("old.mbox.uidvalidity", mailbox->i.uidvalidity));
         /* make sure nothing new gets created with a lower value */
         mailbox->i.uidvalidity = mboxname_setuidvalidity(mailbox_name(mailbox), uidvalidity);
     }
@@ -3874,10 +3897,14 @@ done:
     if (!r && !mailbox_crceq(synccrcs, mailbox_synccrcs(mailbox, 0))) {
         /* try forcing a recalculation */
         if (!mailbox_crceq(synccrcs, mailbox_synccrcs(mailbox, 1))) {
-            xsyslog(LOG_NOTICE, "SYNCNOTICE: CRC error after apply",
-                            "mailbox=<%s> crcs_master=<%u/%u> crcs_replica=<%u/%u>",
-                            mailbox_name(mailbox), synccrcs.basic, synccrcs.annot,
-                            mailbox->i.synccrcs.basic, mailbox->i.synccrcs.annot);
+            xsyslog_ev(LOG_NOTICE, "sync.mailbox.crc.mismatch",
+                       lf_mailbox(mailbox),
+                       lf_u("mbox.crcs.basic", synccrcs.basic),
+                       lf_u("replica.mbox.crcs.basic",
+                            mailbox->i.synccrcs.basic),
+                       lf_u("mbox.crcs.annot", synccrcs.annot),
+                       lf_u("replica.mbox.crcs.annot",
+                            mailbox->i.synccrcs.annot));
             r = IMAP_SYNC_CHECKSUM;
         }
     }
@@ -4209,8 +4236,10 @@ static char *sync_sieve_read(const char *userid, const char *name, uint32_t *siz
 
             r = mailbox_open_irl(mboxname, &mailbox);
             if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
-                       mboxname, error_message(r));
+                xsyslog_ev(LOG_ERR, "sync.sieve.mailbox.open.failed",
+                           lf_s("u.username", userid),
+                           lf_intname("mbox.name", mboxname),
+                           lf_err("error", r));
             }
             else {
                 r = sieve_script_fetch(mailbox, sdata, &content);
@@ -4254,7 +4283,8 @@ static int sync_sieve_upload(const char *userid, const char *fname,
     if (stat(sieve_path, &sbuf) == -1 && errno == ENOENT) {
         if (cyrus_mkdir(sieve_path, 0755) == -1) return IMAP_IOERROR;
         if (mkdir(sieve_path, 0755) == -1 && errno != EEXIST) {
-            syslog(LOG_ERR, "Failed to create %s:%m", sieve_path);
+            xsyslog_ev(LOG_ERR, "sync.sieve.dir.create.failed",
+                       lf_s("sys.path", sieve_path));
             return IMAP_IOERROR;
         }
     }
@@ -4262,14 +4292,17 @@ static int sync_sieve_upload(const char *userid, const char *fname,
     user_nslock = user_nslock_lock_w(userid);
     db = sievedb_open_userid(userid);
     if (!db) {
-        syslog(LOG_ERR, "Failed to open Sieve DB for %s", userid);
+        xsyslog_ev(LOG_ERR, "sync.sieve.db.open.failed",
+                   lf_s("u.username", userid));
         r = IMAP_INTERNAL;
         goto done;
     }
 
     r = sieve_ensure_folder(userid, &mailbox, /*silent*/1);
     if (r) {
-        syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
+        xsyslog_ev(LOG_ERR, "sync.sieve.mailbox.open.failed",
+                   lf_s("u.username", userid),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -4279,7 +4312,10 @@ static int sync_sieve_upload(const char *userid, const char *fname,
         sdata->name = name;
     }
     else if (r) {
-        syslog(LOG_ERR, "Failed to lookup script %s for %s", name, userid);
+        xsyslog_ev(LOG_ERR, "sync.sieve.script.lookup.failed",
+                   lf_s("u.username", userid),
+                   lf_s("sieve.script", name),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -4503,11 +4539,12 @@ static int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
         if (strcmpsafe(mbentry->uniqueid, uniqueid) ||
             (uidvalidity && mbentry->uidvalidity &&
              mbentry->uidvalidity != uidvalidity)) {
-            xsyslog(LOG_ERR, "SYNCERROR: refusing to UNMAILBOX a different mailbox",
-                             "mailbox=<%s> uniqueid=<%s> uidvalidity=<%u>"
-                             " wanted_uniqueid=<%s> wanted_uidvalidity=<%u>",
-                             mboxname, mbentry->uniqueid, mbentry->uidvalidity,
-                             uniqueid, uidvalidity);
+            xsyslog_ev(LOG_ERR, "sync.unmailbox.refused",
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("mbox.uniqueid", uniqueid),
+                       lf_u("mbox.uidvalidity", uidvalidity),
+                       lf_s("replica.mbox.uniqueid", mbentry->uniqueid),
+                       lf_u("replica.mbox.uidvalidity", mbentry->uidvalidity));
             r = IMAP_SYNC_WRONG_MAILBOX;
             goto done;
         }
@@ -4597,20 +4634,25 @@ static int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
 
 done:
     if (r) {
-        xsyslog(LOG_NOTICE, "rename failed",
-                "oldmboxname=<%s> newmboxname=<%s> error=<%s>",
-                oldmboxname, newmboxname, error_message(r));
+        xsyslog_ev(LOG_NOTICE, "sync.rename.failed",
+                   lf_intname("old.mbox.name", oldmboxname),
+                   lf_intname("mbox.name", newmboxname),
+                   lf_err("error", r));
         // ensure the mboxlist entry gets fixed up or removed
         if (olddestmbentry) {
             int r2 = mboxlist_update_full(olddestmbentry, /*localonly*/1, /*silent*/1);
             if (r2)
-                xsyslog(LOG_ERR, "IOERROR: replacing old destination tombstone after rename error",
-                        "mboxname=<%s> error=<%s>", olddestmbentry->name, error_message(r2));
+                xsyslog_ev(LOG_ERR, "sync.rename.cleanup.failed",
+                           lf_s("sync.step", "restore_tombstone"),
+                           lf_intname("mbox.name", olddestmbentry->name),
+                           lf_err("error", r2));
         } else if (newdestmbentry) {
             int r2 = mboxlist_delete(newdestmbentry);
             if (r2)
-                xsyslog(LOG_ERR, "IOERROR: removing temporary uniqueid tombstone after rename error",
-                        "mboxname=<%s> error=<%s>", newdestmbentry->name, error_message(r2));
+                xsyslog_ev(LOG_ERR, "sync.rename.cleanup.failed",
+                           lf_s("sync.step", "remove_tombstone"),
+                           lf_intname("mbox.name", newdestmbentry->name),
+                           lf_err("error", r2));
         }
     }
     mboxlist_entry_free(&mbentry);
@@ -4872,8 +4914,9 @@ static int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
 
     /* nothing to do if there's no userid */
     if (!userid || !userid[0]) {
-        xsyslog(LOG_WARNING, "ignoring attempt to sync_apply_unuser() without userid",
-                             NULL);
+        xsyslog_ev(LOG_WARNING, "sync.command.invalid",
+                   lf_s("sync.command", "UNUSER"),
+                   lf_s("sync.reason", "missing_userid"));
         return 0;
     }
 
@@ -4939,11 +4982,11 @@ static int sync_apply_force(struct dlist *kin __attribute__((unused)),
                             struct sync_state *sstate __attribute__((unused)))
 {
     if (opt_force) {
-        syslog(LOG_NOTICE, "SYNCNOTICE: force already enabled");
+        xsyslog_ev(LOG_NOTICE, "sync.force.unchanged");
     }
     else {
         opt_force = 1;
-        syslog(LOG_NOTICE, "SYNCNOTICE: enabling force mode");
+        xsyslog_ev(LOG_NOTICE, "sync.force.enabled");
     }
 
     return 0;
@@ -5171,7 +5214,9 @@ static int sync_restore_mailbox(struct dlist *kin,
     int r;
 
     if (!dlist_getatom(kin, "MBOXNAME", &mboxname)) {
-        syslog(LOG_DEBUG, "%s: missing MBOXNAME", __func__);
+        xsyslog_ev(LOG_DEBUG, "sync.command.invalid",
+                   lf_s("sync.command", "RESTORE"),
+                   lf_s("sync.reason", "missing_mboxname"));
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
 
@@ -5218,8 +5263,10 @@ static int sync_restore_mailbox(struct dlist *kin,
     /* open/create mailbox */
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
-    syslog(LOG_DEBUG, "%s: mailbox_open_iwl %s: %s",
-           __func__, mboxname, error_message(r));
+    xsyslog_ev(LOG_DEBUG, "sync.restore.step",
+               lf_s("sync.step", "open"),
+               lf_intname("mbox.name", mboxname),
+               lf_s_opt("error", r ? error_message(r) : NULL));
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         dlist_getatom(kin, "UNIQUEID", &uniqueid);
         dlist_getnum64(kin, "HIGHESTMODSEQ", &highestmodseq);
@@ -5259,15 +5306,19 @@ static int sync_restore_mailbox(struct dlist *kin,
                                                1/*isadmin*/,
                                                sstate->userid, sstate->authstate,
                                                flags, &mailbox);
-            syslog(LOG_DEBUG, "%s: mboxlist_createmailbox %s: %s",
-                __func__, mboxname, error_message(r));
+            xsyslog_ev(LOG_DEBUG, "sync.restore.step",
+                       lf_s("sync.step", "create"),
+                       lf_intname("mbox.name", mboxname),
+                       lf_s_opt("error", r ? error_message(r) : NULL));
             is_new_mailbox = 1;
         }
         user_nslock_release(&user_nslock);
     }
     if (r) {
-        syslog(LOG_ERR, "Failed to open mailbox %s to restore: %s",
-               mboxname, error_message(r));
+        xsyslog_ev(LOG_ERR, "sync.mailbox.open.failed",
+                   lf_s("sync.command", "RESTORE"),
+                   lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
         return r;
     }
 
@@ -5279,8 +5330,14 @@ static int sync_restore_mailbox(struct dlist *kin,
 
     /* make sure mailbox types match */
     if (mbtypes_sync(mailbox_mbtype(mailbox)) != mbtype) {
-        syslog(LOG_ERR, "restore mailbox %s: mbtype mismatch (%d, %d)",
-               mailbox_name(mailbox), mailbox_mbtype(mailbox), mbtype);
+        char *mtype = xstrdup(mboxlist_mbtype_to_string(mbtype));
+        xsyslog_ev(LOG_ERR, "sync.mailbox.type.mismatch",
+                   lf_s("sync.command", "RESTORE"),
+                   lf_mailbox(mailbox),
+                   lf_s("mbox.type", mtype),
+                   lf_s("replica.mbox.type",
+                        mboxlist_mbtype_to_string(mailbox_mbtype(mailbox))));
+        free(mtype);
         r = IMAP_MAILBOX_BADTYPE;
         goto bail;
     }
@@ -5289,8 +5346,10 @@ static int sync_restore_mailbox(struct dlist *kin,
 
     /* hold the annotate state open */
     r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
-    syslog(LOG_DEBUG, "%s: mailbox_get_annotate_state %s: %s",
-        __func__, mailbox_name(mailbox), error_message(r));
+    xsyslog_ev(LOG_DEBUG, "sync.restore.step",
+               lf_s("sync.step", "annotate_state"),
+               lf_mailbox(mailbox),
+               lf_s_opt("error", r ? error_message(r) : NULL));
     if (r) goto bail;
 
     /* and make it hold a transaction open */
@@ -5311,9 +5370,10 @@ static int sync_restore_mailbox(struct dlist *kin,
                                       mailbox_annots, restore_annots,
                                       !is_new_mailbox, NULL);
         if (r)
-            syslog(LOG_WARNING,
-                   "restore mailbox %s: unable to apply mailbox annotations: %s",
-                   mailbox_name(mailbox), error_message(r));
+            xsyslog_ev(LOG_WARNING, "sync.annotations.apply.failed",
+                       lf_s("sync.command", "RESTORE"),
+                       lf_mailbox(mailbox),
+                       lf_err("error", r));
 
         /* keep going on annotations failure*/
         r = 0;
@@ -5331,8 +5391,10 @@ static int sync_restore_mailbox(struct dlist *kin,
         /* XXX skip if the guid is already in this folder? */
 
         r = parse_upload(ki, mailbox, &record, &annots);
-        syslog(LOG_DEBUG, "%s: parse_upload %s: %s",
-               __func__, mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_DEBUG, "sync.restore.step",
+                   lf_s("sync.step", "parse_upload"),
+                   lf_mailbox(mailbox),
+                   lf_s_opt("error", r ? error_message(r) : NULL));
         if (r) goto bail;
 
         /* generate a uid if we can't reuse a provided one */
@@ -5352,11 +5414,15 @@ static int sync_restore_mailbox(struct dlist *kin,
     }
 
     r = mailbox_commit(mailbox);
-    syslog(LOG_DEBUG, "%s: mailbox_commit %s: %s",
-        __func__, mailbox_name(mailbox), error_message(r));
+    xsyslog_ev(LOG_DEBUG, "sync.restore.step",
+               lf_s("sync.step", "commit"),
+               lf_mailbox(mailbox),
+               lf_s_opt("error", r ? error_message(r) : NULL));
     if (r) {
-        syslog(LOG_ERR, "%s: mailbox_commit(%s): %s",
-               __func__, mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "sync.mailbox.commit.failed",
+                   lf_s("sync.command", "RESTORE"),
+                   lf_mailbox(mailbox),
+                   lf_err("error", r));
     }
 
     if (!r && has_append)

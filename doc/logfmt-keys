@@ -46,6 +46,7 @@ mbox.changes_epoch      the start of the mailbox's recorded history
 mbox.crcs.annot         annotation sync CRC
 mbox.crcs.basic         basic sync CRC
 mbox.crcs.header        the CRC of the cyrus.header file as read
+mbox.createdmodseq      the modseq the mailbox was created at
 mbox.deletedmodseq      highest modseq of a deletion in this mailbox
 mbox.destroyed          when a mailbox was destroyed
 mbox.expunged           how many messages an expunge removed
@@ -53,6 +54,7 @@ mbox.field              which field or annotation reconstruct corrected
 mbox.foldermodseq       the mailbox's folder modseq
 mbox.generation         the generation the mailbox index expects of its cache
 mbox.highestmodseq      the mailbox's highest modseq
+mbox.last_uid           the highest uid the mailbox has assigned
 mbox.limit              which exists limit was hit: addressbook, calendar or mailbox
 mbox.lock.duration      how long a mailbox index lock was held, in seconds
 mbox.mailboxid          the mailbox's JMAP id
@@ -76,6 +78,7 @@ mbox.uniqueid           the mailbox's uniqueid
 mbox.userflag           the user flag slot number within the mailbox header
 mbox.value              the value of the field named by mbox.field, after the change
 mbox.version            the mailbox index format version
+mbox.xconvmodseq        the mailbox's highest conversation modseq
 
 ### msg. - a message
 
@@ -447,7 +450,9 @@ statuscache.items       the STATUS items a lookup asked for, as a hex mask
 sync.capabilities       the capability list a replication server advertised
 sync.channel            a replication channel name
 sync.command            a replication protocol command
+sync.field              which mailbox field a replication comparison is about
 sync.file.guid          the guid of a message file, where it disagrees with msg.guid
+sync.forced             1 if replication is running in force mode
 sync.reason             why replication skipped, refused or rejected something
 sync.response           a replication server's response, or the part of it at fault
 sync.stage.path         a message file in the replication staging area
@@ -498,6 +503,19 @@ other.mbox.name         the name of the other mailbox involved, in the admin nam
 other.mbox.part         the partition of the other mailbox involved
 other.mbox.uniqueid     the uniqueid of the other mailbox involved
 
+### replica. - the replica's copy of a value, paired with the unprefixed key for the master's
+
+replica.mbox.crcs.annot the replica's annotation sync CRC
+replica.mbox.crcs.basic the replica's basic sync CRC
+replica.mbox.createdmodseq  the replica's createdmodseq for the mailbox
+replica.mbox.highestmodseq  the replica's highest modseq for the mailbox
+replica.mbox.last_uid   the highest uid the replica has assigned in the mailbox
+replica.mbox.type       the replica's mailbox type, as a string
+replica.mbox.uidvalidity  the replica's uidvalidity for the mailbox
+replica.mbox.uniqueid   the replica's uniqueid for the mailbox
+replica.mbox.xconvmodseq  the replica's highest conversation modseq for the mailbox
+replica.msg.guid        the guid of the replica's message at this uid
+replica.msg.modseq      the replica's modseq for the message
 ### old. - the value before a change, paired with the unprefixed key
 
 old.mbox.acl            the mailbox ACL before the change

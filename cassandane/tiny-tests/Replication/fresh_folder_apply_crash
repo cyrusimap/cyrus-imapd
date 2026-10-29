@@ -36,7 +36,7 @@ sub test_fresh_folder_apply_crash
     $self->assert_matches(qr/sync_client pid \d+\) exited with code/,
                           $e->to_string());
     $self->assert_syslog_matches($self->{replica},
-                                 qr/SYNCERROR: mailbox compare update failed/);
+                                 qr/event=sync\.mailbox\.update\.failed\b/);
 
     # the abort() in the apply leaves a core
     unlink $_ for $self->{replica}->find_cores();
