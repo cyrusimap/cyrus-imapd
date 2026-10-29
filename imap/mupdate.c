@@ -1586,15 +1586,9 @@ static void cmd_set(struct conn *C,
         if (!m) {
             /* Check if we run in a discrete murder topology */
             if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) {
-                /* Replicated backends with the same server name issue
-                 * deletion twice. Suppress bailing out on the second one
-                 * (the replica).
-                 */
-                if (strcmp(m->location, location)) {
-                    /* failed; mailbox doesn't exist */
-                    msg = DOESNTEXIST;
-                    goto done;
-                }
+                /* The mailbox must exist on delete */
+                msg = DOESNTEXIST;
+                goto done;
             }
             /* otherwise do nothing (local delete on master) */
         } else {
