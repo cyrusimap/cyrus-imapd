@@ -47,7 +47,9 @@ static void save_argv0(const char *s)
 EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s\n", s);
-    syslog(LOG_ERR, "Fatal error: %s", s);
+    xsyslog_ev(LOG_ERR, "cvt_xlist_specialuse.fatal",
+               lf_s("error", s),
+               lf_d("sys.exitcode", code));
 
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
 

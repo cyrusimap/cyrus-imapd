@@ -352,13 +352,14 @@ int main(int argc, char *argv[])
     sync_log_init();
 
     if (addflag && addflag[0] == '\\') {
-        syslog(LOG_ERR, "can't set a system flag");
+        xsyslog_ev(LOG_ERR, "unexpunge.flag.invalid");
         fatal("can't set a system flag", EX_SOFTWARE);
     }
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&unex_namespace, NAMESPACE_OPTION_ADMIN))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "unexpunge.namespace.init.failed",
+                   lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -400,9 +401,9 @@ int main(int argc, char *argv[])
     if (!r) {
         printf("restored %u expunged messages\n",
                 numrestored);
-        syslog(LOG_NOTICE,
-               "restored %u expunged messages in mailbox '%s'",
-               numrestored, extname);
+        xsyslog_ev(LOG_NOTICE, "unexpunge.restored",
+                   lf_s("mbox.name", extname),
+                   lf_u("unexpunge.count", numrestored));
     }
 
     mailbox_close(&mailbox);

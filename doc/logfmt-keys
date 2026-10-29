@@ -238,6 +238,9 @@ conversations.threads   how many threads a conversations record counts
 conversations.value     a value in the conversations db, as stored
 conversations.version   a conversations db's format version
 conversations.version.max  the newest conversations db format version this code reads
+ctl_cyrusdb.op          which ctl_cyrusdb operation ran: recover or checkpoint
+ctl_mboxlist.action     which repair ctl_mboxlist made or would make
+ctl_mboxlist.dryrun     1 if ctl_mboxlist only reported what it would do
 dav.brief               the Brief preference a request asked for
 dav.collection          the DAV collection a request named
 dav.depth               the Depth a request asked to recurse to
@@ -303,6 +306,13 @@ duplicate.count         how many duplicate delivery records a prune examined
 duplicate.deleted       how many duplicate delivery records a prune removed
 duplicate.mark          when a duplicate delivery record was marked
 duplicate.prune.age     how old a duplicate delivery record must be to be pruned, in seconds
+expire.archive_seconds  how old a message must be for cyr_expire to archive it
+expire.databases        how many conversations databases cyr_expire examined
+expire.expired          how many records cyr_expire expired
+expire.mailboxes        how many mailboxes cyr_expire examined
+expire.removed          how many mailboxes or tombstones cyr_expire removed
+expire.seen             how many records cyr_expire examined
+expire.userflags        how many unused user flags cyr_expire removed
 http.auth.param         the name of a parameter in an HTTP auth credential
 http.auth.reset.reason  why the connection's authentication state was reset
 http.auth.response      1 if the credentials carried a client response
@@ -522,6 +532,9 @@ master.waitdaemons      how many waitdaemon structures are in use
 master.waitdaemons.allocated  how many waitdaemon structures are allocated
 master.workers.desired  how many waiting children a service should have
 master.workers.max      the most children a service may have
+mbdump.reason           why a mailbox dump skipped something
+mbdump.response         the response read where a sync continuation was expected
+mbdump.step             which step of a mailbox dump or undump is being logged
 mboxevent.event         the name of a mailbox event notification
 mboxevent.field         which field of a message an event notification couldn't get
 mboxevent.params        the parameters an event notification was missing
@@ -608,6 +621,7 @@ quota.test_sync.duration  how long quota -Z waited for its signal, in seconds
 quota.test_sync.wait    how quota -Z's wait ended: none, signaled or timeout
 quota.value             a quota record as stored
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
+reconstruct.source      where reconstruct took a corrected value from
 sasl.prop               which SASL property couldn't be set
 sasl.result             a SASL result code
 sasl.text               a message logged by the SASL library
@@ -756,6 +770,7 @@ tls.sni                 the server name a TLS client asked for
 tls.state               OpenSSL's description of the handshake state
 tls.step                which step of a TLS operation is being logged
 tls.verify.depth        the depth in the chain of the certificate being verified
+unexpunge.count         how many messages unexpunge restored
 user.reason             why an operation on a user's files took another course
 userdeny.negated        1 if a user_deny.db pattern is negated
 userdeny.pattern        one service pattern from a user_deny.db entry
@@ -763,6 +778,8 @@ userdeny.patterns       a user_deny.db entry's service patterns, as stored
 userdeny.service        the service a user_deny.db entry is checked against
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
+virusscan.step          which step of a ClamAV operation is being logged
+virusscan.substitution  a substitution the notification template lacks
 ws.close.reason         the reason text of a WebSocket close frame
 ws.eof                  1 if the WebSocket input stream is at end of file
 ws.fin                  1 if a frame is the last one of its message

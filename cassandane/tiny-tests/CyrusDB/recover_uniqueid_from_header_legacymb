@@ -59,10 +59,10 @@ sub test_recover_uniqueid_from_header_legacymb
 
         # should have still existed in cyrus.header
         $self->assert_does_not_match(
-            qr{mailbox header had no uniqueid, creating one}, $syslog);
+            qr{\bevent=ctl_cyrusdb\.uniqueid\.created\b}, $syslog);
 
         # expect to find the log line
-        $self->assert_matches(qr{mbentry had no uniqueid, setting from header},
+        $self->assert_matches(qr{\bevent=ctl_cyrusdb\.uniqueid\.copied\b},
                               $syslog);
     }
 

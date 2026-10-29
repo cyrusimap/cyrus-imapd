@@ -182,7 +182,7 @@ static void kill_existing_services(const char *user)
         delay *= 2;
         if (delay > 8) {
             if (prejudice++) {
-                syslog(LOG_ALERT, "cannot kill some processes even with SIGKILL");
+                xsyslog_ev(LOG_ALERT, "cyr_deny.kill.failed");
                 break;
             }
             delay = 1;
