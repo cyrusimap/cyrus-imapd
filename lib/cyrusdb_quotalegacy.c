@@ -178,18 +178,16 @@ static int abort_subtxn(const char *fname, struct subtxn *tid)
         /* release lock */
         r = lock_unlock(tid->fd, fname);
         if (r == -1) {
-            xsyslog(LOG_ERR, "IOERROR: lock_unlock failed",
-                             "fname=<%s>",
-                             fname);
+            xsyslog_ev(LOG_ERR, "db.quotalegacy.unlock.failed",
+                       lf_s("sys.path", fname));
             r = CYRUSDB_IOERROR;
         }
 
         /* close */
         r = close(tid->fd);
         if (r == -1) {
-            xsyslog(LOG_ERR, "IOERROR: close failed",
-                             "fname=<%s>",
-                             fname);
+            xsyslog_ev(LOG_ERR, "db.quotalegacy.close.failed",
+                       lf_s("sys.path", fname));
             r = CYRUSDB_IOERROR;
         }
     }
@@ -214,9 +212,8 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
             fstat(writefd, &sbuf) == -1 ||
             cyrus_rename(tid->fnamenew, fname) == -1 ||
             lock_unlock(writefd, fname) == -1) {
-            xsyslog(LOG_ERR, "IOERROR: commit failed",
-                             "fname=<%s>",
-                             tid->fnamenew);
+            xsyslog_ev(LOG_ERR, "db.quotalegacy.commit.failed",
+                       lf_s("sys.path", tid->fnamenew));
             r = CYRUSDB_IOERROR;
         }
         close(writefd);
@@ -233,17 +230,15 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
     if (tid->fd != -1) {
         r = lock_unlock(tid->fd, fname);
         if (r == -1) {
-            xsyslog(LOG_ERR, "IOERROR: lock_unlock failed",
-                             "fname=<%s>",
-                             fname);
+            xsyslog_ev(LOG_ERR, "db.quotalegacy.unlock.failed",
+                       lf_s("sys.path", fname));
             r = CYRUSDB_IOERROR;
         }
 
         r = close(tid->fd);
         if (r == -1) {
-            xsyslog(LOG_ERR, "IOERROR: close failed",
-                             "fname=<%s>",
-                             fname);
+            xsyslog_ev(LOG_ERR, "db.quotalegacy.close.failed",
+                       lf_s("sys.path", fname));
             r = CYRUSDB_IOERROR;
         }
     }
@@ -299,7 +294,8 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
 
     if (r == -1) {
         int level = (flags & CYRUSDB_CREATE) ? LOG_ERR : LOG_DEBUG;
-        syslog(level, "IOERROR: stating quota %s: %m", db->path);
+        xsyslog_ev(level, "db.quotalegacy.open.failed",
+                   lf_s("sys.path", db->path));
         free_db(db);
         return CYRUSDB_IOERROR;
     }
@@ -367,8 +363,9 @@ static int myfetch(struct dbengine *db, char *quota_path,
                 return CYRUSDB_NOTFOUND;
             }
 
-            xsyslog(LOG_ERR, "IOERROR: open quota file failed",
-                             "fname=<%s>", quota_path);
+            xsyslog_ev(LOG_ERR, "db.quotalegacy.read.failed",
+                       lf_s("sys.path", quota_path),
+                       lf_s("db.step", "open"));
             return CYRUSDB_IOERROR;
         }
 
@@ -379,9 +376,10 @@ static int myfetch(struct dbengine *db, char *quota_path,
 
             r = lock_reopen(quota_fd, quota_path, &sbuf, &lockfailaction);
             if (r == -1) {
-                xsyslog(LOG_ERR, "IOERROR: lock_reopen failed",
-                                 "action=<%s> fname=<%s>",
-                                 lockfailaction, quota_path);
+                xsyslog_ev(LOG_ERR, "db.quotalegacy.lock.failed",
+                           lf_s("sys.path", quota_path),
+                           lf_s("db.step", "reopen"),
+                           lf_s("db.lock.action", lockfailaction));
                 xclose(quota_fd);
                 return CYRUSDB_IOERROR;
             }
@@ -662,18 +660,19 @@ static int mystore(struct dbengine *db,
             }
         }
         if (fd == -1 && (errno != ENOENT || data)) {
-            xsyslog(LOG_ERR, "IOERROR: open quota file failed",
-                             "fname=<%s>",
-                             quota_path);
+            xsyslog_ev(LOG_ERR, "db.quotalegacy.read.failed",
+                       lf_s("sys.path", quota_path),
+                       lf_s("db.step", "open"));
             return CYRUSDB_IOERROR;
         }
 
         if (fd != -1) {
             r = lock_reopen(fd, quota_path, &sbuf, &lockfailaction);
             if (r == -1) {
-                xsyslog(LOG_ERR, "IOERROR: lock_reopen failed",
-                                 "action=<%s> fname=<%s>",
-                                 lockfailaction, quota_path);
+                xsyslog_ev(LOG_ERR, "db.quotalegacy.lock.failed",
+                           lf_s("sys.path", quota_path),
+                           lf_s("db.step", "reopen"),
+                           lf_s("db.lock.action", lockfailaction));
                 xclose(fd);
                 return CYRUSDB_IOERROR;
             }
@@ -711,9 +710,9 @@ static int mystore(struct dbengine *db,
                     newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
             }
             if (newfd == -1) {
-                xsyslog(LOG_ERR, "IOERROR: creating quota file failed",
-                                 "fname=<%s>",
-                                 new_quota_path);
+                xsyslog_ev(LOG_ERR, "db.quotalegacy.write.failed",
+                           lf_s("sys.path", new_quota_path),
+                           lf_s("db.step", "create"));
                 if (tid)
                     abort_txn(db, *tid);
                 else
@@ -724,9 +723,9 @@ static int mystore(struct dbengine *db,
             mytid->fdnew = newfd;
             r = lock_blocking(newfd, new_quota_path);
             if (r) {
-                xsyslog(LOG_ERR, "IOERROR: lock_blocking failed",
-                                 "fname=<%s>",
-                                 new_quota_path);
+                xsyslog_ev(LOG_ERR, "db.quotalegacy.write.failed",
+                           lf_s("sys.path", new_quota_path),
+                           lf_s("db.step", "lock"));
                 if (tid)
                     abort_txn(db, *tid);
                 else
@@ -753,13 +752,14 @@ static int mystore(struct dbengine *db,
 
         if (n != (ssize_t)datalen+1 || r1 == -1) {
             if (n == -1 || r1 == -1)
-                xsyslog(LOG_ERR, "IOERROR: write failed",
-                                 "fname=<%s>",
-                                 new_quota_path);
+                xsyslog_ev(LOG_ERR, "db.quotalegacy.write.failed",
+                           lf_s("sys.path", new_quota_path),
+                           lf_s("db.step", "write"));
             else
-                xsyslog(LOG_ERR, "IOERROR: partial write",
-                                 "fname=<%s> wanted=<%d>",
-                                 new_quota_path, (int)datalen+1);
+                xsyslog_ev(LOG_ERR, "db.quotalegacy.write.failed",
+                           lf_s("sys.path", new_quota_path),
+                           lf_s("db.step", "partial_write"),
+                           lf_d("db.bytes", (int)datalen+1));
             if (tid)
                 abort_txn(db, *tid);
             else
