@@ -361,6 +361,9 @@ idle.keys               the filter keys a client idles with, serialised
 idle.mboxevent          the mailbox event being forwarded, e.g. MessageNew
 idle.message            which message to idled: notify, init or done
 idle.poll.interval      seconds between polls when idled can't be reached
+idle.reason             why an idled message was rejected
+idle.size               the size of an idled message, in bytes
+idle.step               which step of idled messaging is being logged
 imap.behavior           prefix for the keys below; never logged on its own
 # imap.behavior.* -- one per entry in imapd.c's client_behavior_registry,
 # pushed by key name, so the lint can't see them.  Value is always 1:
@@ -536,6 +539,16 @@ notify.reason           why sending a notification failed
 notify.response         notifyd's response to a notification
 notify.step             which step of sending a notification is being logged
 pop.subfolder           the subfolder a POP session was restricted to
+prometheus.bytes        how many bytes a prometheus stats operation handled
+prometheus.bytes.wanted how many bytes a prometheus stats operation expected
+prometheus.duration     how long collating a prometheus report took, in seconds
+prometheus.frequency    how often a prometheus report is written, in seconds
+prometheus.ident        a service's name, as a prometheus label
+prometheus.reason       why a prometheus stats operation skipped or failed
+prometheus.report       which prometheus report is being logged
+prometheus.services     how many services a prometheus report covers
+prometheus.slow_count   how many times in a row a report took too long to collate
+prometheus.step         which step of a prometheus stats operation is being logged
 proxy.server            the backend server a request was proxied to
 pts.canonical           the canonical form of an identity, as the PTS module gave it
 pts.domain              a domain the PTS module looked an identity up in
@@ -665,6 +678,8 @@ sync.step               which step of a replication operation is being logged
 sync.to.modseq          the modseq a partial replication stops at
 sync.to.uid             the uid a partial replication stops at
 sync.tries              how many times replication tried before giving up
+telemetry.cpu.sys       system CPU time a session used, in seconds
+telemetry.cpu.user      user CPU time a session used, in seconds
 tls.alert.desc          a TLS alert's description
 tls.alert.type          a TLS alert's level: warning or fatal
 tls.alpn                the application protocol ALPN selected
@@ -799,6 +814,7 @@ old.mboxlist.subs.version  the subscriptions db version before an upgrade
 old.msg.cid             a message's conversation id before it was reassigned
 old.msg.imapuid         the message's IMAP uid before a move
 old.msg.sysflags        the message's system flags before the change
+old.prometheus.frequency  how often a prometheus report was written before a change, in seconds
 old.search.cacheonly    the attachment extractor's cache-only flag before a change
 old.search.createdmodseq  the createdmodseq the client last saw
 old.search.generation   the search index generation the client last saw

@@ -59,7 +59,8 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
                  userid, ctime(&now));
         r = write(fd, buf2, strlen(buf2));
         if (r < 0)
-            syslog(LOG_ERR, "IOERROR: unable to write to telemetry log %s: %m", buf);
+            xsyslog_ev(LOG_ERR, "telemetry.write.failed",
+                       lf_s("sys.path", buf));
 
         if (pin) prot_setlog(pin, fd);
         if (pout) prot_setlog(pout, fd);
@@ -76,7 +77,8 @@ EXPORTED void telemetry_rusage(char *userid)
 
     if (userid && *userid) {
         if (getrusage(RUSAGE_SELF, &current) != 0) {
-            syslog(LOG_ERR, "getrusage: %s", userid);
+            xsyslog_ev(LOG_ERR, "telemetry.rusage.failed",
+                       lf_s("u.username", userid));
             return;
         }
 
@@ -98,9 +100,10 @@ EXPORTED void telemetry_rusage(char *userid)
          * Some systems provide significantly more data, but POSIX
          * guarantees user & sys CPU time.
          */
-        syslog(LOG_INFO, "USAGE %s user: " TIME_T_FMT ".%.6d sys: " TIME_T_FMT ".%.6d", userid,
-               user.tv_sec, (int)user.tv_usec,
-               sys.tv_sec, (int)sys.tv_usec);
+        xsyslog_ev(LOG_INFO, "telemetry.rusage",
+                   lf_s("u.username", userid),
+                   lf_raw("telemetry.cpu.user", TIME_T_FMT ".%.6d", user.tv_sec, (int)user.tv_usec),
+                   lf_raw("telemetry.cpu.sys", TIME_T_FMT ".%.6d", sys.tv_sec, (int)sys.tv_usec));
 
         previous = current;
     }

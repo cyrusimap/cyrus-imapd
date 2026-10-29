@@ -70,8 +70,9 @@ static void shut_down(int ec)
 
 EXPORTED void fatal(const char *msg, int err)
 {
-    syslog(LOG_CRIT, "%s", msg);
-    syslog(LOG_NOTICE, "exiting");
+    xsyslog_ev(LOG_CRIT, "prometheus.fatal",
+               lf_s("error", msg),
+               lf_d("sys.exitcode", err));
 
     if (err != EX_PROTOCOL && config_fatals_abort) abort();
 
@@ -105,7 +106,9 @@ static int do_cleanup(void)
     dh = opendir(basedir);
     if (!dh) {
         if (errno == ENOENT) return 0; /* nothing to do */
-        syslog(LOG_ERR, "IOERROR: opendir(%s): %m", basedir);
+        xsyslog_ev(LOG_ERR, "prometheus.stats.read.failed",
+                   lf_s("sys.path", basedir),
+                   lf_s("prometheus.step", "opendir"));
         return EX_IOERR;
     }
 
@@ -117,7 +120,10 @@ static int do_cleanup(void)
 
         r = snprintf(path, sizeof(path), "%s%s", basedir, dirent->d_name);
         if (r < 0 || (size_t) r >= sizeof(path)) {
-            syslog(LOG_ERR, "IOERROR: path too long: %s%s", basedir, dirent->d_name);
+            xsyslog_ev(LOG_ERR, "prometheus.stats.read.failed",
+                       lf_s("sys.path", basedir),
+                       lf_s("sys.filename", dirent->d_name),
+                       lf_s("prometheus.reason", "path_too_long"));
             continue;
         }
 
@@ -146,7 +152,9 @@ static int promdir_foreach(promdir_foreach_cb *proc,
 
     dh = opendir(basedir);
     if (!dh) {
-        syslog(LOG_ERR, "IOERROR: prometheus_foreach opendir(%s): %m", basedir);
+        xsyslog_ev(LOG_ERR, "prometheus.stats.read.failed",
+                   lf_s("sys.path", basedir),
+                   lf_s("prometheus.step", "opendir"));
         return -1;
     }
 
@@ -162,7 +170,10 @@ static int promdir_foreach(promdir_foreach_cb *proc,
 
         r = snprintf(fname, sizeof(fname), "%s%s", basedir, dirent->d_name);
         if (r < 0 || (size_t) r >= sizeof(fname)) {
-            syslog(LOG_ERR, "IOERROR: path too long: %s%s", basedir, dirent->d_name);
+            xsyslog_ev(LOG_ERR, "prometheus.stats.read.failed",
+                       lf_s("sys.path", basedir),
+                       lf_s("sys.filename", dirent->d_name),
+                       lf_s("prometheus.reason", "path_too_long"));
             continue;
         }
 
@@ -181,10 +192,10 @@ static int promdir_foreach(promdir_foreach_cb *proc,
              */
             if (mappedfile_size(mf) != 0) {
                 /* if it's not empty, that's a surprise! */
-                xsyslog(LOG_DEBUG, "unexpected file size",
-                                   "filename=<%s> expected=<%zu>"
-                                   " actual=<%zu>",
-                                   fname, sizeof(stats), mappedfile_size(mf));
+                xsyslog_ev(LOG_DEBUG, "prometheus.stats.size.unexpected",
+                           lf_s("sys.path", fname),
+                           lf_zu("prometheus.bytes.wanted", sizeof(stats)),
+                           lf_zu("prometheus.bytes", mappedfile_size(mf)));
             }
 
             mappedfile_unlock(mf);
@@ -270,12 +281,16 @@ static void do_collate_service_report(struct buf *buf)
 
     doneprocs_lock_fd = open(doneprocs_lock_fname, O_CREAT|O_TRUNC|O_RDWR, 0644);
     if (doneprocs_lock_fd == -1) {
-        syslog(LOG_ERR, "can't open doneprocs lock: %s (%m)", doneprocs_lock_fname);
+        xsyslog_ev(LOG_ERR, "prometheus.doneprocs.lock.failed",
+                   lf_s("sys.path", doneprocs_lock_fname),
+                   lf_s("prometheus.step", "open"));
         free_hash_table(&all_stats, NULL);
         return;
     }
     if (lock_setlock(doneprocs_lock_fd, /*ex*/1, /*nb*/0, doneprocs_lock_fname)) {
-        syslog(LOG_ERR, "can't get exclusive lock on %s", doneprocs_lock_fname);
+        xsyslog_ev(LOG_ERR, "prometheus.doneprocs.lock.failed",
+                   lf_s("sys.path", doneprocs_lock_fname),
+                   lf_s("prometheus.step", "lock"));
         close(doneprocs_lock_fd);
         doneprocs_lock_fd = -1;
         free(doneprocs_lock_fname);
@@ -290,8 +305,8 @@ static void do_collate_service_report(struct buf *buf)
     promdir_foreach(&accum_stats, PROMDIR_FOREACH_PIDS, &all_stats);
 
     report_time = now_ms();
-    syslog(LOG_DEBUG, "updating prometheus report for %zu services",
-                      hash_count(&all_stats));
+    xsyslog_ev(LOG_DEBUG, "prometheus.report.updating",
+               lf_zu("prometheus.services", hash_count(&all_stats)));
 
     /* release .doneprocs.lock */
     xunlink(doneprocs_lock_fname);
@@ -579,16 +594,18 @@ static void do_collate_usage_report(struct buf *buf)
                                "*", 1,
                                NULL, NULL,
                                count_users_mailboxes, NULL, &h);
-    syslog(LOG_DEBUG, "counted users and mailboxes in %f seconds",
-                      (now_ms() - starttime) / 1000.0);
+    xsyslog_ev(LOG_DEBUG, "prometheus.report.counted",
+               lf_s("prometheus.report", "usage"),
+               lf_duration("prometheus.duration", (now_ms() - starttime) / 1000.0));
 
     if (!r) {
         struct quota_rock rock = { NULL, &h, NULL };
 
         starttime = now_ms();
         r = quota_foreach(NULL, count_quota_commitments, &rock, NULL, 0);
-        syslog(LOG_DEBUG, "counted quota commitments in %f seconds",
-                          (now_ms() - starttime) / 1000.0);
+        xsyslog_ev(LOG_DEBUG, "prometheus.report.counted",
+                   lf_s("prometheus.report", "quota"),
+                   lf_duration("prometheus.duration", (now_ms() - starttime) / 1000.0));
 
     }
 
@@ -740,9 +757,11 @@ int main(int argc, char **argv)
             snprintf(debugbuf, sizeof(debugbuf), debugger,
                      argv[0], getpid(), "promstatsd");
 #pragma GCC diagnostic pop
-            syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
+            xsyslog_ev(LOG_DEBUG, "prometheus.debugger.running",
+                       lf_s("master.service.cmd", debugbuf));
             ret = system(debugbuf); /* run debugger */
-            syslog(LOG_DEBUG, "debugger returned exit status: %d", ret);
+            xsyslog_ev(LOG_DEBUG, "prometheus.debugger.exited",
+                       lf_d("sys.exitcode", ret));
         }
     }
 
@@ -755,12 +774,14 @@ int main(int argc, char **argv)
         reports[i].frequency = 1000 * config_getduration(reports[i].freq_opt);
 
         if (reports[i].frequency) {
-            syslog(LOG_DEBUG, "updating %s every %" PRIi64 " seconds",
-                              fname, reports[i].frequency / 1000);
+            xsyslog_ev(LOG_DEBUG, "prometheus.report.scheduled",
+                       lf_s("sys.path", fname),
+                       lf_lld("prometheus.frequency", (long long) (reports[i].frequency / 1000)));
             reports[i].next_report_time = tick + reports[i].frequency;
         }
         else {
-            syslog(LOG_DEBUG, "not updating %s due to frequency 0", fname);
+            xsyslog_ev(LOG_DEBUG, "prometheus.report.disabled",
+                       lf_s("sys.path", fname));
         }
 
         xunlink(fname);
@@ -777,14 +798,14 @@ int main(int argc, char **argv)
 
         sig = signals_poll();
         if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
-            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully");
+            xsyslog_ev(LOG_DEBUG, "prometheus.sighup");
             shut_down(0);
         }
 
         /* check for shutdown file */
         if (shutdown_file(NULL, 0)) {
             if (verbose || debugmode)
-                syslog(LOG_DEBUG, "Detected shutdown file");
+                xsyslog_ev(LOG_DEBUG, "prometheus.shutdown_file");
             shut_down(0);
         }
 
@@ -799,9 +820,9 @@ int main(int argc, char **argv)
                 reports[i].collate_fn(&reports[i].buf);
                 collate_took = now_ms() - profile_starttime;
 
-                syslog(LOG_DEBUG, "collated %s report in %f seconds",
-                                  reports[i].desc,
-                                  collate_took / 1000.0);
+                xsyslog_ev(LOG_DEBUG, "prometheus.report.collated",
+                           lf_s("prometheus.report", reports[i].desc),
+                           lf_duration("prometheus.duration", collate_took / 1000.0));
                 do_write_report(reports[i].mf, &reports[i].buf);
 
                 /* if some report is consistently taking too long to collate
@@ -810,23 +831,19 @@ int main(int argc, char **argv)
                 if (collate_took >= reports[i].frequency / 2) {
                     reports[i].slow_collate_count ++;
 
-                    xsyslog(LOG_NOTICE, "report took too long to collate",
-                                        "report=<%s> frequency=<%" PRIi64 "s>"
-                                        " collate_took=<%gs> count=<%d>",
-                                        reports[i].desc,
-                                        reports[i].frequency / 1000,
-                                        collate_took / 1000.0,
-                                        reports[i].slow_collate_count);
+                    xsyslog_ev(LOG_NOTICE, "prometheus.report.slow",
+                               lf_s("prometheus.report", reports[i].desc),
+                               lf_lld("prometheus.frequency", (long long) (reports[i].frequency / 1000)),
+                               lf_duration("prometheus.duration", collate_took / 1000.0),
+                               lf_d("prometheus.slow_count", reports[i].slow_collate_count));
 
                     if (reports[i].slow_collate_count > 2) {
                         int64_t new_frequency = reports[i].frequency * 2;
 
-                        xsyslog(LOG_NOTICE, "increasing time between reports",
-                                            "report=<%s> frequency=<%" PRIi64 "s>"
-                                            " new_frequency=<%" PRIi64 "s>",
-                                            reports[i].desc,
-                                            reports[i].frequency / 1000,
-                                            new_frequency / 1000);
+                        xsyslog_ev(LOG_NOTICE, "prometheus.report.slowed",
+                                   lf_s("prometheus.report", reports[i].desc),
+                                   lf_lld("old.prometheus.frequency", (long long) (reports[i].frequency / 1000)),
+                                   lf_lld("prometheus.frequency", (long long) (new_frequency / 1000)));
 
                         reports[i].frequency = new_frequency;
                         reports[i].slow_collate_count = 0;

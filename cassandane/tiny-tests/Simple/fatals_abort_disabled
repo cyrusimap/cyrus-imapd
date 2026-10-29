@@ -24,4 +24,7 @@ sub test_fatals_abort_disabled
                           $e->{'-text'});
 
     # post-test sanity checks will complain for us if a core was left behind
+
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/\bevent=prometheus\.fatal\b/);
 }
