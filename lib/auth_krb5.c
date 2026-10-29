@@ -9,6 +9,7 @@
 
 #include "auth.h"
 #include "xmalloc.h"
+#include "util.h"
 
 #ifdef HAVE_GSSAPI_H
 
@@ -161,7 +162,7 @@ static void myfreestate(struct auth_state *auth_state)
 
 static strarray_t *mygroups(const struct auth_state *auth_state __attribute__((unused)))
 {
-    syslog(LOG_WARNING, "Authentication mechanism (krb5) does not support groups");
+    xsyslog_ev(LOG_WARNING, "auth.krb5.groups.unsupported");
     return NULL;
 }
 

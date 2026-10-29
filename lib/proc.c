@@ -119,16 +119,17 @@ EXPORTED int proc_register(struct proc_handle **handlep,
     procfile = fopen(newfname, "w+");
     if (!procfile) {
         if (cyrus_mkdir(newfname, 0755) == -1) {
-            xsyslog(LOG_ERR, "IOERROR: failed to create proc directory",
-                               "fname=<%s>", newfname);
+            xsyslog_ev(LOG_ERR, "proc.mkdir.failed",
+                       lf_s("sys.path", newfname));
             goto error;
         }
         else {
-            syslog(LOG_NOTICE, "created proc directory");
+            xsyslog_ev(LOG_NOTICE, "proc.mkdir.created",
+                       lf_s("sys.path", newfname));
             procfile = fopen(newfname, "w+");
             if (!procfile) {
-                xsyslog(LOG_ERR, "IOERROR: failed to create proc file",
-                                 "fname=<%s>", newfname);
+                xsyslog_ev(LOG_ERR, "proc.create.failed",
+                           lf_s("sys.path", newfname));
                 goto error;
             }
         }
@@ -144,9 +145,9 @@ EXPORTED int proc_register(struct proc_handle **handlep,
     fclose(procfile);
 
     if (cyrus_rename(newfname, handle->fname)) {
-        xsyslog(LOG_ERR, "IOERROR: rename failed",
-                         "source=<%s> dest=<%s>",
-                         newfname, handle->fname);
+        xsyslog_ev(LOG_ERR, "proc.rename.failed",
+                   lf_s("old.sys.path", newfname),
+                   lf_s("sys.path", handle->fname));
         xunlink(newfname);
         goto error;
     }
@@ -281,8 +282,9 @@ EXPORTED int proc_foreach(procdata_t *func, void *rock)
             if (len > 4 && !strcmp(p + len - 4, ".new")) continue; /* temporary new file */
             pid = strtoul(p, &end, 10);
             if (pid == 0 || end == NULL || *end || end == p) {
-                syslog(LOG_ERR, "IOERROR: bogus filename \"%s/%s\" in proc_foreach",
-                                path, p);
+                xsyslog_ev(LOG_ERR, "proc.filename.invalid",
+                           lf_s("sys.path", path),
+                           lf_s("sys.filename", p));
                 continue;
             }
             r = proc_foreach_helper(pid, func, rock);
