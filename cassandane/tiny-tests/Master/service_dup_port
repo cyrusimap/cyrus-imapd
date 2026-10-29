@@ -9,17 +9,15 @@ sub test_service_dup_port ($self)
     my $srvB = $self->lemming_service(tag => 'B',
                                       port => $srvA->port());
 
-    # master should emit a syslog message like this
-    #
-    # Dec 31 14:40:57 enki 0340541/master[26085]: unable to create B
-    # listener socket: Address already in use
+    # master should log master.service.listener.failed for one of them,
+    # with sys.error="Address already in use"
     #
     # and struggle on.
     $self->start();
 
     if ($self->{instance}->{have_syslog_replacement}) {
         # check syslog for the expected error
-        my $pat = qr/unable to create (?:A|B) listener socket:/;
+        my $pat = qr/\bevent=master\.service\.listener\.failed\b.*\bmaster\.service=(?:A|B)\b/;
         my @lines = $self->{instance}->getsyslog($pat);
         $self->assert_num_equals(1, scalar @lines);
         $self->assert_matches(qr/Address already in use/, $lines[0]);

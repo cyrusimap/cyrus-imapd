@@ -34,4 +34,8 @@ sub test_exit_after_connect ($self)
     lemming_push($lemm, 'exit');
     $self->assert_cmp_deeply({ A => { live => 0, dead => 2 } },
                               $self->lemming_census());
+
+    xlog $self, "master logged the exits";
+    $self->assert_syslog_matches($self->{instance},
+        qr/\bevent=master\.child\.exited\b.*\bsys\.exitcode=1\b/);
 }
