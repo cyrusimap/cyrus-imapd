@@ -56,23 +56,26 @@ static void printfile(struct protstream *out, const struct dlist *dl)
 
     f = fopen(dl->sval, "r");
     if (!f) {
-        xsyslog(LOG_ERR, "IOERROR: Failed to read file",
-                         "sval=<%s>", dl->sval);
+        xsyslog_ev(LOG_ERR, "sync.file.read.failed",
+                   lf_s("sys.path", dl->sval),
+                   lf_s("sync.step", "open"));
         prot_printf(out, "NIL");
         return;
     }
     if (fstat(fileno(f), &sbuf) == -1) {
-        xsyslog(LOG_ERR, "IOERROR: Failed to stat file",
-                         "sval=<%s>", dl->sval);
+        xsyslog_ev(LOG_ERR, "sync.file.read.failed",
+                   lf_s("sys.path", dl->sval),
+                   lf_s("sync.step", "stat"));
         prot_printf(out, "NIL");
         fclose(f);
         return;
     }
     size = sbuf.st_size;
     if (size != dl->nval) {
-        xsyslog(LOG_ERR, "IOERROR: Size mismatch",
-                         "sval=<%s> len=<%lu> expected=<" UINT64_FMT ">",
-                         dl->sval, size, dl->nval);
+        xsyslog_ev(LOG_ERR, "sync.file.size.mismatch",
+                   lf_s("sys.path", dl->sval),
+                   lf_llu("msg.size", dl->nval),
+                   lf_lu("sync.file.size", size));
         prot_printf(out, "NIL");
         fclose(f);
         return;
@@ -84,8 +87,12 @@ static void printfile(struct protstream *out, const struct dlist *dl)
     message_guid_generate(&guid2, msg_base, msg_len);
 
     if (!message_guid_equal(&guid2, dl->gval)) {
-        xsyslog(LOG_ERR, "IOERROR: GUID mismatch",
-                         "guid=<%s>", message_guid_encode(dl->gval));
+        char *want = xstrdup(message_guid_encode(dl->gval));
+        xsyslog_ev(LOG_ERR, "sync.message.guid.mismatch",
+                   lf_s("sys.path", dl->sval),
+                   lf_s("msg.guid", want),
+                   lf_s("sync.file.guid", message_guid_encode(&guid2)));
+        free(want);
         prot_printf(out, "NIL");
         fclose(f);
         map_free(&msg_base, &msg_len);
@@ -124,15 +131,16 @@ EXPORTED const char *dlist_reserve_path(const char *part, int isarchive,
     /* gotta make sure we can create files */
     if (cyrus_mkdir(buf, 0755)) {
         /* it's going to fail later, but at least this will help */
-        xsyslog(LOG_ERR, "IOERROR: failed to create directory for reserve",
-                         "directory=<%s/sync./%lu/> file=<%s>",
-                         base, (unsigned long) getpid(), buf);
+        xsyslog_ev(LOG_ERR, "sync.reserve.mkdir.failed",
+                   lf_s("sync.stage.path", buf));
     }
 
     if (config_getswitch(IMAPOPT_DEBUG_LOG_SYNC_PARTITION_CHOICE)) {
-        xsyslog(LOG_DEBUG, "debug_log_sync_partition_choice: chose reserve path",
-                           "base=<%s> reserve_path=<%s>",
-                           base, buf);
+        xsyslog_ev(LOG_DEBUG, "sync.reserve.path.chosen",
+                   lf_s("mbox.part", part),
+                   lf_b("sync.archive", isarchive),
+                   lf_s("sys.path", base),
+                   lf_s("sync.stage.path", buf));
     }
 
     return buf;
@@ -151,8 +159,9 @@ static int reservefile(struct protstream *in, const char *part,
         const char *guidstr = config_getstring(IMAPOPT_DEBUG_WRITEFAIL_GUID);
         if (guidstr) {
             if (!message_guid_decode(&debug_writefail_guid, guidstr)) {
-                xsyslog(LOG_DEBUG, "debug_writefail_guid: ignoring invalid guid",
-                                   "guid=<%s>", guidstr);
+                xsyslog_ev(LOG_DEBUG, "sync.config.invalid",
+                           lf_s("config.option", "debug_writefail_guid"),
+                           lf_s("msg.guid", guidstr));
                 message_guid_set_null(&debug_writefail_guid);
             }
         }
@@ -169,8 +178,10 @@ static int reservefile(struct protstream *in, const char *part,
 
     file = fopen(*fname, "w+");
     if (!file) {
-        xsyslog(LOG_ERR, "IOERROR: failed to upload file",
-                         "guid=<%s>", message_guid_encode(guid));
+        xsyslog_ev(LOG_ERR, "sync.upload.failed",
+                   lf_s("msg.guid", message_guid_encode(guid)),
+                   lf_s("sync.stage.path", *fname),
+                   lf_s("sync.step", "open"));
         r = IMAP_IOERROR;
     }
     else if (debug_writefail_guid.status == GUID_NONNULL
@@ -179,8 +190,11 @@ static int reservefile(struct protstream *in, const char *part,
         fclose(file);
         file = NULL;
         errno = ENOSPC;
-        xsyslog(LOG_ERR, "IOERROR: failed to upload file (simulated)",
-                         "guid=<%s>", message_guid_encode(guid));
+        xsyslog_ev(LOG_ERR, "sync.upload.failed",
+                   lf_s("msg.guid", message_guid_encode(guid)),
+                   lf_s("sync.stage.path", *fname),
+                   lf_s("sync.step", "open"),
+                   lf_s("sync.reason", "simulated"));
         r = IMAP_IOERROR;
     }
     /* Note: in the case of error we still read the file's data from the wire,
@@ -190,16 +204,21 @@ static int reservefile(struct protstream *in, const char *part,
     while (size) {
         size_t n = prot_read(in, buf, size > 8192 ? 8192 : size);
         if (!n) {
-            xsyslog(LOG_ERR,
-                    "IOERROR: reading message: unexpected end of file", NULL);
+            xsyslog_ev(LOG_ERR, "sync.upload.failed",
+                       lf_s("msg.guid", message_guid_encode(guid)),
+                       lf_s("sync.stage.path", *fname),
+                       lf_s("sync.step", "read"),
+                       lf_s("sync.reason", "eof"));
             r = IMAP_IOERROR;
             break;
         }
         size -= n;
         if (!file) continue;
         if (fwrite(buf, 1, n, file) != n) {
-            xsyslog(LOG_ERR, "IOERROR: write failed",
-                             "fname=<%s>", *fname);
+            xsyslog_ev(LOG_ERR, "sync.upload.failed",
+                       lf_s("msg.guid", message_guid_encode(guid)),
+                       lf_s("sync.stage.path", *fname),
+                       lf_s("sync.step", "write"));
             r = IMAP_IOERROR;
             break;
         }
@@ -216,8 +235,10 @@ static int reservefile(struct protstream *in, const char *part,
     }
 
     if (fsync(fileno(file)) < 0) {
-        xsyslog(LOG_ERR, "IOERRROR: fsync failed",
-                         "fname=<%s>", *fname);
+        xsyslog_ev(LOG_ERR, "sync.upload.failed",
+                   lf_s("msg.guid", message_guid_encode(guid)),
+                   lf_s("sync.stage.path", *fname),
+                   lf_s("sync.step", "fsync"));
         r = IMAP_IOERROR;
         goto error;
     }
@@ -702,7 +723,8 @@ EXPORTED void dlist_unlink_files(struct dlist *dl)
 
     if (!dl->sval) return;
 
-    syslog(LOG_DEBUG, "%s: unlinking %s", __func__, dl->sval);
+    xsyslog_ev(LOG_DEBUG, "sync.file.unlinked",
+               lf_s("sys.path", dl->sval));
     xunlink(dl->sval);
 }
 

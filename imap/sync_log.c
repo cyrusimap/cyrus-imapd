@@ -154,14 +154,17 @@ static void sync_log_base(const char *channel, const char *string)
             }
         }
         if (fd < 0) {
-            syslog(LOG_ERR, "sync_log(): Unable to write to log file %s: %s",
-                   fname, strerror(errno));
+            xsyslog_ev(LOG_ERR, "sync.log.write.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("sync.step", "open"));
             return;
         }
 
         if (lock_blocking(fd, fname) == -1) {
-            syslog(LOG_ERR, "sync_log(): Failed to lock %s for %s: %m",
-                   fname, string);
+            xsyslog_ev(LOG_ERR, "sync.log.write.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("sync.step", "lock"),
+                       lf_s("sync.log.entry", string));
             xclose(fd);
             return;
         }
@@ -177,15 +180,19 @@ static void sync_log_base(const char *channel, const char *string)
     }
     if (retries >= SYNC_LOG_RETRIES) {
         xclose(fd);
-        syslog(LOG_ERR,
-               "sync_log(): Failed to lock %s for %s after %d attempts",
-               fname, string, retries);
+        xsyslog_ev(LOG_ERR, "sync.log.write.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("sync.step", "lock"),
+                   lf_s("sync.log.entry", string),
+                   lf_d("sync.tries", retries));
         return;
     }
 
     if (retry_write(fd, string, strlen(string)) < 0)
-        syslog(LOG_ERR, "write() to %s failed: %s",
-               fname, strerror(errno));
+        xsyslog_ev(LOG_ERR, "sync.log.write.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("sync.step", "write"),
+                   lf_s("sync.log.entry", string));
 
     (void)fsync(fd); /* paranoia */
     lock_unlock(fd, fname);
@@ -205,7 +212,8 @@ EXPORTED void sync_log_reset()
     if (!channels) return;
     if (!rightnow_log) return;
     if (!buf_len(rightnow_log)) return;
-    syslog(LOG_NOTICE, "SYNCNOTICE: rightnow log leaked %s", buf_cstring(rightnow_log));
+    xsyslog_ev(LOG_NOTICE, "sync.rightnow.leaked",
+               lf_buf("sync.log.entry", rightnow_log));
     buf_reset(rightnow_log);
 }
 
@@ -494,11 +502,11 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
 
     if (stat(slr->work_file, &sbuf) == 0) {
         /* Existing work log file - process this first */
-        syslog(LOG_NOTICE,
-               "Reprocessing sync log file %s", slr->work_file);
+        xsyslog_ev(LOG_NOTICE, "sync.log.reprocessing",
+                   lf_s("sys.path", slr->work_file));
     }
     else if (!slr->log_file) {
-        syslog(LOG_ERR, "No sync log filename");
+        xsyslog_ev(LOG_ERR, "sync.log.filename.missing");
         return IMAP_IOERROR;
     }
     else {
@@ -506,15 +514,18 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
         if (stat(slr->log_file, &sbuf) < 0) {
             if (errno == ENOENT)
                 return IMAP_AGAIN;  /* no problem, try again later */
-            syslog(LOG_ERR, "Failed to stat %s: %m",
-                   slr->log_file);
+            xsyslog_ev(LOG_ERR, "sync.log.read.failed",
+                       lf_s("sys.path", slr->log_file),
+                       lf_s("sync.step", "stat"));
             return IMAP_IOERROR;
         }
 
         /* Move sync_log to our work file */
         if (cyrus_rename(slr->log_file, slr->work_file) < 0) {
-            syslog(LOG_ERR, "Rename %s -> %s failed: %m",
-                   slr->log_file, slr->work_file);
+            xsyslog_ev(LOG_ERR, "sync.log.read.failed",
+                       lf_s("old.sys.path", slr->log_file),
+                       lf_s("sys.path", slr->work_file),
+                       lf_s("sync.step", "rename"));
             return IMAP_IOERROR;
         }
     }
@@ -522,12 +533,16 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
     if (slr->fd < 0) {
         int fd = open(slr->work_file, O_RDWR, 0);
         if (fd < 0) {
-            syslog(LOG_ERR, "Failed to open %s: %m", slr->work_file);
+            xsyslog_ev(LOG_ERR, "sync.log.read.failed",
+                       lf_s("sys.path", slr->work_file),
+                       lf_s("sync.step", "open"));
             return IMAP_IOERROR;
         }
 
         if (lock_blocking(fd, slr->work_file) < 0) {
-            syslog(LOG_ERR, "Failed to lock %s: %m", slr->work_file);
+            xsyslog_ev(LOG_ERR, "sync.log.read.failed",
+                       lf_s("sys.path", slr->work_file),
+                       lf_s("sync.step", "lock"));
             close(fd);
             return IMAP_IOERROR;
         }
@@ -579,7 +594,8 @@ EXPORTED int sync_log_reader_end(sync_log_reader_t *slr)
          * we've done with the work file we can unlink it.
          * Further checks at this point are just paranoia. */
         if (slr->work_file && xunlink(slr->work_file) == -1) {
-            syslog(LOG_ERR, "Unlink %s failed: %m", slr->work_file);
+            xsyslog_ev(LOG_ERR, "sync.log.unlink.failed",
+                       lf_s("sys.path", slr->work_file));
             return IMAP_IOERROR;
         }
     }
@@ -616,7 +632,9 @@ EXPORTED int sync_log_reader_getitem(sync_log_reader_t *slr,
             continue;
 
         if (c != ' ') {
-            syslog(LOG_ERR, "Invalid input");
+            xsyslog_ev(LOG_ERR, "sync.log.entry.invalid",
+                       lf_buf("sync.command", &slr->type),
+                       lf_s("sync.reason", "no_space_after_command"));
             eatline(slr->input, c);
             continue;
         }
@@ -632,7 +650,9 @@ EXPORTED int sync_log_reader_getitem(sync_log_reader_t *slr,
 
         if (c == '\r') c = prot_getc(slr->input);
         if (c != '\n') {
-            syslog(LOG_ERR, "Garbage at end of input line");
+            xsyslog_ev(LOG_ERR, "sync.log.entry.invalid",
+                       lf_buf("sync.command", &slr->type),
+                       lf_s("sync.reason", "trailing_garbage"));
             eatline(slr->input, c);
             continue;
         }
