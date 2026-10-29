@@ -119,10 +119,12 @@ part.type               the part's MIME type
 ### login. - authentication
 
 login.anonymous         1 if the login was anonymous
+login.authid            the authentication identity, when it differs from the user
 login.magic             the magic-plus suffix supplied with the username
 login.mech              the SASL mechanism used
 login.nopassword        1 if the login was accepted without a password
 login.password          the password given for a refused anonymous login
+login.reason            why a login was refused, as told to the client
 login.scheme            the HTTP auth scheme used
 login.tls               1 if the connection was under TLS
 
@@ -213,7 +215,9 @@ cmd.duration            how long a command took, in seconds
 cmd.nettime             how long a command spent on the network, in seconds
 cmd.total               cmd.duration and cmd.nettime added together
 compress.algorithm      the compression algorithm a connection negotiated
+config.debug            1 if debug logging is now on
 config.option           the name of an imapd.conf option
+config.value            the value given for an imapd.conf option
 conn.host               open connections from this client host
 conn.host.max           how many are allowed from one host
 conn.user               open connections for this user
@@ -519,6 +523,8 @@ mboxevent.params        the parameters an event notification was missing
 mboxlist.key            a raw mailboxes.db key
 mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
+mboxname.step           which step of a mailbox name operation is being logged
+mboxname.suffix         the metadata file suffix a user path was built for
 message.bodysize        the size a parsed message's headers and body add up to, in bytes
 message.cacheitem       a message cache item, as stored
 message.reason          why message parsing failed or stopped
@@ -541,6 +547,7 @@ notify.priority         the priority of a notifyd notification
 notify.reason           why sending a notification failed
 notify.response         notifyd's response to a notification
 notify.step             which step of sending a notification is being logged
+partlist.reason         why a partition was left out of selection
 pop.command             a POP3 command
 pop.count.dele          how many DELE commands a POP3 session ran
 pop.count.retr          how many RETR commands a POP3 session ran
@@ -588,6 +595,7 @@ pts.waited              1 if the PTS client had to wait to connect
 pts.write               1 if the PTS client is waiting to write
 quota.root              the quota root a quota applies to
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
+sasl.prop               which SASL property couldn't be set
 sasl.result             a SASL result code
 sasl.text               a message logged by the SASL library
 sched.addresses         the scheduling addresses considered, one per indexed subkey
@@ -643,6 +651,7 @@ search.updates          how many update passes indexed nothing
 search.value            a search term's value, as given
 seen.op                 which seen database operation is being logged
 seen.uids               a seen state's uid sequence, as stored
+shutdown_file.text      the contents of the shutdown file
 sieve.bytecode.length   the length of a compiled Sieve script, in bytes
 sieve.duration          how long a Sieve operation took, in seconds
 sieve.lineno            the line of a Sieve script an error was found on
@@ -734,6 +743,7 @@ tls.sni                 the server name a TLS client asked for
 tls.state               OpenSSL's description of the handshake state
 tls.step                which step of a TLS operation is being logged
 tls.verify.depth        the depth in the chain of the certificate being verified
+user.reason             why an operation on a user's files took another course
 userdeny.negated        1 if a user_deny.db pattern is negated
 userdeny.pattern        one service pattern from a user_deny.db entry
 userdeny.patterns       a user_deny.db entry's service patterns, as stored

@@ -115,7 +115,8 @@ static int get_facility(const char *name)
     /* fall back to the default.  This will work because we already have
        this log open when we call out */
 
-    syslog(LOG_ERR, "config error: syslog name %s not recognised", name);
+    xsyslog_ev(LOG_ERR, "config.syslog_facility.invalid",
+               lf_s("config.value", name));
 
     return SYSLOG_FACILITY;
 }
@@ -155,8 +156,8 @@ static void debug_toggled(void)
 {
     debug_update_log_suppression();
 
-    syslog(LOG_INFO, "debug logging turned %s",
-                     config_debug ? "on" : "off");
+    xsyslog_ev(LOG_INFO, "config.debug.toggled",
+               lf_b("config.debug", config_debug));
 }
 
 /* Called before a cyrus application starts (but after command line parameters
@@ -767,7 +768,8 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
         auth_freestate(authstate);
 
         if (!userisadmin) {
-            syslog(LOG_ERR, "%s is not an admin", auth_identity);
+            xsyslog_ev(LOG_WARNING, "login.proxy.denied",
+                       lf_s("login.authid", auth_identity));
             sasl_seterror(conn, SASL_NOLOG, "only admins may authenticate");
             return SASL_BADAUTH;
         }
@@ -777,8 +779,10 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
 
     /* is requested_user denied access?  authenticated admins are exempt */
     if (!userisadmin && userdeny(requested_user, config_ident, denymsg, sizeof(denymsg))) {
-        syslog(LOG_ERR, "user '%s' denied access to service '%s': %s",
-               requested_user, config_ident, denymsg);
+        xsyslog_ev(LOG_WARNING, "login.denied",
+                   lf_s("u.username", requested_user),
+                   lf_s("userdeny.service", config_ident),
+                   lf_s("login.reason", denymsg));
         sasl_seterror(conn, SASL_NOLOG, "%s", denymsg);
 
         auth_freestate(authstate);
@@ -901,13 +905,14 @@ EXPORTED int shutdown_file(char *buf, int size)
     if (!fgets(buf, size, f)) {
         *buf = '\0';
 
-        syslog(LOG_DEBUG, "Shutdown file exists with no contents");
+        xsyslog_ev(LOG_DEBUG, "shutdown_file.found");
     }
     else {
         if ((p = strchr(buf, '\r')) != NULL) *p = 0;
         if ((p = strchr(buf, '\n')) != NULL) *p = 0;
 
-        syslog(LOG_DEBUG, "Shutdown file: %s, closing connection", buf);
+        xsyslog_ev(LOG_DEBUG, "shutdown_file.found",
+                   lf_s("shutdown_file.text", buf));
     }
 
     fclose(f);
@@ -1029,21 +1034,27 @@ EXPORTED int saslprops_set_tls(struct saslprops_t *saslprops,
 
     r = sasl_setprop(saslconn, SASL_SSF_EXTERNAL, &saslprops->ssf);
     if (r != SASL_OK) {
-        syslog(LOG_NOTICE, "sasl_setprop(SSF_EXTERNAL) failed");
+        xsyslog_ev(LOG_NOTICE, "saslprops.set_tls.failed",
+                   lf_s("sasl.prop", "SSF_EXTERNAL"),
+                   lf_d("sasl.result", r));
         return r;
     }
 
     r = sasl_setprop(saslconn, SASL_AUTH_EXTERNAL,
                      buf_cstringnull(&saslprops->authid));
     if (r != SASL_OK) {
-        syslog(LOG_NOTICE, "sasl_setprop(AUTH_EXTERNAL) failed");
+        xsyslog_ev(LOG_NOTICE, "saslprops.set_tls.failed",
+                   lf_s("sasl.prop", "AUTH_EXTERNAL"),
+                   lf_d("sasl.result", r));
         return r;
     }
 
     if (saslprops->cbinding.name) {
         r = sasl_setprop(saslconn, SASL_CHANNEL_BINDING, &saslprops->cbinding);
         if (r != SASL_OK) {
-            syslog(LOG_NOTICE, "sasl_setprop(CHANNEL_BINDING) failed");
+            xsyslog_ev(LOG_NOTICE, "saslprops.set_tls.failed",
+                       lf_s("sasl.prop", "CHANNEL_BINDING"),
+                       lf_d("sasl.result", r));
             return r;
         }
     }

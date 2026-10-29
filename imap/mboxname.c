@@ -244,8 +244,9 @@ static int mboxname_lock_item(const char *mboxname, struct mboxlock **mboxlockpt
 done:
     if (r) {
         if (!(nonblock && r == IMAP_MAILBOX_LOCKED))
-            xsyslog(LOG_ERR, "can not lock mailbox",
-                    "name=<%s> error=<%s>", mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "mboxname.lock.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_err("error", r));
         remove_lockitem(lockitem);
     }
     else if (mboxlockptr) {
@@ -652,7 +653,8 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname,
         charset_t cs = charset_lookupname("utf-8");
         if (cs == CHARSET_UNKNOWN_CHARSET) {
             /* huh? */
-            syslog(LOG_INFO, "charset utf-8 is unknown");
+            xsyslog_ev(LOG_INFO, "mboxname.utf7.failed",
+                       lf_s("mboxname.step", "charset"));
             return NULL;
         }
 
@@ -661,7 +663,8 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname,
         charset_free(&cs);
 
         if (!freeme) {
-            syslog(LOG_ERR, "Could not convert mailbox name to IMAP UTF-7.");
+            xsyslog_ev(LOG_WARNING, "mboxname.utf7.failed",
+                       lf_s("mboxname.step", "convert"));
             return NULL;
         }
 
@@ -876,7 +879,8 @@ EXPORTED mbname_t *mbname_from_path(const char *path)
     else {
         /* Construct a mailbox relative to cwd */
         if (!getcwd(cwd, MAX_MAILBOX_PATH)) {
-            syslog(LOG_ERR, "IOERROR: failed to getcwd in mbname_from_path %s: %m", path);
+            xsyslog_ev(LOG_ERR, "mboxname.getcwd.failed",
+                       lf_s("sys.path", path));
         }
         uid = strrchr(cwd, '/');
     }
@@ -2478,8 +2482,9 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
         }
 
         if (r || !mbentry || !mbentry->uniqueid) {
-            syslog(LOG_INFO, "Falling back to using legacy location for %s.%s",
-                   mbname_userid(mbname), suffix);
+            xsyslog_ev(LOG_INFO, "mboxname.legacy_path",
+                       lf_s("u.username", mbname_userid(mbname)),
+                       lf_s("mboxname.suffix", suffix));
         }
         else if (!(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
             fname = mboxid_conf_getpath(mbentry->uniqueid, suffix);
@@ -2985,23 +2990,27 @@ static int mboxname_load_fcounters(const char *fname, struct mboxname_counters *
             fd = open(fname, O_RDWR | O_CREAT, 0644);
         }
         if (fd == -1) {
-            xsyslog(LOG_ERR, "IOERROR: create failed",
-                             "filename=<%s>", fname);
+            xsyslog_ev(LOG_ERR, "mboxname.counters.read.failed",
+                       lf_s("mboxname.step", "create"),
+                       lf_s("sys.path", fname));
             goto done;
         }
         if (lock_blocking(fd, fname)) {
-            xsyslog(LOG_ERR, "IOERROR: lock_blocking failed",
-                             "filename=<%s>", fname);
+            xsyslog_ev(LOG_ERR, "mboxname.counters.read.failed",
+                       lf_s("mboxname.step", "lock_blocking"),
+                       lf_s("sys.path", fname));
             goto done;
         }
         if (fstat(fd, &sbuf)) {
-            xsyslog(LOG_ERR, "IOERROR: fstat failed",
-                             "filename=<%s>", fname);
+            xsyslog_ev(LOG_ERR, "mboxname.counters.read.failed",
+                       lf_s("mboxname.step", "fstat"),
+                       lf_s("sys.path", fname));
             goto done;
         }
         if (stat(fname, &fbuf)) {
-            xsyslog(LOG_ERR, "IOERROR: stat failed",
-                             "filename=<%s>", fname);
+            xsyslog_ev(LOG_ERR, "mboxname.counters.read.failed",
+                       lf_s("mboxname.step", "stat"),
+                       lf_s("sys.path", fname));
             goto done;
         }
         if (sbuf.st_ino == fbuf.st_ino) break;
@@ -3050,8 +3059,9 @@ static int mboxname_set_fcounters(const char *fname, struct mboxname_counters *v
     newfd = open(newfname, O_CREAT | O_TRUNC | O_WRONLY, 0644);
     if (newfd == -1) {
         r = IMAP_IOERROR;
-        xsyslog(LOG_ERR, "IOERROR: open failed",
-                         "filename=<%s>", newfname);
+        xsyslog_ev(LOG_ERR, "mboxname.counters.write.failed",
+                   lf_s("mboxname.step", "open"),
+                   lf_s("sys.path", newfname));
         goto done;
     }
 
@@ -3062,15 +3072,17 @@ static int mboxname_set_fcounters(const char *fname, struct mboxname_counters *v
     n = retry_write(newfd, buf, MV_LENGTH);
     if (n < 0) {
         r = IMAP_IOERROR;
-        xsyslog(LOG_ERR, "IOERROR: retry_write failed",
-                         "filename=<%s>", newfname);
+        xsyslog_ev(LOG_ERR, "mboxname.counters.write.failed",
+                   lf_s("mboxname.step", "retry_write"),
+                   lf_s("sys.path", newfname));
         goto done;
     }
 
     if (fdatasync(newfd)) {
         r = IMAP_IOERROR;
-        xsyslog(LOG_ERR, "IOERROR: fdatasync failed",
-                         "filename=<%s>", newfname);
+        xsyslog_ev(LOG_ERR, "mboxname.counters.write.failed",
+                   lf_s("mboxname.step", "fdatasync"),
+                   lf_s("sys.path", newfname));
         goto done;
     }
 
@@ -3079,9 +3091,10 @@ static int mboxname_set_fcounters(const char *fname, struct mboxname_counters *v
 
     if (cyrus_rename(newfname, fname)) {
         r = IMAP_IOERROR;
-        xsyslog(LOG_ERR, "IOERROR: rename failed",
-                         "oldfname=<%s> newfname=<%s>",
-                         newfname, fname);
+        xsyslog_ev(LOG_ERR, "mboxname.counters.write.failed",
+                   lf_s("mboxname.step", "rename"),
+                   lf_s("old.sys.path", newfname),
+                   lf_s("sys.path", fname));
         goto done;
     }
 
@@ -3116,8 +3129,9 @@ static int mboxname_read_fcounters(const char *fname, struct mboxname_counters *
     if (fd < 0) goto done;
 
     if (fstat(fd, &sbuf)) {
-        xsyslog(LOG_ERR, "IOERROR: fstat failed",
-                         "filename=<%s>", fname);
+        xsyslog_ev(LOG_ERR, "mboxname.counters.read.failed",
+                   lf_s("mboxname.step", "fstat"),
+                   lf_s("sys.path", fname));
         r = IMAP_IOERROR;
         goto done;
     }
