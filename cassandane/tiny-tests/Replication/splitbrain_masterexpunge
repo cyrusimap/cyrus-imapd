@@ -70,5 +70,5 @@ sub test_splitbrain_masterexpunge
     $self->assert_syslog_matches($self->{instance},
                                  qr/SYNC(?:ERROR|NOTICE): guid mismatch/);
     $self->assert_syslog_matches($self->{replica},
-                                 qr/SYNC(?:ERROR|NOTICE): guid mismatch/);
+                                 qr/event=sync\.record\.guid\.mismatch\b/);
 }

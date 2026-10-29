@@ -46,7 +46,7 @@ sub test_stale_synccache_replica_user_gone
 
     xlog $self, "the folder apply fails first, and says why";
     $self->assert_syslog_matches($self->{replica},
-        qr/Failed to open mailbox user\.cassandane\.sub to update: Permission denied/);
+        qr/event=sync\.mailbox\.open\.failed\b.*mbox\.name=user\.cassandane\.sub error="Permission denied"/);
     $self->assert_syslog_matches($self->{instance},
         qr/event=sync\.command\.rejected\b.*sync\.command=MAILBOX error="IMAP_PERMISSION_DENIED\b/);
 }
