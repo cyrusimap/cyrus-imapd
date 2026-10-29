@@ -48,5 +48,5 @@ sub test_stale_synccache_replica_user_gone
     $self->assert_syslog_matches($self->{replica},
         qr/Failed to open mailbox user\.cassandane\.sub to update: Permission denied/);
     $self->assert_syslog_matches($self->{instance},
-        qr/MAILBOX received NO response: IMAP_PERMISSION_DENIED/);
+        qr/event=sync\.command\.rejected\b.*sync\.command=MAILBOX error="IMAP_PERMISSION_DENIED\b/);
 }

@@ -43,7 +43,7 @@ sub test_mailbox_parent_missing_refused
     $self->assert_syslog_matches($self->{replica},
         qr/Failed to open mailbox user\.cassandane\.sub to update: Permission denied/);
     $self->assert_syslog_matches($self->{instance},
-        qr/MAILBOX received NO response: IMAP_PERMISSION_DENIED/);
+        qr/event=sync\.command\.rejected\b.*sync\.command=MAILBOX error="IMAP_PERMISSION_DENIED\b/);
 
     xlog $self, "syncing the user is what repairs it";
     $replicaadmin->disconnect();

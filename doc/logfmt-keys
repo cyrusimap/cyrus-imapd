@@ -444,7 +444,14 @@ sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
 statuscache.hit         1 if the status cache had the answer
 statuscache.items       the STATUS items a lookup asked for, as a hex mask
+sync.capabilities       the capability list a replication server advertised
 sync.channel            a replication channel name
+sync.command            a replication protocol command
+sync.file.guid          the guid of a message file, where it disagrees with msg.guid
+sync.reason             why replication skipped, refused or rejected something
+sync.response           a replication server's response, or the part of it at fault
+sync.stage.path         a message file in the replication staging area
+sync.step               which step of a replication operation is being logged
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
 ws.close.reason         the reason text of a WebSocket close frame

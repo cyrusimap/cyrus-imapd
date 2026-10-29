@@ -157,7 +157,8 @@ struct sync_action_list {
  */
 static char *imap_sasl_parsesuccess(char *str, const char **status)
 {
-    syslog(LOG_DEBUG, "imap_sasl_parsesuccess(): input is: %s", str);
+    xsyslog_ev(LOG_DEBUG, "sync.auth.response.received",
+               lf_s("sync.response", str));
     if (NULL == status)  return NULL; /* nothing useful we can do */
 
     const char *prelude = "A01 OK "; // XXX don't hardcode this, get it from sasl_cmd->ok
@@ -170,7 +171,9 @@ static char *imap_sasl_parsesuccess(char *str, const char **status)
 
     if (strncmp(str, prelude, prelude_len)) {
         /* this isn't the string we expected */
-        syslog(LOG_INFO, "imap_sasl_parsesuccess(): unexpected initial string contents: %s", str);
+        xsyslog_ev(LOG_INFO, "sync.auth.capability.missing",
+                   lf_s("sync.reason", "unexpected_response"),
+                   lf_s("sync.response", str));
         return NULL;
     }
 
@@ -178,7 +181,9 @@ static char *imap_sasl_parsesuccess(char *str, const char **status)
 
     if (strncmp(start, capability, capability_len)) {
         /* this isn't a capability string */
-        syslog(LOG_INFO, "imap_sasl_parsesuccess(): str does not contain a capability string: %s", str);
+        xsyslog_ev(LOG_INFO, "sync.auth.capability.missing",
+                   lf_s("sync.reason", "no_capability_code"),
+                   lf_s("sync.response", str));
         return NULL;
     }
 
@@ -189,7 +194,9 @@ static char *imap_sasl_parsesuccess(char *str, const char **status)
 
     if (*end == '\0') {
         /* didn't find end of capability string */
-        syslog(LOG_INFO, "imap_sasl_parsesuccess(): did not find end of capability string: %s", str);
+        xsyslog_ev(LOG_INFO, "sync.auth.capability.missing",
+                   lf_s("sync.reason", "unterminated_capability_code"),
+                   lf_s("sync.response", str));
         return NULL;
     }
 
@@ -197,7 +204,8 @@ static char *imap_sasl_parsesuccess(char *str, const char **status)
     *++end = '\0';
 
     /* status gets the capability string */
-    syslog(LOG_DEBUG, "imap_sasl_parsesuccess(): found capability string: %s", start);
+    xsyslog_ev(LOG_DEBUG, "sync.auth.capability.found",
+               lf_s("sync.capabilities", start));
     *status = start;
 
     /* there's no base64 data, so return NULL */
@@ -958,14 +966,17 @@ static int sync_sieve_activate(const char *userid, const char *bcname)
     int r;
 
     if (!db) {
-        syslog(LOG_ERR, "Failed to open Sieve DB for %s", userid);
+        xsyslog_ev(LOG_ERR, "sync.sieve.db.open.failed",
+                   lf_s("u.username", userid));
         user_nslock_release(&user_nslock);
         return IMAP_INTERNAL;
     }
 
     r = sieve_ensure_folder(userid, &mailbox, /*silent*/1);
     if (r) {
-        syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
+        xsyslog_ev(LOG_ERR, "sync.sieve.mailbox.open.failed",
+                   lf_s("u.username", userid),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -1009,14 +1020,17 @@ static int sync_sieve_delete(const char *userid, const char *fname)
     user_nslock = user_nslock_lock_w(userid);
     db = sievedb_open_userid(userid);
     if (!db) {
-        syslog(LOG_ERR, "Failed to open Sieve DB for %s", userid);
+        xsyslog_ev(LOG_ERR, "sync.sieve.db.open.failed",
+                   lf_s("u.username", userid));
         user_nslock_release(&user_nslock);
         return IMAP_INTERNAL;
     }
 
     r = sieve_ensure_folder(userid, &mailbox, /*silent*/1);
     if (r) {
-        syslog(LOG_ERR, "Failed to open Sieve mailbox for %s", userid);
+        xsyslog_ev(LOG_ERR, "sync.sieve.mailbox.open.failed",
+                   lf_s("u.username", userid),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -1078,7 +1092,9 @@ static int sync_sieve_validate(struct index_record *record,
     if (r != SIEVE_OK) {
         const char *err = parse_err ? parse_err : error_message(r);
 
-        syslog(LOG_ERR, "sieve script parse error uid=%u: %s", record->uid, err);
+        xsyslog_ev(LOG_ERR, "sync.sieve.script.invalid",
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("error", err));
     }
 
     free(parse_err);
@@ -1806,12 +1822,18 @@ static int sync_getflags(struct dlist *kl,
             } else if (!strcmp(s, "\\draft")) {
                 record->system_flags |= FLAG_DRAFT;
             } else {
-                syslog(LOG_ERR, "Unknown system flag: %s", s);
+                xsyslog_ev(LOG_ERR, "sync.flag.unknown",
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", record->uid),
+                           lf_s("msg.flag", s));
             }
         }
         else {
             if (mailbox_user_flag(mailbox, s, &userflag, /*allow all*/2)) {
-                syslog(LOG_ERR, "Unable to record user flag: %s", s);
+                xsyslog_ev(LOG_ERR, "sync.flag.record.failed",
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", record->uid),
+                           lf_s("msg.flag", s));
                 free(s);
                 return IMAP_IOERROR;
             }
@@ -2023,8 +2045,10 @@ static int sync_send_file(struct mailbox *mailbox,
                           struct dlist *kupload)
 {
     if (message_guid_isnull(&record->guid)) {
-        syslog(LOG_WARNING, "%s: missing guid for record %u (uid %u) -- needs 'reconstruct -G'?",
-               mailbox_name(mailbox), record->recno, record->uid);
+        xsyslog_ev(LOG_WARNING, "sync.record.guid.missing",
+                   lf_mailbox(mailbox),
+                   lf_u("mbox.recno", record->recno),
+                   lf_u("msg.imapuid", record->uid));
         return IMAP_MAILBOX_BADFORMAT;
     }
 
@@ -2242,9 +2266,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
     int c;
 
     if ((c = getword(in, &response)) == EOF) {
-        xsyslog(LOG_ERR, "IOERROR: zero length response",
-                         "command=<%s> prot_error=<%s>",
-                         cmd, prot_error(in));
+        xsyslog_ev(LOG_ERR, "sync.response.empty",
+                   lf_s("sync.command", cmd),
+                   lf_s("error", prot_error(in)));
         return IMAP_PROTOCOL_ERROR;
     }
 
@@ -2279,7 +2303,8 @@ int sync_parse_response(const char *cmd, struct protstream *in,
     }
     if (!strcmp(response.s, "BYE")) {
         /* server is shutting down, don't be surprised by it */
-        syslog(LOG_DEBUG, "received BYE: replica was shut down");
+        xsyslog_ev(LOG_DEBUG, "sync.response.bye",
+                   lf_s("sync.command", cmd));
         dlist_free(&kl);
         eatline(in, c);
         return IMAP_BYE_LOGOUT;
@@ -2287,57 +2312,70 @@ int sync_parse_response(const char *cmd, struct protstream *in,
     if (!strcmp(response.s, "NO")) {
         dlist_free(&kl);
         sync_getline(in, &errmsg);
-        syslog(LOG_ERR, "%s received NO response: %s", cmd, errmsg.s);
+
+        int r;
 
         /* Slight hack to transform certain error strings into equivalent
          * imap_err value so that caller has some idea of cause.  Match
          * this to the logic at sync_response() */
         if (!strncmp(errmsg.s, "IMAP_INVALID_USER ",
                      strlen("IMAP_INVALID_USER ")))
-            return IMAP_INVALID_USER;
+            r = IMAP_INVALID_USER;
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_NONEXISTENT ",
                           strlen("IMAP_MAILBOX_NONEXISTENT ")))
-            return IMAP_MAILBOX_NONEXISTENT;
+            r = IMAP_MAILBOX_NONEXISTENT;
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_LOCKED ",
                           strlen("IMAP_MAILBOX_LOCKED ")))
-            return IMAP_MAILBOX_LOCKED;
+            r = IMAP_MAILBOX_LOCKED;
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_MOVED ",
                           strlen("IMAP_MAILBOX_MOVED ")))
-            return IMAP_MAILBOX_MOVED;
+            r = IMAP_MAILBOX_MOVED;
         else if (!strncmp(errmsg.s, "IMAP_SYNC_WRONG_MAILBOX ",
                           strlen("IMAP_SYNC_WRONG_MAILBOX ")))
-            return IMAP_SYNC_WRONG_MAILBOX;
+            r = IMAP_SYNC_WRONG_MAILBOX;
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_NOTSUPPORTED ",
                           strlen("IMAP_MAILBOX_NOTSUPPORTED ")))
-            return IMAP_MAILBOX_NOTSUPPORTED;
+            r = IMAP_MAILBOX_NOTSUPPORTED;
         else if (!strncmp(errmsg.s, "IMAP_PERMISSION_DENIED ",
                           strlen("IMAP_PERMISSION_DENIED ")))
-            return IMAP_PERMISSION_DENIED;
+            r = IMAP_PERMISSION_DENIED;
         else if (!strncmp(errmsg.s, "IMAP_SYNC_CHECKSUM ",
                           strlen("IMAP_SYNC_CHECKSUM ")))
-            return IMAP_SYNC_CHECKSUM;
+            r = IMAP_SYNC_CHECKSUM;
         else if (!strncmp(errmsg.s, "IMAP_SYNC_CHANGED ",
                           strlen("IMAP_SYNC_CHANGED ")))
-            return IMAP_SYNC_CHANGED;
+            r = IMAP_SYNC_CHANGED;
         else if (!strncmp(errmsg.s, "IMAP_SYNC_BADSIEVE ",
                           strlen("IMAP_SYNC_BADSIEVE ")))
-            return IMAP_SYNC_BADSIEVE;
+            r = IMAP_SYNC_BADSIEVE;
         else if (!strncmp(errmsg.s, "IMAP_PROTOCOL_ERROR ",
                           strlen("IMAP_PROTOCOL_ERROR ")))
-            return IMAP_PROTOCOL_ERROR;
+            r = IMAP_PROTOCOL_ERROR;
         else if (!strncmp(errmsg.s, "IMAP_PROTOCOL_BAD_PARAMETERS ",
                           strlen("IMAP_PROTOCOL_BAD_PARAMETERS ")))
-            return IMAP_PROTOCOL_BAD_PARAMETERS;
+            r = IMAP_PROTOCOL_BAD_PARAMETERS;
         else
-            return IMAP_REMOTE_DENIED;
+            r = IMAP_REMOTE_DENIED;
+
+        /* The caller retries or resets on these, and logs if that fails
+         * too. */
+        bool retryable = r == IMAP_SYNC_CHECKSUM || r == IMAP_SYNC_CHANGED
+                      || r == IMAP_MAILBOX_NONEXISTENT;
+
+        xsyslog_ev(retryable ? LOG_WARNING : LOG_ERR, "sync.command.rejected",
+                   lf_s("sync.command", cmd),
+                   lf_s("error", errmsg.s));
+
+        return r;
     }
 
  parse_err:
     dlist_free(&kl);
     sync_getline(in, &errmsg);
-    xsyslog(LOG_ERR, "IOERROR: received bad response",
-                     "command=<%s> response=<%s> errmsg=<%s>",
-                     cmd, response.s, errmsg.s);
+    xsyslog_ev(LOG_ERR, "sync.response.invalid",
+               lf_s("sync.command", cmd),
+               lf_s("sync.response", response.s),
+               lf_s("error", errmsg.s));
     return IMAP_PROTOCOL_ERROR;
 }
 
@@ -2367,18 +2405,25 @@ static int sync_append_copyfile(struct mailbox *mailbox,
             record->internal_flags |= FLAG_INTERNAL_UNLINKED;
             goto just_write;
         }
-        xsyslog(LOG_ERR, "IOERROR: parse failed",
-                         "guid=<%s> error=<%s>",
-                         message_guid_encode(&record->guid),
-                         error_message(r));
+        xsyslog_ev(LOG_ERR, "sync.message.parse.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("msg.guid", message_guid_encode(&record->guid)),
+                   lf_s_opt("sync.stage.path", item ? item->fname : NULL),
+                   lf_err("error", r));
         return r;
     }
 
     /* record->guid was rewritten in the parse, see if it changed */
     if (!message_guid_equal(&tmp_guid, &record->guid)) {
-        xsyslog(LOG_ERR, "IOERROR: guid mismatch on parse",
-                         "filename=<%s> guid=<%s>",
-                         item->fname, message_guid_encode(&record->guid));
+        char *mguid = xstrdup(message_guid_encode(&tmp_guid));
+        xsyslog_ev(LOG_ERR, "sync.message.guid.mismatch",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("msg.guid", mguid),
+                   lf_s("sync.file.guid", message_guid_encode(&record->guid)),
+                   lf_s("sync.stage.path", item->fname));
+        free(mguid);
         return IMAP_IOERROR;
     }
 
@@ -2396,9 +2441,12 @@ static int sync_append_copyfile(struct mailbox *mailbox,
     destname = mailbox_record_fname(mailbox, record);
     r = mailbox_copyfile_fdptr(item->fname, destname, 0, fdptr);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: copy file failed",
-                         "filename=<%s> destination=<%s>",
-                         item->fname, destname);
+        xsyslog_ev(LOG_ERR, "sync.message.copy.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("sync.stage.path", item->fname),
+                   lf_s("sys.path", destname),
+                   lf_err("error", r));
         return r;
     }
 
@@ -2413,8 +2461,10 @@ static int sync_append_copyfile(struct mailbox *mailbox,
     /* apply the remote annotations */
     r = apply_annotations(mailbox, record, NULL, annots, 0, &hadsnoozed);
     if (r) {
-        syslog(LOG_ERR, "Failed to apply annotations: %s",
-               error_message(r));
+        xsyslog_ev(LOG_ERR, "sync.annotations.apply.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_err("error", r));
     }
 
     if (!r && hadsnoozed) {
@@ -2440,8 +2490,10 @@ int sync_mailbox_version_check(struct mailbox **mailboxp)
 
 done:
     if (r) {
-        syslog(LOG_DEBUG, "%s: %s failed version check: %s",
-                          __func__, mailbox_name(*mailboxp), error_message(r));
+        xsyslog_ev(LOG_DEBUG, "sync.mailbox.version.unsupported",
+                   lf_mailbox(*mailboxp),
+                   lf_u("mbox.version", (*mailboxp)->i.minor_version),
+                   lf_err("error", r));
         mailbox_close(mailboxp);
     }
     return r;
@@ -2469,22 +2521,33 @@ static int reserve_one(const char *partition, struct mailbox *mailbox,
     memset(&record2, 0, sizeof(struct index_record));
     r = message_parse(mailbox_msg_path, &record2);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: parse failed",
-                         "filename=<%s>",
-                         mailbox_msg_path);
+        xsyslog_ev(LOG_ERR, "sync.message.parse.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("msg.guid", message_guid_encode(&record->guid)),
+                   lf_s("sys.path", mailbox_msg_path),
+                   lf_err("error", r));
         return r;
     }
     if (!message_guid_equal(&record->guid, &record2.guid)) {
-        xsyslog(LOG_ERR, "IOERROR: guid mismatch on parse",
-                        "filename=<%s>",
-                        mailbox_msg_path);
+        char *mguid = xstrdup(message_guid_encode(&record->guid));
+        xsyslog_ev(LOG_ERR, "sync.message.guid.mismatch",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("msg.guid", mguid),
+                   lf_s("sync.file.guid", message_guid_encode(&record2.guid)),
+                   lf_s("sys.path", mailbox_msg_path));
+        free(mguid);
         return IMAP_IOERROR;
     }
 
     if (cyrus_copyfile(mailbox_msg_path, stage_msg_path, COPYFILE_MKDIR|COPYFILE_NODIRSYNC) != 0) {
-        xsyslog(LOG_ERR, "IOERROR: link failed",
-                         "mailbox_msg_path=<%s> stage_msg_path=<%s>",
-                         mailbox_msg_path, stage_msg_path);
+        xsyslog_ev(LOG_ERR, "sync.message.stage.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("sys.path", mailbox_msg_path),
+                   lf_s("sync.step", "copy"),
+                   lf_s("sync.stage.path", stage_msg_path));
         return IMAP_IOERROR;
     }
 
@@ -2611,9 +2674,14 @@ static int reserve_one_part(const char *partition, struct mailbox *mailbox,
     /* verify the extracted bytes really do hash to the GUID we want */
     message_guid_generate(&guid, base, len);
     if (!message_guid_equal(&item->guid, &guid)) {
-        xsyslog(LOG_ERR, "IOERROR: guid mismatch on extracted part",
-                         "mailbox=<%s> uid=<%u> partid=<%s>",
-                         mailbox_name(mailbox), record->uid, partid);
+        char *mguid = xstrdup(message_guid_encode(&item->guid));
+        xsyslog_ev(LOG_ERR, "sync.message.guid.mismatch",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("part.id", partid),
+                   lf_s("msg.guid", mguid),
+                   lf_s("sync.file.guid", message_guid_encode(&guid)));
+        free(mguid);
         r = IMAP_IOERROR;
         goto done;
     }
@@ -2621,14 +2689,22 @@ static int reserve_one_part(const char *partition, struct mailbox *mailbox,
     stage_msg_path = dlist_reserve_path(partition, /*isarchive*/0, &item->guid);
     fd = open(stage_msg_path, O_WRONLY|O_CREAT|O_TRUNC, 0666);
     if (fd < 0) {
-        xsyslog(LOG_ERR, "IOERROR: create failed",
-                         "stage_msg_path=<%s>", stage_msg_path);
+        xsyslog_ev(LOG_ERR, "sync.message.stage.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("part.id", partid),
+                   lf_s("sync.step", "create"),
+                   lf_s("sync.stage.path", stage_msg_path));
         r = IMAP_IOERROR;
         goto done;
     }
     if (retry_write(fd, base, len) != (ssize_t)len) {
-        xsyslog(LOG_ERR, "IOERROR: write failed",
-                         "stage_msg_path=<%s>", stage_msg_path);
+        xsyslog_ev(LOG_ERR, "sync.message.stage.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("part.id", partid),
+                   lf_s("sync.step", "write"),
+                   lf_s("sync.stage.path", stage_msg_path));
         close(fd);
         xunlink(stage_msg_path);
         r = IMAP_IOERROR;
