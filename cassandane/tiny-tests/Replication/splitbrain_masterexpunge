@@ -66,9 +66,9 @@ sub test_splitbrain_masterexpunge
     xlog $self, "After replication, the replica should have the same 5 messages";
     $self->check_messages(\%exp, store => $replica_store);
 
-    # We should have generated a SYNCERROR/SYNCNOTICE or two
+    # We should have logged a guid mismatch on each side
     $self->assert_syslog_matches($self->{instance},
-                                 qr/SYNC(?:ERROR|NOTICE): guid mismatch/);
+                                 qr/event=sync\.record\.guid\.mismatch\b/);
     $self->assert_syslog_matches($self->{replica},
                                  qr/event=sync\.record\.guid\.mismatch\b/);
 }
