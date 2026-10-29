@@ -64,7 +64,7 @@ EOF
 
     # sync_client should have logged the BAD response
     $self->assert_syslog_matches($self->{instance},
-                                 qr/IOERROR: received bad response/);
+                                 qr/event=sync\.response\.invalid\b/);
 
     if ($self->{instance}->{have_syslog_replacement}) {
         # sync server should have logged the write error
