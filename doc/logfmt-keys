@@ -237,14 +237,29 @@ db.archive.path         where a database file is being archived to
 db.aside.path           where a database is moved aside to during a convert
 db.backend              a cyrusdb backend name, e.g. twom
 db.backend.requested    the cyrusdb backend the caller asked for
+db.bytes                a size within a database, in bytes
+db.checkpoint.path      the file a checkpoint writes before renaming it into place
+db.duration             how long a database operation took, in seconds
 db.engine               the address of a database handle, in debug traces
+db.fd                   a database's file descriptor
 db.flags                the flags a database operation was called with
+db.inode                a database file's inode number
 db.key                  a database record's key
+db.level                a skiplist node's level
 db.lock.action          the step at which taking a database file lock failed
+db.lock.duration        how long a database lock was held, in seconds
+db.logstart             the offset where a skiplist's log begins
+db.maxlevel             the highest skiplist level allowed
+db.offset               an offset within a database file
 db.op                   which cyrusdb call a debug trace is for
 db.reason               why a database operation failed, skipped or refused something
+db.records              how many records a database holds or an operation handled
+db.refcount             how many open handles share a database
 db.result               a cyrusdb call's return code, in debug traces
+db.size                 a database file's size, in bytes
 db.step                 which step of a database operation is being logged
+db.target               the offset a database pointer refers to
+db.version              a database's format version
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
 http.auth.param         the name of a parameter in an HTTP auth credential
 http.auth.reset.reason  why the connection's authentication state was reset
@@ -640,6 +655,7 @@ replica.msg.modseq      the replica's modseq for the message
 ### old. - the value before a change, paired with the unprefixed key
 
 old.db.backend          the cyrusdb backend a database was in before a convert
+old.db.logstart         a skiplist's log offset before recovery corrected it
 old.master.child.state  a child's state before a message changed it
 old.master.service      the service master thought a child belonged to
 old.mbox.acl            the mailbox ACL before the change

@@ -15,8 +15,8 @@ sub test_recover_skipstamp ($self)
     # cyrus processes will whinge about missing skipstamp file
     if ($self->{instance}->{have_syslog_replacement}) {
         my $syslog = join "\n", $self->{instance}->getsyslog();
-        $self->assert_matches(qr/skipstamp is missing/, $syslog);
-        $self->assert_matches(qr/DBERROR: skipstamp/, $syslog);
+        $self->assert_matches(qr/\bevent=db\.skiplist\.skipstamp\.missing\b/, $syslog);
+        $self->assert_matches(qr/\bevent=db\.skiplist\.skipstamp\.unreadable\b/, $syslog);
     }
 
     # shut down, enable recover, and restart
@@ -32,10 +32,10 @@ sub test_recover_skipstamp ($self)
         my $syslog = join "\n", $self->{instance}->getsyslog();
 
         # recover should have logged itself updating skipstamp
-        $self->assert_matches(qr/updating recovery stamp/, $syslog);
+        $self->assert_matches(qr/\bevent=db\.skiplist\.recovery\.stamped\b/, $syslog);
 
         # cyrus processes should not whinge about missing skipstamp file
-        $self->assert_does_not_match(qr/skipstamp is missing/, $syslog);
-        $self->assert_does_not_match(qr/DBERROR: skipstamp/, $syslog);
+        $self->assert_does_not_match(qr/\bevent=db\.skiplist\.skipstamp\.missing\b/, $syslog);
+        $self->assert_does_not_match(qr/\bevent=db\.skiplist\.skipstamp\.unreadable\b/, $syslog);
     }
 }

@@ -30,14 +30,14 @@ sub test_recover_skipcleanshutdown ($self)
         my $syslog = join "\n", $self->{instance}->getsyslog();
 
         # recover should not claim this was a normal start
-        $self->assert_does_not_match(qr/starting normally/, $syslog);
+        $self->assert_does_not_match(qr/\bevent=db\.skiplist\.recovery\.skipped\b/, $syslog);
 
         # recover should have logged itself updating skipstamp
-        $self->assert_matches(qr/updating recovery stamp/, $syslog);
+        $self->assert_matches(qr/\bevent=db\.skiplist\.recovery\.stamped\b/, $syslog);
 
         # cyrus processes should not whinge about missing skipstamp file
-        $self->assert_does_not_match(qr/skipstamp is missing/, $syslog);
-        $self->assert_does_not_match(qr/DBERROR: skipstamp/, $syslog);
+        $self->assert_does_not_match(qr/\bevent=db\.skiplist\.skipstamp\.missing\b/, $syslog);
+        $self->assert_does_not_match(qr/\bevent=db\.skiplist\.skipstamp\.unreadable\b/, $syslog);
     }
 
     # shut down "cleanly" again, but this time leaving skipstamp alone
@@ -60,13 +60,13 @@ sub test_recover_skipcleanshutdown ($self)
         my $syslog = join "\n", $self->{instance}->getsyslog();
 
         # recover should claim this was a normal start
-        $self->assert_matches(qr/starting normally/, $syslog);
+        $self->assert_matches(qr/\bevent=db\.skiplist\.recovery\.skipped\b/, $syslog);
 
         # recover should not have updated skipstamp
-        $self->assert_does_not_match(qr/updating recovery stamp/, $syslog);
+        $self->assert_does_not_match(qr/\bevent=db\.skiplist\.recovery\.stamped\b/, $syslog);
 
         # cyrus processes should not whinge about missing skipstamp file
-        $self->assert_does_not_match(qr/skipstamp is missing/, $syslog);
-        $self->assert_does_not_match(qr/DBERROR: skipstamp/, $syslog);
+        $self->assert_does_not_match(qr/\bevent=db\.skiplist\.skipstamp\.missing\b/, $syslog);
+        $self->assert_does_not_match(qr/\bevent=db\.skiplist\.skipstamp\.unreadable\b/, $syslog);
     }
 }
