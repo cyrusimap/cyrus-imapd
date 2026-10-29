@@ -1,5 +1,21 @@
 #!perl
 use Cassandane::Tiny;
+use Time::Local qw(timelocal);
+
+# Cassandane's syslog replacement stamps each line with local time to the
+# microsecond, as "Oct 29 16:25:21.608579", without a year.
+my sub syslog_line_epoch ($line)
+{
+    my ($mon, $mday, $h, $m, $s, $frac) = $line =~
+        /^<\w+> (\w{3}) +(\d+) (\d\d):(\d\d):(\d\d)(\.\d+)/
+        or return undef;
+
+    my %month;
+    @month{qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)} = (0 .. 11);
+    my $year = (localtime)[5] + 1900;
+
+    return timelocal($s, $m, $h, $mday, $month{$mon}, $year) + $frac;
+}
 
 sub test_squatter_attachextract_nolock
     :min_version_3_9 :SearchAttachmentExtractor
@@ -48,12 +64,16 @@ sub test_squatter_attachextract_nolock
     my $reacquired_timestamp = undef;
     if ($self->{instance}->{have_syslog_replacement}) {
         my @log = $self->{instance}->getsyslog(
-            qr/squatter\[\d+\]: (released|reacquired) mailbox lock/);
+            qr/squatter\[\d+\]: event=search\.index\.lock\.(released|reacquired)\b/);
 
-        ($released_timestamp) = ($log[0] =~ /released.+unixepoch=<(\d+)>/);
+        $self->assert_num_equals(2, scalar @log);
+        $self->assert_matches(qr/\.released\b/, $log[0]);
+        $self->assert_matches(qr/\.reacquired\b/, $log[1]);
+
+        $released_timestamp = syslog_line_epoch($log[0]);
         $self->assert_not_null($released_timestamp);
 
-        ($reacquired_timestamp) = ($log[1] =~ /reacquired.+unixepoch=<(\d+)>/);
+        $reacquired_timestamp = syslog_line_epoch($log[1]);
         $self->assert_not_null($reacquired_timestamp);
     }
 

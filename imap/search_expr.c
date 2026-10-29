@@ -146,8 +146,9 @@ static int complexity_check(int r, unsigned *nnodes)
 {
     unsigned max = (unsigned)config_getint(IMAPOPT_SEARCH_NORMALISATION_MAX);
     if (max && nnodes && *nnodes >= max) {
-        xsyslog(LOG_WARNING, "nnodes exceeds normalisation_max",
-                "nnodes=%d normalisation_max=%d", *nnodes, max);
+        xsyslog_ev(LOG_WARNING, "search.expr.normalise.abandoned",
+                   lf_d("search.nodes", *nnodes),
+                   lf_d("limit.value", max));
         return -1;
     }
     return r;
@@ -2477,7 +2478,8 @@ static int search_language_match(message_t *m __attribute__((unused)),
                                  void *data1 __attribute__((unused)))
 {
     /* language matching must be done in the backend */
-    syslog(LOG_DEBUG, "%s: ignoring language search attribute", __func__);
+    xsyslog_ev(LOG_DEBUG, "search.expr.attribute.ignored",
+               lf_s("search.attribute", "language"));
     return 1;
 }
 
@@ -2487,7 +2489,8 @@ static int search_icalendar_match(message_t *m __attribute__((unused)),
                                  void *data1 __attribute__((unused)))
 {
     /* icalendar matching must be done in the backend */
-    syslog(LOG_WARNING, "%s: ignoring icalendar search attribute", __func__);
+    xsyslog_ev(LOG_WARNING, "search.expr.attribute.ignored",
+               lf_s("search.attribute", "icalendar"));
     return 0;
 }
 
@@ -2516,14 +2519,16 @@ static void search_seen_internalise(struct index_state *state,
                     *internalisedp = seen;
                 }
                 else {
-                    xsyslog(LOG_WARNING, "can not read seen data",
-                            "userid=<%s> mboxid=<%s> err=<%s>",
-                            v->s, mailbox_uniqueid(state->mailbox), error_message(r));
+                    xsyslog_ev(LOG_WARNING, "search.expr.seen.read.failed",
+                               lf_s("u.username", v->s),
+                               lf_s("mbox.uniqueid", mailbox_uniqueid(state->mailbox)),
+                               lf_err("error", r));
                 }
             }
             else {
-                xsyslog(LOG_WARNING, "can not open seendb",
-                        "userid=<%s> err=<%s>", v->s, error_message(r));
+                xsyslog_ev(LOG_WARNING, "search.expr.seen.open.failed",
+                           lf_s("u.username", v->s),
+                           lf_err("error", r));
             }
             seen_close(&seendb);
         }
