@@ -519,6 +519,48 @@ sync.step               which step of a replication operation is being logged
 sync.to.modseq          the modseq a partial replication stops at
 sync.to.uid             the uid a partial replication stops at
 sync.tries              how many times replication tried before giving up
+tls.alert.desc          a TLS alert's description
+tls.alert.type          a TLS alert's level: warning or fatal
+tls.alpn                the application protocol ALPN selected
+tls.alpn.client         the application protocols a TLS client offered
+tls.alpn.server         the application protocols the server would accept
+tls.authid              the identity a client certificate authenticated
+tls.cert.subject        the subject of a certificate being loaded, one-line form
+tls.cipher              the negotiated TLS cipher suite
+tls.cipher.algbits      the key length of the cipher's algorithm, in bits
+tls.cipher.bits         the cipher's effective key length, in bits
+tls.ciphers             a configured TLS cipher list
+tls.client_ca_dir       the tls_client_ca_dir setting
+tls.client_ca_file      the tls_client_ca_file setting
+tls.client_cert.requested  1 if the server asks clients for a certificate
+tls.client_cert.required  1 if the server refuses clients without a certificate
+tls.direction           read or write: which way a TLS alert went
+tls.dump                one line of a TLS hex dump
+tls.early_data          1 if the server accepted TLS 1.3 early data
+tls.engine              which TLS engine logged: server or client
+tls.group               a TLS key exchange group, or a colon-separated list of them
+tls.key.path            the private key file paired with the certificate in sys.path
+tls.peer.fingerprint    the MD5 fingerprint of the peer's certificate
+tls.peer.issuer         the issuer of the peer's certificate, one-line form
+tls.peer.issuer_cn      the common name of the peer certificate's issuer
+tls.peer.subject        the subject of the peer's certificate, one-line form
+tls.peer.subject_cn     the common name of the peer certificate's subject
+tls.protocol            the negotiated TLS protocol version
+tls.reason              why a TLS operation failed or was skipped
+tls.result              the outcome of a TLS session cache operation
+tls.reused              1 if a TLS session was resumed rather than new
+tls.server_ca_dir       the tls_server_ca_dir setting
+tls.server_ca_file      the tls_server_ca_file setting
+tls.server_cert         the tls_server_cert setting
+tls.server_key          the tls_server_key setting
+tls.session.expire      when a cached TLS session expires
+tls.session.id          a TLS session id, in hex
+tls.sessions            how many sessions the TLS session cache holds
+tls.sessions.purged     how many expired sessions were removed from the TLS session cache
+tls.sni                 the server name a TLS client asked for
+tls.state               OpenSSL's description of the handshake state
+tls.step                which step of a TLS operation is being logged
+tls.verify.depth        the depth in the chain of the certificate being verified
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
 ws.close.reason         the reason text of a WebSocket close frame
