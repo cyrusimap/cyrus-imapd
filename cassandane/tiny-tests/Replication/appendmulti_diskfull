@@ -69,10 +69,8 @@ EOF
     if ($self->{instance}->{have_syslog_replacement}) {
         # sync server should have logged the write error
         my @lines = $self->{replica}->getsyslog();
-        $self->assert_matches(qr{IOERROR:\sfailed\sto\supload\sfile
-                                 (?:\s\(simulated\))?:
-                                 (?:\s[^=]+=<[^>]*>)*
-                                 \sguid=<$canaryguid>
+        $self->assert_matches(qr{\bevent=sync\.upload\.failed\b
+                                 .*\bmsg\.guid=$canaryguid\b
                               }x,
                               "@lines");
 

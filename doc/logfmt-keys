@@ -448,6 +448,7 @@ sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
 statuscache.hit         1 if the status cache had the answer
 statuscache.items       the STATUS items a lookup asked for, as a hex mask
+sync.archive            1 if replication is staging a message on an archive partition
 sync.cached             the mailboxes a replication lookup took from the sync cache
 sync.capabilities       the capability list a replication server advertised
 sync.capability         a single replication protocol capability
@@ -461,6 +462,7 @@ sync.file.size          the size of a message file, where it disagrees with msg.
 sync.forced             1 if replication is running in force mode
 sync.from.modseq        the modseq a partial replication starts after
 sync.from.uid           the uid a partial replication starts after
+sync.log.entry          a line of a sync log file, as written or read
 sync.mailboxes          the mailboxes a replication lookup asked the replica about
 sync.promoted_to        the broader replication command a failed one was promoted to
 sync.reason             why replication skipped, refused or rejected something

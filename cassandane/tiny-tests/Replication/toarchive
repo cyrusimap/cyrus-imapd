@@ -69,14 +69,14 @@ sub test_toarchive
             $repcfg->get('archivepartition-default')
         );
 
-        my @choices = $self->{replica}->getsyslog(qr{debug_log_sync_partition_choice: chose reserve path});
+        my @choices = $self->{replica}->getsyslog(qr{\bevent=sync\.reserve\.path\.chosen\b});
 
         $self->assert_num_equals(scalar(keys %msg), scalar @choices);
 
         foreach my $choice (@choices) {
-            $self->assert_matches(qr{\bbase=<$part>},
+            $self->assert_matches(qr{\bsys\.path=\Q$part\E\s},
                                   $choice);
-            $self->assert_matches(qr{\breserve_path=<$part/sync\./},
+            $self->assert_matches(qr{\bsync\.stage\.path=\Q$part\E/sync\./},
                                   $choice);
         }
     }
