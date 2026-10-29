@@ -508,9 +508,14 @@ sched.sender            the scheduling address a message was sent from
 sched.transport         how a scheduling message travels: caldav, imip or ischedule
 sched.userid            the userid whose scheduling addresses were used
 scope                   the scope a duplicate-delivery check applied to
+search.attachextract.socket  the socket an attachment extractor connection uses
+search.attachextract.timeout  when an idle attachment extractor connection will be closed
+search.attribute        a search attribute, e.g. language
 search.batch_highest_createdmodseq  highest createdmodseq indexed in this batch
 search.batch_lowest_createdmodseq   lowest createdmodseq indexed in this batch
 search.bytes            how many bytes a search index operation handled
+search.cached           1 if attachment text came from the extractor cache
+search.cacheonly        1 if attachment extraction may only read its cache
 search.committed        how many documents a Xapian commit wrote
 search.createdmodseq    highest createdmodseq the search index covers
 search.cyrusid          a Xapian document's cyrusid term
@@ -527,6 +532,7 @@ search.language         an ISO 639 language code
 search.lock             the name lock a search index operation needs
 search.messages         how many messages a search index operation handled
 search.min_index_version  the lowest search index version an operation needs
+search.nodes            how many nodes a search expression has
 search.op               a search operator, e.g. OR
 search.part             which part of a message a search term or index entry is for
 search.query            a Xapian query, as Xapian describes it
@@ -539,6 +545,7 @@ search.source.index_version  the index version of the search tier being read fro
 search.step             which step of a search operation is being logged
 search.tier             a Xapian search tier name
 search.tier.key         a key that names a Xapian search tier
+search.tmp.path         a temporary file a search operation writes before renaming it
 search.uids             a sequence of message uids, as a search index records them
 search.uncommitted      how many documents were pending when a commit failed
 search.updates          how many update passes indexed nothing
@@ -710,6 +717,7 @@ old.mboxlist.key        a mailboxes.db key before it was rewritten
 old.mboxlist.subs.version  the subscriptions db version before an upgrade
 old.msg.imapuid         the message's IMAP uid before a move
 old.msg.sysflags        the message's system flags before the change
+old.search.cacheonly    the attachment extractor's cache-only flag before a change
 old.search.createdmodseq  the createdmodseq the client last saw
 old.search.generation   the search index generation the client last saw
 old.sys.path            the path a file was copied or moved from
