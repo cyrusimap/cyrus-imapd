@@ -103,15 +103,15 @@ sub assert_alpn_protocol
     else {
         return if !$self->{instance}->{have_syslog_replacement};
 
-        my @lines = $self->{instance}->getsyslog(qr{starttls: \S+ with cipher});
+        my @lines = $self->{instance}->getsyslog(qr{\bevent=tls\.session\.started\b});
         $self->assert_num_equals(1, scalar @lines);
 
         if ($protocol) {
-            $self->assert_matches(qr{; application protocol = $protocol},
+            $self->assert_matches(qr{\btls\.alpn=\Q$protocol\E\b},
                                   $lines[0]);
         }
         else {
-            $self->assert_does_not_match(qr{; application protocol =},
+            $self->assert_does_not_match(qr{\btls\.alpn=},
                                          $lines[0]);
         }
     }

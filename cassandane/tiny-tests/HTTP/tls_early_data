@@ -174,7 +174,7 @@ sub test_tls_early_data_process_reuse
     $self->assert_str_equals('200', early_response_status($out));
 
     # All five were served by the same process
-    my %pids = map { /httpsreuse\[(\d+)\]: starttls:/ ? ($1 => 1) : () }
+    my %pids = map { /httpsreuse\[(\d+)\]: event=tls\.session\.started\b/ ? ($1 => 1) : () }
                $self->{instance}->getsyslog();
     $self->assert_num_equals(1, scalar keys %pids);
 }
@@ -246,8 +246,8 @@ sub test_tls_early_data_http2
     $self->assert_matches(qr/^Early data was accepted/m, $out);
 
     my @log = $self->{instance}->getsyslog();
-    my ($starttls) = grep { /starttls:/ } @log;
-    $self->assert_matches(qr/reused.*application protocol = h2.*early data accepted/,
+    my ($starttls) = grep { /\bevent=tls\.session\.started\b/ } @log;
+    $self->assert_matches(qr/\btls\.reused=1\b.*\btls\.alpn=h2\b.*\btls\.early_data=1\b/,
                           $starttls);
 
     # Only the requests that arrived early are early, and only the unsafe
