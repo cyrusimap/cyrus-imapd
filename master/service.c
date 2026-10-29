@@ -52,11 +52,14 @@ static int newfile = 0;
 void notify_master(int fd, int msg)
 {
     struct notify_message notifymsg;
-    if (verbose) syslog(LOG_DEBUG, "telling master %x", msg);
+    if (verbose)
+        xsyslog_ev(LOG_DEBUG, "service.master.notifying",
+                   lf_raw("master.message", "0x%x", msg));
     notifymsg.message = msg;
     notifymsg.service_pid = getpid();
     if (write(fd, &notifymsg, sizeof(notifymsg)) != sizeof(notifymsg)) {
-        syslog(LOG_ERR, "unable to tell master %x: %m", msg);
+        xsyslog_ev(LOG_ERR, "service.master.notify.failed",
+                   lf_raw("master.message", "0x%x", msg));
     }
 }
 
@@ -96,7 +99,8 @@ static int libwrap_ask(struct request_info *req, int fd)
 
     a = hosts_access(req);
     if (!a) {
-        syslog(deny_severity, "refused connection from %s", eval_client(req));
+        xsyslog_ev(deny_severity, "service.connection.refused",
+                   lf_s("r.clienthost", eval_client(req)));
     }
 
     return a;
@@ -130,9 +134,9 @@ static int getlockfd(char *service, int id)
              config_dir, service, id);
     fd = open(lockfile, O_CREAT | O_RDWR, 0600);
     if (fd < 0) {
-        syslog(LOG_ERR,
-               "locking disabled: couldn't open socket lockfile %s: %m",
-               lockfile);
+        xsyslog_ev(LOG_ERR, "service.lock.disabled",
+                   lf_s("master.service", service),
+                   lf_s("sys.path", lockfile));
         lockfd = -1;
         return -1;
     }
@@ -166,7 +170,8 @@ static int lockaccept(void)
         }
 
         if (rc < 0) {
-            syslog(LOG_ERR, "fcntl: F_SETLKW: error getting accept lock: %m");
+            xsyslog_ev(LOG_ERR, "service.lock.failed",
+                       lf_s("master.step", "lock"));
             if (MESSAGE_MASTER_ON_EXIT)
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
             service_abort(EX_OSERR);
@@ -194,8 +199,8 @@ static int unlockaccept(void)
             /* noop */;
 
         if (rc < 0) {
-            syslog(LOG_ERR,
-                   "fcntl: F_SETLKW: error releasing accept lock: %m");
+            xsyslog_ev(LOG_ERR, "service.lock.failed",
+                       lf_s("master.step", "unlock"));
             if (MESSAGE_MASTER_ON_EXIT)
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
             service_abort(EX_OSERR);
@@ -290,8 +295,9 @@ int main(int argc, char **argv, char **envp)
     while ((opt = getopt(argc, argv, "C:U:T:DX")) != EOF) {
         if (argv[optind-1][0] == '-' && strlen(argv[optind-1]) > 2) {
             /* we have merged options */
-            syslog(LOG_ERR,
-                   "options and arguments MUST be separated by whitespace");
+            xsyslog_ev(LOG_ERR, "service.args.invalid",
+                       lf_s("master.reason", "merged_options"),
+                       lf_s("master.service.cmd", argv[optind-1]));
             exit(EX_USAGE);
         }
 
@@ -334,20 +340,23 @@ int main(int argc, char **argv, char **envp)
     if (p) verbose = atoi(p) + 1;
 
     if (verbose > 30) {
-        syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
+        xsyslog_ev(LOG_DEBUG, "service.debugger.waiting",
+                   lf_d("sys.pid", getpid()));
         sleep(15);
     }
 
     p = getenv("CYRUS_SERVICE");
     if (p == NULL) {
-        syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
+        xsyslog_ev(LOG_ERR, "service.env.missing",
+                   lf_s("master.reason", "CYRUS_SERVICE"));
         exit(EX_SOFTWARE);
     }
     service = xstrdup(p);
 
     p = getenv("CYRUS_ID");
     if (p == NULL) {
-        syslog(LOG_ERR, "could not getenv(CYRUS_ID); exiting");
+        xsyslog_ev(LOG_ERR, "service.env.missing",
+                   lf_s("master.reason", "CYRUS_ID"));
         exit(EX_SOFTWARE);
     }
     id = atoi(p);
@@ -377,12 +386,15 @@ int main(int argc, char **argv, char **envp)
             snprintf(debugbuf, sizeof(debugbuf), debugger,
                      argv[0], getpid(), service);
 #pragma GCC diagnostic pop
-            syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
+            xsyslog_ev(LOG_DEBUG, "service.debugger.running",
+                       lf_s("master.service.cmd", debugbuf));
             ret = system(debugbuf); /* run debugger */
-            syslog(LOG_DEBUG, "debugger returned exit status: %d", ret);
+            xsyslog_ev(LOG_DEBUG, "service.debugger.exited",
+                       lf_d("sys.exitcode", ret));
         }
     }
-    syslog(LOG_DEBUG, "executed");
+    xsyslog_ev(LOG_DEBUG, "service.started",
+               lf_s("master.service", service));
 
     if (debug_stdio) {
         if (service_init(service_argv.count, service_argv.data, envp) != 0) {
@@ -395,7 +407,8 @@ int main(int argc, char **argv, char **envp)
         if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD,
                                         fdflags | FD_CLOEXEC);
         if (fdflags == -1) {
-            syslog(LOG_ERR, "unable to set close on exec: %m");
+            xsyslog_ev(LOG_ERR, "service.socket.setup.failed",
+                       lf_s("master.step", "cloexec"));
             if (MESSAGE_MASTER_ON_EXIT)
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
             return 1;
@@ -404,7 +417,8 @@ int main(int argc, char **argv, char **envp)
         if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD,
                                         fdflags | FD_CLOEXEC);
         if (fdflags == -1) {
-            syslog(LOG_ERR, "unable to set close on exec: %m");
+            xsyslog_ev(LOG_ERR, "service.socket.setup.failed",
+                       lf_s("master.step", "cloexec"));
             if (MESSAGE_MASTER_ON_EXIT)
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
             return 1;
@@ -413,13 +427,15 @@ int main(int argc, char **argv, char **envp)
         /* figure out what sort of socket this is */
         if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
                     (char *) &soctype, &typelen) < 0) {
-            syslog(LOG_ERR, "getsockopt: SOL_SOCKET: failed to get type: %m");
+            xsyslog_ev(LOG_ERR, "service.socket.setup.failed",
+                       lf_s("master.step", "getsockopt"));
             if (MESSAGE_MASTER_ON_EXIT)
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
             return 1;
         }
         if (getsockname(LISTEN_FD, &socname, &addrlen) < 0) {
-            syslog(LOG_ERR, "getsockname: failed: %m");
+            xsyslog_ev(LOG_ERR, "service.socket.setup.failed",
+                       lf_s("master.step", "getsockname"));
             if (MESSAGE_MASTER_ON_EXIT)
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
             return 1;
@@ -473,12 +489,16 @@ int main(int argc, char **argv, char **envp)
                 /* This might happen transiently during a package
                  * upgrade or permanently after package removal.
                  * In either case, it's time to die. */
-                syslog(LOG_INFO, "cannot stat process file: %m");
+                xsyslog_ev(LOG_INFO, "service.exec.changed",
+                           lf_s("sys.path", path),
+                           lf_s("master.reason", "stat_failed"),
+                           lf_s("sys.error", strerror(errno)));
                 break;
             }
             if (sbuf.st_ino != start_ino || sbuf.st_size != start_size ||
                 sbuf.st_mtime != start_mtime) {
-                syslog(LOG_INFO, "process file has changed");
+                xsyslog_ev(LOG_INFO, "service.exec.changed",
+                           lf_s("sys.path", path));
                 newfile = 1;
                 break;
             }
@@ -515,7 +535,7 @@ int main(int argc, char **argv, char **envp)
                         GCC_FALLTHROUGH
 
                     default:
-                        syslog(LOG_ERR, "accept failed: %m");
+                        xsyslog_ev(LOG_ERR, "service.accept.failed");
                         if (MESSAGE_MASTER_ON_EXIT)
                             notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
                         service_abort(EX_OSERR);
@@ -535,7 +555,8 @@ int main(int argc, char **argv, char **envp)
                              (struct sockaddr *) &from, &fromlen);
                 if (r == -1) {
                     if (signals_poll() == SIGHUP) break;
-                    syslog(LOG_ERR, "recvfrom failed: %m");
+                    xsyslog_ev(LOG_ERR, "service.accept.failed",
+                               lf_s("master.step", "recvfrom"));
                     if (MESSAGE_MASTER_ON_EXIT)
                         notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
                     service_abort(EX_OSERR);
@@ -555,7 +576,8 @@ int main(int argc, char **argv, char **envp)
         }
         if (fd < 0) {
             /* how did this happen? - we might have caught a signal. */
-            syslog(LOG_ERR, "accept() failed but we didn't catch it?");
+            xsyslog_ev(LOG_ERR, "service.accept.failed",
+                       lf_s("master.reason", "no_fd"));
             if (MESSAGE_MASTER_ON_EXIT)
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
             service_abort(EX_SOFTWARE);
@@ -579,20 +601,23 @@ int main(int argc, char **argv, char **envp)
         }
 
         notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
-        syslog(LOG_DEBUG, "accepted connection");
+        xsyslog_ev(LOG_DEBUG, "service.connection.accepted");
 
         if (fd != STDIN_FILENO && dup2(fd, STDIN_FILENO) < 0) {
-            syslog(LOG_ERR, "can't duplicate accepted socket: %m");
+            xsyslog_ev(LOG_ERR, "service.socket.setup.failed",
+                       lf_s("master.step", "dup"));
             service_abort(EX_OSERR);
         }
         if (fd != STDOUT_FILENO && dup2(fd, STDOUT_FILENO) < 0) {
-            syslog(LOG_ERR, "can't duplicate accepted socket: %m");
+            xsyslog_ev(LOG_ERR, "service.socket.setup.failed",
+                       lf_s("master.step", "dup"));
             service_abort(EX_OSERR);
         }
 #if 0  /* XXX  This appears to have no valid use (and breaks wire protocols).
           We should look into capturing stderr and sending it to syslog. */
         if (fd != STDERR_FILENO && dup2(fd, STDERR_FILENO) < 0) {
-            syslog(LOG_ERR, "can't duplicate accepted socket: %m");
+            xsyslog_ev(LOG_ERR, "service.socket.setup.failed",
+                       lf_s("master.step", "dup"));
             service_abort(EX_OSERR);
         }
 #endif
