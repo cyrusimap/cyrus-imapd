@@ -159,8 +159,9 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
     while (size) {
         n = prot_read(from, buf, size > 4096 ? 4096 : size);
         if (!n) {
-            xsyslog(LOG_ERR, "IOERROR: reading message: unexpected end of file",
-                             NULL);
+            xsyslog_ev(LOG_ERR, "message.copy.failed",
+                       lf_s("message.step", "read"),
+                       lf_s("message.reason", "eof"));
             return IMAP_IOERROR;
         }
 
@@ -218,7 +219,8 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
 
     if (to) {
         if (fflush(to) || ferror(to) || fdatasync(fileno(to))) {
-            syslog(LOG_ERR, "IOERROR: writing message: %s", strerror(errno));
+            xsyslog_ev(LOG_ERR, "message.copy.failed",
+                       lf_s("message.step", "write"));
             r = IMAP_IOERROR;
             goto done;
         }
@@ -350,11 +352,12 @@ EXPORTED int message_parse_file(FILE *infile,
 
     if (fstat(fd, &sbuf) == -1) {
         if (efname)
-            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool",
-                             "filename=<%s>",
-                             efname);
+            xsyslog_ev(LOG_ERR, "message.parse.failed",
+                       lf_s("sys.path", efname),
+                       lf_s("message.step", "fstat"));
         else
-            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool", NULL);
+            xsyslog_ev(LOG_ERR, "message.parse.failed",
+                       lf_s("message.step", "fstat"));
         fatal("can't fstat message file", EX_OSFILE);
     }
     map_refresh(fd, 1, msg_base, msg_len, sbuf.st_size,
@@ -392,11 +395,12 @@ EXPORTED int message_parse_file_buf(FILE *infile,
 
     if (fstat(fd, &sbuf) == -1) {
         if (efname)
-            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool",
-                             "filename=<%s>",
-                             efname);
+            xsyslog_ev(LOG_ERR, "message.parse.failed",
+                       lf_s("sys.path", efname),
+                       lf_s("message.step", "fstat"));
         else
-            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool", NULL);
+            xsyslog_ev(LOG_ERR, "message.parse.failed",
+                       lf_s("message.step", "fstat"));
         fatal("can't fstat message file", EX_OSFILE);
     }
     buf_refresh_mmap(buf, 1, fd, efname, sbuf.st_size, "new message");
@@ -428,11 +432,12 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body,
 
     if (fstat(fd, &sbuf) == -1) {
         if (efname)
-            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool",
-                             "filename=<%s>",
-                             efname);
+            xsyslog_ev(LOG_ERR, "message.parse.failed",
+                       lf_s("sys.path", efname),
+                       lf_s("message.step", "fstat"));
         else
-            xsyslog(LOG_ERR, "IOERROR: fstat on new message in spool", NULL);
+            xsyslog_ev(LOG_ERR, "message.parse.failed",
+                       lf_s("message.step", "fstat"));
         fatal("can't fstat message file", EX_OSFILE);
     }
     msg.len = sbuf.st_size;
@@ -445,11 +450,12 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body,
     n = retry_read(fd, (char*) msg.base, msg.len);
     if (n != msg.len) {
         if (efname)
-            xsyslog(LOG_ERR, "IOERROR: reading binary file in spool",
-                             "filename=<%s>",
-                             efname);
+            xsyslog_ev(LOG_ERR, "message.parse.failed",
+                       lf_s("sys.path", efname),
+                       lf_s("message.step", "read_binary"));
         else
-            xsyslog(LOG_ERR, "IOERROR: reading binary file in spool", NULL);
+            xsyslog_ev(LOG_ERR, "message.parse.failed",
+                       lf_s("message.step", "read_binary"));
         return IMAP_IOERROR;
     }
 
@@ -468,11 +474,12 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body,
 
     if (n != msg.len || fsync(fd)) {
         if (efname)
-            xsyslog(LOG_ERR, "IOERROR: rewriting binary file in spool",
-                             "filename=<%s>",
-                             efname);
+            xsyslog_ev(LOG_ERR, "message.parse.failed",
+                       lf_s("sys.path", efname),
+                       lf_s("message.step", "rewrite_binary"));
         else
-            xsyslog(LOG_ERR, "IOERROR: rewriting binary file in spool", NULL);
+            xsyslog_ev(LOG_ERR, "message.parse.failed",
+                       lf_s("message.step", "rewrite_binary"));
         return IMAP_IOERROR;
     }
 
@@ -501,18 +508,16 @@ EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
     if (body->filesize != body->header_size + body->content_size) {
         if (efname)
             /* XXX IOERROR but only LOG_NOTICE?? */
-            xsyslog(LOG_NOTICE, "IOERROR: size mismatch on parse",
-                                "guid=<%s> filename=<%s> "
-                                "filesize=<%" PRIu32 "> bodysize=<%" PRIu32 ">",
-                                message_guid_encode(&body->guid), efname,
-                                body->filesize,
-                                body->header_size + body->content_size);
+            xsyslog_ev(LOG_NOTICE, "message.size.mismatch",
+                       lf_s("sys.path", efname),
+                       lf_s("msg.guid", message_guid_encode(&body->guid)),
+                       lf_u("msg.size", body->filesize),
+                       lf_u("message.bodysize", body->header_size + body->content_size));
         else
-            xsyslog(LOG_NOTICE, "IOERROR: size mismatch on parse",
-                                "guid=<%s> "
-                                "filesize=<%" PRIu32 "> bodysize=<%" PRIu32 ">",
-                                message_guid_encode(&body->guid), body->filesize,
-                                body->header_size + body->content_size);
+            xsyslog_ev(LOG_NOTICE, "message.size.mismatch",
+                       lf_s("msg.guid", message_guid_encode(&body->guid)),
+                       lf_u("msg.size", body->filesize),
+                       lf_u("message.bodysize", body->header_size + body->content_size));
     }
 
     return 0;
@@ -609,8 +614,8 @@ static void message_find_part(struct body *body, const char *section,
     if (match) {
         /* matching part, sanity check the size against the mmap'd file */
         if (body->content_offset + body->content_size > msg_len) {
-            xsyslog(LOG_ERR, "IOERROR: body part exceeds size of message file",
-                             NULL);
+            xsyslog_ev(LOG_ERR, "message.parse.failed",
+                       lf_s("message.reason", "part_past_eof"));
             fatal("body part exceeds size of message file", EX_OSFILE);
         }
 
@@ -889,13 +894,14 @@ static void message_parse_headers(struct msg *msg, struct body *body,
             /* check if we've hit a limit and flag it */
             if (maxlines && body->header_lines > maxlines) {
                 if (efname)
-                    syslog(LOG_ERR, "ERROR: message (%s) has more than %d header lines "
-                                    "not caching any more",
-                           efname, maxlines);
+                    xsyslog_ev(LOG_WARNING, "message.limit.reached",
+                               lf_s("sys.path", efname),
+                               lf_s("limit.name", "maxheaderlines"),
+                               lf_d("limit.value", maxlines));
                 else
-                    syslog(LOG_ERR, "ERROR: message has more than %d header lines "
-                                    "not caching any more",
-                           maxlines);
+                    xsyslog_ev(LOG_WARNING, "message.limit.reached",
+                               lf_s("limit.name", "maxheaderlines"),
+                               lf_d("limit.value", maxlines));
                 have_max = 1;
                 continue;
             }
@@ -963,7 +969,7 @@ static void message_parse_headers(struct msg *msg, struct body *body,
                     if (p)
                         memcpy(p, "base64", 6);
                     else
-                        xsyslog(LOG_ERR, "can not patch BINARY CTE header", NULL);
+                        xsyslog_ev(LOG_ERR, "message.binary.patch.failed");
                 }
                 break;
             case RFC822_CONTENT_TYPE:
@@ -1093,7 +1099,8 @@ EXPORTED void message_parse_charset_params(const struct param *params,
             if (param->value && *param->value) {
                 charset_t cs = charset_lookupname(param->value);
                 if (cs == CHARSET_UNKNOWN_CHARSET) {
-                    xsyslog(LOG_NOTICE, "unknown charset", "charset=<%s>", param->value);
+                    xsyslog_ev(LOG_NOTICE, "message.charset.unknown",
+                               lf_s("part.charset", param->value));
                     continue;
                 }
                 charset_free(c_ptr);
@@ -1918,13 +1925,14 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
     /* check if we've hit a limit and flag it */
     if (limit && depth == limit) {
         if (efname)
-            syslog(LOG_ERR, "ERROR: mime boundary limit %i exceeded, "
-                            "not parsing anymore (%s)",
-                   limit, efname);
+            xsyslog_ev(LOG_WARNING, "message.limit.reached",
+                       lf_s("sys.path", efname),
+                       lf_s("limit.name", "boundary_depth"),
+                       lf_d("limit.value", limit));
         else
-            syslog(LOG_ERR, "ERROR: mime boundary limit %i exceeded, "
-                            "not parsing anymore",
-                   limit);
+            xsyslog_ev(LOG_WARNING, "message.limit.reached",
+                       lf_s("limit.name", "boundary_depth"),
+                       lf_d("limit.value", limit));
     }
 }
 
@@ -3928,7 +3936,7 @@ static int extract_convdata(struct conversations_state *state,
             hcount++;
             if (hcount > 20) {
                 free(msgid);
-                syslog(LOG_DEBUG, "too many references, skipping the rest");
+                xsyslog_ev(LOG_DEBUG, "message.references.truncated");
                 break;
             }
             /*
@@ -4125,9 +4133,13 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         conversation_id_t was = record->cid;
         record->cid = generate_conversation_id(record);
 
-        syslog(LOG_NOTICE, "splitting conversation for %s %u "
-               "base:" CONV_FMT " was:" CONV_FMT " now:" CONV_FMT,
-               mailbox_name(mailbox), record->uid, record->basecid, was, record->cid);
+        xsyslog_ev(LOG_NOTICE, "conversations.thread.split",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", record->uid),
+                   lf_raw("msg.cid", CONV_FMT, record->cid),
+                   lf_raw("old.msg.cid", CONV_FMT, was),
+                   lf_raw("conversations.basecid", CONV_FMT, record->basecid),
+                   lf_d("limit.value", max_thread));
 
         if (!record->basecid) record->basecid = was;
 
@@ -4999,11 +5011,11 @@ static int message_parse_cbodystructure(message_t *m)
     m->body = xzmalloc(sizeof(struct body));
     r = parse_bodystructure_part(prot, m->body, NULL, m->record.cache_version);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: error parsing body structure",
-                         "mailbox=<%s> record_uid=<%u>, cacheitem=<%.*s>",
-                         mailbox_name(m->mailbox), m->record.uid,
-                         (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
-                         cacheitem_base(&m->record, CACHE_BODYSTRUCTURE));
+        xsyslog_ev(LOG_ERR, "message.cache.invalid",
+                   lf_mailbox(m->mailbox),
+                   lf_u("msg.imapuid", m->record.uid),
+                   lf_s("message.step", "bodystructure"),
+                   lf_raw("message.cacheitem", "%.*s", (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE), cacheitem_base(&m->record, CACHE_BODYSTRUCTURE)));
     }
     if (r) goto done;
 
@@ -5014,11 +5026,11 @@ static int message_parse_cbodystructure(message_t *m)
     r = parse_bodystructure_sections(&cachestr, cacheend, &toplevel,
                                      m->record.cache_version, NULL);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: error parsing section structure",
-                         "mailbox=<%s> record_uid=<%u> cacheitem=<%.*s>",
-                         mailbox_name(m->mailbox), m->record.uid,
-                         (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
-                         cacheitem_base(&m->record, CACHE_BODYSTRUCTURE));
+        xsyslog_ev(LOG_ERR, "message.cache.invalid",
+                   lf_mailbox(m->mailbox),
+                   lf_u("msg.imapuid", m->record.uid),
+                   lf_s("message.step", "sections"),
+                   lf_raw("message.cacheitem", "%.*s", (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE), cacheitem_base(&m->record, CACHE_BODYSTRUCTURE)));
     }
 
 done:
@@ -5038,9 +5050,9 @@ static int message_map_file(message_t *m, const char *fname)
     if (fd == -1) return errno;
 
     if (fstat(fd, &sbuf) == -1) {
-        xsyslog(LOG_ERR, "IOERROR: fstat failed",
-                         "filename=<%s>",
-                         fname);
+        xsyslog_ev(LOG_ERR, "message.parse.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("message.step", "fstat"));
         fatal("can't fstat message file", EX_OSFILE);
     }
     if (!S_ISREG(sbuf.st_mode)) {
