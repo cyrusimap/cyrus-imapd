@@ -67,8 +67,9 @@ EXPORTED int duplicate_init(const char *fname)
 
     r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &dupdb);
     if (r != 0) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "duplicate.db.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(r)));
         goto out;
     }
     duplicate_dbopen = 1;
@@ -150,16 +151,21 @@ EXPORTED time_t duplicate_check(const duplicate_key_t *dkey)
         memcpy(&mark, data, sizeof(time_t));
     } else if (r != CYRUSDB_OK) {
         if (r != CYRUSDB_NOTFOUND) {
-            syslog(LOG_ERR, "duplicate_check: error looking up %s/%s/%s: %s",
-                   dkey->id, dkey->to, dkey->date,
-                   cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "duplicate.db.fetch.failed",
+                       lf_s("msg.id", dkey->id),
+                       lf_s("scope", dkey->to),
+                       lf_s("msg.date", dkey->date),
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         mark = 0;
     }
 
 #if DEBUG
-    syslog(LOG_DEBUG, "duplicate_check: %-40s %-20s %-40s %ld",
-           dkey->id, dkey->to, dkey->date, mark);
+    xsyslog_ev(LOG_DEBUG, "duplicate.checked",
+               lf_s("msg.id", dkey->id),
+               lf_s("scope", dkey->to),
+               lf_s("msg.date", dkey->date),
+               lf_time("duplicate.mark", mark));
 #endif
 
     buf_free(&key);
@@ -169,8 +175,11 @@ EXPORTED time_t duplicate_check(const duplicate_key_t *dkey)
 EXPORTED void duplicate_log(const duplicate_key_t *dkey, const char *action)
 {
     assert(dkey->date != NULL);
-    syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s date %s (%s)",
-      dkey->to, dkey->id, dkey->date, action);
+    xsyslog_ev(LOG_INFO, "duplicate.eliminated",
+               lf_s("msg.id", dkey->id),
+               lf_s("scope", dkey->to),
+               lf_s("msg.date", dkey->date),
+               lf_s("duplicate.action", action));
     auditlog_duplicate(action, dkey);
 }
 
@@ -194,8 +203,12 @@ EXPORTED void duplicate_mark(const duplicate_key_t *dkey, time_t mark, unsigned 
     } while (r == CYRUSDB_AGAIN);
 
 #if DEBUG
-    syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %-40s %ld %lu",
-           dkey->id, dkey->to, dkey->date, mark, uid);
+    xsyslog_ev(LOG_DEBUG, "duplicate.marked",
+               lf_s("msg.id", dkey->id),
+               lf_s("scope", dkey->to),
+               lf_s("msg.date", dkey->date),
+               lf_time("duplicate.mark", mark),
+               lf_lu("msg.imapuid", uid));
 #endif
     buf_free(&key);
 }
@@ -307,15 +320,16 @@ EXPORTED int duplicate_prune(int seconds, struct hash_table *expire_table)
     prock.count = prock.deletions = 0;
     prock.expmark = time(NULL) - seconds;
     prock.expire_table = expire_table;
-    syslog(LOG_NOTICE, "duplicate_prune: pruning back %0.2f days",
-           ((double)seconds/86400));
+    xsyslog_ev(LOG_NOTICE, "duplicate.prune.starting",
+               lf_duration("duplicate.prune.age", (double) seconds));
 
     /* check each entry in our database */
     prock.db = dupdb;
     cyrusdb_foreach(dupdb, "", 0, &prune_p, &prune_cb, &prock, NULL);
 
-    syslog(LOG_NOTICE, "duplicate_prune: purged %d out of %d entries",
-           prock.deletions, prock.count);
+    xsyslog_ev(LOG_NOTICE, "duplicate.prune.done",
+               lf_d("duplicate.deleted", prock.deletions),
+               lf_d("duplicate.count", prock.count));
 
     return 0;
 }
@@ -390,8 +404,8 @@ EXPORTED int duplicate_done(void)
     if (duplicate_dbopen) {
         r = cyrusdb_close(dupdb);
         if (r) {
-            syslog(LOG_ERR, "DBERROR: error closing deliverdb: %s",
-                   cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "duplicate.db.close.failed",
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         duplicate_dbopen = 0;
     }
