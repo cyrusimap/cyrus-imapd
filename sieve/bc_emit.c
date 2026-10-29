@@ -10,6 +10,7 @@
 
 
 #include "bytecode.h"
+#include "util.h"
 
 #include <syslog.h>
 #include <sys/types.h>
@@ -341,7 +342,8 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
     /*debugging variable to check filelen*/
     /*int location;*/
 
-    syslog(LOG_DEBUG, "entered bc_action_emit with filelen: %d", filelen);
+    xsyslog_ev(LOG_DEBUG, "sieve.bytecode.emitting",
+               lf_d("sieve.bytecode.length", filelen));
 
     /* All non-string data MUST be sizeof(int)
        byte aligned so the end of each string may require a pad */

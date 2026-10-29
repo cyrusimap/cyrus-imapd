@@ -485,8 +485,9 @@ static int lock_and_execute(struct mailbox *mailbox,
         r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
 
         if (r) {
-            syslog(LOG_ERR, "locking mailbox %s failed: %s",
-                   mailbox_name(mailbox), error_message(r));
+            xsyslog_ev(LOG_ERR, "sieve.db.lock.failed",
+                       lf_mailbox(mailbox),
+                       lf_err("error", r));
             return r;
         }
 
@@ -517,8 +518,11 @@ static int remove_uid(struct mailbox *mailbox, uint32_t uid)
     }
 
     if (r) {
-        syslog(LOG_ERR, "expunging record (%s:%u) failed: %s",
-               mailbox_name(mailbox), uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "sieve.db.write.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", uid),
+                   lf_s("sieve.step", "expunge"),
+                   lf_err("error", r));
     }
 
     return r;
@@ -545,7 +549,9 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox_name(mailbox), now, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "sieve.db.write.failed",
+                   lf_mailbox(mailbox),
+                   lf_s("sieve.step", "newstage"));
         return CYRUSDB_IOERROR;
     }
 
@@ -589,8 +595,10 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
         r = IMAP_IOERROR;
-        syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "sieve.db.write.failed",
+                   lf_mailbox(mailbox),
+                   lf_s("sieve.step", "append_setup"),
+                   lf_err("error", r));
         fclose(f);
         goto done;
     }
@@ -606,8 +614,10 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
 
     if ((r = append_setup_mbox(&as, mailbox, userid, authstate,
                                0, NULL, NULL, 0, 0))) {
-        syslog(LOG_ERR, "append_setup(%s) failed: %s",
-               mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "sieve.db.write.failed",
+                   lf_mailbox(mailbox),
+                   lf_s("sieve.step", "append_setup"),
+                   lf_err("error", r));
     }
     else {
         struct body *body = NULL;
@@ -620,14 +630,20 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
         }
 
         if (r) {
-            syslog(LOG_ERR, "append_fromstage() failed: %s", error_message(r));
+            xsyslog_ev(LOG_ERR, "sieve.db.write.failed",
+                       lf_mailbox(mailbox),
+                       lf_s("sieve.step", "append_fromstage"),
+                       lf_err("error", r));
             append_abort(&as);
         }
         else {
             /* Commit the append to the sieve mailbox */
             r = append_commit(&as);
             if (r) {
-                syslog(LOG_ERR, "append_commit() failed: %s", error_message(r));
+                xsyslog_ev(LOG_ERR, "sieve.db.write.failed",
+                           lf_mailbox(mailbox),
+                           lf_s("sieve.step", "append_commit"),
+                           lf_err("error", r));
             }
             else if (old_uid) {
                 /* Now that we have the replacement script in place
@@ -668,8 +684,11 @@ static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata,
 
         r = mailbox_find_index_record(mailbox, sdata->imap_uid, &record);
         if (r) {
-            syslog(LOG_ERR, "fetching record (%s:%u) failed: %s",
-                   mailbox_name(mailbox), sdata->imap_uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "sieve.db.read.failed",
+                       lf_intname("mbox.name", mailbox_name(mailbox)),
+                       lf_u("msg.imapuid", sdata->imap_uid),
+                       lf_s("sieve.step", "record"),
+                       lf_err("error", r));
             return r;
         }
     }
@@ -677,7 +696,8 @@ static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata,
     struct sieve_db *sievedb = sievedb_open_mailbox(mailbox);
 
     if (!sievedb) {
-        syslog(LOG_ERR, "opening sieve_db for %s failed", mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "sieve.db.open.failed",
+                   lf_mailbox(mailbox));
         return CYRUSDB_IOERROR;
     }
         
@@ -693,16 +713,22 @@ static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata,
 
         r = mailbox_find_index_record(mailbox, mydata->imap_uid, &oldactive);
         if (r) {
-            syslog(LOG_ERR, "fetching record (%s:%u) failed: %s",
-                   mailbox_name(mailbox), mydata->imap_uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "sieve.db.read.failed",
+                       lf_intname("mbox.name", mailbox_name(mailbox)),
+                       lf_u("msg.imapuid", mydata->imap_uid),
+                       lf_s("sieve.step", "record"),
+                       lf_err("error", r));
         }
         else {
             oldactive.system_flags &= ~FLAG_FLAGGED;
             r = mailbox_rewrite_index_record(mailbox, &oldactive);
 
             if (r) {
-                syslog(LOG_ERR, "unflagging record (%s:%u) failed: %s",
-                       mailbox_name(mailbox), oldactive.uid, error_message(r));
+                xsyslog_ev(LOG_ERR, "sieve.db.write.failed",
+                           lf_mailbox(mailbox),
+                           lf_u("msg.imapuid", oldactive.uid),
+                           lf_s("sieve.step", "unflag"),
+                           lf_err("error", r));
             }
         }
     }
@@ -713,8 +739,11 @@ static int activate_script(struct mailbox *mailbox, struct sieve_data *sdata,
         r = mailbox_rewrite_index_record(mailbox, &record);
 
         if (r) {
-            syslog(LOG_ERR, "flagging record (%s:%u) failed: %s",
-                   mailbox_name(mailbox), record.uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "sieve.db.write.failed",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", record.uid),
+                       lf_s("sieve.step", "flag"),
+                       lf_err("error", r));
         }
     }
 
@@ -778,8 +807,11 @@ EXPORTED int sieve_script_fetch(struct mailbox *mailbox,
     }
 
     if (r) {
-        syslog(LOG_ERR, "fetching message (%s:%u) failed: %s",
-               mailbox_name(mailbox), sdata->imap_uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "sieve.db.read.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", sdata->imap_uid),
+                   lf_s("sieve.step", "message"),
+                   lf_err("error", r));
     }
 
     return r;
@@ -879,8 +911,9 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
                                    1/*isadmin*/, userid, NULL/*auth_state*/,
                                    flags, &mailbox);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                   mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "sieve.mailbox.create.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_err("error", r));
             goto done;
         }
 
@@ -902,8 +935,9 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
     if (!r && mailboxptr) {
         r = mailbox_open_iwl(mboxname, mailboxptr);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
-                   mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "sieve.mailbox.open.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_err("error", r));
             goto done;
         }
         (*mailboxptr)->silentchanges = silent;
@@ -944,8 +978,9 @@ EXPORTED int sieve_script_rebuild(const char *userid,
 
         r = mailbox_open_irl(mboxname, &mailbox);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
-                   mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "sieve.mailbox.open.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_err("error", r));
         }
         else {
             r = sieve_script_fetch(mailbox, sdata, content_buf);
@@ -969,7 +1004,8 @@ EXPORTED int sieve_script_rebuild(const char *userid,
             lastupdated = sbuf.st_mtime;
         }
         else {
-            syslog(LOG_ERR, "IOERROR: stat %s: %m", buf_cstring(&namebuf));
+            xsyslog_ev(LOG_ERR, "sieve.script.stat.failed",
+                       lf_buf("sys.path", &namebuf));
         }
     }
 
@@ -983,7 +1019,8 @@ EXPORTED int sieve_script_rebuild(const char *userid,
     buf_printf(&namebuf, "%s/%s%s", sievedir, script, BYTECODE_SUFFIX);
     r = stat(buf_cstring(&namebuf), &bc_stat);
     if (r && errno != ENOENT) {
-        syslog(LOG_ERR, "IOERROR: stat %s: %m", buf_cstring(&namebuf));
+        xsyslog_ev(LOG_ERR, "sieve.script.stat.failed",
+                   lf_buf("sys.path", &namebuf));
         r = IMAP_IOERROR;
         goto done;
     }
@@ -1003,8 +1040,8 @@ EXPORTED int sieve_script_rebuild(const char *userid,
         sieve_script_unload(&exe);
 
         if (version == BYTECODE_VERSION) {
-            syslog(LOG_DEBUG,
-                   "%s: %s is up to date\n", __func__, buf_cstring(&namebuf));
+            xsyslog_ev(LOG_DEBUG, "sieve.script.current",
+                       lf_buf("sys.path", &namebuf));
             goto done;
         }
     }
