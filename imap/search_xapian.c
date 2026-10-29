@@ -72,14 +72,16 @@ static int check_config(char **errstr)
     const char *s;
 
     if (!config_getswitch(IMAPOPT_CONVERSATIONS)) {
-        syslog(LOG_ERR, "ERROR: conversations required but not enabled");
+        xsyslog_ev(LOG_ERR, "search.xapian.config.invalid",
+                   lf_s("config.option", "conversations"));
         if (errstr)
             *errstr = xstrdup("xapian: conversations required but not enabled");
         return IMAP_NOTFOUND;
     }
     s = config_getstring(IMAPOPT_DEFAULTSEARCHTIER);
     if (!s || !strlen(s)) {
-        syslog(LOG_ERR, "ERROR: no default search tier configured");
+        xsyslog_ev(LOG_ERR, "search.xapian.config.invalid",
+                   lf_s("config.option", "defaultsearchtier"));
         if (errstr)
             *errstr = xstrdup("xapian: no default search tier configured");
         return IMAP_PARTITION_UNKNOWN;
@@ -292,9 +294,10 @@ static int activefile_open(const char *mboxname, const char *partition,
     if (!r && !mappedfile_size(*activefile))
         _activefile_init(mboxname, partition, *activefile);
     if (r) {
-        xsyslog(LOG_ERR, "mappedfile_open failed",
-                         "fname=<%s> error=<%s>",
-                         fname, error_message(r));
+        xsyslog_ev(LOG_ERR, "search.xapian.activefile.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("search.step", "open"),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -303,9 +306,10 @@ static int activefile_open(const char *mboxname, const char *partition,
     if (type == AF_LOCK_WRITE) r = mappedfile_writelock(*activefile);
     else r = mappedfile_readlock(*activefile);
     if (r) {
-        xsyslog(LOG_ERR, "mappedfile_readlock failed",
-                         "fname=<%s> error=<%s>",
-                         fname, error_message(r));
+        xsyslog_ev(LOG_ERR, "search.xapian.activefile.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("search.step", "lock"),
+                   lf_err("error", r));
         r = IMAP_MAILBOX_LOCKED;
         goto done;
     }
@@ -371,7 +375,8 @@ static char *activefile_path(const char *mboxname, const char *part, const char 
     if (dostat) {
         if (xapstat(dest)) {
             if (errno != ENOENT)
-                syslog(LOG_ERR, "IOERROR: can't read %s for search, check permissions: %m", dest);
+                xsyslog_ev(LOG_ERR, "search.xapian.tier.unreadable",
+                           lf_s("sys.path", dest));
             free(dest);
             dest = NULL;
         }
@@ -574,7 +579,8 @@ static int tierexists_cb(void *rock, const char *key, size_t keylen,
 {
     const int *verbose = rock;
     if (*verbose > 1) {
-        syslog(LOG_INFO, "tierexists_cb: found tier key %.*s", (int) keylen, key);
+        xsyslog_ev(LOG_INFO, "search.xapian.tier.found",
+                   lf_raw("search.tier.key", "%.*s", (int) keylen, key));
     }
     return CYRUSDB_DONE;
 }
@@ -606,8 +612,9 @@ static int cachetier_cb(void *vrock, const char *key, size_t keylen,
     r = cyrusdb_store(idb->db, buf_base(rock->buf), buf_len(rock->buf),
             data, datalen, &idb->txn);
     if (r) {
-        xsyslog(LOG_ERR, "could not save key", "key=<%s> dberror=<%s>",
-                buf_cstring(rock->buf), cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "search.xapian.indexed.write.failed",
+                   lf_buf("search.indexed.key", rock->buf),
+                   lf_s("error", cyrusdb_strerror(r)));
     }
     buf_truncate(rock->buf, prefix_len);
     return r;
@@ -642,8 +649,9 @@ static int read_indexeddb_highest_createdmodseq(struct indexeddb *idb)
     if (parsed)
         parsed = rest == end; // generation must consume the remaining bytes
     if (!parsed) {
-        xsyslog(LOG_ERR, "bogus highest_createdmodseq entry",
-                "entry=<%.*s>", (int) datalen, data);
+        xsyslog_ev(LOG_ERR, "search.xapian.indexed.invalid",
+                   lf_s("search.reason", "highest_createdmodseq"),
+                   lf_raw("search.indexed.value", "%.*s", (int) datalen, data));
         return CYRUSDB_INTERNAL;
     }
 
@@ -700,8 +708,9 @@ static int indexeddb_open(const char *userid, const char *fname,
         if (!r) {
             bit64 num;
             if (parsenum(data, NULL, datalen, &num) || num > INDEXEDDB_VERSION) {
-                xsyslog(LOG_ERR, "bogus version entry", "entry=<%.*s>",
-                        (int) datalen, data);
+                xsyslog_ev(LOG_ERR, "search.xapian.indexed.invalid",
+                           lf_s("search.reason", "version"),
+                           lf_raw("search.indexed.value", "%.*s", (int) datalen, data));
                 r = CYRUSDB_INTERNAL;
             }
             else {
@@ -740,8 +749,10 @@ static int indexeddb_open(const char *userid, const char *fname,
                     idb->version = INDEXEDDB_VERSION;
                 }
                 if (r) {
-                    xsyslog(LOG_ERR, "could not store version record",
-                            "fname=<%s> dberror=<%s>", fname, cyrusdb_strerror(r));
+                    xsyslog_ev(LOG_ERR, "search.xapian.indexed.write.failed",
+                               lf_s("sys.path", fname),
+                               lf_s("search.step", "version"),
+                               lf_s("error", cyrusdb_strerror(r)));
                 }
                 buf_free(&buf);
             }
@@ -838,8 +849,9 @@ static int cache_indexed(struct indexeddb *idb,
                 NULL, tierexists_cb, &verbose, &idb->txn);
         if (r == CYRUSDB_DONE) {
             if (verbose) {
-                xsyslog(LOG_INFO, "tier is already merged",
-                        "tier=<%s>", strarray_nth(activetiers, i));
+                xsyslog_ev(LOG_INFO, "search.xapian.tier.skipped",
+                           lf_s("search.tier", strarray_nth(activetiers, i)),
+                           lf_s("search.reason", "merged"));
             }
             r = 0;
             continue;
@@ -851,8 +863,9 @@ static int cache_indexed(struct indexeddb *idb,
         r = indexeddb_open(userid, buf_cstring(&path), 0, &srcdb);
         if (r == CYRUSDB_NOTFOUND) {
             if (verbose) {
-                xsyslog(LOG_INFO, "no db found at path", "path=<%s>",
-                       buf_cstring(&path));
+                xsyslog_ev(LOG_INFO, "search.xapian.tier.skipped",
+                           lf_buf("sys.path", &path),
+                           lf_s("search.reason", "no_db"));
             }
             r = 0;
             continue;
@@ -865,9 +878,11 @@ static int cache_indexed(struct indexeddb *idb,
             r = cyrusdb_foreach(srcdb->db, NULL, 0, NULL, cachetier_cb, &rock, NULL);
         }
         else {
-            xsyslog(LOG_ERR, "indexed.db versions differ - skipping",
-                    "db_version=<%d> srcdb_version=<%d> srcdb_path=<%s>",
-                    idb->version, srcdb->version, buf_cstring(&path));
+            xsyslog_ev(LOG_ERR, "search.xapian.tier.skipped",
+                       lf_buf("sys.path", &path),
+                       lf_s("search.reason", "version"),
+                       lf_d("search.index_version", idb->version),
+                       lf_d("search.source.index_version", srcdb->version));
         }
         indexeddb_close(&srcdb, r);
     }
@@ -933,8 +948,9 @@ static int read_indexed(const char *userid,
     buf_printf(&path, "%s%s", strarray_nth(activedirs, 0), INDEXEDDB_FNAME);
     r = indexeddb_open(userid, buf_cstring(&path), CYRUSDB_CREATE, &idb);
     if (r) {
-        xsyslog(LOG_ERR, "can not open db at path", "path=<%s> dberror=<%s>",
-                buf_cstring(&path), cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "search.xapian.indexed.open.failed",
+                   lf_buf("sys.path", &path),
+                   lf_s("error", cyrusdb_strerror(r)));
         goto out;
     }
 
@@ -964,8 +980,8 @@ static int read_indexed(const char *userid,
             seqset_join(res, seq);
             seqset_free(&seq);
             if (verbose > 1) {
-                xsyslog(LOG_INFO, "read top tier seq", "seq=<%.*s>",
-                        (int)datalen, data);
+                xsyslog_ev(LOG_INFO, "search.xapian.tier.read",
+                           lf_raw("search.uids", "%.*s", (int)datalen, data));
             }
         }
     }
@@ -999,18 +1015,20 @@ static int read_indexed(const char *userid,
                 continue;
             }
             if (r) {
-                xsyslog(LOG_ERR, "can not open db at path",
-                        "path=<%s> dberror=<%s>",
-                        buf_cstring(&path), cyrusdb_strerror(r));
+                xsyslog_ev(LOG_ERR, "search.xapian.indexed.open.failed",
+                           lf_buf("sys.path", &path),
+                           lf_s("error", cyrusdb_strerror(r)));
                 goto out;
             }
             buf_reset(&key);
 
             /* Sanity check index versions */
             if (srcdb->version != idb->version) {
-                xsyslog(LOG_ERR, "indexed.db versions differ - skipping",
-                        "db_version=<%d> srcdb_version=<%d> srcdb_path=<%s>",
-                        idb->version, srcdb->version, buf_cstring(&path));
+                xsyslog_ev(LOG_ERR, "search.xapian.tier.skipped",
+                           lf_buf("sys.path", &path),
+                           lf_s("search.reason", "version"),
+                           lf_d("search.index_version", idb->version),
+                           lf_d("search.source.index_version", srcdb->version));
                 indexeddb_close(&srcdb, 0);
                 continue;
             }
@@ -1045,8 +1063,9 @@ static int read_indexed(const char *userid,
             seqset_join(res, seq);
             seqset_free(&seq);
             if (verbose > 1) {
-                xsyslog(LOG_INFO, "read tier", "tier=<%s> seq=<%.*s>",
-                        strarray_nth(activetiers, i), (int)datalen, data);
+                xsyslog_ev(LOG_INFO, "search.xapian.tier.read",
+                           lf_s("search.tier", strarray_nth(activetiers, i)),
+                           lf_raw("search.uids", "%.*s", (int)datalen, data));
             }
         }
     }
@@ -1127,8 +1146,10 @@ static int write_indexed(const char *dir,
 
     if (verbose) {
         char *str = seqset_cstring(seq);
-        syslog(LOG_INFO, "write_indexed db=%s uniqueid=%s uids=%s",
-               fname, uniqueid, str);
+        xsyslog_ev(LOG_INFO, "search.xapian.indexed.write",
+                   lf_s("sys.path", fname),
+                   lf_s("mbox.uniqueid", uniqueid),
+                   lf_s("search.uids", str));
         free(str);
     }
 
@@ -1207,8 +1228,9 @@ static int upgrade_indexed_cb(void *vrock,
         }
     }
     if (!mboxname) {
-        xsyslog(LOG_ERR, "can not parse entry", "entry=<%.*s>",
-                (int) keylen, key);
+        xsyslog_ev(LOG_ERR, "search.xapian.indexed.invalid",
+                   lf_s("search.reason", "unparseable"),
+                   lf_raw("search.indexed.key", "%.*s", (int) keylen, key));
         r = CYRUSDB_INTERNAL;
         goto done;
     }
@@ -1216,8 +1238,8 @@ static int upgrade_indexed_cb(void *vrock,
     /* Remove legacy entry */
     r = cyrusdb_delete(idb->db, key, keylen, &idb->txn, 1);
     if (r) {
-        xsyslog(LOG_DEBUG, "can not delete entry", "entry=<%.*s>",
-                (int) keylen, key);
+        xsyslog_ev(LOG_DEBUG, "search.xapian.indexed.delete.failed",
+                   lf_raw("search.indexed.key", "%.*s", (int) keylen, key));
         goto done;
     }
 
@@ -1226,7 +1248,8 @@ static int upgrade_indexed_cb(void *vrock,
     /* Lookup mailbox entry */
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r && r != IMAP_MAILBOX_NONEXISTENT) {
-        xsyslog(LOG_ERR, "can not lookup mailbox", "mboxname=<%s>", mboxname);
+        xsyslog_ev(LOG_ERR, "search.xapian.mailbox.lookup.failed",
+                   lf_intname("mbox.name", mboxname));
         r = CYRUSDB_INTERNAL;
         goto done;
     } else if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -1240,8 +1263,8 @@ static int upgrade_indexed_cb(void *vrock,
         r = cyrusdb_store(idb->db, buf_base(&buf), buf_len(&buf),
                 buf_base(rock->mydata), buf_len(rock->mydata), &idb->txn);
         if (r) {
-            xsyslog(LOG_ERR, "can not store entry", "entry=<%s>",
-                    buf_cstring(&buf));
+            xsyslog_ev(LOG_ERR, "search.xapian.indexed.write.failed",
+                       lf_buf("search.indexed.key", &buf));
             goto done;
         }
     }
@@ -1266,7 +1289,8 @@ static int upgrade(const char *userid)
 
     int r = mailbox_open_irl(inboxname, &inbox);
     if (r) {
-        xsyslog(LOG_ERR, "can not open inbox", "inboxname=<%s>", inboxname);
+        xsyslog_ev(LOG_ERR, "search.xapian.mailbox.open.failed",
+                   lf_intname("mbox.name", inboxname));
         goto out;
     }
 
@@ -1286,12 +1310,14 @@ static int upgrade(const char *userid)
 
         r = indexeddb_open(userid, fname, CYRUSDB_CREATE, &idb);
         if (r) {
-            xsyslog(LOG_ERR, "can not open database", "fname=<%s> dberror=<%s>",
-                    fname, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "search.xapian.indexed.open.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         else if (idb->version == INDEXEDDB_VERSION) {
-            xsyslog(LOG_INFO, "database already at current version - skipping",
-                    "fname=<%s> dbversion=<%d>", fname, idb->version);
+            xsyslog_ev(LOG_INFO, "search.xapian.indexed.upgrade.skipped",
+                       lf_s("sys.path", fname),
+                       lf_d("search.index_version", idb->version));
         }
         else {
             /* Upgrade database entries */
@@ -1306,8 +1332,10 @@ static int upgrade(const char *userid)
                         buf_base(&buf), buf_len(&buf), &idb->txn);
                 buf_reset(&buf);
                 if (r) {
-                    xsyslog(LOG_ERR, "could not store version record",
-                            "fname=<%s> dberror=<%s>", fname, cyrusdb_strerror(r));
+                    xsyslog_ev(LOG_ERR, "search.xapian.indexed.write.failed",
+                               lf_s("sys.path", fname),
+                               lf_s("search.step", "version"),
+                               lf_s("error", cyrusdb_strerror(r)));
                 }
             }
         }
@@ -1427,8 +1455,8 @@ static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *loc
     /* Get a shared lock */
     r = mboxname_lock(namelock_fname, &lock->namelock, LOCK_SHARED);
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
-                namelock_fname);
+        xsyslog_ev(LOG_ERR, "search.xapian.lock.failed",
+                   lf_s("search.lock", namelock_fname));
         goto out;
     }
 
@@ -1886,8 +1914,8 @@ static int xapian_run_cb(void *data, size_t nmemb, void *rock)
 
     struct conversations_state *cstate = mailbox_get_cstate(bb->session->mailbox);
     if (!cstate) {
-        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-               mailbox_name(bb->session->mailbox));
+        xsyslog_ev(LOG_INFO, "search.xapian.conversations.open.failed",
+                   lf_intname("mbox.name", mailbox_name(bb->session->mailbox)));
         return IMAP_NOTFOUND;
     }
 
@@ -1990,8 +2018,9 @@ static int run_query(xapian_builder_t *bb)
     else if (bb->root) {
         struct buf buf = BUF_INITIALIZER;
         opnode_serialise(&buf, bb->root);
-        syslog(LOG_ERR, "search_xapian: expected DNF or OR clause, got %s",
-                buf_cstring(&buf));
+        xsyslog_ev(LOG_ERR, "search.xapian.query.invalid",
+                   lf_s("search.reason", "not_dnf"),
+                   lf_buf("search.expr", &buf));
         buf_free(&buf);
         r = IMAP_INTERNAL;
         goto out;
@@ -2002,8 +2031,8 @@ static int run_query(xapian_builder_t *bb)
 
     struct conversations_state *cstate = mailbox_get_cstate(bb->session->mailbox);
     if (!cstate) {
-        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-                mailbox_name(bb->session->mailbox));
+        xsyslog_ev(LOG_INFO, "search.xapian.conversations.open.failed",
+                   lf_intname("mbox.name", mailbox_name(bb->session->mailbox)));
         r = IMAP_NOTFOUND;
         goto out;
     }
@@ -2082,14 +2111,17 @@ static void begin_boolean(search_builder_t *bx, int op)
         bb->root = on;
     ptrarray_push(&bb->stack, on);
     if (SEARCH_VERBOSE(bb->session->opts))
-        syslog(LOG_INFO, "begin_boolean(op=%s)", search_op_as_string(op));
+        xsyslog_ev(LOG_INFO, "search.xapian.query.trace",
+                   lf_s("search.step", "begin_boolean"),
+                   lf_s("search.op", search_op_as_string(op)));
 }
 
 static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     if (SEARCH_VERBOSE(bb->session->opts))
-        syslog(LOG_INFO, "end_boolean");
+        xsyslog_ev(LOG_INFO, "search.xapian.query.trace",
+                   lf_s("search.step", "end_boolean"));
     ptrarray_pop(&bb->stack);
 }
 
@@ -2102,8 +2134,10 @@ static void matchlist(search_builder_t *bx, enum search_part part, const strarra
     if (!vals) return;
     if (SEARCH_VERBOSE(bb->session->opts)) {
         char *item = strarray_join(vals, ",");
-        syslog(LOG_INFO, "match(part=%s, str=\"%s\")",
-               search_part_as_string(part), item);
+        xsyslog_ev(LOG_INFO, "search.xapian.query.trace",
+                   lf_s("search.step", "match"),
+                   lf_s("search.part", search_part_as_string(part)),
+                   lf_s("search.value", item));
         free(item);
     }
 
@@ -2160,8 +2194,8 @@ static search_session_t *begin_session(struct mailbox *mailbox, int opts)
      * locks, to avoid deadlocking */
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
     if (!cstate) {
-        xsyslog(LOG_ERR, "can't open conversations", "mailbox=<%s>",
-                mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "search.xapian.conversations.open.failed",
+                   lf_intname("mbox.name", mailbox_name(mailbox)));
         return NULL;
     }
 
@@ -2319,14 +2353,16 @@ static const char *xapian_rootdir(const char *tier, const char *partition)
     if (!partition) {
         partition = config_getstring(IMAPOPT_DEFAULTPARTITION);
         if (!partition) {
-            syslog(LOG_ERR, "no default partition configured");
+            xsyslog_ev(LOG_ERR, "search.xapian.config.invalid",
+                       lf_s("config.option", "defaultpartition"));
             return NULL;
         }
     }
     confkey = strconcat(tier, "searchpartition-", partition, NULL);
     root = config_getoverflowstring(confkey, NULL);
     if (!root) {
-        syslog(LOG_ERR, "undefined search partition: %s", confkey);
+        xsyslog_ev(LOG_ERR, "search.xapian.config.invalid",
+                   lf_s("config.option", confkey));
     }
     free(confkey);
     return root;
@@ -2376,7 +2412,9 @@ static int check_directory(const char *dir, int verbose, int create)
     if (r < 0) {
         if (errno != ENOENT) {
             /* something went wrong - permissions problem most likely */
-            syslog(LOG_ERR, "IOERROR: unable to stat %s: %m", dir);
+            xsyslog_ev(LOG_ERR, "search.xapian.dir.failed",
+                       lf_s("sys.path", dir),
+                       lf_s("search.step", "stat"));
             r = IMAP_IOERROR;
             goto out;
         }
@@ -2387,13 +2425,16 @@ static int check_directory(const char *dir, int verbose, int create)
             goto out;
         }
         if (verbose)
-            syslog(LOG_INFO, "Building directory %s", dir);
+            xsyslog_ev(LOG_INFO, "search.xapian.dir.created",
+                       lf_s("sys.path", dir));
         dummyfile = strconcat(dir, "/dummy", (char *)NULL);
         cyrus_mkdir(dummyfile, 0700);
         r = stat(dir, &sb);
         if (r < 0) {
             /* something went wrong - permissions problem most likely */
-            syslog(LOG_ERR, "IOERROR: unable to stat %s: %m", dir);
+            xsyslog_ev(LOG_ERR, "search.xapian.dir.failed",
+                       lf_s("sys.path", dir),
+                       lf_s("search.step", "stat"));
             r = IMAP_IOERROR;
             goto out;
         }
@@ -2508,7 +2549,7 @@ static int audit_mailbox(search_text_receiver_t *rx, bitvector_t *unindexed)
     int r = 0;
 
     if (tr->mode != XAPIAN_DBW_XAPINDEXED) {
-        syslog(LOG_ERR, "search_xapian: require XAPIAN_DBW_XAPINDEXED mode");
+        xsyslog_ev(LOG_ERR, "search.xapian.mode.invalid");
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -2522,8 +2563,9 @@ static int audit_mailbox(search_text_receiver_t *rx, bitvector_t *unindexed)
 
         if (!seqset_ismember(tr->oldindexed, uid)) {
             if (tr->super.verbose)
-                syslog(LOG_INFO, "search_xapian: ignoring %s:%d during audit",
-                        mailbox_name(tr->super.mailbox), uid);
+                xsyslog_ev(LOG_INFO, "search.xapian.audit.skipped",
+                           lf_mailbox(tr->super.mailbox),
+                           lf_u("msg.imapuid", uid));
             continue;
         }
 
@@ -2612,10 +2654,11 @@ static int append_text(search_text_receiver_t *rx,
     if (tr->part) {
         unsigned len = text->len;
         if (tr->part_total + len > config_search_maxsize) {
-            syslog(LOG_ERR, "Xapian: truncating text from "
-                    "message mailbox %s uid %u part %s",
-                    mailbox_name(tr->mailbox), tr->uid,
-                    search_part_as_string(tr->part));
+            xsyslog_ev(LOG_WARNING, "search.xapian.text.truncated",
+                       lf_mailbox(tr->mailbox),
+                       lf_u("msg.imapuid", tr->uid),
+                       lf_s("search.part", search_part_as_string(tr->part)),
+                       lf_d("limit.value", config_search_maxsize));
             len = config_search_maxsize - tr->part_total;
         }
 
@@ -2658,9 +2701,9 @@ static void end_part(search_text_receiver_t *rx)
         seg->is_finished = 1;
 
     if (tr->verbose > 1)
-        syslog(LOG_NOTICE, "Xapian: %llu bytes in part %s",
-               (seg ? (unsigned long long)seg->text.len : 0),
-               search_part_as_string(tr->part));
+        xsyslog_ev(LOG_NOTICE, "search.xapian.part.indexed",
+                   lf_llu("search.bytes", seg ? (unsigned long long)seg->text.len : 0),
+                   lf_s("search.part", search_part_as_string(tr->part)));
 
     tr->part = 0;
 }
@@ -2709,8 +2752,8 @@ static int is_indexed_part(xapian_update_receiver_t *tr, const struct message_gu
 
     struct conversations_state *cstate = mailbox_get_cstate(tr->super.mailbox);
     if (!cstate) {
-        xsyslog(LOG_INFO, "can't open conversations", "mailbox=<%s>",
-                mailbox_name(tr->super.mailbox));
+        xsyslog_ev(LOG_INFO, "search.xapian.conversations.open.failed",
+                   lf_intname("mbox.name", mailbox_name(tr->super.mailbox)));
         return 0;
     }
 
@@ -2720,8 +2763,10 @@ static int is_indexed_part(xapian_update_receiver_t *tr, const struct message_gu
     int r = conversations_guid_foreach(cstate, guidrep, is_indexed_cb, &rock);
     if (r == CYRUSDB_DONE) ret = SEARCH_INDEXLEVEL_BASIC;
     else if (r) {
-        xsyslog(LOG_ERR, "unexpected return code", "guid=<%s> r=<%d> err=<%s>",
-                message_guid_encode(guid), r, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "search.xapian.guid.lookup.failed",
+                   lf_s("msg.guid", message_guid_encode(guid)),
+                   lf_d("error.code", r),
+                   lf_s("error", cyrusdb_strerror(r)));
     }
     free(guidrep);
 
@@ -2893,8 +2938,9 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     }
 
     if (mboxname_isdeletedmailbox(mailbox_name(mailbox), NULL)) {
-        syslog(LOG_ERR, "Refusing to index deleted mailbox %s",
-                mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "search.xapian.index.refused",
+                   lf_mailbox(mailbox),
+                   lf_s("search.reason", "deleted_mailbox"));
         r = IMAP_MAILBOX_NONEXISTENT;
         goto out;
     }
@@ -2903,8 +2949,8 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      * to avoid deadlocking against the search state */
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
     if (!cstate) {
-        xsyslog(LOG_ERR, "can't open conversations", "mailbox=<%s>",
-                mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "search.xapian.conversations.open.failed",
+                   lf_intname("mbox.name", mailbox_name(mailbox)));
         r = IMAP_MAILBOX_NOTSUPPORTED;
         goto out;
     }
@@ -2918,8 +2964,8 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
 
     r = mboxname_lock(namelock_fname, &tr->xapiandb_namelock, LOCK_SHARED);
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
-               namelock_fname);
+        xsyslog_ev(LOG_ERR, "search.xapian.lock.failed",
+                   lf_s("search.lock", namelock_fname));
         goto out;
     }
 
@@ -2948,7 +2994,9 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     const char *deftier = config_getstring(IMAPOPT_DEFAULTSEARCHTIER);
     r = activefile_open(mailbox_name(mailbox), mailbox_partition(mailbox), &tr->activefile, AF_LOCK_WRITE, &active);
     if (r) {
-        syslog(LOG_ERR, "Failed to lock activefile for %s", mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "search.xapian.activefile.failed",
+                   lf_intname("mbox.name", mailbox_name(mailbox)),
+                   lf_s("search.step", "lock"));
         goto out;
     }
 
@@ -2957,7 +3005,9 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     // make sure we're indexing to the default tier
     while (!_starts_with_tier(active, deftier)) {
         char *newstart = activefile_nextname(active, config_getstring(IMAPOPT_DEFAULTSEARCHTIER));
-        syslog(LOG_NOTICE, "create new search tier %s for %s", newstart, mailbox_name(mailbox));
+        xsyslog_ev(LOG_NOTICE, "search.xapian.tier.created",
+                   lf_s("search.tier", newstart),
+                   lf_mailbox(mailbox));
         strarray_unshiftm(active, newstart);
         r = activefile_write(tr->activefile, active);
         mappedfile_close(&tr->activefile);
@@ -2965,7 +3015,9 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         active = NULL;
         r = activefile_open(mailbox_name(mailbox), mailbox_partition(mailbox), &tr->activefile, AF_LOCK_WRITE, &active);
         if (r) {
-            syslog(LOG_ERR, "Failed to lock activefile for %s", mailbox_name(mailbox));
+            xsyslog_ev(LOG_ERR, "search.xapian.activefile.failed",
+                       lf_intname("mbox.name", mailbox_name(mailbox)),
+                       lf_s("search.step", "lock"));
             goto out;
         }
     }
@@ -2978,7 +3030,8 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     tr->activedirs = activefile_resolve(mailbox_name(mailbox), mailbox_partition(mailbox), active, dostat, &tr->activetiers);
     // this should never be able to fail here, because the first item will always exist!
     if (!tr->activedirs || !tr->activedirs->count) {
-        syslog(LOG_ERR, "Failed to resolve activedir for %s", mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "search.xapian.activedir.failed",
+                   lf_mailbox(mailbox));
         r = IMAP_INTERNAL;
         goto out;
     }
@@ -3090,8 +3143,9 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
             tr->activedirs, tr->activetiers,
             uniqueid, seq, /*do_cache*/1, tr->super.verbose);
     if (r) {
-        syslog(LOG_ERR, "is_indexed_cb: read_indexed %s failed: %s",
-               uniqueid, error_message(r));
+        xsyslog_ev(LOG_ERR, "search.xapian.indexed.read.failed",
+                   lf_s("mbox.uniqueid", uniqueid),
+                   lf_err("error", r));
         seqset_free(&seq);
         return 0;
     }
@@ -3119,8 +3173,8 @@ static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
         /* Determine if msg is already indexed */
         struct conversations_state *cstate = mailbox_get_cstate(tr->super.mailbox);
         if (!cstate) {
-            syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-                    mailbox_name(tr->super.mailbox));
+            xsyslog_ev(LOG_INFO, "search.xapian.conversations.open.failed",
+                       lf_intname("mbox.name", mailbox_name(tr->super.mailbox)));
             return 0;
         }
 
@@ -3129,8 +3183,11 @@ static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
         int r = conversations_guid_foreach(cstate, guidrep, is_indexed_cb, &rock);
         if (r == CYRUSDB_DONE) ret = SEARCH_INDEXLEVEL_BASIC;
         else if (r) {
-            syslog(LOG_ERR, "is_indexed %s:%d: unexpected return code: %d (%s)",
-                   mailbox_name(tr->super.mailbox), uid, r, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "search.xapian.guid.lookup.failed",
+                       lf_mailbox(tr->super.mailbox),
+                       lf_u("msg.imapuid", uid),
+                       lf_d("error.code", r),
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         free(guidrep);
     }
@@ -3448,7 +3505,8 @@ static int list_files(const char *userid, strarray_t *files)
         goto out;
     }
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to lookup %s", mboxname);
+        xsyslog_ev(LOG_ERR, "search.xapian.mailbox.lookup.failed",
+                   lf_intname("mbox.name", mboxname));
         goto out;
     }
 
@@ -3457,15 +3515,17 @@ static int list_files(const char *userid, strarray_t *files)
 
     r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_SHARED);
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
-               namelock_fname);
+        xsyslog_ev(LOG_ERR, "search.xapian.lock.failed",
+                   lf_s("search.lock", namelock_fname));
         goto out;
     }
 
     /* Get a readlock on the activefile */
     r = activefile_open(mboxname, mbentry->partition, &activefile, AF_LOCK_READ, &active);
     if (r) {
-        syslog(LOG_ERR, "Couldn't open active file: %s", mboxname);
+        xsyslog_ev(LOG_ERR, "search.xapian.activefile.failed",
+                   lf_intname("mbox.name", mboxname),
+                   lf_s("search.step", "open"));
         goto out;
     }
     if (!active) goto out;
@@ -3766,8 +3826,9 @@ static int reindex_mb(void *rock,
         goto done;
     }
     else if (r) {
-        xsyslog(LOG_ERR, "can not lookup mailbox", "key=<%s> err=<%s>",
-                mbkey, error_message(r));
+        xsyslog_ev(LOG_ERR, "search.xapian.mailbox.lookup.failed",
+                   lf_s("mboxlist.key", mbkey),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -3894,7 +3955,9 @@ static int reindex_mb(void *rock,
                 buf_reset(&buf);
                 buf_printf(&buf, "%s.%d", strarray_nth(filter->destpaths, 0), (int)strarray_size(&filter->temptargets));
                 const char *temp = strarray_nth(&filter->temptargets, 0);
-                syslog(LOG_DEBUG, "REINDEX: chunking %s to %s", temp, buf_cstring(&buf));
+                xsyslog_ev(LOG_DEBUG, "search.xapian.reindex.chunking",
+                           lf_s("old.sys.path", temp),
+                           lf_buf("sys.path", &buf));
                 r = copy_files(temp, buf_cstring(&buf));
                 removedir(temp);
                 // insert the new path directly after the temporary directory
@@ -4144,7 +4207,8 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
         goto out;
     }
     if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to lookup %s", mboxname);
+        xsyslog_ev(LOG_ERR, "search.xapian.mailbox.lookup.failed",
+                   lf_intname("mbox.name", mboxname));
         goto out;
     }
 
@@ -4170,15 +4234,17 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
         goto out;
     }
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
-               namelock_fname);
+        xsyslog_ev(LOG_ERR, "search.xapian.lock.failed",
+                   lf_s("search.lock", namelock_fname));
         goto out;
     }
 
     /* take an exclusive lock on the activefile file */
     r = activefile_open(mboxname, mbentry->partition, &activefile, AF_LOCK_WRITE, &active);
     if (r) {
-        syslog(LOG_ERR, "Failed to lock activefile for %s", mboxname);
+        xsyslog_ev(LOG_ERR, "search.xapian.activefile.failed",
+                   lf_intname("mbox.name", mboxname),
+                   lf_s("search.step", "lock"));
         goto out;
     }
     if (!active || !active->count) goto out;
@@ -4259,8 +4325,8 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
     /* Get a shared name lock */
     r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_SHARED);
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
-               namelock_fname);
+        xsyslog_ev(LOG_ERR, "search.xapian.lock.failed",
+                   lf_s("search.lock", namelock_fname));
         goto out;
     }
 
@@ -4401,8 +4467,8 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
     /* Get an exclusive namelock */
     r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_EXCLUSIVE);
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
-               namelock_fname);
+        xsyslog_ev(LOG_ERR, "search.xapian.lock.failed",
+                   lf_s("search.lock", namelock_fname));
         goto out;
     }
 
@@ -4583,8 +4649,8 @@ static int delete_user(const mbentry_t *mbentry)
     namelock_fname = xapiandb_namelock_fname_from_userid(userid);
     r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_EXCLUSIVE);
     if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s",
-               namelock_fname);
+        xsyslog_ev(LOG_ERR, "search.xapian.lock.failed",
+                   lf_s("search.lock", namelock_fname));
         goto out;
     }
 
