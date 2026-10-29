@@ -68,8 +68,11 @@ static int timeout_select(int sock, int op, int sec)
   tv.tv_sec = sec;
   tv.tv_usec = 0;
 
-  syslog(LOG_DEBUG, "timeout_select: sock = %d, rp = 0x%lx, wp = 0x%lx, sec = %d",
-         sock, (unsigned long)rp, (unsigned long)wp, sec);
+  xsyslog_ev(LOG_DEBUG, "pts.client.select",
+             lf_d("pts.fd", sock),
+             lf_b("pts.read", rp != NULL),
+             lf_b("pts.write", wp != NULL),
+             lf_d("pts.timeout", sec));
 
   if ((r = select(sock+1, rp, wp, NULL, &tv)) == 0) {
     /* r == 0 then timed out. we change this into an error */
@@ -77,7 +80,8 @@ static int timeout_select(int sock, int op, int sec)
     r = -1;
   }
 
-  syslog(LOG_DEBUG, "timeout_select exiting. r = %d; errno = %d", r, errno);
+  xsyslog_ev(LOG_DEBUG, "pts.client.selected",
+             lf_d("pts.result", r));
   return r;
 }
 
@@ -87,12 +91,14 @@ static int nb_connect(int s, struct sockaddr *sa, socklen_t slen, int sec)
   int flags, rc=0;
 
   if ((flags = fcntl(s, F_GETFL,0)) == -1) {
-    syslog(LOG_ERR, "unable to get socket flags");
+    xsyslog_ev(LOG_ERR, "pts.client.connect.failed",
+               lf_s("pts.step", "get_flags"));
     return -1;
   }
 
   if (fcntl(s, F_SETFL, flags|O_NONBLOCK) == -1) {
-    syslog(LOG_ERR, "unable to set socket to NON_BLOCK");
+    xsyslog_ev(LOG_ERR, "pts.client.connect.failed",
+               lf_s("pts.step", "set_nonblock"));
     return -1;
   }
 
@@ -103,26 +109,30 @@ static int nb_connect(int s, struct sockaddr *sa, socklen_t slen, int sec)
     }
   } else {
     /* yay, it got through on the first shot. */
-    syslog(LOG_DEBUG, "connected with no delay");
+    xsyslog_ev(LOG_DEBUG, "pts.client.connected",
+               lf_b("pts.waited", 0));
     rc = 0;
     goto done;
   }
 
-  syslog(LOG_DEBUG, "didn't immediately connect. waiting...");
+  xsyslog_ev(LOG_DEBUG, "pts.client.connecting");
 
   if (timeout_select(s, TS_RW, sec) < 0) {
-    syslog(LOG_ERR, "timeoutselect: %m");
+    xsyslog_ev(LOG_ERR, "pts.client.connect.failed",
+               lf_s("pts.step", "select"));
     rc = -1;
     goto done;
   }
 
-  syslog(LOG_DEBUG, "connect: connected in time.");
+  xsyslog_ev(LOG_DEBUG, "pts.client.connected",
+             lf_b("pts.waited", 1));
   rc = 0;
 
  done:
   /* set back to blocking so the reads/writes don't screw up), but why bother on an error... */
   if (!rc && (fcntl(s, F_SETFL, flags) == -1)) {
-    syslog(LOG_ERR, "unable to set socket back to nonblocking: %m");
+    xsyslog_ev(LOG_ERR, "pts.client.connect.failed",
+               lf_s("pts.step", "set_block"));
     rc = -1;
   }
 
@@ -211,7 +221,8 @@ static const char *mycanonifyid(const char *identifier,
     }
 
     if (!strcmp(identifier, "")) {
-        syslog(LOG_ERR, "unable to canonify empty identifier");
+        xsyslog_ev(LOG_ERR, "pts.canonify.failed",
+                   lf_s("pts.reason", "empty"));
         return NULL;
     }
 
@@ -219,18 +230,21 @@ static const char *mycanonifyid(const char *identifier,
     canonuser_cache = NULL;
     if(ptload(identifier, &canonuser_cache) < 0) {
       if (canonuser_cache == NULL) {
-        syslog(LOG_ERR, "ptload completely failed: unable to canonify identifier: %s",
-               identifier);
+        xsyslog_ev(LOG_ERR, "pts.canonify.failed",
+                   lf_s("pts.id", identifier));
         return NULL;
       } else {
-        syslog(LOG_ERR, "ptload failed: but canonified %s -> %s", identifier,
-               canonuser_cache->userid.id);
+        xsyslog_ev(LOG_ERR, "pts.load.failed",
+                   lf_s("pts.id", identifier),
+                   lf_s("pts.canonical", canonuser_cache->userid.id));
       }
     }
 
     canonuser_id = xstrdup(identifier);
     strlcpy(retbuf, canonuser_cache->userid.id, sizeof(retbuf));
-    syslog(LOG_DEBUG, "canonified %s -> %s", identifier, retbuf);
+    xsyslog_ev(LOG_DEBUG, "pts.canonified",
+               lf_s("pts.id", identifier),
+               lf_s("pts.canonical", retbuf));
     return retbuf;
 }
 
@@ -261,7 +275,8 @@ static struct auth_state *mynewstate(const char *identifier)
        strcmp(identifier, "anonymous")) {
 
       if(ptload(identifier, &output) < 0) {
-        syslog(LOG_ERR, "ptload failed for %s", identifier);
+        xsyslog_ev(LOG_ERR, "pts.load.failed",
+                   lf_s("pts.id", identifier));
         /* Allowing this to go through is a problem if negative group access is
          * used significantly.   Allowing this to go through is a feature when
          * the ptserver is having problems and the user wants to get to his
@@ -279,9 +294,11 @@ static struct auth_state *mynewstate(const char *identifier)
       strlcpy(output->userid.id, identifier,
               sizeof(output->userid.id));
       output->userid.hash = strhash(identifier);
-      syslog(LOG_DEBUG, "creating empty auth_state for %s", identifier);
+      xsyslog_ev(LOG_DEBUG, "pts.state.empty",
+                 lf_s("pts.id", identifier));
     } else {
-      syslog(LOG_DEBUG, "using ptloaded value of: %s", output->userid.id);
+      xsyslog_ev(LOG_DEBUG, "pts.state.loaded",
+                 lf_s("pts.canonical", output->userid.id));
     }
 
     return output;
@@ -326,8 +343,9 @@ static int ptload(const char *identifier, struct auth_state **state)
     }
     r = cyrusdb_open(the_ptscache_db, fname, CYRUSDB_CREATE, &ptdb);
     if (r != 0) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "pts.cache.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(r)));
         free(tofree);
         *state = NULL;
         return -1;
@@ -337,7 +355,8 @@ static int ptload(const char *identifier, struct auth_state **state)
 
     id_len = strlen(identifier);
     if(id_len > PTS_DB_KEYSIZE) {
-        syslog(LOG_ERR, "identifier too long in auth_newstate");
+        xsyslog_ev(LOG_ERR, "pts.load.failed",
+                   lf_s("pts.reason", "too_long"));
         *state = NULL;
         return -1;
     }
@@ -346,8 +365,9 @@ static int ptload(const char *identifier, struct auth_state **state)
     r = cyrusdb_fetch(ptdb, identifier, id_len,
                                &data, &dsize, NULL);
     if (r && r != CYRUSDB_NOTFOUND) {
-        syslog(LOG_ERR, "auth_newstate: error fetching record: %s",
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "pts.cache.read.failed",
+                   lf_s("pts.step", "newstate"),
+                   lf_s("error", cyrusdb_strerror(r)));
 
         rc = -1;
         goto done;
@@ -364,10 +384,11 @@ static int ptload(const char *identifier, struct auth_state **state)
         time_t now = time(NULL);
         int timeout = libcyrus_config_getint(CYRUSOPT_PTS_CACHE_TIMEOUT);
 
-        syslog(LOG_DEBUG,
-               "ptload(): fetched cache record (%s)" \
-               "(mark " TIME_T_FMT ", current " TIME_T_FMT ", limit " TIME_T_FMT ")", identifier,
-               fetched->mark, now, now - timeout);
+        xsyslog_ev(LOG_DEBUG, "pts.cache.fetched",
+                   lf_s("pts.id", identifier),
+                   lf_time("pts.mark", fetched->mark),
+                   lf_time("pts.time", now),
+                   lf_time("pts.limit", now - timeout));
 
         if (fetched->mark > (now - timeout)) {
             /* not expired; let's return it */
@@ -375,12 +396,12 @@ static int ptload(const char *identifier, struct auth_state **state)
         }
     }
 
-    syslog(LOG_DEBUG, "ptload(): pinging ptloader");
+    xsyslog_ev(LOG_DEBUG, "pts.client.pinging");
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
-        syslog(LOG_ERR,
-               "ptload(): unable to create socket for ptloader: %m");
+        xsyslog_ev(LOG_ERR, "pts.client.connect.failed",
+                   lf_s("pts.step", "socket"));
         rc = -1;
         goto done;
     }
@@ -392,8 +413,10 @@ static int ptload(const char *identifier, struct auth_state **state)
     }
 
     if (strlen(fname) >= sizeof(srvaddr.sun_path)) {
-        syslog(LOG_ERR, "ptload(): socket filename %s too long for %zu-byte buffer",
-                        fname, sizeof(srvaddr.sun_path));
+        xsyslog_ev(LOG_ERR, "pts.client.connect.failed",
+                   lf_s("pts.step", "socket_path"),
+                   lf_s("sys.path", fname),
+                   lf_zu("limit.value", sizeof(srvaddr.sun_path)));
         rc = -1;
         goto done;
     }
@@ -405,29 +428,32 @@ static int ptload(const char *identifier, struct auth_state **state)
     free(tofree);
 
     if (r == -1) {
-        syslog(LOG_ERR, "ptload(): can't connect to ptloader server: %m");
+        xsyslog_ev(LOG_ERR, "pts.client.connect.failed",
+                   lf_s("pts.step", "connect"));
         close(s);
         rc = -1;
         goto done;
     }
 
-    syslog(LOG_DEBUG, "ptload(): connected");
+    xsyslog_ev(LOG_DEBUG, "pts.client.request.started");
     niov = 0;
     WRITEV_ADD_TO_IOVEC(iov, niov, (char *) &id_len, sizeof(id_len));
     WRITEV_ADD_TO_IOVEC(iov, niov, (char *) identifier, id_len);
 
     if (timeout_select(s, TS_WRITE, PT_TIMEOUT_SEC) < 0) {
-      syslog(LOG_ERR, "timeoutselect: writing to ptloader %m");
+      xsyslog_ev(LOG_ERR, "pts.client.request.failed",
+                 lf_s("pts.step", "write"));
       rc = -1;
       goto done;
     }
     retry_writev(s, iov, niov);
-    syslog(LOG_DEBUG, "ptload sent data");
+    xsyslog_ev(LOG_DEBUG, "pts.client.request.sent");
 
     start = 0;
     while (start < sizeof(response) - 1) {
       if (timeout_select(s, TS_READ, PT_TIMEOUT_SEC) < 0) {
-        syslog(LOG_ERR, "timeout_select: reading from ptloader: %m");
+        xsyslog_ev(LOG_ERR, "pts.client.request.failed",
+                   lf_s("pts.step", "read"));
         rc = -1;
         goto done;
       }
@@ -438,14 +464,17 @@ static int ptload(const char *identifier, struct auth_state **state)
     response[sizeof(response)-1] = '\0';
 
     close(s);
-    syslog(LOG_DEBUG, "ptload read data back");
+    xsyslog_ev(LOG_DEBUG, "pts.client.response.received");
 
     if (start <= 1 || strncmp(response, "OK", 2)) {
        if(start > 1) {
-           syslog(LOG_ERR,
-                  "ptload(): bad response from ptloader server: %s", response);
+           xsyslog_ev(LOG_ERR, "pts.client.request.failed",
+                      lf_s("pts.step", "response"),
+                      lf_s("error", response));
        } else {
-           syslog(LOG_ERR, "ptload(): empty response from ptloader server");
+           xsyslog_ev(LOG_ERR, "pts.client.request.failed",
+                      lf_s("pts.step", "response"),
+                      lf_s("pts.reason", "empty"));
        }
        rc = -1;
        goto done;
@@ -455,9 +484,9 @@ static int ptload(const char *identifier, struct auth_state **state)
     r = cyrusdb_fetch(ptdb, identifier, id_len,
                                &data, &dsize, NULL);
     if (r != 0 || !data) {
-        syslog(LOG_ERR, "ptload(): error fetching record: %s"
-               "(did ptloader add the record?)",
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "pts.cache.read.failed",
+                   lf_s("pts.step", "after_load"),
+                   lf_s("error", cyrusdb_strerror(r)));
         dsize = 0;
         data = NULL;
         rc = -1;
@@ -474,11 +503,11 @@ static int ptload(const char *identifier, struct auth_state **state)
 
     if (fetched == NULL) {
       *state = NULL;
-      syslog(LOG_DEBUG, "No data available at all from ptload()");
+      xsyslog_ev(LOG_DEBUG, "pts.load.empty");
     } else  {
       /* copy it into our structure */
       *state = fetched;
-      syslog(LOG_DEBUG, "ptload returning data");
+      xsyslog_ev(LOG_DEBUG, "pts.load.returned");
     }
 
     /* close and unlock the database */
