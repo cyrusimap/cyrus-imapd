@@ -640,10 +640,14 @@ search.updates          how many update passes indexed nothing
 search.value            a search term's value, as given
 seen.op                 which seen database operation is being logged
 seen.uids               a seen state's uid sequence, as stored
+sieve.bytecode.length   the length of a compiled Sieve script, in bytes
+sieve.duration          how long a Sieve operation took, in seconds
 sieve.lineno            the line of a Sieve script an error was found on
+sieve.regex             a regular expression a Sieve script matches with
 sieve.result            a SIEVE_* result code
 sieve.script            the name of a Sieve script
 sieve.srs.domain        the domain SRS rewrites a return path into
+sieve.step              which step of a Sieve storage operation is being logged
 sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
 smmap.step              which step of an smmapd lookup is being logged

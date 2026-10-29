@@ -585,7 +585,8 @@ int main(int argc, char *argv[])
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&test_namespace, NAMESPACE_OPTION_ADMIN))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "sieve.test.init.failed",
+                   lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 
