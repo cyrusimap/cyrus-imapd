@@ -48,7 +48,7 @@ sub test_splitbrain_different_uniqueid_used
     if ($self->{instance}->{have_syslog_replacement}) {
         # sync_client should have logged the failure
         my @mlines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: user replication failed/, "@mlines");
+        $self->assert_matches(qr/event=sync\.user\.failed\b/, "@mlines");
         $self->assert_matches(qr/event=sync\.command\.rejected\b.*sync\.command=MAILBOX error="IMAP_SYNC_WRONG_MAILBOX\b/, "@mlines");
     }
 

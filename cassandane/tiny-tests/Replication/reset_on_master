@@ -39,10 +39,9 @@ sub test_reset_on_master
     $self->run_replication(inputfile => $file, rolling => 1);
 
     my $pattern = qr{
-        \bSYNCNOTICE:\sattempt\sto\sUNMAILBOX\swithout\sa\stombstone
-        (?: \suser\.user2\.no\b
-            | :\smailbox=<user\.user2\.no>
-        )
+        \bevent=sync\.mailbox\.tombstone\.missing\b
+        .*\bsync\.command=UNMAILBOX\s
+        mbox\.name=user\.user2\.no\b
     }x;
     $self->assert_syslog_matches($self->{instance}, $pattern);
 }
