@@ -47,6 +47,7 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "caldav_db.h"
 #include "calsched_support.h"
 #include "http_dav.h"
 #include "mailbox.h"
@@ -140,76 +141,104 @@ EXPORTED void caldav_caluseraddr_fini(struct caldav_caluseraddr *addr)
     }
 }
 
-/* Add to userids the userids whose default scheduling addresses (see
-   get_schedule_addresses()) can include addr, whether or not they exist */
-static void sched_address_userids(const char *addr, strarray_t *userids)
+static int caladdress_mboxlist_lookup(const char *name, mbentry_t **mbentryp)
 {
-    if (!strncasecmp(addr, "mailto:", 7)) {
-        addr += 7;
-    }
+    return mboxlist_lookup(name, mbentryp, NULL);
+}
+
+EXPORTED char *caladdress_userid(const char *addr, bool defdomain_fallback,
+                                 int (*mlookup)(const char *, mbentry_t **),
+                                 mbentry_t **calhomep)
+{
+    char *userid = NULL;
+
+    if (calhomep) *calhomep = NULL;
+    if (!addr) return NULL;
+    if (!mlookup) mlookup = &caladdress_mboxlist_lookup;
+
+    if (!strncasecmp(addr, "mailto:", 7)) addr += 7;
 
     const char *at = strrchr(addr, '@');
-    if (!at) {
-        return;
+    if (!at || !strarray_contains_case(&config_cua_domains, at + 1)) {
+        return NULL;
     }
 
-    const char *domain = at + 1;
-    if (!strarray_contains_case(&config_cua_domains, domain)) {
-        return;
-    }
-
-    /* user+detail@domain is an address of user and of user@domain */
+    /* user+detail@domain is delivered to user */
     const char *plus = memchr(addr, '+', at - addr);
     size_t len = (plus ? plus : at) - addr;
-    if (!len) {
-        return;
-    }
+    if (!len) return NULL;
 
+    /* with virtdomains, local@domain is that domain's user; a user in the
+       default domain may also hold local@ in every calendar_user_address_set
+       domain (see get_schedule_addresses()) */
+    strarray_t tries = STRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
-    buf_setmap(&buf, addr, len);
-    strarray_add(userids, buf_cstring(&buf));
-    buf_printf(&buf, "@%s", domain);
-    strarray_add(userids, buf_cstring(&buf));
+    for (int lcase = 0; lcase < 2; lcase++) {
+        if (config_virtdomains) {
+            buf_setmap(&buf, addr, len);
+            buf_printf(&buf, "@%s", at + 1);
+            if (lcase) buf_lcase(&buf);
+            strarray_add(&tries, buf_cstring(&buf));
+        }
+        if (!config_virtdomains || defdomain_fallback) {
+            buf_setmap(&buf, addr, len);
+            if (lcase) buf_lcase(&buf);
+            strarray_add(&tries, buf_cstring(&buf));
+        }
+    }
+    buf_free(&buf);
 
-    /* addresses compare without regard to case, userids may not */
-    for (int i = 0, n = strarray_size(userids); i < n; i++) {
-        buf_setcstr(&buf, strarray_nth(userids, i));
-        strarray_add(userids, buf_lcase(&buf));
+    for (int i = 0; !userid && i < strarray_size(&tries); i++) {
+        mbname_t *mbname = mbname_from_userid(strarray_nth(&tries, i));
+        char *calhome = caldav_mboxname(mbname_userid(mbname), NULL);
+        mbentry_t *mbentry = NULL;
+
+        if (!mlookup(calhome, &mbentry)) {
+            userid = xstrdup(mbname_userid(mbname));
+            if (calhomep) *calhomep = mbentry;
+            else mboxlist_entry_free(&mbentry);
+        }
+        else if (!mboxlist_lookup(mbname_intname(mbname), NULL, NULL)) {
+            /* a user with no calendars yet still owns the address */
+            userid = xstrdup(mbname_userid(mbname));
+        }
+
+        free(calhome);
+        mbname_free(&mbname);
     }
 
-    buf_free(&buf);
+    strarray_fini(&tries);
+
+    return userid;
+}
+
+static bool sched_same_user(const char *a, const char *b)
+{
+    if (!a || !b) return false;
+
+    mbname_t *mbname = mbname_from_userid(b);
+    bool same = !strcasecmpsafe(a, mbname_userid(mbname));
+    mbname_free(&mbname);
+
+    return same;
 }
 
 EXPORTED void sched_addresses_restrict(strarray_t *addresses,
                                        const char *userid,
                                        const char *ownerid)
 {
-    strarray_t addr_userids = STRARRAY_INITIALIZER;
-
     for (int i = strarray_size(addresses) - 1; i >= 0; i--) {
-        strarray_truncate(&addr_userids, 0);
-        sched_address_userids(strarray_nth(addresses, i), &addr_userids);
+        char *addrid = caladdress_userid(strarray_nth(addresses, i),
+                                         true, NULL, NULL);
 
-        if ((userid && strarray_contains_case(&addr_userids, userid))
-            || (ownerid && strarray_contains_case(&addr_userids, ownerid)))
+        if (addrid && !sched_same_user(addrid, userid)
+                   && !sched_same_user(addrid, ownerid))
         {
-            continue;
+            free(strarray_remove(addresses, i));
         }
 
-        for (int j = 0; j < strarray_size(&addr_userids); j++) {
-            char *inbox =
-                mboxname_user_mbox(strarray_nth(&addr_userids, j), NULL);
-            bool exists = !mboxlist_lookup(inbox, NULL, NULL);
-            free(inbox);
-
-            if (exists) {
-                free(strarray_remove(addresses, i));
-                break;
-            }
-        }
+        free(addrid);
     }
-
-    strarray_fini(&addr_userids);
 }
 
 EXPORTED void get_schedule_addresses(const char *mboxname,
