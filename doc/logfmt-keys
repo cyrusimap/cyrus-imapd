@@ -493,6 +493,10 @@ master.workers.max      the most children a service may have
 mboxlist.key            a raw mailboxes.db key
 mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
+mupdate.command         an mupdate protocol command
+mupdate.location        a mailbox location as mupdate gives it, server!partition
+mupdate.reason          why an mupdate operation failed or was refused
+mupdate.step            which step of an mupdate operation is being logged
 pop.subfolder           the subfolder a POP session was restricted to
 proxy.server            the backend server a request was proxied to
 quota.root              the quota root a quota applies to
